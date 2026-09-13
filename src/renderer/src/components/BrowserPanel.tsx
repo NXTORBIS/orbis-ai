@@ -67,7 +67,7 @@ export default function BrowserPanel({ onClose }: Props): React.JSX.Element {
         src={url}
         className="browser-content"
         title="Browser"
-        sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-pointer-lock"
+        sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-pointer-lock allow-modals"
       />
     </div>
   )
