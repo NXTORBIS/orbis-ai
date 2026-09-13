@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(foreach \\($t in 'node','npm','python','py','pip','git','ollama'\\) { $c = Get-Command $t -ErrorAction SilentlyContinue; if \\($c\\) { $v = try { & $t --version 2>$null | Select-Object -First 1 } catch { '?' }; \"{0,-8} FOUND  {1}\" -f $t, $v } else { \"{0,-8} missing\" -f $t } })",
+      "Skill(claude-api)",
+      "Skill(claude-api:*)",
+      "Bash(npm run *)",
+      "Bash(powershell -Command \"Compress-Archive -Path 'win-unpacked' -DestinationPath 'Orbis-0.1.0-Portable.zip' -Force\")",
+      "Bash(powershell -Command \"Get-FileHash -Path 'Orbis-Setup-0.1.0.exe' -Algorithm SHA256 | Format-List\")",
+      "Bash(tasklist)",
+      "Bash(\"C:/Users/ksran/Downloads/Orbis AI desktop app/dist/win-unpacked/Orbis.exe\")",
+      "Bash(wmic process *)",
+      "Bash(findstr -i orbis)",
+      "PowerShell(Get-Process Orbis -ErrorAction SilentlyContinue)",
+      "Bash(find \"C:/Users/ksran/AppData\" -name \"*orbis*\" -o -name \"*electron*\" 2>/dev/null | head -20)",
+      "Bash(find \"C:/Users/ksran\" -path \"*/AppData/Local/*\" -name \"*.log\" -mmin -10 2>/dev/null | head -10)",
+      "Bash(pkill -f \"electron-vite\\\\|npm run dev\")",
+      "Bash(pkill -f \"npm run dev\\\\|electron\")",
+      "Read(//tmp/**)",
+      "Bash(pkill -f \"Orbis\\\\|npm run dev\\\\|electron\")",
+      "Bash(\"C:/Users/ksran/Downloads/Orbis AI desktop app/dist/win-unpacked/Orbis.exe\" --no-sandbox)",
+      "Bash(git init *)",
+      "Bash(git config *)",
+      "Bash(git add *)",
+      "Bash(git commit -m 'Fix: Disable ORION auto-spawn and clean up unused code *)"
+    ]
+  }
+}
