@@ -22,14 +22,6 @@ export interface DownloadProgress {
 }
 
 const MODELS: Record<string, Model> = {
-  'orion-99-plus': {
-    id: 'orion-99-plus',
-    name: 'ORION 99%+ Superintelligence',
-    size: 2_500_000_000, // ~2.5GB for the INT8 quantized model
-    url: 'https://github.com/NXTORBIS/orion/releases/download/v99-superintelligence/orion-int8-quantized.tar.gz',
-    sha256: 'placeholder-sha256-will-be-verified-on-download',
-    format: 'huggingface',
-  },
   'qwen3-14b-gguf': {
     id: 'qwen3-14b-gguf',
     name: 'Qwen3-14B-Q4_K_M (Text)',
