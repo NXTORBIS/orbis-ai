@@ -8,7 +8,7 @@ export interface WebResult {
 
 type FetchFn = (url: string, init?: RequestInit) => Promise<Response>
 
-export async function searchWeb(query: string, fetchFn: FetchFn, signal?: AbortSignal, limit = 5): Promise<WebResult[]> {
+export async function searchWeb(query: string, fetchFn: FetchFn, signal?: AbortSignal, limit = 4): Promise<WebResult[]> {
   const res = await fetchFn(ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Mozilla/5.0' },
@@ -27,7 +27,9 @@ export function parseResults(html: string): WebResult[] {
     const snippet = /class="result__snippet"[^>]*>([\s\S]*?)<\/a>/.exec(block)?.[1] ?? ''
     const url = href ? resolveUrl(decodeEntities(href)) : null
     if (!url || !title) continue
-    results.push({ url, title: clean(title), snippet: clean(snippet) })
+    const text = clean(snippet)
+    // ORION reads about 3 words a second on CPU, so every extra word of context delays the reply.
+    results.push({ url, title: clean(title), snippet: text.length > 240 ? `${text.slice(0, 240).trimEnd()}…` : text })
   }
   return results
 }

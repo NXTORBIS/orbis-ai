@@ -196,13 +196,16 @@ function registerIpc(): void {
     const controller = new AbortController()
     activeRequests.set(request.requestId, controller)
     try {
-      let systemPrompt = buildSystemPrompt(settings, request.persona)
-      const query = request.webSearch ? request.messages.at(-1)?.content.trim() : undefined
-      if (query) {
+      const systemPrompt = buildSystemPrompt(settings, request.persona)
+      let messages = request.messages
+      const last = messages.at(-1)
+      const query = request.webSearch && last?.role === 'user' ? last.content.trim() : undefined
+      if (last && query) {
         emit({ type: 'status', message: 'Searching the web…' })
         try {
           const results = await searchWeb(query, (url, init) => net.fetch(url, init), controller.signal)
-          systemPrompt += `\n\n${formatResults(query, results)}`
+          // ORION only reads the latest user message, so the results have to travel inside it.
+          messages = [...messages.slice(0, -1), { ...last, content: `${formatResults(query, results)}\n\nQuestion: ${last.content}` }]
         } catch (err) {
           if (controller.signal.aborted) return emit({ type: 'aborted' })
           emit({ type: 'status', message: `Web search failed (${err instanceof Error ? err.message : String(err)}), answering without it.` })
@@ -212,7 +215,7 @@ function registerIpc(): void {
         apiKey: apiKey ?? '',
         conversationId: request.conversationId,
         model: request.model,
-        messages: request.messages,
+        messages,
         systemPrompt,
         reasoningEffort: request.reasoningEffort ?? settings.reasoningEffort,
         autoFallback: settings.autoFallback,
