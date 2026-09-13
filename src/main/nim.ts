@@ -113,11 +113,15 @@ async function streamOnce(model: string, opts: ChatOptions, lean = false): Promi
   if (!res.body) throw new HttpError(502, 'Empty response from NVIDIA')
 
   opts.emit({ type: 'start', model })
+  await readStream(res.body, model, opts)
+}
 
+/** Relays an OpenAI-style SSE body as delta events, then emits done. */
+async function readStream(stream: ReadableStream<Uint8Array>, model: string, opts: ChatOptions): Promise<void> {
   const parser = new SseParser()
   const splitter = new ThinkTagSplitter()
   const decoder = new TextDecoder()
-  const reader = res.body.getReader()
+  const reader = stream.getReader()
   let finishReason: string | null = null
 
   const handle = (data: string): void => {
@@ -163,23 +167,21 @@ async function streamOnce(model: string, opts: ChatOptions, lean = false): Promi
   opts.emit({ type: 'done', model, truncated: finishReason === 'length' })
 }
 
-/** ORION replies with one JSON message (no SSE) and never hands the chat to a cloud model. */
+/** ORION streams its answer when it can, and never hands the chat to a cloud model. */
 async function chatOrion(opts: ChatOptions): Promise<void> {
   let res: Response
-  let text: string
   try {
     res = await opts.fetchFn(`${ORION_BASE_URL}/chat/completions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
       body: JSON.stringify({
         model: opts.model,
         messages: toApiMessages(opts.messages, opts.systemPrompt, opts.model),
         session: opts.conversationId,
-        stream: false
+        stream: true
       }),
       signal: opts.signal
     })
-    text = await res.text()
   } catch (err) {
     if (opts.signal.aborted) return opts.emit({ type: 'aborted' })
     const reason = err instanceof Error ? err.message : String(err)
@@ -188,8 +190,30 @@ async function chatOrion(opts: ChatOptions): Promise<void> {
       message: `Couldn't reach ORION at ${ORION_BASE_URL} (${reason}). Start it from the orion folder with: .venv\\Scripts\\python.exe -m orion.api.server configs/system/laptop.yaml`
     })
   }
-  if (!res.ok) return opts.emit({ type: 'error', message: `ORION returned ${res.status}: ${extractErrorMessage(text) || res.statusText}` })
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    return opts.emit({ type: 'error', message: `ORION returned ${res.status}: ${extractErrorMessage(text) || res.statusText}` })
+  }
 
+  if (res.body && res.headers.get('content-type')?.includes('text/event-stream')) {
+    opts.emit({ type: 'start', model: opts.model })
+    try {
+      await readStream(res.body, opts.model, opts)
+    } catch (err) {
+      if (opts.signal.aborted) return opts.emit({ type: 'aborted' })
+      opts.emit({ type: 'error', message: err instanceof Error ? err.message : String(err) })
+    }
+    return
+  }
+
+  // Older ORION servers ignore `stream` and send one JSON message.
+  let text: string
+  try {
+    text = await res.text()
+  } catch {
+    if (opts.signal.aborted) return opts.emit({ type: 'aborted' })
+    return opts.emit({ type: 'error', message: 'Lost the connection to ORION while it was replying.' })
+  }
   let reply: OrionReply
   try {
     reply = JSON.parse(text) as OrionReply

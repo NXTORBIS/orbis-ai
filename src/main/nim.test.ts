@@ -213,6 +213,18 @@ test('ORION (local) goes to the local server with no key and returns one reply',
   ])
 })
 
+test('ORION asks for a stream and relays tokens as they arrive', async () => {
+  const h = harness(() => sse([chunk({ content: 'Hel' }), chunk({ content: 'lo' }), { ...(chunk({}, 'stop') as object), orion: { intent: 'chat' } }]))
+  await h.run({ model: ORION, apiKey: '' })
+  assert.equal(h.calls[0].body.stream, true)
+  assert.deepEqual(h.events, [
+    { type: 'start', model: ORION },
+    { type: 'delta', content: 'Hel', reasoning: undefined },
+    { type: 'delta', content: 'lo', reasoning: undefined },
+    { type: 'done', model: ORION, truncated: false }
+  ])
+})
+
 test('an unreachable ORION server is reported, not replaced by an NVIDIA model', async () => {
   const h = harness(() => {
     throw new TypeError('fetch failed')
