@@ -28,7 +28,8 @@
       "Bash(gh auth *)",
       "Bash(gh repo *)",
       "Bash(git commit -m 'chore: Update Claude settings for latest development workflow *)",
-      "Bash(git push *)"
+      "Bash(git push *)",
+      "Bash(python -c \"import orion; print\\(orion.__version__\\)\")"
     ]
   }
 }

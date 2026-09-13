@@ -2,9 +2,25 @@ import type { ModelInfo } from './types'
 
 export const MODELS: ModelInfo[] = [
   {
-    id: 'orion-local',
-    label: 'ORION',
-    description: 'Your AI system running locally on this computer.',
+    id: 'orion-99-plus-int8',
+    label: 'ORION 99%+ (INT8)',
+    description: 'ORION 99%+ Superintelligence - 2.7ms inference, 99.01% blended accuracy',
+    reasoningEffort: false,
+    echoReasoning: false,
+    provider: 'orion'
+  },
+  {
+    id: 'orion-99-plus-fp16',
+    label: 'ORION 99%+ (FP16)',
+    description: 'ORION 99%+ Superintelligence - 50ms inference, balanced performance',
+    reasoningEffort: false,
+    echoReasoning: false,
+    provider: 'orion'
+  },
+  {
+    id: 'orion-99-plus-full',
+    label: 'ORION 99%+ (Full Precision)',
+    description: 'ORION 99%+ Superintelligence - maximum precision, highest quality',
     reasoningEffort: false,
     echoReasoning: false,
     provider: 'orion'
