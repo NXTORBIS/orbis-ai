@@ -23,7 +23,12 @@
       "Bash(git config *)",
       "Bash(git add *)",
       "Bash(git commit -m 'Fix: Disable ORION auto-spawn and clean up unused code *)",
-      "Bash(xargs grep -l \"github\\\\|gitlab\\\\|remote\\\\|origin\")"
+      "Bash(xargs grep -l \"github\\\\|gitlab\\\\|remote\\\\|origin\")",
+      "Bash(gh --version)",
+      "Bash(gh auth *)",
+      "Bash(gh repo *)",
+      "Bash(git commit -m 'chore: Update Claude settings for latest development workflow *)",
+      "Bash(git push *)"
     ]
   }
 }
