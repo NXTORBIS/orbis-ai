@@ -2500,8 +2500,29 @@ kbd {
 
 .browser-content {
   flex: 1;
+  display: flex;
   border: none;
   background: white;
+}
+
+.browser-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.browser-btn.spinning svg {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.sys-btn.active {
+  color: var(--cyan);
+  background: rgba(63, 216, 255, 0.14);
 }
 
 @media (max-width: 900px) {

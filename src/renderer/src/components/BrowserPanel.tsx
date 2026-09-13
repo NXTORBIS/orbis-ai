@@ -1,61 +1,91 @@
-import { useState } from 'react'
-import { ArrowLeft, ArrowRight, X, Maximize2 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { ArrowLeft, ArrowRight, ExternalLink, RotateCw, X } from 'lucide-react'
 
 interface Props {
   onClose(): void
 }
 
-export default function BrowserPanel({ onClose }: Props): React.JSX.Element {
-  const [url, setUrl] = useState('https://www.google.com')
-  const [inputValue, setInputValue] = useState(url)
+type Webview = HTMLElement & {
+  canGoBack(): boolean
+  canGoForward(): boolean
+  goBack(): void
+  goForward(): void
+  reload(): void
+  getURL(): string
+  loadURL(url: string): Promise<void>
+}
 
-  const handleNavigate = (newUrl: string): void => {
-    let finalUrl = newUrl.trim()
-    if (!finalUrl.startsWith('http://') && !finalUrl.startsWith('https://')) {
-      finalUrl = 'https://' + finalUrl
+const HOME = 'https://duckduckgo.com'
+
+function toUrl(input: string): string {
+  const text = input.trim()
+  if (/^https?:\/\//i.test(text)) return text
+  if (/^[^\s/]+\.[a-z]{2,}(\/\S*)?$/i.test(text)) return `https://${text}`
+  return `https://duckduckgo.com/?q=${encodeURIComponent(text)}`
+}
+
+export default function BrowserPanel({ onClose }: Props): React.JSX.Element {
+  const viewRef = useRef<Webview | null>(null)
+  const [address, setAddress] = useState(HOME)
+  const [nav, setNav] = useState({ back: false, forward: false, loading: true })
+
+  useEffect(() => {
+    const view = viewRef.current
+    if (!view) return
+    const sync = (): void => {
+      setAddress(view.getURL())
+      setNav((n) => ({ ...n, back: view.canGoBack(), forward: view.canGoForward() }))
     }
-    setUrl(finalUrl)
-    setInputValue(finalUrl)
+    const startLoading = (): void => setNav((n) => ({ ...n, loading: true }))
+    const stopLoading = (): void => setNav((n) => ({ ...n, loading: false }))
+    view.addEventListener('did-navigate', sync)
+    view.addEventListener('did-navigate-in-page', sync)
+    view.addEventListener('did-start-loading', startLoading)
+    view.addEventListener('did-stop-loading', stopLoading)
+    return () => {
+      view.removeEventListener('did-navigate', sync)
+      view.removeEventListener('did-navigate-in-page', sync)
+      view.removeEventListener('did-start-loading', startLoading)
+      view.removeEventListener('did-stop-loading', stopLoading)
+    }
+  }, [])
+
+  const go = (input: string): void => {
+    const url = toUrl(input)
+    setAddress(url)
+    void viewRef.current?.loadURL(url)
   }
 
   return (
     <div className="browser-panel">
       <div className="browser-header">
         <div className="browser-controls">
-          <button className="browser-btn" title="Back" onClick={() => {
-            const iframe = document.querySelector('iframe') as HTMLIFrameElement
-            if (iframe?.contentWindow?.history) {
-              iframe.contentWindow.history.back()
-            }
-          }}>
+          <button className="browser-btn" title="Back" disabled={!nav.back} onClick={() => viewRef.current?.goBack()}>
             <ArrowLeft size={16} />
           </button>
-          <button className="browser-btn" title="Forward" onClick={() => {
-            const iframe = document.querySelector('iframe') as HTMLIFrameElement
-            if (iframe?.contentWindow?.history) {
-              iframe.contentWindow.history.forward()
-            }
-          }}>
+          <button className="browser-btn" title="Forward" disabled={!nav.forward} onClick={() => viewRef.current?.goForward()}>
             <ArrowRight size={16} />
+          </button>
+          <button className={`browser-btn${nav.loading ? ' spinning' : ''}`} title="Reload" onClick={() => viewRef.current?.reload()}>
+            <RotateCw size={16} />
           </button>
         </div>
 
         <input
           type="text"
           className="browser-address-bar"
-          value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
+          value={address}
+          onChange={(e) => setAddress(e.target.value)}
+          onFocus={(e) => e.target.select()}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              handleNavigate(inputValue)
-            }
+            if (e.key === 'Enter') go(address)
           }}
-          placeholder="Enter URL..."
+          placeholder="Search or enter a URL"
         />
 
         <div className="browser-actions">
-          <button className="browser-btn" title="Fullscreen">
-            <Maximize2 size={16} />
+          <button className="browser-btn" title="Open in your browser" onClick={() => void window.api.openExternal(address)}>
+            <ExternalLink size={16} />
           </button>
           <button className="browser-btn close" title="Close" onClick={onClose}>
             <X size={16} />
@@ -63,12 +93,7 @@ export default function BrowserPanel({ onClose }: Props): React.JSX.Element {
         </div>
       </div>
 
-      <iframe
-        src={url}
-        className="browser-content"
-        title="Browser"
-        sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-pointer-lock allow-modals"
-      />
+      <webview ref={viewRef as React.Ref<HTMLWebViewElement>} src={HOME} partition="persist:browser" className="browser-content" />
     </div>
   )
 }

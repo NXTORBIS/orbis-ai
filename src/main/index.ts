@@ -7,6 +7,7 @@ import type { ChatRequest, Conversation, PickedFiles, SettingsUpdate, StreamEven
 import { isLocalModel } from '../shared/models'
 import { streamChat, testApiKey } from './nim'
 import { buildSystemPrompt } from './prompt'
+import { formatResults, searchWeb } from './websearch'
 import { Store } from './store'
 import { OrionManager, OrionClient } from './orion'
 
@@ -97,11 +98,27 @@ function createWindow(): BrowserWindow {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
-      spellcheck: true
+      spellcheck: true,
+      webviewTag: true
     }
   })
 
   win.once('ready-to-show', () => win.show())
+
+  // The in-app browser gets no preload or Node access, and only loads web URLs.
+  win.webContents.on('will-attach-webview', (event, webPreferences, params) => {
+    delete webPreferences.preload
+    webPreferences.nodeIntegration = false
+    webPreferences.contextIsolation = true
+    webPreferences.sandbox = true
+    if (!isHttpUrl(params.src)) event.preventDefault()
+  })
+  win.webContents.on('did-attach-webview', (_event, contents) => {
+    contents.setWindowOpenHandler(({ url }) => {
+      if (isHttpUrl(url)) void contents.loadURL(url)
+      return { action: 'deny' }
+    })
+  })
 
   // Links always open in the system browser, never inside the app window.
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -179,12 +196,24 @@ function registerIpc(): void {
     const controller = new AbortController()
     activeRequests.set(request.requestId, controller)
     try {
+      let systemPrompt = buildSystemPrompt(settings, request.persona)
+      const query = request.webSearch ? request.messages.at(-1)?.content.trim() : undefined
+      if (query) {
+        emit({ type: 'status', message: 'Searching the web…' })
+        try {
+          const results = await searchWeb(query, (url, init) => net.fetch(url, init), controller.signal)
+          systemPrompt += `\n\n${formatResults(query, results)}`
+        } catch (err) {
+          if (controller.signal.aborted) return emit({ type: 'aborted' })
+          emit({ type: 'status', message: `Web search failed (${err instanceof Error ? err.message : String(err)}), answering without it.` })
+        }
+      }
       await streamChat({
         apiKey: apiKey ?? '',
         conversationId: request.conversationId,
         model: request.model,
         messages: request.messages,
-        systemPrompt: buildSystemPrompt(settings, request.persona),
+        systemPrompt,
         reasoningEffort: request.reasoningEffort ?? settings.reasoningEffort,
         autoFallback: settings.autoFallback,
         signal: controller.signal,

@@ -10,6 +10,8 @@ interface Props {
   onSearch(): void
   onQuickPrompts(): void
   onUnavailable(feature: string): void
+  webSearch: boolean
+  onToggleWebSearch(): void
   onToggleActivity(): void
   onToggleTheme(): void
 }
@@ -41,7 +43,12 @@ export default function SystemBar(props: Props): React.JSX.Element {
         <button className="sys-btn" title="Quick prompts" onClick={props.onQuickPrompts}>
           <Hash size={15} />
         </button>
-        <button className="sys-btn" title="Web search" onClick={() => props.onUnavailable('Web search')}>
+        <button
+          className={`sys-btn${props.webSearch ? ' active' : ''}`}
+          title={props.webSearch ? 'Web search on — replies use live results' : 'Web search off'}
+          aria-pressed={props.webSearch}
+          onClick={props.onToggleWebSearch}
+        >
           <Globe size={15} />
         </button>
         <button className="sys-btn framed" title="Voice input" onClick={() => props.onUnavailable('Voice input')}>

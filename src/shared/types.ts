@@ -84,6 +84,8 @@ export interface ChatRequest {
   reasoningEffort?: ReasoningEffort
   /** Full history, ending with the new user message. */
   messages: ChatMessage[]
+  /** Search the web for the latest user message and give the model the results. */
+  webSearch?: boolean
 }
 
 export type StreamEvent =

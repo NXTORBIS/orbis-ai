@@ -55,6 +55,7 @@ export default function App(): React.JSX.Element {
   const [draft, setDraft] = useState<DraftChat>({ mode: 'auto', model: DEFAULT_MODEL, persona: DEFAULT_PERSONA })
   const [loaded, setLoaded] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [webSearch, setWebSearch] = useState(false)
   const [historyFocus, setHistoryFocus] = useState(0)
   const [activityOpen, setActivityOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -258,13 +259,14 @@ export default function App(): React.JSX.Element {
         model: conversation.model,
         persona: conversation.persona,
         reasoningEffort: modeInfo(conversation.mode).reasoningEffort,
-        messages: history
+        messages: history,
+        webSearch
       }
       window.api.sendChat(request).catch((err: unknown) => {
         finish({ error: err instanceof Error ? err.message : String(err) })
       })
     },
-    [commitStreams, flushDeltas, logActivity, persist, queueDelta, updateConversation]
+    [commitStreams, flushDeltas, logActivity, persist, queueDelta, updateConversation, webSearch]
   )
 
   const send = useCallback(
@@ -502,6 +504,11 @@ export default function App(): React.JSX.Element {
         onSearch={openSearch}
         onQuickPrompts={() => setQuickPromptsOpen((open) => !open)}
         onUnavailable={(feature) => notify(`${feature} is coming soon.`)}
+        webSearch={webSearch}
+        onToggleWebSearch={() => {
+          notify(webSearch ? 'Web search off.' : 'Web search on. Replies will use live results.')
+          setWebSearch(!webSearch)
+        }}
         onToggleActivity={toggleActivity}
         onToggleTheme={() => void updateSettings({ theme: dark ? 'light' : 'dark' })}
       />
