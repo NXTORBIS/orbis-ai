@@ -90,9 +90,12 @@ function groqEffort(effort: ReasoningEffort): string {
 }
 
 async function streamOnce(model: string, opts: ChatOptions, apiKey: string, lean = false): Promise<void> {
+  // Keep only the last 15 messages to avoid token limits on free tier
+  const recentMessages = opts.messages.slice(-15)
+
   const body: Record<string, unknown> = {
     model,
-    messages: toApiMessages(opts.messages, opts.systemPrompt, model),
+    messages: toApiMessages(recentMessages, opts.systemPrompt, model),
     stream: true
   }
   if (!lean && modelInfo(model).reasoningEffort) body.reasoning_effort = groqEffort(opts.reasoningEffort)
@@ -110,9 +113,16 @@ async function streamOnce(model: string, opts: ChatOptions, apiKey: string, lean
 
   if (!res.ok) {
     const text = await res.text().catch(() => '')
+    const errorMsg = extractErrorMessage(text) || res.statusText
+
+    // Handle 413/400 token limit errors
+    if ((res.status === 413 || res.status === 400) && errorMsg.toLowerCase().includes('token')) {
+      throw new HttpError(res.status, 'Message too long for this model. Try clearing old messages or using a shorter conversation history.', parseRetryAfter(res.headers.get('retry-after')))
+    }
+
     // A model may reject optional params; retry once with a minimal request.
     if (res.status === 400 && !lean) return streamOnce(model, opts, apiKey, true)
-    throw new HttpError(res.status, extractErrorMessage(text) || res.statusText, parseRetryAfter(res.headers.get('retry-after')))
+    throw new HttpError(res.status, errorMsg, parseRetryAfter(res.headers.get('retry-after')))
   }
   if (!res.body) throw new HttpError(502, 'Empty response from Groq')
 

@@ -2,17 +2,16 @@ import type { Settings } from '../shared/types'
 import { personaInfo } from '../shared/personas'
 
 export function buildSystemPrompt(settings: Settings, personaId: string, now = new Date()): string {
-  const today = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })
+  const today = now.toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })
   const parts = [
-    `You are ${settings.assistantName}, an advanced AI assistant inside the Orbis desktop app. Today is ${today}.`,
-    'Format replies in Markdown. Use tables for structured comparisons, fenced code blocks with a language tag for code, and $...$ or $$...$$ for math.'
+    `You are ${settings.assistantName}. Today is ${today}.`,
+    'Use Markdown: tables for comparisons, code blocks with language tags, $...$ for math.'
   ]
   if (settings.userName.trim()) {
-    const title = settings.userTitle.trim()
-    parts.push(`The user's name is ${settings.userName.trim()}.${title ? ` Address them as "${title}" when greeting them.` : ''}`)
+    parts.push(`User: ${settings.userName.trim()}${settings.userTitle.trim() ? ` (${settings.userTitle.trim()})` : ''}`)
   }
   const persona = personaInfo(personaId)
   if (persona.prompt) parts.push(persona.prompt)
-  if (settings.systemPrompt.trim()) parts.push(`The user's custom instructions:\n${settings.systemPrompt.trim()}`)
+  if (settings.systemPrompt.trim()) parts.push(settings.systemPrompt.trim())
   return parts.join('\n\n')
 }
