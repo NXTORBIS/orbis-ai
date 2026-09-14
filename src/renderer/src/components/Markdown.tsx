@@ -44,8 +44,17 @@ function CodeBlock({ node, children, ...rest }: React.ComponentProps<'pre'> & Ex
   )
 }
 
+function Image({ node: _node, ...props }: React.ComponentProps<'img'> & ExtraProps): React.JSX.Element {
+  return (
+    <div className="markdown-image">
+      <img {...props} style={{ maxWidth: '100%', maxHeight: '500px', borderRadius: '8px' }} />
+    </div>
+  )
+}
+
 const components: Components = {
   pre: CodeBlock,
+  img: Image,
   a: ({ node: _node, ...props }) => <a {...props} target="_blank" rel="noreferrer" />,
   table: ({ node: _node, ...props }) => (
     <div className="table-wrap">

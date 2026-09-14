@@ -68,7 +68,8 @@
       "Bash(git commit -m 'Show File, Edit, View, Help menu bar *)",
       "Bash(powershell -Command ' *)",
       "Bash(git commit -m 'Update taskbar icon to use Orbis logo *)",
-      "Bash(git commit -m 'Remove non-existent ORION Vision model from Groq *)"
+      "Bash(git commit -m 'Remove non-existent ORION Vision model from Groq *)",
+      "Bash(git commit -m 'Display generated images directly inline in chat *)"
     ]
   }
 }
