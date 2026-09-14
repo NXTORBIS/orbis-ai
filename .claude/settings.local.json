@@ -48,7 +48,8 @@
       "Bash(git commit -m 'Fix extremely bright light mode - significantly reduce brightness *)",
       "Bash(git commit -m 'Implement ChatGPT-style UI layout *)",
       "Bash(git commit -m 'Upgrade taskbar icon to high-resolution Orbis logo *)",
-      "Bash(git commit -m 'Reposition model selector below input and move + button to left *)"
+      "Bash(git commit -m 'Reposition model selector below input and move + button to left *)",
+      "Bash(git commit -m 'Move model selector to bottom-right corner and remove grid background *)"
     ]
   }
 }

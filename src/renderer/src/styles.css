@@ -224,13 +224,7 @@ select {
 }
 
 .hud-grid {
-  position: absolute;
-  inset: 0;
-  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
-  background-size: 48px 48px;
-  background-position: center center;
-  -webkit-mask-image: radial-gradient(ellipse 95% 90% at 50% 50%, #000 55%, transparent 100%);
-  mask-image: radial-gradient(ellipse 95% 90% at 50% 50%, #000 55%, transparent 100%);
+  display: none;
 }
 
 .hud-particles {
@@ -1794,12 +1788,45 @@ textarea.hud-input {
   align-items: center;
 }
 
-.modes-selector {
-  display: flex !important;
-  justify-content: center;
-  width: 100%;
-  margin-top: 8px;
-  padding: 0 !important;
+.mode-selector-corner {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+}
+
+.mode-pill-subtle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid rgba(63, 216, 255, 0.2);
+  border-radius: 6px;
+  background: rgba(63, 216, 255, 0.04);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.mode-pill-subtle:hover {
+  background: rgba(63, 216, 255, 0.08);
+  border-color: rgba(63, 216, 255, 0.3);
+  color: var(--cyan);
+}
+
+.mode-pill-subtle svg {
+  color: var(--muted);
+  transition: color 0.2s;
+}
+
+.mode-pill-subtle:hover svg {
+  color: var(--cyan);
 }
 
 .mode-pill {
