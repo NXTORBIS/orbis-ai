@@ -996,6 +996,25 @@ textarea.hud-input {
   padding: 0 24px 120px;
 }
 
+/* Center composer when there are no messages */
+.stage-content:has(.empty-state) .composer-dock {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 100%;
+  padding: 0 24px;
+  transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Glide down when messages appear */
+.stage-content:not(:has(.empty-state)) .composer-dock {
+  position: relative;
+  top: auto;
+  left: auto;
+  transform: none;
+}
+
 .greeting {
   position: relative;
   min-height: 1.35em;
