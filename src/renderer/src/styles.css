@@ -1646,7 +1646,7 @@ textarea.hud-input {
   flex: 1;
   min-height: 56px;
   max-height: 200px;
-  padding: 16px 16px;
+  padding: 16px 16px 44px 16px;
   border: 0;
   outline: none;
   resize: none;
