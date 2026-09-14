@@ -1,13 +1,104 @@
 import type { ModelInfo } from './types'
 
+/** ORION models (Groq production, console.groq.com/docs/models). First entry is the default. */
 export const MODELS: ModelInfo[] = [
   {
-    id: 'orion-local',
-    label: 'ORION',
-    description: 'Your AI system running locally on this computer.',
+    id: 'meta-llama/llama-prompt-guard-2-22m',
+    label: 'ORION Nano',
+    description: 'Safety / lightweight',
     reasoningEffort: false,
-    echoReasoning: false,
-    provider: 'orion'
+    echoReasoning: false
+  },
+  {
+    id: 'allam-2-7b',
+    label: 'ORION Mini',
+    description: 'Lightweight general',
+    reasoningEffort: false,
+    echoReasoning: false
+  },
+  {
+    id: 'openai/gpt-oss-20b',
+    label: 'ORION Core',
+    description: 'Balanced',
+    reasoningEffort: true,
+    echoReasoning: false
+  },
+  {
+    id: 'qwen/qwen3.6-27b',
+    label: 'ORION Pro',
+    description: 'Advanced',
+    reasoningEffort: false,
+    echoReasoning: false
+  },
+  {
+    id: 'qwen/qwen3.8-27b',
+    label: 'ORION Ultra',
+    description: 'More advanced',
+    reasoningEffort: false,
+    echoReasoning: false
+  },
+  {
+    id: 'openai/gpt-oss-120b',
+    label: 'ORION Max',
+    description: 'Highest-capability general model',
+    reasoningEffort: true,
+    echoReasoning: false
+  },
+  {
+    id: 'groq/compound',
+    label: 'ORION Apex',
+    description: 'Advanced compound/tool-use',
+    reasoningEffort: false,
+    echoReasoning: false
+  },
+  {
+    id: 'groq/compound-mini',
+    label: 'ORION Apex Mini',
+    description: 'Faster compound/tool-use',
+    reasoningEffort: false,
+    echoReasoning: false
+  },
+  {
+    id: 'openai/gpt-oss-safeguard-20b',
+    label: 'ORION Shield',
+    description: 'Safety',
+    reasoningEffort: false,
+    echoReasoning: false
+  },
+  {
+    id: 'meta-llama/llama-prompt-guard-2-86m',
+    label: 'ORION Guard',
+    description: 'Prompt security',
+    reasoningEffort: false,
+    echoReasoning: false
+  },
+  {
+    id: 'whisper-large-v3',
+    label: 'ORION Listen',
+    description: 'Speech → text',
+    reasoningEffort: false,
+    echoReasoning: false
+  },
+  {
+    id: 'whisper-large-v3-turbo',
+    label: 'ORION Listen Turbo',
+    description: 'Fast speech → text',
+    reasoningEffort: false,
+    echoReasoning: false
+  },
+  {
+    id: 'canopylabs/orpheus-v1-english',
+    label: 'ORION Voice',
+    description: 'English text → speech',
+    reasoningEffort: false,
+    echoReasoning: false
+  },
+  {
+    id: 'canopylabs/orpheus-arabic-saudi',
+    label: 'ORION Voice Arabic',
+    description: 'Arabic text → speech',
+    reasoningEffort: false,
+    echoReasoning: false
   }
 ]
 
@@ -20,10 +111,3 @@ export function modelInfo(id: string): ModelInfo {
 export function modelLabel(id: string): string {
   return modelInfo(id).label
 }
-
-export function isLocalModel(id: string): boolean {
-  return modelInfo(id).provider === 'orion'
-}
-
-/** Models served by NIM (all NVIDIA models have been removed; only ORION remains). */
-export const NIM_MODELS: ModelInfo[] = []

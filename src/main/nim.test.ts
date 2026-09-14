@@ -4,9 +4,9 @@ import { GROQ_BASE_URL, streamChat, testApiKey } from './nim.ts'
 import type { ChatOptions, FetchFn } from './nim.ts'
 import type { ChatMessage, StreamEvent } from '../shared/types'
 
-const LLAMA = 'llama-3.3-70b-versatile'
-const INSTANT = 'llama-3.1-8b-instant'
-const GPT_OSS = 'openai/gpt-oss-120b'
+const ORION_NANO = 'meta-llama/llama-prompt-guard-2-22m'
+const ORION_MINI = 'allam-2-7b'
+const ORION_MAX = 'openai/gpt-oss-120b'
 
 interface Call {
   url: string
@@ -50,7 +50,7 @@ function harness(respond: (call: Call, index: number, signal?: AbortSignal) => R
   const run = (overrides: Partial<ChatOptions> = {}): Promise<void> =>
     streamChat({
       apiKeys: ['test-key'],
-      model: LLAMA,
+      model: ORION_NANO,
       messages: [user('Hi')],
       systemPrompt: 'sys',
       reasoningEffort: 'high',
@@ -78,10 +78,10 @@ test('streams from Groq with the API key as a bearer token', async () => {
   assert.equal(h.calls[0].headers.Authorization, 'Bearer test-key')
   assert.equal(h.calls[0].body.stream, true)
   assert.deepEqual(h.events, [
-    { type: 'start', model: LLAMA },
+    { type: 'start', model: ORION_NANO },
     { type: 'delta', content: 'Hel', reasoning: undefined },
     { type: 'delta', content: 'lo', reasoning: undefined },
-    { type: 'done', model: LLAMA, truncated: false }
+    { type: 'done', model: ORION_NANO, truncated: false }
   ])
 })
 
@@ -120,20 +120,20 @@ test('switches to the next API key when rate-limited', async () => {
 
 test('falls back to the next model when the first is rate-limited', async () => {
   const h = harness((call) =>
-    call.model === LLAMA
+    call.model === ORION_NANO
       ? json(429, { error: { message: 'Too many requests' } })
       : sse([chunk({ reasoning: 'Let me think' }), chunk({ content: 'Hello' }), chunk({ content: '!' }, 'stop')])
   )
   await h.run()
   assert.deepEqual(
     h.calls.map((c) => c.model),
-    [LLAMA, INSTANT]
+    [ORION_NANO, ORION_MINI]
   )
   assert.equal(h.events[0].type, 'status')
-  assert.deepEqual(h.events[1], { type: 'start', model: INSTANT })
+  assert.deepEqual(h.events[1], { type: 'start', model: ORION_MINI })
   assert.equal(text(h.events, 'reasoning'), 'Let me think')
   assert.equal(text(h.events, 'content'), 'Hello!')
-  assert.deepEqual(h.events.at(-1), { type: 'done', model: INSTANT, truncated: false })
+  assert.deepEqual(h.events.at(-1), { type: 'done', model: ORION_MINI, truncated: false })
 })
 
 test('splits inline <think> tags and reports length truncation', async () => {
@@ -141,24 +141,24 @@ test('splits inline <think> tags and reports length truncation', async () => {
   await h.run({ autoFallback: false })
   assert.equal(text(h.events, 'reasoning'), 'plan')
   assert.equal(text(h.events, 'content'), 'Answer')
-  assert.deepEqual(h.events.at(-1), { type: 'done', model: LLAMA, truncated: true })
+  assert.deepEqual(h.events.at(-1), { type: 'done', model: ORION_NANO, truncated: true })
 })
 
 test('sends reasoning_effort only to reasoning models, mapping max to high', async () => {
   const h = harness(() => sse([chunk({ content: 'ok' }, 'stop')]))
-  await h.run({ model: GPT_OSS, reasoningEffort: 'max', autoFallback: false })
-  await h.run({ model: LLAMA, autoFallback: false })
+  await h.run({ model: ORION_MAX, reasoningEffort: 'max', autoFallback: false })
+  await h.run({ model: ORION_NANO, autoFallback: false })
   assert.equal(h.calls[0].body.reasoning_effort, 'high')
   assert.equal('reasoning_effort' in h.calls[1].body, false)
 })
 
 test('retries once without optional params after a 400', async () => {
   const h = harness((_call, index) => (index === 0 ? json(400, { error: { message: 'unsupported parameter' } }) : sse([chunk({ content: 'ok' }, 'stop')])))
-  await h.run({ model: GPT_OSS })
+  await h.run({ model: ORION_MAX })
   assert.equal(h.calls.length, 2)
   assert.equal(h.calls[0].body.reasoning_effort, 'high')
   assert.equal('reasoning_effort' in h.calls[1].body, false)
-  assert.equal(h.calls[1].model, GPT_OSS)
+  assert.equal(h.calls[1].model, ORION_MAX)
   assert.equal(h.events.at(-1)?.type, 'done')
 })
 
@@ -180,11 +180,11 @@ test('reports error when all keys are rate-limited', async () => {
 test('sends the system prompt first and never echoes reasoning back', async () => {
   const history: ChatMessage[] = [
     user('Q1'),
-    { id: 'a1', role: 'assistant', content: 'A1', reasoning: 'R1', model: GPT_OSS, createdAt: 0 },
+    { id: 'a1', role: 'assistant', content: 'A1', reasoning: 'R1', model: ORION_MAX, createdAt: 0 },
     user('Q2')
   ]
   const h = harness(() => sse([chunk({ content: 'ok' }, 'stop')]))
-  await h.run({ messages: history, model: GPT_OSS, autoFallback: false })
+  await h.run({ messages: history, model: ORION_MAX, autoFallback: false })
   const messages = h.calls[0].body.messages as Record<string, unknown>[]
   assert.equal(messages[0].role, 'system')
   assert.equal('reasoning_content' in messages[2], false)
