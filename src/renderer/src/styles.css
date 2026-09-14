@@ -554,31 +554,30 @@ textarea.hud-input {
   gap: 6px;
   padding: 12px 0 14px;
   background: var(--rail-bg);
-  border-right: 1px solid var(--line-strong);
+  border-right: 1px solid rgba(255, 255, 255, 0.04);
 }
 
 .rail-logo {
   display: grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
-  margin-bottom: 8px;
-  border-radius: 50%;
-  color: var(--cyan);
-  filter: drop-shadow(0 0 6px var(--cyan-glow));
+  width: 36px;
+  height: 36px;
+  margin-bottom: 10px;
+  border-radius: 8px;
+  color: var(--text);
+  filter: none;
   cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   background: transparent;
 }
 
 .rail-logo:hover {
-  background: rgba(63, 216, 255, 0.12);
-  filter: drop-shadow(0 0 12px var(--cyan-glow));
-  transform: scale(1.1);
+  background: var(--hover);
+  transform: scale(1.05);
 }
 
 .rail-logo:active {
-  transform: scale(0.95);
+  transform: scale(0.98);
 }
 
 .rail-btn {
@@ -1017,34 +1016,15 @@ textarea.hud-input {
 
 .greeting {
   position: relative;
-  min-height: 1.35em;
   margin: 0;
-  padding: 0 32px;
-  font-family: var(--display);
-  font-size: clamp(28px, 2.2vw, 40px);
-  font-weight: 700;
-  letter-spacing: -0.02em;
+  padding: 0 24px;
+  font-family: var(--font);
+  font-size: clamp(32px, 4vw, 44px);
+  font-weight: 400;
+  letter-spacing: 0;
   text-align: center;
-  color: var(--greeting);
-  text-shadow: none;
-  background: linear-gradient(135deg, var(--greeting) 0%, var(--muted-strong) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-.greeting-prefix {
-  font-weight: 700;
-}
-
-.greeting-caret {
-  display: inline-block;
-  width: 2px;
-  height: 1em;
-  margin-left: 4px;
-  vertical-align: -0.12em;
-  background: currentColor;
-  animation: blink 1s steps(1) infinite;
+  color: var(--text);
+  line-height: 1.2;
 }
 
 .greeting::before,

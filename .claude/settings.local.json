@@ -58,7 +58,8 @@
       "Bash(cp \"C:\\\\Users\\\\ksran\\\\Downloads\\\\Orbis Logos\\\\Final Orbis logo only.jpg\" \"C:\\\\Users\\\\ksran\\\\Downloads\\\\Orbis AI desktop app\\\\build\\\\icon.png\")",
       "Bash(git commit -m 'Update taskbar icon to use correct Orbis logo *)",
       "Bash(git commit -m 'Reduce input pill border thickness - make it subtle *)",
-      "Bash(git commit -m 'Further reduce input box height *)"
+      "Bash(git commit -m 'Further reduce input box height *)",
+      "Bash(git commit -m 'Simplify greeting and sidebar to match Claude Code style *)"
     ]
   }
 }
