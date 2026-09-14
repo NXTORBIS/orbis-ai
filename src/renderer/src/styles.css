@@ -1954,10 +1954,13 @@ textarea.hud-input {
 
 .mode-menu {
   top: auto;
-  right: auto;
+  right: 0;
   bottom: calc(100% + 12px);
-  left: -8px;
-  width: 300px;
+  left: auto;
+  width: 280px;
+  max-height: 320px;
+  overflow-y: auto;
+  max-width: 90vw;
 }
 
 .mode-dot {
