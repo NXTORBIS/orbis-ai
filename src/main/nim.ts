@@ -184,12 +184,12 @@ function toApiMessages(messages: ChatMessage[], systemPrompt: string, model: str
   const info = modelInfo(model)
   const out: Record<string, unknown>[] = systemPrompt.trim() ? [{ role: 'system', content: systemPrompt }] : []
   for (const m of messages) {
-    const content = m.role === 'user' ? withAttachments(m) : m.content
+    const content = m.role === 'user' ? toMessageContent(m) : m.content
     // Failed replies with no text would break role alternation, so they are left out.
     if (m.role === 'assistant' && !content) continue
     const prev = out[out.length - 1]
-    if (prev?.role === 'user' && m.role === 'user') {
-      prev.content = `${prev.content as string}\n\n${content}`
+    if (prev?.role === 'user' && m.role === 'user' && typeof content === 'string' && typeof prev.content === 'string') {
+      prev.content = `${prev.content}\n\n${content}`
       continue
     }
     const msg: Record<string, unknown> = { role: m.role, content }
@@ -201,10 +201,31 @@ function toApiMessages(messages: ChatMessage[], systemPrompt: string, model: str
   return out
 }
 
-function withAttachments(message: ChatMessage): string {
+function toMessageContent(message: ChatMessage): string | Record<string, unknown>[] {
   if (!message.attachments?.length) return message.content
-  const files = message.attachments.map((a) => `<file name="${a.name}">\n${a.content}\n</file>`).join('\n\n')
-  return message.content ? `${files}\n\n${message.content}` : files
+  const parts: Record<string, unknown>[] = []
+
+  for (const a of message.attachments) {
+    if (a.type === 'image') {
+      parts.push({
+        type: 'image_url',
+        image_url: {
+          url: `data:${a.mimeType || 'image/jpeg'};base64,${a.content}`
+        }
+      })
+    } else {
+      parts.push({
+        type: 'text',
+        text: `<file name="${a.name}">\n${a.content}\n</file>`
+      })
+    }
+  }
+
+  if (message.content) {
+    parts.push({ type: 'text', text: message.content })
+  }
+
+  return parts.length === 1 && typeof parts[0].text === 'string' ? (parts[0].text as string) : parts
 }
 
 function parseRetryAfter(header: string | null): number | undefined {

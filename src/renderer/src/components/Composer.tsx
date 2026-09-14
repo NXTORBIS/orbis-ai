@@ -187,8 +187,13 @@ export default function Composer(props: Props): React.JSX.Element {
     if (picked.skipped.length) props.onNotify(`Skipped ${picked.skipped.join(', ')}: not a text file or larger than 200 KB.`, 'warn')
   }
 
+  const attachImages = async (): Promise<void> => {
+    const picked = await window.api.pickImages()
+    if (picked.attachments.length) setAttachments((current) => [...current, ...picked.attachments].slice(0, 10))
+    if (picked.skipped.length) props.onNotify(`Skipped ${picked.skipped.join(', ')}: not an image or larger than 200 KB.`, 'warn')
+  }
 
-  const ModeIcon = MODE_ICONS[mode]
+
   const currentModeLabel = mode === 'custom' ? modelLabel(model) : (MODES.find((m) => m.id === mode)?.label ?? 'Auto')
 
   return (
@@ -215,7 +220,11 @@ export default function Composer(props: Props): React.JSX.Element {
         <div className="attachment-row">
           {attachments.map((a, i) => (
             <span key={`${a.name}-${i}`} className="attachment-chip glass">
-              <FileText size={13} />
+              {a.type === 'image' ? (
+                <img src={`data:${a.mimeType || 'image/jpeg'};base64,${a.content}`} alt={a.name} style={{ width: 24, height: 24, borderRadius: 4, objectFit: 'cover' }} />
+              ) : (
+                <FileText size={13} />
+              )}
               <span className="truncate">{a.name}</span>
               <button title="Remove" onClick={() => setAttachments((current) => current.filter((_, j) => j !== i))}>
                 <X size={12} />
@@ -265,7 +274,7 @@ export default function Composer(props: Props): React.JSX.Element {
                     type="button"
                     className="menu-item"
                     onClick={() => {
-                      props.onNotify('Image upload is coming soon.')
+                      void attachImages()
                       setAttachMenuOpen(false)
                     }}
                   >

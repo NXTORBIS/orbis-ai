@@ -27,12 +27,12 @@ export function parseResults(html: string): WebResult[] {
 
   let match
   while ((match = regex.exec(html)) !== null) {
-    let url = match[1]
+    const href = match[1]
     const title = match[2]
     const snippet = match[3]
 
-    url = resolveUrl(url)
-    if (!url || !title) continue
+    const url = resolveUrl(href)
+    if (url === null || !title) continue
 
     const text = clean(snippet)
     results.push({ url, title: clean(title), snippet: text.length > 240 ? `${text.slice(0, 240).trimEnd()}…` : text })

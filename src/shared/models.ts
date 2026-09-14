@@ -99,6 +99,13 @@ export const MODELS: ModelInfo[] = [
     description: 'Arabic text → speech',
     reasoningEffort: false,
     echoReasoning: false
+  },
+  {
+    id: 'llava-1.5-7b-hf',
+    label: 'ORION Vision',
+    description: 'Image analysis & understanding',
+    reasoningEffort: false,
+    echoReasoning: false
   }
 ]
 

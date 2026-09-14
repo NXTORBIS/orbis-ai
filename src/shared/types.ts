@@ -3,6 +3,8 @@ export type Role = 'user' | 'assistant'
 export interface Attachment {
   name: string
   content: string
+  type?: 'text' | 'image'
+  mimeType?: string
 }
 
 export interface ChatMessage {
@@ -112,4 +114,5 @@ export interface NxtorbisApi {
   /** System-wide CPU load, 0-100. */
   getCpuUsage(): Promise<number>
   pickTextFiles(): Promise<PickedFiles>
+  pickImages(): Promise<PickedFiles>
 }

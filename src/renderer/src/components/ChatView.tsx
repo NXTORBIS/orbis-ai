@@ -78,7 +78,7 @@ export default function ChatView(props: Props): React.JSX.Element {
     return (
       <div className="stage-content">
         <div className="empty-state">
-          <Greeting title={settings?.userTitle ?? ''} />
+          <Greeting />
         </div>
         {composer}
       </div>

@@ -9,7 +9,7 @@ const PHRASES = [
 ]
 
 /** Typewriter greeting that cycles phrases, with a short glitch burst on each change. */
-export default function Greeting({ title }: { title: string }): React.JSX.Element {
+export default function Greeting(): React.JSX.Element {
   const [typed, setTyped] = useState('')
   const [glitching, setGlitching] = useState(false)
 

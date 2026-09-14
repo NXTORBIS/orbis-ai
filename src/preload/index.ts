@@ -22,7 +22,8 @@ const api: NxtorbisApi = {
   },
   openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
   getCpuUsage: () => ipcRenderer.invoke('system:cpu'),
-  pickTextFiles: () => ipcRenderer.invoke('files:pickText')
+  pickTextFiles: () => ipcRenderer.invoke('files:pickText'),
+  pickImages: () => ipcRenderer.invoke('files:pickImages')
 }
 
 contextBridge.exposeInMainWorld('api', api)

@@ -57,7 +57,28 @@ async function readTextFiles(paths: string[]): Promise<PickedFiles> {
       const buffer = await fs.readFile(path)
       // NUL bytes mean a binary file, which the model can't read as text.
       if (buffer.includes(0)) picked.skipped.push(name)
-      else picked.attachments.push({ name, content: buffer.toString('utf8') })
+      else picked.attachments.push({ name, content: buffer.toString('utf8'), type: 'text' })
+    } catch {
+      picked.skipped.push(name)
+    }
+  }
+  return picked
+}
+
+async function readImages(paths: string[]): Promise<PickedFiles> {
+  const picked: PickedFiles = { attachments: [], skipped: [] }
+  for (const path of paths.slice(0, 10)) {
+    const name = basename(path)
+    try {
+      if ((await fs.stat(path)).size > MAX_ATTACHMENT_BYTES) {
+        picked.skipped.push(name)
+        continue
+      }
+      const buffer = await fs.readFile(path)
+      const base64 = buffer.toString('base64')
+      const ext = name.split('.').pop()?.toLowerCase()
+      const mimeType = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'png' ? 'image/png' : 'image/webp'
+      picked.attachments.push({ name, content: base64, type: 'image', mimeType })
     } catch {
       picked.skipped.push(name)
     }
@@ -243,6 +264,20 @@ function registerIpc(): void {
     const win = BrowserWindow.fromWebContents(event.sender)
     const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
     return result.canceled ? { attachments: [], skipped: [] } : readTextFiles(result.filePaths)
+  })
+
+  ipcMain.handle('files:pickImages', async (event) => {
+    const options: OpenDialogOptions = {
+      title: 'Upload images',
+      properties: ['openFile', 'multiSelections'],
+      filters: [
+        { name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif'] },
+        { name: 'All files', extensions: ['*'] }
+      ]
+    }
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
+    return result.canceled ? { attachments: [], skipped: [] } : readImages(result.filePaths)
   })
 }
 
