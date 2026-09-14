@@ -1567,8 +1567,9 @@ textarea.hud-input {
   align-items: center;
   width: 100%;
   margin: 0 auto;
-  padding: 24px 0 48px;
-  gap: 16px;
+  padding: 32px 16px 48px;
+  gap: 20px;
+  background: transparent;
 }
 
 /* HUD frame line spanning the stage just above the composer. */
@@ -1588,13 +1589,13 @@ textarea.hud-input {
   position: relative;
   display: flex;
   flex-direction: column;
-  width: min(720px, calc(100% - 32px));
+  width: min(900px, calc(100% - 32px));
   border: 1px solid var(--composer-border);
   border-radius: 28px;
   background: var(--composer-bg);
   backdrop-filter: blur(20px);
-  transition: border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4), 0 0 20px var(--composer-glow), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15), 0 0 20px var(--composer-glow), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .composer.thinking {
@@ -1647,16 +1648,16 @@ textarea.hud-input {
   position: relative;
   z-index: 1;
   width: 100%;
-  min-height: 56px;
-  max-height: 200px;
-  padding: 16px 20px 8px;
+  min-height: 64px;
+  max-height: 240px;
+  padding: 18px 24px 12px;
   border: 0;
   outline: none;
   resize: none;
   background: transparent;
   color: var(--composer-text);
-  font-size: 15px;
-  line-height: 1.6;
+  font-size: 16px;
+  line-height: 1.7;
   font-weight: 500;
 }
 
@@ -1781,20 +1782,27 @@ textarea.hud-input {
   }
 }
 
+.composer-dock > .popover-anchor {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
 .mode-pill {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  height: 36px;
-  padding: 0 14px;
+  height: 40px;
+  padding: 0 16px;
   border: 1px solid var(--pill-border);
-  border-radius: 12px;
+  border-radius: 16px;
   background: rgba(63, 216, 255, 0.08);
   color: var(--composer-text);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .mode-pill svg:first-child {

@@ -44,7 +44,9 @@
       "Bash(git commit -m 'Remove rotating beam animation, keep only glow effect *)",
       "Bash(git commit -m 'Add ChatGPT'\\\\''s modern UI aesthetic to Orbis *)",
       "Bash(git commit -m 'Add ChatGPT-style slash commands to Orbis *)",
-      "Bash(git commit -m 'Improve ORBIS logo visibility and UI polish *)"
+      "Bash(git commit -m 'Improve ORBIS logo visibility and UI polish *)",
+      "Bash(git commit -m 'Fix extremely bright light mode - significantly reduce brightness *)",
+      "Bash(git commit -m 'Implement ChatGPT-style UI layout *)"
     ]
   }
 }
