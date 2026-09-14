@@ -1,111 +1,28 @@
 import type { ModelInfo } from './types'
 
-/** ORION models (Groq production, console.groq.com/docs/models). First entry is the default. */
+/**
+ * Groq chat models, each checked with a live streamed completion. Speech, text-to-speech and
+ * prompt-guard models are left out because they can't answer chat requests. First entry is the default.
+ */
 export const MODELS: ModelInfo[] = [
-  {
-    id: 'meta-llama/llama-prompt-guard-2-22m',
-    label: 'ORION Nano',
-    description: 'Safety / lightweight',
-    reasoningEffort: false,
-    echoReasoning: false
-  },
-  {
-    id: 'allam-2-7b',
-    label: 'ORION Mini',
-    description: 'Lightweight general',
-    reasoningEffort: false,
-    echoReasoning: false
-  },
-  {
-    id: 'openai/gpt-oss-20b',
-    label: 'ORION Core',
-    description: 'Balanced',
-    reasoningEffort: true,
-    echoReasoning: false
-  },
-  {
-    id: 'qwen/qwen3.6-27b',
-    label: 'ORION Pro',
-    description: 'Advanced',
-    reasoningEffort: false,
-    echoReasoning: false
-  },
-  {
-    id: 'qwen/qwen3.8-27b',
-    label: 'ORION Ultra',
-    description: 'More advanced',
-    reasoningEffort: false,
-    echoReasoning: false
-  },
-  {
-    id: 'openai/gpt-oss-120b',
-    label: 'ORION Max',
-    description: 'Highest-capability general model',
-    reasoningEffort: true,
-    echoReasoning: false
-  },
-  {
-    id: 'groq/compound',
-    label: 'ORION Apex',
-    description: 'Advanced compound/tool-use',
-    reasoningEffort: false,
-    echoReasoning: false
-  },
-  {
-    id: 'groq/compound-mini',
-    label: 'ORION Apex Mini',
-    description: 'Faster compound/tool-use',
-    reasoningEffort: false,
-    echoReasoning: false
-  },
-  {
-    id: 'openai/gpt-oss-safeguard-20b',
-    label: 'ORION Shield',
-    description: 'Safety',
-    reasoningEffort: false,
-    echoReasoning: false
-  },
-  {
-    id: 'meta-llama/llama-prompt-guard-2-86m',
-    label: 'ORION Guard',
-    description: 'Prompt security',
-    reasoningEffort: false,
-    echoReasoning: false
-  },
-  {
-    id: 'whisper-large-v3',
-    label: 'ORION Listen',
-    description: 'Speech → text',
-    reasoningEffort: false,
-    echoReasoning: false
-  },
-  {
-    id: 'whisper-large-v3-turbo',
-    label: 'ORION Listen Turbo',
-    description: 'Fast speech → text',
-    reasoningEffort: false,
-    echoReasoning: false
-  },
-  {
-    id: 'canopylabs/orpheus-v1-english',
-    label: 'ORION Voice',
-    description: 'English text → speech',
-    reasoningEffort: false,
-    echoReasoning: false
-  },
-  {
-    id: 'canopylabs/orpheus-arabic-saudi',
-    label: 'ORION Voice Arabic',
-    description: 'Arabic text → speech',
-    reasoningEffort: false,
-    echoReasoning: false
-  }
+  { id: 'openai/gpt-oss-20b', label: 'ORION Core', description: 'Fast and balanced for everyday chats', reasoningEffort: true, echoReasoning: false, contextWindow: 131072 },
+  { id: 'openai/gpt-oss-120b', label: 'ORION Max', description: 'Most capable, with deeper reasoning', reasoningEffort: true, echoReasoning: false, contextWindow: 131072 },
+  { id: 'qwen/qwen3.8-27b', label: 'ORION Ultra', description: 'Strong writing and analysis', reasoningEffort: false, echoReasoning: false, contextWindow: 131042 },
+  { id: 'qwen/qwen3.6-27b', label: 'ORION Pro', description: 'Thinks step by step before answering', reasoningEffort: false, echoReasoning: false, contextWindow: 131072 },
+  { id: 'groq/compound', label: 'ORION Apex', description: 'Can search the web and run code', reasoningEffort: false, echoReasoning: false, contextWindow: 131072 },
+  { id: 'groq/compound-mini', label: 'ORION Apex Mini', description: 'Quicker web search and code', reasoningEffort: false, echoReasoning: false, contextWindow: 131072 },
+  { id: 'openai/gpt-oss-safeguard-20b', label: 'ORION Shield', description: 'Safety-focused reasoning', reasoningEffort: false, echoReasoning: false, contextWindow: 131072 },
+  { id: 'allam-2-7b', label: 'ORION Mini', description: 'Lightweight, for short chats (English and Arabic)', reasoningEffort: false, echoReasoning: false, contextWindow: 4096 }
 ]
 
-export const DEFAULT_MODEL = MODELS[2].id // ORION Core - balanced model for Auto mode
+export const DEFAULT_MODEL = MODELS[0].id
+
+export function isKnownModel(id: string): boolean {
+  return MODELS.some((m) => m.id === id)
+}
 
 export function modelInfo(id: string): ModelInfo {
-  return MODELS.find((m) => m.id === id) ?? { id, label: id, description: '', reasoningEffort: false, echoReasoning: false }
+  return MODELS.find((m) => m.id === id) ?? { id, label: id, description: '', reasoningEffort: false, echoReasoning: false, contextWindow: 8192 }
 }
 
 export function modelLabel(id: string): string {

@@ -1,5 +1,8 @@
 export type Role = 'user' | 'assistant'
 
+/** Status the main process sends while an image renders; the chat swaps in the mini games for it. */
+export const IMAGE_GEN_STATUS = 'Generating image…'
+
 export interface Attachment {
   name: string
   content: string
@@ -25,14 +28,15 @@ export interface ChatMessage {
   createdAt: number
 }
 
-export type ChatMode = 'auto' | 'fast' | 'advanced' | 'reasoning' | 'custom'
-
 export interface Conversation {
   id: string
   title: string
   model: string
-  mode: ChatMode
   persona: string
+  /** Never written to disk or listed in history; discarded when the user leaves it. */
+  incognito?: boolean
+  /** Shown in the sidebar's Pinned section. */
+  pinned?: boolean
   messages: ChatMessage[]
   createdAt: number
   updatedAt: number
@@ -74,6 +78,8 @@ export interface ModelInfo {
   echoReasoning: boolean
   /** Supports vision/image input. */
   vision?: boolean
+  /** Max tokens per request; older history is trimmed to fit. */
+  contextWindow: number
 }
 
 export interface ChatRequest {
@@ -92,7 +98,7 @@ export type StreamEvent =
   | { type: 'start'; model: string }
   | { type: 'delta'; content?: string; reasoning?: string }
   | { type: 'status'; message: string }
-  | { type: 'image'; url: string; prompt: string }
+  | { type: 'image'; url: string; prompt: string; seed: number }
   | { type: 'done'; model: string; truncated: boolean }
   | { type: 'error'; message: string }
   | { type: 'aborted' }
@@ -101,6 +107,19 @@ export interface PickedFiles {
   attachments: Attachment[]
   /** Files that were too large or not text. */
   skipped: string[]
+}
+
+export interface ImageEditRequest {
+  /** Prompt the current image was rendered from. */
+  prompt: string
+  instruction: string
+  seed?: number
+}
+
+export interface ImageEditResult {
+  url: string
+  prompt: string
+  seed: number
 }
 
 export interface NxtorbisApi {
@@ -118,4 +137,13 @@ export interface NxtorbisApi {
   getCpuUsage(): Promise<number>
   pickTextFiles(): Promise<PickedFiles>
   pickImages(): Promise<PickedFiles>
+  transcribeAudio(audioBuffer: Uint8Array): Promise<string>
+  /** Opens a save dialog for a data: image; resolves false when cancelled. */
+  saveImage(dataUrl: string, name: string): Promise<boolean>
+  /** Re-renders an image with the edit merged into its prompt, keeping the seed. */
+  editImage(request: ImageEditRequest): Promise<ImageEditResult>
+  /** Fires when a page in the in-app browser tries to open a new window. */
+  onBrowserNewTab(listener: (url: string) => void): () => void
+  popOutBrowser(url: string): Promise<boolean>
+  clearBrowserData(): Promise<void>
 }

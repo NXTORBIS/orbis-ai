@@ -1,13 +1,15 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeTheme, net, shell } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeTheme, net, session, shell } from 'electron'
 import type { MenuItemConstructorOptions, OpenDialogOptions, TitleBarOverlayOptions } from 'electron'
 import { existsSync, promises as fs } from 'node:fs'
 import os from 'node:os'
 import { basename, join } from 'node:path'
-import type { ChatRequest, Conversation, PickedFiles, SettingsUpdate, StreamEvent } from '../shared/types'
+import type { ChatRequest, Conversation, ImageEditRequest, ImageEditResult, PickedFiles, SettingsUpdate, StreamEvent } from '../shared/types'
+import { IMAGE_GEN_STATUS } from '../shared/types'
 import { streamChat, testApiKey } from './nim'
 import { buildSystemPrompt } from './prompt'
 import { formatResults, searchWeb } from './websearch'
-import { detectImageGenRequest, generateImage } from './imagegen'
+import { detectImageGenRequest, generateImage, rewriteImagePrompt } from './imagegen'
+import { transcribeAudio } from './voice'
 import { Store } from './store'
 
 // Baked in at build time from GROQ_API_KEY in .env.local (see electron.vite.config.ts).
@@ -135,9 +137,10 @@ function createWindow(): BrowserWindow {
     webPreferences.sandbox = true
     if (!isHttpUrl(params.src)) event.preventDefault()
   })
+  // Links that would open a new window open as a new tab in the in-app browser instead.
   win.webContents.on('did-attach-webview', (_event, contents) => {
     contents.setWindowOpenHandler(({ url }) => {
-      if (isHttpUrl(url)) void contents.loadURL(url)
+      if (isHttpUrl(url) && !win.webContents.isDestroyed()) win.webContents.send('browser:new-tab', url)
       return { action: 'deny' }
     })
   })
@@ -192,7 +195,6 @@ function registerIpc(): void {
   ipcMain.handle('settings:update', async (_event, update: SettingsUpdate) => {
     const settings = await store.updateSettings(update)
     nativeTheme.themeSource = settings.theme
-    mainWindow?.setTitleBarOverlay(titleBarOverlayFor(nativeTheme.shouldUseDarkColors))
     return settings
   })
 
@@ -220,15 +222,17 @@ function registerIpc(): void {
       if (last?.role === 'user') {
         const imagePrompt = detectImageGenRequest(last.content)
         if (imagePrompt) {
-          emit({ type: 'status', message: 'Generating image…' })
+          emit({ type: 'status', message: IMAGE_GEN_STATUS })
           try {
-            const imageUrl = await generateImage(imagePrompt, (url, init) => net.fetch(url, init))
-            emit({ type: 'image', url: imageUrl, prompt: imagePrompt })
-            emit({ type: 'done', model: 'pollinations-ai', truncated: false })
-            return
+            const image = await generateImage(imagePrompt, (url, init) => net.fetch(url, init))
+            if (controller.signal.aborted) return emit({ type: 'aborted' })
+            emit({ type: 'image', url: image.dataUrl, prompt: imagePrompt, seed: image.seed })
+            emit({ type: 'done', model: request.model, truncated: false })
           } catch (err) {
-            emit({ type: 'status', message: `Image generation failed: ${err instanceof Error ? err.message : String(err)}. Proceeding with text response.` })
+            // Falling back to the chat model would just get "I can't make images" back.
+            emit({ type: 'error', message: `Couldn't generate the image: ${err instanceof Error ? err.message : String(err)}. Try again in a moment.` })
           }
+          return
         }
       }
 
@@ -297,6 +301,74 @@ function registerIpc(): void {
     const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
     return result.canceled ? { attachments: [], skipped: [] } : readImages(result.filePaths)
   })
+
+  ipcMain.handle('browser:popout', (_event, url: string) => {
+    if (typeof url !== 'string' || !isHttpUrl(url)) return false
+    const popout = new BrowserWindow({
+      width: 1100,
+      height: 800,
+      title: 'Orbis Browser',
+      autoHideMenuBar: true,
+      backgroundColor: '#111215',
+      // Same session as the in-app browser so sign-ins carry over; no preload or Node access.
+      webPreferences: { partition: 'persist:browser', contextIsolation: true, nodeIntegration: false, sandbox: true }
+    })
+    popout.setMenuBarVisibility(false)
+    popout.webContents.setWindowOpenHandler(({ url: next }) => {
+      if (isHttpUrl(next)) void popout.webContents.loadURL(next)
+      return { action: 'deny' }
+    })
+    void popout.loadURL(url)
+    return true
+  })
+
+  ipcMain.handle('browser:clear-data', async () => {
+    const browserSession = session.fromPartition('persist:browser')
+    await Promise.all([browserSession.clearStorageData(), browserSession.clearCache()])
+  })
+
+  ipcMain.handle('image:edit', async (_event, request: ImageEditRequest): Promise<ImageEditResult> => {
+    const instruction = String(request?.instruction ?? '').trim().slice(0, 2000)
+    if (!instruction) throw new Error('Describe the edit first.')
+    const prompt = String(request?.prompt ?? '').trim().slice(0, 1000)
+    const seed = Number.isSafeInteger(request?.seed) ? request.seed : undefined
+    const fetchFn = (url: string, init?: RequestInit): Promise<Response> => net.fetch(url, init)
+    const nextPrompt = await rewriteImagePrompt(prompt, instruction, GROQ_API_KEYS, fetchFn)
+    const image = await generateImage(nextPrompt, fetchFn, seed)
+    return { url: image.dataUrl, prompt: nextPrompt, seed: image.seed }
+  })
+
+  ipcMain.handle('image:save', async (event, dataUrl: string, name: string) => {
+    const match = /^data:image\/(png|jpe?g|webp|gif);base64,([A-Za-z0-9+/=]+)$/i.exec(dataUrl)
+    if (!match) return false
+    const ext = match[1].toLowerCase() === 'jpeg' ? 'jpg' : match[1].toLowerCase()
+    const safeName = (String(name).replace(/[<>:"/\\|?*\x00-\x1f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60) || 'orbis-image')
+    const options = {
+      title: 'Save image',
+      defaultPath: join(app.getPath('downloads'), `${safeName}.${ext}`),
+      filters: [{ name: 'Image', extensions: [ext] }]
+    }
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const result = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options)
+    if (result.canceled || !result.filePath) return false
+    await fs.writeFile(result.filePath, Buffer.from(match[2], 'base64'))
+    return true
+  })
+
+  ipcMain.handle('voice:transcribe', async (_event, audioData: Uint8Array) => {
+    if (GROQ_API_KEYS.length === 0) {
+      throw new Error('No Groq API key available for transcription')
+    }
+    const audioBuffer = Buffer.from(audioData)
+    for (const key of GROQ_API_KEYS) {
+      try {
+        return await transcribeAudio(audioBuffer, (url, init) => net.fetch(url, init), key)
+      } catch (err) {
+        const lastKey = key === GROQ_API_KEYS[GROQ_API_KEYS.length - 1]
+        if (lastKey) throw err
+      }
+    }
+  })
 }
 
 // Settings and chats saved before the rename to Orbis live under the old folder name.
@@ -358,7 +430,6 @@ if (!app.requestSingleInstanceLock()) {
 
     registerIpc()
     mainWindow = createWindow()
-    nativeTheme.on('updated', () => mainWindow?.setTitleBarOverlay(titleBarOverlayFor(nativeTheme.shouldUseDarkColors)))
     mainWindow.on('closed', () => (mainWindow = null))
   })
 

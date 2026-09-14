@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Check, ChevronDown, Ellipsis, Orbit, Pencil, Share2, SquarePen, Trash2, Users } from 'lucide-react'
+import { Check, Ellipsis, HatGlasses, Pencil, Share2, SquarePen, Trash2, Users } from 'lucide-react'
 import { PERSONAS, personaInfo } from '../../../shared/personas'
 import { useDismiss } from '../lib/useDismiss'
 
@@ -10,6 +10,8 @@ interface Props {
   personaMenuOpen: boolean
   thinking: boolean
   userInitial: string
+  incognito: boolean
+  onToggleIncognito(): void
   onPersonaMenuChange(open: boolean): void
   onPersonaChange(id: string): void
   onRename(title: string): void
@@ -44,40 +46,16 @@ export default function ChatHeader(props: Props): React.JSX.Element {
   return (
     <header className="chat-header">
       <div className="header-side">
-        <div className="popover-anchor" ref={personaRef}>
-          <button className="persona-pill" onClick={() => props.onPersonaMenuChange(!props.personaMenuOpen)}>
-            <Orbit size={14} />
-            {persona.label}
-            <ChevronDown size={14} />
-          </button>
-          {props.personaMenuOpen && (
-            <div className="popover glass" role="menu">
-              <span className="hud-label">Assistant</span>
-              {PERSONAS.map((p) => (
-                <button
-                  key={p.id}
-                  role="menuitemradio"
-                  aria-checked={p.id === persona.id}
-                  className={`menu-item${p.id === persona.id ? ' selected' : ''}`}
-                  onClick={() => {
-                    props.onPersonaChange(p.id)
-                    props.onPersonaMenuChange(false)
-                  }}
-                >
-                  <span className="menu-text">
-                    <b>{p.label}</b>
-                    <small>{p.description}</small>
-                  </span>
-                  {p.id === persona.id && <Check size={14} />}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
         <span className={`status ${props.thinking ? 'thinking' : 'idle'}`}>
           <i />
           {props.thinking ? 'THINKING' : 'IDLE'}
         </span>
+        {props.incognito && (
+          <span className="incognito-pill">
+            <HatGlasses size={12} />
+            Incognito
+          </span>
+        )}
       </div>
 
       <div className="header-title">
@@ -101,9 +79,49 @@ export default function ChatHeader(props: Props): React.JSX.Element {
       </div>
 
       <div className="header-side right">
-        <button className="icon-btn" title="Assistants" onClick={() => props.onPersonaMenuChange(true)}>
-          <Users size={16} />
+        <button
+          className={`icon-btn incognito-btn${props.incognito ? ' active' : ''}`}
+          title={props.incognito ? 'Turn off incognito (Ctrl+Shift+N)' : 'Incognito chat (Ctrl+Shift+N)'}
+          aria-pressed={props.incognito}
+          onClick={props.onToggleIncognito}
+        >
+          <HatGlasses size={16} />
         </button>
+        <div className="popover-anchor" ref={personaRef}>
+          <button
+            className={`icon-btn${props.personaMenuOpen ? ' active' : ''}`}
+            title={`Assistant: ${persona.label}`}
+            aria-label="Choose assistant"
+            aria-haspopup="menu"
+            aria-expanded={props.personaMenuOpen}
+            onClick={() => props.onPersonaMenuChange(!props.personaMenuOpen)}
+          >
+            <Users size={16} />
+          </button>
+          {props.personaMenuOpen && (
+            <div className="popover glass align-right" role="menu">
+              <span className="hud-label">Assistant</span>
+              {PERSONAS.map((p) => (
+                <button
+                  key={p.id}
+                  role="menuitemradio"
+                  aria-checked={p.id === persona.id}
+                  className={`menu-item${p.id === persona.id ? ' selected' : ''}`}
+                  onClick={() => {
+                    props.onPersonaChange(p.id)
+                    props.onPersonaMenuChange(false)
+                  }}
+                >
+                  <span className="menu-text">
+                    <b>{p.label}</b>
+                    <small>{p.description}</small>
+                  </span>
+                  {p.id === persona.id && <Check size={14} />}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <button className="icon-btn" title="Rename chat" disabled={!props.hasConversation} onClick={startRename}>
           <SquarePen size={16} />
         </button>

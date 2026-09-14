@@ -1,20 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronDown } from 'lucide-react'
-import type { Attachment, ChatMessage, ChatMode, ChatRequest, Conversation, Settings, SettingsUpdate, StreamEvent } from '../../shared/types'
-import { DEFAULT_MODEL, modelLabel } from '../../shared/models'
-import { modeInfo, newChatMode } from '../../shared/modes'
+import type { Attachment, ChatMessage, ChatRequest, Conversation, Settings, SettingsUpdate, StreamEvent } from '../../shared/types'
+import { IMAGE_GEN_STATUS } from '../../shared/types'
+import { DEFAULT_MODEL, isKnownModel, modelLabel } from '../../shared/models'
 import { DEFAULT_PERSONA } from '../../shared/personas'
 import { copyText, newId, titleFromMessage } from './lib/utils'
 import BrowserPanel from './components/BrowserPanel'
 import ChatHeader from './components/ChatHeader'
 import ChatView from './components/ChatView'
 import CursorGlow from './components/CursorGlow'
-import HistoryDrawer from './components/HistoryDrawer'
+import ImagesView from './components/ImagesView'
 import HudBackground from './components/HudBackground'
-import NavRail from './components/NavRail'
+import Sidebar from './components/Sidebar'
 import { ActivityPanel, ShortcutsModal, ToastStack } from './components/Overlays'
 import SettingsModal from './components/SettingsModal'
 import SystemBar from './components/SystemBar'
+import ImageEditor from './components/ImageEditor'
+import { ImageEditorContext, collectImages, imageMarkdown } from './lib/imageEditor'
+import type { EditableImage, GalleryImage } from './lib/imageEditor'
 
 export interface StreamState {
   requestId: string
@@ -40,7 +42,7 @@ interface PendingDelta {
 }
 
 interface DraftChat {
-  mode: ChatMode
+  incognito: boolean
   model: string
   persona: string
 }
@@ -52,18 +54,24 @@ export default function App(): React.JSX.Element {
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [streams, setStreams] = useState<Record<string, StreamState>>({})
   const [activeId, setActiveId] = useState<string | null>(null)
-  const [draft, setDraft] = useState<DraftChat>({ mode: 'auto', model: DEFAULT_MODEL, persona: DEFAULT_PERSONA })
+  const [draft, setDraft] = useState<DraftChat>({ model: DEFAULT_MODEL, persona: DEFAULT_PERSONA, incognito: false })
   const [loaded, setLoaded] = useState(false)
-  const [historyOpen, setHistoryOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('orbis.sidebarCollapsed') === '1'
+    } catch {
+      return false
+    }
+  })
+  const [imagesOpen, setImagesOpen] = useState(false)
   const [webSearch, setWebSearch] = useState(false)
-  const [historyFocus, setHistoryFocus] = useState(0)
+  const [searchToken, setSearchToken] = useState(0)
   const [activityOpen, setActivityOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [browserOpen, setBrowserOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [personaMenuOpen, setPersonaMenuOpen] = useState(false)
   const [quickPromptsOpen, setQuickPromptsOpen] = useState(false)
-  const [headerCollapsed, setHeaderCollapsed] = useState(false)
   const [notices, setNotices] = useState<Notice[]>([])
   const [unread, setUnread] = useState(0)
   const [toasts, setToasts] = useState<Notice[]>([])
@@ -99,7 +107,7 @@ export default function App(): React.JSX.Element {
 
   const persist = useCallback((id: string) => {
     const conversation = conversationsRef.current.find((c) => c.id === id)
-    if (conversation) void window.api.saveConversation(conversation)
+    if (conversation && !conversation.incognito) void window.api.saveConversation(conversation)
   }, [])
 
   const notify = useCallback((text: string, kind: NoticeKind = 'info') => {
@@ -116,7 +124,7 @@ export default function App(): React.JSX.Element {
   useEffect(() => {
     void Promise.all([window.api.getSettings(), window.api.listConversations()]).then(([s, list]) => {
       setSettings(s)
-      setDraft({ ...newChatMode(s.defaultModel), persona: DEFAULT_PERSONA })
+      setDraft((d) => ({ ...d, model: isKnownModel(s.defaultModel) ? s.defaultModel : DEFAULT_MODEL, persona: DEFAULT_PERSONA }))
       commitConversations(list)
       setLoaded(true)
     })
@@ -233,6 +241,7 @@ export default function App(): React.JSX.Element {
           }
           case 'status':
             setStatus(event.message)
+            if (event.message === IMAGE_GEN_STATUS) break
             if (!COUNTDOWN.test(event.message)) {
               logActivity(event.message, 'warn')
             } else if (!countdownLogged) {
@@ -241,7 +250,7 @@ export default function App(): React.JSX.Element {
             }
             break
           case 'image':
-            queueDelta(conversationId, assistant.id, `![Generated Image](${event.url})`, '', undefined)
+            queueDelta(conversationId, assistant.id, imageMarkdown({ src: event.url, prompt: event.prompt, seed: event.seed }), '', undefined)
             break
           case 'done':
             finish()
@@ -260,7 +269,6 @@ export default function App(): React.JSX.Element {
         requestId,
         model: conversation.model,
         persona: conversation.persona,
-        reasoningEffort: modeInfo(conversation.mode).reasoningEffort,
         messages: history,
         webSearch
       }
@@ -370,11 +378,10 @@ export default function App(): React.JSX.Element {
     [persist, updateConversation]
   )
 
-  const changeMode = useCallback(
-    (mode: ChatMode, model?: string) => {
-      const apply = (current: { model: string }): { mode: ChatMode; model: string } => ({ mode, model: model ?? modeInfo(mode).model ?? current.model })
-      if (!activeId) return setDraft((d) => ({ ...d, ...apply(d) }))
-      updateConversation(activeId, (c) => ({ ...c, ...apply(c) }))
+  const changeModel = useCallback(
+    (model: string) => {
+      if (!activeId) return setDraft((d) => ({ ...d, model }))
+      updateConversation(activeId, (c) => ({ ...c, model }))
       persist(activeId)
     },
     [activeId, persist, updateConversation]
@@ -406,13 +413,12 @@ export default function App(): React.JSX.Element {
             resolve(null)
           }
         })
-        const fast = modeInfo('fast')
         window.api
           .sendChat({
             requestId,
-            model: fast.model ?? DEFAULT_MODEL,
+            model: DEFAULT_MODEL,
             persona: DEFAULT_PERSONA,
-            reasoningEffort: fast.reasoningEffort,
+            reasoningEffort: 'low',
             messages: [
               {
                 id: newId(),
@@ -451,10 +457,34 @@ export default function App(): React.JSX.Element {
     [notify, settings]
   )
 
-  const newChat = useCallback(() => {
-    setActiveId(null)
-    setDraft({ ...newChatMode(settings?.defaultModel ?? DEFAULT_MODEL), persona: DEFAULT_PERSONA })
-  }, [settings?.defaultModel])
+  const startChat = useCallback(
+    (incognito: boolean) => {
+      setActiveId(null)
+      setImagesOpen(false)
+      const preferred = settings?.defaultModel ?? DEFAULT_MODEL
+      setDraft({ model: isKnownModel(preferred) ? preferred : DEFAULT_MODEL, persona: DEFAULT_PERSONA, incognito })
+    },
+    [settings?.defaultModel]
+  )
+
+  const newChat = useCallback(() => startChat(false), [startChat])
+
+  const toggleIncognito = useCallback(() => {
+    const on = !(activeId ? conversationsRef.current.find((c) => c.id === activeId)?.incognito : draft.incognito)
+    startChat(on)
+    notify(on ? "Incognito chat on. It won't be saved or shown in your history." : 'Incognito chat off.')
+  }, [activeId, draft.incognito, notify, startChat])
+
+  // Incognito chats only exist while open, so leaving one discards it (and stops its reply).
+  useEffect(() => {
+    const stale = conversationsRef.current.filter((c) => c.incognito && c.id !== activeId)
+    if (!stale.length) return
+    for (const c of stale) {
+      const stream = streamsRef.current[c.id]
+      if (stream) void window.api.abortChat(stream.requestId)
+    }
+    commitConversations(conversationsRef.current.filter((c) => !c.incognito || c.id === activeId))
+  }, [activeId, commitConversations])
 
   const updateSettings = useCallback(async (update: SettingsUpdate) => {
     const next = await window.api.updateSettings(update)
@@ -462,15 +492,70 @@ export default function App(): React.JSX.Element {
     return next
   }, [])
 
+  useEffect(() => {
+    try {
+      localStorage.setItem('orbis.sidebarCollapsed', sidebarCollapsed ? '1' : '0')
+    } catch {
+      // Storage can be unavailable; the sidebar just won't remember its state.
+    }
+  }, [sidebarCollapsed])
+
+  const toggleSidebar = useCallback(() => setSidebarCollapsed((collapsed) => !collapsed), [])
+
   const openSearch = useCallback(() => {
-    setHistoryOpen(true)
-    setHistoryFocus((n) => n + 1)
+    setSidebarCollapsed(false)
+    setSearchToken((n) => n + 1)
+  }, [])
+
+  const selectChat = useCallback((id: string) => {
+    setActiveId(id)
+    setImagesOpen(false)
+  }, [])
+
+  const togglePin = useCallback(
+    (id: string) => {
+      updateConversation(id, (c) => ({ ...c, pinned: !c.pinned }))
+      persist(id)
+    },
+    [persist, updateConversation]
+  )
+
+  const editScreenshot = useCallback(
+    (src: string, title: string) => setEditing({ conversationId: activeId, image: { src, prompt: title }, tool: 'markup' }),
+    [activeId]
+  )
+
+  const editGalleryImage = useCallback((image: GalleryImage) => {
+    setEditing({ conversationId: image.conversationId, image: { src: image.src, prompt: image.prompt, seed: image.seed, alpha: image.alpha } })
   }, [])
 
   const toggleActivity = useCallback(() => {
     setActivityOpen((open) => !open)
     setUnread(0)
   }, [])
+
+  const [editing, setEditing] = useState<{ conversationId: string | null; image: EditableImage; tool?: 'markup' } | null>(null)
+  const openImageEditor = useCallback((image: EditableImage) => setEditing({ conversationId: activeId, image }), [activeId])
+
+  const addImageToChat = useCallback(
+    (conversationId: string | null, image: EditableImage): boolean => {
+      const conversation = conversationId ? conversationsRef.current.find((c) => c.id === conversationId) : undefined
+      if (!conversation) {
+        notify(conversationId ? "That chat no longer exists, so the image can't be added. Download it instead." : 'Open or start a chat to add this image, or download it instead.', 'warn')
+        return false
+      }
+      if (streamsRef.current[conversation.id]) {
+        notify('Wait for the current reply to finish, then save the image.', 'warn')
+        return false
+      }
+      const now = Date.now()
+      const message: ChatMessage = { id: newId(), role: 'assistant', content: imageMarkdown(image), model: conversation.model, createdAt: now }
+      updateConversation(conversation.id, (c) => ({ ...c, messages: [...c.messages, message], updatedAt: now }))
+      persist(conversation.id)
+      return true
+    },
+    [notify, persist, updateConversation]
+  )
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent): void => {
@@ -479,33 +564,37 @@ export default function App(): React.JSX.Element {
       if (e.shiftKey && key === 'o') {
         e.preventDefault()
         newChat()
+      } else if (e.shiftKey && key === 'n') {
+        e.preventDefault()
+        toggleIncognito()
       } else if (key === ',') {
         e.preventDefault()
         setSettingsOpen(true)
       } else if (key === 'b') {
         e.preventDefault()
-        setHistoryOpen((open) => !open)
+        toggleSidebar()
       }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [newChat])
+  }, [newChat, toggleIncognito, toggleSidebar])
 
   const active = activeId ? conversations.find((c) => c.id === activeId) : undefined
-  const current: DraftChat = active ? { mode: active.mode, model: active.model, persona: active.persona } : draft
-  const recent = useMemo(() => [...conversations].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 3), [conversations])
+  const current: DraftChat = active ? { model: active.model, persona: active.persona, incognito: Boolean(active.incognito) } : draft
+  const savedConversations = useMemo(() => conversations.filter((c) => !c.incognito), [conversations])
+  const galleryImages = useMemo(() => collectImages(savedConversations), [savedConversations])
 
   return (
+    <ImageEditorContext.Provider value={openImageEditor}>
     <div className={`hud${effects ? ' effects' : ''}`}>
       <HudBackground animated={effects} />
       <SystemBar
         dark={dark}
         unread={unread}
-        onToggleHistory={() => setHistoryOpen((open) => !open)}
+        onToggleHistory={toggleSidebar}
         onNewChat={newChat}
         onSearch={openSearch}
         onQuickPrompts={() => setQuickPromptsOpen((open) => !open)}
-        onUnavailable={(feature) => notify(`${feature} is coming soon.`)}
         webSearch={webSearch}
         onToggleWebSearch={() => {
           notify(webSearch ? 'Web search off.' : 'Web search on. Replies will use live results.')
@@ -513,73 +602,64 @@ export default function App(): React.JSX.Element {
         }}
         onToggleActivity={toggleActivity}
         onToggleTheme={() => void updateSettings({ theme: dark ? 'light' : 'dark' })}
-      />
+      >
+        <ChatHeader
+          title={active?.title ?? 'New chat'}
+          hasConversation={Boolean(active)}
+          persona={current.persona}
+          personaMenuOpen={personaMenuOpen}
+          thinking={Boolean(active && streams[active.id])}
+          userInitial={settings?.userName.trim().charAt(0).toUpperCase() || 'U'}
+          incognito={current.incognito}
+          onToggleIncognito={toggleIncognito}
+          onPersonaMenuChange={setPersonaMenuOpen}
+          onPersonaChange={changePersona}
+          onRename={(title) => active && renameConversation(active.id, title)}
+          onShare={() => active && shareConversation(active.id)}
+          onDelete={() => active && deleteConversation(active.id)}
+          onOpenSettings={() => setSettingsOpen(true)}
+        />
+      </SystemBar>
 
       <div className="hud-body">
-        <NavRail
-          recent={recent}
+        <Sidebar
+          collapsed={sidebarCollapsed}
+          conversations={savedConversations}
           activeId={activeId}
+          incognito={current.incognito}
           streams={streams}
+          imageCount={galleryImages.length}
+          imagesOpen={imagesOpen}
+          searchToken={searchToken}
+          userName={settings?.userName ?? 'You'}
+          userTitle={settings?.userTitle ?? ''}
+          onToggleCollapsed={toggleSidebar}
           onNewChat={newChat}
+          onIncognito={toggleIncognito}
           onSearch={openSearch}
+          onImages={() => setImagesOpen((open) => !open)}
           onAssistants={() => setPersonaMenuOpen(true)}
-          onSelect={setActiveId}
+          onBrowser={() => setBrowserOpen((b) => !b)}
+          onSelect={selectChat}
+          onRename={renameConversation}
+          onDelete={deleteConversation}
+          onTogglePin={togglePin}
           onSettings={() => setSettingsOpen(true)}
           onHelp={() => setShortcutsOpen(true)}
-          onBrowser={() => setBrowserOpen((b) => !b)}
         />
 
-        {historyOpen && (
-          <HistoryDrawer
-            conversations={conversations}
-            activeId={activeId}
-            streams={streams}
-            focusToken={historyFocus}
-            onClose={() => setHistoryOpen(false)}
-            onNewChat={() => {
-              newChat()
-              setHistoryOpen(false)
-            }}
-            onSelect={(id) => {
-              setActiveId(id)
-              setHistoryOpen(false)
-            }}
-            onRename={renameConversation}
-            onDelete={deleteConversation}
-          />
-        )}
-
         <main className="stage">
-          <button className="top-chevron" title={headerCollapsed ? 'Show header' : 'Hide header'} onClick={() => setHeaderCollapsed((c) => !c)}>
-            <ChevronDown size={14} className={headerCollapsed ? 'flipped' : undefined} />
-          </button>
-          {!headerCollapsed && (
-            <ChatHeader
-              title={active?.title ?? 'New chat'}
-              hasConversation={Boolean(active)}
-              persona={current.persona}
-              personaMenuOpen={personaMenuOpen}
-              thinking={Boolean(active && streams[active.id])}
-              userInitial={settings?.userName.trim().charAt(0).toUpperCase() || 'U'}
-              onPersonaMenuChange={setPersonaMenuOpen}
-              onPersonaChange={changePersona}
-              onRename={(title) => active && renameConversation(active.id, title)}
-              onShare={() => active && shareConversation(active.id)}
-              onDelete={() => active && deleteConversation(active.id)}
-              onOpenSettings={() => setSettingsOpen(true)}
-            />
-          )}
           <ChatView
             key={activeId ?? 'new'}
             conversation={active}
             stream={active ? streams[active.id] : undefined}
             settings={settings}
             loaded={loaded}
-            mode={current.mode}
             model={current.model}
+            incognito={current.incognito}
             quickPromptsOpen={quickPromptsOpen}
             onQuickPromptsChange={setQuickPromptsOpen}
-            onModeChange={changeMode}
+            onModelChange={changeModel}
             onSend={send}
             onStop={() => active && stop(active.id)}
             onRegenerate={(messageId) => active && regenerate(active.id, messageId)}
@@ -592,7 +672,12 @@ export default function App(): React.JSX.Element {
             onNewChat={newChat}
             onSearch={openSearch}
           />
+          {imagesOpen && (
+            <ImagesView images={galleryImages} onClose={() => setImagesOpen(false)} onOpenChat={selectChat} onEdit={editGalleryImage} onNotify={notify} />
+          )}
         </main>
+
+        {browserOpen && <BrowserPanel onClose={() => setBrowserOpen(false)} onEditScreenshot={editScreenshot} onNotify={notify} />}
 
         <button className="edge-handle" title="Activity" onClick={toggleActivity}>
           <span />
@@ -604,7 +689,17 @@ export default function App(): React.JSX.Element {
       <ToastStack toasts={toasts} onDismiss={(id) => setToasts((current) => current.filter((t) => t.id !== id))} />
       {settingsOpen && settings && <SettingsModal settings={settings} onUpdate={updateSettings} onClose={() => setSettingsOpen(false)} />}
       {shortcutsOpen && <ShortcutsModal onClose={() => setShortcutsOpen(false)} />}
-      {browserOpen && <BrowserPanel onClose={() => setBrowserOpen(false)} />}
+      {editing && (
+        <ImageEditor
+          key={editing.image.src.slice(-64)}
+          image={editing.image}
+          onClose={() => setEditing(null)}
+          onSave={(image) => addImageToChat(editing.conversationId, image)}
+          onNotify={notify}
+          initialTool={editing.tool}
+        />
+      )}
     </div>
+    </ImageEditorContext.Provider>
   )
 }

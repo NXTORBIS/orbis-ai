@@ -1,6 +1,8 @@
 import { memo, useEffect, useRef, useState } from 'react'
 import { Check, ChevronDown, Copy, Ellipsis, FileText, Pencil, RefreshCw, Sparkles, ThumbsDown, ThumbsUp, Type, Upload, Volume2, VolumeX } from 'lucide-react'
 import type { ChatMessage } from '../../../shared/types'
+import { IMAGE_GEN_STATUS } from '../../../shared/types'
+import ImageGenPlaceholder from './ImageGenPlaceholder'
 import { modelLabel } from '../../../shared/models'
 import { copyText, formatDuration } from '../lib/utils'
 import { useDismiss } from '../lib/useDismiss'
@@ -127,6 +129,18 @@ function UserMessage({ message, userName, canEdit, onEdit, onResend, onNotify }:
 }
 
 function PendingReply({ status, reasoning }: { status?: string; reasoning?: string }): React.JSX.Element {
+  if (status === IMAGE_GEN_STATUS) {
+    return (
+      <div className="msg assistant pending image-pending">
+        <div className="avatar assistant-avatar">
+          <OrbisMark size={20} />
+        </div>
+        <div className="msg-body">
+          <ImageGenPlaceholder />
+        </div>
+      </div>
+    )
+  }
   return (
     <div className="msg assistant pending">
       <ThinkingOrb />

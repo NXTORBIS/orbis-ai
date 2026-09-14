@@ -1,12 +1,12 @@
-import mark from '../assets/orbis-mark.jpg'
-import wordmark from '../assets/orbis-wordmark.png'
+import ring from '../assets/orbis-ring.png'
+import logo from '../assets/orbis-logo.png'
 
-/** The standalone ORBIS ring, used wherever the single logo appears. */
+/** The ORBIS ring from the original transparent logo, used wherever the single mark appears. */
 export function OrbisMark({ size, className }: { size: number; className?: string }): React.JSX.Element {
   return (
     <img
       className={`orbis-mark${className ? ` ${className}` : ''}`}
-      src={mark}
+      src={ring}
       alt=""
       aria-hidden="true"
       draggable={false}
@@ -15,7 +15,7 @@ export function OrbisMark({ size, className }: { size: number; className?: strin
   )
 }
 
-/** ORBIS wordmark for dark theme. */
-export function OrbisWordmark(): React.JSX.Element {
-  return <img className="wordmark" src={wordmark} alt="ORBIS" draggable={false} />
+/** The original transparent ORBIS logo (ring and lettering). */
+export function OrbisWordmark({ className }: { className?: string }): React.JSX.Element {
+  return <img className={`wordmark${className ? ` ${className}` : ''}`} src={logo} alt="ORBIS" draggable={false} />
 }

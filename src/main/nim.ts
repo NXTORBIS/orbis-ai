@@ -86,8 +86,7 @@ function groqEffort(effort: ReasoningEffort): string {
 }
 
 async function streamOnce(model: string, opts: ChatOptions, apiKey: string, lean = false): Promise<void> {
-  // Keep only the last 15 messages to avoid token limits on free tier
-  const recentMessages = opts.messages.slice(-15)
+  const recentMessages = fitToContext(opts.messages.slice(-15), opts.systemPrompt, modelInfo(model).contextWindow)
 
   const body: Record<string, unknown> = {
     model,
@@ -191,11 +190,29 @@ function asText(value: unknown): string {
   return typeof value === 'string' ? value : ''
 }
 
+const DATA_IMAGE_MARKDOWN = /!\[[^\]]*\]\(data:image\/[^)]+\)/g
+
+function messageSize(m: ChatMessage): number {
+  const files = (m.attachments ?? []).reduce((n, a) => n + (a.type === 'image' ? 0 : a.content.length), 0)
+  return m.content.replace(DATA_IMAGE_MARKDOWN, '[generated image]').length + files
+}
+
+/** Drops the oldest messages until the request fits the model's context, always keeping the newest. */
+function fitToContext(messages: ChatMessage[], systemPrompt: string, contextWindow: number): ChatMessage[] {
+  // Roughly 4 characters per token, keeping 40% of the window free for the reply.
+  const budget = contextWindow * 0.6 * 4 - systemPrompt.length
+  let total = messages.reduce((n, m) => n + messageSize(m), 0)
+  let start = 0
+  while (start < messages.length - 1 && total > budget) total -= messageSize(messages[start++])
+  return messages.slice(start)
+}
+
 function toApiMessages(messages: ChatMessage[], systemPrompt: string, model: string): Record<string, unknown>[] {
   const info = modelInfo(model)
   const out: Record<string, unknown>[] = systemPrompt.trim() ? [{ role: 'system', content: systemPrompt }] : []
   for (const m of messages) {
-    const content = m.role === 'user' ? toMessageContent(m, info) : m.content
+    // Generated images are inline base64; sending them back would blow the token limit.
+    const content = m.role === 'user' ? toMessageContent(m, info) : m.content.replace(DATA_IMAGE_MARKDOWN, '[generated image]')
     // Failed replies with no text would break role alternation, so they are left out.
     if (m.role === 'assistant' && !content) continue
     const prev = out[out.length - 1]

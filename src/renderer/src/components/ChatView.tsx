@@ -1,6 +1,6 @@
 import { Fragment, useLayoutEffect, useRef, useState } from 'react'
-import { ArrowDown } from 'lucide-react'
-import type { Attachment, ChatMode, Conversation, Settings } from '../../../shared/types'
+import { ArrowDown, HatGlasses } from 'lucide-react'
+import type { Attachment, Conversation, Settings } from '../../../shared/types'
 import type { NoticeKind, StreamState } from '../App'
 import Composer from './Composer'
 import Greeting from './Greeting'
@@ -11,11 +11,11 @@ interface Props {
   stream?: StreamState
   settings: Settings | null
   loaded: boolean
-  mode: ChatMode
   model: string
+  incognito: boolean
   quickPromptsOpen: boolean
   onQuickPromptsChange(open: boolean): void
-  onModeChange(mode: ChatMode, model?: string): void
+  onModelChange(model: string): void
   onSend(text: string, attachments: Attachment[]): boolean
   onStop(): void
   onRegenerate(messageId: string): void
@@ -56,11 +56,10 @@ export default function ChatView(props: Props): React.JSX.Element {
   const composer = (
     <Composer
       streaming={Boolean(stream)}
-      mode={props.mode}
       model={props.model}
       quickPromptsOpen={props.quickPromptsOpen}
       onQuickPromptsChange={props.onQuickPromptsChange}
-      onModeChange={props.onModeChange}
+      onModelChange={props.onModelChange}
       onSend={(text, attachments) => {
         stickToBottomRef.current = true
         return props.onSend(text, attachments)
@@ -79,6 +78,12 @@ export default function ChatView(props: Props): React.JSX.Element {
       <div className="stage-content">
         <div className="empty-state">
           <Greeting />
+          {props.incognito && (
+            <p className="incognito-note">
+              <HatGlasses size={14} />
+              Incognito chat. It won't be saved or appear in your history, and it's gone once you leave.
+            </p>
+          )}
         </div>
         {composer}
       </div>
@@ -91,6 +96,12 @@ export default function ChatView(props: Props): React.JSX.Element {
     <div className="stage-content">
       <div className="messages" ref={scrollRef} onScroll={onScroll}>
         <div className="messages-inner">
+          {props.incognito && (
+            <div className="incognito-banner">
+              <HatGlasses size={13} />
+              Incognito chat · not saved
+            </div>
+          )}
           {messages.map((m, i) => (
             <Fragment key={m.id}>
               {(i === 0 || dayKey(messages[i - 1].createdAt) !== dayKey(m.createdAt)) && (

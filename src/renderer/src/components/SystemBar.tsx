@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Bell, Cpu, Globe, Hash, Mic, Moon, PanelLeft, Plus, Search, Sun } from 'lucide-react'
-import { OrbisWordmark } from './Brand'
+import { Bell, Cpu, Globe, Hash, Moon, PanelLeft, Plus, Search, Sun } from 'lucide-react'
 
 interface Props {
   dark: boolean
@@ -9,11 +8,12 @@ interface Props {
   onNewChat(): void
   onSearch(): void
   onQuickPrompts(): void
-  onUnavailable(feature: string): void
   webSearch: boolean
   onToggleWebSearch(): void
   onToggleActivity(): void
   onToggleTheme(): void
+  /** Chat controls (status, title, actions) shown between the bar's left and right groups. */
+  children?: React.ReactNode
 }
 
 export default function SystemBar(props: Props): React.JSX.Element {
@@ -26,7 +26,6 @@ export default function SystemBar(props: Props): React.JSX.Element {
         <button className="sys-btn" title="Chats (Ctrl+B)" onClick={props.onToggleHistory}>
           <PanelLeft size={15} />
         </button>
-        <OrbisWordmark />
         <span className="core-readout" title="System CPU load">
           <Cpu size={13} />
           CORE: <b>{cpu === null ? '--' : `${cpu}%`}</b>
@@ -35,6 +34,8 @@ export default function SystemBar(props: Props): React.JSX.Element {
           <Plus size={15} />
         </button>
       </div>
+
+      {props.children}
 
       <div className="system-group">
         <button className="sys-btn" title="Search chats" onClick={props.onSearch}>
@@ -50,9 +51,6 @@ export default function SystemBar(props: Props): React.JSX.Element {
           onClick={props.onToggleWebSearch}
         >
           <Globe size={15} />
-        </button>
-        <button className="sys-btn framed" title="Voice input" onClick={() => props.onUnavailable('Voice input')}>
-          <Mic size={15} />
         </button>
         <button className="sys-btn" title="Activity" onClick={props.onToggleActivity}>
           <Bell size={15} />

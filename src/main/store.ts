@@ -2,8 +2,7 @@ import { safeStorage } from 'electron'
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import type { Conversation, ReasoningEffort, Settings, SettingsUpdate, Theme } from '../shared/types'
-import { DEFAULT_MODEL, MODELS } from '../shared/models'
-import { newChatMode } from '../shared/modes'
+import { DEFAULT_MODEL, MODELS, isKnownModel } from '../shared/models'
 import { DEFAULT_PERSONA } from '../shared/personas'
 
 interface StoredSettings extends Omit<Settings, 'hasApiKey'> {
@@ -101,8 +100,8 @@ export class Store {
         .map(async (f) => {
           try {
             const c = JSON.parse(await fs.readFile(join(this.conversationsDir, f), 'utf8')) as Conversation
-            // Chats saved before modes and personas existed lack these fields.
-            return { ...c, mode: c.mode ?? newChatMode(c.model).mode, persona: c.persona ?? DEFAULT_PERSONA }
+            // Older chats may lack a persona or point at a model that was removed because it can't chat.
+            return { ...c, model: isKnownModel(c.model) ? c.model : DEFAULT_MODEL, persona: c.persona ?? DEFAULT_PERSONA }
           } catch {
             return null
           }

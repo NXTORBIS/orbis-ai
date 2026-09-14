@@ -23,7 +23,19 @@ const api: NxtorbisApi = {
   openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
   getCpuUsage: () => ipcRenderer.invoke('system:cpu'),
   pickTextFiles: () => ipcRenderer.invoke('files:pickText'),
-  pickImages: () => ipcRenderer.invoke('files:pickImages')
+  pickImages: () => ipcRenderer.invoke('files:pickImages'),
+  transcribeAudio: (audioBuffer) => ipcRenderer.invoke('voice:transcribe', audioBuffer),
+  saveImage: (dataUrl, name) => ipcRenderer.invoke('image:save', dataUrl, name),
+  editImage: (request) => ipcRenderer.invoke('image:edit', request),
+  onBrowserNewTab: (listener) => {
+    const handler = (_event: IpcRendererEvent, url: string): void => listener(url)
+    ipcRenderer.on('browser:new-tab', handler)
+    return () => {
+      ipcRenderer.removeListener('browser:new-tab', handler)
+    }
+  },
+  popOutBrowser: (url) => ipcRenderer.invoke('browser:popout', url),
+  clearBrowserData: () => ipcRenderer.invoke('browser:clear-data')
 }
 
 contextBridge.exposeInMainWorld('api', api)

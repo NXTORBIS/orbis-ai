@@ -1,34 +1,10 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { LucideIcon } from 'lucide-react'
-import {
-  Brain,
-  ChevronDown,
-  FileText,
-  Files,
-  Gauge,
-  Mic,
-  Plus,
-  Send,
-  SlidersHorizontal,
-  Sparkles,
-  Square,
-  Upload,
-  X,
-  Zap
-} from 'lucide-react'
-import type { Attachment, ChatMode } from '../../../shared/types'
+import { Check, ChevronDown, FileText, Files, Mic, Plus, Send, Square, Upload, X } from 'lucide-react'
+import type { Attachment } from '../../../shared/types'
 import { MODELS, modelLabel } from '../../../shared/models'
-import { MODES } from '../../../shared/modes'
 import { useDismiss } from '../lib/useDismiss'
+import { useVoiceInput } from '../hooks/useVoiceInput'
 import type { NoticeKind } from '../App'
-
-const MODE_ICONS: Record<ChatMode, LucideIcon> = {
-  auto: Sparkles,
-  fast: Zap,
-  advanced: Gauge,
-  reasoning: Brain,
-  custom: SlidersHorizontal
-}
 
 const QUICK_PROMPTS = [
   { label: 'Summarize a document', text: 'Summarize the attached document in five bullet points.' },
@@ -45,17 +21,15 @@ const SLASH_COMMANDS = [
   { name: 'clear', label: 'Clear', description: 'Clear all messages' },
   { name: 'search', label: 'Search', description: 'Search conversations' },
   { name: 'settings', label: 'Settings', description: 'Open settings' },
-  { name: 'models', label: 'Models', description: 'List all models' },
-  { name: 'modes', label: 'Modes', description: 'List all chat modes' }
+  { name: 'models', label: 'Models', description: 'List all models' }
 ]
 
 interface Props {
   streaming: boolean
-  mode: ChatMode
   model: string
   quickPromptsOpen: boolean
   onQuickPromptsChange(open: boolean): void
-  onModeChange(mode: ChatMode, model?: string): void
+  onModelChange(model: string): void
   /** Returns false when nothing was sent, so the draft is kept. */
   onSend(text: string, attachments: Attachment[]): boolean
   onStop(): void
@@ -67,11 +41,10 @@ interface Props {
 }
 
 export default function Composer(props: Props): React.JSX.Element {
-  const { streaming, mode, model } = props
+  const { streaming, model } = props
   const [text, setText] = useState('')
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [menuOpen, setMenuOpen] = useState(false)
-  const [modelsOpen, setModelsOpen] = useState(false)
   const [attachMenuOpen, setAttachMenuOpen] = useState(false)
   const [commandsOpen, setCommandsOpen] = useState(false)
   const [filteredCommands, setFilteredCommands] = useState<typeof SLASH_COMMANDS>([])
@@ -80,10 +53,8 @@ export default function Composer(props: Props): React.JSX.Element {
   const menuRef = useRef<HTMLDivElement>(null)
   const attachMenuRef = useRef<HTMLDivElement>(null)
   const commandsRef = useRef<HTMLDivElement>(null)
-  useDismiss(menuRef, menuOpen, () => {
-    setMenuOpen(false)
-    setModelsOpen(false)
-  })
+  const { isRecording, isTranscribing, startRecording, stopRecording } = useVoiceInput()
+  useDismiss(menuRef, menuOpen, () => setMenuOpen(false))
   useDismiss(attachMenuRef, attachMenuOpen, () => {
     setAttachMenuOpen(false)
   })
@@ -99,6 +70,18 @@ export default function Composer(props: Props): React.JSX.Element {
   }, [text])
 
   useEffect(() => textareaRef.current?.focus(), [])
+
+  // Other panels (e.g. the browser's element picker) hand text to the message box this way.
+  useEffect(() => {
+    const onCompose = (e: Event): void => {
+      const detail = (e as CustomEvent<unknown>).detail
+      if (typeof detail !== 'string' || !detail) return
+      setText((current) => (current.trim() ? `${current.trimEnd()}\n\n${detail}` : detail))
+      requestAnimationFrame(() => textareaRef.current?.focus())
+    }
+    window.addEventListener('orbis:compose', onCompose)
+    return () => window.removeEventListener('orbis:compose', onCompose)
+  }, [])
 
   // Detect and filter slash commands
   useEffect(() => {
@@ -141,9 +124,6 @@ export default function Composer(props: Props): React.JSX.Element {
         break
       case 'models':
         props.onNotify(`Available ORION models:\n${MODELS.map((m) => `• ${m.label}`).join('\n')}`)
-        break
-      case 'modes':
-        props.onNotify(`Available modes:\n${MODES.map((m) => `• ${m.label}`).join('\n')}`)
         break
     }
   }
@@ -193,8 +173,40 @@ export default function Composer(props: Props): React.JSX.Element {
     if (picked.skipped.length) props.onNotify(`Skipped ${picked.skipped.join(', ')}: not an image or larger than 200 KB.`, 'warn')
   }
 
+  const toggleVoiceInput = async (): Promise<void> => {
+    if (isRecording) {
+      const transcribedText = await stopRecording()
+      if (transcribedText) {
+        setText((current) => (current ? `${current} ${transcribedText}` : transcribedText))
+      } else {
+        props.onNotify('Transcription failed. Please try again.', 'warn')
+      }
+    } else {
+      try {
+        await startRecording()
+      } catch (err) {
+        props.onNotify('Microphone access denied.', 'warn')
+      }
+    }
+  }
 
-  const currentModeLabel = mode === 'custom' ? modelLabel(model) : (MODES.find((m) => m.id === mode)?.label ?? 'Auto')
+
+  const currentModelLabel = modelLabel(model)
+
+  const [menuPlacement, setMenuPlacement] = useState({ down: false, maxHeight: 320 })
+
+  // The composer sits mid-screen in an empty chat, so open the menu toward whichever side has room.
+  const openModelMenu = (): void => {
+    const rect = menuRef.current?.getBoundingClientRect()
+    if (rect) {
+      const top = (document.querySelector('.chat-header')?.getBoundingClientRect().bottom ?? 0) + 12
+      const above = rect.top - 12 - top
+      const below = window.innerHeight - rect.bottom - 24
+      const down = above < 300 && below > above
+      setMenuPlacement({ down, maxHeight: Math.round(Math.max(160, Math.min(440, down ? below : above))) })
+    }
+    setMenuOpen(true)
+  }
 
   return (
     <div className="composer-dock">
@@ -325,64 +337,46 @@ export default function Composer(props: Props): React.JSX.Element {
                 title="Choose a model"
                 aria-haspopup="menu"
                 aria-expanded={menuOpen}
-                onClick={() => setMenuOpen((o) => !o)}
+                onClick={() => (menuOpen ? setMenuOpen(false) : openModelMenu())}
               >
-                <span className="model-label">{currentModeLabel}</span>
+                <span className="model-label">{currentModelLabel}</span>
                 <ChevronDown size={11} />
               </button>
               {menuOpen && (
-                <div className="popover glass mode-menu" role="menu">
-                  {MODES.map((m) => {
-                    const Icon = MODE_ICONS[m.id]
-                    const selected = m.id === mode
+                <div className={`popover glass mode-menu${menuPlacement.down ? ' down' : ''}`} style={{ maxHeight: menuPlacement.maxHeight }} role="menu">
+                  {MODELS.map((m) => {
+                    const selected = m.id === model
                     return (
                       <button
                         key={m.id}
                         type="button"
                         role="menuitemradio"
                         aria-checked={selected}
-                        className={`menu-item mode-item${selected ? ' selected' : ''}`}
+                        className={`menu-item mode-item model-item${selected ? ' selected' : ''}`}
                         onClick={() => {
-                          if (m.id === 'custom') return setModelsOpen((o) => !o)
-                          props.onModeChange(m.id)
+                          props.onModelChange(m.id)
                           setMenuOpen(false)
                         }}
                       >
-                        <Icon size={15} />
                         <span className="menu-text">
                           <b>{m.label}</b>
-                          <small>{m.id === 'custom' && selected ? modelLabel(model) : m.description}</small>
+                          <small>{m.description}</small>
                         </span>
-                        {selected && <span className="mode-dot" />}
+                        {selected && <Check size={15} className="model-check" />}
                       </button>
                     )
                   })}
-                  {modelsOpen && (
-                    <div className="mode-models">
-                      {MODELS.map((m) => (
-                        <button
-                          key={m.id}
-                          type="button"
-                          className={`menu-item${mode === 'custom' && m.id === model ? ' selected' : ''}`}
-                          onClick={() => {
-                            props.onModeChange('custom', m.id)
-                            setMenuOpen(false)
-                            setModelsOpen(false)
-                          }}
-                        >
-                          <span className="menu-text">
-                            <b>{m.label}</b>
-                            <small>{m.description}</small>
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
                 </div>
               )}
             </div>
 
-            <button type="button" className="tool-btn" title="Voice input" onClick={() => props.onNotify('Voice input is coming soon.')}>
+            <button
+              type="button"
+              className={`tool-btn${isRecording ? ' recording' : ''}${isTranscribing ? ' transcribing' : ''}`}
+              title={isRecording ? 'Stop recording' : isTranscribing ? 'Transcribing...' : 'Start voice input'}
+              onClick={() => void toggleVoiceInput()}
+              disabled={isTranscribing}
+            >
               <Mic size={16} />
             </button>
 
