@@ -111,9 +111,14 @@ async function streamOnce(model: string, opts: ChatOptions, apiKey: string, lean
     const text = await res.text().catch(() => '')
     const errorMsg = extractErrorMessage(text) || res.statusText
 
-    // Handle 413/400 token limit errors
+    // Handle token limit errors
     if ((res.status === 413 || res.status === 400) && errorMsg.toLowerCase().includes('token')) {
       throw new HttpError(res.status, 'Message too long for this model. Try clearing old messages or using a shorter conversation history.', parseRetryAfter(res.headers.get('retry-after')))
+    }
+
+    // Handle unsupported model errors
+    if ((res.status === 400) && (errorMsg.toLowerCase().includes('classification') || errorMsg.toLowerCase().includes('streaming') || errorMsg.toLowerCase().includes('does not support'))) {
+      throw new HttpError(res.status, `Model ${model} is not available or does not support this operation. Please select a different model.`, parseRetryAfter(res.headers.get('retry-after')))
     }
 
     // A model may reject optional params; retry once with a minimal request.

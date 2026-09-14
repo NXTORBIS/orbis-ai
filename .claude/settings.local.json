@@ -70,7 +70,9 @@
       "Bash(git commit -m 'Update taskbar icon to use Orbis logo *)",
       "Bash(git commit -m 'Remove non-existent ORION Vision model from Groq *)",
       "Bash(git commit -m 'Display generated images directly inline in chat *)",
-      "Bash(git commit -m 'Add Groq vision model support - ORION Vision *)"
+      "Bash(git commit -m 'Add Groq vision model support - ORION Vision *)",
+      "PowerShell(Get-Process -Name \"Orbis\" -ErrorAction SilentlyContinue)",
+      "PowerShell(Stop-Process -Force)"
     ]
   }
 }
