@@ -1003,10 +1003,9 @@ textarea.hud-input {
   transform: translate(-50%, -50%);
   width: 100%;
   padding: 0 24px;
-  transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Glide down when messages appear */
+/* Move to bottom when messages appear */
 .stage-content:not(:has(.empty-state)) .composer-dock {
   position: relative;
   top: auto;
@@ -1016,15 +1015,30 @@ textarea.hud-input {
 
 .greeting {
   position: relative;
+  min-height: 1.35em;
   margin: 0;
-  padding: 0 24px;
-  font-family: var(--font);
-  font-size: clamp(32px, 4vw, 44px);
-  font-weight: 400;
-  letter-spacing: 0;
+  padding: 0 32px;
+  font-family: var(--display);
+  font-size: clamp(28px, 2.2vw, 40px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
   text-align: center;
-  color: var(--text);
-  line-height: 1.2;
+  color: var(--greeting);
+  text-shadow: none;
+  background: linear-gradient(135deg, var(--greeting) 0%, var(--muted-strong) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.greeting-caret {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 4px;
+  vertical-align: -0.12em;
+  background: currentColor;
+  animation: blink 1s steps(1) infinite;
 }
 
 .greeting::before,
