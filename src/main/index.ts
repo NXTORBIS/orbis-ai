@@ -7,6 +7,7 @@ import type { ChatRequest, Conversation, PickedFiles, SettingsUpdate, StreamEven
 import { streamChat, testApiKey } from './nim'
 import { buildSystemPrompt } from './prompt'
 import { formatResults, searchWeb } from './websearch'
+import { detectImageGenRequest, generateImage } from './imagegen'
 import { Store } from './store'
 
 // Baked in at build time from GROQ_API_KEY in .env.local (see electron.vite.config.ts).
@@ -214,6 +215,23 @@ function registerIpc(): void {
       const systemPrompt = buildSystemPrompt(settings, request.persona)
       let messages = request.messages
       const last = messages.at(-1)
+
+      // Check for image generation request
+      if (last?.role === 'user') {
+        const imagePrompt = detectImageGenRequest(last.content)
+        if (imagePrompt) {
+          emit({ type: 'status', message: 'Generating image…' })
+          try {
+            const imageUrl = await generateImage(imagePrompt, (url, init) => net.fetch(url, init))
+            emit({ type: 'image', url: imageUrl, prompt: imagePrompt })
+            emit({ type: 'done', model: 'pollinations-ai', truncated: false })
+            return
+          } catch (err) {
+            emit({ type: 'status', message: `Image generation failed: ${err instanceof Error ? err.message : String(err)}. Proceeding with text response.` })
+          }
+        }
+      }
+
       const query = request.webSearch && last?.role === 'user' ? last.content.trim() : undefined
       if (last && query) {
         emit({ type: 'status', message: 'Searching the web…' })

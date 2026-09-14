@@ -240,6 +240,9 @@ export default function App(): React.JSX.Element {
               logActivity('All models are rate-limited. Waiting for the per-minute limit to reset.', 'warn')
             }
             break
+          case 'image':
+            queueDelta(conversationId, assistant.id, `![Generated Image](${event.url})`, '', undefined)
+            break
           case 'done':
             finish(event.truncated ? { error: 'This reply hit the length limit and was cut off.' } : undefined)
             break

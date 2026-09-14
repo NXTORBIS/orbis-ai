@@ -92,6 +92,7 @@ export type StreamEvent =
   | { type: 'start'; model: string }
   | { type: 'delta'; content?: string; reasoning?: string }
   | { type: 'status'; message: string }
+  | { type: 'image'; url: string; prompt: string }
   | { type: 'done'; model: string; truncated: boolean }
   | { type: 'error'; message: string }
   | { type: 'aborted' }
