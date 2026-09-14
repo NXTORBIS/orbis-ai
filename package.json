@@ -1,7 +1,7 @@
 {
   "name": "nxtorbis-ai",
   "productName": "Orbis",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Orbis, a HUD-style desktop AI assistant powered by NVIDIA NIM",
   "author": "Nxtorbis",
   "private": true,
