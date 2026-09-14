@@ -44,7 +44,7 @@
   --user-bubble-border: rgba(63, 216, 255, 0.32);
 
   --composer-bg: linear-gradient(180deg, rgba(14, 18, 24, 0.92), rgba(5, 7, 10, 0.95));
-  --composer-border: rgba(63, 216, 255, 0.15);
+  --composer-border: rgba(63, 216, 255, 0.08);
   --composer-glow: rgba(63, 216, 255, 0.14);
   --composer-glow-strong: rgba(63, 216, 255, 0.3);
   --composer-text: #f2f4f7;
