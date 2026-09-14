@@ -347,7 +347,7 @@ export default function Composer(props: Props): React.JSX.Element {
           </div>
         </div>
 
-        {/* Model selector - bottom right, subtle */}
+        {/* Model selector - bottom right */}
         <div className="popover-anchor mode-selector-corner" ref={menuRef}>
           <button
             type="button"
@@ -357,8 +357,8 @@ export default function Composer(props: Props): React.JSX.Element {
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen((o) => !o)}
           >
-            <ModeIcon size={11} />
-            <ChevronDown size={10} />
+            <span className="model-label">{currentModeLabel}</span>
+            <ChevronDown size={11} />
           </button>
           {menuOpen && (
             <div className="popover glass mode-menu" role="menu">
