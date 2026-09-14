@@ -1,25 +1,21 @@
 import type { ChatMessage, ReasoningEffort, StreamEvent } from '../shared/types'
-import { NIM_MODELS, isLocalModel, modelInfo, modelLabel } from '../shared/models.ts'
+import { MODELS, modelInfo, modelLabel } from '../shared/models.ts'
 import { SseParser, ThinkTagSplitter } from './sse.ts'
 
 // Overridable for local testing or another OpenAI-compatible endpoint.
-export const NIM_BASE_URL = process.env.NXTORBIS_API_BASE_URL ?? 'https://integrate.api.nvidia.com/v1'
-export const ORION_BASE_URL = process.env.ORBIS_ORION_BASE_URL ?? 'http://127.0.0.1:8765/v1'
-const MAX_TOKENS = 32768
-const MAX_RATE_LIMIT_WAIT_MS = 65_000
+export const GROQ_BASE_URL = process.env.ORBIS_GROQ_BASE_URL ?? 'https://api.groq.com/openai/v1'
 
 export type FetchFn = (url: string, init: RequestInit) => Promise<Response>
 
 export interface ChatOptions {
-  apiKey: string
+  /** Keys from the user's own GroqCloud account, tried in order when Groq rejects one. */
+  apiKeys: string[]
   model: string
   messages: ChatMessage[]
   /** Complete system prompt; omitted from the request when empty. */
   systemPrompt: string
   reasoningEffort: ReasoningEffort
   autoFallback: boolean
-  /** Sent to ORION as its memory session. */
-  conversationId?: string
   signal: AbortSignal
   emit: (event: StreamEvent) => void
   fetchFn: FetchFn
@@ -42,61 +38,69 @@ class StreamError extends Error {}
 const FALLBACK_STATUSES = new Set([403, 404, 429, 500, 502, 503, 504])
 
 export async function streamChat(opts: ChatOptions): Promise<void> {
-  if (isLocalModel(opts.model)) return chatOrion(opts)
-  const chain = opts.autoFallback ? [opts.model, ...NIM_MODELS.map((m) => m.id).filter((id) => id !== opts.model)] : [opts.model]
+  if (opts.apiKeys.length === 0) {
+    return opts.emit({ type: 'error', message: 'This copy of Orbis has no Groq API key. Add it to .env.local and rebuild.' })
+  }
+  const chain = opts.autoFallback ? [opts.model, ...MODELS.map((m) => m.id).filter((id) => id !== opts.model)] : [opts.model]
 
-  for (let round = 0; round < 2; round++) {
-    let rateLimitedWaitMs: number | null = null
-    let firstFailure: unknown = null
-
-    for (let i = 0; i < chain.length; i++) {
-      const model = chain[i]
-      try {
-        await streamOnce(model, opts)
-        return
-      } catch (err) {
-        if (opts.signal.aborted) return opts.emit({ type: 'aborted' })
-        if (!(err instanceof HttpError) || !FALLBACK_STATUSES.has(err.status)) {
-          return opts.emit({ type: 'error', message: describeError(err, model) })
-        }
-        firstFailure ??= err
-        if (err.status === 429 || err.status >= 500) {
-          const wait = err.retryAfterMs ?? 60_000
-          rateLimitedWaitMs = rateLimitedWaitMs === null ? wait : Math.min(rateLimitedWaitMs, wait)
-        }
-        const next = chain[i + 1]
-        if (next) {
-          const reason = err.status === 429 ? 'is rate-limited' : 'is unavailable right now'
-          opts.emit({ type: 'status', message: `${modelLabel(model)} ${reason}. Switching to ${modelLabel(next)}…` })
-        }
+  for (let i = 0; i < chain.length; i++) {
+    const model = chain[i]
+    try {
+      await streamWithKeys(model, opts)
+      return
+    } catch (err) {
+      if (opts.signal.aborted) return opts.emit({ type: 'aborted' })
+      if (!(err instanceof HttpError) || !FALLBACK_STATUSES.has(err.status)) {
+        return opts.emit({ type: 'error', message: describeError(err, model) })
+      }
+      const next = chain[i + 1]
+      if (next) {
+        const reason = err.status === 429 ? 'is rate-limited' : 'is unavailable right now'
+        opts.emit({ type: 'status', message: `${modelLabel(model)} ${reason}. Switching to ${modelLabel(next)}…` })
       }
     }
+  }
+  return opts.emit({ type: 'error', message: describeError(new Error('All keys exhausted'), opts.model) })
+}
 
-    if (rateLimitedWaitMs === null || round === 1) {
-      return opts.emit({ type: 'error', message: describeError(firstFailure, opts.model) })
+/**
+ * Moves to the next key when Groq rejects one (revoked/mistyped/rate-limited).
+ */
+async function streamWithKeys(model: string, opts: ChatOptions): Promise<void> {
+  for (let k = 0; k < opts.apiKeys.length; k++) {
+    try {
+      return await streamOnce(model, opts, opts.apiKeys[k])
+    } catch (err) {
+      const isRejected = err instanceof HttpError && err.status === 401
+      const isRateLimited = err instanceof HttpError && err.status === 429
+      const shouldRetry = (isRejected || isRateLimited) && k < opts.apiKeys.length - 1 && !opts.signal.aborted
+      if (!shouldRetry) throw err
+      if (isRateLimited) {
+        opts.emit({ type: 'status', message: `Key ${k + 1} is rate-limited. Switching to key ${k + 2} of ${opts.apiKeys.length}…` })
+      } else {
+        opts.emit({ type: 'status', message: `Groq rejected API key ${k + 1} of ${opts.apiKeys.length}. Trying the next one…` })
+      }
     }
-    // Every model is limited: wait for the per-minute window to reset, then try the chain once more.
-    await waitWithCountdown(Math.min(rateLimitedWaitMs, MAX_RATE_LIMIT_WAIT_MS), opts)
-    if (opts.signal.aborted) return opts.emit({ type: 'aborted' })
   }
 }
 
-async function streamOnce(model: string, opts: ChatOptions, lean = false): Promise<void> {
-  const info = modelInfo(model)
+/** Groq's reasoning models accept low, medium and high. */
+function groqEffort(effort: ReasoningEffort): string {
+  return effort === 'max' ? 'high' : effort
+}
+
+async function streamOnce(model: string, opts: ChatOptions, apiKey: string, lean = false): Promise<void> {
   const body: Record<string, unknown> = {
     model,
     messages: toApiMessages(opts.messages, opts.systemPrompt, model),
     stream: true
   }
-  if (!lean) {
-    body.max_tokens = MAX_TOKENS
-    if (info.reasoningEffort) body.reasoning_effort = opts.reasoningEffort
-  }
+  if (!lean && modelInfo(model).reasoningEffort) body.reasoning_effort = groqEffort(opts.reasoningEffort)
 
-  const res = await opts.fetchFn(`${NIM_BASE_URL}/chat/completions`, {
+  const res = await opts.fetchFn(`${GROQ_BASE_URL}/chat/completions`, {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${opts.apiKey}`,
+      Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
       Accept: 'text/event-stream'
     },
@@ -106,11 +110,11 @@ async function streamOnce(model: string, opts: ChatOptions, lean = false): Promi
 
   if (!res.ok) {
     const text = await res.text().catch(() => '')
-    // Some deployments reject optional params; retry once with a minimal request.
-    if (res.status === 400 && !lean) return streamOnce(model, opts, true)
+    // A model may reject optional params; retry once with a minimal request.
+    if (res.status === 400 && !lean) return streamOnce(model, opts, apiKey, true)
     throw new HttpError(res.status, extractErrorMessage(text) || res.statusText, parseRetryAfter(res.headers.get('retry-after')))
   }
-  if (!res.body) throw new HttpError(502, 'Empty response from NVIDIA')
+  if (!res.body) throw new HttpError(502, 'Empty response from Groq')
 
   opts.emit({ type: 'start', model })
   await readStream(res.body, model, opts)
@@ -165,77 +169,6 @@ async function readStream(stream: ReadableStream<Uint8Array>, model: string, opt
     opts.emit({ type: 'delta', content: tail.content || undefined, reasoning: tail.reasoning || undefined })
   }
   opts.emit({ type: 'done', model, truncated: finishReason === 'length' })
-}
-
-/** ORION streams its answer when it can, and never hands the chat to a cloud model. */
-async function chatOrion(opts: ChatOptions): Promise<void> {
-  let res: Response
-  try {
-    res = await opts.fetchFn(`${ORION_BASE_URL}/chat/completions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
-      body: JSON.stringify({
-        model: opts.model,
-        messages: toApiMessages(opts.messages, opts.systemPrompt, opts.model),
-        session: opts.conversationId,
-        stream: true
-      }),
-      signal: opts.signal
-    })
-  } catch (err) {
-    if (opts.signal.aborted) return opts.emit({ type: 'aborted' })
-    const reason = err instanceof Error ? err.message : String(err)
-    return opts.emit({
-      type: 'error',
-      message: `Couldn't reach ORION at ${ORION_BASE_URL} (${reason}). Start it from the orion folder with: .venv\\Scripts\\python.exe -m orion.api.server configs/system/laptop.yaml`
-    })
-  }
-  if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    return opts.emit({ type: 'error', message: `ORION returned ${res.status}: ${extractErrorMessage(text) || res.statusText}` })
-  }
-
-  if (res.body && res.headers.get('content-type')?.includes('text/event-stream')) {
-    opts.emit({ type: 'start', model: opts.model })
-    try {
-      await readStream(res.body, opts.model, opts)
-    } catch (err) {
-      if (opts.signal.aborted) return opts.emit({ type: 'aborted' })
-      opts.emit({ type: 'error', message: err instanceof Error ? err.message : String(err) })
-    }
-    return
-  }
-
-  // Older ORION servers ignore `stream` and send one JSON message.
-  let text: string
-  try {
-    text = await res.text()
-  } catch {
-    if (opts.signal.aborted) return opts.emit({ type: 'aborted' })
-    return opts.emit({ type: 'error', message: 'Lost the connection to ORION while it was replying.' })
-  }
-  let reply: OrionReply
-  try {
-    reply = JSON.parse(text) as OrionReply
-  } catch {
-    return opts.emit({ type: 'error', message: 'ORION sent a reply that is not JSON.' })
-  }
-  const choice = reply.choices?.[0]
-  const raw = asText(choice?.message?.content)
-  if (!raw) return opts.emit({ type: 'error', message: 'ORION returned an empty reply.' })
-
-  const splitter = new ThinkTagSplitter()
-  const head = splitter.push(raw)
-  const tail = splitter.flush()
-  const content = head.content + tail.content
-  const reasoning = head.reasoning + tail.reasoning
-  opts.emit({ type: 'start', model: opts.model })
-  opts.emit({ type: 'delta', content: content || undefined, reasoning: reasoning || undefined })
-  opts.emit({ type: 'done', model: opts.model, truncated: choice?.finish_reason === 'length' })
-}
-
-interface OrionReply {
-  choices?: { message?: { content?: unknown }; finish_reason?: string | null }[]
 }
 
 interface StreamChunk {
@@ -299,45 +232,34 @@ function describeError(err: unknown, model: string): string {
   if (err instanceof HttpError) {
     switch (err.status) {
       case 401:
-        return 'NVIDIA rejected your API key. Check it in Settings.'
+        return 'Groq rejected the API key. Put a valid key in .env.local and rebuild.'
       case 403:
-        return `Your API key doesn't have access to ${modelLabel(model)}. (${err.message})`
+        return `The Groq API key doesn't have access to ${modelLabel(model)}. (${err.message})`
       case 404:
-        return `${modelLabel(model)} isn't available on NVIDIA right now.`
+        return `${modelLabel(model)} isn't available on Groq right now.`
       case 429:
-        return 'All models are rate-limited. Wait a minute and try again.'
+        return "Groq's rate limit is reached. Wait a minute and try again."
       default:
-        return `NVIDIA returned ${err.status}: ${err.message}`
+        return `Groq returned ${err.status}: ${err.message}`
     }
   }
   if (err instanceof StreamError) return err.message
-  if (err instanceof Error) return `Couldn't reach NVIDIA: ${err.message}`
+  if (err instanceof Error) return `Couldn't reach Groq: ${err.message}`
   return 'Something went wrong.'
 }
 
-async function waitWithCountdown(ms: number, opts: ChatOptions): Promise<void> {
-  const end = Date.now() + ms
-  while (!opts.signal.aborted) {
-    const left = end - Date.now()
-    if (left <= 0) return
-    opts.emit({ type: 'status', message: `All models are rate-limited. Retrying in ${Math.ceil(left / 1000)}s…` })
-    await sleep(Math.min(1000, left), opts.signal)
-  }
-}
 
-function sleep(ms: number, signal: AbortSignal): Promise<void> {
-  return new Promise((resolve) => {
-    const done = (): void => {
-      clearTimeout(timer)
-      signal.removeEventListener('abort', done)
-      resolve()
+/** Lists models with each key. 429 still proves a key is valid. */
+export async function testApiKey(apiKeys: string[], fetchFn: FetchFn): Promise<{ ok: boolean; message: string }> {
+  if (apiKeys.length === 0) return { ok: false, message: 'No Groq API key is built into this copy of Orbis.' }
+  let accepted = 0
+  for (const key of apiKeys) {
+    try {
+      const res = await fetchFn(`${GROQ_BASE_URL}/models`, { headers: { Authorization: `Bearer ${key}` } })
+      if (res.ok || res.status === 429) accepted++
+    } catch (err) {
+      return { ok: false, message: `Couldn't reach Groq: ${err instanceof Error ? err.message : String(err)}` }
     }
-    const timer = setTimeout(done, ms)
-    signal.addEventListener('abort', done, { once: true })
-  })
-}
-
-/** Makes a tiny request to check the key. 429 still proves the key is valid. */
-export async function testApiKey(): Promise<{ ok: boolean; message: string }> {
-  return { ok: true, message: 'ORION is ready. No API key needed.' }
+  }
+  return { ok: accepted > 0, message: `Groq accepted ${accepted} of ${apiKeys.length} API key${apiKeys.length === 1 ? '' : 's'}.` }
 }

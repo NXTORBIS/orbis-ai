@@ -1,15 +1,17 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { ORION_BASE_URL, streamChat, testApiKey } from './nim.ts'
+import { GROQ_BASE_URL, streamChat, testApiKey } from './nim.ts'
 import type { ChatOptions, FetchFn } from './nim.ts'
 import type { ChatMessage, StreamEvent } from '../shared/types'
 
-const KIMI = 'moonshotai/kimi-k3'
-const DEEPSEEK = 'deepseek-ai/deepseek-v4-pro-0813'
-const ORION = 'orion-local'
+const LLAMA = 'llama-3.3-70b-versatile'
+const INSTANT = 'llama-3.1-8b-instant'
+const GPT_OSS = 'openai/gpt-oss-120b'
 
 interface Call {
+  url: string
   model: string
+  headers: Record<string, string>
   body: Record<string, unknown>
 }
 
@@ -39,16 +41,16 @@ function sse(chunks: unknown[], signal?: AbortSignal, keepOpen = false): Respons
 function harness(respond: (call: Call, index: number, signal?: AbortSignal) => Response) {
   const calls: Call[] = []
   const events: StreamEvent[] = []
-  const fetchFn: FetchFn = async (_url, init) => {
+  const fetchFn: FetchFn = async (url, init) => {
     const body = JSON.parse(String(init.body)) as Record<string, unknown>
-    const call = { model: String(body.model), body }
+    const call = { url, model: String(body.model), headers: init.headers as Record<string, string>, body }
     calls.push(call)
     return respond(call, calls.length - 1, init.signal ?? undefined)
   }
   const run = (overrides: Partial<ChatOptions> = {}): Promise<void> =>
     streamChat({
-      apiKey: 'test',
-      model: KIMI,
+      apiKeys: ['test-key'],
+      model: LLAMA,
       messages: [user('Hi')],
       systemPrompt: 'sys',
       reasoningEffort: 'high',
@@ -58,28 +60,80 @@ function harness(respond: (call: Call, index: number, signal?: AbortSignal) => R
       fetchFn,
       ...overrides
     })
-  return { calls, events, run, fetchFn }
+  return { calls, events, run }
 }
 
 const text = (events: StreamEvent[], key: 'content' | 'reasoning'): string =>
   events.map((e) => (e.type === 'delta' ? (e[key] ?? '') : '')).join('')
 
+const errorMessage = (events: StreamEvent[]): string => {
+  const last = events.at(-1)
+  return last?.type === 'error' ? last.message : ''
+}
+
+test('streams from Groq with the API key as a bearer token', async () => {
+  const h = harness(() => sse([chunk({ content: 'Hel' }), chunk({ content: 'lo' }, 'stop')]))
+  await h.run({ autoFallback: false })
+  assert.equal(h.calls[0].url, `${GROQ_BASE_URL}/chat/completions`)
+  assert.equal(h.calls[0].headers.Authorization, 'Bearer test-key')
+  assert.equal(h.calls[0].body.stream, true)
+  assert.deepEqual(h.events, [
+    { type: 'start', model: LLAMA },
+    { type: 'delta', content: 'Hel', reasoning: undefined },
+    { type: 'delta', content: 'lo', reasoning: undefined },
+    { type: 'done', model: LLAMA, truncated: false }
+  ])
+})
+
+test('without an API key it reports the problem and sends nothing', async () => {
+  const h = harness(() => sse([]))
+  await h.run({ apiKeys: [] })
+  assert.equal(h.calls.length, 0)
+  assert.match(errorMessage(h.events), /no Groq API key/)
+})
+
+test('moves to the next API key when Groq rejects one', async () => {
+  const h = harness((call) =>
+    call.headers.Authorization === 'Bearer revoked' ? json(401, { error: { message: 'Invalid API Key' } }) : sse([chunk({ content: 'ok' }, 'stop')])
+  )
+  await h.run({ apiKeys: ['revoked', 'valid'], autoFallback: false })
+  assert.deepEqual(
+    h.calls.map((c) => c.headers.Authorization),
+    ['Bearer revoked', 'Bearer valid']
+  )
+  assert.ok(h.events.some((e) => e.type === 'status' && /rejected API key 1 of 2/.test(e.message)))
+  assert.equal(h.events.at(-1)?.type, 'done')
+})
+
+test('switches to the next API key when rate-limited', async () => {
+  const h = harness((call) =>
+    call.headers.Authorization === 'Bearer first' ? json(429, { error: { message: 'Too many requests' } }) : sse([chunk({ content: 'ok' }, 'stop')])
+  )
+  await h.run({ apiKeys: ['first', 'second'], autoFallback: false })
+  assert.deepEqual(
+    h.calls.map((c) => c.headers.Authorization),
+    ['Bearer first', 'Bearer second']
+  )
+  assert.ok(h.events.some((e) => e.type === 'status' && /rate-limited/.test(e.message)))
+  assert.equal(h.events.at(-1)?.type, 'done')
+})
+
 test('falls back to the next model when the first is rate-limited', async () => {
   const h = harness((call) =>
-    call.model === KIMI
+    call.model === LLAMA
       ? json(429, { error: { message: 'Too many requests' } })
-      : sse([chunk({ reasoning_content: 'Let me think' }), chunk({ content: 'Hello' }), chunk({ content: '!' }, 'stop')])
+      : sse([chunk({ reasoning: 'Let me think' }), chunk({ content: 'Hello' }), chunk({ content: '!' }, 'stop')])
   )
   await h.run()
   assert.deepEqual(
     h.calls.map((c) => c.model),
-    [KIMI, DEEPSEEK]
+    [LLAMA, INSTANT]
   )
   assert.equal(h.events[0].type, 'status')
-  assert.deepEqual(h.events[1], { type: 'start', model: DEEPSEEK })
+  assert.deepEqual(h.events[1], { type: 'start', model: INSTANT })
   assert.equal(text(h.events, 'reasoning'), 'Let me think')
   assert.equal(text(h.events, 'content'), 'Hello!')
-  assert.deepEqual(h.events.at(-1), { type: 'done', model: DEEPSEEK, truncated: false })
+  assert.deepEqual(h.events.at(-1), { type: 'done', model: INSTANT, truncated: false })
 })
 
 test('splits inline <think> tags and reports length truncation', async () => {
@@ -87,64 +141,57 @@ test('splits inline <think> tags and reports length truncation', async () => {
   await h.run({ autoFallback: false })
   assert.equal(text(h.events, 'reasoning'), 'plan')
   assert.equal(text(h.events, 'content'), 'Answer')
-  assert.deepEqual(h.events.at(-1), { type: 'done', model: KIMI, truncated: true })
+  assert.deepEqual(h.events.at(-1), { type: 'done', model: LLAMA, truncated: true })
+})
+
+test('sends reasoning_effort only to reasoning models, mapping max to high', async () => {
+  const h = harness(() => sse([chunk({ content: 'ok' }, 'stop')]))
+  await h.run({ model: GPT_OSS, reasoningEffort: 'max', autoFallback: false })
+  await h.run({ model: LLAMA, autoFallback: false })
+  assert.equal(h.calls[0].body.reasoning_effort, 'high')
+  assert.equal('reasoning_effort' in h.calls[1].body, false)
 })
 
 test('retries once without optional params after a 400', async () => {
-  const h = harness((_call, index) => (index === 0 ? json(400, { detail: 'unsupported parameter' }) : sse([chunk({ content: 'ok' }, 'stop')])))
-  await h.run()
+  const h = harness((_call, index) => (index === 0 ? json(400, { error: { message: 'unsupported parameter' } }) : sse([chunk({ content: 'ok' }, 'stop')])))
+  await h.run({ model: GPT_OSS })
   assert.equal(h.calls.length, 2)
   assert.equal(h.calls[0].body.reasoning_effort, 'high')
-  assert.equal(h.calls[0].body.max_tokens, 32768)
   assert.equal('reasoning_effort' in h.calls[1].body, false)
-  assert.equal('max_tokens' in h.calls[1].body, false)
-  assert.equal(h.calls[1].model, KIMI)
+  assert.equal(h.calls[1].model, GPT_OSS)
   assert.equal(h.events.at(-1)?.type, 'done')
 })
 
-test('stops on an invalid API key without trying other models', async () => {
-  const h = harness(() => json(401, { error: { message: 'Unauthorized' } }))
+test('stops when Groq rejects the only API key, without trying other models', async () => {
+  const h = harness(() => json(401, { error: { message: 'Invalid API Key' } }))
   await h.run()
   assert.equal(h.calls.length, 1)
-  const last = h.events.at(-1)
-  assert.equal(last?.type, 'error')
-  assert.match(last?.type === 'error' ? last.message : '', /rejected your API key/)
+  assert.match(errorMessage(h.events), /Groq rejected the API key/)
 })
 
-test('waits for the rate-limit window, retries once, then reports the error', async () => {
+test('reports error when all keys are rate-limited', async () => {
   const h = harness(() => json(429, {}, { 'retry-after': '1' }))
-  const started = Date.now()
-  await h.run({ autoFallback: false })
+  await h.run({ apiKeys: ['first', 'second'], autoFallback: false })
   assert.equal(h.calls.length, 2)
-  assert.ok(Date.now() - started >= 900, 'should wait about a second')
-  assert.ok(h.events.some((e) => e.type === 'status' && /Retrying in/.test(e.message)))
+  assert.ok(h.events.some((e) => e.type === 'status' && /rate-limited/.test(e.message)))
   assert.equal(h.events.at(-1)?.type, 'error')
 })
 
-test('echoes reasoning_content only to the model that produced it', async () => {
+test('sends the system prompt first and never echoes reasoning back', async () => {
   const history: ChatMessage[] = [
     user('Q1'),
-    { id: 'a1', role: 'assistant', content: 'A1', reasoning: 'R1', model: KIMI, createdAt: 0 },
+    { id: 'a1', role: 'assistant', content: 'A1', reasoning: 'R1', model: GPT_OSS, createdAt: 0 },
     user('Q2')
   ]
   const h = harness(() => sse([chunk({ content: 'ok' }, 'stop')]))
-  await h.run({ messages: history, autoFallback: false })
-  await h.run({ messages: history, autoFallback: false, model: DEEPSEEK })
-
-  const kimiMessages = h.calls[0].body.messages as Record<string, unknown>[]
-  const deepseekMessages = h.calls[1].body.messages as Record<string, unknown>[]
-  assert.equal(kimiMessages[0].role, 'system')
-  assert.equal(kimiMessages[2].reasoning_content, 'R1')
-  assert.equal('reasoning_content' in deepseekMessages[2], false)
-  assert.equal('reasoning_effort' in h.calls[0].body, true)
+  await h.run({ messages: history, model: GPT_OSS, autoFallback: false })
+  const messages = h.calls[0].body.messages as Record<string, unknown>[]
+  assert.equal(messages[0].role, 'system')
+  assert.equal('reasoning_content' in messages[2], false)
 })
 
 test('merges consecutive user messages left by a failed reply', async () => {
-  const history: ChatMessage[] = [
-    user('first'),
-    { id: 'a1', role: 'assistant', content: '', error: 'boom', createdAt: 0 },
-    user('second')
-  ]
+  const history: ChatMessage[] = [user('first'), { id: 'a1', role: 'assistant', content: '', error: 'boom', createdAt: 0 }, user('second')]
   const h = harness(() => sse([chunk({ content: 'ok' }, 'stop')]))
   await h.run({ messages: history, autoFallback: false })
   const messages = h.calls[0].body.messages as Record<string, unknown>[]
@@ -178,75 +225,15 @@ test('aborting mid-stream emits aborted and keeps partial output', async () => {
   assert.deepEqual(h.events.at(-1), { type: 'aborted' })
 })
 
-test('testApiKey returns ORION ready message', async () => {
-  assert.deepEqual(await testApiKey(), { ok: true, message: 'ORION is ready. No API key needed.' })
-})
-
-test('ORION (local) goes to the local server with no key and returns one reply', async () => {
-  const calls: { url: string; headers: Record<string, string>; body: Record<string, unknown> }[] = []
-  const events: StreamEvent[] = []
+test('testApiKey checks every key against the models endpoint', async () => {
+  const urls: string[] = []
   const fetchFn: FetchFn = async (url, init) => {
-    calls.push({ url, headers: init.headers as Record<string, string>, body: JSON.parse(String(init.body)) as Record<string, unknown> })
-    return json(200, { choices: [{ message: { role: 'assistant', content: '<think>check</think>Hello from ORION' }, finish_reason: 'stop' }] })
+    urls.push(url)
+    const auth = (init.headers as Record<string, string>).Authorization
+    return auth === 'Bearer good' ? json(200, { data: [] }) : json(401, { error: { message: 'Invalid API Key' } })
   }
-  await streamChat({
-    apiKey: '',
-    model: ORION,
-    conversationId: 'chat-1',
-    messages: [user('Hi')],
-    systemPrompt: 'sys',
-    reasoningEffort: 'high',
-    autoFallback: true,
-    signal: new AbortController().signal,
-    emit: (e) => events.push(e),
-    fetchFn
-  })
-  assert.equal(calls.length, 1)
-  assert.equal(calls[0].url, `${ORION_BASE_URL}/chat/completions`)
-  assert.equal('Authorization' in calls[0].headers, false)
-  assert.equal(calls[0].body.session, 'chat-1')
-  assert.equal((calls[0].body.messages as Record<string, unknown>[]).at(-1)?.content, 'Hi')
-  assert.deepEqual(events, [
-    { type: 'start', model: ORION },
-    { type: 'delta', content: 'Hello from ORION', reasoning: 'check' },
-    { type: 'done', model: ORION, truncated: false }
-  ])
-})
-
-test('ORION asks for a stream and relays tokens as they arrive', async () => {
-  const h = harness(() => sse([chunk({ content: 'Hel' }), chunk({ content: 'lo' }), { ...(chunk({}, 'stop') as object), orion: { intent: 'chat' } }]))
-  await h.run({ model: ORION, apiKey: '' })
-  assert.equal(h.calls[0].body.stream, true)
-  assert.deepEqual(h.events, [
-    { type: 'start', model: ORION },
-    { type: 'delta', content: 'Hel', reasoning: undefined },
-    { type: 'delta', content: 'lo', reasoning: undefined },
-    { type: 'done', model: ORION, truncated: false }
-  ])
-})
-
-test('an unreachable ORION server is reported, not replaced by an NVIDIA model', async () => {
-  const h = harness(() => {
-    throw new TypeError('fetch failed')
-  })
-  await h.run({ model: ORION, apiKey: '' })
-  assert.deepEqual(
-    h.calls.map((c) => c.model),
-    [ORION]
-  )
-  const last = h.events.at(-1)
-  assert.equal(last?.type, 'error')
-  assert.match(last?.type === 'error' ? last.message : '', /Couldn't reach ORION/)
-})
-
-test('ORION errors show the server message', async () => {
-  const h = harness(() => json(500, { error: 'orchestrator failed' }))
-  await h.run({ model: ORION, apiKey: '' })
-  assert.equal(h.calls.length, 1)
-  assert.deepEqual(h.events.at(-1), { type: 'error', message: 'ORION returned 500: orchestrator failed' })
-})
-
-test('testApiKey always returns ORION ready', async () => {
-  const result = await testApiKey()
-  assert.deepEqual(result, { ok: true, message: 'ORION is ready. No API key needed.' })
+  assert.deepEqual(await testApiKey(['good', 'bad'], fetchFn), { ok: true, message: 'Groq accepted 1 of 2 API keys.' })
+  assert.equal(urls[0], `${GROQ_BASE_URL}/models`)
+  assert.deepEqual(await testApiKey(['bad'], fetchFn), { ok: false, message: 'Groq accepted 0 of 1 API key.' })
+  assert.equal((await testApiKey([], fetchFn)).ok, false)
 })
