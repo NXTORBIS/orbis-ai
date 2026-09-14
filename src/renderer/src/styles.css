@@ -979,23 +979,27 @@ textarea.hud-input {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-end;
-  gap: 18px;
-  padding: 0 24px 90px;
+  justify-content: center;
+  gap: 28px;
+  padding: 0 24px 120px;
 }
 
 .greeting {
   position: relative;
   min-height: 1.35em;
   margin: 0;
-  padding: 0 24px;
+  padding: 0 32px;
   font-family: var(--display);
-  font-size: clamp(20px, 1.9vw, 30px);
-  font-weight: 500;
-  letter-spacing: 0.01em;
+  font-size: clamp(28px, 2.2vw, 40px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
   text-align: center;
   color: var(--greeting);
-  text-shadow: 0 0 22px var(--cyan-glow-soft);
+  text-shadow: none;
+  background: linear-gradient(135deg, var(--greeting) 0%, var(--muted-strong) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
 
 .greeting-prefix {
@@ -1060,34 +1064,36 @@ textarea.hud-input {
 }
 
 .messages-inner {
-  max-width: 980px;
+  max-width: 900px;
   margin: 0 auto;
-  padding: 18px 32px 28px;
+  padding: 32px 24px 40px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
 }
 
 .date-divider {
   display: flex;
   justify-content: center;
+  margin: 12px 0;
 }
 
 .date-divider span {
-  padding: 2px 10px;
+  padding: 6px 14px;
   border: 1px solid var(--pill-border);
-  border-radius: 8px;
-  background: var(--pill-bg-strong);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
   font-family: var(--mono);
-  font-size: 10.5px;
+  font-size: 11px;
   letter-spacing: 0.08em;
   color: var(--muted-strong);
+  text-transform: uppercase;
 }
 
 .msg {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
 }
 
@@ -1099,7 +1105,7 @@ textarea.hud-input {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  max-width: min(760px, 80%);
+  max-width: min(720px, 85%);
 }
 
 .msg.user .msg-body {
@@ -1107,30 +1113,31 @@ textarea.hud-input {
 }
 
 .msg.assistant:not(.pending) > .msg-body {
-  width: min(820px, 80%);
+  width: min(820px, 100%);
 }
 
 .msg.assistant > .avatar {
-  margin-top: 2px;
+  margin-top: 4px;
 }
 
 .msg-meta {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin: 4px 0 6px;
-  font-size: 11px;
+  gap: 8px;
+  margin: 6px 0 8px;
+  font-size: 12px;
 }
 
 .msg-meta time {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 11px;
   color: var(--muted);
 }
 
 .msg-name {
   font-weight: 700;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.02em;
+  font-size: 13px;
 }
 
 .meta-icon {
@@ -1138,32 +1145,34 @@ textarea.hud-input {
 }
 
 .user-bubble {
-  padding: 7px 13px;
+  padding: 10px 16px;
   border: 1px solid var(--user-bubble-border);
-  border-radius: 12px;
+  border-radius: 16px;
   background: var(--user-bubble);
-  font-size: 13.5px;
-  line-height: 1.55;
+  font-size: 14px;
+  line-height: 1.6;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  transition: background 0.2s, border-color 0.2s;
 }
 
 .msg-card {
-  min-width: 140px;
-  padding: 12px 16px;
-  border-radius: 14px;
-  font-size: 13.5px;
-  line-height: 1.65;
+  min-width: 120px;
+  padding: 14px 18px;
+  border-radius: 16px;
+  font-size: 14px;
+  line-height: 1.68;
+  transition: background 0.2s;
 }
 
 .msg-actions {
   display: flex;
   align-items: center;
-  gap: 2px;
-  min-height: 26px;
-  margin-top: 4px;
+  gap: 4px;
+  min-height: 28px;
+  margin-top: 6px;
   opacity: 0;
-  transition: opacity 0.15s;
+  transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .msg:hover .msg-actions,
@@ -1173,7 +1182,7 @@ textarea.hud-input {
 
 /* Your own messages always show their actions. */
 .msg.user:not(:hover) .msg-actions {
-  opacity: 0.75;
+  opacity: 0.8;
 }
 
 .model-tag {
@@ -1539,14 +1548,15 @@ textarea.hud-input {
   align-items: center;
   width: 100%;
   margin: 0 auto;
-  padding: 14px 0 34px;
+  padding: 24px 0 48px;
+  gap: 16px;
 }
 
 /* HUD frame line spanning the stage just above the composer. */
 .composer-dock::before {
   content: '';
   position: absolute;
-  top: 6px;
+  top: 0;
   left: -100vw;
   right: -100vw;
   z-index: -1;
@@ -1559,13 +1569,13 @@ textarea.hud-input {
   position: relative;
   display: flex;
   flex-direction: column;
-  width: min(600px, calc(100% - 48px));
+  width: min(720px, calc(100% - 32px));
   border: 1px solid var(--composer-border);
-  border-radius: 22px;
+  border-radius: 28px;
   background: var(--composer-bg);
-  backdrop-filter: blur(16px);
-  transition: border-color 0.2s, box-shadow 0.3s;
-  box-shadow: 0 0 16px var(--composer-glow), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(20px);
+  transition: border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4), 0 0 20px var(--composer-glow), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .composer.thinking {
@@ -1618,20 +1628,22 @@ textarea.hud-input {
   position: relative;
   z-index: 1;
   width: 100%;
-  min-height: 48px;
+  min-height: 56px;
   max-height: 200px;
-  padding: 14px 18px 4px;
+  padding: 16px 20px 8px;
   border: 0;
   outline: none;
   resize: none;
   background: transparent;
   color: var(--composer-text);
-  font-size: 14.5px;
-  line-height: 1.5;
+  font-size: 15px;
+  line-height: 1.6;
+  font-weight: 500;
 }
 
 .composer textarea::placeholder {
   color: var(--composer-placeholder);
+  font-weight: 400;
 }
 
 .composer-row {
@@ -1640,29 +1652,35 @@ textarea.hud-input {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
-  padding: 2px 8px 8px 10px;
+  gap: 12px;
+  padding: 4px 12px 12px 12px;
 }
 
 .composer-tools {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
 }
 
 .tool-btn {
   display: grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
   color: var(--composer-icon);
-  transition: color 0.15s, background 0.15s;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  background: transparent;
 }
 
 .tool-btn:hover:not(:disabled) {
   background: var(--cyan-fill);
   color: var(--cyan);
+  transform: translateY(-2px);
+}
+
+.tool-btn:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 .tool-divider {
@@ -1675,42 +1693,57 @@ textarea.hud-input {
 .mode-pill {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 10px;
+  gap: 8px;
+  height: 36px;
+  padding: 0 14px;
   border: 1px solid var(--pill-border);
-  border-radius: 999px;
-  background: var(--cyan-fill);
+  border-radius: 12px;
+  background: rgba(63, 216, 255, 0.08);
   color: var(--composer-text);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
 }
 
 .mode-pill svg:first-child {
   color: var(--cyan);
+  width: 16px;
+  height: 16px;
 }
 
 .mode-pill:hover {
   border-color: var(--cyan-dim);
-  box-shadow: 0 0 12px var(--cyan-glow-soft);
+  background: rgba(63, 216, 255, 0.12);
+  box-shadow: 0 0 16px rgba(63, 216, 255, 0.2);
+}
+
+.mode-pill:active {
+  transform: scale(0.98);
 }
 
 .send-btn {
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
-  margin-left: 4px;
-  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  margin-left: 8px;
+  border-radius: 12px;
   background: var(--cyan);
-  color: #04243a;
-  box-shadow: 0 0 14px var(--cyan-glow);
-  transition: transform 0.15s;
+  color: #0a1428;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 2px 12px rgba(63, 216, 255, 0.3);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .send-btn:hover:not(:disabled) {
-  transform: scale(1.06);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(63, 216, 255, 0.4);
+}
+
+.send-btn:active:not(:disabled) {
+  transform: translateY(0);
 }
 
 .send-btn:disabled {
