@@ -1569,44 +1569,28 @@ textarea.hud-input {
 }
 
 .composer.thinking {
-  animation: glow-pulse 1.5s ease-in-out infinite;
+  animation: composer-breathe 1.5s ease-in-out infinite;
 }
 
 .composer.submitted {
   animation: glide-down 0.6s ease-out forwards;
 }
 
-/* Two comet-like dashes travel around the cyan outline at an even speed. */
+/* Beam animation removed - using glow effect only */
 .composer-beam {
-  position: absolute;
-  inset: -1px;
-  width: calc(100% + 2px);
-  height: calc(100% + 2px);
-  overflow: visible;
-  pointer-events: none;
+  display: none;
 }
 
 .composer-beam rect {
-  fill: none;
-  stroke-linecap: round;
-  animation: beam-travel 6s linear infinite;
+  display: none;
 }
 
 .beam-tail {
-  stroke: var(--cyan);
-  stroke-width: 1.5;
-  stroke-dasharray: 10 40;
-  opacity: 0.5;
+  display: none;
 }
 
-/* Extra class keeps this above `.composer-beam rect`, so the head rides at the front of the tail. */
 .composer-beam .beam-head {
-  stroke: var(--beam-hot);
-  stroke-width: 2;
-  stroke-dasharray: 3 47;
-  stroke-dashoffset: -7;
-  filter: drop-shadow(0 0 3px var(--cyan)) drop-shadow(0 0 8px var(--cyan-glow));
-  animation-name: beam-travel-head;
+  display: none;
 }
 
 /* A faint scanning sheen drifting across the glass. */
@@ -1625,14 +1609,9 @@ textarea.hud-input {
   border-color: rgba(63, 216, 255, 0.6);
 }
 
-.composer:focus-within .composer-beam rect {
-  animation-duration: 4s;
-}
-
-/* Faster beam and glow while a reply is streaming. */
-.composer.busy,
-.composer.busy .composer-beam rect {
-  animation-duration: 1.6s;
+/* Pulsing glow while a reply is streaming. */
+.composer.busy {
+  animation: composer-breathe 0.8s ease-in-out infinite;
 }
 
 .composer textarea {
