@@ -1,4 +1,4 @@
-import mark from '../assets/orbis-mark.png'
+import mark from '../assets/orbis-mark.jpg'
 import wordmark from '../assets/orbis-wordmark.png'
 
 /** The standalone ORBIS ring, used wherever the single logo appears. */
