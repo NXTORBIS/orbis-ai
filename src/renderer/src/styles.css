@@ -1644,16 +1644,16 @@ textarea.hud-input {
   position: relative;
   z-index: 1;
   flex: 1;
-  min-height: 56px;
+  min-height: 44px;
   max-height: 200px;
-  padding: 16px 16px;
+  padding: 12px 16px;
   border: 0;
   outline: none;
   resize: none;
   background: transparent;
   color: var(--composer-text);
   font-size: 15px;
-  line-height: 1.6;
+  line-height: 1.5;
   font-weight: 500;
 }
 
