@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef, useState } from 'react'
-import { Check, ChevronDown, Copy, Ellipsis, FileText, Pencil, RefreshCw, Sparkles, ThumbsDown, ThumbsUp, Type, Upload, Volume2, VolumeX } from 'lucide-react'
+import { Check, ChevronDown, Copy, CornerDownRight, Ellipsis, FileText, Pencil, RefreshCw, Sparkles, ThumbsDown, ThumbsUp, Type, Upload, Volume2, VolumeX } from 'lucide-react'
 import type { ChatMessage } from '../../../shared/types'
 import { IMAGE_GEN_STATUS } from '../../../shared/types'
 import ImageGenPlaceholder from './ImageGenPlaceholder'
@@ -20,6 +20,10 @@ interface Props {
   status?: string
   canRegenerate: boolean
   canEdit: boolean
+  /** Follow-up chips are clickable only while no reply is streaming. */
+  canSuggest: boolean
+  /** Sends a follow-up suggestion as the next message. */
+  onSuggest(text: string): void
   onRegenerate(messageId: string): void
   onEdit(messageId: string, text: string): void
   /** Re-send a user message as-is, replacing the replies after it. */
@@ -214,6 +218,16 @@ function AssistantMessage(props: Props): React.JSX.Element {
             {message.model && <span className="model-tag">{modelLabel(message.model)}</span>}
           </div>
         )}
+        {!streaming && props.canSuggest && message.suggestions && message.suggestions.length > 0 && (
+          <div className="followups" role="group" aria-label="Suggested follow-ups">
+            {message.suggestions.map((suggestion) => (
+              <button key={suggestion} type="button" className="followup-chip" onClick={() => props.onSuggest(suggestion)}>
+                <CornerDownRight size={13} />
+                {suggestion}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -311,6 +325,7 @@ export default memo(
     a.status === b.status &&
     a.canRegenerate === b.canRegenerate &&
     a.canEdit === b.canEdit &&
+    a.canSuggest === b.canSuggest &&
     a.assistantName === b.assistantName &&
     a.userName === b.userName
 )

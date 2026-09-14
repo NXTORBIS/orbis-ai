@@ -9,8 +9,6 @@ import {
   HatGlasses,
   Images,
   Keyboard,
-  PanelLeftClose,
-  PanelLeftOpen,
   Pencil,
   Pin,
   PinOff,
@@ -25,7 +23,7 @@ import type { Conversation } from '../../../shared/types'
 import type { StreamState } from '../App'
 import { groupConversations } from '../lib/utils'
 import { useDismiss } from '../lib/useDismiss'
-import { OrbisMark, OrbisWordmark } from './Brand'
+import { OrbisWordmark } from './Brand'
 
 interface Props {
   collapsed: boolean
@@ -40,7 +38,6 @@ interface Props {
   searchToken: number
   userName: string
   userTitle: string
-  onToggleCollapsed(): void
   onNewChat(): void
   onIncognito(): void
   onSearch(): void
@@ -236,14 +233,8 @@ export default function Sidebar(props: Props): React.JSX.Element {
 
   return (
     <nav className={`sidebar${collapsed ? ' collapsed' : ''}`} aria-label="Sidebar">
-      <div className="sb-head">
-        {collapsed ? (
-          <button type="button" className="sb-logo" title="Open sidebar (Ctrl+B)" aria-label="Open sidebar" onClick={props.onToggleCollapsed}>
-            <OrbisMark size={26} className="sb-logo-mark" />
-            <PanelLeftOpen size={18} className="sb-logo-toggle" />
-          </button>
-        ) : (
-          <>
+      {!collapsed && (
+        <div className="sb-head">
             <div className="sb-brand-anchor" ref={brandRef}>
               <button type="button" className="sb-brand" aria-haspopup="menu" aria-expanded={brandOpen} onClick={() => setBrandOpen((o) => !o)}>
                 <OrbisWordmark className="sb-wordmark" />
@@ -278,12 +269,8 @@ export default function Sidebar(props: Props): React.JSX.Element {
                 </div>
               )}
             </div>
-            <button type="button" className="sb-icon" title="Close sidebar (Ctrl+B)" aria-label="Close sidebar" onClick={props.onToggleCollapsed}>
-              <PanelLeftClose size={17} />
-            </button>
-          </>
-        )}
-      </div>
+        </div>
+      )}
 
       <div className="sb-nav">
         {nav.map(({ label, icon: Icon, onClick, active, badge, shortcut }) => (

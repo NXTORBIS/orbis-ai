@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Bell, Cpu, Globe, Hash, Moon, PanelLeft, Plus, Search, Sun } from 'lucide-react'
+import { Bell, Cpu, Globe, Hash, Moon, PanelLeftClose, PanelLeftOpen, Plus, Search, Sun } from 'lucide-react'
+import { OrbisGlassMark } from './Brand'
 
 interface Props {
   dark: boolean
   unread: number
   onToggleHistory(): void
+  sidebarCollapsed: boolean
   onNewChat(): void
   onSearch(): void
   onQuickPrompts(): void
@@ -23,8 +25,14 @@ export default function SystemBar(props: Props): React.JSX.Element {
   return (
     <div className="system-bar">
       <div className="system-group">
-        <button className="sys-btn" title="Chats (Ctrl+B)" onClick={props.onToggleHistory}>
-          <PanelLeft size={15} />
+        <button
+          className="bar-logo"
+          title={props.sidebarCollapsed ? 'Open sidebar (Ctrl+B)' : 'Close sidebar (Ctrl+B)'}
+          aria-label={props.sidebarCollapsed ? 'Open sidebar' : 'Close sidebar'}
+          onClick={props.onToggleHistory}
+        >
+          <OrbisGlassMark size={26} className="bar-logo-mark" />
+          {props.sidebarCollapsed ? <PanelLeftOpen size={18} className="bar-logo-toggle" /> : <PanelLeftClose size={18} className="bar-logo-toggle" />}
         </button>
         <span className="core-readout" title="System CPU load">
           <Cpu size={13} />

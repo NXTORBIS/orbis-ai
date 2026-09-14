@@ -102,7 +102,7 @@ export default function SettingsModal({ settings, onUpdate, onClose }: Props): R
           <section className="setting row">
             <div className="setting-label">
               <h3>Visual effects</h3>
-              <p>Particles, cursor glow, and the animated message box outline, orb, and greeting. Turn off for less motion.</p>
+              <p>Particles and the animated message box outline, orb, and greeting. Turn off for less motion.</p>
             </div>
             <Toggle checked={settings.effects} onChange={(v) => void onUpdate({ effects: v })} />
           </section>

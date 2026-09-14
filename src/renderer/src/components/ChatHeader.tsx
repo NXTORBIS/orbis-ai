@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { Check, Ellipsis, HatGlasses, Pencil, Share2, SquarePen, Trash2, Users } from 'lucide-react'
 import { PERSONAS, personaInfo } from '../../../shared/personas'
 import { useDismiss } from '../lib/useDismiss'
@@ -28,6 +28,36 @@ export default function ChatHeader(props: Props): React.JSX.Element {
   const moreRef = useRef<HTMLDivElement>(null)
   useDismiss(personaRef, props.personaMenuOpen, () => props.onPersonaMenuChange(false))
   useDismiss(moreRef, moreOpen, () => setMoreOpen(false))
+  const titleRef = useRef<HTMLDivElement>(null)
+  const [titleBox, setTitleBox] = useState<{ left: number; width: number } | null>(null)
+
+  // Centre the title on the whole bar, sized to the free space between the button groups so it never overlaps them.
+  useLayoutEffect(() => {
+    const bar = titleRef.current?.closest<HTMLElement>('.system-bar')
+    if (!bar) return
+    const sides = [...bar.querySelectorAll<HTMLElement>('.system-group, .header-side')]
+    const update = (): void => {
+      const barRect = bar.getBoundingClientRect()
+      const center = barRect.width / 2
+      let left = 0
+      let right = barRect.width
+      for (const side of sides) {
+        const r = side.getBoundingClientRect()
+        if (!r.width) continue
+        if (r.left - barRect.left < center) left = Math.max(left, r.right - barRect.left)
+        else right = Math.min(right, r.left - barRect.left)
+      }
+      const gap = 16
+      const half = Math.min(center - left, right - center) - gap
+      const next = half >= 60 ? { left: center - half, width: half * 2 } : { left: left + gap, width: Math.max(0, right - left - gap * 2) }
+      setTitleBox((current) => (current && Math.abs(current.left - next.left) < 0.5 && Math.abs(current.width - next.width) < 0.5 ? current : next))
+    }
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(bar)
+    sides.forEach((side) => observer.observe(side))
+    return () => observer.disconnect()
+  }, [])
 
   const persona = personaInfo(props.persona)
 
@@ -58,7 +88,11 @@ export default function ChatHeader(props: Props): React.JSX.Element {
         )}
       </div>
 
-      <div className="header-title">
+      <div
+        ref={titleRef}
+        className="header-title"
+        style={titleBox ? { left: titleBox.left, width: titleBox.width } : { visibility: 'hidden' }}
+      >
         {editing ? (
           <input
             className="hud-input compact"
@@ -122,7 +156,7 @@ export default function ChatHeader(props: Props): React.JSX.Element {
             </div>
           )}
         </div>
-        <button className="icon-btn" title="Rename chat" disabled={!props.hasConversation} onClick={startRename}>
+        <button className="icon-btn rename-btn" title="Rename chat" disabled={!props.hasConversation} onClick={startRename}>
           <SquarePen size={16} />
         </button>
         <button className="share-btn" disabled={!props.hasConversation} onClick={props.onShare}>

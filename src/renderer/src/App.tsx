@@ -7,7 +7,6 @@ import { copyText, newId, titleFromMessage } from './lib/utils'
 import BrowserPanel from './components/BrowserPanel'
 import ChatHeader from './components/ChatHeader'
 import ChatView from './components/ChatView'
-import CursorGlow from './components/CursorGlow'
 import ImagesView from './components/ImagesView'
 import HudBackground from './components/HudBackground'
 import Sidebar from './components/Sidebar'
@@ -17,6 +16,8 @@ import SystemBar from './components/SystemBar'
 import ImageEditor from './components/ImageEditor'
 import { ImageEditorContext, collectImages, imageMarkdown } from './lib/imageEditor'
 import type { EditableImage, GalleryImage } from './lib/imageEditor'
+import { MAX_QUEUED_MESSAGES } from './lib/messageQueue'
+import type { ChatQueue } from './lib/messageQueue'
 
 export interface StreamState {
   requestId: string
@@ -185,6 +186,39 @@ export default function App(): React.JSX.Element {
     [flushDeltas]
   )
 
+  const [queues, setQueues] = useState<Record<string, ChatQueue>>({})
+  const queuesRef = useRef<Record<string, ChatQueue>>({})
+  const commitQueues = useCallback((fn: (q: Record<string, ChatQueue>) => Record<string, ChatQueue>) => {
+    queuesRef.current = fn(queuesRef.current)
+    setQueues(queuesRef.current)
+  }, [])
+  // Assigned once the queue runner exists below; startGeneration reports each finished reply through it.
+  const settleQueueRef = useRef<(conversationId: string, outcome: 'done' | 'stopped' | 'error') => void>(() => undefined)
+
+  // Suggestions are optional extras: fetched after a reply completes and silently skipped on any failure.
+  const requestSuggestions = useCallback(
+    async (conversationId: string, messageId: string) => {
+      const conversation = conversationsRef.current.find((c) => c.id === conversationId)
+      const index = conversation ? conversation.messages.findIndex((m) => m.id === messageId) : -1
+      if (!conversation || index < 0) return
+      const reply = conversation.messages[index]
+      if (reply.error || !reply.content.trim()) return
+      const recent = conversation.messages.slice(Math.max(0, index - 5), index + 1).map((m) => ({ role: m.role, content: m.content }))
+      try {
+        const result = await window.api.suggestFollowups(recent)
+        if (!result.followups.length && !result.next) return
+        updateConversation(conversationId, (c) => ({
+          ...c,
+          messages: c.messages.map((m) => (m.id === messageId ? { ...m, suggestions: result.followups, prediction: result.next ?? undefined } : m))
+        }))
+        persist(conversationId)
+      } catch {
+        // No suggestions this time; the chat works the same without them.
+      }
+    },
+    [persist, updateConversation]
+  )
+
   const startGeneration = useCallback(
     (conversation: Conversation, history: ChatMessage[]) => {
       const conversationId = conversation.id
@@ -254,13 +288,17 @@ export default function App(): React.JSX.Element {
             break
           case 'done':
             finish()
+            void requestSuggestions(conversationId, assistant.id)
+            settleQueueRef.current(conversationId, 'done')
             break
           case 'error':
             finish({ error: event.message })
             logActivity(event.message, 'error')
+            settleQueueRef.current(conversationId, 'error')
             break
           case 'aborted':
             finish()
+            settleQueueRef.current(conversationId, 'stopped')
             break
         }
       })
@@ -274,9 +312,26 @@ export default function App(): React.JSX.Element {
       }
       window.api.sendChat(request).catch((err: unknown) => {
         finish({ error: err instanceof Error ? err.message : String(err) })
+        settleQueueRef.current(conversationId, 'error')
       })
     },
-    [commitStreams, flushDeltas, logActivity, persist, queueDelta, updateConversation, webSearch]
+    [commitStreams, flushDeltas, logActivity, persist, queueDelta, requestSuggestions, updateConversation, webSearch]
+  )
+
+  // The quick title from the first message shows immediately; the AI title replaces it unless the user renamed the chat first.
+  const autoTitle = useCallback(
+    async (conversationId: string, prompt: string, quickTitle: string) => {
+      try {
+        const title = await window.api.generateTitle(prompt)
+        const conversation = conversationsRef.current.find((c) => c.id === conversationId)
+        if (!title || !conversation || conversation.title !== quickTitle) return
+        updateConversation(conversationId, (c) => ({ ...c, title }))
+        persist(conversationId)
+      } catch {
+        // The quick title stays.
+      }
+    },
+    [persist, updateConversation]
   )
 
   const send = useCallback(
@@ -284,7 +339,19 @@ export default function App(): React.JSX.Element {
       const content = text.trim()
       if (!content && attachments.length === 0) return false
       const existing = activeId ? conversationsRef.current.find((c) => c.id === activeId) : undefined
-      if (existing && streamsRef.current[existing.id]) return false
+      if (existing && streamsRef.current[existing.id]) {
+        // Orbis is still replying: queue the message to go out after the reply (and any earlier queued ones).
+        const queue = queuesRef.current[existing.id]
+        if ((queue?.items.length ?? 0) >= MAX_QUEUED_MESSAGES) {
+          notify(`Up to ${MAX_QUEUED_MESSAGES} messages can wait in the queue. Remove one or let Orbis catch up.`, 'warn')
+          return false
+        }
+        commitQueues((q) => ({
+          ...q,
+          [existing.id]: { paused: queue?.paused ?? false, items: [...(queue?.items ?? []), { id: newId(), text: content, attachments }] }
+        }))
+        return true
+      }
 
       const now = Date.now()
       const conversation: Conversation = existing ?? {
@@ -302,9 +369,76 @@ export default function App(): React.JSX.Element {
       setActiveId(updated.id)
       persist(updated.id)
       startGeneration(updated, history)
+      if (!existing && content) void autoTitle(updated.id, content, updated.title)
       return true
     },
-    [activeId, commitConversations, draft, persist, startGeneration]
+    [activeId, autoTitle, commitConversations, commitQueues, draft, notify, persist, startGeneration]
+  )
+
+  /** Sends a message into an existing chat that isn't replying; used to run queued messages. */
+  const pushUserMessage = useCallback(
+    (conversationId: string, content: string, attachments: Attachment[]): boolean => {
+      const conversation = conversationsRef.current.find((c) => c.id === conversationId)
+      if (!conversation || streamsRef.current[conversationId]) return false
+      const now = Date.now()
+      const userMessage: ChatMessage = { id: newId(), role: 'user', content, createdAt: now, ...(attachments.length ? { attachments } : {}) }
+      const history = [...conversation.messages, userMessage]
+      const updated = { ...conversation, messages: history, updatedAt: now }
+      commitConversations(conversationsRef.current.map((c) => (c.id === updated.id ? updated : c)))
+      persist(updated.id)
+      startGeneration(updated, history)
+      return true
+    },
+    [commitConversations, persist, startGeneration]
+  )
+
+  const runNextQueued = useCallback(
+    (conversationId: string) => {
+      const queue = queuesRef.current[conversationId]
+      if (!queue || queue.paused || !queue.items.length || streamsRef.current[conversationId]) return
+      const [next, ...rest] = queue.items
+      commitQueues(({ [conversationId]: _sent, ...others }) => (rest.length ? { ...others, [conversationId]: { ...queue, items: rest } } : others))
+      pushUserMessage(conversationId, next.text, next.attachments)
+    },
+    [commitQueues, pushUserMessage]
+  )
+
+  useEffect(() => {
+    settleQueueRef.current = (conversationId, outcome) => {
+      const queue = queuesRef.current[conversationId]
+      if (!queue?.items.length) return
+      if (outcome !== 'done') {
+        commitQueues((q) => ({ ...q, [conversationId]: { ...queue, paused: true } }))
+        return
+      }
+      // A short beat lets the finished reply settle on screen before the next message goes out.
+      window.setTimeout(() => runNextQueued(conversationId), 450)
+    }
+  }, [commitQueues, runNextQueued])
+
+  const removeQueued = useCallback(
+    (conversationId: string, itemId: string) => {
+      commitQueues((q) => {
+        const queue = q[conversationId]
+        if (!queue) return q
+        const items = queue.items.filter((item) => item.id !== itemId)
+        const { [conversationId]: _old, ...others } = q
+        return items.length ? { ...others, [conversationId]: { ...queue, items } } : others
+      })
+    },
+    [commitQueues]
+  )
+
+  const clearQueue = useCallback((conversationId: string) => commitQueues(({ [conversationId]: _cleared, ...others }) => others), [commitQueues])
+
+  const resumeQueue = useCallback(
+    (conversationId: string) => {
+      const queue = queuesRef.current[conversationId]
+      if (!queue) return
+      commitQueues((q) => ({ ...q, [conversationId]: { ...queue, paused: false } }))
+      runNextQueued(conversationId)
+    },
+    [commitQueues, runNextQueued]
   )
 
   const stop = useCallback((conversationId: string) => {
@@ -360,12 +494,13 @@ export default function App(): React.JSX.Element {
 
   const deleteConversation = useCallback(
     (id: string) => {
+      clearQueue(id)
       stop(id)
       commitConversations(conversationsRef.current.filter((c) => c.id !== id))
       setActiveId((current) => (current === id ? null : current))
       void window.api.deleteConversation(id)
     },
-    [commitConversations, stop]
+    [clearQueue, commitConversations, stop]
   )
 
   const renameConversation = useCallback(
@@ -483,8 +618,9 @@ export default function App(): React.JSX.Element {
       const stream = streamsRef.current[c.id]
       if (stream) void window.api.abortChat(stream.requestId)
     }
+    commitQueues((q) => Object.fromEntries(Object.entries(q).filter(([id]) => !stale.some((c) => c.id === id))))
     commitConversations(conversationsRef.current.filter((c) => !c.incognito || c.id === activeId))
-  }, [activeId, commitConversations])
+  }, [activeId, commitConversations, commitQueues])
 
   const updateSettings = useCallback(async (update: SettingsUpdate) => {
     const next = await window.api.updateSettings(update)
@@ -592,6 +728,7 @@ export default function App(): React.JSX.Element {
         dark={dark}
         unread={unread}
         onToggleHistory={toggleSidebar}
+        sidebarCollapsed={sidebarCollapsed}
         onNewChat={newChat}
         onSearch={openSearch}
         onQuickPrompts={() => setQuickPromptsOpen((open) => !open)}
@@ -633,7 +770,6 @@ export default function App(): React.JSX.Element {
           searchToken={searchToken}
           userName={settings?.userName ?? 'You'}
           userTitle={settings?.userTitle ?? ''}
-          onToggleCollapsed={toggleSidebar}
           onNewChat={newChat}
           onIncognito={toggleIncognito}
           onSearch={openSearch}
@@ -661,6 +797,10 @@ export default function App(): React.JSX.Element {
             onQuickPromptsChange={setQuickPromptsOpen}
             onModelChange={changeModel}
             onSend={send}
+            queue={active ? queues[active.id] : undefined}
+            onRemoveQueued={(itemId) => active && removeQueued(active.id, itemId)}
+            onClearQueue={() => active && clearQueue(active.id)}
+            onResumeQueue={() => active && resumeQueue(active.id)}
             onStop={() => active && stop(active.id)}
             onRegenerate={(messageId) => active && regenerate(active.id, messageId)}
             onEdit={(messageId, text) => active && editMessage(active.id, messageId, text)}
@@ -685,7 +825,6 @@ export default function App(): React.JSX.Element {
         {activityOpen && <ActivityPanel items={notices} onClear={() => setNotices([])} onClose={() => setActivityOpen(false)} />}
       </div>
 
-      {effects && <CursorGlow />}
       <ToastStack toasts={toasts} onDismiss={(id) => setToasts((current) => current.filter((t) => t.id !== id))} />
       {settingsOpen && settings && <SettingsModal settings={settings} onUpdate={updateSettings} onClose={() => setSettingsOpen(false)} />}
       {shortcutsOpen && <ShortcutsModal onClose={() => setShortcutsOpen(false)} />}

@@ -1,7 +1,8 @@
-import { Fragment, useLayoutEffect, useRef, useState } from 'react'
+import { Fragment, useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { ArrowDown, HatGlasses } from 'lucide-react'
 import type { Attachment, Conversation, Settings } from '../../../shared/types'
 import type { NoticeKind, StreamState } from '../App'
+import type { ChatQueue } from '../lib/messageQueue'
 import Composer from './Composer'
 import Greeting from './Greeting'
 import MessageItem from './MessageItem'
@@ -17,6 +18,10 @@ interface Props {
   onQuickPromptsChange(open: boolean): void
   onModelChange(model: string): void
   onSend(text: string, attachments: Attachment[]): boolean
+  queue?: ChatQueue
+  onRemoveQueued(itemId: string): void
+  onClearQueue(): void
+  onResumeQueue(): void
   onStop(): void
   onRegenerate(messageId: string): void
   onEdit(messageId: string, text: string): void
@@ -53,10 +58,30 @@ export default function ChatView(props: Props): React.JSX.Element {
     setShowJump(distance > 240)
   }
 
+  const messagesRef = useRef(messages)
+  messagesRef.current = messages
+  const completeDraft = useCallback(
+    (draft: string) =>
+      window.api.completeDraft(
+        draft,
+        messagesRef.current.filter((m) => m.content.trim()).map((m) => ({ role: m.role, content: m.content }))
+      ),
+    []
+  )
+
+  const last = messages.at(-1)
   const composer = (
     <Composer
       streaming={Boolean(stream)}
       model={props.model}
+      prediction={!stream && last?.role === 'assistant' ? last.prediction : undefined}
+      onCompleteDraft={completeDraft}
+      draftContextKey={`${conversation?.id ?? 'new'}:${last?.id ?? ''}:${stream ? 'live' : 'idle'}`}
+      queue={props.queue}
+      onRemoveQueued={props.onRemoveQueued}
+      onClearQueue={props.onClearQueue}
+      onResumeQueue={props.onResumeQueue}
+      effects={settings?.effects !== false}
       quickPromptsOpen={props.quickPromptsOpen}
       onQuickPromptsChange={props.onQuickPromptsChange}
       onModelChange={props.onModelChange}
@@ -117,6 +142,11 @@ export default function ChatView(props: Props): React.JSX.Element {
                 status={stream?.messageId === m.id ? stream.status : undefined}
                 canRegenerate={!stream && i === lastAssistantIndex}
                 canEdit={!stream}
+                canSuggest
+                onSuggest={(text) => {
+                  stickToBottomRef.current = true
+                  props.onSend(text, [])
+                }}
                 onRegenerate={props.onRegenerate}
                 onEdit={props.onEdit}
                 onResend={props.onResend}

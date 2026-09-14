@@ -35,7 +35,10 @@ const api: NxtorbisApi = {
     }
   },
   popOutBrowser: (url) => ipcRenderer.invoke('browser:popout', url),
-  clearBrowserData: () => ipcRenderer.invoke('browser:clear-data')
+  clearBrowserData: () => ipcRenderer.invoke('browser:clear-data'),
+  suggestFollowups: (messages) => ipcRenderer.invoke('chat:suggest', messages),
+  generateTitle: (prompt) => ipcRenderer.invoke('chat:title', prompt),
+  completeDraft: (draft, messages) => ipcRenderer.invoke('chat:complete', draft, messages)
 }
 
 contextBridge.exposeInMainWorld('api', api)

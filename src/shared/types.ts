@@ -25,7 +25,16 @@ export interface ChatMessage {
   /** Set when generation failed or was cut short. */
   error?: string
   feedback?: 'up' | 'down'
+  /** Short follow-up messages offered under an assistant reply; clicking one sends it. */
+  suggestions?: string[]
+  /** The user's most likely next message, offered as ghost text only when the reply clearly invites it. */
+  prediction?: string
   createdAt: number
+}
+
+export interface FollowupSuggestions {
+  next: string | null
+  followups: string[]
 }
 
 export interface Conversation {
@@ -59,7 +68,7 @@ export interface Settings {
   userName: string
   /** How the assistant addresses you, e.g. "Commander". */
   userTitle: string
-  /** Animated particles and cursor glow. */
+  /** Animated background particles and motion effects. */
   effects: boolean
 }
 
@@ -146,4 +155,10 @@ export interface NxtorbisApi {
   onBrowserNewTab(listener: (url: string) => void): () => void
   popOutBrowser(url: string): Promise<boolean>
   clearBrowserData(): Promise<void>
+  /** Predicts the user's next message and follow-ups for the latest assistant reply. */
+  suggestFollowups(messages: { role: Role; content: string }[]): Promise<FollowupSuggestions>
+  /** A short AI-written chat title for a first message, or null if one couldn't be made. */
+  generateTitle(prompt: string): Promise<string | null>
+  /** Completes a half-typed message using the chat for context; the result always starts with the draft, or is null. */
+  completeDraft(draft: string, messages: { role: Role; content: string }[]): Promise<string | null>
 }

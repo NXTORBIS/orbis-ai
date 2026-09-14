@@ -10,6 +10,7 @@ import { buildSystemPrompt } from './prompt'
 import { formatResults, searchWeb } from './websearch'
 import { detectImageGenRequest, generateImage, rewriteImagePrompt } from './imagegen'
 import { transcribeAudio } from './voice'
+import { completeDraft, generateTitle, suggestFollowups } from './suggest'
 import { Store } from './store'
 
 // Baked in at build time from GROQ_API_KEY in .env.local (see electron.vite.config.ts).
@@ -300,6 +301,27 @@ function registerIpc(): void {
     const win = BrowserWindow.fromWebContents(event.sender)
     const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
     return result.canceled ? { attachments: [], skipped: [] } : readImages(result.filePaths)
+  })
+
+  ipcMain.handle('chat:suggest', (_event, messages: unknown) => {
+    if (!Array.isArray(messages)) return { next: null, followups: [] }
+    const valid = messages.filter(
+      (m): m is { role: string; content: string } => !!m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string'
+    )
+    return suggestFollowups(valid, GROQ_API_KEYS, (url, init) => net.fetch(url, init))
+  })
+
+  ipcMain.handle('chat:complete', (_event, draft: unknown, messages: unknown) => {
+    if (typeof draft !== 'string' || !Array.isArray(messages)) return null
+    const valid = messages.filter(
+      (m): m is { role: string; content: string } => !!m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string'
+    )
+    return completeDraft(draft, valid, GROQ_API_KEYS, (url, init) => net.fetch(url, init))
+  })
+
+  ipcMain.handle('chat:title', (_event, prompt: unknown) => {
+    if (typeof prompt !== 'string') return null
+    return generateTitle(prompt, GROQ_API_KEYS, (url, init) => net.fetch(url, init))
   })
 
   ipcMain.handle('browser:popout', (_event, url: string) => {
