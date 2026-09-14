@@ -1568,15 +1568,7 @@ textarea.hud-input {
 
 /* HUD frame line spanning the stage just above the composer. */
 .composer-dock::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100vw;
-  right: -100vw;
-  z-index: -1;
-  height: 1px;
-  background: var(--line-strong);
-  pointer-events: none;
+  display: none;
 }
 
 .composer {
