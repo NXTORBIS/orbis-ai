@@ -262,7 +262,43 @@ if (!app.requestSingleInstanceLock()) {
 
   void app.whenReady().then(async () => {
     app.setAppUserModelId('ai.nxtorbis.desktop')
-    if (app.isPackaged) Menu.setApplicationMenu(null)
+
+    // Create menu like ChatGPT
+    const menu = Menu.buildFromTemplate([
+      {
+        label: 'File',
+        submenu: [
+          { label: 'New Chat', accelerator: 'CmdOrCtrl+N', click: () => mainWindow?.webContents.send('menu:new-chat') },
+          { type: 'separator' },
+          { label: 'Exit', accelerator: 'CmdOrCtrl+Q', role: 'quit' }
+        ]
+      },
+      {
+        label: 'Edit',
+        submenu: [
+          { label: 'Undo', accelerator: 'CmdOrCtrl+Z', role: 'undo' },
+          { label: 'Redo', accelerator: 'CmdOrCtrl+Shift+Z', role: 'redo' },
+          { type: 'separator' },
+          { label: 'Cut', accelerator: 'CmdOrCtrl+X', role: 'cut' },
+          { label: 'Copy', accelerator: 'CmdOrCtrl+C', role: 'copy' },
+          { label: 'Paste', accelerator: 'CmdOrCtrl+V', role: 'paste' }
+        ]
+      },
+      {
+        label: 'View',
+        submenu: [
+          { label: 'Reload', accelerator: 'CmdOrCtrl+R', role: 'reload' },
+          { label: 'Toggle Developer Tools', accelerator: 'CmdOrCtrl+Shift+I', role: 'toggleDevTools' }
+        ]
+      },
+      {
+        label: 'Help',
+        submenu: [
+          { label: 'About Orbis', click: () => mainWindow?.webContents.send('menu:about') }
+        ]
+      }
+    ])
+    Menu.setApplicationMenu(menu)
 
     store = new Store(app.getPath('userData'))
     nativeTheme.themeSource = (await store.getSettings()).theme

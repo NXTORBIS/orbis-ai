@@ -60,7 +60,8 @@
       "Bash(git commit -m 'Reduce input pill border thickness - make it subtle *)",
       "Bash(git commit -m 'Further reduce input box height *)",
       "Bash(git commit -m 'Simplify greeting and sidebar to match Claude Code style *)",
-      "Bash(git commit -m 'Match Claude Code exactly - update input placeholder *)"
+      "Bash(git commit -m 'Match Claude Code exactly - update input placeholder *)",
+      "Bash(git commit -m 'Add File, Edit, View, Help menu bar like ChatGPT *)"
     ]
   }
 }
