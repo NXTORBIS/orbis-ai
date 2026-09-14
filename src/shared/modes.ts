@@ -11,7 +11,7 @@ export interface ModeInfo {
 }
 
 export const MODES: ModeInfo[] = [
-  { id: 'auto', label: 'Auto', model: DEFAULT_MODEL, description: 'ORION — general use' },
+  { id: 'auto', label: 'Auto', model: DEFAULT_MODEL, description: 'Llama 3.3 70B — general use' },
   { id: 'custom', label: 'Customize', description: 'Choose a model' }
 ]
 

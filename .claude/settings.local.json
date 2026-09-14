@@ -29,7 +29,21 @@
       "Bash(gh repo *)",
       "Bash(git commit -m 'chore: Update Claude settings for latest development workflow *)",
       "Bash(git push *)",
-      "Bash(python -c \"import orion; print\\(orion.__version__\\)\")"
+      "Bash(python -c \"import orion; print\\(orion.__version__\\)\")",
+      "Bash(curl -s http://127.0.0.1:8765/v1/health)",
+      "Bash(.venv\\\\Scripts\\\\python.exe -m orion.api.server configs/system/laptop.yaml)",
+      "Bash(timeout 60 python -m orion.api.server configs/system/laptop.yaml)",
+      "Bash(curl -s http://127.0.0.1:8765/v1/models)",
+      "Bash(npm test *)",
+      "Bash(git commit -m ' *)",
+      "Bash(rm src/renderer/src/assets/orbis-mark.svg src/renderer/src/assets/orbis-wordmark.svg)",
+      "Bash(git commit -m 'Use actual uploaded ORBIS logos instead of SVG *)",
+      "Bash(cp \"C:\\\\Users\\\\ksran\\\\Downloads\\\\Orbis Logos\\\\Final Orbis logo only.jpg\" \"C:\\\\Users\\\\ksran\\\\Downloads\\\\Orbis AI desktop app\\\\src\\\\renderer\\\\src\\\\assets\\\\orbis-mark.jpg\")",
+      "Bash(cp \"C:\\\\Users\\\\ksran\\\\Downloads\\\\Orbis Logos\\\\Full Orbis Logo with text.png\" \"C:\\\\Users\\\\ksran\\\\Downloads\\\\Orbis AI desktop app\\\\src\\\\renderer\\\\src\\\\assets\\\\orbis-wordmark.png\")",
+      "Bash(git commit -m 'Update to official ORBIS logos from Downloads folder *)",
+      "Bash(git commit -m 'Remove rotating beam animation, keep only glow effect *)",
+      "Bash(git commit -m 'Add ChatGPT'\\\\''s modern UI aesthetic to Orbis *)",
+      "Bash(git commit -m 'Add ChatGPT-style slash commands to Orbis *)"
     ]
   }
 }

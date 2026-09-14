@@ -25,6 +25,8 @@ interface Props {
   onNotify(text: string, kind?: NoticeKind): void
   onImprovePrompt(text: string): Promise<string | null>
   onOpenSettings(): void
+  onNewChat?(): void
+  onSearch?(): void
 }
 
 const dayKey = (ts: number): string => new Date(ts).toDateString()
@@ -66,6 +68,9 @@ export default function ChatView(props: Props): React.JSX.Element {
       onStop={props.onStop}
       onNotify={props.onNotify}
       onImprovePrompt={props.onImprovePrompt}
+      onNewChat={props.onNewChat}
+      onSearch={props.onSearch}
+      onSettings={props.onOpenSettings}
     />
   )
 

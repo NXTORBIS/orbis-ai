@@ -70,14 +70,10 @@ export interface ModelInfo {
   reasoningEffort: boolean
   /** Expects prior `reasoning_content` echoed back in multi-turn history. */
   echoReasoning: boolean
-  /** `orion` is the local ORION server: no API key, never part of the fallback chain. Default `nvidia`. */
-  provider?: 'nvidia' | 'orion'
 }
 
 export interface ChatRequest {
   requestId: string
-  /** Lets the local ORION server keep memory per chat. */
-  conversationId?: string
   model: string
   persona: string
   /** Overrides the saved reasoning effort (Fast and Reasoning modes). */

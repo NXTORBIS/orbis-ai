@@ -1690,6 +1690,78 @@ textarea.hud-input {
   background: var(--glass-border);
 }
 
+/* Slash commands dropdown */
+.slash-commands {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  margin-bottom: 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: var(--glass);
+  display: flex;
+  flex-direction: column;
+  max-height: 240px;
+  overflow-y: auto;
+  z-index: 10;
+  animation: slide-up 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.slash-command {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border: none;
+  background: transparent;
+  color: var(--composer-text);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.slash-command:first-child {
+  border-radius: 11px 11px 0 0;
+}
+
+.slash-command:last-child {
+  border-radius: 0 0 11px 11px;
+}
+
+.slash-command:hover,
+.slash-command.selected {
+  background: rgba(63, 216, 255, 0.1);
+}
+
+.cmd-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cmd-name {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--cyan);
+}
+
+.cmd-desc {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .mode-pill {
   display: inline-flex;
   align-items: center;

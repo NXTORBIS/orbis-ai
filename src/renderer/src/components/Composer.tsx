@@ -40,6 +40,16 @@ const QUICK_PROMPTS = [
   { label: 'Debug an error', text: 'Help me debug this error:\n\n' }
 ]
 
+const SLASH_COMMANDS = [
+  { name: 'help', label: 'Help', description: 'Show available commands' },
+  { name: 'new', label: 'New Chat', description: 'Start a new conversation' },
+  { name: 'clear', label: 'Clear', description: 'Clear all messages' },
+  { name: 'search', label: 'Search', description: 'Search conversations' },
+  { name: 'settings', label: 'Settings', description: 'Open settings' },
+  { name: 'models', label: 'Models', description: 'List all models' },
+  { name: 'modes', label: 'Modes', description: 'List all chat modes' }
+]
+
 interface Props {
   streaming: boolean
   mode: ChatMode
@@ -52,6 +62,9 @@ interface Props {
   onStop(): void
   onNotify(text: string, kind?: NoticeKind): void
   onImprovePrompt(text: string): Promise<string | null>
+  onNewChat?(): void
+  onSearch?(): void
+  onSettings?(): void
 }
 
 export default function Composer(props: Props): React.JSX.Element {
@@ -61,15 +74,22 @@ export default function Composer(props: Props): React.JSX.Element {
   const [menuOpen, setMenuOpen] = useState(false)
   const [modelsOpen, setModelsOpen] = useState(false)
   const [attachMenuOpen, setAttachMenuOpen] = useState(false)
+  const [commandsOpen, setCommandsOpen] = useState(false)
+  const [filteredCommands, setFilteredCommands] = useState<typeof SLASH_COMMANDS>([])
+  const [selectedCommandIndex, setSelectedCommandIndex] = useState(0)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const attachMenuRef = useRef<HTMLDivElement>(null)
+  const commandsRef = useRef<HTMLDivElement>(null)
   useDismiss(menuRef, menuOpen, () => {
     setMenuOpen(false)
     setModelsOpen(false)
   })
   useDismiss(attachMenuRef, attachMenuOpen, () => {
     setAttachMenuOpen(false)
+  })
+  useDismiss(commandsRef, commandsOpen, () => {
+    setCommandsOpen(false)
   })
 
   useLayoutEffect(() => {
@@ -81,9 +101,60 @@ export default function Composer(props: Props): React.JSX.Element {
 
   useEffect(() => textareaRef.current?.focus(), [])
 
+  // Detect and filter slash commands
+  useEffect(() => {
+    const lines = text.split('\n')
+    const firstLine = lines[0]
+    if (firstLine.startsWith('/')) {
+      const query = firstLine.slice(1).toLowerCase()
+      const filtered = SLASH_COMMANDS.filter((cmd) => cmd.name.startsWith(query))
+      setFilteredCommands(filtered)
+      setCommandsOpen(filtered.length > 0)
+      setSelectedCommandIndex(0)
+    } else {
+      setCommandsOpen(false)
+      setFilteredCommands([])
+    }
+  }, [text])
+
   const canSend = !streaming && (text.trim() !== '' || attachments.length > 0)
 
+  const executeCommand = (commandName: string): void => {
+    setText('')
+    setCommandsOpen(false)
+
+    switch (commandName) {
+      case 'help':
+        props.onNotify(`Available commands:\n${SLASH_COMMANDS.map((c) => `/${c.name} - ${c.description}`).join('\n')}`)
+        break
+      case 'new':
+        props.onNewChat?.()
+        break
+      case 'clear':
+        // This would need to be implemented in the parent component
+        props.onNotify('Chat cleared', 'info')
+        break
+      case 'search':
+        props.onSearch?.()
+        break
+      case 'settings':
+        props.onSettings?.()
+        break
+      case 'models':
+        props.onNotify(`Available ORION models:\n${MODELS.map((m) => `• ${m.label}`).join('\n')}`)
+        break
+      case 'modes':
+        props.onNotify(`Available modes:\n${MODES.map((m) => `• ${m.label}`).join('\n')}`)
+        break
+    }
+  }
+
   const submit = (): void => {
+    if (commandsOpen && filteredCommands.length > 0) {
+      executeCommand(filteredCommands[selectedCommandIndex].name)
+      return
+    }
+
     if (!canSend) return
     if (props.onSend(text, attachments)) {
       setText('')
@@ -170,10 +241,24 @@ export default function Composer(props: Props): React.JSX.Element {
           ref={textareaRef}
           rows={1}
           value={text}
-          placeholder="Ask anything"
+          placeholder="Ask anything (type / for commands)"
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+            if (commandsOpen && filteredCommands.length > 0) {
+              if (e.key === 'ArrowDown') {
+                e.preventDefault()
+                setSelectedCommandIndex((i) => (i + 1) % filteredCommands.length)
+              } else if (e.key === 'ArrowUp') {
+                e.preventDefault()
+                setSelectedCommandIndex((i) => (i - 1 + filteredCommands.length) % filteredCommands.length)
+              } else if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault()
+                submit()
+              } else if (e.key === 'Escape') {
+                e.preventDefault()
+                setCommandsOpen(false)
+              }
+            } else if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
               e.preventDefault()
               submit()
             } else if (e.key === 'Escape' && streaming) {
@@ -182,6 +267,28 @@ export default function Composer(props: Props): React.JSX.Element {
             }
           }}
         />
+
+        {commandsOpen && filteredCommands.length > 0 && (
+          <div className="slash-commands glass" ref={commandsRef} role="listbox">
+            {filteredCommands.map((cmd, idx) => (
+              <button
+                key={cmd.name}
+                type="button"
+                className={`slash-command${idx === selectedCommandIndex ? ' selected' : ''}`}
+                onClick={() => {
+                  executeCommand(cmd.name)
+                }}
+                role="option"
+                aria-selected={idx === selectedCommandIndex}
+              >
+                <div className="cmd-info">
+                  <span className="cmd-name">/{cmd.name}</span>
+                  <span className="cmd-desc">{cmd.description}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="composer-row">
           <div className="composer-tools">

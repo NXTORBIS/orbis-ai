@@ -4,12 +4,14 @@ import { existsSync, promises as fs } from 'node:fs'
 import os from 'node:os'
 import { basename, join } from 'node:path'
 import type { ChatRequest, Conversation, PickedFiles, SettingsUpdate, StreamEvent } from '../shared/types'
-import { isLocalModel } from '../shared/models'
 import { streamChat, testApiKey } from './nim'
 import { buildSystemPrompt } from './prompt'
 import { formatResults, searchWeb } from './websearch'
 import { Store } from './store'
-import { OrionManager, OrionClient } from './orion'
+
+// Baked in at build time from GROQ_API_KEY in .env.local (see electron.vite.config.ts).
+declare const __GROQ_API_KEYS__: string[]
+const GROQ_API_KEYS: string[] = typeof __GROQ_API_KEYS__ === 'undefined' ? [] : __GROQ_API_KEYS__
 
 const MAX_ATTACHMENT_BYTES = 200_000
 const TEXT_EXTENSIONS = [
@@ -66,8 +68,6 @@ async function readTextFiles(paths: string[]): Promise<PickedFiles> {
 const activeRequests = new Map<string, AbortController>()
 let store: Store
 let mainWindow: BrowserWindow | null = null
-let orionClient: OrionClient | null = null
-let orionManager: OrionManager | null = null
 
 function isHttpUrl(url: string): boolean {
   try {
@@ -174,9 +174,7 @@ function registerIpc(): void {
     return settings
   })
 
-  ipcMain.handle('settings:testKey', async () => {
-    return testApiKey()
-  })
+  ipcMain.handle('settings:testKey', () => testApiKey(GROQ_API_KEYS, (url, init) => net.fetch(url, init)))
 
   ipcMain.handle('conversations:list', () => store.listConversations())
   ipcMain.handle('conversations:save', (_event, conversation: Conversation) => store.saveConversation(conversation))
@@ -187,10 +185,6 @@ function registerIpc(): void {
     const emit = (streamEvent: StreamEvent): void => {
       if (!sender.isDestroyed()) sender.send('chat:event', request.requestId, streamEvent)
     }
-
-    const local = isLocalModel(request.model)
-    const apiKey = local ? '' : await store.getApiKey()
-    if (!local && !apiKey) return emit({ type: 'error', message: 'Start ORION in its console to begin chatting.' })
     const settings = await store.getSettings()
 
     const controller = new AbortController()
@@ -204,7 +198,7 @@ function registerIpc(): void {
         emit({ type: 'status', message: 'Searching the web…' })
         try {
           const results = await searchWeb(query, (url, init) => net.fetch(url, init), controller.signal)
-          // ORION only reads the latest user message, so the results have to travel inside it.
+          // Kept inside the user message so the results sit right next to the question they answer.
           messages = [...messages.slice(0, -1), { ...last, content: `${formatResults(query, results)}\n\nQuestion: ${last.content}` }]
         } catch (err) {
           if (controller.signal.aborted) return emit({ type: 'aborted' })
@@ -212,8 +206,7 @@ function registerIpc(): void {
         }
       }
       await streamChat({
-        apiKey: apiKey ?? '',
-        conversationId: request.conversationId,
+        apiKeys: GROQ_API_KEYS,
         model: request.model,
         messages,
         systemPrompt,
@@ -251,44 +244,6 @@ function registerIpc(): void {
     const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
     return result.canceled ? { attachments: [], skipped: [] } : readTextFiles(result.filePaths)
   })
-
-  ipcMain.handle('orion:status', () => {
-    return orionManager?.getStatus() || { state: 'stopped', uptime: 0 }
-  })
-
-  ipcMain.handle('orion:start', async () => {
-    if (!orionManager) throw new Error('OrionManager not initialized')
-    try {
-      await orionManager.start()
-      return { success: true, state: orionManager.getState() }
-    } catch (err) {
-      return { success: false, error: err instanceof Error ? err.message : String(err) }
-    }
-  })
-
-  ipcMain.handle('orion:stop', async () => {
-    if (!orionManager) throw new Error('OrionManager not initialized')
-    await orionManager.stop()
-    return { success: true, state: orionManager.getState() }
-  })
-
-  ipcMain.handle('vision:analyze', async (_event, imageBase64: string, prompt: string) => {
-    if (!orionClient) throw new Error('OrionClient not initialized')
-    try {
-      return await orionClient.vision({ image: imageBase64, prompt })
-    } catch (err) {
-      return { error: err instanceof Error ? err.message : String(err) }
-    }
-  })
-
-  ipcMain.handle('generate:image', async (_event, prompt: string) => {
-    if (!orionClient) throw new Error('OrionClient not initialized')
-    try {
-      return await orionClient.generate({ prompt })
-    } catch (err) {
-      return { error: err instanceof Error ? err.message : String(err) }
-    }
-  })
 }
 
 // Settings and chats saved before the rename to Orbis live under the old folder name.
@@ -312,38 +267,14 @@ if (!app.requestSingleInstanceLock()) {
     store = new Store(app.getPath('userData'))
     nativeTheme.themeSource = (await store.getSettings()).theme
 
-    // Initialize ORION
-    orionClient = new OrionClient()
-    orionManager = new OrionManager(orionClient, { readinessTimeout: 60_000 })
-
-    // Handle ORION state changes
-    orionManager.onStateChange((state) => {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('orion:stateChanged', state)
-      }
-    })
-
-    // Start ORION in background
-    orionManager.start().catch((err) => {
-      console.error('Failed to start ORION:', err)
-    })
-
     registerIpc()
     mainWindow = createWindow()
     nativeTheme.on('updated', () => mainWindow?.setTitleBarOverlay(titleBarOverlayFor(nativeTheme.shouldUseDarkColors)))
     mainWindow.on('closed', () => (mainWindow = null))
   })
 
-  app.on('window-all-closed', async () => {
+  app.on('window-all-closed', () => {
     for (const controller of activeRequests.values()) controller.abort()
-    // Gracefully shutdown ORION
-    if (orionManager) {
-      try {
-        await orionManager.stop()
-      } catch (err) {
-        console.error('Error stopping ORION:', err)
-      }
-    }
     app.quit()
   })
 }

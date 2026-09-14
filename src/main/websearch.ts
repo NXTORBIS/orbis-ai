@@ -28,7 +28,6 @@ export function parseResults(html: string): WebResult[] {
     const url = href ? resolveUrl(decodeEntities(href)) : null
     if (!url || !title) continue
     const text = clean(snippet)
-    // ORION reads about 3 words a second on CPU, so every extra word of context delays the reply.
     results.push({ url, title: clean(title), snippet: text.length > 240 ? `${text.slice(0, 240).trimEnd()}…` : text })
   }
   return results

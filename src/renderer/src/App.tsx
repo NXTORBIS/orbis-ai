@@ -255,7 +255,6 @@ export default function App(): React.JSX.Element {
 
       const request: ChatRequest = {
         requestId,
-        conversationId,
         model: conversation.model,
         persona: conversation.persona,
         reasoningEffort: modeInfo(conversation.mode).reasoningEffort,
@@ -587,6 +586,8 @@ export default function App(): React.JSX.Element {
             onNotify={notify}
             onImprovePrompt={improvePrompt}
             onOpenSettings={() => setSettingsOpen(true)}
+            onNewChat={newChat}
+            onSearch={openSearch}
           />
         </main>
 
