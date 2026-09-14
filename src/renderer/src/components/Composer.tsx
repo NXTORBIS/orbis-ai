@@ -281,7 +281,7 @@ export default function Composer(props: Props): React.JSX.Element {
             ref={textareaRef}
             rows={1}
             value={text}
-            placeholder="Ask anything (type / for commands)"
+            placeholder="Message Orbis"
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => {
               if (commandsOpen && filteredCommands.length > 0) {
