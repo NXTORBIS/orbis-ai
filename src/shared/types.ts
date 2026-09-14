@@ -72,6 +72,8 @@ export interface ModelInfo {
   reasoningEffort: boolean
   /** Expects prior `reasoning_content` echoed back in multi-turn history. */
   echoReasoning: boolean
+  /** Supports vision/image input. */
+  vision?: boolean
 }
 
 export interface ChatRequest {

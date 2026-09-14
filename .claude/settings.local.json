@@ -65,7 +65,9 @@
       "Bash(git commit -m 'Restore typewriter animation with old display font styling *)",
       "Bash(git commit -m 'Increase spacing between greeting and input box *)",
       "Bash(git commit -m 'Switch web search from DuckDuckGo to Google *)",
-      "Bash(git commit -m 'Show File, Edit, View, Help menu bar *)"
+      "Bash(git commit -m 'Show File, Edit, View, Help menu bar *)",
+      "Bash(powershell -Command ' *)",
+      "Bash(git commit -m 'Update taskbar icon to use Orbis logo *)"
     ]
   }
 }

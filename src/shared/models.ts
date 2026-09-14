@@ -105,7 +105,8 @@ export const MODELS: ModelInfo[] = [
     label: 'ORION Vision',
     description: 'Image analysis & understanding',
     reasoningEffort: false,
-    echoReasoning: false
+    echoReasoning: false,
+    vision: true
   }
 ]
 

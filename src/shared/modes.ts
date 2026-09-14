@@ -12,6 +12,9 @@ export interface ModeInfo {
 
 export const MODES: ModeInfo[] = [
   { id: 'auto', label: 'Auto', model: DEFAULT_MODEL, description: 'ORION Core — balanced & capable' },
+  { id: 'fast', label: 'Fast', model: 'allam-2-7b', description: 'ORION Mini — quick responses' },
+  { id: 'advanced', label: 'Advanced', model: 'qwen/qwen3.8-27b', description: 'ORION Ultra — advanced reasoning' },
+  { id: 'reasoning', label: 'Reasoning', model: 'openai/gpt-oss-120b', reasoningEffort: 'high', description: 'ORION Max — deep thinking' },
   { id: 'custom', label: 'Customize', description: 'Choose a model' }
 ]
 

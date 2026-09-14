@@ -184,7 +184,7 @@ function toApiMessages(messages: ChatMessage[], systemPrompt: string, model: str
   const info = modelInfo(model)
   const out: Record<string, unknown>[] = systemPrompt.trim() ? [{ role: 'system', content: systemPrompt }] : []
   for (const m of messages) {
-    const content = m.role === 'user' ? toMessageContent(m) : m.content
+    const content = m.role === 'user' ? toMessageContent(m, info) : m.content
     // Failed replies with no text would break role alternation, so they are left out.
     if (m.role === 'assistant' && !content) continue
     const prev = out[out.length - 1]
@@ -201,8 +201,22 @@ function toApiMessages(messages: ChatMessage[], systemPrompt: string, model: str
   return out
 }
 
-function toMessageContent(message: ChatMessage): string | Record<string, unknown>[] {
+function toMessageContent(message: ChatMessage, model: ReturnType<typeof modelInfo>): string | Record<string, unknown>[] {
   if (!message.attachments?.length) return message.content
+
+  const hasImages = message.attachments.some(a => a.type === 'image')
+  const supportsVision = model.vision
+
+  // If model doesn't support vision, strip images and just send text
+  if (hasImages && !supportsVision) {
+    const textParts = message.attachments.filter(a => a.type !== 'image').map(a => `<file name="${a.name}">\n${a.content}\n</file>`)
+    const textContent = textParts.length > 0 ? textParts.join('\n\n') : ''
+    if (message.content) {
+      return textContent ? `${textContent}\n\n${message.content}` : message.content
+    }
+    return textContent || message.content
+  }
+
   const parts: Record<string, unknown>[] = []
 
   for (const a of message.attachments) {
