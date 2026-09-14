@@ -102,7 +102,7 @@ export const MODELS: ModelInfo[] = [
   }
 ]
 
-export const DEFAULT_MODEL = MODELS[0].id
+export const DEFAULT_MODEL = MODELS[2].id // ORION Core - balanced model for Auto mode
 
 export function modelInfo(id: string): ModelInfo {
   return MODELS.find((m) => m.id === id) ?? { id, label: id, description: '', reasoningEffort: false, echoReasoning: false }
