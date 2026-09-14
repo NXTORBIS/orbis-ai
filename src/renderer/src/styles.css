@@ -2025,10 +2025,7 @@ textarea.hud-input {
   user-select: none;
 }
 
-/* Both logo images are white-and-cyan artwork on transparency; invert them on light backgrounds, keeping the cyan hue. */
-:root[data-theme='light'] .orbis-mark {
-  filter: invert(1) hue-rotate(180deg);
-}
+/* The glass ring is shaded to read on both dark and light backgrounds, so it is never inverted. */
 
 .wordmark {
   height: 20px;
@@ -3287,9 +3284,9 @@ textarea.hud-input {
   justify-content: center;
   gap: 5px;
   height: 32px;
-  padding: 0 10px;
+  padding: 0 14px;
   border: 1px solid rgba(63, 216, 255, 0.25);
-  border-radius: 8px;
+  border-radius: 999px;
   background: rgba(63, 216, 255, 0.06);
   color: var(--muted-strong);
   font-size: 12px;

@@ -5,7 +5,7 @@ import type { ChatOptions, FetchFn } from './nim.ts'
 import type { ChatMessage, StreamEvent } from '../shared/types'
 
 const ORION_NANO = 'meta-llama/llama-prompt-guard-2-22m'
-const ORION_MINI = 'allam-2-7b'
+const ORION_CORE = 'openai/gpt-oss-20b'
 const ORION_MAX = 'openai/gpt-oss-120b'
 
 interface Call {
@@ -101,7 +101,7 @@ test('moves to the next API key when Groq rejects one', async () => {
     h.calls.map((c) => c.headers.Authorization),
     ['Bearer revoked', 'Bearer valid']
   )
-  assert.ok(h.events.some((e) => e.type === 'status' && /rejected API key 1 of 2/.test(e.message)))
+  assert.equal(h.events.some((e) => e.type === 'status'), false)
   assert.equal(h.events.at(-1)?.type, 'done')
 })
 
@@ -114,7 +114,7 @@ test('switches to the next API key when rate-limited', async () => {
     h.calls.map((c) => c.headers.Authorization),
     ['Bearer first', 'Bearer second']
   )
-  assert.ok(h.events.some((e) => e.type === 'status' && /rate-limited/.test(e.message)))
+  assert.equal(h.events.some((e) => e.type === 'status'), false)
   assert.equal(h.events.at(-1)?.type, 'done')
 })
 
@@ -127,13 +127,13 @@ test('falls back to the next model when the first is rate-limited', async () => 
   await h.run()
   assert.deepEqual(
     h.calls.map((c) => c.model),
-    [ORION_NANO, ORION_MINI]
+    [ORION_NANO, ORION_CORE]
   )
   assert.equal(h.events[0].type, 'status')
-  assert.deepEqual(h.events[1], { type: 'start', model: ORION_MINI })
+  assert.deepEqual(h.events[1], { type: 'start', model: ORION_CORE })
   assert.equal(text(h.events, 'reasoning'), 'Let me think')
   assert.equal(text(h.events, 'content'), 'Hello!')
-  assert.deepEqual(h.events.at(-1), { type: 'done', model: ORION_MINI, truncated: false })
+  assert.deepEqual(h.events.at(-1), { type: 'done', model: ORION_CORE, truncated: false })
 })
 
 test('splits inline <think> tags and reports length truncation', async () => {
@@ -150,6 +150,67 @@ test('sends reasoning_effort only to reasoning models, mapping max to high', asy
   await h.run({ model: ORION_NANO, autoFallback: false })
   assert.equal(h.calls[0].body.reasoning_effort, 'high')
   assert.equal('reasoning_effort' in h.calls[1].body, false)
+})
+
+test('gives reasoning models an explicit output budget', async () => {
+  const h = harness(() => sse([chunk({ content: 'ok' }, 'stop')]))
+  await h.run({ model: ORION_MAX, autoFallback: false })
+  await h.run({ model: ORION_NANO, autoFallback: false })
+  assert.equal(h.calls[0].body.max_completion_tokens, 8192)
+  assert.equal('max_completion_tokens' in h.calls[1].body, false)
+})
+
+test('retries at low effort into the same reply when reasoning leaves no answer', async () => {
+  const h = harness((_call, index) =>
+    index === 0 ? sse([chunk({ reasoning: 'Planning day one' }, 'length')]) : sse([chunk({ reasoning: 'Short' }), chunk({ content: 'Day 1' }, 'stop')])
+  )
+  await h.run({ model: ORION_MAX, autoFallback: false })
+  assert.equal(h.calls.length, 2)
+  assert.equal(h.calls[1].body.reasoning_effort, 'low')
+  assert.equal(h.calls[1].body.max_completion_tokens, 4096)
+  assert.equal(h.events.filter((e) => e.type === 'start').length, 1)
+  assert.equal(h.events.some((e) => e.type === 'error' || e.type === 'status'), false)
+  assert.equal(text(h.events, 'content'), 'Day 1')
+  assert.deepEqual(h.events.at(-1), { type: 'done', model: ORION_MAX, truncated: false })
+})
+
+test('rescue retry rotates keys and keeps the reply if every key is rate-limited', async () => {
+  const h = harness((_call, index) =>
+    index === 0 ? sse([chunk({ reasoning: 'Thinking' }, 'length')]) : json(429, { error: { message: 'Too many requests' } })
+  )
+  await h.run({ model: ORION_MAX, apiKeys: ['a', 'b'] })
+  assert.deepEqual(
+    h.calls.map((c) => [c.model, c.headers.Authorization]),
+    [[ORION_MAX, 'Bearer a'], [ORION_MAX, 'Bearer a'], [ORION_MAX, 'Bearer b']]
+  )
+  assert.deepEqual(h.events.at(-1), { type: 'done', model: ORION_MAX, truncated: true })
+})
+
+test('shrinks the output budget to fit when Groq says the request is too large', async () => {
+  const h = harness((_call, index) =>
+    index === 0 ? json(413, { error: { message: 'Request too large on tokens per minute (TPM): Limit 8000, Requested 11000' } }) : sse([chunk({ content: '4' }, 'stop')])
+  )
+  await h.run({ model: ORION_MAX, autoFallback: false })
+  assert.equal(h.calls.length, 2)
+  assert.equal(h.calls[0].body.max_completion_tokens, 8192)
+  // 2808 prompt tokens and a 256-token margin leave 4936 for the reply.
+  assert.equal(h.calls[1].body.max_completion_tokens, 4936)
+  assert.equal(h.calls[1].body.reasoning_effort, 'high')
+  assert.equal(text(h.events, 'content'), '4')
+  assert.equal(h.events.at(-1)?.type, 'done')
+})
+
+test('falls back to the default budget when the too-large error has no numbers', async () => {
+  const h = harness((_call, index) => (index === 0 ? json(413, { error: { message: 'Too many tokens' } }) : sse([chunk({ content: '4' }, 'stop')])))
+  await h.run({ model: ORION_MAX, autoFallback: false })
+  assert.equal(h.calls.length, 2)
+  assert.equal('max_completion_tokens' in h.calls[1].body, false)
+})
+
+test('does not retry when a reasoning model answers normally', async () => {
+  const h = harness(() => sse([chunk({ reasoning: 'hmm' }), chunk({ content: 'Hi!' }, 'stop')]))
+  await h.run({ model: ORION_MAX, autoFallback: false })
+  assert.equal(h.calls.length, 1)
 })
 
 test('retries once without optional params after a 400', async () => {
@@ -173,7 +234,7 @@ test('reports error when all keys are rate-limited', async () => {
   const h = harness(() => json(429, {}, { 'retry-after': '1' }))
   await h.run({ apiKeys: ['first', 'second'], autoFallback: false })
   assert.equal(h.calls.length, 2)
-  assert.ok(h.events.some((e) => e.type === 'status' && /rate-limited/.test(e.message)))
+  assert.equal(h.events.some((e) => e.type === 'status'), false)
   assert.equal(h.events.at(-1)?.type, 'error')
 })
 

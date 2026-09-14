@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Check, ChevronDown, FileText, Files, ListPlus, Mic, Paperclip, Pencil, Play, Plus, Send, Square, Upload, X } from 'lucide-react'
+import { Check, FileText, Files, ListPlus, Mic, Paperclip, Pencil, Play, Plus, Send, Square, Upload, X } from 'lucide-react'
 import { MAX_QUEUED_MESSAGES } from '../lib/messageQueue'
 import type { ChatQueue, QueuedMessage } from '../lib/messageQueue'
 import type { Attachment } from '../../../shared/types'
@@ -587,7 +587,6 @@ export default function Composer(props: Props): React.JSX.Element {
                 onClick={() => (menuOpen ? setMenuOpen(false) : openModelMenu())}
               >
                 <span className="model-label">{currentModelLabel}</span>
-                <ChevronDown size={11} />
               </button>
               {menuOpen && (
                 <div className={`popover glass mode-menu${menuPlacement.down ? ' down' : ''}`} style={{ maxHeight: menuPlacement.maxHeight }} role="menu">

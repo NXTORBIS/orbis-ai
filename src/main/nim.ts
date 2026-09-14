@@ -64,12 +64,39 @@ export async function streamChat(opts: ChatOptions): Promise<void> {
 }
 
 /**
+ * Groq defaults gpt-oss to 2048 output tokens, which high effort can spend entirely on reasoning.
+ * The budget also counts against the per-minute token limit, so it is generous but not huge.
+ */
+const REASONING_MAX_TOKENS = 8192
+const RESCUE_MAX_TOKENS = 4096
+
+interface StreamResult {
+  hasContent: boolean
+  finishReason: string | null
+}
+
+/** Streams a reply, then silently retries once at low effort if reasoning left no answer. */
+async function streamWithKeys(model: string, opts: ChatOptions): Promise<void> {
+  let result = await withKeyRotation(opts, (key) => streamOnce(model, opts, key))
+  if (!result.hasContent && modelInfo(model).reasoningEffort && !opts.signal.aborted) {
+    console.warn(`[chat] ${model} finished with no answer (finish_reason=${result.finishReason}); retrying at low reasoning effort`)
+    try {
+      result = await withKeyRotation(opts, (key) => streamOnce(model, opts, key, 'rescue'))
+    } catch (err) {
+      // Nothing new was shown, so keep the reply as it is rather than switching models.
+      if (!(err instanceof HttpError) || opts.signal.aborted) throw err
+    }
+  }
+  opts.emit({ type: 'done', model, truncated: result.finishReason === 'length' })
+}
+
+/**
  * Moves to the next key when Groq rejects one (revoked/mistyped/rate-limited).
  */
-async function streamWithKeys(model: string, opts: ChatOptions): Promise<void> {
-  for (let k = 0; k < opts.apiKeys.length; k++) {
+async function withKeyRotation(opts: ChatOptions, attempt: (apiKey: string) => Promise<StreamResult>): Promise<StreamResult> {
+  for (let k = 0; ; k++) {
     try {
-      return await streamOnce(model, opts, opts.apiKeys[k])
+      return await attempt(opts.apiKeys[k])
     } catch (err) {
       const isRejected = err instanceof HttpError && err.status === 401
       const isRateLimited = err instanceof HttpError && err.status === 429
@@ -85,7 +112,11 @@ function groqEffort(effort: ReasoningEffort): string {
   return effort === 'max' ? 'high' : effort
 }
 
-async function streamOnce(model: string, opts: ChatOptions, apiKey: string, lean = false): Promise<void> {
+/** 'lean' drops optional params after a 400; 'rescue' is the low-effort retry for an empty answer. */
+type Variant = 'normal' | 'lean' | 'rescue'
+
+/** `maxTokens` overrides the default output budget; null omits it and leaves Groq's default. */
+async function streamOnce(model: string, opts: ChatOptions, apiKey: string, variant: Variant = 'normal', maxTokens?: number | null): Promise<StreamResult> {
   const recentMessages = fitToContext(opts.messages.slice(-15), opts.systemPrompt, modelInfo(model).contextWindow)
 
   const body: Record<string, unknown> = {
@@ -93,7 +124,11 @@ async function streamOnce(model: string, opts: ChatOptions, apiKey: string, lean
     messages: toApiMessages(recentMessages, opts.systemPrompt, model),
     stream: true
   }
-  if (!lean && modelInfo(model).reasoningEffort) body.reasoning_effort = groqEffort(opts.reasoningEffort)
+  if (variant !== 'lean' && modelInfo(model).reasoningEffort) {
+    body.reasoning_effort = variant === 'rescue' ? 'low' : groqEffort(opts.reasoningEffort)
+    const budget = maxTokens === undefined ? (variant === 'rescue' ? RESCUE_MAX_TOKENS : REASONING_MAX_TOKENS) : maxTokens
+    if (budget !== null) body.max_completion_tokens = budget
+  }
 
   const res = await opts.fetchFn(`${GROQ_BASE_URL}/chat/completions`, {
     method: 'POST',
@@ -110,6 +145,11 @@ async function streamOnce(model: string, opts: ChatOptions, apiKey: string, lean
     const text = await res.text().catch(() => '')
     const errorMsg = extractErrorMessage(text) || res.statusText
 
+    // Groq counts the output budget against the per-minute token limit; shrink it to fit.
+    if ((res.status === 413 || res.status === 400) && errorMsg.toLowerCase().includes('token') && typeof body.max_completion_tokens === 'number') {
+      return streamOnce(model, opts, apiKey, variant, fitBudget(errorMsg, body.max_completion_tokens))
+    }
+
     // Handle token limit errors
     if ((res.status === 413 || res.status === 400) && errorMsg.toLowerCase().includes('token')) {
       throw new HttpError(res.status, 'Message too long for this model. Try clearing old messages or using a shorter conversation history.', parseRetryAfter(res.headers.get('retry-after')))
@@ -121,22 +161,24 @@ async function streamOnce(model: string, opts: ChatOptions, apiKey: string, lean
     }
 
     // A model may reject optional params; retry once with a minimal request.
-    if (res.status === 400 && !lean) return streamOnce(model, opts, apiKey, true)
+    if (res.status === 400 && variant === 'normal') return streamOnce(model, opts, apiKey, 'lean')
     throw new HttpError(res.status, errorMsg, parseRetryAfter(res.headers.get('retry-after')))
   }
   if (!res.body) throw new HttpError(502, 'Empty response from Groq')
 
-  opts.emit({ type: 'start', model })
-  await readStream(res.body, model, opts)
+  // The rescue continues the reply that already started.
+  if (variant !== 'rescue') opts.emit({ type: 'start', model })
+  return readStream(res.body, opts)
 }
 
-/** Relays an OpenAI-style SSE body as delta events, then emits done. */
-async function readStream(stream: ReadableStream<Uint8Array>, model: string, opts: ChatOptions): Promise<void> {
+/** Relays an OpenAI-style SSE body as delta events. */
+async function readStream(stream: ReadableStream<Uint8Array>, opts: ChatOptions): Promise<StreamResult> {
   const parser = new SseParser()
   const splitter = new ThinkTagSplitter()
   const decoder = new TextDecoder()
   const reader = stream.getReader()
   let finishReason: string | null = null
+  let hasContent = false
 
   const handle = (data: string): void => {
     if (data === '[DONE]') return
@@ -158,6 +200,7 @@ async function readStream(stream: ReadableStream<Uint8Array>, model: string, opt
       content = split.content
       reasoning += split.reasoning
     }
+    if (content.trim()) hasContent = true
     if (content || reasoning) opts.emit({ type: 'delta', content: content || undefined, reasoning: reasoning || undefined })
     if (choice.finish_reason) finishReason = choice.finish_reason
   }
@@ -175,10 +218,11 @@ async function readStream(stream: ReadableStream<Uint8Array>, model: string, opt
   }
 
   const tail = splitter.flush()
+  if (tail.content.trim()) hasContent = true
   if (tail.content || tail.reasoning) {
     opts.emit({ type: 'delta', content: tail.content || undefined, reasoning: tail.reasoning || undefined })
   }
-  opts.emit({ type: 'done', model, truncated: finishReason === 'length' })
+  return { hasContent, finishReason }
 }
 
 interface StreamChunk {
@@ -235,8 +279,8 @@ function toMessageContent(message: ChatMessage, model: ReturnType<typeof modelIn
   const hasImages = message.attachments.some(a => a.type === 'image')
   const supportsVision = model.vision
 
-  // If model doesn't support vision, strip images and just send text
-  if (hasImages && !supportsVision) {
+  // Without images (or vision), send plain text so text-only models accept it
+  if (!hasImages || !supportsVision) {
     const textParts = message.attachments.filter(a => a.type !== 'image').map(a => `<file name="${a.name}">\n${a.content}\n</file>`)
     const textContent = textParts.length > 0 ? textParts.join('\n\n') : ''
     if (message.content) {
@@ -268,6 +312,18 @@ function toMessageContent(message: ChatMessage, model: ReturnType<typeof modelIn
   }
 
   return parts.length === 1 && typeof parts[0].text === 'string' ? (parts[0].text as string) : parts
+}
+
+/**
+ * Reads "Limit 8000, Requested 11000" from a too-large error and returns the biggest budget that fits,
+ * or null (Groq's default) when it can't be worked out or would be smaller than that default.
+ */
+function fitBudget(message: string, requested: number): number | null {
+  const match = /limit\D*(\d+).*?requested\D*(\d+)/i.exec(message)
+  if (!match) return null
+  const promptTokens = Number(match[2]) - requested
+  const fit = Number(match[1]) - promptTokens - 256
+  return fit >= 2048 ? Math.min(fit, requested - 1) : null
 }
 
 function parseRetryAfter(header: string | null): number | undefined {
