@@ -1,7 +1,7 @@
-import ring from '../assets/orbis-ring.png'
+import ring from '../assets/orbis-ring-glass.png'
 import logo from '../assets/orbis-logo.png'
 
-/** The ORBIS ring from the original transparent logo, used wherever the single mark appears. */
+/** The glass ORBIS ring, used wherever the single mark appears. */
 export function OrbisMark({ size, className }: { size: number; className?: string }): React.JSX.Element {
   return (
     <img

@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { Check, ChevronDown, FileText, Files, Mic, Plus, Send, Square, Upload, X } from 'lucide-react'
+import { Check, FileText, Files, Mic, Plus, Send, Square, Upload, X } from 'lucide-react'
 import type { Attachment } from '../../../shared/types'
 import { MODELS, modelLabel } from '../../../shared/models'
 import { useDismiss } from '../lib/useDismiss'
@@ -340,7 +340,6 @@ export default function Composer(props: Props): React.JSX.Element {
                 onClick={() => (menuOpen ? setMenuOpen(false) : openModelMenu())}
               >
                 <span className="model-label">{currentModelLabel}</span>
-                <ChevronDown size={11} />
               </button>
               {menuOpen && (
                 <div className={`popover glass mode-menu${menuPlacement.down ? ' down' : ''}`} style={{ maxHeight: menuPlacement.maxHeight }} role="menu">

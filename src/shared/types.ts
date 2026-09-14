@@ -61,6 +61,8 @@ export interface Settings {
   userTitle: string
   /** Animated particles and cursor glow. */
   effects: boolean
+  /** First-launch setup (the welcome screen and name) has been finished on this installation. */
+  welcomeCompleted: boolean
 }
 
 export type SettingsUpdate = Partial<Omit<Settings, 'hasApiKey'>> & {

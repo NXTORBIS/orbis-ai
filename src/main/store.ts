@@ -20,7 +20,8 @@ const DEFAULTS: Omit<Settings, 'hasApiKey'> = {
   assistantName: 'Orbis',
   userName: 'NxtOrbis',
   userTitle: 'Commander',
-  effects: true
+  effects: true,
+  welcomeCompleted: false
 }
 
 const THEMES: Theme[] = ['system', 'light', 'dark']
@@ -56,6 +57,7 @@ export class Store {
     if (typeof update.assistantName === 'string') next.assistantName = update.assistantName.trim().slice(0, 40) || DEFAULTS.assistantName
     if (typeof update.userName === 'string') next.userName = update.userName.trim().slice(0, 40) || DEFAULTS.userName
     if (typeof update.userTitle === 'string') next.userTitle = update.userTitle.trim().slice(0, 40)
+    if (typeof update.welcomeCompleted === 'boolean') next.welcomeCompleted = update.welcomeCompleted
 
     if (typeof update.apiKey === 'string') {
       const key = update.apiKey.trim()
@@ -125,7 +127,11 @@ export class Store {
     if (this.settings) return this.settings
     try {
       const raw = JSON.parse(await fs.readFile(this.settingsPath, 'utf8')) as Partial<StoredSettings>
+      // Anything but an object is corrupt; the catch below starts setup again from defaults.
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Corrupt settings')
       this.settings = { ...DEFAULTS, ...raw }
+      // Installations set up before the welcome screen existed are already configured.
+      if (typeof raw.welcomeCompleted !== 'boolean') this.settings.welcomeCompleted = true
       if (!MODELS.some((m) => m.id === this.settings!.defaultModel)) this.settings.defaultModel = DEFAULT_MODEL
     } catch {
       this.settings = { ...DEFAULTS }

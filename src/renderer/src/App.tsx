@@ -13,6 +13,7 @@ import HudBackground from './components/HudBackground'
 import Sidebar from './components/Sidebar'
 import { ActivityPanel, ShortcutsModal, ToastStack } from './components/Overlays'
 import SettingsModal from './components/SettingsModal'
+import WelcomeExperience from './components/WelcomeExperience'
 import SystemBar from './components/SystemBar'
 import ImageEditor from './components/ImageEditor'
 import { ImageEditorContext, collectImages, imageMarkdown } from './lib/imageEditor'
@@ -56,6 +57,11 @@ export default function App(): React.JSX.Element {
   const [activeId, setActiveId] = useState<string | null>(null)
   const [draft, setDraft] = useState<DraftChat>({ model: DEFAULT_MODEL, persona: DEFAULT_PERSONA, incognito: false })
   const [loaded, setLoaded] = useState(false)
+  /** The Orbis startup screen, shown on every launch; 'leaving' while it hands over to the main interface. */
+  const [welcome, setWelcome] = useState<'closed' | 'open' | 'leaving'>('open')
+  /** No valid name is saved, so startup continues into the name step. Set once, when settings load. */
+  const [needsName, setNeedsName] = useState(false)
+  const [loadError, setLoadError] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try {
       return localStorage.getItem('orbis.sidebarCollapsed') === '1'
@@ -121,14 +127,22 @@ export default function App(): React.JSX.Element {
     if (!activityOpenRef.current) setUnread((n) => n + 1)
   }, [])
 
-  useEffect(() => {
-    void Promise.all([window.api.getSettings(), window.api.listConversations()]).then(([s, list]) => {
-      setSettings(s)
-      setDraft((d) => ({ ...d, model: isKnownModel(s.defaultModel) ? s.defaultModel : DEFAULT_MODEL, persona: DEFAULT_PERSONA }))
-      commitConversations(list)
-      setLoaded(true)
-    })
+  const load = useCallback(() => {
+    Promise.all([window.api.getSettings(), window.api.listConversations()]).then(
+      ([s, list]) => {
+        setSettings(s)
+        setDraft((d) => ({ ...d, model: isKnownModel(s.defaultModel) ? s.defaultModel : DEFAULT_MODEL, persona: DEFAULT_PERSONA }))
+        commitConversations(list)
+        // A blank saved name means setup never really finished.
+        setNeedsName(!s.welcomeCompleted || !s.userName.trim())
+        setLoadError(false)
+        setLoaded(true)
+      },
+      () => setLoadError(true)
+    )
   }, [commitConversations])
+
+  useEffect(load, [load])
 
   useEffect(() => {
     const media = matchMedia('(prefers-color-scheme: dark)')
@@ -492,6 +506,25 @@ export default function App(): React.JSX.Element {
     return next
   }, [])
 
+  const completeWelcome = useCallback(
+    async (name: string) => {
+      const next = await updateSettings({ userName: name, welcomeCompleted: true })
+      if (!next.welcomeCompleted || !next.userName.trim()) throw new Error('Setup was not saved')
+    },
+    [updateSettings]
+  )
+
+  const enterFromWelcome = useCallback(() => {
+    setWelcome('leaving')
+    setLoaded(true)
+  }, [])
+
+  const finishWelcome = useCallback(() => {
+    setWelcome('closed')
+    setLoadError(false)
+    requestAnimationFrame(() => document.querySelector<HTMLTextAreaElement>('.composer textarea')?.focus())
+  }, [])
+
   useEffect(() => {
     try {
       localStorage.setItem('orbis.sidebarCollapsed', sidebarCollapsed ? '1' : '0')
@@ -559,7 +592,7 @@ export default function App(): React.JSX.Element {
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent): void => {
-      if (!e.ctrlKey && !e.metaKey) return
+      if (welcome !== 'closed' || (!e.ctrlKey && !e.metaKey)) return
       const key = e.key.toLowerCase()
       if (e.shiftKey && key === 'o') {
         e.preventDefault()
@@ -577,7 +610,7 @@ export default function App(): React.JSX.Element {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [newChat, toggleIncognito, toggleSidebar])
+  }, [newChat, toggleIncognito, toggleSidebar, welcome])
 
   const active = activeId ? conversations.find((c) => c.id === activeId) : undefined
   const current: DraftChat = active ? { model: active.model, persona: active.persona, incognito: Boolean(active.incognito) } : draft
@@ -586,7 +619,7 @@ export default function App(): React.JSX.Element {
 
   return (
     <ImageEditorContext.Provider value={openImageEditor}>
-    <div className={`hud${effects ? ' effects' : ''}`}>
+    <div className={`hud${effects ? ' effects' : ''}${welcome === 'leaving' ? ' hud-entering' : ''}`} inert={welcome === 'open'}>
       <HudBackground animated={effects} />
       <SystemBar
         dark={dark}
@@ -700,6 +733,16 @@ export default function App(): React.JSX.Element {
         />
       )}
     </div>
-    </ImageEditorContext.Provider>
+    {welcome !== 'closed' && (
+      <WelcomeExperience
+        ready={loaded}
+        needsName={needsName}
+        loadError={loadError}
+        onRetryLoad={load}
+        onComplete={completeWelcome}
+        onEnter={enterFromWelcome}
+        onFinished={finishWelcome}
+      />
+    )}    </ImageEditorContext.Provider>
   )
 }
