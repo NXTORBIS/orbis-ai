@@ -1,4 +1,4 @@
-const ENDPOINT = 'https://html.duckduckgo.com/html/'
+const ENDPOINT = 'https://www.google.com/search'
 
 export interface WebResult {
   title: string
@@ -9,10 +9,12 @@ export interface WebResult {
 type FetchFn = (url: string, init?: RequestInit) => Promise<Response>
 
 export async function searchWeb(query: string, fetchFn: FetchFn, signal?: AbortSignal, limit = 4): Promise<WebResult[]> {
-  const res = await fetchFn(ENDPOINT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Mozilla/5.0' },
-    body: new URLSearchParams({ q: query }).toString(),
+  const url = new URL(ENDPOINT)
+  url.searchParams.set('q', query)
+  url.searchParams.set('num', String(limit * 2))
+
+  const res = await fetchFn(url.toString(), {
+    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
     signal
   })
   if (!res.ok) throw new Error(`search returned ${res.status}`)
@@ -21,12 +23,17 @@ export async function searchWeb(query: string, fetchFn: FetchFn, signal?: AbortS
 
 export function parseResults(html: string): WebResult[] {
   const results: WebResult[] = []
-  for (const block of html.split('class="result__a"').slice(1)) {
-    const href = /href="([^"]+)"/.exec(block)?.[1]
-    const title = /^[^>]*>([\s\S]*?)<\/a>/.exec(block)?.[1]
-    const snippet = /class="result__snippet"[^>]*>([\s\S]*?)<\/a>/.exec(block)?.[1] ?? ''
-    const url = href ? resolveUrl(decodeEntities(href)) : null
+  const regex = /<div\s+data-sokoban-container[^>]*>[\s\S]*?<a[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<span[^>]*>([\s\S]*?)<\/span>/g
+
+  let match
+  while ((match = regex.exec(html)) !== null) {
+    let url = match[1]
+    const title = match[2]
+    const snippet = match[3]
+
+    url = resolveUrl(url)
     if (!url || !title) continue
+
     const text = clean(snippet)
     results.push({ url, title: clean(title), snippet: text.length > 240 ? `${text.slice(0, 240).trimEnd()}…` : text })
   }
@@ -46,9 +53,15 @@ export function formatResults(query: string, results: WebResult[]): string {
 
 function resolveUrl(href: string): string | null {
   let url = href.startsWith('//') ? `https:${href}` : href
-  // DuckDuckGo wraps some links in a redirect whose `uddg` parameter holds the real target.
-  if (url.includes('duckduckgo.com/l/')) url = new URL(url).searchParams.get('uddg') ?? ''
-  if (url.includes('duckduckgo.com/y.js')) return null
+  // Google wraps some links in a redirect whose `url` parameter holds the real target.
+  try {
+    if (url.includes('google.com/url?')) {
+      const params = new URL(url).searchParams
+      url = params.get('url') ?? ''
+    }
+  } catch {
+    // Continue with original URL if parsing fails
+  }
   return /^https?:\/\//i.test(url) ? url : null
 }
 
