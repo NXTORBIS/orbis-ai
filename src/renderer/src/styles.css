@@ -1582,7 +1582,7 @@ textarea.hud-input {
 .composer {
   position: relative;
   display: flex;
-  align-items: flex-end;
+  flex-direction: column;
   width: min(950px, calc(100% - 32px));
   max-width: 95vw;
   border: 1px solid var(--composer-border);
@@ -1592,7 +1592,6 @@ textarea.hud-input {
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15), 0 0 20px var(--composer-glow), inset 0 1px 0 rgba(255, 255, 255, 0.05);
   padding: 0;
-  gap: 8px;
 }
 
 .composer.thinking {
@@ -1663,6 +1662,16 @@ textarea.hud-input {
   font-weight: 400;
 }
 
+.composer-input-wrapper {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px;
+  width: 100%;
+}
+
 .composer-row {
   position: relative;
   z-index: 1;
@@ -1670,6 +1679,7 @@ textarea.hud-input {
   align-items: center;
   gap: 8px;
   padding: 0 8px 8px 8px;
+  width: 100%;
 }
 
 .composer-tools {
@@ -1793,7 +1803,22 @@ textarea.hud-input {
   position: relative;
   display: flex;
   align-items: center;
-  padding-right: 8px;
+}
+
+.left-tools,
+.right-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.left-tools {
+  flex-shrink: 0;
+}
+
+.right-tools {
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .mode-pill-subtle {
