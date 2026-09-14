@@ -1567,8 +1567,8 @@ textarea.hud-input {
   align-items: center;
   width: 100%;
   margin: 0 auto;
-  padding: 32px 16px 48px;
-  gap: 20px;
+  padding: 24px 16px 48px;
+  gap: 12px;
   background: transparent;
 }
 
@@ -1588,14 +1588,16 @@ textarea.hud-input {
 .composer {
   position: relative;
   display: flex;
-  flex-direction: column;
-  width: min(900px, calc(100% - 32px));
+  align-items: center;
+  width: min(950px, calc(100% - 32px));
+  max-width: 95vw;
   border: 1px solid var(--composer-border);
-  border-radius: 28px;
+  border-radius: 50px;
   background: var(--composer-bg);
   backdrop-filter: blur(20px);
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15), 0 0 20px var(--composer-glow), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  padding: 0 8px;
 }
 
 .composer.thinking {
@@ -1647,17 +1649,17 @@ textarea.hud-input {
 .composer textarea {
   position: relative;
   z-index: 1;
-  width: 100%;
-  min-height: 64px;
-  max-height: 240px;
-  padding: 18px 24px 12px;
+  flex: 1;
+  min-height: 56px;
+  max-height: 200px;
+  padding: 16px 20px;
   border: 0;
   outline: none;
   resize: none;
   background: transparent;
   color: var(--composer-text);
-  font-size: 16px;
-  line-height: 1.7;
+  font-size: 15px;
+  line-height: 1.6;
   font-weight: 500;
 }
 
@@ -1671,9 +1673,9 @@ textarea.hud-input {
   z-index: 1;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 4px 12px 12px 12px;
+  gap: 8px;
+  padding: 0;
+  margin-left: auto;
 }
 
 .composer-tools {
@@ -1685,22 +1687,23 @@ textarea.hud-input {
 .tool-btn {
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  color: var(--composer-icon);
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: none;
+  color: var(--muted);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   background: transparent;
+  cursor: pointer;
 }
 
 .tool-btn:hover:not(:disabled) {
-  background: var(--cyan-fill);
+  background: rgba(63, 216, 255, 0.08);
   color: var(--cyan);
-  transform: translateY(-2px);
 }
 
 .tool-btn:active:not(:disabled) {
-  transform: translateY(0);
+  background: rgba(63, 216, 255, 0.12);
 }
 
 .tool-divider {
@@ -1783,73 +1786,87 @@ textarea.hud-input {
 }
 
 .composer-dock > .popover-anchor {
+  display: none;
+}
+
+.composer .popover-anchor {
+  position: relative;
   display: flex;
-  justify-content: center;
-  width: 100%;
+  align-items: center;
 }
 
 .mode-pill {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  height: 40px;
-  padding: 0 16px;
-  border: 1px solid var(--pill-border);
-  border-radius: 16px;
+  gap: 6px;
+  height: 36px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 8px;
   background: rgba(63, 216, 255, 0.08);
-  color: var(--composer-text);
-  font-size: 14px;
-  font-weight: 600;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  white-space: nowrap;
 }
 
 .mode-pill svg:first-child {
-  color: var(--cyan);
-  width: 16px;
-  height: 16px;
+  color: var(--muted);
+  width: 14px;
+  height: 14px;
+}
+
+.mode-pill svg:last-child {
+  color: var(--muted);
+  width: 12px;
+  height: 12px;
 }
 
 .mode-pill:hover {
-  border-color: var(--cyan-dim);
   background: rgba(63, 216, 255, 0.12);
-  box-shadow: 0 0 16px rgba(63, 216, 255, 0.2);
+  color: var(--cyan);
+}
+
+.mode-pill:hover svg {
+  color: var(--cyan);
 }
 
 .mode-pill:active {
-  transform: scale(0.98);
+  transform: scale(0.96);
 }
 
 .send-btn {
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
-  margin-left: 8px;
-  border-radius: 12px;
+  width: 36px;
+  height: 36px;
+  margin-right: 4px;
+  border-radius: 8px;
   background: var(--cyan);
   color: #0a1428;
   border: none;
   cursor: pointer;
-  box-shadow: 0 2px 12px rgba(63, 216, 255, 0.3);
+  box-shadow: 0 2px 8px rgba(63, 216, 255, 0.25);
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .send-btn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(63, 216, 255, 0.4);
+  background: #2dccff;
+  box-shadow: 0 4px 12px rgba(63, 216, 255, 0.4);
 }
 
 .send-btn:active:not(:disabled) {
-  transform: translateY(0);
+  background: #1fb8ff;
 }
 
 .send-btn:disabled {
-  opacity: 1;
+  opacity: 0.5;
   background: var(--hover);
   color: var(--faint);
   box-shadow: none;
+  cursor: not-allowed;
 }
 
 .send-btn.ready {

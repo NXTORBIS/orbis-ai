@@ -225,72 +225,6 @@ export default function Composer(props: Props): React.JSX.Element {
         </div>
       )}
 
-      {/* ChatGPT-style model selector above input */}
-      <div className="popover-anchor" ref={menuRef}>
-        <button
-          type="button"
-          className="mode-pill"
-          title="Choose a mode"
-          aria-haspopup="menu"
-          aria-expanded={menuOpen}
-          onClick={() => setMenuOpen((o) => !o)}
-        >
-          <ModeIcon size={14} />
-          {currentModeLabel}
-          <ChevronDown size={13} />
-        </button>
-        {menuOpen && (
-          <div className="popover glass mode-menu" role="menu">
-            {MODES.map((m) => {
-              const Icon = MODE_ICONS[m.id]
-              const selected = m.id === mode
-              return (
-                <button
-                  key={m.id}
-                  type="button"
-                  role="menuitemradio"
-                  aria-checked={selected}
-                  className={`menu-item mode-item${selected ? ' selected' : ''}`}
-                  onClick={() => {
-                    if (m.id === 'custom') return setModelsOpen((o) => !o)
-                    props.onModeChange(m.id)
-                    setMenuOpen(false)
-                  }}
-                >
-                  <Icon size={15} />
-                  <span className="menu-text">
-                    <b>{m.label}</b>
-                    <small>{m.id === 'custom' && selected ? modelLabel(model) : m.description}</small>
-                  </span>
-                  {selected && <span className="mode-dot" />}
-                </button>
-              )
-            })}
-            {modelsOpen && (
-              <div className="mode-models">
-                {MODELS.map((m) => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    className={`menu-item${mode === 'custom' && m.id === model ? ' selected' : ''}`}
-                    onClick={() => {
-                      props.onModeChange('custom', m.id)
-                      setMenuOpen(false)
-                      setModelsOpen(false)
-                    }}
-                  >
-                    <span className="menu-text">
-                      <b>{m.label}</b>
-                      <small>{m.description}</small>
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
       <form
         className={`composer${streaming ? ' busy' : ''}`}
         onSubmit={(e) => {
@@ -302,6 +236,7 @@ export default function Composer(props: Props): React.JSX.Element {
           <rect className="beam-tail" x="0" y="0" width="100%" height="100%" rx="22" ry="22" pathLength={100} />
           <rect className="beam-head" x="0" y="0" width="100%" height="100%" rx="22" ry="22" pathLength={100} />
         </svg>
+
         <textarea
           ref={textareaRef}
           rows={1}
@@ -355,6 +290,72 @@ export default function Composer(props: Props): React.JSX.Element {
           </div>
         )}
 
+        {/* Model selector - Claude Code style */}
+        <div className="popover-anchor" ref={menuRef}>
+          <button
+            type="button"
+            className="mode-pill"
+            title="Choose a model"
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((o) => !o)}
+          >
+            <ModeIcon size={13} />
+            {currentModeLabel}
+            <ChevronDown size={12} />
+          </button>
+          {menuOpen && (
+            <div className="popover glass mode-menu" role="menu">
+              {MODES.map((m) => {
+                const Icon = MODE_ICONS[m.id]
+                const selected = m.id === mode
+                return (
+                  <button
+                    key={m.id}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={selected}
+                    className={`menu-item mode-item${selected ? ' selected' : ''}`}
+                    onClick={() => {
+                      if (m.id === 'custom') return setModelsOpen((o) => !o)
+                      props.onModeChange(m.id)
+                      setMenuOpen(false)
+                    }}
+                  >
+                    <Icon size={15} />
+                    <span className="menu-text">
+                      <b>{m.label}</b>
+                      <small>{m.id === 'custom' && selected ? modelLabel(model) : m.description}</small>
+                    </span>
+                    {selected && <span className="mode-dot" />}
+                  </button>
+                )
+              })}
+              {modelsOpen && (
+                <div className="mode-models">
+                  {MODELS.map((m) => (
+                    <button
+                      key={m.id}
+                      type="button"
+                      className={`menu-item${mode === 'custom' && m.id === model ? ' selected' : ''}`}
+                      onClick={() => {
+                        props.onModeChange('custom', m.id)
+                        setMenuOpen(false)
+                        setModelsOpen(false)
+                      }}
+                    >
+                      <span className="menu-text">
+                        <b>{m.label}</b>
+                        <small>{m.description}</small>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         <div className="composer-row">
           <div className="composer-tools">
             <div className="popover-anchor" ref={attachMenuRef}>
@@ -364,7 +365,7 @@ export default function Composer(props: Props): React.JSX.Element {
                 title="Attach files"
                 onClick={() => setAttachMenuOpen((o) => !o)}
               >
-                <Plus size={18} />
+                <Plus size={16} />
               </button>
               {attachMenuOpen && (
                 <div className="popover glass attach-menu" role="menu">
@@ -393,22 +394,20 @@ export default function Composer(props: Props): React.JSX.Element {
                 </div>
               )}
             </div>
+            <button type="button" className="tool-btn" title="Voice input" onClick={() => props.onNotify('Voice input is coming soon.')}>
+              <Mic size={16} />
+            </button>
           </div>
 
-          <div className="composer-tools">
-            <button type="button" className="tool-btn" title="Voice input" onClick={() => props.onNotify('Voice input is coming soon.')}>
-              <Mic size={17} />
+          {streaming ? (
+            <button type="button" className="send-btn stop" title="Stop generating (Esc)" onClick={props.onStop}>
+              <Square size={12} fill="currentColor" />
             </button>
-            {streaming ? (
-              <button type="button" className="send-btn stop" title="Stop generating (Esc)" onClick={props.onStop}>
-                <Square size={13} fill="currentColor" />
-              </button>
-            ) : (
-              <button type="submit" className={`send-btn${canSend ? ' ready' : ''}`} title="Send (Enter)" disabled={!canSend}>
-                <Send size={15} />
-              </button>
-            )}
-          </div>
+          ) : (
+            <button type="submit" className={`send-btn${canSend ? ' ready' : ''}`} title="Send (Enter)" disabled={!canSend}>
+              <Send size={14} />
+            </button>
+          )}
         </div>
       </form>
 
