@@ -998,7 +998,7 @@ textarea.hud-input {
 /* Center composer when there are no messages */
 .stage-content:has(.empty-state) .composer-dock {
   position: absolute;
-  top: 50%;
+  top: 55%;
   left: 50%;
   transform: translate(-50%, -50%);
   width: 100%;

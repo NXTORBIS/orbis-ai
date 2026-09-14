@@ -62,7 +62,8 @@
       "Bash(git commit -m 'Simplify greeting and sidebar to match Claude Code style *)",
       "Bash(git commit -m 'Match Claude Code exactly - update input placeholder *)",
       "Bash(git commit -m 'Add File, Edit, View, Help menu bar like ChatGPT *)",
-      "Bash(git commit -m 'Restore typewriter animation with old display font styling *)"
+      "Bash(git commit -m 'Restore typewriter animation with old display font styling *)",
+      "Bash(git commit -m 'Increase spacing between greeting and input box *)"
     ]
   }
 }
