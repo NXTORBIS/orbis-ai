@@ -75,11 +75,7 @@ async function streamWithKeys(model: string, opts: ChatOptions): Promise<void> {
       const isRateLimited = err instanceof HttpError && err.status === 429
       const shouldRetry = (isRejected || isRateLimited) && k < opts.apiKeys.length - 1 && !opts.signal.aborted
       if (!shouldRetry) throw err
-      if (isRateLimited) {
-        opts.emit({ type: 'status', message: `Key ${k + 1} is rate-limited. Switching to key ${k + 2} of ${opts.apiKeys.length}…` })
-      } else {
-        opts.emit({ type: 'status', message: `Groq rejected API key ${k + 1} of ${opts.apiKeys.length}. Trying the next one…` })
-      }
+      // Silently switch to next key without notifying user
     }
   }
 }
