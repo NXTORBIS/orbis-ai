@@ -89,9 +89,9 @@ function createWindow(): BrowserWindow {
     ...(app.isPackaged ? {} : { icon: join(app.getAppPath(), 'build', 'icon.png') }),
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#000000' : '#e6edf8',
     // The HUD's own system bar replaces the native title bar; window buttons are overlaid on it.
-    titleBarStyle: 'hidden',
+    titleBarStyle: 'default',
     titleBarOverlay: titleBarOverlayFor(nativeTheme.shouldUseDarkColors),
-    autoHideMenuBar: true,
+    autoHideMenuBar: false,
     show: false,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
