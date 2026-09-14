@@ -237,125 +237,6 @@ export default function Composer(props: Props): React.JSX.Element {
           <rect className="beam-head" x="0" y="0" width="100%" height="100%" rx="22" ry="22" pathLength={100} />
         </svg>
 
-        <textarea
-          ref={textareaRef}
-          rows={1}
-          value={text}
-          placeholder="Ask anything (type / for commands)"
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (commandsOpen && filteredCommands.length > 0) {
-              if (e.key === 'ArrowDown') {
-                e.preventDefault()
-                setSelectedCommandIndex((i) => (i + 1) % filteredCommands.length)
-              } else if (e.key === 'ArrowUp') {
-                e.preventDefault()
-                setSelectedCommandIndex((i) => (i - 1 + filteredCommands.length) % filteredCommands.length)
-              } else if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-                e.preventDefault()
-                submit()
-              } else if (e.key === 'Escape') {
-                e.preventDefault()
-                setCommandsOpen(false)
-              }
-            } else if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-              e.preventDefault()
-              submit()
-            } else if (e.key === 'Escape' && streaming) {
-              e.preventDefault()
-              props.onStop()
-            }
-          }}
-        />
-
-        {commandsOpen && filteredCommands.length > 0 && (
-          <div className="slash-commands glass" ref={commandsRef} role="listbox">
-            {filteredCommands.map((cmd, idx) => (
-              <button
-                key={cmd.name}
-                type="button"
-                className={`slash-command${idx === selectedCommandIndex ? ' selected' : ''}`}
-                onClick={() => {
-                  executeCommand(cmd.name)
-                }}
-                role="option"
-                aria-selected={idx === selectedCommandIndex}
-              >
-                <div className="cmd-info">
-                  <span className="cmd-name">/{cmd.name}</span>
-                  <span className="cmd-desc">{cmd.description}</span>
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Model selector - Claude Code style */}
-        <div className="popover-anchor" ref={menuRef}>
-          <button
-            type="button"
-            className="mode-pill"
-            title="Choose a model"
-            aria-haspopup="menu"
-            aria-expanded={menuOpen}
-            onClick={() => setMenuOpen((o) => !o)}
-          >
-            <ModeIcon size={13} />
-            {currentModeLabel}
-            <ChevronDown size={12} />
-          </button>
-          {menuOpen && (
-            <div className="popover glass mode-menu" role="menu">
-              {MODES.map((m) => {
-                const Icon = MODE_ICONS[m.id]
-                const selected = m.id === mode
-                return (
-                  <button
-                    key={m.id}
-                    type="button"
-                    role="menuitemradio"
-                    aria-checked={selected}
-                    className={`menu-item mode-item${selected ? ' selected' : ''}`}
-                    onClick={() => {
-                      if (m.id === 'custom') return setModelsOpen((o) => !o)
-                      props.onModeChange(m.id)
-                      setMenuOpen(false)
-                    }}
-                  >
-                    <Icon size={15} />
-                    <span className="menu-text">
-                      <b>{m.label}</b>
-                      <small>{m.id === 'custom' && selected ? modelLabel(model) : m.description}</small>
-                    </span>
-                    {selected && <span className="mode-dot" />}
-                  </button>
-                )
-              })}
-              {modelsOpen && (
-                <div className="mode-models">
-                  {MODELS.map((m) => (
-                    <button
-                      key={m.id}
-                      type="button"
-                      className={`menu-item${mode === 'custom' && m.id === model ? ' selected' : ''}`}
-                      onClick={() => {
-                        props.onModeChange('custom', m.id)
-                        setMenuOpen(false)
-                        setModelsOpen(false)
-                      }}
-                    >
-                      <span className="menu-text">
-                        <b>{m.label}</b>
-                        <small>{m.description}</small>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
         <div className="composer-row">
           <div className="composer-tools">
             <div className="popover-anchor" ref={attachMenuRef}>
@@ -394,22 +275,144 @@ export default function Composer(props: Props): React.JSX.Element {
                 </div>
               )}
             </div>
+          </div>
+
+          <textarea
+            ref={textareaRef}
+            rows={1}
+            value={text}
+            placeholder="Ask anything (type / for commands)"
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (commandsOpen && filteredCommands.length > 0) {
+                if (e.key === 'ArrowDown') {
+                  e.preventDefault()
+                  setSelectedCommandIndex((i) => (i + 1) % filteredCommands.length)
+                } else if (e.key === 'ArrowUp') {
+                  e.preventDefault()
+                  setSelectedCommandIndex((i) => (i - 1 + filteredCommands.length) % filteredCommands.length)
+                } else if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                  e.preventDefault()
+                  submit()
+                } else if (e.key === 'Escape') {
+                  e.preventDefault()
+                  setCommandsOpen(false)
+                }
+              } else if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault()
+                submit()
+              } else if (e.key === 'Escape' && streaming) {
+                e.preventDefault()
+                props.onStop()
+              }
+            }}
+          />
+
+          {commandsOpen && filteredCommands.length > 0 && (
+            <div className="slash-commands glass" ref={commandsRef} role="listbox">
+              {filteredCommands.map((cmd, idx) => (
+                <button
+                  key={cmd.name}
+                  type="button"
+                  className={`slash-command${idx === selectedCommandIndex ? ' selected' : ''}`}
+                  onClick={() => {
+                    executeCommand(cmd.name)
+                  }}
+                  role="option"
+                  aria-selected={idx === selectedCommandIndex}
+                >
+                  <div className="cmd-info">
+                    <span className="cmd-name">/{cmd.name}</span>
+                    <span className="cmd-desc">{cmd.description}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          <div className="composer-tools">
             <button type="button" className="tool-btn" title="Voice input" onClick={() => props.onNotify('Voice input is coming soon.')}>
               <Mic size={16} />
             </button>
-          </div>
 
-          {streaming ? (
-            <button type="button" className="send-btn stop" title="Stop generating (Esc)" onClick={props.onStop}>
-              <Square size={12} fill="currentColor" />
-            </button>
-          ) : (
-            <button type="submit" className={`send-btn${canSend ? ' ready' : ''}`} title="Send (Enter)" disabled={!canSend}>
-              <Send size={14} />
-            </button>
-          )}
+            {streaming ? (
+              <button type="button" className="send-btn stop" title="Stop generating (Esc)" onClick={props.onStop}>
+                <Square size={12} fill="currentColor" />
+              </button>
+            ) : (
+              <button type="submit" className={`send-btn${canSend ? ' ready' : ''}`} title="Send (Enter)" disabled={!canSend}>
+                <Send size={14} />
+              </button>
+            )}
+          </div>
         </div>
       </form>
+
+      {/* Model selector below input */}
+      <div className="popover-anchor modes-selector" ref={menuRef}>
+        <button
+          type="button"
+          className="mode-pill"
+          title="Choose a model"
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen((o) => !o)}
+        >
+          <ModeIcon size={13} />
+          {currentModeLabel}
+          <ChevronDown size={12} />
+        </button>
+        {menuOpen && (
+          <div className="popover glass mode-menu" role="menu">
+            {MODES.map((m) => {
+              const Icon = MODE_ICONS[m.id]
+              const selected = m.id === mode
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={selected}
+                  className={`menu-item mode-item${selected ? ' selected' : ''}`}
+                  onClick={() => {
+                    if (m.id === 'custom') return setModelsOpen((o) => !o)
+                    props.onModeChange(m.id)
+                    setMenuOpen(false)
+                  }}
+                >
+                  <Icon size={15} />
+                  <span className="menu-text">
+                    <b>{m.label}</b>
+                    <small>{m.id === 'custom' && selected ? modelLabel(model) : m.description}</small>
+                  </span>
+                  {selected && <span className="mode-dot" />}
+                </button>
+              )
+            })}
+            {modelsOpen && (
+              <div className="mode-models">
+                {MODELS.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    className={`menu-item${mode === 'custom' && m.id === model ? ' selected' : ''}`}
+                    onClick={() => {
+                      props.onModeChange('custom', m.id)
+                      setMenuOpen(false)
+                      setModelsOpen(false)
+                    }}
+                  >
+                    <span className="menu-text">
+                      <b>{m.label}</b>
+                      <small>{m.description}</small>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       <p className="disclaimer">AI can make mistakes. Check important info.</p>
     </div>

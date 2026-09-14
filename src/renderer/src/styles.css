@@ -1588,7 +1588,7 @@ textarea.hud-input {
 .composer {
   position: relative;
   display: flex;
-  align-items: center;
+  flex-direction: column;
   width: min(950px, calc(100% - 32px));
   max-width: 95vw;
   border: 1px solid var(--composer-border);
@@ -1597,7 +1597,7 @@ textarea.hud-input {
   backdrop-filter: blur(20px);
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15), 0 0 20px var(--composer-glow), inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  padding: 0 8px;
+  padding: 0;
 }
 
 .composer.thinking {
@@ -1652,7 +1652,7 @@ textarea.hud-input {
   flex: 1;
   min-height: 56px;
   max-height: 200px;
-  padding: 16px 20px;
+  padding: 16px 16px;
   border: 0;
   outline: none;
   resize: none;
@@ -1674,8 +1674,7 @@ textarea.hud-input {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0;
-  margin-left: auto;
+  padding: 0 8px 8px 8px;
 }
 
 .composer-tools {
@@ -1793,6 +1792,14 @@ textarea.hud-input {
   position: relative;
   display: flex;
   align-items: center;
+}
+
+.modes-selector {
+  display: flex !important;
+  justify-content: center;
+  width: 100%;
+  margin-top: 8px;
+  padding: 0 !important;
 }
 
 .mode-pill {
