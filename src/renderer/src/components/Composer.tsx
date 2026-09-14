@@ -3,7 +3,6 @@ import type { LucideIcon } from 'lucide-react'
 import {
   Brain,
   ChevronDown,
-  ChevronUp,
   FileText,
   Files,
   Gauge,
@@ -415,9 +414,6 @@ export default function Composer(props: Props): React.JSX.Element {
       </form>
 
       <p className="disclaimer">AI can make mistakes. Check important info.</p>
-      <button className="dock-chevron" title="Quick prompts" onClick={() => props.onQuickPromptsChange(!props.quickPromptsOpen)}>
-        <ChevronUp size={14} className={props.quickPromptsOpen ? 'flipped' : undefined} />
-      </button>
     </div>
   )
 }

@@ -572,6 +572,19 @@ textarea.hud-input {
   border-radius: 50%;
   color: var(--cyan);
   filter: drop-shadow(0 0 6px var(--cyan-glow));
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  background: transparent;
+}
+
+.rail-logo:hover {
+  background: rgba(63, 216, 255, 0.12);
+  filter: drop-shadow(0 0 12px var(--cyan-glow));
+  transform: scale(1.1);
+}
+
+.rail-logo:active {
+  transform: scale(0.95);
 }
 
 .rail-btn {
@@ -581,12 +594,17 @@ textarea.hud-input {
   height: 34px;
   border-radius: 9px;
   color: var(--muted);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.rail-btn:hover,
-.rail-logo:hover {
+.rail-btn:hover {
   background: var(--hover);
   color: var(--text);
+  transform: translateY(-2px);
+}
+
+.rail-btn:active {
+  transform: translateY(0);
 }
 
 .rail-recent {
@@ -1335,7 +1353,7 @@ textarea.hud-input {
 }
 
 .orb-mark {
-  animation: orb-turn 3.2s ease-in-out infinite;
+  /* Removed rotation animation - logo stays static while thinking */
 }
 
 /* ================= Brand ================= */
@@ -1354,10 +1372,11 @@ textarea.hud-input {
 }
 
 .wordmark {
-  height: 24px;
+  height: 32px;
   width: auto;
-  margin: 0 2px 0 4px;
+  margin: 0 8px;
   user-select: none;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s;
 }
 
 /* The wordmark is white artwork; invert it for the light theme while keeping the cyan hue. */
