@@ -244,7 +244,7 @@ export default function App(): React.JSX.Element {
             queueDelta(conversationId, assistant.id, `![Generated Image](${event.url})`, '', undefined)
             break
           case 'done':
-            finish(event.truncated ? { error: 'This reply hit the length limit and was cut off.' } : undefined)
+            finish()
             break
           case 'error':
             finish({ error: event.message })
