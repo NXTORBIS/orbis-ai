@@ -1,5 +1,5 @@
 import type { FollowupSuggestions } from '../shared/types'
-import { GROQ_BASE_URL } from './nim'
+import { GROQ_BASE_URL } from './nim.ts'
 
 type FetchFn = (url: string, init?: RequestInit) => Promise<Response>
 
@@ -41,7 +41,15 @@ function clean(value: unknown, maxLength: number): string | null {
 }
 
 /** Asks a fast Groq model for a JSON object, rotating keys on rate limits. Returns null on any failure. */
-async function requestJson(system: string, user: string, apiKeys: string[], fetchFn: FetchFn): Promise<Record<string, unknown> | null> {
+export async function requestJson(
+  system: string,
+  user: string,
+  apiKeys: string[],
+  fetchFn: FetchFn,
+  timeoutMs = 15_000
+): Promise<Record<string, unknown> | null> {
+  // These helper calls are optional extras; bad input means "no answer", never a crash of the chat request.
+  if (!Array.isArray(apiKeys) || typeof fetchFn !== 'function') return null
   for (const key of apiKeys) {
     let res: Response
     try {
@@ -58,13 +66,17 @@ async function requestJson(system: string, user: string, apiKeys: string[], fetc
             { role: 'user', content: user }
           ]
         }),
-        signal: AbortSignal.timeout(15_000)
+        signal: AbortSignal.timeout(timeoutMs)
       })
     } catch {
       return null
     }
-    if (res.status === 401 || res.status === 429) continue
-    if (!res.ok) return null
+    if (res.status === 401 || res.status === 403 || res.status === 429) continue
+    if (!res.ok) {
+      // A key whose organization Groq restricted fails every request; the next key can answer.
+      if (/restricted/i.test(await res.text().catch(() => ''))) continue
+      return null
+    }
     try {
       const json = (await res.json()) as { choices?: { message?: { content?: string } }[] }
       const parsed: unknown = JSON.parse(json.choices?.[0]?.message?.content ?? '')
@@ -134,6 +146,32 @@ export async function completeDraft(
   rest = rest.replace(/^["'“”]+|["'“”]+$/g, '').trimEnd()
   if (rest.trim().length < 2 || rest.length > 160) return null
   return draft + rest
+}
+
+const PREDICT_INSTRUCTIONS = [
+  'You power the address bar of the Orbis browser, a single box for web addresses and searches. The user is still typing.',
+  'Reply with JSON only, shaped {"completions": string[]}.',
+  'Give up to 4 distinct web searches the user most likely intends, most likely first. Each must begin with the typed text (finish a half-typed word first) and add a specific, useful ending, at most 10 words in total.',
+  'Prefer popular, current and concrete intents over generic ones. Keep the user\'s language. No URLs, quotes, numbering or commentary, and never answer the query.',
+  'Return an empty list when the text is gibberish.'
+].join(' ')
+
+/** Orion's guesses at the search being typed in the address bar. Returns an empty list on any failure. */
+export async function predictQueries(input: string, apiKeys: string[], fetchFn: FetchFn): Promise<string[]> {
+  const typed = input.replace(/\s+/g, ' ').trimStart()
+  if (typed.trim().length < 3 || typed.length > 120) return []
+  const parsed = await requestJson(PREDICT_INSTRUCTIONS, `Typed so far: ${JSON.stringify(typed)}`, apiKeys, fetchFn, 6_000)
+  const seen = new Set([typed.trim().toLowerCase()])
+  return (Array.isArray(parsed?.completions) ? parsed.completions : [])
+    .map((c) => clean(c, 90))
+    .filter((c): c is string => {
+      if (!c || /^https?:\/\//i.test(c) || !c.toLowerCase().startsWith(typed.trim().toLowerCase().split(' ')[0])) return false
+      const key = c.toLowerCase()
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    .slice(0, 4)
 }
 
 /** A short AI-written title for a chat, based on its first message. Returns null on any failure. */

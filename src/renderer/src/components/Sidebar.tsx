@@ -4,7 +4,6 @@ import {
   ChevronDown,
   ChevronRight,
   CircleHelp,
-  Ellipsis,
   Globe,
   HatGlasses,
   Images,
@@ -82,15 +81,12 @@ export default function Sidebar(props: Props): React.JSX.Element {
   const [query, setQuery] = useState('')
   const [searching, setSearching] = useState(false)
   const [sections, setSections] = useState<Record<string, boolean>>(readSections)
-  const [menuId, setMenuId] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [confirmId, setConfirmId] = useState<string | null>(null)
   const [brandOpen, setBrandOpen] = useState(false)
   const searchRef = useRef<HTMLInputElement>(null)
   const brandRef = useRef<HTMLDivElement>(null)
-  const menuRef = useRef<HTMLDivElement>(null)
   useDismiss(brandRef, brandOpen, () => setBrandOpen(false))
-  useDismiss(menuRef, menuId !== null, () => setMenuId(null))
 
   useEffect(() => {
     try {
@@ -103,8 +99,12 @@ export default function Sidebar(props: Props): React.JSX.Element {
   useEffect(() => {
     if (!props.searchToken) return
     setSearching(true)
-    requestAnimationFrame(() => searchRef.current?.focus())
   }, [props.searchToken])
+
+  // Focus once the search field exists: on a first request it only renders after the effect above.
+  useEffect(() => {
+    if (props.searchToken && searching) searchRef.current?.focus()
+  }, [props.searchToken, searching])
 
   const { pinned, groups } = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -175,57 +175,23 @@ export default function Sidebar(props: Props): React.JSX.Element {
         </div>
       )
     }
-    const menuOpen = menuId === c.id
     return (
-      <div key={c.id} className={`sb-row${c.id === activeId ? ' active' : ''}${menuOpen ? ' menu-open' : ''}`}>
+      <div key={c.id} className={`sb-row${c.id === activeId ? ' active' : ''}`}>
         <button type="button" className="sb-row-main" title={c.title} onClick={() => props.onSelect(c.id)} onDoubleClick={() => setEditingId(c.id)}>
           {streams[c.id] && <span className="live-dot" />}
           <span className="truncate">{c.title}</span>
         </button>
-        <div className="sb-row-menu" ref={menuOpen ? menuRef : undefined}>
-          <button type="button" className="sb-row-more" aria-label={`Options for ${c.title}`} aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenuId(menuOpen ? null : c.id)}>
-            <Ellipsis size={15} />
+        {/* Pin, rename and delete sit in line with the chat, shown on hover or focus. */}
+        <div className="sb-row-actions">
+          <button type="button" className="sb-row-action" aria-label={`${c.pinned ? 'Unpin' : 'Pin'} ${c.title}`} title={c.pinned ? 'Unpin' : 'Pin'} onClick={() => props.onTogglePin(c.id)}>
+            {c.pinned ? <PinOff size={14} /> : <Pin size={14} />}
           </button>
-          {menuOpen && (
-            <div className="popover glass sb-popover" role="menu">
-              <button
-                type="button"
-                role="menuitem"
-                className="menu-item"
-                onClick={() => {
-                  props.onTogglePin(c.id)
-                  setMenuId(null)
-                }}
-              >
-                {c.pinned ? <PinOff size={14} /> : <Pin size={14} />}
-                {c.pinned ? 'Unpin' : 'Pin'}
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                className="menu-item"
-                onClick={() => {
-                  setEditingId(c.id)
-                  setMenuId(null)
-                }}
-              >
-                <Pencil size={14} />
-                Rename
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                className="menu-item danger"
-                onClick={() => {
-                  setConfirmId(c.id)
-                  setMenuId(null)
-                }}
-              >
-                <Trash2 size={14} />
-                Delete
-              </button>
-            </div>
-          )}
+          <button type="button" className="sb-row-action" aria-label={`Rename ${c.title}`} title="Rename" onClick={() => setEditingId(c.id)}>
+            <Pencil size={14} />
+          </button>
+          <button type="button" className="sb-row-action danger" aria-label={`Delete ${c.title}`} title="Delete" onClick={() => setConfirmId(c.id)}>
+            <Trash2 size={14} />
+          </button>
         </div>
       </div>
     )

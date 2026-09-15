@@ -84,4 +84,28 @@ src/
 | Esc | Stop generating |
 | Ctrl+Shift+O | New chat |
 | Ctrl+B | Toggle chat history |
+| Ctrl+K | Search chats |
 | Ctrl+, | Settings |
+
+### Browser
+
+These work while the browser, its URL bar, or a web page has focus. Orbis's own shortcuts above always win: Ctrl+N, Ctrl+Shift+N, Ctrl+Shift+O, Ctrl+B, Ctrl+, and Ctrl+K are never taken by the browser.
+
+| Keys | Action |
+|---|---|
+| Ctrl+T / Ctrl+W | New tab / close tab |
+| Ctrl+Shift+T | Reopen closed tab |
+| Ctrl+Tab / Ctrl+Shift+Tab (or Ctrl+PageDown / PageUp) | Next / previous tab |
+| Ctrl+1…8 / Ctrl+9 | Go to tab / last tab |
+| Ctrl+Shift+PageUp / PageDown | Move tab left / right |
+| Alt+Left / Alt+Right | Back / forward |
+| Ctrl+R or F5 / Ctrl+Shift+R or Ctrl+F5 | Reload / reload without cache |
+| Esc | Stop loading |
+| Ctrl+L, Alt+D or F6 | Go to the URL bar |
+| Ctrl+F, F3 / Shift+F3 | Find in page, next / previous match |
+| Ctrl++ / Ctrl+- / Ctrl+0 | Zoom in / out / reset (remembered per site) |
+| F11 | Fullscreen |
+| Ctrl+H / Ctrl+J | History / downloads |
+| Ctrl+D / Ctrl+Shift+D / Ctrl+Shift+B | Bookmark page / bookmark all tabs / bookmarks |
+| Ctrl+P / Ctrl+S / Ctrl+U / F12 | Print / save page / view source / developer tools |
+| Ctrl+click or middle-click / Shift+click | Open link in a background tab / a new window |

@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Check, FileText, Files, ListPlus, Mic, Paperclip, Pencil, Play, Plus, Send, Square, Upload, X } from 'lucide-react'
 import { MAX_QUEUED_MESSAGES } from '../lib/messageQueue'
+import { SLASH_COMMANDS } from '../lib/commands'
 import type { ChatQueue, QueuedMessage } from '../lib/messageQueue'
 import type { Attachment } from '../../../shared/types'
 import { MODELS, modelLabel } from '../../../shared/models'
@@ -60,14 +61,6 @@ function useTypewriterPlaceholder(active: boolean): string {
   return shown
 }
 
-const SLASH_COMMANDS = [
-  { name: 'help', label: 'Help', description: 'Show available commands' },
-  { name: 'new', label: 'New Chat', description: 'Start a new conversation' },
-  { name: 'clear', label: 'Clear', description: 'Clear all messages' },
-  { name: 'search', label: 'Search', description: 'Search conversations' },
-  { name: 'settings', label: 'Settings', description: 'Open settings' },
-  { name: 'models', label: 'Models', description: 'List all models' }
-]
 
 interface Props {
   streaming: boolean
@@ -90,6 +83,8 @@ interface Props {
   onModelChange(model: string): void
   /** Returns false when nothing was sent, so the draft is kept. */
   onSend(text: string, attachments: Attachment[]): boolean
+  /** Runs a slash command such as "/clear" or "/rename Trip ideas". */
+  onCommand(name: string, args: string): void
   onStop(): void
   onNotify(text: string, kind?: NoticeKind): void
   onImprovePrompt(text: string): Promise<string | null>
@@ -180,12 +175,11 @@ export default function Composer(props: Props): React.JSX.Element {
     return () => window.removeEventListener('orbis:compose', onCompose)
   }, [])
 
-  // Detect and filter slash commands
+  // The "/" menu lists matching commands until the command is typed out and followed by a space.
   useEffect(() => {
-    const lines = text.split('\n')
-    const firstLine = lines[0]
-    if (firstLine.startsWith('/')) {
-      const query = firstLine.slice(1).toLowerCase()
+    const typed = /^\/(\S*)$/.exec(text)
+    if (typed) {
+      const query = typed[1].toLowerCase()
       const filtered = SLASH_COMMANDS.filter((cmd) => cmd.name.startsWith(query))
       setFilteredCommands(filtered)
       setCommandsOpen(filtered.length > 0)
@@ -263,36 +257,30 @@ export default function Composer(props: Props): React.JSX.Element {
     })
   }
 
-  const executeCommand = (commandName: string): void => {
-    setText('')
+  /** Runs a slash command, or fills it in when it still needs text after it. */
+  const executeCommand = (commandName: string, args = ''): void => {
+    const command = SLASH_COMMANDS.find((c) => c.name === commandName)
+    if (!command) return
     setCommandsOpen(false)
-
-    switch (commandName) {
-      case 'help':
-        props.onNotify(`Available commands:\n${SLASH_COMMANDS.map((c) => `/${c.name} - ${c.description}`).join('\n')}`)
-        break
-      case 'new':
-        props.onNewChat?.()
-        break
-      case 'clear':
-        // This would need to be implemented in the parent component
-        props.onNotify('Chat cleared', 'info')
-        break
-      case 'search':
-        props.onSearch?.()
-        break
-      case 'settings':
-        props.onSettings?.()
-        break
-      case 'models':
-        props.onNotify(`Available ORION models:\n${MODELS.map((m) => `• ${m.label}`).join('\n')}`)
-        break
+    if (command.args && !args.trim()) {
+      setText(`/${command.name} `)
+      requestAnimationFrame(() => textareaRef.current?.focus())
+      return
     }
+    setText('')
+    if (command.name === 'models') return openModelMenu()
+    props.onCommand(command.name, args.trim())
   }
 
   const submit = (): void => {
     if (commandsOpen && filteredCommands.length > 0) {
       executeCommand(filteredCommands[selectedCommandIndex].name)
+      return
+    }
+    // A command typed out with its text ("/rename Trip ideas", "/model max") runs instead of being sent.
+    const typed = /^\/([a-z]+)(?:\s+([\s\S]*))?$/i.exec(text.trim())
+    if (typed && SLASH_COMMANDS.some((c) => c.name === typed[1].toLowerCase())) {
+      executeCommand(typed[1].toLowerCase(), typed[2] ?? '')
       return
     }
 
@@ -551,6 +539,9 @@ export default function Composer(props: Props): React.JSX.Element {
                 } else if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
                   e.preventDefault()
                   submit()
+                } else if (e.key === 'Tab' && !e.shiftKey) {
+                  e.preventDefault()
+                  executeCommand(filteredCommands[selectedCommandIndex].name)
                 } else if (e.key === 'Escape') {
                   e.preventDefault()
                   setCommandsOpen(false)
@@ -659,7 +650,10 @@ export default function Composer(props: Props): React.JSX.Element {
                 aria-selected={idx === selectedCommandIndex}
               >
                 <div className="cmd-info">
-                  <span className="cmd-name">/{cmd.name}</span>
+                  <span className="cmd-name">
+                    /{cmd.name}
+                    {cmd.args && <span className="cmd-args"> {cmd.args}</span>}
+                  </span>
                   <span className="cmd-desc">{cmd.description}</span>
                 </div>
               </button>

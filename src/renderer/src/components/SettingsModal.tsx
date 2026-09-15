@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import type { Settings, SettingsUpdate, Theme } from '../../../shared/types'
 import { MODELS } from '../../../shared/models'
+import AccountSection from './AccountSection'
 
 interface Props {
   settings: Settings
@@ -73,6 +74,8 @@ export default function SettingsModal({ settings, onUpdate, onClose }: Props): R
         </div>
 
         <div className="modal-body">
+          <AccountSection />
+
           <section className="setting">
             <div className="setting-label">
               <h3>Profile</h3>
@@ -105,6 +108,22 @@ export default function SettingsModal({ settings, onUpdate, onClose }: Props): R
               <p>Particles and the animated message box outline, orb, and greeting. Turn off for less motion.</p>
             </div>
             <Toggle checked={settings.effects} onChange={(v) => void onUpdate({ effects: v })} />
+          </section>
+
+          <section className="setting row">
+            <div className="setting-label">
+              <h3>Web search suggestions</h3>
+              <p>As you type in the address bar, ask the search engine and Orion for likely searches. Sends what you type.</p>
+            </div>
+            <Toggle checked={settings.searchSuggestions} onChange={(v) => void onUpdate({ searchSuggestions: v })} />
+          </section>
+
+          <section className="setting row">
+            <div className="setting-label">
+              <h3>Personalized suggestions</h3>
+              <p>Suggest from your browsing history, recent searches, bookmarks and Orion research, and learn which suggestions you pick. Stays on this device.</p>
+            </div>
+            <Toggle checked={settings.personalizedSuggestions} onChange={(v) => void onUpdate({ personalizedSuggestions: v })} />
           </section>
 
           <section className="setting row">

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Attachment, ChatMessage, ChatRequest, Conversation, Settings, SettingsUpdate, StreamEvent } from '../../shared/types'
 import { IMAGE_GEN_STATUS } from '../../shared/types'
-import { DEFAULT_MODEL, isKnownModel, modelLabel } from '../../shared/models'
+import { DEFAULT_MODEL, MODELS, isKnownModel, modelLabel } from '../../shared/models'
+import { automationActive, automationProgress } from '../../shared/automation'
 import { DEFAULT_PERSONA } from '../../shared/personas'
 import { copyText, newId, titleFromMessage } from './lib/utils'
 import BrowserPanel from './components/BrowserPanel'
@@ -13,6 +14,13 @@ import Sidebar from './components/Sidebar'
 import { ActivityPanel, ShortcutsModal, ToastStack } from './components/Overlays'
 import SettingsModal from './components/SettingsModal'
 import WelcomeExperience from './components/WelcomeExperience'
+import UrlBar from './components/UrlBar'
+import BrowserSizeControl from './components/BrowserSizeControl'
+import { OPEN_URL_EVENT } from './lib/openInBrowser'
+import type { OpenUrlDetail } from './lib/openInBrowser'
+import { clampBrowserSize, loadBrowserSize, resolveBrowserSize, saveBrowserSize } from './lib/browserSize'
+import type { Bounds, BrowserMode, BrowserSizePref } from './lib/browserSize'
+import type { BrowserOrbProps } from './components/BrowserOrb'
 import SystemBar from './components/SystemBar'
 import ImageEditor from './components/ImageEditor'
 import { ImageEditorContext, collectImages, imageMarkdown } from './lib/imageEditor'
@@ -76,6 +84,78 @@ export default function App(): React.JSX.Element {
   const [activityOpen, setActivityOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [browserOpen, setBrowserOpen] = useState(false)
+  /** A chat request waiting for the browser to hand over the tab Orbis should control. */
+  const [browserTarget, setBrowserTarget] = useState<string | null>(null)
+  /** Chat requests currently operating the browser. */
+  const [browserAgents, setBrowserAgents] = useState<string[]>([])
+  /** The browser's active page, sent with chat requests so "click the first result" has context. */
+  const browserPageRef = useRef<{ url: string; title: string } | null>(null)
+  /** The same page, as state, for the URL bar. */
+  const [browserPage, setBrowserPageState] = useState<{ url: string; title: string } | null>(null)
+  /** An address typed in the URL bar, waiting for the browser to open it. */
+  const [browserNavigation, setBrowserNavigation] = useState<(OpenUrlDetail & { id: number }) | null>(null)
+  /** Back at the chat with the browser still open: its tabs, pages and orb stay as they were. */
+  const [browserHidden, setBrowserHidden] = useState(false)
+  /** The browser's active page is loading, shown in the URL bar. */
+  const [browserLoading, setBrowserLoading] = useState(false)
+  const [browserMode, setBrowserMode] = useState<BrowserMode>('full')
+  const [browserPref, setBrowserPref] = useState<BrowserSizePref>(loadBrowserSize)
+  const [browserWindow, setBrowserWindow] = useState<Bounds>({ width: 1200, height: 800 })
+  /** The content area below the header, which the browser fills or opens a window in. */
+  const [hudBounds, setHudBounds] = useState<Bounds>({ width: window.innerWidth, height: window.innerHeight - 90 })
+  const browserStateRef = useRef({ open: browserOpen, pref: browserPref, bounds: hudBounds })
+  browserStateRef.current = { open: browserOpen, pref: browserPref, bounds: hudBounds }
+  const hudObserver = useRef<ResizeObserver | null>(null)
+  const hudBodyRef = useCallback((body: HTMLDivElement | null) => {
+    hudObserver.current?.disconnect()
+    hudObserver.current = null
+    if (!body) return
+    const measure = (): void => setHudBounds({ width: body.clientWidth, height: body.clientHeight })
+    measure()
+    hudObserver.current = new ResizeObserver(measure)
+    hudObserver.current.observe(body)
+  }, [])
+
+  /** Shows the browser the way a size preference asks: a full page, or a window of that size. */
+  const applyBrowserSize = useCallback((pref: BrowserSizePref) => {
+    setBrowserMode(pref.preset === 'full' ? 'full' : 'window')
+    setBrowserWindow(resolveBrowserSize(pref, browserStateRef.current.bounds))
+  }, [])
+
+  /** Opens the browser at the preferred size; an already open browser keeps its size and is brought back into view. */
+  const openBrowser = useCallback(() => {
+    if (!browserStateRef.current.open) applyBrowserSize(browserStateRef.current.pref)
+    setBrowserOpen(true)
+    setBrowserHidden(false)
+  }, [applyBrowserSize])
+
+  /** Sidebar and /browser: open it, or switch between the browser and the chat without closing it. */
+  const toggleBrowser = useCallback(() => {
+    if (!browserStateRef.current.open) return openBrowser()
+    setBrowserHidden((isHidden) => !isHidden)
+  }, [openBrowser])
+
+  const changeBrowserPref = useCallback(
+    (pref: BrowserSizePref) => {
+      setBrowserPref(pref)
+      saveBrowserSize(pref)
+      if (browserStateRef.current.open) applyBrowserSize(pref)
+    },
+    [applyBrowserSize]
+  )
+
+  /** Dragging the window's corner; the size it ends at becomes the remembered custom size. */
+  const resizeBrowserWindow = useCallback((width: number, height: number, final: boolean) => {
+    const size = clampBrowserSize(width, height, browserStateRef.current.bounds)
+    setBrowserWindow(size)
+    if (final) {
+      const pref: BrowserSizePref = { preset: 'custom', ...size }
+      setBrowserPref(pref)
+      saveBrowserSize(pref)
+    }
+  }, [])
+  /** Latest state of each running browser automation, by chat request, for the browser banner. */
+  const [automations, setAutomations] = useState<Record<string, NonNullable<ChatMessage['automation']>>>({})
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [personaMenuOpen, setPersonaMenuOpen] = useState(false)
   const [quickPromptsOpen, setQuickPromptsOpen] = useState(false)
@@ -256,8 +336,12 @@ export default function App(): React.JSX.Element {
         finished = true
         unsubscribe()
         flushDeltas()
+        setBrowserAgents((agents) => (agents.includes(requestId) ? agents.filter((a) => a !== requestId) : agents))
+        setBrowserTarget((pending) => (pending === requestId ? null : pending))
+        setAutomations(({ [requestId]: _ended, ...rest }) => rest)
         patchAssistant((m) => ({
           ...m,
+          confirmation: undefined,
           ...patch,
           reasoningMs: m.reasoningMs ?? (thinkStart !== null && m.reasoning ? Date.now() - thinkStart : undefined)
         }))
@@ -273,7 +357,7 @@ export default function App(): React.JSX.Element {
               setStatus(undefined)
             } else {
               // The preceding status event already logged the switch.
-              setStatus(`${modelLabel(conversation.model)} was busy, so ${modelLabel(event.model)} is answering.`)
+              setStatus(`${modelLabel(conversation.model)} couldn't take this one, so ${modelLabel(event.model)} is answering.`)
             }
             break
           case 'delta': {
@@ -300,6 +384,32 @@ export default function App(): React.JSX.Element {
           case 'image':
             queueDelta(conversationId, assistant.id, imageMarkdown({ src: event.url, prompt: event.prompt, seed: event.seed }), '', undefined)
             break
+          case 'browser-target':
+            openBrowser()
+            setBrowserTarget(requestId)
+            setBrowserAgents((agents) => (agents.includes(requestId) ? agents : [...agents, requestId]))
+            break
+          case 'step':
+            patchAssistant((m) => {
+              const steps = m.steps ?? []
+              const known = steps.some((s) => s.id === event.step.id)
+              // Long automations keep only their most recent steps; progress lives in the automation state.
+              return { ...m, steps: known ? steps.map((s) => (s.id === event.step.id ? event.step : s)) : [...steps, event.step].slice(-200) }
+            })
+            break
+          case 'automation':
+            patchAssistant((m) => ({ ...m, automation: event.automation }))
+            setAutomations((all) => ({ ...all, [requestId]: event.automation }))
+            break
+          case 'confirm':
+            patchAssistant((m) => ({ ...m, confirmation: event.confirmation }))
+            break
+          case 'confirm-done':
+            patchAssistant((m) => (m.confirmation?.id === event.id ? { ...m, confirmation: undefined } : m))
+            break
+          case 'research':
+            patchAssistant((m) => ({ ...m, research: event.research }))
+            break
           case 'done':
             finish()
             void requestSuggestions(conversationId, assistant.id)
@@ -322,7 +432,8 @@ export default function App(): React.JSX.Element {
         model: conversation.model,
         persona: conversation.persona,
         messages: history,
-        webSearch
+        webSearch,
+        browser: browserPageRef.current ?? undefined
       }
       window.api.sendChat(request).catch((err: unknown) => {
         finish({ error: err instanceof Error ? err.message : String(err) })
@@ -348,11 +459,63 @@ export default function App(): React.JSX.Element {
     [persist, updateConversation]
   )
 
+  /** While an automation runs, a message can stop, pause or steer it; anything else waits in the queue. */
+  const handleAutomationMessage = useCallback(
+    async (conversationId: string, requestId: string, objective: string, text: string) => {
+      const action = await window.api.classifyAutomationMessage(text, objective).catch(() => 'other' as const)
+      if (action === 'stop' || action === 'pause') {
+        notify(action === 'pause' ? 'Pausing the automation…' : 'Stopping the automation…')
+        void window.api.controlAutomation(requestId, action)
+        return
+      }
+      if (action === 'resume') return notify('The automation is already running.')
+      if (action === 'steer') {
+        notify('Got it. Orbis will take that into account from its next step.')
+        void window.api.steerAutomation(requestId, text)
+        return
+      }
+      const queue = queuesRef.current[conversationId]
+      if ((queue?.items.length ?? 0) >= MAX_QUEUED_MESSAGES) {
+        return notify(`Up to ${MAX_QUEUED_MESSAGES} messages can wait in the queue. Remove one or stop the automation.`, 'warn')
+      }
+      commitQueues((q) => ({
+        ...q,
+        [conversationId]: { paused: queue?.paused ?? false, items: [...(queue?.items ?? []), { id: newId(), text, attachments: [] }] }
+      }))
+      notify('Your message will be sent when the automation finishes or you stop it.')
+    },
+    [commitQueues, notify]
+  )
+
+  const sendRef = useRef<(text: string, attachments: Attachment[], skipControlCheck?: boolean, browserTask?: boolean) => boolean>(() => false)
+
   const send = useCallback(
-    (text: string, attachments: Attachment[]): boolean => {
+    /** `browserTask` marks a message from the browser's floating assistant, which always acts on the page. */
+    (text: string, attachments: Attachment[], skipControlCheck = false, browserTask = false): boolean => {
       const content = text.trim()
       if (!content && attachments.length === 0) return false
       const existing = activeId ? conversationsRef.current.find((c) => c.id === activeId) : undefined
+      const running = existing ? streamsRef.current[existing.id] : undefined
+      const automation = running && existing?.messages.find((m) => m.id === running.messageId)?.automation
+      if (existing && running && automation && automationActive(automation) && attachments.length === 0) {
+        void handleAutomationMessage(existing.id, running.requestId, automation.objective, content)
+        return true
+      }
+      // "Stop" just after an automation ended would otherwise reach the chat model, which might claim it stopped something.
+      const ended = !running && existing ? [...existing.messages].reverse().find((m) => m.role === 'assistant')?.automation : undefined
+      if (!skipControlCheck && existing && ended && !automationActive(ended) && attachments.length === 0 && content.length <= 60) {
+        window.api
+          .classifyAutomationMessage(content, ended.objective)
+          .then((action) => {
+            if (action === 'stop' || action === 'pause') {
+              notify(ended.status === 'completed' ? 'That automation has already finished.' : "Nothing is running right now, so there's nothing to stop.")
+            } else {
+              sendRef.current(content, attachments, true, browserTask)
+            }
+          })
+          .catch(() => sendRef.current(content, attachments, true, browserTask))
+        return true
+      }
       if (existing && streamsRef.current[existing.id]) {
         // Orbis is still replying: queue the message to go out after the reply (and any earlier queued ones).
         const queue = queuesRef.current[existing.id]
@@ -376,7 +539,14 @@ export default function App(): React.JSX.Element {
         createdAt: now,
         updatedAt: now
       }
-      const userMessage: ChatMessage = { id: newId(), role: 'user', content, createdAt: now, ...(attachments.length ? { attachments } : {}) }
+      const userMessage: ChatMessage = {
+        id: newId(),
+        role: 'user',
+        content,
+        createdAt: now,
+        ...(attachments.length ? { attachments } : {}),
+        ...(browserTask ? { browserTask: true } : {})
+      }
       const history = [...conversation.messages, userMessage]
       const updated = { ...conversation, messages: history, updatedAt: now }
       commitConversations(existing ? conversationsRef.current.map((c) => (c.id === updated.id ? updated : c)) : [updated, ...conversationsRef.current])
@@ -386,8 +556,9 @@ export default function App(): React.JSX.Element {
       if (!existing && content) void autoTitle(updated.id, content, updated.title)
       return true
     },
-    [activeId, autoTitle, commitConversations, commitQueues, draft, notify, persist, startGeneration]
+    [activeId, autoTitle, commitConversations, commitQueues, draft, handleAutomationMessage, notify, persist, startGeneration]
   )
+  sendRef.current = send
 
   /** Sends a message into an existing chat that isn't replying; used to run queued messages. */
   const pushUserMessage = useCallback(
@@ -568,6 +739,7 @@ export default function App(): React.JSX.Element {
             model: DEFAULT_MODEL,
             persona: DEFAULT_PERSONA,
             reasoningEffort: 'low',
+            images: false,
             messages: [
               {
                 id: newId(),
@@ -703,6 +875,65 @@ export default function App(): React.JSX.Element {
     setUnread(0)
   }, [])
 
+  const answerBrowserConfirmation = useCallback((messageId: string, confirmationId: string, approved: boolean) => {
+    const stream = Object.values(streamsRef.current).find((s) => s.messageId === messageId)
+    if (stream) void window.api.answerBrowserConfirmation(stream.requestId, confirmationId, approved)
+  }, [])
+
+  const provideBrowserTarget = useCallback((requestId: string, webContentsId: number | null) => {
+    setBrowserTarget((pending) => (pending === requestId ? null : pending))
+    void window.api.provideBrowserTarget(requestId, webContentsId)
+  }, [])
+
+  const closeBrowser = useCallback(() => {
+    setBrowserOpen(false)
+    setBrowserHidden(false)
+    setBrowserLoading(false)
+    browserPageRef.current = null
+    setBrowserPageState(null)
+    if (browserTarget) provideBrowserTarget(browserTarget, null)
+  }, [browserTarget, provideBrowserTarget])
+
+  const stopBrowserAgents = useCallback(() => {
+    // Automations stop with their progress saved; a single task simply ends.
+    for (const requestId of browserAgents) void (automations[requestId] ? window.api.controlAutomation(requestId, 'stop') : window.api.abortChat(requestId))
+  }, [automations, browserAgents])
+
+  const pauseBrowserAgents = useCallback(() => {
+    for (const requestId of browserAgents) if (automations[requestId]) void window.api.controlAutomation(requestId, 'pause')
+  }, [automations, browserAgents])
+
+  const controlAutomation = useCallback((messageId: string, action: 'pause' | 'stop') => {
+    const stream = Object.values(streamsRef.current).find((s) => s.messageId === messageId)
+    if (stream) void window.api.controlAutomation(stream.requestId, action)
+  }, [])
+
+  const setBrowserPage = useCallback((page: { url: string; title: string } | null) => {
+    browserPageRef.current = page
+    setBrowserPageState((current) => (current?.url === page?.url && current?.title === page?.title ? current : page))
+  }, [])
+
+  /**
+   * From the URL bar, links and research sources: open the browser at the preferred size (a full page unless changed)
+   * and load the address there, in a new tab when asked.
+   */
+  const openInBrowser = useCallback(
+    (input: string, options?: Omit<OpenUrlDetail, 'url'>) => {
+      openBrowser()
+      setBrowserNavigation({ url: input, id: Date.now(), ...options })
+    },
+    [openBrowser]
+  )
+
+  useEffect(() => {
+    const onOpen = (e: Event): void => {
+      const { url, newTab, more } = (e as CustomEvent<OpenUrlDetail>).detail ?? {}
+      if (url) openInBrowser(url, { newTab, more })
+    }
+    window.addEventListener(OPEN_URL_EVENT, onOpen)
+    return () => window.removeEventListener(OPEN_URL_EVENT, onOpen)
+  }, [openInBrowser])
+
   const [editing, setEditing] = useState<{ conversationId: string | null; image: EditableImage; tool?: 'markup' } | null>(null)
   const openImageEditor = useCallback((image: EditableImage) => setEditing({ conversationId: activeId, image }), [activeId])
 
@@ -726,6 +957,120 @@ export default function App(): React.JSX.Element {
     [notify, persist, updateConversation]
   )
 
+  /** Empties a chat but keeps it (title, model and assistant) so the conversation can start over in place. */
+  const clearConversation = useCallback(
+    (id: string) => {
+      clearQueue(id)
+      stop(id)
+      updateConversation(id, (c) => ({ ...c, messages: [], updatedAt: Date.now() }))
+      persist(id)
+    },
+    [clearQueue, persist, stop, updateConversation]
+  )
+
+  /** Slash commands from the message box, e.g. "/clear" or "/model max". */
+  const runCommand = useCallback(
+    (name: string, args: string) => {
+      const conversation = activeId ? conversationsRef.current.find((c) => c.id === activeId) : undefined
+      const lastReply = conversation && [...conversation.messages].reverse().find((m) => m.role === 'assistant' && m.content.trim())
+      const busy = Boolean(conversation && streamsRef.current[conversation.id])
+      const needChat = (): void => notify('Start a chat first.', 'warn')
+      const shortName = (label: string): string => label.toLowerCase().replace(/^orion\s+/, '')
+
+      switch (name) {
+        case 'new':
+          return newChat()
+        case 'clear':
+          if (!conversation || conversation.messages.length === 0) return notify('This chat is already empty.')
+          clearConversation(conversation.id)
+          return notify('Chat cleared.')
+        case 'imagine':
+          send(`/imagine ${args}`, [])
+          return
+        case 'browse':
+          send(`/browse ${args}`, [])
+          return
+        case 'web':
+          notify(webSearch ? 'Web search off.' : 'Web search on. Replies will use live results.')
+          return setWebSearch(!webSearch)
+        case 'model': {
+          const wanted = shortName(args.trim())
+          const model = MODELS.find((m) => shortName(m.label) === wanted || m.id.toLowerCase() === wanted) ?? MODELS.find((m) => shortName(m.label).startsWith(wanted))
+          if (!model) return notify(`There's no model called "${args}". Try ${MODELS.map((m) => shortName(m.label)).join(', ')}.`, 'warn')
+          changeModel(model.id)
+          return notify(`Switched to ${model.label}.`)
+        }
+        case 'regenerate':
+          if (!conversation || !lastReply) return notify('There is no reply to regenerate yet.', 'warn')
+          if (busy) return notify('Wait for the current reply to finish first.', 'warn')
+          return regenerate(conversation.id, lastReply.id)
+        case 'stop':
+          if (!conversation || !busy) return notify("Orbis isn't replying right now.")
+          return stop(conversation.id)
+        case 'copy':
+          if (!lastReply) return notify('There is no reply to copy yet.', 'warn')
+          void copyText(lastReply.content).then(() => notify('Last reply copied.'))
+          return
+        case 'summarize':
+          if (!conversation?.messages.length) return notify('There is nothing to summarize yet.', 'warn')
+          send('Summarize our conversation so far in a few short bullet points.', [])
+          return
+        case 'translate':
+          if (!lastReply) return notify('There is no reply to translate yet.', 'warn')
+          send(`Translate your last reply into ${args}.`, [])
+          return
+        case 'rename':
+          if (!conversation) return needChat()
+          renameConversation(conversation.id, args)
+          return notify(`Chat renamed to "${args.trim()}".`)
+        case 'share':
+          if (!conversation) return needChat()
+          return shareConversation(conversation.id)
+        case 'delete':
+          if (!conversation) return needChat()
+          deleteConversation(conversation.id)
+          return notify('Chat deleted.')
+        case 'incognito':
+          return toggleIncognito()
+        case 'search':
+          return openSearch()
+        case 'images':
+          return setImagesOpen(true)
+        case 'browser':
+          return toggleBrowser()
+        case 'theme':
+          void updateSettings({ theme: dark ? 'light' : 'dark' })
+          return
+        case 'assistant':
+          return setPersonaMenuOpen(true)
+        case 'settings':
+          return setSettingsOpen(true)
+        case 'shortcuts':
+        case 'help':
+          return setShortcutsOpen(true)
+      }
+    },
+    [
+      activeId,
+      changeModel,
+      clearConversation,
+      dark,
+      deleteConversation,
+      newChat,
+      notify,
+      openSearch,
+      regenerate,
+      renameConversation,
+      send,
+      shareConversation,
+      stop,
+      toggleBrowser,
+      toggleIncognito,
+      updateSettings,
+      webSearch
+    ]
+  )
+
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent): void => {
       if (welcome !== 'closed' || (!e.ctrlKey && !e.metaKey)) return
@@ -742,21 +1087,85 @@ export default function App(): React.JSX.Element {
       } else if (key === 'b') {
         e.preventDefault()
         toggleSidebar()
+      } else if (key === 'k' && !e.shiftKey && !e.altKey) {
+        // Unused until now; web pages keep their own Ctrl+K (it only reaches the Orbis window).
+        e.preventDefault()
+        openSearch()
       }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [newChat, toggleIncognito, toggleSidebar, welcome])
+  }, [newChat, openSearch, toggleIncognito, toggleSidebar, welcome])
 
   const active = activeId ? conversations.find((c) => c.id === activeId) : undefined
   const current: DraftChat = active ? { model: active.model, persona: active.persona, incognito: Boolean(active.incognito) } : draft
+
+  // The floating browser assistant follows the current chat's latest reply: its steps, progress, approvals and summary.
+  const orbReply = active ? [...active.messages].reverse().find((m) => m.role === 'assistant') : undefined
+  const orbStream = active ? streams[active.id] : undefined
+  // A reply belongs to the browser when it did browser work or answers a request made from the orb (even with no actions).
+  const orbAsked = Boolean(orbReply && active?.messages[active.messages.indexOf(orbReply) - 1]?.browserTask)
+  const orbProps: BrowserOrbProps = {
+    working: Boolean(orbStream && orbReply && orbStream.messageId === orbReply.id),
+    status: orbStream?.status,
+    automation: orbReply?.automation,
+    steps: orbReply?.steps ?? [],
+    confirmation: orbReply?.confirmation,
+    summary:
+      orbReply && (orbReply.steps?.length || orbReply.automation || orbAsked)
+        ? (orbReply.error ?? orbReply.content).replace(/[#*_`>|]+/g, ' ').replace(/\s+/g, ' ').trim() || undefined
+        : undefined,
+    onPrompt: (text) => {
+      send(text, [], false, true)
+    },
+    onPause: () => {
+      if (orbReply) controlAutomation(orbReply.id, 'pause')
+    },
+    onStop: () => {
+      if (!active || !orbReply) return
+      if (automationActive(orbReply.automation)) controlAutomation(orbReply.id, 'stop')
+      else stop(active.id)
+    },
+    onResume: () => {
+      send('Continue', [], true, true)
+    },
+    onAnswer: (confirmationId, approved) => {
+      if (orbReply) answerBrowserConfirmation(orbReply.id, confirmationId, approved)
+    }
+  }
   const savedConversations = useMemo(() => conversations.filter((c) => !c.incognito), [conversations])
+  const researchTopics = useMemo(
+    () =>
+      savedConversations.flatMap((c) =>
+        c.messages.flatMap((m) => (m.research && !m.research.reused && m.research.question.trim() ? [{ question: m.research.question.trim(), at: m.research.retrievedAt }] : []))
+      ),
+    [savedConversations]
+  )
   const galleryImages = useMemo(() => collectImages(savedConversations), [savedConversations])
 
   return (
     <ImageEditorContext.Provider value={openImageEditor}>
-    <div className={`hud${effects ? ' effects' : ''}${welcome === 'leaving' ? ' hud-entering' : ''}`} inert={welcome === 'open'}>
+    <div
+      className={`hud${effects ? ' effects' : ''}${welcome === 'leaving' ? ' hud-entering' : ''}${browserOpen && !browserHidden && browserMode === 'full' ? ' browser-full' : ''}`}
+      inert={welcome === 'open'}
+    >
       <HudBackground animated={effects} />
+      <UrlBar
+        url={browserPage?.url ?? ''}
+        title={browserPage?.title ?? ''}
+        onNavigate={openInBrowser}
+        research={researchTopics}
+        incognito={current.incognito}
+        searchSuggestions={settings?.searchSuggestions !== false}
+        personalizedSuggestions={settings?.personalizedSuggestions !== false}
+        askModel={current.model}
+        askPersona={current.persona}
+        onNotify={notify}
+        loading={browserOpen && browserLoading}
+        browserHidden={browserOpen && browserHidden}
+        onShowBrowser={() => setBrowserHidden(false)}
+        sizeControl={<BrowserSizeControl pref={browserPref} bounds={hudBounds} onChange={changeBrowserPref} />}
+      />
       <SystemBar
         dark={dark}
         unread={unread}
@@ -791,7 +1200,7 @@ export default function App(): React.JSX.Element {
         />
       </SystemBar>
 
-      <div className="hud-body">
+      <div className="hud-body" ref={hudBodyRef}>
         <Sidebar
           collapsed={sidebarCollapsed}
           conversations={savedConversations}
@@ -808,7 +1217,7 @@ export default function App(): React.JSX.Element {
           onSearch={openSearch}
           onImages={() => setImagesOpen((open) => !open)}
           onAssistants={() => setPersonaMenuOpen(true)}
-          onBrowser={() => setBrowserOpen((b) => !b)}
+          onBrowser={toggleBrowser}
           onSelect={selectChat}
           onRename={renameConversation}
           onDelete={deleteConversation}
@@ -830,6 +1239,9 @@ export default function App(): React.JSX.Element {
             onQuickPromptsChange={setQuickPromptsOpen}
             onModelChange={changeModel}
             onSend={send}
+            onCommand={runCommand}
+            onBrowserConfirm={answerBrowserConfirmation}
+            onAutomationControl={controlAutomation}
             queue={active ? queues[active.id] : undefined}
             onRemoveQueued={(itemId) => active && removeQueued(active.id, itemId)}
             onClearQueue={() => active && clearQueue(active.id)}
@@ -850,7 +1262,38 @@ export default function App(): React.JSX.Element {
           )}
         </main>
 
-        {browserOpen && <BrowserPanel onClose={() => setBrowserOpen(false)} onEditScreenshot={editScreenshot} onNotify={notify} />}
+        {browserOpen && (
+          <BrowserPanel
+            onClose={closeBrowser}
+            onEditScreenshot={editScreenshot}
+            onNotify={notify}
+            agentRequest={browserTarget}
+            onAgentTarget={provideBrowserTarget}
+            agentActive={browserAgents.length > 0}
+            onStopAgent={stopBrowserAgents}
+            agentStatus={(() => {
+              const running = browserAgents.map((id) => automations[id]).find(automationActive)
+              return running ? automationProgress(running) : undefined
+            })()}
+            onPauseAgent={browserAgents.some((id) => automationActive(automations[id])) ? pauseBrowserAgents : undefined}
+            onPageChange={setBrowserPage}
+            navigation={browserNavigation}
+            orb={orbProps}
+            mode={browserMode}
+            onModeChange={setBrowserMode}
+            // Large, Medium and Small follow the space the window has now (the header shows again when leaving full
+            // page, and the app window can be resized); a custom or dragged size keeps its pixels, fitted to the space.
+            windowSize={
+              browserPref.preset === 'large' || browserPref.preset === 'medium' || browserPref.preset === 'small'
+                ? resolveBrowserSize(browserPref, hudBounds)
+                : clampBrowserSize(browserWindow.width, browserWindow.height, hudBounds)
+            }
+            onWindowResize={resizeBrowserWindow}
+            hidden={browserHidden}
+            onBackToChat={() => setBrowserHidden(true)}
+            onLoadingChange={setBrowserLoading}
+          />
+        )}
 
         <button className="edge-handle" title="Activity" onClick={toggleActivity}>
           <span />

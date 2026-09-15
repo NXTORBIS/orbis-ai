@@ -4,6 +4,7 @@ import type { Attachment, Conversation, Settings } from '../../../shared/types'
 import type { NoticeKind, StreamState } from '../App'
 import type { ChatQueue } from '../lib/messageQueue'
 import Composer from './Composer'
+import ChatRail from './ChatRail'
 import Greeting from './Greeting'
 import MessageItem from './MessageItem'
 
@@ -18,6 +19,9 @@ interface Props {
   onQuickPromptsChange(open: boolean): void
   onModelChange(model: string): void
   onSend(text: string, attachments: Attachment[]): boolean
+  onCommand(name: string, args: string): void
+  onBrowserConfirm(messageId: string, confirmationId: string, approved: boolean): void
+  onAutomationControl(messageId: string, action: 'pause' | 'stop'): void
   queue?: ChatQueue
   onRemoveQueued(itemId: string): void
   onClearQueue(): void
@@ -89,6 +93,7 @@ export default function ChatView(props: Props): React.JSX.Element {
         stickToBottomRef.current = true
         return props.onSend(text, attachments)
       }}
+      onCommand={props.onCommand}
       onStop={props.onStop}
       onNotify={props.onNotify}
       onImprovePrompt={props.onImprovePrompt}
@@ -134,6 +139,7 @@ export default function ChatView(props: Props): React.JSX.Element {
                   <span>{formatDay(m.createdAt)}</span>
                 </div>
               )}
+              <div className="msg-slot" data-msg-id={m.id}>
               <MessageItem
                 message={m}
                 assistantName={settings?.assistantName ?? 'Assistant'}
@@ -152,11 +158,15 @@ export default function ChatView(props: Props): React.JSX.Element {
                 onResend={props.onResend}
                 onFeedback={props.onFeedback}
                 onNotify={props.onNotify}
+                onBrowserConfirm={props.onBrowserConfirm}
+                onAutomationControl={props.onAutomationControl}
               />
+              </div>
             </Fragment>
           ))}
         </div>
       </div>
+      <ChatRail messages={messages} scrollRef={scrollRef} userName={settings?.userName ?? 'You'} />
       {showJump && (
         <button
           className="jump-btn glass"

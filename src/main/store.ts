@@ -2,7 +2,7 @@ import { safeStorage } from 'electron'
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import type { Conversation, ReasoningEffort, Settings, SettingsUpdate, Theme } from '../shared/types'
-import { DEFAULT_MODEL, MODELS, isKnownModel } from '../shared/models'
+import { DEFAULT_MODEL, MODELS, currentModelId } from '../shared/models'
 import { DEFAULT_PERSONA } from '../shared/personas'
 
 interface StoredSettings extends Omit<Settings, 'hasApiKey'> {
@@ -21,7 +21,9 @@ const DEFAULTS: Omit<Settings, 'hasApiKey'> = {
   userName: 'NxtOrbis',
   userTitle: 'Commander',
   effects: true,
-  welcomeCompleted: false
+  welcomeCompleted: false,
+  searchSuggestions: true,
+  personalizedSuggestions: true
 }
 
 const THEMES: Theme[] = ['system', 'light', 'dark']
@@ -58,6 +60,8 @@ export class Store {
     if (typeof update.userName === 'string') next.userName = update.userName.trim().slice(0, 40) || DEFAULTS.userName
     if (typeof update.userTitle === 'string') next.userTitle = update.userTitle.trim().slice(0, 40)
     if (typeof update.welcomeCompleted === 'boolean') next.welcomeCompleted = update.welcomeCompleted
+    if (typeof update.searchSuggestions === 'boolean') next.searchSuggestions = update.searchSuggestions
+    if (typeof update.personalizedSuggestions === 'boolean') next.personalizedSuggestions = update.personalizedSuggestions
 
     if (typeof update.apiKey === 'string') {
       const key = update.apiKey.trim()
@@ -102,8 +106,8 @@ export class Store {
         .map(async (f) => {
           try {
             const c = JSON.parse(await fs.readFile(join(this.conversationsDir, f), 'utf8')) as Conversation
-            // Older chats may lack a persona or point at a model that was removed because it can't chat.
-            return { ...c, model: isKnownModel(c.model) ? c.model : DEFAULT_MODEL, persona: c.persona ?? DEFAULT_PERSONA }
+            // Older chats may lack a persona or point at a model Groq retired (moved to its replacement) or that can't chat.
+            return { ...c, model: currentModelId(c.model), persona: c.persona ?? DEFAULT_PERSONA }
           } catch {
             return null
           }
@@ -132,7 +136,7 @@ export class Store {
       this.settings = { ...DEFAULTS, ...raw }
       // Installations set up before the welcome screen existed are already configured.
       if (typeof raw.welcomeCompleted !== 'boolean') this.settings.welcomeCompleted = true
-      if (!MODELS.some((m) => m.id === this.settings!.defaultModel)) this.settings.defaultModel = DEFAULT_MODEL
+      this.settings.defaultModel = currentModelId(this.settings.defaultModel)
     } catch {
       this.settings = { ...DEFAULTS }
     }

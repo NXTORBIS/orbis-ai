@@ -1,6 +1,31 @@
 import { memo, useEffect, useRef, useState } from 'react'
-import { Check, ChevronDown, Copy, CornerDownRight, Ellipsis, FileText, Pencil, RefreshCw, Sparkles, ThumbsDown, ThumbsUp, Type, Upload, Volume2, VolumeX } from 'lucide-react'
-import type { ChatMessage } from '../../../shared/types'
+import {
+  Ban,
+  Check,
+  ChevronDown,
+  Copy,
+  CornerDownRight,
+  Ellipsis,
+  FileText,
+  Gamepad2,
+  Globe,
+  LoaderCircle,
+  Pause,
+  Pencil,
+  RefreshCw,
+  Repeat,
+  ShieldAlert,
+  Sparkles,
+  Square,
+  ThumbsDown,
+  ThumbsUp,
+  Type,
+  Upload,
+  Volume2,
+  VolumeX
+} from 'lucide-react'
+import type { AutomationState, BrowserConfirmation, BrowserStep, ChatMessage } from '../../../shared/types'
+import { automationActive, automationProgress } from '../../../shared/automation'
 import { IMAGE_GEN_STATUS } from '../../../shared/types'
 import ImageGenPlaceholder from './ImageGenPlaceholder'
 import { modelLabel } from '../../../shared/models'
@@ -8,6 +33,7 @@ import { copyText, formatDuration } from '../lib/utils'
 import { useDismiss } from '../lib/useDismiss'
 import type { NoticeKind } from '../App'
 import Markdown from './Markdown'
+import ResearchSources from './ResearchSources'
 import { OrbisMark } from './Brand'
 import { ThinkingOrb, ThinkingText } from './Thinking'
 
@@ -30,13 +56,19 @@ interface Props {
   onResend(messageId: string): void
   onFeedback(messageId: string, feedback: 'up' | 'down' | undefined): void
   onNotify(text: string, kind?: NoticeKind): void
+  /** Approves or cancels a browser action Orbis asked about in this reply. */
+  onBrowserConfirm?(messageId: string, confirmationId: string, approved: boolean): void
+  /** Pauses or stops the browser automation this reply is running. */
+  onAutomationControl?(messageId: string, action: 'pause' | 'stop'): void
 }
 
 const formatTime = (ts: number): string => new Date(ts).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
 
 function MessageItem(props: Props): React.JSX.Element {
   const { message, streaming, status } = props
-  return message.role === 'user' ? <UserMessage {...props} /> : streaming && !message.content ? <PendingReply status={status} reasoning={message.reasoning} /> : <AssistantMessage {...props} />
+  const browsing = Boolean(message.steps?.length || message.confirmation || message.automation)
+  if (message.role === 'user') return <UserMessage {...props} />
+  return streaming && !message.content && !browsing ? <PendingReply status={status} reasoning={message.reasoning} /> : <AssistantMessage {...props} />
 }
 
 function UserMessage({ message, userName, canEdit, onEdit, onResend, onNotify }: Props): React.JSX.Element {
@@ -182,8 +214,24 @@ function AssistantMessage(props: Props): React.JSX.Element {
         </div>
         <div className="msg-card glass" ref={cardRef}>
           {message.reasoning && <Reasoning text={message.reasoning} durationMs={message.reasoningMs} />}
-          {streaming && status && <div className="stream-status">{status}</div>}
-          {message.content && <Markdown text={message.content} />}
+          {message.automation && (
+            <AutomationBar
+              automation={message.automation}
+              live={streaming}
+              onControl={props.onAutomationControl ? (action) => props.onAutomationControl?.(message.id, action) : undefined}
+            />
+          )}
+          {message.steps && message.steps.length > 0 && <BrowserSteps steps={message.steps} active={streaming} />}
+          {streaming && status && !message.confirmation && <div className="stream-status">{status}</div>}
+          {message.confirmation && props.onBrowserConfirm && (
+            <ConfirmationCard
+              key={message.confirmation.id}
+              confirmation={message.confirmation}
+              onAnswer={(confirmationId, approved) => props.onBrowserConfirm?.(message.id, confirmationId, approved)}
+            />
+          )}
+          {message.content && <Markdown text={message.content} sources={message.research?.sources} />}
+          {message.research && message.research.sources.length > 0 && <ResearchSources research={message.research} content={message.content} streaming={streaming} />}
           {streaming && <span className="stream-caret" />}
           {message.error && <div className="message-error">{message.error}</div>}
         </div>
@@ -294,6 +342,123 @@ function Reasoning({ text, active = false, durationMs }: { text: string; active?
         <ChevronDown size={13} />
       </button>
       {open && <div className="reasoning-body">{text}</div>}
+    </div>
+  )
+}
+
+const STEP_ICONS: Record<BrowserStep['status'], React.ReactNode> = {
+  done: <Check size={13} />,
+  waiting: <LoaderCircle size={13} className="spin" />,
+  declined: <Ban size={13} />,
+  blocked: <ShieldAlert size={13} />
+}
+
+const AUTOMATION_LABELS: Record<AutomationState['status'], string> = {
+  running: 'Automation running',
+  'waiting-approval': 'Waiting for your approval',
+  paused: 'Automation paused',
+  stopped: 'Automation stopped',
+  completed: 'Automation finished',
+  stuck: 'Automation stopped: no progress',
+  failed: 'Automation stopped: error'
+}
+
+/** Live status of a continuous automation or game, with Pause and Stop while it runs. All numbers are verified progress. */
+function AutomationBar({ automation, live, onControl }: { automation: AutomationState; live: boolean; onControl?: (action: 'pause' | 'stop') => void }): React.JSX.Element {
+  const active = live && automationActive(automation)
+  const game = automation.kind === 'game'
+  const label = game ? AUTOMATION_LABELS[automation.status].replace('Automation', 'Game automation') : AUTOMATION_LABELS[automation.status]
+  const endsAt = automation.deadline ? new Date(automation.deadline).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : null
+  return (
+    <div className={`automation-bar ${automation.status}`} role="status" aria-live="polite">
+      <div className="automation-head">
+        {active ? <LoaderCircle size={14} className="spin" /> : game ? <Gamepad2 size={14} /> : <Repeat size={14} />}
+        <b>{label}</b>
+        <span className="automation-progress">{automationProgress(automation)}</span>
+        {active && onControl && (
+          <span className="automation-actions">
+            <button type="button" className="queue-btn" onClick={() => onControl('pause')}>
+              <Pause size={11} />
+              Pause
+            </button>
+            <button type="button" className="queue-btn danger" onClick={() => onControl('stop')}>
+              <Square size={10} />
+              Stop
+            </button>
+          </span>
+        )}
+      </div>
+      {automation.total ? (
+        <div className="automation-meter" aria-hidden="true">
+          <span style={{ width: `${Math.min(100, (automation.completed / automation.total) * 100)}%` }} />
+        </div>
+      ) : null}
+      <div className="automation-meta">
+        <span>Goal: {automation.objective}</span>
+        <span>
+          Stops {automation.stopWhen}
+          {endsAt ? ` (by ${endsAt})` : ''}
+        </span>
+        {automation.current && <span>{game ? 'Now' : 'Last item'}: {automation.current}</span>}
+        {!active && automation.reason && <span>{automation.reason}</span>}
+      </div>
+    </div>
+  )
+}
+
+/** What Orbis did in the browser for this reply; open while it works, collapsed afterwards. Long runs show their latest steps. */
+function BrowserSteps({ steps, active }: { steps: BrowserStep[]; active: boolean }): React.JSX.Element {
+  const [open, setOpen] = useState(active)
+  const shown = open || active
+  const visible = steps.slice(-40)
+  return (
+    <div className={`browser-steps${shown ? ' open' : ''}`}>
+      <button type="button" className="reasoning-toggle" aria-expanded={shown} onClick={() => setOpen((o) => !o)}>
+        <Globe size={13} />
+        {active ? 'Using the browser' : `Used the browser · ${steps.length} step${steps.length === 1 ? '' : 's'}`}
+        <ChevronDown size={13} />
+      </button>
+      {shown && (
+        <ol className="browser-step-list">
+          {steps.length > visible.length && <li className="browser-step earlier">{steps.length - visible.length} earlier steps</li>}
+          {visible.map((step) => (
+            <li key={step.id} className={`browser-step ${step.status}`}>
+              {STEP_ICONS[step.status]}
+              <span>{step.text}</span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  )
+}
+
+/** Asks the user to approve a consequential browser action before Orbis runs it. */
+function ConfirmationCard({ confirmation, onAnswer }: { confirmation: BrowserConfirmation; onAnswer(confirmationId: string, approved: boolean): void }): React.JSX.Element {
+  const [answered, setAnswered] = useState(false)
+  const answer = (approved: boolean): void => {
+    if (answered) return
+    setAnswered(true)
+    onAnswer(confirmation.id, approved)
+  }
+  return (
+    <div className="browser-confirm" role="alertdialog" aria-labelledby={`confirm-${confirmation.id}`} aria-describedby={`confirm-reason-${confirmation.id}`}>
+      <div className="browser-confirm-head">
+        <ShieldAlert size={15} />
+        <span id={`confirm-${confirmation.id}`}>Orbis wants to:</span>
+      </div>
+      <p className="browser-confirm-action">{confirmation.action}</p>
+      <p className="browser-confirm-reason" id={`confirm-reason-${confirmation.id}`}>
+        {confirmation.reason} Nothing happens until you approve.
+      </p>
+      <div className="browser-confirm-buttons">
+        <button type="button" className="text-btn" disabled={answered} onClick={() => answer(false)}>
+          Cancel
+        </button>
+        <button type="button" className="primary-btn" disabled={answered} onClick={() => answer(true)}>
+          Approve
+        </button>
+      </div>
     </div>
   )
 }

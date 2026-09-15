@@ -1,0 +1,44 @@
+! Title: Orbis site compatibility
+! Version: 2026.09.15
+! Description: Orbis's own rules, loaded after the community lists. Cosmetic rules remove ad containers the lists may
+!   miss on sites Orbis users visit a lot; exceptions keep essential resources working. Standard adblock syntax,
+!   so a fix is a one-line change here (shipped with the app) rather than a code change.
+!
+! ---------- YouTube: ad slots and promoted content in feeds, search and the watch page ----------
+youtube.com##ytd-ad-slot-renderer
+youtube.com##ytd-in-feed-ad-layout-renderer
+youtube.com##ytd-promoted-sparkles-web-renderer
+youtube.com##ytd-promoted-video-renderer
+youtube.com##ytd-display-ad-renderer
+youtube.com##ytd-banner-promo-renderer
+youtube.com##ytd-statement-banner-renderer
+youtube.com##ytd-rich-item-renderer:has(> #content > ytd-ad-slot-renderer)
+youtube.com##ytd-rich-section-renderer:has(ytd-statement-banner-renderer)
+youtube.com###player-ads
+youtube.com###masthead-ad
+youtube.com##.ytd-merch-shelf-renderer
+youtube.com##ytm-promoted-sparkles-web-renderer
+youtube.com##ytm-companion-ad-renderer
+youtube.com##.ytp-ad-overlay-container
+youtube.com##.ytp-ad-message-container
+!
+! ---------- Spotify Web: promotional banners in the interface (playback and DRM are untouched) ----------
+open.spotify.com##[data-testid="hpto-component"]
+open.spotify.com##[data-testid="embedded-ad"]
+open.spotify.com##[data-testid="ad-slot-container"]
+!
+! ---------- Social feeds: sponsored units that are marked as ads by the site itself ----------
+reddit.com##shreddit-ad-post
+reddit.com##shreddit-comments-page-ad
+reddit.com##.promotedlink
+x.com##[data-testid="placementTracking"]:has([data-testid="promotedIndicator"])
+linkedin.com##.feed-shared-update-v2:has(.update-components-actor__sub-description:has-text(/^Promoted$/))
+!
+! ---------- Common anti-adblock overlays that lock the page (structure only; site scripts keep running) ----------
+##.fc-ab-root
+##.adblock-detection-overlay
+##div[class^="adblock-notice"]
+!
+! ---------- Compatibility exceptions: essential resources some generic rules catch ----------
+@@||www.youtube.com/youtubei/v1/player^$xhr,domain=youtube.com
+@@||open.spotify.com/get_access_token^$xhr,domain=open.spotify.com

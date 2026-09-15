@@ -32,6 +32,8 @@ export function normalizeMath(markdown: string): string {
       i % 2 === 1
         ? part
         : part
+            // Prices like "$10 and $47" would otherwise render as one maths span; a $ right before a number is currency.
+            .replace(/(^|[^\\$\w])\$(?=\d)/g, '$1\\$')
             .replace(/\\\[([\s\S]+?)\\\]/g, (_, math: string) => `\n$$\n${math.trim()}\n$$\n`)
             .replace(/\\\(([\s\S]+?)\\\)/g, (_, math: string) => `$${math}$`)
     )

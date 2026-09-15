@@ -6,6 +6,10 @@ directories:
 files:
   - out/**
   - package.json
+# Filter lists that ship with Orbis, so ad blocking works on first run and offline (updated at runtime).
+extraResources:
+  - from: resources/adblock
+    to: adblock
 win:
   target: nsis
   artifactName: ${productName}-Setup-${version}.${ext}

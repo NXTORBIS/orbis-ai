@@ -1,0 +1,95 @@
+{
+  "version": "2026-09-15T13:34:40.422Z",
+  "lists": {
+    "easylist": {
+      "file": "easylist.txt",
+      "checksum": "318f849794a94697a04d470f6162523befd43ce58d2477d4e321f727cbbb0ccd",
+      "bytes": 2068783
+    },
+    "peter-lowe": {
+      "file": "peter-lowe.txt",
+      "checksum": "13e5ecddc163997c41cea134e96e2328e1489d435ff757f87a737b4a7d141d8d",
+      "bytes": 114724
+    },
+    "ublock-filters": {
+      "file": "ublock-filters.txt",
+      "checksum": "f64eb22a4421a0813adcb04afd8739cdc0ad9de9842dc0178feb05d917becf14",
+      "bytes": 471974
+    },
+    "ublock-filters-2020": {
+      "file": "ublock-filters-2020.txt",
+      "checksum": "589dba6de1d45f9be4f96f8dc5a5520d93bb7209dbd88c172622328627da1473",
+      "bytes": 130996
+    },
+    "ublock-filters-2021": {
+      "file": "ublock-filters-2021.txt",
+      "checksum": "95178374dc83e09cf3b8b75aeaf100c225beb6717cd079dd33014b1bc42ff9cd",
+      "bytes": 166792
+    },
+    "ublock-filters-2022": {
+      "file": "ublock-filters-2022.txt",
+      "checksum": "2d04863c46844e34c8e77c3193718d65c237560ebfbb97d6ea55a20e81d6a855",
+      "bytes": 156249
+    },
+    "ublock-filters-2023": {
+      "file": "ublock-filters-2023.txt",
+      "checksum": "e57280ddc43de90fd798712c71ac10f1c10270b7815da17d26c9d8997737090a",
+      "bytes": 219794
+    },
+    "ublock-filters-2024": {
+      "file": "ublock-filters-2024.txt",
+      "checksum": "61c6370caf313fe15c1fba4a371ffd2b31c2255309052bbb1ccb4f41696434a4",
+      "bytes": 235876
+    },
+    "ublock-badware": {
+      "file": "ublock-badware.txt",
+      "checksum": "00b6e789c148541dfafab5f5a433fe83d2f3fd20e426eb5baf4c490afd325d1c",
+      "bytes": 251534
+    },
+    "ublock-quick-fixes": {
+      "file": "ublock-quick-fixes.txt",
+      "checksum": "61d766e66cf971d417e105f0b0ad869f80ef28ed407028f9555332bdd3fc0822",
+      "bytes": 87718
+    },
+    "ublock-resource-abuse": {
+      "file": "ublock-resource-abuse.txt",
+      "checksum": "a7f06a353f79141a4c1eded476fc26409a76d8f02be1c2e7c225e96666fbe64d",
+      "bytes": 8701
+    },
+    "ublock-unbreak": {
+      "file": "ublock-unbreak.txt",
+      "checksum": "d06b9a46309f8d2555b69f9c2e789e61299ecec0f947c5cf13ce5e5febb5a22e",
+      "bytes": 280767
+    },
+    "easyprivacy": {
+      "file": "easyprivacy.txt",
+      "checksum": "d0b04edb90a4e9ef6f3a371d08a9afd90057a22abe843586409fe08edfa89262",
+      "bytes": 1508869
+    },
+    "ublock-privacy": {
+      "file": "ublock-privacy.txt",
+      "checksum": "62d173cbfa87251b305e4a695d0d5b8afefb96a2e32d3f70f21e2b422fae6dbe",
+      "bytes": 182394
+    },
+    "easylist-cookie": {
+      "file": "easylist-cookie.txt",
+      "checksum": "03053470785e40aabdb90d9c9cfd95bc44d68653332bd9b24adbfef138e5f18f",
+      "bytes": 1192237
+    },
+    "ublock-annoyances-others": {
+      "file": "ublock-annoyances-others.txt",
+      "checksum": "f40e8d9d4c45a1bf76483e175a006132e1b494e2b5318de82fc70339d1228958",
+      "bytes": 416806
+    },
+    "ublock-annoyances-cookies": {
+      "file": "ublock-annoyances-cookies.txt",
+      "checksum": "d0bb345c4177aa9689692bda42be9beeb594a5fd99306a3b225a3f97c68ab51e",
+      "bytes": 406408
+    },
+    "ublock-resources": {
+      "file": "ublock-resources.txt",
+      "checksum": "5ce0ce483f0e5514308ccb0240960a9dd7bfeab417debeef96960dce2c95f690",
+      "bytes": 183850
+    }
+  }
+}
