@@ -62,7 +62,7 @@ interface Props {
   onOpenWorkflows?(): void
 }
 
-const EMPTY_LIBRARY: BrowserLibrarySnapshot = { history: [], bookmarks: [], downloads: [], permissions: {}, searches: [], picks: {}, shortcuts: [] }
+const EMPTY_LIBRARY: BrowserLibrarySnapshot = { history: [], bookmarks: [], downloads: [], permissions: {}, searches: [], picks: {}, shortcuts: [], readingList: [], savedPages: [], screenshots: [] }
 const CACHE_SIZE = 200
 
 /** Remembers recent prediction responses so retyping or backspacing shows them instantly. */
