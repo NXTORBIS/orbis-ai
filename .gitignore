@@ -5,3 +5,7 @@ dist/
 .env
 .env.*
 !.env.example
+
+# Filter lists are downloaded at runtime, never shipped: they are published under licences of their own.
+resources/adblock/lists/
+resources/adblock/manifest.json

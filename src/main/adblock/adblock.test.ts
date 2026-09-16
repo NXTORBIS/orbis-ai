@@ -293,3 +293,58 @@ test('list validation and rule counting', () => {
   assert.equal(validateList('{}', 'resources', 1), 'the resources file has no entries')
   assert.equal(validateList('||a^\n'.repeat(30), 'list', 10, 40), null)
 })
+
+test('with nothing downloaded yet, Orbis blocks nothing, says so, and the first update installs the lists', async () => {
+  const s = await setup()
+  try {
+    // Orbis ships without the third-party lists: they are published under licences of their own and are fetched at
+    // runtime. Until the first download arrives there is simply nothing to block.
+    await rm(join(s.bundled, 'lists'), { recursive: true, force: true })
+    await rm(join(s.bundled, 'manifest.json'), { force: true })
+
+    const empty = await s.store.load()
+    assert.equal(empty.empty, true)
+    assert.equal(empty.manifest.version, 'none')
+    assert.deepEqual(Object.keys(empty.manifest.lists), [])
+    assert.equal(empty.canRollback, false)
+    assert.equal(empty.recovered, undefined, 'a first run is not a recovery from damage')
+    // Orbis's own compatibility rules still ship with it, so they are there from the start.
+    assert.match(empty.texts.get('compat') ?? '', /ytd-ad-slot-renderer/)
+
+    const result = await s.store.update()
+    assert.deepEqual(result.updated.sort(), ['ads', 'res', 'trk'])
+    assert.deepEqual(result.failed, [])
+
+    const loaded = await s.store.load()
+    assert.equal(loaded.empty, undefined, 'once they are here, this is an ordinary set of lists')
+    assert.equal(loaded.manifest.lists.ads.source, 'downloaded')
+    assert.equal(loaded.manifest.lists.ads.rules, 40)
+    assert.match(loaded.texts.get('compat') ?? '', /ytd-ad-slot-renderer/)
+  } finally {
+    await s.cleanup()
+  }
+})
+
+test('a first run with no connection stays empty rather than breaking, and recovers on the next try', async () => {
+  const s = await setup()
+  try {
+    await rm(join(s.bundled, 'lists'), { recursive: true, force: true })
+    await rm(join(s.bundled, 'manifest.json'), { force: true })
+    const offline = new FilterStore({ dir: s.dir, bundledDir: s.bundled, catalog: s.catalog, fetchFn: async () => { throw new Error('offline') } })
+
+    const result = await offline.update()
+    assert.equal(result.updated.length, 0)
+    assert.equal(result.failed.length, 3, 'every list is reported as failed, with a reason')
+    assert.ok(result.failed.every((f) => /offline/.test(f.reason)))
+
+    const still = await offline.load()
+    assert.equal(still.empty, true, 'Orbis is still usable, just not blocking anything')
+
+    // The connection comes back and the very next update fills them in.
+    const online = new FilterStore({ dir: s.dir, bundledDir: s.bundled, catalog: s.catalog, fetchFn: s.store['o'].fetchFn })
+    await online.update()
+    assert.equal((await online.load()).empty, undefined)
+  } finally {
+    await s.cleanup()
+  }
+})

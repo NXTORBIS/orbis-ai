@@ -256,8 +256,9 @@ export class FilterStore {
       })
     )
     if (!result.updated.length) {
-      // Nothing new: just remember when this was checked.
-      await writeFile(join(this.currentDir, 'manifest.json'), JSON.stringify({ ...base.manifest, checkedAt: now }, null, 2))
+      // Nothing new: just remember when this was checked. With nothing downloaded yet there is nothing to write on,
+      // and the next attempt starts from scratch.
+      if (!base.empty) await writeFile(join(this.currentDir, 'manifest.json'), JSON.stringify({ ...base.manifest, checkedAt: now }, null, 2))
       return result
     }
     manifest.version = new Date(now).toISOString()
@@ -265,7 +266,9 @@ export class FilterStore {
     manifest.checkedAt = now
     await this.writeSet(this.stagingDir, manifest, texts)
     await rm(this.previousDir, { recursive: true, force: true })
-    await rename(this.currentDir, this.previousDir)
+    // The very first set has nothing to step aside for; after that the set being replaced is kept for rollback.
+    if (await this.exists(this.currentDir)) await rename(this.currentDir, this.previousDir)
+    else await rm(this.currentDir, { recursive: true, force: true })
     await rename(this.stagingDir, this.currentDir)
     result.version = manifest.version
     return result
