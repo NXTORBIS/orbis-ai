@@ -36,6 +36,7 @@ const api: NxtorbisApi = {
   },
   popOutBrowser: (url) => ipcRenderer.invoke('browser:popout', url),
   protectedMedia: () => ipcRenderer.invoke('browser:protected-media'),
+  runSearch: (query, vertical) => ipcRenderer.invoke('search:run', query, vertical),
   updateStatus: () => ipcRenderer.invoke('update:status'),
   checkForUpdates: () => ipcRenderer.invoke('update:check'),
   downloadUpdate: () => ipcRenderer.invoke('update:download'),

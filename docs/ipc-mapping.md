@@ -103,6 +103,7 @@ Three channels disappear because we are currently reimplementing what Chromium a
 | `shortcuts:add`, `shortcuts:remove`, `shortcuts:update`, `shortcuts:refresh-icon` | Mojo onto the same store |
 | `app:notices`, `app:licence-file` | Mojo; the licence files ship beside the browser |
 | `omnibox:predict`, `omnibox:web` | Mojo onto the same ranking, which is ours and better suited to Orbis than Chromium's |
+| `search:run` | Mojo onto the same search. Orbis Search is Orbis's own page, so it stays ours entirely |
 
 ### Orion — unchanged
 

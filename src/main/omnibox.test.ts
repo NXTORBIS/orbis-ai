@@ -24,8 +24,12 @@ test('addresses open directly; everything else searches', () => {
   assert.equal(toUrl('github.com'), 'https://github.com')
   assert.equal(toUrl('localhost:5173/app'), 'http://localhost:5173/app')
   assert.equal(toUrl('https://example.com/a b'), 'https://example.com/a b')
-  assert.match(toUrl('latest NVIDIA GPU'), /google\.com\/search\?q=latest%20NVIDIA%20GPU$/)
-  assert.match(toUrl('how do I install React'), /\/search\?q=/)
+  // A search belongs to Orbis now, rather than being handed to somebody else's site.
+  assert.equal(toUrl('latest NVIDIA GPU'), 'orbis://search?q=latest%20NVIDIA%20GPU')
+  assert.match(toUrl('how do I install React'), /^orbis:\/\/search\?q=/)
+  // Asking for a particular engine still goes there, so nothing is taken away.
+  assert.match(toUrl('!g latest NVIDIA GPU'), /google\.com\/search\?q=latest%20NVIDIA%20GPU$/)
+  assert.equal(toUrl('orbis://settings'), 'orbis://settings')
   // File-like words are searches, not sites.
   assert.equal(isAddress('node.js'), false)
   assert.equal(isAddress('index.html'), false)

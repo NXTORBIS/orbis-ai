@@ -339,6 +339,16 @@ export interface AdBlockListInfo {
 
 import type { HistorySwipeView } from './historySwipe'
 import type { Channel, UpdateStatus } from './updates'
+import type { SearchResult, SearchVertical } from './orbisSearch'
+
+export interface SearchOutcomeView {
+  query: string
+  vertical: SearchVertical
+  results: SearchResult[]
+  wantsAnswer: boolean
+  problem: string | null
+  tookMs: number
+}
 
 export interface UpdateSettingsView {
   channel: Channel
@@ -604,6 +614,8 @@ export interface NxtorbisApi {
   popOutBrowser(url: string): Promise<boolean>
   /** Whether protected media (Spotify, Netflix and the like) can play in this build, and what the decryption module says. */
   protectedMedia(): Promise<{ ready: boolean; status: unknown }>
+  /** Searches the web for an Orbis Search page. Sends the words and nothing about who asked. */
+  runSearch(query: string, vertical: SearchVertical): Promise<SearchOutcomeView>
   /** Updating Orbis: what is happening, what the user has chosen, and what has been installed before. */
   updateStatus(): Promise<{ status: UpdateStatus; settings: UpdateSettingsView; history: UpdateHistoryView[] } | null>
   checkForUpdates(): Promise<UpdateStatus | null>

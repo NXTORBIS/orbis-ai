@@ -27,6 +27,7 @@
       "Bash(gh --version)",
       "Bash(gh auth *)",
       "Bash(gh repo *)",
+      "Bash(gh release *)",
       "Bash(git commit -m 'chore: Update Claude settings for latest development workflow *)",
       "Bash(git push *)",
       "Bash(python -c \"import orion; print\\(orion.__version__\\)\")",
@@ -72,7 +73,15 @@
       "Bash(git commit -m 'Display generated images directly inline in chat *)",
       "Bash(git commit -m 'Add Groq vision model support - ORION Vision *)",
       "PowerShell(Get-Process -Name \"Orbis\" -ErrorAction SilentlyContinue)",
-      "PowerShell(Stop-Process -Force)"
+      "PowerShell(Stop-Process -Force)",
+      "Bash(timeout 180 bash -c 'while ! grep -q \"electron-builder\" C:\\\\Users\\\\ksran\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-ksran-Downloads-Orbis-AI-desktop-app\\\\6b5ac3f6-dc4c-4f7e-b3a6-dcc9fa7ec69f\\\\tasks\\\\bji7uoo4m.output 2>/dev/null; do sleep 2; done; tail -30 C:\\\\Users\\\\ksran\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-ksran-Downloads-Orbis-AI-desktop-app\\\\6b5ac3f6-dc4c-4f7e-b3a6-dcc9fa7ec69f\\\\tasks\\\\bji7uoo4m.output')",
+      "Bash(timeout 300 bash -c 'for i in {1..3}; do echo \"Attempt $i...\"; npm run dist 2>&1 | tail -20 && break || sleep 5; done')",
+      "Bash(timeout 600 bash -c 'until ls -l dist/Orbis-Setup-0.1.0.exe 2>/dev/null | grep -q \"109M\\\\|110M\\\\|111M\"; do sleep 5; done; echo \"✓ Build ready!\"; ls -lh dist/Orbis-Setup-0.1.0.exe')",
+      "Bash(npx electron-builder *)",
+      "Bash(\\\\.7z\" | tail -5)",
+      "PowerShell(\\(Get-Item \"C:\\\\Users\\\\ksran\\\\Downloads\\\\Orbis AI desktop app\\\\dist\\\\Orbis-Setup-0.1.0.exe\"\\).Length / 1MB)",
+      "Bash(timeout 300 bash -c 'until stat -c%Y \"C:\\\\Users\\\\ksran\\\\Downloads\\\\Orbis AI desktop app\\\\dist\\\\Orbis-Setup-0.1.0.exe\" 2>/dev/null | grep -q \"\"; do sleep 5; done; echo \"Build ready!\"; ls -lh \"C:\\\\Users\\\\ksran\\\\Downloads\\\\Orbis AI desktop app\\\\dist\\\\Orbis-Setup-0.1.0.exe\"')",
+      "PowerShell($exe = \"C:\\\\Users\\\\ksran\\\\Downloads\\\\Orbis AI desktop app\\\\dist\\\\Orbis-Setup-0.1.0.exe\"; if \\(Test-Path $exe\\) { $size = \\(Get-Item $exe\\).Length / 1MB; Write-Host \"✅ Ready: Orbis-Setup-0.1.0.exe \\($\\([math]::Round\\($size,1\\)\\) MB\\)\" } else { Write-Host \"❌ Build failed\" })"
     ]
   }
 }

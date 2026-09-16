@@ -1,7 +1,7 @@
 import type { Research, ResearchSource } from '../shared/types'
 import { normalizeUrl } from '../shared/research.ts'
 
-type FetchFn = (url: string, init?: RequestInit) => Promise<Response>
+export type FetchFn = (url: string, init?: RequestInit) => Promise<Response>
 export type Recency = Research['recency']
 
 /** One search result, before its page is read. */

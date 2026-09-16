@@ -37,6 +37,7 @@ import {
 } from 'lucide-react'
 import type { NoticeKind } from '../App'
 import type { HistorySwipeView } from '../../../shared/historySwipe'
+import { isOrbisPage, readSearchPageUrl } from '../../../shared/orbisSearch'
 import type { BrowserPermissionRequest, BrowserShortcutEvent, DeviceRequest } from '../../../shared/types'
 import BrowserLibraryPanel from './BrowserLibraryPanel'
 import type { ClosedTab, LibraryTab } from './BrowserLibraryPanel'
@@ -54,6 +55,8 @@ import ShortcutsGrid from './ShortcutsGrid'
 import WidgetHost, { useWidgets } from './widgets/WidgetHost'
 // Only ever seen when a site asks for a device, so it is fetched then rather than at startup.
 const DeviceChooser = lazy(() => import('./DeviceChooser'))
+// Orbis Search: only fetched when a search is actually shown.
+const OrbisSearchPage = lazy(() => import('./OrbisSearchPage'))
 import ExtensionsToolbar from './ExtensionsToolbar'
 import ExtensionPrompts from './ExtensionPrompts'
 import type { ExtensionWindowRequest, ReportedBrowserTab } from '../../../shared/types'
@@ -350,6 +353,8 @@ export default function BrowserPanel({
   /** Sites waiting for an answer to a permission request, oldest first. */
   const [permissions, setPermissions] = useState<BrowserPermissionRequest[]>([])
   const [deviceRequest, setDeviceRequest] = useState<DeviceRequest | null>(null)
+  /** The search an answer was already asked for, so it is not asked twice while the page re-renders. */
+  const searchAnswerAsked = useRef<string | null>(null)
   /** The two-finger history gesture, while it is being pulled. Null whenever nothing is being pulled. */
   const [swipe, setSwipe] = useState<HistorySwipeView | null>(null)
   const [rememberPermission, setRememberPermission] = useState(false)
@@ -377,6 +382,56 @@ export default function BrowserPanel({
   const active = tabs.find((t) => t.id === activeId) ?? tabs[0]
   const view = (): Webview | undefined => views.current.get(active.id)
   const hasPage = Boolean(active.url)
+  /** Orbis Search is a page Orbis draws itself, so the tab shows it instead of loading a website. */
+  const searchPage = readSearchPageUrl(active.url)
+
+  /**
+   * Orion reading the results. It answers from what came back and says which result each claim came from, so the
+   * answer can always be checked against something real. Only asked for when the search is worth an answer.
+   */
+  const [searchAnswer, setSearchAnswer] = useState<{ key: string; text: string; done: boolean } | null>(null)
+  const askOrionAboutSearch = useCallback(
+    (query: string, results: { title: string; url: string; snippet: string; site: string }[]) => {
+      const key = `${query}|${results.length}`
+      if (searchAnswer?.key === key) return { text: searchAnswer.text, done: searchAnswer.done }
+      if (searchAnswerAsked.current === key) return searchAnswer ? { text: searchAnswer.text, done: searchAnswer.done } : null
+      searchAnswerAsked.current = key
+
+      const requestId = newId()
+      setSearchAnswer({ key, text: '', done: false })
+      const sources = results
+        .slice(0, 8)
+        .map((r, i) => `[${i + 1}] ${r.title} — ${r.site}\n${r.snippet}`)
+        .join('\n\n')
+      const content = [
+        `Someone searched for: ${query}`,
+        '',
+        'These are the results that came back:',
+        '',
+        sources,
+        '',
+        'Answer the search in two or three sentences, in plain words, using only what these results say.',
+        'Put the number of the result you used in square brackets after each claim, like [2].',
+        'If the results do not answer it, say so plainly. Do not invent anything that is not above.'
+      ].join('\n')
+
+      const off = window.api.onChatEvent(requestId, (event) => {
+        if (event.type === 'delta') setSearchAnswer((current) => (current?.key === key ? { ...current, text: current.text + (event.content ?? '') } : current))
+        else if (event.type === 'done' || event.type === 'error') {
+          setSearchAnswer((current) => (current?.key === key ? { ...current, done: true } : current))
+          off()
+        }
+      })
+      void window.api
+        .sendChat({ requestId, model: 'orion-core', ask: true, images: false, messages: [{ id: requestId, role: 'user', content, createdAt: Date.now() }] })
+        .catch(() => {
+          setSearchAnswer((current) => (current?.key === key ? { ...current, done: true } : current))
+          off()
+        })
+      return { text: '', done: false }
+    },
+    [searchAnswer]
+  )
 
   const patch = useCallback((id: string, changes: Partial<Tab>) => {
     setTabs((list) => list.map((t) => (t.id === id ? { ...t, ...changes } : t)))
@@ -737,6 +792,11 @@ export default function BrowserPanel({
   const navigate = (input: string, tabId = active.id): void => {
     if (!input.trim()) return
     const url = toUrl(input)
+    // Orbis's own pages never reach the engine. There is nothing to load: the address is the whole of the page.
+    if (isOrbisPage(url)) {
+      patch(tabId, { url, title: 'Orbis Search', loading: false, error: undefined, offline: undefined })
+      return
+    }
     const webview = views.current.get(tabId)
     if (webview) {
       patch(tabId, { error: undefined })
@@ -2659,7 +2719,9 @@ export default function BrowserPanel({
           .sort((a, b) => a.seq - b.seq)
           .map(
             (tab) =>
-              tab.url && (
+              // An Orbis page has no engine behind it: Orbis draws it itself, so no view is made for one.
+              tab.url &&
+              !isOrbisPage(tab.url) && (
                 <TabView
                   partition={profile.partition}
                   key={`${tab.id}:${tab.generation}:${tab.private ? PRIVATE_PARTITION : profile.partition}`}
@@ -2726,6 +2788,16 @@ export default function BrowserPanel({
               />
             )
           })()}
+        {searchPage && (
+          <Suspense fallback={null}>
+            <OrbisSearchPage
+              query={searchPage.query}
+              vertical={searchPage.vertical}
+              onOpen={(url) => navigate(url)}
+              onAskOrion={askOrionAboutSearch}
+            />
+          </Suspense>
+        )}
         {!hasPage && (
           <div className="browser-newtab" style={widgets.wallpaper && !active.private ? { background: widgets.wallpaper } : undefined}>
             <OrbisMark size={40} />

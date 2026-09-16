@@ -24,6 +24,7 @@ import { buildSystemPrompt } from './prompt'
 import { UpdateManager } from './update/manager'
 import { electronPlatform, imageSize } from './platformElectron'
 import { asPageHandle } from './pageHandle'
+import { runSearch } from './search'
 import type { Platform } from './platform'
 import { answerContext, runResearch } from './research'
 import { OrbisAdBlock } from './adblock/electron'
@@ -676,6 +677,18 @@ function registerIpc(): void {
   ipcMain.handle('browser:popout', (_event, url: string) => Boolean(popOutBrowser(url)))
   // Whether pages that use protected media (Spotify, Netflix and the like) can play here.
   ipcMain.handle('browser:protected-media', () => protectedMedia)
+
+  /**
+   * Orbis Search. The words are sent to the web and nothing else: no identifier, no history, nothing about who asked.
+   * Orion's answer is a separate request the page makes only when it is worth one.
+   */
+  ipcMain.handle('search:run', async (_e, query: unknown, vertical: unknown) =>
+    runSearch({
+      query: typeof query === 'string' ? query : '',
+      vertical: vertical === 'images' || vertical === 'videos' || vertical === 'news' ? vertical : 'all',
+      fetchFn: (url, init) => net.fetch(url, init)
+    })
+  )
 
   // Updating Orbis. Everything the window and Orion can ask goes through the one manager.
   ipcMain.handle('update:status', () => (updates ? { status: updates.getStatus(), settings: updates.getSettings(), history: updates.getUpdateHistory() } : null))

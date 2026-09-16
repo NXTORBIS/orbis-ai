@@ -1,4 +1,5 @@
 import type { BrowserBookmark, BrowserHistoryEntry, BrowserPick, BrowserSearchEntry } from './types'
+import { searchDestination } from './orbisSearch.ts'
 
 /** What a line typed in the address bar is for. The first detected intent is the main one. */
 export type OmniIntent = 'url' | 'question' | 'news' | 'images' | 'videos' | 'shopping' | 'search'
@@ -85,13 +86,19 @@ export function searchUrl(query: string, vertical?: 'news' | 'images' | 'videos'
   return `${GOOGLE}?q=${encodeURIComponent(query.trim())}${vertical ? `&tbm=${tbm[vertical]}` : ''}`
 }
 
-/** The page to load for typed text: the address itself, or a web search. */
+/**
+ * The page to load for typed text: the address itself, or a search.
+ *
+ * A search goes to Orbis Search rather than to somebody else's site — that is the whole point of having one. Asking
+ * for a particular engine still works: "!g something" goes to Google, and always will.
+ */
 export function toUrl(input: string): string {
   const text = input.trim()
   if (/^https?:\/\//i.test(text)) return text
+  if (/^orbis:\/\//i.test(text)) return text
   if (LOCAL.test(text)) return `http://${text}`
   if (isAddress(text)) return `https://${text}`
-  return searchUrl(text)
+  return searchDestination(text).url
 }
 
 export function detectIntents(input: string): OmniIntent[] {
