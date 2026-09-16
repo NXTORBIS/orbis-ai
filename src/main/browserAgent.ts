@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto'
-import { webContents as allWebContents } from 'electron'
-import type { WebContents } from 'electron'
+import type { PageHandle } from './pageHandle'
 import type { BrowserControl } from './browserControl/registry.ts'
 import type { WindowControl } from './browserControl/window.ts'
 import { automationProgress } from '../shared/automation.ts'
@@ -52,7 +51,9 @@ export interface BrowserAgentOptions {
   signal: AbortSignal
   emit(event: StreamEvent): void
   /** Resolves to the browser tab Orbis should control, opening the browser first if needed. */
-  getTarget(): Promise<WebContents>
+  getTarget(): Promise<PageHandle>
+  /** Finds a page by its id, for following the user when they change tabs mid-automation. */
+  findPage?(id: number): PageHandle | null
   /** Asks the user to approve an action; resolves true when they approve. */
   confirm(confirmation: BrowserConfirmation): Promise<boolean>
   /** An earlier automation to pick up from, without redoing what it processed. */
@@ -353,7 +354,7 @@ const clamp = (value: number, min: number, max: number): number => (Number.isFin
 
 
 /** What the page shows right now; games add a coarse picture of the tab, since their state often lives only in pixels. */
-async function fingerprint(wc: WebContents, visual: boolean): Promise<string> {
+async function fingerprint(wc: PageHandle, visual: boolean): Promise<string> {
   const hash = createHash('sha1')
   hash.update(String(await withTimeout(wc.executeJavaScript(FINGERPRINT_SCRIPT), 5000).catch(() => wc.getURL())))
   if (visual) {
@@ -481,7 +482,7 @@ export async function runBrowserAgent(options: BrowserAgentOptions): Promise<voi
   const declined = new Set<string>()
   /** Set when Orbis hands the next step to the user (login, CAPTCHA…); the run pauses there. */
   const handOff = { message: '' }
-  let tab: WebContents | null = null
+  let tab: PageHandle | null = null
   let duplicates = 0
   /** The game's level indicator when the last level was marked done, so a changed indicator counts as evidence. */
   let levelAtLastMark: string | undefined
@@ -490,7 +491,7 @@ export async function runBrowserAgent(options: BrowserAgentOptions): Promise<voi
    * Keeps a game's progress in step with the game's own indicator ("Level 3 of 10"): levels before the current one
    * are done, the total is the game's, and a shown win completes them all. Nothing is counted that the game didn't show.
    */
-  const syncGameProgress = async (wc: WebContents): Promise<void> => {
+  const syncGameProgress = async (wc: PageHandle): Promise<void> => {
     if (!auto || mode !== 'game') return
     const shown = String(await withTimeout(wc.executeJavaScript(`document.body ? document.body.innerText : ''`), 5000).catch(() => ''))
     const level = shown.match(LEVEL_INDICATOR)
@@ -526,7 +527,7 @@ export async function runBrowserAgent(options: BrowserAgentOptions): Promise<voi
   const watched = new Map<string, string>()
 
   /** Watches the main video on screen until it ends, loops, the site moves on, it stalls, or `limit` seconds pass. */
-  const watchVideo = async (wc: WebContents, limit: number): Promise<{ seconds: number; outcome: string } | null> => {
+  const watchVideo = async (wc: PageHandle, limit: number): Promise<{ seconds: number; outcome: string } | null> => {
     const read = (): Promise<MediaInfo | null> => withTimeout(wc.executeJavaScript(MEDIA_SCRIPT, true) as Promise<MediaInfo | null>, 5000).catch(() => null)
     const started = Date.now()
     let info = await read()
@@ -581,7 +582,7 @@ export async function runBrowserAgent(options: BrowserAgentOptions): Promise<voi
    * Before scrolling on in a video feed, lets the current video finish. Returns a message instead of advancing when the
    * site already moved on by itself, so the next video isn't skipped.
    */
-  const finishVideoFirst = async (wc: WebContents): Promise<string | null> => {
+  const finishVideoFirst = async (wc: PageHandle): Promise<string | null> => {
     const url = wc.getURL()
     if (!watchToEnd || !VIDEO_FEED.test(url) || watched.has(url)) return null
     const result = await watchVideo(wc, 600)
@@ -599,7 +600,7 @@ export async function runBrowserAgent(options: BrowserAgentOptions): Promise<voi
     if (auto && tab && !tab.isDestroyed()) auto.lastUrl = tab.getURL()
   }
   /** Keeps a short excerpt of each page a loop visits, for checking later that nothing shown on it was skipped. */
-  const rememberPage = async (wc: WebContents): Promise<void> => {
+  const rememberPage = async (wc: PageHandle): Promise<void> => {
     if (!auto || mode !== 'loop') return
     const text = String(await withTimeout(wc.executeJavaScript(`document.body ? document.body.innerText : ''`), 5000).catch(() => ''))
       .replace(/\s+/g, ' ')
@@ -665,7 +666,7 @@ export async function runBrowserAgent(options: BrowserAgentOptions): Promise<voi
     return null
   }
 
-  const runTool = async (call: ToolCall, wc: WebContents): Promise<string> => {
+  const runTool = async (call: ToolCall, wc: PageHandle): Promise<string> => {
     let args: Record<string, unknown>
     try {
       args = JSON.parse(call.function.arguments || '{}') as Record<string, unknown>
@@ -987,9 +988,9 @@ export async function runBrowserAgent(options: BrowserAgentOptions): Promise<voi
   }
 
   /** After a tab capability, keep working in the tab that is now active (the one the user sees), when it changed. */
-  const activeTab = (): WebContents | null => {
+  const activeTab = (): PageHandle | null => {
     const id = options.windowControl?.state?.tabs.find((t) => t.active)?.webContentsId
-    const contents = typeof id === 'number' ? allWebContents.fromId(id) : undefined
+    const contents = typeof id === 'number' ? (options.findPage?.(id) ?? null) : null
     return contents && !contents.isDestroyed() ? contents : null
   }
 

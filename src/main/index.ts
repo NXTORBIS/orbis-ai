@@ -23,6 +23,7 @@ import { streamChat, testApiKey } from './nim'
 import { buildSystemPrompt } from './prompt'
 import { UpdateManager } from './update/manager'
 import { electronPlatform, imageSize } from './platformElectron'
+import { asPageHandle } from './pageHandle'
 import type { Platform } from './platform'
 import { answerContext, runResearch } from './research'
 import { OrbisAdBlock } from './adblock/electron'
@@ -489,7 +490,11 @@ function registerIpc(): void {
               fetchFn: (url, init) => net.fetch(url, init),
               signal: controller.signal,
               emit,
-              getTarget: () => requestBrowserTarget(request.requestId, sender, emit, controller.signal),
+              getTarget: async () => asPageHandle(await requestBrowserTarget(request.requestId, sender, emit, controller.signal)),
+              findPage: (id) => {
+                const found = webContents.fromId(id)
+                return found && !found.isDestroyed() ? asPageHandle(found) : null
+              },
               control: browserControl?.control,
               windowControl: browserControl?.windowControl,
               confirm: (confirmation) => requestBrowserConfirmation(request.requestId, confirmation, emit, controller.signal)

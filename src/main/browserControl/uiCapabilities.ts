@@ -1,4 +1,5 @@
 import type { BrowserWindow, WebContents } from 'electron'
+import { asPageHandle } from '../pageHandle'
 import type { ParamSpec } from '../../shared/browserControl.ts'
 import { BrowserControl, fail } from './registry.ts'
 import * as page from './page.ts'
@@ -71,11 +72,10 @@ export function registerUiCapabilities(control: BrowserControl, getWindow: () =>
 
   const locateUi = async (locator: unknown): Promise<{ ref: number; target: page.TargetInfo; guarded: string | null }> => {
     const wc = host()
-    const found = await page.locate(wc, (locator ?? {}) as Locator)
+    const found = await page.locate(asPageHandle(wc), (locator ?? {}) as Locator)
     if ('error' in found) fail('not-found', found.error, true)
     const { ref, target } = found as { ref: number; target: page.TargetInfo }
-    const guarded = await page.exec<string | null>(
-      wc,
+    const guarded = await page.exec<string | null>(asPageHandle(wc),
       `(() => { const el = document.querySelector('[data-orbis-ref="${ref}"]'); if (!el) return null;
         if (el.tagName === 'WEBVIEW') return 'web page';
         if (el.closest('.ext-prompt')) return 'the extension permission prompt';
@@ -97,7 +97,7 @@ export function registerUiCapabilities(control: BrowserControl, getWindow: () =>
     params: { region: { type: 'string', description: 'all (default), browser, address bar, menu, dialog, sidebar, chat…' } },
     mutates: false,
     confirmation: 'none',
-    run: (p) => page.exec(host(), UI_SNAPSHOT(String(p.region ?? 'all')))
+    run: (p) => page.exec(asPageHandle(host()), UI_SNAPSHOT(String(p.region ?? 'all')))
   })
 
   control.register({
@@ -117,17 +117,17 @@ export function registerUiCapabilities(control: BrowserControl, getWindow: () =>
     run: async (p) => {
       const wc = host()
       const { ref, target } = await locateUi(p.locator)
-      await page.exec(wc, armClickScript(ref))
+      await page.exec(asPageHandle(wc), armClickScript(ref))
       const button = p.button === 'right' ? 'right' : 'left'
       // A minimized or covered Orbis window gets no pointer input; the control's own click is used then (only one of the two).
-      const hidden = (await page.exec<string>(wc, 'document.visibilityState').catch(() => 'visible')) === 'hidden'
-      if ((target.covered || hidden) && button === 'left') await page.exec(wc, `document.querySelector('[data-orbis-ref="${ref}"]')?.click()`)
-      else page.mouseClick(wc, target.x, target.y, button)
+      const hidden = (await page.exec<string>(asPageHandle(wc), 'document.visibilityState').catch(() => 'visible')) === 'hidden'
+      if ((target.covered || hidden) && button === 'left') await page.exec(asPageHandle(wc), `document.querySelector('[data-orbis-ref="${ref}"]')?.click()`)
+      else page.mouseClick(asPageHandle(wc), target.x, target.y, button)
       return { ref, control: { name: target.label, tag: target.tag, role: target.role } }
     },
     verify: async () => {
       await page.sleep(120)
-      const seen = await page.exec<boolean>(host(), 'window.__orbisClickSeen === true', 2000).catch(() => false)
+      const seen = await page.exec<boolean>(asPageHandle(host()), 'window.__orbisClickSeen === true', 2000).catch(() => false)
       return { verified: seen, detail: seen ? 'The control received the click.' : 'The click did not reach the control.' }
     }
   })
@@ -149,9 +149,9 @@ export function registerUiCapabilities(control: BrowserControl, getWindow: () =>
       const wc = host()
       const { ref, target } = await locateUi(p.locator)
       if (!target.editable) fail('invalid-params', `“${target.label}” is not a text field.`)
-      const focused = await page.exec<boolean>(wc, `(() => { const el = document.querySelector('[data-orbis-ref="${ref}"]'); el.focus(); ${p.append ? "if (typeof el.setSelectionRange === 'function') el.setSelectionRange(el.value.length, el.value.length);" : "if (typeof el.select === 'function') el.select();"} return document.activeElement === el; })()`)
+      const focused = await page.exec<boolean>(asPageHandle(wc), `(() => { const el = document.querySelector('[data-orbis-ref="${ref}"]'); el.focus(); ${p.append ? "if (typeof el.setSelectionRange === 'function') el.setSelectionRange(el.value.length, el.value.length);" : "if (typeof el.select === 'function') el.select();"} return document.activeElement === el; })()`)
       if (!focused) fail('failed', "Couldn't focus that field.", true)
-      const before = p.append ? await page.exec<string>(wc, `document.querySelector('[data-orbis-ref="${ref}"]').value ?? ''`) : ''
+      const before = p.append ? await page.exec<string>(asPageHandle(wc), `document.querySelector('[data-orbis-ref="${ref}"]').value ?? ''`) : ''
       await wc.insertText(String(p.text))
       if (p.submit) {
         wc.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' })
@@ -163,7 +163,7 @@ export function registerUiCapabilities(control: BrowserControl, getWindow: () =>
     verify: async (data, p) => {
       const r = data as { ref: number; existingLength: number; submitted: boolean }
       if (r.submitted) return { verified: true, detail: 'Typed and pressed Enter.' }
-      const value = await page.exec<string | null>(host(), `(() => { const el = document.querySelector('[data-orbis-ref="${r.ref}"]'); return el ? (el.isContentEditable ? el.innerText : el.value) : null; })()`).catch(() => null)
+      const value = await page.exec<string | null>(asPageHandle(host()), `(() => { const el = document.querySelector('[data-orbis-ref="${r.ref}"]'); return el ? (el.isContentEditable ? el.innerText : el.value) : null; })()`).catch(() => null)
       const ok = value !== null && value.slice(r.existingLength).startsWith(String(p.text).slice(0, 200))
       return { verified: ok, detail: ok ? 'The field holds the typed text.' : 'The field does not hold the typed text.' }
     }
@@ -186,7 +186,7 @@ export function registerUiCapabilities(control: BrowserControl, getWindow: () =>
       wc.sendInputEvent({ type: 'keyUp', keyCode: keyCode!, modifiers: [...modifiers] })
       return { key: p.key }
     },
-    verify: async () => ({ verified: true, detail: `Delivered to ${String(await page.exec<string>(host(), `(document.activeElement && (document.activeElement.getAttribute('aria-label') || document.activeElement.tagName)) || 'the window'`).catch(() => 'the window'))}.` })
+    verify: async () => ({ verified: true, detail: `Delivered to ${String(await page.exec<string>(asPageHandle(host()), `(document.activeElement && (document.activeElement.getAttribute('aria-label') || document.activeElement.tagName)) || 'the window'`).catch(() => 'the window'))}.` })
   })
 
   control.register({
@@ -199,12 +199,12 @@ export function registerUiCapabilities(control: BrowserControl, getWindow: () =>
     confirmation: 'none',
     run: async (p) => {
       const { ref, target } = await locateUi(p.locator)
-      page.mouseMove(host(), target.x, target.y)
+      page.mouseMove(asPageHandle(host()), target.x, target.y)
       return { ref }
     },
     verify: async (data) => {
       await page.sleep(100)
-      const hovered = await page.exec<boolean>(host(), `document.querySelector('[data-orbis-ref="${(data as { ref: number }).ref}"]')?.matches(':hover') === true`).catch(() => false)
+      const hovered = await page.exec<boolean>(asPageHandle(host()), `document.querySelector('[data-orbis-ref="${(data as { ref: number }).ref}"]')?.matches(':hover') === true`).catch(() => false)
       return { verified: hovered, detail: hovered ? 'The pointer is over it.' : 'The pointer is not over it.' }
     }
   })
@@ -219,8 +219,7 @@ export function registerUiCapabilities(control: BrowserControl, getWindow: () =>
     confirmation: 'none',
     run: async (p) => {
       const { ref } = await locateUi(p.locator)
-      return page.exec(
-        host(),
+      return page.exec(asPageHandle(host()),
         `(() => { const el = document.querySelector('[data-orbis-ref="${ref}"]'); return { text: (el.innerText || '').replace(/\\s+/g, ' ').trim().slice(0, 2000), value: el.type === 'password' ? undefined : el.value, name: el.getAttribute('aria-label') || el.getAttribute('title') || undefined, disabled: el.disabled || el.getAttribute('aria-disabled') === 'true', pressed: el.getAttribute('aria-pressed'), expanded: el.getAttribute('aria-expanded'), checked: el.getAttribute('aria-checked') ?? (el.type === 'checkbox' ? el.checked : null), selected: el.getAttribute('aria-selected') }; })()`
       )
     }
@@ -238,7 +237,7 @@ export function registerUiCapabilities(control: BrowserControl, getWindow: () =>
       const end = Date.now() + Math.min(Number(p.timeoutMs) || 10_000, 120_000)
       for (let delay = 100; ; delay = Math.min(delay * 1.5, 800)) {
         if (ctx.signal?.aborted) fail('aborted', 'Stopped.')
-        const found = await page.exec<{ ref?: number }>(host(), page.locateScript(p.locator as Locator), 3000).catch((): { ref?: number } => ({}))
+        const found = await page.exec<{ ref?: number }>(asPageHandle(host()), page.locateScript(p.locator as Locator), 3000).catch((): { ref?: number } => ({}))
         if (p.gone ? !found.ref : found.ref) return { met: true }
         if (Date.now() > end) fail('timeout', `The control ${p.gone ? 'is still there' : 'never appeared'}.`, true)
         await page.sleep(delay)

@@ -1,4 +1,5 @@
 import { app, clipboard, ClipboardItem, nativeImage, webContents } from 'electron'
+import { asPageHandle } from '../pageHandle'
 import type { BrowserWindow, Session, WebContents } from 'electron'
 import { existsSync, promises as fs } from 'node:fs'
 import { join } from 'node:path'
@@ -89,7 +90,7 @@ const SETTINGS: Record<string, { type: 'boolean' | 'string'; values?: string[]; 
  */
 export function registerMainCapabilities(d: MainCapabilityDeps): void {
   const { control, windowControl } = d
-  const tab = (ctx: Pick<ControlContext, 'target'>): WebContents => resolvePage(ctx, windowControl, () => d.getWindow()?.webContents ?? null)
+  const tab = (ctx: Pick<ControlContext, 'target'>): WebContents => resolvePage(ctx, windowControl, () => d.getWindow()?.webContents ?? null) as unknown as WebContents
   const noWindow = (): string | null => (d.getWindow() ? null : 'The Orbis window is not open.')
 
   // ---------------------------------------------------------------- windows
@@ -306,7 +307,7 @@ export function registerMainCapabilities(d: MainCapabilityDeps): void {
     requires: ['web-page'],
     run: async (p, ctx) => {
       const wc = tab(ctx)
-      const found = await page.locate(wc, p.locator as Locator)
+      const found = await page.locate(asPageHandle(wc), p.locator as Locator)
       if ('error' in found) fail('not-found', found.error, true)
       const { target } = found as { target: page.TargetInfo }
       const zoom = wc.getZoomFactor()
@@ -1072,7 +1073,7 @@ export function registerMainCapabilities(d: MainCapabilityDeps): void {
     mutates: true,
     confirmation: 'none',
     requires: ['web-page'],
-    observe: async (_p, ctx) => page.exec<string>(tab(ctx), 'String(getSelection())'),
+    observe: async (_p, ctx) => page.exec<string>(asPageHandle(tab(ctx)), 'String(getSelection())'),
     run: (_p, ctx, selection) => {
       if (!String(selection).trim()) fail('invalid-params', 'Nothing is selected on the page. Select text first (page.selectText).', true)
       tab(ctx).copy()
@@ -1095,7 +1096,7 @@ export function registerMainCapabilities(d: MainCapabilityDeps): void {
     requires: ['web-page'],
     run: async (p, ctx) => {
       const wc = tab(ctx)
-      const found = await page.locate(wc, p.locator as Locator)
+      const found = await page.locate(asPageHandle(wc), p.locator as Locator)
       if ('error' in found) fail('not-found', found.error, true)
       const { target } = found as { target: page.TargetInfo }
       const zoom = wc.getZoomFactor()
@@ -1493,7 +1494,7 @@ export function registerMainCapabilities(d: MainCapabilityDeps): void {
       case 'elementExists':
       case 'elementMissing': {
         const wc = pageOf()
-        const found: { ref?: number } = wc ? await page.exec<{ ref?: number }>(wc, page.locateScript((c.locator ?? {}) as Locator), 5000).catch((): { ref?: number } => ({})) : {}
+        const found: { ref?: number } = wc ? await page.exec<{ ref?: number }>(asPageHandle(wc), page.locateScript((c.locator ?? {}) as Locator), 5000).catch((): { ref?: number } => ({})) : {}
         return c.check === 'elementExists' ? Boolean(found.ref) : !found.ref
       }
       case 'textContains':
@@ -1501,8 +1502,8 @@ export function registerMainCapabilities(d: MainCapabilityDeps): void {
         const wc = pageOf()
         if (!wc) return c.check === 'textMissing'
         const text = c.locator
-          ? await page.exec<string>(wc, `(() => { ${page.locateScript(c.locator as Locator).slice(0, 0)} const r = ${page.locateScript(c.locator as Locator)}; const el = r.ref && document.querySelector('[data-orbis-ref="' + r.ref + '"]'); return el ? (el.innerText || el.value || '') : ''; })()`, 5000).catch(() => '')
-          : await page.exec<string>(wc, `document.body ? document.body.innerText : ''`, 5000).catch(() => '')
+          ? await page.exec<string>(asPageHandle(wc), `(() => { ${page.locateScript(c.locator as Locator).slice(0, 0)} const r = ${page.locateScript(c.locator as Locator)}; const el = r.ref && document.querySelector('[data-orbis-ref="' + r.ref + '"]'); return el ? (el.innerText || el.value || '') : ''; })()`, 5000).catch(() => '')
+          : await page.exec<string>(asPageHandle(wc), `document.body ? document.body.innerText : ''`, 5000).catch(() => '')
         const has = text.toLowerCase().includes(String(c.text ?? '').toLowerCase())
         return c.check === 'textContains' ? has : !has
       }

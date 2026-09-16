@@ -1,4 +1,5 @@
 import { webContents } from 'electron'
+import { asPageHandle } from '../pageHandle'
 import type { WebContents } from 'electron'
 import type { ParamSpec } from '../../shared/browserControl.ts'
 import { assessAction } from '../browserSafety.ts'
@@ -51,7 +52,7 @@ const hostOf = (url: string): string => {
 }
 
 async function located(wc: WebContents, locator: unknown): Promise<{ ref: number; method: string; count: number; target: page.TargetInfo }> {
-  const found = await page.locate(wc, (locator ?? {}) as Locator)
+  const found = await page.locate(asPageHandle(wc), (locator ?? {}) as Locator)
   if ('error' in found) fail('not-found', found.error, true)
   return found as { ref: number; method: string; count: number; target: page.TargetInfo }
 }
@@ -90,9 +91,9 @@ export function registerPageCapabilities(control: BrowserControl, windowControl:
     const wc = tab(ctx)
     let element = null
     if (params.locator) {
-      const found = await page.locate(wc, params.locator as Locator)
+      const found = await page.locate(asPageHandle(wc), params.locator as Locator)
       if (!('error' in found)) element = found.target
-    } else element = await page.exec<page.TargetInfo | null>(wc, page.ACTIVE_SCRIPT).catch(() => null)
+    } else element = await page.exec<page.TargetInfo | null>(asPageHandle(wc), page.ACTIVE_SCRIPT).catch(() => null)
     // Without an element there is nothing to act on: the action itself reports that it wasn't found.
     if (!element && kind !== 'key') return { decision: ctx.flagged ? 'confirm' : 'run', reason: ctx.flagged ? 'Orbis thinks this action could have an effect outside the browser.' : '' }
     const verdict = assessAction(
@@ -118,8 +119,8 @@ export function registerPageCapabilities(control: BrowserControl, windowControl:
     confirmation: 'none',
     run: async (p, ctx) => {
       const wc = tab(ctx)
-      const read = await page.exec<{ url: string; title: string; text: string }>(wc, page.extractScript(undefined, undefined, undefined, 1))
-      const selection = await page.exec<string>(wc, `String(window.getSelection() || '').slice(0, 5000)`).catch(() => '')
+      const read = await page.exec<{ url: string; title: string; text: string }>(asPageHandle(wc), page.extractScript(undefined, undefined, undefined, 1))
+      const selection = await page.exec<string>(asPageHandle(wc), `String(window.getSelection() || '').slice(0, 5000)`).catch(() => '')
       return { ...read, text: read.text.slice(0, Math.min(Number(p.maxChars) || 20_000, 100_000)), selection, loading: wc.isLoading() }
     }
   })
@@ -132,7 +133,7 @@ export function registerPageCapabilities(control: BrowserControl, windowControl:
     params: {},
     mutates: false,
     confirmation: 'none',
-    run: async (_p, ctx) => page.snapshot(tab(ctx))
+    run: async (_p, ctx) => page.snapshot(asPageHandle(tab(ctx)))
   })
 
   control.register({
@@ -163,24 +164,24 @@ export function registerPageCapabilities(control: BrowserControl, windowControl:
     run: async (p, ctx) => {
       const wc = tab(ctx)
       const found = await located(wc, p.locator)
-      await page.exec(wc, armClickScript(found.ref))
+      await page.exec(asPageHandle(wc), armClickScript(found.ref))
       const button = (p.button as page.MouseButton | undefined) ?? 'left'
       const count = Math.min(2, Math.max(1, Number(p.clickCount) || 1))
       // Pointer input only reaches a page that is on screen. When something covers the element's centre, or the page is
       // hidden (the window is minimized or covered), the element's own click is used instead: exactly one click, never both.
-      const hidden = (await page.exec<string>(wc, 'document.visibilityState').catch(() => 'visible')) === 'hidden'
+      const hidden = (await page.exec<string>(asPageHandle(wc), 'document.visibilityState').catch(() => 'visible')) === 'hidden'
       const scripted = (found.target.covered || hidden) && button === 'left'
       if (hidden && button !== 'left') fail('unavailable', 'The page is hidden (Orbis is minimized or covered), so a right or middle click can’t be delivered. Show Orbis and try again.', true)
-      if (scripted) await page.exec(wc, `document.querySelector('[data-orbis-ref="${found.ref}"]')?.${count === 2 ? "dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))" : 'click()'}`)
-      else page.mouseClick(wc, found.target.x, found.target.y, button, count)
+      if (scripted) await page.exec(asPageHandle(wc), `document.querySelector('[data-orbis-ref="${found.ref}"]')?.${count === 2 ? "dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))" : 'click()'}`)
+      else page.mouseClick(asPageHandle(wc), found.target.x, found.target.y, button, count)
       return { element: found.target, method: found.method, delivered: scripted ? 'element click' : 'pointer' }
     },
     verify: async (data, _p, ctx, before) => {
       const wc = tab(ctx)
       await page.sleep(250)
       const navigated = wc.getURL() !== (before as { url: string }).url || wc.isLoading()
-      const seen = navigated || (await page.exec<boolean>(wc, 'window.__orbisClickSeen === true', 3000).catch(() => false))
-      await page.settle(wc, ctx.signal, true)
+      const seen = navigated || (await page.exec<boolean>(asPageHandle(wc), 'window.__orbisClickSeen === true', 3000).catch(() => false))
+      await page.settle(asPageHandle(wc), ctx.signal, true)
       return { verified: seen, detail: seen ? `The click reached ${actionName((data as { element: page.TargetInfo }).element)}${navigated ? ' and the page navigated' : ''}.` : 'The click did not reach the element (something may be covering it, or the page changed).' }
     }
   })
@@ -196,12 +197,12 @@ export function registerPageCapabilities(control: BrowserControl, windowControl:
     run: async (p, ctx) => {
       const wc = tab(ctx)
       const found = await located(wc, p.locator)
-      page.mouseMove(wc, found.target.x, found.target.y)
+      page.mouseMove(asPageHandle(wc), found.target.x, found.target.y)
       return { ref: found.ref }
     },
     verify: async (data, _p, ctx) => {
       await page.sleep(150)
-      const hovered = await page.exec<boolean>(tab(ctx), `(() => { const el = document.querySelector('[data-orbis-ref="${(data as { ref: number }).ref}"]'); return !!el && (el.matches(':hover') || !!el.querySelector(':hover')); })()`).catch(() => false)
+      const hovered = await page.exec<boolean>(asPageHandle(tab(ctx)), `(() => { const el = document.querySelector('[data-orbis-ref="${(data as { ref: number }).ref}"]'); return !!el && (el.matches(':hover') || !!el.querySelector(':hover')); })()`).catch(() => false)
       return { verified: hovered, detail: hovered ? 'The element is under the pointer.' : 'The pointer is not over the element.' }
     }
   })
@@ -217,7 +218,7 @@ export function registerPageCapabilities(control: BrowserControl, windowControl:
     run: async (p, ctx) => {
       const wc = tab(ctx)
       const found = await located(wc, p.locator)
-      if (!(await page.exec<boolean>(wc, page.focusScript(found.ref)))) fail('failed', "That element can't take focus.", true)
+      if (!(await page.exec<boolean>(asPageHandle(wc), page.focusScript(found.ref)))) fail('failed', "That element can't take focus.", true)
       return { ref: found.ref, element: found.target }
     }
   })
@@ -242,23 +243,23 @@ export function registerPageCapabilities(control: BrowserControl, windowControl:
       const found = await located(wc, p.locator)
       if (!found.target.editable) fail('invalid-params', `${actionName(found.target)} is not a text field.`)
       const text = String(p.text)
-      if (p.append) await page.exec(wc, `(() => { const el = document.querySelector('[data-orbis-ref="${found.ref}"]'); el.focus(); if (typeof el.setSelectionRange === 'function' && el.value !== undefined) el.setSelectionRange(el.value.length, el.value.length); return true; })()`)
-      else if (!(await page.exec<boolean>(wc, page.focusScript(found.ref)))) fail('failed', "Couldn't focus that field.", true)
-      const existing = p.append ? String((await page.exec<string>(wc, `document.querySelector('[data-orbis-ref="${found.ref}"]').value ?? ''`).catch(() => '')) ?? '') : ''
+      if (p.append) await page.exec(asPageHandle(wc), `(() => { const el = document.querySelector('[data-orbis-ref="${found.ref}"]'); el.focus(); if (typeof el.setSelectionRange === 'function' && el.value !== undefined) el.setSelectionRange(el.value.length, el.value.length); return true; })()`)
+      else if (!(await page.exec<boolean>(asPageHandle(wc), page.focusScript(found.ref)))) fail('failed', "Couldn't focus that field.", true)
+      const existing = p.append ? String((await page.exec<string>(asPageHandle(wc), `document.querySelector('[data-orbis-ref="${found.ref}"]').value ?? ''`).catch(() => '')) ?? '') : ''
       await wc.insertText(text)
       // Typed input doesn't always land (for example when the tab isn't focused); set the value directly if it didn't.
-      await page.exec(wc, page.fillScript(found.ref, existing + text))
-      if (p.submit) await page.pressNamedKey(wc, 'Enter')
+      await page.exec(asPageHandle(wc), page.fillScript(found.ref, existing + text))
+      if (p.submit) await page.pressNamedKey(asPageHandle(wc), 'Enter')
       // What was typed is never part of the result (it can be private); verification reads it from the call's own parameters.
       return { ref: found.ref, existingLength: existing.length, submitted: p.submit === true }
     },
     verify: async (data, p, ctx) => {
       const d = data as { ref: number; existingLength: number; submitted: boolean }
       if (d.submitted) {
-        await page.settle(tab(ctx), ctx.signal)
+        await page.settle(asPageHandle(tab(ctx)), ctx.signal)
         return { verified: true, detail: 'Typed and pressed Enter; the page handled the submission.' }
       }
-      const value = await page.exec<string | null>(tab(ctx), `(() => { const el = document.querySelector('[data-orbis-ref="${d.ref}"]'); return el ? (el.isContentEditable ? el.innerText : el.value) : null; })()`).catch(() => null)
+      const value = await page.exec<string | null>(asPageHandle(tab(ctx)), `(() => { const el = document.querySelector('[data-orbis-ref="${d.ref}"]'); return el ? (el.isContentEditable ? el.innerText : el.value) : null; })()`).catch(() => null)
       const normal = (s: string): string => s.replace(/\s+/g, ' ').trim()
       const ok = value !== null && normal(value.slice(d.existingLength)) === normal(String(p.text))
       return { verified: ok, detail: ok ? `The field now holds the ${String(p.text).length} typed characters.` : 'The field does not hold the typed text.' }
@@ -276,12 +277,12 @@ export function registerPageCapabilities(control: BrowserControl, windowControl:
     run: async (p, ctx) => {
       const wc = tab(ctx)
       const found = await located(wc, p.locator)
-      await page.exec(wc, page.focusScript(found.ref))
-      await page.exec(wc, page.fillScript(found.ref, ''))
+      await page.exec(asPageHandle(wc), page.focusScript(found.ref))
+      await page.exec(asPageHandle(wc), page.fillScript(found.ref, ''))
       return { ref: found.ref }
     },
     verify: async (data, _p, ctx) => {
-      const value = await page.exec<string | null>(tab(ctx), `(() => { const el = document.querySelector('[data-orbis-ref="${(data as { ref: number }).ref}"]'); return el ? (el.isContentEditable ? el.innerText : el.value) : null; })()`).catch(() => null)
+      const value = await page.exec<string | null>(asPageHandle(tab(ctx)), `(() => { const el = document.querySelector('[data-orbis-ref="${(data as { ref: number }).ref}"]'); return el ? (el.isContentEditable ? el.innerText : el.value) : null; })()`).catch(() => null)
       return { verified: value === '' || value?.trim() === '', detail: value === '' ? 'The field is empty.' : 'The field still has text.' }
     }
   })
@@ -297,19 +298,19 @@ export function registerPageCapabilities(control: BrowserControl, windowControl:
     observe: async (p, ctx) => {
       const wc = tab(ctx)
       const found = await located(wc, p.locator)
-      return { ref: found.ref, before: await page.exec<string>(wc, `document.querySelector('[data-orbis-ref="${found.ref}"]').value ?? document.querySelector('[data-orbis-ref="${found.ref}"]').innerText`).catch(() => '') }
+      return { ref: found.ref, before: await page.exec<string>(asPageHandle(wc), `document.querySelector('[data-orbis-ref="${found.ref}"]').value ?? document.querySelector('[data-orbis-ref="${found.ref}"]').innerText`).catch(() => '') }
     },
     run: async (_p, ctx, before) => {
       const wc = tab(ctx)
       const { ref } = before as { ref: number }
-      if (!(await page.exec<boolean>(wc, `(() => { const el = document.querySelector('[data-orbis-ref="${ref}"]'); if (!el) return false; el.focus(); return document.activeElement === el; })()`))) fail('failed', "Couldn't focus that field.", true)
+      if (!(await page.exec<boolean>(asPageHandle(wc), `(() => { const el = document.querySelector('[data-orbis-ref="${ref}"]'); if (!el) return false; el.focus(); return document.activeElement === el; })()`))) fail('failed', "Couldn't focus that field.", true)
       wc.paste()
       return { ref }
     },
     verify: async (_d, _p, ctx, before) => {
       await page.sleep(200)
       const b = before as { ref: number; before: string }
-      const now = await page.exec<string>(tab(ctx), `document.querySelector('[data-orbis-ref="${b.ref}"]').value ?? document.querySelector('[data-orbis-ref="${b.ref}"]').innerText`).catch(() => b.before)
+      const now = await page.exec<string>(asPageHandle(tab(ctx)), `document.querySelector('[data-orbis-ref="${b.ref}"]').value ?? document.querySelector('[data-orbis-ref="${b.ref}"]').innerText`).catch(() => b.before)
       return { verified: now !== b.before, detail: now !== b.before ? 'The field changed with the pasted content.' : 'Nothing was pasted (the clipboard may be empty).' }
     }
   })
@@ -336,16 +337,16 @@ export function registerPageCapabilities(control: BrowserControl, windowControl:
       if (bad.length) fail('invalid-params', `Unsupported keys: ${bad.join(', ')}.`)
       if (p.locator) {
         const found = await located(wc, p.locator)
-        await page.exec(wc, `document.querySelector('[data-orbis-ref="${found.ref}"]')?.focus()`)
+        await page.exec(asPageHandle(wc), `document.querySelector('[data-orbis-ref="${found.ref}"]')?.focus()`)
       }
       const modifiers = ((p.modifiers as string[] | undefined) ?? []).filter((m): m is 'shift' | 'control' | 'alt' | 'meta' => ['shift', 'control', 'alt', 'meta'].includes(m))
       for (const key of keys) {
         if (ctx.signal?.aborted) break
-        await page.pressNamedKey(wc, key, Math.min(Number(p.holdMs) || 0, 3000), modifiers)
+        await page.pressNamedKey(asPageHandle(wc), key, Math.min(Number(p.holdMs) || 0, 3000), modifiers)
         await page.sleep(60)
       }
-      await page.settle(wc, ctx.signal, true)
-      return { pressed: keys, focused: await page.exec(wc, page.ACTIVE_SCRIPT).catch(() => null), url: wc.getURL() }
+      await page.settle(asPageHandle(wc), ctx.signal, true)
+      return { pressed: keys, focused: await page.exec(asPageHandle(wc), page.ACTIVE_SCRIPT).catch(() => null), url: wc.getURL() }
     }
   })
 
@@ -362,13 +363,13 @@ export function registerPageCapabilities(control: BrowserControl, windowControl:
     run: async (p, ctx) => {
       const wc = tab(ctx)
       const found = await located(wc, p.locator)
-      const result = String(await page.exec(wc, page.selectScript(found.ref, String(p.option))))
+      const result = String(await page.exec(asPageHandle(wc), page.selectScript(found.ref, String(p.option))))
       if (!result.startsWith('ok:')) fail(result.includes('no option') ? 'not-found' : 'invalid-params', `Couldn't choose it: ${result}.`, result.includes('no option'))
       return { ref: found.ref, chosen: result.slice(3) }
     },
     verify: async (data, _p, ctx) => {
       const d = data as { ref: number; chosen: string }
-      const now = await page.exec<string>(tab(ctx), `(() => { const el = document.querySelector('[data-orbis-ref="${d.ref}"]'); return el && el.options[el.selectedIndex] ? el.options[el.selectedIndex].text.trim() : ''; })()`).catch(() => '')
+      const now = await page.exec<string>(asPageHandle(tab(ctx)), `(() => { const el = document.querySelector('[data-orbis-ref="${d.ref}"]'); return el && el.options[el.selectedIndex] ? el.options[el.selectedIndex].text.trim() : ''; })()`).catch(() => '')
       return { verified: now === d.chosen, detail: now === d.chosen ? `${quote(d.chosen)} is selected.` : `The dropdown shows ${quote(now)}.` }
     }
   })
@@ -386,15 +387,15 @@ export function registerPageCapabilities(control: BrowserControl, windowControl:
       const wc = tab(ctx)
       const found = await located(wc, p.locator)
       const state = `(() => { const el = document.querySelector('[data-orbis-ref="${found.ref}"]'); if (!el) return null; if ('checked' in el && (el.type === 'checkbox' || el.type === 'radio')) return el.checked; const a = el.getAttribute('aria-checked') ?? el.getAttribute('aria-pressed'); return a === null ? null : a === 'true'; })()`
-      const current = await page.exec<boolean | null>(wc, state)
+      const current = await page.exec<boolean | null>(asPageHandle(wc), state)
       if (current === null) fail('invalid-params', `${actionName(found.target)} isn't a checkbox, radio button or switch.`)
       if (current !== p.checked) {
-        const hidden = (await page.exec<string>(wc, 'document.visibilityState').catch(() => 'visible')) === 'hidden'
-        if (found.target.covered || hidden) await page.exec(wc, `document.querySelector('[data-orbis-ref="${found.ref}"]').click()`)
-        else page.mouseClick(wc, found.target.x, found.target.y)
+        const hidden = (await page.exec<string>(asPageHandle(wc), 'document.visibilityState').catch(() => 'visible')) === 'hidden'
+        if (found.target.covered || hidden) await page.exec(asPageHandle(wc), `document.querySelector('[data-orbis-ref="${found.ref}"]').click()`)
+        else page.mouseClick(asPageHandle(wc), found.target.x, found.target.y)
       }
       await page.sleep(150)
-      return { ref: found.ref, now: await page.exec<boolean | null>(wc, state), wanted: p.checked }
+      return { ref: found.ref, now: await page.exec<boolean | null>(asPageHandle(wc), state), wanted: p.checked }
     },
     verify: (data) => {
       const d = data as { now: boolean | null; wanted: boolean }
@@ -413,7 +414,7 @@ export function registerPageCapabilities(control: BrowserControl, windowControl:
     describe: (p) => `Submit the form at ${JSON.stringify(p.locator)}`,
     assess: async (p, ctx) => {
       if (ctx.source === 'user') return { decision: 'run', reason: '' }
-      const found = await page.locate(tab(ctx), p.locator as Locator)
+      const found = await page.locate(asPageHandle(tab(ctx)), p.locator as Locator)
       if ('error' in found) return { decision: 'run', reason: '' }
       const verdict = assessAction({ kind: 'click', element: { ...found.target, submits: true, inForm: true }, flagged: ctx.flagged === true })
       return { decision: verdict.decision, reason: 'reason' in verdict ? verdict.reason : '' }
@@ -422,7 +423,7 @@ export function registerPageCapabilities(control: BrowserControl, windowControl:
     run: async (p, ctx) => {
       const wc = tab(ctx)
       const found = await located(wc, p.locator)
-      const outcome = await page.exec<string>(wc, `(() => { const el = document.querySelector('[data-orbis-ref="${found.ref}"]'); const form = el && (el.tagName === 'FORM' ? el : el.form || el.closest('form')); if (!form) return 'no form'; window.__orbisSubmitted = false; form.addEventListener('submit', () => { window.__orbisSubmitted = true; }, { once: true, capture: true }); const button = el.matches('button, input[type=submit], input[type=image]') ? el : form.querySelector('button[type=submit], input[type=submit], button:not([type])'); if (typeof form.requestSubmit === 'function') form.requestSubmit(button || undefined); else form.submit(); return 'ok'; })()`)
+      const outcome = await page.exec<string>(asPageHandle(wc), `(() => { const el = document.querySelector('[data-orbis-ref="${found.ref}"]'); const form = el && (el.tagName === 'FORM' ? el : el.form || el.closest('form')); if (!form) return 'no form'; window.__orbisSubmitted = false; form.addEventListener('submit', () => { window.__orbisSubmitted = true; }, { once: true, capture: true }); const button = el.matches('button, input[type=submit], input[type=image]') ? el : form.querySelector('button[type=submit], input[type=submit], button:not([type])'); if (typeof form.requestSubmit === 'function') form.requestSubmit(button || undefined); else form.submit(); return 'ok'; })()`)
       if (outcome !== 'ok') fail('invalid-params', 'That element is not in a form.')
       return { ref: found.ref }
     },
@@ -430,8 +431,8 @@ export function registerPageCapabilities(control: BrowserControl, windowControl:
       const wc = tab(ctx)
       await page.sleep(300)
       const navigated = wc.getURL() !== (before as { url: string }).url || wc.isLoading()
-      const submitted = navigated || (await page.exec<boolean>(wc, 'window.__orbisSubmitted === true', 3000).catch(() => false))
-      await page.settle(wc, ctx.signal)
+      const submitted = navigated || (await page.exec<boolean>(asPageHandle(wc), 'window.__orbisSubmitted === true', 3000).catch(() => false))
+      await page.settle(asPageHandle(wc), ctx.signal)
       return { verified: submitted, detail: submitted ? `The form was submitted${navigated ? ` and the page moved to ${wc.getURL()}` : ''}.` : 'The form did not submit (the page may have blocked it, for example for a missing field).' }
     }
   })
@@ -444,32 +445,32 @@ export function registerPageCapabilities(control: BrowserControl, windowControl:
     params: { direction: { type: 'string', description: 'down, up, top or bottom', enum: ['down', 'up', 'top', 'bottom'] }, locator: { ...LOCATOR, required: false, description: 'Scroll this element into view instead.' } },
     mutates: true,
     confirmation: 'none',
-    observe: async (_p, ctx) => page.exec<{ url: string; top: number; height: number; textLength: number }>(tab(ctx), page.VIEW_SCRIPT),
+    observe: async (_p, ctx) => page.exec<{ url: string; top: number; height: number; textLength: number }>(asPageHandle(tab(ctx)), page.VIEW_SCRIPT),
     run: async (p, ctx) => {
       const wc = tab(ctx)
       if (p.locator) {
         const found = await located(wc, p.locator)
-        await page.exec(wc, `document.querySelector('[data-orbis-ref="${found.ref}"]').scrollIntoView({ block: 'center', behavior: 'instant' })`)
+        await page.exec(asPageHandle(wc), `document.querySelector('[data-orbis-ref="${found.ref}"]').scrollIntoView({ block: 'center', behavior: 'instant' })`)
         return { intoView: found.ref }
       }
       const direction = String(p.direction ?? 'down')
-      if (direction === 'top' || direction === 'bottom') await page.exec(wc, `window.scrollTo({ top: ${direction === 'top' ? 0 : 'document.documentElement.scrollHeight'}, behavior: 'instant' })`)
-      else if (!(await page.exec<string | null>(wc, page.scrollScript(direction === 'down')).catch(() => null))) {
-        const view = await page.exec<{ width: number; view: number }>(wc, page.VIEW_SCRIPT)
+      if (direction === 'top' || direction === 'bottom') await page.exec(asPageHandle(wc), `window.scrollTo({ top: ${direction === 'top' ? 0 : 'document.documentElement.scrollHeight'}, behavior: 'instant' })`)
+      else if (!(await page.exec<string | null>(asPageHandle(wc), page.scrollScript(direction === 'down')).catch(() => null))) {
+        const view = await page.exec<{ width: number; view: number }>(asPageHandle(wc), page.VIEW_SCRIPT)
         wc.sendInputEvent({ type: 'mouseWheel', x: Math.round(view.width / 2), y: Math.round(view.view / 2), deltaX: 0, deltaY: direction === 'down' ? -view.view : view.view })
       }
-      await page.settle(wc, ctx.signal, true)
+      await page.settle(asPageHandle(wc), ctx.signal, true)
       return { direction }
     },
     verify: async (data, _p, ctx, before) => {
       const d = data as { intoView?: number }
       const wc = tab(ctx)
       if (d.intoView) {
-        const inView = await page.exec<boolean>(wc, `(() => { const r = document.querySelector('[data-orbis-ref="${d.intoView}"]').getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight; })()`).catch(() => false)
+        const inView = await page.exec<boolean>(asPageHandle(wc), `(() => { const r = document.querySelector('[data-orbis-ref="${d.intoView}"]').getBoundingClientRect(); return r.bottom > 0 && r.top < innerHeight; })()`).catch(() => false)
         return { verified: inView, detail: inView ? 'The element is on screen.' : 'The element is still off screen.' }
       }
       const b = before as { url: string; top: number; height: number; textLength: number }
-      const now = await page.exec<typeof b>(wc, page.VIEW_SCRIPT).catch(() => b)
+      const now = await page.exec<typeof b>(asPageHandle(wc), page.VIEW_SCRIPT).catch(() => b)
       const moved = now.top !== b.top || now.url !== b.url || now.height !== b.height || now.textLength !== b.textLength
       return { verified: true, detail: moved ? `Scrolled to ${now.top}px of ${now.height}px${now.height > b.height ? '; more content loaded' : ''}.` : 'Already at the end: scrolling had no effect.' }
     }
@@ -487,8 +488,8 @@ export function registerPageCapabilities(control: BrowserControl, windowControl:
       const wc = tab(ctx)
       const from = await located(wc, p.from)
       const to = await located(wc, p.to)
-      await page.mouseDrag(wc, from.target.x, from.target.y, to.target.x, to.target.y)
-      await page.settle(wc, ctx.signal, true)
+      await page.mouseDrag(asPageHandle(wc), from.target.x, from.target.y, to.target.x, to.target.y)
+      await page.settle(asPageHandle(wc), ctx.signal, true)
       return { from: from.target, to: to.target }
     }
   })
@@ -504,8 +505,7 @@ export function registerPageCapabilities(control: BrowserControl, windowControl:
     run: async (p, ctx) => {
       const wc = tab(ctx)
       const found = await located(wc, p.locator)
-      return page.exec<string>(
-        wc,
+      return page.exec<string>(asPageHandle(wc),
         `(() => { const el = document.querySelector('[data-orbis-ref="${found.ref}"]'); const want = ${JSON.stringify(p.text ?? null)}; const sel = getSelection(); sel.removeAllRanges(); const range = document.createRange();
           if (!want) { range.selectNodeContents(el); sel.addRange(range); return sel.toString(); }
           const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT); let node;
@@ -534,7 +534,7 @@ export function registerPageCapabilities(control: BrowserControl, windowControl:
     mutates: false,
     confirmation: 'none',
     run: async (p, ctx) => {
-      const result = await page.exec<Record<string, unknown>>(tab(ctx), page.extractScript(p.selector as string | undefined, p.fields as Record<string, string> | undefined, p.attribute as string | undefined, Math.min(Number(p.limit) || 100, 1000)))
+      const result = await page.exec<Record<string, unknown>>(asPageHandle(tab(ctx)), page.extractScript(p.selector as string | undefined, p.fields as Record<string, string> | undefined, p.attribute as string | undefined, Math.min(Number(p.limit) || 100, 1000)))
       if (typeof result.error === 'string') fail('invalid-params', result.error)
       return result
     }
@@ -567,11 +567,11 @@ export function registerPageCapabilities(control: BrowserControl, windowControl:
         if (p.loaded) checks.push(!wc.isLoading())
         if (p.urlMatches) checks.push(urlRe ? urlRe.test(wc.getURL()) : wc.getURL().includes(String(p.urlMatches)))
         if (p.locator) {
-          const found = await page.exec<{ ref?: number }>(wc, page.locateScript(p.locator as Locator), 4000).catch((): { ref?: number } => ({}))
+          const found = await page.exec<{ ref?: number }>(asPageHandle(wc), page.locateScript(p.locator as Locator), 4000).catch((): { ref?: number } => ({}))
           checks.push(gone ? !found.ref : Boolean(found.ref))
         }
         if (typeof p.text === 'string') {
-          const has = await page.exec<boolean>(wc, `(document.body ? document.body.innerText : '').toLowerCase().includes(${JSON.stringify((p.text as string).toLowerCase())})`, 4000).catch(() => false)
+          const has = await page.exec<boolean>(asPageHandle(wc), `(document.body ? document.body.innerText : '').toLowerCase().includes(${JSON.stringify((p.text as string).toLowerCase())})`, 4000).catch(() => false)
           checks.push(gone ? !has : has)
         }
         if (!checks.length) fail('invalid-params', 'Say what to wait for: locator, text, urlMatches or loaded.')
@@ -590,7 +590,7 @@ export function registerPageCapabilities(control: BrowserControl, windowControl:
     params: { limit: { type: 'integer', description: 'Most nodes (default 400).' } },
     mutates: false,
     confirmation: 'none',
-    run: async (p, ctx) => page.accessibilityTree(tab(ctx), Math.min(Number(p.limit) || 400, 2000))
+    run: async (p, ctx) => page.accessibilityTree(asPageHandle(tab(ctx)), Math.min(Number(p.limit) || 400, 2000))
   })
 
   control.register({
@@ -603,9 +603,9 @@ export function registerPageCapabilities(control: BrowserControl, windowControl:
     confirmation: 'none',
     run: async (p, ctx) => {
       const wc = tab(ctx)
-      let image = await page.withTimeout(wc.capturePage(), 8000).catch(() => null)
+      let image = await page.withTimeout(asPageHandle(wc).capturePage(), 8000).catch(() => null)
       // A hidden page (Orbis minimized or covered) isn't composited; the DevTools protocol can still render a frame of it.
-      if (!image || image.isEmpty()) image = await page.debuggerScreenshot(wc).catch(() => null)
+      if (!image || image.isEmpty()) image = await page.debuggerScreenshot(asPageHandle(wc)).catch(() => null)
       if (!image || image.isEmpty()) fail('failed', "The page couldn't be captured (it may still be loading).", true)
       const size = image!.getSize()
       const width = Math.min(size.width, Number(p.maxWidth) || 1280)
@@ -623,7 +623,7 @@ export function registerPageCapabilities(control: BrowserControl, windowControl:
     mutates: false,
     confirmation: 'none',
     run: async (p, ctx) => {
-      const html = await page.exec<string>(tab(ctx), 'document.documentElement.outerHTML')
+      const html = await page.exec<string>(asPageHandle(tab(ctx)), 'document.documentElement.outerHTML')
       return { length: html.length, html: html.slice(0, Math.min(Number(p.maxChars) || 100_000, 1_000_000)) }
     }
   })
@@ -641,9 +641,9 @@ export function registerPageCapabilities(control: BrowserControl, windowControl:
       const info = p.locator
         ? await (async () => {
             const found = await located(wc, p.locator)
-            return page.exec<{ link?: string; image?: string; editable: boolean; selection: string }>(wc, `(() => { const el = document.querySelector('[data-orbis-ref="${found.ref}"]'); const a = el.closest('a[href]'); const img = el.tagName === 'IMG' ? el : null; return { link: a ? a.href : undefined, image: img ? img.currentSrc || img.src : undefined, editable: el.isContentEditable || ['INPUT', 'TEXTAREA'].includes(el.tagName), selection: String(getSelection()) }; })()`)
+            return page.exec<{ link?: string; image?: string; editable: boolean; selection: string }>(asPageHandle(wc), `(() => { const el = document.querySelector('[data-orbis-ref="${found.ref}"]'); const a = el.closest('a[href]'); const img = el.tagName === 'IMG' ? el : null; return { link: a ? a.href : undefined, image: img ? img.currentSrc || img.src : undefined, editable: el.isContentEditable || ['INPUT', 'TEXTAREA'].includes(el.tagName), selection: String(getSelection()) }; })()`)
           })()
-        : await page.exec<{ link?: string; image?: string; editable: boolean; selection: string }>(wc, `({ editable: false, selection: String(getSelection()) })`)
+        : await page.exec<{ link?: string; image?: string; editable: boolean; selection: string }>(asPageHandle(wc), `({ editable: false, selection: String(getSelection()) })`)
       const actions: { label: string; capability: string; params: Record<string, unknown> }[] = []
       if (info.link) {
         actions.push(
@@ -698,7 +698,7 @@ export function registerPageCapabilities(control: BrowserControl, windowControl:
     run: async (p, ctx) => {
       const wc = tab(ctx)
       const found = await located(wc, p.locator)
-      const href = await page.exec<string | null>(wc, `(() => { const el = document.querySelector('[data-orbis-ref="${found.ref}"]'); const a = el && el.closest('a[href]'); return a ? a.href : null; })()`)
+      const href = await page.exec<string | null>(asPageHandle(wc), `(() => { const el = document.querySelector('[data-orbis-ref="${found.ref}"]'); const a = el && el.closest('a[href]'); return a ? a.href : null; })()`)
       if (!href || !/^https?:/i.test(href)) fail('invalid-params', `${actionName(found.target)} is not a web link.`)
       const where = String(p.where ?? 'this-tab')
       const command =
@@ -726,8 +726,7 @@ export function registerPageCapabilities(control: BrowserControl, windowControl:
     mutates: false,
     confirmation: 'none',
     run: async (p, ctx) =>
-      page.exec(
-        tab(ctx),
+      page.exec(asPageHandle(tab(ctx)),
         `(() => { let nodes; try { nodes = [...document.querySelectorAll(${JSON.stringify(p.selector)})]; } catch (e) { return { error: e.message }; }
           return { count: nodes.length, elements: nodes.slice(0, ${Math.min(Number(p.limit) || 50, 500)}).map((el) => { const r = el.getBoundingClientRect(); const password = el.type === 'password'; return { tag: el.tagName.toLowerCase(), id: el.id || undefined, text: (el.innerText || '').replace(/\\s+/g, ' ').trim().slice(0, 200), value: password ? undefined : el.value, checked: el.checked, disabled: el.disabled, visible: r.width > 0 && r.height > 0, attributes: Object.fromEntries([...el.attributes].filter((a) => !/^on/i.test(a.name) && a.name !== 'style').slice(0, 20).map((a) => [a.name, a.value.slice(0, 200)])) }; }) }; })()`
       )

@@ -1,4 +1,4 @@
-import type { WebContents } from 'electron'
+import type { PageHandle } from '../pageHandle'
 import { noteAutomatedInput } from '../browserShortcuts.ts'
 import type { ElementInfo } from '../browserSafety.ts'
 
@@ -344,7 +344,7 @@ export function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 }
 
 /** Waits for loading to finish; `quick` keeps the pause short for game moves. */
-export async function settle(wc: WebContents, signal?: AbortSignal, quick = false): Promise<void> {
+export async function settle(wc: PageHandle, signal?: AbortSignal, quick = false): Promise<void> {
   await sleep(quick ? 120 : 350)
   const deadline = Date.now() + 15_000
   while (!wc.isDestroyed() && wc.isLoading() && Date.now() < deadline && !signal?.aborted) await sleep(150)
@@ -372,11 +372,11 @@ export function describePage(page: PageSnapshot): string {
   return [`URL: ${page.url}`, `Title: ${page.title}`, `Scrolled ${page.scrollY}px of ${page.scrollHeight}px`, '', 'Visible text:', page.text || '(none)', '', 'Interactive elements:', lines.join('\n') || '(none)'].join('\n')
 }
 
-export async function snapshot(wc: WebContents): Promise<PageSnapshot> {
+export async function snapshot(wc: PageHandle): Promise<PageSnapshot> {
   return (await withTimeout(wc.executeJavaScript(SNAPSHOT_SCRIPT), 8000)) as PageSnapshot
 }
 
-export async function pageState(wc: WebContents): Promise<string> {
+export async function pageState(wc: PageHandle): Promise<string> {
   try {
     return describePage(await snapshot(wc))
   } catch {
@@ -384,12 +384,12 @@ export async function pageState(wc: WebContents): Promise<string> {
   }
 }
 
-export function exec<T>(wc: WebContents, code: string, ms = 8000): Promise<T> {
+export function exec<T>(wc: PageHandle, code: string, ms = 8000): Promise<T> {
   return withTimeout(wc.executeJavaScript(code, true) as Promise<T>, ms)
 }
 
 /** A key pressed in the page as real keyboard input; never acts as a browser shortcut. */
-export async function pressNamedKey(wc: WebContents, name: string, holdMs = 0, modifiers: ('shift' | 'control' | 'alt' | 'meta')[] = []): Promise<void> {
+export async function pressNamedKey(wc: PageHandle, name: string, holdMs = 0, modifiers: ('shift' | 'control' | 'alt' | 'meta')[] = []): Promise<void> {
   const keyCode = keyCodeOf(name)
   if (!keyCode) return
   noteAutomatedInput(wc.id)
@@ -404,7 +404,7 @@ export async function pressNamedKey(wc: WebContents, name: string, holdMs = 0, m
 export type MouseButton = 'left' | 'right' | 'middle'
 
 /** A real mouse click at a point of the page (CSS pixels), for an element already identified. */
-export function mouseClick(wc: WebContents, x: number, y: number, button: MouseButton = 'left', clickCount = 1): void {
+export function mouseClick(wc: PageHandle, x: number, y: number, button: MouseButton = 'left', clickCount = 1): void {
   const zoom = wc.getZoomFactor()
   const px = Math.round(x * zoom)
   const py = Math.round(y * zoom)
@@ -415,12 +415,12 @@ export function mouseClick(wc: WebContents, x: number, y: number, button: MouseB
   }
 }
 
-export function mouseMove(wc: WebContents, x: number, y: number): void {
+export function mouseMove(wc: PageHandle, x: number, y: number): void {
   const zoom = wc.getZoomFactor()
   wc.sendInputEvent({ type: 'mouseMove', x: Math.round(x * zoom), y: Math.round(y * zoom) })
 }
 
-export async function mouseDrag(wc: WebContents, fromX: number, fromY: number, toX: number, toY: number): Promise<void> {
+export async function mouseDrag(wc: PageHandle, fromX: number, fromY: number, toX: number, toY: number): Promise<void> {
   const zoom = wc.getZoomFactor()
   wc.sendInputEvent({ type: 'mouseMove', x: Math.round(fromX * zoom), y: Math.round(fromY * zoom) })
   wc.sendInputEvent({ type: 'mouseDown', x: Math.round(fromX * zoom), y: Math.round(fromY * zoom), button: 'left', clickCount: 1 })
@@ -434,7 +434,7 @@ export async function mouseDrag(wc: WebContents, fromX: number, fromY: number, t
 }
 
 /** Resolves a locator to a numbered reference and the element's position and description. */
-export async function locate(wc: WebContents, locator: Locator): Promise<{ ref: number; method: string; count: number; target: TargetInfo } | { error: string }> {
+export async function locate(wc: PageHandle, locator: Locator): Promise<{ ref: number; method: string; count: number; target: TargetInfo } | { error: string }> {
   type Found = { ref?: number; method?: string; count?: number; error?: string }
   const found = await exec<Found>(wc, locateScript(locator)).catch((err: Error): Found => ({ error: `The page didn't answer: ${err.message}` }))
   if (!found.ref) return { error: found.error ?? 'No matching element.' }
@@ -444,7 +444,7 @@ export async function locate(wc: WebContents, locator: Locator): Promise<{ ref: 
 }
 
 /** The accessibility tree Chromium builds for the page, read through the page's own debugger connection and released straight after. */
-export async function accessibilityTree(wc: WebContents, limit = 400): Promise<{ role: string; name: string; value?: string; depth: number }[]> {
+export async function accessibilityTree(wc: PageHandle, limit = 400): Promise<{ role: string; name: string; value?: string; depth: number }[]> {
   const dbg = wc.debugger
   const attachedHere = !dbg.isAttached()
   if (attachedHere) {
@@ -477,7 +477,7 @@ export async function accessibilityTree(wc: WebContents, limit = 400): Promise<{
 }
 
 /** A screenshot through the page's DevTools protocol (works while the page is hidden); released straight after. */
-export async function debuggerScreenshot(wc: WebContents): Promise<Electron.NativeImage> {
+export async function debuggerScreenshot(wc: PageHandle): Promise<Electron.NativeImage> {
   const { nativeImage } = await import('electron')
   const dbg = wc.debugger
   const attachedHere = !dbg.isAttached()
