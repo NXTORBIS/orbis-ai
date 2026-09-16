@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { Attachment, ChatMessage, ChatRequest, Conversation, Settings, SettingsUpdate, StreamEvent } from '../../shared/types'
+import type { Attachment, AutomationState, BrowserConfirmation, BrowserStep, ChatMessage, ChatRequest, Conversation, Settings, SettingsUpdate, StreamEvent } from '../../shared/types'
 import { IMAGE_GEN_STATUS } from '../../shared/types'
 import { themeBase } from '../../shared/themes'
 import { DEFAULT_MODEL, MODELS, isKnownModel, modelLabel } from '../../shared/models'
@@ -127,6 +127,88 @@ export default function App(): React.JSX.Element {
     if (!browserStateRef.current.open) return openBrowser()
     setBrowserHidden((isHidden) => !isHidden)
   }, [openBrowser])
+
+  /**
+   * The browser assistant's own task: the words, the answer, and what Orbis did in the page along the way.
+   *
+   * Kept here rather than in a conversation, so nothing the browser assistant is asked ever appears in Orbis Chat.
+   */
+  const [orbTask, setOrbTask] = useState<{
+    requestId: string
+    id: string
+    content: string
+    error?: string
+    steps: BrowserStep[]
+    automation?: AutomationState
+    confirmation?: BrowserConfirmation
+    working: boolean
+    status?: string
+  } | null>(null)
+  const orbOff = useRef<(() => void) | null>(null)
+  /** Which model and mode the user is on, read when a task starts rather than captured before there is one. */
+  const currentRef = useRef<DraftChat>({ model: DEFAULT_MODEL, incognito: false })
+
+  /** Asks the browser assistant something. Its own request, its own answer, and nothing to do with the chat. */
+  const askBrowserOrion = useCallback(
+    (text: string) => {
+      const task = text.trim()
+      if (!task) return
+      orbOff.current?.()
+      const requestId = newId()
+      setOrbTask({ requestId, id: requestId, content: '', steps: [], working: true })
+
+      const off = window.api.onChatEvent(requestId, (event) => {
+        setOrbTask((now) => {
+          if (!now || now.requestId !== requestId) return now
+          switch (event.type) {
+            case 'delta':
+              return { ...now, content: now.content + (event.content ?? '') }
+            case 'status':
+              return { ...now, status: event.message }
+            case 'step':
+              return { ...now, steps: [...now.steps.filter((s) => s.id !== event.step.id), event.step] }
+            case 'confirm':
+              return { ...now, confirmation: event.confirmation }
+            case 'confirm-done':
+              return now.confirmation?.id === event.id ? { ...now, confirmation: undefined } : now
+            case 'automation':
+              return { ...now, automation: event.automation }
+            case 'error':
+              return { ...now, error: event.message, working: false }
+            case 'done':
+            case 'aborted':
+              return { ...now, working: false }
+            default:
+              return now
+          }
+        })
+        if (event.type === 'done' || event.type === 'error' || event.type === 'aborted') {
+          off()
+          orbOff.current = null
+        }
+      })
+      orbOff.current = off
+
+      void window.api
+        .sendChat({
+          requestId,
+          model: currentRef.current.model,
+          // Left on so the main process still works out what the message is: turning it off skips that entirely, and
+          // with it the decision to read the open page. A browser task never becomes a picture request anyway.
+          images: true,
+          // The page in front travels with the request; without it "summarise this page" has no page.
+          browser: browserPageRef.current ?? undefined,
+          messages: [{ id: requestId, role: 'user', content: task, browserTask: true, createdAt: Date.now() }]
+        })
+        .catch(() => {
+          off()
+          orbOff.current = null
+          setOrbTask((now) => (now?.requestId === requestId ? { ...now, error: 'Orion could not be reached.', working: false } : now))
+        })
+    },
+    []
+  )
+  useEffect(() => () => orbOff.current?.(), [])
 
   /** Latest state of each running browser automation, by chat request, for the browser banner. */
   const [automations, setAutomations] = useState<Record<string, NonNullable<ChatMessage['automation']>>>({})
@@ -1148,39 +1230,41 @@ export default function App(): React.JSX.Element {
 
   const active = activeId ? conversations.find((c) => c.id === activeId) : undefined
   const current: DraftChat = active ? { model: active.model, incognito: Boolean(active.incognito) } : draft
+  currentRef.current = current
 
   // The floating browser assistant follows the current chat's latest reply: its steps, progress, approvals and summary.
-  const orbReply = active ? [...active.messages].reverse().find((m) => m.role === 'assistant') : undefined
-  const orbStream = active ? streams[active.id] : undefined
-  // A reply belongs to the browser when it did browser work or answers a request made from the orb (even with no actions).
-  const orbAsked = Boolean(orbReply && active?.messages[active.messages.indexOf(orbReply) - 1]?.browserTask)
+  /**
+   * What the browser's assistant is doing, which is its own affair.
+   *
+   * It used to put what somebody typed into it straight into the open Orbis Chat conversation, so asking the browser
+   * to summarise a page left a chat called "Summarize This Page" in the sidebar. The browser assistant and the chat
+   * are different places to be, and a question asked in one does not belong to the other.
+   *
+   * This is a standalone request: no conversation is made, nothing is written to the chat store, and the steps,
+   * confirmations and automation state come back on the request itself.
+   */
   const orbProps: BrowserOrbProps = {
-    working: Boolean(orbStream && orbReply && orbStream.messageId === orbReply.id),
-    status: orbStream?.status,
-    automation: orbReply?.automation,
-    steps: orbReply?.steps ?? [],
-    confirmation: orbReply?.confirmation,
-    summary:
-      orbReply && (orbReply.steps?.length || orbReply.automation || orbAsked)
-        ? (orbReply.error ?? orbReply.content).replace(/[#*_`>|]+/g, ' ').replace(/\s+/g, ' ').trim() || undefined
-        : undefined,
-    onPrompt: (text) => {
-      send(text, [], false, true)
-    },
+    working: Boolean(orbTask?.working),
+    status: orbTask?.status,
+    automation: orbTask?.automation,
+    steps: orbTask?.steps ?? [],
+    confirmation: orbTask?.confirmation,
+    summary: orbTask ? (orbTask.error ?? orbTask.content).replace(/[#*_`>|]+/g, ' ').replace(/\s+/g, ' ').trim() || undefined : undefined,
+    onPrompt: askBrowserOrion,
     onNotify: notify,
     onPause: () => {
-      if (orbReply) controlAutomation(orbReply.id, 'pause')
+      if (orbTask) void window.api.controlAutomation(orbTask.requestId, 'pause')
     },
     onStop: () => {
-      if (!active || !orbReply) return
-      if (automationActive(orbReply.automation)) controlAutomation(orbReply.id, 'stop')
-      else stop(active.id)
+      if (!orbTask) return
+      if (automationActive(orbTask.automation)) void window.api.controlAutomation(orbTask.requestId, 'stop')
+      else void window.api.abortChat(orbTask.requestId)
     },
     onResume: () => {
       send('Continue', [], true, true)
     },
     onAnswer: (confirmationId, approved) => {
-      if (orbReply) answerBrowserConfirmation(orbReply.id, confirmationId, approved)
+      if (orbTask) void window.api.answerBrowserConfirmation(orbTask.requestId, confirmationId, approved)
     }
   }
   const savedConversations = useMemo(() => conversations.filter((c) => !c.incognito), [conversations])
