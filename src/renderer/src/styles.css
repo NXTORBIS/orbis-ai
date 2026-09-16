@@ -12861,3 +12861,239 @@ html[data-motion='reduced'] .tool-btn.recording {
 .bsb-panel-body .ws-body {
   grid-template-columns: 220px 1fr;
 }
+
+/* ---------------------------------------------------------------- Orion, asking and asking again */
+
+/*
+ * A search that keeps its thread. The questions and answers run down the page, the sources found along the way are
+ * numbered once at the bottom, and the box to ask the next thing sits where you last looked.
+ *
+ * This is Orbis Search, not Orbis Chat: no conversation is made, and nothing here ever reaches the chat.
+ */
+.oorion {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.oorion-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.oorion-topic {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--faint);
+}
+
+.oorion-new {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.oorion-new:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.oorion-thread {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.oorion-question {
+  margin: 0 0 8px;
+  font-size: 17px;
+  font-weight: 500;
+  color: var(--text);
+  line-height: 1.45;
+}
+
+.oorion-answer {
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--glass-border);
+  background: var(--pill-bg-strong);
+}
+
+.oorion-answer h3 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--cyan);
+}
+
+.oorion-answer h3 small {
+  font-size: 10.5px;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--faint);
+}
+
+.oorion-answer p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text);
+  white-space: pre-wrap;
+}
+
+.oorion-sources {
+  padding-top: 14px;
+  border-top: 1px solid var(--line-strong);
+}
+
+.oorion-sources h4 {
+  margin: 0 0 8px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.oorion-sources ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 6px;
+}
+
+.oorion-sources button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.oorion-sources button:hover {
+  border-color: var(--glass-border);
+  background: var(--hover);
+}
+
+.oorion-number {
+  display: grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  flex: none;
+  border-radius: 5px;
+  background: var(--pill-bg-strong);
+  font-size: 10.5px;
+  color: var(--faint);
+}
+
+.oorion-source-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+
+.oorion-source-text b {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.oorion-source-text small {
+  font-size: 11px;
+  color: var(--faint);
+}
+
+/* The next question, where you last looked. */
+.oorion-ask {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  background: var(--pill-bg-strong);
+  backdrop-filter: blur(12px);
+}
+
+.oorion-ask textarea {
+  flex: 1;
+  min-width: 0;
+  max-height: 160px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+  resize: none;
+  outline: none;
+}
+
+.oorion-send,
+.oorion-mic {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+}
+
+.oorion-send {
+  background: var(--cyan-fill);
+  color: var(--cyan);
+}
+
+.oorion-send:disabled {
+  background: transparent;
+  color: var(--faint);
+  cursor: default;
+}
+
+.oorion-mic:hover,
+.oorion-send:not(:disabled):hover {
+  background: var(--hover-strong);
+  color: var(--text);
+}
+
+.oorion-mic.recording {
+  color: var(--danger, #ff6b6b);
+  background: color-mix(in srgb, var(--danger, #ff6b6b) 16%, transparent);
+}

@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowUpRight, FileBox, Image, MapPin, Mic, Music, Newspaper, Search, Sparkles, Square, Telescope, Users, Video } from 'lucide-react'
 import { useVoiceInput } from '../hooks/useVoiceInput'
 import MediaViewer, { ShareButton, SiteIcon } from './SearchMedia'
+const OrionSearchMode = lazy(() => import('./OrionSearchMode'))
 import type { NoticeKind } from '../App'
 import type { SearchVertical } from '../../../shared/orbisSearch'
 import { searchPageUrl, VERTICALS } from '../../../shared/orbisSearch'
@@ -113,6 +114,13 @@ export default function OrbisSearchPage({ query, vertical, at, onOpen, onAskOrio
   )
 
   useEffect(() => {
+    // Orion mode does its own asking and its own research; it is not a list of web results.
+    if (vertical === 'orion') {
+      setOutcome(null)
+      setSpecial(null)
+      setSearching(false)
+      return
+    }
     if (query.trim()) void run(query, vertical)
     else {
       setOutcome(null)
@@ -121,8 +129,10 @@ export default function OrbisSearchPage({ query, vertical, at, onOpen, onAskOrio
     }
   }, [query, vertical, run])
 
-  // Orion answers on its own page. The web results are the web results, with nothing written over the top of them.
-  const answer = vertical === 'orion' && outcome && outcome.results.length ? onAskOrion(outcome.query, outcome.results) : null
+  // Orion answers on its own page, as a session of its own. The web results are the web results, with nothing
+  // written over the top of them.
+  const answer = null as { text: string; done: boolean } | null
+  void onAskOrion
   const problem = outcome?.problem ?? special?.problem ?? null
 
   return (
@@ -184,9 +194,15 @@ export default function OrbisSearchPage({ query, vertical, at, onOpen, onAskOrio
       </header>
 
       <div className="osearch-body">
-        {searching && <p className="osearch-status view-muted">{vertical === 'all' ? 'Searching the web…' : `Searching ${VERTICAL_LABEL[vertical].toLowerCase()}…`}</p>}
+        {vertical === 'orion' && query.trim() && (
+          <Suspense fallback={<p className="osearch-status view-muted">Asking Orion…</p>}>
+            <OrionSearchMode query={query} onOpen={onOpen} onNotify={onNotify} />
+          </Suspense>
+        )}
 
-        {!searching && problem && <p className="osearch-status view-muted">{problem}</p>}
+        {vertical !== 'orion' && searching && <p className="osearch-status view-muted">{vertical === 'all' ? 'Searching the web…' : `Searching ${VERTICAL_LABEL[vertical].toLowerCase()}…`}</p>}
+
+        {vertical !== 'orion' && !searching && problem && <p className="osearch-status view-muted">{problem}</p>}
 
         {special && special.results.length > 0 && (
           <SpecializedResults outcome={special} onOpen={onOpen} onLook={look} onNotify={onNotify} />
