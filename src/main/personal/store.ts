@@ -15,11 +15,15 @@ export class JsonFile<T> {
   private timer: NodeJS.Timeout | null = null
   private dirty = false
 
-  constructor(
-    private readonly path: string,
-    private readonly fallback: () => T,
-    private readonly parse: (raw: unknown) => T
-  ) {}
+  private readonly path: string
+  private readonly fallback: () => T
+  private readonly parse: (raw: unknown) => T
+
+  constructor(path: string, fallback: () => T, parse: (raw: unknown) => T) {
+    this.path = path
+    this.fallback = fallback
+    this.parse = parse
+  }
 
   async read(): Promise<T> {
     if (this.value === null) {
@@ -63,11 +67,12 @@ export class Collection<T extends { id: string }> {
   private readonly file: JsonFile<T[]>
   private readonly listeners = new Set<() => void>()
 
-  constructor(
-    path: string,
-    private readonly normalize: (raw: unknown) => T | null,
-    private readonly limit = 5000
-  ) {
+  private readonly normalize: (raw: unknown) => T | null
+  private readonly limit: number
+
+  constructor(path: string, normalize: (raw: unknown) => T | null, limit = 5000) {
+    this.normalize = normalize
+    this.limit = limit
     this.file = new JsonFile<T[]>(
       path,
       () => [],

@@ -1,8 +1,9 @@
-import { safeStorage } from 'electron'
 import { promises as fs } from 'node:fs'
+import { nullPlatform } from '../platform.ts'
+import type { SecretStorePort } from '../platform'
 import { join } from 'node:path'
 import type { Workflow, WorkflowCheckpoint, WorkflowRunSummary, WorkflowVersion } from '../../shared/workflows'
-import { WORKFLOW_FORMAT } from '../../shared/workflows'
+import { WORKFLOW_FORMAT } from '../../shared/workflows.ts'
 
 export type { WorkflowCheckpoint, WorkflowVersion }
 
@@ -21,8 +22,15 @@ export class WorkflowStore {
   private cache: Map<string, Workflow> | null = null
   private runsCache: WorkflowRunSummary[] | null = null
 
-  constructor(userData: string) {
+  /**
+   * Secrets are kept only where the machine can encrypt them. Which machine that is — Electron's today, Chromium's
+   * tomorrow — is handed in rather than imported, so this file stays free of either.
+   */
+  private readonly secretStore: SecretStorePort
+
+  constructor(userData: string, secretStore: SecretStorePort = nullPlatform().secrets) {
     this.dir = join(userData, 'workflows')
+    this.secretStore = secretStore
   }
 
   private file(...parts: string[]): string {
@@ -147,21 +155,21 @@ export class WorkflowStore {
   }
 
   canRememberSecrets(): boolean {
-    return safeStorage.isEncryptionAvailable()
+    return this.secretStore.available()
   }
 
   async rememberSecret(workflowId: string, name: string, value: string): Promise<void> {
-    if (!safeStorage.isEncryptionAvailable()) throw new Error("This computer can't encrypt stored secrets, so Orbis won't keep them. Enter them each run.")
+    if (!this.secretStore.available()) throw new Error("This computer can't encrypt stored secrets, so Orbis won't keep them. Enter them each run.")
     const all = await this.secrets()
-    all[`${workflowId}:${name}`] = safeStorage.encryptString(value).toString('base64')
+    all[`${workflowId}:${name}`] = this.secretStore.encrypt(value).toString('base64')
     await this.write(this.file('secrets.json'), all)
   }
 
   async secret(workflowId: string, name: string): Promise<string | null> {
     const stored = (await this.secrets())[`${workflowId}:${name}`]
-    if (!stored || !safeStorage.isEncryptionAvailable()) return null
+    if (!stored || !this.secretStore.available()) return null
     try {
-      return safeStorage.decryptString(Buffer.from(stored, 'base64'))
+      return this.secretStore.decrypt(Buffer.from(stored, 'base64'))
     } catch {
       return null
     }

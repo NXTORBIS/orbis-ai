@@ -1,8 +1,8 @@
-import { clipboard, ClipboardItem, nativeImage } from 'electron'
 import { join } from 'node:path'
-import type { ClipboardSettings, ClipItem, ClipKind } from '../../shared/clipboardHistory'
-import { addClip, clipKind, clipPreview, DEFAULT_CLIPBOARD_SETTINGS, MAX_CLIP_IMAGE_BYTES, normalizeClip, normalizeClipboardSettings, pruneClips, searchClips, shouldCapture } from '../../shared/clipboardHistory'
-import { Collection, JsonFile } from './store'
+import type { ClipboardPort } from '../platform.ts'
+import type { ClipboardSettings, ClipItem, ClipKind } from '../../shared/clipboardHistory.ts'
+import { addClip, clipKind, clipPreview, DEFAULT_CLIPBOARD_SETTINGS, MAX_CLIP_IMAGE_BYTES, normalizeClip, normalizeClipboardSettings, pruneClips, searchClips, shouldCapture } from '../../shared/clipboardHistory.ts'
+import { Collection, JsonFile } from './store.ts'
 
 export interface ClipboardContext {
   /** Whether the page in front is a private tab, and which page it is, so copies can be attributed or skipped. */
@@ -13,6 +13,10 @@ export interface ClipboardContext {
 
 export interface ClipboardHistoryOptions {
   userData: string
+  /** The clipboard itself, and how to measure a picture on it. Named rather than imported, so this file knows
+   * nothing about which browser engine Orbis is built on. */
+  clipboard: ClipboardPort
+  imageSize?(bytes: Uint8Array): { width: number; height: number } | null
   /** Whether Orbis is the app in front: it is watched closely then, and only loosely otherwise. */
   isActive(): boolean
   context(): ClipboardContext
@@ -39,9 +43,12 @@ export class ClipboardHistory {
   private paused = false
   private lastSkip: string | null = null
 
-  constructor(private readonly o: ClipboardHistoryOptions) {
-    this.clips = new Collection<ClipItem>(join(o.userData, 'personal', 'clipboard.json'), normalizeClip, 2000)
-    this.settingsFile = new JsonFile<ClipboardSettings>(join(o.userData, 'personal', 'clipboard-settings.json'), () => ({ ...DEFAULT_CLIPBOARD_SETTINGS }), normalizeClipboardSettings)
+  private readonly o: ClipboardHistoryOptions
+
+  constructor(options: ClipboardHistoryOptions) {
+    this.o = options
+    this.clips = new Collection<ClipItem>(join(options.userData, 'personal', 'clipboard.json'), normalizeClip, 2000)
+    this.settingsFile = new JsonFile<ClipboardSettings>(join(options.userData, 'personal', 'clipboard-settings.json'), () => ({ ...DEFAULT_CLIPBOARD_SETTINGS }), normalizeClipboardSettings)
   }
 
   onChange(listener: () => void): () => void {
@@ -70,7 +77,7 @@ export class ClipboardHistory {
   private schedule(): void {
     if (this.timer) clearTimeout(this.timer)
     this.timer = setTimeout(() => {
-      void this.tick().finally(() => this.schedule())
+      void this.check().finally(() => this.schedule())
     }, this.o.isActive() ? POLL_MS : IDLE_POLL_MS)
     this.timer.unref?.()
   }
@@ -111,32 +118,28 @@ export class ClipboardHistory {
   }
 
   private async signature(): Promise<string | null> {
-    const text = await clipboard.readText().catch(() => '')
+    const text = await this.o.clipboard.readText().catch(() => '')
     if (text) return `text:${text}`
     const image = await this.readImage()
     return image ? `image:${image.dataUrl.length}:${image.dataUrl.slice(-64)}` : null
   }
 
   private async readImage(): Promise<{ dataUrl: string; width: number; height: number; bytes: number } | null> {
-    try {
-      for (const item of await clipboard.read()) {
-        const type = item.types.find((t) => t === 'image/png' || t === 'image/jpeg')
-        if (!type) continue
-        const blob = (await item.getType(type)) as Blob | null
-        if (!blob) continue
-        const buffer = Buffer.from(await blob.arrayBuffer())
-        if (!buffer.length || buffer.length > MAX_CLIP_IMAGE_BYTES) return null
-        const image = nativeImage.createFromBuffer(buffer)
-        const size = image.getSize()
-        return { dataUrl: `data:${type};base64,${buffer.toString('base64')}`, width: size.width, height: size.height, bytes: buffer.length }
-      }
-    } catch {
-      // Nothing readable on the clipboard.
+    const image = await this.o.clipboard.readImage().catch(() => null)
+    if (!image || (image.type !== 'image/png' && image.type !== 'image/jpeg')) return null
+    const buffer = Buffer.from(image.bytes)
+    if (!buffer.length || buffer.length > MAX_CLIP_IMAGE_BYTES) return null
+    const size = this.o.imageSize?.(image.bytes) ?? null
+    return {
+      dataUrl: `data:${image.type};base64,${buffer.toString('base64')}`,
+      width: size?.width ?? 0,
+      height: size?.height ?? 0,
+      bytes: buffer.length
     }
-    return null
   }
 
-  private async tick(): Promise<void> {
+  /** Looks at the clipboard once, now. The timer calls this; so does anything that knows something was copied. */
+  async check(): Promise<void> {
     if (this.paused) return
     const settings = await this.settings()
     if (!settings.enabled) return
@@ -194,10 +197,10 @@ export class ClipboardHistory {
     if (item.kind === 'image') {
       const base64 = item.content.slice(item.content.indexOf(',') + 1)
       const type = item.content.slice(5, item.content.indexOf(';')) || 'image/png'
-      await clipboard.write([new ClipboardItem({ [type]: new Blob([new Uint8Array(Buffer.from(base64, 'base64'))], { type }) })])
+      await this.o.clipboard.writeImage({ type, bytes: new Uint8Array(Buffer.from(base64, 'base64')) })
       this.ownWrite = `image:${item.content.length}:${item.content.slice(-64)}`
     } else {
-      await clipboard.writeText(item.content)
+      await this.o.clipboard.writeText(item.content)
       this.ownWrite = `text:${item.content}`
     }
     this.lastSeen = this.ownWrite
