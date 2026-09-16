@@ -2,7 +2,8 @@ import { app, clipboard, dialog, ipcMain, Menu, shell, webContents } from 'elect
 import type { BrowserWindow, MenuItemConstructorOptions, Session, WebContents } from 'electron'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import type { BrowserDownload, BrowserPermissionRequest, BrowserShortcutEvent } from '../shared/types'
+import type { BrowserDownload, BrowserPermissionRequest, BrowserShortcutEvent, DeviceRequest } from '../shared/types'
+import { DeviceChooser } from './deviceChooser'
 import { BrowserLibrary, uniqueDownloadName } from './browserLibrary'
 import { decideShortcut, isAutomatedInput } from './browserShortcuts'
 import type { KeyInput } from './browserShortcuts'
@@ -20,6 +21,13 @@ const originOf = (url: string): string => {
 
 /** Always allowed: harmless for any site. */
 const ALWAYS_ALLOWED = new Set(['fullscreen', 'clipboard-sanitized-write'])
+
+/**
+ * Asking to pick a device is allowed; reaching one is not. Chromium checks this before it will even offer the chooser,
+ * so refusing here means a site is turned away with "no device selected" and no explanation. What a site may actually
+ * touch is decided by the chooser the user answers, and enforced by the device permission handler.
+ */
+const MAY_CHOOSE_A_DEVICE = new Set(['usb', 'hid', 'serial'])
 
 /** Asked about, in plain words. Anything else a site requests is denied. */
 const ASKABLE: Record<string, string> = {
@@ -59,6 +67,45 @@ export interface BrowserIntegrationOptions {
  * downloads, site permissions, saving pages and fullscreen.
  */
 export class BrowserIntegration {
+  /**
+   * Choosing a USB, HID, serial or Bluetooth device for a page. Without this every such request is refused out of
+   * hand and the site looks broken for no visible reason.
+   */
+  readonly devices = new DeviceChooser({
+    canAsk: (contents) => {
+      const win = this.o.getWindow()
+      return Boolean(win && contents && contents.hostWebContents === win.webContents)
+    },
+    ask: (request) =>
+      new Promise<string | null>((resolve) => {
+        let answered = false
+        const answer = (deviceId: string | null): void => {
+          if (answered) return
+          answered = true
+          this.deviceWaiters.delete(request.id)
+          this.pendingDevices.delete(request.id)
+          resolve(deviceId)
+          // The chooser goes away however it was answered.
+          this.send('browser:device-answered', request.id)
+        }
+        this.deviceWaiters.set(request.id, answer)
+        this.pendingDevices.set(request.id, request)
+        this.send('browser:device-request', request)
+        // A chooser nobody answers cancels, so the page is not left waiting for ever.
+        setTimeout(() => answer(null), 120_000)
+      })
+  })
+  private readonly deviceWaiters = new Map<string, (deviceId: string | null) => void>()
+  private readonly pendingDevices = new Map<string, DeviceRequest>()
+
+  /** The window's answer to a device chooser. */
+  answerDevice(id: string, deviceId: string | null): boolean {
+    const waiter = this.deviceWaiters.get(id)
+    if (!waiter) return false
+    waiter(deviceId)
+    return true
+  }
+
   private readonly o: BrowserIntegrationOptions
   /** The browser (or its URL bar) has focus in the Orbis window, as the window reports it. */
   private browserFocused = false
@@ -119,6 +166,7 @@ export class BrowserIntegration {
 
   /** A browser tab's page. */
   attachGuest(contents: WebContents): void {
+    this.devices.attach(contents)
     contents.on('before-input-event', (event, input) => {
       if (!isAutomatedInput(contents.id)) this.route(event, input, contents.id)
     })
@@ -254,6 +302,7 @@ export class BrowserIntegration {
    * Private tabs' in-memory session asks every time: it never reads or saves remembered permissions.
    */
   setupSession(session: Session = this.o.session): void {
+    this.devices.wire(session)
     const { library } = this.o
     const remembers = session.isPersistent()
     session.on('will-download', (_event, item) => {
@@ -312,7 +361,7 @@ export class BrowserIntegration {
       setTimeout(() => answer(false, false), 120_000)
     })
     session.setPermissionCheckHandler((_contents, permission, requestingOrigin) => {
-      if (ALWAYS_ALLOWED.has(permission)) return true
+      if (ALWAYS_ALLOWED.has(permission) || MAY_CHOOSE_A_DEVICE.has(permission)) return true
       return remembers && library.permission(originOf(requestingOrigin), permission) === 'allow'
     })
   }
@@ -398,6 +447,11 @@ export class BrowserIntegration {
     ipcMain.handle('browser:permission-answer', (_e, id: unknown, allow: unknown, remember: unknown) => {
       if (typeof id === 'string') this.permissionWaiters.get(id)?.(allow === true, remember === true)
     })
+    ipcMain.handle('browser:device-answer', (_e, id: unknown, deviceId: unknown) => {
+      if (typeof id !== 'string') return false
+      return this.answerDevice(id, typeof deviceId === 'string' && deviceId ? deviceId : null)
+    })
+    ipcMain.handle('browser:pending-devices', () => [...this.pendingDevices.values()])
     ipcMain.handle('browser:save-page', (_e, webContentsId: unknown) => {
       const contents = typeof webContentsId === 'number' ? webContents.fromId(webContentsId) : undefined
       return contents && !contents.isDestroyed() ? this.savePage(contents) : false

@@ -337,6 +337,25 @@ export interface AdBlockListInfo {
   source: 'bundled' | 'downloaded'
 }
 
+export type DeviceKind = 'usb' | 'hid' | 'serial' | 'bluetooth'
+
+export interface DeviceChoice {
+  id: string
+  name: string
+  /** Who made it, its serial number, where it is plugged in — whatever the device says about itself. */
+  detail: string
+}
+
+/** A site asking to use a device, waiting for you to pick one or say no. */
+export interface DeviceRequest {
+  id: string
+  origin: string
+  kind: DeviceKind
+  /** What the site is asking for, in plain words. */
+  label: string
+  devices: DeviceChoice[]
+}
+
 export interface NoticeEntry {
   name: string
   version: string
@@ -678,6 +697,10 @@ export interface NxtorbisApi {
   onSettingsChanged(listener: (settings: Settings) => void): () => void
   /** A site's permission request was answered (from the prompt or through the control layer). */
   onBrowserPermissionAnswered(listener: (id: string) => void): () => void
+  /** A site is asking to use a device: the window shows the list and the user picks one, or none. */
+  onDeviceRequest(listener: (request: DeviceRequest) => void): () => void
+  onDeviceAnswered(listener: (id: string) => void): () => void
+  answerDeviceRequest(id: string, deviceId: string | null): Promise<boolean>
 
   // Orbis Browser Control Layer
   /** What Orbis can do right now. */

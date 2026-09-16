@@ -36,7 +36,7 @@ import {
   ZoomOut
 } from 'lucide-react'
 import type { NoticeKind } from '../App'
-import type { BrowserPermissionRequest, BrowserShortcutEvent } from '../../../shared/types'
+import type { BrowserPermissionRequest, BrowserShortcutEvent, DeviceRequest } from '../../../shared/types'
 import BrowserLibraryPanel from './BrowserLibraryPanel'
 import type { ClosedTab, LibraryTab } from './BrowserLibraryPanel'
 import { copyText, newId } from '../lib/utils'
@@ -51,6 +51,8 @@ import { toUrl } from '../../../shared/omnibox'
 import TabContextMenu, { TabEditDialog } from './TabContextMenu'
 import ShortcutsGrid from './ShortcutsGrid'
 import WidgetHost, { useWidgets } from './widgets/WidgetHost'
+// Only ever seen when a site asks for a device, so it is fetched then rather than at startup.
+const DeviceChooser = lazy(() => import('./DeviceChooser'))
 import ExtensionsToolbar from './ExtensionsToolbar'
 import ExtensionPrompts from './ExtensionPrompts'
 import type { ExtensionWindowRequest, ReportedBrowserTab } from '../../../shared/types'
@@ -346,6 +348,7 @@ export default function BrowserPanel({
   const [library, setLibrary] = useState<LibraryTab | null>(null)
   /** Sites waiting for an answer to a permission request, oldest first. */
   const [permissions, setPermissions] = useState<BrowserPermissionRequest[]>([])
+  const [deviceRequest, setDeviceRequest] = useState<DeviceRequest | null>(null)
   const [rememberPermission, setRememberPermission] = useState(false)
   /** A page went fullscreen (a video, say): the page fills the window. */
   const [htmlFullscreen, setHtmlFullscreen] = useState(false)
@@ -639,6 +642,17 @@ export default function BrowserPanel({
       window.api.setBrowserFocus(false)
     }
   }, [hidden])
+
+  // A site asking to use a device it can see. A second request while one is open replaces it, which is how Bluetooth
+  // arrives: Chromium asks again each time it finds another device.
+  useEffect(() => {
+    const off = window.api.onDeviceRequest((request) => setDeviceRequest(request))
+    const offAnswered = window.api.onDeviceAnswered((id) => setDeviceRequest((current) => (current?.id === id ? null : current)))
+    return () => {
+      off()
+      offAnswered()
+    }
+  }, [])
 
   useEffect(
     () =>
@@ -2562,6 +2576,17 @@ export default function BrowserPanel({
               <X size={13} />
             </button>
           </div>
+        )}
+        {deviceRequest && (
+          <Suspense fallback={null}>
+            <DeviceChooser
+              request={deviceRequest}
+              onAnswer={(deviceId) => {
+                void window.api.answerDeviceRequest(deviceRequest.id, deviceId)
+                setDeviceRequest(null)
+              }}
+            />
+          </Suspense>
         )}
         {permissions[0] && (
           <div className="browser-permission" role="alertdialog" aria-label="Site permission request">
