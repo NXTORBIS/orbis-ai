@@ -16,8 +16,6 @@ import {
   Globe,
   HatGlasses,
   LoaderCircle,
-  Maximize2,
-  Minimize2,
   MousePointer2,
   PanelRight,
   Pencil,
@@ -1268,12 +1266,6 @@ export default function BrowserPanel({
     window.addEventListener('pointerup', up)
   }
 
-  const toggleFullPage = (): void => {
-    if (mode === 'full') return onModeChange(restoreMode.current)
-    restoreMode.current = mode
-    onModeChange('full')
-  }
-
   const menuAction = (action: () => void): (() => void) => () => {
     action()
     setMenuOpen(false)
@@ -2500,18 +2492,6 @@ export default function BrowserPanel({
             onClick={() => void window.api.popOutBrowser(active.url)}
           >
             <PictureInPicture2 size={16} />
-          </button>
-          <button
-            type="button"
-            className="b-icon"
-            aria-label={mode === 'full' ? 'Exit full page' : 'Full page'}
-            title={mode === 'full' ? 'Exit full page' : 'Full page'}
-            onClick={toggleFullPage}
-          >
-            {mode === 'full' ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
-          </button>
-          <button type="button" className="b-icon" aria-label="Close browser" title="Close" onClick={onClose}>
-            <X size={17} />
           </button>
         </div>
       </div>

@@ -226,13 +226,16 @@ export default function UrlBar({
   const [copied, setCopied] = useState(false)
   /** The Workflows button's panel, and how many workflow runs are going on right now (shown on the button). */
   const [workflowsOpen, setWorkflowsOpen] = useState(false)
+  /** Where the Workflows button was when it was pressed, so its panel hangs from it wherever the browser sits. */
+  const [workflowsAnchor, setWorkflowsAnchor] = useState<{ left: number; right: number; bottom: number } | null>(null)
   const [runningWorkflows, setRunningWorkflows] = useState(0)
   const [recordingWorkflow, setRecordingWorkflow] = useState(false)
   const workflowsRef = useRef<HTMLDivElement>(null)
+  const workflowsPanelRef = useRef<HTMLDivElement>(null)
   /** Half-typed text per tab, kept until it is submitted, dismissed with Esc, or the tab navigates elsewhere. */
   const drafts = useRef(new Map<string, string>())
 
-  useDismiss(workflowsRef, workflowsOpen, () => setWorkflowsOpen(false))
+  useDismiss([workflowsRef, workflowsPanelRef], workflowsOpen, () => setWorkflowsOpen(false))
 
   // How many workflows are running, for the button's badge: counted when something actually changes.
   useEffect(() => {
@@ -705,14 +708,18 @@ export default function UrlBar({
             aria-haspopup="dialog"
             aria-expanded={workflowsOpen}
             title={recordingWorkflow ? 'Workflows: recording what you do' : runningWorkflows ? `Workflows (${runningWorkflows} running)` : 'Workflows: run, record, manage'}
-            onClick={() => setWorkflowsOpen((open) => !open)}
+            onClick={(e) => {
+              const box = e.currentTarget.getBoundingClientRect()
+              setWorkflowsAnchor({ left: box.left, right: box.right, bottom: box.bottom })
+              setWorkflowsOpen((open) => !open)
+            }}
           >
             <WorkflowIcon size={14} aria-hidden="true" />
             {(runningWorkflows > 0 || recordingWorkflow) && <span className={`url-workflows-badge${recordingWorkflow ? ' recording' : ''}`} aria-hidden="true" />}
           </button>
-          {workflowsOpen && (
+          {workflowsOpen && workflowsAnchor && (
             <Suspense fallback={null}>
-              <WorkflowQuickPanel url={url} onClose={() => setWorkflowsOpen(false)} onOpenLibrary={() => onOpenWorkflows?.()} onNotify={onNotify} />
+              <WorkflowQuickPanel url={url} anchor={workflowsAnchor} panelRef={workflowsPanelRef} onClose={() => setWorkflowsOpen(false)} onOpenLibrary={() => onOpenWorkflows?.()} onNotify={onNotify} />
             </Suspense>
           )}
         </div>

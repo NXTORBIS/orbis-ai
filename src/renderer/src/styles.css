@@ -8598,13 +8598,12 @@ html[data-browser-immersive] .hud.browser-full .url-strip:focus-within {
 }
 
 .wf-quick {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  z-index: 40;
-  width: 340px;
-  max-height: 460px;
+  /* Placed in window coordinates by the panel itself, so nothing around the address bar can clip it. */
+  position: fixed;
+  z-index: 60;
+  width: min(340px, calc(100vw - 16px));
   overflow: auto;
+  overscroll-behavior: contain;
   padding: 10px;
   border-radius: 14px;
   display: flex;
@@ -10798,4 +10797,38 @@ html[data-density] .wg-card {
   color: var(--danger);
   font-size: 11px;
   line-height: 1.5;
+}
+
+/* The Workflows panel is narrow: every row keeps its buttons and trims its text rather than pushing past the edge. */
+.wf-quick-run,
+.wf-quick-item,
+.wf-quick-foot {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.wf-quick-run .wf-status,
+.wf-quick-run-actions,
+.wf-quick-item > svg {
+  flex: 0 0 auto;
+}
+
+.wf-quick-run > .wf-muted {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.wf-quick-item-main {
+  min-width: 0;
+}
+
+.wf-quick-tag {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wf-quick-foot {
+  flex-wrap: wrap;
 }

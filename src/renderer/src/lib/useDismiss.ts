@@ -25,15 +25,20 @@ export function useDropdownOpen(active: boolean): void {
  * (including the window's drag areas), inside a browser page (which the window's document never sees, so the main
  * process reports it), or outside Orbis. Escape dismisses too.
  */
-export function useDismiss(ref: RefObject<HTMLElement | null>, active: boolean, onDismiss: () => void): void {
+export function useDismiss(ref: RefObject<HTMLElement | null> | RefObject<HTMLElement | null>[], active: boolean, onDismiss: () => void): void {
   const dismissRef = useRef(onDismiss)
   dismissRef.current = onDismiss
+  // A panel rendered at the top of the HUD is not inside its own button, so a dropdown can name every part of itself.
+  const parts = Array.isArray(ref) ? ref : [ref]
+  const partsRef = useRef(parts)
+  partsRef.current = parts
   useDropdownOpen(active)
   useEffect(() => {
     if (!active) return
     const dismiss = (): void => dismissRef.current()
     const onMouseDown = (e: MouseEvent): void => {
-      if (ref.current && !ref.current.contains(e.target as Node)) dismiss()
+      const known = partsRef.current.filter((part) => part.current)
+      if (known.length && !known.some((part) => part.current!.contains(e.target as Node))) dismiss()
     }
     const onKeyDown = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') dismiss()
@@ -48,5 +53,5 @@ export function useDismiss(ref: RefObject<HTMLElement | null>, active: boolean, 
       window.removeEventListener('blur', dismiss)
       stopPagePointer?.()
     }
-  }, [ref, active])
+  }, [active])
 }

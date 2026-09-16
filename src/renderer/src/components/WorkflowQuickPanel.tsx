@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import type { ReactNode, RefObject } from 'react'
+import { createPortal } from 'react-dom'
 import { CircleStop, Dot, LoaderCircle, Pause, Play, Plus, Radio, Search, Settings2, Square } from 'lucide-react'
 import type { ActiveWorkflowRun, Workflow, WorkflowLibrary } from '../../../shared/workflows'
 import type { NoticeKind } from '../App'
@@ -16,12 +18,32 @@ const STATUS_LABEL: Record<string, string> = {
   stopped: 'Stopped'
 }
 
+/** Rendered at the top of the HUD, so nothing around the address bar can clip the panel or sit over it. */
+const toTop = (node: ReactNode): React.JSX.Element => createPortal(node, document.querySelector('.hud') ?? document.body) as React.JSX.Element
+
 /**
  * The Workflows button's panel, next to the address bar: the workflows you can run on the page you are on, whatever is
  * running right now, and a way to record a new one — without leaving the page. Everything else lives in the full
  * Workflows screen.
  */
-export default function WorkflowQuickPanel({ url, onOpenLibrary, onClose, onNotify }: { url: string; onOpenLibrary(): void; onClose(): void; onNotify(message: string, kind?: NoticeKind): void }): React.JSX.Element {
+export default function WorkflowQuickPanel({
+  url,
+  anchor,
+  panelRef,
+  onOpenLibrary,
+  onClose,
+  onNotify
+}: {
+  url: string
+  /** Where the Workflows button is on screen, so the panel can hang from it and still stay inside the window. */
+  anchor: { left: number; right: number; bottom: number }
+  /** Held by whoever opened the panel, so a click inside it is not mistaken for a click somewhere else. */
+  panelRef: RefObject<HTMLDivElement | null>
+  onOpenLibrary(): void
+  onClose(): void
+  onNotify(message: string, kind?: NoticeKind): void
+}): React.JSX.Element {
+  const [place, setPlace] = useState<{ left: number; top: number; maxHeight: number } | null>(null)
   const [library, setLibrary] = useState<WorkflowLibrary>(EMPTY)
   const [query, setQuery] = useState('')
   const [asking, setAsking] = useState<Workflow | null>(null)
@@ -67,6 +89,29 @@ export default function WorkflowQuickPanel({ url, onOpenLibrary, onClose, onNoti
 
   const control = (run: ActiveWorkflowRun, action: 'pause' | 'resume' | 'stop'): void => void window.api.controlWorkflowRun(run.runId, action)
 
+  /**
+   * Hangs the panel under the button and keeps every edge inside the window: it lines up with the button's right-hand
+   * side where there is room, slides in where there is not, and is never taller than the space below it.
+   */
+  useLayoutEffect(() => {
+    const panel = panelRef.current
+    if (!panel) return
+    const measure = (): void => {
+      const width = panel.offsetWidth
+      const gap = 8
+      const margin = 8
+      const top = anchor.bottom + gap
+      setPlace({
+        left: Math.max(margin, Math.min(anchor.right - width, window.innerWidth - width - margin)),
+        top: Math.min(top, Math.max(margin, window.innerHeight - margin - 120)),
+        maxHeight: Math.max(160, window.innerHeight - top - margin)
+      })
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [anchor.bottom, anchor.right, asking])
+
   const stopAndSave = async (): Promise<void> => {
     const suggested = `${host || 'Recording'} ${new Date().toLocaleString([], { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}`
     const saved = await window.api.saveWorkflowRecording(suggested)
@@ -74,8 +119,14 @@ export default function WorkflowQuickPanel({ url, onOpenLibrary, onClose, onNoti
   }
 
   if (asking) {
-    return (
-      <div className="wf-quick popover glass" role="dialog" aria-label={`Run ${asking.name}`}>
+    return toTop(
+      <div
+        ref={panelRef}
+        className="wf-quick popover glass"
+        role="dialog"
+        aria-label={`Run ${asking.name}`}
+        style={place ? { left: place.left, top: place.top, maxHeight: place.maxHeight } : { visibility: 'hidden' }}
+      >
         <RunDialog
           workflow={asking}
           debug={false}
@@ -90,8 +141,14 @@ export default function WorkflowQuickPanel({ url, onOpenLibrary, onClose, onNoti
     )
   }
 
-  return (
-    <div className="wf-quick popover glass" role="dialog" aria-label="Workflows">
+  return toTop(
+    <div
+      ref={panelRef}
+      className="wf-quick popover glass"
+      role="dialog"
+      aria-label="Workflows"
+      style={place ? { left: place.left, top: place.top, maxHeight: place.maxHeight } : { visibility: 'hidden' }}
+    >
       <header className="wf-quick-head">
         <label className="wf-quick-search">
           <Search size={13} aria-hidden="true" />
