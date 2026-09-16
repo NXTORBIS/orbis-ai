@@ -69,6 +69,8 @@ test('the map does not describe channels that no longer exist', async () => {
 test('the boundary is a known size, so the migration can be estimated rather than guessed', async () => {
   const code = await channelsInCode()
   assert.ok(code.length > 50, 'the boundary should be substantial; if this drops sharply, something was deleted by accident')
-  // A ceiling as well as a floor: the boundary should shrink as the migration goes, never grow.
-  assert.ok(code.length <= 110, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
+  // A ceiling as well as a floor: the boundary should shrink as the migration goes, never grow by accident.
+  // Raised deliberately for the specialized search provider, the reading list and saved pages, the browser sidebar,
+  // and asking the system which browser opens links. Each is written down in the map above.
+  assert.ok(code.length <= 118, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
 })

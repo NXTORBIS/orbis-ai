@@ -31,6 +31,9 @@ const BROWSER_LAYER = new Set([
   'main/browserControl/uiCapabilities.ts',
   'main/browserControl/window.ts',
   'main/browserIntegration.ts',
+  // Registering Orbis as a browser and opening the system's chooser. Chromium does exactly this in shell_integration,
+  // and by then Orbis is an application Windows already knows about.
+  'main/defaultBrowser.ts',
   'main/deviceChooser.ts',
   'main/extensions/bridge.ts',
   'main/extensions/manager.ts',

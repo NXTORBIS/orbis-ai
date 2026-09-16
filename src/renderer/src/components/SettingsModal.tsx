@@ -1,6 +1,6 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { X } from 'lucide-react'
-import type { Settings, SettingsUpdate, Theme } from '../../../shared/types'
+import type { DefaultBrowserState, Settings, SettingsUpdate, Theme } from '../../../shared/types'
 import { MODELS } from '../../../shared/models'
 import AccountSection from './AccountSection'
 
@@ -81,6 +81,8 @@ export default function SettingsModal({ settings, onUpdate, onClose }: Props): R
 
         <div className="modal-body">
           <AccountSection />
+
+          <DefaultBrowserSetting />
 
           <section className="setting">
             <div className="setting-label">
@@ -215,5 +217,55 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange(value: boole
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
       <span />
     </label>
+  )
+}
+
+/**
+ * Whether Orbis is the browser this computer opens links with.
+ *
+ * Windows decides this, not Orbis: since Windows 10 an application can register itself as able to open links and can
+ * open the page where the choice is made, but it cannot make the choice. So this says what the system says, opens the
+ * chooser, and asks the system again afterwards — it never reports a change it has not been told about.
+ */
+function DefaultBrowserSetting(): React.JSX.Element | null {
+  const [state, setState] = useState<DefaultBrowserState | null>(null)
+  const [asking, setAsking] = useState(false)
+
+  const look = useCallback(() => void window.api.defaultBrowserState().then(setState), [])
+
+  useEffect(() => {
+    look()
+    // Coming back to Orbis is when the answer is most likely to have changed.
+    const onFocus = (): void => look()
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [look])
+
+  if (!state) return null
+
+  const ask = async (): Promise<void> => {
+    setAsking(true)
+    try {
+      setState(await window.api.requestDefaultBrowser())
+    } finally {
+      setAsking(false)
+    }
+  }
+
+  return (
+    <section className="setting row">
+      <div className="setting-label">
+        <h3>Default browser</h3>
+        <p>{state.isDefault ? 'Links from other apps open in Orbis.' : (state.why ?? 'Links from other apps open somewhere else.')}</p>
+      </div>
+      <div className="setting-action">
+        <span className={`default-browser-state${state.isDefault ? ' on' : ''}`}>{state.isDefault ? 'Orbis is your default browser' : 'Not default browser'}</span>
+        {!state.isDefault && state.canAsk && (
+          <button type="button" className="queue-btn primary" disabled={asking} onClick={() => void ask()}>
+            {asking ? 'Waiting for Windows…' : 'Set Orbis as default'}
+          </button>
+        )}
+      </div>
+    </section>
   )
 }

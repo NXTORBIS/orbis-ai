@@ -14,6 +14,14 @@ import type { ControlLogEntryView } from './browserControlView'
 import type { SidebarLayout } from './browserSidebar'
 import type { SpecializedOutcome } from './searchProviders'
 import type { VoiceErrorCode, VoiceModel } from './voiceInput'
+
+/** What the system says about which browser opens links. */
+export interface DefaultBrowserState {
+  isDefault: boolean
+  /** Whether Orbis can ask at all; false in a development run, where there is no installed application to choose. */
+  canAsk: boolean
+  why?: string
+}
 import type { RunControl as WorkflowRunControl, StepRecord } from './browserControl'
 import type { ActiveWorkflowRun, RecordingState, Workflow, WorkflowIssue, WorkflowLibrary, WorkflowRunResult, WorkflowRunSummary, WorkflowVersion } from './workflows'
 import type { Note, NoteFilter } from './notes'
@@ -642,6 +650,11 @@ export interface NxtorbisApi {
   getCpuUsage(): Promise<number>
   pickTextFiles(): Promise<PickedFiles>
   pickImages(): Promise<PickedFiles>
+  /** Whether Orbis is the browser this computer opens links with, as the system reports it. */
+  defaultBrowserState(): Promise<DefaultBrowserState>
+  /** Registers Orbis as able to open links and opens the system's chooser; resolves what the system says afterwards. */
+  requestDefaultBrowser(): Promise<DefaultBrowserState>
+  openDefaultAppsSettings(): Promise<boolean>
   /**
    * The words in a recording. Rejects with { code, message } saying why when it cannot: a microphone problem, a
    * refusal, silence, or the service being unreachable. It never answers with words nobody said.

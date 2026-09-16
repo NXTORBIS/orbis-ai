@@ -13097,3 +13097,57 @@ html[data-motion='reduced'] .tool-btn.recording {
   color: var(--danger, #ff6b6b);
   background: color-mix(in srgb, var(--danger, #ff6b6b) 16%, transparent);
 }
+
+/* ---------------------------------------------------------------- the orb on a new tab */
+
+/*
+ * The same orb as everywhere else in Orbis, given the room a new tab has: the same mark, the same glow, the same slow
+ * drift. It is a button, because the first thing anybody does on a new tab is go to the address bar.
+ */
+.newtab-orb {
+  display: grid;
+  place-items: center;
+  width: 128px;
+  height: 128px;
+  padding: 0;
+  border: 1px solid var(--cyan-dim);
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, rgba(63, 216, 255, 0.24), rgba(6, 10, 16, 0.9) 70%);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.45), 0 0 44px rgba(63, 216, 255, 0.22);
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  animation: orb-float 4s ease-in-out infinite;
+}
+
+.newtab-orb:hover {
+  transform: scale(1.04);
+  border-color: var(--cyan);
+  box-shadow: 0 20px 70px rgba(0, 0, 0, 0.5), 0 0 60px rgba(63, 216, 255, 0.36);
+}
+
+.newtab-orb:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 4px;
+}
+
+/* A tab nobody is looking at does not need to be animating, and neither does a window that asked for less motion. */
+.browser-view:not(.active) ~ .browser-newtab .newtab-orb,
+html[data-motion='reduced'] .newtab-orb {
+  animation: none;
+}
+
+/* Whether Orbis opens this computer's links. */
+.setting-action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.default-browser-state {
+  font-size: 12.5px;
+  color: var(--faint);
+}
+
+.default-browser-state.on {
+  color: var(--cyan);
+}

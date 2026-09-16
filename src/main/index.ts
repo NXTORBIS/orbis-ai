@@ -39,6 +39,7 @@ import type { ChatIntent } from './intent'
 import { automationProgress } from '../shared/automation'
 import { runBrowserAgent } from './browserAgent'
 import { transcribeAudio, VoiceError } from './voice'
+import { openDefaultAppsSettings, readDefaultBrowser, requestDefaultBrowser } from './defaultBrowser'
 import { checkAudio, describeError, isVoiceModel } from '../shared/voiceInput'
 import { completeDraft, generateTitle, generateWorkflowTitle, predictQueries, suggestFollowups } from './suggest'
 import { WorkflowTitler } from './workflows/titler'
@@ -850,6 +851,11 @@ function registerIpc(): void {
    * The window records; this sends it to Whisper and sends the words back. A failure comes back as a reason the window
    * can act on rather than as a string it has to guess at, and neither the audio nor the words are kept or logged.
    */
+  // Whether Orbis is the browser Windows opens links with. Windows decides; Orbis asks and reports what it is told.
+  ipcMain.handle('default-browser:state', () => readDefaultBrowser())
+  ipcMain.handle('default-browser:request', () => requestDefaultBrowser())
+  ipcMain.handle('default-browser:settings', () => openDefaultAppsSettings())
+
   ipcMain.handle('voice:transcribe', async (event, audioData: unknown, options: unknown) => {
     if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
     const o = (options ?? {}) as { mimeType?: unknown; model?: unknown; language?: unknown }

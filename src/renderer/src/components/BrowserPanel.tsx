@@ -3004,7 +3004,13 @@ export default function BrowserPanel({
         )}
         {!hasPage && (
           <div className="browser-newtab" style={widgets.wallpaper && !active.private ? { background: widgets.wallpaper } : undefined}>
-            <OrbisMark size={40} />
+            {/*
+              * The Orbis orb, the same mark and the same idle drift it has everywhere else, given the room a new tab
+              * has. Pressing it puts the cursor in the address bar, which is what a new tab is for.
+              */}
+            <button type="button" className="newtab-orb" aria-label="Search or type a URL" title="Search or type a URL" onClick={focusUrlBar}>
+              <OrbisMark size={92} />
+            </button>
             {active.private && (
               <p className="browser-private-note">
                 <HatGlasses size={16} aria-hidden="true" />
