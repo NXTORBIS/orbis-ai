@@ -1,5 +1,6 @@
-import { safeStorage } from 'electron'
 import { promises as fs } from 'node:fs'
+import { nullPlatform } from './platform.ts'
+import type { SecretStorePort } from './platform'
 import { join } from 'node:path'
 import type { Conversation, ReasoningEffort, Settings, SettingsUpdate, Theme } from '../shared/types'
 import { DEFAULT_MODEL, MODELS, currentModelId } from '../shared/models'
@@ -36,7 +37,11 @@ export class Store {
   private settings: StoredSettings | null = null
   private readonly writeQueues = new Map<string, Promise<void>>()
 
-  constructor(userDataDir: string) {
+  private readonly secrets: SecretStorePort
+
+  /** Where a key is kept encrypted. Handed in, so this file knows nothing about which engine Orbis runs on. */
+  constructor(userDataDir: string, secrets: SecretStorePort = nullPlatform().secrets) {
+    this.secrets = secrets
     this.settingsPath = join(userDataDir, 'settings.json')
     this.conversationsDir = join(userDataDir, 'conversations')
   }
@@ -69,8 +74,8 @@ export class Store {
       if (!key) {
         delete next.apiKey
         delete next.apiKeyEncrypted
-      } else if (safeStorage.isEncryptionAvailable()) {
-        next.apiKey = safeStorage.encryptString(key).toString('base64')
+      } else if (this.secrets.available()) {
+        next.apiKey = this.secrets.encrypt(key).toString('base64')
         next.apiKeyEncrypted = true
       } else {
         next.apiKey = Buffer.from(key, 'utf8').toString('base64')
@@ -88,7 +93,7 @@ export class Store {
     if (!apiKey) return null
     const bytes = Buffer.from(apiKey, 'base64')
     try {
-      return apiKeyEncrypted ? safeStorage.decryptString(bytes) : bytes.toString('utf8')
+      return apiKeyEncrypted ? this.secrets.decrypt(bytes) : bytes.toString('utf8')
     } catch {
       return null
     }

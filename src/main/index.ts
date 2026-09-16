@@ -23,6 +23,7 @@ import { streamChat, testApiKey } from './nim'
 import { buildSystemPrompt } from './prompt'
 import { UpdateManager } from './update/manager'
 import { electronPlatform, imageSize } from './platformElectron'
+import type { Platform } from './platform'
 import { answerContext, runResearch } from './research'
 import { OrbisAdBlock } from './adblock/electron'
 import { BrowserIntegration } from './browserIntegration'
@@ -714,7 +715,7 @@ function registerIpc(): void {
     provider: configuredProvider(),
     fetchFn: (url, init) => net.fetch(url, init),
     openExternal: (url) => shell.openExternal(url),
-    secrets: protectedSessionFile(app.getPath('userData')),
+    secrets: protectedSessionFile(app.getPath('userData'), platform().secrets),
     onChange: (state) => {
       for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send('auth:changed', state)
     },
@@ -824,6 +825,14 @@ function registerIpc(): void {
 const legacyUserData = join(app.getPath('appData'), 'Nxtorbis AI')
 if (!app.commandLine.hasSwitch('user-data-dir') && existsSync(legacyUserData)) app.setPath('userData', legacyUserData)
 
+/**
+ * The small surface Orbis's own services need from the machine underneath them — the clipboard, and somewhere to keep
+ * a secret the operating system can encrypt. Everything above it is written against the interfaces in platform.ts, so
+ * moving to Chromium replaces this one function and nothing else.
+ */
+let platformInstance: Platform | null = null
+const platform = (): Platform => (platformInstance ??= electronPlatform())
+
 /** The one place that knows about updating Orbis; everything else asks it rather than doing any of it itself. */
 let updates: UpdateManager | null = null
 /** Set while Orbis is closing to make way for the installer, so nothing mistakes it for the user quitting. */
@@ -898,7 +907,7 @@ if (!app.requestSingleInstanceLock()) {
     ])
     Menu.setApplicationMenu(menu)
 
-    store = new Store(app.getPath('userData'))
+    store = new Store(app.getPath('userData'), platform().secrets)
     nativeTheme.themeSource = (await store.getSettings()).theme
 
     registerIpc()
@@ -930,9 +939,6 @@ if (!app.requestSingleInstanceLock()) {
     adblock.attachSession(privateSession)
     browser.registerIpc()
 
-    // The small surface Orbis's own services need from the machine underneath them. Everything above it is written
-    // against the interfaces in platform.ts, so moving to Chromium replaces this line and nothing else.
-    const platform = electronPlatform()
 
     // Chrome Web Store extensions in the browser session. Requests extensions make of Orbis's tabs and toolbar are
     // carried out by the window, which answers with the affected tab's id.
@@ -1011,7 +1017,7 @@ if (!app.requestSingleInstanceLock()) {
       if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, ...args)
     }
     const fetchForOrion = (url: string, init?: RequestInit): Promise<Response> => net.fetch(url, init)
-    const workflowStore = new WorkflowStore(app.getPath('userData'), platform.secrets)
+    const workflowStore = new WorkflowStore(app.getPath('userData'), platform().secrets)
     workflowRecorder = new WorkflowRecorder({ getWindow: () => mainWindow, windowControl: browserControl.windowControl, library: libraryForControl, emit: (state) => sendToWindow('workflows:recording', state) })
     const workflows = new WorkflowEngine({
       control: browserControl.control,
@@ -1106,7 +1112,7 @@ if (!app.requestSingleInstanceLock()) {
     // A workspace that keeps itself up to date follows the window while it is the one that is open.
     browserControl.windowControl.onState((state) => workspacesStore.onBrowserState(state ? { tabs: state.tabs, groups: state.groups } : null))
     const clipboardHistory = new ClipboardHistory({
-      clipboard: platform.clipboard,
+      clipboard: platform().clipboard,
       imageSize,
       userData: app.getPath('userData'),
       // Only watched while Orbis itself is in front, so copying elsewhere costs nothing.

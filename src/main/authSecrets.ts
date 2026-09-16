@@ -1,5 +1,6 @@
-import { safeStorage } from 'electron'
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { nullPlatform } from './platform.ts'
+import type { SecretStorePort } from './platform'
 import { join } from 'node:path'
 import { googleProvider } from './auth'
 import type { OAuthProvider, SecretStore } from './auth'
@@ -14,25 +15,25 @@ export function configuredProvider(): OAuthProvider | null {
 }
 
 /**
- * The account session, encrypted with Windows DPAPI (Electron safeStorage) for the signed-in Windows user. When
- * encryption isn't available nothing is written: the session lasts only while Orbis runs.
+ * The account session, encrypted by the operating system for the signed-in user. When encryption isn't available
+ * nothing is written: the session lasts only while Orbis runs.
  */
-export function protectedSessionFile(dir: string): SecretStore {
+export function protectedSessionFile(dir: string, secrets: SecretStorePort = nullPlatform().secrets): SecretStore {
   const file = join(dir, 'account-session.bin')
   return {
     async load() {
       try {
-        if (!safeStorage.isEncryptionAvailable()) return null
-        return safeStorage.decryptString(await readFile(file))
+        if (!secrets.available()) return null
+        return secrets.decrypt(await readFile(file))
       } catch {
         return null
       }
     },
     async save(value) {
-      if (!safeStorage.isEncryptionAvailable()) return false
+      if (!secrets.available()) return false
       await mkdir(dir, { recursive: true })
       const temp = `${file}.tmp`
-      await writeFile(temp, safeStorage.encryptString(value), { mode: 0o600 })
+      await writeFile(temp, secrets.encrypt(value), { mode: 0o600 })
       await rename(temp, file)
       return true
     },
