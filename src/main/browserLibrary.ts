@@ -58,7 +58,7 @@ export class BrowserLibrary {
   private data: LibraryFile = EMPTY()
   private saveTimer: NodeJS.Timeout | null = null
   private writing: Promise<void> = Promise.resolve()
-  private readonly file: string
+  private file: string
   /** Called after any change, so open windows can refresh. */
   onChange?: () => void
 
@@ -67,6 +67,19 @@ export class BrowserLibrary {
   constructor(dir: string, now: () => number = Date.now) {
     this.file = join(dir, 'browser-library.json')
     this.now = now
+  }
+
+  /**
+   * Points the library at another profile's folder: what is in memory is written out first, then that profile's own
+   * history, bookmarks, downloads and site permissions are read in.
+   */
+  async useDirectory(dir: string): Promise<void> {
+    const next = join(dir, 'browser-library.json')
+    if (next === this.file) return
+    await this.flush()
+    this.file = next
+    await this.load()
+    this.changed()
   }
 
   async load(): Promise<void> {

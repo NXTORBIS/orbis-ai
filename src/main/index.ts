@@ -49,6 +49,10 @@ import { TasksStore } from './personal/tasks'
 import { ClipboardHistory } from './personal/clipboard'
 import { WhiteboardStore } from './personal/whiteboard'
 import { WorkspacesStore } from './personal/workspaces'
+import { ProfilesStore } from './personal/profiles'
+import { ExperienceStore } from './experience/store'
+import { registerExperienceIpc } from './experience/ipc'
+import type { Profile } from '../shared/profiles'
 import { registerPersonalIpc } from './personal/ipc'
 import { Store } from './store'
 
@@ -956,6 +960,39 @@ if (!app.requestSingleInstanceLock()) {
     void workflows.start().catch((err: unknown) => console.error('[workflows] failed to start', err))
     app.on('before-quit', () => workflows.stop())
 
+    // The Experience Runtime: everything the user personalises, kept apart from Orbis's own settings so the browser
+    // works exactly as it always has until someone chooses otherwise.
+    const experienceStore = new ExperienceStore(app.getPath('userData'))
+    await experienceStore.load().catch((err: unknown) => console.error('[experience] could not be read', err))
+    registerExperienceIpc({ store: experienceStore, control: browserControl.control, getWindow: () => mainWindow, send: sendToWindow })
+    app.on('before-quit', () => void experienceStore.flush())
+
+    // Profiles: separate browsing identities. Each has its own cookies, logins, site storage, history, bookmarks,
+    // downloads and open pages; extensions are installed once and follow whichever profile is in use.
+    const profilesStore = new ProfilesStore(app.getPath('userData'))
+    const preparedSessions = new Set<string>()
+    /** Wires a profile's session the same way the first one is wired: ad blocking, downloads, permissions, new windows. */
+    const useProfile = async (profile: Profile): Promise<Profile> => {
+      const partition = profilesStore.partition(profile.id)
+      const profileSession = session.fromPartition(partition)
+      if (!preparedSessions.has(partition)) {
+        preparedSessions.add(partition)
+        browser?.setupSession(profileSession)
+        adblock?.attachSession(profileSession)
+      }
+      await browserLibrary?.useDirectory(profilesStore.dataDir(profile.id))
+      await extensions.useSession(profileSession).catch((err: unknown) => console.error('[profiles] extensions did not follow', err))
+      sendToWindow('profiles:changed', { profile, partition })
+      return profile
+    }
+    const switchProfile = async (id: string): Promise<{ profile: Profile; partition: string }> => {
+      const profile = await profilesStore.setActive(id)
+      await useProfile(profile)
+      return { profile, partition: profilesStore.partition(profile.id) }
+    }
+    const startingProfile = await profilesStore.active()
+    if (startingProfile.id !== 'default') await useProfile(startingProfile).catch((err: unknown) => console.error('[profiles] could not start in the last profile', err))
+
     // Notes, tasks and clipboard history: the user's own things, kept locally and reachable from the control layer.
     const notesStore = new NotesStore(app.getPath('userData'))
     const tasksStore = new TasksStore(app.getPath('userData'))
@@ -975,6 +1012,8 @@ if (!app.requestSingleInstanceLock()) {
     registerPersonalIpc({
       notes: notesStore,
       tasks: tasksStore,
+      profiles: profilesStore,
+      switchProfile,
       clipboard: clipboardHistory,
       whiteboard: whiteboardStore,
       workspaces: workspacesStore,
@@ -1004,6 +1043,7 @@ if (!app.requestSingleInstanceLock()) {
     app.on('before-quit', () => {
       clipboardHistory.stop()
       workspacesStore.stop()
+      void profilesStore.flush()
       void Promise.all([notesStore.flush(), tasksStore.flush(), clipboardHistory.flush(), whiteboardStore.flush(), workspacesStore.flush()])
     })
 

@@ -287,6 +287,18 @@ export class ExtensionsManager {
     }
   }
 
+  /**
+   * Moves the extensions to another profile's session: the same extensions, each with that profile's own extension
+   * storage. Called when the user switches profile.
+   */
+  async useSession(session: Session): Promise<void> {
+    if (session === this.o.session) return
+    this.o.session = session
+    this.hookedWorkers.clear()
+    this.bridge.useSession(session)
+    await this.start()
+  }
+
   private hookWorker(versionId: number): void {
     // Websites run service workers in this session too; only extension workers are touched, checked by scope first.
     let scope = ''

@@ -18,6 +18,8 @@ import type { Task, TaskCounts, TaskFilter, TaskList } from './tasks'
 import type { ClipboardSettings, ClipItem, ClipKind } from './clipboardHistory'
 import type { Board } from './whiteboard'
 import type { Workspace, WorkspaceSummary } from './workspaces'
+import type { Profile } from './profiles'
+import type { ConfigChange, ExperienceConfig, ExperienceExport, ExperienceHealth, ImportCheck } from './experience'
 import type { PlanLine } from './workflowCompile'
 
 export type Role = 'user' | 'assistant'
@@ -777,4 +779,28 @@ export interface NxtorbisApi {
   planWorkspaceOpen(id: string, replace?: boolean): Promise<{ open: number; close: number; keep: number }>
   openWorkspace(id: string, replace?: boolean): Promise<{ opened: number; groups: number; name: string }>
   onWorkspacesChanged(listener: () => void): () => void
+
+  // Profiles
+  listProfiles(): Promise<{ profiles: Profile[]; activeId: string; partition: string }>
+  createProfile(name: string): Promise<Profile>
+  saveProfile(profile: Profile): Promise<Profile>
+  renameProfile(id: string, name: string): Promise<Profile>
+  removeProfile(id: string): Promise<{ removed: boolean; reason?: string }>
+  switchProfile(id: string): Promise<{ profile: Profile; partition: string }>
+  onProfileChanged(listener: (change: { profile: Profile; partition: string }) => void): () => void
+  onProfilesChanged(listener: () => void): () => void
+
+  // The Experience Runtime (personalisation)
+  getExperience(): Promise<ExperienceConfig>
+  saveExperience(config: ExperienceConfig, reason?: string): Promise<{ config: ExperienceConfig; changes: ConfigChange[] }>
+  experienceHealth(): Promise<ExperienceHealth>
+  experienceSnapshots(): Promise<{ id: string; reason: string; takenAt: number; summary: string[] }[]>
+  restoreExperienceSnapshot(id: string): Promise<ExperienceConfig>
+  removeExperienceSnapshot(id: string): Promise<boolean>
+  resetExperienceSection(section: string): Promise<ExperienceConfig>
+  restoreOriginalExperience(): Promise<{ config: ExperienceConfig; wasDefault: boolean }>
+  exportExperience(): Promise<ExperienceExport>
+  checkExperienceImport(raw: unknown): Promise<ImportCheck & { changes?: ConfigChange[] }>
+  importExperience(raw: unknown, how?: 'replace' | 'merge'): Promise<{ config: ExperienceConfig; changes: ConfigChange[] }>
+  onExperienceChanged(listener: (config: ExperienceConfig) => void): () => void
 }

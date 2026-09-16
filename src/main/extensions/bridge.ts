@@ -192,6 +192,11 @@ export class ExtensionBridge {
   // ------------------------------------------------------------------ tabs reported by the window
 
   /** The window's current tabs; differences become chrome.tabs events. */
+  /** The session the extensions now run in, after the user switches profile. */
+  useSession(session: Session): void {
+    this.o.session = session
+  }
+
   updateTabs(next: ReportedTab[]): void {
     const previous = this.tabs
     const nextMap = new Map(next.map((t) => [t.id, t]))

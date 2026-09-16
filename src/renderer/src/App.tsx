@@ -15,6 +15,9 @@ import TasksView from './components/TasksView'
 import ClipboardView from './components/ClipboardView'
 import WhiteboardView from './components/WhiteboardView'
 import WorkspacesView from './components/WorkspacesView'
+import ProfilesView from './components/ProfilesView'
+import CustomizeView from './components/CustomizeView'
+import { useExperience } from './lib/experience'
 import HudBackground from './components/HudBackground'
 import Sidebar from './components/Sidebar'
 import { ActivityPanel, ShortcutsModal, ToastStack } from './components/Overlays'
@@ -93,6 +96,10 @@ export default function App(): React.JSX.Element {
   const [clipboardOpen, setClipboardOpen] = useState(false)
   const [whiteboardOpen, setWhiteboardOpen] = useState(false)
   const [workspacesOpen, setWorkspacesOpen] = useState(false)
+  const [profilesOpen, setProfilesOpen] = useState(false)
+  const [customizeOpen, setCustomizeOpen] = useState(false)
+  /** Everything the user has personalised, applied to the window; an untouched Orbis is left exactly as it is. */
+  const experience = useExperience()
   const [webSearch, setWebSearch] = useState(false)
   const [searchToken, setSearchToken] = useState(0)
   const [activityOpen, setActivityOpen] = useState(false)
@@ -1348,6 +1355,8 @@ export default function App(): React.JSX.Element {
           clipboardOpen={clipboardOpen}
           whiteboardOpen={whiteboardOpen}
           workspacesOpen={workspacesOpen}
+          profilesOpen={profilesOpen}
+          customizeOpen={customizeOpen}
           searchToken={searchToken}
           userName={settings?.userName ?? 'You'}
           userTitle={settings?.userTitle ?? ''}
@@ -1359,6 +1368,8 @@ export default function App(): React.JSX.Element {
             setImagesOpen((open) => !open)
           }}
           onWorkflows={() => {
+            setCustomizeOpen(false)
+            setProfilesOpen(false)
             setWorkspacesOpen(false)
             setWhiteboardOpen(false)
             setImagesOpen(false)
@@ -1368,6 +1379,8 @@ export default function App(): React.JSX.Element {
             setWorkflowsOpen((open) => !open)
           }}
           onNotes={() => {
+            setCustomizeOpen(false)
+            setProfilesOpen(false)
             setWorkspacesOpen(false)
             setWhiteboardOpen(false)
             setImagesOpen(false)
@@ -1377,6 +1390,8 @@ export default function App(): React.JSX.Element {
             setNotesOpen((open) => !open)
           }}
           onTasks={() => {
+            setCustomizeOpen(false)
+            setProfilesOpen(false)
             setWorkspacesOpen(false)
             setWhiteboardOpen(false)
             setImagesOpen(false)
@@ -1386,6 +1401,8 @@ export default function App(): React.JSX.Element {
             setTasksOpen((open) => !open)
           }}
           onClipboard={() => {
+            setCustomizeOpen(false)
+            setProfilesOpen(false)
             setWorkspacesOpen(false)
             setWhiteboardOpen(false)
             setImagesOpen(false)
@@ -1395,6 +1412,8 @@ export default function App(): React.JSX.Element {
             setClipboardOpen((open) => !open)
           }}
           onWhiteboard={() => {
+            setCustomizeOpen(false)
+            setProfilesOpen(false)
             setWorkspacesOpen(false)
             setImagesOpen(false)
             setWorkflowsOpen(false)
@@ -1404,6 +1423,8 @@ export default function App(): React.JSX.Element {
             setWhiteboardOpen((open) => !open)
           }}
           onWorkspaces={() => {
+            setCustomizeOpen(false)
+            setProfilesOpen(false)
             setImagesOpen(false)
             setWorkflowsOpen(false)
             setNotesOpen(false)
@@ -1411,6 +1432,28 @@ export default function App(): React.JSX.Element {
             setClipboardOpen(false)
             setWhiteboardOpen(false)
             setWorkspacesOpen((open) => !open)
+          }}
+          onProfiles={() => {
+            setCustomizeOpen(false)
+            setImagesOpen(false)
+            setWorkflowsOpen(false)
+            setNotesOpen(false)
+            setTasksOpen(false)
+            setClipboardOpen(false)
+            setWhiteboardOpen(false)
+            setWorkspacesOpen(false)
+            setProfilesOpen((open) => !open)
+          }}
+          onCustomize={() => {
+            setImagesOpen(false)
+            setWorkflowsOpen(false)
+            setNotesOpen(false)
+            setTasksOpen(false)
+            setClipboardOpen(false)
+            setWhiteboardOpen(false)
+            setWorkspacesOpen(false)
+            setProfilesOpen(false)
+            setCustomizeOpen((open) => !open)
           }}
           onAssistants={() => setPersonaMenuOpen(true)}
           onBrowser={toggleBrowser}
@@ -1462,6 +1505,8 @@ export default function App(): React.JSX.Element {
           {clipboardOpen && <ClipboardView onClose={() => setClipboardOpen(false)} onNotify={notify} />}
           {whiteboardOpen && <WhiteboardView onClose={() => setWhiteboardOpen(false)} onNotify={notify} />}
           {workspacesOpen && <WorkspacesView onClose={() => setWorkspacesOpen(false)} onNotify={notify} />}
+          {profilesOpen && <ProfilesView onClose={() => setProfilesOpen(false)} onNotify={notify} />}
+          {customizeOpen && <CustomizeView experience={experience} onClose={() => setCustomizeOpen(false)} onNotify={notify} />}
         </main>
 
         {browserOpen && (

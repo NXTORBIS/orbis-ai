@@ -18,8 +18,10 @@ import {
   Users,
   ClipboardList,
   LayoutGrid,
+  Paintbrush,
   ListTodo,
   PenLine,
+  UserRound,
   NotebookPen,
   Workflow as WorkflowIcon,
   X
@@ -45,6 +47,8 @@ interface Props {
   clipboardOpen: boolean
   whiteboardOpen: boolean
   workspacesOpen: boolean
+  profilesOpen: boolean
+  customizeOpen: boolean
   /** Changes whenever the search box should open and take focus. */
   searchToken: number
   userName: string
@@ -59,6 +63,8 @@ interface Props {
   onClipboard(): void
   onWhiteboard(): void
   onWorkspaces(): void
+  onProfiles(): void
+  onCustomize(): void
   onAssistants(): void
   onBrowser(): void
   onSelect(id: string): void
@@ -150,6 +156,8 @@ export default function Sidebar(props: Props): React.JSX.Element {
     { label: 'Clipboard', icon: ClipboardList, onClick: props.onClipboard, active: props.clipboardOpen },
     { label: 'Whiteboard', icon: PenLine, onClick: props.onWhiteboard, active: props.whiteboardOpen },
     { label: 'Workspaces', icon: LayoutGrid, onClick: props.onWorkspaces, active: props.workspacesOpen },
+    { label: 'Profiles', icon: UserRound, onClick: props.onProfiles, active: props.profilesOpen },
+    { label: 'Customize', icon: Paintbrush, onClick: props.onCustomize, active: props.customizeOpen },
     { label: 'Assistants', icon: Users, onClick: props.onAssistants },
     { label: 'Browser', icon: Globe, onClick: props.onBrowser }
   ]

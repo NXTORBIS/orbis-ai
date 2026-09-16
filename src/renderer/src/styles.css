@@ -10061,3 +10061,293 @@ html[data-browser-immersive] .hud.browser-full .url-strip:focus-within {
   margin: 0 0 6px;
   font-size: 16px;
 }
+
+
+/* ---- Profiles */
+
+.profiles-note {
+  margin: 0 28px 10px;
+  max-width: 760px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.profile-mark {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  color: #0b0d12;
+  font: 700 13px var(--font);
+}
+
+
+/* ---- What the Experience Runtime applies. Nothing here has any effect until the user personalises something. */
+
+html[data-ui-scale] .hud-body {
+  zoom: var(--ui-scale, 1);
+}
+
+/* Web pages keep their own size: only Orbis's own interface scales. */
+html[data-ui-scale] .browser-view {
+  zoom: calc(1 / var(--ui-scale, 1));
+}
+
+html[data-density='cosy'] {
+  --pad-scale: 0.92;
+}
+
+html[data-density='compact'] {
+  --pad-scale: 0.82;
+}
+
+html[data-density] .sb-nav-item {
+  min-height: calc(36px * var(--pad-scale, 1));
+}
+
+html[data-density] .task-row {
+  padding: calc(8px * var(--pad-scale, 1)) 10px;
+  gap: calc(10px * var(--pad-scale, 1));
+}
+
+html[data-density] .note-item {
+  padding: calc(10px * var(--pad-scale, 1)) 12px;
+}
+
+html[data-density] .clip-row {
+  padding: calc(6px * var(--pad-scale, 1)) 10px;
+}
+
+html[data-density] .space-card {
+  padding: calc(12px * var(--pad-scale, 1)) 14px;
+}
+
+html[data-density] .cz-row {
+  padding: calc(8px * var(--pad-scale, 1)) 2px;
+}
+
+html[data-density] .view-head {
+  padding: calc(22px * var(--pad-scale, 1)) 28px calc(12px * var(--pad-scale, 1));
+}
+
+html[data-density] .browser-tab {
+  height: calc(var(--tab-height, 32px) * var(--pad-scale, 1));
+}
+
+html[data-corners] .glass,
+html[data-corners] .modal,
+html[data-corners] .space-card,
+html[data-corners] .og-card,
+html[data-corners] .note-item,
+html[data-corners] .board-item,
+html[data-corners] .cz-panel {
+  border-radius: var(--corner-radius, 14px);
+}
+
+html[data-blur] .glass {
+  backdrop-filter: blur(calc(14px * var(--blur-scale, 1)));
+}
+
+html[data-contrast='high'] .view-muted,
+html[data-contrast='high'] .wf-muted {
+  color: var(--muted-strong);
+}
+
+html[data-focus-rings='always'] :focus {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+html[data-motion='reduced'] *,
+html[data-motion='reduced'] *::before,
+html[data-motion='reduced'] *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* ---- Customize centre */
+
+.cz-body {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  flex: 1;
+  min-height: 0;
+  gap: 16px;
+  padding: 4px 28px 24px;
+}
+
+.cz-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.cz-state {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line-strong);
+  background: var(--glass);
+  font-size: 11px;
+}
+
+.cz-state p {
+  margin: 0 0 4px;
+}
+
+.cz-state ul {
+  margin: 0;
+  padding-left: 16px;
+  color: var(--muted-strong);
+}
+
+.cz-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 18px;
+  border-radius: 14px;
+  border: 1px solid var(--glass-border);
+  background: var(--glass);
+}
+
+.cz-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 6px 0 2px;
+}
+
+.cz-section-head h3,
+.cz-section-head h4 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.cz-section-head h4 {
+  font-size: 13px;
+  color: var(--muted-strong);
+}
+
+.cz-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 8px 2px;
+  border-bottom: 1px solid var(--line-strong);
+  font-size: 13px;
+  color: var(--muted-strong);
+}
+
+.cz-row:last-child {
+  border-bottom: 0;
+}
+
+.cz-row > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cz-row small {
+  font-size: 11px;
+}
+
+.cz-row input[type='range'] {
+  flex: 1;
+  max-width: 220px;
+  accent-color: var(--cyan);
+}
+
+.cz-row input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--cyan);
+}
+
+.cz-row select {
+  height: 30px;
+  min-width: 190px;
+  padding: 0 8px;
+  border-radius: 8px;
+  border: 1px solid var(--pill-border);
+  background: var(--pill-bg);
+  color: var(--text);
+  font: 12px var(--font);
+}
+
+.cz-accents {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.cz-accent-default {
+  width: auto;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--pill-bg-strong);
+  color: var(--muted-strong);
+  font-size: 10px;
+}
+
+.cz-dirty {
+  color: var(--cyan);
+  font-size: 12px;
+}
+
+.cz-note {
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.cz-health {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line-strong);
+  background: var(--pill-bg-strong);
+  font-size: 12px;
+}
+
+.cz-health.bad {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+}
+
+.cz-health p {
+  margin: 4px 0;
+}
+
+.cz-snapshots {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cz-snapshot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 10px;
+  border-radius: 9px;
+  background: var(--pill-bg-strong);
+  font-size: 12px;
+}
+
+.cz-snapshot span {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}

@@ -245,6 +245,9 @@ const hostOf = (url: string): string => {
 }
 
 const SESSION_KEY = 'orbis.browser.session'
+
+/** Each profile remembers its own pages and groups; the first profile keeps the keys Orbis has always used. */
+const keyFor = (base: string, profileId: string): string => (profileId === 'default' ? base : `${base}.${profileId}`)
 const ZOOM_KEY = 'orbis.browser.zoom'
 
 /** Zoom is remembered per site, like other browsers. */
@@ -384,6 +387,14 @@ export default function BrowserPanel({
     return next
   }, [])
 
+  /**
+   * The profile in use. Its partition is what ordinary tabs browse in, so cookies and logins are separate per profile;
+   * private tabs always use the private session. When the profile changes, its own pages are put back.
+   */
+  const [profile, setProfile] = useState<{ id: string; partition: string }>({ id: 'default', partition: 'persist:browser' })
+  const profileRef = useRef('default')
+  profileRef.current = profile.id
+
   const addTab = useCallback(
     (url: string, options: { activate?: boolean; private?: boolean; index?: number; pinned?: boolean } = {}): Tab => {
       const tab: Tab = { ...createTab(url, options.private === true), ...(options.pinned ? { pinned: true } : {}) }
@@ -402,6 +413,27 @@ export default function BrowserPanel({
 
   const openTab = useCallback((url = '', activate = true, isPrivate = false) => void addTab(url, { activate, private: isPrivate }), [addTab])
 
+  useEffect(() => {
+    void window.api.listProfiles().then(({ activeId, partition }) => setProfile({ id: activeId, partition }))
+    return window.api.onProfileChanged((change) => {
+      setProfile({ id: change.profile.id, partition: change.partition })
+      // The pages of the profile being left stay with it; the new profile's own pages come back.
+      const saved: string[] = (() => {
+        try {
+          const raw: unknown = JSON.parse(stored(keyFor(SESSION_KEY, change.profile.id)) ?? '[]')
+          return Array.isArray(raw) ? raw.filter((url): url is string => typeof url === 'string' && isWebUrl(url)).slice(0, 20) : []
+        } catch {
+          return []
+        }
+      })()
+      const fresh = saved.length ? saved.map((url) => createTab(url)) : [createTab('')]
+      setGroups([])
+      setSplit(null)
+      applyTabs(() => fresh)
+      setActiveId(fresh[0].id)
+    })
+  }, [applyTabs])
+
   useEffect(() => store('orbis.browser.width', String(width)), [width])
   // Ctrl+click and middle-click open links in the background; other links and "Open link in new tab" switch to them.
   useEffect(() => window.api.onBrowserNewTab((url, options) => openTab(url, !options.background)), [openTab])
@@ -410,7 +442,7 @@ export default function BrowserPanel({
   const tabUrls = tabs.filter((t) => !t.private).map((t) => t.url).filter(isWebUrl)
   const tabUrlsKey = tabUrls.join('\n')
   useEffect(() => {
-    if (tabUrls.length) store(SESSION_KEY, JSON.stringify(tabUrls.slice(0, 20)))
+    if (tabUrls.length) store(keyFor(SESSION_KEY, profileRef.current), JSON.stringify(tabUrls.slice(0, 20)))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabUrlsKey])
 
@@ -670,10 +702,15 @@ export default function BrowserPanel({
     const webview = views.current.get(tabId)
     if (webview) {
       patch(tabId, { error: undefined })
-      webview.loadURL(url).catch(() => undefined)
-    } else {
-      patch(tabId, { url, title: url, loading: true, error: undefined })
+      try {
+        void webview.loadURL(url).catch(() => undefined)
+        return
+      } catch {
+        // The view is on screen but not ready yet (a tab that has only just appeared, after a profile switch say):
+        // the address goes on the tab instead, and the view loads it as soon as it is.
+      }
     }
+    patch(tabId, { url, title: url, loading: true, error: undefined })
   }
 
   useEffect(() => {
@@ -788,7 +825,7 @@ export default function BrowserPanel({
   const groupsKey = JSON.stringify(groups.map((g) => [g.name, g.color, g.collapsed, tabs.filter((t) => t.groupId === g.id && !t.private && isWebUrl(t.url)).map((t) => t.url)]))
   useEffect(() => {
     if (!tabUrls.length) return
-    store(GROUPS_KEY, JSON.stringify(groups.map((g) => ({ name: g.name, color: g.color, collapsed: Boolean(g.collapsed), urls: tabs.filter((t) => t.groupId === g.id && !t.private && isWebUrl(t.url)).map((t) => t.url) })).filter((g) => g.urls.length)))
+    store(keyFor(GROUPS_KEY, profileRef.current), JSON.stringify(groups.map((g) => ({ name: g.name, color: g.color, collapsed: Boolean(g.collapsed), urls: tabs.filter((t) => t.groupId === g.id && !t.private && isWebUrl(t.url)).map((t) => t.url) })).filter((g) => g.urls.length)))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupsKey])
 
@@ -2584,6 +2621,7 @@ export default function BrowserPanel({
             (tab) =>
               tab.url && (
                 <TabView
+                  partition={profile.partition}
                   key={`${tab.id}:${tab.generation}`}
                   tab={tab}
                   active={tab.id === active.id}
@@ -2707,6 +2745,8 @@ export default function BrowserPanel({
 }
 
 interface TabViewProps {
+  /** The session ordinary tabs browse in: the profile in use. */
+  partition: string
   tab: Tab
   active: boolean
   onRegister(id: string, webview: Webview | null): void
@@ -2724,7 +2764,7 @@ interface TabViewProps {
   onActivate(id: string): void
 }
 
-function TabView({ tab, active, split, muted, onActivate, onRegister, onUpdate, onFound, onNavigated, onFullscreen }: TabViewProps): React.JSX.Element {
+function TabView({ tab, active, split, muted, partition, onActivate, onRegister, onUpdate, onFound, onNavigated, onFullscreen }: TabViewProps): React.JSX.Element {
   const ref = useRef<Webview | null>(null)
   const mutedRef = useRef(muted)
   mutedRef.current = muted
@@ -2829,7 +2869,7 @@ function TabView({ tab, active, split, muted, onActivate, onRegister, onUpdate, 
     <webview
       ref={ref as React.Ref<HTMLWebViewElement>}
       src={src}
-      partition={tab.private ? PRIVATE_PARTITION : 'persist:browser'}
+      partition={tab.private ? PRIVATE_PARTITION : partition}
       useragent={tab.mobile ? MOBILE_UA : DESKTOP_UA}
       className={`browser-view${active ? ' active' : ''}${split ? ` split-${split}` : ''}${tab.mobile && !split ? ' mobile' : ''}`}
       {...POPUPS}

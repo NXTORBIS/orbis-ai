@@ -11,6 +11,9 @@ import type { NotesStore } from './notes'
 import type { TasksStore } from './tasks'
 import type { WhiteboardStore } from './whiteboard'
 import type { WorkspacesStore } from './workspaces'
+import type { ProfilesStore } from './profiles'
+import type { Profile } from '../../shared/profiles'
+import { partitionFor } from '../../shared/profiles'
 import type { Workspace } from '../../shared/workspaces'
 import { openPlan } from '../../shared/workspaces'
 
@@ -20,6 +23,9 @@ export interface PersonalIpcOptions {
   clipboard: ClipboardHistory
   whiteboard: WhiteboardStore
   workspaces: WorkspacesStore
+  profiles: ProfilesStore
+  /** Moves Orbis to another profile: its session, its browsing data and its pages. */
+  switchProfile(id: string): Promise<{ profile: Profile; partition: string }>
   control: BrowserControl
   getWindow(): BrowserWindow | null
   /** The page in front: its address, title and the text the user has selected. */
@@ -52,6 +58,7 @@ export function registerPersonalIpc(o: PersonalIpcOptions): void {
   o.clipboard.onChange(() => o.send('clipboard:changed'))
   o.whiteboard.onChange(() => o.send('whiteboard:changed'))
   o.workspaces.onChange(() => o.send('workspaces:changed'))
+  o.profiles.onChange(() => o.send('profiles:list-changed'))
 
   // ---------------------------------------------------------------- notes
 
@@ -155,6 +162,15 @@ export function registerPersonalIpc(o: PersonalIpcOptions): void {
     if (!workspace) throw new Error('That workspace no longer exists.')
     return openWorkspace(workspace, replace !== false)
   })
+
+  // ---------------------------------------------------------------- profiles
+
+  handle('profiles:list', async () => ({ profiles: await o.profiles.list(), activeId: await o.profiles.activeId(), partition: partitionFor(await o.profiles.activeId()) }))
+  handle('profiles:create', async (_e, name) => o.profiles.create({ name: str(name, 40) || 'New profile' }))
+  handle('profiles:save', (_e, profile) => o.profiles.save(profile as Profile))
+  handle('profiles:rename', (_e, id, name) => o.profiles.rename(str(id, 80), str(name, 40)))
+  handle('profiles:remove', (_e, id) => o.profiles.remove(str(id, 80)))
+  handle('profiles:switch', (_e, id) => o.switchProfile(str(id, 80)))
 
   // ---------------------------------------------------------------- capabilities
 
@@ -594,6 +610,57 @@ export function registerPersonalIpc(o: PersonalIpcOptions): void {
     }
   })
 
+  o.control.register({
+    id: 'profiles.list',
+    domain: 'profiles',
+    name: 'List profiles',
+    description: 'The separate browsing identities set up in Orbis, and which one is in use. Each keeps its own cookies, logins, history and bookmarks.',
+    params: {},
+    mutates: false,
+    confirmation: 'none',
+    run: async () => {
+      const activeId = await o.profiles.activeId()
+      return (await o.profiles.list()).map((p) => ({ id: p.id, name: p.name, active: p.id === activeId, lastUsedAt: p.lastUsedAt }))
+    }
+  })
+
+  o.control.register({
+    id: 'profiles.switch',
+    domain: 'profiles',
+    name: 'Switch profile',
+    description: 'Moves Orbis to another profile: its own logins, history and pages. The pages open now are put away with the profile they belong to.',
+    params: { profile: { type: 'string', description: 'Profile id or exact name.', required: true } },
+    mutates: true,
+    confirmation: 'always',
+    describe: (p) => `Switch to the profile ${JSON.stringify(String(p.profile))}`,
+    run: async (p) => {
+      const all = await o.profiles.list()
+      const profile = all.find((x) => x.id === p.profile) ?? all.find((x) => x.name.toLowerCase() === String(p.profile).toLowerCase())
+      if (!profile) return fail('not-found', `No profile called ${JSON.stringify(String(p.profile))}. See profiles.list.`, true)
+      const result = await o.switchProfile(profile.id)
+      return { id: result.profile.id, name: result.profile.name }
+    },
+    verify: async (data) => {
+      const { id, name } = data as { id: string; name: string }
+      const activeId = await o.profiles.activeId()
+      return { verified: activeId === id, detail: activeId === id ? `${name} is the profile in use.` : 'The profile did not change.' }
+    }
+  })
+
+  o.control.register({
+    id: 'profiles.create',
+    domain: 'profiles',
+    name: 'Create a profile',
+    description: 'Makes another browsing identity, with its own logins, history and bookmarks. It is not switched to.',
+    params: { name: { type: 'string', description: 'What to call it.', required: true } },
+    mutates: true,
+    confirmation: 'none',
+    run: async (p) => {
+      const profile = await o.profiles.create({ name: String(p.name) })
+      return { id: profile.id, name: profile.name }
+    }
+  })
+
   // State the rest of the control layer (and Orion) can read without a command.
   o.control.registerState('notes', async () => {
     const notes = await o.notes.search({})
@@ -603,6 +670,11 @@ export function registerPersonalIpc(o: PersonalIpcOptions): void {
     const { lists, counts } = await o.tasks.snapshot()
     const today = await o.tasks.search({ view: 'today', sort: 'due' })
     return { counts, lists: lists.map((l) => ({ id: l.id, name: l.name })), today: today.slice(0, 20).map(taskSummary) }
+  })
+  o.control.registerState('profiles', async () => {
+    const activeId = await o.profiles.activeId()
+    const all = await o.profiles.list()
+    return { active: all.find((p) => p.id === activeId)?.name ?? null, count: all.length, profiles: all.map((p) => ({ id: p.id, name: p.name, active: p.id === activeId })) }
   })
   o.control.registerState('workspaces', async () => {
     const list = await o.workspaces.list()

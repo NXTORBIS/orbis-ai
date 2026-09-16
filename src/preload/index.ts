@@ -217,7 +217,29 @@ const api: NxtorbisApi = {
   reorderWorkspaces: (ids) => ipcRenderer.invoke('workspaces:reorder', ids),
   planWorkspaceOpen: (id, replace) => ipcRenderer.invoke('workspaces:plan', id, replace),
   openWorkspace: (id, replace) => ipcRenderer.invoke('workspaces:open', id, replace),
-  onWorkspacesChanged: (listener) => subscribe('workspaces:changed', listener)
+  onWorkspacesChanged: (listener) => subscribe('workspaces:changed', listener),
+
+  listProfiles: () => ipcRenderer.invoke('profiles:list'),
+  createProfile: (name) => ipcRenderer.invoke('profiles:create', name),
+  saveProfile: (profile) => ipcRenderer.invoke('profiles:save', profile),
+  renameProfile: (id, name) => ipcRenderer.invoke('profiles:rename', id, name),
+  removeProfile: (id) => ipcRenderer.invoke('profiles:remove', id),
+  switchProfile: (id) => ipcRenderer.invoke('profiles:switch', id),
+  onProfileChanged: (listener) => subscribe('profiles:changed', listener),
+  onProfilesChanged: (listener) => subscribe('profiles:list-changed', listener),
+
+  getExperience: () => ipcRenderer.invoke('experience:get'),
+  saveExperience: (config, reason) => ipcRenderer.invoke('experience:save', config, reason),
+  experienceHealth: () => ipcRenderer.invoke('experience:health'),
+  experienceSnapshots: () => ipcRenderer.invoke('experience:snapshots'),
+  restoreExperienceSnapshot: (id) => ipcRenderer.invoke('experience:restore-snapshot', id),
+  removeExperienceSnapshot: (id) => ipcRenderer.invoke('experience:remove-snapshot', id),
+  resetExperienceSection: (section) => ipcRenderer.invoke('experience:reset-section', section),
+  restoreOriginalExperience: () => ipcRenderer.invoke('experience:restore-original'),
+  exportExperience: () => ipcRenderer.invoke('experience:export'),
+  checkExperienceImport: (raw) => ipcRenderer.invoke('experience:check-import', raw),
+  importExperience: (raw, how) => ipcRenderer.invoke('experience:import', raw, how),
+  onExperienceChanged: (listener) => subscribe('experience:changed', listener)
 }
 
 /** Listens on a channel whose events carry one value; returns the unsubscribe function. */
