@@ -460,12 +460,21 @@ function registerIpc(): void {
           const phrase = detectImageGenRequest(last.content)
           return phrase ? { kind: 'image', prompt: phrase } : null
         })
-        // The browser's floating assistant only takes browser tasks; the classifier still decides once, loop or game.
+        /**
+         * What the browser's floating assistant does with a message.
+         *
+         * Most of what is typed there is a task for the page — click this, fill that in — so anything the classifier
+         * cannot place becomes one. But a question *about* the page is not a task on it: "summarize this page" and
+         * "what are the key points" are answered by reading the page, which is what the classifier already says when
+         * it returns an answer that wants the page. Forcing those into the browser agent made Orbis go clicking about
+         * a page it should simply have read.
+         */
+        const readsThePage = detected?.kind === 'answer' && (detected.usePage || Boolean(detected.research))
         const intent: ChatIntent | null = request.ask
           ? detected?.kind === 'browse' || detected?.kind === 'image'
             ? null
             : detected
-          : last.browserTask && detected?.kind !== 'browse' && detected?.kind !== 'adblock'
+          : last.browserTask && detected?.kind !== 'browse' && detected?.kind !== 'adblock' && !readsThePage
             ? { kind: 'browse', task: last.content, mode: 'once', resume: false }
             : detected
         if (controller.signal.aborted) return emit({ type: 'aborted' })
