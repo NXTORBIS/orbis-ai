@@ -6,6 +6,7 @@ import type { NoticeKind } from '../App'
 
 const VIEWS: { id: TaskViewName; label: string }[] = [
   { id: 'today', label: 'Today' },
+  { id: 'reminders', label: 'Reminders' },
   { id: 'upcoming', label: 'Upcoming' },
   { id: 'overdue', label: 'Overdue' },
   { id: 'flagged', label: 'Important' },
@@ -38,10 +39,10 @@ const forInput = (task: Task): string => {
  * Tasks: lists, due dates, priorities, subtasks and repeats. Typing "Pay rent tomorrow 9am !high #bills" fills in the
  * date, time, priority and list; everything is stored locally and shared with Orion through the control layer.
  */
-export default function TasksView({ onClose, onNotify }: { onClose(): void; onNotify(message: string, kind?: NoticeKind): void }): React.JSX.Element {
+export default function TasksView({ onClose, onNotify, only }: { onClose(): void; onNotify(message: string, kind?: NoticeKind): void; /** Opens on one view — the sidebar's Reminders panel is this screen showing the tasks that have a time. */ only?: TaskViewName }): React.JSX.Element {
   const [lists, setLists] = useState<TaskList[]>([])
   const [tasks, setTasks] = useState<Task[]>([])
-  const [view, setView] = useState<TaskViewName>('today')
+  const [view, setView] = useState<TaskViewName>(only ?? 'today')
   const [listId, setListId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -72,6 +73,8 @@ export default function TasksView({ onClose, onNotify }: { onClose(): void; onNo
         if (view === 'today') return t.due !== undefined && startOfDay(t.due) <= startOfDay(now)
         if (view === 'upcoming') return t.due !== undefined && startOfDay(t.due) > startOfDay(now)
         if (view === 'overdue') return t.due !== undefined && (t.hasTime ? t.due < now : startOfDay(t.due) < startOfDay(now))
+        // A reminder is a task with an actual time on it, rather than one merely due that day.
+        if (view === 'reminders') return t.due !== undefined && t.hasTime
         if (view === 'flagged') return t.priority === 'high'
         return true
       })

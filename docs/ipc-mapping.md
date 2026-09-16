@@ -56,6 +56,7 @@ This is the one place where Chromium does it better than we do, and the port is 
 | `library:download-action`, `library:clear-downloads` | Downloads | `DownloadItem` (pause, resume, cancel, show) |
 | `library:record-search`, `library:remove-search`, `library:clear-searches` | What was searched | Orbis's own; Chromium has no equivalent worth using |
 | `library:record-pick` | Which suggestion was taken | Orbis's own, feeds the omnibox ranking |
+| `library:forget-permissions` | Forgets a site's remembered answers | `HostContentSettingsMap` |
 | `library:reading-add`, `library:reading-read`, `library:reading-remove`, `library:reading-clear-read` | The reading list | Orbis's own; Chromium's reading list is tied to a Google account, ours is not |
 | `library:forget-saved-page` | Forgets a saved page | Orbis's own; Chromium saves pages but does not list them |
 | `library:keep-screenshot`, `library:read-screenshot`, `library:remove-screenshot` | Pictures kept of pages | Orbis's own |

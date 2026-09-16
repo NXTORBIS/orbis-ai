@@ -732,6 +732,8 @@ export interface NxtorbisApi {
   /** Tells the main process whether the browser (or its URL bar) has focus, so its shortcuts apply there. */
   setBrowserFocus(focused: boolean): void
   getBrowserLibrary(): Promise<BrowserLibrarySnapshot>
+  /** Forgets remembered permission answers for one site, or for every site. */
+  forgetSitePermissions(origin?: string): Promise<void>
   /** Sets a page aside to read later; false when the address is not a web page. */
   addToReadingList(url: string, title?: string): Promise<boolean>
   setReadingListRead(url: string, read: boolean): Promise<void>

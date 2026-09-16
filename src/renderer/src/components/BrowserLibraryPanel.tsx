@@ -11,6 +11,8 @@ export interface ClosedTab {
 }
 
 interface Props {
+  /** Drawn inside a sidebar panel, which supplies the heading and the way out. */
+  inSidebar?: boolean
   tab: LibraryTab
   onTab(tab: LibraryTab): void
   onClose(): void
@@ -56,7 +58,7 @@ function downloadStatus(d: BrowserDownload): string {
 }
 
 /** The browser's history, bookmarks, downloads and recently closed tabs, as a panel over the page. */
-export default function BrowserLibraryPanel({ tab, onTab, onClose, onOpen, closedTabs, onReopen }: Props): React.JSX.Element {
+export default function BrowserLibraryPanel({ tab, onTab, onClose, onOpen, closedTabs, onReopen, inSidebar }: Props): React.JSX.Element {
   const [library, setLibrary] = useState<BrowserLibrarySnapshot | null>(null)
   const [query, setQuery] = useState('')
   const searchRef = useRef<HTMLInputElement>(null)
@@ -78,8 +80,8 @@ export default function BrowserLibraryPanel({ tab, onTab, onClose, onOpen, close
 
   return (
     <aside
-      className="browser-library"
-      role="dialog"
+      className={`browser-library${inSidebar ? ' in-sidebar' : ''}`}
+      role={inSidebar ? 'group' : 'dialog'}
       aria-label="Browser library"
       onKeyDown={(e) => {
         if (e.key === 'Escape') {
@@ -88,7 +90,7 @@ export default function BrowserLibraryPanel({ tab, onTab, onClose, onOpen, close
         }
       }}
     >
-      <header className="browser-library-head">
+      <header className="browser-library-head" hidden={inSidebar}>
         <div className="browser-library-tabs" role="tablist">
           {TABS.map(({ id, label, icon: Icon, shortcut }) => (
             <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? 'selected' : undefined} title={`${label} (${shortcut})`} onClick={() => onTab(id)}>

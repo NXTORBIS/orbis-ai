@@ -73,6 +73,7 @@ const api: NxtorbisApi = {
   onBrowserShortcut: (listener) => subscribe('browser:shortcut', listener),
   setBrowserFocus: (focused) => ipcRenderer.send('browser:focus', focused),
   getBrowserLibrary: () => ipcRenderer.invoke('library:get'),
+  forgetSitePermissions: (origin) => ipcRenderer.invoke('library:forget-permissions', origin),
   addToReadingList: (url, title) => ipcRenderer.invoke('library:reading-add', url, title),
   setReadingListRead: (url, read) => ipcRenderer.invoke('library:reading-read', url, read),
   removeFromReadingList: (url) => ipcRenderer.invoke('library:reading-remove', url),

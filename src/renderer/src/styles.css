@@ -11407,3 +11407,809 @@ html[data-motion='reduced'] .osearch-caret {
   cursor: pointer;
   text-decoration: underline;
 }
+
+/* ---------------------------------------------------------------- the browser sidebar */
+
+/*
+ * A simple browser surface with a powerful sidebar underneath: the page keeps the room it had, and everything that
+ * manages browsing sits beside it rather than filling the toolbar.
+ */
+.browser-stage {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.browser-stage .browser-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.bsb-list {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  min-height: 0;
+  border-right: 1px solid var(--line-strong);
+  background: var(--bg-mid);
+}
+
+.bsb-list-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px 6px;
+}
+
+.bsb-pinned {
+  padding-bottom: 6px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--line);
+}
+
+.bsb-group {
+  margin-bottom: 6px;
+}
+
+.bsb-group-head {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px 2px;
+}
+
+.bsb-group-name {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 1;
+  min-width: 0;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--faint);
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bsb-group-name svg {
+  transition: transform 0.14s ease;
+}
+
+.bsb-group-name svg.open {
+  transform: rotate(90deg);
+}
+
+.bsb-group-tools {
+  display: flex;
+  gap: 1px;
+}
+
+.bsb-group-tools button {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+}
+
+.bsb-group-tools button:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.bsb-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted-strong);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bsb-list.compact .bsb-row {
+  padding: 4px 9px;
+  font-size: 12.5px;
+}
+
+.bsb-list.icons .bsb-row {
+  justify-content: center;
+  padding: 9px 0;
+}
+
+.bsb-row:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.bsb-row.on {
+  background: var(--cyan-fill);
+  color: var(--cyan);
+}
+
+.bsb-row.dragging {
+  opacity: 0.45;
+}
+
+.bsb-row-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.bsb-count {
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--pill-bg-strong);
+  font-size: 10px;
+  color: var(--faint);
+}
+
+.bsb-row-tools {
+  display: none;
+  align-items: center;
+  gap: 1px;
+  color: var(--faint);
+}
+
+.bsb-row:hover .bsb-row-tools,
+.bsb-row:focus-within .bsb-row-tools {
+  display: flex;
+}
+
+.bsb-row-tools [role="button"] {
+  display: grid;
+  place-items: center;
+  width: 19px;
+  height: 19px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.bsb-row-tools [role="button"]:hover {
+  background: var(--hover-strong);
+  color: var(--text);
+}
+
+.bsb-grip {
+  cursor: grab;
+}
+
+.bsb-empty {
+  margin: 2px 9px 6px;
+  padding: 7px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 8px;
+  font-size: 11px;
+  color: var(--faint);
+  text-align: center;
+}
+
+.bsb-arrange {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.bsb-arrange h4,
+.bsb-sub h4 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 8px 9px 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.bsb-hidden-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 5px 9px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--faint);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bsb-hidden-row:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.bsb-hidden-row span:first-of-type {
+  flex: 1;
+  min-width: 0;
+}
+
+.bsb-arrange-actions {
+  display: flex;
+  gap: 6px;
+  padding: 8px 9px 2px;
+}
+
+.bsb-text-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.bsb-text-btn:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.bsb-text-btn.strong {
+  width: 100%;
+  justify-content: flex-start;
+  padding: 8px 10px;
+  font-size: 12.5px;
+}
+
+.bsb-foot {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px;
+  border-top: 1px solid var(--line);
+}
+
+.bsb-list.icons .bsb-foot {
+  flex-direction: column;
+}
+
+.bsb-foot-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex: 1;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--faint);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.bsb-foot-btn:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.bsb-foot-btn.on {
+  background: var(--cyan-fill);
+  color: var(--cyan);
+}
+
+/* The edge of either column, dragged to resize it. */
+.bsb-resizer {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  bottom: 0;
+  width: 7px;
+  z-index: 4;
+  cursor: col-resize;
+}
+
+.bsb-resizer:hover {
+  background: var(--cyan-dim);
+}
+
+.bsb-panel {
+  position: relative;
+  display: flex;
+  flex: none;
+  min-height: 0;
+  border-right: 1px solid var(--line-strong);
+  background: var(--bg-mid);
+}
+
+.bsb-panel-body {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.bsb-pane {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.bsb-pane-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 12px 8px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.bsb-pane-head h3 {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text);
+}
+
+.bsb-pane-action,
+.bsb-pane-close {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+}
+
+.bsb-pane-action:hover,
+.bsb-pane-close:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.bsb-pane-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 8px 16px;
+}
+
+/* A screen written for the stage fills a panel just as well. */
+.bsb-pane-body > .view,
+.bsb-pane-body .browser-library.in-sidebar {
+  position: static;
+  height: 100%;
+  animation: none;
+  background: transparent;
+}
+
+.bsb-pane-body .view-head {
+  padding: 4px 4px 10px;
+}
+
+.bsb-pane-body .view-head h2 {
+  font-size: 15px;
+}
+
+.bsb-filter {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 2px 2px 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  background: var(--pill-bg);
+  color: var(--faint);
+}
+
+.bsb-filter input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  outline: none;
+}
+
+.bsb-filter button {
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+}
+
+.bsb-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.bsb-item {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  border-radius: 8px;
+}
+
+.bsb-item.column {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 3px;
+  padding: 8px 9px;
+  margin-bottom: 4px;
+  background: var(--pill-bg);
+}
+
+.bsb-item:hover {
+  background: var(--hover);
+}
+
+.bsb-item.on {
+  background: var(--cyan-fill);
+}
+
+.bsb-item-main {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: 1;
+  min-width: 0;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.bsb-item-main.plain {
+  width: 100%;
+  cursor: default;
+}
+
+button.bsb-item-main.plain {
+  cursor: pointer;
+}
+
+button.bsb-item-main.plain:hover {
+  background: var(--hover);
+}
+
+.bsb-item-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+
+.bsb-item-text b {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.bsb-item-text small {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.bsb-item-action {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+  opacity: 0;
+}
+
+.bsb-item:hover .bsb-item-action,
+.bsb-item:focus-within .bsb-item-action {
+  opacity: 1;
+}
+
+.bsb-item-action:hover {
+  background: var(--hover-strong);
+  color: var(--text);
+}
+
+.bsb-favicon {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  border-radius: 3px;
+  color: var(--faint);
+}
+
+.bsb-chip {
+  padding: 0 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--group-color) 26%, transparent);
+  color: var(--group-color);
+  font-size: 10px;
+}
+
+.bsb-none {
+  margin: 14px 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--faint);
+}
+
+.bsb-none.plain {
+  margin: 4px 10px 8px;
+}
+
+.bsb-sub {
+  margin-top: 10px;
+}
+
+.bsb-group-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--group-color, var(--faint));
+  text-transform: none;
+  letter-spacing: 0.02em;
+  font-size: 12px;
+}
+
+.bsb-group-title-name {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.bsb-group-count {
+  margin-right: auto;
+  color: var(--faint);
+  font-size: 10.5px;
+}
+
+.bsb-capability {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 10px;
+  margin-bottom: 4px;
+  border-radius: 8px;
+  background: var(--pill-bg);
+}
+
+.bsb-capability b {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.bsb-capability small {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.bsb-capability code {
+  font-size: 10.5px;
+  color: var(--faint);
+}
+
+.bsb-research-q {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.bsb-research-meta {
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.bsb-research-sources,
+.bsb-orion-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 4px;
+}
+
+.bsb-orion-actions {
+  flex-direction: column;
+  margin: 2px 2px 10px;
+}
+
+.bsb-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  padding: 3px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.bsb-source:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.bsb-orion-answer {
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--pill-bg-strong);
+}
+
+.bsb-orion-answer p {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--text);
+  white-space: pre-wrap;
+}
+
+.bsb-secure {
+  margin: 4px 10px 8px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.bsb-secure.ok {
+  color: var(--muted-strong);
+}
+
+.bsb-secure.no {
+  color: var(--warn, #d9a441);
+}
+
+.bsb-shots {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+  padding: 2px;
+}
+
+.bsb-shot {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.bsb-shot > button {
+  padding: 0;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--pill-bg);
+  cursor: zoom-in;
+  overflow: hidden;
+}
+
+.bsb-shot-thumb {
+  display: block;
+  aspect-ratio: 16 / 10;
+}
+
+.bsb-shot-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.bsb-shot figcaption {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.bsb-shot figcaption span:first-child {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.bsb-shot-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.bsb-shot-actions button {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+}
+
+.bsb-shot-actions button:hover {
+  background: var(--hover-strong);
+  color: var(--text);
+}
+
+.bsb-shot-view {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 40px;
+  background: rgb(0 0 0 / 0.72);
+  cursor: zoom-out;
+}
+
+.bsb-shot-view img {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 8px;
+}
+
+.bsb-menu {
+  position: fixed;
+  z-index: 70;
+  min-width: 190px;
+  padding: 5px;
+}
+
+.bsb-menu .menu-label {
+  display: block;
+  padding: 5px 10px 3px;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+}

@@ -151,7 +151,7 @@ export function completeTask(task: Task, done: boolean, time = now()): { task: T
 
 // ---------------------------------------------------------------- views
 
-export type TaskView = 'all' | 'today' | 'upcoming' | 'overdue' | 'completed' | 'flagged'
+export type TaskView = 'all' | 'today' | 'upcoming' | 'overdue' | 'completed' | 'flagged' | 'reminders'
 
 export interface TaskFilter {
   view?: TaskView

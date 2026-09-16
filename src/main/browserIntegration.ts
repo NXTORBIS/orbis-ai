@@ -557,6 +557,7 @@ export class BrowserIntegration {
       if (typeof key === 'string') library.recordPick(key)
     })
     ipcMain.handle('library:clear-downloads', () => library.clearFinishedDownloads())
+    ipcMain.handle('library:forget-permissions', (_e, origin: unknown) => library.forgetPermissions(typeof origin === 'string' && origin ? origin : undefined))
     ipcMain.handle('library:reading-add', (_e, url: unknown, title: unknown) => (typeof url === 'string' ? library.addToReadingList(url, typeof title === 'string' ? title : '') : false))
     ipcMain.handle('library:reading-read', (_e, url: unknown, read: unknown) => {
       if (typeof url === 'string') library.setReadingListRead(url, read !== false)

@@ -1,4 +1,4 @@
-import { Fragment, lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowLeft,
   ArrowRight,
@@ -38,6 +38,12 @@ import {
 import type { NoticeKind } from '../App'
 import type { HistorySwipeView } from '../../../shared/historySwipe'
 import { isOrbisPage, readSearchPageUrl } from '../../../shared/orbisSearch'
+import type { SidebarLayout } from '../../../shared/browserSidebar'
+import { defaultLayout, findPanel, isHidden, movePanel, openPanel, PANELS, panelLabel, setMode, setPanelHidden, setPanelPinned } from '../../../shared/browserSidebar'
+import BrowserSidebar, { SidebarToggle } from './BrowserSidebar'
+import type { Experience } from '../lib/experience'
+import { SidebarPanel } from './BrowserSidebarPanels'
+import type { SidebarContext } from './BrowserSidebarPanels'
 import type { BrowserPermissionRequest, BrowserShortcutEvent, DeviceRequest } from '../../../shared/types'
 import BrowserLibraryPanel from './BrowserLibraryPanel'
 import type { ClosedTab, LibraryTab } from './BrowserLibraryPanel'
@@ -171,6 +177,8 @@ interface Props {
   onLoadingChange?(loading: boolean): void
   /** Opens one of Orbis's own panels (notes, tasks, clipboard, whiteboard, workspaces), asked for by a widget. */
   onOpenOrbisView?(name: string): void
+  /** Everything the user has personalised, so the sidebar's Customize panel changes the real thing. */
+  experience: Experience
 }
 
 const MOBILE_UA =
@@ -328,7 +336,8 @@ export default function BrowserPanel({
   hidden,
   onBackToChat,
   onLoadingChange,
-  onOpenOrbisView
+  onOpenOrbisView,
+  experience
 }: Props): React.JSX.Element {
   const widgets = useWidgets()
   const [firstTab] = useState(createTab)
@@ -354,6 +363,34 @@ export default function BrowserPanel({
   const [permissions, setPermissions] = useState<BrowserPermissionRequest[]>([])
   const [deviceRequest, setDeviceRequest] = useState<DeviceRequest | null>(null)
   /** The search an answer was already asked for, so it is not asked twice while the page re-renders. */
+  /**
+   * The browser sidebar: the list of panels, how this profile has arranged it, and which one is open. Kept with the
+   * profile in the main process, so it is the same the next time Orbis opens and different in another profile.
+   */
+  const [sidebar, setSidebar] = useState<SidebarLayout>(defaultLayout)
+  const sidebarSave = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    void window.api.getBrowserSidebar().then(setSidebar)
+    return window.api.onBrowserSidebar(setSidebar)
+  }, [])
+  /** Changing the arrangement shows immediately and is written shortly after, so dragging does not write per frame. */
+  const changeSidebar = useCallback((next: SidebarLayout) => {
+    setSidebar(next)
+    if (sidebarSave.current) clearTimeout(sidebarSave.current)
+    sidebarSave.current = setTimeout(() => void window.api.saveBrowserSidebar(next), 250)
+  }, [])
+  const sidebarLive = useRef(sidebar)
+  sidebarLive.current = sidebar
+
+  /** Counts beside a panel's name — the real ones, or nothing. */
+  const [libraryCounts, setLibraryCounts] = useState({ downloads: 0, unread: 0 })
+  useEffect(() => {
+    const read = (snapshot: { downloads: { state: string }[]; readingList: { readAt?: number }[] }): void =>
+      setLibraryCounts({ downloads: snapshot.downloads.filter((d) => d.state === 'progressing' || d.state === 'paused').length, unread: snapshot.readingList.filter((r) => !r.readAt).length })
+    void window.api.getBrowserLibrary().then(read)
+    return window.api.onBrowserLibrary(read)
+  }, [])
+
   const searchAnswerAsked = useRef<string | null>(null)
   /** The two-finger history gesture, while it is being pulled. Null whenever nothing is being pulled. */
   const [swipe, setSwipe] = useState<HistorySwipeView | null>(null)
@@ -2198,6 +2235,139 @@ export default function BrowserPanel({
       }
     },
     {
+      id: 'sidebar.list',
+      domain: 'browser',
+      name: 'What is in the browser sidebar',
+      description: 'Every panel, which group it is in, whether it is hidden or pinned, and which one is open.',
+      params: {},
+      mutates: false,
+      run: () => {
+        const layout = sidebarLive.current
+        return readResult({
+          open: layout.open,
+          showing: layout.panel,
+          mode: layout.mode,
+          groups: layout.groups.map((g) => ({ id: g.id, name: g.label, collapsed: g.collapsed, panels: g.items })),
+          pinned: layout.pinned,
+          hidden: layout.hidden,
+          panels: PANELS.map((p) => ({ id: p.id, name: p.label, does: p.description }))
+        })
+      }
+    },
+    {
+      id: 'sidebar.open',
+      domain: 'browser',
+      name: 'Open a sidebar panel',
+      description: 'Opens one of the browser sidebar panels by name: bookmarks, downloads, tabs, notes, customize and the rest. A hidden panel is shown again.',
+      params: { panel: str('The panel, by name.', true) },
+      mutates: true,
+      run: async (p) => {
+        const panel = findPanel(String(p.panel ?? ''))
+        if (!panel) return failure('not-found', `There is no sidebar panel called “${String(p.panel ?? '')}”.`)
+        changeSidebar(openPanel(sidebarLive.current, panel))
+        const ok = await waitUntil(() => sidebarLive.current.panel === panel && sidebarLive.current.open)
+        return ok ? verified(`The ${panelLabel(panel)} panel is open.`, { panel }) : unverified('The panel did not open.')
+      }
+    },
+    {
+      id: 'sidebar.close',
+      domain: 'browser',
+      name: 'Close the sidebar panel',
+      description: 'Closes whichever sidebar panel is open, leaving the list of panels.',
+      params: {},
+      mutates: true,
+      run: async () => {
+        changeSidebar(openPanel(sidebarLive.current, null))
+        const ok = await waitUntil(() => sidebarLive.current.panel === null)
+        return ok ? verified('The panel is closed.') : unverified('The panel is still open.')
+      }
+    },
+    {
+      id: 'sidebar.show',
+      domain: 'browser',
+      name: 'Show or hide the browser sidebar',
+      description: 'Shows the browser sidebar beside the page, or puts it away.',
+      params: { on: bool('True to show it, false to put it away.') },
+      mutates: true,
+      run: async (p) => {
+        const on = p.on !== false
+        changeSidebar({ ...sidebarLive.current, open: on, panel: on ? sidebarLive.current.panel : null })
+        const ok = await waitUntil(() => sidebarLive.current.open === on)
+        return ok ? verified(on ? 'The sidebar is showing.' : 'The sidebar is put away.') : unverified('The sidebar did not change.')
+      }
+    },
+    {
+      id: 'sidebar.hidePanel',
+      domain: 'browser',
+      name: 'Hide a panel from the sidebar',
+      description: 'Takes a panel out of the sidebar, or puts it back. Hiding one does not remove anything from Orbis.',
+      params: { panel: str('The panel, by name.', true), hidden: bool('True to hide it, false to show it again.') },
+      mutates: true,
+      run: async (p) => {
+        const panel = findPanel(String(p.panel ?? ''))
+        if (!panel) return failure('not-found', `There is no sidebar panel called “${String(p.panel ?? '')}”.`)
+        const hide = p.hidden !== false
+        changeSidebar(setPanelHidden(sidebarLive.current, panel, hide))
+        const ok = await waitUntil(() => isHidden(sidebarLive.current, panel) === hide)
+        return ok ? verified(`${panelLabel(panel)} is ${hide ? 'hidden' : 'showing'}.`, { panel }) : unverified('The sidebar did not change.')
+      }
+    },
+    {
+      id: 'sidebar.pin',
+      domain: 'browser',
+      name: 'Pin a panel to the top of the sidebar',
+      description: 'Keeps a panel above the groups, or lets it return to its group.',
+      params: { panel: str('The panel, by name.', true), pinned: bool('True to pin it, false to unpin it.') },
+      mutates: true,
+      run: async (p) => {
+        const panel = findPanel(String(p.panel ?? ''))
+        if (!panel) return failure('not-found', `There is no sidebar panel called “${String(p.panel ?? '')}”.`)
+        const pin = p.pinned !== false
+        changeSidebar(setPanelPinned(sidebarLive.current, panel, pin))
+        const ok = await waitUntil(() => sidebarLive.current.pinned.includes(panel) === pin)
+        return ok ? verified(`${panelLabel(panel)} is ${pin ? 'pinned to the top' : 'back in its group'}.`, { panel }) : unverified('The sidebar did not change.')
+      }
+    },
+    {
+      id: 'sidebar.move',
+      domain: 'browser',
+      name: 'Move a panel in the sidebar',
+      description: 'Moves a panel to a position, and into another group when one is named. Position 0 is the top.',
+      params: { panel: str('The panel, by name.', true), position: int('Where it should end up; 0 is the top.'), group: str('The group to move it into. Leave out to keep it where it is.') },
+      mutates: true,
+      run: async (p) => {
+        const panel = findPanel(String(p.panel ?? ''))
+        if (!panel) return failure('not-found', `There is no sidebar panel called “${String(p.panel ?? '')}”.`)
+        const layout = sidebarLive.current
+        const named = typeof p.group === 'string' && p.group ? layout.groups.find((g) => g.label.toLowerCase() === String(p.group).toLowerCase() || g.id === p.group) : undefined
+        if (typeof p.group === 'string' && p.group && !named) return failure('not-found', `There is no sidebar group called “${p.group}”.`)
+        const where = named?.id ?? layout.groups.find((g) => g.items.includes(panel))?.id
+        if (!where) return failure('not-found', 'That panel is not in a group.')
+        const index = typeof p.position === 'number' ? p.position : 0
+        changeSidebar(movePanel(layout, panel, where, index))
+        const landed = (): number => {
+          const items = sidebarLive.current.groups.find((g) => g.id === where)?.items ?? []
+          return items.indexOf(panel)
+        }
+        const ok = await waitUntil(() => landed() === Math.max(0, Math.min(index, (sidebarLive.current.groups.find((g) => g.id === where)?.items.length ?? 1) - 1)))
+        return ok ? verified(`${panelLabel(panel)} moved.`, { panel }) : unverified('The panel did not move.')
+      }
+    },
+    {
+      id: 'sidebar.mode',
+      domain: 'browser',
+      name: 'Icons or labels in the sidebar',
+      description: 'Narrows the browser sidebar to icons alone, or shows each panel name.',
+      params: { mode: str('Either "icons" or "labels".', true) },
+      mutates: true,
+      run: async (p) => {
+        const mode = String(p.mode ?? '').toLowerCase() === 'icons' ? 'icons' : 'labels'
+        changeSidebar(setMode(sidebarLive.current, mode))
+        const ok = await waitUntil(() => sidebarLive.current.mode === mode)
+        return ok ? verified(mode === 'icons' ? 'The sidebar shows icons alone.' : 'The sidebar shows names.') : unverified('The sidebar did not change.')
+      }
+    },
+    {
       id: 'tabs.list',
       domain: 'tabs',
       name: 'List tabs',
@@ -2209,6 +2379,55 @@ export default function BrowserPanel({
   ]
   useControlScope('browser-panel', capabilities)
   useControlRendered()
+
+  /** What the sidebar's panels are given: live browser state, and the same ways of acting on it that Orion uses. */
+  const sidebarContext: SidebarContext = useMemo(
+    () => ({
+      tabs: tabs.map((t) => ({ id: t.id, url: t.url, title: t.title, favicon: t.favicon, loading: t.loading, pinned: t.pinned, private: t.private, muted: Boolean(t.muted) || mutedHosts.includes(hostOf(t.url)), audible: t.audible, groupId: t.groupId, customTitle: t.customTitle })),
+      groups,
+      activeTabId: activeId,
+      closedTabs,
+      pageUrl: active.url,
+      getWebContentsId: () => {
+        try {
+          return views.current.get(activeId)?.getWebContentsId() ?? null
+        } catch {
+          return null
+        }
+      },
+      navigate: (url: string) => navigate(url),
+      openTab: (url: string) => openTab(url),
+      reopenTab: (position: number) => reopenTab(position),
+      onNotify,
+      experience,
+      onClose: () => changeSidebar(openPanel(sidebarLive.current, null)),
+      askOrion: (prompt, onDelta) => {
+        const requestId = newId()
+        let text = ''
+        const off = window.api.onChatEvent(requestId, (event) => {
+          if (event.type === 'delta') {
+            text += event.content ?? ''
+            onDelta(text, false)
+          } else if (event.type === 'done' || event.type === 'error') {
+            onDelta(text, true)
+            off()
+          }
+        })
+        // Asked as a browser task, so Orion reads the page in front rather than guessing at it.
+        void window.api
+          .sendChat({ requestId, model: 'orion-core', ask: false, images: false, messages: [{ id: requestId, role: 'user', content: prompt, browserTask: true, createdAt: Date.now() }] })
+          .catch(() => {
+            onDelta(text, true)
+            off()
+          })
+        return () => {
+          off()
+          void window.api.abortChat(requestId).catch(() => undefined)
+        }
+      }
+    }),
+    [tabs, groups, activeId, closedTabs, active.url, mutedHosts, onNotify, experience, changeSidebar, navigate, openTab, reopenTab]
+  )
 
   const immersive = windowFullscreen && mode === 'full' && !hidden && !htmlFullscreen
   const className = ['browser-panel', mode, hidden ? 'to-chat' : '', resizing ? 'resizing' : '', picking ? 'picking' : '', htmlFullscreen ? 'html-fullscreen' : '', immersive ? 'immersive' : ''].filter(Boolean).join(' ')
@@ -2436,6 +2655,7 @@ export default function BrowserPanel({
         )}
 
         <div className="browser-window-actions">
+          <SidebarToggle open={sidebar.open} onToggle={() => changeSidebar({ ...sidebarLive.current, open: !sidebarLive.current.open })} />
           <ExtensionsToolbar requestedPopup={extensionPopup} onPopupShown={() => setExtensionPopup(null)} onOpenTab={(url) => openTab(url)} onNotify={onNotify} />
           <span className="browser-mode-badge" role="status" title="How the browser is shown now. Change the size next to the URL bar">
             {modeLabel}
@@ -2621,6 +2841,16 @@ export default function BrowserPanel({
         </div>
       )}
 
+      <div className="browser-stage">
+      {sidebar.open && (
+        <BrowserSidebar
+          layout={sidebar}
+          onLayout={changeSidebar}
+          onReset={() => void window.api.resetBrowserSidebar().then(setSidebar)}
+          badges={{ tabs: tabs.length, downloads: libraryCounts.downloads, readingList: libraryCounts.unread }}
+          renderPanel={(id) => <SidebarPanel id={id} ctx={sidebarContext} />}
+        />
+      )}
       <div className="browser-body">
         {hasPage && GOOGLE_SIGNIN_REJECTED.test(active.url) && (
           <div className="browser-signin-notice" role="alert">
@@ -2858,6 +3088,7 @@ export default function BrowserPanel({
           </div>
         )}
         {resizing && <div className={`browser-drag-shield${mode === 'window' ? ' corner' : ''}`} />}
+      </div>
       </div>
     </section>
   )

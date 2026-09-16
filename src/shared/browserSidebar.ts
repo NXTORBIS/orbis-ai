@@ -36,6 +36,7 @@ export type PanelId =
   | 'adblock'
   | 'tracking'
   | 'controls'
+  | 'workflows'
   | 'orion'
   | 'customize'
 
@@ -79,6 +80,7 @@ export const PANELS: PanelInfo[] = [
   { id: 'tracking', label: 'Tracking protection', home: 'protection', description: 'Trackers, pop-ups and redirects' },
 
   { id: 'controls', label: 'Browser controls', home: 'orbis', description: 'Everything Orbis can be asked to do, and what it has done' },
+  { id: 'workflows', label: 'Workflows', home: 'orbis', description: 'Sequences Orbis runs for you, and what they did' },
   { id: 'orion', label: 'Orion', home: 'orbis', description: 'Ask about this page, summarise it, or research it' },
   { id: 'customize', label: 'Customize', home: 'orbis', description: 'Themes, wallpapers, widgets and how Orbis looks' }
 ]

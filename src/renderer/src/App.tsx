@@ -9,14 +9,6 @@ import BrowserPanel from './components/BrowserPanel'
 import ChatHeader from './components/ChatHeader'
 import ChatView from './components/ChatView'
 import ImagesView from './components/ImagesView'
-import WorkflowsView from './components/WorkflowsView'
-import NotesView from './components/NotesView'
-import TasksView from './components/TasksView'
-import ClipboardView from './components/ClipboardView'
-import WhiteboardView from './components/WhiteboardView'
-import WorkspacesView from './components/WorkspacesView'
-import ProfilesView from './components/ProfilesView'
-import CustomizeView from './components/CustomizeView'
 import { useExperience } from './lib/experience'
 import HudBackground from './components/HudBackground'
 import Sidebar from './components/Sidebar'
@@ -89,28 +81,16 @@ export default function App(): React.JSX.Element {
     }
   })
   const [imagesOpen, setImagesOpen] = useState(false)
-  const [workflowsOpen, setWorkflowsOpen] = useState(false)
-  const [notesOpen, setNotesOpen] = useState(false)
-  const [tasksOpen, setTasksOpen] = useState(false)
-  const [clipboardOpen, setClipboardOpen] = useState(false)
-  const [whiteboardOpen, setWhiteboardOpen] = useState(false)
-  const [workspacesOpen, setWorkspacesOpen] = useState(false)
-  const [profilesOpen, setProfilesOpen] = useState(false)
-  const [customizeOpen, setCustomizeOpen] = useState(false)
   /** Everything the user has personalised, applied to the window; an untouched Orbis is left exactly as it is. */
   const experience = useExperience()
 
-  /** Opens one of Orbis's own panels — from a widget, say — and puts the others away. */
+  /**
+   * Opens one of Orbis's own panels — from a widget, say. These live in the browser's sidebar now, so the browser is
+   * asked to open the panel of that name through the same control layer Orion uses.
+   */
   const openOrbisView = useCallback((name: string): void => {
     setImagesOpen(false)
-    setWorkflowsOpen(false)
-    setProfilesOpen(false)
-    setCustomizeOpen(false)
-    setNotesOpen(name === 'notes')
-    setTasksOpen(name === 'tasks')
-    setClipboardOpen(name === 'clipboard')
-    setWhiteboardOpen(name === 'whiteboard')
-    setWorkspacesOpen(name === 'workspaces')
+    void window.api.executeControl({ capability: 'sidebar.open', params: { panel: name }, target: {}, source: 'user' }).catch(() => undefined)
   }, [])
   const [webSearch, setWebSearch] = useState(false)
   const [searchToken, setSearchToken] = useState(0)
@@ -1300,7 +1280,7 @@ export default function App(): React.JSX.Element {
         personalizedSuggestions={settings?.personalizedSuggestions !== false}
         askModel={current.model}
         onNotify={notify}
-        onOpenWorkflows={() => setWorkflowsOpen(true)}
+        onOpenWorkflows={() => openOrbisView('workflows')}
         loading={browserOpen && browserLoading}
         browserHidden={browserOpen && browserHidden}
         onShowBrowser={() => setBrowserHidden(false)}
@@ -1344,113 +1324,14 @@ export default function App(): React.JSX.Element {
           incognito={current.incognito}
           streams={streams}
           imageCount={galleryImages.length}
-          imagesOpen={imagesOpen}
-          workflowsOpen={workflowsOpen}
-          notesOpen={notesOpen}
-          tasksOpen={tasksOpen}
-          clipboardOpen={clipboardOpen}
-          whiteboardOpen={whiteboardOpen}
-          workspacesOpen={workspacesOpen}
-          profilesOpen={profilesOpen}
-          customizeOpen={customizeOpen}
+          imagesOpen={imagesOpen}
           searchToken={searchToken}
           userName={settings?.userName ?? 'You'}
           userTitle={settings?.userTitle ?? ''}
           onNewChat={newChat}
           onIncognito={toggleIncognito}
           onSearch={openSearch}
-          onImages={() => {
-            setWorkflowsOpen(false)
-            setImagesOpen((open) => !open)
-          }}
-          onWorkflows={() => {
-            setCustomizeOpen(false)
-            setProfilesOpen(false)
-            setWorkspacesOpen(false)
-            setWhiteboardOpen(false)
-            setImagesOpen(false)
-            setNotesOpen(false)
-            setTasksOpen(false)
-            setClipboardOpen(false)
-            setWorkflowsOpen((open) => !open)
-          }}
-          onNotes={() => {
-            setCustomizeOpen(false)
-            setProfilesOpen(false)
-            setWorkspacesOpen(false)
-            setWhiteboardOpen(false)
-            setImagesOpen(false)
-            setWorkflowsOpen(false)
-            setTasksOpen(false)
-            setClipboardOpen(false)
-            setNotesOpen((open) => !open)
-          }}
-          onTasks={() => {
-            setCustomizeOpen(false)
-            setProfilesOpen(false)
-            setWorkspacesOpen(false)
-            setWhiteboardOpen(false)
-            setImagesOpen(false)
-            setWorkflowsOpen(false)
-            setNotesOpen(false)
-            setClipboardOpen(false)
-            setTasksOpen((open) => !open)
-          }}
-          onClipboard={() => {
-            setCustomizeOpen(false)
-            setProfilesOpen(false)
-            setWorkspacesOpen(false)
-            setWhiteboardOpen(false)
-            setImagesOpen(false)
-            setWorkflowsOpen(false)
-            setNotesOpen(false)
-            setTasksOpen(false)
-            setClipboardOpen((open) => !open)
-          }}
-          onWhiteboard={() => {
-            setCustomizeOpen(false)
-            setProfilesOpen(false)
-            setWorkspacesOpen(false)
-            setImagesOpen(false)
-            setWorkflowsOpen(false)
-            setNotesOpen(false)
-            setTasksOpen(false)
-            setClipboardOpen(false)
-            setWhiteboardOpen((open) => !open)
-          }}
-          onWorkspaces={() => {
-            setCustomizeOpen(false)
-            setProfilesOpen(false)
-            setImagesOpen(false)
-            setWorkflowsOpen(false)
-            setNotesOpen(false)
-            setTasksOpen(false)
-            setClipboardOpen(false)
-            setWhiteboardOpen(false)
-            setWorkspacesOpen((open) => !open)
-          }}
-          onProfiles={() => {
-            setCustomizeOpen(false)
-            setImagesOpen(false)
-            setWorkflowsOpen(false)
-            setNotesOpen(false)
-            setTasksOpen(false)
-            setClipboardOpen(false)
-            setWhiteboardOpen(false)
-            setWorkspacesOpen(false)
-            setProfilesOpen((open) => !open)
-          }}
-          onCustomize={() => {
-            setImagesOpen(false)
-            setWorkflowsOpen(false)
-            setNotesOpen(false)
-            setTasksOpen(false)
-            setClipboardOpen(false)
-            setWhiteboardOpen(false)
-            setWorkspacesOpen(false)
-            setProfilesOpen(false)
-            setCustomizeOpen((open) => !open)
-          }}
+          onImages={() => setImagesOpen((open) => !open)}
           onBrowser={toggleBrowser}
           onSelect={selectChat}
           onRename={renameConversation}
@@ -1494,14 +1375,6 @@ export default function App(): React.JSX.Element {
           {imagesOpen && (
             <ImagesView images={galleryImages} onClose={() => setImagesOpen(false)} onOpenChat={selectChat} onEdit={editGalleryImage} onNotify={notify} />
           )}
-          {workflowsOpen && <WorkflowsView onClose={() => setWorkflowsOpen(false)} onNotify={notify} />}
-          {notesOpen && <NotesView onClose={() => setNotesOpen(false)} onNotify={notify} />}
-          {tasksOpen && <TasksView onClose={() => setTasksOpen(false)} onNotify={notify} />}
-          {clipboardOpen && <ClipboardView onClose={() => setClipboardOpen(false)} onNotify={notify} />}
-          {whiteboardOpen && <WhiteboardView onClose={() => setWhiteboardOpen(false)} onNotify={notify} />}
-          {workspacesOpen && <WorkspacesView onClose={() => setWorkspacesOpen(false)} onNotify={notify} />}
-          {profilesOpen && <ProfilesView onClose={() => setProfilesOpen(false)} onNotify={notify} />}
-          {customizeOpen && <CustomizeView experience={experience} onClose={() => setCustomizeOpen(false)} onNotify={notify} />}
         </main>
 
         {browserOpen && (
@@ -1535,6 +1408,7 @@ export default function App(): React.JSX.Element {
             onBackToChat={() => setBrowserHidden(true)}
             onLoadingChange={setBrowserLoading}
             onOpenOrbisView={openOrbisView}
+            experience={experience}
           />
         )}
 

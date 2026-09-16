@@ -15,14 +15,6 @@ import {
   Settings,
   SquarePen,
   Trash2,
-  ClipboardList,
-  LayoutGrid,
-  Paintbrush,
-  ListTodo,
-  PenLine,
-  UserRound,
-  NotebookPen,
-  Workflow as WorkflowIcon,
   X
 } from 'lucide-react'
 import type { Conversation } from '../../../shared/types'
@@ -40,14 +32,6 @@ interface Props {
   streams: Record<string, StreamState>
   imageCount: number
   imagesOpen: boolean
-  workflowsOpen: boolean
-  notesOpen: boolean
-  tasksOpen: boolean
-  clipboardOpen: boolean
-  whiteboardOpen: boolean
-  workspacesOpen: boolean
-  profilesOpen: boolean
-  customizeOpen: boolean
   /** Changes whenever the search box should open and take focus. */
   searchToken: number
   userName: string
@@ -56,14 +40,6 @@ interface Props {
   onIncognito(): void
   onSearch(): void
   onImages(): void
-  onWorkflows(): void
-  onNotes(): void
-  onTasks(): void
-  onClipboard(): void
-  onWhiteboard(): void
-  onWorkspaces(): void
-  onProfiles(): void
-  onCustomize(): void
   onBrowser(): void
   onSelect(id: string): void
   onRename(id: string, title: string): void
@@ -148,15 +124,8 @@ export default function Sidebar(props: Props): React.JSX.Element {
     { label: 'Incognito chat', icon: HatGlasses, onClick: props.onIncognito, active: props.incognito, shortcut: 'Ctrl+Shift+N' },
     { label: 'Search chats', icon: Search, onClick: props.onSearch },
     { label: 'Images', icon: Images, onClick: props.onImages, active: props.imagesOpen, badge: props.imageCount },
-    { label: 'Workflows', icon: WorkflowIcon, onClick: props.onWorkflows, active: props.workflowsOpen },
-    { label: 'Notes', icon: NotebookPen, onClick: props.onNotes, active: props.notesOpen },
-    { label: 'Tasks', icon: ListTodo, onClick: props.onTasks, active: props.tasksOpen },
-    { label: 'Clipboard', icon: ClipboardList, onClick: props.onClipboard, active: props.clipboardOpen },
-    { label: 'Whiteboard', icon: PenLine, onClick: props.onWhiteboard, active: props.whiteboardOpen },
-    { label: 'Workspaces', icon: LayoutGrid, onClick: props.onWorkspaces, active: props.workspacesOpen },
-    { label: 'Profiles', icon: UserRound, onClick: props.onProfiles, active: props.profilesOpen },
-    { label: 'Customize', icon: Paintbrush, onClick: props.onCustomize, active: props.customizeOpen },
-    { label: 'Browser', icon: Globe, onClick: props.onBrowser }
+    // Everything that manages browsing lives in the browser's own sidebar now. This is the way to it.
+    { label: 'Browser', icon: Globe, onClick: props.onBrowser, shortcut: 'Ctrl+Shift+B' }
   ]
 
   const isOpen = (id: string): boolean => Boolean(query.trim()) || sections[id] !== false

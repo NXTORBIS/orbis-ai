@@ -36,6 +36,7 @@ import {
   Telescope,
   Trash2,
   UserRound,
+  Workflow,
   X
 } from 'lucide-react'
 import type { PanelId, SidebarLayout } from '../../../shared/browserSidebar'
@@ -103,6 +104,7 @@ const ICONS: Record<PanelId, LucideIcon> = {
   adblock: ShieldOff,
   tracking: Eye,
   controls: Sliders,
+  workflows: Workflow,
   orion: Sparkles,
   customize: Paintbrush
 }
