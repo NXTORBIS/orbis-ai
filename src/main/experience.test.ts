@@ -49,7 +49,7 @@ test('a stored configuration is read safely: nonsense falls back to Orbis’s ow
       { id: 'w1', name: 'Mine', source: 'data:image/png;base64,AAA', kind: 'image', addedAt: 5 },
       { id: 'w2', name: 'Remote', source: 'https://example.com/a.png', kind: 'image' }
     ],
-    themes: [{ id: 't1', name: 'Mine', base: 'neon', tokens: { accent: '#fff', 'bad key!': 'x' } }],
+    themes: [{ id: 't1', name: 'Mine', base: 'neon', tokens: { cyan: '#fff', accent: '#fff', 'bad key!': 'x' } }],
     themeId: 'nope',
     privacy: { keepUsageDays: 10_000 },
     notifications: { quietHours: { enabled: true, from: '25:00', to: '07:30' } }
@@ -63,7 +63,7 @@ test('a stored configuration is read safely: nonsense falls back to Orbis’s ow
   assert.equal(config.newTab.wallpaperId, null, 'a wallpaper that is not there is not chosen')
   assert.deepEqual(config.wallpapers.map((w) => w.id), ['w1'], 'a wallpaper fetched from the internet is refused')
   assert.equal(config.themes[0].base, 'dark')
-  assert.deepEqual(Object.keys(config.themes[0].tokens), ['accent'])
+  assert.deepEqual(Object.keys(config.themes[0].tokens), ['cyan'], 'only tokens Orbis really uses survive')
   assert.equal(config.themeId, null)
   assert.equal(config.privacy.keepUsageDays, 365)
   assert.equal(config.notifications.quietHours.from, '22:00')

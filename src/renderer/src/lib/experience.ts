@@ -60,6 +60,8 @@ export function applyExperience(config: ExperienceConfig, systemReducedMotion: b
 
 export interface Experience {
   config: ExperienceConfig
+  /** What is really stored, ignoring any preview: what a screen should compare its own draft against. */
+  saved: ExperienceConfig
   /** True until the stored configuration has been read, so nothing flashes on startup. */
   loading: boolean
   /** Shows a configuration without saving it, for live preview while the user is choosing. */
@@ -134,5 +136,5 @@ export function useExperience(): Experience {
     applyExperience(saved, systemMotion.current)
   }, [])
 
-  return { config: previewed ?? config, loading, preview, save, cancelPreview }
+  return { config: previewed ?? config, saved: config, loading, preview, save, cancelPreview }
 }

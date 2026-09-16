@@ -15,7 +15,6 @@ import {
   Settings,
   SquarePen,
   Trash2,
-  Users,
   ClipboardList,
   LayoutGrid,
   Paintbrush,
@@ -65,7 +64,6 @@ interface Props {
   onWorkspaces(): void
   onProfiles(): void
   onCustomize(): void
-  onAssistants(): void
   onBrowser(): void
   onSelect(id: string): void
   onRename(id: string, title: string): void
@@ -158,7 +156,6 @@ export default function Sidebar(props: Props): React.JSX.Element {
     { label: 'Workspaces', icon: LayoutGrid, onClick: props.onWorkspaces, active: props.workspacesOpen },
     { label: 'Profiles', icon: UserRound, onClick: props.onProfiles, active: props.profilesOpen },
     { label: 'Customize', icon: Paintbrush, onClick: props.onCustomize, active: props.customizeOpen },
-    { label: 'Assistants', icon: Users, onClick: props.onAssistants },
     { label: 'Browser', icon: Globe, onClick: props.onBrowser }
   ]
 

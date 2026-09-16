@@ -130,17 +130,27 @@ export default function WidgetHost({ widgets, onOpen, onChange }: WidgetHostProp
   )
 }
 
-/** Reads the widgets the user has set up and whether they asked for any, and follows every change to them. */
-export function useWidgets(): { on: boolean; widgets: WidgetInstance[]; save(widgets: WidgetInstance[]): void } {
+/**
+ * Reads what the new tab should show: the widgets the user has set up, whether they asked for any, and the wallpaper
+ * they chose. Everything follows changes as they are made, so the tab never has to be reopened.
+ */
+export function useWidgets(): { on: boolean; widgets: WidgetInstance[]; wallpaper: string | null; save(widgets: WidgetInstance[]): void } {
   const [widgets, setWidgets] = useState<WidgetInstance[]>([])
   const [on, setOn] = useState(false)
+  const [wallpaper, setWallpaper] = useState<string | null>(null)
 
   useEffect(() => {
     let alive = true
-    const take = (config: { widgets: unknown[]; newTab: { widgets: boolean } }): void => {
+    const take = (config: {
+      widgets: unknown[]
+      newTab: { widgets: boolean; wallpaperId: string | null }
+      wallpapers: { id: string; source: string; kind: 'image' | 'gradient' }[]
+    }): void => {
       if (!alive) return
       setWidgets(config.widgets as WidgetInstance[])
       setOn(config.newTab.widgets)
+      const chosen = config.newTab.wallpaperId ? config.wallpapers.find((w) => w.id === config.newTab.wallpaperId) : null
+      setWallpaper(chosen ? (chosen.kind === 'image' ? `url("${chosen.source}") center / cover no-repeat` : chosen.source) : null)
     }
     void window.api.getExperience().then(take)
     const off = window.api.onExperienceChanged(take)
@@ -155,5 +165,5 @@ export function useWidgets(): { on: boolean; widgets: WidgetInstance[]; save(wid
     void window.api.getExperience().then((config) => window.api.saveExperience({ ...config, widgets: next }, 'Changed widgets'))
   }
 
-  return { on, widgets, save }
+  return { on, widgets, wallpaper, save }
 }

@@ -57,7 +57,6 @@ interface Props {
   personalizedSuggestions?: boolean
   /** The model and assistant that answer Ctrl+Enter questions. */
   askModel: string
-  askPersona: string
   onNotify(message: string, kind?: NoticeKind): void
   /** Opens the full Workflows screen from the quick panel. */
   onOpenWorkflows?(): void
@@ -206,7 +205,6 @@ export default function UrlBar({
   searchSuggestions = true,
   personalizedSuggestions = true,
   askModel,
-  askPersona,
   onNotify,
   onOpenWorkflows
 }: Props): React.JSX.Element {
@@ -779,7 +777,7 @@ export default function UrlBar({
           </div>
         )}
       </form>
-      {ask && <OrionAnswer key={ask.id} question={ask.question} page={ask.page} context={ask.context} model={askModel} persona={askPersona} onClose={() => setAsk(null)} />}
+      {ask && <OrionAnswer key={ask.id} question={ask.question} page={ask.page} context={ask.context} model={askModel} onClose={() => setAsk(null)} />}
       {browserHidden && (
         <button type="button" className="url-return" onClick={onShowBrowser} title="Back to the open browser, right where you left it">
           <PanelTop size={13} />

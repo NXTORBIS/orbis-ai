@@ -8,6 +8,10 @@
 
 import type { WidgetInstance } from './widgets'
 import { normalizeWidgets } from './widgets.ts'
+import type { Dashboard } from './dashboards'
+import { normalizeDashboards } from './dashboards.ts'
+import type { StoredTheme } from './themes'
+import { cleanTokens, themeExists, themeName, themeTokens } from './themes.ts'
 
 export const EXPERIENCE_SCHEMA_VERSION = 1
 
@@ -49,18 +53,6 @@ export interface WallpaperConfig {
   source: string
   kind: 'image' | 'gradient'
   addedAt: number
-}
-
-export interface ThemeTokens {
-  [token: string]: string
-}
-
-export interface ThemeConfig {
-  id: string
-  name: string
-  base: 'dark' | 'light'
-  tokens: ThemeTokens
-  createdAt: number
 }
 
 export interface NewTabConfig {
@@ -116,15 +108,16 @@ export interface ExperienceConfig {
   appearance: AppearanceConfig
   newTab: NewTabConfig
   wallpapers: WallpaperConfig[]
-  themes: ThemeConfig[]
+  themes: StoredTheme[]
   /** Which of the user's themes is in use, or null for Orbis's own. */
   themeId: string | null
   privacy: PrivacyConfig
   performance: PerformanceConfig
   accessibility: AccessibilityConfig
   notifications: NotificationsConfig
-  /** Set by later parts of the runtime (widgets, dashboards, scenes, rules); kept here so one file holds everything. */
-  dashboards: unknown[]
+  dashboards: Dashboard[]
+  /** Which dashboard's widgets are on screen, or null when the widgets below are simply the ones chosen. */
+  activeDashboardId: string | null
   widgets: WidgetInstance[]
   scenes: unknown[]
   rules: unknown[]
@@ -148,6 +141,7 @@ export function defaultConfig(): ExperienceConfig {
     accessibility: { ...DEFAULT_ACCESSIBILITY },
     notifications: { quietHours: { ...DEFAULT_NOTIFICATIONS.quietHours }, categories: {} },
     dashboards: [],
+    activeDashboardId: null,
     widgets: [],
     scenes: [],
     rules: [],
@@ -189,13 +183,15 @@ export function normalizeConfig(raw: unknown): ExperienceConfig {
     .filter((w) => w.source.startsWith('data:image/') || w.kind === 'gradient')
     .map((w) => ({ id: w.id, name: String(w.name ?? 'Wallpaper').slice(0, 60), source: w.source.slice(0, 8_000_000), kind: w.kind === 'gradient' ? ('gradient' as const) : ('image' as const), addedAt: num(w.addedAt, Date.now(), 0, Number.MAX_SAFE_INTEGER) }))
     .slice(0, 60)
+  const dashboards = normalizeDashboards(r.dashboards)
   const themes = (Array.isArray(r.themes) ? r.themes : [])
-    .filter((t): t is ThemeConfig => Boolean(t) && typeof t.id === 'string')
+    .filter((t): t is StoredTheme => Boolean(t) && typeof t.id === 'string')
     .map((t) => ({
       id: t.id,
       name: String(t.name ?? 'Theme').slice(0, 60),
       base: t.base === 'light' ? ('light' as const) : ('dark' as const),
-      tokens: Object.fromEntries(Object.entries(t.tokens ?? {}).filter(([key, value]) => /^[a-z-]{1,40}$/.test(key) && typeof value === 'string' && value.length <= 60).slice(0, 60)),
+      // Only tokens Orbis really uses, holding only what a colour can hold.
+      tokens: cleanTokens(t.tokens),
       createdAt: num(t.createdAt, Date.now(), 0, Number.MAX_SAFE_INTEGER)
     }))
     .slice(0, 40)
@@ -222,7 +218,8 @@ export function normalizeConfig(raw: unknown): ExperienceConfig {
     },
     wallpapers,
     themes,
-    themeId: typeof r.themeId === 'string' && themes.some((t) => t.id === r.themeId) ? r.themeId : null,
+    // One of Orbis's own themes, or one of yours; a theme that has been deleted falls back to Orbis's colours.
+    themeId: typeof r.themeId === 'string' && themeExists(r.themeId, themes) ? r.themeId : null,
     privacy: {
       doNotPersonalize: bool(privacy.doNotPersonalize, DEFAULT_PRIVACY.doNotPersonalize),
       keepOutOfPrivate: bool(privacy.keepOutOfPrivate, DEFAULT_PRIVACY.keepOutOfPrivate),
@@ -246,7 +243,8 @@ export function normalizeConfig(raw: unknown): ExperienceConfig {
       },
       categories: Object.fromEntries(Object.entries(notifications.categories ?? {}).filter(([key, value]) => /^[a-z-]{1,40}$/.test(key) && typeof value === 'boolean').slice(0, 40))
     },
-    dashboards: list(r.dashboards),
+    dashboards,
+    activeDashboardId: typeof r.activeDashboardId === 'string' && dashboards.some((d) => d.id === r.activeDashboardId) ? r.activeDashboardId : null,
     widgets: normalizeWidgets(list(r.widgets)),
     scenes: list(r.scenes),
     rules: list(r.rules),
@@ -416,7 +414,7 @@ export function describeConfig(config: ExperienceConfig): string[] {
   if (a.transparency !== 1) lines.push(`Panels ${a.transparency < 1 ? 'more solid' : 'more see-through'}`)
   if (a.blur !== 1) lines.push(`Background blur ${Math.round(a.blur * 100)}%`)
   if (a.reducedMotion !== 'system') lines.push(`Less movement: ${a.reducedMotion}`)
-  if (config.themeId) lines.push(`Theme: ${config.themes.find((t) => t.id === config.themeId)?.name ?? config.themeId}`)
+  if (config.themeId) lines.push(`Theme: ${themeName(config.themeId, config.themes) ?? config.themeId}`)
   if (config.wallpapers.length) lines.push(`${config.wallpapers.length} wallpaper${config.wallpapers.length === 1 ? '' : 's'}`)
   if (config.newTab.mode !== 'current') lines.push(`New tab: ${config.newTab.mode}`)
   if (config.accessibility.highContrast) lines.push('High contrast')
@@ -458,8 +456,7 @@ export function appearanceVariables(config: ExperienceConfig, systemReducedMotio
   if (a.transparency !== 1) out['--glass'] = `rgba(14, 15, 18, ${Math.min(1, 0.84 * a.transparency).toFixed(2)})`
   if (a.blur !== 1) out['--blur-scale'] = String(a.blur)
   if (a.fontScale !== 1) out['--font-scale'] = String(a.fontScale)
-  const theme = config.themeId ? config.themes.find((t) => t.id === config.themeId) : null
-  if (theme) for (const [token, value] of Object.entries(theme.tokens)) out[`--${token}`] = value
+  for (const [token, value] of Object.entries(themeTokens(config.themeId, config.themes))) out[`--${token}`] = value
   if (config.accessibility.highContrast) {
     out['--text'] = '#ffffff'
     out['--muted'] = '#d8dbe1'

@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Attachment, ChatMessage, ChatRequest, Conversation, Settings, SettingsUpdate, StreamEvent } from '../../shared/types'
 import { IMAGE_GEN_STATUS } from '../../shared/types'
+import { themeBase } from '../../shared/themes'
 import { DEFAULT_MODEL, MODELS, isKnownModel, modelLabel } from '../../shared/models'
 import { automationActive, automationProgress } from '../../shared/automation'
-import { DEFAULT_PERSONA } from '../../shared/personas'
 import { copyText, newId, titleFromMessage } from './lib/utils'
 import BrowserPanel from './components/BrowserPanel'
 import ChatHeader from './components/ChatHeader'
@@ -65,7 +65,6 @@ interface PendingDelta {
 interface DraftChat {
   incognito: boolean
   model: string
-  persona: string
 }
 
 const COUNTDOWN = /Retrying in \d+s/
@@ -75,7 +74,7 @@ export default function App(): React.JSX.Element {
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [streams, setStreams] = useState<Record<string, StreamState>>({})
   const [activeId, setActiveId] = useState<string | null>(null)
-  const [draft, setDraft] = useState<DraftChat>({ model: DEFAULT_MODEL, persona: DEFAULT_PERSONA, incognito: false })
+  const [draft, setDraft] = useState<DraftChat>({ model: DEFAULT_MODEL, incognito: false })
   const [loaded, setLoaded] = useState(false)
   /** The Orbis startup screen, shown on every launch; 'leaving' while it hands over to the main interface. */
   const [welcome, setWelcome] = useState<'closed' | 'open' | 'leaving'>('open')
@@ -191,7 +190,6 @@ export default function App(): React.JSX.Element {
   /** Latest state of each running browser automation, by chat request, for the browser banner. */
   const [automations, setAutomations] = useState<Record<string, NonNullable<ChatMessage['automation']>>>({})
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
-  const [personaMenuOpen, setPersonaMenuOpen] = useState(false)
   const [quickPromptsOpen, setQuickPromptsOpen] = useState(false)
   const [notices, setNotices] = useState<Notice[]>([])
   const [unread, setUnread] = useState(0)
@@ -246,7 +244,7 @@ export default function App(): React.JSX.Element {
     Promise.all([window.api.getSettings(), window.api.listConversations()]).then(
       ([s, list]) => {
         setSettings(s)
-        setDraft((d) => ({ ...d, model: isKnownModel(s.defaultModel) ? s.defaultModel : DEFAULT_MODEL, persona: DEFAULT_PERSONA }))
+        setDraft((d) => ({ ...d, model: isKnownModel(s.defaultModel) ? s.defaultModel : DEFAULT_MODEL }))
         commitConversations(list)
         // A blank saved name means setup never really finished.
         setNeedsName(!s.welcomeCompleted || !s.userName.trim())
@@ -280,9 +278,12 @@ export default function App(): React.JSX.Element {
   const dark = settings ? settings.theme === 'dark' || (settings.theme === 'system' && systemDark) : true
   const effects = settings?.effects !== false
 
+  // A theme that expects light surroundings turns on the light Orbis already has, and then refines it; with no theme,
+  // the user's own light-or-dark choice stands exactly as before.
+  const experienceBase = themeBase(experience.config.themeId, experience.config.themes)
   useEffect(() => {
-    document.documentElement.dataset.theme = dark ? 'dark' : 'light'
-  }, [dark])
+    document.documentElement.dataset.theme = experienceBase ?? (dark ? 'dark' : 'light')
+  }, [dark, experienceBase])
 
   /** Applies buffered stream text once per animation frame instead of once per token. */
   const flushDeltas = useCallback(() => {
@@ -475,7 +476,6 @@ export default function App(): React.JSX.Element {
       const request: ChatRequest = {
         requestId,
         model: conversation.model,
-        persona: conversation.persona,
         messages: history,
         webSearch,
         browser: browserPageRef.current ?? undefined
@@ -752,15 +752,6 @@ export default function App(): React.JSX.Element {
     [activeId, persist, updateConversation]
   )
 
-  const changePersona = useCallback(
-    (persona: string) => {
-      if (!activeId) return setDraft((d) => ({ ...d, persona }))
-      updateConversation(activeId, (c) => ({ ...c, persona }))
-      persist(activeId)
-    },
-    [activeId, persist, updateConversation]
-  )
-
   const improvePrompt = useCallback(
     (text: string): Promise<string | null> => {
       return new Promise((resolve) => {
@@ -782,7 +773,6 @@ export default function App(): React.JSX.Element {
           .sendChat({
             requestId,
             model: DEFAULT_MODEL,
-            persona: DEFAULT_PERSONA,
             reasoningEffort: 'low',
             images: false,
             messages: [
@@ -828,7 +818,7 @@ export default function App(): React.JSX.Element {
       setActiveId(null)
       setImagesOpen(false)
       const preferred = settings?.defaultModel ?? DEFAULT_MODEL
-      setDraft({ model: isKnownModel(preferred) ? preferred : DEFAULT_MODEL, persona: DEFAULT_PERSONA, incognito })
+      setDraft({ model: isKnownModel(preferred) ? preferred : DEFAULT_MODEL, incognito })
     },
     [settings?.defaultModel]
   )
@@ -1188,8 +1178,6 @@ export default function App(): React.JSX.Element {
         case 'theme':
           void updateSettings({ theme: dark ? 'light' : 'dark' })
           return
-        case 'assistant':
-          return setPersonaMenuOpen(true)
         case 'settings':
           return setSettingsOpen(true)
         case 'shortcuts':
@@ -1249,7 +1237,7 @@ export default function App(): React.JSX.Element {
   }, [newChat, openSearch, toggleIncognito, toggleSidebar, welcome])
 
   const active = activeId ? conversations.find((c) => c.id === activeId) : undefined
-  const current: DraftChat = active ? { model: active.model, persona: active.persona, incognito: Boolean(active.incognito) } : draft
+  const current: DraftChat = active ? { model: active.model, incognito: Boolean(active.incognito) } : draft
 
   // The floating browser assistant follows the current chat's latest reply: its steps, progress, approvals and summary.
   const orbReply = active ? [...active.messages].reverse().find((m) => m.role === 'assistant') : undefined
@@ -1311,7 +1299,6 @@ export default function App(): React.JSX.Element {
         searchSuggestions={settings?.searchSuggestions !== false}
         personalizedSuggestions={settings?.personalizedSuggestions !== false}
         askModel={current.model}
-        askPersona={current.persona}
         onNotify={notify}
         onOpenWorkflows={() => setWorkflowsOpen(true)}
         loading={browserOpen && browserLoading}
@@ -1338,14 +1325,10 @@ export default function App(): React.JSX.Element {
         <ChatHeader
           title={active?.title ?? 'New chat'}
           hasConversation={Boolean(active)}
-          persona={current.persona}
-          personaMenuOpen={personaMenuOpen}
           thinking={Boolean(active && streams[active.id])}
           userInitial={settings?.userName.trim().charAt(0).toUpperCase() || 'U'}
           incognito={current.incognito}
           onToggleIncognito={toggleIncognito}
-          onPersonaMenuChange={setPersonaMenuOpen}
-          onPersonaChange={changePersona}
           onRename={(title) => active && renameConversation(active.id, title)}
           onShare={() => active && shareConversation(active.id)}
           onDelete={() => active && deleteConversation(active.id)}
@@ -1468,7 +1451,6 @@ export default function App(): React.JSX.Element {
             setProfilesOpen(false)
             setCustomizeOpen((open) => !open)
           }}
-          onAssistants={() => setPersonaMenuOpen(true)}
           onBrowser={toggleBrowser}
           onSelect={selectChat}
           onRename={renameConversation}

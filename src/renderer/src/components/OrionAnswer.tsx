@@ -7,7 +7,6 @@ import type { ChatMessage, Research, StreamEvent } from '../../../shared/types'
 interface Props {
   question: string
   model: string
-  persona: string
   /** The browser page open when the question was asked, for questions about it ("summarize this article"). */
   page?: { url: string; title: string }
   /** The page's own text, for Summarize: Orion answers from it alone (no web research, no browser work). */
@@ -25,7 +24,7 @@ type Phase = 'working' | 'done' | 'error' | 'stopped'
  * and its URL stay exactly as they were. It goes straight to Orion (researching the web when the question needs it),
  * never through the browser orb, and never saves a chat.
  */
-export default function OrionAnswer({ question, model, persona, page, context, onClose }: Props): React.JSX.Element {
+export default function OrionAnswer({ question, model, page, context, onClose }: Props): React.JSX.Element {
   const [attempt, setAttempt] = useState(0)
   const [content, setContent] = useState('')
   const [research, setResearch] = useState<Research>()
@@ -85,14 +84,14 @@ export default function OrionAnswer({ question, model, persona, page, context, o
     const message: ChatMessage = { id: requestId, role: 'user', content, createdAt: Date.now() }
     window.api
       // A summary answers from the page text given here; images: false skips intent detection (no research, no browser).
-      .sendChat({ requestId, model, persona, ask: true, messages: [message], browser: source, ...(context ? { images: false } : {}) })
+      .sendChat({ requestId, model, ask: true, messages: [message], browser: source, ...(context ? { images: false } : {}) })
       .then(() => finish('done'))
       .catch((err: unknown) => finish('error', err instanceof Error ? err.message : String(err)))
     return () => {
       unsubscribe()
       if (!finished) void window.api.abortChat(requestId)
     }
-  }, [question, model, persona, context, attempt])
+  }, [question, model, context, attempt])
 
   useEffect(() => {
     panelRef.current?.scrollIntoView({ block: 'nearest' })

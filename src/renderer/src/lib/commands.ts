@@ -27,7 +27,6 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { name: 'images', description: 'Open your generated images' },
   { name: 'browser', description: 'Open or close the browser' },
   { name: 'theme', description: 'Switch between dark and light mode' },
-  { name: 'assistant', description: 'Choose an assistant persona' },
   { name: 'settings', description: 'Open settings' },
   { name: 'shortcuts', description: 'Show commands and keyboard shortcuts' },
   { name: 'help', description: 'Show all commands' }

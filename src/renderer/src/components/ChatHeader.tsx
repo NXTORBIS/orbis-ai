@@ -1,19 +1,14 @@
 import { useLayoutEffect, useRef, useState } from 'react'
-import { Check, Ellipsis, HatGlasses, Pencil, Share2, SquarePen, Trash2, Users } from 'lucide-react'
-import { PERSONAS, personaInfo } from '../../../shared/personas'
+import { Ellipsis, HatGlasses, Pencil, Share2, SquarePen, Trash2 } from 'lucide-react'
 import { useDismiss } from '../lib/useDismiss'
 
 interface Props {
   title: string
   hasConversation: boolean
-  persona: string
-  personaMenuOpen: boolean
   thinking: boolean
   userInitial: string
   incognito: boolean
   onToggleIncognito(): void
-  onPersonaMenuChange(open: boolean): void
-  onPersonaChange(id: string): void
   onRename(title: string): void
   onShare(): void
   onDelete(): void
@@ -24,9 +19,7 @@ export default function ChatHeader(props: Props): React.JSX.Element {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
   const [moreOpen, setMoreOpen] = useState(false)
-  const personaRef = useRef<HTMLDivElement>(null)
   const moreRef = useRef<HTMLDivElement>(null)
-  useDismiss(personaRef, props.personaMenuOpen, () => props.onPersonaMenuChange(false))
   useDismiss(moreRef, moreOpen, () => setMoreOpen(false))
   const titleRef = useRef<HTMLDivElement>(null)
   const [titleBox, setTitleBox] = useState<{ left: number; width: number } | null>(null)
@@ -59,7 +52,6 @@ export default function ChatHeader(props: Props): React.JSX.Element {
     return () => observer.disconnect()
   }, [])
 
-  const persona = personaInfo(props.persona)
 
   const startRename = (): void => {
     if (!props.hasConversation) return
@@ -121,41 +113,6 @@ export default function ChatHeader(props: Props): React.JSX.Element {
         >
           <HatGlasses size={16} />
         </button>
-        <div className="popover-anchor" ref={personaRef}>
-          <button
-            className={`icon-btn${props.personaMenuOpen ? ' active' : ''}`}
-            title={`Assistant: ${persona.label}`}
-            aria-label="Choose assistant"
-            aria-haspopup="menu"
-            aria-expanded={props.personaMenuOpen}
-            onClick={() => props.onPersonaMenuChange(!props.personaMenuOpen)}
-          >
-            <Users size={16} />
-          </button>
-          {props.personaMenuOpen && (
-            <div className="popover glass align-right" role="menu">
-              <span className="hud-label">Assistant</span>
-              {PERSONAS.map((p) => (
-                <button
-                  key={p.id}
-                  role="menuitemradio"
-                  aria-checked={p.id === persona.id}
-                  className={`menu-item${p.id === persona.id ? ' selected' : ''}`}
-                  onClick={() => {
-                    props.onPersonaChange(p.id)
-                    props.onPersonaMenuChange(false)
-                  }}
-                >
-                  <span className="menu-text">
-                    <b>{p.label}</b>
-                    <small>{p.description}</small>
-                  </span>
-                  {p.id === persona.id && <Check size={14} />}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
         <button className="icon-btn rename-btn" title="Rename chat" disabled={!props.hasConversation} onClick={startRename}>
           <SquarePen size={16} />
         </button>

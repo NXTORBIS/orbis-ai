@@ -2692,7 +2692,7 @@ export default function BrowserPanel({
             )
           })()}
         {!hasPage && (
-          <div className="browser-newtab">
+          <div className="browser-newtab" style={widgets.wallpaper && !active.private ? { background: widgets.wallpaper } : undefined}>
             <OrbisMark size={40} />
             {active.private && (
               <p className="browser-private-note">

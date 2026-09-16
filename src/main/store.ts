@@ -3,7 +3,6 @@ import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import type { Conversation, ReasoningEffort, Settings, SettingsUpdate, Theme } from '../shared/types'
 import { DEFAULT_MODEL, MODELS, currentModelId } from '../shared/models'
-import { DEFAULT_PERSONA } from '../shared/personas'
 
 interface StoredSettings extends Omit<Settings, 'hasApiKey'> {
   /** base64; DPAPI-encrypted via safeStorage when `apiKeyEncrypted` is true. */
@@ -108,8 +107,8 @@ export class Store {
         .map(async (f) => {
           try {
             const c = JSON.parse(await fs.readFile(join(this.conversationsDir, f), 'utf8')) as Conversation
-            // Older chats may lack a persona or point at a model Groq retired (moved to its replacement) or that can't chat.
-            return { ...c, model: currentModelId(c.model), persona: c.persona ?? DEFAULT_PERSONA }
+            // Older chats may point at a model Groq retired (moved to its replacement) or that can't chat.
+            return { ...c, model: currentModelId(c.model) }
           } catch {
             return null
           }

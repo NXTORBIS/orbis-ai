@@ -163,7 +163,6 @@ export interface Conversation {
   id: string
   title: string
   model: string
-  persona: string
   /** Never written to disk or listed in history; discarded when the user leaves it. */
   incognito?: boolean
   /** Shown in the sidebar's Pinned section. */
@@ -231,7 +230,6 @@ export interface ModelInfo {
 export interface ChatRequest {
   requestId: string
   model: string
-  persona: string
   /** False keeps the request away from image generation, e.g. when rewriting a prompt. */
   images?: boolean
   /** Overrides the saved reasoning effort (Fast and Reasoning modes). */

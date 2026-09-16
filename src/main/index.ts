@@ -436,7 +436,7 @@ function registerIpc(): void {
     const controller = new AbortController()
     activeRequests.set(request.requestId, controller)
     try {
-      const systemPrompt = buildSystemPrompt(settings, request.persona)
+      const systemPrompt = buildSystemPrompt(settings)
       let messages = request.messages
       const last = messages.at(-1)
 
