@@ -147,6 +147,14 @@ export interface SidebarLayout {
   panelWidth: number
   /** Whether the sidebar is showing at all. */
   open: boolean
+  /**
+   * Filling the browser rather than sitting beside it.
+   *
+   * Managing a browser is not something done out of the corner of an eye: bookmarks, history, a whiteboard and the
+   * personalisation screens all want room. Full page gives them the room, the way a settings screen does, and the
+   * page underneath is still there when it is put away again.
+   */
+  full: boolean
   /** The panel showing, or null when the list alone is showing. */
   panel: PanelId | null
 }
@@ -173,6 +181,7 @@ export function defaultLayout(): SidebarLayout {
     width: DEFAULT_WIDTH,
     panelWidth: DEFAULT_PANEL_WIDTH,
     open: false,
+    full: false,
     panel: null
   }
 }
@@ -239,6 +248,7 @@ export function normalizeLayout(raw: unknown): SidebarLayout {
     width: clamp(typeof input.width === 'number' && Number.isFinite(input.width) ? input.width : DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH),
     panelWidth: clamp(typeof input.panelWidth === 'number' && Number.isFinite(input.panelWidth) ? input.panelWidth : DEFAULT_PANEL_WIDTH, MIN_PANEL_WIDTH, MAX_PANEL_WIDTH),
     open: input.open === true,
+    full: input.full === true,
     // A panel that has been hidden since, or that no longer exists, is not reopened.
     panel: known.has(input.panel as PanelId) && !listOf(input.hidden).includes(input.panel as PanelId) ? (input.panel as PanelId) : null
   }
@@ -373,6 +383,11 @@ export function openPanel(layout: SidebarLayout, panel: PanelId | null): Sidebar
 
 export function setOpen(layout: SidebarLayout, open: boolean): SidebarLayout {
   return { ...layout, open }
+}
+
+/** Filling the browser, or beside it. Going full page opens the sidebar if it was away. */
+export function setFull(layout: SidebarLayout, full: boolean): SidebarLayout {
+  return { ...layout, full, open: full ? true : layout.open }
 }
 
 /** How wide the sidebar actually is on screen: an icon-only sidebar is as wide as an icon, whatever was dragged. */

@@ -16,13 +16,10 @@ import { ActivityPanel, ShortcutsModal, ToastStack } from './components/Overlays
 import SettingsModal from './components/SettingsModal'
 import WelcomeExperience from './components/WelcomeExperience'
 import UrlBar from './components/UrlBar'
-import BrowserSizeControl from './components/BrowserSizeControl'
 import ControlPrompts from './components/ControlPrompts'
-import { failure, int, reportControlState, str, unverified, useControlRendered, useControlScope, verified, waitUntil } from './lib/browserControl'
+import { reportControlState, str, unverified, useControlRendered, useControlScope, verified, waitUntil } from './lib/browserControl'
 import { OPEN_URL_EVENT } from './lib/openInBrowser'
 import type { OpenUrlDetail } from './lib/openInBrowser'
-import { clampBrowserSize, loadBrowserSize, resolveBrowserSize, saveBrowserSize } from './lib/browserSize'
-import type { Bounds, BrowserMode, BrowserSizePref } from './lib/browserSize'
 import type { BrowserOrbProps } from './components/BrowserOrb'
 import SystemBar from './components/SystemBar'
 import ImageEditor from './components/ImageEditor'
@@ -111,36 +108,19 @@ export default function App(): React.JSX.Element {
   const [browserHidden, setBrowserHidden] = useState(false)
   /** The browser's active page is loading, shown in the URL bar. */
   const [browserLoading, setBrowserLoading] = useState(false)
-  const [browserMode, setBrowserMode] = useState<BrowserMode>('full')
-  const [browserPref, setBrowserPref] = useState<BrowserSizePref>(loadBrowserSize)
-  const [browserWindow, setBrowserWindow] = useState<Bounds>({ width: 1200, height: 800 })
-  /** The content area below the header, which the browser fills or opens a window in. */
-  const [hudBounds, setHudBounds] = useState<Bounds>({ width: window.innerWidth, height: window.innerHeight - 90 })
-  const browserStateRef = useRef({ open: browserOpen, pref: browserPref, bounds: hudBounds })
-  browserStateRef.current = { open: browserOpen, pref: browserPref, bounds: hudBounds }
-  const hudObserver = useRef<ResizeObserver | null>(null)
-  const hudBodyRef = useCallback((body: HTMLDivElement | null) => {
-    hudObserver.current?.disconnect()
-    hudObserver.current = null
-    if (!body) return
-    const measure = (): void => setHudBounds({ width: body.clientWidth, height: body.clientHeight })
-    measure()
-    hudObserver.current = new ResizeObserver(measure)
-    hudObserver.current.observe(body)
-  }, [])
+  const browserStateRef = useRef({ open: browserOpen })
+  browserStateRef.current = { open: browserOpen }
 
-  /** Shows the browser the way a size preference asks: a full page, or a window of that size. */
-  const applyBrowserSize = useCallback((pref: BrowserSizePref) => {
-    setBrowserMode(pref.preset === 'full' ? 'full' : 'window')
-    setBrowserWindow(resolveBrowserSize(pref, browserStateRef.current.bounds))
-  }, [])
-
-  /** Opens the browser at the preferred size; an already open browser keeps its size and is brought back into view. */
+  /**
+   * Opening the browser.
+   *
+   * It fills the content area, always. It used to be a window that could be docked, shrunk to a preset or dragged to
+   * a size, which meant five ways to be looking at a browser and four of them worse than the fifth.
+   */
   const openBrowser = useCallback(() => {
-    if (!browserStateRef.current.open) applyBrowserSize(browserStateRef.current.pref)
     setBrowserOpen(true)
     setBrowserHidden(false)
-  }, [applyBrowserSize])
+  }, [])
 
   /** Sidebar and /browser: open it, or switch between the browser and the chat without closing it. */
   const toggleBrowser = useCallback(() => {
@@ -148,25 +128,6 @@ export default function App(): React.JSX.Element {
     setBrowserHidden((isHidden) => !isHidden)
   }, [openBrowser])
 
-  const changeBrowserPref = useCallback(
-    (pref: BrowserSizePref) => {
-      setBrowserPref(pref)
-      saveBrowserSize(pref)
-      if (browserStateRef.current.open) applyBrowserSize(pref)
-    },
-    [applyBrowserSize]
-  )
-
-  /** Dragging the window's corner; the size it ends at becomes the remembered custom size. */
-  const resizeBrowserWindow = useCallback((width: number, height: number, final: boolean) => {
-    const size = clampBrowserSize(width, height, browserStateRef.current.bounds)
-    setBrowserWindow(size)
-    if (final) {
-      const pref: BrowserSizePref = { preset: 'custom', ...size }
-      setBrowserPref(pref)
-      saveBrowserSize(pref)
-    }
-  }, [])
   /** Latest state of each running browser automation, by chat request, for the browser banner. */
   const [automations, setAutomations] = useState<Record<string, NonNullable<ChatMessage['automation']>>>({})
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
@@ -954,10 +915,10 @@ export default function App(): React.JSX.Element {
 
   // ---------------------------------------------------------------- Browser Control Layer: the browser's place in Orbis
   useEffect(() => {
-    reportControlState({ open: browserOpen, hidden: browserOpen && browserHidden, mode: browserOpen ? browserMode : null })
-  }, [browserOpen, browserHidden, browserMode])
-  const appLive = useRef({ browserOpen, browserHidden, browserMode, browserWindow })
-  appLive.current = { browserOpen, browserHidden, browserMode, browserWindow }
+    reportControlState({ open: browserOpen, hidden: browserOpen && browserHidden, mode: browserOpen ? 'full' : null })
+  }, [browserOpen, browserHidden])
+  const appLive = useRef({ browserOpen, browserHidden })
+  appLive.current = { browserOpen, browserHidden }
   useControlScope('app', [
     {
       id: 'browser.open',
@@ -1016,37 +977,6 @@ export default function App(): React.JSX.Element {
         return ok ? verified('The chat is showing; the browser stays open behind it.') : unverified('The browser is still in front.')
       }
     },
-    {
-      id: 'browser.setMode',
-      domain: 'browser',
-      name: 'Browser layout',
-      description: 'Shows the browser as a full page, a window, or docked beside the chat.',
-      params: { mode: str('full, window or dock', true, { enum: ['full', 'window', 'dock'] }) },
-      mutates: true,
-      requires: ['browser-open'],
-      run: async (p) => {
-        setBrowserMode(p.mode as BrowserMode)
-        const ok = await waitUntil(() => appLive.current.browserMode === p.mode)
-        return ok ? verified(`The browser is shown as ${p.mode === 'full' ? 'a full page' : p.mode === 'dock' ? 'docked' : 'a window'}.`) : unverified('The layout did not change.')
-      }
-    },
-    {
-      id: 'browser.resize',
-      domain: 'browser',
-      name: 'Resize the browser window',
-      description: 'Shows the browser as a window of a size (fitted to the space Orbis has), remembered as its custom size.',
-      params: { width: int('Width in pixels.', true), height: int('Height in pixels.', true) },
-      mutates: true,
-      requires: ['browser-open'],
-      run: async (p) => {
-        if (!appLive.current.browserOpen) return failure('unavailable', 'The browser is closed.', true)
-        setBrowserMode('window')
-        resizeBrowserWindow(Number(p.width), Number(p.height), true)
-        const want = clampBrowserSize(Number(p.width), Number(p.height), hudBounds)
-        const ok = await waitUntil(() => appLive.current.browserMode === 'window' && appLive.current.browserWindow.width === want.width && appLive.current.browserWindow.height === want.height)
-        return ok ? verified(`The browser window is ${want.width} × ${want.height}.`, want) : unverified('The size did not change.')
-      }
-    }
   ])
 
   useControlRendered()
@@ -1266,7 +1196,7 @@ export default function App(): React.JSX.Element {
   return (
     <ImageEditorContext.Provider value={openImageEditor}>
     <div
-      className={`hud${effects ? ' effects' : ''}${welcome === 'leaving' ? ' hud-entering' : ''}${browserOpen && !browserHidden && browserMode === 'full' ? ' browser-full' : ''}`}
+      className={`hud${effects ? ' effects' : ''}${welcome === 'leaving' ? ' hud-entering' : ''}${browserOpen && !browserHidden ? ' browser-full' : ''}`}
       inert={welcome === 'open'}
     >
       <HudBackground animated={effects} />
@@ -1285,7 +1215,6 @@ export default function App(): React.JSX.Element {
         loading={browserOpen && browserLoading}
         browserHidden={browserOpen && browserHidden}
         onShowBrowser={() => setBrowserHidden(false)}
-        sizeControl={<BrowserSizeControl pref={browserPref} bounds={hudBounds} onChange={changeBrowserPref} />}
       />
       <SystemBar
         dark={dark}
@@ -1317,7 +1246,7 @@ export default function App(): React.JSX.Element {
         />
       </SystemBar>
 
-      <div className="hud-body" ref={hudBodyRef}>
+      <div className="hud-body">
         <Sidebar
           collapsed={sidebarCollapsed}
           conversations={savedConversations}
@@ -1395,16 +1324,7 @@ export default function App(): React.JSX.Element {
             onPageChange={setBrowserPage}
             navigation={browserNavigation}
             orb={orbProps}
-            mode={browserMode}
-            onModeChange={setBrowserMode}
-            // Large, Medium and Small follow the space the window has now (the header shows again when leaving full
-            // page, and the app window can be resized); a custom or dragged size keeps its pixels, fitted to the space.
-            windowSize={
-              browserPref.preset === 'large' || browserPref.preset === 'medium' || browserPref.preset === 'small'
-                ? resolveBrowserSize(browserPref, hudBounds)
-                : clampBrowserSize(browserWindow.width, browserWindow.height, hudBounds)
-            }
-            onWindowResize={resizeBrowserWindow}
+
             hidden={browserHidden}
             onBackToChat={() => setBrowserHidden(true)}
             onLoadingChange={setBrowserLoading}

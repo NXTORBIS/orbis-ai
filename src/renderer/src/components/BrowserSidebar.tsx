@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
   AppWindow,
+  Maximize2,
+  Minimize2,
   Bookmark,
   Boxes,
   Camera,
@@ -55,6 +57,7 @@ import {
   removeGroup,
   renameGroup,
   setDensity,
+  setFull,
   setGroupCollapsed,
   setMode,
   setPanelHidden,
@@ -138,7 +141,8 @@ export default function BrowserSidebar({ layout, onLayout, onReset, renderPanel,
   const listRef = useRef<HTMLDivElement>(null)
   useDismiss(menuRef, Boolean(menu), () => setMenu(null))
 
-  const icons = layout.mode === 'icons'
+  const icons = layout.mode === 'icons' && !layout.full
+  const full = layout.full
   const change = useCallback((next: SidebarLayout) => onLayout(next), [onLayout])
 
   // Dragging the edge of either column. The width is stored as it settles, not on every frame.
@@ -252,8 +256,8 @@ export default function BrowserSidebar({ layout, onLayout, onReset, renderPanel,
     <>
       <div
         ref={listRef}
-        className={`bsb-list${icons ? ' icons' : ''}${layout.density === 'compact' ? ' compact' : ''}`}
-        style={{ width: shownWidth(layout) }}
+        className={`bsb-list${icons ? ' icons' : ''}${layout.density === 'compact' ? ' compact' : ''}${full ? ' full' : ''}`}
+        style={full ? undefined : { width: shownWidth(layout) }}
         role="navigation"
         aria-label="Browser sidebar"
         onKeyDown={onListKeyDown}
@@ -266,7 +270,19 @@ export default function BrowserSidebar({ layout, onLayout, onReset, renderPanel,
             * read through. The section opens to whichever of its panels was last looked at, and the rest are tabs
             * along the top of it. Arranging still works on the panels themselves.
             */}
-          {!arranging &&
+          {full &&
+            view.groups
+              .filter((group) => group.items.length > 0)
+              .map((group) => (
+                <section key={group.id} className="bsb-group">
+                  <div className="bsb-group-head">
+                    <span className="bsb-group-name as-label">{group.label}</span>
+                  </div>
+                  <div className="bsb-group-body">{group.items.map((id, i) => row(id, group.id, i))}</div>
+                </section>
+              ))}
+
+          {!full && !arranging &&
             view.groups
               .filter((group) => group.items.length > 0)
               .map((group) => {
@@ -294,7 +310,7 @@ export default function BrowserSidebar({ layout, onLayout, onReset, renderPanel,
                 )
               })}
 
-          {arranging &&
+          {!full && arranging &&
             view.groups.map((group) => (
             <section key={group.id} className="bsb-group">
               {!icons && (
@@ -399,7 +415,19 @@ export default function BrowserSidebar({ layout, onLayout, onReset, renderPanel,
           </button>
           <button
             type="button"
+            className={`bsb-foot-btn${full ? ' on' : ''}`}
+            aria-label={full ? 'Show beside the page' : 'Fill the browser'}
+            aria-pressed={full}
+            title={full ? 'Show beside the page' : 'Fill the browser, like a settings screen'}
+            onClick={() => change(setFull(layout, !full))}
+          >
+            {full ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+            {full && <span>Beside the page</span>}
+          </button>
+          <button
+            type="button"
             className="bsb-foot-btn"
+            hidden={full}
             aria-label={icons ? 'Show labels' : 'Icons only'}
             title={icons ? 'Show labels' : 'Icons only'}
             onClick={() => change(setMode(layout, icons ? 'labels' : 'icons'))}
@@ -419,11 +447,11 @@ export default function BrowserSidebar({ layout, onLayout, onReset, renderPanel,
           )}
         </div>
 
-        {!icons && <div className="bsb-resizer" onPointerDown={startResize('list')} aria-hidden="true" />}
+        {!icons && !full && <div className="bsb-resizer" onPointerDown={startResize('list')} aria-hidden="true" />}
       </div>
 
       {layout.panel && (
-        <div className="bsb-panel column" style={{ width: layout.panelWidth }}>
+        <div className={`bsb-panel column${full ? ' full' : ''}`} style={full ? undefined : { width: layout.panelWidth }}>
           {/* The rest of this section, so opening "Library" still reaches history and downloads in one press. */}
           {(() => {
             const section = layout.groups.find((g) => g.items.includes(layout.panel as PanelId))
@@ -451,7 +479,7 @@ export default function BrowserSidebar({ layout, onLayout, onReset, renderPanel,
             )
           })()}
           <div className="bsb-panel-body">{renderPanel(layout.panel)}</div>
-          <div className="bsb-resizer" onPointerDown={startResize('panel')} aria-hidden="true" />
+          {!full && <div className="bsb-resizer" onPointerDown={startResize('panel')} aria-hidden="true" />}
         </div>
       )}
 

@@ -50,8 +50,6 @@ interface Props {
   /** The browser is open but the user went back to the chat. */
   browserHidden?: boolean
   onShowBrowser?(): void
-  /** The browser size preference control. */
-  sizeControl?: ReactNode
   /** Questions Orion researched in saved chats. */
   research?: { question: string; at: number }[]
   /** The current chat is incognito (or the tab is private): nothing personal is suggested or remembered. */
@@ -202,7 +200,6 @@ export default function UrlBar({
   loading,
   browserHidden,
   onShowBrowser,
-  sizeControl,
   research = [],
   incognito = false,
   searchSuggestions = true,
@@ -825,7 +822,6 @@ export default function UrlBar({
           <span>Browser</span>
         </button>
       )}
-      {sizeControl}
     </div>
   )
 }

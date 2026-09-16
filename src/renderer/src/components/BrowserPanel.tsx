@@ -17,7 +17,6 @@ import {
   HatGlasses,
   LoaderCircle,
   MousePointer2,
-  PanelRight,
   Pencil,
   PictureInPicture2,
   Plus,
@@ -53,7 +52,6 @@ import { OrbisMark } from './Brand'
 import BrowserOrb from './BrowserOrb'
 import AdBlockSection from './AdBlockSection'
 import type { BrowserOrbProps } from './BrowserOrb'
-import type { BrowserMode } from '../lib/browserSize'
 import { sameUrl } from '../../../shared/research'
 import { toUrl } from '../../../shared/omnibox'
 import TabContextMenu, { TabEditDialog } from './TabContextMenu'
@@ -173,12 +171,7 @@ interface Props {
   /** The floating Orbis assistant shown over the page. */
   orb?: BrowserOrbProps
   /** Full page over the content area, a sized window, or docked beside the chat. */
-  mode: BrowserMode
-  onModeChange(mode: BrowserMode): void
-  /** The window's size in window mode. */
-  windowSize: { width: number; height: number }
-  /** Called while the window is being resized, and once more with `final` when the drag ends. */
-  onWindowResize(width: number, height: number, final: boolean): void
+
   /** Back at the chat: the browser keeps its tabs and pages, just out of sight. */
   hidden?: boolean
   onBackToChat(): void
@@ -338,10 +331,7 @@ export default function BrowserPanel({
   onPageChange,
   navigation,
   orb,
-  mode,
-  onModeChange,
-  windowSize,
-  onWindowResize,
+
   hidden,
   onBackToChat,
   onLoadingChange,
@@ -352,12 +342,9 @@ export default function BrowserPanel({
   const [firstTab] = useState(createTab)
   const [tabs, setTabs] = useState<Tab[]>([firstTab])
   const [activeId, setActiveId] = useState(firstTab.id)
-  /** The mode Exit full page returns to. */
-  const restoreMode = useRef<BrowserMode>(mode === 'full' ? 'window' : mode)
+
   /** The last navigation request handled; an empty tab about to load one shouldn't pull focus to the URL bar. */
   const handledNavigation = useRef<number | undefined>(undefined)
-  const [width, setWidth] = useState(() => Number(stored('orbis.browser.width')) || 560)
-  const [resizing, setResizing] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [findOpen, setFindOpen] = useState(false)
   const [findText, setFindText] = useState('')
@@ -378,12 +365,17 @@ export default function BrowserPanel({
    */
   const [sidebar, setSidebar] = useState<SidebarLayout>(defaultLayout)
   const sidebarSave = useRef<ReturnType<typeof setTimeout> | null>(null)
+  /** Set the moment anything is arranged, so a slow first read cannot undo a press that beat it. */
+  const sidebarTouched = useRef(false)
   useEffect(() => {
-    void window.api.getBrowserSidebar().then(setSidebar)
+    void window.api.getBrowserSidebar().then((stored) => {
+      if (!sidebarTouched.current) setSidebar(stored)
+    })
     return window.api.onBrowserSidebar(setSidebar)
   }, [])
   /** Changing the arrangement shows immediately and is written shortly after, so dragging does not write per frame. */
   const changeSidebar = useCallback((next: SidebarLayout) => {
+    sidebarTouched.current = true
     setSidebar(next)
     if (sidebarSave.current) clearTimeout(sidebarSave.current)
     sidebarSave.current = setTimeout(() => void window.api.saveBrowserSidebar(next), 250)
@@ -408,8 +400,6 @@ export default function BrowserPanel({
   const [htmlFullscreen, setHtmlFullscreen] = useState(false)
   /** The web pages open when the browser was last used, offered on the new tab page. */
   const [lastSession, setLastSession] = useState(lastSessionUrls)
-  /** The mode to return to when F11 fullscreen ends. */
-  const fullscreenRestore = useRef<BrowserMode | null>(null)
   /** The Orbis window is fullscreen (F11). With the browser at full page, the tab bar and address bar tuck away above the top edge. */
   const [windowFullscreen, setWindowFullscreen] = useState(false)
   /** The pointer reached the very top edge: the tucked-away tab bar and address bar are showing. */
@@ -544,7 +534,6 @@ export default function BrowserPanel({
     })
   }, [applyTabs])
 
-  useEffect(() => store('orbis.browser.width', String(width)), [width])
   // Ctrl+click and middle-click open links in the background; other links and "Open link in new tab" switch to them.
   useEffect(() => window.api.onBrowserNewTab((url, options) => openTab(url, !options.background)), [openTab])
 
@@ -567,7 +556,7 @@ export default function BrowserPanel({
   // clicked, unless the address bar is being typed in or a menu is open.
   useEffect(() => {
     const root = document.documentElement
-    if (!(windowFullscreen && mode === 'full' && !hidden && !htmlFullscreen)) {
+    if (!(windowFullscreen && !hidden && !htmlFullscreen)) {
       delete root.dataset.browserImmersive
       setTabsRevealed(false)
       return
@@ -612,7 +601,7 @@ export default function BrowserPanel({
       stopPagePointer()
       delete root.dataset.browserImmersive
     }
-  }, [windowFullscreen, mode, hidden, htmlFullscreen])
+  }, [windowFullscreen, hidden, htmlFullscreen])
 
   useEffect(() => {
     const root = document.documentElement
@@ -1405,60 +1394,14 @@ export default function BrowserPanel({
 
   const toggleMobile = (): void => setMobile(active.id, !active.mobile)
 
-  const startResize = (e: React.PointerEvent<HTMLDivElement>): void => {
-    e.preventDefault()
-    const startX = e.clientX
-    const startWidth = width
-    setResizing(true)
-    const move = (ev: PointerEvent): void => setWidth(Math.round(Math.min(Math.max(340, startWidth + startX - ev.clientX), window.innerWidth - 420)))
-    const up = (): void => {
-      setResizing(false)
-      window.removeEventListener('pointermove', move)
-      window.removeEventListener('pointerup', up)
-    }
-    window.addEventListener('pointermove', move)
-    window.addEventListener('pointerup', up)
-  }
-
-  // The window sits at the bottom right, so dragging its top-left corner up and left makes it bigger.
-  // Only the element's size changes: the page adapts to the new viewport without reloading.
-  const startWindowResize = (e: React.PointerEvent<HTMLDivElement>): void => {
-    e.preventDefault()
-    const startX = e.clientX
-    const startY = e.clientY
-    const { width: startWidth, height: startHeight } = windowSize
-    let last = { width: startWidth, height: startHeight }
-    setResizing(true)
-    const move = (ev: PointerEvent): void => {
-      last = { width: startWidth + startX - ev.clientX, height: startHeight + startY - ev.clientY }
-      onWindowResize(last.width, last.height, false)
-    }
-    const up = (): void => {
-      setResizing(false)
-      window.removeEventListener('pointermove', move)
-      window.removeEventListener('pointerup', up)
-      onWindowResize(last.width, last.height, true)
-    }
-    window.addEventListener('pointermove', move)
-    window.addEventListener('pointerup', up)
-  }
-
   const menuAction = (action: () => void): (() => void) => () => {
     action()
     setMenuOpen(false)
   }
 
-  /** F11: the Orbis window goes fullscreen with the browser at full page; again restores both. */
+  /** F11: the Orbis window goes fullscreen, and again brings it back. The browser is a full page either way. */
   const toggleFullscreen = async (): Promise<void> => {
-    const on = await window.api.setWindowFullscreen()
-    if (on && mode !== 'full') {
-      fullscreenRestore.current = mode
-      restoreMode.current = mode
-      onModeChange('full')
-    } else if (!on && fullscreenRestore.current) {
-      onModeChange(fullscreenRestore.current)
-      fullscreenRestore.current = null
-    }
+    await window.api.setWindowFullscreen()
   }
 
   const toggleLibrary = (tab: LibraryTab): void => {
@@ -2474,21 +2417,19 @@ export default function BrowserPanel({
     [tabs, groups, activeId, closedTabs, active.url, mutedHosts, onNotify, experience, changeSidebar, navigate, openTab, reopenTab]
   )
 
-  const immersive = windowFullscreen && mode === 'full' && !hidden && !htmlFullscreen
-  const className = ['browser-panel', mode, hidden ? 'to-chat' : '', resizing ? 'resizing' : '', picking ? 'picking' : '', htmlFullscreen ? 'html-fullscreen' : '', immersive ? 'immersive' : ''].filter(Boolean).join(' ')
+  const immersive = windowFullscreen && !hidden && !htmlFullscreen
+  const className = ['browser-panel', 'full', hidden ? 'to-chat' : '', picking ? 'picking' : '', htmlFullscreen ? 'html-fullscreen' : '', immersive ? 'immersive' : ''].filter(Boolean).join(' ')
 
   return (
     <section
       ref={sectionRef}
       className={className}
-      style={mode === 'dock' ? { width } : mode === 'window' ? { width: windowSize.width, height: windowSize.height } : undefined}
+
       aria-label="Browser"
       aria-hidden={hidden || undefined}
       inert={hidden}
-      data-mode={mode}
+      data-mode="full"
     >
-      {mode === 'dock' && <div className="browser-resizer" onPointerDown={startResize} aria-hidden="true" />}
-      {mode === 'window' && <div className="browser-window-grip" onPointerDown={startWindowResize} title="Drag to resize" aria-hidden="true" />}
 
       {immersive && (
         <div
@@ -2701,16 +2642,6 @@ export default function BrowserPanel({
           </button>
           <SidebarToggle open={sidebar.open} onToggle={() => changeSidebar({ ...sidebarLive.current, open: !sidebarLive.current.open })} />
           <ExtensionsToolbar requestedPopup={extensionPopup} onPopupShown={() => setExtensionPopup(null)} onOpenTab={(url) => openTab(url)} onNotify={onNotify} />
-          <button
-            type="button"
-            className={`b-icon${mode === 'dock' ? ' active' : ''}`}
-            aria-label={mode === 'dock' ? 'Undock browser' : 'Dock browser'}
-            aria-pressed={mode === 'dock'}
-            title={mode === 'dock' ? 'Show as a window' : 'Dock beside the chat'}
-            onClick={() => onModeChange(mode === 'dock' ? 'window' : 'dock')}
-          >
-            <PanelRight size={16} />
-          </button>
           <div className="browser-menu-anchor" ref={menuRef}>
             <button type="button" className="b-icon" aria-label="More options" aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenuOpen((o) => !o)}>
               <EllipsisVertical size={16} />
@@ -2882,7 +2813,7 @@ export default function BrowserPanel({
         </div>
       )}
 
-      <div className="browser-stage">
+      <div className={`browser-stage${sidebar.open && sidebar.full ? ' sidebar-full' : ''}`}>
       {sidebar.open && (
         <BrowserSidebar
           layout={sidebar}
@@ -3130,7 +3061,6 @@ export default function BrowserPanel({
             </button>
           </div>
         )}
-        {resizing && <div className={`browser-drag-shield${mode === 'window' ? ' corner' : ''}`} />}
       </div>
       </div>
     </section>
