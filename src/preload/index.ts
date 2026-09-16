@@ -115,6 +115,7 @@ const api: NxtorbisApi = {
   setWindowFullscreen: (on) => ipcRenderer.invoke('window:fullscreen', on),
   onSettingsChanged: (listener) => subscribe('settings:changed', listener),
   onBrowserPermissionAnswered: (listener) => subscribe('browser:permission-answered', listener),
+  onHistorySwipe: (listener) => subscribe('browser:history-swipe', listener),
   onDeviceRequest: (listener) => subscribe('browser:device-request', listener),
   onDeviceAnswered: (listener) => subscribe('browser:device-answered', listener),
   answerDeviceRequest: (id, deviceId) => ipcRenderer.invoke('browser:device-answer', id, deviceId),

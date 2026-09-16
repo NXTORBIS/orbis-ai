@@ -11040,3 +11040,54 @@ html[data-density] .wg-card {
   justify-content: flex-end;
   gap: 8px;
 }
+
+/* ---------------------------------------------------------------- two-finger history swipe */
+
+/*
+ * The preview follows the fingers: everything below is driven by --swipe-progress, which the gesture sets on every
+ * movement. Nothing here animates on its own, so the pull tracks the trackpad rather than playing back at it.
+ */
+.browser-swipe {
+  position: absolute;
+  top: 50%;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  margin-top: -23px;
+  border-radius: 50%;
+  border: 1px solid var(--glass-border);
+  background: var(--glass);
+  box-shadow: var(--glass-shadow);
+  color: var(--muted-strong);
+  pointer-events: none;
+  opacity: calc(0.35 + var(--swipe-progress, 0) * 0.65);
+}
+
+.browser-swipe.back {
+  left: 0;
+  transform: translateX(calc(-46px + var(--swipe-progress, 0) * 72px));
+}
+
+.browser-swipe.forward {
+  right: 0;
+  transform: translateX(calc(46px - var(--swipe-progress, 0) * 72px));
+}
+
+/* Past the point of no return: lifting your fingers now will navigate, and it says so. */
+.browser-swipe.committing {
+  border-color: var(--cyan);
+  color: var(--cyan);
+  box-shadow: 0 0 0 1px var(--cyan-dim), var(--glass-shadow);
+}
+
+.browser-swipe-arrow {
+  display: flex;
+  transform: scale(calc(0.8 + var(--swipe-progress, 0) * 0.2));
+}
+
+html[data-motion='reduced'] .browser-swipe-arrow {
+  transform: none;
+}

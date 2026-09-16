@@ -36,6 +36,7 @@ import {
   ZoomOut
 } from 'lucide-react'
 import type { NoticeKind } from '../App'
+import type { HistorySwipeView } from '../../../shared/historySwipe'
 import type { BrowserPermissionRequest, BrowserShortcutEvent, DeviceRequest } from '../../../shared/types'
 import BrowserLibraryPanel from './BrowserLibraryPanel'
 import type { ClosedTab, LibraryTab } from './BrowserLibraryPanel'
@@ -349,6 +350,8 @@ export default function BrowserPanel({
   /** Sites waiting for an answer to a permission request, oldest first. */
   const [permissions, setPermissions] = useState<BrowserPermissionRequest[]>([])
   const [deviceRequest, setDeviceRequest] = useState<DeviceRequest | null>(null)
+  /** The two-finger history gesture, while it is being pulled. Null whenever nothing is being pulled. */
+  const [swipe, setSwipe] = useState<HistorySwipeView | null>(null)
   const [rememberPermission, setRememberPermission] = useState(false)
   /** A page went fullscreen (a video, say): the page fills the window. */
   const [htmlFullscreen, setHtmlFullscreen] = useState(false)
@@ -642,6 +645,24 @@ export default function BrowserPanel({
       window.api.setBrowserFocus(false)
     }
   }, [hidden])
+
+  // Two-finger history swiping. The main process decides what the movement means; the window shows it and, when the
+  // fingers lift, navigates with exactly the call the Back and Forward buttons make.
+  useEffect(
+    () =>
+      window.api.onHistorySwipe(({ view, navigate }) => {
+        if (navigate) {
+          setSwipe(null)
+          // The tab the gesture belongs to, read now rather than captured when the listener was set up.
+          const webview = views.current.get(activeRef.current.id)
+          if (navigate === 'back' && webview?.canGoBack()) webview.goBack()
+          else if (navigate === 'forward' && webview?.canGoForward()) webview.goForward()
+          return
+        }
+        setSwipe(view.state === 'tracking' || view.state === 'committing' ? view : null)
+      }),
+    []
+  )
 
   // A site asking to use a device it can see. A second request while one is open replaces it, which is how Bluetooth
   // arrives: Chromium asks again each time it finds another device.
@@ -2575,6 +2596,15 @@ export default function BrowserPanel({
             <button type="button" className="b-icon" aria-label="Dismiss" onClick={() => setBlockedNav(null)}>
               <X size={13} />
             </button>
+          </div>
+        )}
+        {swipe && (
+          <div
+            className={`browser-swipe ${swipe.direction}${swipe.willCommit ? ' committing' : ''}`}
+            aria-hidden="true"
+            style={{ ['--swipe-progress' as string]: swipe.progress.toFixed(3) }}
+          >
+            <span className="browser-swipe-arrow">{swipe.direction === 'back' ? <ArrowLeft size={20} /> : <ArrowRight size={20} />}</span>
           </div>
         )}
         {deviceRequest && (

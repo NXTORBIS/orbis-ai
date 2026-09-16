@@ -4,6 +4,9 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import type { BrowserDownload, BrowserPermissionRequest, BrowserShortcutEvent, DeviceRequest } from '../shared/types'
 import { DeviceChooser } from './deviceChooser'
+import { GestureInputAdapter } from './gestureAdapter'
+import { HistorySwipeRecognizer } from '../shared/historySwipe'
+import type { HistorySwipeContext, HistorySwipeView } from '../shared/historySwipe'
 import { BrowserLibrary, uniqueDownloadName } from './browserLibrary'
 import { decideShortcut, isAutomatedInput } from './browserShortcuts'
 import type { KeyInput } from './browserShortcuts'
@@ -95,6 +98,18 @@ export class BrowserIntegration {
         setTimeout(() => answer(null), 120_000)
       })
   })
+  /**
+   * Two-finger history swiping. The trackpad reports movement here, in the main process, where the platform's own
+   * account of it arrives — a page is never asked to guess a gesture from mouse events. What it decides is sent to the
+   * window, which navigates through exactly the code the Back button uses.
+   */
+  private readonly swipe = new HistorySwipeRecognizer()
+  private readonly gestures = new GestureInputAdapter({ emit: (event) => this.onGesture(event) })
+  /** The page the gesture started on, and what it could do at the time. Worked out once, never per movement. */
+  private swipeContext: HistorySwipeContext = { canGoBack: false, canGoForward: false, pageCanScrollHorizontally: false }
+  private swipeContents: WebContents | null = null
+  private lastSwipeView: HistorySwipeView | null = null
+
   private readonly deviceWaiters = new Map<string, (deviceId: string | null) => void>()
   private readonly pendingDevices = new Map<string, DeviceRequest>()
 
@@ -191,6 +206,91 @@ export class BrowserIntegration {
       if (remember) this.o.library.retitle(contents.getURL(), title)
     })
     contents.on('context-menu', (_event, params) => this.contextMenu(contents, params))
+    // Trackpad movement for the history gesture. Ordinary wheel events are dropped before anything else happens.
+    contents.on('before-mouse-event', (_event, mouse) => this.onPageWheel(contents, mouse as Parameters<typeof this.onPageWheel>[1]))
+    // A gesture cannot outlive what it was started on.
+    contents.on('did-start-navigation', () => this.cancelSwipe())
+    contents.once('destroyed', () => {
+      if (this.swipeContents === contents) this.cancelSwipe()
+    })
+  }
+
+  /**
+   * A page's trackpad movement. Anything that is not a precision trackpad is dropped in the adapter before any work is
+   * done, so an ordinary mouse wheel costs a comparison and nothing else.
+   */
+  private onPageWheel(contents: WebContents, mouse: { type: string; deltaX?: number; deltaY?: number; hasPreciseScrollingDeltas?: boolean; accelerationRatioX?: number }): void {
+    if (!GestureInputAdapter.isTrackpad(mouse)) return
+    if (this.swipeContents !== contents) {
+      // A gesture belongs to one page. Movement from anywhere else ends whatever was running.
+      this.gestures.cancel()
+      this.swipeContents = contents
+      this.swipeContext = {
+        canGoBack: contents.navigationHistory.canGoBack(),
+        canGoForward: contents.navigationHistory.canGoForward(),
+        // Asked of the page once per gesture rather than per movement; until it answers, the page keeps the movement.
+        pageCanScrollHorizontally: true
+      }
+      void this.askPageAboutScrolling(contents)
+    }
+    this.gestures.handleWheel(mouse)
+  }
+
+  /** Whether the page can still scroll sideways, so the page's own scrolling keeps its claim on the movement. */
+  private async askPageAboutScrolling(contents: WebContents): Promise<void> {
+    try {
+      const scrollable = await contents.executeJavaScript(
+        `(() => {
+          const room = (el) => el && el.scrollWidth > el.clientWidth + 1
+          if (room(document.scrollingElement) || room(document.body)) return true
+          const el = document.elementFromPoint(innerWidth / 2, innerHeight / 2)
+          for (let node = el; node && node !== document.body; node = node.parentElement) {
+            const overflow = getComputedStyle(node).overflowX
+            if ((overflow === 'auto' || overflow === 'scroll') && room(node)) return true
+          }
+          return false
+        })()`,
+        false
+      )
+      if (this.swipeContents === contents) this.swipeContext = { ...this.swipeContext, pageCanScrollHorizontally: scrollable === true }
+    } catch {
+      // A page that cannot be asked keeps the movement, which is the safer way round.
+    }
+  }
+
+  /** What the recogniser made of one movement: update the preview, and navigate when the fingers lift. */
+  private onGesture(event: Parameters<HistorySwipeRecognizer['handle']>[0]): void {
+    const contents = this.swipeContents
+    const outcome = this.swipe.handle(event, this.swipeContext)
+    if (outcome.navigate && contents && !contents.isDestroyed()) {
+      // Navigation goes to the window, which does it the same way the Back button does.
+      this.send('browser:history-swipe', { view: outcome.view, navigate: outcome.navigate, webContentsId: contents.id })
+      this.lastSwipeView = null
+      return
+    }
+    if (outcome.show) {
+      const view = outcome.view
+      // Only a real change is worth telling the window about, so a still finger sends nothing.
+      if (this.lastSwipeView && this.lastSwipeView.direction === view.direction && Math.abs(this.lastSwipeView.progress - view.progress) < 0.01 && this.lastSwipeView.willCommit === view.willCommit) return
+      this.lastSwipeView = view
+      this.send('browser:history-swipe', { view, navigate: null, webContentsId: contents?.id ?? 0 })
+      return
+    }
+    if (outcome.hide && this.lastSwipeView) {
+      this.lastSwipeView = null
+      this.send('browser:history-swipe', { view: outcome.view, navigate: null, webContentsId: contents?.id ?? 0 })
+    }
+  }
+
+  /** Everything that should stop a gesture in its tracks: the tab going away, the window losing focus, a navigation. */
+  cancelSwipe(): void {
+    this.gestures.cancel()
+    const outcome = this.swipe.cancel()
+    this.swipeContents = null
+    if (this.lastSwipeView) {
+      this.lastSwipeView = null
+      this.send('browser:history-swipe', { view: outcome.view, navigate: null, webContentsId: 0 })
+    }
   }
 
   /** Where a link or window.open from a page goes: Ctrl/middle-click a background tab, Shift+click a new window. */

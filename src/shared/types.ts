@@ -337,6 +337,8 @@ export interface AdBlockListInfo {
   source: 'bundled' | 'downloaded'
 }
 
+import type { HistorySwipeView } from './historySwipe'
+
 export type DeviceKind = 'usb' | 'hid' | 'serial' | 'bluetooth'
 
 export interface DeviceChoice {
@@ -697,6 +699,11 @@ export interface NxtorbisApi {
   onSettingsChanged(listener: (settings: Settings) => void): () => void
   /** A site's permission request was answered (from the prompt or through the control layer). */
   onBrowserPermissionAnswered(listener: (id: string) => void): () => void
+  /**
+   * Two-finger history swiping, as the main process makes sense of it: a preview to follow while the fingers move, and
+   * one instruction to navigate when they lift.
+   */
+  onHistorySwipe(listener: (update: { view: HistorySwipeView; navigate: 'back' | 'forward' | null; webContentsId: number }) => void): () => void
   /** A site is asking to use a device: the window shows the list and the user picks one, or none. */
   onDeviceRequest(listener: (request: DeviceRequest) => void): () => void
   onDeviceAnswered(listener: (id: string) => void): () => void
