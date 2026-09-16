@@ -32,6 +32,7 @@ const WorkspacesView = lazy(() => import('./WorkspacesView'))
 const ProfilesView = lazy(() => import('./ProfilesView'))
 const CustomizeView = lazy(() => import('./CustomizeView'))
 const WorkflowsView = lazy(() => import('./WorkflowsView'))
+const SecretsPanel = lazy(() => import('./SecretsPanel'))
 
 /**
  * What each panel of the browser sidebar shows.
@@ -840,6 +841,12 @@ export function SidebarPanel({ id, ctx }: { id: PanelId; ctx: SidebarContext }):
       return <ControlsPanel onClose={onClose} />
     case 'workflows':
       return view(<WorkflowsView onClose={onClose} onNotify={ctx.onNotify} />)
+    case 'secrets':
+      return (
+        <PanelFrame id="secrets" onClose={onClose}>
+          {view(<SecretsPanel onNotify={ctx.onNotify} />)}
+        </PanelFrame>
+      )
     case 'orion':
       return <OrionPanel ctx={ctx} onClose={onClose} />
     case 'customize':

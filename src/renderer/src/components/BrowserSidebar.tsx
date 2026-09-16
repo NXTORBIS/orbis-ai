@@ -16,6 +16,7 @@ import {
   FolderTree,
   GripVertical,
   Layers,
+  KeyRound,
   ListTodo,
   Music,
   NotebookPen,
@@ -102,6 +103,7 @@ const ICONS: Record<PanelId, LucideIcon> = {
   tracking: Eye,
   controls: Sliders,
   workflows: Workflow,
+  secrets: KeyRound,
   orion: Sparkles,
   customize: Paintbrush
 }

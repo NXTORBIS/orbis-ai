@@ -14,6 +14,14 @@ import type { ControlLogEntryView } from './browserControlView'
 import type { SidebarLayout } from './browserSidebar'
 import type { SpecializedOutcome } from './searchProviders'
 import type { VoiceErrorCode, VoiceModel } from './voiceInput'
+import type { SecretDetail, SecretInput, SecretSummary, VaultStatus } from './vault'
+
+/** A vault call that could not be done, and why. Never carries anything of the vault. */
+export interface VaultError {
+  error: string
+}
+
+export const isVaultError = (value: unknown): value is VaultError => Boolean(value && typeof value === 'object' && typeof (value as VaultError).error === 'string')
 
 /** What the system says about which browser opens links. */
 export interface DefaultBrowserState {
@@ -650,6 +658,29 @@ export interface NxtorbisApi {
   getCpuUsage(): Promise<number>
   pickTextFiles(): Promise<PickedFiles>
   pickImages(): Promise<PickedFiles>
+  /**
+   * The secrets vault of the profile in use.
+   *
+   * Every one of these answers either the thing asked for or { error } saying why not. The vault key never leaves the
+   * main process, and a value comes back only when one secret is asked for by id.
+   */
+  vaultStatus(): Promise<VaultStatus | VaultError>
+  vaultQuestion(): Promise<string | null | VaultError>
+  vaultCreate(password: string, recovery?: { question: string; answer: string }): Promise<VaultStatus | VaultError>
+  vaultUnlock(password: string): Promise<VaultStatus | VaultError>
+  vaultLock(): Promise<VaultStatus | VaultError>
+  vaultList(): Promise<SecretSummary[] | VaultError>
+  vaultReveal(id: string): Promise<SecretDetail | VaultError>
+  vaultAdd(secret: SecretInput): Promise<SecretSummary | VaultError>
+  vaultUpdate(id: string, secret: SecretInput): Promise<SecretSummary | VaultError>
+  vaultRemove(id: string): Promise<void | VaultError>
+  vaultChangePassword(current: string, next: string): Promise<VaultStatus | VaultError>
+  vaultSetRecovery(password: string, recovery: { question: string; answer: string } | null): Promise<VaultStatus | VaultError>
+  vaultRecover(answer: string, password: string): Promise<VaultStatus | VaultError>
+  vaultAutoLock(password: string, ms: number): Promise<VaultStatus | VaultError>
+  vaultDestroy(password: string): Promise<VaultStatus | VaultError>
+  /** Told when the vault locks itself, so the window can clear whatever it was showing. */
+  onVaultLocked(listener: () => void): () => void
   /** Whether Orbis is the browser this computer opens links with, as the system reports it. */
   defaultBrowserState(): Promise<DefaultBrowserState>
   /** Registers Orbis as able to open links and opens the system's chooser; resolves what the system says afterwards. */

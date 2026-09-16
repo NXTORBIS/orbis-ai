@@ -1,5 +1,5 @@
 import { app, BrowserWindow, clipboard, components, dialog, ipcMain, Menu, nativeTheme, net, session, shell, webContents } from 'electron'
-import type { MenuItemConstructorOptions, OpenDialogOptions, TitleBarOverlayOptions, WebContents } from 'electron'
+import type { MenuItemConstructorOptions, OpenDialogOptions, TitleBarOverlayOptions, WebContents, IpcMainInvokeEvent } from 'electron'
 import { existsSync, promises as fs } from 'node:fs'
 import os from 'node:os'
 import { spawn } from 'node:child_process'
@@ -66,6 +66,7 @@ import { registerExperienceIpc } from './experience/ipc'
 import type { Profile } from '../shared/profiles'
 import { registerPersonalIpc } from './personal/ipc'
 import { BrowserSidebarStore } from './browserSidebarStore'
+import { SecretsVault, VaultFailure } from './vault/store'
 import { Store } from './store'
 
 // Baked in at build time from GROQ_API_KEY in .env.local (see electron.vite.config.ts).
@@ -1186,6 +1187,88 @@ if (!app.requestSingleInstanceLock()) {
     const workspacesStore = new WorkspacesStore(app.getPath('userData'))
     // How this profile has arranged the browser sidebar. Kept with the profile, because a work life and a personal one
     // have no reason to share which panels are to hand.
+    /**
+     * The secrets vault, one per profile.
+     *
+     * The vault key never leaves this process and the window never receives it. Everything below takes the profile
+     * from the profile store rather than from the window, so a window cannot ask for another profile's vault.
+     */
+    const vault = new SecretsVault(app.getPath('userData'))
+    const vaultProfile = async (): Promise<string> => (await profilesStore.active()).id
+    vault.whenLocked(() => sendToWindow('vault:locked'))
+    app.on('before-quit', () => vault.lock())
+    // Switching profile takes the vault with it: a vault unlocked for one profile is not unlocked for another.
+    profilesStore.onChange(() => vault.lock())
+
+    const vaultCall = <T,>(run: (profileId: string) => Promise<T> | T): ((event: IpcMainInvokeEvent, ...args: unknown[]) => Promise<T | { error: string }>) => {
+      return async (event) => {
+        if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
+        try {
+          return await run(await vaultProfile())
+        } catch (err) {
+          // The reason travels as a code the window can act on; nothing of the vault ever does.
+          return { error: err instanceof VaultFailure ? err.code : 'io' }
+        }
+      }
+    }
+    const str = (value: unknown, max = 4096): string => (typeof value === 'string' ? value.slice(0, max) : '')
+
+    ipcMain.handle('vault:status', vaultCall((id) => vault.status(id)))
+    ipcMain.handle('vault:question', vaultCall((id) => vault.recoveryQuestion(id)))
+    ipcMain.handle('vault:create', (event, password: unknown, recovery: unknown) =>
+      vaultCall(async (id) => {
+        const r = (recovery ?? {}) as { question?: unknown; answer?: unknown }
+        await vault.create(id, str(password), str(r.question) && str(r.answer) ? { question: str(r.question, 300), answer: str(r.answer) } : undefined)
+        return vault.status(id)
+      })(event)
+    )
+    ipcMain.handle('vault:unlock', (event, password: unknown) =>
+      vaultCall(async (id) => {
+        await vault.unlock(id, str(password))
+        return vault.status(id)
+      })(event)
+    )
+    ipcMain.handle('vault:lock', vaultCall(async (id) => {
+      vault.lock()
+      return vault.status(id)
+    }))
+    ipcMain.handle('vault:list', vaultCall((id) => vault.list(id)))
+    ipcMain.handle('vault:reveal', (event, secretId: unknown) => vaultCall((id) => vault.reveal(id, str(secretId, 80)))(event))
+    ipcMain.handle('vault:add', (event, secret: unknown) => vaultCall((id) => vault.add(id, secret))(event))
+    ipcMain.handle('vault:update', (event, secretId: unknown, secret: unknown) => vaultCall((id) => vault.update(id, str(secretId, 80), secret))(event))
+    ipcMain.handle('vault:remove', (event, secretId: unknown) => vaultCall((id) => vault.remove(id, str(secretId, 80)))(event))
+    ipcMain.handle('vault:change-password', (event, current: unknown, next: unknown) =>
+      vaultCall(async (id) => {
+        await vault.changeMasterPassword(id, str(current), str(next))
+        return vault.status(id)
+      })(event)
+    )
+    ipcMain.handle('vault:set-recovery', (event, password: unknown, recovery: unknown) =>
+      vaultCall(async (id) => {
+        const r = recovery as { question?: unknown; answer?: unknown } | null
+        await vault.setRecovery(id, str(password), r && str(r.question) && str(r.answer) ? { question: str(r.question, 300), answer: str(r.answer) } : null)
+        return vault.status(id)
+      })(event)
+    )
+    ipcMain.handle('vault:recover', (event, answer: unknown, password: unknown) =>
+      vaultCall(async (id) => {
+        await vault.recover(id, str(answer), str(password))
+        return vault.status(id)
+      })(event)
+    )
+    ipcMain.handle('vault:auto-lock', (event, password: unknown, ms: unknown) =>
+      vaultCall(async (id) => {
+        await vault.setAutoLock(id, str(password), typeof ms === 'number' ? ms : 0)
+        return vault.status(id)
+      })(event)
+    )
+    ipcMain.handle('vault:destroy', (event, password: unknown) =>
+      vaultCall(async (id) => {
+        await vault.destroy(id, str(password))
+        return vault.status(id)
+      })(event)
+    )
+
     const browserSidebar = new BrowserSidebarStore(app.getPath('userData'))
     const sidebarProfile = async (): Promise<string> => (await profilesStore.active()).id
     ipcMain.handle('browser-sidebar:get', async (event) => {

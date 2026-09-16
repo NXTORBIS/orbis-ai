@@ -37,6 +37,7 @@ export type PanelId =
   | 'tracking'
   | 'controls'
   | 'workflows'
+  | 'secrets'
   | 'orion'
   | 'customize'
 
@@ -81,6 +82,7 @@ export const PANELS: PanelInfo[] = [
 
   { id: 'controls', label: 'Browser controls', home: 'orbis', description: 'Everything Orbis can be asked to do, and what it has done' },
   { id: 'workflows', label: 'Workflows', home: 'orbis', description: 'Sequences Orbis runs for you, and what they did' },
+  { id: 'secrets', label: 'Secrets', home: 'settings', description: 'API keys, passwords and notes, locked behind a master password' },
   { id: 'orion', label: 'Orion', home: 'orbis', description: 'Ask about this page, summarise it, or research it' },
   { id: 'customize', label: 'Customize', home: 'orbis', description: 'Themes, wallpapers, widgets and how Orbis looks' }
 ]
@@ -113,7 +115,7 @@ const HOME_GROUPS: { id: string; label: string; panels: PanelId[] }[] = [
   { id: 'media', label: 'Media', panels: ['screenshots', 'media'] },
   { id: 'protection', label: 'Protection', panels: ['privacy', 'adblock', 'tracking'] },
   { id: 'orion', label: 'Orion', panels: ['orion', 'controls', 'workflows'] },
-  { id: 'settings', label: 'Settings', panels: ['customize', 'extensions'] }
+  { id: 'settings', label: 'Settings', panels: ['customize', 'extensions', 'secrets'] }
 ]
 
 /** The icon a section is shown by: its first panel's, so a section looks like what it opens. */
