@@ -76,6 +76,13 @@ test('a manifest is a claim, and every part of it is checked before it is believ
   assert.equal(insecure.ok, false)
   assert.match(refusal({ ...manifest(), platforms: { 'windows-x64': { ...PACKAGE, url: 'http://updates.example/o.exe' } } }), /https/)
 
+  // A server on this same computer is the one exception, because there is no network in between to interfere with.
+  assert.equal(readManifest({ ...manifest(), platforms: { 'windows-x64': { ...PACKAGE, url: 'http://127.0.0.1:8788/package' } } }).ok, true)
+  assert.equal(readManifest({ ...manifest(), platforms: { 'windows-x64': { ...PACKAGE, url: 'http://localhost:8788/package' } } }).ok, true)
+  // Something merely pretending to be local is not.
+  assert.equal(readManifest({ ...manifest(), platforms: { 'windows-x64': { ...PACKAGE, url: 'http://127.0.0.1.example.com/p' } } }).ok, false)
+  assert.equal(readManifest({ ...manifest(), platforms: { 'windows-x64': { ...PACKAGE, url: 'http://localhost.evil.test/p' } } }).ok, false)
+
   const noHash = readManifest({ ...manifest(), platforms: { 'windows-x64': { ...PACKAGE, sha256: 'nope' } } })
   assert.equal(noHash.ok, false)
 

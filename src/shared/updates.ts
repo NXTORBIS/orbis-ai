@@ -118,6 +118,16 @@ export interface ReleaseManifest {
   platforms: Record<string, ReleasePackage>
 }
 
+/**
+ * Where a package may be fetched from. https anywhere, and plain http only from this computer: a loopback address has
+ * no network in the middle to be interfered with, and is how a development build is tested against a local server.
+ */
+export function isSafePackageUrl(url: string): boolean {
+  if (/^https:\/\/[^\s]+$/i.test(url)) return true
+  const loopback = /^http:\/\/(127\.0\.0\.1|\[::1\]|localhost)(:\d{1,5})?(\/[^\s]*)?$/i
+  return loopback.test(url)
+}
+
 const isPlainObject = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 
 /**
@@ -136,8 +146,9 @@ export function readManifest(raw: unknown): { ok: true; manifest: ReleaseManifes
   for (const [key, value] of Object.entries(raw.platforms)) {
     if (!/^[a-z0-9-]{1,40}$/.test(key) || !isPlainObject(value)) return { ok: false, problem: `the entry for ${key} does not make sense` }
     const url = String(value.url ?? '')
-    // Only https, so a package cannot be fetched over something that can be tampered with in transit.
-    if (!/^https:\/\/[^\s]+$/i.test(url)) return { ok: false, problem: `the package for ${key} is not an https address` }
+    // Only https, so a package cannot be tampered with in transit. The single exception is a server on this same
+    // computer, which nothing can sit in the middle of — that is what development builds talk to.
+    if (!isSafePackageUrl(url)) return { ok: false, problem: `the package for ${key} is not an https address` }
     const sha256 = String(value.sha256 ?? '').toLowerCase()
     if (!/^[0-9a-f]{64}$/.test(sha256)) return { ok: false, problem: `the package for ${key} has no usable checksum` }
     const size = Number(value.size)

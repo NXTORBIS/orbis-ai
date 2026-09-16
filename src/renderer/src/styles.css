@@ -11091,3 +11091,90 @@ html[data-density] .wg-card {
 html[data-motion='reduced'] .browser-swipe-arrow {
   transform: none;
 }
+
+/* ---------------------------------------------------------------- updating Orbis */
+
+.up-state {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.up-line {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted-strong);
+}
+
+.up-line.problem {
+  color: var(--danger);
+}
+
+.up-progress {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--pill-bg-strong);
+  overflow: hidden;
+}
+
+.up-progress span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--cyan);
+}
+
+.up-required {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 9px;
+  border: 1px solid var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: 12px;
+}
+
+.up-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line-strong);
+  background: var(--pill-bg);
+  font-size: 12px;
+}
+
+.up-notes pre {
+  margin: 0;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  color: var(--muted-strong);
+}
+
+.up-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.up-history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.up-history li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+}

@@ -2,7 +2,8 @@ import { app, BrowserWindow, clipboard, components, dialog, ipcMain, Menu, nativ
 import type { MenuItemConstructorOptions, OpenDialogOptions, TitleBarOverlayOptions, WebContents } from 'electron'
 import { existsSync, promises as fs } from 'node:fs'
 import os from 'node:os'
-import { basename, join } from 'node:path'
+import { spawn } from 'node:child_process'
+import { basename, dirname, join } from 'node:path'
 import type {
   AutomationState,
   BrowserConfirmation,
@@ -20,6 +21,7 @@ import type {
 import { IMAGE_GEN_STATUS } from '../shared/types'
 import { streamChat, testApiKey } from './nim'
 import { buildSystemPrompt } from './prompt'
+import { UpdateManager } from './update/manager'
 import { answerContext, runResearch } from './research'
 import { OrbisAdBlock } from './adblock/electron'
 import { BrowserIntegration } from './browserIntegration'
@@ -668,6 +670,17 @@ function registerIpc(): void {
   // Whether pages that use protected media (Spotify, Netflix and the like) can play here.
   ipcMain.handle('browser:protected-media', () => protectedMedia)
 
+  // Updating Orbis. Everything the window and Orion can ask goes through the one manager.
+  ipcMain.handle('update:status', () => (updates ? { status: updates.getStatus(), settings: updates.getSettings(), history: updates.getUpdateHistory() } : null))
+  ipcMain.handle('update:check', () => updates?.checkForUpdates() ?? null)
+  ipcMain.handle('update:download', () => updates?.downloadUpdate() ?? null)
+  ipcMain.handle('update:cancel-download', () => {
+    updates?.cancelDownload()
+    return updates?.getStatus() ?? null
+  })
+  ipcMain.handle('update:restart-and-update', () => updates?.restartAndUpdate() ?? null)
+  ipcMain.handle('update:settings', (_e, patch: unknown) => updates?.setSettings((patch ?? {}) as Parameters<UpdateManager['setSettings']>[0]) ?? null)
+
   /**
    * The licences of everything Orbis is built from, generated at build time from what is actually installed. Most of
    * them require their text to travel with the app, so this is read from the file rather than written by hand.
@@ -809,6 +822,18 @@ function registerIpc(): void {
 // An explicit --user-data-dir (used for testing) still takes precedence.
 const legacyUserData = join(app.getPath('appData'), 'Nxtorbis AI')
 if (!app.commandLine.hasSwitch('user-data-dir') && existsSync(legacyUserData)) app.setPath('userData', legacyUserData)
+
+/** The one place that knows about updating Orbis; everything else asks it rather than doing any of it itself. */
+let updates: UpdateManager | null = null
+/** Set while Orbis is closing to make way for the installer, so nothing mistakes it for the user quitting. */
+let updatesQuitting = false
+
+/**
+ * Where a released Orbis asks about updates. Set by the build rather than by anything in the application, so a
+ * production build cannot be pointed at a development server by accident; ORBIS_UPDATE_URL overrides it while
+ * developing.
+ */
+const UPDATE_ENDPOINT = 'https://updates.nxtorbis.ai/manifest'
 
 /** Whether protected media (Widevine) is available, so Orbis can say so plainly instead of a page failing silently. */
 let protectedMedia: { ready: boolean; status: unknown } = { ready: false, status: 'not checked yet' }
@@ -1012,6 +1037,39 @@ if (!app.requestSingleInstanceLock()) {
     // Profiles: separate browsing identities. Each has its own cookies, logins, site storage, history, bookmarks,
     // downloads and open pages; extensions are installed once and follow whichever profile is in use.
     const profilesStore = new ProfilesStore(app.getPath('userData'))
+
+    // Updating Orbis. Created once the window is on its way, and it looks for a release in the background rather than
+    // holding anything up. The endpoint comes from the build, so a released Orbis never asks a development server.
+    updates = new UpdateManager({
+      directory: join(app.getPath('userData'), 'updates'),
+      currentVersion: app.getVersion(),
+      installDirectory: dirname(app.getPath('exe')),
+      executablePath: app.getPath('exe'),
+      platform: process.platform as 'win32' | 'darwin' | 'linux',
+      arch: process.arch,
+      endpoint: process.env.ORBIS_UPDATE_URL ?? UPDATE_ENDPOINT,
+      pid: process.pid,
+      quit: () => {
+        // Everything is written out before Orbis goes; the installer waits for this process to end.
+        updatesQuitting = true
+        app.quit()
+      },
+      spawnDetached: async (command, args) => {
+        const child = spawn(command, args, { detached: true, stdio: 'ignore', windowsHide: true })
+        child.unref()
+      },
+      // An update only counts as having worked if the user's profiles are still there afterwards.
+      profilesReadable: async () => {
+        try {
+          await profilesStore.list()
+          return true
+        } catch {
+          return false
+        }
+      }
+    })
+    updates.on('changed', (status) => mainWindow?.webContents.send('update:changed', status))
+    void updates.start().catch((err: unknown) => console.error('[updates] failed to start', err))
     const preparedSessions = new Set<string>()
     /** Wires a profile's session the same way the first one is wired: ad blocking, downloads, permissions, new windows. */
     const useProfile = async (profile: Profile): Promise<Profile> => {
@@ -1090,6 +1148,11 @@ if (!app.requestSingleInstanceLock()) {
     })
 
     app.on('before-quit', () => void browserLibrary?.flush())
+    // Closing to make way for the installer still saves everything first; it is a restart, not a loss.
+    app.on('before-quit', () => {
+      updates?.stop()
+      if (updatesQuitting) void updates?.getStatus()
+    })
     mainWindow = createWindow()
     mainWindow.on('closed', () => (mainWindow = null))
     mainWindow.on('focus', () => extensions.bridge.setWindowFocused(true))

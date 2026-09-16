@@ -338,6 +338,21 @@ export interface AdBlockListInfo {
 }
 
 import type { HistorySwipeView } from './historySwipe'
+import type { Channel, UpdateStatus } from './updates'
+
+export interface UpdateSettingsView {
+  channel: Channel
+  checkAutomatically: boolean
+  downloadAutomatically: boolean
+  installAutomatically: boolean
+}
+
+export interface UpdateHistoryView {
+  version: string
+  at: number
+  outcome: 'installed' | 'rolled-back' | 'failed'
+  note?: string
+}
 
 export type DeviceKind = 'usb' | 'hid' | 'serial' | 'bluetooth'
 
@@ -589,6 +604,15 @@ export interface NxtorbisApi {
   popOutBrowser(url: string): Promise<boolean>
   /** Whether protected media (Spotify, Netflix and the like) can play in this build, and what the decryption module says. */
   protectedMedia(): Promise<{ ready: boolean; status: unknown }>
+  /** Updating Orbis: what is happening, what the user has chosen, and what has been installed before. */
+  updateStatus(): Promise<{ status: UpdateStatus; settings: UpdateSettingsView; history: UpdateHistoryView[] } | null>
+  checkForUpdates(): Promise<UpdateStatus | null>
+  downloadUpdate(): Promise<UpdateStatus | null>
+  cancelUpdateDownload(): Promise<UpdateStatus | null>
+  /** Saves what is open, closes Orbis and hands over to the installer. */
+  restartAndUpdate(): Promise<UpdateStatus | null>
+  setUpdateSettings(patch: Partial<UpdateSettingsView>): Promise<UpdateSettingsView | null>
+  onUpdateChanged(listener: (status: UpdateStatus) => void): () => void
   /** The licences of everything Orbis is built from, generated at build time from what is installed. */
   notices(): Promise<Notices | null>
   /** The Electron or Chromium licence, which ship as files beside Orbis rather than inside it. */

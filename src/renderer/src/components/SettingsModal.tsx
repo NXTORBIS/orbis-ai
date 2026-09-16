@@ -7,6 +7,7 @@ import AccountSection from './AccountSection'
 const OfflineGamesSettings = lazy(() => import('./OfflineGamesSettings'))
 // A megabyte of licence text: read only when someone asks to see it.
 const NoticesPanel = lazy(() => import('./NoticesPanel'))
+const UpdateSettings = lazy(() => import('./UpdateSettings'))
 
 interface Props {
   settings: Settings
@@ -156,9 +157,13 @@ export default function SettingsModal({ settings, onUpdate, onClose }: Props): R
             <Segmented value={settings.theme} options={THEME_OPTIONS} onChange={(v) => void onUpdate({ theme: v })} />
           </section>
 
+          <Suspense fallback={null}>
+            <UpdateSettings />
+          </Suspense>
+
           <section className="setting row">
             <div className="setting-label">
-              <h3>About Orbis</h3>
+              <h3>Licences</h3>
               <p>The licences of everything Orbis is built from.</p>
             </div>
             <button type="button" className="queue-btn" onClick={() => setNoticesOpen(true)}>
