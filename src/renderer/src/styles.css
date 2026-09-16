@@ -12758,3 +12758,106 @@ html[data-motion='reduced'] .tool-btn.recording {
 .bsb-panel.full .board-stage {
   min-height: 420px;
 }
+
+/* ---------------------------------------------------------------- a sidebar panel is a page */
+
+/*
+ * Every panel fills the browser, the way the settings screen does. Bookmarks, a whiteboard and the personalisation
+ * screens are not things done in a column out of the corner of an eye, and a panel that has to be resized before it
+ * is usable is a panel that was the wrong size.
+ *
+ * The page underneath is covered, never closed: closing the panel shows it exactly as it was.
+ */
+.bsb-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  background: var(--bg-center);
+}
+
+.bsb-panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 24px 32px 32px;
+}
+
+/* The content stops short of the far edge, the way a settings screen does, so lines stay readable. */
+.bsb-panel-body > .view,
+.bsb-panel-body > .bsb-pane,
+.bsb-panel-body .browser-library.in-sidebar {
+  max-width: 940px;
+  margin: 0 auto;
+}
+
+.bsb-panel-body > .bsb-pane {
+  position: static;
+  height: auto;
+}
+
+/* The rest of the section, along the top, in line with the content below it. */
+.bsb-panel-tabs {
+  display: flex;
+  gap: 3px;
+  flex: none;
+  width: 100%;
+  max-width: 1004px;
+  margin: 0 auto;
+  padding: 20px 32px 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.bsb-panel-tab {
+  padding: 6px 12px;
+  font-size: 12.5px;
+}
+
+.bsb-pane-head {
+  padding: 4px 0 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.bsb-pane-head h3 {
+  font-size: 19px;
+  font-family: var(--display);
+  letter-spacing: 0.04em;
+}
+
+.bsb-pane-body {
+  padding-top: 14px;
+}
+
+.bsb-panel-body .view-head {
+  padding: 0 0 14px;
+}
+
+.bsb-panel-body .view-head h2 {
+  font-size: 19px;
+}
+
+/* A screen built for the stage fills a page just as well, with its list back beside it. */
+.bsb-panel-body .board-body {
+  grid-template-columns: 220px 1fr;
+  grid-template-rows: 1fr;
+  gap: 14px;
+}
+
+.bsb-panel-body .board-list {
+  max-height: none;
+}
+
+.bsb-panel-body .board-stage {
+  min-height: 440px;
+}
+
+.bsb-panel-body .notes-body,
+.bsb-panel-body .tasks-body,
+.bsb-panel-body .customize-body,
+.bsb-panel-body .ws-body {
+  grid-template-columns: 220px 1fr;
+}

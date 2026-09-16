@@ -143,18 +143,8 @@ export interface SidebarLayout {
   density: SidebarDensity
   /** How wide the list of panels is. An icon-only sidebar ignores it. */
   width: number
-  /** How wide an open panel is, beside the list and beside the page. */
-  panelWidth: number
   /** Whether the sidebar is showing at all. */
   open: boolean
-  /**
-   * Filling the browser rather than sitting beside it.
-   *
-   * Managing a browser is not something done out of the corner of an eye: bookmarks, history, a whiteboard and the
-   * personalisation screens all want room. Full page gives them the room, the way a settings screen does, and the
-   * page underneath is still there when it is put away again.
-   */
-  full: boolean
   /** The panel showing, or null when the list alone is showing. */
   panel: PanelId | null
 }
@@ -164,9 +154,6 @@ export const MIN_WIDTH = 168
 export const MAX_WIDTH = 460
 export const ICON_WIDTH = 52
 export const DEFAULT_WIDTH = 210
-export const MIN_PANEL_WIDTH = 280
-export const MAX_PANEL_WIDTH = 760
-export const DEFAULT_PANEL_WIDTH = 380
 export const MAX_GROUPS = 12
 const MAX_LABEL = 40
 
@@ -179,9 +166,7 @@ export function defaultLayout(): SidebarLayout {
     mode: 'labels',
     density: 'comfortable',
     width: DEFAULT_WIDTH,
-    panelWidth: DEFAULT_PANEL_WIDTH,
     open: false,
-    full: false,
     panel: null
   }
 }
@@ -246,9 +231,7 @@ export function normalizeLayout(raw: unknown): SidebarLayout {
     mode: input.mode === 'icons' ? 'icons' : 'labels',
     density: input.density === 'comfortable' ? 'comfortable' : 'compact',
     width: clamp(typeof input.width === 'number' && Number.isFinite(input.width) ? input.width : DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH),
-    panelWidth: clamp(typeof input.panelWidth === 'number' && Number.isFinite(input.panelWidth) ? input.panelWidth : DEFAULT_PANEL_WIDTH, MIN_PANEL_WIDTH, MAX_PANEL_WIDTH),
     open: input.open === true,
-    full: input.full === true,
     // A panel that has been hidden since, or that no longer exists, is not reopened.
     panel: known.has(input.panel as PanelId) && !listOf(input.hidden).includes(input.panel as PanelId) ? (input.panel as PanelId) : null
   }
@@ -369,10 +352,6 @@ export function setWidth(layout: SidebarLayout, width: number): SidebarLayout {
   return { ...layout, width: clamp(width, MIN_WIDTH, MAX_WIDTH) }
 }
 
-export function setPanelWidth(layout: SidebarLayout, width: number): SidebarLayout {
-  return { ...layout, panelWidth: clamp(width, MIN_PANEL_WIDTH, MAX_PANEL_WIDTH) }
-}
-
 /** Opens a panel, or closes the open one. Opening a hidden panel shows it again, since that is what was asked for. */
 export function openPanel(layout: SidebarLayout, panel: PanelId | null): SidebarLayout {
   if (panel === null) return { ...layout, panel: null }
@@ -383,11 +362,6 @@ export function openPanel(layout: SidebarLayout, panel: PanelId | null): Sidebar
 
 export function setOpen(layout: SidebarLayout, open: boolean): SidebarLayout {
   return { ...layout, open }
-}
-
-/** Filling the browser, or beside it. Going full page opens the sidebar if it was away. */
-export function setFull(layout: SidebarLayout, full: boolean): SidebarLayout {
-  return { ...layout, full, open: full ? true : layout.open }
 }
 
 /** How wide the sidebar actually is on screen: an icon-only sidebar is as wide as an icon, whatever was dragged. */

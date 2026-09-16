@@ -2813,7 +2813,7 @@ export default function BrowserPanel({
         </div>
       )}
 
-      <div className={`browser-stage${sidebar.open && sidebar.full ? ' sidebar-full' : ''}`}>
+      <div className={`browser-stage${sidebar.open && sidebar.panel ? ' sidebar-full' : ''}`}>
       {sidebar.open && (
         <BrowserSidebar
           layout={sidebar}

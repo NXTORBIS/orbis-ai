@@ -9,11 +9,8 @@ import {
   locate,
   MAX_WIDTH,
   MIN_WIDTH,
-  MIN_PANEL_WIDTH,
-  MAX_PANEL_WIDTH,
   moveGroup,
   openPanel,
-  setPanelWidth,
   movePanel,
   movePinned,
   normalizeLayout,
@@ -255,9 +252,4 @@ test('a panel that was open but has since been hidden does not come back on rest
   assert.equal(normalizeLayout({ ...defaultLayout(), panel: 'notAPanel' }).panel, null)
   assert.equal(normalizeLayout({ ...defaultLayout(), panel: 'notes' }).panel, 'notes')
 })
-
-test('the panel column has its own width, and it is kept usable too', () => {
-  assert.equal(setPanelWidth(defaultLayout(), 10).panelWidth, MIN_PANEL_WIDTH)
-  assert.equal(setPanelWidth(defaultLayout(), 9999).panelWidth, MAX_PANEL_WIDTH)
-  assert.equal(setPanelWidth(defaultLayout(), 420).panelWidth, 420)
-})
+
