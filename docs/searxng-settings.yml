@@ -1,0 +1,138 @@
+# Orbis specialized search — SearXNG configuration
+#
+# SearXNG (AGPL-3.0, https://github.com/searxng/searxng) is the aggregation layer behind Orbis's specialized search
+# categories: images, videos, news, maps, music, science, files and social media. Orbis's ordinary web search does NOT
+# come through here; it stays on its own provider.
+#
+# Orbis is a commercial product, and SearXNG's own licence says nothing about the terms of the sites it queries. Each
+# engine below was chosen on that basis: an official, documented API, or an open corpus whose licence permits reuse
+# with attribution. Engines that work by scraping a search engine's HTML, that proxy another platform to get around its
+# terms, or that index pirated material are deliberately absent, however well they perform.
+#
+# Every engine left out is a deliberate choice, not an oversight. Turning one on is a licensing decision, not a
+# configuration change.
+
+use_default_settings:
+  engines:
+    keep_only:
+      # -------------------------------------------------- images
+      # Openverse indexes openly licensed media and documents an API for it; Wikimedia Commons is free-licensed and
+      # has a real API. Both require attribution, which travels with the result.
+      - openverse
+      - wikicommons.images
+
+      # -------------------------------------------------- videos
+      # PeerTube is federated and open, with a documented API. Commons again for free-licensed video.
+      # Deliberately not "piped": it reaches YouTube by a route YouTube does not sanction.
+      - peertube
+      - wikicommons.videos
+
+      # -------------------------------------------------- news
+      # Wikinews is CC BY and has an API. News coverage is thin as a result; the honest fix is a licensed news API,
+      # not switching on a scraper.
+      - wikinews
+
+      # -------------------------------------------------- map
+      # OpenStreetMap data is ODbL: usable commercially, attribution required. Both of these query public endpoints
+      # whose usage policies rule out volume traffic, so production must point them at self-hosted Nominatim/Photon.
+      - openstreetmap
+      - photon
+
+      # -------------------------------------------------- music
+      - bandcamp
+      - wikicommons.audio
+
+      # -------------------------------------------------- science
+      # All official scholarly APIs, all intended for programmatic use.
+      # Deliberately not "google scholar": automated querying is against Google's terms.
+      - arxiv
+      - crossref
+      - pubmed
+      - openalex
+      - semantic scholar
+      - openairepublications
+      - openairedatasets
+
+      # -------------------------------------------------- files
+      # Deliberately not "library genesis": it indexes pirated books.
+      - wikicommons.files
+
+      # -------------------------------------------------- social media
+      # The public Mastodon API. Deliberately no Reddit or X: their current terms do not permit this use.
+      - mastodon users
+      - mastodon hashtags
+
+search:
+  # Orbis talks to this over the JSON API and never parses its HTML. "html" stays on only so an operator can open the
+  # instance and look at it; the service layer in front decides who may.
+  formats:
+    - json
+    - html
+  safe_search: 1
+  autocomplete: ''
+  default_lang: 'auto'
+
+server:
+  port: 8888
+  # Never bound to a public interface. Orbis reaches it through its own service layer, which is what does the
+  # authenticating, rate limiting and abuse prevention.
+  bind_address: "127.0.0.1"
+  base_url: false
+  # Bot and flood protection, on even behind the service layer: two doors are better than one.
+  limiter: true
+  public_instance: false
+  # Set SEARXNG_SECRET in the environment. There is no default worth having.
+  secret_key: !!str "${SEARXNG_SECRET}"
+  image_proxy: true
+  method: "GET"
+
+# A search that one slow engine would otherwise hold up returns without it.
+outgoing:
+  request_timeout: 4.0
+  max_request_timeout: 8.0
+  pool_connections: 100
+  pool_maxsize: 20
+  enable_http2: true
+
+ui:
+  static_use_hash: true
+  default_locale: ''
+  query_in_title: false
+  infinite_scroll: false
+
+general:
+  debug: false
+  instance_name: "Orbis specialized search"
+  # Orbis does not keep what people search for, and neither does this.
+  donation_url: false
+  contact_url: false
+  enable_metrics: false
+
+# Engines are attributed where their licence asks for it; results are never presented as Orbis's own.
+engines:
+  - name: openstreetmap
+    disabled: false
+  - name: photon
+    disabled: false
+  - name: openverse
+    disabled: false
+  - name: peertube
+    disabled: false
+  - name: arxiv
+    disabled: false
+  - name: crossref
+    disabled: false
+  - name: pubmed
+    disabled: false
+  - name: openalex
+    disabled: false
+  - name: semantic scholar
+    disabled: false
+  - name: mastodon users
+    disabled: false
+  - name: mastodon hashtags
+    disabled: false
+  - name: bandcamp
+    disabled: false
+  - name: wikinews
+    disabled: false

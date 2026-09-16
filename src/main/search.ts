@@ -16,7 +16,8 @@ import type { SearchResult, SearchVertical } from '../shared/orbisSearch'
 
 export interface SearchOptions {
   query: string
-  vertical: SearchVertical
+  /** Always "all": this provider is web search. The other categories have their own. */
+  vertical: Extract<SearchVertical, 'all'>
   fetchFn: FetchFn
   signal?: AbortSignal
 }
@@ -31,13 +32,13 @@ export interface SearchOutcome {
   tookMs: number
 }
 
-/** How a vertical is asked for, since the engines take it as part of the words. */
-const VERTICAL_TERMS: Record<SearchVertical, string> = {
-  all: '',
-  images: ' images',
-  videos: ' video',
-  news: ' news'
-}
+/**
+ * This is Orbis's general web provider, and only that.
+ *
+ * Images, videos, news and the other categories used to be asked of the same engines with a word tacked on the end,
+ * which is not the same as searching a source that actually holds them. They go to the specialized provider now, and
+ * this one is left doing the thing it is good at.
+ */
 
 export async function runSearch(o: SearchOptions): Promise<SearchOutcome> {
   const query = o.query.replace(/\s+/g, ' ').trim().slice(0, 300)
@@ -46,8 +47,7 @@ export async function runSearch(o: SearchOptions): Promise<SearchOutcome> {
   if (!query) return { ...empty, problem: 'Nothing was searched for.' }
 
   try {
-    // News is asked for recently; everything else takes the web as it is.
-    const hits = await searchWeb(`${query}${VERTICAL_TERMS[o.vertical]}`, o.vertical === 'news' ? 'week' : 'any', o.fetchFn, o.signal)
+    const hits = await searchWeb(query, 'any', o.fetchFn, o.signal)
     const results = tidyResults(hits)
     return {
       query,

@@ -25,6 +25,8 @@ import { UpdateManager } from './update/manager'
 import { electronPlatform, imageSize } from './platformElectron'
 import { asPageHandle } from './pageHandle'
 import { runSearch } from './search'
+import { endpointFromEnvironment, SearxngProvider } from './search/specialized'
+import { isSpecialized } from '../shared/searchProviders'
 import type { Platform } from './platform'
 import { answerContext, runResearch } from './research'
 import { OrbisAdBlock } from './adblock/electron'
@@ -693,13 +695,21 @@ function registerIpc(): void {
    * Orbis Search. The words are sent to the web and nothing else: no identifier, no history, nothing about who asked.
    * Orion's answer is a separate request the page makes only when it is worth one.
    */
-  ipcMain.handle('search:run', async (_e, query: unknown, vertical: unknown) =>
-    runSearch({
-      query: typeof query === 'string' ? query : '',
-      vertical: vertical === 'images' || vertical === 'videos' || vertical === 'news' ? vertical : 'all',
-      fetchFn: (url, init) => net.fetch(url, init)
-    })
-  )
+  /**
+   * Orbis Search, which is really two providers.
+   *
+   * "all" is ordinary web search on the backend it has always used. Every other category goes to the specialized
+   * provider, which asks sources that hold that kind of thing. Neither can break the other: a category that cannot be
+   * reached says so and web search carries on.
+   */
+  const specializedSearch = new SearxngProvider({ endpoint: endpointFromEnvironment(), fetchFn: (url, init) => net.fetch(url, init) })
+  ipcMain.handle('search:run', async (_e, query: unknown, vertical: unknown) => {
+    const words = typeof query === 'string' ? query : ''
+    const asked = typeof vertical === 'string' ? vertical : 'all'
+    if (isSpecialized(asked)) return specializedSearch.search(asked, words)
+    return runSearch({ query: words, vertical: 'all', fetchFn: (url, init) => net.fetch(url, init) })
+  })
+  ipcMain.handle('search:specialized-health', () => specializedSearch.check())
 
   // Updating Orbis. Everything the window and Orion can ask goes through the one manager.
   ipcMain.handle('update:status', () => (updates ? { status: updates.getStatus(), settings: updates.getSettings(), history: updates.getUpdateHistory() } : null))

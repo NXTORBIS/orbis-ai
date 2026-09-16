@@ -12,6 +12,7 @@ import type {
 } from './browserControl'
 import type { ControlLogEntryView } from './browserControlView'
 import type { SidebarLayout } from './browserSidebar'
+import type { SpecializedOutcome } from './searchProviders'
 import type { RunControl as WorkflowRunControl, StepRecord } from './browserControl'
 import type { ActiveWorkflowRun, RecordingState, Workflow, WorkflowIssue, WorkflowLibrary, WorkflowRunResult, WorkflowRunSummary, WorkflowVersion } from './workflows'
 import type { Note, NoteFilter } from './notes'
@@ -651,7 +652,13 @@ export interface NxtorbisApi {
   /** Whether protected media (Spotify, Netflix and the like) can play in this build, and what the decryption module says. */
   protectedMedia(): Promise<{ ready: boolean; status: unknown }>
   /** Searches the web for an Orbis Search page. Sends the words and nothing about who asked. */
-  runSearch(query: string, vertical: SearchVertical): Promise<SearchOutcomeView>
+  /**
+   * Searching. "all" is web search; every other category goes to the specialized provider, and comes back as a
+   * SpecializedOutcome instead. The page knows which it asked for.
+   */
+  runSearch(query: string, vertical: SearchVertical): Promise<SearchOutcomeView | SpecializedOutcome>
+  /** Whether specialized search is answering, so a category can say it is unavailable rather than hang. */
+  specializedSearchHealthy(): Promise<boolean>
   /** Updating Orbis: what is happening, what the user has chosen, and what has been installed before. */
   updateStatus(): Promise<{ status: UpdateStatus; settings: UpdateSettingsView; history: UpdateHistoryView[] } | null>
   checkForUpdates(): Promise<UpdateStatus | null>

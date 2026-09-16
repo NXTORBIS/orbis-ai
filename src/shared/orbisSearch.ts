@@ -15,8 +15,18 @@
 export const ORBIS_SCHEME = 'orbis:'
 export const SEARCH_PAGE = 'orbis://search'
 
-export type SearchVertical = 'all' | 'images' | 'videos' | 'news'
-export const VERTICALS: SearchVertical[] = ['all', 'images', 'videos', 'news']
+/**
+ * What Orbis Search can be asked for.
+ *
+ * "all" is ordinary web search and goes to its own provider. Everything else is a specialized category and goes to the
+ * specialized provider, which queries sources that actually hold that kind of thing. The two are separate on purpose:
+ * either can be replaced, or be down, without the other noticing.
+ */
+export type SearchVertical = 'all' | 'images' | 'videos' | 'news' | 'maps' | 'music' | 'science' | 'files' | 'social'
+export const VERTICALS: SearchVertical[] = ['all', 'images', 'videos', 'news', 'maps', 'music', 'science', 'files', 'social']
+
+/** Ordinary web search, as opposed to a category with sources of its own. */
+export const isWebSearch = (vertical: SearchVertical): boolean => vertical === 'all'
 
 /** Where a search lives, as an address a tab can hold and history can remember. */
 export function searchPageUrl(query: string, vertical: SearchVertical = 'all'): string {
