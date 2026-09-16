@@ -1,5 +1,6 @@
 import type { FollowupSuggestions } from '../shared/types'
 import { GROQ_BASE_URL } from './nim.ts'
+import { MAX_TITLE, shortenTitle, validateTitle, visibleLength } from '../shared/workflowTitle.ts'
 
 type FetchFn = (url: string, init?: RequestInit) => Promise<Response>
 
@@ -30,6 +31,18 @@ const COMPLETE_INSTRUCTIONS = [
   'Avoid generic filler such as "please", "in detail" or "tell me more" unless nothing more specific fits.',
   'A draft that is already a complete request still gets a completion that makes it sharper, e.g. "Explain black holes" -> "Explain black holes in simple terms with an analogy."',
   'Set "completion" to null only when the draft is gibberish or too fragmentary to guess any intent.'
+].join(' ')
+
+const WORKFLOW_TITLE_INSTRUCTIONS = [
+  'You name automations. You are given a description of what one Orbis workflow is for: what sets it off, what it does, which services it touches and what it produces.',
+  'Reply with JSON only, shaped {"title": string}.',
+  'Write the name of the workflow the way a person would refer to it, from its purpose and outcome, not from the steps it takes to get there.',
+  'For example a workflow that opens a news site every morning, collects the technology articles and summarises them is "Daily Tech News", not "Open Website and Extract Articles".',
+  'It is 2 to 5 words and at most 40 characters. Aim for 15 to 30 characters.',
+  'Use the language the workflow itself is written in. Use Title Case for English; for other languages capitalize only the first word and proper nouns.',
+  'No quotes, emojis, trailing punctuation, step names, selectors, URLs or ids.',
+  'Never include anything that looks like a password, key, token or other secret.',
+  'Never answer with "Workflow", "Automation", "Task", "Untitled" or a number.'
 ].join(' ')
 
 const IMAGE_MARKDOWN = /!\[([^\]]*)\]\(data:image\/[^)]+\)/g
@@ -174,6 +187,43 @@ export async function predictQueries(input: string, apiKeys: string[], fetchFn: 
       return true
     })
     .slice(0, 4)
+}
+
+/**
+ * A short AI-written name for a workflow, from a description of what it is for.
+ *
+ * The same Orion infrastructure that names chats, asked a different question. A name that comes back too long is sent
+ * back once to be shortened rather than cut, and anything that still will not do comes back as null — the caller then
+ * keeps whatever name the workflow already had. Nothing here invents a name when Orion cannot be reached.
+ */
+export async function generateWorkflowTitle(context: string, apiKeys: string[], fetchFn: FetchFn): Promise<string | null> {
+  const described = context.trim().slice(0, 2500)
+  if (!described) return null
+
+  const parsed = await requestJson(WORKFLOW_TITLE_INSTRUCTIONS, described, apiKeys, fetchFn, 12_000)
+  const candidate = typeof parsed?.title === 'string' ? parsed.title : null
+  if (!candidate) return null
+
+  const valid = validateTitle(candidate)
+  if (valid) return valid
+
+  // Too long, or dressed up in quotes: ask for it shorter before giving up on it.
+  if (visibleLength(candidate.trim()) > MAX_TITLE) {
+    const again = await requestJson(
+      WORKFLOW_TITLE_INSTRUCTIONS,
+      `${described}
+
+The name "${candidate.trim().slice(0, 120)}" is too long. Give a shorter one, at most ${MAX_TITLE} characters, keeping what it means.`,
+      apiKeys,
+      fetchFn,
+      12_000
+    )
+    const shorter = validateTitle(typeof again?.title === 'string' ? again.title : null)
+    if (shorter) return shorter
+    // Orion could not shorten it; drop the words that carry nothing rather than cut it mid-thought.
+    return shortenTitle(candidate)
+  }
+  return null
 }
 
 /** A short AI-written title for a chat, based on its first message. Returns null on any failure. */

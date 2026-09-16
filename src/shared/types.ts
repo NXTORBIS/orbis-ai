@@ -829,6 +829,10 @@ export interface NxtorbisApi {
   getWorkflow(id: string): Promise<Workflow | null>
   createWorkflow(name: string, templateId?: string): Promise<Workflow>
   saveWorkflow(workflow: Workflow, note?: string): Promise<Workflow>
+  /** Asks Orion for a new name now; null when Orion could not answer, in which case the name is unchanged. */
+  regenerateWorkflowTitle(id: string): Promise<Workflow | null>
+  /** A name the user chose. Orbis stops naming this workflow until they ask it to again. */
+  renameWorkflow(id: string, name: string): Promise<Workflow>
   duplicateWorkflow(id: string): Promise<Workflow>
   removeWorkflow(id: string): Promise<void>
   /** Asks where to save; resolves the file path, or null when cancelled. */

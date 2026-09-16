@@ -37,7 +37,8 @@ import type { ChatIntent } from './intent'
 import { automationProgress } from '../shared/automation'
 import { runBrowserAgent } from './browserAgent'
 import { transcribeAudio } from './voice'
-import { completeDraft, generateTitle, predictQueries, suggestFollowups } from './suggest'
+import { completeDraft, generateTitle, generateWorkflowTitle, predictQueries, suggestFollowups } from './suggest'
+import { WorkflowTitler } from './workflows/titler'
 import { parseWebSuggestions } from '../shared/omnibox'
 import { AuthManager } from './auth'
 import { configuredProvider, protectedSessionFile } from './authSecrets'
@@ -1046,13 +1047,27 @@ if (!app.requestSingleInstanceLock()) {
       ask: (request, signal) => askOrion(request, GROQ_API_KEYS, fetchForOrion, signal),
       send: sendToWindow
     })
+    /**
+     * Naming workflows. Orion names them the way it names chats, so nobody has to name every one they make; the work
+     * happens after the workflow is already saved and usable, and never holds anything up.
+     */
+    const workflowTitler = new WorkflowTitler({
+      get: (workflowId) => workflows.get(workflowId),
+      save: (workflow) => workflowStore.save(workflow, 'Named by Orion'),
+      ask: (context) => generateWorkflowTitle(context, GROQ_API_KEYS, fetchForOrion),
+      announce: () => sendToWindow('workflows:changed')
+    })
+    workflows.onStored = (workflow) => workflowTitler.onSaved(workflow)
+    app.on('before-quit', () => workflowTitler.stop())
+
     registerWorkflowIpc({
       engine: workflows,
       recorder: workflowRecorder,
       store: workflowStore,
       control: browserControl.control,
       getWindow: () => mainWindow,
-      draft: (instruction, current) => draftWorkflow(instruction, current, browserControl!.control.list(), GROQ_API_KEYS, fetchForOrion, () => crypto.randomUUID())
+      draft: (instruction, current) => draftWorkflow(instruction, current, browserControl!.control.list(), GROQ_API_KEYS, fetchForOrion, () => crypto.randomUUID()),
+      regenerateTitle: (workflowId) => workflowTitler.regenerate(workflowId)
     })
     void workflows.start().catch((err: unknown) => console.error('[workflows] failed to start', err))
     app.on('before-quit', () => workflows.stop())

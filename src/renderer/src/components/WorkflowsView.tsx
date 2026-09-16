@@ -8,6 +8,7 @@ import {
   LoaderCircle,
   Pause,
   Pencil,
+  PenLine,
   Pin,
   PinOff,
   Play,
@@ -66,6 +67,26 @@ export default function WorkflowsView({ onClose, onNotify }: Props): React.JSX.E
   const [runs, setRuns] = useState<Record<string, ActiveWorkflowRun>>({})
   const [records, setRecords] = useState<Record<string, StepRecord[]>>({})
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
+  const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null)
+  const [naming, setNaming] = useState<string | null>(null)
+
+  /**
+   * Asking Orion for a name now.
+   *
+   * This is also how somebody hands naming back to Orbis after renaming a workflow themselves. Orion may be
+   * unreachable, in which case the workflow keeps the name it has and is told so; nothing is invented.
+   */
+  const rename = async (id: string): Promise<void> => {
+    setNaming(id)
+    try {
+      const named = await window.api.regenerateWorkflowTitle(id)
+      onNotify(named ? `Named \u201C${named.name}\u201D.` : 'Orion could not think of a name just now. The workflow keeps the one it has.', named ? 'info' : 'warn')
+    } catch {
+      onNotify('Orion could not be reached. The workflow keeps its name.', 'warn')
+    } finally {
+      setNaming(null)
+    }
+  }
   const [draftOpen, setDraftOpen] = useState(false)
   const [draftText, setDraftText] = useState('')
   const [drafting, setDrafting] = useState(false)
@@ -349,6 +370,7 @@ export default function WorkflowsView({ onClose, onNotify }: Props): React.JSX.E
                       {w.name}
                     </b>
                     <small className="wf-muted">
+                      {w.titleSource === 'user' ? 'your name · ' : ''}
                       {countSteps(w.steps)} step{countSteps(w.steps) === 1 ? '' : 's'} · v{w.version}
                       {w.trigger.type !== 'manual' ? ` · starts ${w.trigger.type === 'appStart' ? 'with Orbis' : `on ${w.trigger.type}`}` : ''}
                     </small>
@@ -369,6 +391,35 @@ export default function WorkflowsView({ onClose, onNotify }: Props): React.JSX.E
                   )}
                   {next && <span className="wf-muted"> · next {new Date(next).toLocaleString()}</span>}
                 </p>
+                {renaming?.id === w.id && (
+                  <form
+                    className="wf-card-actions"
+                    onSubmit={(e) => {
+                      e.preventDefault()
+                      const chosen = renaming.name.trim()
+                      setRenaming(null)
+                      if (chosen && chosen !== w.name) void act(() => window.api.renameWorkflow(w.id, chosen), "Couldn't rename")
+                    }}
+                  >
+                    <input
+                      className="hud-input compact"
+                      value={renaming.name}
+                      aria-label={`Name for ${w.name}`}
+                      autoFocus
+                      onFocus={(e) => e.currentTarget.select()}
+                      onChange={(e) => setRenaming({ id: w.id, name: e.target.value })}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') setRenaming(null)
+                      }}
+                    />
+                    <button type="submit" className="queue-btn primary">
+                      Rename
+                    </button>
+                    <button type="button" className="queue-btn" onClick={() => setRenaming(null)}>
+                      Cancel
+                    </button>
+                  </form>
+                )}
                 {confirmDelete === w.id ? (
                   <div className="wf-card-actions">
                     <span>Delete “{w.name}” and its versions?</span>
@@ -404,6 +455,19 @@ export default function WorkflowsView({ onClose, onNotify }: Props): React.JSX.E
                     </button>
                     <button type="button" className="b-icon" aria-label={w.pinned ? 'Unpin' : 'Pin'} title={w.pinned ? 'Unpin' : 'Pin to the top'} onClick={() => void act(() => window.api.saveWorkflow({ ...w, pinned: !w.pinned }), "Couldn't update")}>
                       {w.pinned ? <PinOff size={13} /> : <Pin size={13} />}
+                    </button>
+                    <button type="button" className="b-icon" aria-label={`Rename ${w.name}`} title="Rename" onClick={() => setRenaming({ id: w.id, name: w.name })}>
+                      <PenLine size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      className="b-icon"
+                      aria-label={`Regenerate the name of ${w.name}`}
+                      title={w.titleSource === 'user' ? 'Let Orion name this again' : 'Ask Orion for a new name'}
+                      disabled={naming === w.id}
+                      onClick={() => void rename(w.id)}
+                    >
+                      <Sparkles size={13} className={naming === w.id ? 'spin' : undefined} />
                     </button>
                     <button type="button" className="b-icon" aria-label="Duplicate" title="Duplicate" onClick={() => void act(() => window.api.duplicateWorkflow(w.id), "Couldn't duplicate")}>
                       <Copy size={13} />

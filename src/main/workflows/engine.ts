@@ -95,16 +95,21 @@ export class WorkflowEngine {
     return this.o.store.get(id)
   }
 
+  /** Told whenever a workflow is stored, so it can be named without the engine knowing anything about naming. */
+  onStored?: (workflow: Workflow) => void
+
   async create(name: string, template?: Workflow): Promise<Workflow> {
     const base = template ? { ...template, id: crypto.randomUUID(), name, template: false, favorite: false, pinned: false, version: 1, createdAt: Date.now(), updatedAt: Date.now(), createdBy: 'user' as const } : newWorkflow(name, crypto.randomUUID())
     const saved = await this.o.store.save(base)
     await this.refresh()
+    this.onStored?.(saved)
     return saved
   }
 
   async save(workflow: Workflow, note?: string): Promise<Workflow> {
     const saved = await this.o.store.save(workflow, note)
     await this.refresh()
+    this.onStored?.(saved)
     return saved
   }
 

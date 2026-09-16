@@ -172,6 +172,15 @@ export interface Workflow {
   format: typeof WORKFLOW_FORMAT
   id: string
   name: string
+  /**
+   * How the name came about. Orion names workflows so nobody has to, but a name somebody chose themselves is theirs:
+   * "user" stops Orbis renaming it, ever, until they ask for a new one.
+   */
+  titleSource?: 'ai' | 'user'
+  /** What the workflow was for when Orion last named it, so a rename only follows a real change of purpose. */
+  lastTitleContext?: string
+  lastGeneratedAt?: number
+  titleVersion?: number
   description: string
   icon: string
   color: string
@@ -215,6 +224,9 @@ export function newWorkflow(name: string, id: string, now = Date.now()): Workflo
     createdAt: now,
     updatedAt: now,
     createdBy: 'user',
+    // A workflow starts out Orbis's to name; the moment somebody renames it, it stops being.
+    titleSource: 'ai',
+    titleVersion: 0,
     tags: [],
     favorite: false,
     pinned: false,
@@ -598,6 +610,10 @@ export function importWorkflow(json: unknown, newId: () => string, now = Date.no
     icon: typeof w.icon === 'string' ? w.icon : base.icon,
     color: typeof w.color === 'string' ? w.color : base.color,
     createdBy: 'import',
+    titleSource: w.titleSource === 'user' ? 'user' : 'ai',
+    ...(typeof w.lastTitleContext === 'string' ? { lastTitleContext: w.lastTitleContext } : {}),
+    ...(typeof w.lastGeneratedAt === 'number' ? { lastGeneratedAt: w.lastGeneratedAt } : {}),
+    titleVersion: typeof w.titleVersion === 'number' ? w.titleVersion : 0,
     tags: Array.isArray(w.tags) ? w.tags.filter((t): t is string => typeof t === 'string') : [],
     template: w.template === true,
     inputs: Array.isArray(w.inputs) ? w.inputs : [],
