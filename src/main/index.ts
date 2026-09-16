@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeTheme, net, session, shell, webContents } from 'electron'
+import { app, BrowserWindow, clipboard, components, dialog, ipcMain, Menu, nativeTheme, net, session, shell, webContents } from 'electron'
 import type { MenuItemConstructorOptions, OpenDialogOptions, TitleBarOverlayOptions, WebContents } from 'electron'
 import { existsSync, promises as fs } from 'node:fs'
 import os from 'node:os'
@@ -665,6 +665,8 @@ function registerIpc(): void {
   })
 
   ipcMain.handle('browser:popout', (_event, url: string) => Boolean(popOutBrowser(url)))
+  // Whether pages that use protected media (Spotify, Netflix and the like) can play here.
+  ipcMain.handle('browser:protected-media', () => protectedMedia)
   ipcMain.handle('window:is-fullscreen', (event) => BrowserWindow.fromWebContents(event.sender)?.isFullScreen() ?? false)
 
   // Account sign-in through the system browser (never an Orbis web view). Only state reaches windows, never codes or tokens.
@@ -782,6 +784,9 @@ function registerIpc(): void {
 const legacyUserData = join(app.getPath('appData'), 'Nxtorbis AI')
 if (!app.commandLine.hasSwitch('user-data-dir') && existsSync(legacyUserData)) app.setPath('userData', legacyUserData)
 
+/** Whether protected media (Widevine) is available, so Orbis can say so plainly instead of a page failing silently. */
+let protectedMedia: { ready: boolean; status: unknown } = { ready: false, status: 'not checked yet' }
+
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
@@ -793,6 +798,16 @@ if (!app.requestSingleInstanceLock()) {
 
   void app.whenReady().then(async () => {
     app.setAppUserModelId('ai.nxtorbis.desktop')
+
+    // Protected media (Spotify, Netflix and the rest) plays through a content decryption module that is fetched and
+    // kept up to date separately from Orbis. Waiting for it here means a tab never opens before it is ready; if it
+    // cannot be had — no connection on first run, say — Orbis carries on without it and only DRM pages are affected.
+    try {
+      await components.whenReady()
+      protectedMedia = { ready: true, status: components.status() }
+    } catch (err) {
+      protectedMedia = { ready: false, status: err instanceof Error ? err.message : String(err) }
+    }
 
     // Create menu like ChatGPT
     const menu = Menu.buildFromTemplate([

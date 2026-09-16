@@ -35,6 +35,7 @@ const api: NxtorbisApi = {
     }
   },
   popOutBrowser: (url) => ipcRenderer.invoke('browser:popout', url),
+  protectedMedia: () => ipcRenderer.invoke('browser:protected-media'),
   clearBrowserData: () => ipcRenderer.invoke('browser:clear-data'),
   suggestFollowups: (messages) => ipcRenderer.invoke('chat:suggest', messages),
   generateTitle: (prompt) => ipcRenderer.invoke('chat:title', prompt),

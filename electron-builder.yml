@@ -1,5 +1,8 @@
 appId: ai.nxtorbis.desktop
 productName: Orbis
+# Orbis is built on castLabs' Electron, which carries the content decryption module protected sites need (Spotify,
+# Netflix and the rest). Packaging must use that exact build rather than downloading the ordinary one.
+electronDist: node_modules/electron/dist
 directories:
   buildResources: build
   output: dist

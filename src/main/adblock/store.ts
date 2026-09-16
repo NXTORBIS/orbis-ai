@@ -44,6 +44,8 @@ export interface Manifest {
 
 export interface LoadedFilters {
   manifest: Manifest
+  /** No lists have been downloaded yet: Orbis blocks nothing until the first download arrives. */
+  empty?: boolean
   /** List id → text (including the scriptlet resources and bundled-only lists). */
   texts: Map<string, string>
   /** Set when the stored lists were damaged and an earlier or bundled version was used instead. */
@@ -194,18 +196,26 @@ export class FilterStore {
         chosen = previous
       } else {
         const bundled = await this.readSet(this.o.bundledDir)
-        if (!bundled.ok) throw new Error(`No usable filter lists: ${bundled.error}`)
-        const updatedAt = Date.parse(bundled.manifest.version) || this.now()
-        const manifest: Manifest = {
-          version: bundled.manifest.version,
-          updatedAt,
-          lists: Object.fromEntries(
-            Object.entries(bundled.manifest.lists).map(([id, entry]) => [id, { ...entry, rules: entry.rules ?? countRules(bundled.texts.get(id) ?? ''), updatedAt, source: 'bundled' as const }])
-          )
+        if (bundled.ok) {
+          const updatedAt = Date.parse(bundled.manifest.version) || this.now()
+          const manifest: Manifest = {
+            version: bundled.manifest.version,
+            updatedAt,
+            lists: Object.fromEntries(
+              Object.entries(bundled.manifest.lists).map(([id, entry]) => [id, { ...entry, rules: entry.rules ?? countRules(bundled.texts.get(id) ?? ''), updatedAt, source: 'bundled' as const }])
+            )
+          }
+          await this.writeSet(this.currentDir, manifest, bundled.texts)
+          if (!current.missing) recovered = `The filter lists were damaged (${current.error}), so Orbis restored the lists that ship with it.`
+          chosen = { manifest, texts: bundled.texts }
+        } else {
+          // Orbis ships without the lists themselves — they are downloaded on first run. Until they arrive there is
+          // simply nothing to block, which is an ordinary state rather than a failure.
+          if (!current.missing) recovered = `The filter lists were damaged (${current.error}), so Orbis is fetching them again.`
+          const texts = new Map<string, string>()
+          await this.addBundledOnly(texts)
+          return { manifest: { version: 'none', lists: {} }, texts, empty: true, recovered, canRollback: false }
         }
-        await this.writeSet(this.currentDir, manifest, bundled.texts)
-        if (!current.missing) recovered = `The filter lists were damaged (${current.error}), so Orbis restored the lists that ship with it.`
-        chosen = { manifest, texts: bundled.texts }
       }
     }
     await this.addBundledOnly(chosen.texts)
@@ -221,6 +231,7 @@ export class FilterStore {
     const texts = new Map(base.texts)
     const manifest: Manifest = { ...base.manifest, lists: { ...base.manifest.lists } }
     const result: UpdateResult = { updated: [], unchanged: [], failed: [], version: base.manifest.version }
+    // With nothing on disk yet, every list counts as new rather than as an update of something.
     const now = this.now()
     await Promise.all(
       this.downloadable.map(async (item) => {

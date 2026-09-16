@@ -549,6 +549,8 @@ export interface NxtorbisApi {
   /** Fires when a page in the in-app browser tries to open a new window. */
   onBrowserNewTab(listener: (url: string, options: { background: boolean }) => void): () => void
   popOutBrowser(url: string): Promise<boolean>
+  /** Whether protected media (Spotify, Netflix and the like) can play in this build, and what the decryption module says. */
+  protectedMedia(): Promise<{ ready: boolean; status: unknown }>
   clearBrowserData(): Promise<void>
   /** Wipes private tabs' cookies, storage and cache (their in-memory session), once the last private tab closes. */
   clearPrivateBrowsing(): Promise<void>

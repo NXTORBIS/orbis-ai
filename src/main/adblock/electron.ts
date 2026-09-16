@@ -88,6 +88,13 @@ export class OrbisAdBlock {
     this.core.onStats = (id) => this.queueStats(id)
     this.wireSession()
     await this.loadEngines()
+    if (this.loaded?.empty) {
+      // First run: the lists are not shipped with Orbis, so they are fetched now rather than on the usual schedule.
+      this.notice = 'Getting the filter lists. Until they arrive, nothing is blocked.'
+      this.emitState()
+      void this.updateFilters()
+      return
+    }
     const last = this.loaded?.manifest.checkedAt ?? this.loaded?.manifest.updatedAt ?? 0
     if (Date.now() - last > this.catalog.updateIntervalHours * 3_600_000) setTimeout(() => void this.updateFilters(), 15_000)
   }
@@ -356,7 +363,11 @@ export class OrbisAdBlock {
       else this.loaded = await this.store.load()
       this.notice = result.failed.length ? `Some filter lists couldn't be updated: ${result.failed.map((f) => `${f.id} (${f.reason})`).join('; ')}. They keep their current version.` : undefined
     } catch (err) {
-      this.notice = `Filter update failed: ${err instanceof Error ? err.message : String(err)}. The current lists stay in use.`
+      const why = err instanceof Error ? err.message : String(err)
+      // With nothing downloaded yet there is no "current version" to fall back on, and saying so is the honest thing.
+      this.notice = this.loaded?.empty
+        ? `The filter lists could not be downloaded (${why}). Nothing is blocked until they arrive — Orbis will try again.`
+        : `Filter update failed: ${why}. The current lists stay in use.`
     } finally {
       this.updating = false
     }
