@@ -6,6 +6,9 @@
  * Pure — no browser, no storage. Nothing here changes Orbis by itself: the engine applies what these rules work out.
  */
 
+import type { WidgetInstance } from './widgets'
+import { normalizeWidgets } from './widgets.ts'
+
 export const EXPERIENCE_SCHEMA_VERSION = 1
 
 // ---------------------------------------------------------------- appearance
@@ -122,7 +125,7 @@ export interface ExperienceConfig {
   notifications: NotificationsConfig
   /** Set by later parts of the runtime (widgets, dashboards, scenes, rules); kept here so one file holds everything. */
   dashboards: unknown[]
-  widgets: unknown[]
+  widgets: WidgetInstance[]
   scenes: unknown[]
   rules: unknown[]
   presets: unknown[]
@@ -244,7 +247,7 @@ export function normalizeConfig(raw: unknown): ExperienceConfig {
       categories: Object.fromEntries(Object.entries(notifications.categories ?? {}).filter(([key, value]) => /^[a-z-]{1,40}$/.test(key) && typeof value === 'boolean').slice(0, 40))
     },
     dashboards: list(r.dashboards),
-    widgets: list(r.widgets),
+    widgets: normalizeWidgets(list(r.widgets)),
     scenes: list(r.scenes),
     rules: list(r.rules),
     presets: list(r.presets),

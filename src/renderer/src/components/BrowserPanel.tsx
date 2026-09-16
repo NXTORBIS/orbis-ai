@@ -52,6 +52,7 @@ import { sameUrl } from '../../../shared/research'
 import { toUrl } from '../../../shared/omnibox'
 import TabContextMenu, { TabEditDialog } from './TabContextMenu'
 import ShortcutsGrid from './ShortcutsGrid'
+import WidgetHost, { useWidgets } from './widgets/WidgetHost'
 import ExtensionsToolbar from './ExtensionsToolbar'
 import ExtensionPrompts from './ExtensionPrompts'
 import type { ExtensionWindowRequest, ReportedBrowserTab } from '../../../shared/types'
@@ -164,6 +165,8 @@ interface Props {
   onBackToChat(): void
   /** Reports whether the active tab's page is loading, for the URL bar. */
   onLoadingChange?(loading: boolean): void
+  /** Opens one of Orbis's own panels (notes, tasks, clipboard, whiteboard, workspaces), asked for by a widget. */
+  onOpenOrbisView?(name: string): void
 }
 
 const MOBILE_UA =
@@ -320,8 +323,10 @@ export default function BrowserPanel({
   onWindowResize,
   hidden,
   onBackToChat,
-  onLoadingChange
+  onLoadingChange,
+  onOpenOrbisView
 }: Props): React.JSX.Element {
+  const widgets = useWidgets()
   const [firstTab] = useState(createTab)
   const [tabs, setTabs] = useState<Tab[]>([firstTab])
   const [activeId, setActiveId] = useState(firstTab.id)
@@ -2700,6 +2705,13 @@ export default function BrowserPanel({
               Type a URL or search in the bar above
             </button>
             <ShortcutsGrid onOpen={(url) => navigate(url)} />
+            {widgets.on && !active.private && (
+              <WidgetHost
+                widgets={widgets.widgets}
+                onChange={widgets.save}
+                onOpen={(what) => (what.kind === 'url' ? navigate(what.value) : onOpenOrbisView?.(what.value))}
+              />
+            )}
             {restorable.length > 0 && tabs.length === 1 && (
               <button type="button" className="browser-retry browser-restore" onClick={restoreSession} title={restorable.join('\n')}>
                 <RotateCcw size={13} />

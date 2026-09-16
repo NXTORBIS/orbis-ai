@@ -1,20 +1,34 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Check, Download, FileUp, History, Paintbrush, RotateCcw, ShieldCheck, Sparkles, Undo2, X, Zap } from 'lucide-react'
+import { Check, Download, FileUp, History, LayoutGrid, Paintbrush, Plus, RotateCcw, ShieldCheck, Sparkles, Trash2, Undo2, X, Zap } from 'lucide-react'
 import type { AppearanceConfig, ExperienceConfig } from '../../../shared/experience'
 import { defaultConfig, describeConfig, diffConfig, isDefaultConfig } from '../../../shared/experience'
 import type { Experience } from '../lib/experience'
 import type { NoticeKind } from '../App'
+import type { WidgetCategory, WidgetInstance, WidgetSize, ZoneName } from '../../../shared/widgets'
+import { MAX_WIDGETS, newWidgetInstance, permissionsOf, searchWidgets, widgetById, ZONES } from '../../../shared/widgets'
 
-type Category = 'appearance' | 'newTab' | 'accessibility' | 'performance' | 'privacy' | 'advanced'
+type Category = 'appearance' | 'newTab' | 'widgets' | 'accessibility' | 'performance' | 'privacy' | 'advanced'
 
 const CATEGORIES: { id: Category; label: string; icon: typeof Paintbrush }[] = [
   { id: 'appearance', label: 'Appearance', icon: Paintbrush },
   { id: 'newTab', label: 'New tab', icon: Sparkles },
+  { id: 'widgets', label: 'Widgets', icon: LayoutGrid },
   { id: 'accessibility', label: 'Accessibility', icon: Check },
   { id: 'performance', label: 'Performance', icon: Zap },
   { id: 'privacy', label: 'Privacy', icon: ShieldCheck },
   { id: 'advanced', label: 'Advanced', icon: History }
 ]
+
+const WIDGET_GROUPS: { id: WidgetCategory | 'all'; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'time', label: 'Time' },
+  { id: 'productivity', label: 'Your things' },
+  { id: 'browser', label: 'Browser' },
+  { id: 'information', label: 'Information' },
+  { id: 'utility', label: 'Handy' }
+]
+
+const ZONE_WORDS: Record<ZoneName, string> = { top: 'Top', left: 'Left', centre: 'Middle', right: 'Right', bottom: 'Bottom' }
 
 const ACCENTS = ['', '#3fd8ff', '#3ee58a', '#ffbe4d', '#ff4d6d', '#a78bfa', '#f472b6', '#60a5fa']
 
@@ -33,6 +47,8 @@ const when = (time: number): string => {
  */
 export default function CustomizeView({ experience, onClose, onNotify }: { experience: Experience; onClose(): void; onNotify(message: string, kind?: NoticeKind): void }): React.JSX.Element {
   const [category, setCategory] = useState<Category>('appearance')
+  const [widgetSearch, setWidgetSearch] = useState('')
+  const [widgetGroup, setWidgetGroup] = useState<WidgetCategory | 'all'>('all')
   const [draft, setDraft] = useState<ExperienceConfig>(experience.config)
   const [snapshots, setSnapshots] = useState<{ id: string; reason: string; takenAt: number; summary: string[] }[]>([])
   const [health, setHealth] = useState<{ ok: boolean; problems: string[]; repairs: string[]; snapshots: number } | null>(null)
@@ -136,6 +152,17 @@ export default function CustomizeView({ experience, onClose, onNotify }: { exper
       <small>{format(value)}</small>
     </label>
   )
+
+  // ---- widgets ----
+  const setWidgets = (widgets: WidgetInstance[]): void => change({ ...draft, widgets })
+  const addWidget = (widget: string): void => {
+    if (draft.widgets.length >= MAX_WIDGETS) return onNotify(`That is as many widgets as one Orbis can hold (${MAX_WIDGETS})`, 'error')
+    const instance = newWidgetInstance(widget, 'centre', draft.widgets.filter((w) => w.zone === 'centre').length)
+    if (instance) setWidgets([...draft.widgets, instance])
+  }
+  const patchWidget = (id: string, patch: Partial<WidgetInstance>): void => setWidgets(draft.widgets.map((w) => (w.id === id ? { ...w, ...patch } : w)))
+  const widgetSetting = (instance: WidgetInstance, name: string, value: string | number | boolean): void =>
+    patchWidget(instance.id, { settings: { ...instance.settings, [name]: value } })
 
   const toggle = (label: string, value: boolean, onChange: (value: boolean) => void, hint?: string) => (
     <label className="cz-row">
@@ -252,10 +279,132 @@ export default function CustomizeView({ experience, onClose, onNotify }: { exper
                 </button>
               </div>
               <p className="view-muted cz-note">
-                The new tab is the Orbis one unless you choose otherwise. Other modes, widgets and wallpapers arrive with the next part of this work; what is here now is what works today.
+                The new tab is the Orbis one unless you choose otherwise. Turn widgets on here and choose them under Widgets. Other modes and wallpapers arrive with the next part of this work; what is here now is what works today.
               </p>
               {toggle('Greeting', draft.newTab.greeting, (greeting) => change({ ...draft, newTab: { ...draft.newTab, greeting } }))}
               {toggle('Shortcuts', draft.newTab.shortcuts, (shortcuts) => change({ ...draft, newTab: { ...draft.newTab, shortcuts } }))}
+              {toggle('Widgets', draft.newTab.widgets, (widgets) => change({ ...draft, newTab: { ...draft.newTab, widgets } }), 'Shows the widgets you have chosen on an empty tab')}
+            </>
+          )}
+
+          {category === 'widgets' && (
+            <>
+              <div className="cz-section-head">
+                <h3>Widgets</h3>
+                <button type="button" className="queue-btn small" onClick={() => void resetSection('widgets', 'Widgets')}>
+                  <RotateCcw size={12} /> Reset this
+                </button>
+              </div>
+              <p className="view-muted cz-note">
+                Small panels on an empty tab, showing things Orbis already holds. Nothing is added unless you add it, each one says what it reads before you do, and one that stops
+                working is set aside on its own rather than taking the browser with it.
+                {!draft.newTab.widgets && ' They are switched off for the new tab at the moment \u2014 turn them on under New tab.'}
+              </p>
+
+              {draft.widgets.length > 0 && (
+                <div className="cz-widgets-chosen">
+                  {draft.widgets.map((instance) => {
+                    const definition = widgetById(instance.widget)
+                    if (!definition) return null
+                    return (
+                      <div key={instance.id} className="cz-widget-row">
+                        <div className="cz-widget-top">
+                          <b>{definition.name}</b>
+                          <select value={instance.zone} aria-label={`Where ${definition.name} sits`} onChange={(e) => patchWidget(instance.id, { zone: e.target.value as ZoneName })}>
+                            {ZONES.map((zone) => (
+                              <option key={zone} value={zone}>
+                                {ZONE_WORDS[zone]}
+                              </option>
+                            ))}
+                          </select>
+                          <select value={instance.size} aria-label={`How big ${definition.name} is`} onChange={(e) => patchWidget(instance.id, { size: e.target.value as WidgetSize })}>
+                            {definition.sizes.map((size) => (
+                              <option key={size} value={size}>
+                                {size === 'small' ? 'Small' : size === 'medium' ? 'Medium' : 'Large'}
+                              </option>
+                            ))}
+                          </select>
+                          <button type="button" className="icon-btn" aria-label={`Remove ${definition.name}`} onClick={() => setWidgets(draft.widgets.filter((w) => w.id !== instance.id))}>
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                        {definition.settings.length > 0 && (
+                          <div className="cz-widget-settings">
+                            {definition.settings.map((setting) => {
+                              const value = instance.settings[setting.name] ?? setting.default
+                              const label = `${definition.name}: ${setting.label}`
+                              if (setting.type === 'boolean') {
+                                return (
+                                  <label key={setting.name} className="cz-row">
+                                    <span>{setting.label}</span>
+                                    <input type="checkbox" aria-label={label} checked={Boolean(value)} onChange={(e) => widgetSetting(instance, setting.name, e.target.checked)} />
+                                  </label>
+                                )
+                              }
+                              if (setting.type === 'choice') {
+                                return (
+                                  <label key={setting.name} className="cz-row">
+                                    <span>{setting.label}</span>
+                                    <select aria-label={label} value={String(value)} onChange={(e) => widgetSetting(instance, setting.name, e.target.value)}>
+                                      {setting.choices?.map((choice) => (
+                                        <option key={choice.value} value={choice.value}>
+                                          {choice.label}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </label>
+                                )
+                              }
+                              return (
+                                <label key={setting.name} className="cz-row">
+                                  <span>{setting.label}</span>
+                                  <input
+                                    type={setting.type === 'number' ? 'number' : 'text'}
+                                    aria-label={label}
+                                    min={setting.min}
+                                    max={setting.max}
+                                    value={String(value)}
+                                    onChange={(e) => widgetSetting(instance, setting.name, setting.type === 'number' ? Number(e.target.value) : e.target.value)}
+                                  />
+                                </label>
+                              )
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              <div className="cz-section-head">
+                <h3>Add a widget</h3>
+              </div>
+              <input className="cz-search" value={widgetSearch} placeholder="Search widgets" aria-label="Search widgets" onChange={(e) => setWidgetSearch(e.target.value)} />
+              <div className="cz-chips">
+                {WIDGET_GROUPS.map((group) => (
+                  <button key={group.id} type="button" className={`queue-btn small${widgetGroup === group.id ? ' primary' : ''}`} onClick={() => setWidgetGroup(group.id)}>
+                    {group.label}
+                  </button>
+                ))}
+              </div>
+              <div className="cz-widget-catalogue">
+                {searchWidgets(widgetSearch, widgetGroup).map((definition) => {
+                  const reads = permissionsOf(definition)
+                  const count = draft.widgets.filter((w) => w.widget === definition.id).length
+                  return (
+                    <div key={definition.id} className="cz-widget-card">
+                      <b>{definition.name}</b>
+                      <small className="view-muted">{definition.description}</small>
+                      <small className="view-muted">{reads.length ? reads.join(' \u00b7 ') : 'Reads nothing of yours'}</small>
+                      <button type="button" className="queue-btn small" onClick={() => addWidget(definition.id)}>
+                        <Plus size={12} /> Add{count ? ` another (${count})` : ''}
+                      </button>
+                    </div>
+                  )
+                })}
+                {searchWidgets(widgetSearch, widgetGroup).length === 0 && <p className="view-muted">No widget matches that.</p>}
+              </div>
             </>
           )}
 

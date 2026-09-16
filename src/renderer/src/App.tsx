@@ -100,6 +100,19 @@ export default function App(): React.JSX.Element {
   const [customizeOpen, setCustomizeOpen] = useState(false)
   /** Everything the user has personalised, applied to the window; an untouched Orbis is left exactly as it is. */
   const experience = useExperience()
+
+  /** Opens one of Orbis's own panels — from a widget, say — and puts the others away. */
+  const openOrbisView = useCallback((name: string): void => {
+    setImagesOpen(false)
+    setWorkflowsOpen(false)
+    setProfilesOpen(false)
+    setCustomizeOpen(false)
+    setNotesOpen(name === 'notes')
+    setTasksOpen(name === 'tasks')
+    setClipboardOpen(name === 'clipboard')
+    setWhiteboardOpen(name === 'whiteboard')
+    setWorkspacesOpen(name === 'workspaces')
+  }, [])
   const [webSearch, setWebSearch] = useState(false)
   const [searchToken, setSearchToken] = useState(0)
   const [activityOpen, setActivityOpen] = useState(false)
@@ -1539,6 +1552,7 @@ export default function App(): React.JSX.Element {
             hidden={browserHidden}
             onBackToChat={() => setBrowserHidden(true)}
             onLoadingChange={setBrowserLoading}
+            onOpenOrbisView={openOrbisView}
           />
         )}
 

@@ -10351,3 +10351,324 @@ html[data-motion='reduced'] *::after {
   flex-direction: column;
   gap: 1px;
 }
+
+/* ---------------------------------------------------------------- widgets on an empty tab */
+
+.wg-zones {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(760px, 100%);
+  margin-top: 6px;
+}
+
+.wg-zone {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.wg-zone-left {
+  justify-content: flex-start;
+}
+
+.wg-zone-right {
+  justify-content: flex-end;
+}
+
+.wg-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--line-strong);
+  background: var(--pill-bg-strong);
+  text-align: left;
+  min-width: 0;
+}
+
+.wg-card.wg-small {
+  flex: 0 1 180px;
+}
+
+.wg-card.wg-medium {
+  flex: 0 1 240px;
+}
+
+.wg-card.wg-large {
+  flex: 1 1 100%;
+}
+
+.wg-card.collapsed {
+  padding-bottom: 8px;
+}
+
+.wg-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted-strong);
+}
+
+.wg-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.wg-icon:hover {
+  opacity: 1;
+  background: var(--pill-bg);
+}
+
+.wg-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.wg-list li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  min-width: 0;
+}
+
+.wg-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  padding: 2px 0;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wg-line:hover {
+  color: var(--cyan);
+}
+
+.wg-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  border-radius: 5px;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: transparent;
+  cursor: pointer;
+}
+
+.wg-check:hover {
+  color: var(--cyan);
+  border-color: var(--cyan);
+}
+
+.wg-clock,
+.wg-timer,
+.wg-quote,
+.wg-games,
+.wg-calc {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.wg-clock b,
+.wg-timer b {
+  font-size: 26px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.wg-big {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.wg-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.wg-quote p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.wg-calc input {
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 9px;
+  border: 1px solid var(--line-strong);
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+
+.wg-calc b {
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+  min-height: 22px;
+}
+
+.wg-empty,
+.wg-empty-action {
+  margin: 0;
+  font-size: 12px;
+}
+
+.wg-empty-action {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.wg-failed {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted-strong);
+}
+
+.wg-setaside {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wg-setaside-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--muted-strong);
+}
+
+/* ---------------------------------------------------------------- choosing widgets in Customize */
+
+.cz-widgets-chosen {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 8px 0 4px;
+}
+
+.cz-widget-row {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line-strong);
+  background: var(--pill-bg-strong);
+}
+
+.cz-widget-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.cz-widget-top b {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cz-widget-top select,
+.cz-widget-settings select,
+.cz-widget-settings input[type='text'],
+.cz-widget-settings input[type='number'] {
+  padding: 4px 6px;
+  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+
+.cz-widget-settings {
+  margin-top: 4px;
+}
+
+.cz-search {
+  width: 100%;
+  margin: 8px 0;
+  padding: 7px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line-strong);
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.cz-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.cz-widget-catalogue {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 10px;
+}
+
+.cz-widget-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  padding: 11px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line-strong);
+  background: var(--pill-bg-strong);
+  font-size: 13px;
+}
+
+.cz-widget-card small {
+  line-height: 1.45;
+}
+
+html[data-density] .wg-card {
+  padding: calc(12px * var(--pad-scale, 1)) calc(14px * var(--pad-scale, 1));
+}
