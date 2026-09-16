@@ -371,18 +371,34 @@ export default function BrowserPanel({
   }, [])
 
   /** Adds a tab (at the end, or at an index, pinned tabs staying in front) and returns it. Every way of opening a tab uses this. */
-  const addTab = useCallback((url: string, options: { activate?: boolean; private?: boolean; index?: number; pinned?: boolean } = {}): Tab => {
-    const tab: Tab = { ...createTab(url, options.private === true), ...(options.pinned ? { pinned: true } : {}) }
-    setTabs((list) => {
-      const next = [...list]
-      const pinnedCount = list.filter((t) => t.pinned).length
-      const at = typeof options.index === 'number' ? Math.max(options.pinned ? 0 : pinnedCount, Math.min(options.index, next.length)) : next.length
-      next.splice(at, 0, tab)
-      return next
-    })
-    if (options.activate !== false) setActiveId(tab.id)
-    return tab
+  /**
+   * The tabs as they stand, including changes made earlier in this same turn. Opening and closing several tabs at once
+   * (restoring a workspace, say) must build on each other rather than each starting from what the last render saw.
+   */
+  const tabsRef = useRef<Tab[]>(tabs)
+  tabsRef.current = tabs
+  const applyTabs = useCallback((change: (list: Tab[]) => Tab[]): Tab[] => {
+    const next = change(tabsRef.current)
+    tabsRef.current = next
+    setTabs(next)
+    return next
   }, [])
+
+  const addTab = useCallback(
+    (url: string, options: { activate?: boolean; private?: boolean; index?: number; pinned?: boolean } = {}): Tab => {
+      const tab: Tab = { ...createTab(url, options.private === true), ...(options.pinned ? { pinned: true } : {}) }
+      applyTabs((list) => {
+        const next = [...list]
+        const pinnedCount = list.filter((t) => t.pinned).length
+        const at = typeof options.index === 'number' ? Math.max(options.pinned ? 0 : pinnedCount, Math.min(options.index, next.length)) : next.length
+        next.splice(at, 0, tab)
+        return next
+      })
+      if (options.activate !== false) setActiveId(tab.id)
+      return tab
+    },
+    [applyTabs]
+  )
 
   const openTab = useCallback((url = '', activate = true, isPrivate = false) => void addTab(url, { activate, private: isPrivate }), [addTab])
 
@@ -870,12 +886,13 @@ export default function BrowserPanel({
   const closeTabs = (ids: string[]): void => {
     const closing = new Set(ids)
     if (!closing.size) return
-    const closedNow = tabs.flatMap((t, index) => (closing.has(t.id) && t.url && !t.private ? [{ url: t.url, title: t.title, index }] : []))
+    const current = tabsRef.current
+    const closedNow = current.flatMap((t, index) => (closing.has(t.id) && t.url && !t.private ? [{ url: t.url, title: t.title, index }] : []))
     if (closedNow.length) setClosedTabs((list) => [...list, ...closedNow].slice(-25))
-    const rest = tabs.filter((t) => !closing.has(t.id))
+    const rest = current.filter((t) => !closing.has(t.id))
     if (!rest.length) return onClose()
-    setTabs(rest)
-    if (closing.has(activeId)) focusTab(rest[Math.min(tabs.findIndex((t) => t.id === activeId), rest.length - 1)])
+    applyTabs(() => rest)
+    if (closing.has(activeId)) focusTab(rest[Math.min(current.findIndex((t) => t.id === activeId), rest.length - 1)])
   }
 
   const GROUP_COLORS = ['#3fd8ff', '#a78bfa', '#f472b6', '#34d399', '#fbbf24', '#f87171', '#60a5fa']
@@ -1423,6 +1440,58 @@ export default function BrowserPanel({
         if (typeof p.groupId === 'string') addTabsToGroup([tab.id], p.groupId)
         const ok = await waitUntil(() => Boolean(liveTab(tab.id)) && (p.active === false || live.current.activeId === tab.id))
         return ok ? verified(`Opened tab ${tab.id}${url ? ` at ${url}` : ''}.`, { tabId: tab.id, url }) : unverified('The tab did not appear.', { tabId: tab.id })
+      }
+    },
+    {
+      id: 'browser.openWorkspace',
+      domain: 'browser',
+      name: 'Open a workspace',
+      description: 'Opens a saved set of pages and groups. With replace, the pages that are open and not part of it are closed first.',
+      params: {
+        tabs: { type: 'array', description: 'The pages: url, title, pinned, group, active.', required: true },
+        groups: { type: 'array', description: 'The groups: name, color, collapsed.' },
+        replace: { type: 'boolean', description: 'Close the pages that are not part of it (default true).' }
+      },
+      mutates: true,
+      run: async (p) => {
+        const wanted = (Array.isArray(p.tabs) ? p.tabs : []).filter((t): t is { url: string; title?: string; pinned?: boolean; group?: string; active?: boolean } => Boolean(t) && typeof (t as { url?: unknown }).url === 'string')
+        if (!wanted.length) return failure('invalid-params', 'That workspace has no pages in it.')
+        const replace = p.replace !== false
+        const before = live.current.tabs
+        // Pages already open are kept as they are, so switching back does not reload everything.
+        const openAlready = new Map(before.map((t) => [t.url, t]))
+        const used: string[] = []
+        const madeGroups = new Map<string, string>()
+        for (const want of wanted) {
+          const existing = openAlready.get(want.url)
+          const id = existing ? existing.id : addTab(want.url, { activate: false, pinned: want.pinned === true }).id
+          used.push(id)
+          if (want.pinned && !existing?.pinned) setTabs((list) => list.map((t) => (t.id === id ? { ...t, pinned: true } : t)))
+          if (want.group) {
+            let groupId = madeGroups.get(want.group)
+            if (!groupId) {
+              const details = (Array.isArray(p.groups) ? p.groups : []).find((g) => (g as { name?: string })?.name === want.group) as { color?: string; collapsed?: boolean } | undefined
+              const group = createGroup([], want.group, details?.color)
+              groupId = group.id
+              madeGroups.set(want.group, groupId)
+              if (details?.collapsed) setGroupCollapsed(groupId, true)
+            }
+            addTabsToGroup([id], groupId)
+          }
+        }
+        if (replace) {
+          // Private tabs are never part of a workspace, and are never closed by switching to one.
+          const extra = before.filter((t) => !used.includes(t.id) && !t.private).map((t) => t.id)
+          if (extra.length) closeTabs(extra)
+        }
+        const activeWanted = wanted.find((t) => t.active) ?? wanted[0]
+        const activeId = used[wanted.indexOf(activeWanted)] ?? used[0]
+        const activeTab = live.current.tabs.find((t) => t.id === activeId)
+        if (activeTab) focusTab(activeTab)
+        const ok = await waitUntil(() => used.every((id) => live.current.tabs.some((t) => t.id === id)) && (!replace || live.current.tabs.every((t) => used.includes(t.id) || t.private)))
+        return ok
+          ? verified(`Opened ${used.length} page${used.length === 1 ? '' : 's'}${madeGroups.size ? ` in ${madeGroups.size} group${madeGroups.size === 1 ? '' : 's'}` : ''}.`, { tabIds: used, groups: [...madeGroups.keys()] })
+          : unverified('The workspace did not open fully.', { tabIds: used })
       }
     },
     {

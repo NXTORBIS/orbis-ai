@@ -16,7 +16,7 @@
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
-    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/main/sse.test.ts src/main/nim.test.ts src/main/browserSafety.test.ts src/main/research.test.ts src/main/adblock/adblock.test.ts src/main/browserShortcuts.test.ts src/main/browserLibrary.test.ts src/main/omnibox.test.ts src/main/auth.test.ts src/main/favicon.test.ts src/main/extensions/matchPattern.test.ts src/main/browserControl/browserControl.test.ts src/main/browserControl/runner.test.ts src/main/workflows/workflows.test.ts src/main/workflows/compile.test.ts src/main/gameLogic.test.ts src/main/offlineGames.test.ts src/main/notes.test.ts src/main/tasks.test.ts src/main/clipboardHistory.test.ts src/main/whiteboard.test.ts",
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/main/sse.test.ts src/main/nim.test.ts src/main/browserSafety.test.ts src/main/research.test.ts src/main/adblock/adblock.test.ts src/main/browserShortcuts.test.ts src/main/browserLibrary.test.ts src/main/omnibox.test.ts src/main/auth.test.ts src/main/favicon.test.ts src/main/extensions/matchPattern.test.ts src/main/browserControl/browserControl.test.ts src/main/browserControl/runner.test.ts src/main/workflows/workflows.test.ts src/main/workflows/compile.test.ts src/main/gameLogic.test.ts src/main/offlineGames.test.ts src/main/notes.test.ts src/main/tasks.test.ts src/main/clipboardHistory.test.ts src/main/whiteboard.test.ts src/main/workspaces.test.ts",
     "dist": "npm run typecheck && npm run build && electron-builder --win"
   },
   "devDependencies": {

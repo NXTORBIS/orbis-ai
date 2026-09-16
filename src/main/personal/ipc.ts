@@ -10,18 +10,24 @@ import type { ClipboardHistory } from './clipboard'
 import type { NotesStore } from './notes'
 import type { TasksStore } from './tasks'
 import type { WhiteboardStore } from './whiteboard'
+import type { WorkspacesStore } from './workspaces'
+import type { Workspace } from '../../shared/workspaces'
+import { openPlan } from '../../shared/workspaces'
 
 export interface PersonalIpcOptions {
   notes: NotesStore
   tasks: TasksStore
   clipboard: ClipboardHistory
   whiteboard: WhiteboardStore
+  workspaces: WorkspacesStore
   control: BrowserControl
   getWindow(): BrowserWindow | null
   /** The page in front: its address, title and the text the user has selected. */
   readPage(): Promise<{ url: string; title: string; selection?: string }>
   /** A picture of the page in front, as a data URL. */
   pageImage(): Promise<{ dataUrl: string; width: number; height: number; url: string; title: string }>
+  /** What the browser window holds right now (null when the browser is not open). */
+  browserState(): { tabs: { url: string; title: string; pinned?: boolean; private?: boolean; muted?: boolean; active?: boolean; groupId?: string | null }[]; groups?: { id: string; name: string; color: string; collapsed?: boolean }[] } | null
   send(channel: string, ...args: unknown[]): void
 }
 
@@ -45,6 +51,7 @@ export function registerPersonalIpc(o: PersonalIpcOptions): void {
   o.tasks.onChange(() => o.send('tasks:changed'))
   o.clipboard.onChange(() => o.send('clipboard:changed'))
   o.whiteboard.onChange(() => o.send('whiteboard:changed'))
+  o.workspaces.onChange(() => o.send('workspaces:changed'))
 
   // ---------------------------------------------------------------- notes
 
@@ -113,6 +120,40 @@ export function registerPersonalIpc(o: PersonalIpcOptions): void {
         source: { url: shot.url, title: shot.title }
       }
     ])
+  })
+
+  // ---------------------------------------------------------------- workspaces
+
+  /** Opens a workspace in the browser window, through the window's own capability, and says what really happened. */
+  const openWorkspace = async (workspace: Workspace, replace: boolean): Promise<{ opened: number; groups: number; name: string }> => {
+    const result = await o.control.execute(
+      { capability: 'browser.openWorkspace', params: { tabs: workspace.tabs, groups: workspace.groups, replace }, target: {}, source: 'user' },
+      { confirm: async () => true }
+    )
+    if (!result.ok) throw new Error(result.error?.message ?? 'The workspace could not be opened.')
+    await o.workspaces.markOpened(workspace.id)
+    const data = (result.data ?? {}) as { tabIds?: string[]; groups?: string[] }
+    return { opened: data.tabIds?.length ?? 0, groups: data.groups?.length ?? 0, name: workspace.name }
+  }
+
+  handle('workspaces:list', async () => ({ workspaces: await o.workspaces.list(), currentId: o.workspaces.current() }))
+  handle('workspaces:save-current', (_e, name, patch) => o.workspaces.saveCurrent(str(name, 60) || 'New workspace', o.browserState(), obj(patch) as Partial<Workspace>))
+  handle('workspaces:update-current', (_e, id) => o.workspaces.updateFrom(str(id, 80), o.browserState()))
+  handle('workspaces:save', (_e, workspace) => o.workspaces.save(workspace as Workspace))
+  handle('workspaces:rename', (_e, id, name) => o.workspaces.rename(str(id, 80), str(name, 60)))
+  handle('workspaces:remove', (_e, id) => o.workspaces.remove(str(id, 80)))
+  handle('workspaces:duplicate', (_e, id) => o.workspaces.duplicate(str(id, 80)))
+  handle('workspaces:reorder', (_e, ids) => o.workspaces.reorder(Array.isArray(ids) ? ids.map((id) => str(id, 80)) : []))
+  handle('workspaces:plan', async (_e, id, replace) => {
+    const workspace = await o.workspaces.get(str(id, 80))
+    if (!workspace) throw new Error('That workspace no longer exists.')
+    const state = o.browserState()
+    return openPlan(workspace, { tabs: (state?.tabs ?? []).filter((t) => !t.private).map((t) => ({ url: t.url, title: t.title, pinned: t.pinned === true })) }, replace !== false)
+  })
+  handle('workspaces:open', async (_e, id, replace) => {
+    const workspace = await o.workspaces.get(str(id, 80))
+    if (!workspace) throw new Error('That workspace no longer exists.')
+    return openWorkspace(workspace, replace !== false)
   })
 
   // ---------------------------------------------------------------- capabilities
@@ -480,6 +521,79 @@ export function registerPersonalIpc(o: PersonalIpcOptions): void {
     }
   })
 
+  o.control.register({
+    id: 'workspaces.list',
+    domain: 'workspaces',
+    name: 'List workspaces',
+    description: 'The saved sets of pages the user can switch between: id, name, how many pages and groups, and the sites in each.',
+    params: {},
+    mutates: false,
+    confirmation: 'none',
+    run: async () => {
+      const list = await o.workspaces.list()
+      const currentId = o.workspaces.current()
+      return list.map((w) => ({ id: w.id, name: w.name, tabs: w.summary.tabs, groups: w.summary.groups, sites: w.summary.sites, open: w.id === currentId, lastOpenedAt: w.lastOpenedAt ?? null }))
+    }
+  })
+
+  o.control.register({
+    id: 'workspaces.open',
+    domain: 'workspaces',
+    name: 'Open a workspace',
+    description: 'Switches the browser to a saved workspace. By default the pages that are not part of it are closed, so it asks first.',
+    params: { workspace: { type: 'string', description: 'Workspace id or exact name.', required: true }, replace: { type: 'boolean', description: 'Close the other pages (default true).' } },
+    mutates: true,
+    confirmation: 'always',
+    describe: (p) => `Open the workspace ${JSON.stringify(String(p.workspace))}${p.replace === false ? ' alongside what is open' : ', closing the other pages'}`,
+    run: async (p) => {
+      const all = await o.workspaces.list()
+      const workspace = all.find((w) => w.id === p.workspace) ?? all.find((w) => w.name.toLowerCase() === String(p.workspace).toLowerCase())
+      if (!workspace) return fail('not-found', `No workspace called ${JSON.stringify(String(p.workspace))}. See workspaces.list.`, true)
+      return openWorkspace(workspace, p.replace !== false)
+    },
+    verify: async (data) => {
+      const { opened, name } = data as { opened: number; name: string }
+      return { verified: opened > 0, detail: opened > 0 ? `${name} is open with ${opened} page${opened === 1 ? '' : 's'}.` : 'Nothing was opened.' }
+    }
+  })
+
+  o.control.register({
+    id: 'workspaces.save',
+    domain: 'workspaces',
+    name: 'Save the open pages as a workspace',
+    description: 'Saves the pages and groups that are open now as a workspace, under a name. Private tabs are never saved.',
+    params: { name: { type: 'string', description: 'What to call it.', required: true } },
+    mutates: true,
+    confirmation: 'none',
+    describe: (p) => `Save the open pages as the workspace ${JSON.stringify(String(p.name))}`,
+    run: async (p) => {
+      const saved = await o.workspaces.saveCurrent(String(p.name), o.browserState())
+      return { id: saved.id, name: saved.name, tabs: saved.tabs.length, groups: saved.groups.length }
+    },
+    verify: async (data) => {
+      const { id, tabs } = data as { id: string; tabs: number }
+      const saved = await o.workspaces.get(id)
+      return { verified: Boolean(saved) && saved!.tabs.length === tabs, detail: saved ? `Saved ${saved.tabs.length} page${saved.tabs.length === 1 ? '' : 's'}.` : 'The workspace was not saved.' }
+    }
+  })
+
+  o.control.register({
+    id: 'workspaces.update',
+    domain: 'workspaces',
+    name: 'Update a workspace',
+    description: 'Brings a workspace up to date with the pages that are open now.',
+    params: { workspace: { type: 'string', description: 'Workspace id or exact name.', required: true } },
+    mutates: true,
+    confirmation: 'when-consequential',
+    run: async (p) => {
+      const all = await o.workspaces.list()
+      const workspace = all.find((w) => w.id === p.workspace) ?? all.find((w) => w.name.toLowerCase() === String(p.workspace).toLowerCase())
+      if (!workspace) return fail('not-found', 'There is no workspace with that name.', true)
+      const saved = await o.workspaces.updateFrom(workspace.id, o.browserState())
+      return { id: saved.id, name: saved.name, tabs: saved.tabs.length }
+    }
+  })
+
   // State the rest of the control layer (and Orion) can read without a command.
   o.control.registerState('notes', async () => {
     const notes = await o.notes.search({})
@@ -489,6 +603,11 @@ export function registerPersonalIpc(o: PersonalIpcOptions): void {
     const { lists, counts } = await o.tasks.snapshot()
     const today = await o.tasks.search({ view: 'today', sort: 'due' })
     return { counts, lists: lists.map((l) => ({ id: l.id, name: l.name })), today: today.slice(0, 20).map(taskSummary) }
+  })
+  o.control.registerState('workspaces', async () => {
+    const list = await o.workspaces.list()
+    const currentId = o.workspaces.current()
+    return { count: list.length, current: list.find((w) => w.id === currentId)?.name ?? null, workspaces: list.slice(0, 20).map((w) => ({ id: w.id, name: w.name, tabs: w.summary.tabs })) }
   })
   o.control.registerState('whiteboard', async () => {
     const boards = await o.whiteboard.list()

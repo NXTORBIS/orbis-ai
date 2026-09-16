@@ -48,6 +48,7 @@ import { NotesStore } from './personal/notes'
 import { TasksStore } from './personal/tasks'
 import { ClipboardHistory } from './personal/clipboard'
 import { WhiteboardStore } from './personal/whiteboard'
+import { WorkspacesStore } from './personal/workspaces'
 import { registerPersonalIpc } from './personal/ipc'
 import { Store } from './store'
 
@@ -959,6 +960,9 @@ if (!app.requestSingleInstanceLock()) {
     const notesStore = new NotesStore(app.getPath('userData'))
     const tasksStore = new TasksStore(app.getPath('userData'))
     const whiteboardStore = new WhiteboardStore(app.getPath('userData'))
+    const workspacesStore = new WorkspacesStore(app.getPath('userData'))
+    // A workspace that keeps itself up to date follows the window while it is the one that is open.
+    browserControl.windowControl.onState((state) => workspacesStore.onBrowserState(state ? { tabs: state.tabs, groups: state.groups } : null))
     const clipboardHistory = new ClipboardHistory({
       userData: app.getPath('userData'),
       // Only watched while Orbis itself is in front, so copying elsewhere costs nothing.
@@ -973,6 +977,7 @@ if (!app.requestSingleInstanceLock()) {
       tasks: tasksStore,
       clipboard: clipboardHistory,
       whiteboard: whiteboardStore,
+      workspaces: workspacesStore,
       control: browserControl.control,
       getWindow: () => mainWindow,
       send: sendToWindow,
@@ -981,6 +986,10 @@ if (!app.requestSingleInstanceLock()) {
         const data = (result.data ?? {}) as { url?: string; title?: string; selection?: string }
         if (!result.ok || !data.url) throw new Error('There is no page open to save.')
         return { url: data.url, title: data.title ?? '', ...(data.selection ? { selection: data.selection } : {}) }
+      },
+      browserState: () => {
+        const state = browserControl?.windowControl.state
+        return state ? { tabs: state.tabs, groups: state.groups } : null
       },
       pageImage: async () => {
         const page = await browserControl!.control.execute({ capability: 'page.read', params: { maxChars: 1 }, target: {}, source: 'user' }, { confirm: async () => true })
@@ -994,7 +1003,8 @@ if (!app.requestSingleInstanceLock()) {
     void clipboardHistory.start().catch((err: unknown) => console.error('[clipboard] failed to start', err))
     app.on('before-quit', () => {
       clipboardHistory.stop()
-      void Promise.all([notesStore.flush(), tasksStore.flush(), clipboardHistory.flush(), whiteboardStore.flush()])
+      workspacesStore.stop()
+      void Promise.all([notesStore.flush(), tasksStore.flush(), clipboardHistory.flush(), whiteboardStore.flush(), workspacesStore.flush()])
     })
 
     app.on('before-quit', () => void browserLibrary?.flush())

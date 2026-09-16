@@ -205,7 +205,19 @@ const api: NxtorbisApi = {
   addToBoard: (id, elements) => ipcRenderer.invoke('whiteboard:add', id, elements),
   exportBoardSvg: (id) => ipcRenderer.invoke('whiteboard:export-svg', id),
   addPageToBoard: (id, at) => ipcRenderer.invoke('whiteboard:page-image', id, at),
-  onBoardsChanged: (listener) => subscribe('whiteboard:changed', listener)
+  onBoardsChanged: (listener) => subscribe('whiteboard:changed', listener),
+
+  listWorkspaces: () => ipcRenderer.invoke('workspaces:list'),
+  saveCurrentWorkspace: (name, patch) => ipcRenderer.invoke('workspaces:save-current', name, patch),
+  updateWorkspaceFromWindow: (id) => ipcRenderer.invoke('workspaces:update-current', id),
+  saveWorkspace: (workspace) => ipcRenderer.invoke('workspaces:save', workspace),
+  renameWorkspace: (id, name) => ipcRenderer.invoke('workspaces:rename', id, name),
+  removeWorkspace: (id) => ipcRenderer.invoke('workspaces:remove', id),
+  duplicateWorkspace: (id) => ipcRenderer.invoke('workspaces:duplicate', id),
+  reorderWorkspaces: (ids) => ipcRenderer.invoke('workspaces:reorder', ids),
+  planWorkspaceOpen: (id, replace) => ipcRenderer.invoke('workspaces:plan', id, replace),
+  openWorkspace: (id, replace) => ipcRenderer.invoke('workspaces:open', id, replace),
+  onWorkspacesChanged: (listener) => subscribe('workspaces:changed', listener)
 }
 
 /** Listens on a channel whose events carry one value; returns the unsubscribe function. */

@@ -14,6 +14,7 @@ import NotesView from './components/NotesView'
 import TasksView from './components/TasksView'
 import ClipboardView from './components/ClipboardView'
 import WhiteboardView from './components/WhiteboardView'
+import WorkspacesView from './components/WorkspacesView'
 import HudBackground from './components/HudBackground'
 import Sidebar from './components/Sidebar'
 import { ActivityPanel, ShortcutsModal, ToastStack } from './components/Overlays'
@@ -91,6 +92,7 @@ export default function App(): React.JSX.Element {
   const [tasksOpen, setTasksOpen] = useState(false)
   const [clipboardOpen, setClipboardOpen] = useState(false)
   const [whiteboardOpen, setWhiteboardOpen] = useState(false)
+  const [workspacesOpen, setWorkspacesOpen] = useState(false)
   const [webSearch, setWebSearch] = useState(false)
   const [searchToken, setSearchToken] = useState(0)
   const [activityOpen, setActivityOpen] = useState(false)
@@ -1345,6 +1347,7 @@ export default function App(): React.JSX.Element {
           tasksOpen={tasksOpen}
           clipboardOpen={clipboardOpen}
           whiteboardOpen={whiteboardOpen}
+          workspacesOpen={workspacesOpen}
           searchToken={searchToken}
           userName={settings?.userName ?? 'You'}
           userTitle={settings?.userTitle ?? ''}
@@ -1356,6 +1359,7 @@ export default function App(): React.JSX.Element {
             setImagesOpen((open) => !open)
           }}
           onWorkflows={() => {
+            setWorkspacesOpen(false)
             setWhiteboardOpen(false)
             setImagesOpen(false)
             setNotesOpen(false)
@@ -1364,6 +1368,7 @@ export default function App(): React.JSX.Element {
             setWorkflowsOpen((open) => !open)
           }}
           onNotes={() => {
+            setWorkspacesOpen(false)
             setWhiteboardOpen(false)
             setImagesOpen(false)
             setWorkflowsOpen(false)
@@ -1372,6 +1377,7 @@ export default function App(): React.JSX.Element {
             setNotesOpen((open) => !open)
           }}
           onTasks={() => {
+            setWorkspacesOpen(false)
             setWhiteboardOpen(false)
             setImagesOpen(false)
             setWorkflowsOpen(false)
@@ -1380,6 +1386,7 @@ export default function App(): React.JSX.Element {
             setTasksOpen((open) => !open)
           }}
           onClipboard={() => {
+            setWorkspacesOpen(false)
             setWhiteboardOpen(false)
             setImagesOpen(false)
             setWorkflowsOpen(false)
@@ -1388,12 +1395,22 @@ export default function App(): React.JSX.Element {
             setClipboardOpen((open) => !open)
           }}
           onWhiteboard={() => {
+            setWorkspacesOpen(false)
             setImagesOpen(false)
             setWorkflowsOpen(false)
             setNotesOpen(false)
             setTasksOpen(false)
             setClipboardOpen(false)
             setWhiteboardOpen((open) => !open)
+          }}
+          onWorkspaces={() => {
+            setImagesOpen(false)
+            setWorkflowsOpen(false)
+            setNotesOpen(false)
+            setTasksOpen(false)
+            setClipboardOpen(false)
+            setWhiteboardOpen(false)
+            setWorkspacesOpen((open) => !open)
           }}
           onAssistants={() => setPersonaMenuOpen(true)}
           onBrowser={toggleBrowser}
@@ -1444,6 +1461,7 @@ export default function App(): React.JSX.Element {
           {tasksOpen && <TasksView onClose={() => setTasksOpen(false)} onNotify={notify} />}
           {clipboardOpen && <ClipboardView onClose={() => setClipboardOpen(false)} onNotify={notify} />}
           {whiteboardOpen && <WhiteboardView onClose={() => setWhiteboardOpen(false)} onNotify={notify} />}
+          {workspacesOpen && <WorkspacesView onClose={() => setWorkspacesOpen(false)} onNotify={notify} />}
         </main>
 
         {browserOpen && (

@@ -17,6 +17,7 @@ import type { Note, NoteFilter } from './notes'
 import type { Task, TaskCounts, TaskFilter, TaskList } from './tasks'
 import type { ClipboardSettings, ClipItem, ClipKind } from './clipboardHistory'
 import type { Board } from './whiteboard'
+import type { Workspace, WorkspaceSummary } from './workspaces'
 import type { PlanLine } from './workflowCompile'
 
 export type Role = 'user' | 'assistant'
@@ -763,4 +764,17 @@ export interface NxtorbisApi {
   exportBoardSvg(id: string): Promise<{ name: string; svg: string }>
   addPageToBoard(id: string, at?: { x: number; y: number }): Promise<Board>
   onBoardsChanged(listener: () => void): () => void
+
+  // Workspaces
+  listWorkspaces(): Promise<{ workspaces: (Workspace & { summary: WorkspaceSummary })[]; currentId: string | null }>
+  saveCurrentWorkspace(name: string, patch?: Partial<Workspace>): Promise<Workspace>
+  updateWorkspaceFromWindow(id: string): Promise<Workspace>
+  saveWorkspace(workspace: Workspace): Promise<Workspace>
+  renameWorkspace(id: string, name: string): Promise<Workspace>
+  removeWorkspace(id: string): Promise<boolean>
+  duplicateWorkspace(id: string): Promise<Workspace>
+  reorderWorkspaces(ids: string[]): Promise<Workspace[]>
+  planWorkspaceOpen(id: string, replace?: boolean): Promise<{ open: number; close: number; keep: number }>
+  openWorkspace(id: string, replace?: boolean): Promise<{ opened: number; groups: number; name: string }>
+  onWorkspacesChanged(listener: () => void): () => void
 }
