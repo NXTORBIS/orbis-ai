@@ -667,6 +667,32 @@ function registerIpc(): void {
   ipcMain.handle('browser:popout', (_event, url: string) => Boolean(popOutBrowser(url)))
   // Whether pages that use protected media (Spotify, Netflix and the like) can play here.
   ipcMain.handle('browser:protected-media', () => protectedMedia)
+
+  /**
+   * The licences of everything Orbis is built from, generated at build time from what is actually installed. Most of
+   * them require their text to travel with the app, so this is read from the file rather than written by hand.
+   */
+  ipcMain.handle('app:notices', async () => {
+    const file = app.isPackaged ? join(process.resourcesPath, 'notices.json') : join(app.getAppPath(), 'resources', 'notices.json')
+    try {
+      return JSON.parse(await fs.readFile(file, 'utf8')) as unknown
+    } catch {
+      return null
+    }
+  })
+  /** The Electron and Chromium licences, which ship as files beside Orbis rather than inside it. */
+  ipcMain.handle('app:licence-file', async (_event, which: 'electron' | 'chromium') => {
+    const beside = app.isPackaged ? join(process.resourcesPath, '..') : join(app.getAppPath(), 'node_modules', 'electron', 'dist')
+    const name = which === 'chromium' ? ['LICENSES.chromium.html', 'LICENSES.chromium.html'] : ['LICENSE.electron.txt', 'LICENSE']
+    for (const candidate of name) {
+      try {
+        return await fs.readFile(join(beside, candidate), 'utf8')
+      } catch {
+        // Try the other name: packaged and development builds spell them differently.
+      }
+    }
+    return null
+  })
   ipcMain.handle('window:is-fullscreen', (event) => BrowserWindow.fromWebContents(event.sender)?.isFullScreen() ?? false)
 
   // Account sign-in through the system browser (never an Orbis web view). Only state reaches windows, never codes or tokens.

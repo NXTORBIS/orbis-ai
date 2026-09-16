@@ -337,6 +337,23 @@ export interface AdBlockListInfo {
   source: 'bundled' | 'downloaded'
 }
 
+export interface NoticeEntry {
+  name: string
+  version: string
+  license: string
+  homepage: string
+  /** The licence in full, as it was published. Empty when the package shipped no licence file of its own. */
+  text: string
+}
+
+export interface Notices {
+  generatedAt: string
+  orbis: string
+  /** Things Orbis uses that are not npm packages: Electron and Chromium, Widevine, the filter lists. */
+  others: NoticeEntry[]
+  packages: NoticeEntry[]
+}
+
 export interface AdBlockState {
   settings: AdBlockSettings
   /** The categories in effect now (all off when ad blocking is off). */
@@ -551,6 +568,10 @@ export interface NxtorbisApi {
   popOutBrowser(url: string): Promise<boolean>
   /** Whether protected media (Spotify, Netflix and the like) can play in this build, and what the decryption module says. */
   protectedMedia(): Promise<{ ready: boolean; status: unknown }>
+  /** The licences of everything Orbis is built from, generated at build time from what is installed. */
+  notices(): Promise<Notices | null>
+  /** The Electron or Chromium licence, which ship as files beside Orbis rather than inside it. */
+  licenceFile(which: 'electron' | 'chromium'): Promise<string | null>
   clearBrowserData(): Promise<void>
   /** Wipes private tabs' cookies, storage and cache (their in-memory session), once the last private tab closes. */
   clearPrivateBrowsing(): Promise<void>

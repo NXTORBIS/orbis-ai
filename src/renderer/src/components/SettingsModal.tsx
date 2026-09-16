@@ -5,6 +5,8 @@ import { MODELS } from '../../../shared/models'
 import AccountSection from './AccountSection'
 
 const OfflineGamesSettings = lazy(() => import('./OfflineGamesSettings'))
+// A megabyte of licence text: read only when someone asks to see it.
+const NoticesPanel = lazy(() => import('./NoticesPanel'))
 
 interface Props {
   settings: Settings
@@ -22,6 +24,7 @@ type ProfileKey = 'assistantName' | 'userName' | 'userTitle'
 
 export default function SettingsModal({ settings, onUpdate, onClose }: Props): React.JSX.Element {
   const [instructions, setInstructions] = useState(settings.systemPrompt)
+  const [noticesOpen, setNoticesOpen] = useState(false)
   const [profile, setProfile] = useState<Record<ProfileKey, string>>({
     assistantName: settings.assistantName,
     userName: settings.userName,
@@ -153,6 +156,16 @@ export default function SettingsModal({ settings, onUpdate, onClose }: Props): R
             <Segmented value={settings.theme} options={THEME_OPTIONS} onChange={(v) => void onUpdate({ theme: v })} />
           </section>
 
+          <section className="setting row">
+            <div className="setting-label">
+              <h3>About Orbis</h3>
+              <p>The licences of everything Orbis is built from.</p>
+            </div>
+            <button type="button" className="queue-btn" onClick={() => setNoticesOpen(true)}>
+              Third-party notices
+            </button>
+          </section>
+
           <section className="setting">
             <div className="setting-label">
               <h3>Custom instructions</h3>
@@ -170,6 +183,11 @@ export default function SettingsModal({ settings, onUpdate, onClose }: Props): R
           </section>
         </div>
       </div>
+      {noticesOpen && (
+        <Suspense fallback={null}>
+          <NoticesPanel onClose={() => setNoticesOpen(false)} />
+        </Suspense>
+      )}
     </div>
   )
 }
