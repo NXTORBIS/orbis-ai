@@ -104,6 +104,7 @@ Three channels disappear because we are currently reimplementing what Chromium a
 | `app:notices`, `app:licence-file` | Mojo; the licence files ship beside the browser |
 | `omnibox:predict`, `omnibox:web` | Mojo onto the same ranking, which is ours and better suited to Orbis than Chromium's |
 | `search:run` | Mojo onto the same search. Orbis Search is Orbis's own page, so it stays ours entirely |
+| `browser-sidebar:get`, `browser-sidebar:save`, `browser-sidebar:reset` | Mojo onto the same per-profile store. The sidebar is Orbis's own interface, so it stays ours |
 
 ### Orion — unchanged
 

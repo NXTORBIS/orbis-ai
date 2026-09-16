@@ -60,6 +60,7 @@ import { ExperienceStore } from './experience/store'
 import { registerExperienceIpc } from './experience/ipc'
 import type { Profile } from '../shared/profiles'
 import { registerPersonalIpc } from './personal/ipc'
+import { BrowserSidebarStore } from './browserSidebarStore'
 import { Store } from './store'
 
 // Baked in at build time from GROQ_API_KEY in .env.local (see electron.vite.config.ts).
@@ -1127,6 +1128,24 @@ if (!app.requestSingleInstanceLock()) {
     const tasksStore = new TasksStore(app.getPath('userData'))
     const whiteboardStore = new WhiteboardStore(app.getPath('userData'))
     const workspacesStore = new WorkspacesStore(app.getPath('userData'))
+    // How this profile has arranged the browser sidebar. Kept with the profile, because a work life and a personal one
+    // have no reason to share which panels are to hand.
+    const browserSidebar = new BrowserSidebarStore(app.getPath('userData'))
+    const sidebarProfile = async (): Promise<string> => (await profilesStore.active()).id
+    ipcMain.handle('browser-sidebar:get', async (event) => {
+      if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
+      return browserSidebar.read(await sidebarProfile())
+    })
+    ipcMain.handle('browser-sidebar:save', async (event, layout: unknown) => {
+      if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
+      return browserSidebar.write(await sidebarProfile(), layout)
+    })
+    ipcMain.handle('browser-sidebar:reset', async (event) => {
+      if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
+      return browserSidebar.reset(await sidebarProfile())
+    })
+    // Switching profile brings that profile's arrangement with it.
+    profilesStore.onChange(() => void sidebarProfile().then(async (id) => sendToWindow('browser-sidebar:changed', await browserSidebar.read(id))).catch(() => undefined))
     // A workspace that keeps itself up to date follows the window while it is the one that is open.
     browserControl.windowControl.onState((state) => workspacesStore.onBrowserState(state ? { tabs: state.tabs, groups: state.groups } : null))
     const clipboardHistory = new ClipboardHistory({
@@ -1175,7 +1194,7 @@ if (!app.requestSingleInstanceLock()) {
       clipboardHistory.stop()
       workspacesStore.stop()
       void profilesStore.flush()
-      void Promise.all([notesStore.flush(), tasksStore.flush(), clipboardHistory.flush(), whiteboardStore.flush(), workspacesStore.flush()])
+      void Promise.all([notesStore.flush(), tasksStore.flush(), clipboardHistory.flush(), whiteboardStore.flush(), workspacesStore.flush(), browserSidebar.flush()])
     })
 
     app.on('before-quit', () => void browserLibrary?.flush())

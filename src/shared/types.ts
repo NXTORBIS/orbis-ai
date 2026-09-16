@@ -11,6 +11,7 @@ import type {
   WindowRunResult
 } from './browserControl'
 import type { ControlLogEntryView } from './browserControlView'
+import type { SidebarLayout } from './browserSidebar'
 import type { RunControl as WorkflowRunControl, StepRecord } from './browserControl'
 import type { ActiveWorkflowRun, RecordingState, Workflow, WorkflowIssue, WorkflowLibrary, WorkflowRunResult, WorkflowRunSummary, WorkflowVersion } from './workflows'
 import type { Note, NoteFilter } from './notes'
@@ -696,6 +697,12 @@ export interface NxtorbisApi {
   /** Tells the main process whether the browser (or its URL bar) has focus, so its shortcuts apply there. */
   setBrowserFocus(focused: boolean): void
   getBrowserLibrary(): Promise<BrowserLibrarySnapshot>
+  /** How this profile has arranged the browser sidebar. */
+  getBrowserSidebar(): Promise<SidebarLayout>
+  saveBrowserSidebar(layout: SidebarLayout): Promise<SidebarLayout>
+  resetBrowserSidebar(): Promise<SidebarLayout>
+  /** Told when the arrangement changes elsewhere — switching profile, say. */
+  onBrowserSidebar(listener: (layout: SidebarLayout) => void): () => void
   onBrowserLibrary(listener: (library: BrowserLibrarySnapshot) => void): () => void
   /** Bookmarks the page, or removes its bookmark; resolves to whether it is bookmarked now. */
   toggleBookmark(url: string, title: string): Promise<boolean>
