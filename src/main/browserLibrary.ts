@@ -1,7 +1,7 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
-import { basename, extname, join } from 'node:path'
+import { basename, dirname, extname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import type { BrowserBookmark, BrowserDownload, BrowserHistoryEntry, BrowserLibrarySnapshot, BrowserPick, BrowserSearchEntry, SiteShortcut, SitePermissionDecision } from '../shared/types'
+import type { BrowserBookmark, BrowserDownload, BrowserHistoryEntry, BrowserLibrarySnapshot, BrowserPick, BrowserSearchEntry, PageShot, ReadingListItem, SavedPage, SiteShortcut, SitePermissionDecision } from '../shared/types'
 
 const MAX_HISTORY = 5000
 /** A revisit of the same page within this window updates the entry instead of adding another. */
@@ -10,6 +10,9 @@ const MAX_DOWNLOADS = 200
 const MAX_SEARCHES = 300
 const MAX_PICKS = 500
 export const MAX_SHORTCUTS = 24
+const MAX_READING = 500
+const MAX_SAVED_PAGES = 500
+const MAX_SCREENSHOTS = 300
 
 interface LibraryFile {
   history: BrowserHistoryEntry[]
@@ -19,9 +22,12 @@ interface LibraryFile {
   searches: BrowserSearchEntry[]
   picks: Record<string, BrowserPick>
   shortcuts: SiteShortcut[]
+  readingList: ReadingListItem[]
+  savedPages: SavedPage[]
+  screenshots: PageShot[]
 }
 
-const EMPTY = (): LibraryFile => ({ history: [], bookmarks: [], downloads: [], permissions: {}, searches: [], picks: {}, shortcuts: [] })
+const EMPTY = (): LibraryFile => ({ history: [], bookmarks: [], downloads: [], permissions: {}, searches: [], picks: {}, shortcuts: [], readingList: [], savedPages: [], screenshots: [] })
 
 /** Pages the browser should never record (its own blank and error pages). */
 const recordable = (url: string): boolean => /^https?:\/\//i.test(url)
@@ -69,6 +75,11 @@ export class BrowserLibrary {
     this.now = now
   }
 
+  /** Where this profile's browsing data is kept. Screenshots are written beside it, so they follow the profile. */
+  directory(): string {
+    return dirname(this.file)
+  }
+
   /**
    * Points the library at another profile's folder: what is in memory is written out first, then that profile's own
    * history, bookmarks, downloads and site permissions are read in.
@@ -98,7 +109,10 @@ export class BrowserLibrary {
               .filter((s) => s && typeof s.id === 'string' && typeof s.url === 'string' && shortcutUrl(s.url))
               .map((s) => ({ id: s.id, name: shortcutName(String(s.name ?? ''), shortcutUrl(s.url)!), url: shortcutUrl(s.url)!, addedAt: Number(s.addedAt) || 0, ...(validIcon(s.icon) ? { icon: s.icon } : s.icon === null ? { icon: null } : {}) }))
               .slice(0, MAX_SHORTCUTS)
-          : []
+          : [],
+        readingList: Array.isArray(raw.readingList) ? raw.readingList.filter((r) => r && typeof r.url === 'string' && typeof r.addedAt === 'number').slice(0, MAX_READING) : [],
+        savedPages: Array.isArray(raw.savedPages) ? raw.savedPages.filter((s) => s && typeof s.url === 'string' && typeof s.path === 'string').slice(0, MAX_SAVED_PAGES) : [],
+        screenshots: Array.isArray(raw.screenshots) ? raw.screenshots.filter((s) => s && typeof s.id === 'string' && typeof s.path === 'string').slice(0, MAX_SCREENSHOTS) : []
       }
     } catch {
       // No library yet, or a damaged file: start empty rather than failing the browser.
@@ -149,8 +163,96 @@ export class BrowserLibrary {
       permissions: { ...this.data.permissions },
       searches: this.data.searches.slice(0, 100),
       picks: { ...this.data.picks },
-      shortcuts: this.data.shortcuts.map((s) => ({ ...s }))
+      shortcuts: this.data.shortcuts.map((s) => ({ ...s })),
+      readingList: [...this.data.readingList],
+      savedPages: [...this.data.savedPages],
+      screenshots: [...this.data.screenshots]
     }
+  }
+
+  // ---------------------------------------------------------------- reading list
+
+  /**
+   * Pages set aside to read. A bookmark says "keep this"; a reading list says "I have not read this yet", which is why
+   * the two are separate lists rather than one with a flag.
+   */
+  addToReadingList(url: string, title = ''): boolean {
+    if (!recordable(url)) return false
+    const key = pageKey(url)
+    const already = this.data.readingList.find((r) => pageKey(r.url) === key)
+    if (already) {
+      // Adding something already on the list means "I want to read this again".
+      delete already.readAt
+      this.changed()
+      return true
+    }
+    this.data.readingList.unshift({ url, title: title.slice(0, 300), addedAt: this.now() })
+    this.data.readingList = this.data.readingList.slice(0, MAX_READING)
+    this.changed()
+    return true
+  }
+
+  inReadingList(url: string): boolean {
+    const key = pageKey(url)
+    return this.data.readingList.some((r) => pageKey(r.url) === key)
+  }
+
+  setReadingListRead(url: string, read: boolean): void {
+    const key = pageKey(url)
+    const item = this.data.readingList.find((r) => pageKey(r.url) === key)
+    if (!item) return
+    if (read) item.readAt = this.now()
+    else delete item.readAt
+    this.changed()
+  }
+
+  removeFromReadingList(url: string): void {
+    const key = pageKey(url)
+    const before = this.data.readingList.length
+    this.data.readingList = this.data.readingList.filter((r) => pageKey(r.url) !== key)
+    if (this.data.readingList.length !== before) this.changed()
+  }
+
+  clearReadReadingList(): number {
+    const before = this.data.readingList.length
+    this.data.readingList = this.data.readingList.filter((r) => !r.readAt)
+    const removed = before - this.data.readingList.length
+    if (removed) this.changed()
+    return removed
+  }
+
+  // ---------------------------------------------------------------- saved pages
+
+  /** Records a page saved to disk, so there is a list of them rather than a folder somebody has to remember. */
+  recordSavedPage(url: string, title: string, path: string): void {
+    this.data.savedPages = [{ url, title: title.slice(0, 300), path, savedAt: this.now() }, ...this.data.savedPages.filter((s) => s.path !== path)].slice(0, MAX_SAVED_PAGES)
+    this.changed()
+  }
+
+  /** Forgets a saved page. The file itself is the user's, and is left where it is. */
+  removeSavedPage(path: string): void {
+    const before = this.data.savedPages.length
+    this.data.savedPages = this.data.savedPages.filter((s) => s.path !== path)
+    if (this.data.savedPages.length !== before) this.changed()
+  }
+
+  // ---------------------------------------------------------------- screenshots
+
+  recordScreenshot(shot: PageShot): void {
+    this.data.screenshots = [shot, ...this.data.screenshots.filter((s) => s.id !== shot.id)].slice(0, MAX_SCREENSHOTS)
+    this.changed()
+  }
+
+  screenshot(id: string): PageShot | undefined {
+    return this.data.screenshots.find((s) => s.id === id)
+  }
+
+  removeScreenshot(id: string): PageShot | undefined {
+    const going = this.data.screenshots.find((s) => s.id === id)
+    if (!going) return undefined
+    this.data.screenshots = this.data.screenshots.filter((s) => s.id !== id)
+    this.changed()
+    return going
   }
 
   // ---------------------------------------------------------------- history

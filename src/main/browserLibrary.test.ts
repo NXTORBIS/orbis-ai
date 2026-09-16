@@ -159,7 +159,7 @@ test('a damaged library file starts empty instead of breaking the browser', asyn
     await writeFile(join(dir, 'browser-library.json'), '{not json')
     const lib = new BrowserLibrary(dir)
     await lib.load()
-    assert.deepEqual(lib.snapshot(), { history: [], bookmarks: [], downloads: [], permissions: {}, searches: [], picks: {}, shortcuts: [] })
+    assert.deepEqual(lib.snapshot(), { history: [], bookmarks: [], downloads: [], permissions: {}, searches: [], picks: {}, shortcuts: [], readingList: [], savedPages: [], screenshots: [] })
     lib.visit('https://a.example/', 'A')
     await lib.flush()
     assert.match(await readFile(join(dir, 'browser-library.json'), 'utf8'), /a\.example/)
@@ -174,4 +174,62 @@ test('downloads never overwrite an existing file and get safe names', () => {
   assert.equal(uniqueDownloadName('new.pdf', (n) => taken.has(n)), 'new.pdf')
   assert.equal(uniqueDownloadName('../../evil:name?.exe', () => false), 'evil_name_.exe')
   assert.equal(uniqueDownloadName('', () => false), 'download')
+})
+
+test('a reading list is a queue, not a second set of bookmarks', async () => {
+  const { dir, done } = await library()
+  try {
+    const lib = new BrowserLibrary(dir)
+    await lib.load()
+
+    assert.equal(lib.addToReadingList('https://a.example/article', 'An article'), true)
+    assert.equal(lib.addToReadingList('orbis://search?q=x', 'Not a web page'), false, 'only real pages can be set aside')
+    assert.equal(lib.inReadingList('https://a.example/article'), true)
+    assert.equal(lib.isBookmarked('https://a.example/article'), false, 'setting something aside does not bookmark it')
+
+    lib.setReadingListRead('https://a.example/article', true)
+    assert.ok(lib.snapshot().readingList[0].readAt, 'it knows what has been read')
+
+    // Adding it again means reading it again, rather than a second copy.
+    lib.addToReadingList('https://a.example/article', 'An article')
+    assert.equal(lib.snapshot().readingList.length, 1)
+    assert.equal(lib.snapshot().readingList[0].readAt, undefined)
+
+    lib.addToReadingList('https://b.example/other', 'Other')
+    lib.setReadingListRead('https://b.example/other', true)
+    assert.equal(lib.clearReadReadingList(), 1, 'clearing what is read leaves what is not')
+    assert.deepEqual(lib.snapshot().readingList.map((r) => r.url), ['https://a.example/article'])
+
+    lib.removeFromReadingList('https://a.example/article')
+    assert.equal(lib.snapshot().readingList.length, 0)
+  } finally {
+    await done()
+  }
+})
+
+test('saved pages and screenshots are listed, and survive a restart', async () => {
+  const { dir, done } = await library()
+  try {
+    const lib = new BrowserLibrary(dir)
+    await lib.load()
+    lib.recordSavedPage('https://a.example/', 'A', 'C:/pages/a.html')
+    lib.recordSavedPage('https://a.example/', 'A again', 'C:/pages/a.html')
+    assert.equal(lib.snapshot().savedPages.length, 1, 'saving over the same file replaces its entry')
+
+    lib.recordScreenshot({ id: 'one', url: 'https://a.example/', title: 'A', path: 'C:/shots/one.png', at: 1, width: 800, height: 600 })
+    assert.equal(lib.screenshot('one')?.width, 800)
+    await lib.flush()
+
+    const later = new BrowserLibrary(dir)
+    await later.load()
+    assert.deepEqual(later.snapshot().savedPages.map((s) => s.path), ['C:/pages/a.html'])
+    assert.deepEqual(later.snapshot().screenshots.map((s) => s.id), ['one'])
+
+    assert.equal(later.removeScreenshot('one')?.path, 'C:/shots/one.png', 'removing one says which file to delete')
+    assert.equal(later.removeScreenshot('one'), undefined)
+    later.removeSavedPage('C:/pages/a.html')
+    assert.equal(later.snapshot().savedPages.length, 0)
+  } finally {
+    await done()
+  }
 })

@@ -1,6 +1,8 @@
 import { app, clipboard, dialog, ipcMain, Menu, shell, webContents } from 'electron'
 import type { BrowserWindow, MenuItemConstructorOptions, Session, WebContents } from 'electron'
 import { existsSync } from 'node:fs'
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import type { BrowserDownload, BrowserPermissionRequest, BrowserShortcutEvent, DeviceRequest } from '../shared/types'
 import { DeviceChooser } from './deviceChooser'
@@ -555,6 +557,55 @@ export class BrowserIntegration {
       if (typeof key === 'string') library.recordPick(key)
     })
     ipcMain.handle('library:clear-downloads', () => library.clearFinishedDownloads())
+    ipcMain.handle('library:reading-add', (_e, url: unknown, title: unknown) => (typeof url === 'string' ? library.addToReadingList(url, typeof title === 'string' ? title : '') : false))
+    ipcMain.handle('library:reading-read', (_e, url: unknown, read: unknown) => {
+      if (typeof url === 'string') library.setReadingListRead(url, read !== false)
+    })
+    ipcMain.handle('library:reading-remove', (_e, url: unknown) => {
+      if (typeof url === 'string') library.removeFromReadingList(url)
+    })
+    ipcMain.handle('library:reading-clear-read', () => library.clearReadReadingList())
+    ipcMain.handle('library:forget-saved-page', (_e, path: unknown) => {
+      if (typeof path === 'string') library.removeSavedPage(path)
+    })
+    // Keeping a picture of a page: written beside this profile's other browsing data, and listed so it can be found.
+    ipcMain.handle('library:keep-screenshot', async (_e, dataUrl: unknown, url: unknown, title: unknown, size: unknown) => {
+      if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:image/png;base64,')) return null
+      const bytes = Buffer.from(dataUrl.slice('data:image/png;base64,'.length), 'base64')
+      if (!bytes.length || bytes.length > 24_000_000) return null
+      const id = randomUUID()
+      const dir = join(this.o.library.directory(), 'screenshots')
+      const path = join(dir, `${id}.png`)
+      await mkdir(dir, { recursive: true })
+      await writeFile(path, bytes)
+      const measured = (size ?? {}) as { width?: number; height?: number }
+      const shot = {
+        id,
+        url: typeof url === 'string' ? url : '',
+        title: typeof title === 'string' ? title.slice(0, 300) : '',
+        path,
+        at: Date.now(),
+        width: Number(measured.width) || 0,
+        height: Number(measured.height) || 0
+      }
+      library.recordScreenshot(shot)
+      return shot
+    })
+    ipcMain.handle('library:read-screenshot', async (_e, id: unknown) => {
+      const shot = typeof id === 'string' ? library.screenshot(id) : undefined
+      if (!shot) return null
+      try {
+        return `data:image/png;base64,${(await readFile(shot.path)).toString('base64')}`
+      } catch {
+        return null
+      }
+    })
+    ipcMain.handle('library:remove-screenshot', async (_e, id: unknown) => {
+      const going = typeof id === 'string' ? library.removeScreenshot(id) : undefined
+      // The picture was taken by Orbis and kept by Orbis, so removing it removes the file too.
+      if (going) await rm(going.path, { force: true }).catch(() => undefined)
+      return Boolean(going)
+    })
     ipcMain.handle('library:download-action', async (_e, id: unknown, action: unknown) => {
       if (typeof id === 'string' && (action === 'cancel' || action === 'pause' || action === 'resume' || action === 'open' || action === 'show')) await this.downloadAction(id, action)
     })

@@ -9,7 +9,11 @@ import {
   locate,
   MAX_WIDTH,
   MIN_WIDTH,
+  MIN_PANEL_WIDTH,
+  MAX_PANEL_WIDTH,
   moveGroup,
+  openPanel,
+  setPanelWidth,
   movePanel,
   movePinned,
   normalizeLayout,
@@ -226,4 +230,34 @@ test('a change to an arrangement is announced, so every window follows it', asyn
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
+})
+
+test('opening a panel, and what happens to it when it is hidden', () => {
+  let layout = openPanel(defaultLayout(), 'bookmarks')
+  assert.equal(layout.panel, 'bookmarks')
+  assert.equal(layout.open, true, 'asking for a panel opens the sidebar it lives in')
+
+  // Asking for a hidden panel by name shows it again: that is what asking for it meant.
+  layout = openPanel(setPanelHidden(layout, 'history', true), 'history')
+  assert.equal(layout.panel, 'history')
+  assert.equal(isHidden(layout, 'history'), false)
+
+  // Hiding the panel that is open closes it, rather than leaving it up with no way back.
+  layout = setPanelHidden(layout, 'history', true)
+  assert.equal(layout.panel, null)
+
+  assert.equal(openPanel(layout, null).panel, null)
+})
+
+test('a panel that was open but has since been hidden does not come back on restart', () => {
+  const stored = { ...defaultLayout(), hidden: ['downloads'], panel: 'downloads' }
+  assert.equal(normalizeLayout(stored).panel, null)
+  assert.equal(normalizeLayout({ ...defaultLayout(), panel: 'notAPanel' }).panel, null)
+  assert.equal(normalizeLayout({ ...defaultLayout(), panel: 'notes' }).panel, 'notes')
+})
+
+test('the panel column has its own width, and it is kept usable too', () => {
+  assert.equal(setPanelWidth(defaultLayout(), 10).panelWidth, MIN_PANEL_WIDTH)
+  assert.equal(setPanelWidth(defaultLayout(), 9999).panelWidth, MAX_PANEL_WIDTH)
+  assert.equal(setPanelWidth(defaultLayout(), 420).panelWidth, 420)
 })

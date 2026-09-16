@@ -123,9 +123,14 @@ export interface SidebarLayout {
   pinned: PanelId[]
   mode: SidebarMode
   density: SidebarDensity
+  /** How wide the list of panels is. An icon-only sidebar ignores it. */
   width: number
+  /** How wide an open panel is, beside the list and beside the page. */
+  panelWidth: number
   /** Whether the sidebar is showing at all. */
   open: boolean
+  /** The panel showing, or null when the list alone is showing. */
+  panel: PanelId | null
 }
 
 export const LAYOUT_VERSION = 1
@@ -133,6 +138,9 @@ export const MIN_WIDTH = 168
 export const MAX_WIDTH = 460
 export const ICON_WIDTH = 52
 export const DEFAULT_WIDTH = 248
+export const MIN_PANEL_WIDTH = 280
+export const MAX_PANEL_WIDTH = 760
+export const DEFAULT_PANEL_WIDTH = 380
 export const MAX_GROUPS = 12
 const MAX_LABEL = 40
 
@@ -145,7 +153,9 @@ export function defaultLayout(): SidebarLayout {
     mode: 'labels',
     density: 'comfortable',
     width: DEFAULT_WIDTH,
-    open: false
+    panelWidth: DEFAULT_PANEL_WIDTH,
+    open: false,
+    panel: null
   }
 }
 
@@ -208,7 +218,10 @@ export function normalizeLayout(raw: unknown): SidebarLayout {
     mode: input.mode === 'icons' ? 'icons' : 'labels',
     density: input.density === 'compact' ? 'compact' : 'comfortable',
     width: clamp(typeof input.width === 'number' && Number.isFinite(input.width) ? input.width : DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH),
-    open: input.open === true
+    panelWidth: clamp(typeof input.panelWidth === 'number' && Number.isFinite(input.panelWidth) ? input.panelWidth : DEFAULT_PANEL_WIDTH, MIN_PANEL_WIDTH, MAX_PANEL_WIDTH),
+    open: input.open === true,
+    // A panel that has been hidden since, or that no longer exists, is not reopened.
+    panel: known.has(input.panel as PanelId) && !listOf(input.hidden).includes(input.panel as PanelId) ? (input.panel as PanelId) : null
   }
 }
 
@@ -242,7 +255,13 @@ export function movePanel(layout: SidebarLayout, id: PanelId, toGroupId: string,
 export function setPanelHidden(layout: SidebarLayout, id: PanelId, hidden: boolean): SidebarLayout {
   if (!PANEL_IDS.includes(id)) return layout
   const without = layout.hidden.filter((h) => h !== id)
-  return { ...layout, hidden: hidden ? [...without, id] : without, pinned: hidden ? layout.pinned.filter((p) => p !== id) : layout.pinned }
+  return {
+    ...layout,
+    hidden: hidden ? [...without, id] : without,
+    pinned: hidden ? layout.pinned.filter((p) => p !== id) : layout.pinned,
+    // Hiding the panel that is open closes it, rather than leaving it showing with no way back to it.
+    panel: hidden && layout.panel === id ? null : layout.panel
+  }
 }
 
 export function isHidden(layout: SidebarLayout, id: PanelId): boolean {
@@ -319,6 +338,18 @@ export function setDensity(layout: SidebarLayout, density: SidebarDensity): Side
 
 export function setWidth(layout: SidebarLayout, width: number): SidebarLayout {
   return { ...layout, width: clamp(width, MIN_WIDTH, MAX_WIDTH) }
+}
+
+export function setPanelWidth(layout: SidebarLayout, width: number): SidebarLayout {
+  return { ...layout, panelWidth: clamp(width, MIN_PANEL_WIDTH, MAX_PANEL_WIDTH) }
+}
+
+/** Opens a panel, or closes the open one. Opening a hidden panel shows it again, since that is what was asked for. */
+export function openPanel(layout: SidebarLayout, panel: PanelId | null): SidebarLayout {
+  if (panel === null) return { ...layout, panel: null }
+  if (!PANEL_IDS.includes(panel)) return layout
+  const shown = layout.hidden.includes(panel) ? setPanelHidden(layout, panel, false) : layout
+  return { ...shown, open: true, panel }
 }
 
 export function setOpen(layout: SidebarLayout, open: boolean): SidebarLayout {

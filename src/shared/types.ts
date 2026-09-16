@@ -477,6 +477,35 @@ export interface BrowserPick {
   lastAt: number
 }
 
+/** A page set aside to read later. Kept apart from bookmarks: a bookmark is forever, this is a queue. */
+export interface ReadingListItem {
+  url: string
+  title: string
+  addedAt: number
+  /** When it was marked read. Absent while it is still waiting. */
+  readAt?: number
+}
+
+/** A page saved to this computer, readable without a connection. */
+export interface SavedPage {
+  url: string
+  title: string
+  /** Where it was actually written. */
+  path: string
+  savedAt: number
+}
+
+/** A picture taken of a page. */
+export interface PageShot {
+  id: string
+  url: string
+  title: string
+  path: string
+  at: number
+  width: number
+  height: number
+}
+
 export interface BrowserLibrarySnapshot {
   history: BrowserHistoryEntry[]
   bookmarks: BrowserBookmark[]
@@ -488,6 +517,12 @@ export interface BrowserLibrarySnapshot {
   picks: Record<string, BrowserPick>
   /** The new-tab page's site shortcuts, in the user's order. */
   shortcuts: SiteShortcut[]
+  /** Pages set aside to read, newest first. */
+  readingList: ReadingListItem[]
+  /** Pages saved to this computer, newest first. */
+  savedPages: SavedPage[]
+  /** Pictures taken of pages, newest first. */
+  screenshots: PageShot[]
 }
 
 /** A Chrome Web Store extension installed in the Orbis browser. */
@@ -697,6 +732,20 @@ export interface NxtorbisApi {
   /** Tells the main process whether the browser (or its URL bar) has focus, so its shortcuts apply there. */
   setBrowserFocus(focused: boolean): void
   getBrowserLibrary(): Promise<BrowserLibrarySnapshot>
+  /** Sets a page aside to read later; false when the address is not a web page. */
+  addToReadingList(url: string, title?: string): Promise<boolean>
+  setReadingListRead(url: string, read: boolean): Promise<void>
+  removeFromReadingList(url: string): Promise<void>
+  /** Clears everything already read; resolves how many went. */
+  clearReadReadingList(): Promise<number>
+  /** Forgets a saved page. The file itself is the user's and stays where it is. */
+  forgetSavedPage(path: string): Promise<void>
+  /** Keeps a picture of a page beside this profile's browsing data. */
+  keepScreenshot(dataUrl: string, url: string, title: string, size?: { width: number; height: number }): Promise<PageShot | null>
+  /** One kept picture, as a data URL, or null when the file has gone. */
+  readScreenshot(id: string): Promise<string | null>
+  /** Removes a kept picture, and its file. */
+  removeScreenshot(id: string): Promise<boolean>
   /** How this profile has arranged the browser sidebar. */
   getBrowserSidebar(): Promise<SidebarLayout>
   saveBrowserSidebar(layout: SidebarLayout): Promise<SidebarLayout>
