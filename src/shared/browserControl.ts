@@ -28,6 +28,9 @@ export type ControlDomain =
   | 'devtools'
   | 'shortcuts'
   | 'workflows'
+  | 'notes'
+  | 'tasks'
+  | 'clips'
   | 'state'
 
 /** Who asked: the person using Orbis, Orion's browser agent, or an automation run. */

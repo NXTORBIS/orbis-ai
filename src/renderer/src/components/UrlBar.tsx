@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
   ArrowUpRight,
@@ -19,6 +19,7 @@ import {
   Sparkles,
   Star,
   Video,
+  Workflow as WorkflowIcon,
   X
 } from 'lucide-react'
 import { sameUrl } from '../../../shared/research'
@@ -27,7 +28,10 @@ import type { OmniSuggestion } from '../../../shared/omnibox'
 import type { BrowserLibrarySnapshot } from '../../../shared/types'
 import type { NoticeKind } from '../App'
 import OrionAnswer from './OrionAnswer'
-import { useDropdownOpen } from '../lib/useDismiss'
+
+// The quick Workflows panel (and the run dialog it uses) loads the first time the button is opened.
+const WorkflowQuickPanel = lazy(() => import('./WorkflowQuickPanel'))
+import { useDismiss, useDropdownOpen } from '../lib/useDismiss'
 import { bool, failure, int, readResult, reportControlState, str, unverified, useControlRendered, useControlScope, verified, waitUntil } from '../lib/browserControl'
 
 interface Props {
@@ -55,6 +59,8 @@ interface Props {
   askModel: string
   askPersona: string
   onNotify(message: string, kind?: NoticeKind): void
+  /** Opens the full Workflows screen from the quick panel. */
+  onOpenWorkflows?(): void
 }
 
 const EMPTY_LIBRARY: BrowserLibrarySnapshot = { history: [], bookmarks: [], downloads: [], permissions: {}, searches: [], picks: {}, shortcuts: [] }
@@ -201,7 +207,8 @@ export default function UrlBar({
   personalizedSuggestions = true,
   askModel,
   askPersona,
-  onNotify
+  onNotify,
+  onOpenWorkflows
 }: Props): React.JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null)
   /** The shown text is the user's own (a draft), not the page's address. */
@@ -219,8 +226,32 @@ export default function UrlBar({
   const [summarizing, setSummarizing] = useState(false)
   /** The Copy button just copied the address (shows a check for a moment). */
   const [copied, setCopied] = useState(false)
+  /** The Workflows button's panel, and how many workflow runs are going on right now (shown on the button). */
+  const [workflowsOpen, setWorkflowsOpen] = useState(false)
+  const [runningWorkflows, setRunningWorkflows] = useState(0)
+  const [recordingWorkflow, setRecordingWorkflow] = useState(false)
+  const workflowsRef = useRef<HTMLDivElement>(null)
   /** Half-typed text per tab, kept until it is submitted, dismissed with Esc, or the tab navigates elsewhere. */
   const drafts = useRef(new Map<string, string>())
+
+  useDismiss(workflowsRef, workflowsOpen, () => setWorkflowsOpen(false))
+
+  // How many workflows are running, for the button's badge: counted when something actually changes.
+  useEffect(() => {
+    const count = (): void =>
+      void window.api.getWorkflowLibrary().then((library) => {
+        setRunningWorkflows(library.active.length)
+        setRecordingWorkflow(library.recording.active)
+      })
+    count()
+    const offs = [
+      window.api.onWorkflowRunUpdate(count),
+      window.api.onWorkflowRunFinished(count),
+      window.api.onWorkflowsChanged(count),
+      window.api.onWorkflowRecording((state) => setRecordingWorkflow(Boolean(state?.active)))
+    ]
+    return () => offs.forEach((off) => off())
+  }, [])
 
   const saveDraft = (value: string): void => {
     if (value) drafts.current.set(tabKey, value)
@@ -668,6 +699,25 @@ export default function UrlBar({
             <Star size={14} />
           </button>
         )}
+        <div className="url-workflows" ref={workflowsRef}>
+          <button
+            type="button"
+            className={`url-star${workflowsOpen ? ' on' : ''}`}
+            aria-label="Workflows"
+            aria-haspopup="dialog"
+            aria-expanded={workflowsOpen}
+            title={recordingWorkflow ? 'Workflows: recording what you do' : runningWorkflows ? `Workflows (${runningWorkflows} running)` : 'Workflows: run, record, manage'}
+            onClick={() => setWorkflowsOpen((open) => !open)}
+          >
+            <WorkflowIcon size={14} aria-hidden="true" />
+            {(runningWorkflows > 0 || recordingWorkflow) && <span className={`url-workflows-badge${recordingWorkflow ? ' recording' : ''}`} aria-hidden="true" />}
+          </button>
+          {workflowsOpen && (
+            <Suspense fallback={null}>
+              <WorkflowQuickPanel url={url} onClose={() => setWorkflowsOpen(false)} onOpenLibrary={() => onOpenWorkflows?.()} onNotify={onNotify} />
+            </Suspense>
+          )}
+        </div>
         <button type="submit" className="url-go" aria-label="Open in Orbis browser" title="Open in Orbis browser" disabled={!shown.trim()}>
           <ArrowUpRight size={14} />
         </button>

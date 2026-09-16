@@ -10,7 +10,15 @@ async function library(): Promise<{ lib: BrowserLibrary; dir: string; clock: { t
   const clock = { t: Date.parse('2026-09-15T10:00:00Z') }
   const lib = new BrowserLibrary(dir, () => clock.t)
   await lib.load()
-  return { lib, dir, clock, done: () => rm(dir, { recursive: true, force: true }) }
+  return {
+    lib,
+    dir,
+    clock,
+    done: async () => {
+      await lib.flush()
+      await rm(dir, { recursive: true, force: true })
+    }
+  }
 }
 
 test('new-tab shortcuts are validated, editable, removable, keep their fetched icon and survive a restart', async () => {

@@ -157,7 +157,44 @@ const api: NxtorbisApi = {
   onWorkflowStep: (listener) => subscribe('workflows:step', listener),
   onWorkflowRunFinished: (listener) => subscribe('workflows:run-finished', listener),
   onWorkflowNotice: (listener) => subscribe('workflows:notice', listener),
-  onWorkflowRecording: (listener) => subscribe('workflows:recording', listener)
+  onWorkflowRecording: (listener) => subscribe('workflows:recording', listener),
+
+  listNotes: (filter) => ipcRenderer.invoke('notes:list', filter),
+  noteTags: () => ipcRenderer.invoke('notes:tags'),
+  getNote: (id) => ipcRenderer.invoke('notes:get', id),
+  createNote: (patch) => ipcRenderer.invoke('notes:create', patch),
+  saveNote: (note) => ipcRenderer.invoke('notes:save', note),
+  removeNote: (id) => ipcRenderer.invoke('notes:remove', id),
+  archiveNote: (id, archived) => ipcRenderer.invoke('notes:archive', id, archived),
+  noteFromPage: () => ipcRenderer.invoke('notes:from-page'),
+  exportNotes: (ids) => ipcRenderer.invoke('notes:export', ids),
+  importNotes: (json) => ipcRenderer.invoke('notes:import', json),
+  onNotesChanged: (listener) => subscribe('notes:changed', listener),
+
+  tasksSnapshot: () => ipcRenderer.invoke('tasks:snapshot'),
+  listTasks: (filter) => ipcRenderer.invoke('tasks:list', filter),
+  createTask: (patch) => ipcRenderer.invoke('tasks:create', patch),
+  saveTask: (task) => ipcRenderer.invoke('tasks:save', task),
+  updateTask: (id, patch) => ipcRenderer.invoke('tasks:update', id, patch),
+  completeTask: (id, done) => ipcRenderer.invoke('tasks:complete', id, done),
+  removeTask: (id) => ipcRenderer.invoke('tasks:remove', id),
+  clearCompletedTasks: (listId) => ipcRenderer.invoke('tasks:clear-completed', listId),
+  reorderTasks: (listId, ids) => ipcRenderer.invoke('tasks:reorder', listId, ids),
+  saveTaskList: (list) => ipcRenderer.invoke('tasks:save-list', list),
+  createTaskList: (patch) => ipcRenderer.invoke('tasks:create-list', patch),
+  removeTaskList: (id) => ipcRenderer.invoke('tasks:remove-list', id),
+  taskFromPage: (listId) => ipcRenderer.invoke('tasks:from-page', listId),
+  onTasksChanged: (listener) => subscribe('tasks:changed', listener),
+
+  clipboardHistory: (query, kind) => ipcRenderer.invoke('clipboard:history', query, kind),
+  clipboardSettings: () => ipcRenderer.invoke('clipboard:settings'),
+  updateClipboardSettings: (patch) => ipcRenderer.invoke('clipboard:update-settings', patch),
+  useClip: (id) => ipcRenderer.invoke('clipboard:use', id),
+  pinClip: (id, pinned) => ipcRenderer.invoke('clipboard:pin', id, pinned),
+  removeClip: (id) => ipcRenderer.invoke('clipboard:remove', id),
+  clearClipboardHistory: (includePinned) => ipcRenderer.invoke('clipboard:clear', includePinned),
+  clipboardPaused: (paused) => ipcRenderer.invoke('clipboard:paused', paused),
+  onClipboardChanged: (listener) => subscribe('clipboard:changed', listener)
 }
 
 /** Listens on a channel whose events carry one value; returns the unsubscribe function. */

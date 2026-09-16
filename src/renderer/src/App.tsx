@@ -10,6 +10,9 @@ import ChatHeader from './components/ChatHeader'
 import ChatView from './components/ChatView'
 import ImagesView from './components/ImagesView'
 import WorkflowsView from './components/WorkflowsView'
+import NotesView from './components/NotesView'
+import TasksView from './components/TasksView'
+import ClipboardView from './components/ClipboardView'
 import HudBackground from './components/HudBackground'
 import Sidebar from './components/Sidebar'
 import { ActivityPanel, ShortcutsModal, ToastStack } from './components/Overlays'
@@ -83,6 +86,9 @@ export default function App(): React.JSX.Element {
   })
   const [imagesOpen, setImagesOpen] = useState(false)
   const [workflowsOpen, setWorkflowsOpen] = useState(false)
+  const [notesOpen, setNotesOpen] = useState(false)
+  const [tasksOpen, setTasksOpen] = useState(false)
+  const [clipboardOpen, setClipboardOpen] = useState(false)
   const [webSearch, setWebSearch] = useState(false)
   const [searchToken, setSearchToken] = useState(0)
   const [activityOpen, setActivityOpen] = useState(false)
@@ -1283,6 +1289,7 @@ export default function App(): React.JSX.Element {
         askModel={current.model}
         askPersona={current.persona}
         onNotify={notify}
+        onOpenWorkflows={() => setWorkflowsOpen(true)}
         loading={browserOpen && browserLoading}
         browserHidden={browserOpen && browserHidden}
         onShowBrowser={() => setBrowserHidden(false)}
@@ -1332,6 +1339,9 @@ export default function App(): React.JSX.Element {
           imageCount={galleryImages.length}
           imagesOpen={imagesOpen}
           workflowsOpen={workflowsOpen}
+          notesOpen={notesOpen}
+          tasksOpen={tasksOpen}
+          clipboardOpen={clipboardOpen}
           searchToken={searchToken}
           userName={settings?.userName ?? 'You'}
           userTitle={settings?.userTitle ?? ''}
@@ -1344,7 +1354,31 @@ export default function App(): React.JSX.Element {
           }}
           onWorkflows={() => {
             setImagesOpen(false)
+            setNotesOpen(false)
+            setTasksOpen(false)
+            setClipboardOpen(false)
             setWorkflowsOpen((open) => !open)
+          }}
+          onNotes={() => {
+            setImagesOpen(false)
+            setWorkflowsOpen(false)
+            setTasksOpen(false)
+            setClipboardOpen(false)
+            setNotesOpen((open) => !open)
+          }}
+          onTasks={() => {
+            setImagesOpen(false)
+            setWorkflowsOpen(false)
+            setNotesOpen(false)
+            setClipboardOpen(false)
+            setTasksOpen((open) => !open)
+          }}
+          onClipboard={() => {
+            setImagesOpen(false)
+            setWorkflowsOpen(false)
+            setNotesOpen(false)
+            setTasksOpen(false)
+            setClipboardOpen((open) => !open)
           }}
           onAssistants={() => setPersonaMenuOpen(true)}
           onBrowser={toggleBrowser}
@@ -1391,6 +1425,9 @@ export default function App(): React.JSX.Element {
             <ImagesView images={galleryImages} onClose={() => setImagesOpen(false)} onOpenChat={selectChat} onEdit={editGalleryImage} onNotify={notify} />
           )}
           {workflowsOpen && <WorkflowsView onClose={() => setWorkflowsOpen(false)} onNotify={notify} />}
+          {notesOpen && <NotesView onClose={() => setNotesOpen(false)} onNotify={notify} />}
+          {tasksOpen && <TasksView onClose={() => setTasksOpen(false)} onNotify={notify} />}
+          {clipboardOpen && <ClipboardView onClose={() => setClipboardOpen(false)} onNotify={notify} />}
         </main>
 
         {browserOpen && (

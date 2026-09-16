@@ -57,6 +57,7 @@ const validIcon = (icon: unknown): icon is string => typeof icon === 'string' &&
 export class BrowserLibrary {
   private data: LibraryFile = EMPTY()
   private saveTimer: NodeJS.Timeout | null = null
+  private writing: Promise<void> = Promise.resolve()
   private readonly file: string
   /** Called after any change, so open windows can refresh. */
   onChange?: () => void
@@ -110,12 +111,21 @@ export class BrowserLibrary {
     }, 800)
   }
 
+  /** Writes now. Any save waiting on the timer is folded into this one, and writes never overlap each other. */
   async flush(): Promise<void> {
-    const dir = join(this.file, '..')
-    await mkdir(dir, { recursive: true })
-    const temp = `${this.file}.tmp`
-    await writeFile(temp, JSON.stringify(this.data))
-    await rename(temp, this.file)
+    if (this.saveTimer) {
+      clearTimeout(this.saveTimer)
+      this.saveTimer = null
+    }
+    const data = JSON.stringify(this.data)
+    this.writing = this.writing.then(async () => {
+      const dir = join(this.file, '..')
+      await mkdir(dir, { recursive: true })
+      const temp = `${this.file}.tmp`
+      await writeFile(temp, data)
+      await rename(temp, this.file)
+    })
+    return this.writing
   }
 
   snapshot(): BrowserLibrarySnapshot {

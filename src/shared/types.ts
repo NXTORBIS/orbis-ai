@@ -13,6 +13,9 @@ import type {
 import type { ControlLogEntryView } from './browserControlView'
 import type { RunControl as WorkflowRunControl, StepRecord } from './browserControl'
 import type { ActiveWorkflowRun, RecordingState, Workflow, WorkflowIssue, WorkflowLibrary, WorkflowRunResult, WorkflowRunSummary, WorkflowVersion } from './workflows'
+import type { Note, NoteFilter } from './notes'
+import type { Task, TaskCounts, TaskFilter, TaskList } from './tasks'
+import type { ClipboardSettings, ClipItem, ClipKind } from './clipboardHistory'
 import type { PlanLine } from './workflowCompile'
 
 export type Role = 'user' | 'assistant'
@@ -707,4 +710,44 @@ export interface NxtorbisApi {
   onWorkflowRunFinished(listener: (summary: WorkflowRunSummary) => void): () => void
   onWorkflowNotice(listener: (notice: { workflowId: string; message: string }) => void): () => void
   onWorkflowRecording(listener: (state: RecordingState) => void): () => void
+
+  // Notes
+  listNotes(filter?: NoteFilter): Promise<Note[]>
+  noteTags(): Promise<{ tag: string; count: number }[]>
+  getNote(id: string): Promise<Note | null>
+  createNote(patch?: Partial<Note>): Promise<Note>
+  saveNote(note: Note): Promise<Note>
+  removeNote(id: string): Promise<boolean>
+  archiveNote(id: string, archived: boolean): Promise<Note>
+  noteFromPage(): Promise<Note>
+  exportNotes(ids?: string[]): Promise<string>
+  importNotes(json: string): Promise<Note[]>
+  onNotesChanged(listener: () => void): () => void
+
+  // Tasks
+  tasksSnapshot(): Promise<{ lists: TaskList[]; tasks: Task[]; counts: TaskCounts }>
+  listTasks(filter?: TaskFilter): Promise<Task[]>
+  createTask(patch?: Partial<Task>): Promise<Task>
+  saveTask(task: Task): Promise<Task>
+  updateTask(id: string, patch: Partial<Task>): Promise<Task>
+  completeTask(id: string, done: boolean): Promise<{ task: Task; repeated: boolean }>
+  removeTask(id: string): Promise<boolean>
+  clearCompletedTasks(listId?: string): Promise<number>
+  reorderTasks(listId: string, ids: string[]): Promise<Task[]>
+  saveTaskList(list: TaskList): Promise<TaskList>
+  createTaskList(patch?: Partial<TaskList>): Promise<TaskList>
+  removeTaskList(id: string): Promise<boolean>
+  taskFromPage(listId?: string): Promise<Task>
+  onTasksChanged(listener: () => void): () => void
+
+  // Clipboard history
+  clipboardHistory(query?: string, kind?: ClipKind | 'all' | 'pinned'): Promise<ClipItem[]>
+  clipboardSettings(): Promise<ClipboardSettings>
+  updateClipboardSettings(patch: Partial<ClipboardSettings>): Promise<ClipboardSettings>
+  useClip(id: string): Promise<ClipItem>
+  pinClip(id: string, pinned: boolean): Promise<ClipItem | null>
+  removeClip(id: string): Promise<boolean>
+  clearClipboardHistory(includePinned?: boolean): Promise<number>
+  clipboardPaused(paused?: boolean): Promise<{ paused: boolean; lastSkipped: string | null }>
+  onClipboardChanged(listener: () => void): () => void
 }

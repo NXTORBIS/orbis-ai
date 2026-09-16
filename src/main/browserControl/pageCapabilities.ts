@@ -112,14 +112,15 @@ export function registerPageCapabilities(control: BrowserControl, windowControl:
     ...common,
     id: 'page.read',
     name: 'Read the page',
-    description: "Reads the tab's current URL, title and visible text.",
+    description: "Reads the tab's current URL, title, visible text and the text the user has selected.",
     params: { maxChars: { type: 'integer', description: 'Most text to return (default 20000).' }, ...TAB },
     mutates: false,
     confirmation: 'none',
     run: async (p, ctx) => {
       const wc = tab(ctx)
       const read = await page.exec<{ url: string; title: string; text: string }>(wc, page.extractScript(undefined, undefined, undefined, 1))
-      return { ...read, text: read.text.slice(0, Math.min(Number(p.maxChars) || 20_000, 100_000)), loading: wc.isLoading() }
+      const selection = await page.exec<string>(wc, `String(window.getSelection() || '').slice(0, 5000)`).catch(() => '')
+      return { ...read, text: read.text.slice(0, Math.min(Number(p.maxChars) || 20_000, 100_000)), selection, loading: wc.isLoading() }
     }
   })
 

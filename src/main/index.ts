@@ -44,6 +44,10 @@ import { WorkflowRecorder } from './workflows/recorder'
 import { WorkflowEngine } from './workflows/engine'
 import { registerWorkflowIpc } from './workflows/ipc'
 import { askOrion, draftWorkflow } from './workflows/orion'
+import { NotesStore } from './personal/notes'
+import { TasksStore } from './personal/tasks'
+import { ClipboardHistory } from './personal/clipboard'
+import { registerPersonalIpc } from './personal/ipc'
 import { Store } from './store'
 
 // Baked in at build time from GROQ_API_KEY in .env.local (see electron.vite.config.ts).
@@ -949,6 +953,38 @@ if (!app.requestSingleInstanceLock()) {
     })
     void workflows.start().catch((err: unknown) => console.error('[workflows] failed to start', err))
     app.on('before-quit', () => workflows.stop())
+
+    // Notes, tasks and clipboard history: the user's own things, kept locally and reachable from the control layer.
+    const notesStore = new NotesStore(app.getPath('userData'))
+    const tasksStore = new TasksStore(app.getPath('userData'))
+    const clipboardHistory = new ClipboardHistory({
+      userData: app.getPath('userData'),
+      // Only watched while Orbis itself is in front, so copying elsewhere costs nothing.
+      isActive: () => Boolean(mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused()) || [...popouts].some((w) => !w.isDestroyed() && w.isFocused()),
+      context: () => {
+        const tab = browserControl?.windowControl.state?.tabs.find((t) => t.active)
+        return tab ? { private: tab.private, url: tab.url, title: tab.title } : {}
+      }
+    })
+    registerPersonalIpc({
+      notes: notesStore,
+      tasks: tasksStore,
+      clipboard: clipboardHistory,
+      control: browserControl.control,
+      getWindow: () => mainWindow,
+      send: sendToWindow,
+      readPage: async () => {
+        const result = await browserControl!.control.execute({ capability: 'page.read', params: { maxChars: 2000 }, target: {}, source: 'user' }, { confirm: async () => true })
+        const data = (result.data ?? {}) as { url?: string; title?: string; selection?: string }
+        if (!result.ok || !data.url) throw new Error('There is no page open to save.')
+        return { url: data.url, title: data.title ?? '', ...(data.selection ? { selection: data.selection } : {}) }
+      }
+    })
+    void clipboardHistory.start().catch((err: unknown) => console.error('[clipboard] failed to start', err))
+    app.on('before-quit', () => {
+      clipboardHistory.stop()
+      void Promise.all([notesStore.flush(), tasksStore.flush(), clipboardHistory.flush()])
+    })
 
     app.on('before-quit', () => void browserLibrary?.flush())
     mainWindow = createWindow()

@@ -16,6 +16,9 @@ import {
   SquarePen,
   Trash2,
   Users,
+  ClipboardList,
+  ListTodo,
+  NotebookPen,
   Workflow as WorkflowIcon,
   X
 } from 'lucide-react'
@@ -35,6 +38,9 @@ interface Props {
   imageCount: number
   imagesOpen: boolean
   workflowsOpen: boolean
+  notesOpen: boolean
+  tasksOpen: boolean
+  clipboardOpen: boolean
   /** Changes whenever the search box should open and take focus. */
   searchToken: number
   userName: string
@@ -44,6 +50,9 @@ interface Props {
   onSearch(): void
   onImages(): void
   onWorkflows(): void
+  onNotes(): void
+  onTasks(): void
+  onClipboard(): void
   onAssistants(): void
   onBrowser(): void
   onSelect(id: string): void
@@ -130,6 +139,9 @@ export default function Sidebar(props: Props): React.JSX.Element {
     { label: 'Search chats', icon: Search, onClick: props.onSearch },
     { label: 'Images', icon: Images, onClick: props.onImages, active: props.imagesOpen, badge: props.imageCount },
     { label: 'Workflows', icon: WorkflowIcon, onClick: props.onWorkflows, active: props.workflowsOpen },
+    { label: 'Notes', icon: NotebookPen, onClick: props.onNotes, active: props.notesOpen },
+    { label: 'Tasks', icon: ListTodo, onClick: props.onTasks, active: props.tasksOpen },
+    { label: 'Clipboard', icon: ClipboardList, onClick: props.onClipboard, active: props.clipboardOpen },
     { label: 'Assistants', icon: Users, onClick: props.onAssistants },
     { label: 'Browser', icon: Globe, onClick: props.onBrowser }
   ]
