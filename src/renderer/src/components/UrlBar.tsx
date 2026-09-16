@@ -13,7 +13,7 @@ import {
   LoaderCircle,
   Lock,
   Newspaper,
-  PanelTop,
+  ArrowLeft,
   Search,
   ShoppingBag,
   Sparkles,
@@ -787,8 +787,8 @@ export default function UrlBar({
       {ask && <OrionAnswer key={ask.id} question={ask.question} page={ask.page} context={ask.context} model={askModel} onClose={() => setAsk(null)} />}
       {browserHidden && (
         <button type="button" className="url-return" onClick={onShowBrowser} title="Back to the open browser, right where you left it">
-          <PanelTop size={13} />
-          Return to browser
+          <ArrowLeft size={13} />
+          <span>Browser</span>
         </button>
       )}
       {sizeControl}

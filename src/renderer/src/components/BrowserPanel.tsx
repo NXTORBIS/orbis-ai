@@ -2431,7 +2431,6 @@ export default function BrowserPanel({
 
   const immersive = windowFullscreen && mode === 'full' && !hidden && !htmlFullscreen
   const className = ['browser-panel', mode, hidden ? 'to-chat' : '', resizing ? 'resizing' : '', picking ? 'picking' : '', htmlFullscreen ? 'html-fullscreen' : '', immersive ? 'immersive' : ''].filter(Boolean).join(' ')
-  const modeLabel = mode === 'full' ? 'Full page' : mode === 'dock' ? 'Docked' : `${windowSize.width} × ${windowSize.height}`
 
   return (
     <section
@@ -2457,10 +2456,6 @@ export default function BrowserPanel({
         />
       )}
       <div className="browser-tabs-row">
-        <button type="button" className="browser-back-chat" title="Back to the Orbis chat. The browser stays open" onClick={onBackToChat}>
-          <ArrowLeft size={15} />
-          <span>Chat</span>
-        </button>
         <div className="browser-nav">
           <button type="button" className="b-icon" aria-label="Back" title="Back" disabled={!active.back} onClick={() => view()?.goBack()}>
             <ArrowLeft size={15} />
@@ -2655,11 +2650,12 @@ export default function BrowserPanel({
         )}
 
         <div className="browser-window-actions">
+          <button type="button" className="browser-back-chat" title="Back to the Orbis chat. The browser stays open" onClick={onBackToChat}>
+            <ArrowLeft size={15} />
+            <span>Chat</span>
+          </button>
           <SidebarToggle open={sidebar.open} onToggle={() => changeSidebar({ ...sidebarLive.current, open: !sidebarLive.current.open })} />
           <ExtensionsToolbar requestedPopup={extensionPopup} onPopupShown={() => setExtensionPopup(null)} onOpenTab={(url) => openTab(url)} onNotify={onNotify} />
-          <span className="browser-mode-badge" role="status" title="How the browser is shown now. Change the size next to the URL bar">
-            {modeLabel}
-          </span>
           <button
             type="button"
             className={`b-icon${mode === 'dock' ? ' active' : ''}`}
