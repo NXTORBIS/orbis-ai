@@ -108,7 +108,7 @@ export default function Composer(props: Props): React.JSX.Element {
   const commandsRef = useRef<HTMLDivElement>(null)
   const formRef = useRef<HTMLFormElement>(null)
   const [trail, setTrail] = useState<number | null>(null)
-  const { isRecording, isTranscribing, startRecording, stopRecording } = useVoiceInput()
+  const voice = useVoiceInput('chat')
 
   // The first message swaps the centred composer for one docked at the bottom; glide from the old spot to the new one.
   useLayoutEffect(() => {
@@ -321,20 +321,19 @@ export default function Composer(props: Props): React.JSX.Element {
     if (picked.skipped.length) props.onNotify(`Skipped ${picked.skipped.join(', ')}: not an image or larger than 200 KB.`, 'warn')
   }
 
+  /**
+   * The chat microphone.
+   *
+   * What comes back goes into this box and no other. The service knows which input started the session, so words
+   * spoken into the browser's assistant can never arrive here.
+   */
   const toggleVoiceInput = async (): Promise<void> => {
-    if (isRecording) {
-      const transcribedText = await stopRecording()
-      if (transcribedText) {
-        setText((current) => (current ? `${current} ${transcribedText}` : transcribedText))
-      } else {
-        props.onNotify('Transcription failed. Please try again.', 'warn')
-      }
-    } else {
-      try {
-        await startRecording()
-      } catch (err) {
-        props.onNotify('Microphone access denied.', 'warn')
-      }
+    const spoken = await voice.toggle()
+    if (spoken) {
+      setText((current) => (current ? `${current} ${spoken}` : spoken))
+      requestAnimationFrame(() => textareaRef.current?.focus())
+    } else if (voice.error) {
+      props.onNotify(voice.error, 'warn')
     }
   }
 
@@ -609,10 +608,10 @@ export default function Composer(props: Props): React.JSX.Element {
 
             <button
               type="button"
-              className={`tool-btn${isRecording ? ' recording' : ''}${isTranscribing ? ' transcribing' : ''}`}
-              title={isRecording ? 'Stop recording' : isTranscribing ? 'Transcribing...' : 'Start voice input'}
+              className={`tool-btn${voice.recording ? ' recording' : ''}${voice.transcribing ? ' transcribing' : ''}`}
+              title={voice.recording ? `Stop recording (${Math.round(voice.recordingMs / 1000)}s)` : voice.transcribing ? 'Writing down what you said…' : 'Speak instead of typing'}
               onClick={() => void toggleVoiceInput()}
-              disabled={isTranscribing}
+              disabled={voice.transcribing || !voice.available}
             >
               <Mic size={16} />
             </button>

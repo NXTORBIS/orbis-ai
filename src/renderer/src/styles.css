@@ -12331,3 +12331,65 @@ button.bsb-item-main.plain:hover {
     width: 100%;
   }
 }
+
+/* ---------------------------------------------------------------- speaking instead of typing */
+
+/*
+ * The same microphone in four places: the chat composer, the browser assistant, the address bar and the search box.
+ * It is red while it is actually recording and never before, because "listening" that is not listening is a lie.
+ */
+.orb-mic,
+.url-mic,
+.osearch-mic {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+}
+
+.orb-mic:hover,
+.url-mic:hover,
+.osearch-mic:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.orb-mic:disabled,
+.url-mic:disabled,
+.osearch-mic:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.orb-mic.recording,
+.url-mic.recording,
+.osearch-mic.recording,
+.tool-btn.recording {
+  color: var(--danger, #ff6b6b);
+  background: color-mix(in srgb, var(--danger, #ff6b6b) 16%, transparent);
+  animation: mic-live 1.6s ease-in-out infinite;
+}
+
+.tool-btn.transcribing,
+.orb-mic.transcribing {
+  color: var(--cyan);
+}
+
+@keyframes mic-live {
+  50% {
+    background: color-mix(in srgb, var(--danger, #ff6b6b) 34%, transparent);
+  }
+}
+
+html[data-motion='reduced'] .orb-mic.recording,
+html[data-motion='reduced'] .url-mic.recording,
+html[data-motion='reduced'] .osearch-mic.recording,
+html[data-motion='reduced'] .tool-btn.recording {
+  animation: none;
+}

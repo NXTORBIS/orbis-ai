@@ -1237,6 +1237,7 @@ export default function App(): React.JSX.Element {
     onPrompt: (text) => {
       send(text, [], false, true)
     },
+    onNotify: notify,
     onPause: () => {
       if (orbReply) controlAutomation(orbReply.id, 'pause')
     },

@@ -14,9 +14,11 @@ import {
   Lock,
   Newspaper,
   ArrowLeft,
+  Mic,
   Search,
   ShoppingBag,
   Sparkles,
+  Square,
   Star,
   Video,
   Workflow as WorkflowIcon,
@@ -26,6 +28,7 @@ import { sameUrl } from '../../../shared/research'
 import { buildSuggestions, isAddress, pickKey, queryKey, recentSuggestions, toUrl } from '../../../shared/omnibox'
 import type { OmniSuggestion } from '../../../shared/omnibox'
 import type { BrowserLibrarySnapshot } from '../../../shared/types'
+import { useVoiceInput } from '../hooks/useVoiceInput'
 import type { NoticeKind } from '../App'
 import OrionAnswer from './OrionAnswer'
 
@@ -209,6 +212,7 @@ export default function UrlBar({
   onOpenWorkflows
 }: Props): React.JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null)
+  const voice = useVoiceInput('url-bar', { inputId: tabKey })
   /** The shown text is the user's own (a draft), not the page's address. */
   const [editing, setEditing] = useState(false)
   const [typed, setTyped] = useState('')
@@ -371,6 +375,24 @@ export default function UrlBar({
     if (!text) return
     onNavigate(text, { newTab })
     close()
+  }
+
+  /**
+   * The address bar's microphone.
+   *
+   * The words are typed into the bar, and nothing else happens: Enter still opens, Ctrl+Enter still asks Orion and
+   * Shift+Enter still opens in the default browser. Speaking replaces typing, not the keys that follow it.
+   */
+  const speak = async (): Promise<void> => {
+    const spoken = await voice.toggle()
+    if (spoken) {
+      setTyped((current) => (current.trim() ? `${current.trimEnd()} ${spoken}` : spoken))
+      setEditing(true)
+      setOpen(true)
+      requestAnimationFrame(() => inputRef.current?.focus())
+    } else if (voice.error) {
+      onNotify(voice.error, 'warn')
+    }
   }
 
   /** Ctrl+Enter: the typed words (or the chosen suggestion's) go to Orion, and the answer shows over the browser. */
@@ -723,6 +745,18 @@ export default function UrlBar({
             </Suspense>
           )}
         </div>
+        {voice.available && (
+          <button
+            type="button"
+            className={`url-star url-mic${voice.recording ? ' recording' : ''}`}
+            aria-label={voice.recording ? 'Stop recording' : 'Speak instead of typing'}
+            title={voice.recording ? `Stop recording (${Math.round(voice.recordingMs / 1000)}s)` : voice.transcribing ? 'Writing down what you said…' : 'Speak instead of typing'}
+            disabled={voice.transcribing}
+            onClick={() => void speak()}
+          >
+            {voice.transcribing ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : voice.recording ? <Square size={13} /> : <Mic size={14} />}
+          </button>
+        )}
         <button type="submit" className="url-go" aria-label="Open in Orbis browser" title="Open in Orbis browser" disabled={!shown.trim()}>
           <ArrowUpRight size={14} />
         </button>

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowUpRight, FileBox, Image, MapPin, Music, Newspaper, Search, Sparkles, Telescope, Users, Video } from 'lucide-react'
+import { ArrowUpRight, FileBox, Image, MapPin, Mic, Music, Newspaper, Search, Sparkles, Square, Telescope, Users, Video } from 'lucide-react'
+import { useVoiceInput } from '../hooks/useVoiceInput'
 import type { SearchVertical } from '../../../shared/orbisSearch'
 import { searchPageUrl, VERTICALS } from '../../../shared/orbisSearch'
 import type { SearchOutcomeView } from '../../../shared/types'
@@ -58,6 +59,22 @@ export default function OrbisSearchPage({ query, vertical, onOpen, onAskOrion }:
   const [searching, setSearching] = useState(true)
   const [typed, setTyped] = useState(query)
   const latest = useRef(0)
+  const boxRef = useRef<HTMLInputElement>(null)
+  const voice = useVoiceInput('search')
+
+  /**
+   * The search box's microphone.
+   *
+   * The words land in the box for the person to read before they search: speaking is another way of typing, not a way
+   * of skipping the moment where you notice it heard you wrong.
+   */
+  const speak = async (): Promise<void> => {
+    const spoken = await voice.toggle()
+    if (spoken) {
+      setTyped((current) => (current.trim() ? `${current.trimEnd()} ${spoken}` : spoken))
+      requestAnimationFrame(() => boxRef.current?.focus())
+    }
+  }
 
   useEffect(() => setTyped(query), [query])
 
@@ -111,7 +128,19 @@ export default function OrbisSearchPage({ query, vertical, onOpen, onAskOrion }:
           }}
         >
           <Search size={15} aria-hidden="true" />
-          <input value={typed} onChange={(e) => setTyped(e.target.value)} aria-label="Search the web with Orbis" placeholder="Search the web" spellCheck={false} />
+          <input ref={boxRef} value={typed} onChange={(e) => setTyped(e.target.value)} aria-label="Search the web with Orbis" placeholder="Search the web" spellCheck={false} />
+          {voice.available && (
+            <button
+              type="button"
+              className={`osearch-mic${voice.recording ? ' recording' : ''}`}
+              aria-label={voice.recording ? 'Stop recording' : 'Speak instead of typing'}
+              title={voice.recording ? `Stop recording (${Math.round(voice.recordingMs / 1000)}s)` : voice.transcribing ? 'Writing down what you said…' : 'Speak instead of typing'}
+              disabled={voice.transcribing}
+              onClick={() => void speak()}
+            >
+              {voice.recording ? <Square size={13} /> : <Mic size={14} />}
+            </button>
+          )}
         </form>
 
         <nav className="osearch-verticals" aria-label="What to search">

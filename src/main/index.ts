@@ -38,7 +38,8 @@ import { classifyAutomationMessage, classifyIntent } from './intent'
 import type { ChatIntent } from './intent'
 import { automationProgress } from '../shared/automation'
 import { runBrowserAgent } from './browserAgent'
-import { transcribeAudio } from './voice'
+import { transcribeAudio, VoiceError } from './voice'
+import { checkAudio, describeError, isVoiceModel } from '../shared/voiceInput'
 import { completeDraft, generateTitle, generateWorkflowTitle, predictQueries, suggestFollowups } from './suggest'
 import { WorkflowTitler } from './workflows/titler'
 import { parseWebSuggestions } from '../shared/omnibox'
@@ -843,18 +844,33 @@ function registerIpc(): void {
     return true
   })
 
-  ipcMain.handle('voice:transcribe', async (_event, audioData: Uint8Array) => {
-    if (GROQ_API_KEYS.length === 0) {
-      throw new Error('No Groq API key available for transcription')
-    }
-    const audioBuffer = Buffer.from(audioData)
-    for (const key of GROQ_API_KEYS) {
-      try {
-        return await transcribeAudio(audioBuffer, (url, init) => net.fetch(url, init), key)
-      } catch (err) {
-        const lastKey = key === GROQ_API_KEYS[GROQ_API_KEYS.length - 1]
-        if (lastKey) throw err
-      }
+  /**
+   * Speech into text, for every microphone in Orbis.
+   *
+   * The window records; this sends it to Whisper and sends the words back. A failure comes back as a reason the window
+   * can act on rather than as a string it has to guess at, and neither the audio nor the words are kept or logged.
+   */
+  ipcMain.handle('voice:transcribe', async (event, audioData: unknown, options: unknown) => {
+    if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
+    const o = (options ?? {}) as { mimeType?: unknown; model?: unknown; language?: unknown }
+    const audio = audioData instanceof Uint8Array ? Buffer.from(audioData) : Buffer.alloc(0)
+    const bad = checkAudio(audio.length)
+    if (bad) return { ok: false as const, code: bad, message: describeError(bad) }
+
+    try {
+      const text = await transcribeAudio({
+        audio,
+        mimeType: typeof o.mimeType === 'string' && o.mimeType.startsWith('audio/') ? o.mimeType : 'audio/webm',
+        model: isVoiceModel(o.model) ? o.model : undefined,
+        language: typeof o.language === 'string' && /^[a-z]{2}$/i.test(o.language) ? o.language.toLowerCase() : null,
+        fetchFn: (url, init) => net.fetch(url, init),
+        apiKeys: GROQ_API_KEYS
+      })
+      return { ok: true as const, text }
+    } catch (err) {
+      const code = err instanceof VoiceError ? err.code : 'api-error'
+      // The reason travels; the audio and the words never do.
+      return { ok: false as const, code, message: describeError(code) }
     }
   })
 }

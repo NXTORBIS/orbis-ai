@@ -13,6 +13,7 @@ import type {
 import type { ControlLogEntryView } from './browserControlView'
 import type { SidebarLayout } from './browserSidebar'
 import type { SpecializedOutcome } from './searchProviders'
+import type { VoiceErrorCode, VoiceModel } from './voiceInput'
 import type { RunControl as WorkflowRunControl, StepRecord } from './browserControl'
 import type { ActiveWorkflowRun, RecordingState, Workflow, WorkflowIssue, WorkflowLibrary, WorkflowRunResult, WorkflowRunSummary, WorkflowVersion } from './workflows'
 import type { Note, NoteFilter } from './notes'
@@ -641,7 +642,14 @@ export interface NxtorbisApi {
   getCpuUsage(): Promise<number>
   pickTextFiles(): Promise<PickedFiles>
   pickImages(): Promise<PickedFiles>
-  transcribeAudio(audioBuffer: Uint8Array): Promise<string>
+  /**
+   * The words in a recording. Rejects with { code, message } saying why when it cannot: a microphone problem, a
+   * refusal, silence, or the service being unreachable. It never answers with words nobody said.
+   */
+  transcribeAudio(
+    audioBuffer: Uint8Array,
+    options?: { mimeType?: string; model?: VoiceModel; language?: string | null }
+  ): Promise<{ ok: true; text: string } | { ok: false; code: VoiceErrorCode; message: string }>
   /** Opens a save dialog for a data: image; resolves false when cancelled. */
   saveImage(dataUrl: string, name: string): Promise<boolean>
   /** Re-renders an image with the edit merged into its prompt, keeping the seed. */

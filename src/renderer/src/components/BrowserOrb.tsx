@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { ArrowUp, Ban, Check, LoaderCircle, Pause, Play, ShieldAlert, Square, X } from 'lucide-react'
+import { ArrowUp, Ban, Check, LoaderCircle, Mic, Pause, Play, ShieldAlert, Square, X } from 'lucide-react'
 import type { AutomationState, BrowserConfirmation, BrowserStep } from '../../../shared/types'
+import { useVoiceInput } from '../hooks/useVoiceInput'
 import { automationActive, automationProgress } from '../../../shared/automation'
 import { OrbisMark } from './Brand'
 
@@ -19,6 +20,8 @@ export interface BrowserOrbState {
 
 export interface BrowserOrbProps extends BrowserOrbState {
   onPrompt(text: string): void
+  /** Said when the microphone cannot be used, so a refusal is explained rather than silent. */
+  onNotify?(message: string, kind?: 'info' | 'warn' | 'error'): void
   onPause(): void
   onStop(): void
   onResume(): void
@@ -61,6 +64,7 @@ const STATUS_LABELS: Record<AutomationState['status'], string> = {
 export default function BrowserOrb(props: BrowserOrbProps): React.JSX.Element {
   const layerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const voice = useVoiceInput('browser-orion')
   const gesture = useRef<{ id: number; startX: number; startY: number; originX: number; originY: number; moved: boolean } | null>(null)
   const [size, setSize] = useState({ width: 0, height: 0 })
   const [position, setPosition] = useState(loadPosition)
@@ -148,6 +152,23 @@ export default function BrowserOrb(props: BrowserOrbProps): React.JSX.Element {
     if (!task) return
     props.onPrompt(task)
     setText('')
+  }
+
+  /**
+   * The browser assistant's microphone.
+   *
+   * The words go into this box and nowhere else — never into the chat composer. What is said is only ever turned into
+   * text here; what "this page" means is worked out afterwards, by the same page-context resolver that handles the
+   * same words typed.
+   */
+  const speak = async (): Promise<void> => {
+    const spoken = await voice.toggle()
+    if (spoken) {
+      setText((current) => (current.trim() ? `${current.trimEnd()} ${spoken}` : spoken))
+      requestAnimationFrame(() => inputRef.current?.focus())
+    } else if (voice.error) {
+      props.onNotify?.(voice.error, 'warn')
+    }
   }
 
   const { automation, confirmation, working } = props
@@ -303,6 +324,18 @@ export default function BrowserOrb(props: BrowserOrbProps): React.JSX.Element {
                 }
               }}
             />
+            {voice.available && (
+              <button
+                type="button"
+                className={`orb-mic${voice.recording ? ' recording' : ''}${voice.transcribing ? ' transcribing' : ''}`}
+                aria-label={voice.recording ? 'Stop recording' : 'Speak instead of typing'}
+                title={voice.recording ? `Stop recording (${Math.round(voice.recordingMs / 1000)}s)` : voice.transcribing ? 'Writing down what you said…' : 'Speak instead of typing'}
+                disabled={voice.transcribing}
+                onClick={() => void speak()}
+              >
+                {voice.recording ? <Square size={13} /> : <Mic size={14} />}
+              </button>
+            )}
             <button type="submit" className="orb-send" aria-label="Send to Orbis" disabled={!text.trim()}>
               <ArrowUp size={15} />
             </button>
