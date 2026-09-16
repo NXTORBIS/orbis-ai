@@ -7,8 +7,14 @@ test('a search has an address of its own, so it can be a tab, a bookmark and a p
   assert.equal(searchPageUrl('cats', 'images'), 'orbis://search?q=cats&in=images')
 
   const read = readSearchPageUrl('orbis://search?q=how%20tall%20is%20everest')
-  assert.deepEqual(read, { query: 'how tall is everest', vertical: 'all' })
-  assert.deepEqual(readSearchPageUrl('orbis://search?q=cats&in=videos'), { query: 'cats', vertical: 'videos' })
+  assert.deepEqual(read, { query: 'how tall is everest', vertical: 'all', at: null })
+  assert.deepEqual(readSearchPageUrl('orbis://search?q=cats&in=videos'), { query: 'cats', vertical: 'videos', at: null })
+
+  // Which result is being looked at lives in the address too, so closing it is going back.
+  assert.equal(searchPageUrl('cats', 'images', 3), 'orbis://search?q=cats&in=images&at=3')
+  assert.equal(readSearchPageUrl('orbis://search?q=cats&in=images&at=3')?.at, 3)
+  assert.equal(readSearchPageUrl('orbis://search?q=cats&in=images&at=-1')?.at, null)
+  assert.equal(readSearchPageUrl('orbis://search?q=cats&in=images&at=nonsense')?.at, null)
 })
 
 test('a query survives the journey, however it is written', () => {

@@ -32,19 +32,28 @@ export const isOrionSearch = (vertical: SearchVertical): boolean => vertical ===
 export const isWebSearch = (vertical: SearchVertical): boolean => vertical === 'all'
 
 /** Where a search lives, as an address a tab can hold and history can remember. */
-export function searchPageUrl(query: string, vertical: SearchVertical = 'all'): string {
+export function searchPageUrl(query: string, vertical: SearchVertical = 'all', at?: number): string {
   const q = encodeURIComponent(query.trim())
-  return vertical === 'all' ? `${SEARCH_PAGE}?q=${q}` : `${SEARCH_PAGE}?q=${q}&in=${vertical}`
+  const where = vertical === 'all' ? `${SEARCH_PAGE}?q=${q}` : `${SEARCH_PAGE}?q=${q}&in=${vertical}`
+  // Which result is being looked at, when one is. It belongs in the address so that closing it is going back.
+  return typeof at === 'number' && at >= 0 ? `${where}&at=${at}` : where
 }
 
 /** What a search page is showing, or null when the address is not one. */
-export function readSearchPageUrl(url: string): { query: string; vertical: SearchVertical } | null {
+export function readSearchPageUrl(url: string): { query: string; vertical: SearchVertical; at: number | null } | null {
   if (!url.toLowerCase().startsWith(SEARCH_PAGE)) return null
   try {
     const parsed = new URL(url)
     const query = (parsed.searchParams.get('q') ?? '').trim()
     const asked = parsed.searchParams.get('in') as SearchVertical | null
-    return { query, vertical: asked && VERTICALS.includes(asked) ? asked : 'all' }
+    // No "at" at all is not result zero, which is what Number(null) would quietly make it.
+    const raw = parsed.searchParams.get('at')
+    const at = raw === null ? NaN : Number(raw)
+    return {
+      query,
+      vertical: asked && VERTICALS.includes(asked) ? asked : 'all',
+      at: Number.isInteger(at) && at >= 0 ? at : null
+    }
   } catch {
     return null
   }

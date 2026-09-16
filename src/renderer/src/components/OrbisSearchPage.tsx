@@ -7,7 +7,7 @@ import type { SearchVertical } from '../../../shared/orbisSearch'
 import { searchPageUrl, VERTICALS } from '../../../shared/orbisSearch'
 import type { SearchOutcomeView } from '../../../shared/types'
 import type { SpecializedOutcome, SpecializedResult } from '../../../shared/searchProviders'
-import { saidDuration } from '../../../shared/searchProviders'
+import { saidCount, saidDuration } from '../../../shared/searchProviders'
 import { OrbisGlassMark, OrbisWordmark } from './Brand'
 
 /**
@@ -50,6 +50,8 @@ const VERTICAL_LABEL: Record<SearchVertical, string> = {
 export interface OrbisSearchPageProps {
   query: string
   vertical: SearchVertical
+  /** Which result is being looked at, from the address. Null when the results themselves are showing. */
+  at: number | null
   /** Opens a result, or a different search, the way any link in the browser opens. */
   onOpen(url: string): void
   /** Asks Orion to read the results and answer, streaming as it goes. */
@@ -57,7 +59,7 @@ export interface OrbisSearchPageProps {
   onNotify?(message: string, kind?: NoticeKind): void
 }
 
-export default function OrbisSearchPage({ query, vertical, onOpen, onAskOrion, onNotify }: OrbisSearchPageProps): React.JSX.Element {
+export default function OrbisSearchPage({ query, vertical, at, onOpen, onAskOrion, onNotify }: OrbisSearchPageProps): React.JSX.Element {
   const [outcome, setOutcome] = useState<SearchOutcomeView | null>(null)
   /** What a specialized category came back with. Web search and the categories never mix on one page. */
   const [special, setSpecial] = useState<SpecializedOutcome | null>(null)
@@ -65,8 +67,11 @@ export default function OrbisSearchPage({ query, vertical, onOpen, onAskOrion, o
   const [typed, setTyped] = useState(query)
   const latest = useRef(0)
   const boxRef = useRef<HTMLInputElement>(null)
-  /** Which result is open in the viewer. The results themselves are untouched, so closing it returns to exactly here. */
-  const [looking, setLooking] = useState<number | null>(null)
+  /**
+   * Which result is being looked at comes from the address, so opening one is a navigation: the Back button closes it
+   * and the results are exactly as they were, because they were never taken away.
+   */
+  const look = (index: number | null): void => onOpen(searchPageUrl(query, vertical, index ?? undefined))
   const voice = useVoiceInput('search')
 
   /**
@@ -103,7 +108,6 @@ export default function OrbisSearchPage({ query, vertical, onOpen, onAskOrion, o
         setSpecial(null)
       }
       setSearching(false)
-      setLooking(null)
     },
     []
   )
@@ -185,7 +189,7 @@ export default function OrbisSearchPage({ query, vertical, onOpen, onAskOrion, o
         {!searching && problem && <p className="osearch-status view-muted">{problem}</p>}
 
         {special && special.results.length > 0 && (
-          <SpecializedResults outcome={special} onOpen={onOpen} onLook={(i) => setLooking(i)} onNotify={onNotify} />
+          <SpecializedResults outcome={special} onOpen={onOpen} onLook={look} onNotify={onNotify} />
         )}
 
         {special && special.unavailable.length > 0 && (
@@ -244,8 +248,8 @@ export default function OrbisSearchPage({ query, vertical, onOpen, onAskOrion, o
         )}
       </div>
 
-      {special && looking !== null && (
-        <MediaViewer results={special.results} index={looking} onIndex={setLooking} onClose={() => setLooking(null)} onOpen={onOpen} onNotify={onNotify} />
+      {special && at !== null && at < special.results.length && (
+        <MediaViewer results={special.results} index={at} onIndex={look} onClose={() => look(null)} onOpen={onOpen} onNotify={onNotify} />
       )}
     </div>
   )
@@ -329,6 +333,7 @@ function SpecializedResults({
 function SpecializedFacts({ result }: { result: SpecializedResult }): React.JSX.Element | null {
   const facts = [
     result.author,
+    saidCount(result.views) ? `${saidCount(result.views)} views` : undefined,
     result.publisher,
     result.address,
     result.published,

@@ -95,13 +95,29 @@ export function panelLabel(id: PanelId): string {
   return panelInfo(id)?.label ?? id
 }
 
-/** The groups Orbis starts with. Their names and contents are all changeable. */
-const HOME_GROUPS: { id: string; label: string }[] = [
-  { id: 'browsing', label: 'Browsing' },
-  { id: 'work', label: 'Work' },
-  { id: 'protection', label: 'Protection' },
-  { id: 'orbis', label: 'Orbis' }
+/**
+ * What the sidebar actually shows.
+ *
+ * Twenty-six things in a list is not a sidebar, it is an inventory. These are the nine a person actually thinks in --
+ * tabs, library, spaces, notes, research, media, protection, Orion, settings -- and each one opens to the panels it
+ * holds. Nothing is hidden: everything is one level in rather than twenty-five rows down.
+ *
+ * They are only a starting point. Any panel can be moved to any section, and the sections renamed, as before.
+ */
+const HOME_GROUPS: { id: string; label: string; panels: PanelId[] }[] = [
+  { id: 'tabs', label: 'Tabs', panels: ['tabs', 'tabGroups'] },
+  { id: 'library', label: 'Library', panels: ['bookmarks', 'history', 'downloads', 'readingList', 'savedPages'] },
+  { id: 'spaces', label: 'Spaces', panels: ['workspaces', 'profiles'] },
+  { id: 'notes', label: 'Notes', panels: ['notes', 'tasks', 'reminders', 'clipboard', 'whiteboard'] },
+  { id: 'research', label: 'Research', panels: ['research', 'sources'] },
+  { id: 'media', label: 'Media', panels: ['screenshots', 'media'] },
+  { id: 'protection', label: 'Protection', panels: ['privacy', 'adblock', 'tracking'] },
+  { id: 'orion', label: 'Orion', panels: ['orion', 'controls', 'workflows'] },
+  { id: 'settings', label: 'Settings', panels: ['customize', 'extensions'] }
 ]
+
+/** The icon a section is shown by: its first panel's, so a section looks like what it opens. */
+export const sectionLead = (group: { items: PanelId[] }): PanelId | null => group.items[0] ?? null
 
 /** How much of each row is shown. */
 export type SidebarMode = 'icons' | 'labels'
@@ -139,7 +155,7 @@ export const LAYOUT_VERSION = 1
 export const MIN_WIDTH = 168
 export const MAX_WIDTH = 460
 export const ICON_WIDTH = 52
-export const DEFAULT_WIDTH = 248
+export const DEFAULT_WIDTH = 210
 export const MIN_PANEL_WIDTH = 280
 export const MAX_PANEL_WIDTH = 760
 export const DEFAULT_PANEL_WIDTH = 380
@@ -149,7 +165,7 @@ const MAX_LABEL = 40
 export function defaultLayout(): SidebarLayout {
   return {
     version: LAYOUT_VERSION,
-    groups: HOME_GROUPS.map((g) => ({ id: g.id, label: g.label, collapsed: false, items: PANELS.filter((p) => p.home === g.id).map((p) => p.id) })),
+    groups: HOME_GROUPS.map((g) => ({ id: g.id, label: g.label, collapsed: false, items: [...g.panels] })),
     hidden: [],
     pinned: [],
     mode: 'labels',
@@ -198,10 +214,11 @@ export function normalizeLayout(raw: unknown): SidebarLayout {
   }
   if (!groups.length) groups.push(...base.groups.map((g) => ({ ...g, items: [] as PanelId[] })))
 
-  // A panel nobody has placed goes to the group it was born in, or to the first group if that one is gone.
+  // A panel nobody has placed goes to the section it belongs to, or to the first one if that has been removed.
   for (const panel of PANELS) {
     if (placed.has(panel.id)) continue
-    const home = groups.find((g) => g.id === panel.home) ?? groups[0]
+    const born = HOME_GROUPS.find((g) => g.panels.includes(panel.id))?.id
+    const home = groups.find((g) => g.id === born) ?? groups[0]
     home.items.push(panel.id)
     placed.add(panel.id)
   }
@@ -218,7 +235,7 @@ export function normalizeLayout(raw: unknown): SidebarLayout {
     hidden: listOf(input.hidden),
     pinned: listOf(input.pinned),
     mode: input.mode === 'icons' ? 'icons' : 'labels',
-    density: input.density === 'compact' ? 'compact' : 'comfortable',
+    density: input.density === 'comfortable' ? 'comfortable' : 'compact',
     width: clamp(typeof input.width === 'number' && Number.isFinite(input.width) ? input.width : DEFAULT_WIDTH, MIN_WIDTH, MAX_WIDTH),
     panelWidth: clamp(typeof input.panelWidth === 'number' && Number.isFinite(input.panelWidth) ? input.panelWidth : DEFAULT_PANEL_WIDTH, MIN_PANEL_WIDTH, MAX_PANEL_WIDTH),
     open: input.open === true,

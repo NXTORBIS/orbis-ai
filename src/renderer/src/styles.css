@@ -11811,11 +11811,11 @@ html[data-motion='reduced'] .osearch-caret {
   background: transparent;
 }
 
-.bsb-pane-body .view-head {
+.bsb-panel-body .view-head {
   padding: 4px 4px 10px;
 }
 
-.bsb-pane-body .view-head h2 {
+.bsb-panel-body .view-head h2 {
   font-size: 15px;
 }
 
@@ -12724,4 +12724,226 @@ html[data-motion='reduced'] .tool-btn.recording {
     grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
     height: 132px;
   }
+}
+
+/* ---------------------------------------------------------------- everything to hand at once */
+
+/*
+ * Twenty-six panels, all of them on screen without scrolling. The rows are tight, the group headings are small, and
+ * nothing is hidden behind a scrollbar: a sidebar you have to scroll to find something in is a menu, not a sidebar.
+ */
+.bsb-list.compact .bsb-row {
+  padding: 3px 9px;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.bsb-list.compact .bsb-group {
+  margin-bottom: 2px;
+}
+
+.bsb-list.compact .bsb-group-head {
+  padding: 3px 6px 1px;
+}
+
+.bsb-list.compact .bsb-group-name {
+  font-size: 9.5px;
+}
+
+.bsb-list.compact .bsb-pinned {
+  padding-bottom: 3px;
+  margin-bottom: 2px;
+}
+
+.bsb-list.compact .bsb-list-scroll {
+  padding: 5px 5px 2px;
+}
+
+.bsb-list.compact .bsb-foot {
+  padding: 4px 5px;
+}
+
+/* When it still will not all fit, the list shrinks rather than growing a scrollbar. */
+.bsb-list-scroll {
+  scrollbar-width: thin;
+}
+
+/* ---------------------------------------------------------------- screens that are now panels */
+
+/*
+ * The whiteboard was built to fill the stage: a fixed 220px list of boards beside the canvas. In a sidebar panel that
+ * leaves the canvas a sliver. Embedded, it stacks instead — the list becomes a short scrollable strip above a canvas
+ * that gets the rest of the room.
+ */
+.bsb-panel-body .board-body {
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr;
+  gap: 8px;
+  padding: 0;
+}
+
+.bsb-panel-body .board-list {
+  max-height: 124px;
+  overflow-y: auto;
+}
+
+.bsb-panel-body .board-stage {
+  min-height: 260px;
+  border-radius: 10px;
+}
+
+.bsb-panel-body .board-tools {
+  padding: 4px 6px;
+  gap: 3px;
+}
+
+/* The same goes for every other screen that used to have the whole stage: no stage-sized padding in a panel. */
+.bsb-panel-body .view-head,
+.bsb-panel-body .notes-body,
+.bsb-panel-body .tasks-body,
+.bsb-panel-body .clip-body,
+.bsb-panel-body .ws-body,
+.bsb-panel-body .profiles-body,
+.bsb-panel-body .customize-body,
+.bsb-panel-body .wf-body {
+  padding-left: 2px;
+  padding-right: 2px;
+}
+
+/* Two-column screens become one column when the room is a panel's worth. */
+.bsb-panel-body .notes-body,
+.bsb-panel-body .tasks-body,
+.bsb-panel-body .customize-body,
+.bsb-panel-body .ws-body {
+  grid-template-columns: 1fr;
+}
+
+/*
+ * Retracted: every panel an icon, all of them on screen, nothing to scroll for. The name is in the tooltip, and one
+ * press of the button at the bottom shows them all as words again.
+ */
+.bsb-list.icons.compact .bsb-row {
+  padding: 6px 0;
+}
+
+.bsb-list.icons .bsb-group {
+  margin-bottom: 0;
+}
+
+/* A hairline between groups, since their names are not shown when it is retracted. */
+.bsb-list.icons .bsb-group + .bsb-group {
+  margin-top: 3px;
+  padding-top: 3px;
+  border-top: 1px solid var(--line);
+}
+
+/* A panel's own screen never pushes past the panel's edge. */
+.bsb-panel-body .view,
+.bsb-panel-body .board-body,
+.bsb-panel-body .board-main,
+.bsb-panel-body .board-list,
+.bsb-panel-body .board-tools {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.bsb-panel-body .board-tools {
+  flex-wrap: wrap;
+}
+
+.bsb-panel-body .view-head {
+  padding: 2px 2px 8px;
+}
+
+.bsb-panel-body .view-head h2 {
+  font-size: 14px;
+}
+
+/* Tight enough that twenty-six panels fit the height of a window without a scrollbar. */
+.bsb-list.icons.compact .bsb-row {
+  padding: 4px 0;
+}
+
+.bsb-list.icons.compact .bsb-list-scroll {
+  padding: 3px 4px;
+}
+
+.bsb-list.icons .bsb-group + .bsb-group {
+  margin-top: 2px;
+  padding-top: 2px;
+}
+
+/* Nothing in a panel scrolls sideways; a screen that was built for the stage wraps instead. */
+.bsb-panel-body {
+  overflow-x: hidden;
+}
+
+.bsb-panel-body .view {
+  position: static;
+  height: 100%;
+  animation: none;
+  background: transparent;
+  min-width: 0;
+}
+
+/* The last few pixels: twenty-six icons, one window, no scrollbar. */
+.bsb-list.icons.compact .bsb-row {
+  padding: 2px 0;
+  line-height: 1;
+}
+
+.bsb-list.icons.compact .bsb-row svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* ---------------------------------------------------------------- a section, and what is in it */
+
+.bsb-panel.column {
+  flex-direction: column;
+}
+
+/* The rest of the section, along the top of the panel it opened. */
+.bsb-panel-tabs {
+  display: flex;
+  gap: 2px;
+  flex: none;
+  padding: 7px 7px 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.bsb-panel-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.bsb-panel-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  padding: 5px 9px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--faint);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.bsb-panel-tab:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.bsb-panel-tab.on {
+  background: var(--cyan-fill);
+  color: var(--cyan);
+}
+
+/* With sections the list is short, so the rows can breathe again. */
+.bsb-list.compact .bsb-row {
+  padding: 8px 9px;
+  font-size: 13px;
 }

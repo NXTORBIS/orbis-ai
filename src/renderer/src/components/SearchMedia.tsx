@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronLeft, ChevronRight, Copy, Download, ExternalLink, Globe, Link2, Loader, Share2, X } from 'lucide-react'
 import type { SpecializedResult } from '../../../shared/searchProviders'
-import { saidDuration } from '../../../shared/searchProviders'
+import { saidCount, saidDuration } from '../../../shared/searchProviders'
 import type { NoticeKind } from '../App'
 
 /**
@@ -171,9 +171,9 @@ export default function MediaViewer({ results, index, onIndex, onClose, onOpen, 
 
       <footer className="omedia-foot">
         <span className="truncate">
-          {result.author ? `${result.author} · ` : ''}
-          {result.published ?? ''}
-          {result.width && result.height ? ` · ${result.width}×${result.height}` : ''}
+          {[result.author, saidCount(result.views) ? `${saidCount(result.views)} views` : null, result.published, result.width && result.height ? `${result.width}×${result.height}` : null]
+            .filter(Boolean)
+            .join(' · ')}
         </span>
         <span>
           {index + 1} of {results.length}

@@ -70,6 +70,8 @@ export interface SpecializedResult {
   address?: string
   latitude?: number
   longitude?: number
+  /** How many times it has been watched, when the source says. */
+  views?: number
   /** Which engine found it, kept because several of them ask to be credited. */
   via: string
 }
@@ -193,7 +195,8 @@ export function readResult(raw: unknown, kind: SpecializedCategory): Specialized
     ...(webUrl(r.audio_src) ? { audio: webUrl(r.audio_src) } : {}),
     ...(text(r.author, 120) ? { author: text(r.author, 120) } : {}),
     ...(text(r.publisher ?? r.journal, 160) ? { publisher: text(r.publisher ?? r.journal, 160) } : {}),
-    ...(isoDate(r.publishedDate) ? { published: isoDate(r.publishedDate) } : {})
+    ...(isoDate(r.publishedDate) ? { published: isoDate(r.publishedDate) } : {}),
+    ...(number(r.views) ? { views: Math.round(number(r.views)!) } : {})
   }
 
   if (kind === 'maps') {
@@ -221,7 +224,10 @@ export function readOutcome(payload: unknown, kind: SpecializedCategory, query: 
 
   const seen = new Set<string>()
   const results: SpecializedResult[] = []
-  for (const row of rows) {
+  // Something watched a hundred thousand times is more likely what was wanted than something watched twice, so for
+  // videos the most watched come first. Everything without a count keeps the order the engines gave it.
+  const ordered = kind === 'videos' ? [...rows].sort((a, b) => watchedTimes(b) - watchedTimes(a)) : rows
+  for (const row of ordered) {
     const result = readResult(row, kind)
     if (!result) continue
     const key = (result.image ?? result.url).replace(/[#?].*$/, '').toLowerCase()
@@ -248,6 +254,20 @@ export function readOutcome(payload: unknown, kind: SpecializedCategory, query: 
         : 'Nothing came back for that.',
     tookMs
   }
+}
+
+/** How many times something has been watched, as a number to sort by. Nothing said means nothing known, not zero. */
+function watchedTimes(row: unknown): number {
+  const views = number((row as { views?: unknown })?.views)
+  return views && views > 0 ? views : -1
+}
+
+/** A count said the way a person says it: 1.2M, 34K. */
+export function saidCount(views: number | undefined): string | undefined {
+  if (!views || views < 1) return undefined
+  if (views >= 1_000_000) return `${(views / 1_000_000).toFixed(views >= 10_000_000 ? 0 : 1)}M`
+  if (views >= 1_000) return `${(views / 1_000).toFixed(views >= 10_000 ? 0 : 1)}K`
+  return String(views)
 }
 
 /** A duration said the way a person says it: 3:07, or 1:02:44. */

@@ -261,7 +261,41 @@ export default function BrowserSidebar({ layout, onLayout, onReset, renderPanel,
         <div className="bsb-list-scroll">
           {view.pinned.length > 0 && <div className="bsb-pinned">{view.pinned.map((id, i) => row(id, null, i))}</div>}
 
-          {view.groups.map((group) => (
+          {/*
+            * One row per section, not per panel: nine things a person thinks in, rather than twenty-six they have to
+            * read through. The section opens to whichever of its panels was last looked at, and the rest are tabs
+            * along the top of it. Arranging still works on the panels themselves.
+            */}
+          {!arranging &&
+            view.groups
+              .filter((group) => group.items.length > 0)
+              .map((group) => {
+                const lead = group.items.includes(layout.panel as PanelId) ? (layout.panel as PanelId) : group.items[0]
+                const Icon = panelIcon(lead)
+                const on = Boolean(layout.panel && group.items.includes(layout.panel))
+                const count = group.items.reduce((sum, id) => sum + (badges?.[id] ?? 0), 0)
+                return (
+                  <button
+                    key={group.id}
+                    type="button"
+                    className={`bsb-row${on ? ' on' : ''}`}
+                    aria-pressed={on}
+                    title={`${group.label}: ${group.items.map((id) => panelLabel(id)).join(', ')}`}
+                    onClick={() => change(openPanel(layout, on ? null : lead))}
+                    onContextMenu={(e) => {
+                      e.preventDefault()
+                      setMenu({ panel: lead, x: e.clientX, y: e.clientY })
+                    }}
+                  >
+                    <Icon size={16} aria-hidden="true" />
+                    {!icons && <span className="bsb-row-label truncate">{group.label}</span>}
+                    {!icons && count ? <span className="bsb-count">{count > 99 ? '99+' : count}</span> : null}
+                  </button>
+                )
+              })}
+
+          {arranging &&
+            view.groups.map((group) => (
             <section key={group.id} className="bsb-group">
               {!icons && (
                 <div className="bsb-group-head">
@@ -319,7 +353,7 @@ export default function BrowserSidebar({ layout, onLayout, onReset, renderPanel,
                 </div>
               )}
             </section>
-          ))}
+            ))}
 
           {arranging && !icons && (
             <section className="bsb-arrange">
@@ -389,7 +423,33 @@ export default function BrowserSidebar({ layout, onLayout, onReset, renderPanel,
       </div>
 
       {layout.panel && (
-        <div className="bsb-panel" style={{ width: layout.panelWidth }}>
+        <div className="bsb-panel column" style={{ width: layout.panelWidth }}>
+          {/* The rest of this section, so opening "Library" still reaches history and downloads in one press. */}
+          {(() => {
+            const section = layout.groups.find((g) => g.items.includes(layout.panel as PanelId))
+            const siblings = (section?.items ?? []).filter((id) => !layout.hidden.includes(id))
+            if (siblings.length < 2) return null
+            return (
+              <nav className="bsb-panel-tabs" aria-label={`${section?.label ?? ''} panels`}>
+                {siblings.map((id) => {
+                  const Icon = panelIcon(id)
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      className={`bsb-panel-tab${id === layout.panel ? ' on' : ''}`}
+                      aria-current={id === layout.panel}
+                      title={panelInfo(id)?.description}
+                      onClick={() => change(openPanel(layout, id))}
+                    >
+                      <Icon size={13} aria-hidden="true" />
+                      <span className="truncate">{panelLabel(id)}</span>
+                    </button>
+                  )
+                })}
+              </nav>
+            )
+          })()}
           <div className="bsb-panel-body">{renderPanel(layout.panel)}</div>
           <div className="bsb-resizer" onPointerDown={startResize('panel')} aria-hidden="true" />
         </div>

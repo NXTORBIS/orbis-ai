@@ -115,6 +115,15 @@ interface Tab {
   offline?: { code: number; url: string }
   /** The page's process crashed; reloading starts a fresh page. */
   crashed?: boolean
+  /**
+   * The Orbis pages this tab has been on, oldest first, and where in them it is.
+   *
+   * Orbis's own pages never reach the engine, so they would otherwise leave no trail and Back would skip straight past
+   * them. This is that trail: going back through a search, or out of a picture and into the results it came from, is
+   * the same Back button doing the same thing.
+   */
+  orbisTrail?: string[]
+  orbisAt?: number
   /** Bumped to start the tab's page over after a crash. */
   generation: number
   /** Creation order: pages stay in this order in the DOM, since moving a page element would reload it. */
@@ -747,7 +756,7 @@ export default function BrowserPanel({
           setSwipe(null)
           // The tab the gesture belongs to, read now rather than captured when the listener was set up.
           const webview = views.current.get(activeRef.current.id)
-          if (navigate === 'back' && webview?.canGoBack()) webview.goBack()
+          if (navigate === 'back') goBack()
           else if (navigate === 'forward' && webview?.canGoForward()) webview.goForward()
           return
         }
@@ -826,12 +835,48 @@ export default function BrowserPanel({
     [activeId]
   )
 
+  /**
+   * Back and forward, whichever kind of page the tab is on.
+   *
+   * An Orbis page is Orbis's to remember, so stepping through those is done here; anything else is the engine's own
+   * history and is left to it. Returns false when there was nothing to step to.
+   */
+  const stepOrbisHistory = (by: -1 | 1, tabId = active.id): boolean => {
+    const tab = live.current.tabs.find((t) => t.id === tabId)
+    const trail = tab?.orbisTrail ?? []
+    const at = tab?.orbisAt ?? -1
+    const to = at + by
+    if (!tab || to < 0 || to >= trail.length) return false
+    patch(tabId, { url: trail[to], orbisAt: to, back: to > 0, forward: to < trail.length - 1, title: 'Orbis Search', loading: false, error: undefined })
+    return true
+  }
+
+  /** The Back button, and every shortcut and gesture that means the same thing. */
+  const goBack = (tabId = active.id): void => {
+    if (stepOrbisHistory(-1, tabId)) return
+    const webview = views.current.get(tabId)
+    if (webview?.canGoBack()) webview.goBack()
+  }
+
+  const goForward = (tabId = active.id): void => {
+    if (stepOrbisHistory(1, tabId)) return
+    const webview = views.current.get(tabId)
+    if (webview?.canGoForward()) webview.goForward()
+  }
+
   const navigate = (input: string, tabId = active.id): void => {
     if (!input.trim()) return
     const url = toUrl(input)
     // Orbis's own pages never reach the engine. There is nothing to load: the address is the whole of the page.
     if (isOrbisPage(url)) {
-      patch(tabId, { url, title: 'Orbis Search', loading: false, error: undefined, offline: undefined })
+      setTabs((list) =>
+        list.map((tab) => {
+          if (tab.id !== tabId) return tab
+          // Anything ahead of where we are is replaced, the way a browser always has.
+          const trail = [...(tab.orbisTrail ?? []).slice(0, (tab.orbisAt ?? -1) + 1), url]
+          return { ...tab, url, title: 'Orbis Search', loading: false, error: undefined, offline: undefined, orbisTrail: trail, orbisAt: trail.length - 1, back: trail.length > 1, forward: false }
+        })
+      )
       return
     }
     const webview = views.current.get(tabId)
@@ -1485,7 +1530,7 @@ export default function BrowserPanel({
       case 'move-tab-right':
         return moveTab(active.id, index + 1)
       case 'back':
-        if (webview?.canGoBack()) webview.goBack()
+        goBack()
         return
       case 'forward':
         if (webview?.canGoForward()) webview.goForward()
@@ -2457,10 +2502,10 @@ export default function BrowserPanel({
       )}
       <div className="browser-tabs-row">
         <div className="browser-nav">
-          <button type="button" className="b-icon" aria-label="Back" title="Back" disabled={!active.back} onClick={() => view()?.goBack()}>
+          <button type="button" className="b-icon" aria-label="Back" title="Back" disabled={!active.back} onClick={() => goBack()}>
             <ArrowLeft size={15} />
           </button>
-          <button type="button" className="b-icon" aria-label="Forward" title="Forward" disabled={!active.forward} onClick={() => view()?.goForward()}>
+          <button type="button" className="b-icon" aria-label="Forward" title="Forward" disabled={!active.forward} onClick={() => goForward()}>
             <ArrowRight size={15} />
           </button>
           <button
@@ -2858,7 +2903,7 @@ export default function BrowserPanel({
               Sign in with your browser
             </button>
             {active.back && (
-              <button type="button" onClick={() => view()?.goBack()}>
+              <button type="button" onClick={() => goBack()}>
                 Go back
               </button>
             )}
@@ -3019,6 +3064,7 @@ export default function BrowserPanel({
             <OrbisSearchPage
               query={searchPage.query}
               vertical={searchPage.vertical}
+              at={searchPage.at}
               onOpen={(url) => navigate(url)}
               onAskOrion={askOrionAboutSearch}
               onNotify={onNotify}
