@@ -22,8 +22,11 @@ export const SEARCH_PAGE = 'orbis://search'
  * specialized provider, which queries sources that actually hold that kind of thing. The two are separate on purpose:
  * either can be replaced, or be down, without the other noticing.
  */
-export type SearchVertical = 'all' | 'images' | 'videos' | 'news' | 'maps' | 'music' | 'science' | 'files' | 'social'
-export const VERTICALS: SearchVertical[] = ['all', 'images', 'videos', 'news', 'maps', 'music', 'science', 'files', 'social']
+export type SearchVertical = 'orion' | 'all' | 'images' | 'videos' | 'news' | 'maps' | 'music' | 'science' | 'files' | 'social'
+export const VERTICALS: SearchVertical[] = ['orion', 'all', 'images', 'videos', 'news', 'maps', 'music', 'science', 'files', 'social']
+
+/** Asking Orion, which is its own way of searching rather than something added to the top of the web results. */
+export const isOrionSearch = (vertical: SearchVertical): boolean => vertical === 'orion'
 
 /** Ordinary web search, as opposed to a category with sources of its own. */
 export const isWebSearch = (vertical: SearchVertical): boolean => vertical === 'all'

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ArrowUpRight, FileBox, Image, MapPin, Mic, Music, Newspaper, Search, Sparkles, Square, Telescope, Users, Video } from 'lucide-react'
 import { useVoiceInput } from '../hooks/useVoiceInput'
+import MediaViewer, { ShareButton, SiteIcon } from './SearchMedia'
+import type { NoticeKind } from '../App'
 import type { SearchVertical } from '../../../shared/orbisSearch'
 import { searchPageUrl, VERTICALS } from '../../../shared/orbisSearch'
 import type { SearchOutcomeView } from '../../../shared/types'
@@ -20,6 +22,7 @@ import { OrbisGlassMark, OrbisWordmark } from './Brand'
  */
 
 const VERTICAL_ICON: Record<SearchVertical, typeof Search> = {
+  orion: Sparkles,
   all: Search,
   images: Image,
   videos: Video,
@@ -32,6 +35,7 @@ const VERTICAL_ICON: Record<SearchVertical, typeof Search> = {
 }
 
 const VERTICAL_LABEL: Record<SearchVertical, string> = {
+  orion: 'Orion',
   all: 'All',
   images: 'Images',
   videos: 'Videos',
@@ -50,9 +54,10 @@ export interface OrbisSearchPageProps {
   onOpen(url: string): void
   /** Asks Orion to read the results and answer, streaming as it goes. */
   onAskOrion(query: string, results: SearchOutcomeView['results']): { text: string; done: boolean } | null
+  onNotify?(message: string, kind?: NoticeKind): void
 }
 
-export default function OrbisSearchPage({ query, vertical, onOpen, onAskOrion }: OrbisSearchPageProps): React.JSX.Element {
+export default function OrbisSearchPage({ query, vertical, onOpen, onAskOrion, onNotify }: OrbisSearchPageProps): React.JSX.Element {
   const [outcome, setOutcome] = useState<SearchOutcomeView | null>(null)
   /** What a specialized category came back with. Web search and the categories never mix on one page. */
   const [special, setSpecial] = useState<SpecializedOutcome | null>(null)
@@ -60,6 +65,8 @@ export default function OrbisSearchPage({ query, vertical, onOpen, onAskOrion }:
   const [typed, setTyped] = useState(query)
   const latest = useRef(0)
   const boxRef = useRef<HTMLInputElement>(null)
+  /** Which result is open in the viewer. The results themselves are untouched, so closing it returns to exactly here. */
+  const [looking, setLooking] = useState<number | null>(null)
   const voice = useVoiceInput('search')
 
   /**
@@ -96,6 +103,7 @@ export default function OrbisSearchPage({ query, vertical, onOpen, onAskOrion }:
         setSpecial(null)
       }
       setSearching(false)
+      setLooking(null)
     },
     []
   )
@@ -109,7 +117,8 @@ export default function OrbisSearchPage({ query, vertical, onOpen, onAskOrion }:
     }
   }, [query, vertical, run])
 
-  const answer = outcome?.wantsAnswer ? onAskOrion(outcome.query, outcome.results) : null
+  // Orion answers on its own page. The web results are the web results, with nothing written over the top of them.
+  const answer = vertical === 'orion' && outcome && outcome.results.length ? onAskOrion(outcome.query, outcome.results) : null
   const problem = outcome?.problem ?? special?.problem ?? null
 
   return (
@@ -144,7 +153,16 @@ export default function OrbisSearchPage({ query, vertical, onOpen, onAskOrion }:
         </form>
 
         <nav className="osearch-verticals" aria-label="What to search">
-          {VERTICALS.map((name) => {
+          {/* Orion is its own way of searching, not an answer bolted to the top of the web results. */}
+          <button
+            type="button"
+            className={`osearch-vertical orion${vertical === 'orion' ? ' on' : ''}`}
+            aria-current={vertical === 'orion'}
+            onClick={() => onOpen(searchPageUrl(query, 'orion'))}
+          >
+            <Sparkles size={13} aria-hidden="true" /> Orion
+          </button>
+          {VERTICALS.filter((name) => name !== 'orion').map((name) => {
             const Icon = VERTICAL_ICON[name]
             return (
               <button
@@ -166,7 +184,9 @@ export default function OrbisSearchPage({ query, vertical, onOpen, onAskOrion }:
 
         {!searching && problem && <p className="osearch-status view-muted">{problem}</p>}
 
-        {special && special.results.length > 0 && <SpecializedResults outcome={special} onOpen={onOpen} />}
+        {special && special.results.length > 0 && (
+          <SpecializedResults outcome={special} onOpen={onOpen} onLook={(i) => setLooking(i)} onNotify={onNotify} />
+        )}
 
         {special && special.unavailable.length > 0 && (
           <p className="osearch-foot view-muted">
@@ -195,19 +215,20 @@ export default function OrbisSearchPage({ query, vertical, onOpen, onAskOrion }:
 
         {outcome && outcome.results.length > 0 && (
           <ol className="osearch-results">
-            {outcome.results.map((result, i) => (
+            {outcome.results.map((result) => (
               <li key={result.url}>
-                <button type="button" className="osearch-result" onClick={() => onOpen(result.url)}>
-                  <span className="osearch-site">
-                    <span className="osearch-index" aria-hidden="true">
-                      {i + 1}
+                <div className="osearch-result-row">
+                  <button type="button" className="osearch-result" onClick={() => onOpen(result.url)}>
+                    <span className="osearch-site">
+                      <SiteIcon url={result.url} />
+                      <span className="osearch-site-name">{result.site}</span>
+                      <ArrowUpRight size={12} aria-hidden="true" />
                     </span>
-                    {result.site}
-                    <ArrowUpRight size={12} aria-hidden="true" />
-                  </span>
-                  <b>{result.title}</b>
-                  {result.snippet && <span className="osearch-snippet">{result.snippet}</span>}
-                </button>
+                    <b>{result.title}</b>
+                    {result.snippet && <span className="osearch-snippet">{result.snippet}</span>}
+                  </button>
+                  <ShareButton url={result.url} title={result.title} onNotify={onNotify} />
+                </div>
               </li>
             ))}
           </ol>
@@ -222,6 +243,10 @@ export default function OrbisSearchPage({ query, vertical, onOpen, onAskOrion }:
           </footer>
         )}
       </div>
+
+      {special && looking !== null && (
+        <MediaViewer results={special.results} index={looking} onIndex={setLooking} onClose={() => setLooking(null)} onOpen={onOpen} onNotify={onNotify} />
+      )}
     </div>
   )
 }
@@ -234,21 +259,34 @@ export default function OrbisSearchPage({ query, vertical, onOpen, onAskOrion }:
  * wrote it. Everything here comes from the result: a field that did not arrive is simply not drawn, so nothing on
  * screen is something Orbis made up.
  */
-function SpecializedResults({ outcome, onOpen }: { outcome: SpecializedOutcome; onOpen(url: string): void }): React.JSX.Element {
+function SpecializedResults({
+  outcome,
+  onOpen,
+  onLook,
+  onNotify
+}: {
+  outcome: SpecializedOutcome
+  onOpen(url: string): void
+  onLook(index: number): void
+  onNotify?(message: string, kind?: NoticeKind): void
+}): React.JSX.Element {
   const grid = outcome.category === 'images'
+  // A picture or a video is looked at here; anything else is a page, and pages open as pages.
+  const viewable = outcome.category === 'images' || outcome.category === 'videos'
 
   if (grid) {
     return (
       <ul className="osearch-images" aria-label="Image results">
-        {outcome.results.map((result) => (
+        {outcome.results.map((result, i) => (
           <li key={result.image ?? result.url}>
-            <button type="button" className="osearch-image" onClick={() => onOpen(result.url)} title={`${result.title} - ${result.site}`}>
+            <button type="button" className="osearch-image" onClick={() => onLook(i)} title={`${result.title} - ${result.site}`}>
               <img src={result.thumbnail ?? result.image} alt={result.title} loading="lazy" />
               <span className="osearch-image-meta">
                 <b className="truncate">{result.title}</b>
                 <small className="truncate">
+                  <SiteIcon url={result.url} size={13} />
                   {result.site}
-                  {result.width && result.height ? ` - ${result.width}x${result.height}` : ''}
+                  {result.width && result.height ? ` · ${result.width}×${result.height}` : ''}
                 </small>
               </span>
             </button>
@@ -260,9 +298,9 @@ function SpecializedResults({ outcome, onOpen }: { outcome: SpecializedOutcome; 
 
   return (
     <ul className="osearch-results">
-      {outcome.results.map((result) => (
-        <li key={result.url}>
-          <button type="button" className="osearch-result" onClick={() => onOpen(result.url)}>
+      {outcome.results.map((result, i) => (
+        <li key={result.url} className="osearch-result-row">
+          <button type="button" className={`osearch-result${result.thumbnail ? ' media' : ''}`} onClick={() => (viewable ? onLook(i) : onOpen(result.url))}>
             {result.thumbnail && (
               <span className="osearch-thumb">
                 <img src={result.thumbnail} alt="" loading="lazy" />
@@ -271,7 +309,8 @@ function SpecializedResults({ outcome, onOpen }: { outcome: SpecializedOutcome; 
             )}
             <span className="osearch-result-text">
               <span className="osearch-site">
-                {result.site}
+                <SiteIcon url={result.url} />
+                <span className="osearch-site-name">{result.site}</span>
                 <ArrowUpRight size={12} aria-hidden="true" />
               </span>
               <b>{result.title}</b>
@@ -279,6 +318,7 @@ function SpecializedResults({ outcome, onOpen }: { outcome: SpecializedOutcome; 
               <SpecializedFacts result={result} />
             </span>
           </button>
+          <ShareButton url={result.url} title={result.title} onNotify={onNotify} />
         </li>
       ))}
     </ul>

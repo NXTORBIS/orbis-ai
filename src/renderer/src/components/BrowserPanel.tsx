@@ -3021,6 +3021,7 @@ export default function BrowserPanel({
               vertical={searchPage.vertical}
               onOpen={(url) => navigate(url)}
               onAskOrion={askOrionAboutSearch}
+              onNotify={onNotify}
             />
           </Suspense>
         )}
