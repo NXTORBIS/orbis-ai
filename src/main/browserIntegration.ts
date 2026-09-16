@@ -5,6 +5,9 @@ import { join } from 'node:path'
 import type { BrowserDownload, BrowserPermissionRequest, BrowserShortcutEvent, DeviceRequest } from '../shared/types'
 import { DeviceChooser } from './deviceChooser'
 import { GestureInputAdapter } from './gestureAdapter'
+
+/** Gesture diagnostics, for working out why a trackpad is not behaving. Off unless ORBIS_GESTURE_DEBUG is set. */
+const GESTURE_DEBUG = process.env.ORBIS_GESTURE_DEBUG === '1'
 import { HistorySwipeRecognizer } from '../shared/historySwipe'
 import type { HistorySwipeContext, HistorySwipeView } from '../shared/historySwipe'
 import { BrowserLibrary, uniqueDownloadName } from './browserLibrary'
@@ -220,6 +223,10 @@ export class BrowserIntegration {
    * done, so an ordinary mouse wheel costs a comparison and nothing else.
    */
   private onPageWheel(contents: WebContents, mouse: { type: string; deltaX?: number; deltaY?: number; hasPreciseScrollingDeltas?: boolean; accelerationRatioX?: number }): void {
+    if (GESTURE_DEBUG && mouse.type === 'mouseWheel') {
+      // eslint-disable-next-line no-console
+      console.log('[gesture] wheel', JSON.stringify(mouse))
+    }
     if (!GestureInputAdapter.isTrackpad(mouse)) return
     if (this.swipeContents !== contents) {
       // A gesture belongs to one page. Movement from anywhere else ends whatever was running.
@@ -262,6 +269,13 @@ export class BrowserIntegration {
   private onGesture(event: Parameters<HistorySwipeRecognizer['handle']>[0]): void {
     const contents = this.swipeContents
     const outcome = this.swipe.handle(event, this.swipeContext)
+    if (GESTURE_DEBUG) {
+      const v = outcome.view
+      // eslint-disable-next-line no-console
+      console.log(
+        `[gesture] ${event.type} dx=${event.deltaX.toFixed(1)} dy=${event.deltaY.toFixed(1)} | state=${v.state} dir=${v.direction} dist=${v.distance.toFixed(0)} progress=${v.progress.toFixed(2)} commit=${v.willCommit} | back=${this.swipeContext.canGoBack} fwd=${this.swipeContext.canGoForward} pageScrollsX=${this.swipeContext.pageCanScrollHorizontally}${outcome.navigate ? ` -> NAVIGATE ${outcome.navigate}` : ''}`
+      )
+    }
     if (outcome.navigate && contents && !contents.isDestroyed()) {
       // Navigation goes to the window, which does it the same way the Back button does.
       this.send('browser:history-swipe', { view: outcome.view, navigate: outcome.navigate, webContentsId: contents.id })
