@@ -2622,7 +2622,7 @@ export default function BrowserPanel({
               tab.url && (
                 <TabView
                   partition={profile.partition}
-                  key={`${tab.id}:${tab.generation}`}
+                  key={`${tab.id}:${tab.generation}:${tab.private ? PRIVATE_PARTITION : profile.partition}`}
                   tab={tab}
                   active={tab.id === active.id}
                   split={split?.left === tab.id ? 'left' : split?.right === tab.id ? 'right' : undefined}

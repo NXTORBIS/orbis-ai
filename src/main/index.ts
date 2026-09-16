@@ -341,8 +341,9 @@ function createWindow(): BrowserWindow {
     webPreferences.nodeIntegration = false
     webPreferences.contextIsolation = true
     webPreferences.sandbox = true
-    // Only the browser's own sessions: the saved one, and the in-memory one private tabs share.
-    if (params.partition !== 'persist:browser' && params.partition !== 'orbis-private') event.preventDefault()
+    // Only the browser's own sessions: the saved one, each profile's own, and the in-memory one private tabs share.
+    const ownSession = params.partition === 'persist:browser' || params.partition === 'orbis-private' || /^persist:profile-[A-Za-z0-9_-]{1,80}$/.test(params.partition ?? '')
+    if (!ownSession) event.preventDefault()
     // Web pages, "view page source" of a web page, and pages of installed extensions (their options pages and popups).
     const extensionPage = params.partition === 'persist:browser' && /^chrome-extension:\/\/[a-p]{32}\//.test(params.src)
     if (!isHttpUrl(params.src) && !/^view-source:https?:\/\//i.test(params.src) && !extensionPage) event.preventDefault()
