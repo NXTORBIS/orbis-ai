@@ -5,18 +5,23 @@ import type { Note, NoteFilter } from '../../shared/notes'
 import type { Task, TaskFilter, TaskList } from '../../shared/tasks'
 import type { BrowserControl } from '../browserControl/registry'
 import { fail } from '../browserControl/registry'
+import type { Board } from '../../shared/whiteboard'
 import type { ClipboardHistory } from './clipboard'
 import type { NotesStore } from './notes'
 import type { TasksStore } from './tasks'
+import type { WhiteboardStore } from './whiteboard'
 
 export interface PersonalIpcOptions {
   notes: NotesStore
   tasks: TasksStore
   clipboard: ClipboardHistory
+  whiteboard: WhiteboardStore
   control: BrowserControl
   getWindow(): BrowserWindow | null
   /** The page in front: its address, title and the text the user has selected. */
   readPage(): Promise<{ url: string; title: string; selection?: string }>
+  /** A picture of the page in front, as a data URL. */
+  pageImage(): Promise<{ dataUrl: string; width: number; height: number; url: string; title: string }>
   send(channel: string, ...args: unknown[]): void
 }
 
@@ -39,6 +44,7 @@ export function registerPersonalIpc(o: PersonalIpcOptions): void {
   o.notes.onChange(() => o.send('notes:changed'))
   o.tasks.onChange(() => o.send('tasks:changed'))
   o.clipboard.onChange(() => o.send('clipboard:changed'))
+  o.whiteboard.onChange(() => o.send('whiteboard:changed'))
 
   // ---------------------------------------------------------------- notes
 
@@ -81,6 +87,32 @@ export function registerPersonalIpc(o: PersonalIpcOptions): void {
   handle('clipboard:paused', (_e, paused) => {
     if (paused !== undefined) o.clipboard.setPaused(paused === true)
     return { paused: o.clipboard.isPaused(), lastSkipped: o.clipboard.lastSkipped() }
+  })
+
+  // ---------------------------------------------------------------- whiteboards
+
+  handle('whiteboard:list', () => o.whiteboard.list())
+  handle('whiteboard:get', (_e, id) => o.whiteboard.get(str(id, 80)))
+  handle('whiteboard:create', (_e, patch) => o.whiteboard.create(obj(patch) as Partial<Board>))
+  handle('whiteboard:save', (_e, board) => o.whiteboard.save(board as Board))
+  handle('whiteboard:remove', (_e, id) => o.whiteboard.remove(str(id, 80)))
+  handle('whiteboard:rename', (_e, id, name) => o.whiteboard.rename(str(id, 80), str(name, 80)))
+  handle('whiteboard:add', (_e, id, elements) => o.whiteboard.add(str(id, 80), Array.isArray(elements) ? elements : []))
+  handle('whiteboard:export-svg', (_e, id) => o.whiteboard.exportSvg(str(id, 80)))
+  handle('whiteboard:page-image', async (_e, id, at) => {
+    const shot = await o.pageImage()
+    const position = obj(at)
+    const width = Math.min(640, shot.width)
+    return o.whiteboard.add(str(id, 80), [
+      {
+        kind: 'image',
+        at: { x: Number(position.x) || 0, y: Number(position.y) || 0 },
+        width,
+        height: Math.round((shot.height / Math.max(1, shot.width)) * width),
+        src: shot.dataUrl,
+        source: { url: shot.url, title: shot.title }
+      }
+    ])
   })
 
   // ---------------------------------------------------------------- capabilities
@@ -361,6 +393,93 @@ export function registerPersonalIpc(o: PersonalIpcOptions): void {
     }
   })
 
+  o.control.register({
+    id: 'whiteboard.list',
+    domain: 'whiteboard',
+    name: 'List whiteboards',
+    description: 'The whiteboards the user has: id, name, how much is on each, and when each changed.',
+    params: {},
+    mutates: false,
+    confirmation: 'none',
+    run: () => o.whiteboard.list()
+  })
+
+  o.control.register({
+    id: 'whiteboard.create',
+    domain: 'whiteboard',
+    name: 'Create a whiteboard',
+    description: 'Starts a new, empty whiteboard.',
+    params: { name: { type: 'string', description: 'What to call it.' } },
+    mutates: true,
+    confirmation: 'none',
+    run: async (p) => {
+      const board = await o.whiteboard.create({ ...(typeof p.name === 'string' && p.name ? { name: p.name } : {}) })
+      return { id: board.id, name: board.name }
+    }
+  })
+
+  o.control.register({
+    id: 'whiteboard.addNote',
+    domain: 'whiteboard',
+    name: 'Put a note on a whiteboard',
+    description: 'Adds a sticky note with some text to a whiteboard (whiteboard.list gives the ids).',
+    params: {
+      boardId: { type: 'string', description: 'Which board.', required: true },
+      text: { type: 'string', description: 'What the note says.', required: true },
+      x: { type: 'number', description: 'Where to put it across (default 0).' },
+      y: { type: 'number', description: 'Where to put it down the board (default 0).' },
+      color: { type: 'string', description: 'A colour such as #ffd866.' }
+    },
+    mutates: true,
+    confirmation: 'none',
+    describe: (p) => `Add a note to a whiteboard: ${JSON.stringify(String(p.text).slice(0, 40))}`,
+    run: async (p) => {
+      const board = await o.whiteboard.add(String(p.boardId), [{ kind: 'note', text: String(p.text), at: { x: Number(p.x) || 0, y: Number(p.y) || 0 }, width: 180, height: 140, ...(typeof p.color === 'string' ? { color: p.color } : {}) }])
+      return { boardId: board.id, count: board.elements.length }
+    },
+    verify: async (data) => {
+      const board = await o.whiteboard.get((data as { boardId: string }).boardId)
+      return { verified: Boolean(board), detail: board ? `The board now holds ${board.elements.length} things.` : 'The board could not be read back.' }
+    }
+  })
+
+  o.control.register({
+    id: 'whiteboard.addPage',
+    domain: 'whiteboard',
+    name: 'Put the page on a whiteboard',
+    description: 'Takes a picture of the page in front and puts it on a whiteboard, with a link back to the page.',
+    params: { boardId: { type: 'string', description: 'Which board.', required: true }, x: { type: 'number', description: 'Where to put it across.' }, y: { type: 'number', description: 'Where to put it down the board.' } },
+    mutates: true,
+    confirmation: 'none',
+    run: async (p) => {
+      const shot = await o.pageImage()
+      const width = Math.min(640, shot.width)
+      const board = await o.whiteboard.add(String(p.boardId), [{ kind: 'image', at: { x: Number(p.x) || 0, y: Number(p.y) || 0 }, width, height: Math.round((shot.height / Math.max(1, shot.width)) * width), src: shot.dataUrl, source: { url: shot.url, title: shot.title } }])
+      return { boardId: board.id, from: shot.url, count: board.elements.length }
+    }
+  })
+
+  o.control.register({
+    id: 'whiteboard.read',
+    domain: 'whiteboard',
+    name: 'Read a whiteboard',
+    description: 'What is written and drawn on a board: its notes and text, and how many lines, shapes and pictures it holds.',
+    params: { boardId: { type: 'string', description: 'Which board.', required: true } },
+    mutates: false,
+    confirmation: 'none',
+    run: async (p) => {
+      const board = (await o.whiteboard.get(String(p.boardId))) ?? fail('not-found', 'There is no board with that id.', true)
+      const counts: Record<string, number> = {}
+      for (const el of board.elements) counts[el.kind] = (counts[el.kind] ?? 0) + 1
+      return {
+        name: board.name,
+        counts,
+        text: board.elements.filter((el) => el.kind === 'note' || el.kind === 'text').map((el) => (el as { text: string }).text),
+        pages: board.elements.filter((el) => el.kind === 'image' && el.source).map((el) => (el as { source?: { url: string } }).source?.url)
+      }
+    }
+  })
+
   // State the rest of the control layer (and Orion) can read without a command.
   o.control.registerState('notes', async () => {
     const notes = await o.notes.search({})
@@ -370,6 +489,10 @@ export function registerPersonalIpc(o: PersonalIpcOptions): void {
     const { lists, counts } = await o.tasks.snapshot()
     const today = await o.tasks.search({ view: 'today', sort: 'due' })
     return { counts, lists: lists.map((l) => ({ id: l.id, name: l.name })), today: today.slice(0, 20).map(taskSummary) }
+  })
+  o.control.registerState('whiteboard', async () => {
+    const boards = await o.whiteboard.list()
+    return { count: boards.length, boards: boards.slice(0, 10).map((b) => ({ id: b.id, name: b.name, things: b.count, updatedAt: b.updatedAt })) }
   })
   o.control.registerState('clips', async () => {
     const items = await o.clipboard.all()

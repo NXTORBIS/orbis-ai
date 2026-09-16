@@ -194,7 +194,18 @@ const api: NxtorbisApi = {
   removeClip: (id) => ipcRenderer.invoke('clipboard:remove', id),
   clearClipboardHistory: (includePinned) => ipcRenderer.invoke('clipboard:clear', includePinned),
   clipboardPaused: (paused) => ipcRenderer.invoke('clipboard:paused', paused),
-  onClipboardChanged: (listener) => subscribe('clipboard:changed', listener)
+  onClipboardChanged: (listener) => subscribe('clipboard:changed', listener),
+
+  listBoards: () => ipcRenderer.invoke('whiteboard:list'),
+  getBoard: (id) => ipcRenderer.invoke('whiteboard:get', id),
+  createBoard: (patch) => ipcRenderer.invoke('whiteboard:create', patch),
+  saveBoard: (board) => ipcRenderer.invoke('whiteboard:save', board),
+  removeBoard: (id) => ipcRenderer.invoke('whiteboard:remove', id),
+  renameBoard: (id, name) => ipcRenderer.invoke('whiteboard:rename', id, name),
+  addToBoard: (id, elements) => ipcRenderer.invoke('whiteboard:add', id, elements),
+  exportBoardSvg: (id) => ipcRenderer.invoke('whiteboard:export-svg', id),
+  addPageToBoard: (id, at) => ipcRenderer.invoke('whiteboard:page-image', id, at),
+  onBoardsChanged: (listener) => subscribe('whiteboard:changed', listener)
 }
 
 /** Listens on a channel whose events carry one value; returns the unsubscribe function. */

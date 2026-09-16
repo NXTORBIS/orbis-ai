@@ -47,6 +47,7 @@ import { askOrion, draftWorkflow } from './workflows/orion'
 import { NotesStore } from './personal/notes'
 import { TasksStore } from './personal/tasks'
 import { ClipboardHistory } from './personal/clipboard'
+import { WhiteboardStore } from './personal/whiteboard'
 import { registerPersonalIpc } from './personal/ipc'
 import { Store } from './store'
 
@@ -957,6 +958,7 @@ if (!app.requestSingleInstanceLock()) {
     // Notes, tasks and clipboard history: the user's own things, kept locally and reachable from the control layer.
     const notesStore = new NotesStore(app.getPath('userData'))
     const tasksStore = new TasksStore(app.getPath('userData'))
+    const whiteboardStore = new WhiteboardStore(app.getPath('userData'))
     const clipboardHistory = new ClipboardHistory({
       userData: app.getPath('userData'),
       // Only watched while Orbis itself is in front, so copying elsewhere costs nothing.
@@ -970,6 +972,7 @@ if (!app.requestSingleInstanceLock()) {
       notes: notesStore,
       tasks: tasksStore,
       clipboard: clipboardHistory,
+      whiteboard: whiteboardStore,
       control: browserControl.control,
       getWindow: () => mainWindow,
       send: sendToWindow,
@@ -978,12 +981,20 @@ if (!app.requestSingleInstanceLock()) {
         const data = (result.data ?? {}) as { url?: string; title?: string; selection?: string }
         if (!result.ok || !data.url) throw new Error('There is no page open to save.')
         return { url: data.url, title: data.title ?? '', ...(data.selection ? { selection: data.selection } : {}) }
+      },
+      pageImage: async () => {
+        const page = await browserControl!.control.execute({ capability: 'page.read', params: { maxChars: 1 }, target: {}, source: 'user' }, { confirm: async () => true })
+        const shot = await browserControl!.control.execute({ capability: 'page.screenshot', params: { maxWidth: 1280 }, target: {}, source: 'user' }, { confirm: async () => true })
+        const image = (shot.data ?? {}) as { dataUrl?: string; width?: number; height?: number }
+        const about = (page.data ?? {}) as { url?: string; title?: string }
+        if (!shot.ok || !image.dataUrl) throw new Error(shot.error?.message ?? 'The page could not be captured.')
+        return { dataUrl: image.dataUrl, width: image.width ?? 0, height: image.height ?? 0, url: about.url ?? '', title: about.title ?? '' }
       }
     })
     void clipboardHistory.start().catch((err: unknown) => console.error('[clipboard] failed to start', err))
     app.on('before-quit', () => {
       clipboardHistory.stop()
-      void Promise.all([notesStore.flush(), tasksStore.flush(), clipboardHistory.flush()])
+      void Promise.all([notesStore.flush(), tasksStore.flush(), clipboardHistory.flush(), whiteboardStore.flush()])
     })
 
     app.on('before-quit', () => void browserLibrary?.flush())

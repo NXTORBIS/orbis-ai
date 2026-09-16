@@ -31,6 +31,7 @@ export type ControlDomain =
   | 'notes'
   | 'tasks'
   | 'clips'
+  | 'whiteboard'
   | 'state'
 
 /** Who asked: the person using Orbis, Orion's browser agent, or an automation run. */

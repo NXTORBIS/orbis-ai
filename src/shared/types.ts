@@ -16,6 +16,7 @@ import type { ActiveWorkflowRun, RecordingState, Workflow, WorkflowIssue, Workfl
 import type { Note, NoteFilter } from './notes'
 import type { Task, TaskCounts, TaskFilter, TaskList } from './tasks'
 import type { ClipboardSettings, ClipItem, ClipKind } from './clipboardHistory'
+import type { Board } from './whiteboard'
 import type { PlanLine } from './workflowCompile'
 
 export type Role = 'user' | 'assistant'
@@ -750,4 +751,16 @@ export interface NxtorbisApi {
   clearClipboardHistory(includePinned?: boolean): Promise<number>
   clipboardPaused(paused?: boolean): Promise<{ paused: boolean; lastSkipped: string | null }>
   onClipboardChanged(listener: () => void): () => void
+
+  // Whiteboards
+  listBoards(): Promise<(Omit<Board, 'elements'> & { count: number })[]>
+  getBoard(id: string): Promise<Board | null>
+  createBoard(patch?: Partial<Board>): Promise<Board>
+  saveBoard(board: Board): Promise<Board>
+  removeBoard(id: string): Promise<boolean>
+  renameBoard(id: string, name: string): Promise<Board>
+  addToBoard(id: string, elements: unknown[]): Promise<Board>
+  exportBoardSvg(id: string): Promise<{ name: string; svg: string }>
+  addPageToBoard(id: string, at?: { x: number; y: number }): Promise<Board>
+  onBoardsChanged(listener: () => void): () => void
 }
