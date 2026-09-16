@@ -1,0 +1,199 @@
+// Copyright 2026 Orbis. All rights reserved.
+//
+// The Orbis interface, and what it may ask the browser process for.
+//
+// These are the parts of Orbis that never touched the browser engine: its settings, its conversations, its updates,
+// its sign-in, its shortcuts, and Orion. Under Electron they were IPC channels; here they are Mojo interfaces onto
+// the same services. The behaviour does not change — only what carries the call.
+//
+// One interface per area rather than one enormous one, so that a page is given exactly what it needs and no more:
+// the settings page cannot ask Orion anything, and Orion cannot change the update channel.
+
+module orbis.mojom;
+
+// ---------------------------------------------------------------- settings
+
+struct Settings {
+  string assistant_name;
+  string user_name;
+  string user_title;
+  string default_model;
+  string theme;
+  string system_prompt;
+  bool effects;
+  bool search_suggestions;
+  bool personalized_suggestions;
+  bool open_browser_on_launch;
+};
+
+interface SettingsService {
+  Get() => (Settings settings);
+  // Only the fields that are set are changed; the rest are left alone.
+  Update(Settings changes) => (Settings settings);
+  // Checks a key by asking the provider, and says what it found rather than only whether it worked.
+  TestKey(string api_key) => (bool ok, string problem);
+};
+
+// ---------------------------------------------------------------- conversations
+
+struct ConversationSummary {
+  string id;
+  string title;
+  double updated_at;
+  bool pinned;
+};
+
+interface ConversationsService {
+  List() => (array<ConversationSummary> conversations);
+  // The whole conversation as JSON: its shape belongs to Orbis and changes with Orbis, not with the browser.
+  Save(string conversation_json) => (bool saved);
+  Delete(string id) => (bool deleted);
+};
+
+// ---------------------------------------------------------------- updating Orbis
+
+enum UpdateState {
+  kIdle, kChecking, kNoUpdate, kUpdateAvailable, kDownloading, kPaused, kVerifying,
+  kReadyToInstall, kPreparing, kInstalling, kValidating, kRestarting, kCompleted,
+  kRollingBack, kFailed, kCancelled,
+};
+
+struct UpdateStatus {
+  UpdateState state;
+  string current_version;
+  string? available_version;
+  bool mandatory;
+  double progress;
+  string release_notes;
+  string? problem;
+  double last_checked_at;
+};
+
+struct UpdateSettings {
+  string channel;
+  bool check_automatically;
+  bool download_automatically;
+  bool install_automatically;
+};
+
+// Told about an update as it happens, rather than asked repeatedly.
+interface UpdateObserver {
+  OnUpdateChanged(UpdateStatus status);
+};
+
+interface UpdateService {
+  AddObserver(pending_remote<UpdateObserver> observer);
+  GetStatus() => (UpdateStatus status, UpdateSettings settings);
+  CheckForUpdates() => (UpdateStatus status);
+  Download() => (UpdateStatus status);
+  CancelDownload() => (UpdateStatus status);
+  // Saves what is open, closes Orbis and hands over to the installer. There is no answer: Orbis is gone.
+  RestartAndUpdate();
+  SetSettings(UpdateSettings settings) => (UpdateSettings settings);
+};
+
+// ---------------------------------------------------------------- signing in
+
+struct AccountState {
+  bool signed_in;
+  string? email;
+  string? name;
+  string? picture_url;
+  string? problem;
+};
+
+interface AuthObserver {
+  OnAccountChanged(AccountState state);
+};
+
+interface AuthService {
+  AddObserver(pending_remote<AuthObserver> observer);
+  GetState() => (AccountState state);
+  // Opens a real browser window for the provider's own sign-in page. Orbis never sees what is typed into it.
+  SignIn() => (AccountState state);
+  SignOut() => (AccountState state);
+  Cancel();
+};
+
+// ---------------------------------------------------------------- Orion
+
+struct ChatRequest {
+  string request_id;
+  string model;
+  // The messages, and anything the request carries with it, as JSON. Orion's shape is Orion's business.
+  string payload_json;
+};
+
+// Orion answers a piece at a time, so the interface can show it arriving.
+interface ChatObserver {
+  OnDelta(string request_id, string text);
+  OnStatus(string request_id, string status_json);
+  OnDone(string request_id, string result_json);
+  OnFailed(string request_id, string problem);
+};
+
+interface OrionService {
+  AddObserver(pending_remote<ChatObserver> observer);
+  Send(ChatRequest request);
+  Abort(string request_id);
+  // What a conversation should be called, worked out from what is in it.
+  Title(string conversation_json) => (string title);
+  // What the user might usefully ask next.
+  Suggest(string context_json) => (array<string> suggestions);
+  // Which model should answer this, and why — Auto Mode's decision, made per request.
+  Classify(string request_json) => (string model, string reason);
+  // Understanding and making pictures.
+  EditImage(string request_json) => (string result_json);
+  SaveImage(string data_url, string suggested_name) => (bool saved, string? path);
+  // Speech, where the machine can.
+  Transcribe(string audio_base64) => (string text, string? problem);
+};
+
+// ---------------------------------------------------------------- shortcuts on the new tab
+
+struct Shortcut {
+  string id;
+  string url;
+  string title;
+  string? icon_data_url;
+};
+
+interface ShortcutsService {
+  Add(string url, string title) => (Shortcut shortcut);
+  Update(Shortcut shortcut) => (Shortcut shortcut);
+  Remove(string id) => (bool removed);
+  RefreshIcon(string id) => (Shortcut shortcut);
+};
+
+// ---------------------------------------------------------------- what Orbis is built from
+
+struct NoticeEntry {
+  string name;
+  string version;
+  string license;
+  string homepage;
+  string text;
+};
+
+interface NoticesService {
+  GetNotices() => (array<NoticeEntry> others, array<NoticeEntry> packages, string orbis_version);
+  // Electron's and Chromium's own licences, which ship beside the browser rather than inside it.
+  GetLicenceFile(string which) => (string? text);
+};
+
+// ---------------------------------------------------------------- the address bar
+
+struct Prediction {
+  string kind;      // "url", "search", "bookmark", "history", "orion"
+  string text;
+  string? detail;
+  string target;
+  double score;
+};
+
+interface OmniboxService {
+  // What the user probably means, from what Orbis knows locally.
+  Predict(string typed, bool incognito) => (array<Prediction> predictions);
+  // What the search engine suggests, when the user has allowed that.
+  WebSuggestions(string typed) => (array<string> suggestions);
+};

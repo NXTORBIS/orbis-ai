@@ -99,13 +99,19 @@ These can invalidate an acceptance criterion after months of work, so they are s
 | Visual Studio 2022 | Community 17.12 present |
 | Windows SDK | **missing — blocks the build** |
 | depot_tools | present at `C:\chromium\depot_tools` |
+| Chromium source | present at `C:\chromium\src` — **Chromium 156.0.8063.0**, fetched without history to fit the disk |
 | Machine | 12 cores, 32 GB RAM — first build roughly 4–8 hours, then minutes |
 
 ## Phases
 
 1. **Audit** — done. This document.
-2. **Architecture** — decide what belongs to Chromium, the Orbis browser layer, Orbis services, Orion and the control
-   layer. In progress: enforcing the portable boundary in code, so the surviving 78% provably does not touch Electron.
+2. **Architecture** — done. The portable boundary is enforced in code, every way the interface asks the application
+   for something is mapped in `ipc-mapping.md`, and the transport seam exists so domains can move one at a time while
+   the rest keeps working.
+   
+   One thing to settle from the checkout: Chromium's own tip is **156**, while Orbis runs Chromium **152** through
+   Electron. Building against 156 means four versions of web-platform change arriving at once, which is a good thing
+   but should be a deliberate step rather than a surprise.
 3. **Chromium foundation** — source tree, build, Orbis branding and packaging.
 4. **Browser migration** — tabs, navigation, history, downloads, extensions, permissions, media.
 5. **Orbis feature migration** — Orion, the control layer, workflows, profiles, personalization, everything else.
