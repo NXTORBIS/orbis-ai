@@ -16,8 +16,9 @@ export default defineConfig(({ mode }) => {
     preload: {
       build: {
         rollupOptions: {
-          // The app's preload, and a small frame script for the in-app browser session (used by ad blocking).
-          input: { index: resolve('src/preload/index.ts'), adblockFrame: resolve('src/preload/adblockFrame.ts') }
+          // The app's preload, a small frame script for the in-app browser session (used by ad blocking), and the
+          // Chrome extension APIs Orbis provides to extension service workers and pages.
+          input: { index: resolve('src/preload/index.ts'), adblockFrame: resolve('src/preload/adblockFrame.ts'), extensionApis: resolve('src/preload/extensionApis.ts') }
         }
       }
     },

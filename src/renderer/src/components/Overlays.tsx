@@ -75,6 +75,7 @@ const SHORTCUTS: [string, string][] = [
 /** Browser shortcuts: they work while the browser or a web page has focus. */
 const BROWSER_SHORTCUTS: [string, string][] = [
   ['Ctrl + T', 'New tab'],
+  ['Ctrl + Shift + N', 'New private tab (outside the browser it starts an incognito chat)'],
   ['Ctrl + W', 'Close tab'],
   ['Ctrl + Shift + T', 'Reopen closed tab'],
   ['Ctrl + Tab / Ctrl + Shift + Tab', 'Next / previous tab'],
@@ -84,7 +85,7 @@ const BROWSER_SHORTCUTS: [string, string][] = [
   ['Ctrl + R or F5', 'Reload'],
   ['Ctrl + Shift + R or Ctrl + F5', 'Reload without cache'],
   ['Esc', 'Stop loading'],
-  ['Ctrl + L, Alt + D or F6', 'Go to the URL bar'],
+  ['Ctrl + L, Ctrl + E, Alt + D or F6', 'Go to the URL bar'],
   ['↑ / ↓ in the URL bar', 'Choose a suggestion'],
   ['Enter in the URL bar', 'Open or search in Orbis'],
   ['Ctrl + Enter in the URL bar', 'Ask Orion; the answer opens over the page'],

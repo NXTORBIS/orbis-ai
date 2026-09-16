@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
+import { Fragment, lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
 import {
   ArrowLeft,
   ArrowRight,
@@ -14,6 +14,7 @@ import {
   ExternalLink,
   FileCode,
   Globe,
+  HatGlasses,
   LoaderCircle,
   Maximize2,
   Minimize2,
@@ -50,7 +51,18 @@ import type { BrowserMode } from '../lib/browserSize'
 import { sameUrl } from '../../../shared/research'
 import { toUrl } from '../../../shared/omnibox'
 import TabContextMenu, { TabEditDialog } from './TabContextMenu'
+import ShortcutsGrid from './ShortcutsGrid'
+import ExtensionsToolbar from './ExtensionsToolbar'
+import ExtensionPrompts from './ExtensionPrompts'
+import type { ExtensionWindowRequest, ReportedBrowserTab } from '../../../shared/types'
 import type { TabGroup, TabMenuAction } from './TabContextMenu'
+import { bool, failure, int, num, readResult, reportControlState, str, unverified, useControlRendered, useControlScope, verified, waitUntil } from '../lib/browserControl'
+import type { WindowCapability } from '../lib/browserControl'
+import type { ControlTab, ControlTarget } from '../../../shared/browserControl'
+import { classifyLoadFailure } from '../../../shared/offlineGames'
+
+// The offline page and its games load only when a page first fails for lack of a connection.
+const OfflineGames = lazy(() => import('./OfflineGames'))
 
 type Webview = HTMLElement & {
   setAudioMuted(muted: boolean): void
@@ -61,6 +73,7 @@ type Webview = HTMLElement & {
   reload(): void
   reloadIgnoringCache(): void
   stop(): void
+  isLoading(): boolean
   print(): Promise<void>
   isDevToolsOpened(): boolean
   closeDevTools(): void
@@ -87,6 +100,8 @@ interface Tab {
   mobile: boolean
   zoom: number
   error?: string
+  /** The last load failed for lack of a connection (not an HTTP error): the offline page shows until a page loads. */
+  offline?: { code: number; url: string }
   /** The page's process crashed; reloading starts a fresh page. */
   crashed?: boolean
   /** Bumped to start the tab's page over after a crash. */
@@ -101,6 +116,10 @@ interface Tab {
   customIcon?: string
   /** The page is playing sound. */
   audible?: boolean
+  /** A private tab: an in-memory session shared by private tabs, no history, wiped when the last one closes. */
+  private?: boolean
+  /** Muted on its own (an extension's chrome.tabs.update), apart from "Mute site". */
+  muted?: boolean
 }
 
 interface PickResult {
@@ -125,7 +144,7 @@ interface Props {
   agentStatus?: string
   onPauseAgent?(): void
   /** Reports the active tab's page, so chat requests can refer to it. */
-  onPageChange?(page: { url: string; title: string } | null): void
+  onPageChange?(page: { tabId: string; url: string; title: string; private?: boolean } | null): void
   /**
    * An address to open, from the URL bar (the active tab) or a link or research source (a new tab, or the tab already
    * showing it); `more` opens further pages as background tabs. A new id means a new request.
@@ -199,7 +218,22 @@ function store(key: string, value: string): void {
 const focusUrlBar = (): void => void window.dispatchEvent(new Event('orbis:focus-url'))
 
 let tabSeq = 0
-const createTab = (url = ''): Tab => ({ id: newId(), url, title: url || 'New tab', loading: Boolean(url), back: false, forward: false, mobile: false, zoom: 1, generation: 0, seq: tabSeq++ })
+const createTab = (url = '', isPrivate = false): Tab => ({
+  id: newId(),
+  url,
+  title: url || (isPrivate ? 'Private tab' : 'New tab'),
+  loading: Boolean(url),
+  back: false,
+  forward: false,
+  mobile: false,
+  zoom: 1,
+  generation: 0,
+  seq: tabSeq++,
+  ...(isPrivate ? { private: true } : {})
+})
+
+/** The in-memory session private tabs share; main allows only this and the saved browser session. */
+const PRIVATE_PARTITION = 'orbis-private'
 
 const isWebUrl = (url: string): boolean => /^https?:\/\//i.test(url)
 const hostOf = (url: string): string => {
@@ -237,6 +271,22 @@ function storeZoom(url: string, zoom: number): void {
   if (Math.abs(zoom - 1) < 0.001) delete map[host]
   else map[host] = zoom
   store(ZOOM_KEY, JSON.stringify(map))
+}
+
+const GROUPS_KEY = 'orbis.browser.groups'
+
+/** The tab groups open last time, by the pages in them, so restoring the session brings the groups back too. */
+function lastSessionGroups(): { name: string; color: string; collapsed: boolean; urls: string[] }[] {
+  try {
+    const groups: unknown = JSON.parse(stored(GROUPS_KEY) ?? '[]')
+    return Array.isArray(groups)
+      ? groups
+          .filter((g): g is { name: string; color: string; collapsed?: boolean; urls: string[] } => Boolean(g) && typeof g.name === 'string' && typeof g.color === 'string' && Array.isArray(g.urls))
+          .map((g) => ({ name: g.name.slice(0, 40), color: g.color, collapsed: g.collapsed === true, urls: g.urls.filter((u) => typeof u === 'string' && isWebUrl(u)) }))
+      : []
+  } catch {
+    return []
+  }
 }
 
 function lastSessionUrls(): string[] {
@@ -297,6 +347,12 @@ export default function BrowserPanel({
   const [lastSession, setLastSession] = useState(lastSessionUrls)
   /** The mode to return to when F11 fullscreen ends. */
   const fullscreenRestore = useRef<BrowserMode | null>(null)
+  /** The Orbis window is fullscreen (F11). With the browser at full page, the tab bar and address bar tuck away above the top edge. */
+  const [windowFullscreen, setWindowFullscreen] = useState(false)
+  /** The pointer reached the very top edge: the tucked-away tab bar and address bar are showing. */
+  const [tabsRevealed, setTabsRevealed] = useState(false)
+  /** When the bars were last revealed: page pointer reports still in flight from before don't hide them straight away. */
+  const revealedAt = useRef(0)
   const dragTab = useRef<string | null>(null)
   const sectionRef = useRef<HTMLElement>(null)
   const onNotifyRef = useRef(onNotify)
@@ -314,23 +370,201 @@ export default function BrowserPanel({
     setTabs((list) => list.map((t) => (t.id === id ? { ...t, ...changes } : t)))
   }, [])
 
-  const openTab = useCallback((url = '', activate = true) => {
-    const tab = createTab(url)
-    setTabs((list) => [...list, tab])
-    if (activate) setActiveId(tab.id)
+  /** Adds a tab (at the end, or at an index, pinned tabs staying in front) and returns it. Every way of opening a tab uses this. */
+  const addTab = useCallback((url: string, options: { activate?: boolean; private?: boolean; index?: number; pinned?: boolean } = {}): Tab => {
+    const tab: Tab = { ...createTab(url, options.private === true), ...(options.pinned ? { pinned: true } : {}) }
+    setTabs((list) => {
+      const next = [...list]
+      const pinnedCount = list.filter((t) => t.pinned).length
+      const at = typeof options.index === 'number' ? Math.max(options.pinned ? 0 : pinnedCount, Math.min(options.index, next.length)) : next.length
+      next.splice(at, 0, tab)
+      return next
+    })
+    if (options.activate !== false) setActiveId(tab.id)
+    return tab
   }, [])
+
+  const openTab = useCallback((url = '', activate = true, isPrivate = false) => void addTab(url, { activate, private: isPrivate }), [addTab])
 
   useEffect(() => store('orbis.browser.width', String(width)), [width])
   // Ctrl+click and middle-click open links in the background; other links and "Open link in new tab" switch to them.
   useEffect(() => window.api.onBrowserNewTab((url, options) => openTab(url, !options.background)), [openTab])
 
   // The open web pages, so they can be restored next time.
-  const tabUrls = tabs.map((t) => t.url).filter(isWebUrl)
+  const tabUrls = tabs.filter((t) => !t.private).map((t) => t.url).filter(isWebUrl)
   const tabUrlsKey = tabUrls.join('\n')
   useEffect(() => {
     if (tabUrls.length) store(SESSION_KEY, JSON.stringify(tabUrls.slice(0, 20)))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tabUrlsKey])
+
+  // Closing the last private tab (or the browser, with private tabs open) wipes their in-memory session.
+  // The window's real fullscreen state from the main process (a maximized window the size of the screen isn't fullscreen).
+  useEffect(() => {
+    void window.api.isWindowFullscreen().then(setWindowFullscreen)
+    return window.api.onWindowFullscreen(setWindowFullscreen)
+  }, [])
+
+  // Immersive (fullscreen at full page): the bars slide back up once the pointer is over the page again or the page is
+  // clicked, unless the address bar is being typed in or a menu is open.
+  useEffect(() => {
+    const root = document.documentElement
+    if (!(windowFullscreen && mode === 'full' && !hidden && !htmlFullscreen)) {
+      delete root.dataset.browserImmersive
+      setTabsRevealed(false)
+      return
+    }
+    root.dataset.browserImmersive = ''
+    const busy = (): boolean => 'dropdownOpen' in root.dataset || Boolean(document.querySelector('.url-strip:focus-within'))
+    const inBars = (target: EventTarget | null): boolean => target instanceof Element && Boolean(target.closest('.browser-tabs-row, .url-strip, .browser-tab-reveal, .popover'))
+    // The bars cover the top 72px once shown; while they slide in, the pointer at the top edge can briefly be over the
+    // page, which must not hide them again.
+    const onOver = (e: MouseEvent): void => {
+      if (e.clientY > 76 && !inBars(e.target) && !busy()) setTabsRevealed(false)
+    }
+    const onFocusOut = (): void => {
+      window.setTimeout(() => {
+        if (!busy() && !document.querySelector('.browser-tabs-row:hover, .url-strip:hover')) setTabsRevealed(false)
+      }, 0)
+    }
+    // Moving from the bars onto the page: the page (a separate view) takes the pointer, so the window's document hears
+    // nothing more; the bars themselves still get mouseleave, which is what tucks them away.
+    const onLeaveBars = (e: MouseEvent): void => {
+      if (e.clientY <= 76 || busy()) return
+      window.setTimeout(() => {
+        if (!busy() && !document.querySelector('.browser-tabs-row:hover, .url-strip:hover, .popover:hover')) setTabsRevealed(false)
+      }, 0)
+    }
+    const bars = [...document.querySelectorAll<HTMLElement>('.browser-tabs-row, .url-strip')]
+    for (const bar of bars) bar.addEventListener('mouseleave', onLeaveBars)
+    document.addEventListener('mouseover', onOver)
+    document.addEventListener('focusout', onFocusOut)
+    const stopPagePointer = window.api.onPagePointer(() => {
+      if (!('dropdownOpen' in root.dataset)) setTabsRevealed(false)
+    })
+    // The pointer moved inside the page itself: it has left the bars.
+    const stopPageMove = window.api.onPagePointerMove(() => {
+      if (!busy() && Date.now() - revealedAt.current > 500) setTabsRevealed(false)
+    })
+    return () => {
+      stopPageMove()
+      for (const bar of bars) bar.removeEventListener('mouseleave', onLeaveBars)
+      document.removeEventListener('mouseover', onOver)
+      document.removeEventListener('focusout', onFocusOut)
+      stopPagePointer()
+      delete root.dataset.browserImmersive
+    }
+  }, [windowFullscreen, mode, hidden, htmlFullscreen])
+
+  useEffect(() => {
+    const root = document.documentElement
+    if (tabsRevealed) root.dataset.tabsRevealed = ''
+    else delete root.dataset.tabsRevealed
+    // Page pointer movement is only needed (and only sent) while the bars are showing.
+    window.api.watchPagePointerMoves(tabsRevealed)
+    return () => {
+      delete root.dataset.tabsRevealed
+      window.api.watchPagePointerMoves(false)
+    }
+  }, [tabsRevealed])
+
+  // The address bar's Summarize button reads the active tab's page as rendered, so signed-in and private pages work too.
+  const activeRef = useRef(active)
+  activeRef.current = active
+  useEffect(() => {
+    const onRead = (e: Event): void => {
+      const { resolve } = (e as CustomEvent<{ resolve(page: { title: string; text: string } | null): void }>).detail
+      const tab = activeRef.current
+      const webview = views.current.get(tab.id)
+      if (!webview || !tab.url) return resolve(null)
+      webview
+        .executeJavaScript(
+          `(() => {
+            const main = document.querySelector('main, article, [role="main"]');
+            const root = main && main.innerText.trim().length > 400 ? main : document.body;
+            const text = ((root && root.innerText) || '').replace(/[ \\t]+\\n/g, '\\n').replace(/\\n{3,}/g, '\\n\\n').trim();
+            return { title: document.title, text: text.slice(0, 16000) };
+          })()`
+        )
+        .then((page) => resolve(page as { title: string; text: string }), () => resolve(null))
+    }
+    window.addEventListener('orbis:read-page', onRead)
+    return () => window.removeEventListener('orbis:read-page', onRead)
+  }, [])
+
+  /** chrome.action.openPopup from an extension: the toolbar opens that extension's popup. */
+  const [extensionPopup, setExtensionPopup] = useState<string | null>(null)
+
+  const extensionRequest = useRef<(request: ExtensionWindowRequest) => Promise<number | null>>(async () => null)
+  extensionRequest.current = async (request) => {
+    const byPage = (pageId: number): Tab | undefined =>
+      tabs.find((t) => {
+        try {
+          return views.current.get(t.id)?.getWebContentsId() === pageId
+        } catch {
+          return false
+        }
+      })
+    switch (request.kind) {
+      case 'create-tab': {
+        const tab = addTab(request.url ?? '', { activate: request.active, index: request.index, pinned: request.pinned })
+        if (!request.url) return null
+        for (let i = 0; i < 60; i++) {
+          await new Promise((r) => setTimeout(r, 100))
+          try {
+            const id = views.current.get(tab.id)?.getWebContentsId()
+            if (id) return id
+          } catch {
+            // Not attached yet.
+          }
+        }
+        return null
+      }
+      case 'update-tab': {
+        const tab = byPage(request.tabId)
+        if (!tab) return null
+        if (request.url) navigate(request.url, tab.id)
+        if (request.active) setActiveId(tab.id)
+        if (typeof request.pinned === 'boolean' && Boolean(tab.pinned) !== request.pinned) tabAction(tab.id, { type: 'pin' })
+        if (typeof request.muted === 'boolean') patch(tab.id, { muted: request.muted })
+        return request.tabId
+      }
+      case 'remove-tabs':
+        closeTabs(request.tabIds.map(byPage).filter((t): t is Tab => Boolean(t)).map((t) => t.id))
+        return null
+      case 'move-tab': {
+        const tab = byPage(request.tabId)
+        if (tab) moveTab(tab.id, Math.max(0, Math.min(request.index, tabs.length - 1)))
+        return null
+      }
+      case 'open-popup':
+        setExtensionPopup(request.extensionId)
+        return null
+    }
+  }
+  useEffect(
+    () =>
+      window.api.onExtensionWindowRequest(({ requestId, request }) => {
+        void extensionRequest.current(request).then(
+          (result) => window.api.answerExtensionWindowRequest(requestId, result),
+          () => window.api.answerExtensionWindowRequest(requestId, null)
+        )
+      }),
+    []
+  )
+
+  const hasPrivate = tabs.some((t) => t.private)
+  const hadPrivate = useRef(false)
+  useEffect(() => {
+    if (hadPrivate.current && !hasPrivate) void window.api.clearPrivateBrowsing()
+    hadPrivate.current = hasPrivate
+  }, [hasPrivate])
+  useEffect(
+    () => () => {
+      if (hadPrivate.current) void window.api.clearPrivateBrowsing()
+    },
+    []
+  )
 
   // Shortcuts apply only while the browser or its URL bar has focus, so Orion's chat and the rest of Orbis keep their keys.
   useEffect(() => {
@@ -427,8 +661,9 @@ export default function BrowserPanel({
   }
 
   useEffect(() => {
-    onPageChange?.(active.url ? { url: active.url, title: active.title } : null)
-  }, [active.url, active.title, onPageChange])
+    // Sent for blank tabs too (with an empty url), so the address bar can keep each tab's typed text apart.
+    onPageChange?.({ tabId: active.id, url: active.url, title: active.title, ...(active.private ? { private: true } : {}) })
+  }, [active.id, active.url, active.title, active.private, onPageChange])
 
   // Addresses typed in the URL bar open in the active tab. Links and sources open beside it, reusing a tab already showing
   // the page, so opening a source never loses the page the user was on.
@@ -483,7 +718,7 @@ export default function BrowserPanel({
   const closeTab = (id: string): void => {
     const index = tabs.findIndex((t) => t.id === id)
     const closing = tabs[index]
-    if (closing?.url) setClosedTabs((list) => [...list, { url: closing.url, title: closing.title, index }].slice(-25))
+    if (closing?.url && !closing.private) setClosedTabs((list) => [...list, { url: closing.url, title: closing.title, index }].slice(-25))
     const rest = tabs.filter((t) => t.id !== id)
     if (!rest.length) return onClose()
     setTabs(rest)
@@ -524,6 +759,102 @@ export default function BrowserPanel({
   const [mutedHosts, setMutedHosts] = useState<string[]>([])
   const [bookmarkUrls, setBookmarkUrls] = useState<string[]>([])
 
+  /** The tab that was active before the current one ("the tab I was just using"). */
+  const previousTab = useRef<string | null>(null)
+  const lastActive = useRef(activeId)
+  useEffect(() => {
+    if (lastActive.current === activeId) return
+    previousTab.current = lastActive.current
+    lastActive.current = activeId
+  }, [activeId])
+
+  // The open groups are saved with the session (by their pages), so restoring it brings them back.
+  const groupsKey = JSON.stringify(groups.map((g) => [g.name, g.color, g.collapsed, tabs.filter((t) => t.groupId === g.id && !t.private && isWebUrl(t.url)).map((t) => t.url)]))
+  useEffect(() => {
+    if (!tabUrls.length) return
+    store(GROUPS_KEY, JSON.stringify(groups.map((g) => ({ name: g.name, color: g.color, collapsed: Boolean(g.collapsed), urls: tabs.filter((t) => t.groupId === g.id && !t.private && isWebUrl(t.url)).map((t) => t.url) })).filter((g) => g.urls.length)))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupsKey])
+
+  // Chrome extensions and the Browser Control Layer see Orbis's tabs; extensions don't see private tabs (they can't run
+  // in their in-memory session). A tab's page id is its WebContents id, known once the page has attached. Reported
+  // whenever the tabs change, never on a timer (except a short retry while a page is still attaching).
+  useEffect(() => {
+    let timer = 0
+    const report = (): void => {
+      const visible: ReportedBrowserTab[] = []
+      const controlTabs: ControlTab[] = []
+      let pending = false
+      tabs.forEach((tab, index) => {
+        let id: number | null = null
+        try {
+          id = views.current.get(tab.id)?.getWebContentsId() ?? null
+        } catch {
+          id = null
+        }
+        if (tab.url && id === null) pending = true
+        const muted = Boolean(tab.muted) || mutedHosts.includes(hostOf(tab.url))
+        controlTabs.push({
+          id: tab.id,
+          index,
+          webContentsId: id,
+          url: tab.url,
+          title: tab.customTitle || tab.title,
+          loading: Boolean(tab.url) && tab.loading,
+          canGoBack: tab.back,
+          canGoForward: tab.forward,
+          pinned: Boolean(tab.pinned),
+          private: Boolean(tab.private),
+          muted,
+          audible: Boolean(tab.audible),
+          groupId: tab.groupId ?? null,
+          zoom: tab.zoom,
+          error: tab.error ?? null,
+          crashed: Boolean(tab.crashed),
+          active: tab.id === activeId
+        })
+        if (tab.private || !tab.url || id === null) return
+        visible.push({
+          id,
+          index: visible.length,
+          url: tab.url,
+          title: tab.customTitle || tab.title,
+          ...(tab.favicon ? { favIconUrl: tab.favicon } : {}),
+          active: tab.id === activeId,
+          pinned: Boolean(tab.pinned),
+          audible: Boolean(tab.audible),
+          muted,
+          loading: tab.loading
+        })
+      })
+      window.api.reportBrowserTabs(visible)
+      reportControlState({
+        open: true,
+        tabs: controlTabs,
+        activeTabId: activeId,
+        previousTabId: previousTab.current,
+        groups: groups.map((g) => ({ id: g.id, name: g.name, color: g.color, collapsed: Boolean(g.collapsed), tabIds: tabs.filter((t) => t.groupId === g.id).map((t) => t.id) })),
+        closedTabs,
+        split,
+        find: { open: findOpen, text: findText, activeMatch: findResult?.active ?? 0, matches: findResult?.total ?? 0 },
+        panel: library,
+        permissionRequests: permissions.map(({ id, origin, permission, label }) => ({ id, origin, permission, label }))
+      })
+      if (pending) timer = window.setTimeout(report, 400)
+    }
+    report()
+    return () => window.clearTimeout(timer)
+  }, [tabs, activeId, mutedHosts, groups, closedTabs, split, findOpen, findText, findResult, library, permissions])
+  useEffect(
+    () => () => {
+      window.api.reportBrowserTabs([])
+      reportControlState({ open: false, tabs: [], groups: [], activeTabId: null, previousTabId: null, closedTabs: [], split: null, find: { open: false, text: '', activeMatch: 0, matches: 0 }, panel: null, permissionRequests: [] })
+    },
+    []
+  )
+  // A site's request answered elsewhere (through the control layer) leaves the prompt too.
+  useEffect(() => window.api.onBrowserPermissionAnswered((id) => setPermissions((list) => list.filter((r) => r.id !== id))), [])
+
   useEffect(() => {
     const take = (library: { bookmarks: { url: string }[] }): void => setBookmarkUrls(library.bookmarks.map((b) => b.url))
     void window.api.getBrowserLibrary().then(take)
@@ -539,7 +870,7 @@ export default function BrowserPanel({
   const closeTabs = (ids: string[]): void => {
     const closing = new Set(ids)
     if (!closing.size) return
-    const closedNow = tabs.flatMap((t, index) => (closing.has(t.id) && t.url ? [{ url: t.url, title: t.title, index }] : []))
+    const closedNow = tabs.flatMap((t, index) => (closing.has(t.id) && t.url && !t.private ? [{ url: t.url, title: t.title, index }] : []))
     if (closedNow.length) setClosedTabs((list) => [...list, ...closedNow].slice(-25))
     const rest = tabs.filter((t) => !closing.has(t.id))
     if (!rest.length) return onClose()
@@ -548,6 +879,71 @@ export default function BrowserPanel({
   }
 
   const GROUP_COLORS = ['#3fd8ff', '#a78bfa', '#f472b6', '#34d399', '#fbbf24', '#f87171', '#60a5fa']
+  /** The group whose name is being edited in the tab strip. */
+  const [renamingGroup, setRenamingGroup] = useState<string | null>(null)
+
+  /** Puts tabs in a group: pinned tabs keep their place, the others join the group's tabs (or go to the end). */
+  const addTabsToGroup = (tabIds: string[], groupId: string): void => {
+    setTabs((list) => {
+      const marked = list.map((t) => (tabIds.includes(t.id) ? { ...t, groupId } : t))
+      const moving = marked.filter((t) => tabIds.includes(t.id) && !t.pinned)
+      if (!moving.length) return marked
+      const rest = marked.filter((t) => !moving.includes(t))
+      const last = rest.map((t) => t.groupId).lastIndexOf(groupId)
+      rest.splice(Math.max(rest.filter((t) => t.pinned).length, last >= 0 ? last + 1 : rest.length), 0, ...moving)
+      return rest
+    })
+  }
+  const createGroup = (tabIds: string[], name?: string, color?: string): TabGroup => {
+    const group: TabGroup = { id: newId(), name: name?.replace(/\s+/g, ' ').trim().slice(0, 40) || `Group ${groups.length + 1}`, color: color ?? GROUP_COLORS[groups.length % GROUP_COLORS.length] }
+    setGroups((list) => [...list, group])
+    addTabsToGroup(tabIds, group.id)
+    return group
+  }
+  const renameGroup = (groupId: string, name: string): void => {
+    const clean = name.replace(/\s+/g, ' ').trim().slice(0, 40)
+    if (clean) setGroups((list) => list.map((g) => (g.id === groupId ? { ...g, name: clean } : g)))
+  }
+  const setGroupCollapsed = (groupId: string, collapsed: boolean): void => setGroups((list) => list.map((g) => (g.id === groupId ? { ...g, collapsed } : g)))
+  /** Ungroups every tab in a group; the empty group then goes away. */
+  const deleteGroup = (groupId: string): void => {
+    setTabs((list) => list.map((t) => (t.groupId === groupId ? { ...t, groupId: undefined } : t)))
+    setGroups((list) => list.filter((g) => g.id !== groupId))
+  }
+  /** Moves a group's tabs together to a position among the other tabs. */
+  const moveGroup = (groupId: string, index: number): void => {
+    setTabs((list) => {
+      const block = list.filter((t) => t.groupId === groupId && !t.pinned)
+      if (!block.length) return list
+      const rest = list.filter((t) => !block.includes(t))
+      rest.splice(Math.max(rest.filter((t) => t.pinned).length, Math.min(index, rest.length)), 0, ...block)
+      return rest
+    })
+  }
+  /** Reloads a tab; a crashed tab starts over and a failed page is loaded again. */
+  const reloadTab = (tab: Tab, hard = false): boolean => {
+    if (tab.crashed) {
+      restartTab(tab.id)
+      return true
+    }
+    if (tab.error && tab.url) {
+      navigate(tab.url, tab.id)
+      return true
+    }
+    const webview = views.current.get(tab.id)
+    if (!webview) return false
+    if (hard) webview.reloadIgnoringCache()
+    else webview.reload()
+    return true
+  }
+  /** Mobile or desktop view for a tab (reloads it with the matching user agent). */
+  const setMobile = (tabId: string, mobile: boolean): void => {
+    patch(tabId, { mobile })
+    const webview = views.current.get(tabId)
+    if (!webview) return
+    webview.setUserAgent(mobile ? MOBILE_UA : DESKTOP_UA)
+    webview.reload()
+  }
 
   const tabAction = (id: string, action: TabMenuAction): void => {
     const tab = tabs.find((t) => t.id === id)
@@ -590,19 +986,13 @@ export default function BrowserPanel({
       case 'unsplit':
         setSplit(null)
         return
-      case 'new-group': {
-        const group: TabGroup = { id: newId(), name: `Group ${groups.length + 1}`, color: GROUP_COLORS[groups.length % GROUP_COLORS.length] }
-        setGroups((list) => [...list, group])
-        patch(id, { groupId: group.id })
+      case 'new-group':
+        createGroup([id])
         return
-      }
-      case 'group': {
-        patch(id, { groupId: action.groupId })
+      case 'group':
         // The tab joins the others in its group.
-        const last = tabs.map((t) => t.groupId).lastIndexOf(action.groupId)
-        if (last >= 0 && !tab.pinned) moveTab(id, Math.max(pinnedCount, last > index ? last : last + 1))
+        addTabsToGroup([id], action.groupId)
         return
-      }
       case 'ungroup':
         patch(id, { groupId: undefined })
         return
@@ -628,7 +1018,7 @@ export default function BrowserPanel({
         views.current.get(id)?.reload()
         return
       case 'duplicate': {
-        const copy: Tab = { ...createTab(tab.url), title: tab.title, favicon: tab.favicon, customTitle: tab.customTitle, customIcon: tab.customIcon, groupId: tab.groupId, pinned: tab.pinned, mobile: tab.mobile }
+        const copy: Tab = { ...createTab(tab.url), title: tab.title, favicon: tab.favicon, customTitle: tab.customTitle, customIcon: tab.customIcon, groupId: tab.groupId, pinned: tab.pinned, mobile: tab.mobile, private: tab.private }
         setTabs((list) => {
           const at = list.findIndex((t) => t.id === id)
           const next = [...list]
@@ -673,9 +1063,25 @@ export default function BrowserPanel({
     const [first, ...rest] = restorable
     setLastSession([])
     if (!first) return
-    if (active.url) openTab(first)
+    // Groups from last time come back with their pages.
+    const groupOf = new Map<string, TabGroup>()
+    const restoredGroups: TabGroup[] = []
+    for (const saved of lastSessionGroups()) {
+      const group: TabGroup = { id: newId(), name: saved.name, color: saved.color, collapsed: saved.collapsed }
+      const urls = saved.urls.filter((url) => restorable.includes(url) && !groupOf.has(url))
+      for (const url of urls) groupOf.set(url, group)
+      if (urls.length) restoredGroups.push(group)
+    }
+    if (restoredGroups.length) setGroups((list) => [...list, ...restoredGroups])
+    const grouped = (tab: Tab): Tab => (groupOf.has(tab.url) ? { ...tab, groupId: groupOf.get(tab.url)!.id } : tab)
+    if (active.url) addTab(first, {})
     else navigate(first)
-    for (const url of rest) openTab(url, false)
+    if (groupOf.has(first)) {
+      if (active.url) setTabs((list) => list.map((t, i) => (i === list.length - 1 && t.url === first ? grouped(t) : t)))
+      else patch(active.id, { groupId: groupOf.get(first)!.id })
+    }
+    const others = rest.map((url) => grouped(createTab(url)))
+    if (others.length) setTabs((list) => [...list, ...others])
   }
 
   const answerPermission = (allow: boolean): void => {
@@ -763,14 +1169,7 @@ export default function BrowserPanel({
     }
   }
 
-  const toggleMobile = (): void => {
-    const mobile = !active.mobile
-    patch(active.id, { mobile })
-    const webview = view()
-    if (!webview) return
-    webview.setUserAgent(mobile ? MOBILE_UA : DESKTOP_UA)
-    webview.reload()
-  }
+  const toggleMobile = (): void => setMobile(active.id, !active.mobile)
 
   const startResize = (e: React.PointerEvent<HTMLDivElement>): void => {
     e.preventDefault()
@@ -882,6 +1281,10 @@ export default function BrowserPanel({
     switch (event.action) {
       case 'new-tab':
         return openTab()
+      case 'new-private-tab':
+        openTab('', true, true)
+        requestAnimationFrame(focusUrlBar)
+        return
       case 'close-tab':
         return closeTab(active.id)
       case 'reopen-tab':
@@ -906,10 +1309,7 @@ export default function BrowserPanel({
         return
       case 'reload':
       case 'hard-reload':
-        if (active.crashed) return restartTab(active.id)
-        if (active.error && hasPage) return navigate(active.url)
-        if (event.action === 'reload') webview?.reload()
-        else webview?.reloadIgnoringCache()
+        if (hasPage) reloadTab(active, event.action === 'hard-reload')
         return
       case 'stop':
         if (active.loading) webview?.stop()
@@ -956,7 +1356,664 @@ export default function BrowserPanel({
   runShortcutRef.current = runShortcut
   useEffect(() => window.api.onBrowserShortcut((event) => runShortcutRef.current(event)), [])
 
-  const className = ['browser-panel', mode, hidden ? 'to-chat' : '', resizing ? 'resizing' : '', picking ? 'picking' : '', htmlFullscreen ? 'html-fullscreen' : ''].filter(Boolean).join(' ')
+  // ---------------------------------------------------------------- Browser Control Layer: this panel's capabilities
+  // Each one calls the same function the panel's own buttons, menus and shortcuts use, then checks the panel's real state.
+
+  const live = useRef({ tabs, activeId, groups, closedTabs, split, findOpen, findResult, library, mutedHosts })
+  live.current = { tabs, activeId, groups, closedTabs, split, findOpen, findResult, library, mutedHosts }
+  const liveTab = (id: string): Tab | undefined => live.current.tabs.find((t) => t.id === id)
+  const viewLoading = (id: string): boolean => {
+    try {
+      return views.current.get(id)?.isLoading() === true
+    } catch {
+      return false
+    }
+  }
+  /** The tab a command means: its tabId, the command's target (tab or page id), or the active tab. */
+  const tabFor = (params: Record<string, unknown>, target: ControlTarget | null): Tab | null => {
+    const id = typeof params.tabId === 'string' ? params.tabId : target?.tabId
+    if (id) return tabs.find((t) => t.id === id) ?? null
+    if (typeof target?.webContentsId === 'number') {
+      return (
+        tabs.find((t) => {
+          try {
+            return views.current.get(t.id)?.getWebContentsId() === target.webContentsId
+          } catch {
+            return false
+          }
+        }) ?? null
+      )
+    }
+    return active
+  }
+  const TAB_ID = str('Tab id from the browser state (default: the active tab).')
+  const NO_TAB = failure('not-found', 'There is no such tab. Read the browser state for the current tab ids.', true)
+  /** Waits for a tab's navigation to start and finish; resolves the tab as it ended up. */
+  const settleTab = async (id: string, before: { url: string }): Promise<Tab | undefined> => {
+    await waitUntil(() => {
+      const t = liveTab(id)
+      return !t || t.loading || viewLoading(id) || t.url !== before.url || Boolean(t.error)
+    }, 5000)
+    await waitUntil(() => {
+      const t = liveTab(id)
+      return !t || (!t.loading && !viewLoading(id))
+    }, 45_000)
+    return liveTab(id)
+  }
+  const loadOutcome = (tab: Tab | undefined, what: string) =>
+    !tab
+      ? failure('not-found', 'The tab closed.', false)
+      : tab.error
+        ? failure('failed', `${what}: the page couldn't be loaded (${tab.error}).`, true)
+        : verified(`${what}: ${tab.url} loaded${tab.title ? ` (“${tab.title}”)` : ''}.`, { tabId: tab.id, url: tab.url, title: tab.title })
+
+  const capabilities: WindowCapability[] = [
+    {
+      id: 'tabs.create',
+      domain: 'tabs',
+      name: 'Open a tab',
+      description: 'Opens a new tab: blank, or at an address or search text; in the foreground or background, private, pinned, at a position, in a group.',
+      params: { url: str('Address or search text (default: a blank tab).'), active: bool('Switch to it (default true).'), private: bool('A private tab.'), pinned: bool('Pinned.'), index: int('Position (0 = first).'), groupId: str('Add it to this group.') },
+      mutates: true,
+      run: async (p) => {
+        const input = typeof p.url === 'string' ? p.url.trim() : ''
+        const url = input ? (/^(view-source:https?:|chrome-extension:)/i.test(input) ? input : toUrl(input)) : ''
+        if (url && !/^(https?:|view-source:https?:|chrome-extension:)/i.test(url)) return failure('invalid-params', 'Only web pages can be opened in a tab.')
+        const tab = addTab(url, { activate: p.active !== false, private: p.private === true, index: typeof p.index === 'number' ? p.index : undefined, pinned: p.pinned === true })
+        if (typeof p.groupId === 'string') addTabsToGroup([tab.id], p.groupId)
+        const ok = await waitUntil(() => Boolean(liveTab(tab.id)) && (p.active === false || live.current.activeId === tab.id))
+        return ok ? verified(`Opened tab ${tab.id}${url ? ` at ${url}` : ''}.`, { tabId: tab.id, url }) : unverified('The tab did not appear.', { tabId: tab.id })
+      }
+    },
+    {
+      id: 'tabs.close',
+      domain: 'tabs',
+      name: 'Close a tab',
+      description: 'Closes a tab (closing the last tab closes the browser). Use browser state previousTabId for "the tab I was just using".',
+      params: { tabId: TAB_ID },
+      mutates: true,
+      run: async (p, { target }) => {
+        const tab = tabFor(p, target)
+        if (!tab) return NO_TAB
+        const last = tabs.length === 1
+        closeTabs([tab.id])
+        if (last) return verified('Closed the last tab, which closes the browser.', { tabId: tab.id, browserClosed: true })
+        const ok = await waitUntil(() => !liveTab(tab.id))
+        return ok ? verified(`Closed “${tab.customTitle || tab.title}”.`, { tabId: tab.id }) : unverified('The tab is still open.')
+      }
+    },
+    {
+      id: 'tabs.closeOthers',
+      domain: 'tabs',
+      name: 'Close other tabs',
+      description: 'Closes every unpinned tab except this one.',
+      params: { tabId: TAB_ID },
+      mutates: true,
+      confirmation: 'always',
+      run: async (p, { target }) => {
+        const tab = tabFor(p, target)
+        if (!tab) return NO_TAB
+        tabAction(tab.id, { type: 'close-others' })
+        const ok = await waitUntil(() => live.current.tabs.every((t) => t.id === tab.id || t.pinned))
+        return ok ? verified(`Only “${tab.title}” and pinned tabs remain.`) : unverified('Other tabs are still open.')
+      }
+    },
+    {
+      id: 'tabs.closeRight',
+      domain: 'tabs',
+      name: 'Close tabs to the right',
+      description: 'Closes the unpinned tabs to the right of this one.',
+      params: { tabId: TAB_ID },
+      mutates: true,
+      run: async (p, { target }) => {
+        const tab = tabFor(p, target)
+        if (!tab) return NO_TAB
+        const doomed = tabs.slice(tabs.indexOf(tab) + 1).filter((t) => !t.pinned).map((t) => t.id)
+        tabAction(tab.id, { type: 'close-right' })
+        const ok = await waitUntil(() => doomed.every((id) => !liveTab(id)))
+        return ok ? verified(`Closed ${doomed.length} tab${doomed.length === 1 ? '' : 's'}.`) : unverified('Some of those tabs are still open.')
+      }
+    },
+    {
+      id: 'tabs.reopen',
+      domain: 'tabs',
+      name: 'Reopen a closed tab',
+      description: 'Reopens a recently closed tab where it was (default: the most recently closed; see closedTabs in the browser state).',
+      params: { position: int('Position in closedTabs (default: the last one).') },
+      mutates: true,
+      run: async (p) => {
+        if (!closedTabs.length) return failure('not-found', 'No tabs were closed in this session.')
+        const position = typeof p.position === 'number' ? p.position : closedTabs.length - 1
+        const closed = closedTabs[position]
+        if (!closed) return failure('invalid-params', 'There is no closed tab at that position.')
+        const before = tabs.length
+        reopenTab(position)
+        const ok = await waitUntil(() => live.current.tabs.length > before)
+        const reopened = live.current.tabs.find((t) => t.url === closed.url)
+        return ok ? verified(`Reopened ${closed.url}.`, { tabId: reopened?.id, url: closed.url }) : unverified('The tab did not come back.')
+      }
+    },
+    {
+      id: 'tabs.activate',
+      domain: 'tabs',
+      name: 'Switch to a tab',
+      description: 'Makes a tab the active one.',
+      params: { tabId: str('The tab id.', true) },
+      mutates: true,
+      run: async (p) => {
+        const tab = tabs.find((t) => t.id === p.tabId)
+        if (!tab) return NO_TAB
+        focusTab(tab)
+        const ok = await waitUntil(() => live.current.activeId === tab.id)
+        return ok ? verified(`Switched to “${tab.customTitle || tab.title}”.`, { tabId: tab.id }) : unverified('The tab is not active.')
+      }
+    },
+    {
+      id: 'tabs.activatePrevious',
+      domain: 'tabs',
+      name: 'Switch to the previous tab',
+      description: 'Switches back to the tab that was active before the current one.',
+      params: {},
+      mutates: true,
+      run: async () => {
+        const tab = tabs.find((t) => t.id === previousTab.current)
+        if (!tab) return failure('not-found', 'There is no previously used tab that is still open.')
+        focusTab(tab)
+        const ok = await waitUntil(() => live.current.activeId === tab.id)
+        return ok ? verified(`Switched back to “${tab.customTitle || tab.title}”.`, { tabId: tab.id }) : unverified('The tab is not active.')
+      }
+    },
+    ...(['activate', 'close'] as const).map(
+      (verb): WindowCapability => ({
+        id: verb === 'activate' ? 'tabs.activateMatching' : 'tabs.closeMatching',
+        domain: 'tabs',
+        name: verb === 'activate' ? 'Switch to a tab by its page' : 'Close a tab by its page',
+        description: `${verb === 'activate' ? 'Switches to' : 'Closes'} the tab whose address or title contains some text (for workflows, where tab ids change between runs). When several tabs match, it says which and asks for an index${verb === 'close' ? ' (or all: true)' : ''}.`,
+        params: { urlContains: str('Text in the address.'), titleContains: str('Text in the title.'), index: int('Which match (0 = first), when several match.'), ...(verb === 'close' ? { all: bool('Close every match.') } : {}) },
+        mutates: true,
+        run: async (p) => {
+          const url = typeof p.urlContains === 'string' ? p.urlContains.toLowerCase() : ''
+          const title = typeof p.titleContains === 'string' ? p.titleContains.toLowerCase() : ''
+          if (!url && !title) return failure('invalid-params', 'Give urlContains or titleContains.')
+          const matches = tabs.filter((t) => (!url || t.url.toLowerCase().includes(url)) && (!title || (t.customTitle || t.title).toLowerCase().includes(title)))
+          if (!matches.length) return failure('not-found', `No tab matches. Open tabs: ${tabs.map((t) => t.url || 'blank').join(', ')}.`, true)
+          const everyMatch = verb === 'close' && p.all === true
+          if (matches.length > 1 && typeof p.index !== 'number' && !everyMatch) {
+            return failure('invalid-params', `${matches.length} tabs match: ${matches.map((t, i) => `${i}: ${t.customTitle || t.title} (${t.url})`).join('; ')}. Say which with index.`, false)
+          }
+          const chosen = everyMatch ? matches : [matches[Math.max(0, Math.min(Number(p.index ?? 0), matches.length - 1))]]
+          if (verb === 'activate') {
+            focusTab(chosen[0])
+            const ok = await waitUntil(() => live.current.activeId === chosen[0].id)
+            return ok ? verified(`Switched to “${chosen[0].customTitle || chosen[0].title}”.`, { tabId: chosen[0].id, url: chosen[0].url }) : unverified('The tab is not active.')
+          }
+          const closingLast = chosen.length === tabs.length
+          closeTabs(chosen.map((t) => t.id))
+          if (closingLast) return verified('Closed the last tabs, which closes the browser.', { closed: chosen.length })
+          const ok = await waitUntil(() => chosen.every((t) => !liveTab(t.id)))
+          return ok ? verified(`Closed ${chosen.length} tab${chosen.length === 1 ? '' : 's'}.`, { closed: chosen.length }) : unverified('A matching tab is still open.')
+        }
+      })
+    ),
+    {
+      id: 'tabs.move',
+      domain: 'tabs',
+      name: 'Move a tab',
+      description: 'Moves a tab to a position in the tab strip (0 = first).',
+      params: { tabId: TAB_ID, index: int('The new position.', true) },
+      mutates: true,
+      run: async (p, { target }) => {
+        const tab = tabFor(p, target)
+        if (!tab) return NO_TAB
+        const index = Math.max(0, Math.min(Number(p.index), tabs.length - 1))
+        moveTab(tab.id, index)
+        const ok = await waitUntil(() => live.current.tabs.findIndex((t) => t.id === tab.id) === index)
+        return ok ? verified(`Moved to position ${index}.`, { tabId: tab.id, index }) : unverified(`The tab is at position ${live.current.tabs.findIndex((t) => t.id === tab.id)}.`)
+      }
+    },
+    {
+      id: 'tabs.duplicate',
+      domain: 'tabs',
+      name: 'Duplicate a tab',
+      description: 'Opens a copy of a tab next to it.',
+      params: { tabId: TAB_ID },
+      mutates: true,
+      run: async (p, { target }) => {
+        const tab = tabFor(p, target)
+        if (!tab) return NO_TAB
+        const before = new Set(tabs.map((t) => t.id))
+        tabAction(tab.id, { type: 'duplicate' })
+        const ok = await waitUntil(() => live.current.tabs.some((t) => !before.has(t.id) && t.url === tab.url))
+        const copy = live.current.tabs.find((t) => !before.has(t.id))
+        return ok ? verified(`Duplicated as tab ${copy?.id}.`, { tabId: copy?.id }) : unverified('No copy appeared.')
+      }
+    },
+    {
+      id: 'tabs.pin',
+      domain: 'tabs',
+      name: 'Pin or unpin a tab',
+      description: 'Pins a tab to the front of the tab strip, or unpins it.',
+      params: { tabId: TAB_ID, pinned: bool('Pin (true) or unpin (false).', true) },
+      mutates: true,
+      run: async (p, { target }) => {
+        const tab = tabFor(p, target)
+        if (!tab) return NO_TAB
+        if (Boolean(tab.pinned) !== p.pinned) tabAction(tab.id, { type: 'pin' })
+        const ok = await waitUntil(() => Boolean(liveTab(tab.id)?.pinned) === p.pinned)
+        return ok ? verified(`The tab is ${p.pinned ? 'pinned' : 'unpinned'}.`) : unverified('The pin did not change.')
+      }
+    },
+    {
+      id: 'tabs.mute',
+      domain: 'tabs',
+      name: 'Mute or unmute a tab',
+      description: "Mutes or unmutes one tab's sound.",
+      params: { tabId: TAB_ID, muted: bool('Mute (true) or unmute (false).', true) },
+      mutates: true,
+      run: async (p, { target }) => {
+        const tab = tabFor(p, target)
+        if (!tab) return NO_TAB
+        patch(tab.id, { muted: p.muted === true })
+        const ok = await waitUntil(() => Boolean(liveTab(tab.id)?.muted) === p.muted)
+        return ok ? verified(`The tab is ${p.muted ? 'muted' : 'unmuted'}.`) : unverified('The tab sound did not change.')
+      }
+    },
+    {
+      id: 'tabs.muteSite',
+      domain: 'tabs',
+      name: 'Mute or unmute a site',
+      description: "Mutes (or unmutes) every tab on the tab's site, as “Mute site” does.",
+      params: { tabId: TAB_ID, muted: bool('Mute (true) or unmute (false).', true) },
+      mutates: true,
+      run: async (p, { target }) => {
+        const tab = tabFor(p, target)
+        const host = tab ? hostOf(tab.url) : ''
+        if (!tab || !host) return failure('invalid-params', 'That tab has no site open.')
+        if (mutedHosts.includes(host) !== p.muted) tabAction(tab.id, { type: 'mute' })
+        const ok = await waitUntil(() => live.current.mutedHosts.includes(host) === p.muted)
+        return ok ? verified(`${host} is ${p.muted ? 'muted' : 'unmuted'}.`) : unverified('The site sound did not change.')
+      }
+    },
+    {
+      id: 'tabs.rename',
+      domain: 'tabs',
+      name: 'Rename a tab',
+      description: 'Gives a tab your own name and emoji icon (empty values bring back the page’s own).',
+      params: { tabId: TAB_ID, title: str('The name.'), icon: str('An emoji.') },
+      mutates: true,
+      run: async (p, { target }) => {
+        const tab = tabFor(p, target)
+        if (!tab) return NO_TAB
+        const customTitle = typeof p.title === 'string' ? p.title.trim().slice(0, 80) || undefined : tab.customTitle
+        const customIcon = typeof p.icon === 'string' ? p.icon.trim().slice(0, 8) || undefined : tab.customIcon
+        patch(tab.id, { customTitle, customIcon })
+        const ok = await waitUntil(() => liveTab(tab.id)?.customTitle === customTitle && liveTab(tab.id)?.customIcon === customIcon)
+        return ok ? verified(`The tab shows “${customTitle ?? tab.title}”.`) : unverified('The name did not change.')
+      }
+    },
+    {
+      id: 'tabs.split',
+      domain: 'tabs',
+      name: 'Split view',
+      description: 'Shows a tab side by side with the active tab (or ends split view with on: false).',
+      params: { tabId: TAB_ID, on: bool('false ends split view.') },
+      mutates: true,
+      run: async (p, { target }) => {
+        if (p.on === false) {
+          setSplit(null)
+          const ok = await waitUntil(() => !live.current.split)
+          return ok ? verified('Split view ended.') : unverified('Split view is still on.')
+        }
+        const tab = tabFor(p, target)
+        if (!tab) return NO_TAB
+        tabAction(tab.id, { type: 'split' })
+        const ok = await waitUntil(() => Boolean(live.current.split && (live.current.split.left === tab.id || live.current.split.right === tab.id)))
+        return ok ? verified('The tabs are side by side.', live.current.split) : unverified('Split view did not start.')
+      }
+    },
+    {
+      id: 'tabs.mobileView',
+      domain: 'tabs',
+      name: 'Mobile or desktop view',
+      description: 'Shows a tab as a phone would (mobile user agent and width) or as desktop; reloads the page.',
+      params: { tabId: TAB_ID, mobile: bool('Mobile (true) or desktop (false).', true) },
+      mutates: true,
+      run: async (p, { target }) => {
+        const tab = tabFor(p, target)
+        if (!tab || !tab.url) return NO_TAB
+        setMobile(tab.id, p.mobile === true)
+        const ok = await waitUntil(() => liveTab(tab.id)?.mobile === p.mobile)
+        return ok ? verified(`The tab is in ${p.mobile ? 'mobile' : 'desktop'} view.`) : unverified('The view did not change.')
+      }
+    },
+    {
+      id: 'navigation.go',
+      domain: 'navigation',
+      name: 'Open an address or search',
+      description: 'Loads an address, or searches for text, in a tab, and waits until it has loaded or failed (redirects followed; see navigation.info for details).',
+      params: { url: str('An address or search text.', true), tabId: TAB_ID },
+      mutates: true,
+      run: async (p, { target }) => {
+        const tab = tabFor(p, target)
+        if (!tab) return NO_TAB
+        const input = String(p.url ?? '').trim()
+        if (!input) return failure('invalid-params', 'Give an address or search text.')
+        if (!tab.id) return NO_TAB
+        const before = { url: tab.url }
+        navigate(input, tab.id)
+        return loadOutcome(await settleTab(tab.id, before), 'Opened')
+      }
+    },
+    {
+      id: 'navigation.back',
+      domain: 'navigation',
+      name: 'Go back',
+      description: "Goes back in a tab's history and waits for the page.",
+      params: { tabId: TAB_ID },
+      mutates: true,
+      run: async (p, { target }) => {
+        const tab = tabFor(p, target)
+        if (!tab) return NO_TAB
+        const webview = views.current.get(tab.id)
+        if (!webview || !webview.canGoBack()) return failure('unavailable', 'There is no previous page in this tab.')
+        const before = { url: tab.url }
+        webview.goBack()
+        return loadOutcome(await settleTab(tab.id, before), 'Went back')
+      }
+    },
+    {
+      id: 'navigation.forward',
+      domain: 'navigation',
+      name: 'Go forward',
+      description: "Goes forward in a tab's history and waits for the page.",
+      params: { tabId: TAB_ID },
+      mutates: true,
+      run: async (p, { target }) => {
+        const tab = tabFor(p, target)
+        if (!tab) return NO_TAB
+        const webview = views.current.get(tab.id)
+        if (!webview || !webview.canGoForward()) return failure('unavailable', 'There is no next page in this tab.')
+        const before = { url: tab.url }
+        webview.goForward()
+        return loadOutcome(await settleTab(tab.id, before), 'Went forward')
+      }
+    },
+    {
+      id: 'navigation.reload',
+      domain: 'navigation',
+      name: 'Reload',
+      description: 'Reloads a tab (hard: bypassing the cache); a crashed tab starts over. Waits for the page.',
+      params: { tabId: TAB_ID, hard: bool('Bypass the cache.') },
+      mutates: true,
+      run: async (p, { target }) => {
+        const tab = tabFor(p, target)
+        if (!tab || !tab.url) return failure('unavailable', 'That tab has no page to reload.')
+        if (!reloadTab(tab, p.hard === true)) return failure('unavailable', 'The page is not ready yet.', true)
+        const started = await waitUntil(() => Boolean(liveTab(tab.id)?.loading) || viewLoading(tab.id), 3000)
+        if (!started) return unverified('The reload did not start.')
+        await waitUntil(() => !liveTab(tab.id)?.loading && !viewLoading(tab.id), 45_000)
+        return loadOutcome(liveTab(tab.id), p.hard ? 'Hard reloaded' : 'Reloaded')
+      }
+    },
+    {
+      id: 'navigation.stop',
+      domain: 'navigation',
+      name: 'Stop loading',
+      description: 'Stops a tab that is loading.',
+      params: { tabId: TAB_ID },
+      mutates: true,
+      run: async (p, { target }) => {
+        const tab = tabFor(p, target)
+        const webview = tab ? views.current.get(tab.id) : undefined
+        if (!tab || !webview) return NO_TAB
+        if (!tab.loading && !viewLoading(tab.id)) return verified('The tab was not loading.')
+        webview.stop()
+        const ok = await waitUntil(() => !liveTab(tab.id)?.loading && !viewLoading(tab.id), 3000)
+        return ok ? verified('Stopped loading.') : unverified('It is still loading.')
+      }
+    },
+    {
+      id: 'navigation.openExternal',
+      domain: 'navigation',
+      name: 'Open in the default browser',
+      description: "Opens a tab's page (or an address) in the system's default browser.",
+      params: { url: str('An address (default: the tab’s page).'), tabId: TAB_ID },
+      mutates: true,
+      run: async (p, { target }) => {
+        const url = typeof p.url === 'string' && p.url ? toUrl(p.url) : tabFor(p, target)?.url
+        if (!url || !isWebUrl(url)) return failure('invalid-params', 'There is no web page to open.')
+        await window.api.openExternal(url)
+        return verified(`Handed ${url} to the default browser.`)
+      }
+    },
+    {
+      id: 'groups.create',
+      domain: 'groups',
+      name: 'Create a tab group',
+      description: 'Puts tabs in a new group with a name and color.',
+      params: { tabIds: { type: 'array', description: 'Tab ids (default: the active tab).' }, name: str('Group name.'), color: str('A CSS color, e.g. #34d399.') },
+      mutates: true,
+      run: async (p) => {
+        const ids = (Array.isArray(p.tabIds) ? p.tabIds.map(String) : [active.id]).filter((id) => tabs.some((t) => t.id === id))
+        if (!ids.length) return NO_TAB
+        const group = createGroup(ids, typeof p.name === 'string' ? p.name : undefined, typeof p.color === 'string' ? p.color : undefined)
+        const ok = await waitUntil(() => live.current.groups.some((g) => g.id === group.id) && ids.every((id) => liveTab(id)?.groupId === group.id))
+        return ok ? verified(`Created “${group.name}” with ${ids.length} tab${ids.length === 1 ? '' : 's'}.`, { groupId: group.id }) : unverified('The group was not created.')
+      }
+    },
+    {
+      id: 'groups.rename',
+      domain: 'groups',
+      name: 'Rename a group',
+      description: 'Renames a tab group (and optionally recolors it).',
+      params: { groupId: str('The group id.', true), name: str('New name.', true), color: str('New color.') },
+      mutates: true,
+      run: async (p) => {
+        if (!groups.some((g) => g.id === p.groupId)) return failure('not-found', 'There is no such group.', true)
+        renameGroup(String(p.groupId), String(p.name))
+        if (typeof p.color === 'string') setGroups((list) => list.map((g) => (g.id === p.groupId ? { ...g, color: String(p.color) } : g)))
+        const want = String(p.name).replace(/\s+/g, ' ').trim().slice(0, 40)
+        const ok = await waitUntil(() => live.current.groups.find((g) => g.id === p.groupId)?.name === want)
+        return ok ? verified(`The group is called “${want}”.`) : unverified('The name did not change.')
+      }
+    },
+    {
+      id: 'groups.collapse',
+      domain: 'groups',
+      name: 'Collapse or expand a group',
+      description: 'Collapses a group to its name in the tab strip, or expands it.',
+      params: { groupId: str('The group id.', true), collapsed: bool('Collapse (true) or expand (false).', true) },
+      mutates: true,
+      run: async (p) => {
+        if (!groups.some((g) => g.id === p.groupId)) return failure('not-found', 'There is no such group.', true)
+        setGroupCollapsed(String(p.groupId), p.collapsed === true)
+        const ok = await waitUntil(() => Boolean(live.current.groups.find((g) => g.id === p.groupId)?.collapsed) === p.collapsed)
+        return ok ? verified(`The group is ${p.collapsed ? 'collapsed' : 'expanded'}.`) : unverified('The group did not change.')
+      }
+    },
+    {
+      id: 'groups.delete',
+      domain: 'groups',
+      name: 'Ungroup',
+      description: 'Removes a group; its tabs stay open, ungrouped.',
+      params: { groupId: str('The group id.', true) },
+      mutates: true,
+      run: async (p) => {
+        if (!groups.some((g) => g.id === p.groupId)) return failure('not-found', 'There is no such group.', true)
+        deleteGroup(String(p.groupId))
+        const ok = await waitUntil(() => !live.current.tabs.some((t) => t.groupId === p.groupId) && !live.current.groups.some((g) => g.id === p.groupId))
+        return ok ? verified('The group is gone; its tabs are still open.') : unverified('Tabs are still in the group.')
+      }
+    },
+    {
+      id: 'groups.addTab',
+      domain: 'groups',
+      name: 'Add a tab to a group',
+      description: 'Moves a tab into a group (next to its other tabs); also moves a tab from one group to another.',
+      params: { groupId: str('The group id.', true), tabId: TAB_ID },
+      mutates: true,
+      run: async (p, { target }) => {
+        const tab = tabFor(p, target)
+        if (!tab) return NO_TAB
+        if (!groups.some((g) => g.id === p.groupId)) return failure('not-found', 'There is no such group.', true)
+        addTabsToGroup([tab.id], String(p.groupId))
+        const ok = await waitUntil(() => liveTab(tab.id)?.groupId === p.groupId)
+        return ok ? verified('The tab is in the group.') : unverified('The tab is not in the group.')
+      }
+    },
+    {
+      id: 'groups.removeTab',
+      domain: 'groups',
+      name: 'Remove a tab from its group',
+      description: 'Takes a tab out of its group.',
+      params: { tabId: TAB_ID },
+      mutates: true,
+      run: async (p, { target }) => {
+        const tab = tabFor(p, target)
+        if (!tab) return NO_TAB
+        tabAction(tab.id, { type: 'ungroup' })
+        const ok = await waitUntil(() => !liveTab(tab.id)?.groupId)
+        return ok ? verified('The tab is no longer grouped.') : unverified('The tab is still grouped.')
+      }
+    },
+    {
+      id: 'groups.move',
+      domain: 'groups',
+      name: 'Move a group',
+      description: "Moves a group's tabs together to a position in the tab strip.",
+      params: { groupId: str('The group id.', true), index: int('Position among the other tabs.', true) },
+      mutates: true,
+      run: async (p) => {
+        if (!groups.some((g) => g.id === p.groupId)) return failure('not-found', 'There is no such group.', true)
+        const rest = tabs.filter((t) => !(t.groupId === p.groupId && !t.pinned))
+        const expected = Math.max(rest.filter((t) => t.pinned).length, Math.min(Number(p.index), rest.length))
+        moveGroup(String(p.groupId), Number(p.index))
+        const ok = await waitUntil(() => live.current.tabs.findIndex((t) => t.groupId === p.groupId) === expected)
+        const first = live.current.tabs.findIndex((t) => t.groupId === p.groupId)
+        return ok ? verified(`The group starts at position ${first}.`, { index: first }) : unverified(`The group is at position ${first}.`, { index: first })
+      }
+    },
+    {
+      id: 'find.open',
+      domain: 'find',
+      name: 'Find in page',
+      description: 'Opens the find bar and searches the active page for text; reports how many matches there are.',
+      params: { text: str('Text to find.') },
+      mutates: true,
+      requires: ['web-page'],
+      run: async (p) => {
+        if (!hasPage) return failure('unavailable', 'Open a page first.')
+        openFind()
+        if (typeof p.text === 'string' && p.text) {
+          setFindText(p.text)
+          find(p.text)
+          const found = await waitUntil(() => live.current.findResult !== null, 3000)
+          const r = live.current.findResult
+          return found ? verified(`${r?.total ?? 0} match${r?.total === 1 ? '' : 'es'} for “${p.text}”.`, { matches: r?.total ?? 0, activeMatch: r?.active ?? 0 }) : verified(`No matches for “${p.text}”.`, { matches: 0 })
+        }
+        const ok = await waitUntil(() => live.current.findOpen)
+        return ok ? verified('The find bar is open.') : unverified('The find bar did not open.')
+      }
+    },
+    ...(['next', 'previous'] as const).map(
+      (direction): WindowCapability => ({
+        id: `find.${direction}`,
+        domain: 'find',
+        name: direction === 'next' ? 'Next match' : 'Previous match',
+        description: `Moves to the ${direction} match of the current search.`,
+        params: {},
+        mutates: true,
+        requires: ['web-page'],
+        run: async () => {
+          if (!findOpen || !findText) return failure('unavailable', 'Nothing is being searched. Use find.open first.', true)
+          const before = findResult?.active
+          find(findText, direction === 'next', true)
+          await waitUntil(() => live.current.findResult?.active !== before || (live.current.findResult?.total ?? 0) <= 1, 2000)
+          const r = live.current.findResult
+          return verified(`Match ${r?.active ?? 0} of ${r?.total ?? 0}.`, { activeMatch: r?.active ?? 0, matches: r?.total ?? 0 })
+        }
+      })
+    ),
+    {
+      id: 'find.close',
+      domain: 'find',
+      name: 'Close find',
+      description: 'Closes the find bar and clears the highlights.',
+      params: {},
+      mutates: true,
+      run: async () => {
+        closeFind()
+        const ok = await waitUntil(() => !live.current.findOpen)
+        return ok ? verified('The find bar is closed.') : unverified('The find bar is still open.')
+      }
+    },
+    {
+      id: 'zoom.set',
+      domain: 'zoom',
+      name: 'Zoom',
+      description: 'Zooms the active page: in, out, reset, or to a factor (0.5-2). Zoom is remembered per site.',
+      params: { action: str('in, out or reset', false, { enum: ['in', 'out', 'reset'] }), factor: num('A zoom factor such as 1.25.') },
+      mutates: true,
+      requires: ['web-page'],
+      run: async (p) => {
+        if (!hasPage) return failure('unavailable', 'Open a page first.')
+        if (typeof p.factor === 'number') setZoom(Math.min(5, Math.max(0.25, p.factor)))
+        else if (p.action === 'in') stepZoom(1)
+        else if (p.action === 'out') stepZoom(-1)
+        else if (p.action === 'reset') setZoom(1)
+        else return failure('invalid-params', 'Give action (in, out, reset) or factor.')
+        const before = active.zoom
+        const expectChange = !(p.action === 'reset' && before === 1) && !(typeof p.factor === 'number' && p.factor === before)
+        await waitUntil(() => !expectChange || liveTab(active.id)?.zoom !== before, 1500)
+        const now = liveTab(active.id)?.zoom ?? before
+        return verified(`Zoom is ${Math.round(now * 100)}%.`, { zoom: now })
+      }
+    },
+    {
+      id: 'browser.showPanel',
+      domain: 'browser',
+      name: 'Show a browser panel',
+      description: 'Opens the History, Downloads, Bookmarks or Recently closed panel, or closes it (none).',
+      params: { panel: str('history, downloads, bookmarks, closed or none', true, { enum: ['history', 'downloads', 'bookmarks', 'closed', 'none'] }) },
+      mutates: true,
+      run: async (p) => {
+        const panel = p.panel === 'none' ? null : (p.panel as LibraryTab)
+        setMenuOpen(false)
+        setLibrary(panel)
+        const ok = await waitUntil(() => live.current.library === panel)
+        return ok ? verified(panel ? `The ${panel} panel is open.` : 'The panel is closed.') : unverified('The panel did not change.')
+      }
+    },
+    {
+      id: 'browser.restoreSession',
+      domain: 'browser',
+      name: 'Restore last session',
+      description: 'Reopens the pages (and tab groups) that were open when the browser was last used.',
+      params: {},
+      mutates: true,
+      run: async () => {
+        if (!restorable.length) return failure('not-found', 'There is nothing from last time to restore.')
+        const count = restorable.length
+        restoreSession()
+        const ok = await waitUntil(() => restorable.every((url) => live.current.tabs.some((t) => t.url && sameUrl(t.url, url))), 3000)
+        return ok ? verified(`Restored ${count} tab${count === 1 ? '' : 's'}.`) : unverified('Not every page came back.')
+      }
+    },
+    {
+      id: 'tabs.list',
+      domain: 'tabs',
+      name: 'List tabs',
+      description: 'Every tab with its id, position, address, title, loading state, pin, group, sound and zoom.',
+      params: {},
+      mutates: false,
+      run: () => readResult(tabs.map((t, index) => ({ id: t.id, index, url: t.url, title: t.customTitle || t.title, active: t.id === activeId, loading: t.loading, pinned: Boolean(t.pinned), private: Boolean(t.private), groupId: t.groupId ?? null, muted: Boolean(t.muted) || mutedHosts.includes(hostOf(t.url)), zoom: t.zoom, error: t.error ?? null })))
+    }
+  ]
+  useControlScope('browser-panel', capabilities)
+  useControlRendered()
+
+  const immersive = windowFullscreen && mode === 'full' && !hidden && !htmlFullscreen
+  const className = ['browser-panel', mode, hidden ? 'to-chat' : '', resizing ? 'resizing' : '', picking ? 'picking' : '', htmlFullscreen ? 'html-fullscreen' : '', immersive ? 'immersive' : ''].filter(Boolean).join(' ')
   const modeLabel = mode === 'full' ? 'Full page' : mode === 'dock' ? 'Docked' : `${windowSize.width} × ${windowSize.height}`
 
   return (
@@ -972,6 +2029,16 @@ export default function BrowserPanel({
       {mode === 'dock' && <div className="browser-resizer" onPointerDown={startResize} aria-hidden="true" />}
       {mode === 'window' && <div className="browser-window-grip" onPointerDown={startWindowResize} title="Drag to resize" aria-hidden="true" />}
 
+      {immersive && (
+        <div
+          className="browser-tab-reveal"
+          aria-hidden="true"
+          onMouseEnter={() => {
+            revealedAt.current = Date.now()
+            setTabsRevealed(true)
+          }}
+        />
+      )}
       <div className="browser-tabs-row">
         <button type="button" className="browser-back-chat" title="Back to the Orbis chat. The browser stays open" onClick={onBackToChat}>
           <ArrowLeft size={15} />
@@ -1003,17 +2070,64 @@ export default function BrowserPanel({
             const muted = mutedHosts.includes(hostOf(tab.url))
             return (
             <Fragment key={tab.id}>
-            {groupStarts && (
-              <span className="tab-group-chip" style={{ '--group-color': group.color } as React.CSSProperties} title={`Group: ${group.name}`}>
-                {group.name}
-              </span>
-            )}
+            {groupStarts &&
+              (renamingGroup === group.id ? (
+                <input
+                  className="tab-group-chip tab-group-rename"
+                  style={{ '--group-color': group.color } as React.CSSProperties}
+                  aria-label="Group name"
+                  defaultValue={group.name}
+                  autoFocus
+                  onFocus={(e) => e.currentTarget.select()}
+                  onBlur={(e) => {
+                    renameGroup(group.id, e.currentTarget.value)
+                    setRenamingGroup(null)
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') e.currentTarget.blur()
+                    else if (e.key === 'Escape') setRenamingGroup(null)
+                  }}
+                />
+              ) : (
+                <span
+                  className={`tab-group-chip${group.collapsed ? ' collapsed' : ''}`}
+                  role="button"
+                  tabIndex={0}
+                  aria-expanded={!group.collapsed}
+                  aria-label={`Group ${group.name}, ${group.collapsed ? 'collapsed' : 'expanded'}`}
+                  style={{ '--group-color': group.color } as React.CSSProperties}
+                  title={`${group.name}: click to ${group.collapsed ? 'expand' : 'collapse'}, double-click to rename`}
+                  onClick={() => setGroupCollapsed(group.id, !group.collapsed)}
+                  onDoubleClick={() => setRenamingGroup(group.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      setGroupCollapsed(group.id, !group.collapsed)
+                    } else if (e.key === 'F2') setRenamingGroup(group.id)
+                  }}
+                >
+                  {group.name}
+                  <button
+                    type="button"
+                    className="tab-group-ungroup"
+                    aria-label={`Ungroup ${group.name}`}
+                    title="Ungroup"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      deleteGroup(group.id)
+                    }}
+                  >
+                    <X size={10} />
+                  </button>
+                </span>
+              ))}
+            {!(group?.collapsed && tab.id !== active.id) && (
             <div
               role="tab"
               aria-selected={tab.id === active.id}
               aria-label={`${name}${tab.pinned ? ', pinned' : ''}${group ? `, in ${group.name}` : ''}${muted ? ', muted' : tab.audible ? ', playing sound' : ''}`}
               tabIndex={tab.id === active.id ? 0 : -1}
-              className={`browser-tab${tab.id === active.id ? ' active' : ''}${tab.pinned ? ' pinned' : ''}${group ? ' grouped' : ''}${split && (split.left === tab.id || split.right === tab.id) ? ' split' : ''}`}
+              className={`browser-tab${tab.id === active.id ? ' active' : ''}${tab.pinned ? ' pinned' : ''}${group ? ' grouped' : ''}${tab.private ? ' private' : ''}${split && (split.left === tab.id || split.right === tab.id) ? ' split' : ''}`}
               style={group ? ({ '--group-color': group.color } as React.CSSProperties) : undefined}
               title={name}
               draggable
@@ -1078,6 +2192,7 @@ export default function BrowserPanel({
                 <Globe size={14} className="tab-icon" />
               )}
               <span className="truncate">{name}</span>
+              {tab.private && !tab.pinned && <HatGlasses size={12} className="tab-private-icon" aria-label="Private tab" />}
               {(muted || tab.audible) && !tab.pinned && (
                 <span className="tab-audio" title={muted ? 'Site muted' : 'Playing sound'}>
                   {muted ? <VolumeX size={12} /> : <Volume2 size={12} />}
@@ -1095,6 +2210,7 @@ export default function BrowserPanel({
                 <X size={12} />
               </button>
             </div>
+            )}
             </Fragment>
             )
           })}
@@ -1122,6 +2238,7 @@ export default function BrowserPanel({
         )}
 
         <div className="browser-window-actions">
+          <ExtensionsToolbar requestedPopup={extensionPopup} onPopupShown={() => setExtensionPopup(null)} onOpenTab={(url) => openTab(url)} onNotify={onNotify} />
           <span className="browser-mode-badge" role="status" title="How the browser is shown now. Change the size next to the URL bar">
             {modeLabel}
           </span>
@@ -1402,7 +2519,7 @@ export default function BrowserPanel({
                   tab={tab}
                   active={tab.id === active.id}
                   split={split?.left === tab.id ? 'left' : split?.right === tab.id ? 'right' : undefined}
-                  muted={mutedHosts.includes(hostOf(tab.url))}
+                  muted={Boolean(tab.muted) || mutedHosts.includes(hostOf(tab.url))}
                   onActivate={setActiveId}
                   onRegister={registerView}
                   onUpdate={patch}
@@ -1412,6 +2529,7 @@ export default function BrowserPanel({
                 />
               )
           )}
+        <ExtensionPrompts />
         {split && (
           <div className="browser-split-divider">
             <button type="button" className="browser-split-close" aria-label="Close split view" title="Close split view" onClick={() => setSplit(null)}>
@@ -1464,10 +2582,17 @@ export default function BrowserPanel({
         {!hasPage && (
           <div className="browser-newtab">
             <OrbisMark size={40} />
+            {active.private && (
+              <p className="browser-private-note">
+                <HatGlasses size={16} aria-hidden="true" />
+                You’re in a private tab. Pages you visit aren’t saved to history, and cookies and site data are deleted when you close your last private tab. Downloads and bookmarks you make are kept.
+              </p>
+            )}
             <button type="button" className="browser-newtab-hint" onClick={focusUrlBar}>
               <Search size={15} />
               Type a URL or search in the bar above
             </button>
+            <ShortcutsGrid onOpen={(url) => navigate(url)} />
             {restorable.length > 0 && tabs.length === 1 && (
               <button type="button" className="browser-retry browser-restore" onClick={restoreSession} title={restorable.join('\n')}>
                 <RotateCcw size={13} />
@@ -1483,7 +2608,20 @@ export default function BrowserPanel({
             </div>
           </div>
         )}
-        {hasPage && active.error && (
+        {/* One offline page per tab, so each keeps its own game; only the shown tab's plays. */}
+        {tabs
+          .filter((t) => t.offline)
+          .map((t) => {
+            const failure = classifyLoadFailure(t.offline!.code)
+            return (
+              <div key={`offline-${t.id}`} className="browser-offline" hidden={t.id !== activeId}>
+                <Suspense fallback={null}>
+                  <OfflineGames url={t.offline!.url} kind={failure.kind} reason={failure.reason} active={t.id === activeId} retrying={t.loading} onRetry={() => navigate(t.offline!.url, t.id)} />
+                </Suspense>
+              </div>
+            )
+          })}
+        {hasPage && active.error && !active.offline && (
           <div className="browser-error">
             <Globe size={28} />
             <b>{active.crashed ? 'This tab crashed' : "This page can't be reached"}</b>
@@ -1575,7 +2713,7 @@ function TabView({ tab, active, split, muted, onActivate, onRegister, onUpdate, 
       [
         'did-navigate',
         () => {
-          onUpdate(id, { url: webview.getURL(), error: undefined, ...history() })
+          onUpdate(id, { url: webview.getURL(), error: undefined, offline: undefined, ...history() })
           onNavigatedRef.current(id, webview.getURL())
         }
       ],
@@ -1599,7 +2737,13 @@ function TabView({ tab, active, split, muted, onActivate, onRegister, onUpdate, 
           const event = e as Event & { errorCode: number; errorDescription: string; isMainFrame: boolean; validatedURL: string }
           // -3 is an aborted load, e.g. the user navigated away before it finished.
           if (event.isMainFrame && event.errorCode !== -3) {
-            onUpdate(id, { loading: false, url: event.validatedURL || webview.getURL(), error: `${event.errorDescription || 'The page failed to load'} (${event.errorCode})` })
+            const failedUrl = event.validatedURL || webview.getURL()
+            onUpdate(id, {
+              loading: false,
+              url: failedUrl,
+              error: `${event.errorDescription || 'The page failed to load'} (${event.errorCode})`,
+              offline: classifyLoadFailure(event.errorCode).offline ? { code: event.errorCode, url: failedUrl } : undefined
+            })
           }
         }
       ],
@@ -1616,7 +2760,7 @@ function TabView({ tab, active, split, muted, onActivate, onRegister, onUpdate, 
     <webview
       ref={ref as React.Ref<HTMLWebViewElement>}
       src={src}
-      partition="persist:browser"
+      partition={tab.private ? PRIVATE_PARTITION : 'persist:browser'}
       useragent={tab.mobile ? MOBILE_UA : DESKTOP_UA}
       className={`browser-view${active ? ' active' : ''}${split ? ` split-${split}` : ''}${tab.mobile && !split ? ' mobile' : ''}`}
       {...POPUPS}

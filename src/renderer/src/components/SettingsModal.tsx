@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import type { Settings, SettingsUpdate, Theme } from '../../../shared/types'
 import { MODELS } from '../../../shared/models'
 import AccountSection from './AccountSection'
+
+const OfflineGamesSettings = lazy(() => import('./OfflineGamesSettings'))
 
 interface Props {
   settings: Settings
@@ -124,6 +126,24 @@ export default function SettingsModal({ settings, onUpdate, onClose }: Props): R
               <p>Suggest from your browsing history, recent searches, bookmarks and Orion research, and learn which suggestions you pick. Stays on this device.</p>
             </div>
             <Toggle checked={settings.personalizedSuggestions} onChange={(v) => void onUpdate({ personalizedSuggestions: v })} />
+          </section>
+
+          <section className="setting row">
+            <div className="setting-label">
+              <h3>Open browser on launch</h3>
+              <p>Start Orbis in its browser, at your browser size, instead of the chat. Use Chat to go back to your conversations.</p>
+            </div>
+            <Toggle checked={settings.openBrowserOnLaunch} onChange={(v) => void onUpdate({ openBrowserOnLaunch: v })} />
+          </section>
+
+          <section className="setting">
+            <div className="setting-label">
+              <h3>Offline games</h3>
+              <p>What the browser shows when a page can't load because of the network, and how the games play. Scores and saved games stay on this device.</p>
+            </div>
+            <Suspense fallback={null}>
+              <OfflineGamesSettings />
+            </Suspense>
           </section>
 
           <section className="setting row">

@@ -23,7 +23,8 @@ const DEFAULTS: Omit<Settings, 'hasApiKey'> = {
   effects: true,
   welcomeCompleted: false,
   searchSuggestions: true,
-  personalizedSuggestions: true
+  personalizedSuggestions: true,
+  openBrowserOnLaunch: false
 }
 
 const THEMES: Theme[] = ['system', 'light', 'dark']
@@ -62,6 +63,7 @@ export class Store {
     if (typeof update.welcomeCompleted === 'boolean') next.welcomeCompleted = update.welcomeCompleted
     if (typeof update.searchSuggestions === 'boolean') next.searchSuggestions = update.searchSuggestions
     if (typeof update.personalizedSuggestions === 'boolean') next.personalizedSuggestions = update.personalizedSuggestions
+    if (typeof update.openBrowserOnLaunch === 'boolean') next.openBrowserOnLaunch = update.openBrowserOnLaunch
 
     if (typeof update.apiKey === 'string') {
       const key = update.apiKey.trim()

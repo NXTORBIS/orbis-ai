@@ -354,7 +354,7 @@ export function buildSuggestions(input: string, sources: OmniSources, limit = 8,
   })
   sources.orion.forEach((o, i) => {
     const key = `q:${queryKey(o)}`
-    add({ id: key, kind: 'orion', text: o, detail: 'Predicted by Orion', query: o, score: 390 - i * 12 })
+    add({ id: key, kind: 'orion', text: o, query: o, score: 390 - i * 12 })
   })
 
   if (!isAddress(text)) {

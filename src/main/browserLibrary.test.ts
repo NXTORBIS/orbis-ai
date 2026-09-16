@@ -13,6 +13,43 @@ async function library(): Promise<{ lib: BrowserLibrary; dir: string; clock: { t
   return { lib, dir, clock, done: () => rm(dir, { recursive: true, force: true }) }
 }
 
+test('new-tab shortcuts are validated, editable, removable, keep their fetched icon and survive a restart', async () => {
+  const { lib, dir, done } = await library()
+  try {
+    assert.equal(lib.addShortcut('Bad', 'javascript:alert(1)'), null)
+    assert.equal(lib.addShortcut('', 'not a site'), null)
+    const gh = lib.addShortcut('  GitHub  ', 'github.com')!
+    const yt = lib.addShortcut('', 'https://www.youtube.com/feed')!
+    assert.deepEqual([gh.name, gh.url, yt.name, yt.url], ['GitHub', 'https://github.com/', 'youtube.com', 'https://www.youtube.com/feed'])
+    assert.equal(gh.icon, undefined, 'no icon until it is fetched')
+
+    const png = 'data:image/png;base64,iVBORw0KGgo='
+    lib.setShortcutIcon(gh.id, gh.url, png)
+    lib.setShortcutIcon(yt.id, yt.url, null)
+    lib.setShortcutIcon(yt.id, 'https://stale.example/', png)
+    lib.setShortcutIcon(gh.id, gh.url, 'data:text/html;base64,PGgxPg==')
+    assert.equal(lib.shortcut(gh.id)?.icon, png, 'an icon that is not an image is ignored')
+    assert.equal(lib.shortcut(yt.id)?.icon, null, 'an icon fetched for an old address is ignored')
+
+    const renamed = lib.updateShortcut(gh.id, 'Code', 'github.com')!
+    assert.equal(renamed.icon, png, 'renaming keeps the icon')
+    const moved = lib.updateShortcut(gh.id, 'Code', 'gitlab.com')!
+    assert.equal(moved.icon, undefined, 'a new address drops the old icon')
+    assert.equal(lib.updateShortcut(gh.id, 'x', 'ftp://nope'), null)
+
+    lib.removeShortcut(yt.id)
+    await lib.flush()
+    const again = new BrowserLibrary(dir)
+    await again.load()
+    assert.deepEqual(again.snapshot().shortcuts.map((s) => [s.name, s.url]), [['Code', 'https://gitlab.com/']])
+
+    for (let i = 0; i < 40; i++) again.addShortcut(`S${i}`, `site${i}.example`)
+    assert.equal(again.snapshot().shortcuts.length, 24, 'the page holds at most 24 shortcuts')
+  } finally {
+    await done()
+  }
+})
+
 test('address-bar searches are remembered, counted, removable, and cleared with what was learned', async () => {
   const { lib, clock, done } = await library()
   try {
@@ -114,7 +151,7 @@ test('a damaged library file starts empty instead of breaking the browser', asyn
     await writeFile(join(dir, 'browser-library.json'), '{not json')
     const lib = new BrowserLibrary(dir)
     await lib.load()
-    assert.deepEqual(lib.snapshot(), { history: [], bookmarks: [], downloads: [], permissions: {}, searches: [], picks: {} })
+    assert.deepEqual(lib.snapshot(), { history: [], bookmarks: [], downloads: [], permissions: {}, searches: [], picks: {}, shortcuts: [] })
     lib.visit('https://a.example/', 'A')
     await lib.flush()
     assert.match(await readFile(join(dir, 'browser-library.json'), 'utf8'), /a\.example/)

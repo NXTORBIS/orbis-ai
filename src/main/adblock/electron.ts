@@ -105,8 +105,37 @@ export class OrbisAdBlock {
     await writeFile(join(this.o.dataDir, 'settings.json'), JSON.stringify(this.core.settings, null, 2))
   }
 
+  /** Sessions ad blocking applies to: the browser's own, plus the in-memory session of private tabs. */
+  private readonly sessions = new Set<Session>()
+
+  /** Blocks ads in another browser session too (private tabs), with the same lists, settings and exceptions. */
+  attachSession(session: Session): void {
+    if (this.sessions.has(session)) return
+    this.sessions.add(session)
+    this.hookSession(session)
+  }
+
   private wireSession(): void {
-    const { session } = this.o
+    this.sessions.add(this.o.session)
+    this.hookSession(this.o.session)
+    // The in-page script asks for cosmetic filters on load and again as new elements appear.
+    ipcMain.handle('@ghostery/adblocker/inject-cosmetic-filters', async (event, url: unknown, msg?: { classes?: string[]; hrefs?: string[]; ids?: string[] }) => {
+      if (!this.sessions.has(event.sender.session) || typeof url !== 'string') return
+      const { styles, scripts } = this.core.cosmetics(url, msg, event.sender.id)
+      const frame = event.senderFrame
+      // Scriptlets run once, in the frame that asked. Running them again (or in the top page on a subframe's behalf)
+      // redeclares their helpers and breaks sites such as YouTube.
+      const key = frame ? `${frame.processId}:${frame.routingId}:${url.split('#')[0]}` : ''
+      const fresh = frame ? scripts.filter((script) => this.markScriptlet(key, script)) : []
+      debug('cosmetics', event.sender.id, url.slice(0, 80), msg ? `update(${msg.classes?.length ?? 0} classes)` : 'initial', `css=${styles.join('').length}`, `scripts=${scripts.length}`, `run=${fresh.length}`)
+      for (const css of styles) void event.sender.insertCSS(css, { cssOrigin: 'user' }).catch(() => undefined)
+      for (const script of fresh) void frame!.executeJavaScript(isolateScriptlet(script), true).catch(() => undefined)
+    })
+    ipcMain.handle('@ghostery/adblocker/is-mutation-observer-enabled', (event) => this.sessions.has(event.sender.session) && this.core.settings.enabled)
+  }
+
+  /** Network blocking, CSP additions and the in-page cosmetic script for one session. */
+  private hookSession(session: Session): void {
     const preload = createRequire(join(this.o.appPath, 'package.json')).resolve('@ghostery/adblocker-electron-preload')
     session.registerPreloadScript({ type: 'frame', filePath: preload })
     session.registerPreloadScript({ type: 'frame', filePath: join(__dirname, '../preload/adblockFrame.js') })
@@ -136,20 +165,6 @@ export class OrbisAdBlock {
         callback({})
       }
     })
-    // The in-page script (registered above) asks for cosmetic filters on load and again as new elements appear.
-    ipcMain.handle('@ghostery/adblocker/inject-cosmetic-filters', async (event, url: unknown, msg?: { classes?: string[]; hrefs?: string[]; ids?: string[] }) => {
-      if (event.sender.session !== session || typeof url !== 'string') return
-      const { styles, scripts } = this.core.cosmetics(url, msg, event.sender.id)
-      const frame = event.senderFrame
-      // Scriptlets run once, in the frame that asked. Running them again (or in the top page on a subframe's behalf)
-      // redeclares their helpers and breaks sites such as YouTube.
-      const key = frame ? `${frame.processId}:${frame.routingId}:${url.split('#')[0]}` : ''
-      const fresh = frame ? scripts.filter((script) => this.markScriptlet(key, script)) : []
-      debug('cosmetics', event.sender.id, url.slice(0, 80), msg ? `update(${msg.classes?.length ?? 0} classes)` : 'initial', `css=${styles.join('').length}`, `scripts=${scripts.length}`, `run=${fresh.length}`)
-      for (const css of styles) void event.sender.insertCSS(css, { cssOrigin: 'user' }).catch(() => undefined)
-      for (const script of fresh) void frame!.executeJavaScript(isolateScriptlet(script), true).catch(() => undefined)
-    })
-    ipcMain.handle('@ghostery/adblocker/is-mutation-observer-enabled', (event) => event.sender.session === session && this.core.settings.enabled)
   }
 
   private async loadEngines(): Promise<void> {
@@ -299,7 +314,7 @@ export class OrbisAdBlock {
     if (!stronger) return
     // Browser tabs also drop their in-memory resource cache (see preload/adblockFrame.ts); nothing is reloaded.
     for (const tab of webContents.getAllWebContents()) {
-      if (!tab.isDestroyed() && tab.session === this.o.session) tab.send('orbis-adblock:clear-memory-cache')
+      if (!tab.isDestroyed() && this.sessions.has(tab.session)) tab.send('orbis-adblock:clear-memory-cache')
     }
     // Waited for, so a page loaded right after the change is filtered rather than served from the cache.
     await this.o.session.clearCache().catch(() => undefined)

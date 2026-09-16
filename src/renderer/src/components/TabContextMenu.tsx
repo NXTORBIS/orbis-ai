@@ -11,6 +11,8 @@ export interface TabGroup {
   id: string
   name: string
   color: string
+  /** Only the group's name shows in the tab strip (and its active tab, if it has it). */
+  collapsed?: boolean
 }
 
 export type TabMenuAction =
@@ -34,7 +36,7 @@ export type TabMenuAction =
 interface Props {
   x: number
   y: number
-  tab: { url: string; pinned?: boolean; groupId?: string }
+  tab: { url: string; pinned?: boolean; groupId?: string; private?: boolean }
   groups: TabGroup[]
   inSplit: boolean
   bookmarked: boolean
@@ -137,7 +139,7 @@ export default function TabContextMenu({ x, y, tab, groups, inSplit, bookmarked,
           <button type="button" role="menuitem" className="menu-item" disabled={isLast} onClick={() => act({ type: 'move', to: 'end' })}>
             End of tab strip
           </button>
-          <button type="button" role="menuitem" className="menu-item" disabled={!web} onClick={() => act({ type: 'move', to: 'window' })}>
+          <button type="button" role="menuitem" className="menu-item" disabled={!web || tab.private} title={tab.private ? 'Private tabs stay in this window' : undefined} onClick={() => act({ type: 'move', to: 'window' })}>
             New window
           </button>
         </>

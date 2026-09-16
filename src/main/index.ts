@@ -35,6 +35,15 @@ import { completeDraft, generateTitle, predictQueries, suggestFollowups } from '
 import { parseWebSuggestions } from '../shared/omnibox'
 import { AuthManager } from './auth'
 import { configuredProvider, protectedSessionFile } from './authSecrets'
+import { fetchFavicon } from './favicon'
+import { ExtensionsManager } from './extensions/manager'
+import type { ReportedTab, WindowRequest } from './extensions/bridge'
+import { setupBrowserControl } from './browserControl/setup'
+import { WorkflowStore } from './workflows/store'
+import { WorkflowRecorder } from './workflows/recorder'
+import { WorkflowEngine } from './workflows/engine'
+import { registerWorkflowIpc } from './workflows/ipc'
+import { askOrion, draftWorkflow } from './workflows/orion'
 import { Store } from './store'
 
 // Baked in at build time from GROQ_API_KEY in .env.local (see electron.vite.config.ts).
@@ -105,6 +114,12 @@ let adblock: OrbisAdBlock | null = null
 /** Browser shortcuts, context menu, history, bookmarks, downloads and permissions; set up when the app is ready. */
 let browser: BrowserIntegration | null = null
 let browserLibrary: BrowserLibrary | null = null
+/** The Orbis Browser Control Layer: every browser capability, for the window, Orion and automations. */
+let browserControl: ReturnType<typeof setupBrowserControl> | null = null
+/** Pop-out browser windows that are open. */
+const popouts = new Set<BrowserWindow>()
+/** Records workflows from what the user does (only while recording). */
+let workflowRecorder: WorkflowRecorder | null = null
 
 /** Instructions the user adds to a running automation, per chat request. */
 const automationInstructions = new Map<string, string[]>()
@@ -249,8 +264,8 @@ function isHttpUrl(url: string): boolean {
 }
 
 /** A separate Orbis browser window for a page: same session, so sign-ins carry over; no preload or Node access. */
-function popOutBrowser(url: string): boolean {
-  if (typeof url !== 'string' || !isHttpUrl(url)) return false
+function popOutBrowser(url: string): BrowserWindow | null {
+  if (typeof url !== 'string' || !isHttpUrl(url)) return null
   const popout = new BrowserWindow({
     width: 1100,
     height: 800,
@@ -265,7 +280,18 @@ function popOutBrowser(url: string): boolean {
     return { action: 'deny' }
   })
   void popout.loadURL(url)
-  return true
+  popouts.add(popout)
+  popout.once('closed', () => popouts.delete(popout))
+  return popout
+}
+
+/** Clears browsing data: cookies, storage and cache, history, address-bar searches and site permissions (bookmarks and downloads stay). */
+async function clearBrowsingData(): Promise<void> {
+  const browserSession = session.fromPartition('persist:browser')
+  await Promise.all([browserSession.clearStorageData(), browserSession.clearCache()])
+  browserLibrary?.clearHistory()
+  browserLibrary?.clearSearches()
+  browserLibrary?.forgetPermissions()
 }
 
 function createWindow(): BrowserWindow {
@@ -295,6 +321,9 @@ function createWindow(): BrowserWindow {
   })
 
   win.once('ready-to-show', () => win.show())
+  // The window's real fullscreen state, however it changes (F11, Esc, the OS).
+  win.on('enter-full-screen', () => win.webContents.send('window:fullscreen-changed', true))
+  win.on('leave-full-screen', () => win.webContents.send('window:fullscreen-changed', false))
 
   // The in-app browser gets no preload or Node access, and only loads web URLs.
   win.webContents.on('will-attach-webview', (event, webPreferences, params) => {
@@ -302,14 +331,19 @@ function createWindow(): BrowserWindow {
     webPreferences.nodeIntegration = false
     webPreferences.contextIsolation = true
     webPreferences.sandbox = true
-    // Web pages, and "view page source" of a web page.
-    if (!isHttpUrl(params.src) && !/^view-source:https?:\/\//i.test(params.src)) event.preventDefault()
+    // Only the browser's own sessions: the saved one, and the in-memory one private tabs share.
+    if (params.partition !== 'persist:browser' && params.partition !== 'orbis-private') event.preventDefault()
+    // Web pages, "view page source" of a web page, and pages of installed extensions (their options pages and popups).
+    const extensionPage = params.partition === 'persist:browser' && /^chrome-extension:\/\/[a-p]{32}\//.test(params.src)
+    if (!isHttpUrl(params.src) && !/^view-source:https?:\/\//i.test(params.src) && !extensionPage) event.preventDefault()
   })
   browser?.attachWindow(win)
   // Links that would open a new window open as a tab in the in-app browser instead (Ctrl/middle-click in the background,
   // Shift+click in a new window); ad popups and ad redirects are stopped by ad blocking.
   win.webContents.on('did-attach-webview', (_event, contents) => {
     browser?.attachGuest(contents)
+    browserControl?.trackGuest(contents)
+    workflowRecorder?.attach(contents)
     const openTab = (url: string, details: { disposition: string; features: string }): void => {
       if (!isHttpUrl(url) || win.webContents.isDestroyed()) return
       if (browser) browser.openFromPage(url, details)
@@ -441,6 +475,8 @@ function registerIpc(): void {
               signal: controller.signal,
               emit,
               getTarget: () => requestBrowserTarget(request.requestId, sender, emit, controller.signal),
+              control: browserControl?.control,
+              windowControl: browserControl?.windowControl,
               confirm: (confirmation) => requestBrowserConfirmation(request.requestId, confirmation, emit, controller.signal)
             })
           } finally {
@@ -617,7 +653,8 @@ function registerIpc(): void {
     return predictQueries(input, GROQ_API_KEYS, (url, init) => net.fetch(url, init))
   })
 
-  ipcMain.handle('browser:popout', (_event, url: string) => popOutBrowser(url))
+  ipcMain.handle('browser:popout', (_event, url: string) => Boolean(popOutBrowser(url)))
+  ipcMain.handle('window:is-fullscreen', (event) => BrowserWindow.fromWebContents(event.sender)?.isFullScreen() ?? false)
 
   // Account sign-in through the system browser (never an Orbis web view). Only state reaches windows, never codes or tokens.
   const auth = new AuthManager({
@@ -652,14 +689,38 @@ function registerIpc(): void {
   ipcMain.handle('adblock:update', () => adblock?.updateFilters() ?? null)
   ipcMain.handle('adblock:rollback', () => adblock?.rollback() ?? null)
 
-  ipcMain.handle('browser:clear-data', async () => {
-    const browserSession = session.fromPartition('persist:browser')
-    await Promise.all([browserSession.clearStorageData(), browserSession.clearCache()])
-    // Browsing data includes the history and the permissions sites were given; bookmarks and downloads stay.
-    browserLibrary?.clearHistory()
-    browserLibrary?.clearSearches()
-    browserLibrary?.forgetPermissions()
+  // New-tab shortcuts. The site's real icon is fetched in the background and saved with the shortcut.
+  const loadShortcutIcon = (id: string): void => {
+    const shortcut = browserLibrary?.shortcut(id)
+    if (!shortcut) return
+    const { url } = shortcut
+    void fetchFavicon(url, (u, init) => net.fetch(u, init)).then((icon) => browserLibrary?.setShortcutIcon(id, url, icon))
+  }
+  ipcMain.handle('shortcuts:add', (_event, name: unknown, url: unknown) => {
+    if (!browserLibrary || typeof url !== 'string') return null
+    const added = browserLibrary.addShortcut(typeof name === 'string' ? name : '', url)
+    if (added) loadShortcutIcon(added.id)
+    return added
   })
+  ipcMain.handle('shortcuts:update', (_event, id: unknown, name: unknown, url: unknown) => {
+    if (!browserLibrary || typeof id !== 'string' || typeof url !== 'string') return null
+    const updated = browserLibrary.updateShortcut(id, typeof name === 'string' ? name : '', url)
+    if (updated && updated.icon === undefined) loadShortcutIcon(id)
+    return updated
+  })
+  ipcMain.handle('shortcuts:remove', (_event, id: unknown) => {
+    if (typeof id === 'string') browserLibrary?.removeShortcut(id)
+  })
+  ipcMain.handle('shortcuts:refresh-icon', (_event, id: unknown) => {
+    if (typeof id === 'string') loadShortcutIcon(id)
+  })
+
+  ipcMain.handle('browser:clear-private', async () => {
+    const privateSession = session.fromPartition('orbis-private')
+    await Promise.all([privateSession.clearStorageData(), privateSession.clearCache(), privateSession.clearAuthCache()])
+  })
+
+  ipcMain.handle('browser:clear-data', () => clearBrowsingData())
 
   ipcMain.handle('image:edit', async (_event, request: ImageEditRequest): Promise<ImageEditResult> => {
     const instruction = String(request?.instruction ?? '').trim().slice(0, 2000)
@@ -784,10 +845,116 @@ if (!app.requestSingleInstanceLock()) {
       popOut: (url) => void popOutBrowser(url)
     })
     browser.setupSession()
+    // Private tabs (Ctrl+Shift+N in the browser) share one in-memory session: downloads and permission prompts work,
+    // ads are blocked, and nothing is written to disk or remembered.
+    const privateSession = session.fromPartition('orbis-private')
+    browser.setupSession(privateSession)
+    adblock.attachSession(privateSession)
     browser.registerIpc()
+
+    // Chrome Web Store extensions in the browser session. Requests extensions make of Orbis's tabs and toolbar are
+    // carried out by the window, which answers with the affected tab's id.
+    const windowRequests = new Map<string, (result: number | null) => void>()
+    ipcMain.on('extensions:window-answer', (_event, requestId: unknown, result: unknown) => {
+      if (typeof requestId === 'string') windowRequests.get(requestId)?.(typeof result === 'number' ? result : null)
+    })
+    const requestWindow = (request: WindowRequest): Promise<number | null> =>
+      new Promise((resolve) => {
+        if (!mainWindow || mainWindow.isDestroyed()) return resolve(null)
+        const requestId = crypto.randomUUID()
+        const timer = setTimeout(() => finish(null), 10_000)
+        const finish = (result: number | null): void => {
+          clearTimeout(timer)
+          windowRequests.delete(requestId)
+          resolve(result)
+        }
+        windowRequests.set(requestId, finish)
+        mainWindow.webContents.send('extensions:window-request', { requestId, request })
+      })
+    const extensions = new ExtensionsManager({
+      session: session.fromPartition('persist:browser'),
+      getWindow: () => mainWindow,
+      send: (channel, ...args) => {
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, ...args)
+      },
+      requestWindow
+    })
+    browser.setExtensionMenu((context) => extensions.menuItems(context))
+    void extensions.start().catch((err: unknown) => console.error('[extensions] failed to start', err))
+    ipcMain.handle('extensions:list', () => extensions.list())
+    ipcMain.handle('extensions:set-enabled', (_event, id: unknown, enabled: unknown) => (typeof id === 'string' ? extensions.setEnabled(id, enabled === true) : undefined))
+    ipcMain.handle('extensions:set-pinned', (_event, id: unknown, pinned: unknown) => (typeof id === 'string' ? extensions.setPinned(id, pinned === true) : undefined))
+    ipcMain.handle('extensions:remove', (_event, id: unknown) => (typeof id === 'string' ? extensions.remove(id) : undefined))
+    ipcMain.handle('extensions:update', async () => {
+      const { before, after } = await extensions.update()
+      return { updated: Object.keys(after).filter((id) => before[id] && before[id] !== after[id]).length }
+    })
+    ipcMain.handle('extensions:click-action', (_event, id: unknown) => (typeof id === 'string' ? extensions.clickAction(id) : { popup: null }))
+    ipcMain.on('extensions:prompt-answer', (_event, requestId: unknown, allow: unknown) => {
+      if (typeof requestId === 'string') extensions.answer(requestId, allow === true)
+    })
+    ipcMain.on('extensions:report-tabs', (_event, tabs: unknown) => {
+      if (!Array.isArray(tabs)) return
+      const valid = tabs.filter((t): t is ReportedTab => Boolean(t) && typeof t.id === 'number' && typeof t.index === 'number' && typeof t.url === 'string' && typeof t.title === 'string')
+      extensions.updateTabs(valid)
+    })
+
+    const libraryForControl = browserLibrary
+    const integrationForControl = browser
+    browserControl = setupBrowserControl({
+      getWindow: () => mainWindow,
+      popOut: popOutBrowser,
+      popouts: () => [...popouts],
+      store,
+      onSettingsChanged: (settings) => {
+        nativeTheme.themeSource = settings.theme
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('settings:changed', settings)
+      },
+      library: libraryForControl,
+      integration: integrationForControl,
+      extensions,
+      openExtensionPopup: async (id) => void (await requestWindow({ kind: 'open-popup', extensionId: id })),
+      adblock: () => adblock,
+      session: session.fromPartition('persist:browser'),
+      clearBrowsingData,
+      sendShortcut: (action, index) => {
+        if (!mainWindow || mainWindow.isDestroyed()) return false
+        mainWindow.webContents.send('browser:shortcut', index ? { action, index } : { action })
+        return true
+      }
+    })
+
+    // Workflows: stored, versioned, recorded and run through the Browser Control Layer.
+    const sendToWindow = (channel: string, ...args: unknown[]): void => {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, ...args)
+    }
+    const fetchForOrion = (url: string, init?: RequestInit): Promise<Response> => net.fetch(url, init)
+    const workflowStore = new WorkflowStore(app.getPath('userData'))
+    workflowRecorder = new WorkflowRecorder({ getWindow: () => mainWindow, windowControl: browserControl.windowControl, library: libraryForControl, emit: (state) => sendToWindow('workflows:recording', state) })
+    const workflows = new WorkflowEngine({
+      control: browserControl.control,
+      windowControl: browserControl.windowControl,
+      store: workflowStore,
+      library: libraryForControl,
+      ask: (request, signal) => askOrion(request, GROQ_API_KEYS, fetchForOrion, signal),
+      send: sendToWindow
+    })
+    registerWorkflowIpc({
+      engine: workflows,
+      recorder: workflowRecorder,
+      store: workflowStore,
+      control: browserControl.control,
+      getWindow: () => mainWindow,
+      draft: (instruction, current) => draftWorkflow(instruction, current, browserControl!.control.list(), GROQ_API_KEYS, fetchForOrion, () => crypto.randomUUID())
+    })
+    void workflows.start().catch((err: unknown) => console.error('[workflows] failed to start', err))
+    app.on('before-quit', () => workflows.stop())
+
     app.on('before-quit', () => void browserLibrary?.flush())
     mainWindow = createWindow()
     mainWindow.on('closed', () => (mainWindow = null))
+    mainWindow.on('focus', () => extensions.bridge.setWindowFocused(true))
+    mainWindow.on('blur', () => extensions.bridge.setWindowFocused(false))
   })
 
   app.on('window-all-closed', () => {

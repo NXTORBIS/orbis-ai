@@ -1,6 +1,7 @@
 /**
  * Browser keyboard shortcuts: one table, matched in the main process before a key reaches a web page or the Orbis
- * window's menu, and delivered once to the browser panel.
+ * window's menu, and delivered once to the browser panel. The table is only consulted while the browser (a page, or
+ * the Orbis window with the browser focused) has focus.
  *
  * Priority: combinations Orion and the rest of Orbis already use are never taken (see RESERVED); keys a page needs
  * (typing, Space, Page Up/Down, Home/End, arrows) are not in the table, so pages keep handling them natively.
@@ -8,6 +9,7 @@
 
 export type BrowserShortcutAction =
   | 'new-tab'
+  | 'new-private-tab'
   | 'close-tab'
   | 'reopen-tab'
   | 'next-tab'
@@ -64,11 +66,13 @@ export interface KeyInput {
 }
 
 /**
- * Combinations Orion and Orbis already own, which the browser must never take: new chat, incognito chat, chat history,
- * settings (app shortcuts); New Chat, Quit, undo/redo/cut/copy/paste and developer tools (app menu).
+ * Combinations Orion and Orbis already own, which the browser must never take: new chat, chat history, settings,
+ * search chats (app shortcuts); New Chat, Quit, undo/redo/cut/copy/paste and developer tools (app menu).
  * Ctrl+R is not listed: outside the browser it stays the menu's reload; the browser only takes it while it has focus.
+ * Ctrl+Shift+N is not listed either: it is Orbis's incognito chat everywhere except inside the browser, where (like
+ * any browser) it opens a private tab. Outside the browser this table is never consulted, so the chat keeps it.
  */
-export const RESERVED = new Set(['Ctrl+Shift+O', 'Ctrl+Shift+N', 'Ctrl+B', 'Ctrl+,', 'Ctrl+N', 'Ctrl+Q', 'Ctrl+Z', 'Ctrl+Shift+Z', 'Ctrl+X', 'Ctrl+C', 'Ctrl+V', 'Ctrl+Shift+I', 'Ctrl+K'])
+export const RESERVED = new Set(['Ctrl+Shift+O', 'Ctrl+B', 'Ctrl+,', 'Ctrl+N', 'Ctrl+Q', 'Ctrl+Z', 'Ctrl+Shift+Z', 'Ctrl+X', 'Ctrl+C', 'Ctrl+V', 'Ctrl+Shift+I', 'Ctrl+K'])
 
 const KEY_ALIASES: Record<string, string> = { Left: 'ArrowLeft', Right: 'ArrowRight', Esc: 'Escape', Add: '+', Subtract: '-' }
 
@@ -84,6 +88,7 @@ const rules = new Map<string, Rule>()
 const add = (combos: string[], rule: Rule): void => combos.forEach((combo) => rules.set(combo, rule))
 
 add(['Ctrl+T'], { action: 'new-tab' })
+add(['Ctrl+Shift+N'], { action: 'new-private-tab' })
 add(['Ctrl+W', 'Ctrl+F4'], { action: 'close-tab' })
 add(['Ctrl+Shift+T'], { action: 'reopen-tab' })
 add(['Ctrl+Tab', 'Ctrl+PageDown'], { action: 'next-tab', repeatable: true })
@@ -97,7 +102,7 @@ add(['Alt+ArrowRight', 'BrowserForward'], { action: 'forward' })
 add(['Ctrl+R', 'F5', 'BrowserRefresh'], { action: 'reload' })
 add(['Ctrl+Shift+R', 'Ctrl+F5', 'Shift+F5'], { action: 'hard-reload' })
 add(['Escape'], { action: 'stop', passthrough: true })
-add(['Ctrl+L', 'Alt+D', 'F6'], { action: 'focus-url' })
+add(['Ctrl+L', 'Ctrl+E', 'Alt+D', 'F6'], { action: 'focus-url' })
 add(['Ctrl+F'], { action: 'find' })
 add(['F3', 'Ctrl+G'], { action: 'find-next', repeatable: true })
 add(['Shift+F3', 'Ctrl+Shift+G'], { action: 'find-prev', repeatable: true })
@@ -149,6 +154,13 @@ export function isAutomatedInput(webContentsId: number, now = Date.now()): boole
   if (until > now) return true
   automatedUntil.delete(webContentsId)
   return false
+}
+
+/** Every browser command with its combinations, in table order. */
+export function shortcutActions(): { action: BrowserShortcutAction; combos: string[]; takesIndex: boolean }[] {
+  const seen = new Map<BrowserShortcutAction, string[]>()
+  for (const [combo, rule] of rules) seen.set(rule.action, [...(seen.get(rule.action) ?? []), combo])
+  return [...seen.entries()].map(([action, combos]) => ({ action, combos, takesIndex: action === 'select-tab' }))
 }
 
 /** All combinations for an action, for help text. */

@@ -10,8 +10,13 @@ interface Props {
   persona: string
   /** The browser page open when the question was asked, for questions about it ("summarize this article"). */
   page?: { url: string; title: string }
+  /** The page's own text, for Summarize: Orion answers from it alone (no web research, no browser work). */
+  context?: string
   onClose(): void
 }
+
+const SUMMARY_INSTRUCTIONS =
+  'Summarize this web page for me. Start with a one-sentence overview, then give the key points as a short bulleted list, then note anything important such as dates, numbers, names or caveats. Use only what is on the page; if the text is cut off, say so.'
 
 type Phase = 'working' | 'done' | 'error' | 'stopped'
 
@@ -20,7 +25,7 @@ type Phase = 'working' | 'done' | 'error' | 'stopped'
  * and its URL stay exactly as they were. It goes straight to Orion (researching the web when the question needs it),
  * never through the browser orb, and never saves a chat.
  */
-export default function OrionAnswer({ question, model, persona, page, onClose }: Props): React.JSX.Element {
+export default function OrionAnswer({ question, model, persona, page, context, onClose }: Props): React.JSX.Element {
   const [attempt, setAttempt] = useState(0)
   const [content, setContent] = useState('')
   const [research, setResearch] = useState<Research>()
@@ -73,16 +78,21 @@ export default function OrionAnswer({ question, model, persona, page, onClose }:
           break
       }
     })
-    const message: ChatMessage = { id: requestId, role: 'user', content: question, createdAt: Date.now() }
+    const source = pageRef.current
+    const content = context
+      ? `${SUMMARY_INSTRUCTIONS}\n\nTitle: ${source?.title ?? ''}\nAddress: ${source?.url ?? ''}\n\nPage text:\n${context}`
+      : question
+    const message: ChatMessage = { id: requestId, role: 'user', content, createdAt: Date.now() }
     window.api
-      .sendChat({ requestId, model, persona, ask: true, messages: [message], browser: pageRef.current })
+      // A summary answers from the page text given here; images: false skips intent detection (no research, no browser).
+      .sendChat({ requestId, model, persona, ask: true, messages: [message], browser: source, ...(context ? { images: false } : {}) })
       .then(() => finish('done'))
       .catch((err: unknown) => finish('error', err instanceof Error ? err.message : String(err)))
     return () => {
       unsubscribe()
       if (!finished) void window.api.abortChat(requestId)
     }
-  }, [question, model, persona, attempt])
+  }, [question, model, persona, context, attempt])
 
   useEffect(() => {
     panelRef.current?.scrollIntoView({ block: 'nearest' })

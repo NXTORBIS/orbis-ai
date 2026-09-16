@@ -46,7 +46,9 @@ export async function requestJson(
   user: string,
   apiKeys: string[],
   fetchFn: FetchFn,
-  timeoutMs = 15_000
+  timeoutMs = 15_000,
+  /** A larger answer (up to maxTokens) or a stronger model, for structured work such as drafting a workflow. */
+  options: { maxTokens?: number; model?: string } = {}
 ): Promise<Record<string, unknown> | null> {
   // These helper calls are optional extras; bad input means "no answer", never a crash of the chat request.
   if (!Array.isArray(apiKeys) || typeof fetchFn !== 'function') return null
@@ -57,9 +59,9 @@ export async function requestJson(
         method: 'POST',
         headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'openai/gpt-oss-20b',
+          model: options.model ?? 'openai/gpt-oss-20b',
           reasoning_effort: 'low',
-          max_completion_tokens: 800,
+          max_completion_tokens: options.maxTokens ?? 800,
           response_format: { type: 'json_object' },
           messages: [
             { role: 'system', content: system },

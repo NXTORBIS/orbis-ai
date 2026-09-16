@@ -4,7 +4,10 @@ import {
   ArrowUpRight,
   BookOpen,
   Bookmark,
+  Check,
   Clock,
+  Copy,
+  FileText,
   Globe,
   Image as ImageIcon,
   LoaderCircle,
@@ -24,12 +27,16 @@ import type { OmniSuggestion } from '../../../shared/omnibox'
 import type { BrowserLibrarySnapshot } from '../../../shared/types'
 import type { NoticeKind } from '../App'
 import OrionAnswer from './OrionAnswer'
+import { useDropdownOpen } from '../lib/useDismiss'
+import { bool, failure, int, readResult, reportControlState, str, unverified, useControlRendered, useControlScope, verified, waitUntil } from '../lib/browserControl'
 
 interface Props {
   /** The Orbis browser's current page URL, or empty when no page is open. */
   url: string
   /** The current page's title, for bookmarking. */
   title?: string
+  /** The active browser tab. Each tab keeps its own half-typed text, restored when the user comes back to it. */
+  tabKey?: string
   onNavigate(input: string, options?: { newTab?: boolean }): void
   /** The active tab's page is loading. */
   loading?: boolean
@@ -40,7 +47,7 @@ interface Props {
   sizeControl?: ReactNode
   /** Questions Orion researched in saved chats. */
   research?: { question: string; at: number }[]
-  /** The current chat is incognito: nothing personal is suggested or remembered. */
+  /** The current chat is incognito (or the tab is private): nothing personal is suggested or remembered. */
   incognito?: boolean
   searchSuggestions?: boolean
   personalizedSuggestions?: boolean
@@ -50,7 +57,7 @@ interface Props {
   onNotify(message: string, kind?: NoticeKind): void
 }
 
-const EMPTY_LIBRARY: BrowserLibrarySnapshot = { history: [], bookmarks: [], downloads: [], permissions: {}, searches: [], picks: {} }
+const EMPTY_LIBRARY: BrowserLibrarySnapshot = { history: [], bookmarks: [], downloads: [], permissions: {}, searches: [], picks: {}, shortcuts: [] }
 const CACHE_SIZE = 200
 
 /** Remembers recent prediction responses so retyping or backspacing shows them instantly. */
@@ -100,6 +107,20 @@ function usePredictions(text: string, enabled: boolean, delay: number, minLength
   // While newer results are on their way, keep only older ones that still fit what is typed.
   const typed = queryKey(text)
   return useMemo(() => ({ query: result.query, items: typed ? result.items.filter((item) => queryKey(item).startsWith(typed)) : [] }), [result, typed])
+}
+
+/** Asks the browser panel for the active tab's rendered title and text; null when there is no readable page. */
+function readActivePage(): Promise<{ title: string; text: string } | null> {
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = (page: { title: string; text: string } | null): void => {
+      if (settled) return
+      settled = true
+      resolve(page)
+    }
+    window.dispatchEvent(new CustomEvent('orbis:read-page', { detail: { resolve: finish } }))
+    setTimeout(() => finish(null), 8000)
+  })
 }
 
 const fetchWeb = (q: string): Promise<string[]> => window.api.webSuggestions(q)
@@ -162,11 +183,13 @@ function Highlight({ text, typed }: { text: string; typed: string }): React.JSX.
  * The browser's one address bar, above the header. It opens addresses, runs searches, and predicts what the user
  * wants from their history, recent searches, bookmarks, Orion research, the search engine and Orion. Enter opens in
  * Orbis, Ctrl+Enter asks Orion, Shift+Enter opens in the system's default browser; these keys only apply while the bar
- * has focus. Otherwise it always shows the page the browser is really on. Ctrl+L, Alt+D and F6 in the browser focus it.
+ * has focus. Half-typed text belongs to the tab it was typed in: switching tabs and back restores it exactly.
+ * Otherwise it always shows the page the browser is really on. Ctrl+L, Ctrl+E, Alt+D and F6 focus it.
  */
 export default function UrlBar({
   url,
   title = '',
+  tabKey = '',
   onNavigate,
   loading,
   browserHidden,
@@ -181,7 +204,7 @@ export default function UrlBar({
   onNotify
 }: Props): React.JSX.Element {
   const inputRef = useRef<HTMLInputElement>(null)
-  /** The user has typed since focusing: their text wins until they submit, press Escape or leave the field. */
+  /** The shown text is the user's own (a draft), not the page's address. */
   const [editing, setEditing] = useState(false)
   const [typed, setTyped] = useState('')
   const [open, setOpen] = useState(false)
@@ -191,7 +214,41 @@ export default function UrlBar({
   const [inline, setInline] = useState(true)
   const [library, setLibrary] = useState<BrowserLibrarySnapshot>(EMPTY_LIBRARY)
   /** A question sent to Orion with Ctrl+Enter; a new id asks again even with the same words. */
-  const [ask, setAsk] = useState<{ id: number; question: string; page?: { url: string; title: string } } | null>(null)
+  const [ask, setAsk] = useState<{ id: number; question: string; page?: { url: string; title: string }; context?: string } | null>(null)
+  /** The Summarize button is reading the page. */
+  const [summarizing, setSummarizing] = useState(false)
+  /** The Copy button just copied the address (shows a check for a moment). */
+  const [copied, setCopied] = useState(false)
+  /** Half-typed text per tab, kept until it is submitted, dismissed with Esc, or the tab navigates elsewhere. */
+  const drafts = useRef(new Map<string, string>())
+
+  const saveDraft = (value: string): void => {
+    if (value) drafts.current.set(tabKey, value)
+    else drafts.current.delete(tabKey)
+  }
+
+  // Switching tabs shows that tab's own draft (or its address), exactly as it was left.
+  const shownTab = useRef(tabKey)
+  useEffect(() => {
+    if (shownTab.current === tabKey) return
+    shownTab.current = tabKey
+    const draft = drafts.current.get(tabKey) ?? ''
+    setTyped(draft)
+    setEditing(Boolean(draft))
+    setSelected(-1)
+    setInline(false)
+  }, [tabKey])
+
+  // The tab went to another page while the user wasn't typing: its old draft no longer applies.
+  const shownUrl = useRef({ tabKey, url })
+  useEffect(() => {
+    const previous = shownUrl.current
+    shownUrl.current = { tabKey, url }
+    if (previous.tabKey !== tabKey || previous.url === url || document.activeElement === inputRef.current) return
+    drafts.current.delete(tabKey)
+    setTyped('')
+    setEditing(false)
+  }, [tabKey, url])
 
   useEffect(() => {
     const focus = (): void => {
@@ -201,6 +258,13 @@ export default function UrlBar({
     window.addEventListener('orbis:focus-url', focus)
     return () => window.removeEventListener('orbis:focus-url', focus)
   }, [])
+
+  // A page opened or started loading: the suggestions are done, unless the user is typing in the bar right now.
+  const typingRef = useRef(false)
+  typingRef.current = editing && document.activeElement === inputRef.current
+  useEffect(() => {
+    if (!typingRef.current) setOpen(false)
+  }, [url, loading, tabKey])
 
   useEffect(() => {
     void window.api.getBrowserLibrary().then(setLibrary)
@@ -244,7 +308,9 @@ export default function UrlBar({
   const secure = /^https:\/\//i.test(url)
   const bookmarked = onWebPage && library.bookmarks.some((b) => sameUrl(b.url, url))
 
+  /** Done with the typed text (submitted or dismissed): the tab's draft goes and the bar shows the page again. */
   const close = (): void => {
+    drafts.current.delete(tabKey)
     setOpen(false)
     setEditing(false)
     setTyped('')
@@ -293,6 +359,29 @@ export default function UrlBar({
     window.api.openExternal(destination).then(close, () => onNotify("Couldn't open your default browser. Check that one is set in Windows settings, then try again.", 'error'))
   }
 
+  /** Summarize: the open page's text, as it is rendered in the tab, goes to Orion; the summary shows over the page. */
+  const summarizePage = (): void => {
+    if (!onWebPage || summarizing) return
+    setSummarizing(true)
+    void readActivePage()
+      .then((page) => {
+        if (!page?.text.trim()) return onNotify("Couldn't read this page's text to summarize it.", 'warn')
+        setAsk({ id: Date.now(), question: `Summarize: ${page.title || title || url}`, page: { url, title: page.title || title }, context: page.text })
+      })
+      .finally(() => setSummarizing(false))
+  }
+
+  /** Copy: the open page's full address goes to the clipboard. */
+  const copyUrl = (): void => {
+    navigator.clipboard.writeText(url).then(
+      () => {
+        setCopied(true)
+        setTimeout(() => setCopied(false), 1500)
+      },
+      () => onNotify("Couldn't copy the address.", 'error')
+    )
+  }
+
   const remove = (item: OmniSuggestion): void => {
     if (item.removable === 'history' && item.url) void window.api.removeHistory(item.url)
     if (item.removable === 'search') void window.api.removeSearch(item.query ?? item.text)
@@ -300,6 +389,160 @@ export default function UrlBar({
   }
 
   const listOpen = open && items.length > 0
+  useDropdownOpen(listOpen)
+
+  // ---------------------------------------------------------------- Browser Control Layer: the address bar
+  // The one address bar, driven through the same functions typing, Enter, Ctrl+Enter, Shift+Enter and clicks use.
+  const bar = useRef({ typed, editing, shown, items, ask })
+  bar.current = { typed, editing, shown, items, ask }
+  const actions = useRef({ submit, go, askOrion, openInDefaultBrowser })
+  actions.current = { submit, go, askOrion, openInDefaultBrowser }
+  useEffect(() => {
+    reportControlState({
+      addressBar: {
+        value: shown,
+        editing,
+        focused: document.activeElement === inputRef.current,
+        suggestions: open ? items.map((item, index) => ({ index, kind: item.kind, text: item.text, ...(item.url ? { url: item.url } : {}) })) : []
+      }
+    })
+  }, [shown, editing, items, open])
+  /** Puts text in the bar as if typed: it becomes the tab's draft and suggestions open. */
+  const typeText = async (text: string): Promise<boolean> => {
+    inputRef.current?.focus()
+    setEditing(true)
+    setTyped(text)
+    saveDraft(text)
+    setSelected(-1)
+    setInline(false)
+    setOpen(true)
+    return waitUntil(() => bar.current.typed === text && bar.current.editing)
+  }
+  useControlRendered()
+  useControlScope('address-bar', [
+    {
+      id: 'addressBar.focus',
+      domain: 'addressBar',
+      name: 'Focus the address bar',
+      description: 'Puts the keyboard in the address bar with its text selected (as Ctrl+L does).',
+      params: {},
+      mutates: true,
+      run: async () => {
+        inputRef.current?.focus()
+        const ok = await waitUntil(() => document.activeElement === inputRef.current)
+        return ok ? verified('The address bar has focus.') : unverified("The address bar didn't take focus.")
+      }
+    },
+    {
+      id: 'addressBar.read',
+      domain: 'addressBar',
+      name: 'Read the address bar',
+      description: 'What the address bar shows (the page address, or typed text), whether it is being edited, and its suggestions.',
+      params: {},
+      mutates: false,
+      run: () => readResult({ value: shown, editing, typed: editing ? typed : '', completion, suggestions: items.map((item, index) => ({ index, kind: item.kind, text: item.text, url: item.url, detail: item.detail })) })
+    },
+    {
+      id: 'addressBar.set',
+      domain: 'addressBar',
+      name: 'Type in the address bar',
+      description: "Replaces the address bar's text (suggestions update as for typing). Submit it with addressBar.submit.",
+      params: { text: str('The text.', true, { sensitive: true }) },
+      mutates: true,
+      run: async (p) => ((await typeText(String(p.text))) ? verified('The address bar holds the text.') : unverified("The address bar doesn't hold the text."))
+    },
+    {
+      id: 'addressBar.append',
+      domain: 'addressBar',
+      name: 'Add to the address bar text',
+      description: 'Adds text to the end of what the address bar shows.',
+      params: { text: str('The text to add.', true, { sensitive: true }) },
+      mutates: true,
+      run: async (p) => ((await typeText(`${bar.current.editing ? bar.current.typed : bar.current.shown}${String(p.text)}`)) ? verified('Added to the address bar.') : unverified('The text was not added.'))
+    },
+    {
+      id: 'addressBar.clear',
+      domain: 'addressBar',
+      name: 'Clear the address bar',
+      description: 'Empties the address bar for typing.',
+      params: {},
+      mutates: true,
+      run: async () => ((await typeText('')) ? verified('The address bar is empty.') : unverified('The address bar is not empty.'))
+    },
+    {
+      id: 'addressBar.submit',
+      domain: 'addressBar',
+      name: 'Submit the address bar',
+      description: 'Opens what the address bar holds, as Enter does (the top suggestion when typing), in this tab or a new one; optionally types text first.',
+      params: { text: str('Type this first.', false, { sensitive: true }), newTab: bool('Open in a new tab (Alt+Enter).') },
+      mutates: true,
+      run: async (p) => {
+        if (typeof p.text === 'string' && !(await typeText(p.text))) return failure('failed', "Couldn't type into the address bar.", true)
+        if (!bar.current.shown.trim()) return failure('invalid-params', 'The address bar is empty.')
+        const value = bar.current.editing ? bar.current.typed : bar.current.shown
+        actions.current.submit(p.newTab === true)
+        const ok = await waitUntil(() => !bar.current.editing, 1500)
+        return ok ? verified(`Opened “${value}” in the browser${p.newTab ? ' in a new tab' : ''}.`, { value }) : unverified('The address bar did not submit.')
+      }
+    },
+    {
+      id: 'addressBar.suggestions',
+      domain: 'addressBar',
+      name: 'Address bar suggestions',
+      description: 'The suggestions shown for what is typed (history, bookmarks, searches, web and Orion predictions), after giving predictions a moment.',
+      params: { waitMs: int('Wait this long for web predictions (default 600).') },
+      mutates: false,
+      run: async (p) => {
+        await new Promise((resolve) => setTimeout(resolve, Math.min(Number(p.waitMs ?? 600), 3000)))
+        return readResult(bar.current.items.map((item, index) => ({ index, kind: item.kind, text: item.text, url: item.url, detail: item.detail })))
+      }
+    },
+    {
+      id: 'addressBar.chooseSuggestion',
+      domain: 'addressBar',
+      name: 'Choose a suggestion',
+      description: 'Opens one of the address bar suggestions (by index from addressBar.suggestions), as clicking it does.',
+      params: { index: int('The suggestion index.', true), newTab: bool('Open in a new tab.') },
+      mutates: true,
+      run: async (p) => {
+        const item = bar.current.items[Number(p.index)]
+        if (!item) return failure('not-found', 'There is no suggestion at that index. Read addressBar.suggestions.', true)
+        actions.current.go(item, p.newTab === true)
+        const ok = await waitUntil(() => !bar.current.editing, 1500)
+        return ok ? verified(`Opened “${item.text}”.`, { text: item.text, url: item.url }) : unverified('The suggestion did not open.')
+      }
+    },
+    {
+      id: 'addressBar.askOrion',
+      domain: 'addressBar',
+      name: 'Ask Orion from the address bar',
+      description: "Asks Orion the address bar's text (or given text), as Ctrl+Enter does; the answer shows over the page.",
+      params: { text: str('The question (default: what is typed).') },
+      mutates: true,
+      run: async (p) => {
+        if (typeof p.text === 'string' && !(await typeText(p.text))) return failure('failed', "Couldn't type into the address bar.", true)
+        const before = bar.current.ask?.id
+        actions.current.askOrion()
+        const ok = await waitUntil(() => Boolean(bar.current.ask && bar.current.ask.id !== before), 1500)
+        return ok ? verified(`Asked Orion: “${bar.current.ask?.question}”.`) : unverified('Nothing was asked (the bar may be empty).')
+      }
+    },
+    {
+      id: 'addressBar.openInDefaultBrowser',
+      domain: 'addressBar',
+      name: 'Open in the default browser from the address bar',
+      description: "Opens the address bar's text (or given text) in the system's default browser, as Shift+Enter does.",
+      params: { text: str('Type this first.') },
+      mutates: true,
+      run: async (p) => {
+        if (typeof p.text === 'string' && !(await typeText(p.text))) return failure('failed', "Couldn't type into the address bar.", true)
+        if (!bar.current.shown.trim()) return failure('invalid-params', 'The address bar is empty.')
+        actions.current.openInDefaultBrowser()
+        const ok = await waitUntil(() => !bar.current.editing, 3000)
+        return ok ? verified('Handed to the default browser.') : unverified('The default browser did not take it.')
+      }
+    }
+  ])
 
   return (
     <div className={`url-strip${loading ? ' loading' : ''}`}>
@@ -333,21 +576,22 @@ export default function UrlBar({
           aria-activedescendant={listOpen && choice >= 0 ? `omni-${choice}` : undefined}
           spellCheck={false}
           autoComplete="off"
-          onFocus={(e) => {
-            e.currentTarget.select()
-            setOpen(true)
-          }}
+          // Focus alone (after opening a page, Ctrl+L/Ctrl+E, a new tab) only selects the text; the list opens when the
+          // user clicks into the bar, types or presses the arrow keys.
+          onFocus={(e) => e.currentTarget.select()}
+          onMouseDown={() => setOpen(true)}
           onBlur={() => {
+            // Leaving the bar (clicking a tab, the page, anywhere) keeps what was typed; only an empty bar goes back to the address.
             setOpen(false)
-            setEditing(false)
-            setTyped('')
             setSelected(-1)
+            if (!typed) setEditing(false)
           }}
           onChange={(e) => {
             const inputType = (e.nativeEvent as InputEvent).inputType ?? ''
             setInline(!inputType.startsWith('delete'))
             setEditing(true)
             setTyped(e.target.value)
+            saveDraft(e.target.value)
             setSelected(-1)
             setOpen(true)
           }}
@@ -373,6 +617,7 @@ export default function UrlBar({
             } else if (e.key === 'Tab' && completion && !e.shiftKey) {
               e.preventDefault()
               setTyped(completion)
+              saveDraft(completion)
               setInline(false)
             } else if (e.key === 'Delete' && e.shiftKey && active?.removable) {
               e.preventDefault()
@@ -383,14 +628,34 @@ export default function UrlBar({
                 setSelected(-1)
                 setInline(false)
               } else if (listOpen) setOpen(false)
-              else {
-                setEditing(false)
-                setTyped('')
-                e.currentTarget.blur()
-              }
+              else close()
             }
           }}
         />
+        {onWebPage && !browserHidden && (
+          <button
+            type="button"
+            className={`url-star url-copy${copied ? ' copied' : ''}`}
+            aria-label={copied ? 'Address copied' : 'Copy address'}
+            title={copied ? 'Copied' : 'Copy address'}
+            onClick={copyUrl}
+          >
+            {copied ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
+          </button>
+        )}
+        {onWebPage && !browserHidden && (
+          <button
+            type="button"
+            className="url-star url-summarize"
+            aria-label="Summarize this page"
+            title="Summarize this page with Orion"
+            aria-busy={summarizing}
+            disabled={summarizing}
+            onClick={summarizePage}
+          >
+            {summarizing ? <LoaderCircle size={14} className="spin" aria-hidden="true" /> : <FileText size={14} aria-hidden="true" />}
+          </button>
+        )}
         {onWebPage && !browserHidden && (
           <button
             type="button"
@@ -464,7 +729,7 @@ export default function UrlBar({
           </div>
         )}
       </form>
-      {ask && <OrionAnswer key={ask.id} question={ask.question} page={ask.page} model={askModel} persona={askPersona} onClose={() => setAsk(null)} />}
+      {ask && <OrionAnswer key={ask.id} question={ask.question} page={ask.page} context={ask.context} model={askModel} persona={askPersona} onClose={() => setAsk(null)} />}
       {browserHidden && (
         <button type="button" className="url-return" onClick={onShowBrowser} title="Back to the open browser, right where you left it">
           <PanelTop size={13} />

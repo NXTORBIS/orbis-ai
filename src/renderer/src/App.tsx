@@ -9,6 +9,7 @@ import BrowserPanel from './components/BrowserPanel'
 import ChatHeader from './components/ChatHeader'
 import ChatView from './components/ChatView'
 import ImagesView from './components/ImagesView'
+import WorkflowsView from './components/WorkflowsView'
 import HudBackground from './components/HudBackground'
 import Sidebar from './components/Sidebar'
 import { ActivityPanel, ShortcutsModal, ToastStack } from './components/Overlays'
@@ -16,6 +17,8 @@ import SettingsModal from './components/SettingsModal'
 import WelcomeExperience from './components/WelcomeExperience'
 import UrlBar from './components/UrlBar'
 import BrowserSizeControl from './components/BrowserSizeControl'
+import ControlPrompts from './components/ControlPrompts'
+import { failure, int, reportControlState, str, unverified, useControlRendered, useControlScope, verified, waitUntil } from './lib/browserControl'
 import { OPEN_URL_EVENT } from './lib/openInBrowser'
 import type { OpenUrlDetail } from './lib/openInBrowser'
 import { clampBrowserSize, loadBrowserSize, resolveBrowserSize, saveBrowserSize } from './lib/browserSize'
@@ -79,6 +82,7 @@ export default function App(): React.JSX.Element {
     }
   })
   const [imagesOpen, setImagesOpen] = useState(false)
+  const [workflowsOpen, setWorkflowsOpen] = useState(false)
   const [webSearch, setWebSearch] = useState(false)
   const [searchToken, setSearchToken] = useState(0)
   const [activityOpen, setActivityOpen] = useState(false)
@@ -89,9 +93,9 @@ export default function App(): React.JSX.Element {
   /** Chat requests currently operating the browser. */
   const [browserAgents, setBrowserAgents] = useState<string[]>([])
   /** The browser's active page, sent with chat requests so "click the first result" has context. */
-  const browserPageRef = useRef<{ url: string; title: string } | null>(null)
-  /** The same page, as state, for the URL bar. */
-  const [browserPage, setBrowserPageState] = useState<{ url: string; title: string } | null>(null)
+  const browserPageRef = useRef<{ url: string; title: string; private?: boolean } | null>(null)
+  /** The active tab (blank ones too), as state, for the URL bar. */
+  const [browserPage, setBrowserPageState] = useState<{ tabId: string; url: string; title: string; private?: boolean } | null>(null)
   /** An address typed in the URL bar, waiting for the browser to open it. */
   const [browserNavigation, setBrowserNavigation] = useState<(OpenUrlDetail & { id: number }) | null>(null)
   /** Back at the chat with the browser still open: its tabs, pages and orb stay as they were. */
@@ -224,6 +228,17 @@ export default function App(): React.JSX.Element {
   }, [commitConversations])
 
   useEffect(load, [load])
+  // Settings changed through the Browser Control Layer show up straight away.
+  useEffect(() => window.api.onSettingsChanged(setSettings), [])
+
+  // "Open browser on launch": checked once, when settings first arrive and the welcome screen is out of the way, so
+  // switching the setting on later doesn't pop the browser open mid-session.
+  const launchChecked = useRef(false)
+  useEffect(() => {
+    if (launchChecked.current || !settings || welcome === 'open') return
+    launchChecked.current = true
+    if (settings.openBrowserOnLaunch) openBrowser()
+  }, [settings, welcome, openBrowser])
 
   useEffect(() => {
     const media = matchMedia('(prefers-color-scheme: dark)')
@@ -908,9 +923,12 @@ export default function App(): React.JSX.Element {
     if (stream) void window.api.controlAutomation(stream.requestId, action)
   }, [])
 
-  const setBrowserPage = useCallback((page: { url: string; title: string } | null) => {
-    browserPageRef.current = page
-    setBrowserPageState((current) => (current?.url === page?.url && current?.title === page?.title ? current : page))
+  const setBrowserPage = useCallback((page: { tabId: string; url: string; title: string; private?: boolean } | null) => {
+    // Chat requests only get a real page; a blank tab isn't one.
+    browserPageRef.current = page?.url ? { url: page.url, title: page.title, ...(page.private ? { private: true } : {}) } : null
+    setBrowserPageState((current) =>
+      current?.tabId === page?.tabId && current?.url === page?.url && current?.title === page?.title && current?.private === page?.private ? current : page
+    )
   }, [])
 
   /**
@@ -933,6 +951,105 @@ export default function App(): React.JSX.Element {
     window.addEventListener(OPEN_URL_EVENT, onOpen)
     return () => window.removeEventListener(OPEN_URL_EVENT, onOpen)
   }, [openInBrowser])
+
+  // ---------------------------------------------------------------- Browser Control Layer: the browser's place in Orbis
+  useEffect(() => {
+    reportControlState({ open: browserOpen, hidden: browserOpen && browserHidden, mode: browserOpen ? browserMode : null })
+  }, [browserOpen, browserHidden, browserMode])
+  const appLive = useRef({ browserOpen, browserHidden, browserMode, browserWindow })
+  appLive.current = { browserOpen, browserHidden, browserMode, browserWindow }
+  useControlScope('app', [
+    {
+      id: 'browser.open',
+      domain: 'browser',
+      name: 'Open the browser',
+      description: 'Opens the Orbis browser (at its preferred size), optionally at an address or search.',
+      params: { url: str('An address or search text to open.') },
+      mutates: true,
+      run: async (p) => {
+        if (typeof p.url === 'string' && p.url.trim()) openInBrowser(p.url.trim())
+        else openBrowser()
+        const ok = await waitUntil(() => appLive.current.browserOpen && !appLive.current.browserHidden)
+        return ok ? verified('The browser is open.') : unverified('The browser did not open.')
+      }
+    },
+    {
+      id: 'browser.close',
+      domain: 'browser',
+      name: 'Close the browser',
+      description: 'Closes the browser and all of its tabs.',
+      params: {},
+      mutates: true,
+      confirmation: 'always',
+      run: async () => {
+        if (!appLive.current.browserOpen) return verified('The browser was already closed.')
+        closeBrowser()
+        const ok = await waitUntil(() => !appLive.current.browserOpen)
+        return ok ? verified('The browser is closed.') : unverified('The browser is still open.')
+      }
+    },
+    {
+      id: 'browser.show',
+      domain: 'browser',
+      name: 'Show the browser',
+      description: 'Brings the open browser back in front of the chat, as it was.',
+      params: {},
+      mutates: true,
+      requires: ['browser-open'],
+      run: async () => {
+        setBrowserHidden(false)
+        const ok = await waitUntil(() => appLive.current.browserOpen && !appLive.current.browserHidden)
+        return ok ? verified('The browser is showing.') : unverified('The browser is not showing.')
+      }
+    },
+    {
+      id: 'browser.backToChat',
+      domain: 'browser',
+      name: 'Back to the chat',
+      description: 'Returns to the Orbis chat; the browser keeps its tabs, out of sight.',
+      params: {},
+      mutates: true,
+      requires: ['browser-open'],
+      run: async () => {
+        setBrowserHidden(true)
+        const ok = await waitUntil(() => appLive.current.browserHidden)
+        return ok ? verified('The chat is showing; the browser stays open behind it.') : unverified('The browser is still in front.')
+      }
+    },
+    {
+      id: 'browser.setMode',
+      domain: 'browser',
+      name: 'Browser layout',
+      description: 'Shows the browser as a full page, a window, or docked beside the chat.',
+      params: { mode: str('full, window or dock', true, { enum: ['full', 'window', 'dock'] }) },
+      mutates: true,
+      requires: ['browser-open'],
+      run: async (p) => {
+        setBrowserMode(p.mode as BrowserMode)
+        const ok = await waitUntil(() => appLive.current.browserMode === p.mode)
+        return ok ? verified(`The browser is shown as ${p.mode === 'full' ? 'a full page' : p.mode === 'dock' ? 'docked' : 'a window'}.`) : unverified('The layout did not change.')
+      }
+    },
+    {
+      id: 'browser.resize',
+      domain: 'browser',
+      name: 'Resize the browser window',
+      description: 'Shows the browser as a window of a size (fitted to the space Orbis has), remembered as its custom size.',
+      params: { width: int('Width in pixels.', true), height: int('Height in pixels.', true) },
+      mutates: true,
+      requires: ['browser-open'],
+      run: async (p) => {
+        if (!appLive.current.browserOpen) return failure('unavailable', 'The browser is closed.', true)
+        setBrowserMode('window')
+        resizeBrowserWindow(Number(p.width), Number(p.height), true)
+        const want = clampBrowserSize(Number(p.width), Number(p.height), hudBounds)
+        const ok = await waitUntil(() => appLive.current.browserMode === 'window' && appLive.current.browserWindow.width === want.width && appLive.current.browserWindow.height === want.height)
+        return ok ? verified(`The browser window is ${want.width} × ${want.height}.`, want) : unverified('The size did not change.')
+      }
+    }
+  ])
+
+  useControlRendered()
 
   const [editing, setEditing] = useState<{ conversationId: string | null; image: EditableImage; tool?: 'markup' } | null>(null)
   const openImageEditor = useCallback((image: EditableImage) => setEditing({ conversationId: activeId, image }), [activeId])
@@ -1087,6 +1204,10 @@ export default function App(): React.JSX.Element {
       } else if (key === 'b') {
         e.preventDefault()
         toggleSidebar()
+      } else if (key === 'e' && !e.shiftKey && !e.altKey) {
+        // Ctrl+E: straight to the address bar, from anywhere in Orbis (inside the browser the shortcut table does it).
+        e.preventDefault()
+        window.dispatchEvent(new Event('orbis:focus-url'))
       } else if (key === 'k' && !e.shiftKey && !e.altKey) {
         // Unused until now; web pages keep their own Ctrl+K (it only reaches the Orbis window).
         e.preventDefault()
@@ -1153,9 +1274,10 @@ export default function App(): React.JSX.Element {
       <UrlBar
         url={browserPage?.url ?? ''}
         title={browserPage?.title ?? ''}
+        tabKey={browserOpen ? (browserPage?.tabId ?? '') : ''}
         onNavigate={openInBrowser}
         research={researchTopics}
-        incognito={current.incognito}
+        incognito={current.incognito || Boolean(browserOpen && !browserHidden && browserPage?.private)}
         searchSuggestions={settings?.searchSuggestions !== false}
         personalizedSuggestions={settings?.personalizedSuggestions !== false}
         askModel={current.model}
@@ -1209,13 +1331,21 @@ export default function App(): React.JSX.Element {
           streams={streams}
           imageCount={galleryImages.length}
           imagesOpen={imagesOpen}
+          workflowsOpen={workflowsOpen}
           searchToken={searchToken}
           userName={settings?.userName ?? 'You'}
           userTitle={settings?.userTitle ?? ''}
           onNewChat={newChat}
           onIncognito={toggleIncognito}
           onSearch={openSearch}
-          onImages={() => setImagesOpen((open) => !open)}
+          onImages={() => {
+            setWorkflowsOpen(false)
+            setImagesOpen((open) => !open)
+          }}
+          onWorkflows={() => {
+            setImagesOpen(false)
+            setWorkflowsOpen((open) => !open)
+          }}
           onAssistants={() => setPersonaMenuOpen(true)}
           onBrowser={toggleBrowser}
           onSelect={selectChat}
@@ -1260,6 +1390,7 @@ export default function App(): React.JSX.Element {
           {imagesOpen && (
             <ImagesView images={galleryImages} onClose={() => setImagesOpen(false)} onOpenChat={selectChat} onEdit={editGalleryImage} onNotify={notify} />
           )}
+          {workflowsOpen && <WorkflowsView onClose={() => setWorkflowsOpen(false)} onNotify={notify} />}
         </main>
 
         {browserOpen && (
@@ -1302,6 +1433,7 @@ export default function App(): React.JSX.Element {
       </div>
 
       <ToastStack toasts={toasts} onDismiss={(id) => setToasts((current) => current.filter((t) => t.id !== id))} />
+      <ControlPrompts />
       {settingsOpen && settings && <SettingsModal settings={settings} onUpdate={updateSettings} onClose={() => setSettingsOpen(false)} />}
       {shortcutsOpen && <ShortcutsModal onClose={() => setShortcutsOpen(false)} />}
       {editing && (

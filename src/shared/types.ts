@@ -1,3 +1,20 @@
+import type {
+  BrowserCommand,
+  CapabilityDescriptor,
+  CommandResult,
+  ControlConfirmRequest,
+  Plan,
+  RunControl,
+  RunState,
+  WindowBrowserState,
+  WindowRunRequest,
+  WindowRunResult
+} from './browserControl'
+import type { ControlLogEntryView } from './browserControlView'
+import type { RunControl as WorkflowRunControl, StepRecord } from './browserControl'
+import type { ActiveWorkflowRun, RecordingState, Workflow, WorkflowIssue, WorkflowLibrary, WorkflowRunResult, WorkflowRunSummary, WorkflowVersion } from './workflows'
+import type { PlanLine } from './workflowCompile'
+
 export type Role = 'user' | 'assistant'
 
 /** Status the main process sends while an image renders; the chat swaps in the mini games for it. */
@@ -174,6 +191,8 @@ export interface Settings {
   searchSuggestions: boolean
   /** The address bar suggests from local history, searches, bookmarks and research, and learns from picks. */
   personalizedSuggestions: boolean
+  /** Orbis opens its browser (at the saved size) as soon as it starts, instead of the chat. */
+  openBrowserOnLaunch: boolean
 }
 
 export type SettingsUpdate = Partial<Omit<Settings, 'hasApiKey'>> & {
@@ -398,6 +417,88 @@ export interface BrowserLibrarySnapshot {
   /** Recent address-bar searches, newest first. */
   searches: BrowserSearchEntry[]
   picks: Record<string, BrowserPick>
+  /** The new-tab page's site shortcuts, in the user's order. */
+  shortcuts: SiteShortcut[]
+}
+
+/** A Chrome Web Store extension installed in the Orbis browser. */
+export interface InstalledExtension {
+  id: string
+  name: string
+  description: string
+  version: string
+  enabled: boolean
+  /** Shown as its own button on the browser toolbar. */
+  pinned: boolean
+  /** A data URL: the extension's current toolbar icon, or its own icon. */
+  icon?: string
+  /** It has a toolbar button (manifest "action"). */
+  hasAction: boolean
+  /** The toolbar button's live state for the active tab (only while enabled). */
+  action?: {
+    title?: string
+    badgeText?: string
+    badgeBackgroundColor?: [number, number, number, number]
+    badgeTextColor?: [number, number, number, number]
+    hasPopup: boolean
+    enabled: boolean
+  }
+  optionsUrl?: string
+  /** Its page on the Chrome Web Store. */
+  homepageUrl: string
+  /** What its permissions let it do, in Chrome's wording. */
+  warnings: string[]
+}
+
+/** The Chrome Web Store asked to install an extension: the user confirms after seeing what it can do. */
+export interface ExtensionInstallRequest {
+  requestId: string
+  id: string
+  name: string
+  icon?: string
+  warnings: string[]
+}
+
+/** An installed extension asked for optional permissions (chrome.permissions.request). */
+export interface ExtensionPermissionRequest {
+  requestId: string
+  id: string
+  name: string
+  warnings: string[]
+  permissions: string[]
+  origins: string[]
+}
+
+/** A browser tab as extensions see it: its id is the page's WebContents id. */
+export interface ReportedBrowserTab {
+  id: number
+  index: number
+  url: string
+  title: string
+  favIconUrl?: string
+  active: boolean
+  pinned: boolean
+  audible: boolean
+  muted: boolean
+  loading: boolean
+}
+
+/** Something an extension asked the Orbis browser to do with its tabs or toolbar. */
+export type ExtensionWindowRequest =
+  | { kind: 'create-tab'; url?: string; active: boolean; index?: number; pinned?: boolean }
+  | { kind: 'update-tab'; tabId: number; url?: string; active?: boolean; pinned?: boolean; muted?: boolean }
+  | { kind: 'remove-tabs'; tabIds: number[] }
+  | { kind: 'move-tab'; tabId: number; index: number }
+  | { kind: 'open-popup'; extensionId: string }
+
+/** A site shortcut on the browser's new-tab page. */
+export interface SiteShortcut {
+  id: string
+  name: string
+  url: string
+  /** The site's own icon as a data URL; null when the site has none; absent while it is still being fetched. */
+  icon?: string | null
+  addedAt: number
 }
 
 /** A site asking for a permission (camera, location...), waiting for the user's answer. */
@@ -444,6 +545,38 @@ export interface NxtorbisApi {
   onBrowserNewTab(listener: (url: string, options: { background: boolean }) => void): () => void
   popOutBrowser(url: string): Promise<boolean>
   clearBrowserData(): Promise<void>
+  /** Wipes private tabs' cookies, storage and cache (their in-memory session), once the last private tab closes. */
+  clearPrivateBrowsing(): Promise<void>
+  /** A mouse button went down inside a browser page (which the window's document never sees), so open menus can close. */
+  onPagePointer(listener: () => void): () => void
+  /** Asks to hear (or stop hearing) when the pointer moves inside a browser page; reports are throttled. */
+  watchPagePointerMoves(on: boolean): void
+  onPagePointerMove(listener: () => void): () => void
+  /** New-tab shortcuts: saved in the browser library; the site's icon is fetched in the background. */
+  addShortcut(name: string, url: string): Promise<SiteShortcut | null>
+  updateShortcut(id: string, name: string, url: string): Promise<SiteShortcut | null>
+  removeShortcut(id: string): Promise<void>
+  /** Fetches a shortcut's icon again (for one saved while its site couldn't be reached). */
+  refreshShortcutIcon(id: string): Promise<void>
+  /** Chrome Web Store extensions in the browser. */
+  getExtensions(): Promise<InstalledExtension[]>
+  onExtensionsChanged(listener: (extensions: InstalledExtension[]) => void): () => void
+  setExtensionEnabled(id: string, enabled: boolean): Promise<void>
+  setExtensionPinned(id: string, pinned: boolean): Promise<void>
+  removeExtension(id: string): Promise<void>
+  /** Checks the Web Store for updates to enabled extensions; resolves how many were updated. */
+  updateExtensions(): Promise<{ updated: number }>
+  /** The user clicked an extension's toolbar button; resolves the popup page to show, if it has one. */
+  clickExtensionAction(id: string): Promise<{ popup: string | null }>
+  onExtensionInstallRequest(listener: (request: ExtensionInstallRequest) => void): () => void
+  onExtensionPermissionRequest(listener: (request: ExtensionPermissionRequest) => void): () => void
+  /** An approved extension finished installing (or failed to). */
+  onExtensionInstalled(listener: (result: { id: string; name: string; error?: string }) => void): () => void
+  answerExtensionPrompt(requestId: string, allow: boolean): void
+  /** The browser's tabs, for extensions (private tabs excluded). */
+  reportBrowserTabs(tabs: ReportedBrowserTab[]): void
+  onExtensionWindowRequest(listener: (message: { requestId: string; request: ExtensionWindowRequest }) => void): () => void
+  answerExtensionWindowRequest(requestId: string, result: number | null): void
   /** Predicts the user's next message and follow-ups for the latest assistant reply. */
   suggestFollowups(messages: { role: Role; content: string }[]): Promise<FollowupSuggestions>
   /** A short AI-written chat title for a first message, or null if one couldn't be made. */
@@ -504,10 +637,74 @@ export interface NxtorbisApi {
   savePage(webContentsId: number): Promise<boolean>
   /** Turns the Orbis window's fullscreen on, off, or (without a value) toggles it; resolves to the new state. */
   setWindowFullscreen(on?: boolean): Promise<boolean>
+  /** Whether the Orbis window is really fullscreen, and changes to it however they happen (F11, Esc, the OS). */
+  isWindowFullscreen(): Promise<boolean>
+  onWindowFullscreen(listener: (on: boolean) => void): () => void
   getAuthState(): Promise<AuthState>
   /** Opens the system browser to sign in; resolves once it is waiting for the browser. */
   signIn(): Promise<AuthState>
   cancelSignIn(): Promise<void>
   signOut(): Promise<void>
   onAuthState(listener: (state: AuthState) => void): () => void
+  /** Settings changed outside the settings screen (by the Browser Control Layer). */
+  onSettingsChanged(listener: (settings: Settings) => void): () => void
+  /** A site's permission request was answered (from the prompt or through the control layer). */
+  onBrowserPermissionAnswered(listener: (id: string) => void): () => void
+
+  // Orbis Browser Control Layer
+  /** What Orbis can do right now. */
+  getControlCapabilities(filter?: { domain?: string; query?: string; availableOnly?: boolean }): Promise<CapabilityDescriptor[]>
+  /** The real browser state, read now (all parts, or the named ones). */
+  getControlState(parts?: string[]): Promise<Record<string, unknown>>
+  /** Carries out a command: validated, approved when consequential, verified. */
+  executeControl(command: BrowserCommand): Promise<CommandResult>
+  runControlPlan(plan: Plan, source?: 'user' | 'automation'): Promise<RunState>
+  controlRun(id: string, action: RunControl): Promise<boolean>
+  listControlRuns(): Promise<RunState[]>
+  getControlLog(limit?: number): Promise<ControlLogEntryView[]>
+  onControlRunUpdate(listener: (state: RunState) => void): () => void
+  /** The window's browser state, sent whenever it changes. */
+  reportControlState(state: WindowBrowserState): void
+  /** The capabilities one part of the window provides (an empty list removes them). */
+  setControlScope(scope: string, descriptors: CapabilityDescriptor[]): void
+  onControlWindowRun(listener: (request: WindowRunRequest) => void): () => void
+  answerControlWindowRun(callId: string, result: WindowRunResult): void
+  onControlConfirm(listener: (request: ControlConfirmRequest) => void): () => void
+  answerControlConfirm(id: string, approved: boolean): void
+
+  // Workflows
+  getWorkflowLibrary(): Promise<WorkflowLibrary>
+  getWorkflow(id: string): Promise<Workflow | null>
+  createWorkflow(name: string, templateId?: string): Promise<Workflow>
+  saveWorkflow(workflow: Workflow, note?: string): Promise<Workflow>
+  duplicateWorkflow(id: string): Promise<Workflow>
+  removeWorkflow(id: string): Promise<void>
+  /** Asks where to save; resolves the file path, or null when cancelled. */
+  exportWorkflowFile(id: string): Promise<string | null>
+  importWorkflowFile(): Promise<{ workflow: Workflow; issues: WorkflowIssue[] } | null>
+  importWorkflowJson(json: string): Promise<{ workflow: Workflow; issues: WorkflowIssue[] }>
+  workflowVersions(id: string): Promise<WorkflowVersion[]>
+  restoreWorkflowVersion(id: string, version: number): Promise<Workflow>
+  validateWorkflow(workflow: Workflow, inputs?: Record<string, unknown>): Promise<WorkflowIssue[]>
+  planWorkflow(id: string): Promise<{ lines: PlanLine[]; issues: WorkflowIssue[] }>
+  runWorkflow(id: string, options?: { inputs?: Record<string, unknown>; debug?: boolean }): Promise<WorkflowRunResult>
+  controlWorkflowRun(runId: string, action: WorkflowRunControl): Promise<boolean>
+  workflowHistory(id?: string): Promise<WorkflowRunSummary[]>
+  resumeWorkflowRun(runId: string, inputs?: Record<string, unknown>): Promise<WorkflowRunResult>
+  discardWorkflowCheckpoint(runId: string): Promise<void>
+  /** Orion drafts a workflow from words, or changes an existing one; nothing is saved until the user saves it. */
+  draftWorkflow(instruction: string, workflowId?: string): Promise<Workflow>
+  startWorkflowRecording(): Promise<RecordingState>
+  pauseWorkflowRecording(paused: boolean): Promise<RecordingState>
+  stopWorkflowRecording(): Promise<RecordingState>
+  saveWorkflowRecording(name: string): Promise<Workflow>
+  rememberWorkflowSecret(workflowId: string, name: string, value: string): Promise<void>
+  forgetWorkflowSecret(workflowId: string, name?: string): Promise<void>
+  rememberedWorkflowSecrets(workflowId: string): Promise<string[]>
+  onWorkflowsChanged(listener: () => void): () => void
+  onWorkflowRunUpdate(listener: (run: ActiveWorkflowRun) => void): () => void
+  onWorkflowStep(listener: (event: { runId: string; workflowId: string; record: StepRecord }) => void): () => void
+  onWorkflowRunFinished(listener: (summary: WorkflowRunSummary) => void): () => void
+  onWorkflowNotice(listener: (notice: { workflowId: string; message: string }) => void): () => void
+  onWorkflowRecording(listener: (state: RecordingState) => void): () => void
 }

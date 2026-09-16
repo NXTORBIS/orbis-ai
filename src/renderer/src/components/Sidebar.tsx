@@ -16,6 +16,7 @@ import {
   SquarePen,
   Trash2,
   Users,
+  Workflow as WorkflowIcon,
   X
 } from 'lucide-react'
 import type { Conversation } from '../../../shared/types'
@@ -33,6 +34,7 @@ interface Props {
   streams: Record<string, StreamState>
   imageCount: number
   imagesOpen: boolean
+  workflowsOpen: boolean
   /** Changes whenever the search box should open and take focus. */
   searchToken: number
   userName: string
@@ -41,6 +43,7 @@ interface Props {
   onIncognito(): void
   onSearch(): void
   onImages(): void
+  onWorkflows(): void
   onAssistants(): void
   onBrowser(): void
   onSelect(id: string): void
@@ -126,6 +129,7 @@ export default function Sidebar(props: Props): React.JSX.Element {
     { label: 'Incognito chat', icon: HatGlasses, onClick: props.onIncognito, active: props.incognito, shortcut: 'Ctrl+Shift+N' },
     { label: 'Search chats', icon: Search, onClick: props.onSearch },
     { label: 'Images', icon: Images, onClick: props.onImages, active: props.imagesOpen, badge: props.imageCount },
+    { label: 'Workflows', icon: WorkflowIcon, onClick: props.onWorkflows, active: props.workflowsOpen },
     { label: 'Assistants', icon: Users, onClick: props.onAssistants },
     { label: 'Browser', icon: Globe, onClick: props.onBrowser }
   ]

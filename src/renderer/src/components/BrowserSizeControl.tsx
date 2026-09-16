@@ -44,13 +44,13 @@ export default function BrowserSizeControl({ pref, bounds, onChange, variant = '
         className="browser-size-trigger"
         aria-haspopup="dialog"
         aria-expanded={open}
+        aria-label={`Browser size: ${describeBrowserSize(pref)}. Change the size`}
         title={full ? 'Browser opens as a full page. Change the size' : `Browser opens as a ${describeBrowserSize(pref)} window. Change the size`}
         onClick={() => setOpen((o) => !o)}
       >
-        {full ? <Maximize2 size={13} /> : <PictureInPicture2 size={13} />}
-        {variant === 'strip' && <span className="browser-size-label">Browser size:</span>}
+        {full ? <Maximize2 size={12} aria-hidden="true" /> : <PictureInPicture2 size={12} aria-hidden="true" />}
         <b>{describeBrowserSize(pref)}</b>
-        <ChevronDown size={13} />
+        <ChevronDown size={11} aria-hidden="true" />
       </button>
       {open && (
         <div className="popover glass browser-size-menu" role="dialog" aria-label="Browser size">

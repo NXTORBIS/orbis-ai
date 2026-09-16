@@ -63,8 +63,19 @@ export class BrowserIntegration {
   /** The browser (or its URL bar) has focus in the Orbis window, as the window reports it. */
   private browserFocused = false
   private readonly permissionWaiters = new Map<string, (allow: boolean, remember: boolean) => void>()
+  private readonly pendingRequests = new Map<string, BrowserPermissionRequest>()
   private readonly downloadItems = new Map<string, Electron.DownloadItem>()
   private libraryTimer: NodeJS.Timeout | null = null
+  /** Items installed extensions add to a page's right-click menu. */
+  private extensionMenu: ((context: { pageUrl: string; frameUrl?: string; linkUrl?: string; srcUrl?: string; mediaType?: string; selectionText?: string; editable: boolean; tabId: number }) => MenuItemConstructorOptions[]) | null = null
+
+  setExtensionMenu(provider: NonNullable<BrowserIntegration['extensionMenu']>): void {
+    this.extensionMenu = provider
+  }
+
+  /** The window wants to hear when the pointer moves inside a page (to tuck away fullscreen bars). */
+  private watchPageMoves = false
+  private lastPageMove = 0
 
   constructor(options: BrowserIntegrationOptions) {
     this.o = options
@@ -111,11 +122,26 @@ export class BrowserIntegration {
     contents.on('before-input-event', (event, input) => {
       if (!isAutomatedInput(contents.id)) this.route(event, input, contents.id)
     })
-    contents.on('did-navigate', (_event, url) => this.o.library.visit(url, contents.getTitle()))
-    contents.on('did-navigate-in-page', (_event, url, isMainFrame) => {
-      if (isMainFrame) this.o.library.visit(url, contents.getTitle())
+    // Clicks inside a page never reach the Orbis window's document, so open menus and dropdowns hear about them here.
+    contents.on('before-mouse-event', (_event, mouse) => {
+      if (mouse.type === 'mouseDown') this.send('browser:page-pointer')
+      // Pointer movement is only reported while the window asks for it (fullscreen bars are showing), at most every 150ms.
+      else if (mouse.type === 'mouseMove' && this.watchPageMoves && Date.now() - this.lastPageMove > 150) {
+        this.lastPageMove = Date.now()
+        this.send('browser:page-pointer-move')
+      }
     })
-    contents.on('page-title-updated', (_event, title) => this.o.library.retitle(contents.getURL(), title))
+    // Private tabs live in an in-memory session and never write history.
+    const remember = contents.session.isPersistent()
+    contents.on('did-navigate', (_event, url) => {
+      if (remember) this.o.library.visit(url, contents.getTitle())
+    })
+    contents.on('did-navigate-in-page', (_event, url, isMainFrame) => {
+      if (remember && isMainFrame) this.o.library.visit(url, contents.getTitle())
+    })
+    contents.on('page-title-updated', (_event, title) => {
+      if (remember) this.o.library.retitle(contents.getURL(), title)
+    })
     contents.on('context-menu', (_event, params) => this.contextMenu(contents, params))
   }
 
@@ -191,6 +217,20 @@ export class BrowserIntegration {
       )
       separate()
     }
+    const fromExtensions = this.extensionMenu?.({
+      pageUrl: params.pageURL || contents.getURL(),
+      frameUrl: params.frameURL || undefined,
+      linkUrl: params.linkURL || undefined,
+      srcUrl: params.srcURL || undefined,
+      mediaType: params.mediaType,
+      selectionText: params.selectionText || undefined,
+      editable: params.isEditable,
+      tabId: contents.id
+    })
+    if (fromExtensions?.length) {
+      items.push(...fromExtensions)
+      separate()
+    }
     items.push({ label: 'Inspect', click: () => contents.inspectElement(params.x, params.y) })
     Menu.buildFromTemplate(items).popup({ window: win })
   }
@@ -209,9 +249,13 @@ export class BrowserIntegration {
     }
   }
 
-  /** Downloads saved to the Downloads folder (never overwriting), and site permissions asked for or remembered. */
-  setupSession(): void {
-    const { session, library } = this.o
+  /**
+   * Downloads saved to the Downloads folder (never overwriting), and site permissions asked for or remembered.
+   * Private tabs' in-memory session asks every time: it never reads or saves remembered permissions.
+   */
+  setupSession(session: Session = this.o.session): void {
+    const { library } = this.o
+    const remembers = session.isPersistent()
     session.on('will-download', (_event, item) => {
       const dir = app.getPath('downloads')
       const filename = uniqueDownloadName(item.getFilename(), (name) => existsSync(join(dir, name)))
@@ -243,7 +287,7 @@ export class BrowserIntegration {
       const origin = originOf(details.requestingUrl || contents.getURL())
       const askable = permission === 'media' || permission in ASKABLE
       if (!origin || !askable) return callback(false)
-      const remembered = library.permission(origin, permission)
+      const remembered = remembers ? library.permission(origin, permission) : undefined
       if (remembered) return callback(remembered === 'allow')
       // Only tabs in the Orbis window can show the prompt; elsewhere (a pop-out window) the request is declined.
       const win = this.o.getWindow()
@@ -254,25 +298,76 @@ export class BrowserIntegration {
         if (answered) return
         answered = true
         this.permissionWaiters.delete(id)
-        if (remember) library.rememberPermission(origin, permission, allow ? 'allow' : 'block')
+        this.pendingRequests.delete(id)
+        if (remember && remembers) library.rememberPermission(origin, permission, allow ? 'allow' : 'block')
         callback(allow)
+        // The window's prompt goes away however the request was answered.
+        this.send('browser:permission-answered', id)
       }
       this.permissionWaiters.set(id, answer)
       const request: BrowserPermissionRequest = { id, webContentsId: contents.id, origin, permission, label: describePermission(permission, details as { mediaTypes?: string[] }) }
+      this.pendingRequests.set(id, request)
       this.send('browser:permission', request)
       // A request nobody answers is declined, so the page isn't left waiting forever.
       setTimeout(() => answer(false, false), 120_000)
     })
     session.setPermissionCheckHandler((_contents, permission, requestingOrigin) => {
       if (ALWAYS_ALLOWED.has(permission)) return true
-      return library.permission(originOf(requestingOrigin), permission) === 'allow'
+      return remembers && library.permission(originOf(requestingOrigin), permission) === 'allow'
     })
+  }
+
+  /**
+   * A download's controls, as the downloads list offers them. Returns what happened, so callers can tell a download
+   * that can't be resumed or a file that is gone from one that worked.
+   */
+  async downloadAction(id: string, action: 'cancel' | 'pause' | 'resume' | 'open' | 'show'): Promise<{ done: boolean; reason?: string }> {
+    const item = this.downloadItems.get(id)
+    const record = this.o.library.download(id)
+    if (!record) return { done: false, reason: 'There is no such download.' }
+    if (action === 'cancel' || action === 'pause' || action === 'resume') {
+      if (!item) return { done: false, reason: `That download is ${record.state}, so it can't be ${action === 'cancel' ? 'cancelled' : action === 'pause' ? 'paused' : 'resumed'}.` }
+      if (action === 'cancel') item.cancel()
+      else if (action === 'pause') item.pause()
+      else if (!item.canResume()) return { done: false, reason: "The server doesn't allow resuming this download." }
+      else item.resume()
+      return { done: true }
+    }
+    if (!existsSync(record.path)) return { done: false, reason: 'The downloaded file is no longer there.' }
+    if (action === 'open') {
+      if (record.state !== 'completed') return { done: false, reason: 'The download has not finished.' }
+      const problem = await shell.openPath(record.path)
+      return problem ? { done: false, reason: problem } : { done: true }
+    }
+    shell.showItemInFolder(record.path)
+    return { done: true }
+  }
+
+  /** Answers a site's pending permission request (camera, location…) the way the prompt's buttons do. */
+  answerPermission(id: string, allow: boolean, remember: boolean): boolean {
+    const waiter = this.permissionWaiters.get(id)
+    if (!waiter) return false
+    waiter(allow, remember)
+    return true
+  }
+
+  /** Site permission requests waiting for an answer. */
+  pendingPermissions(): BrowserPermissionRequest[] {
+    return [...this.pendingRequests.values()]
+  }
+
+  /** Saves a tab's page (the user picks where). */
+  saveTabPage(contents: WebContents): Promise<boolean> {
+    return this.savePage(contents)
   }
 
   registerIpc(): void {
     const { library } = this.o
     ipcMain.on('browser:focus', (_event, focused: unknown) => {
       this.browserFocused = focused === true
+    })
+    ipcMain.on('browser:watch-page-moves', (_event, on: unknown) => {
+      this.watchPageMoves = on === true
     })
     ipcMain.handle('library:get', () => library.snapshot())
     ipcMain.handle('library:toggle-bookmark', (_e, url: unknown, title: unknown) => (typeof url === 'string' ? library.toggleBookmark(url, typeof title === 'string' ? title : '') : false))
@@ -298,14 +393,7 @@ export class BrowserIntegration {
     })
     ipcMain.handle('library:clear-downloads', () => library.clearFinishedDownloads())
     ipcMain.handle('library:download-action', async (_e, id: unknown, action: unknown) => {
-      if (typeof id !== 'string') return
-      const item = this.downloadItems.get(id)
-      const record = library.download(id)
-      if (action === 'cancel') item?.cancel()
-      else if (action === 'pause') item?.pause()
-      else if (action === 'resume' && item?.canResume()) item.resume()
-      else if (action === 'open' && record?.state === 'completed' && existsSync(record.path)) await shell.openPath(record.path)
-      else if (action === 'show' && record && existsSync(record.path)) shell.showItemInFolder(record.path)
+      if (typeof id === 'string' && (action === 'cancel' || action === 'pause' || action === 'resume' || action === 'open' || action === 'show')) await this.downloadAction(id, action)
     })
     ipcMain.handle('browser:permission-answer', (_e, id: unknown, allow: unknown, remember: unknown) => {
       if (typeof id === 'string') this.permissionWaiters.get(id)?.(allow === true, remember === true)

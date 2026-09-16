@@ -24,7 +24,7 @@ test('standard tab, navigation, address, find and zoom shortcuts are recognised'
   assert.equal(action(key('F5')), 'reload')
   assert.equal(action(key('R', { control: true, shift: true })), 'hard-reload')
   assert.equal(action(key('F5', { control: true })), 'hard-reload')
-  for (const k of [key('l', { control: true }), key('d', { alt: true }), key('F6')]) assert.equal(action(k), 'focus-url')
+  for (const k of [key('l', { control: true }), key('e', { control: true }), key('d', { alt: true }), key('F6')]) assert.equal(action(k), 'focus-url')
   assert.equal(action(key('f', { control: true })), 'find')
   assert.equal(action(key('F3')), 'find-next')
   assert.equal(action(key('F3', { shift: true })), 'find-prev')
@@ -37,11 +37,21 @@ test('standard tab, navigation, address, find and zoom shortcuts are recognised'
 })
 
 test('Orion and Orbis shortcuts are never taken by the browser', () => {
-  for (const combo of ['o', 'n'].map((k) => key(k.toUpperCase(), { control: true, shift: true }))) assert.equal(decideShortcut(combo).handled, false)
+  // Ctrl+Shift+O (new chat) is never taken; Ctrl+Shift+N is the browser's private tab, but only while the browser has focus.
+  assert.equal(decideShortcut(key('O', { control: true, shift: true })).handled, false)
   for (const k of ['b', ',', 'n', 'q', 'z', 'x', 'c', 'v', 'k']) assert.equal(decideShortcut(key(k, { control: true })).handled, false, `Ctrl+${k}`)
   assert.equal(decideShortcut(key('Z', { control: true, shift: true })).handled, false)
   assert.equal(decideShortcut(key('I', { control: true, shift: true })).handled, false)
   for (const combo of RESERVED) for (const a of ['new-tab', 'reload', 'history', 'bookmarks'] as const) assert.ok(!combosFor(a).includes(combo))
+})
+
+test('inside the browser, Ctrl+Shift+N opens a private tab once per press', () => {
+  // The table is only consulted while the browser has focus, so elsewhere Ctrl+Shift+N stays the incognito chat.
+  assert.equal(RESERVED.has('Ctrl+Shift+N'), false)
+  assert.deepEqual(decideShortcut(key('N', { control: true, shift: true })), { handled: true, shortcut: { action: 'new-private-tab' }, run: true, consume: true })
+  assert.deepEqual(decideShortcut(key('N', { control: true, shift: true, isAutoRepeat: true })), { handled: true, shortcut: { action: 'new-private-tab' }, run: false, consume: true })
+  assert.deepEqual(combosFor('new-private-tab'), ['Ctrl+Shift+N'])
+  assert.equal(decideShortcut(key('n', { control: true })).handled, false, 'Ctrl+N stays the new chat')
 })
 
 test('plain typing keys, Tab and page scrolling keys are left to the page', () => {
