@@ -1065,12 +1065,17 @@ if (!app.requestSingleInstanceLock()) {
       }
     })
 
+    // Profiles: separate browsing identities. Each has its own cookies, logins, site storage, history, bookmarks,
+    // downloads and open pages; extensions are installed once and follow whichever profile is in use.
+    const profilesStore = new ProfilesStore(app.getPath('userData'))
+
     // Workflows: stored, versioned, recorded and run through the Browser Control Layer.
     const sendToWindow = (channel: string, ...args: unknown[]): void => {
       if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, ...args)
     }
     const fetchForOrion = (url: string, init?: RequestInit): Promise<Response> => net.fetch(url, init)
-    const workflowStore = new WorkflowStore(app.getPath('userData'), platform().secrets)
+    // Workflows, and the learned skills built on them, belong to the profile that made them.
+    const workflowStore = new WorkflowStore(app.getPath('userData'), platform().secrets, (await profilesStore.active()).id)
     workflowRecorder = new WorkflowRecorder({ getWindow: () => mainWindow, windowControl: browserControl.windowControl, library: libraryForControl, emit: (state) => sendToWindow('workflows:recording', state) })
     const workflows = new WorkflowEngine({
       control: browserControl.control,
@@ -1103,17 +1108,28 @@ if (!app.requestSingleInstanceLock()) {
       regenerateTitle: (workflowId) => workflowTitler.regenerate(workflowId)
     })
     void workflows.start().catch((err: unknown) => console.error('[workflows] failed to start', err))
+    profilesStore.onChange(() => {
+      void profilesStore
+        .active()
+        .then((profile) => workflows.useProfile(profile.id))
+        .catch((err: unknown) => console.error('[workflows] could not switch profile', err))
+    })
     app.on('before-quit', () => workflows.stop())
 
 
-    // Profiles: separate browsing identities. Each has its own cookies, logins, site storage, history, bookmarks,
-    // downloads and open pages; extensions are installed once and follow whichever profile is in use.
-    const profilesStore = new ProfilesStore(app.getPath('userData'))
 
     // The Experience Runtime: everything the user personalises, kept apart from Orbis's own settings so the browser
     // works exactly as it always has until someone chooses otherwise.
-    const experienceStore = new ExperienceStore(app.getPath('userData'))
+    const experienceStore = new ExperienceStore(app.getPath('userData'), (await profilesStore.active()).id)
     await experienceStore.load().catch((err: unknown) => console.error('[experience] could not be read', err))
+    // Personalisation follows the profile: the widgets on the new tab, what each is set to, the wallpaper and the theme
+    // all belong to whoever is using Orbis, and switching profile swaps all of it rather than sharing it.
+    profilesStore.onChange(() => {
+      void profilesStore
+        .active()
+        .then((profile) => experienceStore.useProfile(profile.id))
+        .catch((err: unknown) => console.error('[experience] could not switch profile', err))
+    })
     registerExperienceIpc({ store: experienceStore, control: browserControl.control, getWindow: () => mainWindow, send: sendToWindow })
     app.on('before-quit', () => void experienceStore.flush())
 

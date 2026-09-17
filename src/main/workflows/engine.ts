@@ -64,6 +64,20 @@ export class WorkflowEngine {
     }
   }
 
+  /**
+   * Moves to another profile's workflows.
+   *
+   * Runs in progress belong to the profile they were started in, so they are stopped rather than left driving the
+   * browser on behalf of somebody who is no longer using it; then schedules and triggers are worked out again from the
+   * new profile's library.
+   */
+  async useProfile(profileId: string): Promise<void> {
+    if (this.o.store.profile === profileId) return
+    for (const { run } of this.active.values()) run.control('stop')
+    this.o.store.useProfile(profileId)
+    await this.refresh()
+  }
+
   stop(): void {
     if (this.scheduleTimer) clearTimeout(this.scheduleTimer)
     for (const stop of this.stops.splice(0)) stop()

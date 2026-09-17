@@ -2,6 +2,7 @@ import { promises as fs } from 'node:fs'
 import { nullPlatform } from '../platform.ts'
 import type { SecretStorePort } from '../platform'
 import { join } from 'node:path'
+import { DEFAULT_PROFILE_ID, dataDirFor } from '../../shared/profiles.ts'
 import type { Workflow, WorkflowCheckpoint, WorkflowRunSummary, WorkflowVersion } from '../../shared/workflows'
 import { WORKFLOW_FORMAT } from '../../shared/workflows.ts'
 
@@ -17,7 +18,10 @@ const ID = /^[A-Za-z0-9_-]{1,80}$/
  * the operating system's protection). Writes are atomic and serialized per file.
  */
 export class WorkflowStore {
-  private readonly dir: string
+  private readonly userData: string
+  /** Whose workflows these are. Each profile keeps its own library, versions, run history and remembered secrets. */
+  private profileId: string
+  private dir: string
   private readonly queues = new Map<string, Promise<void>>()
   private cache: Map<string, Workflow> | null = null
   private runsCache: WorkflowRunSummary[] | null = null
@@ -28,9 +32,31 @@ export class WorkflowStore {
    */
   private readonly secretStore: SecretStorePort
 
-  constructor(userData: string, secretStore: SecretStorePort = nullPlatform().secrets) {
-    this.dir = join(userData, 'workflows')
+  constructor(userData: string, secretStore: SecretStorePort = nullPlatform().secrets, profileId: string = DEFAULT_PROFILE_ID) {
+    this.userData = userData
+    this.profileId = profileId
+    // The default profile keeps the folder workflows have always been in.
+    this.dir = join(userData, dataDirFor(profileId), 'workflows')
     this.secretStore = secretStore
+  }
+
+  get profile(): string {
+    return this.profileId
+  }
+
+  /**
+   * Switches to another profile's workflows.
+   *
+   * Workflows used to be one library for the whole application, so a workflow — and now a learned skill — made in one
+   * profile turned up in every other. They belong to the profile that made them. Writes already queued keep the paths
+   * they were queued with, so a switch part way through a save cannot put one profile's workflow in another's folder.
+   */
+  useProfile(profileId: string): void {
+    if (profileId === this.profileId) return
+    this.profileId = profileId
+    this.dir = join(this.userData, dataDirFor(profileId), 'workflows')
+    this.cache = null
+    this.runsCache = null
   }
 
   private file(...parts: string[]): string {
