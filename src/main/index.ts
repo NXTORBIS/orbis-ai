@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, components, dialog, ipcMain, Menu, nativeTheme, net, session, shell, webContents } from 'electron'
+import { app, BrowserWindow, clipboard, components, dialog, ipcMain, Menu, nativeTheme, net, Notification, session, shell, webContents } from 'electron'
 import type { MenuItemConstructorOptions, OpenDialogOptions, TitleBarOverlayOptions, WebContents, IpcMainInvokeEvent } from 'electron'
 import { existsSync, promises as fs } from 'node:fs'
 import os from 'node:os'
@@ -52,6 +52,7 @@ import { readSignals } from './browserControl/captchaCapabilities'
 import { StepRun } from './stepRunner'
 import { SkillManager } from './skillManager'
 import { resolveModel } from '../shared/modelRoute'
+import { parseSchedule, scheduleRequest } from '../shared/schedulePhrase'
 import { MemoryFull, MemoryRefused, MemoryStore } from './knowledge/memory'
 import { SearchSessionStore } from './knowledge/searchSessions'
 import { GalaxyService } from './knowledge/galaxyService'
@@ -157,6 +158,8 @@ const popouts = new Set<BrowserWindow>()
 let workflowRecorder: WorkflowRecorder | null = null
 /** Memory for the profile in use; created once the profiles are known. */
 let memory: MemoryStore | null = null
+/** The workflow engine, once it exists, so chat can schedule workflows in words. */
+let workflowEngine: WorkflowEngine | null = null
 
 /** Instructions the user adds to a running automation, per chat request. */
 const automationInstructions = new Map<string, string[]>()
@@ -480,6 +483,37 @@ function registerIpc(): void {
        * it remembered is what it actually stored. Otherwise the few relevant memories go to Orion as facts about the
        * person, never as instructions, and never the whole store.
        */
+      /**
+       * "Run Morning briefing every Friday at 9am": the workflow's own schedule is set, in Orbis's one scheduler, and the
+       * reply says when it will next run — read back from the scheduler, not assumed.
+       */
+      const scheduling = last?.role === 'user' && !request.ask && workflowEngine ? scheduleRequest(last.content) : null
+      if (scheduling && workflowEngine) {
+        const reply = (text: string): void => {
+          emit({ type: 'delta', content: text })
+          emit({ type: 'done', model: request.model, truncated: false })
+        }
+        const all = (await workflowEngine.list()).filter((w) => w.status !== 'archived')
+        const wanted = scheduling.name.toLowerCase()
+        const exact = all.filter((w) => w.name.toLowerCase() === wanted)
+        const words = wanted.split(/\s+/).filter((w) => w.length > 2)
+        const matches = exact.length ? exact : all.filter((w) => words.length > 0 && words.every((word) => w.name.toLowerCase().includes(word)))
+        if (matches.length === 1) {
+          const parsed = parseSchedule(scheduling.phrase)
+          if (!parsed.ok) return reply(parsed.why)
+          const workflow = matches[0]
+          await workflowEngine.save({ ...workflow, schedule: parsed.schedule }, `Scheduled from chat: ${parsed.said}`)
+          const next = workflowEngine.nextRun(workflow.id)
+          return reply(
+            next
+              ? `Scheduled “${workflow.name}” ${parsed.said}. Next run: ${new Date(next).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}. It runs while Orbis is open, and catches up once if Orbis was closed at the time.`
+              : `I set the schedule for “${workflow.name}”, but the scheduler has no upcoming run for it. Check it in Workflows.`
+          )
+        }
+        if (matches.length > 1) return reply(`More than one workflow matches “${scheduling.name}”: ${matches.slice(0, 5).map((w) => `“${w.name}”`).join(', ')}. Say the full name.`)
+        // Not one of the person's workflows: carry on as an ordinary message.
+      }
+
       if (last?.role === 'user' && memory && !request.ask) {
         const command = parseMemoryCommand(last.content)
         if (command) {
@@ -1150,8 +1184,12 @@ if (!app.requestSingleInstanceLock()) {
       store: workflowStore,
       library: libraryForControl,
       ask: (request, signal) => askOrion(request, GROQ_API_KEYS, fetchForOrion, signal),
-      send: sendToWindow
+      send: sendToWindow,
+      notify: (title, body) => {
+        if (Notification.isSupported()) new Notification({ title, body, silent: false }).show()
+      }
     })
+    workflowEngine = workflows
     /**
      * Naming workflows. Orion names them the way it names chats, so nobody has to name every one they make; the work
      * happens after the workflow is already saved and usable, and never holds anything up.

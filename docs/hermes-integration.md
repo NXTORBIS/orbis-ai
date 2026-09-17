@@ -87,7 +87,7 @@ otherwise.
 | Natural-language cron | Workflow schedules (once/daily/weekly/monthly) | "every Friday" mapped onto existing schedules; missed runs caught up at start | — | **IMPROVE** |
 | Results delivered to messaging apps | — | Orbis notifications instead | Third-party delivery | **REJECT** |
 | Notifications | None | OS notifications for finished scheduled runs, monitored changes | Local | **IMPLEMENT** |
-| Monitoring for changes | — | Scheduled workflow comparing page text with the last run | — | **IMPLEMENT** |
+| Monitoring for changes | — | Scheduled workflow comparing page text with the last run. Needs the engine to keep a result between runs, which it does not yet | — | **DEFER** |
 
 ### Security
 

@@ -1,3 +1,4 @@
+import { missedRun } from '../../shared/schedulePhrase.ts'
 import type { RunControl, RunState, StepRecord, WindowBrowserState } from '../../shared/browserControl'
 import type { ActiveWorkflowRun, Workflow, WorkflowIssue, WorkflowRunSummary, WorkflowStats } from '../../shared/workflows'
 import { exportWorkflow, importWorkflow, newWorkflow, nextScheduledRun, validateWorkflow, workflowStats } from '../../shared/workflows'
@@ -29,6 +30,8 @@ export interface WorkflowEngineOptions {
   ask(request: AskRequest, signal: AbortSignal): Promise<AskResult>
   /** Sends an update to the Orbis window. */
   send(channel: string, ...args: unknown[]): void
+  /** Tells the person, outside the window, that something they scheduled or set to run has finished. */
+  notify?(title: string, body: string): void
 }
 
 const MAX_TIMER = 2 ** 31 - 1
@@ -56,6 +59,7 @@ export class WorkflowEngine {
 
   async start(): Promise<void> {
     await this.refresh()
+    await this.catchUp()
     this.stops.push(this.o.windowControl.onState((state) => void this.onBrowserState(state)))
     this.completedDownloads = new Set(this.o.library.snapshot().downloads.filter((d) => d.state === 'completed').map((d) => d.id))
     this.stops.push(this.o.library.addListener(() => void this.onLibrary()))
@@ -76,6 +80,24 @@ export class WorkflowEngine {
     for (const { run } of this.active.values()) run.control('stop')
     this.o.store.useProfile(profileId)
     await this.refresh()
+  }
+
+  /**
+   * Runs anything that was due while Orbis was closed — once, and only if it was due within the last day. Occurrences
+   * before the workflow was last changed are not counted, so a schedule never fires for a time from before it existed.
+   */
+  private async catchUp(now = Date.now()): Promise<void> {
+    const runs = await this.o.store.runs()
+    for (const workflow of await this.o.store.list()) {
+      if (!workflow.schedule?.enabled || workflow.status === 'archived') continue
+      const lastScheduled = runs.find((r) => r.workflowId === workflow.id && r.trigger === 'schedule')?.startedAt
+      const due = missedRun(workflow.schedule, Math.max(lastScheduled ?? 0, workflow.updatedAt), now)
+      if (due === null) continue
+      this.o.send('workflows:notice', { workflowId: workflow.id, message: `“${workflow.name}” was due while Orbis was closed, so it is running now.` })
+      await this.run(workflow.id, { trigger: 'schedule' }).catch((err: unknown) => this.notice(workflow, err))
+      if (workflow.schedule.kind === 'once') await this.o.store.save({ ...workflow, schedule: { ...workflow.schedule, enabled: false } })
+    }
+    await this.reschedule()
   }
 
   stop(): void {
@@ -335,6 +357,13 @@ export class WorkflowEngine {
     await this.o.store.recordRun(summary)
     await this.o.store.clearCheckpoint(runId)
     this.o.send('workflows:run-finished', summary)
+    // Someone who scheduled a workflow, or set one to start on its own, is usually not watching when it finishes.
+    if (summary.trigger === 'schedule' || summary.trigger === 'event') {
+      this.o.notify?.(
+        summary.status === 'completed' ? `“${summary.workflowName}” finished` : summary.status === 'failed' ? `“${summary.workflowName}” could not finish` : `“${summary.workflowName}” was stopped`,
+        summary.status === 'failed' ? (summary.error?.message ?? 'Open Workflows to see what happened.') : `${summary.stepsRun} ${summary.stepsRun === 1 ? 'step' : 'steps'} run.`
+      )
+    }
   }
 
   // ---------------------------------------------------------------- schedules (while Orbis is open)
