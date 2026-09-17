@@ -52,6 +52,7 @@ import { readSignals } from './browserControl/captchaCapabilities'
 import { StepRun } from './stepRunner'
 import { SkillManager } from './skillManager'
 import { resolveModel } from '../shared/modelRoute'
+import { planCompression, summarise, summaryBlock } from './compress'
 import { parseSchedule, scheduleRequest } from '../shared/schedulePhrase'
 import { MemoryFull, MemoryRefused, MemoryStore } from './knowledge/memory'
 import { SearchSessionStore } from './knowledge/searchSessions'
@@ -705,6 +706,18 @@ function registerIpc(): void {
         if (!research?.sources.length && earlier && (includePage || plan)) emit({ type: 'research', research: { ...earlier, reused: true } })
         // Kept inside the user message so the sources sit right next to the question they answer.
         if (context) messages = [...previous, { ...last, content: `${context}\n\nQuestion: ${last.content}` }]
+      }
+      // A long conversation: its older part goes to Orion as a short summary rather than being silently left out.
+      const compression = request.ask ? null : planCompression(messages)
+      if (compression) {
+        const summary = await summarise(compression.older, GROQ_API_KEYS, (url, init) => net.fetch(url, init)).catch(() => null)
+        if (controller.signal.aborted) return emit({ type: 'aborted' })
+        if (summary) {
+          systemPrompt = `${systemPrompt}
+
+${summaryBlock(summary)}`
+          messages = compression.recent
+        }
       }
       await streamChat({
         apiKeys: GROQ_API_KEYS,
