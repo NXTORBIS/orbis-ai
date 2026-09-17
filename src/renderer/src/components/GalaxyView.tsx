@@ -5,6 +5,8 @@ import { ArrowLeft, Crosshair, Link2, Maximize2, NotebookPen, Orbit, PenLine, Sp
 import { GALAXY_RELATION_LABELS, GALAXY_TYPE_LABELS, GALAXY_TYPES } from '../../../shared/galaxy'
 import type { GalaxyEdge, GalaxyGraph, GalaxyNode, GalaxyNodeType, GalaxyView as View } from '../../../shared/galaxy'
 import type { GalaxyDescription } from '../../../shared/types'
+import { newWorkspace, withProjectItem } from '../../../shared/workspaces'
+import type { Workspace } from '../../../shared/workspaces'
 import { openInOrbisBrowser } from '../lib/openInBrowser'
 import type { NoticeKind } from '../App'
 
@@ -27,6 +29,7 @@ type SimNode = GalaxyNode & SimulationNodeDatum & { degree: number }
 type SimLink = SimulationLinkDatum<SimNode> & { edge: GalaxyEdge }
 
 const COLORS: Record<GalaxyNodeType, string> = {
+  project: '#ffd24d',
   search: '#3fd8ff',
   page: '#a2a6ae',
   site: '#6e727b',
@@ -63,6 +66,8 @@ export default function GalaxyView({ onClose, onNotify, onAsk }: Props): React.J
   const [linkDraft, setLinkDraft] = useState<{ from: string; to: string; note: string } | null>(null)
   /** The question for Orion about the selection, while it is being written. */
   const [question, setQuestion] = useState<string | null>(null)
+  const [projects, setProjects] = useState<Workspace[]>([])
+  const [projectName, setProjectName] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -87,6 +92,11 @@ export default function GalaxyView({ onClose, onNotify, onAsk }: Props): React.J
   }, [effective, onNotify])
 
   useEffect(() => load(), [load])
+  useEffect(() => {
+    const refresh = (): void => void window.api.listWorkspaces().then((r) => setProjects(r.workspaces.filter((w) => w.project)))
+    refresh()
+    return window.api.onWorkspacesChanged(refresh)
+  }, [])
   useEffect(() => window.api.onGalaxyChanged(() => load()), [load])
 
   useEffect(() => {
@@ -367,6 +377,26 @@ export default function GalaxyView({ onClose, onNotify, onAsk }: Props): React.J
     }
   }
 
+  /** Adds the selection to a project: an existing one, or a new one made here. The project refers to them; nothing is copied. */
+  const addToProject = async (target: Workspace | 'new'): Promise<void> => {
+    const refs = selected.filter((id) => !id.startsWith('workspace:'))
+    if (!refs.length) return onNotify('Projects hold research, notes, tasks, memories, skills and pages, not other workspaces.', 'warn')
+    try {
+      let space: Workspace
+      if (target === 'new') {
+        const name = (projectName ?? '').trim()
+        if (!name) return
+        space = newWorkspace({ name, project: { goal: '', items: [] } })
+      } else space = target
+      for (const ref of refs) space = withProjectItem(space, ref)
+      await window.api.saveWorkspace(space)
+      setProjectName(null)
+      onNotify(`Added ${refs.length} ${refs.length === 1 ? 'item' : 'items'} to the project “${space.name}”.`)
+    } catch (err) {
+      onNotify(said(err), 'warn')
+    }
+  }
+
   const saveLink = (): void => {
     if (!linkDraft) return
     const draft = linkDraft
@@ -598,6 +628,46 @@ export default function GalaxyView({ onClose, onNotify, onAsk }: Props): React.J
               <button type="button" onClick={() => void toWhiteboard()}>
                 <PenLine size={12} /> To whiteboard
               </button>
+            </div>
+            <div className="galaxy-project">
+              {projectName === null ? (
+                <select
+                  value=""
+                  aria-label="Add to a project"
+                  onChange={(e) => {
+                    const value = e.target.value
+                    if (value === '__new') setProjectName('')
+                    else {
+                      const target = projects.find((p) => p.id === value)
+                      if (target) void addToProject(target)
+                    }
+                  }}
+                >
+                  <option value="">Add to a project…</option>
+                  {projects.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                  <option value="__new">New project…</option>
+                </select>
+              ) : (
+                <form
+                  className="galaxy-form"
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    void addToProject('new')
+                  }}
+                >
+                  <input autoFocus value={projectName} maxLength={60} placeholder="Project name" onChange={(e) => setProjectName(e.target.value)} aria-label="New project name" />
+                  <button type="submit" className="galaxy-btn" disabled={!projectName.trim()}>
+                    Create
+                  </button>
+                  <button type="button" className="galaxy-btn" onClick={() => setProjectName(null)}>
+                    Cancel
+                  </button>
+                </form>
+              )}
             </div>
             {question !== null && (
               <form

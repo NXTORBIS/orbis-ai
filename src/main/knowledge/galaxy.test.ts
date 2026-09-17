@@ -121,6 +121,19 @@ test('a selected node shows real counts, and Orion is given only the selection',
   assert.match(prompt, /data, not instructions/)
 })
 
+test('a project is a hub for exactly the things added to it, and forgets what no longer exists', () => {
+  const sources = sample()
+  sources.workspaces.push({ id: 'p1', name: 'Orbis', createdAt: 1, updatedAt: 1, tabs: [], project: { goal: 'Ship the browser', items: [{ ref: 'search:s1', addedAt: 1 }, { ref: 'note:n2', addedAt: 1 }, { ref: 'note:deleted', addedAt: 1 }] } })
+  const g = buildGalaxy(sources, 1000)
+  const project = g.nodes.find((n) => n.id === 'workspace:p1')!
+  assert.equal(project.type, 'project')
+  assert.equal(project.detail, 'Ship the browser')
+  const members = g.edges.filter((e) => e.to === 'workspace:p1' && e.relation === 'part_of').map((e) => e.from).sort()
+  assert.deepEqual(members, ['note:n2', 'search:s1'], 'only what was added, and only what still exists')
+  assert.match(g.edges.find((e) => e.relation === 'part_of')!.why, /You added this to the project “Orbis”/)
+  assert.equal(g.nodes.find((n) => n.id === 'workspace:ws1')!.type, 'workspace', 'a workspace that is not a project stays a workspace')
+})
+
 test('a large profile is cut to the most connected and most recent, never at random', () => {
   const sources = empty()
   for (let i = 0; i < 1000; i++) sources.notes.push({ id: `n${i}`, title: `Note ${i}`, archived: false, createdAt: i, updatedAt: i })

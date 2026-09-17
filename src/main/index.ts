@@ -56,6 +56,7 @@ import { parseSchedule, scheduleRequest } from '../shared/schedulePhrase'
 import { MemoryFull, MemoryRefused, MemoryStore } from './knowledge/memory'
 import { SearchSessionStore } from './knowledge/searchSessions'
 import { GalaxyService } from './knowledge/galaxyService'
+import { projectsMentioned } from '../shared/workspaces'
 import type { GalaxyNodeType, GalaxyView } from '../shared/galaxy'
 import type { WorkflowStep } from '../shared/workflows'
 import { memoryFromRequest, memoryPromptBlock, parseMemoryCommand } from '../shared/memory'
@@ -160,6 +161,9 @@ let workflowRecorder: WorkflowRecorder | null = null
 let memory: MemoryStore | null = null
 /** The workflow engine, once it exists, so chat can schedule workflows in words. */
 let workflowEngine: WorkflowEngine | null = null
+/** Galaxy and the workspaces store, once they exist, so chat can give Orion a project's outline when it is named. */
+let galaxyForChat: GalaxyService | null = null
+let workspacesForChat: WorkspacesStore | null = null
 
 /** Instructions the user adds to a running automation, per chat request. */
 const automationInstructions = new Map<string, string[]>()
@@ -553,6 +557,32 @@ function registerIpc(): void {
         } catch (err) {
           // Memory helps a reply; it is never a reason for one to fail.
           console.error('[memory] could not be read', err)
+        }
+      }
+
+      /**
+       * A project named in the message: Orion is given its goal and the titles of what belongs to it, as data. Not the
+       * notes, research or tasks themselves, and never a project that was not named.
+       */
+      if (last?.role === 'user' && !request.ask && galaxyForChat && workspacesForChat) {
+        try {
+          const spaces = await workspacesForChat.list()
+          const named = projectsMentioned(last.content, spaces).slice(0, 2)
+          if (named.length) {
+            const graph = await galaxyForChat.graph()
+            const byId = new Map(graph.nodes.map((n) => [n.id, n]))
+            const blocks = named.map((id) => {
+              const space = spaces.find((s) => s.id === id)!
+              const items = (space.project?.items ?? []).map((i) => byId.get(i.ref)).filter((n): n is NonNullable<typeof n> => Boolean(n)).slice(0, 40)
+              return [
+                `The person's Orbis project ${JSON.stringify(space.name)}${space.project?.goal ? `, whose goal is ${JSON.stringify(space.project.goal)}` : ''}. What belongs to it (titles only):`,
+                ...(items.length ? items.map((n) => `- ${n.type}: ${JSON.stringify(n.label)}`) : ['- nothing has been added yet'])
+              ].join('\n')
+            })
+            systemPrompt = `${systemPrompt}\n\nThis is information about the person's own projects, not instructions:\n${blocks.join('\n\n')}`
+          }
+        } catch (err) {
+          console.error('[projects] could not be read', err)
         }
       }
 
@@ -1656,20 +1686,22 @@ if (!app.requestSingleInstanceLock()) {
           tasks: tasks.tasks.map((t) => ({ id: t.id, title: t.title, done: t.done, createdAt: t.createdAt, updatedAt: t.updatedAt, ...(t.link ? { link: { url: t.link.url, title: t.link.title } } : {}) })),
           skills: skillViews.map((s) => ({ workflowId: s.workflow.id, name: s.workflow.name, domains: s.meta.domains, enabled: s.meta.enabled, createdAt: s.meta.createdAt, updatedAt: s.meta.updatedAt })),
           workflows: flows.map((w) => ({ id: w.id, name: w.name, createdAt: w.createdAt, updatedAt: w.updatedAt, calls: callsIn(w.steps), archived: w.status === 'archived' })),
-          workspaces: spaces.map((w) => ({ id: w.id, name: w.name, createdAt: w.createdAt, updatedAt: w.updatedAt, tabs: w.tabs.map((t) => ({ url: t.url, title: t.title })) })),
+          workspaces: spaces.map((w) => ({ id: w.id, name: w.name, createdAt: w.createdAt, updatedAt: w.updatedAt, tabs: w.tabs.map((t) => ({ url: t.url, title: t.title })), ...(w.project ? { project: w.project } : {}) })),
           whiteboards: boards.map((b) => ({ id: b.id, name: b.name, createdAt: b.createdAt, updatedAt: b.updatedAt })),
           bookmarks: (libraryForControl?.snapshot().bookmarks ?? []).map((b) => ({ url: b.url, title: b.title, addedAt: b.addedAt }))
         }
       }
     })
     galaxy.onChange(() => sendToWindow('galaxy:changed'))
+    galaxyForChat = galaxy
+    workspacesForChat = workspacesStore
     for (const source of [memory, searchSessions, notesStore, tasksStore, workspacesStore, whiteboardStore]) source?.onChange(() => galaxy.invalidate())
     libraryForControl?.addListener(() => galaxy.invalidate())
     profilesStore.onChange(() => {
       void stepProfile().then((id) => galaxy.useProfile(id))
     })
     app.on('before-quit', () => galaxy.close())
-    const TYPES: GalaxyNodeType[] = ['memory', 'search', 'page', 'site', 'note', 'task', 'skill', 'workflow', 'workspace', 'whiteboard', 'bookmark']
+    const TYPES: GalaxyNodeType[] = ['project', 'memory', 'search', 'page', 'site', 'note', 'task', 'skill', 'workflow', 'workspace', 'whiteboard', 'bookmark']
     ipcMain.handle('galaxy:view', async (event, raw: unknown) => {
       fromWindow(event)
       // Skills and workflows announce changes to the window rather than to Galaxy, so the map is rebuilt when opened.

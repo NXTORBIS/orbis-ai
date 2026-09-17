@@ -19,6 +19,19 @@ export interface WorkspaceGroup {
   collapsed: boolean
 }
 
+/**
+ * What turns a workspace into a project: what it is for, and the things in Orbis that belong to it. Items are referred
+ * to, never copied: each is the Galaxy id of something that lives in its own store ("note:…", "search:…"), so deleting
+ * the note deletes it everywhere and the project simply stops listing it.
+ */
+export interface ProjectInfo {
+  goal: string
+  items: { ref: string; addedAt: number }[]
+}
+
+export const MAX_PROJECT_ITEMS = 500
+const PROJECT_REF = /^(memory|search|note|task|skill|workflow|whiteboard|bookmark|page|site):[^\s]{1,2100}$/
+
 export interface Workspace {
   id: string
   name: string
@@ -31,6 +44,8 @@ export interface Workspace {
   updatedAt: number
   lastOpenedAt?: number
   order: number
+  /** Present when the workspace is a project. */
+  project?: ProjectInfo
 }
 
 export const WORKSPACE_COLORS = ['#3fd8ff', '#3ee58a', '#ffbe4d', '#ff4d6d', '#a78bfa', '#f472b6']
@@ -84,8 +99,44 @@ export function normalizeWorkspace(raw: unknown): Workspace | null {
     createdAt: Number(r.createdAt) || now(),
     updatedAt: Number(r.updatedAt) || Number(r.createdAt) || now(),
     ...(Number(r.lastOpenedAt) ? { lastOpenedAt: Number(r.lastOpenedAt) } : {}),
-    order: Number(r.order) || 0
+    order: Number(r.order) || 0,
+    ...(r.project && typeof r.project === 'object' ? { project: normalizeProject(r.project) } : {})
   }
+}
+
+function normalizeProject(raw: Partial<ProjectInfo>): ProjectInfo {
+  const seen = new Set<string>()
+  const items: ProjectInfo['items'] = []
+  for (const item of Array.isArray(raw.items) ? raw.items : []) {
+    if (!item || typeof item.ref !== 'string' || !PROJECT_REF.test(item.ref) || seen.has(item.ref)) continue
+    seen.add(item.ref)
+    items.push({ ref: item.ref, addedAt: Number(item.addedAt) || now() })
+    if (items.length >= MAX_PROJECT_ITEMS) break
+  }
+  return { goal: (typeof raw.goal === 'string' ? raw.goal : '').replace(/\s+/g, ' ').trim().slice(0, 500), items }
+}
+
+/** A project with one more thing in it. Adding something already there changes nothing. */
+export function withProjectItem(workspace: Workspace, ref: string, at = now()): Workspace {
+  const project = workspace.project ?? { goal: '', items: [] }
+  if (!PROJECT_REF.test(ref) || project.items.some((i) => i.ref === ref)) return { ...workspace, project }
+  return { ...workspace, project: { ...project, items: [...project.items, { ref, addedAt: at }].slice(0, MAX_PROJECT_ITEMS) } }
+}
+
+export function withoutProjectItem(workspace: Workspace, ref: string): Workspace {
+  return workspace.project ? { ...workspace, project: { ...workspace.project, items: workspace.project.items.filter((i) => i.ref !== ref) } } : workspace
+}
+
+/**
+ * The projects a message is about, by name: "continue my Orbis project", "what's left on Kitchen renovation?". A name
+ * must appear whole, so a project called "Art" is not found in "start".
+ */
+export function projectsMentioned(message: string, workspaces: Pick<Workspace, 'id' | 'name' | 'project'>[]): string[] {
+  const text = ` ${message.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ')} `
+  return workspaces
+    .filter((w) => w.project && w.name.trim().length >= 3)
+    .filter((w) => text.includes(` ${w.name.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()} `))
+    .map((w) => w.id)
 }
 
 /** What the browser window holds right now, as a workspace's tabs and groups. Private tabs are never saved. */

@@ -14151,3 +14151,51 @@ html[data-motion='reduced'] .newtab-orb {
   font-size: 12.5px;
   resize: vertical;
 }
+
+.galaxy-project {
+  margin-top: 8px;
+}
+
+.galaxy-project select {
+  width: 100%;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--pill-border);
+  border-radius: 999px;
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+}
+
+.space-project {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 6px 0;
+  font-size: 12.5px;
+}
+
+.space-project label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.space-project input {
+  padding: 5px 9px;
+  border: 1px solid var(--pill-border);
+  border-radius: 8px;
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+}
+
+.space-project p {
+  margin: 0;
+}
+
+.space-make-project {
+  align-self: flex-start;
+  margin: 6px 0;
+}

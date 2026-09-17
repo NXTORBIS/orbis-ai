@@ -102,6 +102,27 @@ export default function WorkspacesView({ onClose, onNotify }: { onClose(): void;
               {workspace.summary.pinned ? ` · ${workspace.summary.pinned} pinned` : ''} · {when(workspace.lastOpenedAt)}
             </p>
             <p className="space-sites view-muted">{workspace.summary.sites.join(' · ') || 'No sites'}</p>
+            {workspace.project ? (
+              <div className="space-project">
+                <label>
+                  <span className="view-muted">Project goal</span>
+                  <input
+                    defaultValue={workspace.project.goal}
+                    maxLength={500}
+                    placeholder="What this project is for"
+                    aria-label={`Goal of ${workspace.name}`}
+                    onBlur={(e) => e.target.value.trim() !== workspace.project?.goal && void window.api.saveWorkspace({ ...workspace, project: { ...workspace.project!, goal: e.target.value } })}
+                  />
+                </label>
+                <p className="view-muted">
+                  {workspace.project.items.length} {workspace.project.items.length === 1 ? 'item' : 'items'} in this project · add research, notes, tasks and more from Galaxy
+                </p>
+              </div>
+            ) : (
+              <button type="button" className="queue-btn small space-make-project" onClick={() => void window.api.saveWorkspace({ ...workspace, project: { goal: '', items: [] } }).then(() => onNotify(`“${workspace.name}” is now a project.`))}>
+                Make this a project
+              </button>
+            )}
             <div className="space-colors" role="group" aria-label="Colour">
               {WORKSPACE_COLORS.map((c) => (
                 <button key={c} type="button" className={`board-color${workspace.color === c ? ' on' : ''}`} style={{ background: c }} aria-label={`Colour ${c}`} onClick={() => void window.api.saveWorkspace({ ...workspace, color: c })} />

@@ -18,11 +18,12 @@
  * Pure: no disk, no network, no model.
  */
 
-export type GalaxyNodeType = 'memory' | 'search' | 'page' | 'site' | 'note' | 'task' | 'skill' | 'workflow' | 'workspace' | 'whiteboard' | 'bookmark'
+export type GalaxyNodeType = 'project' | 'memory' | 'search' | 'page' | 'site' | 'note' | 'task' | 'skill' | 'workflow' | 'workspace' | 'whiteboard' | 'bookmark'
 
-export const GALAXY_TYPES: GalaxyNodeType[] = ['search', 'page', 'site', 'note', 'task', 'memory', 'skill', 'workflow', 'workspace', 'whiteboard', 'bookmark']
+export const GALAXY_TYPES: GalaxyNodeType[] = ['project', 'search', 'page', 'site', 'note', 'task', 'memory', 'skill', 'workflow', 'workspace', 'whiteboard', 'bookmark']
 
 export const GALAXY_TYPE_LABELS: Record<GalaxyNodeType, string> = {
+  project: 'Project',
   memory: 'Memory',
   search: 'Research',
   page: 'Page',
@@ -36,7 +37,7 @@ export const GALAXY_TYPE_LABELS: Record<GalaxyNodeType, string> = {
   bookmark: 'Bookmark'
 }
 
-export type GalaxyRelation = 'used_source' | 'saved_from' | 'links_to' | 'on_site' | 'made_on' | 'calls' | 'contains' | 'bookmarked' | 'connected'
+export type GalaxyRelation = 'used_source' | 'saved_from' | 'links_to' | 'on_site' | 'made_on' | 'calls' | 'contains' | 'bookmarked' | 'part_of' | 'connected'
 
 export const GALAXY_RELATION_LABELS: Record<GalaxyRelation, string> = {
   used_source: 'used as a source',
@@ -47,6 +48,7 @@ export const GALAXY_RELATION_LABELS: Record<GalaxyRelation, string> = {
   calls: 'runs',
   contains: 'contains',
   bookmarked: 'is a bookmark of',
+  part_of: 'is part of',
   connected: 'connected by you to'
 }
 
@@ -99,7 +101,7 @@ export interface GalaxySources {
   tasks: { id: string; title: string; done: boolean; createdAt: number; updatedAt: number; link?: { url: string; title: string } }[]
   skills: { workflowId: string; name: string; domains: string[]; enabled: boolean; createdAt: number; updatedAt: number }[]
   workflows: { id: string; name: string; createdAt: number; updatedAt: number; calls: string[]; archived: boolean }[]
-  workspaces: { id: string; name: string; createdAt: number; updatedAt: number; tabs: { url: string; title: string }[] }[]
+  workspaces: { id: string; name: string; createdAt: number; updatedAt: number; tabs: { url: string; title: string }[]; project?: { goal: string; items: { ref: string; addedAt: number }[] } }[]
   whiteboards: { id: string; name: string; createdAt: number; updatedAt: number }[]
   bookmarks: { url: string; title: string; addedAt: number }[]
   links: UserLink[]
@@ -220,7 +222,9 @@ export function buildGalaxy(sources: GalaxySources, now = Date.now()): GalaxyGra
   }
 
   for (const ws of sources.workspaces) {
-    const id = node({ id: `workspace:${ws.id}`, type: 'workspace', label: ws.name, detail: `${ws.tabs.length} tabs`, createdAt: ws.createdAt, updatedAt: ws.updatedAt })
+    const id = ws.project
+      ? node({ id: `workspace:${ws.id}`, type: 'project', label: ws.name, detail: ws.project.goal || `${ws.project.items.length} items`, createdAt: ws.createdAt, updatedAt: ws.updatedAt })
+      : node({ id: `workspace:${ws.id}`, type: 'workspace', label: ws.name, detail: `${ws.tabs.length} tabs`, createdAt: ws.createdAt, updatedAt: ws.updatedAt })
     for (const tab of ws.tabs) {
       const p = page(tab.url, tab.title)
       if (p) edge(id, p, 'contains', 'This page is one of the workspace’s saved tabs.')
@@ -236,6 +240,11 @@ export function buildGalaxy(sources: GalaxySources, now = Date.now()): GalaxyGra
     if (!p) continue
     const id = node({ id: `bookmark:${pageKey(b.url)}`, type: 'bookmark', label: b.title || b.url, url: pageKey(b.url) ?? undefined, createdAt: b.addedAt, updatedAt: b.addedAt })
     edge(id, p, 'bookmarked', 'You bookmarked this page.')
+  }
+
+  // Project membership, once everything is on the map: only items that still exist in their own stores are shown.
+  for (const ws of sources.workspaces) {
+    for (const item of ws.project?.items ?? []) edge(item.ref, `workspace:${ws.id}`, 'part_of', `You added this to the project “${ws.name}”.`)
   }
 
   // The person's own links, only between things that still exist.
