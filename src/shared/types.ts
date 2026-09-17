@@ -726,6 +726,8 @@ export interface NxtorbisApi {
   /** The selection, written as a message for Orion. Nothing else from the profile is included. */
   galaxyAsk(ids: string[], question: string): Promise<string>
   onGalaxyChanged(listener: () => void): () => void
+  /** The profile changed, so the conversations shown belong to someone else now. */
+  onConversationsReload(listener: () => void): () => void
   vaultStatus(): Promise<VaultStatus | VaultError>
   vaultQuestion(): Promise<string | null | VaultError>
   vaultCreate(password: string, recovery?: { question: string; answer: string }): Promise<VaultStatus | VaultError>

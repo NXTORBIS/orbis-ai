@@ -3,7 +3,8 @@ import { nullPlatform } from './platform.ts'
 import type { SecretStorePort } from './platform'
 import { join } from 'node:path'
 import type { Conversation, ReasoningEffort, Settings, SettingsUpdate, Theme } from '../shared/types'
-import { DEFAULT_MODEL, MODELS, currentModelId } from '../shared/models'
+import { DEFAULT_MODEL, MODELS, currentModelId } from '../shared/models.ts'
+import { DEFAULT_PROFILE_ID, dataDirFor } from '../shared/profiles.ts'
 
 interface StoredSettings extends Omit<Settings, 'hasApiKey'> {
   /** base64; DPAPI-encrypted via safeStorage when `apiKeyEncrypted` is true. */
@@ -33,7 +34,9 @@ const ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/
 
 export class Store {
   private readonly settingsPath: string
-  private readonly conversationsDir: string
+  private readonly userDataDir: string
+  /** Whose conversations these are. Settings stay shared; conversations belong to the profile that had them. */
+  private conversationsDir: string
   private settings: StoredSettings | null = null
   private readonly writeQueues = new Map<string, Promise<void>>()
 
@@ -43,7 +46,17 @@ export class Store {
   constructor(userDataDir: string, secrets: SecretStorePort = nullPlatform().secrets) {
     this.secrets = secrets
     this.settingsPath = join(userDataDir, 'settings.json')
-    this.conversationsDir = join(userDataDir, 'conversations')
+    this.userDataDir = userDataDir
+    // The default profile keeps the folder conversations have always been in.
+    this.conversationsDir = join(userDataDir, dataDirFor(DEFAULT_PROFILE_ID), 'conversations')
+  }
+
+  /**
+   * Moves to another profile's conversations. A save already queued keeps the path it was queued with, so a
+   * conversation can never be written into the profile that was switched to.
+   */
+  useProfile(profileId: string): void {
+    this.conversationsDir = join(this.userDataDir, dataDirFor(profileId), 'conversations')
   }
 
   async getSettings(): Promise<Settings> {

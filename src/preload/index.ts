@@ -86,6 +86,7 @@ const api: NxtorbisApi = {
   galaxyUnlink: (id) => ipcRenderer.invoke('galaxy:unlink', id),
   galaxyAsk: (ids, question) => ipcRenderer.invoke('galaxy:ask', ids, question),
   onGalaxyChanged: (listener) => subscribe('galaxy:changed', listener),
+  onConversationsReload: (listener) => subscribe('conversations:reload', listener),
   defaultBrowserState: () => ipcRenderer.invoke('default-browser:state'),
   requestDefaultBrowser: () => ipcRenderer.invoke('default-browser:request'),
   openDefaultAppsSettings: () => ipcRenderer.invoke('default-browser:settings'),

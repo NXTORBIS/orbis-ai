@@ -1199,6 +1199,18 @@ if (!app.requestSingleInstanceLock()) {
     // Profiles: separate browsing identities. Each has its own cookies, logins, site storage, history, bookmarks,
     // downloads and open pages; extensions are installed once and follow whichever profile is in use.
     const profilesStore = new ProfilesStore(app.getPath('userData'))
+    // Conversations belong to the profile in use. The window is told to read them again whenever that changes.
+    const reloadConversations = (): void => {
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('conversations:reload')
+    }
+    store.useProfile((await profilesStore.active()).id)
+    reloadConversations()
+    profilesStore.onChange(() => {
+      void profilesStore.active().then((profile) => {
+        store.useProfile(profile.id)
+        reloadConversations()
+      })
+    })
 
     // Workflows: stored, versioned, recorded and run through the Browser Control Layer.
     const sendToWindow = (channel: string, ...args: unknown[]): void => {

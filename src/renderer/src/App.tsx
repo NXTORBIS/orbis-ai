@@ -268,6 +268,18 @@ export default function App(): React.JSX.Element {
     if (!activityOpenRef.current) setUnread((n) => n + 1)
   }, [])
 
+  // Another profile's conversations: the list is read again, and a chat from the old profile is never left open.
+  useEffect(
+    () =>
+      window.api.onConversationsReload(() => {
+        void window.api.listConversations().then((list) => {
+          commitConversations(list)
+          setActiveId((current) => (current && list.some((c) => c.id === current) ? current : null))
+        })
+      }),
+    [commitConversations]
+  )
+
   const load = useCallback(() => {
     Promise.all([window.api.getSettings(), window.api.listConversations()]).then(
       ([s, list]) => {
