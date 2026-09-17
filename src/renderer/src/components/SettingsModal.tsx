@@ -2,7 +2,6 @@ import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import type { DefaultBrowserState, Settings, SettingsUpdate, Theme } from '../../../shared/types'
 import { MODELS } from '../../../shared/models'
-import AccountSection from './AccountSection'
 
 const OfflineGamesSettings = lazy(() => import('./OfflineGamesSettings'))
 // A megabyte of licence text: read only when someone asks to see it.
@@ -80,8 +79,6 @@ export default function SettingsModal({ settings, onUpdate, onClose }: Props): R
         </div>
 
         <div className="modal-body">
-          <AccountSection />
-
           <DefaultBrowserSetting />
 
           <section className="setting">

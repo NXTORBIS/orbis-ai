@@ -103,7 +103,6 @@ Three channels disappear because we are currently reimplementing what Chromium a
 | `settings:get`, `settings:update`, `settings:testKey` | Mojo onto the same store |
 | `conversations:list`, `conversations:save`, `conversations:delete` | Mojo onto the same store |
 | `update:status`, `update:check`, `update:download`, `update:cancel-download`, `update:restart-and-update`, `update:settings` | Mojo onto the same update manager; the installer changes, the manager does not |
-| `auth:state`, `auth:sign-in`, `auth:sign-out`, `auth:cancel` | Mojo onto the same auth; the sign-in window becomes a real browser window |
 | `shortcuts:add`, `shortcuts:remove`, `shortcuts:update`, `shortcuts:refresh-icon` | Mojo onto the same store |
 | `app:notices`, `app:licence-file` | Mojo; the licence files ship beside the browser |
 | `omnibox:predict`, `omnibox:web` | Mojo onto the same ranking, which is ours and better suited to Orbis than Chromium's |

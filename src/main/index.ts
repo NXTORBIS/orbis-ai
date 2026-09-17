@@ -44,8 +44,6 @@ import { checkAudio, describeError, isVoiceModel } from '../shared/voiceInput'
 import { completeDraft, generateTitle, generateWorkflowTitle, predictQueries, suggestFollowups } from './suggest'
 import { WorkflowTitler } from './workflows/titler'
 import { parseWebSuggestions } from '../shared/omnibox'
-import { AuthManager } from './auth'
-import { configuredProvider, protectedSessionFile } from './authSecrets'
 import { fetchFavicon } from './favicon'
 import { ExtensionsManager } from './extensions/manager'
 import type { ReportedTab, WindowRequest } from './extensions/bridge'
@@ -756,27 +754,16 @@ function registerIpc(): void {
   })
   ipcMain.handle('window:is-fullscreen', (event) => BrowserWindow.fromWebContents(event.sender)?.isFullScreen() ?? false)
 
-  // Account sign-in through the system browser (never an Orbis web view). Only state reaches windows, never codes or tokens.
-  const auth = new AuthManager({
-    provider: configuredProvider(),
-    fetchFn: (url, init) => net.fetch(url, init),
-    openExternal: (url) => shell.openExternal(url),
-    secrets: protectedSessionFile(app.getPath('userData'), platform().secrets),
-    onChange: (state) => {
-      for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send('auth:changed', state)
-    },
-    onReturn: () => {
-      if (!mainWindow) return
-      if (mainWindow.isMinimized()) mainWindow.restore()
-      mainWindow.show()
-      mainWindow.focus()
-    }
-  })
-  void auth.restore()
-  ipcMain.handle('auth:state', () => auth.state())
-  ipcMain.handle('auth:sign-in', () => auth.signIn())
-  ipcMain.handle('auth:cancel', () => auth.cancel())
-  ipcMain.handle('auth:sign-out', () => auth.signOut())
+  /**
+   * Orbis has no account. Everything it keeps stays on this computer, so there is nothing to sign in to.
+   *
+   * Earlier builds could sign in with Google and kept that session, encrypted, beside the rest of Orbis's data. With
+   * sign-in gone nothing would ever read or clear it again, and a Google session left lying around for a feature that
+   * no longer exists is worth removing rather than forgetting. So it is deleted once, quietly, if it is there.
+   */
+  for (const leftover of ['account-session.bin', 'account-session.bin.tmp']) {
+    void fs.rm(join(app.getPath('userData'), leftover), { force: true }).catch(() => undefined)
+  }
 
   ipcMain.handle('adblock:state', () => adblock?.state() ?? null)
   ipcMain.handle('adblock:settings', (_event, update: unknown) => (adblock && update && typeof update === 'object' ? adblock.updateSettings(update as Partial<AdBlockSettings>) : null))

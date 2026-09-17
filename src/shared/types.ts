@@ -470,20 +470,6 @@ export interface BrowserDownload {
 
 export type SitePermissionDecision = 'allow' | 'block'
 
-export type AuthStatus = 'unconfigured' | 'signed-out' | 'waiting' | 'signing-in' | 'signed-in'
-
-/** Account sign-in as the window sees it: never any code or token. */
-export interface AuthState {
-  status: AuthStatus
-  /** The provider in use, e.g. "Google". */
-  provider?: string
-  user?: { name: string; email: string; picture?: string }
-  /** Why the last attempt failed. */
-  error?: string
-  /** Something worth knowing about a successful sign-in. */
-  notice?: string
-}
-
 /** A search run from the address bar. */
 export interface BrowserSearchEntry {
   query: string
@@ -863,12 +849,6 @@ export interface NxtorbisApi {
   /** Whether the Orbis window is really fullscreen, and changes to it however they happen (F11, Esc, the OS). */
   isWindowFullscreen(): Promise<boolean>
   onWindowFullscreen(listener: (on: boolean) => void): () => void
-  getAuthState(): Promise<AuthState>
-  /** Opens the system browser to sign in; resolves once it is waiting for the browser. */
-  signIn(): Promise<AuthState>
-  cancelSignIn(): Promise<void>
-  signOut(): Promise<void>
-  onAuthState(listener: (state: AuthState) => void): () => void
   /** Settings changed outside the settings screen (by the Browser Control Layer). */
   onSettingsChanged(listener: (settings: Settings) => void): () => void
   /** A site's permission request was answered (from the prompt or through the control layer). */
