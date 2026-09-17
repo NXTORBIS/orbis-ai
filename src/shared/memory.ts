@@ -152,3 +152,32 @@ export function memoryPromptBlock(entries: Pick<MemoryEntry, 'text' | 'category'
     ...lines
   ].join('\n')
 }
+
+// ---------------------------------------------------------------- noticing something worth remembering
+
+const SELF_STATEMENT: RegExp[] = [
+  /\b(?:my name is|call me)\s+[A-Z][\w'-]{1,40}/,
+  /\bi(?:'m| am)\s+(?:a|an|the)\s+[\w '-]{3,60}/i,
+  /\bi\s+(?:live|work|study)\s+(?:in|at|for)\s+[\w '-]{2,60}/i,
+  /\bi\s+(?:prefer|like|love|hate|dislike|avoid|always|never|usually)\s+[\w '-]{3,80}/i,
+  /\bi\s+(?:use|am using|am building|am working on)\s+[\w '.-]{3,80}/i,
+  /\bmy\s+(?:timezone|time zone|birthday|pronouns|job|role|team|company|dog|cat|car|phone|laptop)\s+(?:is|are)\s+[\w '.:+-]{2,60}/i
+]
+
+/** A question, a hypothetical, or anything else that is not the person stating something about themselves. */
+const NOT_A_STATEMENT = /\?\s*$|^\s*(?:what|who|when|where|why|how|is|are|do|does|can|could|should|would|will)\b|\b(?:pretend|imagine|suppose|for example|e\.g\.|as if|if i were)\b/i
+
+/**
+ * Something a person said about themselves that is worth offering to remember — offered, never saved. Orion turning its
+ * own reading of a message into a permanent fact is exactly what must not happen, so this only notices plain statements
+ * and leaves the decision to the person. Questions, hypotheticals and anything secret are left alone, and the sentence
+ * is kept as they wrote it rather than reworded.
+ */
+export function memorySuggestion(message: string): string | null {
+  const text = message.replace(/\s+/g, ' ').trim()
+  if (text.length < 8 || text.length > 300 || NOT_A_STATEMENT.test(text)) return null
+  const sentence = text.split(/(?<=[.!])\s+/).find((part) => SELF_STATEMENT.some((pattern) => pattern.test(part)))
+  if (!sentence) return null
+  const checked = checkMemory(sentence.replace(/^(?:and|but|also|so|by the way,?)\s+/i, '').replace(/[.!]+$/, ''))
+  return checked.ok && checked.text.length >= 8 ? checked.text : null
+}

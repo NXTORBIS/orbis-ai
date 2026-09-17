@@ -154,3 +154,21 @@ test('each profile has its own memory, kept on disk', async () => {
     rmSync(dir, { recursive: true, force: true })
   }
 })
+
+test('a plain statement about themselves is offered as a memory; questions, guesses and secrets are not', async () => {
+  const { memorySuggestion } = await import('../../shared/memory.ts')
+  assert.equal(memorySuggestion('By the way, I prefer metric units for everything.'), 'I prefer metric units for everything')
+  assert.equal(memorySuggestion('my name is Sam'), 'my name is Sam')
+  assert.equal(memorySuggestion('I live in Chennai and it is hot today'), 'I live in Chennai and it is hot today')
+  assert.equal(memorySuggestion('My timezone is IST'), 'My timezone is IST')
+  for (const no of [
+    'What do you prefer?',
+    'Imagine I am a pilot — what would I fly?',
+    'How do I live in the moment?',
+    'My password is hunter2',
+    'ok',
+    'Can you explain why I am getting this error?'
+  ]) {
+    assert.equal(memorySuggestion(no), null, no)
+  }
+})

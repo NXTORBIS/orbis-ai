@@ -14211,3 +14211,36 @@ html[data-motion='reduced'] .newtab-orb {
   color: var(--amber);
   font-size: 12px;
 }
+
+.memory-offer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: var(--thread-width, 760px);
+  margin: 0 auto 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  background: var(--pill-bg);
+  font-size: 12.5px;
+}
+
+.memory-offer button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 3px 10px;
+  border: 1px solid var(--pill-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.memory-offer .memory-offer-yes {
+  border-color: var(--cyan-dim);
+  color: var(--cyan);
+}

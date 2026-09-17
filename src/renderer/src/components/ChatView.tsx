@@ -4,6 +4,7 @@ import type { Attachment, Conversation, Settings } from '../../../shared/types'
 import type { NoticeKind, StreamState } from '../App'
 import type { ChatQueue } from '../lib/messageQueue'
 import Composer from './Composer'
+import MemoryOffer from './MemoryOffer'
 import ChatRail from './ChatRail'
 import Greeting from './Greeting'
 import MessageItem from './MessageItem'
@@ -74,8 +75,12 @@ export default function ChatView(props: Props): React.JSX.Element {
   )
 
   const last = messages.at(-1)
+  // Offered after the reply, so it never interrupts: the last thing the person said, if it was about them.
+  const lastUserMessage = !stream ? messages.findLast((m) => m.role === 'user')?.content : undefined
   const composer = (
-    <Composer
+    <>
+      <MemoryOffer message={lastUserMessage} onNotify={props.onNotify} />
+      <Composer
       streaming={Boolean(stream)}
       model={props.model}
       prediction={!stream && last?.role === 'assistant' ? last.prediction : undefined}
@@ -100,7 +105,8 @@ export default function ChatView(props: Props): React.JSX.Element {
       onNewChat={props.onNewChat}
       onSearch={props.onSearch}
       onSettings={props.onOpenSettings}
-    />
+      />
+    </>
   )
 
   if (messages.length === 0) {
