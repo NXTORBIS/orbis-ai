@@ -132,6 +132,43 @@ otherwise.
 | Research planning, query decomposition, source records, cross-checking, claims | **IMPROVE** Orion Search |
 | Using the thumbs up/down Orbis already records | **IMPROVE** |
 
+## What is built, and what is left
+
+As of 2026-09-18. Each line names the commit that carried it and how it was checked. "Checked in the app" means a real
+Orbis was driven through the feature, not only unit tests.
+
+### Built
+
+| Feature | Commit | Checked |
+| --- | --- | --- |
+| Learned skills: save a verified run, reuse it, versions, health, import/export, Settings | `ac58d8f`, `1452ec9` | In the app: save offer, save, suggestion, use, "Done", real record |
+| Step-by-step runs ask before consequential actions (they used to approve everything) | `ac58d8f` | In the app, through the confirmation prompt |
+| Notes, tasks, whiteboards, workspaces per profile | `ac58d8f` | Tests; profile switch in the app |
+| Memory: remember/forget/recall in chat, Settings → Memory, secrets refused, bounded, per profile | `ce40395` | In the app, 14 of 14 |
+| Orbis offers to remember plain statements about you, never saves on its own | `805b20f` | In the app, 8 of 8 |
+| ORION Auto: a model chosen per message, shown on the reply | `d4de802` | In the app: Core, Max and Ultra chosen and labelled |
+| Orion Search sessions saved; "continue my research on…"; Earlier research list | `4b70db0` | In the app, across an Orbis restart |
+| Research planning: comparisons searched side by side, official sources first, citations checked | `0bf8131` | In the app: three searches, eight sites, every citation real |
+| Galaxy | `f88f4a4`, `43997e4` | In the app, 18 of 18 |
+| Projects: a workspace with a goal and linked items, used by Orion when named | `43997e4` | In the app, 7 of 7 |
+| Schedules in words, catch-up for runs missed while closed, notifications | `a89e87d` | In the app, 8 of 8, including a restart |
+| Chats per profile | `e39be0e` | In the app, 6 of 6 |
+| Long chats summarised instead of losing their start | `f39681d` | In the app, against a control run |
+| Skills: import scanning, missing capabilities named, repeated work noticed | `1452ec9` | Tests; skill reuse still passes in the app |
+| Settings → What Orion may do: switch kinds of action off for Orion entirely | `7a74548` | In the app, 7 of 7 |
+| Untrusted content labelled everywhere, with a security test | `ed0aa0d` | 6 security tests |
+
+### Left, and why
+
+| Feature | Why it is not done |
+| --- | --- |
+| Agent task list, and resuming a step-by-step run after a restart | Step runs plan one step at a time against the live page; resuming means re-planning, which is a design question, not just storage. Workflows already checkpoint and resume. |
+| Page-change monitoring ("tell me when this page changes") | Needs the workflow engine to keep a result between runs, which it cannot yet do. |
+| Using the thumbs up/down Orbis records | Nothing reads it yet. What it should change — retrieval, model choice, skill ranking — needs a decision first; guessing would be worse than leaving it. |
+| MCP, in either direction | Deferred in the matrix above: worth doing after the agent core settles, and only with permissions. |
+| Skill hubs, reading picked files, text-to-speech, layout sharing | Deferred in the matrix above. |
+| Staged skill loading for the planner | The orb already offers a matching skill before planning, which is the same saving by another route. |
+
 ## Build order
 
 Each stage ships working, tested and committed before the next begins.

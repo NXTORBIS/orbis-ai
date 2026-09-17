@@ -14244,3 +14244,20 @@ html[data-motion='reduced'] .newtab-orb {
   border-color: var(--cyan-dim);
   color: var(--cyan);
 }
+
+.motion-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--amber);
+  border-radius: 10px;
+}
+
+.motion-note p {
+  flex: 1;
+  min-width: 200px;
+  margin: 0;
+}

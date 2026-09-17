@@ -10,6 +10,7 @@ const UpdateSettings = lazy(() => import('./UpdateSettings'))
 const SkillsSettings = lazy(() => import('./SkillsSettings'))
 const MemorySettings = lazy(() => import('./MemorySettings'))
 const ControlSwitches = lazy(() => import('./ControlSwitches'))
+const MotionNote = lazy(() => import('./MotionNote'))
 
 interface Props {
   settings: Settings
@@ -114,6 +115,9 @@ export default function SettingsModal({ settings, onUpdate, onClose }: Props): R
             <div className="setting-label">
               <h3>Visual effects</h3>
               <p>Particles and the animated message box outline, orb, and greeting. Turn off for less motion.</p>
+              <Suspense fallback={null}>
+                <MotionNote />
+              </Suspense>
             </div>
             <Toggle checked={settings.effects} onChange={(v) => void onUpdate({ effects: v })} />
           </section>
