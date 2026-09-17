@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { buildGalaxy, checkUserLink, describeNode, matchesQuery, pageKey, selectionForOrion, viewGalaxy } from '../../shared/galaxy.ts'
+import { buildGalaxy, checkUserLink, describeNode, GALAXY_PAGE, GALAXY_TYPE_COLORS, GALAXY_TYPES, isGalaxyPage, matchesQuery, pageKey, selectionForOrion, viewGalaxy } from '../../shared/galaxy.ts'
+import { PANELS } from '../../shared/browserSidebar.ts'
 import type { GalaxySources } from '../../shared/galaxy.ts'
 
 const empty = (): GalaxySources => ({ memories: [], searches: [], notes: [], tasks: [], skills: [], workflows: [], workspaces: [], whiteboards: [], bookmarks: [], links: [] })
@@ -184,4 +185,21 @@ test('the service keeps only the links a person makes, and the map follows the s
     service.close()
     rmSync(dir, { recursive: true, force: true })
   }
+})
+
+test('Galaxy has an address of its own, so the browser can hold it in a tab', () => {
+  assert.equal(GALAXY_PAGE, 'orbis://galaxy')
+  assert.equal(isGalaxyPage('orbis://galaxy'), true)
+  assert.equal(isGalaxyPage('ORBIS://GALAXY'), true, 'an address is not case sensitive')
+  assert.equal(isGalaxyPage('orbis://galaxy?focus=note:1'), true)
+  assert.equal(isGalaxyPage('orbis://search?q=galaxy'), false, 'searching for the word is not the page')
+  assert.equal(isGalaxyPage('https://galaxy.example/orbis://galaxy'), false, 'a website cannot pretend to be it')
+})
+
+test('every kind of thing on the map has a colour, and the map lives in the browser sidebar', () => {
+  for (const type of GALAXY_TYPES) assert.match(GALAXY_TYPE_COLORS[type], /^#[0-9a-f]{6}$/, `${type} has a colour`)
+  assert.ok(
+    PANELS.some((p) => p.id === 'galaxy'),
+    'Galaxy is one of the browser panels'
+  )
 })

@@ -25,6 +25,7 @@ export type PanelId =
   | 'extensions'
   | 'research'
   | 'sources'
+  | 'galaxy'
   | 'notes'
   | 'tasks'
   | 'reminders'
@@ -68,6 +69,7 @@ export const PANELS: PanelInfo[] = [
 
   { id: 'research', label: 'Research', home: 'work', description: 'What Orion has looked into, and what it found' },
   { id: 'sources', label: 'Sources', home: 'work', description: 'The pages behind an answer' },
+  { id: 'galaxy', label: 'Galaxy', home: 'work', description: 'A map of everything kept in Orbis, and how it is really connected' },
   { id: 'notes', label: 'Notes', home: 'work', description: 'Notes kept in Orbis' },
   { id: 'tasks', label: 'Tasks', home: 'work', description: 'Things to do' },
   { id: 'reminders', label: 'Reminders', home: 'work', description: 'Tasks with a time on them' },
@@ -111,7 +113,7 @@ const HOME_GROUPS: { id: string; label: string; panels: PanelId[] }[] = [
   { id: 'library', label: 'Library', panels: ['bookmarks', 'history', 'downloads', 'readingList', 'savedPages'] },
   { id: 'spaces', label: 'Spaces', panels: ['workspaces', 'profiles'] },
   { id: 'notes', label: 'Notes', panels: ['notes', 'tasks', 'reminders', 'clipboard', 'whiteboard'] },
-  { id: 'research', label: 'Research', panels: ['research', 'sources'] },
+  { id: 'research', label: 'Research', panels: ['research', 'sources', 'galaxy'] },
   { id: 'media', label: 'Media', panels: ['screenshots', 'media'] },
   { id: 'protection', label: 'Protection', panels: ['privacy', 'adblock', 'tracking'] },
   { id: 'orion', label: 'Orion', panels: ['orion', 'controls', 'workflows'] },

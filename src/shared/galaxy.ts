@@ -18,6 +18,18 @@
  * Pure: no disk, no network, no model.
  */
 
+/**
+ * Where Galaxy lives: one of Orbis's own pages, in the browser, beside everything else it maps. It is an address so a
+ * tab can hold it, history can remember it and Orion can be asked to open it, exactly like Orbis Search.
+ */
+export const GALAXY_PAGE = 'orbis://galaxy'
+
+/** Whether an address is the Galaxy page. */
+export function isGalaxyPage(url: string): boolean {
+  const trimmed = url.trim().toLowerCase()
+  return trimmed === GALAXY_PAGE || trimmed.startsWith(`${GALAXY_PAGE}?`) || trimmed.startsWith(`${GALAXY_PAGE}/`)
+}
+
 export type GalaxyNodeType = 'project' | 'memory' | 'search' | 'page' | 'site' | 'note' | 'task' | 'skill' | 'workflow' | 'workspace' | 'whiteboard' | 'bookmark'
 
 export const GALAXY_TYPES: GalaxyNodeType[] = ['project', 'search', 'page', 'site', 'note', 'task', 'memory', 'skill', 'workflow', 'workspace', 'whiteboard', 'bookmark']
@@ -35,6 +47,22 @@ export const GALAXY_TYPE_LABELS: Record<GalaxyNodeType, string> = {
   workspace: 'Workspace',
   whiteboard: 'Whiteboard',
   bookmark: 'Bookmark'
+}
+
+/** The colour each kind of thing is drawn in, wherever it is shown. */
+export const GALAXY_TYPE_COLORS: Record<GalaxyNodeType, string> = {
+  project: '#ffd24d',
+  search: '#3fd8ff',
+  page: '#a2a6ae',
+  site: '#6e727b',
+  note: '#ffbe4d',
+  task: '#3ee58a',
+  memory: '#b58cff',
+  skill: '#ff8197',
+  workflow: '#7aa2ff',
+  workspace: '#cbced4',
+  whiteboard: '#e0a458',
+  bookmark: '#8fe3ff'
 }
 
 export type GalaxyRelation = 'used_source' | 'saved_from' | 'links_to' | 'on_site' | 'made_on' | 'calls' | 'contains' | 'bookmarked' | 'part_of' | 'connected'

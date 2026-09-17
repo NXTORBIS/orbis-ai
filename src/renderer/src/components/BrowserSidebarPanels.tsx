@@ -5,6 +5,7 @@ import {
   Circle,
   ExternalLink,
   FolderOpen,
+  Orbit,
   Plus,
   RotateCcw,
   Search,
@@ -14,6 +15,8 @@ import {
   X
 } from 'lucide-react'
 import type { PanelId } from '../../../shared/browserSidebar'
+import { GALAXY_PAGE, GALAXY_TYPE_COLORS, GALAXY_TYPE_LABELS, GALAXY_TYPES } from '../../../shared/galaxy'
+import type { GalaxyNodeType } from '../../../shared/galaxy'
 import type { BrowserLibrarySnapshot, Conversation, InstalledExtension, PageShot, Research, SitePermissionDecision } from '../../../shared/types'
 import type { CapabilityDescriptor } from '../../../shared/browserControl'
 import type { NoticeKind } from '../App'
@@ -524,6 +527,61 @@ function SourcesPanel({ ctx, onClose }: { ctx: SidebarContext; onClose(): void }
   )
 }
 
+/**
+ * Galaxy in the sidebar: what is on the map right now, and the way to it.
+ *
+ * The map itself is a page in the browser, because that is where there is room for it. This is the doorway, and it
+ * counts only what really exists: the totals come from the same graph the page draws.
+ */
+function GalaxyPanel({ ctx, onClose }: { ctx: SidebarContext; onClose(): void }): React.JSX.Element {
+  const [totals, setTotals] = useState<Partial<Record<GalaxyNodeType, number>> | null>(null)
+  const load = useCallback(() => {
+    void window.api
+      .galaxyView({ limit: 1 })
+      .then((g) => setTotals(g.totals))
+      .catch(() => setTotals({}))
+  }, [])
+  useEffect(() => {
+    load()
+    return window.api.onGalaxyChanged(load)
+  }, [load])
+
+  const open = (): void => {
+    ctx.navigate(GALAXY_PAGE)
+    onClose()
+  }
+  const counted = GALAXY_TYPES.filter((t) => totals?.[t])
+  const all = counted.reduce((sum, t) => sum + (totals?.[t] ?? 0), 0)
+
+  return (
+    <PanelFrame id="galaxy" onClose={onClose}>
+      <button type="button" className="bsb-wide" onClick={open}>
+        <Orbit size={14} /> Open Galaxy
+      </button>
+      {totals === null ? null : all === 0 ? (
+        <p className="bsb-none">Nothing on the map yet. Research, notes, tasks, memories, skills, workspaces and bookmarks appear here as you keep them.</p>
+      ) : (
+        <>
+          <p className="bsb-none">{all} things on the map, and how they are connected.</p>
+          <ul className="bsb-items">
+            {counted.map((t) => (
+              <li key={t} className="bsb-item">
+                <button type="button" className="bsb-item-main" onClick={open}>
+                  <span className="galaxy-dot" style={{ background: GALAXY_TYPE_COLORS[t] }} />
+                  <span className="bsb-item-text">
+                    <b className="truncate">{GALAXY_TYPE_LABELS[t]}</b>
+                    <small>{totals?.[t]}</small>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </PanelFrame>
+  )
+}
+
 // ---------------------------------------------------------------- extensions, media, privacy, controls
 
 function ExtensionsPanel({ ctx, onClose }: { ctx: SidebarContext; onClose(): void }): React.JSX.Element {
@@ -816,6 +874,8 @@ export function SidebarPanel({ id, ctx }: { id: PanelId; ctx: SidebarContext }):
       return <ResearchPanel ctx={ctx} onClose={onClose} />
     case 'sources':
       return <SourcesPanel ctx={ctx} onClose={onClose} />
+    case 'galaxy':
+      return <GalaxyPanel ctx={ctx} onClose={onClose} />
     case 'notes':
       return view(<NotesView onClose={onClose} onNotify={ctx.onNotify} />)
     case 'tasks':

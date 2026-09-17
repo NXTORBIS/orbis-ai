@@ -20,6 +20,7 @@ import {
   ListTodo,
   Music,
   NotebookPen,
+  Orbit,
   Paintbrush,
   PenLine,
   Pin,
@@ -104,6 +105,7 @@ const ICONS: Record<PanelId, LucideIcon> = {
   controls: Sliders,
   workflows: Workflow,
   secrets: KeyRound,
+  galaxy: Orbit,
   orion: Sparkles,
   customize: Paintbrush
 }

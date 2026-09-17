@@ -36,7 +36,8 @@ import {
 } from 'lucide-react'
 import type { NoticeKind } from '../App'
 import type { HistorySwipeView } from '../../../shared/historySwipe'
-import { isOrbisPage, readSearchPageUrl } from '../../../shared/orbisSearch'
+import { isOrbisPage, readSearchPageUrl, searchPageUrl } from '../../../shared/orbisSearch'
+import { isGalaxyPage } from '../../../shared/galaxy'
 import type { SidebarLayout } from '../../../shared/browserSidebar'
 import { defaultLayout, findPanel, isHidden, movePanel, openPanel, PANELS, panelLabel, setMode, setPanelHidden, setPanelPinned } from '../../../shared/browserSidebar'
 import BrowserSidebar, { SidebarToggle } from './BrowserSidebar'
@@ -62,6 +63,8 @@ import WidgetHost, { useWidgets } from './widgets/WidgetHost'
 const DeviceChooser = lazy(() => import('./DeviceChooser'))
 // Orbis Search: only fetched when a search is actually shown.
 const OrbisSearchPage = lazy(() => import('./OrbisSearchPage'))
+// Galaxy: the map of everything kept in Orbis, fetched only when its page is open.
+const GalaxyView = lazy(() => import('./GalaxyView'))
 import ExtensionsToolbar from './ExtensionsToolbar'
 import ExtensionPrompts from './ExtensionPrompts'
 import type { ExtensionWindowRequest, ReportedBrowserTab } from '../../../shared/types'
@@ -421,6 +424,8 @@ export default function BrowserPanel({
   const hasPage = Boolean(active.url)
   /** Orbis Search is a page Orbis draws itself, so the tab shows it instead of loading a website. */
   const searchPage = readSearchPageUrl(active.url)
+  /** Galaxy is another of Orbis's own pages, drawn over the tab in the same way. */
+  const galaxyPage = isGalaxyPage(active.url)
 
   /**
    * Orion reading the results. It answers from what came back and says which result each claim came from, so the
@@ -864,7 +869,7 @@ export default function BrowserPanel({
           if (tab.id !== tabId) return tab
           // Anything ahead of where we are is replaced, the way a browser always has.
           const trail = [...(tab.orbisTrail ?? []).slice(0, (tab.orbisAt ?? -1) + 1), url]
-          return { ...tab, url, title: 'Orbis Search', loading: false, error: undefined, offline: undefined, orbisTrail: trail, orbisAt: trail.length - 1, back: trail.length > 1, forward: false }
+          return { ...tab, url, title: isGalaxyPage(url) ? 'Galaxy' : 'Orbis Search', loading: false, error: undefined, offline: undefined, orbisTrail: trail, orbisAt: trail.length - 1, back: trail.length > 1, forward: false }
         })
       )
       return
@@ -3004,7 +3009,16 @@ export default function BrowserPanel({
             />
           </Suspense>
         )}
-        {!hasPage && (
+        {galaxyPage && (
+          <Suspense fallback={null}>
+            <GalaxyView
+              onClose={() => (active.back ? goBack() : patch(active.id, { url: '', title: '', orbisTrail: [], orbisAt: -1, back: false, forward: false }))}
+              onNotify={onNotify}
+              onAsk={(message) => navigate(searchPageUrl(message, 'orion'))}
+            />
+          </Suspense>
+        )}
+        {!hasPage && !galaxyPage && (
           <div className="browser-newtab" style={widgets.wallpaper && !active.private ? { background: widgets.wallpaper } : undefined}>
             {/*
               * The Orbis orb, the same mark and the same idle drift it has everywhere else, given the room a new tab
