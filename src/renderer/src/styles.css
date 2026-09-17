@@ -13592,3 +13592,7 @@ html[data-motion='reduced'] .newtab-orb {
 @media (max-width: 620px) {
   .steprun { right: 8px; bottom: 8px; width: calc(100% - 16px); }
 }
+
+/* The up/down pair that sets a widget's place in its zone. */
+.cz-widget-order { display: inline-flex; gap: 2px; }
+.cz-widget-order .icon-btn:disabled { opacity: 0.3; cursor: default; }

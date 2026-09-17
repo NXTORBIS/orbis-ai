@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Check, Copy, Download, FileUp, History, Image, LayoutGrid, Paintbrush, Palette, Plus, RotateCcw, ShieldCheck, Sparkles, Trash2, Undo2, X, Zap } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, Copy, Download, FileUp, History, Image, LayoutGrid, Paintbrush, Palette, Plus, RotateCcw, ShieldCheck, Sparkles, Trash2, Undo2, X, Zap } from 'lucide-react'
 import type { AppearanceConfig, ExperienceConfig } from '../../../shared/experience'
 import { defaultConfig, describeConfig, diffConfig, isDefaultConfig } from '../../../shared/experience'
 import type { Experience } from '../lib/experience'
 import type { NoticeKind } from '../App'
 import type { WidgetCategory, WidgetInstance, WidgetSize, ZoneName } from '../../../shared/widgets'
-import { MAX_WIDGETS, newWidgetInstance, permissionsOf, searchWidgets, widgetById, ZONES } from '../../../shared/widgets'
+import { MAX_WIDGETS, newWidgetInstance, permissionsOf, placeWidget, searchWidgets, widgetById, widgetsInZone, ZONES } from '../../../shared/widgets'
 import type { StoredTheme } from '../../../shared/themes'
 import { BUILT_IN_THEMES, copyOfBuiltIn, MAX_THEMES, newTheme, readability, THEME_TOKENS, themeTokens } from '../../../shared/themes'
 import type { Dashboard } from '../../../shared/dashboards'
@@ -560,13 +560,42 @@ export default function CustomizeView({ experience, onClose, onNotify }: { exper
               </div>
               {draft.widgets.length > 0 && (
                 <div className="cz-widgets-chosen">
-                  {draft.widgets.map((instance) => {
+                  {/*
+                    * Listed in the order they appear on the new tab, zone by zone, so this reads as the page reads.
+                    * A list in a different order to the thing it edits makes people move the wrong widget.
+                    */}
+                  {ZONES.flatMap((zone) => widgetsInZone(draft.widgets, zone))
+                    .concat(draft.widgets.filter((w) => w.disabled))
+                    .map((instance) => {
                     const definition = widgetById(instance.widget)
                     if (!definition) return null
+                    const siblings = widgetsInZone(draft.widgets, instance.zone)
+                    const at = siblings.findIndex((w) => w.id === instance.id)
                     return (
                       <div key={instance.id} className="cz-widget-row">
                         <div className="cz-widget-top">
                           <b>{definition.name}</b>
+                          {/* Buttons rather than dragging, so the order can be changed from the keyboard too. */}
+                          <span className="cz-widget-order">
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              aria-label={`Move ${definition.name} earlier`}
+                              disabled={at <= 0}
+                              onClick={() => setWidgets(placeWidget(draft.widgets, instance.id, instance.zone, at - 1))}
+                            >
+                              <ChevronUp size={14} />
+                            </button>
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              aria-label={`Move ${definition.name} later`}
+                              disabled={at === -1 || at >= siblings.length - 1}
+                              onClick={() => setWidgets(placeWidget(draft.widgets, instance.id, instance.zone, at + 1))}
+                            >
+                              <ChevronDown size={14} />
+                            </button>
+                          </span>
                           <select value={instance.zone} aria-label={`Where ${definition.name} sits`} onChange={(e) => patchWidget(instance.id, { zone: e.target.value as ZoneName })}>
                             {ZONES.map((zone) => (
                               <option key={zone} value={zone}>

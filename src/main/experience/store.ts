@@ -1,7 +1,8 @@
 import { join } from 'node:path'
 import { promises as fs } from 'node:fs'
-import type { ConfigChange, ExperienceConfig, ExperienceExport, ExperienceHealth, ImportCheck, Snapshot } from '../../shared/experience'
-import { addSnapshot, checkImport, defaultConfig, describeConfig, diffConfig, exportConfig, isDefaultConfig, migrateConfig, normalizeConfig } from '../../shared/experience'
+import type { ConfigChange, ExperienceConfig, ExperienceExport, ExperienceHealth, ImportCheck, Snapshot } from '../../shared/experience.ts'
+import { DEFAULT_PROFILE_ID, dataDirFor } from '../../shared/profiles.ts'
+import { addSnapshot, checkImport, defaultConfig, describeConfig, diffConfig, exportConfig, isDefaultConfig, migrateConfig, normalizeConfig } from '../../shared/experience.ts'
 
 /**
  * Where the personalisation lives: one configuration file and a short history of snapshots beside it. A configuration
@@ -11,19 +12,57 @@ import { addSnapshot, checkImport, defaultConfig, describeConfig, diffConfig, ex
 export type { ExperienceHealth }
 
 export class ExperienceStore {
-  private readonly dir: string
-  private readonly configFile: string
-  private readonly snapshotsFile: string
+  private readonly userData: string
+  /** Whose personalisation is loaded. Each profile keeps its own, in its own directory. */
+  private profileId: string
+  private dir: string
+  private configFile: string
+  private snapshotsFile: string
   private config: ExperienceConfig | null = null
   private snapshots: Snapshot[] = []
   private listeners = new Set<(config: ExperienceConfig) => void>()
   private writing: Promise<void> = Promise.resolve()
   private health: ExperienceHealth = { ok: true, problems: [], repairs: [], schemaVersion: 0, snapshots: 0 }
 
-  constructor(userData: string) {
-    this.dir = join(userData, 'experience')
+  constructor(userData: string, profileId: string = DEFAULT_PROFILE_ID) {
+    this.userData = userData
+    this.profileId = profileId
+    this.dir = ''
+    this.configFile = ''
+    this.snapshotsFile = ''
+    this.point(profileId)
+  }
+
+  /** Points at one profile's personalisation. The default profile keeps the place it has always kept. */
+  private point(profileId: string): void {
+    this.profileId = profileId
+    this.dir = join(this.userData, dataDirFor(profileId), 'experience')
     this.configFile = join(this.dir, 'experience.json')
     this.snapshotsFile = join(this.dir, 'snapshots.json')
+  }
+
+  get profile(): string {
+    return this.profileId
+  }
+
+  /**
+   * Switches to another profile's personalisation.
+   *
+   * Everything personal is per profile — the widgets on the new tab, what each one is set to, the wallpaper, the
+   * theme — because a profile that showed another profile's tasks widget would be showing another person's day.
+   *
+   * Anything still being written for the profile being left is finished first, against the paths it was written for,
+   * so a switch part way through a save cannot put one profile's layout in another's file.
+   */
+  async useProfile(profileId: string): Promise<ExperienceConfig> {
+    if (profileId === this.profileId) return this.config ?? this.load()
+    await this.flush()
+    this.point(profileId)
+    this.config = null
+    this.snapshots = []
+    const loaded = await this.load()
+    this.announce()
+    return loaded
   }
 
   onChange(listener: (config: ExperienceConfig) => void): () => void {
@@ -179,12 +218,15 @@ export class ExperienceStore {
   private write(): Promise<void> {
     const config = JSON.stringify(this.config)
     const snapshots = JSON.stringify(this.snapshots)
+    // The paths are taken now, with the content. Reading them inside the queued write would let a profile switch
+    // that happens while this is waiting put one profile's personalisation into another profile's file.
+    const { dir, configFile, snapshotsFile } = this
     this.writing = this.writing.then(async () => {
-      await fs.mkdir(this.dir, { recursive: true })
-      await fs.writeFile(`${this.configFile}.tmp`, config)
-      await fs.rename(`${this.configFile}.tmp`, this.configFile)
-      await fs.writeFile(`${this.snapshotsFile}.tmp`, snapshots)
-      await fs.rename(`${this.snapshotsFile}.tmp`, this.snapshotsFile)
+      await fs.mkdir(dir, { recursive: true })
+      await fs.writeFile(`${configFile}.tmp`, config)
+      await fs.rename(`${configFile}.tmp`, configFile)
+      await fs.writeFile(`${snapshotsFile}.tmp`, snapshots)
+      await fs.rename(`${snapshotsFile}.tmp`, snapshotsFile)
     })
     return this.writing.catch(() => undefined)
   }

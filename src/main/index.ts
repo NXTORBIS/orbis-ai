@@ -1117,16 +1117,17 @@ if (!app.requestSingleInstanceLock()) {
     void workflows.start().catch((err: unknown) => console.error('[workflows] failed to start', err))
     app.on('before-quit', () => workflows.stop())
 
+
+    // Profiles: separate browsing identities. Each has its own cookies, logins, site storage, history, bookmarks,
+    // downloads and open pages; extensions are installed once and follow whichever profile is in use.
+    const profilesStore = new ProfilesStore(app.getPath('userData'))
+
     // The Experience Runtime: everything the user personalises, kept apart from Orbis's own settings so the browser
     // works exactly as it always has until someone chooses otherwise.
     const experienceStore = new ExperienceStore(app.getPath('userData'))
     await experienceStore.load().catch((err: unknown) => console.error('[experience] could not be read', err))
     registerExperienceIpc({ store: experienceStore, control: browserControl.control, getWindow: () => mainWindow, send: sendToWindow })
     app.on('before-quit', () => void experienceStore.flush())
-
-    // Profiles: separate browsing identities. Each has its own cookies, logins, site storage, history, bookmarks,
-    // downloads and open pages; extensions are installed once and follow whichever profile is in use.
-    const profilesStore = new ProfilesStore(app.getPath('userData'))
 
     // Updating Orbis. Created once the window is on its way, and it looks for a release in the background rather than
     // holding anything up. The endpoint comes from the build, so a released Orbis never asks a development server.

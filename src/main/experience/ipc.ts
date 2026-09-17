@@ -1,3 +1,4 @@
+import { registerWidgetCapabilities } from './widgetCapabilities.ts'
 import { ipcMain } from 'electron'
 import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
 import type { AppearanceConfig, ExperienceConfig } from '../../shared/experience'
@@ -40,6 +41,9 @@ export function registerExperienceIpc(o: ExperienceIpcOptions): void {
   handle('experience:import', (_e, raw, how) => o.store.import(raw, how === 'merge' ? 'merge' : 'replace'))
 
   // ---------------------------------------------------------------- capabilities
+
+  // The new tab's widgets, so Orion can really add, move, resize and set them rather than only talk about them.
+  registerWidgetCapabilities(o.control, o.store)
 
   o.control.register({
     id: 'experience.describe',
