@@ -1458,6 +1458,8 @@ if (!app.requestSingleInstanceLock()) {
      * since changed is worse than no run at all.
      */
     const stepRuns = new Map<string, StepRun>()
+    const countedRuns = new Set<string>()
+    let skillsForRuns: SkillManager | null = null
     const stepProfile = async (): Promise<string> => (await profilesStore.active()).id
 
     /** The active tab's page, for reading signals from. Null when the browser is closed or the tab has no page. */
@@ -1494,7 +1496,14 @@ if (!app.requestSingleInstanceLock()) {
             return [data?.title, data?.url, data?.text].filter(Boolean).join('\n').slice(0, 20_000) || 'The page is empty.'
           },
           plan: (request) => planNextStep(request, browserControl!.control.list({}), GROQ_API_KEYS, fetchForOrion),
-          emit: (view) => sendToWindow('steps:changed', view),
+          emit: (view) => {
+            // A goal that finished well is counted once, so doing the same thing again can be pointed out.
+            if (view.session.status === 'done' && !countedRuns.has(view.session.id)) {
+              countedRuns.add(view.session.id)
+              void skillsForRuns?.countSuccess(view.session.goal).catch(() => undefined)
+            }
+            sendToWindow('steps:changed', view)
+          },
           newId: () => crypto.randomUUID()
         }
       )
@@ -1554,6 +1563,7 @@ if (!app.requestSingleInstanceLock()) {
       workflows,
       announce: () => sendToWindow('skills:changed')
     })
+    skillsForRuns = skills
     profilesStore.onChange(() => {
       void stepProfile().then((id) => skills.useProfile(id))
     })
@@ -1645,9 +1655,11 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.handle('skills:preview', async (event, runId: unknown) => {
       fromWindow(event)
       const settings = await skills.settings()
-      const { candidate, why } = skills.preview((await ownRun(runId)).state)
+      const run = await ownRun(runId)
+      const { candidate, why } = skills.preview(run.state)
       return {
         offer: settings.learnFromRuns && Boolean(candidate),
+        timesDone: await skills.timesDone(run.state.goal),
         why,
         candidate: candidate && {
           name: candidate.workflow.name,

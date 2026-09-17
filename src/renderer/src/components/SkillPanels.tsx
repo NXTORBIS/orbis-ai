@@ -64,6 +64,7 @@ export function SaveSkillOffer({ runId }: { runId: string }): React.JSX.Element 
   return (
     <div className="skill-offer" role="region" aria-label="Save as a skill">
       <p className="skill-offer-q">Save this as a reusable skill?</p>
+      {(preview.timesDone ?? 0) > 1 && <p className="skill-meta">You have done this {preview.timesDone} times.</p>}
       {open && (
         <div className="skill-preview">
           <label>

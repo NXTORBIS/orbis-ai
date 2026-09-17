@@ -91,6 +91,8 @@ export interface SkillEdits {
 export interface SkillPreview {
   /** Whether to offer saving at all: learning is switched on and the run taught something. */
   offer: boolean
+  /** How many times this same goal has succeeded, counting this run. */
+  timesDone?: number
   why?: string
   candidate: {
     name: string
@@ -537,9 +539,21 @@ export function checkSkillImport(raw: unknown, capabilities: CapabilityDescripto
 
   const known = new Set(capabilities.map((c) => c.id))
   const used = new Set<string>()
+  const texts: string[] = [String(meta.whenToUse), ...(Array.isArray(meta.examples) ? meta.examples.map(String) : [])]
+  const visits = new Set<string>()
   const walk = (list: WorkflowStep[]): void => {
     for (const step of list) {
-      if (step.type === 'action') used.add(step.capability)
+      texts.push(String(step.name ?? ''))
+      if (step.type === 'userAction' || step.type === 'confirm') texts.push(String(step.message ?? ''))
+      if (step.type === 'orion') texts.push(JSON.stringify((step as { prompt?: unknown }).prompt ?? ''))
+      if (step.type === 'action') {
+        used.add(step.capability)
+        for (const value of Object.values(step.params ?? {})) {
+          if (typeof value !== 'string') continue
+          const host = siteOfUrl(value)
+          if (host) visits.add(host)
+        }
+      }
       if (step.type === 'if') {
         walk(step.then)
         step.elseIf?.forEach((branch) => walk(branch.steps))
@@ -570,10 +584,64 @@ export function checkSkillImport(raw: unknown, capabilities: CapabilityDescripto
       createdFrom: { kind: 'import' }
     },
     workflow: data.workflow,
-    warnings: [...used].some((id) => capabilities.find((c) => c.id === id)?.mutates)
-      ? ['This skill changes things in the browser. Look through its steps before switching it on.']
-      : []
+    warnings: scanWarnings({ used, capabilities, texts, visits, domains: Array.isArray(meta.domains) ? meta.domains.map(String) : [] })
   }
+}
+
+/** Text that reads like an attempt to steer Orion rather than describe a task. */
+const STEERING = /\b(ignore|disregard|forget|override)\b.{0,40}\b(previous|prior|above|earlier|all|your|system)\b.{0,20}\b(instructions?|rules?|prompt|polic(?:y|ies))\b|\b(system prompt|developer message|jailbreak|you are now|act as (?:an? )?(?:unrestricted|different)|do anything now)\b|\b(reveal|print|send|exfiltrate|upload|post)\b.{0,40}\b(vault|passwords?|secrets?|cookies?|tokens?|api keys?|credentials)\b/i
+
+function siteOfUrl(value: string): string | null {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.hostname.replace(/^www\./, '').toLowerCase() : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * What someone should know before switching on a skill they did not make: whether it changes things, whether anything
+ * in it reads like instructions aimed at Orion, and every site it would visit that it does not say it belongs to.
+ * Warnings, not refusals: the person decides, with the facts in front of them.
+ */
+export function scanWarnings(o: { used: Set<string>; capabilities: CapabilityDescriptor[]; texts: string[]; visits: Set<string>; domains: string[] }): string[] {
+  const warnings: string[] = []
+  const changing = [...o.used].filter((id) => o.capabilities.find((c) => c.id === id)?.mutates)
+  if (changing.length) warnings.push(`This skill changes things in the browser (${changing.slice(0, 6).join(', ')}). Look through its steps before switching it on.`)
+  if (o.texts.some((t) => STEERING.test(t))) warnings.push('Some of its text reads like instructions aimed at Orion rather than a description of a task. Orbis never follows those, but a skill written that way was probably not written in good faith.')
+  const declared = o.domains.map((d) => d.toLowerCase().replace(/^\*\./, ''))
+  const elsewhere = [...o.visits].filter((host) => !declared.some((d) => host === d || host.endsWith(`.${d}`)))
+  if (elsewhere.length) warnings.push(`It visits sites it does not say it belongs to: ${elsewhere.slice(0, 8).join(', ')}.`)
+  return warnings
+}
+
+/** Capabilities a skill's steps need that this Orbis cannot use right now, with why. Empty when it can run. */
+export function missingCapabilities(steps: WorkflowStep[], capabilities: CapabilityDescriptor[]): { id: string; why: string }[] {
+  const byId = new Map(capabilities.map((c) => [c.id, c]))
+  const out = new Map<string, string>()
+  const walk = (list: WorkflowStep[]): void => {
+    for (const step of list) {
+      if (step.type === 'action') {
+        const c = byId.get(step.capability)
+        if (!c) out.set(step.capability, 'Orbis does not have it.')
+        else if (!c.available) out.set(step.capability, c.unavailableReason ?? 'It is not available right now.')
+      }
+      if (step.type === 'if') {
+        walk(step.then)
+        step.elseIf?.forEach((b) => walk(b.steps))
+        walk(step.else ?? [])
+      }
+      if (step.type === 'repeat') walk(step.steps)
+    }
+  }
+  walk(steps)
+  return [...out].map(([id, why]) => ({ id, why }))
+}
+
+/** A goal as it is compared for "done this before": case, punctuation and spacing aside. */
+export function goalKey(goal: string): string {
+  return goal.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
 }
 
 export function normalizeSkillSettings(raw: unknown): SkillSettings {

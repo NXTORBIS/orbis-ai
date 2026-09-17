@@ -5,6 +5,8 @@ import { DEFAULT_PROFILE_ID, dataDirFor } from '../shared/profiles.ts'
 import {
   candidateFromRun,
   canLearnFrom,
+  goalKey,
+  missingCapabilities,
   checkSkillImport,
   knownGoodVersion,
   normalizeSkillSettings,
@@ -160,6 +162,26 @@ export class SkillManager {
 
   // ---------------------------------------------------------------- learning from a run
 
+  /**
+   * Counts a finished, successful step-by-step goal, so a repeated one can be pointed out. Only the goal's wording is
+   * kept, per profile, and only a count — never what the run did or saw.
+   */
+  async countSuccess(goal: string): Promise<number> {
+    const key = goalKey(goal)
+    if (!key) return 0
+    const path = join(this.dir(), 'repeats.json')
+    const counts = (await fs.readFile(path, 'utf8').then(JSON.parse).catch(() => ({}))) as Record<string, number>
+    counts[key] = (counts[key] ?? 0) + 1
+    const kept = Object.fromEntries(Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 500))
+    await this.write(path, kept)
+    return counts[key]
+  }
+
+  async timesDone(goal: string): Promise<number> {
+    const counts = (await fs.readFile(join(this.dir(), 'repeats.json'), 'utf8').then(JSON.parse).catch(() => ({}))) as Record<string, number>
+    return counts[goalKey(goal)] ?? 0
+  }
+
   /** What saving this run would make, for the person to look at first. Nothing is written. */
   preview(session: StepSession): { candidate: SkillCandidate | null; why?: string } {
     const eligible = canLearnFrom(session)
@@ -231,6 +253,9 @@ export class SkillManager {
     if (!meta) throw new Error('That skill does not exist.')
     if (!meta.enabled) throw new Error('That skill is switched off.')
     if (meta.trust === 'untrusted') throw new Error('Look through this imported skill and switch it on before running it.')
+    const workflow = await this.o.workflows.get(workflowId)
+    const missing = workflow ? missingCapabilities(workflow.steps, this.o.capabilities()) : []
+    if (missing.length) throw new Error(`This skill needs ${missing.map((m) => `${m.id} (${m.why.replace(/\.$/, '')})`).join(', ')}, so it cannot run now.`)
     const started = await this.o.workflows.run(workflowId, { inputs, trigger: 'orion' })
     const asked = clean(request, 200)
     if (asked && !meta.examples.includes(asked) && asked.toLowerCase() !== meta.whenToUse.toLowerCase()) {
