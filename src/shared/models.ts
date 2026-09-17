@@ -19,7 +19,9 @@ export const MODELS: ModelInfo[] = [
   { id: 'groq/compound', label: 'ORION Apex', description: 'Can search the web and run code', reasoningEffort: false, echoReasoning: false, contextWindow: 131072, inputTokenLimit: 4000 },
   { id: 'groq/compound-mini', label: 'ORION Apex Mini', description: 'Quicker web search and code', reasoningEffort: false, echoReasoning: false, contextWindow: 131072, inputTokenLimit: 4000 },
   { id: 'openai/gpt-oss-safeguard-20b', label: 'ORION Shield', description: 'Safety-focused reasoning', reasoningEffort: false, echoReasoning: false, contextWindow: 131072, inputTokenLimit: 6000 },
-  { id: 'allam-2-7b', label: 'ORION Mini', description: 'Lightweight, for short chats (English and Arabic)', reasoningEffort: false, echoReasoning: false, contextWindow: 4096 }
+  { id: 'allam-2-7b', label: 'ORION Mini', description: 'Lightweight, for short chats (English and Arabic)', reasoningEffort: false, echoReasoning: false, contextWindow: 4096 },
+  // Not a Groq model: resolved to one of the models above for each message (shared/modelRoute.ts), never sent to Groq.
+  { id: 'orion/auto', label: 'ORION Auto', description: 'Picks the right Orion for each message', reasoningEffort: true, echoReasoning: false, contextWindow: 131072, inputTokenLimit: 6000 }
 ]
 
 export const DEFAULT_MODEL = MODELS[0].id

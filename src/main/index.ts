@@ -51,6 +51,7 @@ import { setupBrowserControl } from './browserControl/setup'
 import { readSignals } from './browserControl/captchaCapabilities'
 import { StepRun } from './stepRunner'
 import { SkillManager } from './skillManager'
+import { resolveModel } from '../shared/modelRoute'
 import { MemoryFull, MemoryRefused, MemoryStore } from './knowledge/memory'
 import { memoryFromRequest, memoryPromptBlock, parseMemoryCommand } from '../shared/memory'
 import type { MemoryCategory } from '../shared/memory'
@@ -448,8 +449,16 @@ function registerIpc(): void {
   ipcMain.handle('conversations:save', (_event, conversation: Conversation) => store.saveConversation(conversation))
   ipcMain.handle('conversations:delete', (_event, id: string) => store.deleteConversation(id))
 
-  ipcMain.handle('chat:send', async (event, request: ChatRequest) => {
+  ipcMain.handle('chat:send', async (event, incoming: ChatRequest) => {
     const sender = event.sender
+    // ORION Auto becomes a real model for this one message; a model the person picked is used exactly as picked.
+    const lastIncoming = incoming.messages.at(-1)
+    const route = resolveModel(incoming.model, {
+      text: lastIncoming?.content ?? '',
+      attachmentChars: (lastIncoming?.attachments ?? []).reduce((n, a) => n + (typeof a.content === 'string' ? a.content.length : 0), 0),
+      turns: incoming.messages.length
+    })
+    const request: ChatRequest = { ...incoming, model: route.model }
     const emit = (streamEvent: StreamEvent): void => {
       if (!sender.isDestroyed()) sender.send('chat:event', request.requestId, streamEvent)
     }

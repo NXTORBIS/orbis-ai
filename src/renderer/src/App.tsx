@@ -3,6 +3,7 @@ import type { Attachment, AutomationState, BrowserConfirmation, BrowserStep, Cha
 import { IMAGE_GEN_STATUS } from '../../shared/types'
 import { themeBase } from '../../shared/themes'
 import { DEFAULT_MODEL, MODELS, isKnownModel, modelLabel } from '../../shared/models'
+import { AUTO_MODEL } from '../../shared/modelRoute'
 import { automationActive, automationProgress } from '../../shared/automation'
 import { copyText, newId, titleFromMessage } from './lib/utils'
 import BrowserPanel from './components/BrowserPanel'
@@ -422,7 +423,8 @@ export default function App(): React.JSX.Element {
         switch (event.type) {
           case 'start':
             patchAssistant((m) => ({ ...m, model: event.model }))
-            if (event.model === conversation.model) {
+            if (event.model === conversation.model || conversation.model === AUTO_MODEL) {
+              // Auto choosing a model is not a model failing; the reply's own label says which one answered.
               setStatus(undefined)
             } else {
               // The preceding status event already logged the switch.

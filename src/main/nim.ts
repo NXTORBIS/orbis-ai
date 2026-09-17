@@ -1,5 +1,6 @@
 import type { ChatMessage, ModelInfo, ReasoningEffort, StreamEvent } from '../shared/types'
 import { MODELS, modelInfo, modelLabel } from '../shared/models.ts'
+import { AUTO_MODEL } from '../shared/modelRoute.ts'
 import { SseParser, ThinkTagSplitter } from './sse.ts'
 
 // Overridable for local testing or another OpenAI-compatible endpoint.
@@ -60,7 +61,8 @@ export async function streamChat(opts: ChatOptions): Promise<void> {
   if (opts.apiKeys.length === 0) {
     return opts.emit({ type: 'error', message: 'This copy of Orbis has no Groq API key. Add it to .env.local and rebuild.' })
   }
-  const chain: Attempt[] = [opts.model, ...(opts.autoFallback ? MODELS.map((m) => m.id).filter((id) => id !== opts.model) : [])].map((model) => ({
+  // Auto is never a model Groq knows; it is resolved before this point, and is never a fallback.
+  const chain: Attempt[] = [opts.model, ...(opts.autoFallback ? MODELS.map((m) => m.id).filter((id) => id !== opts.model && id !== AUTO_MODEL) : [])].map((model) => ({
     model,
     variant: 'normal'
   }))
