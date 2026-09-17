@@ -1,14 +1,24 @@
-import { join } from 'node:path'
 import type { Board, BoardElement } from '../../shared/whiteboard'
 import { boardToSvg, MAX_ELEMENTS, newBoard, normalizeBoard, normalizeElement, topZ } from '../../shared/whiteboard'
-import { Collection } from './store'
+import { Collection, personalFile } from './store'
+import { DEFAULT_PROFILE_ID } from '../../shared/profiles.ts'
 
 /** Whiteboards as they are kept and changed: one file of boards, each with everything drawn on it. */
 export class WhiteboardStore {
   private readonly boards: Collection<Board>
 
+  private readonly userData: string
+
   constructor(userData: string) {
-    this.boards = new Collection<Board>(join(userData, 'personal', 'whiteboards.json'), normalizeBoard, 500)
+    this.userData = userData
+    this.boards = new Collection<Board>(personalFile(userData, DEFAULT_PROFILE_ID, 'whiteboards.json'), normalizeBoard, 500)
+  }
+
+  /** Moves to another profile's whiteboard. Each profile keeps its own; the default profile keeps what was there before. */
+  async useProfile(profileId: string): Promise<void> {
+    await Promise.all([
+      this.boards.usePath(personalFile(this.userData, profileId, 'whiteboards.json')),
+    ])
   }
 
   onChange(listener: () => void): () => void {

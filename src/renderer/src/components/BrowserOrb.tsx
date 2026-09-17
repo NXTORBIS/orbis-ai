@@ -1,3 +1,5 @@
+import { SKILL_OFFER_EVENT } from './SkillPanels'
+import type { SkillOfferDetail } from './SkillPanels'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ArrowUp, Ban, Check, ListChecks, LoaderCircle, Mic, Pause, Play, ShieldAlert, Square, X } from 'lucide-react'
 import type { AutomationState, BrowserConfirmation, BrowserStep } from '../../../shared/types'
@@ -174,7 +176,14 @@ export default function BrowserOrb(props: BrowserOrbProps): React.JSX.Element {
     if (!task) return
     // A run already under way is steered through the ordinary assistant, which knows how to stop and pause it.
     if (stepwise && !working) {
-      void window.api.startSteps(task)
+      // A saved skill that fits is offered first; without one, the task is planned step by step as before.
+      void window.api
+        .matchSkills(task)
+        .catch(() => null)
+        .then((found) => {
+          if (found?.matches.length) window.dispatchEvent(new CustomEvent<SkillOfferDetail>(SKILL_OFFER_EVENT, { detail: { task, matches: found.matches, reuse: found.reuse } }))
+          else void window.api.startSteps(task)
+        })
       setText('')
       if (open) toggle()
       return

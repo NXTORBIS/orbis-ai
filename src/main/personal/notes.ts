@@ -1,14 +1,24 @@
-import { join } from 'node:path'
 import type { Note, NoteFilter } from '../../shared/notes'
 import { filterNotes, newNote, noteFromPage, normalizeNote, noteTags, noteToMarkdown } from '../../shared/notes'
-import { Collection } from './store'
+import { Collection, personalFile } from './store'
+import { DEFAULT_PROFILE_ID } from '../../shared/profiles.ts'
 
 /** Notes as they are kept and changed: one file of notes, searched and edited through here. */
 export class NotesStore {
   private readonly notes: Collection<Note>
 
+  private readonly userData: string
+
   constructor(userData: string) {
-    this.notes = new Collection<Note>(join(userData, 'personal', 'notes.json'), normalizeNote, 20_000)
+    this.userData = userData
+    this.notes = new Collection<Note>(personalFile(userData, DEFAULT_PROFILE_ID, 'notes.json'), normalizeNote, 20_000)
+  }
+
+  /** Moves to another profile's notes. Each profile keeps its own; the default profile keeps what was there before. */
+  async useProfile(profileId: string): Promise<void> {
+    await Promise.all([
+      this.notes.usePath(personalFile(this.userData, profileId, 'notes.json')),
+    ])
   }
 
   onChange(listener: () => void): () => void {

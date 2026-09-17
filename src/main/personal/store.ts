@@ -1,5 +1,6 @@
 import { promises as fs } from 'node:fs'
-import { dirname } from 'node:path'
+import { dirname, join } from 'node:path'
+import { dataDirFor } from '../../shared/profiles.ts'
 
 /**
  * Small JSON stores for the things a person keeps in Orbis (notes, tasks, clipboard history and, later, boards and
@@ -15,7 +16,7 @@ export class JsonFile<T> {
   private timer: NodeJS.Timeout | null = null
   private dirty = false
 
-  private readonly path: string
+  private path: string
   private readonly fallback: () => T
   private readonly parse: (raw: unknown) => T
 
@@ -44,6 +45,17 @@ export class JsonFile<T> {
     return value
   }
 
+  /**
+   * Moves to another file: what is pending is written to the file it belongs to first, then the new one is read on
+   * next use. Used when the profile changes, so one profile's notes can never be saved into another's.
+   */
+  async usePath(path: string): Promise<void> {
+    if (path === this.path) return
+    await this.flush()
+    this.path = path
+    this.value = null
+  }
+
   /** Writes now and waits for it (used before quitting, and by tests). */
   async flush(): Promise<void> {
     if (this.timer) {
@@ -53,10 +65,12 @@ export class JsonFile<T> {
     if (!this.dirty || this.value === null) return this.writing
     this.dirty = false
     const data = JSON.stringify(this.value)
+    // The path is taken now, with the data: a write still queued when the file changes must land where it came from.
+    const path = this.path
     this.writing = this.writing.then(async () => {
-      await fs.mkdir(dirname(this.path), { recursive: true })
-      await fs.writeFile(`${this.path}.tmp`, data)
-      await fs.rename(`${this.path}.tmp`, this.path)
+      await fs.mkdir(dirname(path), { recursive: true })
+      await fs.writeFile(`${path}.tmp`, data)
+      await fs.rename(`${path}.tmp`, path)
     })
     return this.writing.catch(() => undefined)
   }
@@ -137,4 +151,15 @@ export class Collection<T extends { id: string }> {
   flush(): Promise<void> {
     return this.file.flush()
   }
+
+  /** Moves to another file, and tells listeners, since everything they showed has changed. */
+  async usePath(path: string): Promise<void> {
+    await this.file.usePath(path)
+    this.changed()
+  }
+}
+
+/** Where a profile's personal data lives. The default profile keeps the folder it always used. */
+export function personalFile(userData: string, profileId: string, name: string): string {
+  return join(userData, dataDirFor(profileId), 'personal', name)
 }

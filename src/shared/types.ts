@@ -1,3 +1,4 @@
+import type { SkillEdits, SkillMatch, SkillPreview, SkillSettings, SkillView } from './skills'
 import type {
   BrowserCommand,
   CapabilityDescriptor,
@@ -671,6 +672,24 @@ export interface NxtorbisApi {
   /** Says the person has dealt with a challenge. Orbis looks at the page before believing it. */
   stepsVerified(runId: string): Promise<StepRunView | null>
   onStepsChanged(listener: (view: StepRunView) => void): () => void
+  /** Learned skills for the profile in use: kept on this computer, saved and reused only when the person says so. */
+  skillSettings(): Promise<SkillSettings>
+  setSkillSettings(next: Partial<SkillSettings>): Promise<SkillSettings>
+  listSkills(): Promise<SkillView[]>
+  /** What saving a finished step-by-step run would make. Saves nothing. */
+  previewSkill(runId: string): Promise<SkillPreview>
+  saveSkill(runId: string, edits?: SkillEdits): Promise<SkillView>
+  /** Saved skills that might do what was asked, judged against the page actually open. */
+  matchSkills(request: string): Promise<{ matches: SkillMatch[]; reuse: SkillSettings['reuse'] }>
+  runSkill(workflowId: string, inputs?: Record<string, string>, request?: string): Promise<ActiveWorkflowRun>
+  editSkill(workflowId: string, edits: SkillEdits): Promise<SkillView>
+  setSkillEnabled(workflowId: string, enabled: boolean): Promise<SkillView>
+  removeSkill(workflowId: string, alsoWorkflow?: boolean): Promise<void>
+  removeAllSkills(): Promise<void>
+  rollBackSkill(workflowId: string): Promise<SkillView>
+  exportSkill(workflowId: string): Promise<string>
+  importSkill(json: string): Promise<{ skill: SkillView; warnings: string[] }>
+  onSkillsChanged(listener: () => void): () => void
   vaultStatus(): Promise<VaultStatus | VaultError>
   vaultQuestion(): Promise<string | null | VaultError>
   vaultCreate(password: string, recovery?: { question: string; answer: string }): Promise<VaultStatus | VaultError>

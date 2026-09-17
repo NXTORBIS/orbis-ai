@@ -1,7 +1,7 @@
-import { join } from 'node:path'
 import type { Workspace, WorkspaceTab } from '../../shared/workspaces'
 import { fromBrowserState, newWorkspace, normalizeWorkspace, summarize } from '../../shared/workspaces'
-import { Collection } from './store'
+import { Collection, personalFile } from './store'
+import { DEFAULT_PROFILE_ID } from '../../shared/profiles.ts'
 
 /** What the browser window currently holds, as the control layer reports it. */
 export interface BrowserSnapshot {
@@ -19,8 +19,18 @@ export class WorkspacesStore {
   private currentId: string | null = null
   private saveTimer: NodeJS.Timeout | null = null
 
+  private readonly userData: string
+
   constructor(userData: string) {
-    this.workspaces = new Collection<Workspace>(join(userData, 'personal', 'workspaces.json'), normalizeWorkspace, 200)
+    this.userData = userData
+    this.workspaces = new Collection<Workspace>(personalFile(userData, DEFAULT_PROFILE_ID, 'workspaces.json'), normalizeWorkspace, 200)
+  }
+
+  /** Moves to another profile's workspaces. Each profile keeps its own; the default profile keeps what was there before. */
+  async useProfile(profileId: string): Promise<void> {
+    await Promise.all([
+      this.workspaces.usePath(personalFile(this.userData, profileId, 'workspaces.json')),
+    ])
   }
 
   onChange(listener: () => void): () => void {

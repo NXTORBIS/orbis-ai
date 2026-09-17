@@ -50,6 +50,8 @@ import type { ReportedTab, WindowRequest } from './extensions/bridge'
 import { setupBrowserControl } from './browserControl/setup'
 import { readSignals } from './browserControl/captchaCapabilities'
 import { StepRun } from './stepRunner'
+import { SkillManager } from './skillManager'
+import type { SkillEdits } from './skillManager'
 import { planNextStep } from './stepPlanner'
 import { WidgetFeeds } from './widgetFeeds'
 import { WorkflowStore } from './workflows/store'
@@ -1193,6 +1195,16 @@ if (!app.requestSingleInstanceLock()) {
     const tasksStore = new TasksStore(app.getPath('userData'))
     const whiteboardStore = new WhiteboardStore(app.getPath('userData'))
     const workspacesStore = new WorkspacesStore(app.getPath('userData'))
+    // Notes, tasks, whiteboards and workspaces belong to the profile in use, like its browsing and its workflows.
+    const personalStores = [notesStore, tasksStore, whiteboardStore, workspacesStore]
+    const followProfile = (): Promise<void> =>
+      profilesStore
+        .active()
+        .then((profile) => Promise.all(personalStores.map((store) => store.useProfile(profile.id))))
+        .then(() => undefined)
+        .catch((err: unknown) => console.error('[personal] could not switch profile', err))
+    await followProfile()
+    profilesStore.onChange(() => void followProfile())
     // How this profile has arranged the browser sidebar. Kept with the profile, because a work life and a personal one
     // have no reason to share which panels are to hand.
     /**
@@ -1305,7 +1317,9 @@ if (!app.requestSingleInstanceLock()) {
           execute: async (command, runId) =>
             browserControl!.control.execute(
               { capability: command.capability, params: command.params, target: command.target, source: 'automation' },
-              { source: 'automation', runId, confirm: async () => true }
+              // A step-by-step run acts for the person but is not the person: whatever a capability says needs confirming
+              // is asked in the window, exactly as it is for workflows.
+              { source: 'automation', runId, confirm: (request) => browserControl!.windowControl.confirm(request) }
             ),
           signals: async (target) => {
             const wc = activePage(target)
@@ -1370,6 +1384,92 @@ if (!app.requestSingleInstanceLock()) {
       await run?.captchaDone()
       return run?.view() ?? null
     }))
+
+    /**
+     * Learned skills: successful step-by-step runs the person chose to keep, stored per profile beside its workflows and
+     * run by the workflow engine like any workflow. Only the Orbis window may ask for any of this.
+     */
+    const skills = new SkillManager({
+      userData: app.getPath('userData'),
+      profileId: await stepProfile(),
+      capabilities: () => browserControl!.control.list({}),
+      workflows,
+      announce: () => sendToWindow('skills:changed')
+    })
+    profilesStore.onChange(() => {
+      void stepProfile().then((id) => skills.useProfile(id))
+    })
+    const fromWindow = (event: IpcMainInvokeEvent): void => {
+      if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
+    }
+    const text = (value: unknown, max: number): string => (typeof value === 'string' ? value.slice(0, max) : '')
+    const edits = (value: unknown): SkillEdits => {
+      const v = (value ?? {}) as Record<string, unknown>
+      return {
+        ...(typeof v.name === 'string' ? { name: v.name } : {}),
+        ...(typeof v.whenToUse === 'string' ? { whenToUse: v.whenToUse } : {}),
+        ...(typeof v.category === 'string' ? { category: v.category } : {}),
+        ...(Array.isArray(v.domains) ? { domains: v.domains.filter((d): d is string => typeof d === 'string') } : {})
+      }
+    }
+    /** The run itself, in the main process, and only if it belongs to the profile in use. */
+    const ownRun = async (runId: unknown): Promise<StepRun> => {
+      const run = typeof runId === 'string' ? stepRuns.get(runId) : undefined
+      if (!run || run.state.profileId !== (await stepProfile())) throw new Error('That run is no longer available.')
+      return run
+    }
+    ipcMain.handle('skills:settings', (event) => (fromWindow(event), skills.settings()))
+    ipcMain.handle('skills:set-settings', (event, next: unknown) => {
+      fromWindow(event)
+      const v = (next ?? {}) as Record<string, unknown>
+      return skills.setSettings({
+        ...(typeof v.enabled === 'boolean' ? { enabled: v.enabled } : {}),
+        ...(typeof v.learnFromRuns === 'boolean' ? { learnFromRuns: v.learnFromRuns } : {}),
+        ...(v.reuse === 'never' || v.reuse === 'suggest' || v.reuse === 'auto' ? { reuse: v.reuse } : {})
+      })
+    })
+    ipcMain.handle('skills:list', (event) => (fromWindow(event), skills.list()))
+    ipcMain.handle('skills:preview', async (event, runId: unknown) => {
+      fromWindow(event)
+      const settings = await skills.settings()
+      const { candidate, why } = skills.preview((await ownRun(runId)).state)
+      return {
+        offer: settings.learnFromRuns && Boolean(candidate),
+        why,
+        candidate: candidate && {
+          name: candidate.workflow.name,
+          whenToUse: candidate.meta.whenToUse,
+          category: candidate.meta.category,
+          domains: candidate.meta.domains,
+          steps: candidate.workflow.steps.map((step) => ({ name: step.name, byYou: step.type === 'userAction' })),
+          inputs: candidate.workflow.inputs.map((input) => ({ label: input.label || input.name, asked: input.default === undefined })),
+          permissions: candidate.workflow.settings.permissions,
+          notes: candidate.notes
+        }
+      }
+    })
+    ipcMain.handle('skills:save', async (event, runId: unknown, changes: unknown) => {
+      fromWindow(event)
+      return skills.saveFromRun((await ownRun(runId)).state, edits(changes))
+    })
+    ipcMain.handle('skills:match', (event, request: unknown) => {
+      fromWindow(event)
+      // The page the person is really on, read here rather than taken from the window.
+      const url = activePage()?.getURL()
+      return skills.match(text(request, 2000), url)
+    })
+    ipcMain.handle('skills:run', (event, workflowId: unknown, inputs: unknown, request: unknown) => {
+      fromWindow(event)
+      const values = inputs && typeof inputs === 'object' ? Object.fromEntries(Object.entries(inputs as Record<string, unknown>).filter(([, v]) => typeof v === 'string').map(([k, v]) => [k, (v as string).slice(0, 2000)])) : {}
+      return skills.run(text(workflowId, 80), values, text(request, 200) || undefined)
+    })
+    ipcMain.handle('skills:edit', (event, workflowId: unknown, changes: unknown) => (fromWindow(event), skills.edit(text(workflowId, 80), edits(changes))))
+    ipcMain.handle('skills:set-enabled', (event, workflowId: unknown, on: unknown) => (fromWindow(event), skills.setEnabled(text(workflowId, 80), on === true)))
+    ipcMain.handle('skills:remove', (event, workflowId: unknown, alsoWorkflow: unknown) => (fromWindow(event), skills.remove(text(workflowId, 80), alsoWorkflow === true)))
+    ipcMain.handle('skills:remove-all', (event) => (fromWindow(event), skills.removeAll()))
+    ipcMain.handle('skills:roll-back', (event, workflowId: unknown) => (fromWindow(event), skills.rollBack(text(workflowId, 80))))
+    ipcMain.handle('skills:export', (event, workflowId: unknown) => (fromWindow(event), skills.exportSkill(text(workflowId, 80))))
+    ipcMain.handle('skills:import', (event, json: unknown) => (fromWindow(event), skills.importSkill(text(json, 2_000_000))))
 
     app.on('before-quit', () => {
       for (const run of stepRuns.values()) run.stopRun('Orbis is closing.')

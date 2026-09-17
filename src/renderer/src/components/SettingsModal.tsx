@@ -7,6 +7,7 @@ const OfflineGamesSettings = lazy(() => import('./OfflineGamesSettings'))
 // A megabyte of licence text: read only when someone asks to see it.
 const NoticesPanel = lazy(() => import('./NoticesPanel'))
 const UpdateSettings = lazy(() => import('./UpdateSettings'))
+const SkillsSettings = lazy(() => import('./SkillsSettings'))
 
 interface Props {
   settings: Settings
@@ -141,6 +142,16 @@ export default function SettingsModal({ settings, onUpdate, onClose }: Props): R
 
           <section className="setting">
             <div className="setting-label">
+              <h3>Learned skills</h3>
+              <p>Successful step-by-step runs you chose to keep, so Orion can do them again faster. Kept on this device, for this profile only, with no passwords in them.</p>
+            </div>
+            <Suspense fallback={null}>
+              <SkillsSettings />
+            </Suspense>
+          </section>
+
+          <section className="setting">
+            <div className="setting-label">
               <h3>Offline games</h3>
               <p>What the browser shows when a page can't load because of the network, and how the games play. Scores and saved games stay on this device.</p>
             </div>
@@ -196,7 +207,7 @@ export default function SettingsModal({ settings, onUpdate, onClose }: Props): R
   )
 }
 
-function Segmented<T extends string>({ value, options, onChange }: { value: T; options: [T, string][]; onChange(value: T): void }): React.JSX.Element {
+export function Segmented<T extends string>({ value, options, onChange }: { value: T; options: [T, string][]; onChange(value: T): void }): React.JSX.Element {
   return (
     <div className="segmented" role="radiogroup">
       {options.map(([option, label]) => (
@@ -208,7 +219,7 @@ function Segmented<T extends string>({ value, options, onChange }: { value: T; o
   )
 }
 
-function Toggle({ checked, onChange }: { checked: boolean; onChange(value: boolean): void }): React.JSX.Element {
+export function Toggle({ checked, onChange }: { checked: boolean; onChange(value: boolean): void }): React.JSX.Element {
   return (
     <label className="switch">
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />

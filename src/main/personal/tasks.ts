@@ -1,7 +1,7 @@
-import { join } from 'node:path'
 import type { Task, TaskFilter, TaskList } from '../../shared/tasks'
 import { completeTask, filterTasks, INBOX_LIST_ID, newList, newTask, normalizeList, normalizeTask, taskCounts, taskFromPage } from '../../shared/tasks'
-import { Collection } from './store'
+import { Collection, personalFile } from './store'
+import { DEFAULT_PROFILE_ID } from '../../shared/profiles.ts'
 
 export interface TasksSnapshot {
   lists: TaskList[]
@@ -14,9 +14,20 @@ export class TasksStore {
   private readonly lists: Collection<TaskList>
   private readonly tasks: Collection<Task>
 
+  private readonly userData: string
+
   constructor(userData: string) {
-    this.lists = new Collection<TaskList>(join(userData, 'personal', 'task-lists.json'), normalizeList, 200)
-    this.tasks = new Collection<Task>(join(userData, 'personal', 'tasks.json'), normalizeTask, 20_000)
+    this.userData = userData
+    this.lists = new Collection<TaskList>(personalFile(userData, DEFAULT_PROFILE_ID, 'task-lists.json'), normalizeList, 200)
+    this.tasks = new Collection<Task>(personalFile(userData, DEFAULT_PROFILE_ID, 'tasks.json'), normalizeTask, 20_000)
+  }
+
+  /** Moves to another profile's tasks. Each profile keeps its own; the default profile keeps what was there before. */
+  async useProfile(profileId: string): Promise<void> {
+    await Promise.all([
+      this.lists.usePath(personalFile(this.userData, profileId, 'task-lists.json')),
+      this.tasks.usePath(personalFile(this.userData, profileId, 'tasks.json')),
+    ])
   }
 
   onChange(listener: () => void): () => void {

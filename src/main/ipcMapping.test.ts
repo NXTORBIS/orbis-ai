@@ -76,5 +76,6 @@ test('the boundary is a known size, so the migration can be estimated rather tha
   // and telling Orbis a challenge has been dealt with).
   // 137 → 139: weather and news for the new tab's widgets.
   // 139 → 135: Google sign-in removed. Orbis keeps everything locally and has no account.
-  assert.ok(code.length <= 135, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
+  // 135 → 149: learned skills (saved from step-by-step runs, reused through the workflow engine).
+  assert.ok(code.length <= 149, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
 })

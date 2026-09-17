@@ -1,4 +1,7 @@
-import { memo, useMemo, useState } from 'react'
+import { sharpenedImage } from '../lib/upscale'
+
+const SHARPEN_IMAGES = false
+import { memo, useEffect, useMemo, useState } from 'react'
 import type { ResearchSource } from '../../../shared/types'
 import { linkCitations } from '../../../shared/research'
 import { openInOrbisBrowser } from '../lib/openInBrowser'
@@ -54,11 +57,28 @@ function Image({ node: _node, src, alt, title, ...props }: React.ComponentProps<
   const openEditor = useImageEditor()
   const [saved, setSaved] = useState(false)
   const [previewing, setPreviewing] = useState(false)
+  const [sharp, setSharp] = useState<{ from: string; url: string } | null>(null)
+  const [sharpening, setSharpening] = useState(false)
+  // Generated images arrive small and soft; they are redrawn sharper on this computer, and swapped in once ready.
+  // Switched off: in the real app sharpening appeared to stall the window, and that has not been found yet.
+  useEffect(() => {
+    if (!SHARPEN_IMAGES || typeof src !== 'string' || !src.startsWith('data:image/')) return undefined
+    let live = true
+    setSharpening(true)
+    void sharpenedImage(src)
+      .then((url) => live && url !== src && setSharp({ from: src, url }))
+      .catch((err: unknown) => console.warn('[images] could not sharpen', err))
+      .finally(() => live && setSharpening(false))
+    return () => {
+      live = false
+    }
+  }, [src])
   if (typeof src !== 'string' || !src.startsWith('data:image/')) return <img src={src} alt={alt} title={title} {...props} className="markdown-inline-image" />
+  const shown = sharp?.from === src ? sharp.url : src
   const seedMatch = /^seed:(\d+)$/.exec(title ?? '')
 
   const download = (): void => {
-    void window.api.saveImage(src, alt || 'orbis-image').then((ok) => {
+    void window.api.saveImage(shown, alt || 'orbis-image').then((ok) => {
       if (!ok) return
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
@@ -71,7 +91,8 @@ function Image({ node: _node, src, alt, title, ...props }: React.ComponentProps<
   return (
     <figure className="generated-image">
       <button type="button" className="generated-image-open" title="Open full preview" onClick={() => setPreviewing(true)}>
-        <img src={src} alt={alt} {...props} />
+        <img src={shown} alt={alt} {...props} />
+        {sharpening && !sharp && <span className="image-sharpening">Sharpening…</span>}
       </button>
       <figcaption>
         <span className="truncate" title={alt}>{alt}</span>
@@ -88,7 +109,7 @@ function Image({ node: _node, src, alt, title, ...props }: React.ComponentProps<
       </figcaption>
       {previewing && (
         <ImageLightbox
-          src={src}
+          src={shown}
           alt={alt ?? ''}
           saved={saved}
           onClose={() => setPreviewing(false)}

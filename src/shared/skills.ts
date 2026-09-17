@@ -71,6 +71,39 @@ export const DEFAULT_SKILL_SETTINGS: SkillSettings = { enabled: true, learnFromR
 
 export const SKILL_CATEGORIES = ['Research', 'Browsing', 'Productivity', 'Shopping', 'Development', 'Study', 'Files', 'Downloads', 'Web apps', 'Communication', 'Custom']
 
+/** What the window is shown of a skill: its details, and how it is doing according to its real runs. */
+export interface SkillView {
+  meta: SkillMeta
+  workflow: { id: string; name: string; description: string; version: number; steps: number; inputs: { name: string; label: string; hasDefault: boolean }[]; permissions: string[] }
+  stats: SkillStats
+  health: SkillHealth
+  knownGoodVersion?: number
+}
+
+export interface SkillEdits {
+  name?: string
+  whenToUse?: string
+  category?: string
+  domains?: string[]
+}
+
+/** What saving a run would make, as the window is shown it before anything is saved. */
+export interface SkillPreview {
+  /** Whether to offer saving at all: learning is switched on and the run taught something. */
+  offer: boolean
+  why?: string
+  candidate: {
+    name: string
+    whenToUse: string
+    category: string
+    domains: string[]
+    steps: { name: string; byYou: boolean }[]
+    inputs: { label: string; asked: boolean }[]
+    permissions: string[]
+    notes: string[]
+  } | null
+}
+
 // ---------------------------------------------------------------- whether a run taught anything
 
 export interface Eligibility {
@@ -152,10 +185,16 @@ function looksPersonal(value: string): boolean {
   return EMAIL.test(value) || PHONE.test(value) || value.length > 80
 }
 
-/** Anything in a step's parameters that names or looks like a secret, by where it sits or what it is. */
-function secretIn(step: PlannedStep, capability: CapabilityDescriptor | undefined): string | null {
+/**
+ * Anything in a step's parameters that is a secret, by where it was typed or what it looks like.
+ *
+ * A parameter Orbis marks sensitive is not by itself a secret: Orbis marks everything typed that way, a search as much
+ * as a password, so that logs never show it. Treating all of it as a secret turned every typing step into one the person
+ * had to do by hand, and a run made of those had nothing left to learn. What is a secret is a field named like one, or a
+ * value shaped like one; sensitive text that is neither is kept as something the skill asks for each time.
+ */
+function secretIn(step: PlannedStep): string | null {
   for (const [name, value] of Object.entries(step.params)) {
-    if (capability?.params[name]?.sensitive) return name
     if (looksSecret(value)) return name
   }
   const locator = JSON.stringify(step.params.locator ?? '')
@@ -226,11 +265,16 @@ export function candidateFromRun(session: StepSession, capabilities: CapabilityD
 
   for (const step of session.steps) {
     if (step.phase !== 'success' || !step.capability) continue
+    // A site asking to verify a person is answered by the person, every time. The skill waits for them there.
+    if (step.capability.startsWith('captcha.')) {
+      steps.push({ id: id(), type: 'userAction', name: 'Verify you are a person', message: 'If the site asks you to verify you are a person, do it on the page, then continue.' })
+      continue
+    }
     const capability = byId.get(step.capability)
     const host = hostOf(step.params.url)
     if (host) domains.add(host)
 
-    const secret = secretIn(step, capability)
+    const secret = secretIn(step)
     if (secret) {
       // The value is never looked at again, let alone kept: the person does this part themselves, every time.
       const ask: UserActionWorkflowStep = { id: id(), type: 'userAction', name: step.intent, message: `${step.intent} — do this on the page yourself, then continue.` }
@@ -243,7 +287,8 @@ export function candidateFromRun(session: StepSession, capabilities: CapabilityD
     if (TEXT_CAPABILITIES.has(step.capability) && typeof params.text === 'string' && params.text.trim()) {
       const name = inputName(step.intent, taken)
       const typed = params.text
-      const personal = looksPersonal(typed)
+      // Sensitive text is asked for every time rather than remembered, as is anything that looks personal.
+      const personal = looksPersonal(typed) || capability?.params.text?.sensitive === true
       inputs.push({
         name,
         label: step.intent.slice(0, 60),
@@ -251,10 +296,10 @@ export function candidateFromRun(session: StepSession, capabilities: CapabilityD
         required: true,
         // What was typed last time is a sensible starting point, unless it is somebody's address or a whole message.
         ...(personal ? {} : { default: typed }),
-        description: personal ? 'Asked for each time, since what was typed before looked personal.' : undefined
+        description: personal ? 'Asked for each time rather than remembered.' : undefined
       })
       params.text = `{{${name}}}`
-      if (personal) notes.push(`What was typed for “${step.intent}” looked personal, so it is not kept as a default.`)
+      if (personal) notes.push(`What was typed for “${step.intent}” is asked for each time rather than remembered.`)
     }
 
     const action: ActionWorkflowStep = {
@@ -507,7 +552,7 @@ export function checkSkillImport(raw: unknown, capabilities: CapabilityDescripto
   const unknown = [...used].filter((id) => !known.has(id))
   if (unknown.length) return { ok: false, why: `The skill needs something this Orbis cannot do: ${unknown.join(', ')}.` }
 
-  const clean = (text: unknown, max: number): string => (typeof text === 'string' ? text.replace(/[ -]/g, ' ').slice(0, max) : '')
+  const clean = (text: unknown, max: number): string => (typeof text === 'string' ? text.replace(/[\u0000-\u001f]/g, ' ').slice(0, max) : '')
   return {
     ok: true,
     meta: {

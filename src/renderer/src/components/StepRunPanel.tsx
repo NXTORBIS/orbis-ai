@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import type { StepRunView } from '../../../shared/stepPlan'
 import type { PublicStep } from '../../../shared/stepPlan'
+import { SaveSkillOffer, SKILL_OFFER_EVENT, SkillSuggestion } from './SkillPanels'
+import type { SkillOfferDetail } from './SkillPanels'
 
 /**
  * What Orbis is doing, step by step, while it is doing it.
@@ -43,11 +45,36 @@ export default function StepRunPanel(): React.JSX.Element | null {
   const [view, setView] = useState<StepRunView | null>(null)
   const [runId, setRunId] = useState<string | null>(null)
   const [small, setSmall] = useState(false)
+  const [offer, setOffer] = useState<SkillOfferDetail | null>(null)
 
   useEffect(() => window.api.onStepsChanged((next) => {
+    setOffer(null)
     setView(next)
     setRunId(next.session.id)
   }), [])
+
+  useEffect(() => {
+    const onOffer = (event: Event): void => {
+      setView(null)
+      setOffer((event as CustomEvent<SkillOfferDetail>).detail)
+    }
+    window.addEventListener(SKILL_OFFER_EVENT, onOffer)
+    return () => window.removeEventListener(SKILL_OFFER_EVENT, onOffer)
+  }, [])
+
+  if (offer) {
+    return (
+      <SkillSuggestion
+        key={offer.task}
+        offer={offer}
+        onClose={() => setOffer(null)}
+        onPlan={(task) => {
+          setOffer(null)
+          void window.api.startSteps(task)
+        }}
+      />
+    )
+  }
 
   if (!view || !runId) return null
   const { session, saying, captcha } = view
@@ -112,6 +139,8 @@ export default function StepRunPanel(): React.JSX.Element | null {
           {!session.steps.length && !over && <li className="steprun-step thinking">Working out where to start.</li>}
         </ol>
       )}
+
+      {session.status === 'done' && <SaveSkillOffer key={runId} runId={runId} />}
 
       <footer className="steprun-foot">
         {/* Confirmed, not attempted: the count is of steps the browser agreed with. */}
