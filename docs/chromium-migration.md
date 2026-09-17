@@ -59,7 +59,7 @@ an external dependency)
 | Tabs, groups, split view | `BrowserPanel.tsx` + `<webview>` | `webContents`, webview tag | `TabStripModel`, `WebContents` | Browser layer | not started | probe-browser, probe-tabs-shortcuts |
 | Tab state on switch | webview kept alive | webview tag | Chromium tab lifecycle | Browser layer | not started | probe-tabs-typing |
 | Navigation, back/forward | `webview.goBack()` | webview tag | `NavigationController` | Browser layer | not started | probe-swipe |
-| Two-finger history swipe | `historySwipe.ts` + `gestureAdapter.ts` | `before-mouse-event` | Chromium overscroll / input pipeline | Browser layer | not started | 24 unit tests |
+| Two-finger history swipe — **required** | `historySwipe.ts` + `gestureAdapter.ts` | `before-input-event` wheel events | Chromium's own `OverscrollController` (`kOverscrollHistoryNavigation`, on by default, handles touchpad gestures) | Browser layer | not started | 24 unit tests; must be checked by hand on a precision touchpad on the built `chrome.exe` |
 | History, bookmarks, downloads | `browserLibrary.ts` (own JSON store) | `session`, `DownloadItem` | `HistoryService`, `BookmarkModel`, `DownloadManager` | Browser layer | not started | browserLibrary.test |
 | Ad blocking | `@ghostery/adblocker-electron` | `session.webRequest` | `URLLoaderThrottle` + same engine | Browser layer | not started | adblock.test, probe-adblock |
 | Extensions | `electron-chrome-web-store` | Electron sessions | Chromium extensions system | Browser layer | blocked — see Decisions | probe-extensions |
@@ -87,19 +87,34 @@ These can invalidate an acceptance criterion after months of work, so they are s
 2. **Chrome Web Store.** Google gates Web Store API access with keys issued to Chrome. Forks fetch extension packages
    directly instead, which is what Orbis already does. "Chrome Web Store extensions" in the official sense is not
    available to a fork; the practice that works today does port.
-3. **Google Sign-In.** Orbis already sends a clean Chrome user agent and is still refused. Being a standalone browser
-   is likely to fix it, but that is not proven. Tested on a plain Chromium build early, before the migration depends
-   on it.
+3. **Signing in to Google websites** (Gmail, YouTube) inside the browser. Orbis already sends a clean Chrome user agent
+   and is still sometimes refused inside Electron's webview. Being a standalone browser is likely to fix it, but that is
+   not proven. Tested on a plain Chromium build early.
+
+   Signing in *to Orbis* is not part of this: it was removed (commit `8d26fa4`). Orbis keeps everything locally and has
+   no account, and the port must not bring one back.
+
+## Must work after the move
+
+Settled with the user and not up for trade-off during the port:
+
+- **Two-finger swipe back and forward on a Windows precision touchpad.** Chromium's native overscroll navigation
+  already recognises touchpad gestures, so the likely route is to use it — and keep Orbis's arrow overlay only if
+  Chromium's own feedback is not good enough — rather than re-porting Orbis's wheel-event recogniser. Either way the
+  acceptance test is a real two-finger swipe on real hardware against the built browser: back, forward, a swipe
+  abandoned half way, a page that scrolls horizontally itself, and a tab with no history.
+- **No account.** See Decisions, item 3.
 
 ## Build environment
 
 | Requirement | State |
 | --- | --- |
-| Disk | 227 GB free — enough for a release build, not for a debug build |
-| Visual Studio 2022 | Community 17.12 present |
-| Windows SDK | **missing — blocks the build** |
+| Disk | 181 GB free — enough for a release build, not for a debug build |
+| Visual Studio | Community 2022 (17.12) and 2026 (18.10) present |
+| Windows SDK | 10.0.28000.0 installed; Debugging Tools for Windows not yet installed |
+| Defender exclusion for `C:\chromium` | not added (needs the machine's administrator) — builds work, but slower |
 | depot_tools | present at `C:\chromium\depot_tools` |
-| Chromium source | present at `C:\chromium\src` — **Chromium 156.0.8063.0**, fetched without history to fit the disk |
+| Chromium source | **target: Stable 154.0.8037.44** (branch 8037), synced without history. Chosen over tip-of-tree 156 for stability and backported security fixes. |
 | Machine | 12 cores, 32 GB RAM — first build roughly 4–8 hours, then minutes |
 
 ## Phases
@@ -109,9 +124,8 @@ These can invalidate an acceptance criterion after months of work, so they are s
    for something is mapped in `ipc-mapping.md`, and the transport seam exists so domains can move one at a time while
    the rest keeps working.
    
-   One thing to settle from the checkout: Chromium's own tip is **156**, while Orbis runs Chromium **152** through
-   Electron. Building against 156 means four versions of web-platform change arriving at once, which is a good thing
-   but should be a deliberate step rather than a surprise.
+   Settled: the build targets **Stable 154.0.8037.44** rather than tip-of-tree 156 — tested, patched, and a fixed
+   target to port against. Two versions of web-platform change over the Chromium 152 inside today's Electron.
 3. **Chromium foundation** — source tree, build, Orbis branding and packaging.
 4. **Browser migration** — tabs, navigation, history, downloads, extensions, permissions, media.
 5. **Orbis feature migration** — Orion, the control layer, workflows, profiles, personalization, everything else.
