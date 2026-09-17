@@ -54,6 +54,9 @@ import { SkillManager } from './skillManager'
 import { resolveModel } from '../shared/modelRoute'
 import { MemoryFull, MemoryRefused, MemoryStore } from './knowledge/memory'
 import { SearchSessionStore } from './knowledge/searchSessions'
+import { GalaxyService } from './knowledge/galaxyService'
+import type { GalaxyNodeType, GalaxyView } from '../shared/galaxy'
+import type { WorkflowStep } from '../shared/workflows'
 import { memoryFromRequest, memoryPromptBlock, parseMemoryCommand } from '../shared/memory'
 import type { MemoryCategory } from '../shared/memory'
 import type { SkillEdits } from './skillManager'
@@ -1587,6 +1590,71 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.handle('skills:roll-back', (event, workflowId: unknown) => (fromWindow(event), skills.rollBack(text(workflowId, 80))))
     ipcMain.handle('skills:export', (event, workflowId: unknown) => (fromWindow(event), skills.exportSkill(text(workflowId, 80))))
     ipcMain.handle('skills:import', (event, json: unknown) => (fromWindow(event), skills.importSkill(text(json, 2_000_000))))
+
+    /**
+     * Galaxy: the profile's own things and how they are really connected, built from the stores above whenever it is
+     * looked at after a change. It keeps no copy of any of them; only links the person makes are stored.
+     */
+    const callsIn = (steps: WorkflowStep[]): string[] =>
+      steps.flatMap((step) =>
+        step.type === 'call' ? [step.workflowId] : step.type === 'if' ? [...callsIn(step.then), ...(step.elseIf ?? []).flatMap((b) => callsIn(b.steps)), ...callsIn(step.else ?? [])] : step.type === 'repeat' ? callsIn(step.steps) : []
+      )
+    const galaxy = new GalaxyService({
+      userData: app.getPath('userData'),
+      profileId: await stepProfile(),
+      collect: async () => {
+        const [notes, tasks, skillViews, flows, spaces, boards] = await Promise.all([
+          notesStore.all(),
+          tasksStore.snapshot(),
+          skills.list(),
+          workflows.list(),
+          workspacesStore.list(),
+          whiteboardStore.list()
+        ])
+        return {
+          memories: memory ? memory.list().map((m) => ({ id: m.id, text: m.text, category: m.category, createdAt: m.createdAt, updatedAt: m.updatedAt, archived: m.archived })) : [],
+          searches: searchSessions.withSources().map((s) => ({ id: s.id, title: s.title, turns: s.turns, startedAt: s.startedAt, updatedAt: s.updatedAt, sources: s.sourceList })),
+          notes: notes.map((n) => ({ id: n.id, title: n.title, archived: n.archived, createdAt: n.createdAt, updatedAt: n.updatedAt, ...(n.source ? { source: { url: n.source.url, title: n.source.title } } : {}) })),
+          tasks: tasks.tasks.map((t) => ({ id: t.id, title: t.title, done: t.done, createdAt: t.createdAt, updatedAt: t.updatedAt, ...(t.link ? { link: { url: t.link.url, title: t.link.title } } : {}) })),
+          skills: skillViews.map((s) => ({ workflowId: s.workflow.id, name: s.workflow.name, domains: s.meta.domains, enabled: s.meta.enabled, createdAt: s.meta.createdAt, updatedAt: s.meta.updatedAt })),
+          workflows: flows.map((w) => ({ id: w.id, name: w.name, createdAt: w.createdAt, updatedAt: w.updatedAt, calls: callsIn(w.steps), archived: w.status === 'archived' })),
+          workspaces: spaces.map((w) => ({ id: w.id, name: w.name, createdAt: w.createdAt, updatedAt: w.updatedAt, tabs: w.tabs.map((t) => ({ url: t.url, title: t.title })) })),
+          whiteboards: boards.map((b) => ({ id: b.id, name: b.name, createdAt: b.createdAt, updatedAt: b.updatedAt })),
+          bookmarks: (libraryForControl?.snapshot().bookmarks ?? []).map((b) => ({ url: b.url, title: b.title, addedAt: b.addedAt }))
+        }
+      }
+    })
+    galaxy.onChange(() => sendToWindow('galaxy:changed'))
+    for (const source of [memory, searchSessions, notesStore, tasksStore, workspacesStore, whiteboardStore]) source?.onChange(() => galaxy.invalidate())
+    libraryForControl?.addListener(() => galaxy.invalidate())
+    profilesStore.onChange(() => {
+      void stepProfile().then((id) => galaxy.useProfile(id))
+    })
+    app.on('before-quit', () => galaxy.close())
+    const TYPES: GalaxyNodeType[] = ['memory', 'search', 'page', 'site', 'note', 'task', 'skill', 'workflow', 'workspace', 'whiteboard', 'bookmark']
+    ipcMain.handle('galaxy:view', async (event, raw: unknown) => {
+      fromWindow(event)
+      // Skills and workflows announce changes to the window rather than to Galaxy, so the map is rebuilt when opened.
+      galaxy.refresh()
+      const v = (raw ?? {}) as Record<string, unknown>
+      const view: GalaxyView = {
+        ...(Array.isArray(v.types) ? { types: v.types.filter((t): t is GalaxyNodeType => TYPES.includes(t as GalaxyNodeType)) } : {}),
+        ...(typeof v.query === 'string' ? { query: v.query.slice(0, 200) } : {}),
+        ...(typeof v.focus === 'string' ? { focus: v.focus.slice(0, 2100) } : {}),
+        ...(typeof v.depth === 'number' ? { depth: v.depth } : {}),
+        ...(typeof v.from === 'number' ? { from: v.from } : {}),
+        ...(typeof v.to === 'number' ? { to: v.to } : {}),
+        limit: typeof v.limit === 'number' ? Math.max(10, Math.min(1500, v.limit)) : 400
+      }
+      return galaxy.view(view)
+    })
+    ipcMain.handle('galaxy:describe', (event, id: unknown) => (fromWindow(event), galaxy.describe(text(id, 2100))))
+    ipcMain.handle('galaxy:link', (event, from: unknown, to: unknown, note: unknown) => (fromWindow(event), galaxy.link(text(from, 2100), text(to, 2100), text(note, 200) || undefined)))
+    ipcMain.handle('galaxy:unlink', (event, id: unknown) => (fromWindow(event), galaxy.unlink(text(id, 80))))
+    ipcMain.handle('galaxy:ask', (event, ids: unknown, question: unknown) => {
+      fromWindow(event)
+      return galaxy.askAbout(Array.isArray(ids) ? ids.filter((i): i is string => typeof i === 'string') : [], text(question, 1000))
+    })
 
     app.on('before-quit', () => {
       for (const run of stepRuns.values()) run.stopRun('Orbis is closing.')

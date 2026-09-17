@@ -10,6 +10,7 @@ import BrowserPanel from './components/BrowserPanel'
 import ChatHeader from './components/ChatHeader'
 import ChatView from './components/ChatView'
 import ImagesView from './components/ImagesView'
+import GalaxyView from './components/GalaxyView'
 import { useExperience } from './lib/experience'
 import HudBackground from './components/HudBackground'
 import Sidebar from './components/Sidebar'
@@ -79,6 +80,9 @@ export default function App(): React.JSX.Element {
     }
   })
   const [imagesOpen, setImagesOpen] = useState(false)
+  const [galaxyOpen, setGalaxyOpen] = useState(false)
+  /** A message from Galaxy, sent once the new chat it belongs in is ready. */
+  const [pendingAsk, setPendingAsk] = useState<string | null>(null)
   /** Everything the user has personalised, applied to the window; an untouched Orbis is left exactly as it is. */
   const experience = useExperience()
 
@@ -850,6 +854,14 @@ export default function App(): React.JSX.Element {
 
   const newChat = useCallback(() => startChat(false), [startChat])
 
+  // Galaxy's "Ask Orion" goes to a fresh chat: sent only once that chat is the one open, so it cannot land in another.
+  useEffect(() => {
+    if (!pendingAsk || activeId) return
+    const message = pendingAsk
+    setPendingAsk(null)
+    send(message, [])
+  }, [pendingAsk, activeId, send])
+
   const toggleIncognito = useCallback(() => {
     const on = !(activeId ? conversationsRef.current.find((c) => c.id === activeId)?.incognito : draft.incognito)
     startChat(on)
@@ -1340,7 +1352,9 @@ export default function App(): React.JSX.Element {
           incognito={current.incognito}
           streams={streams}
           imageCount={galleryImages.length}
-          imagesOpen={imagesOpen}
+          imagesOpen={imagesOpen}
+          galaxyOpen={galaxyOpen}
+          onGalaxy={() => setGalaxyOpen((open) => !open)}
           searchToken={searchToken}
           userName={settings?.userName ?? 'You'}
           userTitle={settings?.userTitle ?? ''}
@@ -1390,6 +1404,17 @@ export default function App(): React.JSX.Element {
           />
           {imagesOpen && (
             <ImagesView images={galleryImages} onClose={() => setImagesOpen(false)} onOpenChat={selectChat} onEdit={editGalleryImage} onNotify={notify} />
+          )}
+          {galaxyOpen && (
+            <GalaxyView
+              onClose={() => setGalaxyOpen(false)}
+              onNotify={notify}
+              onAsk={(message) => {
+                setGalaxyOpen(false)
+                newChat()
+                setPendingAsk(message)
+              }}
+            />
           )}
         </main>
 

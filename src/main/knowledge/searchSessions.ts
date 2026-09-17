@@ -153,6 +153,14 @@ export class SearchSessionStore {
     return (this.open().prepare('SELECT s.* FROM search_sources x JOIN search_sessions s ON s.id = x.session_id WHERE x.url = ? GROUP BY s.id ORDER BY s.updated_at DESC').all(url) as Row[]).map((row) => this.summary(row))
   }
 
+  /** Saved sessions with the addresses they used, newest first, for Galaxy. */
+  withSources(limit = 300): (SavedSearchSummary & { sourceList: { url: string; title: string }[] })[] {
+    const db = this.open()
+    const sessions = this.list(undefined, limit)
+    const sourcesOf = db.prepare('SELECT url, title FROM search_sources WHERE session_id = ? ORDER BY n')
+    return sessions.map((s) => ({ ...s, sourceList: (sourcesOf.all(s.id) as Row[]).map((r) => ({ url: String(r.url), title: String(r.title) })) }))
+  }
+
   remove(id: string): boolean {
     const db = this.open()
     db.prepare('DELETE FROM search_sessions_fts WHERE id = ?').run(id)

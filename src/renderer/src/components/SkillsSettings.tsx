@@ -34,6 +34,7 @@ export default function SkillsSettings(): React.JSX.Element {
   const [skills, setSkills] = useState<SkillView[]>([])
   const [query, setQuery] = useState('')
   const [message, setMessage] = useState('')
+  const [renaming, setRenaming] = useState<{ id: string; name: string } | null>(null)
   const file = useRef<HTMLInputElement>(null)
 
   const refresh = useCallback(() => {
@@ -129,7 +130,27 @@ export default function SkillsSettings(): React.JSX.Element {
           {shown.map((skill) => (
             <li key={skill.workflow.id} className={`skill-item ${skill.health}`}>
               <div className="skill-item-head">
-                <strong>{skill.workflow.name}</strong>
+                {renaming?.id === skill.workflow.id ? (
+                  <form
+                    className="skills-tools"
+                    onSubmit={(e) => {
+                      e.preventDefault()
+                      const name = renaming.name.trim()
+                      setRenaming(null)
+                      if (name && name !== skill.workflow.name) void act(() => window.api.editSkill(skill.workflow.id, { name }))
+                    }}
+                  >
+                    <input autoFocus value={renaming.name} maxLength={80} onChange={(e) => setRenaming({ id: skill.workflow.id, name: e.target.value })} aria-label="Skill name" />
+                    <button type="submit" className="setting-action">
+                      Save
+                    </button>
+                    <button type="button" className="setting-action" onClick={() => setRenaming(null)}>
+                      Cancel
+                    </button>
+                  </form>
+                ) : (
+                  <strong>{skill.workflow.name}</strong>
+                )}
                 <span className={`skill-health ${skill.health}`}>{skill.meta.trust === 'untrusted' ? 'Imported, not checked' : HEALTH[skill.health]}</span>
               </div>
               <p>{skill.meta.whenToUse}</p>
@@ -141,13 +162,7 @@ export default function SkillsSettings(): React.JSX.Element {
               <p className="skill-meta">{skill.stats.runs ? `${skill.stats.succeeded} of ${skill.stats.runs} runs worked · last used ${when(skill.stats.lastUsedAt)}` : 'Not used yet'}</p>
               <div className="skill-actions">
                 <Toggle checked={skill.meta.enabled} onChange={(v) => void act(() => window.api.setSkillEnabled(skill.workflow.id, v))} />
-                <button
-                  type="button"
-                  onClick={() => {
-                    const name = window.prompt('Rename skill', skill.workflow.name)
-                    if (name && name.trim() !== skill.workflow.name) void act(() => window.api.editSkill(skill.workflow.id, { name }))
-                  }}
-                >
+                <button type="button" onClick={() => setRenaming({ id: skill.workflow.id, name: skill.workflow.name })}>
                   Rename
                 </button>
                 {skill.health === 'unstable' && skill.knownGoodVersion && skill.knownGoodVersion < skill.workflow.version && (

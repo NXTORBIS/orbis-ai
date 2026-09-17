@@ -2,6 +2,13 @@ import type { SkillEdits, SkillMatch, SkillPreview, SkillSettings, SkillView } f
 import type { MemoryCategory, MemoryEntry, MemorySettings } from './memory'
 import type { OrionSearchSession } from './orionSearch'
 import type { SavedSearchSummary } from './searchSessions'
+import type { GalaxyEdge, GalaxyGraph, GalaxyNode, GalaxyNodeType, GalaxyView, UserLink } from './galaxy'
+
+export interface GalaxyDescription {
+  node: GalaxyNode
+  counts: Partial<Record<GalaxyNodeType, number>>
+  links: { other: GalaxyNode; edge: GalaxyEdge }[]
+}
 import type {
   BrowserCommand,
   CapabilityDescriptor,
@@ -711,6 +718,14 @@ export interface NxtorbisApi {
   removeSearchSession(id: string): Promise<boolean>
   clearSearchSessions(): Promise<number>
   onSearchSessionsChanged(listener: () => void): () => void
+  /** Galaxy: the profile's own things and their real connections. */
+  galaxyView(view?: GalaxyView): Promise<GalaxyGraph>
+  galaxyDescribe(id: string): Promise<GalaxyDescription | null>
+  galaxyLink(from: string, to: string, note?: string): Promise<UserLink>
+  galaxyUnlink(id: string): Promise<boolean>
+  /** The selection, written as a message for Orion. Nothing else from the profile is included. */
+  galaxyAsk(ids: string[], question: string): Promise<string>
+  onGalaxyChanged(listener: () => void): () => void
   vaultStatus(): Promise<VaultStatus | VaultError>
   vaultQuestion(): Promise<string | null | VaultError>
   vaultCreate(password: string, recovery?: { question: string; answer: string }): Promise<VaultStatus | VaultError>

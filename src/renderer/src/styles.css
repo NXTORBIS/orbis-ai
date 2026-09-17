@@ -13933,3 +13933,221 @@ html[data-motion='reduced'] .newtab-orb {
   font-size: 11.5px;
   pointer-events: none;
 }
+
+/* Galaxy */
+.galaxy-view .galaxy-head {
+  padding-bottom: 6px;
+}
+
+.galaxy-toolbar,
+.galaxy-types {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 0 28px 8px;
+}
+
+.galaxy-search {
+  flex: 1;
+  min-width: 180px;
+}
+
+.galaxy-search input,
+.galaxy-select,
+.galaxy-btn,
+.galaxy-chip {
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--pill-border);
+  border-radius: 999px;
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+}
+
+.galaxy-search input {
+  width: 100%;
+}
+
+.galaxy-btn,
+.galaxy-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+}
+
+.galaxy-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.galaxy-chip.on {
+  border-color: var(--cyan-dim);
+  background: var(--active);
+}
+
+.galaxy-dot {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.galaxy-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  margin: 0 16px 16px;
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  background: var(--bg-center);
+}
+
+.galaxy-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  touch-action: none;
+}
+
+.galaxy-linking {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  padding: 6px 14px;
+  border: 1px solid var(--cyan-dim);
+  border-radius: 999px;
+  background: var(--popover-bg);
+  font-size: 12.5px;
+  transform: translateX(-50%);
+}
+
+.galaxy-details {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  width: min(340px, calc(100% - 24px));
+  padding: 14px;
+  overflow-y: auto;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: var(--popover-bg);
+  box-shadow: var(--glass-shadow);
+}
+
+.galaxy-details h3 {
+  margin: 4px 0;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
+.galaxy-kind {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.galaxy-links {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.galaxy-links li {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12.5px;
+}
+
+.galaxy-links li > button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.galaxy-links small {
+  padding-left: 15px;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+
+.galaxy-links .galaxy-unlink {
+  position: absolute;
+  top: 0;
+  right: 0;
+  color: var(--muted);
+}
+
+.galaxy-details .skill-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+@media (max-width: 700px) {
+  .galaxy-toolbar,
+  .galaxy-types {
+    padding: 0 16px 8px;
+  }
+}
+
+.galaxy-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  border-radius: 14px;
+}
+
+.galaxy-form input {
+  min-width: 160px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--pill-border);
+  border-radius: 999px;
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+}
+
+.galaxy-ask {
+  margin-top: 10px;
+}
+
+.galaxy-ask textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--pill-border);
+  border-radius: 10px;
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  resize: vertical;
+}
