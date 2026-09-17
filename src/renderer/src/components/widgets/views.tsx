@@ -6,6 +6,8 @@ import type { Note } from '../../../../shared/notes'
 import type { ClipItem } from '../../../../shared/clipboardHistory'
 import { GAMES, gameInfo, gameOfTheDay } from '../../../../shared/offlineGames'
 import { loadOfflineGames } from '../../games/useOfflineGames'
+import type { FeedItem, Weather } from '../../../../shared/widgetData'
+import { ago, greeting, mergeFeeds, parseFeedList, parseWorldClocks, recentSites, temperatureIn, timeIn } from '../../../../shared/widgetData'
 
 /**
  * What each widget shows. Every one of these reads something Orbis really holds — your tasks, notes, bookmarks,
@@ -504,6 +506,261 @@ const Calculator: WidgetView = () => {
   )
 }
 
+// ---------------------------------------------------------------- time elsewhere, and a greeting
+
+/**
+ * Something that changes by the minute, redrawn at the turn of the minute, and caught up when the window comes back
+ * into view. Nothing here shows seconds, so nothing here ticks every second.
+ */
+function useMinute(): Date {
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    let timer = 0
+    const tick = (): void => {
+      setNow(new Date())
+      timer = window.setTimeout(tick, 60_000 - (Date.now() % 60_000) + 50)
+    }
+    timer = window.setTimeout(tick, 60_000 - (Date.now() % 60_000) + 50)
+    const visible = (): void => {
+      if (!document.hidden) setNow(new Date())
+    }
+    document.addEventListener('visibilitychange', visible)
+    return () => {
+      window.clearTimeout(timer)
+      document.removeEventListener('visibilitychange', visible)
+    }
+  }, [])
+  return now
+}
+
+const Greeting: WidgetView = ({ instance }) => {
+  const now = useMinute()
+  return (
+    <div className="wg-greeting">
+      <b>{greeting(now, text(instance, 'name'))}</b>
+      {flag(instance, 'date', true) && <small className="view-muted">{now.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</small>}
+    </div>
+  )
+}
+
+const WorldClocks: WidgetView = ({ instance }) => {
+  const now = useMinute()
+  const { clocks, unknown } = useMemo(() => parseWorldClocks(text(instance, 'zones')), [instance])
+  const hour12 = flag(instance, 'hour12')
+  if (!clocks.length) {
+    return <Empty>{unknown.length ? `Orbis does not know the time zone “${unknown[0]}”. Use a name like Europe/London.` : 'Add places in this widget’s settings.'}</Empty>
+  }
+  return (
+    <>
+      <ul className="wg-list wg-world">
+        {clocks.map((clock) => {
+          const there = timeIn(clock.zone, now, hour12)
+          const hours = Math.abs(there.offsetFromHere) / 60
+          return (
+            <li key={`${clock.label}-${clock.zone}`} className="wg-world-row">
+              <span>{clock.label}</span>
+              <b>{there.time}</b>
+              <small className="view-muted">
+                {there.day}
+                {there.offsetFromHere === 0 ? '' : ` · ${there.offsetFromHere > 0 ? '+' : '−'}${hours % 1 ? hours.toFixed(1) : hours}h`}
+              </small>
+            </li>
+          )
+        })}
+      </ul>
+      {unknown.length > 0 && <small className="view-muted">Not recognised: {unknown.join(', ')}</small>}
+    </>
+  )
+}
+
+// ---------------------------------------------------------------- from outside
+
+type Loaded<T> = { state: 'loading' } | { state: 'ready'; data: T; fetchedAt: number; stale: boolean } | { state: 'failed'; reason: string }
+type Answer<T> = { ok: true; data: T; fetchedAt: number; stale: boolean } | { ok: false; reason: string }
+
+/**
+ * Data from the main process, which fetches and caches it.
+ *
+ * Asked for when the widget appears and again on its refresh interval — cheap, because the main process answers from
+ * its cache until the data is really stale — and never while the window is out of sight. Nothing is shown until
+ * something real has arrived, and a refresh that fails keeps what was on screen, marked as old, rather than blanking it.
+ */
+function useSourced<T>(load: () => Promise<Answer<T>>, key: string, everyMs: number): [Loaded<T>, () => void] {
+  const [loaded, setLoaded] = useState<Loaded<T>>({ state: 'loading' })
+  const [round, setRound] = useState(0)
+  const latest = useRef(load)
+  latest.current = load
+
+  useEffect(() => {
+    let alive = true
+    const run = (): void => {
+      if (document.hidden) return
+      void latest
+        .current()
+        .then((result) => {
+          if (!alive) return
+          setLoaded((was) =>
+            result.ok
+              ? { state: 'ready', data: result.data, fetchedAt: result.fetchedAt, stale: result.stale }
+              : was.state === 'ready'
+                ? { ...was, stale: true }
+                : { state: 'failed', reason: result.reason }
+          )
+        })
+        .catch(() => {
+          if (alive) setLoaded((was) => (was.state === 'ready' ? { ...was, stale: true } : { state: 'failed', reason: 'Orbis could not ask for this.' }))
+        })
+    }
+    run()
+    const timer = window.setInterval(run, Math.max(60_000, everyMs))
+    const visible = (): void => {
+      if (!document.hidden) run()
+    }
+    document.addEventListener('visibilitychange', visible)
+    return () => {
+      alive = false
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', visible)
+    }
+  }, [key, everyMs, round])
+
+  const refresh = useCallback(() => {
+    setLoaded({ state: 'loading' })
+    setRound((n) => n + 1)
+  }, [])
+  return [loaded, refresh]
+}
+
+const Freshness = ({ fetchedAt, stale, onRefresh }: { fetchedAt: number; stale: boolean; onRefresh(): void }): React.JSX.Element => (
+  <small className={`wg-fresh view-muted${stale ? ' stale' : ''}`}>
+    {stale ? `Could not update · last updated ${ago(fetchedAt)}` : `Updated ${ago(fetchedAt)}`}
+    <button type="button" className="wg-icon" aria-label="Refresh" onClick={onRefresh}>
+      <RotateCcw size={11} />
+    </button>
+  </small>
+)
+
+const Unavailable = ({ reason, onRetry }: { reason: string; onRetry(): void }): React.JSX.Element => (
+  <div className="wg-failed-soft" role="status">
+    <Empty>{reason}</Empty>
+    <button type="button" className="queue-btn small" onClick={onRetry}>
+      <RotateCcw size={12} /> Try again
+    </button>
+  </div>
+)
+
+const WeatherView: WidgetView = ({ instance }) => {
+  const city = text(instance, 'city').trim()
+  const unit = text(instance, 'unit', 'c') === 'f' ? 'f' : 'c'
+  const [loaded, refresh] = useSourced<Weather>(() => window.api.widgetWeather(city), city, 30 * 60_000)
+
+  if (!city) return <Empty>Choose a city in this widget’s settings.</Empty>
+  if (loaded.state === 'loading') return <Empty>Loading the weather for {city}…</Empty>
+  if (loaded.state === 'failed') return <Unavailable reason={loaded.reason} onRetry={refresh} />
+  const weather = loaded.data
+  return (
+    <div className="wg-weather">
+      <div className="wg-weather-now">
+        <b>{temperatureIn(weather.now.temperature, unit)}</b>
+        <span>
+          {weather.now.condition}
+          <small className="view-muted">{weather.place}</small>
+        </span>
+      </div>
+      <small className="view-muted">
+        {weather.high !== undefined && weather.low !== undefined ? `Next 24 hours: ${temperatureIn(weather.low, unit)} to ${temperatureIn(weather.high, unit)}` : ''}
+        {weather.now.humidity !== undefined ? ` · Humidity ${weather.now.humidity}%` : ''}
+        {weather.now.windSpeed !== undefined ? ` · Wind ${weather.now.windSpeed} m/s` : ''}
+      </small>
+      {flag(instance, 'hours', true) && weather.hours.length > 0 && instance.size !== 'small' && (
+        <ul className="wg-weather-hours">
+          {weather.hours.slice(0, 5).map((hour) => (
+            <li key={hour.at} title={hour.condition}>
+              <small className="view-muted">{new Date(hour.at).toLocaleTimeString([], { hour: 'numeric' })}</small>
+              <b>{temperatureIn(hour.temperature, unit)}</b>
+            </li>
+          ))}
+        </ul>
+      )}
+      <Freshness fetchedAt={loaded.fetchedAt} stale={loaded.stale} onRefresh={refresh} />
+      <small className="wg-attribution view-muted">{weather.attribution} · Places © OpenStreetMap contributors</small>
+    </div>
+  )
+}
+
+const News: WidgetView = ({ instance, onOpen }) => {
+  const feeds = useMemo(() => parseFeedList(text(instance, 'feeds')), [instance])
+  const limit = number(instance, 'limit', 6)
+  const [loaded, refresh] = useSourced<FeedItem[]>(
+    async () => {
+      const results = await Promise.all(feeds.map((url) => window.api.widgetFeed(url)))
+      const good = results.flatMap((r) => (r.ok ? [r] : []))
+      if (!good.length) {
+        const firstFailure = results.find((r) => !r.ok)
+        return { ok: false as const, reason: firstFailure && !firstFailure.ok ? firstFailure.reason : 'No feeds could be read.' }
+      }
+      return {
+        ok: true as const,
+        data: mergeFeeds(good.map((r) => r.data), limit),
+        fetchedAt: Math.min(...good.map((r) => r.fetchedAt)),
+        // Some feeds answering and some not is still worth saying.
+        stale: good.some((r) => r.stale) || good.length < results.length
+      }
+    },
+    `${feeds.join(' ')}|${limit}`,
+    20 * 60_000
+  )
+
+  if (!feeds.length) return <Empty>Add the address of an RSS or Atom feed in this widget’s settings.</Empty>
+  if (loaded.state === 'loading') return <Empty>Loading headlines…</Empty>
+  if (loaded.state === 'failed') return <Unavailable reason={loaded.reason} onRetry={refresh} />
+  if (!loaded.data.length) return <Empty>These feeds have no headlines right now.</Empty>
+  return (
+    <>
+      <ul className="wg-list">
+        {loaded.data.map((item) => (
+          <li key={item.url}>
+            {/* Opened through Orbis's own navigation, in the browser, like any other link. */}
+            <button type="button" className="wg-line wg-news" onClick={() => onOpen({ kind: 'url', value: item.url })}>
+              <span>{item.title}</span>
+              <small className="view-muted">
+                {item.source}
+                {item.publishedAt ? ` · ${ago(item.publishedAt)}` : ''}
+              </small>
+            </button>
+          </li>
+        ))}
+      </ul>
+      <Freshness fetchedAt={loaded.fetchedAt} stale={loaded.stale} onRefresh={refresh} />
+    </>
+  )
+}
+
+const Recent: WidgetView = ({ instance, onOpen }) => {
+  const [history, setHistory] = useState<{ url: string; title: string; visitedAt: number }[]>([])
+  useEffect(() => {
+    const take = (library: { history?: { url: string; title: string; visitedAt: number }[] }): void => setHistory(library.history ?? [])
+    void window.api.getBrowserLibrary().then(take)
+    // Follows history as it changes, so a site visited a moment ago is here without reopening the tab.
+    return window.api.onBrowserLibrary(take)
+  }, [])
+  const sites = useMemo(() => recentSites(history, number(instance, 'limit', 6)), [history, instance])
+
+  if (!sites.length) return <Empty>No sites visited yet.</Empty>
+  return (
+    <ul className="wg-list">
+      {sites.map((site) => (
+        <li key={site.host}>
+          <button type="button" className="wg-line" onClick={() => onOpen({ kind: 'url', value: site.url })} title={site.url}>
+            <ExternalLink size={12} /> <span>{site.title}</span>
+            <small className="view-muted">{site.host}</small>
+          </button>
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 export const WIDGET_VIEWS: Record<string, WidgetView> = {
   clock: Clock,
   countdown: Countdown,
@@ -518,5 +775,10 @@ export const WIDGET_VIEWS: Record<string, WidgetView> = {
   workspaces: Workspaces,
   quote: Quote,
   games: Games,
-  calculator: Calculator
+  calculator: Calculator,
+  greeting: Greeting,
+  worldclock: WorldClocks,
+  weather: WeatherView,
+  news: News,
+  recent: Recent
 }

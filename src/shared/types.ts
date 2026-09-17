@@ -13,6 +13,7 @@ import type {
 import type { ControlLogEntryView } from './browserControlView'
 import type { SidebarLayout } from './browserSidebar'
 import type { StepRunView } from './stepPlan'
+import type { Feed, Weather } from './widgetData'
 import type { SpecializedOutcome } from './searchProviders'
 import type { VoiceErrorCode, VoiceModel } from './voiceInput'
 import type { SecretDetail, SecretInput, SecretSummary, VaultStatus } from './vault'
@@ -671,6 +672,10 @@ export interface NxtorbisApi {
    * `startSteps` returns straight away with the run as it begins; everything after that arrives on `onStepsChanged`,
    * already free of parameters, variable values and anything a model was thinking.
    */
+  /** The weather for a city, from MET Norway, cached in the main process. A reason instead of a forecast when there is none. */
+  widgetWeather(city: string): Promise<{ ok: true; data: Weather; fetchedAt: number; stale: boolean } | { ok: false; reason: string }>
+  /** One RSS or Atom feed, as plain headlines, cached in the main process. */
+  widgetFeed(url: string): Promise<{ ok: true; data: Feed; fetchedAt: number; stale: boolean } | { ok: false; reason: string }>
   startSteps(goal: string): Promise<StepRunView | null>
   readSteps(runId: string): Promise<StepRunView | null>
   pauseSteps(runId: string): Promise<StepRunView | null>

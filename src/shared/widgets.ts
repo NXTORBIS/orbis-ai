@@ -251,6 +251,73 @@ export const WIDGETS: WidgetDefinition[] = [
     permissions: [],
     settings: [],
     refreshMs: 0
+  },
+  {
+    id: 'greeting',
+    name: 'Greeting',
+    description: 'Good morning, afternoon or evening, by your own clock, with the date.',
+    category: 'time',
+    version: 1,
+    sizes: ['medium', 'large'],
+    defaultSize: 'large',
+    permissions: [],
+    settings: [setting('name', 'Your name', 'text', ''), setting('date', 'Show the date', 'boolean', true)],
+    refreshMs: 60_000
+  },
+  {
+    id: 'worldclock',
+    name: 'World clock',
+    description: 'The time in other places, with daylight saving worked out for each.',
+    category: 'time',
+    version: 1,
+    sizes: ['small', 'medium', 'large'],
+    defaultSize: 'medium',
+    permissions: [],
+    settings: [
+      setting('zones', 'Places (Label=Area/City, separated by commas)', 'text', 'London=Europe/London, New York=America/New_York, Tokyo=Asia/Tokyo'),
+      setting('hour12', '12-hour clock', 'boolean', false)
+    ],
+    refreshMs: 60_000
+  },
+  {
+    id: 'weather',
+    name: 'Weather',
+    description: 'The weather for a city you choose, from MET Norway. No location permission needed.',
+    category: 'information',
+    version: 1,
+    sizes: ['small', 'medium', 'large'],
+    defaultSize: 'medium',
+    permissions: ['network'],
+    settings: [
+      setting('city', 'City', 'text', ''),
+      setting('unit', 'Temperature', 'choice', 'c', { choices: [{ value: 'c', label: 'Celsius' }, { value: 'f', label: 'Fahrenheit' }] }),
+      setting('hours', 'Show the next few hours', 'boolean', true)
+    ],
+    refreshMs: 30 * 60_000
+  },
+  {
+    id: 'news',
+    name: 'News',
+    description: 'Headlines from RSS or Atom feeds you choose. Nothing is chosen for you.',
+    category: 'information',
+    version: 1,
+    sizes: ['medium', 'large'],
+    defaultSize: 'medium',
+    permissions: ['network'],
+    settings: [setting('feeds', 'Feed addresses, separated by commas', 'text', ''), setting('limit', 'How many headlines', 'number', 6, { min: 1, max: 20 })],
+    refreshMs: 20 * 60_000
+  },
+  {
+    id: 'recent',
+    name: 'Recent sites',
+    description: 'The sites you visited most recently, one line each.',
+    category: 'browser',
+    version: 1,
+    sizes: ['medium', 'large'],
+    defaultSize: 'medium',
+    permissions: ['history'],
+    settings: [setting('limit', 'How many', 'number', 6, { min: 1, max: 20 })],
+    refreshMs: 0
   }
 ]
 

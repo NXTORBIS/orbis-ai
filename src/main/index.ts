@@ -53,6 +53,7 @@ import { setupBrowserControl } from './browserControl/setup'
 import { readSignals } from './browserControl/captchaCapabilities'
 import { StepRun } from './stepRunner'
 import { planNextStep } from './stepPlanner'
+import { WidgetFeeds } from './widgetFeeds'
 import { WorkflowStore } from './workflows/store'
 import { WorkflowRecorder } from './workflows/recorder'
 import { WorkflowEngine } from './workflows/engine'
@@ -1374,6 +1375,20 @@ if (!app.requestSingleInstanceLock()) {
     profilesStore.onChange(() => {
       for (const run of stepRuns.values()) run.stopRun('The profile changed.')
       stepRuns.clear()
+    })
+
+    /**
+     * Weather and news for the new tab's widgets, fetched and cached here so a page never talks to those services itself.
+     * No keys: MET Norway and OpenStreetMap ask only to be identified, cached against and credited, and they are.
+     */
+    const widgetFeeds = new WidgetFeeds({ fetch: (url, init) => net.fetch(url, init), appVersion: app.getVersion(), contact: process.env.ORBIS_WEATHER_CONTACT })
+    ipcMain.handle('widgets:weather', (event, city: unknown) => {
+      if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
+      return widgetFeeds.weather(typeof city === 'string' ? city : '')
+    })
+    ipcMain.handle('widgets:feed', (event, url: unknown) => {
+      if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
+      return widgetFeeds.feed(typeof url === 'string' ? url.slice(0, 2000) : '')
     })
 
     const browserSidebar = new BrowserSidebarStore(app.getPath('userData'))

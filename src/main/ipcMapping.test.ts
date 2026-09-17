@@ -74,5 +74,6 @@ test('the boundary is a known size, so the migration can be estimated rather tha
   // asking the system which browser opens links, and the secrets vault. Each is written down in the map above.
   // 130 → 137: seven channels for goals worked through one step at a time (start, read, pause, resume, stop, skip,
   // and telling Orbis a challenge has been dealt with).
-  assert.ok(code.length <= 137, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
+  // 137 → 139: weather and news for the new tab's widgets.
+  assert.ok(code.length <= 139, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
 })

@@ -120,7 +120,7 @@ export function registerWidgetCapabilities(control: BrowserControl, store: Exper
     name: 'Add a widget to the new tab',
     description: 'Puts a widget on the user\'s new tab page. The widget must be one Orbis has (read experience.widgetCatalogue). Adding one grants it the access it declares, so it asks first.',
     params: {
-      widget: { type: 'string', description: 'Which widget, by its id: clock, tasks, notes, countdown, timer, bookmarks, downloads, tabs, workspaces, clipboard, whiteboard, quote, games or calculator.', required: true },
+      widget: { type: 'string', description: 'Which widget, by its id: clock, greeting, worldclock, countdown, timer, weather, news, tasks, notes, bookmarks, recent, downloads, tabs, workspaces, clipboard, whiteboard, quote, games or calculator.', required: true },
       zone: { type: 'string', description: 'Where it goes.', enum: [...ZONES] },
       size: { type: 'string', description: 'How big.', enum: SIZES }
     },
