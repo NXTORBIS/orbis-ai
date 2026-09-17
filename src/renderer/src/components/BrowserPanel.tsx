@@ -50,6 +50,7 @@ import { copyText, newId } from '../lib/utils'
 import { useDismiss } from '../lib/useDismiss'
 import { OrbisMark } from './Brand'
 import BrowserOrb from './BrowserOrb'
+import StepRunPanel from './StepRunPanel'
 import AdBlockSection from './AdBlockSection'
 import type { BrowserOrbProps } from './BrowserOrb'
 import { sameUrl } from '../../../shared/research'
@@ -2916,6 +2917,7 @@ export default function BrowserPanel({
           />
         )}
         {hasPage && orb && <BrowserOrb {...orb} />}
+        <StepRunPanel />
         {active.loading && <div className="browser-loading-bar" />}
         {[...tabs]
           .sort((a, b) => a.seq - b.seq)

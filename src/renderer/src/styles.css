@@ -13478,3 +13478,117 @@ html[data-motion='reduced'] .newtab-orb {
   border-color: color-mix(in srgb, var(--danger, #ff6b6b) 40%, transparent);
   color: var(--danger, #ff6b6b);
 }
+
+/* ---------------------------------------------------------------- what Orbis is doing, step by step
+
+   Deliberately plain. A step that has not run looks like a step that has not run: nothing is filled in, ticked or
+   coloured until the browser has confirmed it, because a hopeful interface is a dishonest one. */
+.steprun {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 40;
+  width: min(360px, calc(100% - 32px));
+  max-height: min(60vh, 520px);
+  display: flex;
+  flex-direction: column;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  box-shadow: 0 18px 40px rgb(0 0 0 / 28%);
+  overflow: hidden;
+  font-size: 13px;
+}
+.steprun-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 12px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.steprun-headings { flex: 1; min-width: 0; }
+.steprun-head h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.steprun-head p { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
+.steprun-dot {
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex: none;
+}
+.steprun-dot.running, .steprun-dot.thinking { background: var(--accent); animation: steprun-pulse 1.6s ease-in-out infinite; }
+.steprun-dot.waiting, .steprun-dot.paused { background: #d8a13a; }
+.steprun-dot.done { background: #3fa564; }
+.steprun-dot.failed, .steprun-dot.stopped { background: #c9524a; }
+@keyframes steprun-pulse { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .steprun-dot.running, .steprun-dot.thinking { animation: none; } }
+
+.steprun-fold {
+  flex: none;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.steprun-steps {
+  margin: 0;
+  padding: 8px 12px;
+  list-style: none;
+  overflow-y: auto;
+  flex: 1;
+}
+.steprun-step { display: flex; gap: 9px; padding: 5px 0; align-items: baseline; }
+.steprun-mark { flex: none; width: 13px; color: var(--muted); }
+.steprun-step.success .steprun-mark { color: #3fa564; }
+.steprun-step.failed .steprun-mark { color: #c9524a; }
+.steprun-step.waiting .steprun-mark { color: #d8a13a; }
+.steprun-what { display: flex; flex-direction: column; min-width: 0; }
+.steprun-step.ready .steprun-what, .steprun-step.cancelled .steprun-what, .steprun-step.skipped .steprun-what { color: var(--muted); }
+.steprun-what em { font-style: normal; color: var(--muted); font-size: 11px; }
+.steprun-what small { color: var(--muted); font-size: 11px; opacity: 0.85; }
+
+.steprun-captcha {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, #d8a13a 12%, transparent);
+}
+.steprun-captcha p { margin: 0 0 8px; }
+.steprun-captcha-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.steprun-captcha-actions button, .steprun-actions button {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: inherit;
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.steprun-captcha-actions button.primary { border-color: var(--accent); }
+.steprun-actions button:disabled { opacity: 0.45; cursor: default; }
+
+.steprun-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 12px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 12px;
+}
+.steprun-actions { display: flex; gap: 6px; }
+.steprun.small .steprun-foot { border-top: 0; }
+
+@media (max-width: 620px) {
+  .steprun { right: 8px; bottom: 8px; width: calc(100% - 16px); }
+}
