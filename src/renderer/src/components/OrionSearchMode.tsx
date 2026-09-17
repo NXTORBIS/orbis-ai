@@ -15,6 +15,7 @@ import {
 } from '../../../shared/orionSearch'
 import type { OrionSearchSession } from '../../../shared/orionSearch'
 import { resumeRequest } from '../../../shared/searchSessions'
+import { checkCitations, comparison, mergeResults, planQueries, rankSources } from '../../../shared/researchPlan'
 import type { SavedSearchSummary } from '../../../shared/searchSessions'
 import { AUTO_MODEL } from '../../../shared/modelRoute'
 import type { SearchOutcomeView } from '../../../shared/types'
@@ -110,12 +111,18 @@ export default function OrionSearchMode({ query, onOpen, onNotify }: OrionSearch
       const fresh = !current.turns.length || wantsFreshResearch(text)
       setAsking({ question: text, text: '', done: false, researched: fresh })
 
+      let queries: string[] = []
       if (fresh) {
-        // The words to search are the question, plus what the session is about when the question leans on it.
-        const lean = isFollowUp(text, current) && current.topic ? `${current.topic} ${text}` : text
-        const found = (await window.api.runSearch(lean, 'all').catch(() => null)) as SearchOutcomeView | null
-        if (found && 'results' in found && found.results.length) {
-          const { sources } = addSources(current, found.results, current.turns.length)
+        // A comparison is researched as each side and the comparison, side by side; anything else is one search, with
+        // what the session is about added when the question leans on it.
+        queries = planQueries(text, current.topic, isFollowUp(text, current))
+        const outcomes = await Promise.all(queries.map((q) => (window.api.runSearch(q, 'all') as Promise<SearchOutcomeView>).catch(() => null)))
+        const lists = outcomes.map((found) => (found && 'results' in found ? found.results : []))
+        const compared = comparison(text)
+        const about = [...current.entities, ...(compared ? [compared.a, compared.b] : [])]
+        const merged = rankSources(mergeResults(lists, 12), about)
+        if (merged.length) {
+          const { sources } = addSources(current, merged, current.turns.length)
           current = { ...current, sources }
         }
       }
@@ -139,8 +146,22 @@ export default function OrionSearchMode({ query, onOpen, onNotify }: OrionSearch
             setSession(current)
             return
           }
-          const used = referencedItems(text, current.sources.length)
-          keep(addTurn(current, { id: requestId, question: text, answer: finished, used, researched: fresh, at: Date.now() }))
+          // What the answer cites is checked against what was really found, and kept with the answer.
+          const check = checkCitations(finished, current.sources.length)
+          const used = [...new Set([...referencedItems(text, current.sources.length), ...check.cited.map((n) => n - 1)])]
+          keep(
+            addTurn(current, {
+              id: requestId,
+              question: text,
+              answer: finished,
+              used,
+              researched: fresh,
+              at: Date.now(),
+              ...(queries.length ? { queries } : {}),
+              ...(check.invalid.length ? { invalidCitations: check.invalid } : {}),
+              ...(check.uncited ? { uncited: true } : {})
+            })
+          )
         }
       })
       stopRef.current = () => {
@@ -291,6 +312,17 @@ export default function OrionSearchMode({ query, onOpen, onNotify }: OrionSearch
                 {turn.researched && <small>searched the web</small>}
               </h3>
               <p>{turn.answer}</p>
+              {turn.queries && turn.queries.length > 1 && <p className="oorion-searched">Searched: {turn.queries.join(' · ')}</p>}
+              {turn.invalidCitations?.length ? (
+                <p className="oorion-warning" role="note">
+                  Cites {turn.invalidCitations.map((n) => `[${n}]`).join(', ')}, which {turn.invalidCitations.length === 1 ? 'is not a source' : 'are not sources'} found in this search. Treat that part with care.
+                </p>
+              ) : null}
+              {turn.uncited && (
+                <p className="oorion-warning" role="note">
+                  This answer does not cite any of the sources found.
+                </p>
+              )}
             </div>
           </li>
         ))}

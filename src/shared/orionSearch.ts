@@ -28,6 +28,12 @@ export interface SearchTurn {
   /** Whether the web was searched again for this one. */
   researched: boolean
   at: number
+  /** The searches run for it, when the web was searched. */
+  queries?: string[]
+  /** Citations in the answer that point at no source found. */
+  invalidCitations?: number[]
+  /** The answer made claims without citing anything. */
+  uncited?: boolean
 }
 
 export interface OrionSearchSession {
@@ -290,6 +296,7 @@ export function buildAsk(session: OrionSearchSession, question: string, options:
     '',
     'Answer in two to four sentences, in plain words.',
     'Put the number of the source you used in square brackets after each claim, like [2].',
+    'Prefer official and primary sources. Where sources disagree, say so and cite each of them.',
     'If the sources do not answer it, say so plainly and say what would. Do not invent anything.',
     'Never claim to remember something that is not written above.'
   )

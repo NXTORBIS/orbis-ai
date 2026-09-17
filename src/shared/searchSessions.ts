@@ -50,7 +50,10 @@ export function normalizeSearchSession(raw: unknown, profileId: string): OrionSe
       answer: text(t?.answer, 20_000),
       used: (Array.isArray(t?.used) ? t.used : []).filter((n): n is number => Number.isInteger(n) && n >= 0).slice(0, 50),
       researched: t?.researched === true,
-      at: time(t?.at)
+      at: time(t?.at),
+      ...(Array.isArray(t?.queries) ? { queries: t.queries.map((q) => text(q, 300)).filter(Boolean).slice(0, 3) } : {}),
+      ...(Array.isArray(t?.invalidCitations) && t.invalidCitations.length ? { invalidCitations: t.invalidCitations.filter((n): n is number => Number.isInteger(n)).slice(0, 20) } : {}),
+      ...(t?.uncited === true ? { uncited: true } : {})
     }))
     .filter((t) => t.question && t.answer)
     .slice(-MAX_SAVED_TURNS)

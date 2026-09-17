@@ -14199,3 +14199,15 @@ html[data-motion='reduced'] .newtab-orb {
   align-self: flex-start;
   margin: 6px 0;
 }
+
+.oorion-searched {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.oorion-warning {
+  margin: 6px 0 0;
+  color: var(--amber);
+  font-size: 12px;
+}
