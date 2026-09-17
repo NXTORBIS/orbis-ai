@@ -3669,8 +3669,8 @@ textarea.hud-input {
   position: absolute;
   display: grid;
   place-items: center;
-  width: 38px;
-  height: 38px;
+  width: 30px;
+  height: 30px;
   padding: 0;
   border: 1px solid var(--cyan-dim);
   border-radius: 50%;
@@ -3710,7 +3710,7 @@ textarea.hud-input {
 .browser-orb.attention::after {
   content: '';
   position: absolute;
-  inset: -5px;
+  inset: -4px;
   border: 2px solid transparent;
   border-top-color: var(--cyan);
   border-right-color: var(--cyan);
@@ -3729,10 +3729,10 @@ textarea.hud-input {
 
 .browser-orb-dot {
   position: absolute;
-  top: 2px;
-  right: 2px;
-  width: 9px;
-  height: 9px;
+  top: 1px;
+  right: 1px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: var(--cyan);
   box-shadow: 0 0 8px var(--cyan);
@@ -13482,29 +13482,32 @@ html[data-motion='reduced'] .newtab-orb {
 /* ---------------------------------------------------------------- what Orbis is doing, step by step
 
    Deliberately plain. A step that has not run looks like a step that has not run: nothing is filled in, ticked or
-   coloured until the browser has confirmed it, because a hopeful interface is a dishonest one. */
+   coloured until the browser has confirmed it. Built on the same surface as the orb's own panel, and placed at the top
+   of the page so it never lands on top of the orb, which lives at the bottom unless someone moves it. */
 .steprun {
   position: absolute;
-  right: 16px;
-  bottom: 16px;
-  z-index: 40;
-  width: min(360px, calc(100% - 32px));
-  max-height: min(60vh, 520px);
+  top: 12px;
+  right: 12px;
+  z-index: 8;
+  width: min(340px, calc(100% - 24px));
+  max-height: min(60%, 480px);
   display: flex;
   flex-direction: column;
   border-radius: 14px;
-  border: 1px solid var(--border);
-  background: var(--panel);
-  box-shadow: 0 18px 40px rgb(0 0 0 / 28%);
+  border: 1px solid var(--glass-border);
+  background: var(--popover-bg);
+  color: var(--text);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
   overflow: hidden;
   font-size: 13px;
+  pointer-events: auto;
 }
 .steprun-head {
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  padding: 12px 12px 10px;
-  border-bottom: 1px solid var(--border);
+  padding: 11px 12px 9px;
+  border-bottom: 1px solid var(--glass-border);
 }
 .steprun-headings { flex: 1; min-width: 0; }
 .steprun-head h3 {
@@ -13515,7 +13518,12 @@ html[data-motion='reduced'] .newtab-orb {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.steprun-head p { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
+.steprun-head p {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
 .steprun-dot {
   width: 8px;
   height: 8px;
@@ -13524,10 +13532,10 @@ html[data-motion='reduced'] .newtab-orb {
   background: var(--muted);
   flex: none;
 }
-.steprun-dot.running, .steprun-dot.thinking { background: var(--accent); animation: steprun-pulse 1.6s ease-in-out infinite; }
-.steprun-dot.waiting, .steprun-dot.paused { background: #d8a13a; }
-.steprun-dot.done { background: #3fa564; }
-.steprun-dot.failed, .steprun-dot.stopped { background: #c9524a; }
+.steprun-dot.running, .steprun-dot.thinking { background: var(--cyan); animation: steprun-pulse 1.6s ease-in-out infinite; }
+.steprun-dot.waiting, .steprun-dot.paused { background: var(--amber); }
+.steprun-dot.done { background: var(--green); }
+.steprun-dot.failed, .steprun-dot.stopped { background: var(--danger); }
 @keyframes steprun-pulse { 50% { opacity: 0.35; } }
 @media (prefers-reduced-motion: reduce) { .steprun-dot.running, .steprun-dot.thinking { animation: none; } }
 
@@ -13538,7 +13546,9 @@ html[data-motion='reduced'] .newtab-orb {
   color: var(--muted);
   cursor: pointer;
   padding: 2px 4px;
+  border-radius: 6px;
 }
+.steprun-fold:hover { background: var(--hover); color: var(--text); }
 
 .steprun-steps {
   margin: 0;
@@ -13546,34 +13556,38 @@ html[data-motion='reduced'] .newtab-orb {
   list-style: none;
   overflow-y: auto;
   flex: 1;
+  min-height: 0;
 }
-.steprun-step { display: flex; gap: 9px; padding: 5px 0; align-items: baseline; }
+.steprun-step { display: flex; gap: 9px; padding: 5px 0; align-items: baseline; min-width: 0; }
+.steprun-step.thinking { color: var(--muted); }
 .steprun-mark { flex: none; width: 13px; color: var(--muted); }
-.steprun-step.success .steprun-mark { color: #3fa564; }
-.steprun-step.failed .steprun-mark { color: #c9524a; }
-.steprun-step.waiting .steprun-mark { color: #d8a13a; }
-.steprun-what { display: flex; flex-direction: column; min-width: 0; }
+.steprun-step.success .steprun-mark { color: var(--green); }
+.steprun-step.failed .steprun-mark { color: var(--danger); }
+.steprun-step.waiting .steprun-mark { color: var(--amber); }
+.steprun-what { display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
 .steprun-step.ready .steprun-what, .steprun-step.cancelled .steprun-what, .steprun-step.skipped .steprun-what { color: var(--muted); }
 .steprun-what em { font-style: normal; color: var(--muted); font-size: 11px; }
-.steprun-what small { color: var(--muted); font-size: 11px; opacity: 0.85; }
+.steprun-what small { color: var(--muted); font-size: 11px; }
 
 .steprun-captcha {
   padding: 10px 12px;
-  border-bottom: 1px solid var(--border);
-  background: color-mix(in srgb, #d8a13a 12%, transparent);
+  border-bottom: 1px solid var(--glass-border);
+  background: color-mix(in srgb, var(--amber) 12%, transparent);
 }
 .steprun-captcha p { margin: 0 0 8px; }
 .steprun-captcha-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .steprun-captcha-actions button, .steprun-actions button {
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: inherit;
+  border: 1px solid var(--pill-border);
+  background: var(--pill-bg);
+  color: var(--text);
   border-radius: 8px;
   padding: 4px 10px;
+  font: inherit;
   font-size: 12px;
   cursor: pointer;
 }
-.steprun-captcha-actions button.primary { border-color: var(--accent); }
+.steprun-captcha-actions button:hover, .steprun-actions button:hover { background: var(--pill-bg-strong); }
+.steprun-captcha-actions button.primary { border-color: var(--cyan); }
 .steprun-actions button:disabled { opacity: 0.45; cursor: default; }
 
 .steprun-foot {
@@ -13581,8 +13595,8 @@ html[data-motion='reduced'] .newtab-orb {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 9px 12px;
-  border-top: 1px solid var(--border);
+  padding: 8px 12px;
+  border-top: 1px solid var(--glass-border);
   color: var(--muted);
   font-size: 12px;
 }
@@ -13590,7 +13604,7 @@ html[data-motion='reduced'] .newtab-orb {
 .steprun.small .steprun-foot { border-top: 0; }
 
 @media (max-width: 620px) {
-  .steprun { right: 8px; bottom: 8px; width: calc(100% - 16px); }
+  .steprun { right: 8px; top: 8px; width: calc(100% - 16px); }
 }
 
 /* The up/down pair that sets a widget's place in its zone. */
@@ -13611,4 +13625,32 @@ html[data-motion='reduced'] .newtab-orb {
   cursor: pointer;
 }
 .orb-stepwise:hover { background: var(--hover); color: var(--text); }
-.orb-stepwise.on { color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.orb-stepwise.on { color: var(--cyan); background: color-mix(in srgb, var(--cyan) 16%, transparent); }
+
+/* ---------------------------------------------------------------- greeting, world clock, weather, news, recent sites
+   Built from the same pieces as the widgets beside them, so they read as one set rather than five new designs. */
+.wg-greeting { display: flex; flex-direction: column; gap: 2px; }
+.wg-greeting b { font-size: 20px; font-weight: 600; line-height: 1.25; }
+
+.wg-world-row { display: grid !important; grid-template-columns: minmax(0, 1fr) auto; column-gap: 8px; align-items: baseline; }
+.wg-world-row span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wg-world-row b { font-variant-numeric: tabular-nums; }
+.wg-world-row small { grid-column: 1 / -1; font-size: 11px; margin-top: -2px; }
+
+.wg-weather { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.wg-weather-now { display: flex; align-items: center; gap: 10px; }
+.wg-weather-now b { font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1; }
+.wg-weather-now span { display: flex; flex-direction: column; font-size: 13px; min-width: 0; }
+.wg-weather-hours { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(42px, 1fr)); gap: 4px; }
+.wg-weather-hours li { display: flex; flex-direction: column; align-items: center; font-size: 12px; font-variant-numeric: tabular-nums; }
+
+.wg-news { flex-direction: column; align-items: flex-start !important; white-space: normal !important; gap: 1px !important; }
+.wg-news span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3; }
+.wg-news small, .wg-line small { font-size: 11px; }
+.wg-line span { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.wg-line > small { margin-left: auto; flex: none; padding-left: 6px; }
+
+.wg-fresh { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; }
+.wg-fresh.stale { color: var(--amber); }
+.wg-attribution { font-size: 10px; opacity: 0.75; }
+.wg-failed-soft { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }

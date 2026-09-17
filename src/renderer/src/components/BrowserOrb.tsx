@@ -28,7 +28,7 @@ export interface BrowserOrbProps extends BrowserOrbState {
   onAnswer(confirmationId: string, approved: boolean): void
 }
 
-const ORB = 38
+const ORB = 30
 const MARGIN = 8
 /** Pointer movement (px) before a press becomes a drag, so a slightly shaky click still opens the assistant. */
 const DRAG_THRESHOLD = 5
@@ -173,8 +173,13 @@ export default function BrowserOrb(props: BrowserOrbProps): React.JSX.Element {
     const task = text.trim()
     if (!task) return
     // A run already under way is steered through the ordinary assistant, which knows how to stop and pause it.
-    if (stepwise && !working) void window.api.startSteps(task)
-    else props.onPrompt(task)
+    if (stepwise && !working) {
+      void window.api.startSteps(task)
+      setText('')
+      if (open) toggle()
+      return
+    }
+    props.onPrompt(task)
     setText('')
   }
 
@@ -399,7 +404,7 @@ export default function BrowserOrb(props: BrowserOrbProps): React.JSX.Element {
           if (e.detail === 0) toggle()
         }}
       >
-        <OrbisMark size={26} />
+        <OrbisMark size={20} />
         {(working || confirmation) && <span className="browser-orb-dot" aria-hidden="true" />}
       </button>
     </div>
