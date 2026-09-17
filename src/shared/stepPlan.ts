@@ -328,8 +328,13 @@ export function finish(session: StepSession, summary: string, now = Date.now()):
   if (!isRunning(session.status)) return session
   const unfinished = session.steps.filter((step) => !isSettled(step))
   if (unfinished.length) return session
-  const failed = session.steps.some((step) => step.phase === 'failed')
-  return { ...session, status: failed ? 'failed' : 'done', reason: summary, endedAt: now }
+  // Judged by how it ended, not by every stumble on the way: a step that failed and was then done another way has
+  // not failed the run. What decides is the last step that was actually attempted — if that one did not work, being
+  // told the goal is reached is not believed.
+  const attempted = session.steps.filter((step) => step.phase === 'success' || step.phase === 'failed')
+  const last = attempted[attempted.length - 1]
+  const failed = last?.phase === 'failed'
+  return { ...session, status: failed ? 'failed' : 'done', reason: failed ? `The last step did not work: ${last.error?.message ?? last.intent}` : summary, endedAt: now }
 }
 
 /**

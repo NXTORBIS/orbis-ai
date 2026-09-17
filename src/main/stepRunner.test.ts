@@ -49,7 +49,8 @@ function harness(options: {
       return plans.shift() ?? { kind: 'done', summary: 'Nothing more to do.' }
     },
     emit: (view) => views.push(view),
-    newId: () => `id${++ids}`
+    newId: () => `id${++ids}`,
+    wait: async () => undefined
   }
   return { run: new StepRun({ id: 'run-1', profileId: 'default', goal: 'Buy the thing' }, deps), commands, asked, views }
 }
@@ -251,4 +252,48 @@ test('every change is told to whoever is watching, and each one is already safe 
   assert.ok(phases.includes('verifying'))
   assert.ok(phases.includes('success'))
   assert.ok(phases.indexOf('verifying') < phases.indexOf('success'), 'nothing reaches success before something looked')
+})
+
+test('a page still arriving is looked at again before a step is judged, and never assumed', async () => {
+  let looks = 0
+  const commands: string[] = []
+  const deps: StepRunnerDeps = {
+    execute: async (command) => {
+      commands.push(command.capability)
+      // Loading for the first two looks, there by the third.
+      if (command.capability === 'state.check') return ok({ value: ++looks >= 3 })
+      return ok('clicked')
+    },
+    signals: async () => CLEAR,
+    observe: async () => 'page',
+    plan: (() => {
+      const plans: PlanReply[] = [step('Open orders', 'page.click', { expect: { check: 'urlMatches', pattern: '/orders' } }), { kind: 'done', summary: 'Open.' }]
+      return async () => plans.shift() ?? { kind: 'done', summary: 'Open.' }
+    })(),
+    emit: () => undefined,
+    newId: (() => { let n = 0; return () => `w${++n}` })(),
+    wait: async () => undefined
+  }
+  const run = new StepRun({ id: 'r', profileId: 'default', goal: 'orders' }, deps)
+  const session = await run.start()
+  assert.equal(session.steps[0].phase, 'success')
+  assert.equal(looks, 3, 'it looked until the page was there, and no further')
+  assert.equal(session.status, 'done')
+})
+
+test('a page that never gets there is still a failure after the looks run out', async () => {
+  let looks = 0
+  const h = harness({ plans: [step('Open orders', 'page.click', { expect: { check: 'urlMatches', pattern: '/orders' } })] })
+  // Replace the harness's always-yes check with one that always says no.
+  const original = (h.run as unknown as { deps: StepRunnerDeps }).deps.execute
+  ;(h.run as unknown as { deps: StepRunnerDeps }).deps.execute = async (command, runId) => {
+    if (command.capability === 'state.check') {
+      looks++
+      return ok({ value: false })
+    }
+    return original(command, runId)
+  }
+  const session = await h.run.start()
+  assert.notEqual(session.steps[0].phase, 'success')
+  assert.ok(looks >= 5, `it looked ${looks} times before giving up`)
 })

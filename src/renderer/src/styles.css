@@ -13596,3 +13596,19 @@ html[data-motion='reduced'] .newtab-orb {
 /* The up/down pair that sets a widget's place in its zone. */
 .cz-widget-order { display: inline-flex; gap: 2px; }
 .cz-widget-order .icon-btn:disabled { opacity: 0.3; cursor: default; }
+
+/* Step by step, beside the microphone and shaped like it. Lit only while it is really on. */
+.orb-stepwise {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+}
+.orb-stepwise:hover { background: var(--hover); color: var(--text); }
+.orb-stepwise.on { color: var(--accent); background: color-mix(in srgb, var(--accent) 16%, transparent); }

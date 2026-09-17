@@ -265,7 +265,7 @@ test('a run cannot be declared finished while a step is still in the air', () =>
   assert.equal(finish(s, 'All done.').status, 'done')
 })
 
-test('a run where a step failed finishes as failed, whatever it is told', () => {
+test('a run whose last step failed finishes as failed, whatever it is told', () => {
   const step = id()
   let s = proposeStep(start(), { intent: 'Click', capability: 'page.click', params: {} }, step)
   s = beginStep(s, step)
@@ -315,4 +315,17 @@ test('what is said out loud matches what is true', () => {
   s = recordVerification(s, step, { verified: true, detail: 'open' })
   s = finish(s, 'Found the cheapest flight.')
   assert.equal(describe(s), 'Found the cheapest flight.')
+})
+
+test('a step that failed and was then done another way does not fail the run', () => {
+  const first = id()
+  let s = proposeStep(start(), { intent: 'Click the orders link', capability: 'page.click', params: {} }, first)
+  s = beginStep(s, first)
+  s = recordExecution(s, first, { ok: false, error: { code: 'not-found', message: 'no such link', recoverable: false } })
+  s = runOne(s, 'Go to the orders page directly')
+
+  s = finish(s, 'The orders page is open.')
+  assert.equal(s.status, 'done', 'the goal was reached, and the step that reached it was confirmed')
+  assert.equal(s.reason, 'The orders page is open.')
+  assert.equal(progress(s).failed, 1, 'the stumble is still on record')
 })

@@ -108,7 +108,8 @@ export default function StepRunPanel(): React.JSX.Element | null {
               </span>
             </li>
           ))}
-          {!session.steps.length && <li className="steprun-step ready">Working out where to start.</li>}
+          {/* Only while it is really still thinking: a run that ended with no steps says why in its heading instead. */}
+          {!session.steps.length && !over && <li className="steprun-step thinking">Working out where to start.</li>}
         </ol>
       )}
 

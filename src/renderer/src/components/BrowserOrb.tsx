@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { ArrowUp, Ban, Check, LoaderCircle, Mic, Pause, Play, ShieldAlert, Square, X } from 'lucide-react'
+import { ArrowUp, Ban, Check, ListChecks, LoaderCircle, Mic, Pause, Play, ShieldAlert, Square, X } from 'lucide-react'
 import type { AutomationState, BrowserConfirmation, BrowserStep } from '../../../shared/types'
 import { useVoiceInput } from '../hooks/useVoiceInput'
 import { automationActive, automationProgress } from '../../../shared/automation'
@@ -147,10 +147,34 @@ export default function BrowserOrb(props: BrowserOrbProps): React.JSX.Element {
     }
   }
 
+  /**
+   * Step by step: Orion plans one step, Orbis runs it and checks the page, and only then is the next one planned.
+   * Off by default, so the assistant behaves exactly as it always has until someone asks for this.
+   */
+  const [stepwise, setStepwise] = useState(() => {
+    try {
+      return localStorage.getItem('orbis.orb.stepwise') === '1'
+    } catch {
+      return false
+    }
+  })
+  const toggleStepwise = (): void => {
+    setStepwise((was) => {
+      try {
+        localStorage.setItem('orbis.orb.stepwise', was ? '0' : '1')
+      } catch {
+        // Remembered for this session only.
+      }
+      return !was
+    })
+  }
+
   const submit = (): void => {
     const task = text.trim()
     if (!task) return
-    props.onPrompt(task)
+    // A run already under way is steered through the ordinary assistant, which knows how to stop and pause it.
+    if (stepwise && !working) void window.api.startSteps(task)
+    else props.onPrompt(task)
     setText('')
   }
 
@@ -336,6 +360,16 @@ export default function BrowserOrb(props: BrowserOrbProps): React.JSX.Element {
                 {voice.recording ? <Square size={13} /> : <Mic size={14} />}
               </button>
             )}
+            <button
+              type="button"
+              className={`orb-stepwise${stepwise ? ' on' : ''}`}
+              aria-pressed={stepwise}
+              aria-label="Step by step"
+              title={stepwise ? 'Step by step: each step is checked on the page before the next is planned' : 'Work step by step, checking the page after each one'}
+              onClick={toggleStepwise}
+            >
+              <ListChecks size={14} />
+            </button>
             <button type="submit" className="orb-send" aria-label="Send to Orbis" disabled={!text.trim()}>
               <ArrowUp size={15} />
             </button>

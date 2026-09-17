@@ -54,7 +54,13 @@ export interface StepRunnerDeps {
   emit(view: StepRunnerView): void
   newId(): string
   now?(): number
+  /** Waiting between looks at a page that is still arriving. Replaceable so tests need not really wait. */
+  wait?(ms: number): Promise<void>
 }
+
+/** How many times, and how far apart, a page is looked at before a step is judged not to have worked. */
+const SETTLE_LOOKS = 5
+const SETTLE_MS = 700
 
 export interface PlanRequest {
   goal: string
@@ -85,6 +91,7 @@ export class StepRun {
   private session: StepSession
   private readonly deps: StepRunnerDeps
   private readonly now: () => number
+  private readonly wait: (ms: number) => Promise<void>
   private captcha: CaptchaEncounter | null = null
   private lastFailure: string | undefined
   private running = false
@@ -92,6 +99,7 @@ export class StepRun {
   constructor(options: { id: string; profileId: string; goal: string; maxSteps?: number }, deps: StepRunnerDeps) {
     this.deps = deps
     this.now = deps.now ?? Date.now
+    this.wait = deps.wait ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)))
     this.session = newSession({ ...options, now: this.now() })
   }
 
@@ -127,6 +135,8 @@ export class StepRun {
   async start(): Promise<StepSession> {
     if (this.running) return this.session
     this.running = true
+    // Said straight away: a person who asked for something should see it being worked on before the first step exists.
+    this.changed()
     try {
       while (isRunning(this.statusNow()) && this.statusNow() !== 'waiting') {
 
@@ -238,12 +248,22 @@ export class StepRun {
     if (!expect) {
       return { verified: false, detail: 'Nothing checked the page afterwards, so Orbis is not treating this as done.' }
     }
-    const result = await this.deps
-      .execute({ capability: 'state.check', params: { condition: expect as unknown as Record<string, unknown> }, target }, this.session.id)
-      .catch((): CommandResult => ({ ok: false, capability: 'state.check', error: { code: 'failed', message: 'The page could not be checked.', recoverable: true }, attempts: 1, durationMs: 0 }))
-    if (!result.ok) return { verified: false, detail: result.error?.message ?? 'The page could not be checked.' }
-    const yes = (result.data as { value?: boolean })?.value === true
-    return { verified: yes, detail: yes ? 'The page is as the step needed it to be.' : 'The page did not end up the way this step needed it to.' }
+    // A click that starts a navigation returns before the new page has arrived, so the first look can be too early.
+    // The page is asked again a few times over a few seconds — each time the real browser, never an assumption — and
+    // a step that still does not match after that has genuinely not worked.
+    let detail = 'The page did not end up the way this step needed it to.'
+    for (let look = 0; look < SETTLE_LOOKS; look++) {
+      if (look > 0) await this.wait(SETTLE_MS)
+      const result = await this.deps
+        .execute({ capability: 'state.check', params: { condition: expect as unknown as Record<string, unknown> }, target }, this.session.id)
+        .catch((): CommandResult => ({ ok: false, capability: 'state.check', error: { code: 'failed', message: 'The page could not be checked.', recoverable: true }, attempts: 1, durationMs: 0 }))
+      if (!result.ok) {
+        detail = result.error?.message ?? 'The page could not be checked.'
+        continue
+      }
+      if ((result.data as { value?: boolean })?.value === true) return { verified: true, detail: 'The page is as the step needed it to be.' }
+    }
+    return { verified: false, detail }
   }
 
   // ---------------------------------------------------------------- challenges
