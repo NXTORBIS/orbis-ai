@@ -8,6 +8,7 @@ const OfflineGamesSettings = lazy(() => import('./OfflineGamesSettings'))
 const NoticesPanel = lazy(() => import('./NoticesPanel'))
 const UpdateSettings = lazy(() => import('./UpdateSettings'))
 const SkillsSettings = lazy(() => import('./SkillsSettings'))
+const MemorySettings = lazy(() => import('./MemorySettings'))
 
 interface Props {
   settings: Settings
@@ -138,6 +139,16 @@ export default function SettingsModal({ settings, onUpdate, onClose }: Props): R
               <p>Start Orbis in its browser, at your browser size, instead of the chat. Use Chat to go back to your conversations.</p>
             </div>
             <Toggle checked={settings.openBrowserOnLaunch} onChange={(v) => void onUpdate({ openBrowserOnLaunch: v })} />
+          </section>
+
+          <section className="setting">
+            <div className="setting-label">
+              <h3>Memory</h3>
+              <p>What you have asked Orbis to remember, for this profile only, kept on this device. Orion is given only the few memories that matter for each message.</p>
+            </div>
+            <Suspense fallback={null}>
+              <MemorySettings />
+            </Suspense>
           </section>
 
           <section className="setting">

@@ -1,4 +1,5 @@
 import type { SkillEdits, SkillMatch, SkillPreview, SkillSettings, SkillView } from './skills'
+import type { MemoryCategory, MemoryEntry, MemorySettings } from './memory'
 import type {
   BrowserCommand,
   CapabilityDescriptor,
@@ -690,6 +691,15 @@ export interface NxtorbisApi {
   exportSkill(workflowId: string): Promise<string>
   importSkill(json: string): Promise<{ skill: SkillView; warnings: string[] }>
   onSkillsChanged(listener: () => void): () => void
+  /** Memory for the profile in use: only what the person asked Orbis to remember, kept on this computer. */
+  listMemories(options?: { query?: string; includeArchived?: boolean; category?: MemoryCategory }): Promise<MemoryEntry[]>
+  addMemory(text: string, options?: { category?: MemoryCategory; pinned?: boolean }): Promise<MemoryEntry>
+  updateMemory(id: string, patch: { text?: string; category?: MemoryCategory; pinned?: boolean; archived?: boolean }): Promise<MemoryEntry>
+  removeMemory(id: string): Promise<boolean>
+  clearMemories(): Promise<number>
+  memorySettings(): Promise<MemorySettings>
+  setMemorySettings(next: Partial<MemorySettings>): Promise<MemorySettings>
+  onMemoryChanged(listener: () => void): () => void
   vaultStatus(): Promise<VaultStatus | VaultError>
   vaultQuestion(): Promise<string | null | VaultError>
   vaultCreate(password: string, recovery?: { question: string; answer: string }): Promise<VaultStatus | VaultError>

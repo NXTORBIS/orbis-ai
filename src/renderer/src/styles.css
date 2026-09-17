@@ -13824,6 +13824,32 @@ html[data-motion='reduced'] .newtab-orb {
   color: var(--muted);
 }
 
+.memory-settings .skills-tools input[type='text'],
+.memory-item input {
+  flex: 1;
+  min-width: 140px;
+  padding: 6px 10px;
+  border: 1px solid var(--pill-border);
+  border-radius: 999px;
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+}
+
+.memory-item select {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.memory-item.archived > p:first-child {
+  color: var(--muted);
+}
+
 /* Shown on a generated image while it is being redrawn sharper. */
 .generated-image-open {
   position: relative;

@@ -51,6 +51,9 @@ import { setupBrowserControl } from './browserControl/setup'
 import { readSignals } from './browserControl/captchaCapabilities'
 import { StepRun } from './stepRunner'
 import { SkillManager } from './skillManager'
+import { MemoryFull, MemoryRefused, MemoryStore } from './knowledge/memory'
+import { memoryFromRequest, memoryPromptBlock, parseMemoryCommand } from '../shared/memory'
+import type { MemoryCategory } from '../shared/memory'
 import type { SkillEdits } from './skillManager'
 import { planNextStep } from './stepPlanner'
 import { WidgetFeeds } from './widgetFeeds'
@@ -147,6 +150,8 @@ let browserControl: ReturnType<typeof setupBrowserControl> | null = null
 const popouts = new Set<BrowserWindow>()
 /** Records workflows from what the user does (only while recording). */
 let workflowRecorder: WorkflowRecorder | null = null
+/** Memory for the profile in use; created once the profiles are known. */
+let memory: MemoryStore | null = null
 
 /** Instructions the user adds to a running automation, per chat request. */
 const automationInstructions = new Map<string, string[]>()
@@ -453,9 +458,56 @@ function registerIpc(): void {
     const controller = new AbortController()
     activeRequests.set(request.requestId, controller)
     try {
-      const systemPrompt = buildSystemPrompt(settings)
+      let systemPrompt = buildSystemPrompt(settings)
       let messages = request.messages
       const last = messages.at(-1)
+
+      /**
+       * Memory. A plain request to remember, forget or recall is answered here, from the store itself, so what Orbis says
+       * it remembered is what it actually stored. Otherwise the few relevant memories go to Orion as facts about the
+       * person, never as instructions, and never the whole store.
+       */
+      if (last?.role === 'user' && memory && !request.ask) {
+        const command = parseMemoryCommand(last.content)
+        if (command) {
+          const reply = (text: string): void => {
+            emit({ type: 'delta', content: text })
+            emit({ type: 'done', model: request.model, truncated: false })
+          }
+          try {
+            if (command.kind === 'remember') {
+              const saved = memory.add(memoryFromRequest(command.text), { origin: 'chat' })
+              return reply(`I'll remember that: “${saved.text}”. You can see, edit or delete it in Settings → Memory.`)
+            }
+            if (command.kind === 'forget') {
+              const gone = memory.forget(command.text)
+              return reply(
+                gone.length
+                  ? `Forgotten: ${gone.map((m) => `“${m.text}”`).join(', ')}.`
+                  : "I didn't have anything saved that matches that, so there was nothing to forget. Settings → Memory shows everything I remember."
+              )
+            }
+            const entries = memory.list(command.about ? { query: command.about } : {})
+            return reply(
+              entries.length
+                ? `${command.about ? `What I remember about ${command.about}` : 'What I remember'}:\n\n${entries.slice(0, 30).map((m) => `- ${m.text}`).join('\n')}${entries.length > 30 ? `\n\n…and ${entries.length - 30} more in Settings → Memory.` : ''}`
+                : command.about
+                  ? `I don't have anything saved about ${command.about}.`
+                  : "I haven't been asked to remember anything yet. Say “remember that …” and I will."
+            )
+          } catch (err) {
+            if (err instanceof MemoryRefused || err instanceof MemoryFull) return reply(err.message)
+            throw err
+          }
+        }
+        try {
+          const block = memoryPromptBlock(memory.relevant(last.content))
+          if (block) systemPrompt = `${systemPrompt}\n\n${block}`
+        } catch (err) {
+          // Memory helps a reply; it is never a reason for one to fail.
+          console.error('[memory] could not be read', err)
+        }
+      }
 
       /** A text reply that needs web research or the open page first. */
       let plan: Extract<ChatIntent, { kind: 'answer' }> | null = null
@@ -1418,6 +1470,43 @@ if (!app.requestSingleInstanceLock()) {
       if (!run || run.state.profileId !== (await stepProfile())) throw new Error('That run is no longer available.')
       return run
     }
+    /** Memory: per profile, on this computer. Only the Orbis window may read or change it. */
+    memory = new MemoryStore(app.getPath('userData'), await stepProfile())
+    memory.onChange(() => sendToWindow('memory:changed'))
+    profilesStore.onChange(() => {
+      void stepProfile().then((id) => memory?.useProfile(id))
+    })
+    app.on('before-quit', () => memory?.close())
+    const memoryCall = <T,>(run: (store: MemoryStore, ...args: unknown[]) => T) => (event: IpcMainInvokeEvent, ...args: unknown[]): T => {
+      if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
+      return run(memory!, ...args)
+    }
+    const category = (value: unknown): MemoryCategory | undefined => (['about', 'preference', 'project', 'general'].includes(String(value)) ? (value as MemoryCategory) : undefined)
+    ipcMain.handle('memory:list', memoryCall((store, options) => {
+      const o = (options ?? {}) as Record<string, unknown>
+      return store.list({ query: typeof o.query === 'string' ? o.query.slice(0, 200) : undefined, includeArchived: o.includeArchived === true, category: category(o.category) })
+    }))
+    ipcMain.handle('memory:add', memoryCall((store, text, options) => {
+      const o = (options ?? {}) as Record<string, unknown>
+      return store.add(text, { category: category(o.category), pinned: o.pinned === true, origin: 'settings' })
+    }))
+    ipcMain.handle('memory:update', memoryCall((store, id, patch) => {
+      const p = (patch ?? {}) as Record<string, unknown>
+      return store.update(String(id), {
+        ...(p.text !== undefined ? { text: p.text } : {}),
+        ...(category(p.category) ? { category: category(p.category) } : {}),
+        ...(typeof p.pinned === 'boolean' ? { pinned: p.pinned } : {}),
+        ...(typeof p.archived === 'boolean' ? { archived: p.archived } : {})
+      })
+    }))
+    ipcMain.handle('memory:remove', memoryCall((store, id) => store.remove(String(id))))
+    ipcMain.handle('memory:clear', memoryCall((store) => store.clear()))
+    ipcMain.handle('memory:settings', memoryCall((store) => store.settings()))
+    ipcMain.handle('memory:set-settings', memoryCall((store, next) => {
+      const n = (next ?? {}) as Record<string, unknown>
+      return store.setSettings({ ...(typeof n.enabled === 'boolean' ? { enabled: n.enabled } : {}), ...(typeof n.useInChat === 'boolean' ? { useInChat: n.useInChat } : {}) })
+    }))
+
     ipcMain.handle('skills:settings', (event) => (fromWindow(event), skills.settings()))
     ipcMain.handle('skills:set-settings', (event, next: unknown) => {
       fromWindow(event)
