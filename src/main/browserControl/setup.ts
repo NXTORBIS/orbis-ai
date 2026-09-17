@@ -10,6 +10,7 @@ import { registerPageCapabilities } from './pageCapabilities.ts'
 import { registerMainCapabilities } from './mainCapabilities.ts'
 import type { MainCapabilityDeps, NavigationRecord } from './mainCapabilities.ts'
 import { registerUiCapabilities } from './uiCapabilities.ts'
+import { registerCaptchaCapabilities } from './captchaCapabilities.ts'
 
 export type BrowserControlDeps = Omit<MainCapabilityDeps, 'control' | 'windowControl' | 'navigation'>
 
@@ -60,6 +61,7 @@ export function setupBrowserControl(deps: BrowserControlDeps): { control: Browse
   registerPageCapabilities(control, windowControl, () => deps.getWindow()?.webContents ?? null)
   registerMainCapabilities({ ...deps, control, windowControl, navigation: (wcId) => navigations.get(wcId) })
   registerUiCapabilities(control, deps.getWindow)
+  registerCaptchaCapabilities(control, windowControl, () => deps.getWindow()?.webContents ?? null)
 
   const fromWindow = (event: IpcMainEvent | IpcMainInvokeEvent): boolean => {
     const win: BrowserWindow | null = deps.getWindow()

@@ -19,6 +19,7 @@
  * the one line meant for a person. What never enters a structure cannot leak out of one.
  */
 import type { Condition, ControlError, ControlTarget, RetryPolicy } from './browserControl.ts'
+import type { CaptchaEncounter } from './captcha.ts'
 import { readPath } from './browserControl.ts'
 
 /** Where a step is in its own life. */
@@ -411,6 +412,17 @@ export function publicSession(session: StepSession): Omit<StepSession, 'steps' |
 }
 
 export type PublicStep = Omit<PlannedStep, 'params' | 'target' | 'expect' | 'summary'>
+
+export type PublicSession = ReturnType<typeof publicSession>
+
+/** A run as the window sees it: what is happening, what has happened, and the challenge in the way if there is one. */
+export interface StepRunView {
+  session: PublicSession
+  /** One line about what is true now, in the present tense. */
+  saying: string
+  /** Never carries a token; there is nowhere in a CaptchaEncounter to put one. */
+  captcha?: CaptchaEncounter
+}
 
 export function publicStep(step: PlannedStep): PublicStep {
   const { params, target, expect, summary, ...rest } = step

@@ -29,6 +29,9 @@ const BROWSER_LAYER = new Set([
   'main/browserControl/pageCapabilities.ts',
   'main/browserControl/setup.ts',
   'main/browserControl/uiCapabilities.ts',
+  // Reads a page to tell a verification challenge from a page, and scrolls one into view. Pure Chromium work either
+  // way: it is a content script and a scroll, which is what the renderer does anyway.
+  'main/browserControl/captchaCapabilities.ts',
   'main/browserControl/window.ts',
   'main/browserIntegration.ts',
   // Registering Orbis as a browser and opening the system's chooser. Chromium does exactly this in shell_integration,

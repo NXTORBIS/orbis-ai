@@ -50,6 +50,9 @@ import { fetchFavicon } from './favicon'
 import { ExtensionsManager } from './extensions/manager'
 import type { ReportedTab, WindowRequest } from './extensions/bridge'
 import { setupBrowserControl } from './browserControl/setup'
+import { readSignals } from './browserControl/captchaCapabilities'
+import { StepRun } from './stepRunner'
+import { planNextStep } from './stepPlanner'
 import { WorkflowStore } from './workflows/store'
 import { WorkflowRecorder } from './workflows/recorder'
 import { WorkflowEngine } from './workflows/engine'
@@ -1268,6 +1271,109 @@ if (!app.requestSingleInstanceLock()) {
         return vault.status(id)
       })(event)
     )
+
+    /**
+     * Goals worked through one step at a time.
+     *
+     * Not a second automation engine: every step is a control-layer command, run the same way and verified the same
+     * way as anything else Orbis does. What is different is where the plan comes from — Orion is asked for the next
+     * step only, in front of the page it applies to, and asked again once Orbis has looked at what happened.
+     *
+     * Runs are per profile and are not kept across restarts: a half-finished run resumed against a page that has
+     * since changed is worse than no run at all.
+     */
+    const stepRuns = new Map<string, StepRun>()
+    const stepProfile = async (): Promise<string> => (await profilesStore.active()).id
+
+    /** The active tab's page, for reading signals from. Null when the browser is closed or the tab has no page. */
+    const activePage = (target?: { tabId?: string; webContentsId?: number }): WebContents | null => {
+      const state = browserControl?.windowControl.state
+      const id = target?.webContentsId ?? (target?.tabId ? state?.tabs.find((t) => t.id === target.tabId)?.webContentsId : state?.tabs.find((t) => t.active)?.webContentsId)
+      const contents = typeof id === 'number' ? webContents.fromId(id) : null
+      return contents && !contents.isDestroyed() ? contents : null
+    }
+
+    const makeStepRun = (id: string, profileId: string, goal: string): StepRun =>
+      new StepRun(
+        { id, profileId, goal },
+        {
+          execute: async (command, runId) =>
+            browserControl!.control.execute(
+              { capability: command.capability, params: command.params, target: command.target, source: 'automation' },
+              { source: 'automation', runId, confirm: async () => true }
+            ),
+          signals: async (target) => {
+            const wc = activePage(target)
+            // No page is not a challenge. Saying otherwise would stop runs for the wrong reason.
+            return wc ? readSignals(wc) : { url: '' }
+          },
+          observe: async () => {
+            const result = await browserControl!.control.execute(
+              { capability: 'page.read', params: {}, source: 'automation' },
+              { source: 'automation', confirm: async () => true }
+            )
+            if (!result.ok) return 'The page could not be read.'
+            const data = result.data as { url?: string; title?: string; text?: string } | undefined
+            return [data?.title, data?.url, data?.text].filter(Boolean).join('\n').slice(0, 20_000) || 'The page is empty.'
+          },
+          plan: (request) => planNextStep(request, browserControl!.control.list({}), GROQ_API_KEYS, fetchForOrion),
+          emit: (view) => sendToWindow('steps:changed', view),
+          newId: () => crypto.randomUUID()
+        }
+      )
+
+    /** Only the Orbis window may drive a run, and only ever one of its own profile's. */
+    const stepCall = <T,>(run: (current: StepRun | undefined, profileId: string) => Promise<T> | T) => {
+      return async (event: IpcMainInvokeEvent, runId: unknown): Promise<T | null> => {
+        if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
+        const profileId = await stepProfile()
+        const found = typeof runId === 'string' ? stepRuns.get(runId) : undefined
+        return run(found && found.state.profileId === profileId ? found : undefined, profileId)
+      }
+    }
+
+    ipcMain.handle('steps:start', async (event, goal: unknown) => {
+      if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
+      const task = typeof goal === 'string' ? goal.trim().slice(0, 2000) : ''
+      if (!task) return null
+      const id = crypto.randomUUID()
+      const run = makeStepRun(id, await stepProfile(), task)
+      stepRuns.set(id, run)
+      // Started in the background: the window watches it through steps:changed rather than waiting on this call.
+      void run.start().catch(() => undefined)
+      return run.view()
+    })
+    ipcMain.handle('steps:read', stepCall((run) => run?.view() ?? null))
+    ipcMain.handle('steps:pause', stepCall((run) => {
+      run?.pauseRun('Paused by you.')
+      return run?.view() ?? null
+    }))
+    ipcMain.handle('steps:resume', stepCall(async (run) => {
+      await run?.resumeRun()
+      return run?.view() ?? null
+    }))
+    ipcMain.handle('steps:stop', stepCall((run) => {
+      run?.stopRun('Stopped by you.')
+      return run?.view() ?? null
+    }))
+    ipcMain.handle('steps:skip', stepCall(async (run) => {
+      await run?.skipCurrent('You chose to skip this.')
+      return run?.view() ?? null
+    }))
+    // The person says they have dealt with a challenge. The page is looked at before that is believed.
+    ipcMain.handle('steps:verified', stepCall(async (run) => {
+      await run?.captchaDone()
+      return run?.view() ?? null
+    }))
+
+    app.on('before-quit', () => {
+      for (const run of stepRuns.values()) run.stopRun('Orbis is closing.')
+      stepRuns.clear()
+    })
+    profilesStore.onChange(() => {
+      for (const run of stepRuns.values()) run.stopRun('The profile changed.')
+      stepRuns.clear()
+    })
 
     const browserSidebar = new BrowserSidebarStore(app.getPath('userData'))
     const sidebarProfile = async (): Promise<string> => (await profilesStore.active()).id

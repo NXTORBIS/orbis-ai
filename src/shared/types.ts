@@ -12,6 +12,7 @@ import type {
 } from './browserControl'
 import type { ControlLogEntryView } from './browserControlView'
 import type { SidebarLayout } from './browserSidebar'
+import type { StepRunView } from './stepPlan'
 import type { SpecializedOutcome } from './searchProviders'
 import type { VoiceErrorCode, VoiceModel } from './voiceInput'
 import type { SecretDetail, SecretInput, SecretSummary, VaultStatus } from './vault'
@@ -664,6 +665,21 @@ export interface NxtorbisApi {
    * Every one of these answers either the thing asked for or { error } saying why not. The vault key never leaves the
    * main process, and a value comes back only when one secret is asked for by id.
    */
+  /**
+   * A goal worked through one step at a time, against the real browser.
+   *
+   * `startSteps` returns straight away with the run as it begins; everything after that arrives on `onStepsChanged`,
+   * already free of parameters, variable values and anything a model was thinking.
+   */
+  startSteps(goal: string): Promise<StepRunView | null>
+  readSteps(runId: string): Promise<StepRunView | null>
+  pauseSteps(runId: string): Promise<StepRunView | null>
+  resumeSteps(runId: string): Promise<StepRunView | null>
+  stopSteps(runId: string): Promise<StepRunView | null>
+  skipStep(runId: string): Promise<StepRunView | null>
+  /** Says the person has dealt with a challenge. Orbis looks at the page before believing it. */
+  stepsVerified(runId: string): Promise<StepRunView | null>
+  onStepsChanged(listener: (view: StepRunView) => void): () => void
   vaultStatus(): Promise<VaultStatus | VaultError>
   vaultQuestion(): Promise<string | null | VaultError>
   vaultCreate(password: string, recovery?: { question: string; answer: string }): Promise<VaultStatus | VaultError>

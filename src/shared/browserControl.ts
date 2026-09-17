@@ -14,6 +14,7 @@ export type ControlDomain =
   | 'addressBar'
   | 'page'
   | 'ui'
+  | 'captcha'
   | 'browser'
   | 'window'
   | 'zoom'

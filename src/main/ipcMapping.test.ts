@@ -72,5 +72,7 @@ test('the boundary is a known size, so the migration can be estimated rather tha
   // A ceiling as well as a floor: the boundary should shrink as the migration goes, never grow by accident.
   // Raised deliberately for the specialized search provider, the reading list and saved pages, the browser sidebar,
   // asking the system which browser opens links, and the secrets vault. Each is written down in the map above.
-  assert.ok(code.length <= 130, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
+  // 130 → 137: seven channels for goals worked through one step at a time (start, read, pause, resume, stop, skip,
+  // and telling Orbis a challenge has been dealt with).
+  assert.ok(code.length <= 137, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
 })

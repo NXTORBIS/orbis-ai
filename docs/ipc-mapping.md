@@ -107,6 +107,7 @@ Three channels disappear because we are currently reimplementing what Chromium a
 | `shortcuts:add`, `shortcuts:remove`, `shortcuts:update`, `shortcuts:refresh-icon` | Mojo onto the same store |
 | `app:notices`, `app:licence-file` | Mojo; the licence files ship beside the browser |
 | `omnibox:predict`, `omnibox:web` | Mojo onto the same ranking, which is ours and better suited to Orbis than Chromium's |
+| `steps:start`, `steps:read`, `steps:pause`, `steps:resume`, `steps:stop`, `steps:skip`, `steps:verified` | A goal worked through one step at a time. Mojo; the run lives in the browser process and the window only watches it |
 | `vault:status`, `vault:question`, `vault:create`, `vault:unlock`, `vault:lock`, `vault:list`, `vault:reveal`, `vault:add`, `vault:update`, `vault:remove`, `vault:change-password`, `vault:set-recovery`, `vault:recover`, `vault:auto-lock`, `vault:destroy` | The secrets vault. Mojo onto the same store; the key stays in the browser process either way |
 | `default-browser:state`, `default-browser:request`, `default-browser:settings` | Whether Orbis opens this computer's links | `shell_integration::win::` — Chromium does exactly this, and by then Orbis is a browser Windows already knows about |
 | `search:run`, `search:specialized-health` | Mojo onto the same two providers: web search, and the specialized categories Orbis's own service answers |
