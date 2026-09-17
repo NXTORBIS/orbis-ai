@@ -80,5 +80,6 @@ test('the boundary is a known size, so the migration can be estimated rather tha
   // 149 → 156: memory, kept per profile on this computer.
   // 156 → 162: saved Orion Search sessions.
   // 162 → 167: Galaxy.
-  assert.ok(code.length <= 167, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
+  // 167 → 169: switching kinds of browser action off for Orion.
+  assert.ok(code.length <= 169, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
 })

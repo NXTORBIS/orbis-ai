@@ -1,3 +1,4 @@
+import type { ControlDomain } from '../../shared/browserControl'
 import { app, ipcMain } from 'electron'
 import type { BrowserWindow, IpcMainEvent, IpcMainInvokeEvent, WebContents } from 'electron'
 import { promises as fs } from 'node:fs'
@@ -32,6 +33,11 @@ export function setupBrowserControl(deps: BrowserControlDeps): { control: Browse
     }
   })
   const windowControl = new WindowControl({ control, getWindow: deps.getWindow, capabilityCache: join(app.getPath('userData'), 'control-capabilities.json') })
+  const switchesFile = join(app.getPath('userData'), 'control-switches.json')
+  void fs
+    .readFile(switchesFile, 'utf8')
+    .then((raw) => control.setSwitchedOff((JSON.parse(raw) as { off?: ControlDomain[] }).off ?? []))
+    .catch(() => undefined)
 
   // Navigation outcomes per tab, recorded from the page's own events (a handful per navigation, nothing in between).
   const navigations = new Map<number, NavigationRecord>()
@@ -85,6 +91,18 @@ export function setupBrowserControl(deps: BrowserControlDeps): { control: Browse
   })
   ipcMain.handle('control:capabilities', (event, filter: unknown) => (fromWindow(event) ? control.list((filter ?? {}) as { domain?: string; query?: string; availableOnly?: boolean }) : []))
   ipcMain.handle('control:state', (event, parts: unknown) => (fromWindow(event) ? control.snapshot(Array.isArray(parts) ? parts.map(String) : undefined) : {}))
+  ipcMain.handle('control:switches', (event) => (fromWindow(event) ? control.switchedOff() : []))
+  ipcMain.handle('control:set-switch', async (event, domain: unknown, on: unknown) => {
+    if (!fromWindow(event)) return control.switchedOff()
+    const wanted = String(domain) as ControlDomain
+    const next = new Set(control.switchedOff())
+    if (on === true) next.delete(wanted)
+    else next.add(wanted)
+    control.setSwitchedOff([...next])
+    await fs.mkdir(join(switchesFile, '..'), { recursive: true }).catch(() => undefined)
+    await fs.writeFile(switchesFile, JSON.stringify({ off: control.switchedOff() })).catch(() => undefined)
+    return control.switchedOff()
+  })
   ipcMain.handle('control:execute', async (event, command: unknown) => {
     if (!fromWindow(event) || !command || typeof command !== 'object' || typeof (command as BrowserCommand).capability !== 'string') return { ok: false, capability: '', attempts: 0, durationMs: 0, error: { code: 'invalid-params', message: 'Invalid command.', recoverable: false } }
     const c = command as BrowserCommand

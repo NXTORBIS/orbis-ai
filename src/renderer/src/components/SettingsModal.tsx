@@ -9,6 +9,7 @@ const NoticesPanel = lazy(() => import('./NoticesPanel'))
 const UpdateSettings = lazy(() => import('./UpdateSettings'))
 const SkillsSettings = lazy(() => import('./SkillsSettings'))
 const MemorySettings = lazy(() => import('./MemorySettings'))
+const ControlSwitches = lazy(() => import('./ControlSwitches'))
 
 interface Props {
   settings: Settings
@@ -139,6 +140,16 @@ export default function SettingsModal({ settings, onUpdate, onClose }: Props): R
               <p>Start Orbis in its browser, at your browser size, instead of the chat. Use Chat to go back to your conversations.</p>
             </div>
             <Toggle checked={settings.openBrowserOnLaunch} onChange={(v) => void onUpdate({ openBrowserOnLaunch: v })} />
+          </section>
+
+          <section className="setting">
+            <div className="setting-label">
+              <h3>What Orion may do</h3>
+              <p>The kinds of thing Orbis may do for you, through Orion, skills, workflows and step-by-step runs. Switching one off hides it from them completely.</p>
+            </div>
+            <Suspense fallback={null}>
+              <ControlSwitches />
+            </Suspense>
           </section>
 
           <section className="setting">

@@ -145,6 +145,8 @@ export class BrowserControl {
   private readonly now: () => number
   /** Resources an automation run is changing (a tab, a page, the clipboard, settings, extensions), by run. */
   private readonly locks = new Map<string, string>()
+  /** Kinds of action the person has switched off for Orion and automations. */
+  private off = new Set<ControlDomain>()
 
   constructor(options: BrowserControlOptions = {}) {
     this.o = options
@@ -163,6 +165,26 @@ export class BrowserControl {
     this.capabilities.delete(id)
   }
 
+  // ---------------------------------------------------------------- what Orion is allowed to do at all
+
+  /**
+   * Kinds of action Orion, skills and workflows may not use. A switched-off kind is shown as unavailable wherever
+   * capabilities are listed, so nothing is ever planned around it, and refused if something tries anyway. The person
+   * acting in Orbis themselves is never blocked by this: it decides what Orbis may do on their behalf, not what they
+   * may do.
+   */
+  setSwitchedOff(domains: ControlDomain[]): void {
+    this.off = new Set(domains)
+  }
+
+  switchedOff(): ControlDomain[] {
+    return [...this.off]
+  }
+
+  isSwitchedOff(domain: ControlDomain): boolean {
+    return this.off.has(domain)
+  }
+
   /** Registers a named part of the browser state (tabs, downloads, settings...), read only when asked for. */
   registerState(name: string, reader: () => unknown): void {
     this.stateReaders.set(name, reader)
@@ -171,7 +193,8 @@ export class BrowserControl {
   // ---------------------------------------------------------------- discovery
 
   private descriptor(def: CapabilityDefinition, ctx: Pick<ControlContext, 'source' | 'target'>): CapabilityDescriptor {
-    let reason: string | null = null
+    let reason: string | null = this.off.has(def.domain) ? `Switched off in Settings → What Orion may do (${def.domain}).` : null
+    if (reason) return { id: def.id, domain: def.domain, name: def.name, description: def.description, params: def.params, mutates: def.mutates, confirmation: def.confirmation, requires: def.requires ?? [], provider: (def as CapabilityDefinition & { provider?: 'window' }).provider ?? 'main', available: false, unavailableReason: reason }
     try {
       reason = def.unavailable?.(ctx) ?? null
     } catch (err) {
@@ -270,6 +293,10 @@ export class BrowserControl {
     if (!def) {
       const similar = this.list({ query: command.capability.replace(/[._-]/g, ' ') }).slice(0, 5).map((d) => d.id)
       return error('unknown-capability', `Orbis has no capability "${command.capability}".${similar.length ? ` Similar: ${similar.join(', ')}.` : ''}`)
+    }
+    if (source !== 'user' && this.off.has(def.domain)) {
+      this.record('decision', def.id, source, runId, { decision: 'block', reason: 'switched off' })
+      return error('blocked', `“${def.domain}” is switched off in Settings → What Orion may do, so Orbis will not do this on your behalf.`)
     }
     readOnly = !def.mutates
     const sensitive = new Set(Object.entries(def.params).filter(([, p]) => p.sensitive).map(([k]) => k))

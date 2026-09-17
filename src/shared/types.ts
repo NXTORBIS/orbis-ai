@@ -19,8 +19,7 @@ import type {
   RunState,
   WindowBrowserState,
   WindowRunRequest,
-  WindowRunResult
-} from './browserControl'
+  WindowRunResult, ControlDomain } from './browserControl'
 import type { ControlLogEntryView } from './browserControlView'
 import type { SidebarLayout } from './browserSidebar'
 import type { StepRunView } from './stepPlan'
@@ -728,6 +727,9 @@ export interface NxtorbisApi {
   onGalaxyChanged(listener: () => void): () => void
   /** The profile changed, so the conversations shown belong to someone else now. */
   onConversationsReload(listener: () => void): () => void
+  /** Kinds of browser action switched off for Orion, skills and workflows. */
+  controlSwitches(): Promise<ControlDomain[]>
+  setControlSwitch(domain: ControlDomain, on: boolean): Promise<ControlDomain[]>
   vaultStatus(): Promise<VaultStatus | VaultError>
   vaultQuestion(): Promise<string | null | VaultError>
   vaultCreate(password: string, recovery?: { question: string; answer: string }): Promise<VaultStatus | VaultError>

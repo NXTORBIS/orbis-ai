@@ -225,3 +225,24 @@ test('repeat until and while use conditions; compare handles numbers, text and p
   assert.equal(compare('order-1234', 'matches', '^order-\\d+$'), true)
   assert.equal(compare([1, 2], 'contains', 2), true)
 })
+
+test('a kind of action switched off is refused for Orion and automations, but never for the person', async () => {
+  const { control } = makeControl()
+  control.setSwitchedOff(['tabs'])
+  assert.deepEqual(control.switchedOff(), ['tabs'])
+
+  const listed = control.list({}, 'automation').find((c) => c.id === 'tabs.create')!
+  assert.equal(listed.available, false, 'nothing can be planned around it')
+  assert.match(listed.unavailableReason ?? '', /Switched off in Settings/)
+
+  const refused = await control.execute({ capability: 'tabs.create', params: { url: 'https://example.com' } }, { source: 'automation', confirm: async () => true })
+  assert.equal(refused.ok, false)
+  assert.equal(refused.error?.code, 'blocked')
+  assert.match(refused.error?.message ?? '', /switched off in Settings/)
+
+  const mine = await control.execute({ capability: 'tabs.create', params: { url: 'https://example.com' } }, { source: 'user', confirm: async () => true })
+  assert.equal(mine.ok, true, 'the person acting in Orbis is not blocked by it')
+
+  control.setSwitchedOff([])
+  assert.equal(control.list({}, 'automation').find((c) => c.id === 'tabs.create')!.available, true)
+})
