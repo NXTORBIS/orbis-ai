@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowUp, ExternalLink, Loader, Plus, Sparkles, Square } from 'lucide-react'
+import { ArrowUp, ExternalLink, History, Loader, Plus, Sparkles, Square, Trash2 } from 'lucide-react'
 import {
   addSources,
   addTurn,
@@ -14,6 +14,9 @@ import {
   withTopic
 } from '../../../shared/orionSearch'
 import type { OrionSearchSession } from '../../../shared/orionSearch'
+import { resumeRequest } from '../../../shared/searchSessions'
+import type { SavedSearchSummary } from '../../../shared/searchSessions'
+import { AUTO_MODEL } from '../../../shared/modelRoute'
 import type { SearchOutcomeView } from '../../../shared/types'
 import { useVoiceInput } from '../hooks/useVoiceInput'
 import { SiteIcon } from './SearchMedia'
@@ -54,7 +57,34 @@ export default function OrionSearchMode({ query, onOpen, onNotify }: OrionSearch
   const stopRef = useRef<(() => void) | null>(null)
   const followRef = useRef<HTMLTextAreaElement>(null)
   const voice = useVoiceInput('search', { inputId: 'orion-follow-up' })
+  const [earlier, setEarlier] = useState<SavedSearchSummary[] | null>(null)
   live.current.session = session
+
+  // Research is saved as it happens, so it is still there after Orbis closes and can be picked up again.
+  const keep = useCallback((next: OrionSearchSession) => {
+    setSession(next)
+    if (next.turns.length) void window.api.saveSearchSession(next).catch(() => undefined)
+  }, [])
+
+  const showEarlier = useCallback(() => {
+    void window.api
+      .listSearchSessions()
+      .then(setEarlier)
+      .catch(() => setEarlier([]))
+  }, [])
+
+  const reopen = useCallback(
+    async (id: string) => {
+      const found = await window.api.getSearchSession(id).catch(() => null)
+      setEarlier(null)
+      if (!found) return onNotify?.('That research is no longer saved.', 'warn')
+      stopRef.current?.()
+      live.current.busy = false
+      setAsking(null)
+      setSession(found)
+    },
+    [onNotify]
+  )
 
   /**
    * One question in the session.
@@ -110,7 +140,7 @@ export default function OrionSearchMode({ query, onOpen, onNotify }: OrionSearch
             return
           }
           const used = referencedItems(text, current.sources.length)
-          setSession(addTurn(current, { id: requestId, question: text, answer: finished, used, researched: fresh, at: Date.now() }))
+          keep(addTurn(current, { id: requestId, question: text, answer: finished, used, researched: fresh, at: Date.now() }))
         }
       })
       stopRef.current = () => {
@@ -121,7 +151,7 @@ export default function OrionSearchMode({ query, onOpen, onNotify }: OrionSearch
 
       // A standalone request: no conversation is made, and nothing here reaches Orbis Chat.
       void window.api
-        .sendChat({ requestId, model: 'orion-core', ask: true, images: false, messages: [{ id: requestId, role: 'user', content: context.prompt, createdAt: Date.now() }] })
+        .sendChat({ requestId, model: AUTO_MODEL, ask: true, images: false, messages: [{ id: requestId, role: 'user', content: context.prompt, createdAt: Date.now() }] })
         .catch(() => {
           off()
           live.current.busy = false
@@ -130,17 +160,34 @@ export default function OrionSearchMode({ query, onOpen, onNotify }: OrionSearch
         })
       setSession(current)
     },
-    [onNotify]
+    [onNotify, keep]
   )
 
-  // A new query from the address bar starts a new session; a follow-up continues the one there is.
+  // A new query from the address bar starts a new session; a follow-up continues the one there is. "Continue my research
+  // on …" reopens the saved session it means, rather than starting from nothing.
   const started = useRef('')
   useEffect(() => {
     const text = query.trim()
     if (!text || started.current === text) return
     started.current = text
-    void ask(text, { starting: true })
-  }, [query, ask])
+    const about = resumeRequest(text)
+    if (!about) {
+      void ask(text, { starting: true })
+      return
+    }
+    void window.api
+      .findSearchSession(about)
+      .catch(() => null)
+      .then((found) => {
+        if (found) {
+          setSession(found)
+          onNotify?.(`Picked up your research on ${found.topic}.`, 'info')
+        } else {
+          onNotify?.(`There is no saved research about ${about}, so this starts a new search.`, 'info')
+          void ask(about, { starting: true })
+        }
+      })
+  }, [query, ask, onNotify])
 
   useEffect(() => () => stopRef.current?.(), [])
 
@@ -166,9 +213,55 @@ export default function OrionSearchMode({ query, onOpen, onNotify }: OrionSearch
 
   return (
     <section className="oorion" aria-label="Orion search">
+      {earlier && (
+        <div className="oorion-earlier" role="dialog" aria-label="Earlier research">
+          <div className="oorion-earlier-head">
+            <h4>Earlier research</h4>
+            <button type="button" onClick={() => setEarlier(null)}>
+              Close
+            </button>
+          </div>
+          {earlier.length === 0 ? (
+            <p className="oorion-earlier-empty">Nothing saved yet. Research is saved here as you ask.</p>
+          ) : (
+            <ul>
+              {earlier.map((item) => (
+                <li key={item.id}>
+                  <button type="button" className="oorion-earlier-open" onClick={() => void reopen(item.id)}>
+                    <b className="truncate">{item.title}</b>
+                    <small>
+                      {item.turns} {item.turns === 1 ? 'question' : 'questions'} · {item.sources} sources · {new Date(item.updatedAt).toLocaleDateString()}
+                    </small>
+                  </button>
+                  <button
+                    type="button"
+                    className="oorion-earlier-remove"
+                    aria-label={`Delete saved research: ${item.title}`}
+                    onClick={() => void window.api.removeSearchSession(item.id).then(showEarlier)}
+                  >
+                    <Trash2 size={13} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {turns.length === 0 && !asking && (
+        <div className="oorion-head">
+          <button type="button" className="oorion-new" onClick={showEarlier}>
+            <History size={13} /> Earlier research
+          </button>
+        </div>
+      )}
+
       {turns.length > 0 && (
         <div className="oorion-head">
           <span className="oorion-topic truncate">{session?.topic}</span>
+          <button type="button" className="oorion-new" title="Research saved earlier" onClick={showEarlier}>
+            <History size={13} /> Earlier
+          </button>
           <button
             type="button"
             className="oorion-new"

@@ -1,5 +1,7 @@
 import type { SkillEdits, SkillMatch, SkillPreview, SkillSettings, SkillView } from './skills'
 import type { MemoryCategory, MemoryEntry, MemorySettings } from './memory'
+import type { OrionSearchSession } from './orionSearch'
+import type { SavedSearchSummary } from './searchSessions'
 import type {
   BrowserCommand,
   CapabilityDescriptor,
@@ -700,6 +702,15 @@ export interface NxtorbisApi {
   memorySettings(): Promise<MemorySettings>
   setMemorySettings(next: Partial<MemorySettings>): Promise<MemorySettings>
   onMemoryChanged(listener: () => void): () => void
+  /** Orion Search sessions saved for the profile in use. */
+  saveSearchSession(session: OrionSearchSession): Promise<SavedSearchSummary | null>
+  listSearchSessions(query?: string): Promise<SavedSearchSummary[]>
+  getSearchSession(id: string): Promise<OrionSearchSession | null>
+  /** The saved session that best matches what earlier research was about. */
+  findSearchSession(about: string): Promise<OrionSearchSession | null>
+  removeSearchSession(id: string): Promise<boolean>
+  clearSearchSessions(): Promise<number>
+  onSearchSessionsChanged(listener: () => void): () => void
   vaultStatus(): Promise<VaultStatus | VaultError>
   vaultQuestion(): Promise<string | null | VaultError>
   vaultCreate(password: string, recovery?: { question: string; answer: string }): Promise<VaultStatus | VaultError>

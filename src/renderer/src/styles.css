@@ -13850,6 +13850,73 @@ html[data-motion='reduced'] .newtab-orb {
   color: var(--muted);
 }
 
+/* Orion Search: research saved earlier. */
+.oorion-earlier {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: var(--popover-bg);
+}
+
+.oorion-earlier-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.oorion-earlier-head h4 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.oorion-earlier-head button,
+.oorion-earlier-remove {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.oorion-earlier ul {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.oorion-earlier li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.oorion-earlier-open {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.oorion-earlier-open:hover {
+  background: var(--pill-bg);
+}
+
+.oorion-earlier-open small,
+.oorion-earlier-empty {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 /* Shown on a generated image while it is being redrawn sharper. */
 .generated-image-open {
   position: relative;

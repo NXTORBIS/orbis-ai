@@ -53,6 +53,7 @@ import { StepRun } from './stepRunner'
 import { SkillManager } from './skillManager'
 import { resolveModel } from '../shared/modelRoute'
 import { MemoryFull, MemoryRefused, MemoryStore } from './knowledge/memory'
+import { SearchSessionStore } from './knowledge/searchSessions'
 import { memoryFromRequest, memoryPromptBlock, parseMemoryCommand } from '../shared/memory'
 import type { MemoryCategory } from '../shared/memory'
 import type { SkillEdits } from './skillManager'
@@ -1491,6 +1492,24 @@ if (!app.requestSingleInstanceLock()) {
       return run(memory!, ...args)
     }
     const category = (value: unknown): MemoryCategory | undefined => (['about', 'preference', 'project', 'general'].includes(String(value)) ? (value as MemoryCategory) : undefined)
+    /** Orion Search sessions, saved per profile. Never read into or out of Orbis Chat. */
+    const searchSessions = new SearchSessionStore(app.getPath('userData'), await stepProfile())
+    searchSessions.onChange(() => sendToWindow('search-sessions:changed'))
+    profilesStore.onChange(() => {
+      void stepProfile().then((id) => searchSessions.useProfile(id))
+    })
+    app.on('before-quit', () => searchSessions.close())
+    const searchCall = <T,>(run: (...args: unknown[]) => T) => (event: IpcMainInvokeEvent, ...args: unknown[]): T => {
+      if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
+      return run(...args)
+    }
+    ipcMain.handle('search-sessions:save', searchCall((session) => searchSessions.save(session)))
+    ipcMain.handle('search-sessions:list', searchCall((query) => searchSessions.list(typeof query === 'string' ? query.slice(0, 200) : undefined)))
+    ipcMain.handle('search-sessions:get', searchCall((id) => searchSessions.get(String(id))))
+    ipcMain.handle('search-sessions:find', searchCall((about) => searchSessions.find(String(about).slice(0, 200))))
+    ipcMain.handle('search-sessions:remove', searchCall((id) => searchSessions.remove(String(id))))
+    ipcMain.handle('search-sessions:clear', searchCall(() => searchSessions.clear()))
+
     ipcMain.handle('memory:list', memoryCall((store, options) => {
       const o = (options ?? {}) as Record<string, unknown>
       return store.list({ query: typeof o.query === 'string' ? o.query.slice(0, 200) : undefined, includeArchived: o.includeArchived === true, category: category(o.category) })
