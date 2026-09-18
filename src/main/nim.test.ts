@@ -9,7 +9,6 @@ const ORION_NANO = 'meta-llama/llama-prompt-guard-2-22m'
 const ORION_CORE = 'openai/gpt-oss-20b'
 const ORION_MAX = 'openai/gpt-oss-120b'
 const ORION_ULTRA = 'qwen/qwen3.8-27b'
-const ORION_APEX = 'groq/compound'
 const ORION_PRO = 'orion/pro'
 
 interface Call {
@@ -335,7 +334,7 @@ test('trims long history to a model’s input limit before sending', async () =>
   )
 })
 
-test('hands a message that is too long for a model to Apex, which has the most room', async () => {
+test('falls back to the next model in order when a message is too long', async () => {
   const h = harness((call) =>
     call.model === ORION_ULTRA
       ? json(413, { error: { message: 'Request too large on input tokens per minute (ITPM): Limit 7000, Requested 9000' } })
@@ -344,47 +343,18 @@ test('hands a message that is too long for a model to Apex, which has the most r
   await h.run({ model: ORION_ULTRA, messages: [user('long '.repeat(3000))] })
   assert.deepEqual(
     h.calls.map((c) => c.model),
-    [ORION_ULTRA, ORION_APEX]
+    [ORION_ULTRA, ORION_CORE]
   )
   assert.equal(h.events[0].type, 'status')
-  assert.match((h.events[0] as { message: string }).message, /this long\. Switching to ORION Apex/)
-  assert.deepEqual(h.events.at(-1), { type: 'done', model: ORION_APEX, truncated: false })
-})
-
-test('says which model to try when a message is too long and fallback is off', async () => {
-  const h = harness(() => json(413, { error: { message: 'Request too large on input tokens per minute (ITPM): Limit 7000, Requested 9000' } }))
-  await h.run({ model: ORION_ULTRA, messages: [user('long '.repeat(3000))], autoFallback: false })
-  assert.equal(h.calls.length, 1)
-  assert.match(errorMessage(h.events), /too long for ORION Ultra.*ORION Apex/)
-})
-
-test('when Apex overflows on its own web search, ORION Core searches instead and nothing half-shown remains', async () => {
-  const h = harness((call) =>
-    call.model === ORION_APEX
-      ? sse([chunk({ reasoning: 'raw page dump', executed_tools: [{ type: 'search' }] }), { error: { message: 'Request Entity Too Large' } }])
-      : sse([chunk({ reasoning: 'Looking it up' }), chunk({ content: 'SpaceX launched' }, 'stop')])
-  )
-  await h.run({ model: ORION_APEX, autoFallback: false })
-  assert.deepEqual(
-    h.calls.map((c) => c.model),
-    [ORION_APEX, ORION_CORE]
-  )
-  assert.deepEqual(h.calls[1].body.tools, [{ type: 'browser_search' }])
-  assert.equal(text(h.events, 'reasoning'), 'Looking it up')
-  assert.equal(text(h.events, 'content'), 'SpaceX launched')
-  assert.ok(h.events.some((e) => e.type === 'status' && /searching instead/.test(e.message)))
+  assert.match((h.events[0] as { message: string }).message, /this long\. Switching to ORION Core/)
   assert.deepEqual(h.events.at(-1), { type: 'done', model: ORION_CORE, truncated: false })
 })
 
-test('shows Apex reasoning once its answer starts', async () => {
-  const h = harness(() => sse([chunk({ reasoning: 'Searching' }), chunk({ content: 'Answer' }, 'stop')]))
-  await h.run({ model: ORION_APEX, autoFallback: false })
+test('says a message is too long, and to try a shorter one, when fallback is off', async () => {
+  const h = harness(() => json(413, { error: { message: 'Request too large on input tokens per minute (ITPM): Limit 7000, Requested 9000' } }))
+  await h.run({ model: ORION_ULTRA, messages: [user('long '.repeat(3000))], autoFallback: false })
   assert.equal(h.calls.length, 1)
-  assert.deepEqual(
-    h.events.filter((e) => e.type === 'delta'),
-    [{ type: 'delta', content: 'Answer', reasoning: 'Searching' }]
-  )
-  assert.deepEqual(h.events.at(-1), { type: 'done', model: ORION_APEX, truncated: false })
+  assert.match(errorMessage(h.events), /too long for ORION Ultra.*shorter message/)
 })
 
 test('asks for less output when the request is over a model’s per-minute output limit', async () => {
@@ -421,6 +391,13 @@ test('chats and settings on the retired Qwen 3.6 move to ORION Pro', () => {
   assert.equal(currentModelId(ORION_ULTRA), ORION_ULTRA)
   assert.equal(currentModelId('some/removed-model'), ORION_CORE)
   assert.equal(currentModelId(undefined), ORION_CORE)
+})
+
+test('ORION Apex and Apex Mini are gone (Groq retired Compound and Compound Mini); saved chats move to Core and Max', () => {
+  assert.equal(currentModelId('groq/compound'), ORION_MAX)
+  assert.equal(modelLabel('groq/compound'), 'ORION Max')
+  assert.equal(currentModelId('groq/compound-mini'), ORION_CORE)
+  assert.equal(modelLabel('groq/compound-mini'), 'ORION Core')
 })
 
 test('starts from the key that last worked instead of retrying spent keys first', async () => {

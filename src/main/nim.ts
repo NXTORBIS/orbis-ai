@@ -26,9 +26,9 @@ export interface ChatOptions {
 class HttpError extends Error {
   status: number
   retryAfterMs?: number
-  /** 'key': this key can never be used (its organization is restricted). 'search': Apex's own web results overflowed. */
-  reason?: 'key' | 'search'
-  constructor(status: number, message: string, retryAfterMs?: number, reason?: 'key' | 'search') {
+  /** 'key': this key can never be used (its organization is restricted). */
+  reason?: 'key'
+  constructor(status: number, message: string, retryAfterMs?: number, reason?: 'key') {
     super(message)
     this.status = status
     this.retryAfterMs = retryAfterMs
@@ -43,14 +43,6 @@ class StreamError extends Error {
 }
 
 const FALLBACK_STATUSES = new Set([403, 404, 413, 429, 500, 502, 503, 504])
-
-/** Answers with Groq's browser_search tool when Apex's own web search overflows. */
-const WEB_FALLBACK_MODEL = 'openai/gpt-oss-20b'
-
-/** ORION Apex and Apex Mini: Groq Compound, which searches the web and runs code on its own. */
-function isApex(model: string): boolean {
-  return model.startsWith('groq/compound')
-}
 
 interface Attempt {
   model: string
@@ -78,20 +70,8 @@ export async function streamChat(opts: ChatOptions): Promise<void> {
       if (opts.signal.aborted) return opts.emit({ type: 'aborted' })
       lastError = err
       lastModel = model
-      // Apex's own web search can gather more than Groq accepts. ORION Core searches with browser_search instead,
-      // even with automatic fallback off, so the question still gets a web-backed answer.
-      if (err instanceof HttpError && err.reason === 'search' && !chain.some((a) => a.variant === 'browse')) {
-        chain.splice(i + 1, 0, { model: WEB_FALLBACK_MODEL, variant: 'browse' })
-        opts.emit({ type: 'status', message: `${modelLabel(model)} couldn't fit its web results, so ${modelLabel(WEB_FALLBACK_MODEL)} is searching instead…` })
-        continue
-      }
       if (!(err instanceof HttpError) || !FALLBACK_STATUSES.has(err.status)) {
         return opts.emit({ type: 'error', message: describeError(err, model) })
-      }
-      // Groq Compound takes far more tokens per minute than the other models, so a too-long message goes there next.
-      if (err.status === 413 && !isApex(model)) {
-        const apexAt = chain.findIndex((a, j) => j > i + 1 && isApex(a.model))
-        if (apexAt !== -1) chain.splice(i + 1, 0, ...chain.splice(apexAt, 1))
       }
       const next = chain[i + 1]
       if (next) {
@@ -172,10 +152,9 @@ function groqEffort(effort: ReasoningEffort): string {
 }
 
 /**
- * 'lean' drops optional params after a 400; 'rescue' is the low-effort retry for an empty answer;
- * 'browse' adds Groq's browser_search tool.
+ * 'lean' drops optional params after a 400; 'rescue' is the low-effort retry for an empty answer.
  */
-type Variant = 'normal' | 'lean' | 'rescue' | 'browse'
+type Variant = 'normal' | 'lean' | 'rescue'
 
 /**
  * `maxTokens` overrides the default output budget; null omits it and leaves Groq's default.
@@ -199,7 +178,7 @@ async function streamOnce(
     stream: true
   }
   if (variant !== 'lean' && info.reasoningEffort) {
-    body.reasoning_effort = variant === 'rescue' || variant === 'browse' ? 'low' : groqEffort(opts.reasoningEffort)
+    body.reasoning_effort = variant === 'rescue' ? 'low' : groqEffort(opts.reasoningEffort)
     const budget = maxTokens === undefined ? (variant === 'rescue' ? RESCUE_MAX_TOKENS : REASONING_MAX_TOKENS) : maxTokens
     if (budget !== null) body.max_completion_tokens = budget
   } else if (variant !== 'lean') {
@@ -207,7 +186,6 @@ async function streamOnce(
     if (typeof maxTokens === 'number') body.max_completion_tokens = maxTokens
     if (info.disableReasoning) body.reasoning_effort = 'none'
   }
-  if (variant === 'browse') body.tools = [{ type: 'browser_search' }]
 
   const res = await opts.fetchFn(`${GROQ_BASE_URL}/chat/completions`, {
     method: 'POST',
@@ -268,42 +246,21 @@ async function streamOnce(
 
   // The rescue continues the reply that already started.
   if (variant !== 'rescue') opts.emit({ type: 'start', model })
-  try {
-    return await readStream(res.body, opts, isApex(model))
-  } catch (err) {
-    if (err instanceof StreamError && !err.hasContent) {
-      // Apex's own web search can gather more than Groq accepts, which ends the reply before it answers.
-      if (isApex(model) && /too large/i.test(err.message)) throw new HttpError(413, err.message, undefined, 'search')
-      // The web-search fallback failing before it answered can still hand over to another model.
-      if (variant === 'browse') throw new HttpError(502, err.message)
-    }
-    throw err
-  }
+  return readStream(res.body, opts)
 }
 
 /** Relays an OpenAI-style SSE body as delta events. `holdReasoning` keeps reasoning back until the answer starts. */
-async function readStream(stream: ReadableStream<Uint8Array>, opts: ChatOptions, holdReasoning = false): Promise<StreamResult> {
+async function readStream(stream: ReadableStream<Uint8Array>, opts: ChatOptions): Promise<StreamResult> {
   const parser = new SseParser()
   const splitter = new ThinkTagSplitter()
   const decoder = new TextDecoder()
   const reader = stream.getReader()
   let finishReason: string | null = null
   let hasContent = false
-  let heldContent = ''
-  let heldReasoning = ''
-  let searching = false
 
   const relay = (content: string, reasoning: string): void => {
     if (content.trim()) hasContent = true
-    if (holdReasoning && !hasContent) {
-      heldContent += content
-      heldReasoning += reasoning
-      return
-    }
-    const outContent = heldContent + content
-    const outReasoning = heldReasoning + reasoning
-    heldContent = heldReasoning = ''
-    if (outContent || outReasoning) opts.emit({ type: 'delta', content: outContent || undefined, reasoning: outReasoning || undefined })
+    if (content || reasoning) opts.emit({ type: 'delta', content: content || undefined, reasoning: reasoning || undefined })
   }
 
   const handle = (data: string): void => {
@@ -318,11 +275,6 @@ async function readStream(stream: ReadableStream<Uint8Array>, opts: ChatOptions,
     const choice = chunk.choices?.[0]
     if (!choice) return
     const delta = choice.delta ?? {}
-    // While reasoning is held back, say what is happening instead.
-    if (holdReasoning && !hasContent && !searching && Array.isArray(delta.executed_tools) && delta.executed_tools.length > 0) {
-      searching = true
-      opts.emit({ type: 'status', message: 'Searching the web…' })
-    }
     let reasoning = asText(delta.reasoning_content) || asText(delta.reasoning)
     let content = ''
     const raw = asText(delta.content)
@@ -351,9 +303,7 @@ async function readStream(stream: ReadableStream<Uint8Array>, opts: ChatOptions,
 
   const tail = splitter.flush()
   if (tail.content.trim()) hasContent = true
-  const outContent = heldContent + tail.content
-  const outReasoning = heldReasoning + tail.reasoning
-  if (outContent || outReasoning) opts.emit({ type: 'delta', content: outContent || undefined, reasoning: outReasoning || undefined })
+  if (tail.content || tail.reasoning) opts.emit({ type: 'delta', content: tail.content || undefined, reasoning: tail.reasoning || undefined })
   return { hasContent, finishReason }
 }
 
@@ -503,7 +453,7 @@ function describeError(err: unknown, model: string): string {
       case 404:
         return `${modelLabel(model)} isn't available on Groq right now.`
       case 413:
-        return `This message is too long for ${modelLabel(model)} on Groq's free tier. Try ORION Apex, which takes longer messages, or start a new chat.`
+        return `This message is too long for ${modelLabel(model)} on Groq's free tier. Try a shorter message, or start a new chat.`
       case 429:
         return "Groq's rate limit is reached. Wait a minute and try again."
       default:
