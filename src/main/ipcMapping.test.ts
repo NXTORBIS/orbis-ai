@@ -81,5 +81,8 @@ test('the boundary is a known size, so the migration can be estimated rather tha
   // 156 → 162: saved Orion Search sessions.
   // 162 → 167: Galaxy.
   // 167 → 169: switching kinds of browser action off for Orion.
-  assert.ok(code.length <= 169, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
+  // 169 → 174: local Whisper speech to text — cancelling a transcription, reading this machine's hardware, and
+  // managing model files (status, download, cancel a download, delete, verify) — replacing the single Groq call
+  // voice:transcribe used to make on its own.
+  assert.ok(code.length <= 174, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
 })

@@ -38,7 +38,8 @@ import { classifyAutomationMessage, classifyIntent } from './intent'
 import type { ChatIntent } from './intent'
 import { automationProgress } from '../shared/automation'
 import { runBrowserAgent } from './browserAgent'
-import { transcribeAudio, VoiceError } from './voice'
+import { WhisperService, LocalVoiceError } from './whisper/service.ts'
+import type { WhisperDownloadProgress } from '../shared/whisperModels.ts'
 import { openDefaultAppsSettings, readDefaultBrowser, requestDefaultBrowser } from './defaultBrowser'
 import { checkAudio, describeError, isVoiceModel } from '../shared/voiceInput'
 import { completeDraft, generateTitle, generateWorkflowTitle, predictQueries, suggestFollowups } from './suggest'
@@ -147,6 +148,8 @@ function latestAutomation(messages: ChatMessage[]): AutomationState | undefined 
   return [...messages].reverse().find((m) => m.role === 'assistant' && m.automation)?.automation
 }
 
+/** Speech to text: one Whisper model manager and runtime for every microphone in Orbis; set up when the app is ready. */
+let whisper: WhisperService | null = null
 /** Ad blocking for the in-app browser session; set up when the app is ready. */
 let adblock: OrbisAdBlock | null = null
 /** Browser shortcuts, context menu, history, bookmarks, downloads and permissions; set up when the app is ready. */
@@ -992,28 +995,78 @@ ${summaryBlock(summary)}`
   ipcMain.handle('default-browser:request', () => requestDefaultBrowser())
   ipcMain.handle('default-browser:settings', () => openDefaultAppsSettings())
 
+  // One transcription in flight at a time is all a single window ever asks for; a second call cancels the first's
+  // process the same way the window cancelling a session would, so nothing is left running for words nobody wants.
+  let voiceAbort: AbortController | null = null
+
   ipcMain.handle('voice:transcribe', async (event, audioData: unknown, options: unknown) => {
     if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
-    const o = (options ?? {}) as { mimeType?: unknown; model?: unknown; language?: unknown }
+    if (!whisper) return { ok: false as const, code: 'runtime-error' as const, message: 'Speech input is not ready yet.' }
+    const o = (options ?? {}) as { model?: unknown; language?: unknown }
     const audio = audioData instanceof Uint8Array ? Buffer.from(audioData) : Buffer.alloc(0)
     const bad = checkAudio(audio.length)
     if (bad) return { ok: false as const, code: bad, message: describeError(bad) }
 
+    voiceAbort?.abort()
+    const controller = new AbortController()
+    voiceAbort = controller
+
     try {
-      const text = await transcribeAudio({
-        audio,
-        mimeType: typeof o.mimeType === 'string' && o.mimeType.startsWith('audio/') ? o.mimeType : 'audio/webm',
-        model: isVoiceModel(o.model) ? o.model : undefined,
-        language: typeof o.language === 'string' && /^[a-z]{2}$/i.test(o.language) ? o.language.toLowerCase() : null,
-        fetchFn: (url, init) => net.fetch(url, init),
-        apiKeys: GROQ_API_KEYS
-      })
+      const model = isVoiceModel(o.model) ? o.model : whisper.hardware().recommended
+      const language = typeof o.language === 'string' && /^[a-z]{2}$/i.test(o.language) ? o.language.toLowerCase() : null
+      // Nothing here reaches the network: this is a local child process, run against a model file already on disk.
+      const text = await whisper.transcribe(audio, model, language, controller.signal)
       return { ok: true as const, text }
     } catch (err) {
-      const code = err instanceof VoiceError ? err.code : 'api-error'
-      // The reason travels; the audio and the words never do.
+      const code = err instanceof LocalVoiceError ? err.code : 'runtime-error'
+      // The reason travels; the audio and the words never do — and neither is written down anywhere along the way.
       return { ok: false as const, code, message: describeError(code) }
+    } finally {
+      if (voiceAbort === controller) voiceAbort = null
     }
+  })
+
+  ipcMain.handle('voice:cancel', (event) => {
+    if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
+    voiceAbort?.abort()
+  })
+
+  ipcMain.handle('voice:hardware', (event) => {
+    if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
+    return whisper?.hardware() ?? null
+  })
+
+  ipcMain.handle('voice:models:status', async (event) => {
+    if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
+    return whisper ? await whisper.status() : { installed: [], downloading: [] }
+  })
+
+  ipcMain.handle('voice:models:download', async (event, id: unknown) => {
+    if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
+    if (!whisper || !isVoiceModel(id)) return { ok: false, message: 'Not a recognised model.' }
+    try {
+      await whisper.download(id, (progress: WhisperDownloadProgress) => {
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('voice:models:progress', progress)
+      })
+      return { ok: true }
+    } catch (err) {
+      return { ok: false, message: err instanceof Error ? err.message : String(err) }
+    }
+  })
+
+  ipcMain.handle('voice:models:cancelDownload', (event, id: unknown) => {
+    if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
+    if (whisper && isVoiceModel(id)) whisper.cancelDownload(id)
+  })
+
+  ipcMain.handle('voice:models:delete', async (event, id: unknown) => {
+    if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
+    if (whisper && isVoiceModel(id)) await whisper.delete(id)
+  })
+
+  ipcMain.handle('voice:models:verify', async (event, id: unknown) => {
+    if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
+    return whisper && isVoiceModel(id) ? await whisper.verify(id) : false
   })
 }
 
@@ -1106,6 +1159,14 @@ if (!app.requestSingleInstanceLock()) {
 
     store = new Store(app.getPath('userData'), platform().secrets)
     nativeTheme.themeSource = (await store.getSettings()).theme
+
+    // The model files are the app's, shared by every profile the way the whisper.cpp binary itself is; only which
+    // model a profile has chosen, and its language and microphone, are kept per profile — in experience settings.
+    whisper = new WhisperService(
+      app.getPath('userData'),
+      app.isPackaged ? process.resourcesPath : join(app.getAppPath(), 'resources'),
+      (url, init) => net.fetch(url, init)
+    )
 
     registerIpc()
     // Ad blocking wires the browser session before any browser tab exists; its lists load in the background.

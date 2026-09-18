@@ -13,6 +13,10 @@ files:
 extraResources:
   - from: resources/adblock
     to: adblock
+  # whisper.cpp's official prebuilt Windows binary (MIT) and the DLLs it loads. Speech to text runs this locally;
+  # the multi-gigabyte model files it reads are downloaded into the user's own data directory, not bundled here.
+  - from: resources/whisper
+    to: whisper
   # The licences of everything Orbis is built from. Most of them require their text to travel with the app.
   - from: resources/notices.json
     to: notices.json

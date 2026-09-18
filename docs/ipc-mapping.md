@@ -128,7 +128,12 @@ None of these ever touched Electron beyond the channel itself. They are a servic
 | `chat:browser-target`, `chat:browser-confirm` | Mojo, same service |
 | `automation:classify`, `automation:control`, `automation:steer` | Mojo, same service |
 | `image:edit`, `image:save` | Mojo, same service |
-| `voice:transcribe` | Mojo, same service |
+| `voice:transcribe`, `voice:cancel`, `voice:hardware` | Mojo, same service |
+| `voice:models:status`, `voice:models:download`, `voice:models:cancelDownload`, `voice:models:delete`, `voice:models:verify` | Mojo, same service |
+
+Download progress is pushed to the window as it happens over its own channel (named voice colon models colon
+progress), sent rather than handled — there is nothing for the window to ask back, only something to be told — the
+same way Galaxy and workspace changes already are.
 
 ## What this tells us about the size of the job
 

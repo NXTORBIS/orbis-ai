@@ -1,27 +1,36 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  ACCURATE_MODEL,
   checkAudio,
-  classifyStatus,
   DEFAULT_MODEL,
+  defaultVoiceConfig,
   describeError,
-  fileNameFor,
   isBusy,
   isCapturing,
-  isTransient,
+  isVoiceModel,
   joinTranscripts,
   MAX_AUDIO_BYTES,
-  MAX_DURATION_MS,
+  MIN_AUDIO_BYTES,
   nextState,
   normalizeVoiceConfig,
   pickFormat,
   tidyTranscript,
   VOICE_TARGETS
 } from '../shared/voiceInput.ts'
-import type { VoiceErrorCode, VoiceState } from '../shared/voiceInput'
+import type { VoiceErrorCode, VoiceState } from '../shared/voiceInput.ts'
 
-test('a voice session goes through the states it is supposed to, in order', () => {
+test('every input Orbis actually has a microphone in is a known target, and only those', () => {
+  assert.deepEqual(VOICE_TARGETS, ['chat', 'browser-orion', 'search', 'url-bar'])
+})
+
+test('the default model is a real, locally installable Whisper size — not a Groq model name', () => {
+  assert.equal(isVoiceModel(DEFAULT_MODEL), true)
+  assert.notEqual(DEFAULT_MODEL, 'whisper-large-v3-turbo', 'that was the Groq model name; there is no cloud model any more')
+})
+
+// ---------------------------------------------------------------- the state machine
+
+test('the session walks through requesting permission, listening and processing to being done', () => {
   let state: VoiceState = 'idle'
   state = nextState(state, { type: 'start' })
   assert.equal(state, 'requesting-permission')
@@ -29,157 +38,114 @@ test('a voice session goes through the states it is supposed to, in order', () =
   assert.equal(state, 'initializing')
   state = nextState(state, { type: 'capturing' })
   assert.equal(state, 'listening')
+  assert.equal(isCapturing(state), true)
   state = nextState(state, { type: 'stop' })
   assert.equal(state, 'processing')
+  assert.equal(isCapturing(state), false)
   state = nextState(state, { type: 'transcribed' })
   assert.equal(state, 'completed')
-  assert.equal(nextState(state, { type: 'reset' }), 'idle')
 })
 
-test('"listening" is only ever shown while the microphone is actually open', () => {
-  assert.equal(isCapturing('listening'), true)
-  for (const state of ['idle', 'requesting-permission', 'initializing', 'processing', 'completed', 'error'] as VoiceState[]) {
-    assert.equal(isCapturing(state), false, `${state} is not listening`)
+test('a failure from idle stays idle, so a stray error before recording starts is not shown as a crash', () => {
+  assert.equal(nextState('idle', { type: 'failed', code: 'model-missing' }), 'idle')
+})
+
+test('a failure once something has actually started goes to error, whatever it was doing', () => {
+  for (const state of ['requesting-permission', 'initializing', 'listening', 'processing'] as VoiceState[]) {
+    assert.equal(nextState(state, { type: 'failed', code: 'runtime-error' }), 'error')
   }
-  // Asking for permission and setting up are busy, so a second session cannot start on top of them.
-  assert.equal(isBusy('requesting-permission'), true)
-  assert.equal(isBusy('initializing'), true)
+})
+
+test('an event that makes no sense where the session is leaves it exactly where it was', () => {
+  assert.equal(nextState('idle', { type: 'stop' }), 'idle')
+  assert.equal(nextState('listening', { type: 'permitted' }), 'listening')
+  assert.equal(nextState('completed', { type: 'stop' }), 'completed')
+})
+
+test('reset always goes back to idle, from anywhere', () => {
+  for (const state of ['requesting-permission', 'listening', 'processing', 'completed', 'error'] as VoiceState[]) {
+    assert.equal(nextState(state, { type: 'reset' }), 'idle')
+  }
+})
+
+test('isBusy is true for everything except idle and the two resting states', () => {
+  assert.equal(isBusy('idle'), false)
   assert.equal(isBusy('completed'), false)
+  assert.equal(isBusy('error'), false)
+  for (const state of ['requesting-permission', 'initializing', 'listening', 'processing'] as VoiceState[]) assert.equal(isBusy(state), true)
 })
 
-test('an event that makes no sense where the session is changes nothing', () => {
-  // The usual way this goes wrong: something arrives after a cancel and puts "listening" back on screen.
-  assert.equal(nextState('idle', { type: 'capturing' }), 'idle')
-  assert.equal(nextState('idle', { type: 'transcribed' }), 'idle')
-  assert.equal(nextState('processing', { type: 'capturing' }), 'processing')
-  assert.equal(nextState('listening', { type: 'transcribed' }), 'listening')
-  // And a failure reported for a session that already ended does not resurrect it as an error.
-  assert.equal(nextState('idle', { type: 'failed', code: 'api-error' }), 'idle')
-  assert.equal(nextState('listening', { type: 'failed', code: 'microphone-lost' }), 'error')
-})
+// ---------------------------------------------------------------- errors, all real and all have something to do about them
 
-test('a finished or failed session can start another one', () => {
-  assert.equal(nextState('completed', { type: 'start' }), 'requesting-permission')
-  assert.equal(nextState('error', { type: 'start' }), 'requesting-permission')
-})
-
-test('every failure says what happened and what to do about it', () => {
+test('every error code says something a person can act on, and never blames a cloud API that no longer exists', () => {
   const codes: VoiceErrorCode[] = [
-    'permission-denied',
-    'no-microphone',
-    'microphone-lost',
-    'recording-error',
-    'no-speech',
-    'too-long',
-    'bad-audio',
-    'auth-failed',
-    'rate-limited',
-    'api-error',
-    'network-error',
-    'timeout',
-    'cancelled'
+    'permission-denied', 'no-microphone', 'microphone-lost', 'recording-error', 'no-speech', 'too-long', 'bad-audio',
+    'model-missing', 'model-corrupted', 'unsupported-hardware', 'insufficient-memory', 'runtime-error', 'timeout', 'cancelled'
   ]
   for (const code of codes) {
-    const said = describeError(code)
-    assert.ok(said.length > 15, `${code} says something`)
-    assert.ok(!/undefined|null|\[object/.test(said), `${code} reads like English`)
-  }
-  assert.match(describeError('permission-denied'), /Windows privacy settings/)
-  assert.match(describeError('auth-failed'), /API key/)
-})
-
-test('only the failures worth retrying are treated as worth retrying', () => {
-  for (const code of ['rate-limited', 'api-error', 'network-error', 'timeout'] as VoiceErrorCode[]) assert.equal(isTransient(code), true, code)
-  // Retrying these would only fail again, more times.
-  for (const code of ['permission-denied', 'no-microphone', 'auth-failed', 'bad-audio', 'no-speech', 'cancelled'] as VoiceErrorCode[]) {
-    assert.equal(isTransient(code), false, code)
+    const message = describeError(code)
+    assert.ok(message.length > 10, code)
+    assert.doesNotMatch(message, /api key|groq|cloud/i, `${code} should not mention a cloud provider that no longer exists`)
   }
 })
 
-test('what the service answers with is read as what it means', () => {
-  assert.equal(classifyStatus(401), 'auth-failed')
-  assert.equal(classifyStatus(403), 'auth-failed')
-  assert.equal(classifyStatus(429), 'rate-limited')
-  assert.equal(classifyStatus(413), 'too-long')
-  assert.equal(classifyStatus(400), 'bad-audio')
-  assert.equal(classifyStatus(415), 'bad-audio')
-  assert.equal(classifyStatus(500), 'api-error')
-  assert.equal(classifyStatus(503), 'api-error')
+test('a missing model points at Settings, not at a network problem', () => {
+  assert.match(describeError('model-missing'), /Settings/)
 })
 
-test('a recording is checked before it is sent anywhere', () => {
-  assert.equal(checkAudio(0), 'no-speech', 'a click on and straight back off')
-  assert.equal(checkAudio(50), 'no-speech')
-  assert.equal(checkAudio(MAX_AUDIO_BYTES + 1), 'too-long', 'said before uploading, not after being refused')
-  assert.equal(checkAudio(64_000), null)
+// ---------------------------------------------------------------- what may be sent
+
+test('silence and clicks are refused before anything is run against them', () => {
+  assert.equal(checkAudio(0), 'no-speech')
+  assert.equal(checkAudio(MIN_AUDIO_BYTES - 1), 'no-speech')
+  assert.equal(checkAudio(MIN_AUDIO_BYTES), null)
+  assert.equal(checkAudio(MAX_AUDIO_BYTES), null)
+  assert.equal(checkAudio(MAX_AUDIO_BYTES + 1), 'too-long')
 })
 
-test('the format is one this machine can actually record, and the file says which', () => {
-  assert.equal(pickFormat((t) => t === 'audio/webm;codecs=opus'), 'audio/webm;codecs=opus', 'the best one when it is there')
-  assert.equal(pickFormat((t) => t === 'audio/mp4'), 'audio/mp4', 'and something else when it is not')
-  assert.equal(pickFormat(() => false), null, 'and nothing at all rather than a recorder that throws')
-
-  assert.equal(fileNameFor('audio/webm;codecs=opus'), 'speech.webm')
-  assert.equal(fileNameFor('audio/ogg;codecs=opus'), 'speech.ogg')
-  assert.equal(fileNameFor('audio/mp4'), 'speech.m4a')
-  assert.equal(fileNameFor('audio/mpeg'), 'speech.mp3')
+test('the recording formats offered are tried in a sensible order, and none is chosen if the browser can record none', () => {
+  assert.equal(pickFormat(() => true), 'audio/webm;codecs=opus')
+  assert.equal(pickFormat((type) => type === 'audio/mp4'), 'audio/mp4')
+  assert.equal(pickFormat(() => false), null)
 })
 
-test('a transcript is what was said, not a rewriting of it', () => {
-  assert.equal(tidyTranscript('  Summarize   this page.  '), 'Summarize this page.')
-  // Technical words, addresses and names survive exactly as they came.
-  for (const said of ['Open github.com/searxng/searxng', 'Use whisper-large-v3-turbo', 'Explain TCP versus UDP', 'காலை வணக்கம்', 'नमस्ते दुनिया']) {
-    assert.equal(tidyTranscript(said), said)
-  }
-  // What Whisper returns when it heard nothing is nothing, rather than a word nobody said.
-  for (const silence of ['', '   ', 'you', 'Thank you', 'Thanks for watching', '.']) assert.equal(tidyTranscript(silence), '')
-  assert.equal(tidyTranscript(null), '')
-  assert.equal(tidyTranscript(42), '')
+// ---------------------------------------------------------------- the words that come back
+
+test('a transcript is tidied of stray whitespace, and Whisper\'s own padding for silence becomes nothing', () => {
+  assert.equal(tidyTranscript('  hello   there  '), 'hello there')
+  assert.equal(tidyTranscript('you'), '')
+  assert.equal(tidyTranscript('thank you'), '')
+  assert.equal(tidyTranscript(''), '')
+  assert.equal(tidyTranscript(undefined), '')
+  assert.equal(tidyTranscript('Create a TypeScript function that sorts an array'), 'Create a TypeScript function that sorts an array')
 })
 
-test('a long recording comes back as one thing, with nothing said twice and nothing dropped', () => {
-  // The pieces overlap, because the segments they came from overlap.
-  const joined = joinTranscripts([
-    'The first thing I want to say is that the weather',
-    'the weather today is unusually warm for the time of year',
-    'for the time of year and I think it will rain later'
-  ])
-  assert.equal(joined, 'The first thing I want to say is that the weather today is unusually warm for the time of year and I think it will rain later')
-
-  // Pieces that do not overlap are simply joined, not run together.
-  assert.equal(joinTranscripts(['One two three', 'four five six']), 'One two three four five six')
-  // And nothing earlier is thrown away because a later piece came back empty.
-  assert.equal(joinTranscripts(['Something real', '', '   ']), 'Something real')
+test('long-recording segments are joined without repeating the words at their seams', () => {
+  assert.equal(joinTranscripts(['I want to know how', 'know how quantum entanglement works']), 'I want to know how quantum entanglement works')
+  assert.equal(joinTranscripts(['hello', 'world']), 'hello world')
+  assert.equal(joinTranscripts(['', 'you', 'real words here']), 'real words here')
   assert.equal(joinTranscripts([]), '')
 })
 
-test('the default is the fast model, and the accurate one is available without anything else changing', () => {
-  assert.equal(defaultModel(), 'whisper-large-v3-turbo')
-  assert.equal(ACCURATE_MODEL, 'whisper-large-v3')
-  assert.equal(normalizeVoiceConfig({ model: ACCURATE_MODEL }).model, ACCURATE_MODEL)
-  assert.equal(normalizeVoiceConfig({ model: 'some-other-model' }).model, DEFAULT_MODEL, 'a model that does not exist falls back rather than failing')
+// ---------------------------------------------------------------- settings, made safe
+
+test('a fresh configuration is a real installable model with no device forced and Whisper left to detect the language', () => {
+  const config = defaultVoiceConfig()
+  assert.equal(isVoiceModel(config.model), true)
+  assert.equal(config.language, null)
+  assert.equal(config.deviceId, null)
 })
 
-function defaultModel(): string {
-  return normalizeVoiceConfig({}).model
-}
-
-test('a language is passed through when it is one, and left to the model when it is not', () => {
-  assert.equal(normalizeVoiceConfig({ language: 'ta' }).language, 'ta')
-  assert.equal(normalizeVoiceConfig({ language: 'HI' }).language, 'hi')
-  // Nothing here knows anything about any particular language; an unusable value means "work it out".
-  assert.equal(normalizeVoiceConfig({ language: 'tamil' }).language, null)
-  assert.equal(normalizeVoiceConfig({}).language, null)
+test('a bad or missing stored configuration falls back to the default rather than breaking voice input', () => {
+  assert.deepEqual(normalizeVoiceConfig(null), defaultVoiceConfig())
+  assert.deepEqual(normalizeVoiceConfig({ model: 'whisper-large-v3-turbo' }).model, defaultVoiceConfig().model, 'an old Groq model name is not carried forward')
+  assert.equal(normalizeVoiceConfig({ language: 'not-a-language-code' }).language, null)
+  assert.equal(normalizeVoiceConfig({ language: 'TA' }).language, 'ta')
 })
 
-test('settings that would make voice input unusable are brought back into range', () => {
-  assert.equal(normalizeVoiceConfig({ maxDurationMs: 999_999_999 }).maxDurationMs, MAX_DURATION_MS)
-  assert.equal(normalizeVoiceConfig({ maxDurationMs: 1 }).maxDurationMs, 5_000)
-  assert.equal(normalizeVoiceConfig({ timeoutMs: 'soon' }).timeoutMs, normalizeVoiceConfig({}).timeoutMs)
-  assert.deepEqual(normalizeVoiceConfig(null), normalizeVoiceConfig({}))
-  assert.deepEqual(normalizeVoiceConfig('nonsense'), normalizeVoiceConfig({}))
-})
-
-test('every input that can start a voice session is one of the known ones', () => {
-  assert.deepEqual(VOICE_TARGETS, ['chat', 'browser-orion', 'search', 'url-bar'])
+test('a real model id, language and device id from settings are kept exactly', () => {
+  const config = normalizeVoiceConfig({ model: 'small', language: 'hi', deviceId: 'abc123' })
+  assert.equal(config.model, 'small')
+  assert.equal(config.language, 'hi')
+  assert.equal(config.deviceId, 'abc123')
 })

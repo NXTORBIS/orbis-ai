@@ -7,6 +7,7 @@ import {
   pickFormat
 } from '../../../shared/voiceInput'
 import type { VoiceErrorCode, VoiceInputConfig, VoiceSession, VoiceState, VoiceTarget } from '../../../shared/voiceInput'
+import { toWhisperWav } from './audioToWav'
 
 /**
  * The Orbis voice input service.
@@ -53,8 +54,24 @@ class VoiceInputService {
   private tick: ReturnType<typeof setInterval> | null = null
   private limit: ReturnType<typeof setTimeout> | null = null
   private config: VoiceInputConfig = defaultVoiceConfig()
+  /**
+   * What Settings → Voice input actually has saved, kept up to date for whichever profile is active. Every
+   * microphone in Orbis reads its model, language and device from here unless an input explicitly overrides one —
+   * which is what makes it a setting rather than something each of the five buttons has to be told separately.
+   */
+  private saved: VoiceInputConfig = defaultVoiceConfig()
   /** Set when a session is abandoned, so anything still in flight for it is ignored rather than acted on. */
   private abandoned = new Set<string>()
+
+  constructor() {
+    if (typeof window === 'undefined' || !window.api?.getExperience) return
+    void window.api.getExperience().then((experience) => {
+      this.saved = experience.voice
+    })
+    window.api.onExperienceChanged?.((experience) => {
+      this.saved = experience.voice
+    })
+  }
 
   // ---------------------------------------------------------------- what anyone can ask
 
@@ -112,7 +129,7 @@ class VoiceInputService {
     // A session already running belongs to somebody; take it down cleanly before starting another.
     if (isBusy(this.state)) await this.cancel()
 
-    this.config = { ...defaultVoiceConfig(), ...options.config }
+    this.config = { ...this.saved, ...options.config }
     const session: VoiceSession = {
       sessionId: `v${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`,
       target: options.target,
@@ -212,8 +229,11 @@ class VoiceInputService {
     if (problem) return this.fail(problem, session.sessionId), null
 
     try {
-      const buffer = new Uint8Array(await audio.arrayBuffer())
-      const answer = await window.api.transcribeAudio(buffer, { mimeType: this.mimeType, model: this.config.model, language: this.config.language })
+      // Chromium's own decoder does the format work: whatever codec was recorded in, Whisper is handed the one
+      // shape it actually wants — 16 kHz mono PCM — rather than being sent the raw recording to puzzle out.
+      const wav = await toWhisperWav(audio)
+      if (this.abandoned.has(session.sessionId)) return null
+      const answer = await window.api.transcribeAudio(wav, { model: this.config.model, language: this.config.language })
       // Abandoned while the service was thinking: the words belong to nothing now.
       if (this.abandoned.has(session.sessionId)) return null
       if (!answer.ok) {
@@ -224,9 +244,9 @@ class VoiceInputService {
       this.finish()
       return answer.text
     } catch {
-      // The channel itself failed, which is not something the service said.
+      // Either the browser could not decode the recording, or the channel to Whisper itself failed.
       if (this.abandoned.has(session.sessionId)) return null
-      this.fail('api-error', session.sessionId)
+      this.fail('bad-audio', session.sessionId)
       return null
     }
   }
@@ -290,7 +310,7 @@ class VoiceInputService {
     // A failure reported for a session that has already been abandoned changes nothing.
     if (this.session?.sessionId !== sessionId || this.abandoned.has(sessionId)) return
     this.release()
-    this.error = { code, message: detail && code === 'api-error' ? detail : describeError(code) }
+    this.error = { code, message: detail && code === 'runtime-error' ? detail : describeError(code) }
     this.state = nextState(this.state, { type: 'failed', code })
     this.announce()
   }

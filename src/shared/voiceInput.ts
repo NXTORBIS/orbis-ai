@@ -14,14 +14,19 @@
 
 // ---------------------------------------------------------------- the model
 
-/** Groq's Whisper models. The turbo one is the default because it is fast enough to feel immediate. */
-export const DEFAULT_MODEL = 'whisper-large-v3-turbo'
-/** Slower, and better with accents, quiet speech and unusual words. */
-export const ACCURATE_MODEL = 'whisper-large-v3'
-export const MODELS = [DEFAULT_MODEL, ACCURATE_MODEL] as const
-export type VoiceModel = (typeof MODELS)[number]
+// Which Whisper model is used, what it costs to run, and its file are all in shared/whisperModels.ts — the one
+// catalog, so a size named here is a size the model manager can actually install.
+import { isWhisperModelId, type WhisperModelId } from './whisperModels.ts'
+export type { WhisperModelId as VoiceModel } from './whisperModels.ts'
+export const isVoiceModel = isWhisperModelId
+type VoiceModel = WhisperModelId
 
-export const isVoiceModel = (value: unknown): value is VoiceModel => MODELS.includes(value as VoiceModel)
+/**
+ * The safe universal default, before hardware has been looked at: small enough to install quickly and run on
+ * anything. Once a profile's hardware is known, `recommendedModel()` in shared/whisperModels.ts picks a better one
+ * for it and that becomes the real default — this is only what a fresh config falls back to.
+ */
+export const DEFAULT_MODEL = 'base'
 
 // ---------------------------------------------------------------- where a transcript is allowed to go
 
@@ -63,10 +68,11 @@ export type VoiceErrorCode =
   | 'no-speech'
   | 'too-long'
   | 'bad-audio'
-  | 'auth-failed'
-  | 'rate-limited'
-  | 'api-error'
-  | 'network-error'
+  | 'model-missing'
+  | 'model-corrupted'
+  | 'unsupported-hardware'
+  | 'insufficient-memory'
+  | 'runtime-error'
   | 'timeout'
   | 'cancelled'
 
@@ -134,14 +140,16 @@ export function describeError(code: VoiceErrorCode): string {
       return 'That recording is too long to transcribe. Try it in shorter pieces.'
     case 'bad-audio':
       return "The recording couldn't be read. Try again."
-    case 'auth-failed':
-      return 'Orbis could not sign in to the transcription service. Check your API key in settings.'
-    case 'rate-limited':
-      return 'Too many transcriptions at once. Wait a moment and try again.'
-    case 'api-error':
-      return 'The transcription service could not answer just now.'
-    case 'network-error':
-      return 'Orbis could not reach the transcription service. Check your connection.'
+    case 'model-missing':
+      return 'The speech model is not installed yet. Download it in Settings → Voice input.'
+    case 'model-corrupted':
+      return 'The speech model on disk is damaged. Delete and re-download it in Settings → Voice input.'
+    case 'unsupported-hardware':
+      return "This machine can't run local speech recognition."
+    case 'insufficient-memory':
+      return 'Not enough free memory to run the speech model. Choose a smaller one in Settings → Voice input.'
+    case 'runtime-error':
+      return 'Whisper could not be run just now.'
     case 'timeout':
       return 'Transcribing took too long and was stopped.'
     case 'cancelled':
@@ -149,25 +157,13 @@ export function describeError(code: VoiceErrorCode): string {
   }
 }
 
-/** Which failures are worth trying again on their own, and which are somebody's to fix. */
-export const isTransient = (code: VoiceErrorCode): boolean => code === 'rate-limited' || code === 'api-error' || code === 'network-error' || code === 'timeout'
-
-/** What an HTTP answer from the transcription service means. */
-export function classifyStatus(status: number): VoiceErrorCode {
-  if (status === 401 || status === 403) return 'auth-failed'
-  if (status === 429) return 'rate-limited'
-  if (status === 413) return 'too-long'
-  if (status === 400 || status === 415 || status === 422) return 'bad-audio'
-  return 'api-error'
-}
-
 // ---------------------------------------------------------------- what may be sent
 
 /**
- * The service takes 25 MB. Orbis stops well short of it: a recording that big is minutes of speech, and it is better
- * to say so before uploading than to have it refused afterwards.
+ * Nothing here is a network limit any more — transcription never leaves this machine — but a recording of any size
+ * still has to sit in memory as PCM while it is resampled, and an unbounded one is a mistake, not a feature.
  */
-export const MAX_AUDIO_BYTES = 24 * 1024 * 1024
+export const MAX_AUDIO_BYTES = 200 * 1024 * 1024
 /** Below this there is no speech in it — a click on the microphone and a click back. */
 export const MIN_AUDIO_BYTES = 1200
 /** A session stops itself here rather than recording for ever because somebody forgot it was on. */
@@ -194,13 +190,6 @@ export const AUDIO_FORMATS = ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg
 /** The first format this machine can actually record, or null when it can record none of them. */
 export function pickFormat(supported: (type: string) => boolean): string | null {
   return AUDIO_FORMATS.find((type) => supported(type)) ?? null
-}
-
-/** The file name the service is given, which is how it is told what the audio is. */
-export function fileNameFor(mimeType: string): string {
-  const base = mimeType.split(';')[0].trim().toLowerCase()
-  const extension = base === 'audio/ogg' ? 'ogg' : base === 'audio/mp4' ? 'm4a' : base === 'audio/mpeg' ? 'mp3' : 'webm'
-  return `speech.${extension}`
 }
 
 // ---------------------------------------------------------------- the words that come back

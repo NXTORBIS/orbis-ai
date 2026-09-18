@@ -11,6 +11,7 @@ const SkillsSettings = lazy(() => import('./SkillsSettings'))
 const MemorySettings = lazy(() => import('./MemorySettings'))
 const ControlSwitches = lazy(() => import('./ControlSwitches'))
 const MotionNote = lazy(() => import('./MotionNote'))
+const VoiceSettings = lazy(() => import('./VoiceSettings'))
 
 interface Props {
   settings: Settings
@@ -153,6 +154,16 @@ export default function SettingsModal({ settings, onUpdate, onClose }: Props): R
             </div>
             <Suspense fallback={null}>
               <ControlSwitches />
+            </Suspense>
+          </section>
+
+          <section className="setting">
+            <div className="setting-label">
+              <h3>Voice input</h3>
+              <p>The model every microphone in Orbis uses — the chat composer, the address bar, Orbis Search and Browser Orion alike. Runs entirely on this device once downloaded, with no limit and nothing sent anywhere.</p>
+            </div>
+            <Suspense fallback={null}>
+              <VoiceSettings />
             </Suspense>
           </section>
 

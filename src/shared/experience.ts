@@ -12,6 +12,8 @@ import type { Dashboard } from './dashboards'
 import { normalizeDashboards } from './dashboards.ts'
 import type { StoredTheme } from './themes'
 import { cleanTokens, themeExists, themeName, themeTokens } from './themes.ts'
+import type { VoiceInputConfig } from './voiceInput'
+import { defaultVoiceConfig, normalizeVoiceConfig } from './voiceInput.ts'
 
 export const EXPERIENCE_SCHEMA_VERSION = 1
 
@@ -115,6 +117,8 @@ export interface ExperienceConfig {
   performance: PerformanceConfig
   accessibility: AccessibilityConfig
   notifications: NotificationsConfig
+  /** Which Whisper model, language and microphone every voice-input button in Orbis uses — one setting for all of them. */
+  voice: VoiceInputConfig
   dashboards: Dashboard[]
   /** Which dashboard's widgets are on screen, or null when the widgets below are simply the ones chosen. */
   activeDashboardId: string | null
@@ -140,6 +144,7 @@ export function defaultConfig(): ExperienceConfig {
     performance: { ...DEFAULT_PERFORMANCE },
     accessibility: { ...DEFAULT_ACCESSIBILITY },
     notifications: { quietHours: { ...DEFAULT_NOTIFICATIONS.quietHours }, categories: {} },
+    voice: defaultVoiceConfig(),
     dashboards: [],
     activeDashboardId: null,
     widgets: [],
@@ -235,6 +240,7 @@ export function normalizeConfig(raw: unknown): ExperienceConfig {
       largerText: bool(accessibility.largerText, false),
       alwaysShowFocus: bool(accessibility.alwaysShowFocus, false)
     },
+    voice: normalizeVoiceConfig(r.voice),
     notifications: {
       quietHours: {
         enabled: bool(notifications.quietHours?.enabled, false),
