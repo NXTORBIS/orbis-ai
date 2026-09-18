@@ -40,6 +40,16 @@ export type VoiceTarget = 'chat' | 'browser-orion' | 'search' | 'url-bar'
 
 export const VOICE_TARGETS: VoiceTarget[] = ['chat', 'browser-orion', 'search', 'url-bar']
 
+/**
+ * Push-to-talk: hold Ctrl+Shift+M, speak, let go. It is a shortcut, not a second way of transcribing — it starts and
+ * stops the same session, on the same service, that the microphone buttons do. What it starts is decided by what is
+ * on screen (the browser open, or chat), the same way Ctrl+E already reaches whichever address bar is showing.
+ *
+ * Dispatched on `window`, carrying which target it is speaking for so only the input that started it hears it back —
+ * the same rule the service itself keeps.
+ */
+export const PUSH_TO_TALK_EVENT = 'orbis:push-to-talk'
+
 export interface VoiceSession {
   sessionId: string
   target: VoiceTarget

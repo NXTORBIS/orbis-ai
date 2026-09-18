@@ -69,7 +69,8 @@ const SHORTCUTS: [string, string][] = [
   ['Ctrl + Shift + N', 'Incognito chat'],
   ['Ctrl + B', 'Toggle chat history'],
   ['Ctrl + K', 'Search chats'],
-  ['Ctrl + ,', 'Settings']
+  ['Ctrl + ,', 'Settings'],
+  ['Hold Ctrl + Shift + M', 'Push-to-talk: speak into chat, or into Browser Orion if the browser is open']
 ]
 
 /** Browser shortcuts: they work while the browser or a web page has focus. */

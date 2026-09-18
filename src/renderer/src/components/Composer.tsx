@@ -5,6 +5,7 @@ import { SLASH_COMMANDS } from '../lib/commands'
 import type { ChatQueue, QueuedMessage } from '../lib/messageQueue'
 import type { Attachment } from '../../../shared/types'
 import { MODELS, modelLabel } from '../../../shared/models'
+import { PUSH_TO_TALK_EVENT } from '../../../shared/voiceInput'
 import { useDismiss } from '../lib/useDismiss'
 import { useVoiceInput } from '../hooks/useVoiceInput'
 import { clearComposerStart, peekComposerStart, rememberComposerStart } from '../lib/composerGlide'
@@ -336,6 +337,19 @@ export default function Composer(props: Props): React.JSX.Element {
       props.onNotify(voice.error, 'warn')
     }
   }
+
+  // Push-to-talk (Ctrl+Shift+M): the same toggle above, just started and stopped by the shortcut instead of a click.
+  // Only listened for while chat is the surface it is speaking for — App.tsx decides that from what is on screen.
+  useEffect(() => {
+    const onPushToTalk = (e: Event): void => {
+      const detail = (e as CustomEvent<{ phase: 'start' | 'stop'; target: string }>).detail
+      if (detail?.target !== 'chat') return
+      if (detail.phase === 'start' && !voice.recording) void toggleVoiceInput()
+      else if (detail.phase === 'stop' && voice.recording) void toggleVoiceInput()
+    }
+    window.addEventListener(PUSH_TO_TALK_EVENT, onPushToTalk)
+    return () => window.removeEventListener(PUSH_TO_TALK_EVENT, onPushToTalk)
+  }, [voice.recording])
 
 
   const currentModelLabel = modelLabel(model)

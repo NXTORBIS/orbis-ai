@@ -5,6 +5,7 @@ import { themeBase } from '../../shared/themes'
 import { DEFAULT_MODEL, MODELS, isKnownModel, modelLabel } from '../../shared/models'
 import { AUTO_MODEL } from '../../shared/modelRoute'
 import { automationActive, automationProgress } from '../../shared/automation'
+import { PUSH_TO_TALK_EVENT } from '../../shared/voiceInput'
 import { copyText, newId, titleFromMessage } from './lib/utils'
 import BrowserPanel from './components/BrowserPanel'
 import ChatHeader from './components/ChatHeader'
@@ -1241,6 +1242,43 @@ export default function App(): React.JSX.Element {
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [newChat, openSearch, toggleIncognito, toggleSidebar, welcome])
+
+  // Push-to-talk: hold Ctrl+Shift+M, speak, let go. Not a new transcription engine — it starts and stops the exact
+  // session the chat or Browser Orion microphone button would, and hands the words back to whichever of them it
+  // spoke for. Which one that is follows what is actually on screen, the same way Ctrl+E already does for the
+  // address bar. A held key repeats its keydown many times a second; the ref below is what makes that one press.
+  const pushToTalk = useRef<{ held: boolean; target: 'chat' | 'browser-orion' } | null>(null)
+  useEffect(() => {
+    const start = (e: KeyboardEvent): void => {
+      if (welcome !== 'closed' || !e.ctrlKey || !e.shiftKey || e.key.toLowerCase() !== 'm' || pushToTalk.current) return
+      e.preventDefault()
+      const target = browserStateRef.current.open ? 'browser-orion' : 'chat'
+      pushToTalk.current = { held: true, target }
+      window.dispatchEvent(new CustomEvent(PUSH_TO_TALK_EVENT, { detail: { phase: 'start', target } }))
+    }
+    const stop = (e: KeyboardEvent): void => {
+      // Either key going up ends it — holding one and releasing the other should not leave it recording.
+      if (!pushToTalk.current || (e.key.toLowerCase() !== 'm' && e.key !== 'Control' && e.key !== 'Shift')) return
+      const { target } = pushToTalk.current
+      pushToTalk.current = null
+      window.dispatchEvent(new CustomEvent(PUSH_TO_TALK_EVENT, { detail: { phase: 'stop', target } }))
+    }
+    // Losing focus mid-hold (Alt-Tab, say) must not leave the microphone open with nothing to release it.
+    const release = (): void => {
+      if (!pushToTalk.current) return
+      const { target } = pushToTalk.current
+      pushToTalk.current = null
+      window.dispatchEvent(new CustomEvent(PUSH_TO_TALK_EVENT, { detail: { phase: 'stop', target } }))
+    }
+    window.addEventListener('keydown', start)
+    window.addEventListener('keyup', stop)
+    window.addEventListener('blur', release)
+    return () => {
+      window.removeEventListener('keydown', start)
+      window.removeEventListener('keyup', stop)
+      window.removeEventListener('blur', release)
+    }
+  }, [welcome])
 
   const active = activeId ? conversations.find((c) => c.id === activeId) : undefined
   const current: DraftChat = active ? { model: active.model, incognito: Boolean(active.incognito) } : draft

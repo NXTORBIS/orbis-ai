@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ArrowUp, Ban, Check, ListChecks, LoaderCircle, Mic, Pause, Play, ShieldAlert, Square, X } from 'lucide-react'
 import type { AutomationState, BrowserConfirmation, BrowserStep } from '../../../shared/types'
 import { useVoiceInput } from '../hooks/useVoiceInput'
+import { PUSH_TO_TALK_EVENT } from '../../../shared/voiceInput'
 import { automationActive, automationProgress } from '../../../shared/automation'
 import { OrbisMark } from './Brand'
 
@@ -208,6 +209,19 @@ export default function BrowserOrb(props: BrowserOrbProps): React.JSX.Element {
       props.onNotify?.(voice.error, 'warn')
     }
   }
+
+  // Push-to-talk (Ctrl+Shift+M): the same toggle above, started and stopped by the shortcut. App.tsx decides this is
+  // the assistant it is speaking for only while the browser is the thing on screen.
+  useEffect(() => {
+    const onPushToTalk = (e: Event): void => {
+      const detail = (e as CustomEvent<{ phase: 'start' | 'stop'; target: string }>).detail
+      if (detail?.target !== 'browser-orion') return
+      if (detail.phase === 'start' && !voice.recording) void speak()
+      else if (detail.phase === 'stop' && voice.recording) void speak()
+    }
+    window.addEventListener(PUSH_TO_TALK_EVENT, onPushToTalk)
+    return () => window.removeEventListener(PUSH_TO_TALK_EVENT, onPushToTalk)
+  }, [voice.recording])
 
   const { automation, confirmation, working } = props
   const running = Boolean(working && automation && automationActive(automation))
