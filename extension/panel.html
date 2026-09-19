@@ -15,15 +15,39 @@
       <button id="new" type="button" title="Start a new conversation">New</button>
     </header>
 
-    <main id="messages" aria-live="polite">
-      <p id="empty" class="empty">Ask Orion anything. Everything runs on this computer, with your own key.</p>
-    </main>
+    <nav class="tabs" role="tablist" aria-label="Orbis">
+      <button id="tab-ask" type="button" role="tab" aria-selected="true">Ask</button>
+      <button id="tab-search" type="button" role="tab" aria-selected="false">Search</button>
+    </nav>
 
-    <form id="composer">
-      <textarea id="input" rows="2" placeholder="Ask Orion…" aria-label="Message"></textarea>
-      <button id="send" type="submit">Send</button>
-      <button id="stop" type="button" hidden>Stop</button>
-    </form>
+    <section id="view-ask" class="view" role="tabpanel" aria-labelledby="tab-ask">
+      <main id="messages" aria-live="polite">
+        <p id="empty" class="empty">Ask Orion anything. Everything runs on this computer, with your own key.</p>
+      </main>
+      <form id="composer">
+        <label class="web" title="Orion reads real pages first and tells you which page each claim came from">
+          <input id="web" type="checkbox" /> Search the web
+        </label>
+        <div class="row">
+          <textarea id="input" rows="2" placeholder="Ask Orion…" aria-label="Message"></textarea>
+          <button id="send" type="submit">Send</button>
+          <button id="stop" type="button" hidden>Stop</button>
+        </div>
+      </form>
+    </section>
+
+    <section id="view-search" class="view" role="tabpanel" aria-labelledby="tab-search" hidden>
+      <form id="search-form">
+        <input id="query" type="search" placeholder="Search the web…" aria-label="Search" autocomplete="off" />
+        <button type="submit">Search</button>
+      </form>
+      <main id="results" aria-live="polite">
+        <p id="search-empty" class="empty">Search the web with Orbis. Nothing is sent anywhere but the search itself.</p>
+      </main>
+      <div id="search-actions" hidden>
+        <button id="ask-about" type="button">Ask Orion, with sources</button>
+      </div>
+    </section>
 
     <script type="module" src="panel.js"></script>
   </body>

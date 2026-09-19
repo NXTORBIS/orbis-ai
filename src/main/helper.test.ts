@@ -299,3 +299,106 @@ test('chat:send refuses a missing key and a malformed conversation with words th
       }
     })
   ))
+
+// ---------------------------------------------------------------- Orbis Search, with the whole web faked
+
+const b64url = (text: string): string => Buffer.from(text).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+const bingLink = (url: string): string => `https://www.bing.com/ck/a?!&&p=abc123&u=a1${b64url(url)}&ntb=1`
+const bingPage = (results: { url: string; title: string; snippet: string }[]): string =>
+  `<html><body><ol id="b_results">${results
+    .map((r) => `<li class="b_algo"><div class="b_tpcn"></div><h2><a href="${bingLink(r.url)}" h="ID=SERP">${r.title}</a></h2><div class="b_caption"><p class="b_lineclamp2">${r.snippet}</p></div></li>`)
+    .join('')}</ol></body></html>`
+const article = (title: string, body: string): string =>
+  `<html><head><title>${title}</title><meta property="article:published_time" content="2026-09-10T08:00:00Z"></head><body><article><h1>${title}</h1><p>${body}</p><p>Upgrading takes a single command and most apps need no other changes at all.</p><p>The team thanks everyone who tried the release candidates over the past months.</p></article></body></html>`
+
+/** A fake web: Bing answers with two results, the pages are readable, and Groq streams back `answer`. */
+function fakeWeb(answer = 'React 20 ships a new compiler [1].'): { fetchFn: typeof fetch; requests: string[]; groqBodies: { messages: { role: string; content: string }[] }[] } {
+  const requests: string[] = []
+  const groqBodies: { messages: { role: string; content: string }[] }[] = []
+  const fetchFn = (async (url: string, init?: RequestInit) => {
+    requests.push(String(url))
+    if (String(url).includes('api.groq.com')) {
+      groqBodies.push(JSON.parse(String(init?.body ?? '{}')))
+      return sse(piece(answer), piece('', 'stop'))
+    }
+    if (/bing\.com\/search/.test(String(url))) {
+      return new Response(bingPage([{ url: 'https://react.dev/blog/react-20', title: 'React 20 is out', snippet: 'A new compiler' }, { url: 'https://example.org/react-notes', title: 'React 20 notes', snippet: 'What changed' }]), { status: 200, headers: { 'Content-Type': 'text/html' } })
+    }
+    if (String(url).includes('duckduckgo')) return new Response('<html></html>', { status: 200 })
+    return new Response(article('React 20 is out', 'React 20 ships a new compiler and faster server rendering for every app today.'), { status: 200, headers: { 'Content-Type': 'text/html' } })
+  }) as typeof fetch
+  return { fetchFn, requests, groqBodies }
+}
+
+type Ev = { type: string; content?: string; message?: string; research?: { sources: { url: string }[] } }
+const eventsOf = (reply: Reply): Ev[] => reply.lines.map((l) => (l as { event?: Ev }).event).filter((e): e is Ev => Boolean(e))
+
+test('search:run searches the web through the same provider Electron Orbis uses', () => {
+  const web = fakeWeb()
+  return withServer(createHandlers({ apiKeys: ['k'], fetchFn: web.fetchFn }), async (port) => {
+    const reply = await call(port, { headers: authed, body: rpc('search:run', ['react 20', 'all']) })
+    const outcome = (reply.lines[0] as { result: { query: string; results: { title: string; url: string }[]; problem: string | null } }).result
+    assert.equal(outcome.query, 'react 20')
+    assert.ok(outcome.results.length >= 1, JSON.stringify(outcome).slice(0, 200))
+    assert.ok(outcome.results.some((r) => r.url.startsWith('https://react.dev/')))
+    assert.equal(outcome.problem, null)
+  })
+})
+
+test('search:run with nothing to search for says so instead of searching', () => {
+  const web = fakeWeb()
+  return withServer(createHandlers({ apiKeys: ['k'], fetchFn: web.fetchFn }), async (port) => {
+    const reply = await call(port, { headers: authed, body: rpc('search:run', ['   ', 'all']) })
+    assert.match((reply.lines[0] as { result: { problem: string } }).result.problem, /Nothing was searched for/)
+    assert.equal(web.requests.length, 0, 'no request left this computer')
+  })
+})
+
+test('a search category that cannot be reached says so and does not throw', () => {
+  const web = fakeWeb()
+  return withServer(createHandlers({ apiKeys: ['k'], fetchFn: web.fetchFn }), async (port) => {
+    const reply = await call(port, { headers: authed, body: rpc('search:run', ['cats', 'images']) })
+    assert.ok('result' in (reply.lines[0] as object), 'an answer, not an error: ' + reply.raw.slice(0, 200))
+  })
+})
+
+test('chat:send with web search reads real pages, sends the sources to the panel first, and gives Orion them', () => {
+  const web = fakeWeb()
+  return withServer(createHandlers({ apiKeys: ['k'], fetchFn: web.fetchFn }), async (port) => {
+    const reply = await call(port, { headers: authed, body: rpc('chat:send', [{ model: 'openai/gpt-oss-20b', webSearch: true, messages: [{ role: 'user', content: 'What is new in React 20?' }] }]) })
+    const events = eventsOf(reply)
+    const order = events.map((e) => e.type)
+    assert.ok(order.indexOf('research') !== -1, 'sources were sent: ' + order.join(','))
+    assert.ok(order.indexOf('research') < order.indexOf('delta'), 'the sources arrive before the answer starts')
+    assert.ok(events.find((e) => e.type === 'research')!.research!.sources.some((s) => s.url.includes('react.dev')))
+    assert.equal(events.filter((e) => e.type === 'delta').map((e) => e.content).join(''), 'React 20 ships a new compiler [1].')
+
+    // What Orion was actually given: the question, with the pages read for it beside it.
+    const sent = web.groqBodies[0].messages.at(-1)!.content
+    assert.match(sent, /Question: What is new in React 20\?/)
+    assert.match(sent, /react\.dev/)
+    assert.match(sent, /new compiler/)
+  })
+})
+
+test('chat:send without web search never touches the web', () => {
+  const web = fakeWeb()
+  return withServer(createHandlers({ apiKeys: ['k'], fetchFn: web.fetchFn }), async (port) => {
+    await call(port, { headers: authed, body: rpc('chat:send', [{ model: 'openai/gpt-oss-20b', messages: [{ role: 'user', content: 'Say hello.' }] }]) })
+    assert.ok(web.requests.every((u) => u.includes('api.groq.com')), 'only Orion was contacted: ' + web.requests.join(', '))
+  })
+})
+
+test('when the web returns nothing usable, Orion is still asked, and the person is told there are no sources', () => {
+  const fetchFn = (async (url: string) => {
+    if (String(url).includes('api.groq.com')) return sse(piece('I could not find current sources.'), piece('', 'stop'))
+    return new Response('<html><body></body></html>', { status: 200 })
+  }) as typeof fetch
+  return withServer(createHandlers({ apiKeys: ['k'], fetchFn }), async (port) => {
+    const reply = await call(port, { headers: authed, body: rpc('chat:send', [{ model: 'openai/gpt-oss-20b', webSearch: true, messages: [{ role: 'user', content: 'Something obscure.' }] }]) })
+    const events = eventsOf(reply)
+    assert.ok(!events.some((e) => e.type === 'research'), 'no sources were invented')
+    assert.ok(events.some((e) => e.type === 'status' && /sources/i.test(e.message ?? '')), 'the person is told')
+    assert.ok(events.some((e) => e.type === 'delta'), 'and Orion still answered')
+  })
+})

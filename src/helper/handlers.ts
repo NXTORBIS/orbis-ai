@@ -3,6 +3,11 @@ import { currentModelId, DEFAULT_MODEL, MODELS } from '../shared/models.ts'
 import { resolveModel } from '../shared/modelRoute.ts'
 import { streamChat } from '../main/nim.ts'
 import { generateWithContinuation } from '../main/longGeneration.ts'
+import { runSearch } from '../main/search.ts'
+import { endpointFromEnvironment, SearxngProvider } from '../main/search/specialized.ts'
+import { answerContext, runResearch } from '../main/research.ts'
+import { isSpecialized } from '../shared/searchProviders.ts'
+import type { Research } from '../shared/types'
 import { HelperError } from './server.ts'
 import type { Handler } from './server.ts'
 
@@ -41,6 +46,11 @@ function readMessages(value: unknown): ChatMessage[] {
 }
 
 export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
+  const doFetch = (url: string, init?: RequestInit): Promise<Response> => (deps.fetchFn ?? fetch)(url, init)
+  // Orbis Search is two providers: ordinary web search, and a specialized one for every other category. Neither can
+  // break the other — a category that cannot be reached says so and web search carries on.
+  const specialized = new SearxngProvider({ endpoint: endpointFromEnvironment(), fetchFn: doFetch })
+
   return {
     /** Whether the helper is there and the token works. Says nothing about the person's data. */
     'helper:ping': () => ({ ok: true, version: deps.version ?? 'dev', hasApiKey: deps.apiKeys.length > 0 }),
@@ -48,16 +58,48 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
     /** The models Orion can use, from the one list Electron Orbis uses too, so the two can never disagree. */
     'models:list': () => ({ default: DEFAULT_MODEL, models: MODELS.map((m) => ({ id: m.id, label: m.label, description: m.description })) }),
 
+    /** Orbis Search: the same two providers Electron Orbis uses, for the category the person picked. */
+    'search:run': async ([query, vertical], { signal }) => {
+      const words = typeof query === 'string' ? query.slice(0, 300) : ''
+      const asked = typeof vertical === 'string' ? vertical : 'all'
+      if (isSpecialized(asked as never)) return specialized.search(asked as never, words)
+      return runSearch({ query: words, vertical: 'all', fetchFn: doFetch, signal })
+    },
+    'search:specialized-health': () => specialized.check(),
+
     /**
      * Ask Orion. Streams the same events the Electron window receives (`start`, `delta`, `done`…) and ends with the
      * model that answered. A long request continues past one call's output limit exactly as it does in Electron.
      */
     'chat:send': async ([request], { emit, signal }) => {
-      const req = (request ?? {}) as { model?: unknown; messages?: unknown; systemPrompt?: unknown; reasoningEffort?: unknown }
+      const req = (request ?? {}) as { model?: unknown; messages?: unknown; systemPrompt?: unknown; reasoningEffort?: unknown; webSearch?: unknown }
       if (deps.apiKeys.length === 0) throw new HelperError('no-key', 'The helper has no Groq API key.')
       const messages = readMessages(req.messages)
       const last = messages[messages.length - 1]
       if (last.role !== 'user') throw new HelperError('bad-request', 'The last message must be from the person.')
+
+      // With web search on, Orion answers from real pages, read now, and says which page each claim came from. The
+      // sources go to the panel first, so it can show them while the answer streams.
+      let conversation = messages
+      if (req.webSearch === true) {
+        const research: Research = await runResearch({
+          question: last.content,
+          queries: [last.content.trim().slice(0, 200)],
+          recency: 'any',
+          fetchFn: doFetch,
+          signal,
+          onStatus: (message) => emit({ type: 'status', message })
+        })
+        if (signal.aborted) return { model: null, aborted: true }
+        if (research.sources.length) {
+          emit({ type: 'research', research })
+          const context = answerContext({ research, earlier: undefined, browser: undefined, onScreen: undefined, pageText: null, includePage: false })
+          // Kept inside the person's own message, so the sources sit right next to the question they answer.
+          conversation = [...messages.slice(0, -1), { ...last, content: `${context}\n\nQuestion: ${last.content}` }]
+        } else {
+          emit({ type: 'status', message: `Couldn't get current sources: ${research.problem ?? 'nothing usable was found'}. Answering without them.` })
+        }
+      }
 
       const requested = currentModelId(typeof req.model === 'string' ? req.model : undefined)
       const route = resolveModel(requested, { text: last.content, attachmentChars: 0, turns: messages.length })
@@ -65,7 +107,7 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
       const systemPrompt = typeof req.systemPrompt === 'string' ? req.systemPrompt.slice(0, 20_000) : ''
 
       await generateWithContinuation({
-        messages,
+        messages: conversation,
         emit: (event: StreamEvent) => emit(event),
         signal,
         runSegment: (segmentMessages, segmentEmit) =>
