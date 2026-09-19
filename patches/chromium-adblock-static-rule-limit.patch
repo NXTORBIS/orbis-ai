@@ -1,0 +1,18 @@
+diff --git a/extensions/browser/api/declarative_net_request/utils.cc b/extensions/browser/api/declarative_net_request/utils.cc
+index 6829b53ef9..c3ea67b34d 100644
+--- a/extensions/browser/api/declarative_net_request/utils.cc
++++ b/extensions/browser/api/declarative_net_request/utils.cc
+@@ -371,8 +371,12 @@ std::vector<std::string> GetPublicRulesetIDs(const Extension& extension,
+ }
+ 
+ int GetStaticGuaranteedMinimumRuleCount() {
++  // Orbis: the built-in ad blocker ships its filter lists as static rulesets (well over 100,000 rules). Guaranteeing an
++  // extension the whole profile-wide static limit means those rulesets never draw on the shared global pool, whose
++  // bookkeeping would otherwise have to be rebuilt from preferences on every start.
++  constexpr int kOrbisGuaranteedStaticRules = 300000;
+   return g_static_guaranteed_minimum_for_testing == kInvalidRuleLimit
+-             ? dnr_api::GUARANTEED_MINIMUM_STATIC_RULES
++             ? kOrbisGuaranteedStaticRules
+              : g_static_guaranteed_minimum_for_testing;
+ }
+ 

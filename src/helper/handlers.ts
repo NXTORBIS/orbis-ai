@@ -8,6 +8,7 @@ import { endpointFromEnvironment, SearxngProvider } from '../main/search/special
 import { answerContext, runResearch } from '../main/research.ts'
 import { isSpecialized } from '../shared/searchProviders.ts'
 import type { Research } from '../shared/types'
+import { createAdblockHandlers } from './adblock/service.ts'
 import { HelperError } from './server.ts'
 import type { Handler } from './server.ts'
 
@@ -26,6 +27,8 @@ export interface HandlerDeps {
   /** Overridable so tests never reach the network. */
   fetchFn?: typeof fetch
   version?: string
+  /** Where the extension and the filter lists live, when the helper manages the ad blocker's lists. */
+  adblock?: { extensionDir: string; listsDir: string; bundledDir: string }
 }
 
 const ROLES = new Set(['user', 'assistant'])
@@ -52,6 +55,7 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
   const specialized = new SearxngProvider({ endpoint: endpointFromEnvironment(), fetchFn: doFetch })
 
   return {
+    ...(deps.adblock ? createAdblockHandlers({ ...deps.adblock, fetchFn: doFetch }) : {}),
     /** Whether the helper is there and the token works. Says nothing about the person's data. */
     'helper:ping': () => ({ ok: true, version: deps.version ?? 'dev', hasApiKey: deps.apiKeys.length > 0 }),
 

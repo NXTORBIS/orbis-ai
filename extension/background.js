@@ -6,3 +6,6 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.runtime.onStartup.addListener(() => {
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {})
 })
+
+// Orbis ad blocking (network rules, page filtering, popups, statistics). Built by scripts/build-extension.mjs.
+import './adblock.js'

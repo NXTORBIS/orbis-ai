@@ -214,6 +214,24 @@ export class AdBlockCore {
     this.onStats?.(webContentsId)
   }
 
+  /**
+   * Records a request that something else already decided on. The Chromium build blocks in Chromium's own network layer
+   * (declarativeNetRequest) and reports each real match here, so the counts and the list of recent blocks are the same
+   * ones the Electron build kept, and come only from requests that really were blocked.
+   */
+  recordExternal(webContentsId: number, entry: Omit<AdBlockEntry, 'at'>): void {
+    this.record(webContentsId, entry)
+  }
+
+  /** The per-page results, so a host that gets suspended (a Chromium extension's worker) can keep them. */
+  exportPages(): [number, unknown][] {
+    return [...this.pages.entries()].map(([id, page]) => [id, page])
+  }
+
+  importPages(entries: [number, unknown][]): void {
+    for (const [id, page] of entries) if (!this.pages.has(id)) this.pages.set(id, page as PageStats)
+  }
+
   /** Network filtering for one request, before it leaves the device. */
   onRequest(d: RequestDetails): RequestDecision {
     const active = this.active()

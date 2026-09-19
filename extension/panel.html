@@ -18,6 +18,7 @@
     <nav class="tabs" role="tablist" aria-label="Orbis">
       <button id="tab-ask" type="button" role="tab" aria-selected="true">Ask</button>
       <button id="tab-search" type="button" role="tab" aria-selected="false">Search</button>
+      <button id="tab-block" type="button" role="tab" aria-selected="false">Blocking</button>
     </nav>
 
     <section id="view-ask" class="view" role="tabpanel" aria-labelledby="tab-ask">
@@ -49,6 +50,11 @@
       </div>
     </section>
 
+    <section id="view-block" class="view" role="tabpanel" aria-labelledby="tab-block" hidden>
+      <main id="block" aria-live="polite"></main>
+    </section>
+
     <script type="module" src="panel.js"></script>
+    <script type="module" src="panel-adblock.js"></script>
   </body>
 </html>

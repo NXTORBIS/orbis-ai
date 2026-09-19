@@ -223,15 +223,17 @@ let lastQuery = ''
 let searching = null
 
 function showTab(name) {
-  const search = name === 'search'
-  $('view-ask').hidden = search
-  $('view-search').hidden = !search
-  $('tab-ask').setAttribute('aria-selected', String(!search))
-  $('tab-search').setAttribute('aria-selected', String(search))
-  ;(search ? $('query') : input).focus()
+  for (const id of ['ask', 'search', 'block']) {
+    $(`view-${id}`).hidden = id !== name
+    $(`tab-${id}`).setAttribute('aria-selected', String(id === name))
+  }
+  if (name === 'block') document.dispatchEvent(new CustomEvent('orbis:blocking-shown'))
+  else if (name === 'search') $('query').focus()
+  else input.focus()
 }
 $('tab-ask').addEventListener('click', () => showTab('ask'))
 $('tab-search').addEventListener('click', () => showTab('search'))
+$('tab-block').addEventListener('click', () => showTab('block'))
 
 function renderResults(outcome) {
   results.replaceChildren()

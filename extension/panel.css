@@ -76,3 +76,18 @@ main { flex: 1; overflow-y: auto; padding: 14px 12px; display: flex; flex-direct
 .took { color: var(--muted); font-size: 12px; }
 #search-actions { padding: 10px 12px; border-top: 1px solid var(--line); background: var(--panel); }
 #search-actions button { width: 100%; }
+
+/* Blocking */
+#block { gap: 12px; }
+#block section { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; }
+#block h3 { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+#block .row { display: flex; align-items: center; gap: 8px; }
+#block .row .grow { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+#block .big { font-size: 22px; font-weight: 600; color: var(--accent); }
+#block .muted { color: var(--muted); font-size: 12px; }
+#block .seg button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+#block .entry { display: flex; gap: 8px; align-items: baseline; font-size: 12px; }
+#block .entry .u { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+#block .entry button { padding: 1px 8px; font-size: 11px; }
+#block label.check { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+#block input[type="checkbox"] { accent-color: var(--accent); }
