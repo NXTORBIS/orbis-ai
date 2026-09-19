@@ -249,6 +249,16 @@ test('helper:ping reports the helper is up and whether it has a key, never the k
     assert.doesNotMatch(reply.raw, /gsk_secret/)
   }))
 
+test('models:list gives the panel the same model list Electron Orbis uses, and no retired model', () =>
+  withServer(createHandlers({ apiKeys: [] }), async (port) => {
+    const reply = await call(port, { headers: authed, body: rpc('models:list') })
+    const result = (reply.lines[0] as { result: { default: string; models: { id: string; label: string }[] } }).result
+    assert.ok(result.models.length >= 5)
+    assert.ok(result.models.some((m) => m.id === result.default), 'the default is one of the models offered')
+    assert.ok(!result.models.some((m) => /compound/.test(m.id)), 'a model Groq retired is not offered')
+    assert.ok(result.models.every((m) => m.label.startsWith('ORION')))
+  }))
+
 test('chat:send streams Orion’s answer back and says which model gave it', () =>
   withServer(createHandlers({ apiKeys: ['k'], fetchFn: (async () => sse(piece('Hel'), piece('lo'), piece('', 'stop'))) as typeof fetch }), async (port) => {
     const reply = await call(port, { headers: authed, body: rpc('chat:send', [{ model: 'openai/gpt-oss-20b', messages: [{ role: 'user', content: 'Say hello.' }] }]) })

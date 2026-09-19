@@ -9,3 +9,6 @@ dist/
 # Filter lists are downloaded at runtime, never shipped: they are published under licences of their own.
 resources/adblock/lists/
 resources/adblock/manifest.json
+
+# The Orbis helper writes its port and secret token here on every start. Never commit it.
+extension/helper.json

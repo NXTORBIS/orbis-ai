@@ -1,5 +1,5 @@
 import type { ChatMessage, ReasoningEffort, StreamEvent } from '../shared/types'
-import { currentModelId } from '../shared/models.ts'
+import { currentModelId, DEFAULT_MODEL, MODELS } from '../shared/models.ts'
 import { resolveModel } from '../shared/modelRoute.ts'
 import { streamChat } from '../main/nim.ts'
 import { generateWithContinuation } from '../main/longGeneration.ts'
@@ -44,6 +44,9 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
   return {
     /** Whether the helper is there and the token works. Says nothing about the person's data. */
     'helper:ping': () => ({ ok: true, version: deps.version ?? 'dev', hasApiKey: deps.apiKeys.length > 0 }),
+
+    /** The models Orion can use, from the one list Electron Orbis uses too, so the two can never disagree. */
+    'models:list': () => ({ default: DEFAULT_MODEL, models: MODELS.map((m) => ({ id: m.id, label: m.label, description: m.description })) }),
 
     /**
      * Ask Orion. Streams the same events the Electron window receives (`start`, `delta`, `done`…) and ends with the

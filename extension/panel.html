@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Orbis</title>
+    <link rel="stylesheet" href="panel.css" />
+  </head>
+  <body>
+    <header>
+      <span class="mark" aria-hidden="true"></span>
+      <strong>Orbis</strong>
+      <span id="status" class="status" role="status" aria-live="polite">Connecting…</span>
+      <select id="model" aria-label="Model"></select>
+      <button id="new" type="button" title="Start a new conversation">New</button>
+    </header>
+
+    <main id="messages" aria-live="polite">
+      <p id="empty" class="empty">Ask Orion anything. Everything runs on this computer, with your own key.</p>
+    </main>
+
+    <form id="composer">
+      <textarea id="input" rows="2" placeholder="Ask Orion…" aria-label="Message"></textarea>
+      <button id="send" type="submit">Send</button>
+      <button id="stop" type="button" hidden>Stop</button>
+    </form>
+
+    <script type="module" src="panel.js"></script>
+  </body>
+</html>
