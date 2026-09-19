@@ -20,6 +20,7 @@ import type {
 } from '../shared/types'
 import { IMAGE_GEN_STATUS } from '../shared/types'
 import { streamChat, testApiKey } from './nim'
+import { generateWithContinuation } from './longGeneration.ts'
 import { buildSystemPrompt } from './prompt'
 import { UpdateManager } from './update/manager'
 import { electronPlatform, imageSize } from './platformElectron'
@@ -722,16 +723,26 @@ ${summaryBlock(summary)}`
           messages = compression.recent
         }
       }
-      await streamChat({
-        apiKeys: GROQ_API_KEYS,
-        model: request.model,
+      // A message asking for something long — "write 10,000 words" — can take more than one call to a model that
+      // stops well short of that on its own. generateWithContinuation notices only a real output-limit stop
+      // (never a normal finish, a refusal or an error) and, when more was actually asked for, carries on
+      // automatically: the person sees one continuous answer, never a prompt to say "continue".
+      await generateWithContinuation({
         messages,
-        systemPrompt,
-        reasoningEffort: request.reasoningEffort ?? settings.reasoningEffort,
-        autoFallback: settings.autoFallback,
-        signal: controller.signal,
         emit,
-        fetchFn: (url, init) => net.fetch(url, init)
+        signal: controller.signal,
+        runSegment: (segmentMessages, segmentEmit) =>
+          streamChat({
+            apiKeys: GROQ_API_KEYS,
+            model: request.model,
+            messages: segmentMessages,
+            systemPrompt,
+            reasoningEffort: request.reasoningEffort ?? settings.reasoningEffort,
+            autoFallback: settings.autoFallback,
+            signal: controller.signal,
+            emit: segmentEmit,
+            fetchFn: (url, init) => net.fetch(url, init)
+          })
       })
     } finally {
       activeRequests.delete(request.requestId)
