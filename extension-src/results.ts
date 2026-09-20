@@ -19,7 +19,9 @@ const LABEL: Record<SearchVertical, string> = { orion: 'Orion', all: 'All', imag
 interface Result { title: string; url: string; snippet?: string; site: string; thumbnail?: string; image?: string; durationSec?: number }
 interface Source { n: number; title: string; url: string; domain: string; published?: string }
 
-const params = new URLSearchParams(location.search)
+// The query travels in the fragment, not in a query string: the browser's first navigation to an extension page fails when the address
+// has a query string (found by testing this build), and a fragment loads reliably. A query string is still read, for old links.
+const params = new URLSearchParams(location.hash ? location.hash.slice(1) : location.search)
 const query = (params.get('q') ?? '').trim()
 const wanted = params.get('in') as SearchVertical | null
 const vertical: SearchVertical = wanted && VERTICALS.includes(wanted) ? wanted : 'all'
@@ -38,7 +40,7 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, t
   if (text !== undefined) node.textContent = text
   return node
 }
-const pageUrl = (q: string, v: SearchVertical): string => `results.html?q=${encodeURIComponent(q)}${v === 'all' ? '' : `&in=${v}`}`
+const pageUrl = (q: string, v: SearchVertical): string => `results.html#q=${encodeURIComponent(q)}${v === 'all' ? '' : `&in=${v}`}`
 
 // A bang asks for a particular site (`!g cats`): that is the person's explicit choice, so it goes there.
 const bang = readBang(query)
@@ -211,5 +213,8 @@ function sourcesList(sources: Source[]): Node[] {
   }
   return out
 }
+
+// The address only changes after the #, so the page does not reload by itself: a new search or another vertical asks for a fresh page.
+window.addEventListener('hashchange', () => location.reload())
 
 void search()

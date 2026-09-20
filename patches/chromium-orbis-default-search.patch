@@ -1,5 +1,5 @@
 diff --git a/components/search_engines/template_url_prepopulate_data.cc b/components/search_engines/template_url_prepopulate_data.cc
-index 85b0c96053..c023e9a091 100644
+index 85b0c96053..633ad657d8 100644
 --- a/components/search_engines/template_url_prepopulate_data.cc
 +++ b/components/search_engines/template_url_prepopulate_data.cc
 @@ -41,6 +41,25 @@ inline std::unique_ptr<TemplateURLData> PrepopulatedEngineToTemplateURLData(
@@ -15,7 +15,7 @@ index 85b0c96053..c023e9a091 100644
 +  auto data = std::make_unique<TemplateURLData>();
 +  data->SetShortName(u"Orbis Search");
 +  data->SetKeyword(u"orbis");
-+  data->SetURL("chrome-extension://gcaebckmlhiagfagcplpjmibhkhjljab/results.html?q={searchTerms}");
++  data->SetURL("chrome-extension://gcaebckmlhiagfagcplpjmibhkhjljab/results.html#q={searchTerms}");
 +  // Suggestions are the search engine's own, as in every browser; only the words typed are sent.
 +  data->suggestions_url = "https://suggestqueries.google.com/complete/search?client=firefox&q={searchTerms}";
 +  data->favicon_url = GURL("chrome-extension://gcaebckmlhiagfagcplpjmibhkhjljab/assets/icon-32.png");
