@@ -5344,19 +5344,6 @@ kbd {
   }
 }
 
-/* Docked beside the chat the panel is narrow: keep only the essentials in its header. */
-/* The browser's one compact toolbar: chat,
-navigation,
-tabs {
-  display: flex;
-  flex-shrink: 0;
-  align-items: center;
-  gap: 4px;
-  height: 38px;
-  padding: 0 6px;
-  border-bottom: 1px solid var(--line-strong);
-}
-
 .b-icon {
   display: grid;
   flex-shrink: 0;
