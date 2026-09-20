@@ -1,0 +1,36 @@
+diff --git a/chrome/browser/resources/webui_toolbar/webui_toolbar.css b/chrome/browser/resources/webui_toolbar/webui_toolbar.css
+index db884da574..b271e7b4b8 100644
+--- a/chrome/browser/resources/webui_toolbar/webui_toolbar.css
++++ b/chrome/browser/resources/webui_toolbar/webui_toolbar.css
+@@ -14,8 +14,31 @@ body {
+   height: 100%;
+   margin: 0;
+   overflow: hidden;
++  background: var(--orbis-bg);
++  color: var(--orbis-text);
++  font-family: system-ui, 'Segoe UI', sans-serif;
+ }
+ 
+ toolbar-app[webui-toolbar-fully-enabled] {
+   width: max-content;
+ }
++
++/* Orbis: the toolbar takes the Orbis look (colours and shape) instead of the stock browser theme. */
++:root {
++  --orbis-bg: #0b0e14;
++  --orbis-panel: #131824;
++  --orbis-line: #232b3b;
++  --orbis-text: #e8ecf4;
++  --orbis-muted: #8b95a8;
++  --orbis-accent: #3fd8ff;
++  --color-location-bar-background: var(--orbis-panel);
++  --color-location-bar-background-hovered: #1a2133;
++  --color-omnibox-results-background: #1a2133;
++  --color-omnibox-results-background-hovered: #1f283b;
++  --color-location-bar-border: var(--orbis-line);
++  --color-location-bar-border-on-mismatch: var(--orbis-line);
++  --cr-focus-outline-color: var(--orbis-accent);
++  --color-omnibox-text: var(--orbis-text);
++  --color-toolbar-button-icon: var(--orbis-muted);
++  --color-toolbar-button-icon-hovered: var(--orbis-accent);
++}
