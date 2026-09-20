@@ -4,6 +4,9 @@ import { registerPageCapabilities } from '../browserControl/pageCapabilities.ts'
 import { registerCaptchaCapabilities } from '../browserControl/captchaCapabilities.ts'
 import type { PageHandle } from '../pageHandle.ts'
 import { CdpBrowser } from './cdpPage.ts'
+import type { CdpConnection } from './cdp.ts'
+import { launchChromium } from './launch.ts'
+import type { LaunchOptions } from './launch.ts'
 import { registerChromiumCapabilities } from './chromiumCapabilities.ts'
 import { registerMoreChromiumCapabilities } from './chromiumCapabilities2.ts'
 import { ChromiumPages } from './chromiumPages.ts'
@@ -19,8 +22,9 @@ import { ExtensionBridge } from './extensionBridge.ts'
  */
 
 export interface ChromiumControlOptions {
-  /** The browser's remote-debugging port (loopback only). */
-  port: number
+  /** The browser's remote-debugging port (loopback only), or an open connection to it (a pipe, for a browser Orbis started). */
+  port?: number
+  connection?: CdpConnection
   /** The Orbis extension's id (fixed by its manifest key). */
   extensionId: string
   /** Where saved pages and PDFs go (default: the Downloads folder). */
@@ -52,9 +56,11 @@ export async function startChromiumControl(o: ChromiumControlOptions): Promise<C
   const end = Date.now() + (o.waitMs ?? 30_000)
   let browser: CdpBrowser | undefined
   let last: unknown
+  if (o.connection) browser = await CdpBrowser.fromConnection(o.connection)
+  else if (o.port === undefined) throw new Error('Give a debugging port or an open connection to the browser.')
   while (!browser) {
     try {
-      browser = await CdpBrowser.connect(o.port)
+      browser = await CdpBrowser.connect(o.port!)
     } catch (err) {
       last = err
       if (Date.now() > end) throw new Error(`Orbis's Chromium is not reachable on port ${o.port}: ${err instanceof Error ? err.message : String(last)}`)
@@ -90,5 +96,33 @@ export async function startChromiumControl(o: ChromiumControlOptions): Promise<C
       pages.stop()
       browser!.close()
     }
+  }
+}
+
+export interface LaunchOrbisChromiumOptions extends Omit<ChromiumControlOptions, 'port' | 'connection' | 'onClosed'>, LaunchOptions {
+  onClosed?: () => void
+}
+
+/**
+ * Starts the Orbis browser and the control layer on it, as the app does: the browser is a child process reached over a pipe. When
+ * the browser exits, `onClosed` is called; `stop()` closes it.
+ */
+export async function launchOrbisChromium(o: LaunchOrbisChromiumOptions): Promise<ChromiumControl & { process: import('node:child_process').ChildProcess; exited: Promise<number | null> }> {
+  const launched = launchChromium(o)
+  try {
+    const service = await startChromiumControl({ ...o, connection: launched.connection, onClosed: undefined })
+    void launched.exited.then(() => o.onClosed?.())
+    return {
+      ...service,
+      process: launched.process,
+      exited: launched.exited,
+      stop: () => {
+        service.stop()
+        launched.process.kill()
+      }
+    }
+  } catch (err) {
+    launched.process.kill()
+    throw err
   }
 }

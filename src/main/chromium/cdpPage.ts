@@ -299,7 +299,12 @@ export class CdpBrowser {
   /** Connects to a Chromium started with `--remote-debugging-port`. Only this computer's loopback address is used. */
   static async connect(port: number): Promise<CdpBrowser> {
     const version = (await (await fetch(`http://127.0.0.1:${port}/json/version`)).json()) as { webSocketDebuggerUrl: string }
-    const browser = new CdpBrowser(await CdpConnection.open(version.webSocketDebuggerUrl))
+    return CdpBrowser.fromConnection(await CdpConnection.open(version.webSocketDebuggerUrl))
+  }
+
+  /** Starts following the browser on a connection that is already open (a debugging port's, or the pipe of a browser Orbis started). */
+  static async fromConnection(conn: CdpConnection): Promise<CdpBrowser> {
+    const browser = new CdpBrowser(conn)
     await browser.conn.send('Target.setDiscoverTargets', { discover: true })
     const { targetInfos } = await browser.conn.send<{ targetInfos: TargetInfo[] }>('Target.getTargets')
     for (const info of targetInfos) if (info.type === 'page') await browser.adopt(info)
