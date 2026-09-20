@@ -1,5 +1,5 @@
-import { app, BrowserWindow, clipboard, components, dialog, ipcMain, Menu, nativeTheme, net, Notification, session, shell, webContents } from 'electron'
-import type { MenuItemConstructorOptions, OpenDialogOptions, TitleBarOverlayOptions, WebContents, IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeTheme, net, Notification, shell } from 'electron'
+import type { MenuItemConstructorOptions, OpenDialogOptions, TitleBarOverlayOptions, IpcMainInvokeEvent } from 'electron'
 import { existsSync, promises as fs } from 'node:fs'
 import os from 'node:os'
 import { spawn } from 'node:child_process'
@@ -12,7 +12,6 @@ import type {
   Conversation,
   ImageEditRequest,
   ImageEditResult,
-  AdBlockSettings,
   PickedFiles,
   Research,
   SettingsUpdate,
@@ -24,15 +23,19 @@ import { generateWithContinuation } from './longGeneration.ts'
 import { buildSystemPrompt } from './prompt'
 import { UpdateManager } from './update/manager'
 import { electronPlatform, imageSize } from './platformElectron'
-import { asPageHandle } from './pageHandle'
+import type { PageHandle } from './pageHandle'
 import { runSearch } from './search'
 import { endpointFromEnvironment, SearxngProvider } from './search/specialized'
 import { isSpecialized } from '../shared/searchProviders'
 import type { Platform } from './platform'
 import { answerContext, runResearch } from './research'
-import { OrbisAdBlock } from './adblock/electron'
-import { BrowserIntegration } from './browserIntegration'
+import { adblockCommand } from './adblockChat'
 import { BrowserLibrary } from './browserLibrary'
+import { registerLibraryIpc } from './libraryIpc'
+import { mirrorChromiumInto } from './browserMirror'
+import { closedBrowserState, followChromiumTabs } from './browserState'
+import type { ChromiumControl } from './chromium/service'
+import type { BrowserManagerOptions } from './chromium/browserManager'
 import { findSource, latestResearch, sourceNotes } from '../shared/research'
 import { detectImageGenRequest, generateImage, rewriteImagePrompt } from './imagegen'
 import { classifyAutomationMessage, classifyIntent } from './intent'
@@ -47,8 +50,6 @@ import { completeDraft, generateTitle, generateWorkflowTitle, predictQueries, su
 import { WorkflowTitler } from './workflows/titler'
 import { parseWebSuggestions } from '../shared/omnibox'
 import { fetchFavicon } from './favicon'
-import { ExtensionsManager } from './extensions/manager'
-import type { ReportedTab, WindowRequest } from './extensions/bridge'
 import { setupBrowserControl } from './browserControl/setup'
 import { BrowserManager } from './chromium/browserManager'
 import { readSignals } from './browserControl/captchaCapabilities'
@@ -62,14 +63,13 @@ import { SearchSessionStore } from './knowledge/searchSessions'
 import { GalaxyService } from './knowledge/galaxyService'
 import { projectsMentioned } from '../shared/workspaces'
 import type { GalaxyNodeType, GalaxyView } from '../shared/galaxy'
-import type { WorkflowStep } from '../shared/workflows'
+import type { Workflow, WorkflowStep } from '../shared/workflows'
 import { memoryFromRequest, memoryPromptBlock, parseMemoryCommand } from '../shared/memory'
 import type { MemoryCategory } from '../shared/memory'
 import type { SkillEdits } from './skillManager'
 import { planNextStep } from './stepPlanner'
 import { WidgetFeeds } from './widgetFeeds'
 import { WorkflowStore } from './workflows/store'
-import { WorkflowRecorder } from './workflows/recorder'
 import { ChromiumRecorder } from './workflows/chromiumRecorder'
 import type { RecorderCore } from './workflows/recorderCore'
 import { WorkflowEngine } from './workflows/engine'
@@ -134,19 +134,27 @@ function researchNote(messages: ChatMessage[], browser: ChatRequest['browser']):
   return `"${research.question.slice(0, 160)}"; sources: ${sources}${shown ? `. The open browser page is source [${shown.source.n}].` : ''}`
 }
 
-/** The visible text of the Orbis browser tab showing `url`, for questions about the open page. */
+/** The visible text of the Orbis browser (Chromium) tab showing `url`, for questions about the open page. */
 async function readOpenPage(url: string): Promise<string | null> {
-  const tab = webContents.getAllWebContents().find((wc) => !wc.isDestroyed() && wc.getType() === 'webview' && wc.getURL() === url)
-  if (!tab) return null
+  const service = chromiumBrowser?.current
+  const tab = service?.agent.windowControl.state.tabs.find((t) => t.url === url && t.webContentsId !== undefined)
+  const page = tab?.webContentsId !== undefined ? service?.agent.findPage(tab.webContentsId) : null
+  if (!page) return null
   try {
     const text = await Promise.race([
-      tab.executeJavaScript('document.body ? document.body.innerText : ""') as Promise<unknown>,
+      page.executeJavaScript('document.body ? document.body.innerText : ""') as Promise<unknown>,
       new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timed out')), 4000))
     ])
     return String(text).replace(/\n{3,}/g, '\n\n').trim().slice(0, 7000) || null
   } catch {
     return null
   }
+}
+
+/** The active tab of the Orbis browser (Chromium) when it is running and showing a web page. */
+function openBrowserPage(): { url: string; title: string } | undefined {
+  const tab = chromiumBrowser?.current?.agent.windowControl.state.tabs.find((t) => t.active && /^https?:\/\//i.test(t.url))
+  return tab ? { url: tab.url, title: tab.title } : undefined
 }
 
 /** The conversation's most recent browser automation, which "continue" and "keep going" refer to. */
@@ -156,19 +164,14 @@ function latestAutomation(messages: ChatMessage[]): AutomationState | undefined 
 
 /** Speech to text: one Whisper model manager and runtime for every microphone in Orbis; set up when the app is ready. */
 let whisper: WhisperService | null = null
-/** Ad blocking for the in-app browser session; set up when the app is ready. */
-let adblock: OrbisAdBlock | null = null
-/** Browser shortcuts, context menu, history, bookmarks, downloads and permissions; set up when the app is ready. */
-let browser: BrowserIntegration | null = null
+/** The app's own browsing library: new-tab shortcuts, address-bar memory, reading list, and a copy of Chromium's history, bookmarks and downloads. */
 let browserLibrary: BrowserLibrary | null = null
 /** The Orbis Browser Control Layer: every browser capability, for the window, Orion and automations. */
 let browserControl: ReturnType<typeof setupBrowserControl> | null = null
 /** Orbis's browser: Chromium, started when the browser is first needed. Null only when no Chromium build is installed. */
 let chromiumBrowser: BrowserManager | null = null
-/** Pop-out browser windows that are open. */
-const popouts = new Set<BrowserWindow>()
 /** Records workflows from what the user does (only while recording). */
-let workflowRecorder: (RecorderCore & { attach?(contents: Electron.WebContents): void }) | null = null
+let workflowRecorder: RecorderCore | null = null
 /** Memory for the profile in use; created once the profiles are known. */
 let memory: MemoryStore | null = null
 /** The workflow engine, once it exists, so chat can schedule workflows in words. */
@@ -177,39 +180,15 @@ let workflowEngine: WorkflowEngine | null = null
 let galaxyForChat: GalaxyService | null = null
 /** The secrets vault, once it exists, for the Chromium side panel (which never receives a value). */
 let vaultForPanel: SecretsDeps | null = null
+/** What the Chromium side panel's Workflows tab needs beyond the engine: remembered secrets and Orion drafts. */
+let workflowExtrasForPanel: { store: WorkflowStore; draft(instruction: string, current: Workflow | null): Promise<Workflow> } | null = null
 let workspacesForChat: WorkspacesStore | null = null
 
 /** Instructions the user adds to a running automation, per chat request. */
 const automationInstructions = new Map<string, string[]>()
 
-/** Chat requests waiting for the window to report which browser tab Orbis should control. */
-const browserTargets = new Map<string, (webContentsId: number | null) => void>()
 /** Browser actions waiting for the user's approval, keyed by request and confirmation. */
 const browserConfirmations = new Map<string, (approved: boolean) => void>()
-
-/** Asks the window to open its browser and hand over the active tab. Only a browser tab inside that same window is accepted. */
-function requestBrowserTarget(requestId: string, sender: WebContents, emit: (event: StreamEvent) => void, signal: AbortSignal): Promise<WebContents> {
-  return new Promise((resolve, reject) => {
-    const finish = (result: WebContents | Error): void => {
-      clearTimeout(timer)
-      signal.removeEventListener('abort', onAbort)
-      browserTargets.delete(requestId)
-      if (result instanceof Error) reject(result)
-      else resolve(result)
-    }
-    const onAbort = (): void => finish(new Error('Stopped.'))
-    const timer = setTimeout(() => finish(new Error("The browser didn't open in time. Try again.")), 20_000)
-    signal.addEventListener('abort', onAbort)
-    browserTargets.set(requestId, (id) => {
-      const target = id === null ? undefined : webContents.fromId(id)
-      if (!target || target.isDestroyed() || target.getType() !== 'webview' || target.hostWebContents !== sender) {
-        return finish(new Error("Orbis couldn't find the browser tab. Open the browser and try again."))
-      }
-      finish(target)
-    })
-    emit({ type: 'browser-target' })
-  })
-}
 
 /** Shows an approval card in the chat and waits for the user's answer. */
 function requestBrowserConfirmation(
@@ -233,6 +212,34 @@ function requestBrowserConfirmation(
     })
     emit({ type: 'confirm', confirmation })
   })
+}
+
+/** Said when a browser task needs Orbis's browser but no Chromium build is installed. */
+const NO_BROWSER = 'The Orbis browser (Chromium) is not installed on this computer.'
+
+/** Orbis's browser, told each time it (re)starts so the app can follow its tabs. */
+class FollowedBrowser extends BrowserManager {
+  private followed: ChromiumControl | null = null
+  private readonly onService: (service: ChromiumControl) => void
+  private readonly onStopped: () => void
+  constructor(options: BrowserManagerOptions, onService: (service: ChromiumControl) => void, onStopped: () => void) {
+    super(options)
+    this.onService = onService
+    this.onStopped = onStopped
+  }
+  override async stop(): Promise<void> {
+    await super.stop()
+    this.followed = null
+    this.onStopped()
+  }
+  override async ensure(): Promise<ChromiumControl> {
+    const service = await super.ensure()
+    if (service !== this.followed) {
+      this.followed = service
+      this.onService(service)
+    }
+    return service
+  }
 }
 
 const MAX_ATTACHMENT_BYTES = 200_000
@@ -321,37 +328,6 @@ function isHttpUrl(url: string): boolean {
   }
 }
 
-/** A separate Orbis browser window for a page: same session, so sign-ins carry over; no preload or Node access. */
-function popOutBrowser(url: string): BrowserWindow | null {
-  if (typeof url !== 'string' || !isHttpUrl(url)) return null
-  const popout = new BrowserWindow({
-    width: 1100,
-    height: 800,
-    title: 'Orbis Browser',
-    autoHideMenuBar: true,
-    backgroundColor: '#111215',
-    webPreferences: { partition: 'persist:browser', contextIsolation: true, nodeIntegration: false, sandbox: true }
-  })
-  popout.setMenuBarVisibility(false)
-  popout.webContents.setWindowOpenHandler(({ url: next }) => {
-    if (isHttpUrl(next)) void popout.webContents.loadURL(next)
-    return { action: 'deny' }
-  })
-  void popout.loadURL(url)
-  popouts.add(popout)
-  popout.once('closed', () => popouts.delete(popout))
-  return popout
-}
-
-/** Clears browsing data: cookies, storage and cache, history, address-bar searches and site permissions (bookmarks and downloads stay). */
-async function clearBrowsingData(): Promise<void> {
-  const browserSession = session.fromPartition('persist:browser')
-  await Promise.all([browserSession.clearStorageData(), browserSession.clearCache()])
-  browserLibrary?.clearHistory()
-  browserLibrary?.clearSearches()
-  browserLibrary?.forgetPermissions()
-}
-
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1200,
@@ -382,38 +358,6 @@ function createWindow(): BrowserWindow {
   // The window's real fullscreen state, however it changes (F11, Esc, the OS).
   win.on('enter-full-screen', () => win.webContents.send('window:fullscreen-changed', true))
   win.on('leave-full-screen', () => win.webContents.send('window:fullscreen-changed', false))
-
-  // The in-app browser gets no preload or Node access, and only loads web URLs.
-  win.webContents.on('will-attach-webview', (event, webPreferences, params) => {
-    delete webPreferences.preload
-    webPreferences.nodeIntegration = false
-    webPreferences.contextIsolation = true
-    webPreferences.sandbox = true
-    // Only the browser's own sessions: the saved one, each profile's own, and the in-memory one private tabs share.
-    const ownSession = params.partition === 'persist:browser' || params.partition === 'orbis-private' || /^persist:profile-[A-Za-z0-9_-]{1,80}$/.test(params.partition ?? '')
-    if (!ownSession) event.preventDefault()
-    // Web pages, "view page source" of a web page, and pages of installed extensions (their options pages and popups).
-    const extensionPage = params.partition === 'persist:browser' && /^chrome-extension:\/\/[a-p]{32}\//.test(params.src)
-    if (!isHttpUrl(params.src) && !/^view-source:https?:\/\//i.test(params.src) && !extensionPage) event.preventDefault()
-  })
-  browser?.attachWindow(win)
-  // Links that would open a new window open as a tab in the in-app browser instead (Ctrl/middle-click in the background,
-  // Shift+click in a new window); ad popups and ad redirects are stopped by ad blocking.
-  win.webContents.on('did-attach-webview', (_event, contents) => {
-    browser?.attachGuest(contents)
-    browserControl?.trackGuest(contents)
-    workflowRecorder?.attach?.(contents)
-    const openTab = (url: string, details: { disposition: string; features: string }): void => {
-      if (!isHttpUrl(url) || win.webContents.isDestroyed()) return
-      if (browser) browser.openFromPage(url, details)
-      else win.webContents.send('browser:new-tab', url, { background: false })
-    }
-    if (adblock) return adblock.attachWebview(contents, openTab)
-    contents.setWindowOpenHandler(({ url, disposition, features }) => {
-      openTab(url, { disposition, features })
-      return { action: 'deny' }
-    })
-  })
 
   // Links always open in the system browser, never inside the app window.
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -505,6 +449,8 @@ function registerIpc(): void {
        * "Run Morning briefing every Friday at 9am": the workflow's own schedule is set, in Orbis's one scheduler, and the
        * reply says when it will next run — read back from the scheduler, not assumed.
        */
+      // The page open in the Orbis browser (Chromium), so "summarise this page" and "click the first result" have something to refer to.
+      const openPage = request.browser ?? (request.ask ? undefined : openBrowserPage())
       const scheduling = last?.role === 'user' && !request.ask && workflowEngine ? scheduleRequest(last.content) : null
       if (scheduling && workflowEngine) {
         const reply = (text: string): void => {
@@ -607,7 +553,7 @@ function registerIpc(): void {
       // Picture requests go to the image generator and browser tasks to the browser agent, however they're worded.
       if (last?.role === 'user' && request.images !== false) {
         // Recognising pictures and browser tasks is an extra: if it fails, the message still gets a normal reply.
-        const detected = await detectIntent(messages, request.browser).catch((err: unknown): ChatIntent | null => {
+        const detected = await detectIntent(messages, openPage).catch((err: unknown): ChatIntent | null => {
           console.error('[chat] intent detection failed', err)
           const phrase = detectImageGenRequest(last.content)
           return phrase ? { kind: 'image', prompt: phrase } : null
@@ -655,16 +601,13 @@ function registerIpc(): void {
               signal: controller.signal,
               emit,
               // The browser is Chromium: the agent works in Chromium's active tab, and follows the person when they switch tabs.
-              getTarget: chromiumBrowser
-                ? async () => (await chromiumBrowser!.ensure()).agent.getTarget()
-                : async () => asPageHandle(await requestBrowserTarget(request.requestId, sender, emit, controller.signal)),
-              findPage: (id) => {
-                if (chromiumBrowser) return chromiumBrowser.current?.agent.findPage(id) ?? null
-                const found = webContents.fromId(id)
-                return found && !found.isDestroyed() ? asPageHandle(found) : null
+              getTarget: async () => {
+                if (!chromiumBrowser) throw new Error(NO_BROWSER)
+                return (await chromiumBrowser.ensure()).agent.getTarget()
               },
+              findPage: (id) => chromiumBrowser?.current?.agent.findPage(id) ?? null,
               control: browserControl?.control,
-              windowControl: chromiumBrowser ? { get state() { return chromiumBrowser?.current?.agent.windowControl.state ?? null } } : browserControl?.windowControl,
+              windowControl: { get state() { return chromiumBrowser?.current?.agent.windowControl.state ?? null } },
               confirm: (confirmation) => requestBrowserConfirmation(request.requestId, confirmation, emit, controller.signal)
             })
           } finally {
@@ -691,9 +634,11 @@ function registerIpc(): void {
 
       if (last?.role === 'user' && blocking) {
         // Questions and commands about ad blocking act on, and are answered from, the real blocking engine.
-        const facts = adblock
-          ? await adblock.command(blocking.action, blocking.target, request.browser?.url)
-          : "Ad blocking hasn't started yet, so there is no blocking information. Say so; don't guess."
+        // The blocker is the Orbis extension in Chromium: it answers only while the Orbis browser is open.
+        const service = chromiumBrowser?.current
+        const facts = service
+          ? await adblockCommand(service.bridge, blocking.action, blocking.target, openPage?.url).catch((err: unknown) => `The Orbis browser's ad blocker could not be reached (${err instanceof Error ? err.message : String(err)}). Say so; don't guess.`)
+          : "The Orbis browser isn't open, so there is no live blocking information. Ad blocking settings are in the browser's ad blocker; open the browser and ask again. Say so; don't guess."
         messages = [...messages.slice(0, -1), { ...last, content: `${facts}\n\nQuestion: ${last.content}` }]
       } else if (last?.role === 'user') {
         // Current information comes from real web research: when the question needs it, or always with web search on.
@@ -714,11 +659,11 @@ function registerIpc(): void {
         }
         // Follow-ups keep the research context: the page open in the browser (and which source it is) and the earlier sources.
         const previous = messages.slice(0, -1)
-        const shown = request.browser ? findSource(previous, request.browser.url) : undefined
-        const includePage = Boolean(request.browser && (plan?.usePage || shown))
+        const shown = openPage ? findSource(previous, openPage.url) : undefined
+        const includePage = Boolean(openPage && (plan?.usePage || shown))
         const earlier = shown?.research ?? (includePage || research ? latestResearch(previous) : latestResearch(previous, 4))
-        const pageText = includePage && request.browser ? await readOpenPage(request.browser.url) : null
-        const context = answerContext({ research, earlier, browser: request.browser, onScreen: shown?.source.n, pageText, includePage })
+        const pageText = includePage && openPage ? await readOpenPage(openPage.url) : null
+        const context = answerContext({ research, earlier, browser: openPage, onScreen: shown?.source.n, pageText, includePage })
         // Answers that draw only on earlier research can still cite it, so its sources come along (marked as earlier research).
         if (!research?.sources.length && earlier && (includePage || plan)) emit({ type: 'research', research: { ...earlier, reused: true } })
         // Kept inside the user message so the sources sit right next to the question they answer.
@@ -764,10 +709,6 @@ ${summaryBlock(summary)}`
 
   ipcMain.handle('chat:abort', (_event, requestId: string) => {
     activeRequests.get(requestId)?.abort()
-  })
-
-  ipcMain.handle('chat:browser-target', (_event, requestId: unknown, webContentsId: unknown) => {
-    if (typeof requestId === 'string') browserTargets.get(requestId)?.(typeof webContentsId === 'number' ? webContentsId : null)
   })
 
   ipcMain.handle('chat:browser-confirm', (_event, requestId: unknown, confirmationId: unknown, approved: unknown) => {
@@ -863,12 +804,8 @@ ${summaryBlock(summary)}`
     return predictQueries(input, GROQ_API_KEYS, (url, init) => net.fetch(url, init))
   })
 
-  ipcMain.handle('browser:popout', (_event, url: string) => Boolean(popOutBrowser(url)))
   // Orbis's browser is Chromium. Everything that used to open the in-app browser (the address bar, links, research sources, "open the
   // browser") opens it here instead: an address as a page, anything else as an Orbis Search.
-  ipcMain.on('chromium:available', (event) => {
-    event.returnValue = chromiumBrowser !== null
-  })
   ipcMain.handle('chromium:open', async (_event, input: unknown, options: unknown) => {
     if (!chromiumBrowser) return { ok: false, detail: 'The Orbis browser (Chromium) is not installed on this computer.' }
     const o = (options && typeof options === 'object' ? options : {}) as { newTab?: unknown; more?: unknown }
@@ -881,8 +818,6 @@ ${summaryBlock(summary)}`
       return { ok: false, detail: `The Orbis browser could not start: ${err instanceof Error ? err.message : String(err)}` }
     }
   })
-  // Whether pages that use protected media (Spotify, Netflix and the like) can play here.
-  ipcMain.handle('browser:protected-media', () => protectedMedia)
 
   /**
    * Orbis Search. The words are sent to the web and nothing else: no identifier, no history, nothing about who asked.
@@ -953,17 +888,6 @@ ${summaryBlock(summary)}`
     void fs.rm(join(app.getPath('userData'), leftover), { force: true }).catch(() => undefined)
   }
 
-  ipcMain.handle('adblock:state', () => adblock?.state() ?? null)
-  ipcMain.handle('adblock:settings', (_event, update: unknown) => (adblock && update && typeof update === 'object' ? adblock.updateSettings(update as Partial<AdBlockSettings>) : null))
-  ipcMain.handle('adblock:site', (_event, host: unknown, allowed: unknown) => (adblock && typeof host === 'string' ? adblock.setSite(host, allowed === true) : null))
-  ipcMain.handle('adblock:allow-resource', (_event, url: unknown) => (adblock && typeof url === 'string' ? adblock.allowResource(url) : null))
-  ipcMain.handle('adblock:remove-exception', (_event, kind: unknown, value: unknown) =>
-    adblock && (kind === 'site' || kind === 'resource') && typeof value === 'string' ? adblock.removeException(kind, value) : null
-  )
-  ipcMain.handle('adblock:report', (_event, webContentsId: unknown) => (adblock && typeof webContentsId === 'number' ? adblock.core.report(webContentsId) : null))
-  ipcMain.handle('adblock:update', () => adblock?.updateFilters() ?? null)
-  ipcMain.handle('adblock:rollback', () => adblock?.rollback() ?? null)
-
   // New-tab shortcuts. The site's real icon is fetched in the background and saved with the shortcut.
   const loadShortcutIcon = (id: string): void => {
     const shortcut = browserLibrary?.shortcut(id)
@@ -989,13 +913,6 @@ ${summaryBlock(summary)}`
   ipcMain.handle('shortcuts:refresh-icon', (_event, id: unknown) => {
     if (typeof id === 'string') loadShortcutIcon(id)
   })
-
-  ipcMain.handle('browser:clear-private', async () => {
-    const privateSession = session.fromPartition('orbis-private')
-    await Promise.all([privateSession.clearStorageData(), privateSession.clearCache(), privateSession.clearAuthCache()])
-  })
-
-  ipcMain.handle('browser:clear-data', () => clearBrowsingData())
 
   ipcMain.handle('image:edit', async (_event, request: ImageEditRequest): Promise<ImageEditResult> => {
     const instruction = String(request?.instruction ?? '').trim().slice(0, 2000)
@@ -1136,9 +1053,6 @@ let updatesQuitting = false
  */
 const UPDATE_ENDPOINT = 'https://updates.nxtorbis.ai/manifest'
 
-/** Whether protected media (Widevine) is available, so Orbis can say so plainly instead of a page failing silently. */
-let protectedMedia: { ready: boolean; status: unknown } = { ready: false, status: 'not checked yet' }
-
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
@@ -1150,16 +1064,6 @@ if (!app.requestSingleInstanceLock()) {
 
   void app.whenReady().then(async () => {
     app.setAppUserModelId('ai.nxtorbis.desktop')
-
-    // Protected media (Spotify, Netflix and the rest) plays through a content decryption module that is fetched and
-    // kept up to date separately from Orbis. Waiting for it here means a tab never opens before it is ready; if it
-    // cannot be had — no connection on first run, say — Orbis carries on without it and only DRM pages are affected.
-    try {
-      await components.whenReady()
-      protectedMedia = { ready: true, status: components.status() }
-    } catch (err) {
-      protectedMedia = { ready: false, status: err instanceof Error ? err.message : String(err) }
-    }
 
     // Create menu like ChatGPT
     const menu = Menu.buildFromTemplate([
@@ -1210,104 +1114,35 @@ if (!app.requestSingleInstanceLock()) {
     )
 
     registerIpc()
-    // Ad blocking wires the browser session before any browser tab exists; its lists load in the background.
-    adblock = new OrbisAdBlock({
-      dataDir: join(app.getPath('userData'), 'adblock'),
-      bundledDir: app.isPackaged ? join(process.resourcesPath, 'adblock') : join(app.getAppPath(), 'resources', 'adblock'),
-      appPath: app.getAppPath(),
-      session: session.fromPartition('persist:browser'),
-      fetchFn: (url, init) => net.fetch(url, init),
-      emit: (event) => {
-        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('adblock:event', event)
-      }
-    })
-    void adblock.start().catch((err: unknown) => console.error('[adblock] failed to start', err))
+    // The app's own browsing library (new-tab shortcuts, address-bar memory, reading list, pictures of pages); Chromium's
+    // history, bookmarks and downloads are copied into it on demand.
     browserLibrary = new BrowserLibrary(app.getPath('userData'))
     await browserLibrary.load()
-    browser = new BrowserIntegration({
-      getWindow: () => mainWindow,
-      session: session.fromPartition('persist:browser'),
-      library: browserLibrary,
-      popOut: (url) => void popOutBrowser(url)
-    })
-    browser.setupSession()
-    // Private tabs (Ctrl+Shift+N in the browser) share one in-memory session: downloads and permission prompts work,
-    // ads are blocked, and nothing is written to disk or remembered.
-    const privateSession = session.fromPartition('orbis-private')
-    browser.setupSession(privateSession)
-    adblock.attachSession(privateSession)
-    browser.registerIpc()
+    registerLibraryIpc(browserLibrary, () => mainWindow, () => chromiumBrowser?.current ?? null)
 
-
-    // Chrome Web Store extensions in the browser session. Requests extensions make of Orbis's tabs and toolbar are
-    // carried out by the window, which answers with the affected tab's id.
-    const windowRequests = new Map<string, (result: number | null) => void>()
-    ipcMain.on('extensions:window-answer', (_event, requestId: unknown, result: unknown) => {
-      if (typeof requestId === 'string') windowRequests.get(requestId)?.(typeof result === 'number' ? result : null)
-    })
-    const requestWindow = (request: WindowRequest): Promise<number | null> =>
-      new Promise((resolve) => {
-        if (!mainWindow || mainWindow.isDestroyed()) return resolve(null)
-        const requestId = crypto.randomUUID()
-        const timer = setTimeout(() => finish(null), 10_000)
-        const finish = (result: number | null): void => {
-          clearTimeout(timer)
-          windowRequests.delete(requestId)
-          resolve(result)
-        }
-        windowRequests.set(requestId, finish)
-        mainWindow.webContents.send('extensions:window-request', { requestId, request })
-      })
-    const extensions = new ExtensionsManager({
-      session: session.fromPartition('persist:browser'),
-      getWindow: () => mainWindow,
-      send: (channel, ...args) => {
-        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, ...args)
-      },
-      requestWindow
-    })
-    browser.setExtensionMenu((context) => extensions.menuItems(context))
-    void extensions.start().catch((err: unknown) => console.error('[extensions] failed to start', err))
-    ipcMain.handle('extensions:list', () => extensions.list())
-    ipcMain.handle('extensions:set-enabled', (_event, id: unknown, enabled: unknown) => (typeof id === 'string' ? extensions.setEnabled(id, enabled === true) : undefined))
-    ipcMain.handle('extensions:set-pinned', (_event, id: unknown, pinned: unknown) => (typeof id === 'string' ? extensions.setPinned(id, pinned === true) : undefined))
-    ipcMain.handle('extensions:remove', (_event, id: unknown) => (typeof id === 'string' ? extensions.remove(id) : undefined))
-    ipcMain.handle('extensions:update', async () => {
-      const { before, after } = await extensions.update()
-      return { updated: Object.keys(after).filter((id) => before[id] && before[id] !== after[id]).length }
-    })
-    ipcMain.handle('extensions:click-action', (_event, id: unknown) => (typeof id === 'string' ? extensions.clickAction(id) : { popup: null }))
-    ipcMain.on('extensions:prompt-answer', (_event, requestId: unknown, allow: unknown) => {
-      if (typeof requestId === 'string') extensions.answer(requestId, allow === true)
-    })
-    ipcMain.on('extensions:report-tabs', (_event, tabs: unknown) => {
-      if (!Array.isArray(tabs)) return
-      const valid = tabs.filter((t): t is ReportedTab => Boolean(t) && typeof t.id === 'number' && typeof t.index === 'number' && typeof t.url === 'string' && typeof t.title === 'string')
-      extensions.updateTabs(valid)
-    })
-
-    const libraryForControl = browserLibrary
-    const integrationForControl = browser
     browserControl = setupBrowserControl({
       getWindow: () => mainWindow,
-      popOut: popOutBrowser,
-      popouts: () => [...popouts],
       store,
       onSettingsChanged: (settings) => {
         nativeTheme.themeSource = settings.theme
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('settings:changed', settings)
       },
-      library: libraryForControl,
-      integration: integrationForControl,
-      extensions,
-      openExtensionPopup: async (id) => void (await requestWindow({ kind: 'open-popup', extensionId: id })),
-      adblock: () => adblock,
-      session: session.fromPartition('persist:browser'),
-      clearBrowsingData,
-      sendShortcut: (action, index) => {
-        if (!mainWindow || mainWindow.isDestroyed()) return false
-        mainWindow.webContents.send('browser:shortcut', index ? { action, index } : { action })
-        return true
+      browser: {
+        open: async (input) => {
+          if (!chromiumBrowser) return { ok: false, detail: NO_BROWSER }
+          try {
+            return await chromiumBrowser.open(input.slice(0, 2000), { newTab: true })
+          } catch (err) {
+            return { ok: false, detail: `The Orbis browser could not start: ${err instanceof Error ? err.message : String(err)}` }
+          }
+        },
+        close: async () => void (await chromiumBrowser?.stop()),
+        isOpen: () => Boolean(chromiumBrowser?.current)
+      },
+      resolvePage: (ctx) => {
+        const service = chromiumBrowser?.current
+        if (!service) throw new Error('The Orbis browser is not open. Open it first (browser.open).')
+        return service.pages.resolve(ctx)
       }
     })
 
@@ -1317,7 +1152,7 @@ if (!app.requestSingleInstanceLock()) {
     {
       const chromeExe = [process.env.ORBIS_CHROMIUM, app.isPackaged ? join(process.resourcesPath, 'chromium', 'chrome.exe') : 'C:/chromium/src/out/Default/chrome.exe'].find((p): p is string => Boolean(p) && existsSync(p as string))
       if (chromeExe) {
-        chromiumBrowser = new BrowserManager({
+        chromiumBrowser = new FollowedBrowser({
           chrome: chromeExe,
           extensionSource: app.isPackaged ? join(process.resourcesPath, 'extension') : join(app.getAppPath(), 'extension'),
           dataDir: join(app.getPath('userData'), 'chromium'),
@@ -1327,12 +1162,23 @@ if (!app.requestSingleInstanceLock()) {
           adblockListsDir: join(app.getPath('userData'), 'adblock'),
           personalDir: () => app.getPath('userData'),
           secrets: () => vaultForPanel,
-          workflows: () => (workflowEngine ? { engine: workflowEngine, recorder: workflowRecorder ?? undefined } : null),
+          workflows: () => (workflowEngine ? { engine: workflowEngine, recorder: workflowRecorder ?? undefined, ...(workflowExtrasForPanel ?? {}) } : null),
           galaxy: () => galaxyForChat,
           control: browserControl?.control,
           saveDir: app.getPath('downloads'),
-          clipboard: { readText: () => clipboard.readText(), hasImage: async () => (await clipboard.read().catch(() => [])).some((item) => item.types.includes('image/png')) }
-        })
+          clipboard: { readText: () => clipboard.readText(), hasImage: async () => (await clipboard.read().catch(() => [])).some((item) => item.types.includes('image/png')) },
+          onClosed: () => browserControl?.windowControl.setState(closedBrowserState())
+        }, (service) => {
+          // Whenever the browser starts: the control layer's tab state follows its real tabs, and the app's copy of its history,
+          // bookmarks and downloads is refreshed (at most once every few seconds) whenever those tabs change.
+          let mirrored = 0
+          const refreshMirror = (): void => {
+            if (!browserLibrary || Date.now() - mirrored < 3000) return
+            mirrored = Date.now()
+            void mirrorChromiumInto(browserLibrary, service).catch(() => undefined)
+          }
+          void followChromiumTabs(service, browserControl!.windowControl, refreshMirror).catch((err: unknown) => console.error('[browser] could not follow tabs', err))
+        }, () => browserControl?.windowControl.setState(closedBrowserState()))
         app.on('before-quit', () => void chromiumBrowser?.stop())
         profilesStore.onChange(() => void chromiumBrowser?.profileMayHaveChanged())
       }
@@ -1357,12 +1203,15 @@ if (!app.requestSingleInstanceLock()) {
     const fetchForOrion = (url: string, init?: RequestInit): Promise<Response> => net.fetch(url, init)
     // Workflows, and the learned skills built on them, belong to the profile that made them.
     const workflowStore = new WorkflowStore(app.getPath('userData'), platform().secrets, (await profilesStore.active()).id)
-    workflowRecorder = chromiumBrowser ? new ChromiumRecorder({ getChromium: () => chromiumBrowser!.ensure(), emit: (state) => sendToWindow('workflows:recording', state) }) : new WorkflowRecorder({ getWindow: () => mainWindow, windowControl: browserControl.windowControl, library: libraryForControl, emit: (state) => sendToWindow('workflows:recording', state) })
+    workflowRecorder = new ChromiumRecorder({
+      getChromium: () => (chromiumBrowser ? chromiumBrowser.ensure() : Promise.reject(new Error(NO_BROWSER))),
+      emit: (state) => sendToWindow('workflows:recording', state)
+    })
     const workflows = new WorkflowEngine({
       control: browserControl.control,
       windowControl: browserControl.windowControl,
       store: workflowStore,
-      library: libraryForControl,
+      library: browserLibrary!,
       ask: (request, signal) => askOrion(request, GROQ_API_KEYS, fetchForOrion, signal),
       send: sendToWindow,
       notify: (title, body) => {
@@ -1392,6 +1241,7 @@ if (!app.requestSingleInstanceLock()) {
       draft: (instruction, current) => draftWorkflow(instruction, current, browserControl!.control.list(), GROQ_API_KEYS, fetchForOrion, () => crypto.randomUUID()),
       regenerateTitle: (workflowId) => workflowTitler.regenerate(workflowId)
     })
+    workflowExtrasForPanel = { store: workflowStore, draft: (instruction, current) => draftWorkflow(instruction, current, browserControl!.control.list(), GROQ_API_KEYS, fetchForOrion, () => crypto.randomUUID()) }
     void workflows.start().catch((err: unknown) => console.error('[workflows] failed to start', err))
     profilesStore.onChange(() => {
       void profilesStore
@@ -1450,25 +1300,16 @@ if (!app.requestSingleInstanceLock()) {
     })
     updates.on('changed', (status) => mainWindow?.webContents.send('update:changed', status))
     void updates.start().catch((err: unknown) => console.error('[updates] failed to start', err))
-    const preparedSessions = new Set<string>()
-    /** Wires a profile's session the same way the first one is wired: ad blocking, downloads, permissions, new windows. */
+    /** Points the app at a profile's own data. The browser follows the profile through its own data folder (see BrowserManager). */
     const useProfile = async (profile: Profile): Promise<Profile> => {
-      const partition = profilesStore.partition(profile.id)
-      const profileSession = session.fromPartition(partition)
-      if (!preparedSessions.has(partition)) {
-        preparedSessions.add(partition)
-        browser?.setupSession(profileSession)
-        adblock?.attachSession(profileSession)
-      }
       await browserLibrary?.useDirectory(profilesStore.dataDir(profile.id))
-      await extensions.useSession(profileSession).catch((err: unknown) => console.error('[profiles] extensions did not follow', err))
-      sendToWindow('profiles:changed', { profile, partition })
+      sendToWindow('profiles:changed', { profile })
       return profile
     }
-    const switchProfile = async (id: string): Promise<{ profile: Profile; partition: string }> => {
+    const switchProfile = async (id: string): Promise<{ profile: Profile }> => {
       const profile = await profilesStore.setActive(id)
       await useProfile(profile)
-      return { profile, partition: profilesStore.partition(profile.id) }
+      return { profile }
     }
     const startingProfile = await profilesStore.active()
     if (startingProfile.id !== 'default') await useProfile(startingProfile).catch((err: unknown) => console.error('[profiles] could not start in the last profile', err))
@@ -1588,12 +1429,11 @@ if (!app.requestSingleInstanceLock()) {
     let skillsForRuns: SkillManager | null = null
     const stepProfile = async (): Promise<string> => (await profilesStore.active()).id
 
-    /** The active tab's page, for reading signals from. Null when the browser is closed or the tab has no page. */
-    const activePage = (target?: { tabId?: string; webContentsId?: number }): WebContents | null => {
+    /** The active tab's page in the Orbis browser, for reading signals from. Null when the browser is closed or the tab has no page. */
+    const activePage = (target?: { tabId?: string; webContentsId?: number }): PageHandle | null => {
       const state = browserControl?.windowControl.state
       const id = target?.webContentsId ?? (target?.tabId ? state?.tabs.find((t) => t.id === target.tabId)?.webContentsId : state?.tabs.find((t) => t.active)?.webContentsId)
-      const contents = typeof id === 'number' ? webContents.fromId(id) : null
-      return contents && !contents.isDestroyed() ? contents : null
+      return typeof id === 'number' ? (chromiumBrowser?.current?.agent.findPage(id) ?? null) : null
     }
 
     const makeStepRun = (id: string, profileId: string, goal: string): StepRun =>
@@ -1610,7 +1450,7 @@ if (!app.requestSingleInstanceLock()) {
           signals: async (target) => {
             const wc = activePage(target)
             // No page is not a challenge. Saying otherwise would stop runs for the wrong reason.
-            return wc ? readSignals(asPageHandle(wc)) : { url: '' }
+            return wc ? readSignals(wc) : { url: '' }
           },
           observe: async () => {
             const result = await browserControl!.control.execute(
@@ -1851,15 +1691,17 @@ if (!app.requestSingleInstanceLock()) {
           workflows: flows.map((w) => ({ id: w.id, name: w.name, createdAt: w.createdAt, updatedAt: w.updatedAt, calls: callsIn(w.steps), archived: w.status === 'archived' })),
           workspaces: spaces.map((w) => ({ id: w.id, name: w.name, createdAt: w.createdAt, updatedAt: w.updatedAt, tabs: w.tabs.map((t) => ({ url: t.url, title: t.title })), ...(w.project ? { project: w.project } : {}) })),
           whiteboards: boards.map((b) => ({ id: b.id, name: b.name, createdAt: b.createdAt, updatedAt: b.updatedAt })),
-          bookmarks: (libraryForControl?.snapshot().bookmarks ?? []).map((b) => ({ url: b.url, title: b.title, addedAt: b.addedAt }))
+          bookmarks: (browserLibrary!?.snapshot().bookmarks ?? []).map((b) => ({ url: b.url, title: b.title, addedAt: b.addedAt }))
         }
       }
     })
     galaxy.onChange(() => sendToWindow('galaxy:changed'))
     galaxyForChat = galaxy
+    // The Chromium side panel keeps a Galaxy selection through the same stores the window does.
+    Object.assign(galaxy, { notes: notesStore, whiteboard: whiteboardStore, workspaces: workspacesStore })
     workspacesForChat = workspacesStore
     for (const source of [memory, searchSessions, notesStore, tasksStore, workspacesStore, whiteboardStore]) source?.onChange(() => galaxy.invalidate())
-    libraryForControl?.addListener(() => galaxy.invalidate())
+    browserLibrary!?.addListener(() => galaxy.invalidate())
     profilesStore.onChange(() => {
       void stepProfile().then((id) => galaxy.useProfile(id))
     })
@@ -1935,7 +1777,7 @@ if (!app.requestSingleInstanceLock()) {
       imageSize,
       userData: app.getPath('userData'),
       // Only watched while Orbis itself is in front, so copying elsewhere costs nothing.
-      isActive: () => Boolean(mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused()) || [...popouts].some((w) => !w.isDestroyed() && w.isFocused()),
+      isActive: () => Boolean(mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused()),
       context: () => {
         const tab = browserControl?.windowControl.state?.tabs.find((t) => t.active)
         return tab ? { private: tab.private, url: tab.url, title: tab.title } : {}
@@ -1987,8 +1829,6 @@ if (!app.requestSingleInstanceLock()) {
     })
     mainWindow = createWindow()
     mainWindow.on('closed', () => (mainWindow = null))
-    mainWindow.on('focus', () => extensions.bridge.setWindowFocused(true))
-    mainWindow.on('blur', () => extensions.bridge.setWindowFocused(false))
   })
 
   app.on('window-all-closed', () => {

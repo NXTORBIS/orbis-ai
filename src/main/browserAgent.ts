@@ -215,7 +215,7 @@ const AUTOMATION_TOOLS = [
 
 function systemPrompt(mode: BrowseMode): string {
   const base = [
-    `You are Orbis, operating the in-app web browser for the user. Today is ${new Date().toDateString()}.`,
+    `You are Orbis, operating the Orbis web browser for the user. Today is ${new Date().toDateString()}.`,
     'Work step by step with the tools. After every action you get the page state: URL, title, visible text and numbered interactive elements such as [12] button "Add to cart". Refer to elements by their number from the latest page state only.',
     'Prefer direct URLs when obvious, such as https://www.google.com/search?q=... or https://www.youtube.com/results?search_query=... . Scroll to find things below the visible part of the page.',
     'Set needs_approval to true for the action that actually submits a form other than a search, buys or pays, sends a message or email, posts or comments, books or reserves, deletes, logs in or signs up, subscribes, or otherwise has an effect outside the browser, and whenever you truly cannot tell. Filling in ordinary fields, choosing options, opening links, scrolling and searching never need approval.',

@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import { promises as fs } from 'node:fs'
 import type { Profile } from '../../shared/profiles'
-import { canRemove, dataDirFor, DEFAULT_PROFILE_ID, defaultProfile, MAX_PROFILES, newProfile, normalizeProfile, partitionFor, sortProfiles } from '../../shared/profiles'
+import { canRemove, dataDirFor, DEFAULT_PROFILE_ID, defaultProfile, MAX_PROFILES, newProfile, normalizeProfile, sortProfiles } from '../../shared/profiles'
 import { Collection, JsonFile } from './store'
 
 /**
@@ -91,10 +91,6 @@ export class ProfilesStore {
   dataDir(id: string): string {
     const relative = dataDirFor(id)
     return relative === '.' ? this.userData : join(this.userData, relative)
-  }
-
-  partition(id: string): string {
-    return partitionFor(id)
   }
 
   flush(): Promise<void> {

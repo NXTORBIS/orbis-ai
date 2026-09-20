@@ -22,11 +22,8 @@ const PORTABLE = ['shared', 'main/update', 'main/personal', 'main/experience', '
 
 /** Talks to the engine on purpose, and is rewritten against Chromium. Listed so the list itself stays honest. */
 const BROWSER_LAYER = new Set([
-  'main/adblock/electron.ts',
   'main/browserAgent.ts',
-  'main/browserControl/mainCapabilities.ts',
-  // The one place the page capabilities meet Electron's WebContents: they take a page resolver, and this is Electron's.
-  'main/browserControl/electronPages.ts',
+  'main/browserControl/appCapabilities.ts',
   'main/browserControl/page.ts',
   'main/browserControl/pageCapabilities.ts',
   'main/browserControl/setup.ts',
@@ -35,21 +32,18 @@ const BROWSER_LAYER = new Set([
   // way: it is a content script and a scroll, which is what the renderer does anyway.
   'main/browserControl/captchaCapabilities.ts',
   'main/browserControl/window.ts',
-  'main/browserIntegration.ts',
   // Registering Orbis as a browser and opening the system's chooser. Chromium does exactly this in shell_integration,
   // and by then Orbis is an application Windows already knows about.
   'main/defaultBrowser.ts',
-  'main/deviceChooser.ts',
-  'main/extensions/bridge.ts',
-  'main/extensions/manager.ts',
   'main/imagegen.ts',
+  // The app's own library (shortcuts, address-bar memory) for the Orbis window.
+  'main/libraryIpc.ts',
   'main/index.ts',
   'main/platformElectron.ts',
   // The adapters between Orbis's services and however the application talks to its window. Rewritten as Mojo.
   'main/experience/ipc.ts',
   'main/personal/ipc.ts',
-  'main/workflows/ipc.ts',
-  'main/workflows/recorder.ts'
+  'main/workflows/ipc.ts'
 ])
 
 async function* typescriptFiles(dir: string, prefix = ''): AsyncGenerator<{ path: string; relative: string }> {

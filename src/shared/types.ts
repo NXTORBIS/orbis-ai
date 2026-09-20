@@ -17,7 +17,6 @@ import type {
   Plan,
   RunControl,
   RunState,
-  WindowBrowserState,
   WindowRunRequest,
   WindowRunResult, ControlDomain } from './browserControl'
 import type { ControlLogEntryView } from './browserControlView'
@@ -87,7 +86,7 @@ export interface ChatMessage {
   suggestions?: string[]
   /** The user's most likely next message, offered as ghost text only when the reply clearly invites it. */
   prediction?: string
-  /** What Orbis did in the in-app browser for this reply. */
+  /** What Orbis did in the browser for this reply. */
   steps?: BrowserStep[]
   /** A browser action waiting for the user's approval. */
   confirmation?: BrowserConfirmation
@@ -169,7 +168,7 @@ export interface AutomationState {
   startedAt: number
 }
 
-/** One thing Orbis did (or was stopped from doing) in the in-app browser. */
+/** One thing Orbis did (or was stopped from doing) in the browser. */
 export interface BrowserStep {
   id: string
   /** Plain description, e.g. "Opened wikipedia.org" or "Clicked “Add to cart”". */
@@ -270,7 +269,7 @@ export interface ChatRequest {
   messages: ChatMessage[]
   /** Search the web for the latest user message and give the model the results. */
   webSearch?: boolean
-  /** The in-app browser's active page, so requests like "click the first result" can refer to it. */
+  /** The Orbis browser's active page, so requests like "click the first result" can refer to it. */
   browser?: { url: string; title: string }
   /** Asked from the address bar (Ctrl+Enter): answered in text, with research when needed; never runs the browser or makes images. */
   ask?: boolean
@@ -285,7 +284,6 @@ export type StreamEvent =
   | { type: 'error'; message: string }
   | { type: 'aborted' }
   /** Orbis needs a browser tab to work in; the window opens its browser and hands over the active tab. */
-  | { type: 'browser-target' }
   | { type: 'step'; step: BrowserStep }
   | { type: 'confirm'; confirmation: BrowserConfirmation }
   | { type: 'confirm-done'; id: string }
@@ -360,16 +358,6 @@ export interface AdBlockPageReport {
   recent: AdBlockEntry[]
 }
 
-export interface AdBlockListInfo {
-  id: string
-  name: string
-  category: 'ads' | 'trackers' | 'annoyances' | 'orbis'
-  rules: number
-  updatedAt: number
-  source: 'bundled' | 'downloaded'
-}
-
-import type { HistorySwipeView } from './historySwipe'
 import type { Channel, UpdateStatus } from './updates'
 import type { SearchResult, SearchVertical } from './orbisSearch'
 
@@ -396,25 +384,6 @@ export interface UpdateHistoryView {
   note?: string
 }
 
-export type DeviceKind = 'usb' | 'hid' | 'serial' | 'bluetooth'
-
-export interface DeviceChoice {
-  id: string
-  name: string
-  /** Who made it, its serial number, where it is plugged in — whatever the device says about itself. */
-  detail: string
-}
-
-/** A site asking to use a device, waiting for you to pick one or say no. */
-export interface DeviceRequest {
-  id: string
-  origin: string
-  kind: DeviceKind
-  /** What the site is asking for, in plain words. */
-  label: string
-  devices: DeviceChoice[]
-}
-
 export interface NoticeEntry {
   name: string
   version: string
@@ -431,27 +400,6 @@ export interface Notices {
   others: NoticeEntry[]
   packages: NoticeEntry[]
 }
-
-export interface AdBlockState {
-  settings: AdBlockSettings
-  /** The categories in effect now (all off when ad blocking is off). */
-  active: AdBlockCategories
-  ready: boolean
-  updating: boolean
-  /** Filter lists version (ISO time it was assembled). */
-  version: string
-  updatedAt: number
-  checkedAt?: number
-  canRollback: boolean
-  lists: AdBlockListInfo[]
-  /** The last problem with the filter lists (a failed update, a recovered list), if any. */
-  notice?: string
-}
-
-export type AdBlockEvent =
-  | { type: 'stats'; webContentsId: number; counts: Record<AdBlockCategory, number> }
-  | { type: 'navigation-blocked'; webContentsId: number; url: string; reason: string }
-  | { type: 'state'; state: AdBlockState }
 
 export interface BrowserHistoryEntry {
   url: string
@@ -479,8 +427,6 @@ export interface BrowserDownload {
   finishedAt?: number
 }
 
-export type SitePermissionDecision = 'allow' | 'block'
-
 /** A search run from the address bar. */
 export interface BrowserSearchEntry {
   query: string
@@ -494,123 +440,16 @@ export interface BrowserPick {
   lastAt: number
 }
 
-/** A page set aside to read later. Kept apart from bookmarks: a bookmark is forever, this is a queue. */
-export interface ReadingListItem {
-  url: string
-  title: string
-  addedAt: number
-  /** When it was marked read. Absent while it is still waiting. */
-  readAt?: number
-}
-
-/** A page saved to this computer, readable without a connection. */
-export interface SavedPage {
-  url: string
-  title: string
-  /** Where it was actually written. */
-  path: string
-  savedAt: number
-}
-
-/** A picture taken of a page. */
-export interface PageShot {
-  id: string
-  url: string
-  title: string
-  path: string
-  at: number
-  width: number
-  height: number
-}
-
 export interface BrowserLibrarySnapshot {
   history: BrowserHistoryEntry[]
   bookmarks: BrowserBookmark[]
   downloads: BrowserDownload[]
-  /** Remembered decisions, keyed "origin permission". */
-  permissions: Record<string, SitePermissionDecision>
   /** Recent address-bar searches, newest first. */
   searches: BrowserSearchEntry[]
   picks: Record<string, BrowserPick>
   /** The new-tab page's site shortcuts, in the user's order. */
   shortcuts: SiteShortcut[]
-  /** Pages set aside to read, newest first. */
-  readingList: ReadingListItem[]
-  /** Pages saved to this computer, newest first. */
-  savedPages: SavedPage[]
-  /** Pictures taken of pages, newest first. */
-  screenshots: PageShot[]
 }
-
-/** A Chrome Web Store extension installed in the Orbis browser. */
-export interface InstalledExtension {
-  id: string
-  name: string
-  description: string
-  version: string
-  enabled: boolean
-  /** Shown as its own button on the browser toolbar. */
-  pinned: boolean
-  /** A data URL: the extension's current toolbar icon, or its own icon. */
-  icon?: string
-  /** It has a toolbar button (manifest "action"). */
-  hasAction: boolean
-  /** The toolbar button's live state for the active tab (only while enabled). */
-  action?: {
-    title?: string
-    badgeText?: string
-    badgeBackgroundColor?: [number, number, number, number]
-    badgeTextColor?: [number, number, number, number]
-    hasPopup: boolean
-    enabled: boolean
-  }
-  optionsUrl?: string
-  /** Its page on the Chrome Web Store. */
-  homepageUrl: string
-  /** What its permissions let it do, in Chrome's wording. */
-  warnings: string[]
-}
-
-/** The Chrome Web Store asked to install an extension: the user confirms after seeing what it can do. */
-export interface ExtensionInstallRequest {
-  requestId: string
-  id: string
-  name: string
-  icon?: string
-  warnings: string[]
-}
-
-/** An installed extension asked for optional permissions (chrome.permissions.request). */
-export interface ExtensionPermissionRequest {
-  requestId: string
-  id: string
-  name: string
-  warnings: string[]
-  permissions: string[]
-  origins: string[]
-}
-
-/** A browser tab as extensions see it: its id is the page's WebContents id. */
-export interface ReportedBrowserTab {
-  id: number
-  index: number
-  url: string
-  title: string
-  favIconUrl?: string
-  active: boolean
-  pinned: boolean
-  audible: boolean
-  muted: boolean
-  loading: boolean
-}
-
-/** Something an extension asked the Orbis browser to do with its tabs or toolbar. */
-export type ExtensionWindowRequest =
-  | { kind: 'create-tab'; url?: string; active: boolean; index?: number; pinned?: boolean }
-  | { kind: 'update-tab'; tabId: number; url?: string; active?: boolean; pinned?: boolean; muted?: boolean }
-  | { kind: 'remove-tabs'; tabIds: number[] }
-  | { kind: 'move-tab'; tabId: number; index: number }
-  | { kind: 'open-popup'; extensionId: string }
 
 /** A site shortcut on the browser's new-tab page. */
 export interface SiteShortcut {
@@ -621,26 +460,6 @@ export interface SiteShortcut {
   icon?: string | null
   addedAt: number
 }
-
-/** A site asking for a permission (camera, location...), waiting for the user's answer. */
-export interface BrowserPermissionRequest {
-  id: string
-  webContentsId: number
-  origin: string
-  permission: string
-  /** What it wants, in plain words: "use your camera and microphone". */
-  label: string
-}
-
-/** A browser keyboard shortcut, matched in the main process and delivered once. */
-export interface BrowserShortcutEvent {
-  action: string
-  index?: number
-  /** The page it was pressed in, when it came from a page. */
-  webContentsId?: number
-}
-
-export type BrowserDownloadEvent = { type: 'started' | 'done'; download: BrowserDownload }
 
 export interface NxtorbisApi {
   getSettings(): Promise<Settings>
@@ -781,11 +600,6 @@ export interface NxtorbisApi {
   saveImage(dataUrl: string, name: string): Promise<boolean>
   /** Re-renders an image with the edit merged into its prompt, keeping the seed. */
   editImage(request: ImageEditRequest): Promise<ImageEditResult>
-  /** Fires when a page in the in-app browser tries to open a new window. */
-  onBrowserNewTab(listener: (url: string, options: { background: boolean }) => void): () => void
-  popOutBrowser(url: string): Promise<boolean>
-  /** Whether protected media (Spotify, Netflix and the like) can play in this build, and what the decryption module says. */
-  protectedMedia(): Promise<{ ready: boolean; status: unknown }>
   /** Searches the web for an Orbis Search page. Sends the words and nothing about who asked. */
   /**
    * Searching. "all" is web search; every other category goes to the specialized provider, and comes back as a
@@ -807,47 +621,18 @@ export interface NxtorbisApi {
   notices(): Promise<Notices | null>
   /** The Electron or Chromium licence, which ship as files beside Orbis rather than inside it. */
   licenceFile(which: 'electron' | 'chromium'): Promise<string | null>
-  clearBrowserData(): Promise<void>
-  /** Wipes private tabs' cookies, storage and cache (their in-memory session), once the last private tab closes. */
-  clearPrivateBrowsing(): Promise<void>
-  /** A mouse button went down inside a browser page (which the window's document never sees), so open menus can close. */
-  onPagePointer(listener: () => void): () => void
-  /** Asks to hear (or stop hearing) when the pointer moves inside a browser page; reports are throttled. */
-  watchPagePointerMoves(on: boolean): void
-  onPagePointerMove(listener: () => void): () => void
   /** New-tab shortcuts: saved in the browser library; the site's icon is fetched in the background. */
   addShortcut(name: string, url: string): Promise<SiteShortcut | null>
   updateShortcut(id: string, name: string, url: string): Promise<SiteShortcut | null>
   removeShortcut(id: string): Promise<void>
   /** Fetches a shortcut's icon again (for one saved while its site couldn't be reached). */
   refreshShortcutIcon(id: string): Promise<void>
-  /** Chrome Web Store extensions in the browser. */
-  getExtensions(): Promise<InstalledExtension[]>
-  onExtensionsChanged(listener: (extensions: InstalledExtension[]) => void): () => void
-  setExtensionEnabled(id: string, enabled: boolean): Promise<void>
-  setExtensionPinned(id: string, pinned: boolean): Promise<void>
-  removeExtension(id: string): Promise<void>
-  /** Checks the Web Store for updates to enabled extensions; resolves how many were updated. */
-  updateExtensions(): Promise<{ updated: number }>
-  /** The user clicked an extension's toolbar button; resolves the popup page to show, if it has one. */
-  clickExtensionAction(id: string): Promise<{ popup: string | null }>
-  onExtensionInstallRequest(listener: (request: ExtensionInstallRequest) => void): () => void
-  onExtensionPermissionRequest(listener: (request: ExtensionPermissionRequest) => void): () => void
-  /** An approved extension finished installing (or failed to). */
-  onExtensionInstalled(listener: (result: { id: string; name: string; error?: string }) => void): () => void
-  answerExtensionPrompt(requestId: string, allow: boolean): void
-  /** The browser's tabs, for extensions (private tabs excluded). */
-  reportBrowserTabs(tabs: ReportedBrowserTab[]): void
-  onExtensionWindowRequest(listener: (message: { requestId: string; request: ExtensionWindowRequest }) => void): () => void
-  answerExtensionWindowRequest(requestId: string, result: number | null): void
   /** Predicts the user's next message and follow-ups for the latest assistant reply. */
   suggestFollowups(messages: { role: Role; content: string }[]): Promise<FollowupSuggestions>
   /** A short AI-written chat title for a first message, or null if one couldn't be made. */
   generateTitle(prompt: string): Promise<string | null>
   /** Completes a half-typed message using the chat for context; the result always starts with the draft, or is null. */
   completeDraft(draft: string, messages: { role: Role; content: string }[]): Promise<string | null>
-  /** Hands over the browser tab Orbis should control for a chat request (null when there is none). */
-  provideBrowserTarget(requestId: string, webContentsId: number | null): Promise<void>
   /** Approves or cancels a browser action Orbis asked about. */
   answerBrowserConfirmation(requestId: string, confirmationId: string, approved: boolean): Promise<void>
   /** Pauses (resumable) or stops a running browser automation. */
@@ -856,44 +641,9 @@ export interface NxtorbisApi {
   steerAutomation(requestId: string, text: string): Promise<void>
   /** What a message sent during an automation means for it. */
   classifyAutomationMessage(text: string, objective: string): Promise<'stop' | 'pause' | 'resume' | 'steer' | 'other'>
-  /** Ad blocking: its settings, filter lists and state (null until it has started). */
-  getAdBlockState(): Promise<AdBlockState | null>
-  updateAdBlockSettings(update: Partial<AdBlockSettings>): Promise<AdBlockState | null>
-  /** Allow (exception) or stop allowing ads on a site. */
-  setAdBlockSite(host: string, allowed: boolean): Promise<AdBlockState | null>
-  /** Always allow one resource (its host and path). */
-  allowAdBlockResource(url: string): Promise<AdBlockState | null>
-  removeAdBlockException(kind: 'site' | 'resource', value: string): Promise<AdBlockState | null>
-  /** What was blocked on a browser tab's current page. */
-  /** Whether Orbis's browser (Chromium) is installed. When it is, the browser is Chromium and nothing opens the in-app one. */
-  chromiumAvailable: boolean
   /** Opens an address as a page, or searches anything else with Orbis Search, in Orbis's Chromium (started if needed). */
   chromiumOpen(input: string, options?: { newTab?: boolean; more?: string[] }): Promise<{ ok: boolean; detail: string }>
-  getAdBlockReport(webContentsId: number): Promise<AdBlockPageReport | null>
-  updateAdBlockFilters(): Promise<AdBlockState | null>
-  rollbackAdBlockFilters(): Promise<AdBlockState | null>
-  onAdBlockEvent(listener: (event: AdBlockEvent) => void): () => void
-  /** Browser shortcuts, delivered once per deliberate key press. */
-  onBrowserShortcut(listener: (event: BrowserShortcutEvent) => void): () => void
-  /** Tells the main process whether the browser (or its URL bar) has focus, so its shortcuts apply there. */
-  setBrowserFocus(focused: boolean): void
   getBrowserLibrary(): Promise<BrowserLibrarySnapshot>
-  /** Forgets remembered permission answers for one site, or for every site. */
-  forgetSitePermissions(origin?: string): Promise<void>
-  /** Sets a page aside to read later; false when the address is not a web page. */
-  addToReadingList(url: string, title?: string): Promise<boolean>
-  setReadingListRead(url: string, read: boolean): Promise<void>
-  removeFromReadingList(url: string): Promise<void>
-  /** Clears everything already read; resolves how many went. */
-  clearReadReadingList(): Promise<number>
-  /** Forgets a saved page. The file itself is the user's and stays where it is. */
-  forgetSavedPage(path: string): Promise<void>
-  /** Keeps a picture of a page beside this profile's browsing data. */
-  keepScreenshot(dataUrl: string, url: string, title: string, size?: { width: number; height: number }): Promise<PageShot | null>
-  /** One kept picture, as a data URL, or null when the file has gone. */
-  readScreenshot(id: string): Promise<string | null>
-  /** Removes a kept picture, and its file. */
-  removeScreenshot(id: string): Promise<boolean>
   /** How this profile has arranged the browser sidebar. */
   getBrowserSidebar(): Promise<SidebarLayout>
   saveBrowserSidebar(layout: SidebarLayout): Promise<SidebarLayout>
@@ -903,10 +653,7 @@ export interface NxtorbisApi {
   onBrowserLibrary(listener: (library: BrowserLibrarySnapshot) => void): () => void
   /** Bookmarks the page, or removes its bookmark; resolves to whether it is bookmarked now. */
   toggleBookmark(url: string, title: string): Promise<boolean>
-  addBookmarks(pages: { url: string; title: string }[]): Promise<number>
-  removeBookmark(url: string): Promise<void>
   removeHistory(url: string): Promise<void>
-  clearHistory(): Promise<void>
   /** Remembers a search run from the address bar (never called for incognito chats). */
   recordSearch(query: string): Promise<void>
   removeSearch(query: string): Promise<void>
@@ -918,12 +665,6 @@ export interface NxtorbisApi {
   /** Orion's predictions of the query being typed; empty when suggestions are off or unavailable. */
   predictQueries(input: string): Promise<string[]>
   downloadAction(id: string, action: 'open' | 'show' | 'cancel' | 'pause' | 'resume'): Promise<void>
-  clearDownloads(): Promise<void>
-  onBrowserDownload(listener: (event: BrowserDownloadEvent) => void): () => void
-  onBrowserPermission(listener: (request: BrowserPermissionRequest) => void): () => void
-  answerBrowserPermission(id: string, allow: boolean, remember: boolean): Promise<void>
-  /** Saves a browser tab's page (asks where); resolves false when cancelled or it failed. */
-  savePage(webContentsId: number): Promise<boolean>
   /** Turns the Orbis window's fullscreen on, off, or (without a value) toggles it; resolves to the new state. */
   setWindowFullscreen(on?: boolean): Promise<boolean>
   /** Whether the Orbis window is really fullscreen, and changes to it however they happen (F11, Esc, the OS). */
@@ -931,17 +672,6 @@ export interface NxtorbisApi {
   onWindowFullscreen(listener: (on: boolean) => void): () => void
   /** Settings changed outside the settings screen (by the Browser Control Layer). */
   onSettingsChanged(listener: (settings: Settings) => void): () => void
-  /** A site's permission request was answered (from the prompt or through the control layer). */
-  onBrowserPermissionAnswered(listener: (id: string) => void): () => void
-  /**
-   * Two-finger history swiping, as the main process makes sense of it: a preview to follow while the fingers move, and
-   * one instruction to navigate when they lift.
-   */
-  onHistorySwipe(listener: (update: { view: HistorySwipeView; navigate: 'back' | 'forward' | null; webContentsId: number }) => void): () => void
-  /** A site is asking to use a device: the window shows the list and the user picks one, or none. */
-  onDeviceRequest(listener: (request: DeviceRequest) => void): () => void
-  onDeviceAnswered(listener: (id: string) => void): () => void
-  answerDeviceRequest(id: string, deviceId: string | null): Promise<boolean>
 
   // Orbis Browser Control Layer
   /** What Orbis can do right now. */
@@ -955,8 +685,6 @@ export interface NxtorbisApi {
   listControlRuns(): Promise<RunState[]>
   getControlLog(limit?: number): Promise<ControlLogEntryView[]>
   onControlRunUpdate(listener: (state: RunState) => void): () => void
-  /** The window's browser state, sent whenever it changes. */
-  reportControlState(state: WindowBrowserState): void
   /** The capabilities one part of the window provides (an empty list removes them). */
   setControlScope(scope: string, descriptors: CapabilityDescriptor[]): void
   onControlWindowRun(listener: (request: WindowRunRequest) => void): () => void
@@ -1070,13 +798,13 @@ export interface NxtorbisApi {
   onWorkspacesChanged(listener: () => void): () => void
 
   // Profiles
-  listProfiles(): Promise<{ profiles: Profile[]; activeId: string; partition: string }>
+  listProfiles(): Promise<{ profiles: Profile[]; activeId: string }>
   createProfile(name: string): Promise<Profile>
   saveProfile(profile: Profile): Promise<Profile>
   renameProfile(id: string, name: string): Promise<Profile>
   removeProfile(id: string): Promise<{ removed: boolean; reason?: string }>
-  switchProfile(id: string): Promise<{ profile: Profile; partition: string }>
-  onProfileChanged(listener: (change: { profile: Profile; partition: string }) => void): () => void
+  switchProfile(id: string): Promise<{ profile: Profile }>
+  onProfileChanged(listener: (change: { profile: Profile }) => void): () => void
   onProfilesChanged(listener: () => void): () => void
 
   // The Experience Runtime (personalisation)

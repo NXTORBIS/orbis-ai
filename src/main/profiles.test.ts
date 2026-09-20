@@ -1,10 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { canRemove, dataDirFor, defaultProfile, DEFAULT_PROFILE_ID, newProfile, normalizeProfile, partitionFor, sortProfiles } from '../shared/profiles.ts'
+import { canRemove, dataDirFor, defaultProfile, DEFAULT_PROFILE_ID, newProfile, normalizeProfile, sortProfiles } from '../shared/profiles.ts'
 
-test('the first profile keeps Orbis’s original browsing data; others get their own', () => {
-  assert.equal(partitionFor(DEFAULT_PROFILE_ID), 'persist:browser')
-  assert.equal(partitionFor('abc'), 'persist:profile-abc')
+test('the first profile keeps Orbis’s original data folder; others get their own', () => {
   assert.equal(dataDirFor(DEFAULT_PROFILE_ID), '.')
   assert.equal(dataDirFor('abc'), 'profiles/abc')
   assert.equal(defaultProfile().id, DEFAULT_PROFILE_ID)

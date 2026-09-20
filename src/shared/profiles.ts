@@ -18,10 +18,7 @@ export const PROFILE_COLORS = ['#3fd8ff', '#3ee58a', '#ffbe4d', '#ff4d6d', '#a78
 export const DEFAULT_PROFILE_ID = 'default'
 export const MAX_PROFILES = 20
 
-/** Where a profile's browsing data lives. The first profile keeps Orbis's original session, so nothing is lost. */
-export const partitionFor = (id: string): string => (id === DEFAULT_PROFILE_ID ? 'persist:browser' : `persist:profile-${id}`)
-
-/** The folder a profile's history, bookmarks and downloads live in, under the user's data folder. */
+/** The folder a profile's own data (the app's library, workflows, notes) lives in, under the user's data folder. The browser keeps its own per-profile folder (see BrowserManager). */
 export const dataDirFor = (id: string): string => (id === DEFAULT_PROFILE_ID ? '.' : `profiles/${id}`)
 
 const now = (): number => Date.now()

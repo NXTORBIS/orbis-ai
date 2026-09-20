@@ -1,32 +1,31 @@
 import type { ControlDomain } from '../../shared/browserControl'
 import { app, ipcMain } from 'electron'
-import type { BrowserWindow, IpcMainEvent, IpcMainInvokeEvent, WebContents } from 'electron'
+import type { BrowserWindow, IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
-import type { BrowserCommand, CapabilityDescriptor, ControlSource, Plan, RunControl, WindowBrowserState } from '../../shared/browserControl.ts'
-import { BrowserControl } from './registry.ts'
+import type { BrowserCommand, CapabilityDescriptor, ControlSource, Plan, RunControl } from '../../shared/browserControl.ts'
+import { BrowserControl, fail } from './registry.ts'
 import type { ControlContext } from './registry.ts'
-import { asPageHandle } from '../pageHandle'
 import type { PageHandle } from '../pageHandle'
-import { resolvePage } from './electronPages.ts'
 import { WindowControl } from './window.ts'
 import type { WindowRunResult } from './window.ts'
 import { registerPageCapabilities } from './pageCapabilities.ts'
-import { registerMainCapabilities } from './mainCapabilities.ts'
-import type { MainCapabilityDeps, NavigationRecord } from './mainCapabilities.ts'
+import { registerAppCapabilities } from './appCapabilities.ts'
+import type { AppCapabilityDeps } from './appCapabilities.ts'
 import { registerUiCapabilities } from './uiCapabilities.ts'
 import { registerCaptchaCapabilities } from './captchaCapabilities.ts'
 
-export type BrowserControlDeps = Omit<MainCapabilityDeps, 'control' | 'windowControl' | 'navigation'>
+export type BrowserControlDeps = Omit<AppCapabilityDeps, 'control' | 'windowControl'>
 
 const LOG_LIMIT = 5 * 1024 * 1024
 
 /**
- * Creates the Orbis Browser Control Layer and connects it: the capability registry, the window's side (its own
- * capabilities, state reports, approvals, plan runs), webpage, main-process and Orbis-interface capabilities, a batched
- * log file, and IPC for the window. Only the Orbis window itself may use these channels.
+ * Creates the Orbis Browser Control Layer and connects it: the capability registry, the app's own capabilities (settings, the
+ * clipboard, state and conditions, the Orbis interface), approvals and plan runs, a batched log file, and IPC for the window.
+ * The browser capabilities (tabs, navigation, pages, downloads, extensions...) are Chromium's: `src/main/chromium` registers
+ * them on this same registry when the browser starts. Only the Orbis window itself may use these channels.
  */
-export function setupBrowserControl(deps: BrowserControlDeps): { control: BrowserControl; windowControl: WindowControl; trackGuest(contents: WebContents): void } {
+export function setupBrowserControl(deps: BrowserControlDeps): { control: BrowserControl; windowControl: WindowControl } {
   const logFile = join(app.getPath('userData'), 'logs', 'browser-control.jsonl')
   const control = new BrowserControl({
     sink: async (lines) => {
@@ -43,37 +42,13 @@ export function setupBrowserControl(deps: BrowserControlDeps): { control: Browse
     .then((raw) => control.setSwitchedOff((JSON.parse(raw) as { off?: ControlDomain[] }).off ?? []))
     .catch(() => undefined)
 
-  // Navigation outcomes per tab, recorded from the page's own events (a handful per navigation, nothing in between).
-  const navigations = new Map<number, NavigationRecord>()
-  const trackGuest = (contents: WebContents): void => {
-    const id = contents.id
-    contents.on('did-start-navigation', (details) => {
-      if (!details.isMainFrame || details.isSameDocument) return
-      navigations.set(id, { url: details.url, redirects: [], loading: true, startedAt: Date.now() })
-    })
-    contents.on('did-redirect-navigation', (details) => {
-      if (!details.isMainFrame) return
-      const record = navigations.get(id)
-      if (record && record.redirects.length < 20) record.redirects.push(details.url)
-    })
-    contents.on('did-fail-load', (_event, code, description, url, isMainFrame) => {
-      if (!isMainFrame || code === -3) return
-      const record = navigations.get(id) ?? { url, redirects: [], loading: false, startedAt: Date.now() }
-      navigations.set(id, { ...record, loading: false, failed: { code, description, url }, finishedAt: Date.now() })
-    })
-    contents.on('did-finish-load', () => {
-      const record = navigations.get(id)
-      if (record) Object.assign(record, { loading: false, finishedAt: Date.now(), url: contents.getURL() })
-    })
-    contents.once('destroyed', () => navigations.delete(id))
-  }
-
-  const host = (): WebContents | null => deps.getWindow()?.webContents ?? null
-  const resolve = (ctx: Pick<ControlContext, 'target'>): PageHandle => asPageHandle(resolvePage(ctx, windowControl, host))
-  registerPageCapabilities(control, resolve)
-  registerMainCapabilities({ ...deps, control, windowControl, navigation: (wcId) => navigations.get(wcId) })
+  // Until the browser has started these are listed (so plans and Orion can see them) but say what is missing; Chromium's own
+  // page and CAPTCHA capabilities replace them the moment the browser is up.
+  const noBrowser = (_ctx: Pick<ControlContext, 'target'>): PageHandle => fail('unavailable', 'The Orbis browser is not open yet. Open it first (browser.open).', true)
+  registerPageCapabilities(control, noBrowser)
+  registerCaptchaCapabilities(control, noBrowser)
+  registerAppCapabilities({ ...deps, control, windowControl })
   registerUiCapabilities(control, deps.getWindow)
-  registerCaptchaCapabilities(control, resolve, () => (host() ? null : 'The Orbis window is not open.'))
 
   const fromWindow = (event: IpcMainEvent | IpcMainInvokeEvent): boolean => {
     const win: BrowserWindow | null = deps.getWindow()
@@ -81,9 +56,7 @@ export function setupBrowserControl(deps: BrowserControlDeps): { control: Browse
   }
   const sourceOf = (value: unknown): ControlSource => (value === 'automation' ? 'automation' : 'user')
 
-  ipcMain.on('control:window-state', (event, state: unknown) => {
-    if (fromWindow(event) && state && typeof state === 'object' && Array.isArray((state as WindowBrowserState).tabs)) windowControl.setState(state as WindowBrowserState)
-  })
+  // The parts of the Orbis window that own something (the address bar) say what they can do, and answer when asked to do it.
   ipcMain.on('control:window-scope', (event, scope: unknown, descriptors: unknown) => {
     if (!fromWindow(event) || typeof scope !== 'string' || !Array.isArray(descriptors)) return
     const valid = descriptors.filter((d): d is CapabilityDescriptor => Boolean(d) && typeof d.id === 'string' && /^[a-z][a-zA-Z]*\.[a-z][a-zA-Z0-9-]*$/.test(d.id) && typeof d.name === 'string' && typeof d.params === 'object')
@@ -129,5 +102,5 @@ export function setupBrowserControl(deps: BrowserControlDeps): { control: Browse
     void control.flush()
   })
 
-  return { control, windowControl, trackGuest }
+  return { control, windowControl }
 }

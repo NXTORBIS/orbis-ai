@@ -18,12 +18,9 @@ const UI_SNAPSHOT = (region: string): string => `(() => {
   document.querySelectorAll('[data-orbis-ref]').forEach((el) => el.removeAttribute('data-orbis-ref'));
   const selector = 'button, a[href], input:not([type="hidden"]), textarea, select, summary, [role="button"], [role="tab"], [role="menuitem"], [role="menuitemcheckbox"], [role="menuitemradio"], [role="switch"], [role="checkbox"], [role="radio"], [role="option"], [role="combobox"], [role="slider"], [contenteditable="true"]';
   const regionOf = (el) => {
-    if (el.closest('[role="alertdialog"], [role="dialog"], .ext-prompt, .control-prompt')) return 'dialog';
+    if (el.closest('[role="alertdialog"], [role="dialog"], .control-prompt')) return 'dialog';
     if (el.closest('[role="menu"], .popover')) return 'menu';
-    if (el.closest('.browser-tabs-row')) return 'browser toolbar';
     if (el.closest('.url-strip')) return 'address bar';
-    if (el.closest('.browser-find')) return 'find bar';
-    if (el.closest('.browser-panel')) return 'browser';
     if (el.closest('.sidebar')) return 'sidebar';
     if (el.closest('.system-bar, .systembar')) return 'header';
     return 'chat';
@@ -78,8 +75,6 @@ export function registerUiCapabilities(control: BrowserControl, getWindow: () =>
     const guarded = await page.exec<string | null>(asPageHandle(wc),
       `(() => { const el = document.querySelector('[data-orbis-ref="${ref}"]'); if (!el) return null;
         if (el.tagName === 'WEBVIEW') return 'web page';
-        if (el.closest('.ext-prompt')) return 'the extension permission prompt';
-        if (el.closest('.browser-permission')) return 'a site permission request';
         if (el.closest('.orb-confirm, .confirm-card, .control-prompt')) return 'an approval Orbis is asking you for';
         if (el.closest('[role="alertdialog"]')) return 'a dialog asking you to decide';
         if (el.classList.contains('danger') || el.closest('.danger')) return 'a destructive control';

@@ -18,7 +18,7 @@ import SettingsModal from './components/SettingsModal'
 import WelcomeExperience from './components/WelcomeExperience'
 import UrlBar from './components/UrlBar'
 import ControlPrompts from './components/ControlPrompts'
-import { reportControlState, str, unverified, useControlRendered, useControlScope, verified, waitUntil } from './lib/browserControl'
+import { useControlRendered } from './lib/browserControl'
 import { OPEN_URL_EVENT } from './lib/openInBrowser'
 import type { OpenUrlDetail } from './lib/openInBrowser'
 import SystemBar from './components/SystemBar'
@@ -93,50 +93,22 @@ export default function App(): React.JSX.Element {
   const [searchToken, setSearchToken] = useState(0)
   const [activityOpen, setActivityOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
-  const [browserOpen, setBrowserOpen] = useState(false)
-  /** A chat request waiting for the browser to hand over the tab Orbis should control. */
-  const [browserTarget, setBrowserTarget] = useState<string | null>(null)
-  /** Chat requests currently operating the browser. */
-  const [, setBrowserAgents] = useState<string[]>([])
-  /** The browser's active page, sent with chat requests so "click the first result" has context. */
-  const browserPageRef = useRef<{ url: string; title: string; private?: boolean } | null>(null)
-  /** The active tab (blank ones too), as state, for the URL bar. */
-  const [browserPage, setBrowserPageState] = useState<{ tabId: string; url: string; title: string; private?: boolean } | null>(null)
-  /** An address typed in the URL bar, waiting for the browser to open it. */
-  const [, setBrowserNavigation] = useState<(OpenUrlDetail & { id: number }) | null>(null)
-  /** Back at the chat with the browser still open: its tabs, pages and orb stay as they were. */
-  const [browserHidden, setBrowserHidden] = useState(false)
-  /** The browser's active page is loading, shown in the URL bar. */
-  const [browserLoading, setBrowserLoading] = useState(false)
-  const browserStateRef = useRef({ open: browserOpen })
-  browserStateRef.current = { open: browserOpen }
-
   /**
    * Opening the browser.
    *
    * It fills the content area, always. It used to be a window that could be docked, shrunk to a preset or dragged to
    * a size, which meant five ways to be looking at a browser and four of them worse than the fifth.
    */
-  // Orbis's browser is Chromium, a window of its own: opening "the browser" shows that window, and the in-app browser stays closed.
-  const chromium = window.api.chromiumAvailable
+  // Orbis's browser is Chromium, a window of its own: opening "the browser" shows that window.
   const notifyRef = useRef<(text: string, kind?: NoticeKind) => void>(() => undefined)
   const openChromium = useCallback((input: string, options?: { newTab?: boolean; more?: string[] }) => {
     void window.api.chromiumOpen(input, options).then((result) => {
       if (!result.ok) notifyRef.current(result.detail, 'error')
     })
   }, [])
-  const openBrowser = useCallback(() => {
-    if (chromium) return openChromium('')
-    setBrowserOpen(true)
-    setBrowserHidden(false)
-  }, [chromium, openChromium])
-
-  /** Sidebar and /browser: open it, or switch between the browser and the chat without closing it. */
-  const toggleBrowser = useCallback(() => {
-    if (chromium) return openChromium('')
-    if (!browserStateRef.current.open) return openBrowser()
-    setBrowserHidden((isHidden) => !isHidden)
-  }, [chromium, openBrowser, openChromium])
+  const openBrowser = useCallback(() => openChromium(''), [openChromium])
+  /** Sidebar and /browser: show the browser. */
+  const toggleBrowser = openBrowser
 
   /** Which model and mode the user is on, read when a task starts rather than captured before there is one. */
   const currentRef = useRef<DraftChat>({ model: DEFAULT_MODEL, incognito: false })
@@ -350,8 +322,6 @@ export default function App(): React.JSX.Element {
         finished = true
         unsubscribe()
         flushDeltas()
-        setBrowserAgents((agents) => (agents.includes(requestId) ? agents.filter((a) => a !== requestId) : agents))
-        setBrowserTarget((pending) => (pending === requestId ? null : pending))
         setAutomations(({ [requestId]: _ended, ...rest }) => rest)
         patchAssistant((m) => ({
           ...m,
@@ -399,11 +369,6 @@ export default function App(): React.JSX.Element {
           case 'image':
             queueDelta(conversationId, assistant.id, imageMarkdown({ src: event.url, prompt: event.prompt, seed: event.seed }), '', undefined)
             break
-          case 'browser-target':
-            openBrowser()
-            setBrowserTarget(requestId)
-            setBrowserAgents((agents) => (agents.includes(requestId) ? agents : [...agents, requestId]))
-            break
           case 'step':
             patchAssistant((m) => {
               const steps = m.steps ?? []
@@ -446,8 +411,7 @@ export default function App(): React.JSX.Element {
         requestId,
         model: conversation.model,
         messages: history,
-        webSearch,
-        browser: browserPageRef.current ?? undefined
+        webSearch
       }
       window.api.sendChat(request).catch((err: unknown) => {
         finish({ error: err instanceof Error ? err.message : String(err) })
@@ -879,38 +843,13 @@ export default function App(): React.JSX.Element {
     if (stream) void window.api.answerBrowserConfirmation(stream.requestId, confirmationId, approved)
   }, [])
 
-  const provideBrowserTarget = useCallback((requestId: string, webContentsId: number | null) => {
-    setBrowserTarget((pending) => (pending === requestId ? null : pending))
-    void window.api.provideBrowserTarget(requestId, webContentsId)
-  }, [])
-
-  const closeBrowser = useCallback(() => {
-    setBrowserOpen(false)
-    setBrowserHidden(false)
-    setBrowserLoading(false)
-    browserPageRef.current = null
-    setBrowserPageState(null)
-    if (browserTarget) provideBrowserTarget(browserTarget, null)
-  }, [browserTarget, provideBrowserTarget])
-
   const controlAutomation = useCallback((messageId: string, action: 'pause' | 'stop') => {
     const stream = Object.values(streamsRef.current).find((s) => s.messageId === messageId)
     if (stream) void window.api.controlAutomation(stream.requestId, action)
   }, [])
 
-
-  /**
-   * From the URL bar, links and research sources: open the browser at the preferred size (a full page unless changed)
-   * and load the address there, in a new tab when asked.
-   */
-  const openInBrowser = useCallback(
-    (input: string, options?: Omit<OpenUrlDetail, 'url'>) => {
-      if (chromium) return openChromium(input, { newTab: options?.newTab, more: options?.more })
-      openBrowser()
-      setBrowserNavigation({ url: input, id: Date.now(), ...options })
-    },
-    [chromium, openBrowser, openChromium]
-  )
+  /** From the URL bar, links and research sources: show the address in the Orbis browser, in a new tab when asked. */
+  const openInBrowser = useCallback((input: string, options?: Omit<OpenUrlDetail, 'url'>) => openChromium(input, { newTab: options?.newTab, more: options?.more }), [openChromium])
 
   useEffect(() => {
     const onOpen = (e: Event): void => {
@@ -920,76 +859,6 @@ export default function App(): React.JSX.Element {
     window.addEventListener(OPEN_URL_EVENT, onOpen)
     return () => window.removeEventListener(OPEN_URL_EVENT, onOpen)
   }, [openInBrowser])
-
-  // ---------------------------------------------------------------- Browser Control Layer: the browser's place in Orbis
-  useEffect(() => {
-    reportControlState({ open: browserOpen, hidden: browserOpen && browserHidden, mode: browserOpen ? 'full' : null })
-  }, [browserOpen, browserHidden])
-  const appLive = useRef({ browserOpen, browserHidden })
-  appLive.current = { browserOpen, browserHidden }
-  useControlScope('app', [
-    {
-      id: 'browser.open',
-      domain: 'browser',
-      name: 'Open the browser',
-      description: 'Opens the Orbis browser (at its preferred size), optionally at an address or search.',
-      params: { url: str('An address or search text to open.') },
-      mutates: true,
-      run: async (p) => {
-        if (chromium) {
-          const opened = await window.api.chromiumOpen(typeof p.url === 'string' ? p.url.trim() : '')
-          return opened.ok ? verified(opened.detail) : unverified(opened.detail)
-        }
-        if (typeof p.url === 'string' && p.url.trim()) openInBrowser(p.url.trim())
-        else openBrowser()
-        const ok = await waitUntil(() => appLive.current.browserOpen && !appLive.current.browserHidden)
-        return ok ? verified('The browser is open.') : unverified('The browser did not open.')
-      }
-    },
-    {
-      id: 'browser.close',
-      domain: 'browser',
-      name: 'Close the browser',
-      description: 'Closes the browser and all of its tabs.',
-      params: {},
-      mutates: true,
-      confirmation: 'always',
-      run: async () => {
-        if (!appLive.current.browserOpen) return verified('The browser was already closed.')
-        closeBrowser()
-        const ok = await waitUntil(() => !appLive.current.browserOpen)
-        return ok ? verified('The browser is closed.') : unverified('The browser is still open.')
-      }
-    },
-    {
-      id: 'browser.show',
-      domain: 'browser',
-      name: 'Show the browser',
-      description: 'Brings the open browser back in front of the chat, as it was.',
-      params: {},
-      mutates: true,
-      requires: ['browser-open'],
-      run: async () => {
-        setBrowserHidden(false)
-        const ok = await waitUntil(() => appLive.current.browserOpen && !appLive.current.browserHidden)
-        return ok ? verified('The browser is showing.') : unverified('The browser is not showing.')
-      }
-    },
-    {
-      id: 'browser.backToChat',
-      domain: 'browser',
-      name: 'Back to the chat',
-      description: 'Returns to the Orbis chat; the browser keeps its tabs, out of sight.',
-      params: {},
-      mutates: true,
-      requires: ['browser-open'],
-      run: async () => {
-        setBrowserHidden(true)
-        const ok = await waitUntil(() => appLive.current.browserHidden)
-        return ok ? verified('The chat is showing; the browser stays open behind it.') : unverified('The browser is still in front.')
-      }
-    },
-  ])
 
   useControlRendered()
 
@@ -1167,7 +1036,7 @@ export default function App(): React.JSX.Element {
     const start = (e: KeyboardEvent): void => {
       if (welcome !== 'closed' || !e.ctrlKey || !e.shiftKey || e.key.toLowerCase() !== 'm' || pushToTalk.current) return
       e.preventDefault()
-      const target = browserStateRef.current.open ? 'browser-orion' : 'chat'
+      const target = 'chat'
       pushToTalk.current = { held: true, target }
       window.dispatchEvent(new CustomEvent(PUSH_TO_TALK_EVENT, { detail: { phase: 'start', target } }))
     }
@@ -1223,25 +1092,19 @@ export default function App(): React.JSX.Element {
   return (
     <ImageEditorContext.Provider value={openImageEditor}>
     <div
-      className={`hud${effects ? ' effects' : ''}${welcome === 'leaving' ? ' hud-entering' : ''}${browserOpen && !browserHidden ? ' browser-full' : ''}`}
+      className={`hud${effects ? ' effects' : ''}${welcome === 'leaving' ? ' hud-entering' : ''}`}
       inert={welcome === 'open'}
     >
       <HudBackground animated={effects} />
       <UrlBar
-        url={browserPage?.url ?? ''}
-        title={browserPage?.title ?? ''}
-        tabKey={browserOpen ? (browserPage?.tabId ?? '') : ''}
         onNavigate={openInBrowser}
         research={researchTopics}
-        incognito={current.incognito || Boolean(browserOpen && !browserHidden && browserPage?.private)}
+        incognito={current.incognito}
         searchSuggestions={settings?.searchSuggestions !== false}
         personalizedSuggestions={settings?.personalizedSuggestions !== false}
         askModel={current.model}
         onNotify={notify}
         onOpenWorkflows={() => openOrbisView('workflows')}
-        loading={browserOpen && browserLoading}
-        browserHidden={browserOpen && browserHidden}
-        onShowBrowser={() => setBrowserHidden(false)}
       />
       <SystemBar
         dark={dark}

@@ -53,7 +53,7 @@ export interface AutomationContext {
 const IMAGE_MARKDOWN = /!\[([^\]]*)\]\(data:image\/[a-z]+;base64,[A-Za-z0-9+/=]+(?:\s+"seed:(\d+)")?\)/g
 
 const INSTRUCTIONS = [
-  'You route messages in Orbis, an AI assistant that can also generate images and operate an in-app web browser.',
+  'You route messages in Orbis, an AI assistant that can also generate images and operate the Orbis web browser.',
   'Decide whether the latest user message asks Orbis to produce a picture, to do something in the web browser, or just for a text reply. Judge the intent, not the wording.',
   'Picture requests include drawing, painting, rendering, photos, portraits, designing a logo, icon, poster or wallpaper, visualizing something,',
   '"show me" or "I want to see" something visual, turning an idea into a visual, and restyling or changing a picture.',

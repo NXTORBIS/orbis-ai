@@ -1,11 +1,10 @@
 import { useEffect, useRef } from 'react'
-import type { CapabilityDescriptor, ConfirmationPolicy, ControlDomain, ControlErrorCode, ControlRequirement, ControlSource, ControlTarget, ParamSpec, WindowBrowserState, WindowRunResult } from '../../../shared/browserControl'
+import type { CapabilityDescriptor, ConfirmationPolicy, ControlDomain, ControlErrorCode, ControlRequirement, ControlSource, ControlTarget, ParamSpec, WindowRunResult } from '../../../shared/browserControl'
 
 /**
- * The Orbis window's side of the Browser Control Layer. Parts of the window that own browser state (the browser panel,
- * the address bar, the app shell) register what they can do with the same functions their own buttons call, and report
- * their state when it changes. Nothing here runs on a timer: handlers only run when a command arrives, and state is
- * sent (briefly batched) only after something changed.
+ * The Orbis window's side of the Browser Control Layer. Parts of the window that own something (the address bar) register
+ * what they can do with the same functions their own buttons call. The browser itself is Chromium, whose tabs and pages the main
+ * process reads from the browser directly. Nothing here runs on a timer: handlers only run when a command arrives.
  */
 
 export interface WindowCapability {
@@ -29,14 +28,12 @@ function listen(): void {
   window.api.onControlWindowRun(({ callId, capability, params, target, source }) => {
     const handler = handlers.get(capability)
     if (!handler) return window.api.answerControlWindowRun(callId, failure('unavailable', 'That part of Orbis is not open right now.', true))
-    const sentBefore = reportsSent
     Promise.resolve()
       .then(() => handler.run(params ?? {}, { target, source }))
       .then(
         async (result) => {
-          // The state a command changed reaches the main process before its result, so whoever reads the browser
-          // state next sees the change.
-          if (handler.mutates) await stateSettled(sentBefore)
+          // Let React commit what the command changed, so whoever reads the window next sees it.
+          if (handler.mutates) await nextTask()
           window.api.answerControlWindowRun(callId, result)
         },
         (err: unknown) => window.api.answerControlWindowRun(callId, failure('failed', err instanceof Error ? err.message : String(err), true))
@@ -55,25 +52,6 @@ const nextTask = (): Promise<void> =>
     channel.port2.postMessage(null)
   })
 
-/**
- * Waits (briefly) until the command's change has been reported: React commits it and its effects queue a state
- * report, which is then sent straight away. Ends as soon as a report is pending or has gone out.
- */
-async function stateSettled(sentBefore: number): Promise<void> {
-  const started = performance.now()
-  while (!timer && reportsSent === sentBefore && performance.now() - started < 150) await nextTask()
-  flushControlState()
-}
-
-/** Sends a waiting state report now. */
-export function flushControlState(): void {
-  if (!timer) return
-  window.clearTimeout(timer)
-  timer = 0
-  reportsSent++
-  window.api.reportControlState({ ...state, updatedAt: Date.now() })
-}
-
 /** Registers a part of the window's capabilities while it is mounted; handlers always see its latest state. */
 export function useControlScope(scope: string, capabilities: WindowCapability[]): void {
   const latest = useRef(capabilities)
@@ -90,37 +68,6 @@ export function useControlScope(scope: string, capabilities: WindowCapability[])
       window.api.setControlScope(scope, [])
     }
   }, [scope, key])
-}
-
-const state: WindowBrowserState = {
-  open: false,
-  hidden: false,
-  mode: null,
-  tabs: [],
-  groups: [],
-  activeTabId: null,
-  previousTabId: null,
-  closedTabs: [],
-  split: null,
-  find: { open: false, text: '', activeMatch: 0, matches: 0 },
-  addressBar: { value: '', editing: false, focused: false, suggestions: [] },
-  panel: null,
-  permissionRequests: [],
-  updatedAt: 0
-}
-let timer = 0
-/** How many state reports have gone to the main process. */
-let reportsSent = 0
-
-/** Merges one part of the window's browser state and sends the whole state shortly after (changes are batched). */
-export function reportControlState(part: Partial<WindowBrowserState>): void {
-  Object.assign(state, part)
-  if (timer) return
-  timer = window.setTimeout(() => {
-    timer = 0
-    reportsSent++
-    window.api.reportControlState({ ...state, updatedAt: Date.now() })
-  }, 50)
 }
 
 export const verified = (detail: string, data?: unknown): WindowRunResult => ({ ok: true, data, verification: { verified: true, detail } })

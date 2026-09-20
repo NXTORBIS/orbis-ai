@@ -85,5 +85,7 @@ test('the boundary is a known size, so the migration can be estimated rather tha
   // managing model files (status, download, cancel a download, delete, verify) — replacing the single Groq call
   // voice:transcribe used to make on its own.
   // 174 → 176: opening Chromium, the browser Orbis now uses (whether it is installed, and open it).
-  assert.ok(code.length <= 176, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
+  // 176 → 131: the Electron in-app browser's channels (extensions, permissions and devices, the session ad blocker, the library's
+  // reading list, saved pages, pictures and download bookkeeping, pop-out windows) were removed with it.
+  assert.ok(code.length <= 131, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
 })

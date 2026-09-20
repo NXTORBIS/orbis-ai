@@ -46,12 +46,10 @@ export function useDismiss(ref: RefObject<HTMLElement | null> | RefObject<HTMLEl
     document.addEventListener('mousedown', onMouseDown)
     document.addEventListener('keydown', onKeyDown)
     window.addEventListener('blur', dismiss)
-    const stopPagePointer = window.api?.onPagePointer?.(dismiss)
     return () => {
       document.removeEventListener('mousedown', onMouseDown)
       document.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('blur', dismiss)
-      stopPagePointer?.()
     }
   }, [active])
 }

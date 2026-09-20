@@ -1,5 +1,4 @@
 import type { PageHandle } from '../pageHandle.ts'
-import { noteAutomatedInput } from '../browserShortcuts.ts'
 import type { ElementInfo } from '../browserSafety.ts'
 
 /**
@@ -392,12 +391,10 @@ export function exec<T>(wc: PageHandle, code: string, ms = 8000): Promise<T> {
 export async function pressNamedKey(wc: PageHandle, name: string, holdMs = 0, modifiers: ('shift' | 'control' | 'alt' | 'meta')[] = []): Promise<void> {
   const keyCode = keyCodeOf(name)
   if (!keyCode) return
-  noteAutomatedInput(wc.id)
   wc.sendInputEvent({ type: 'keyDown', keyCode, modifiers })
   const char = name === 'Enter' ? '\r' : name === 'Space' ? ' ' : name.length === 1 ? name : null
   if (char && !modifiers.some((m) => m === 'control' || m === 'meta' || m === 'alt')) wc.sendInputEvent({ type: 'char', keyCode: char, modifiers })
   if (holdMs > 0) await sleep(holdMs)
-  noteAutomatedInput(wc.id)
   wc.sendInputEvent({ type: 'keyUp', keyCode, modifiers })
 }
 

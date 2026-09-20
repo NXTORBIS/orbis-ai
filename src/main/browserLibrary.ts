@@ -1,33 +1,22 @@
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
-import { basename, dirname, extname, join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import type { BrowserBookmark, BrowserDownload, BrowserHistoryEntry, BrowserLibrarySnapshot, BrowserPick, BrowserSearchEntry, PageShot, ReadingListItem, SavedPage, SiteShortcut, SitePermissionDecision } from '../shared/types'
+import type { BrowserBookmark, BrowserDownload, BrowserHistoryEntry, BrowserLibrarySnapshot, BrowserPick, BrowserSearchEntry, SiteShortcut } from '../shared/types'
 
-const MAX_HISTORY = 5000
-/** A revisit of the same page within this window updates the entry instead of adding another. */
-const REVISIT_MS = 30 * 60_000
-const MAX_DOWNLOADS = 200
 const MAX_SEARCHES = 300
 const MAX_PICKS = 500
 export const MAX_SHORTCUTS = 24
-const MAX_READING = 500
-const MAX_SAVED_PAGES = 500
-const MAX_SCREENSHOTS = 300
 
 interface LibraryFile {
   history: BrowserHistoryEntry[]
   bookmarks: BrowserBookmark[]
   downloads: BrowserDownload[]
-  permissions: Record<string, SitePermissionDecision>
   searches: BrowserSearchEntry[]
   picks: Record<string, BrowserPick>
   shortcuts: SiteShortcut[]
-  readingList: ReadingListItem[]
-  savedPages: SavedPage[]
-  screenshots: PageShot[]
 }
 
-const EMPTY = (): LibraryFile => ({ history: [], bookmarks: [], downloads: [], permissions: {}, searches: [], picks: {}, shortcuts: [], readingList: [], savedPages: [], screenshots: [] })
+const EMPTY = (): LibraryFile => ({ history: [], bookmarks: [], downloads: [], searches: [], picks: {}, shortcuts: [] })
 
 /** Pages the browser should never record (its own blank and error pages). */
 const recordable = (url: string): boolean => /^https?:\/\//i.test(url)
@@ -56,12 +45,14 @@ const shortcutName = (name: string, url: string): string => name.replace(/\s+/g,
 const validIcon = (icon: unknown): icon is string => typeof icon === 'string' && /^data:image\/(png|jpeg|gif|webp|x-icon|svg\+xml);base64,[A-Za-z0-9+/=]+$/.test(icon) && icon.length < 420_000
 
 /**
- * The browser's history, bookmarks, downloads list, remembered site permissions, recent address-bar searches, which
+ * The browser's history, bookmarks, downloads list, recent address-bar searches, which
  * suggestions the user picks, and the new-tab page's shortcuts, kept in one JSON file under the user's data folder.
  * Writes are debounced and atomic (a temporary file is renamed over the old one).
  */
 export class BrowserLibrary {
   private data: LibraryFile = EMPTY()
+  /** Lists an earlier Orbis kept here (a reading list, saved pages, pictures of pages) that no longer have a screen: kept as they were, never dropped. */
+  private legacy: Record<string, unknown> = {}
   private saveTimer: NodeJS.Timeout | null = null
   private writing: Promise<void> = Promise.resolve()
   private file: string
@@ -75,14 +66,14 @@ export class BrowserLibrary {
     this.now = now
   }
 
-  /** Where this profile's browsing data is kept. Screenshots are written beside it, so they follow the profile. */
+  /** Where this profile's library is kept. */
   directory(): string {
     return dirname(this.file)
   }
 
   /**
    * Points the library at another profile's folder: what is in memory is written out first, then that profile's own
-   * history, bookmarks, downloads and site permissions are read in.
+   * history, bookmarks and downloads are read in.
    */
   async useDirectory(dir: string): Promise<void> {
     const next = join(dir, 'browser-library.json')
@@ -95,13 +86,13 @@ export class BrowserLibrary {
 
   async load(): Promise<void> {
     try {
-      const raw = JSON.parse(await readFile(this.file, 'utf8')) as Partial<LibraryFile>
+      const raw = JSON.parse(await readFile(this.file, 'utf8')) as Partial<LibraryFile> & Record<string, unknown>
+      this.legacy = Object.fromEntries(['readingList', 'savedPages', 'screenshots'].filter((key) => raw[key] !== undefined).map((key) => [key, raw[key]]))
       this.data = {
         history: Array.isArray(raw.history) ? raw.history.filter((h) => h && typeof h.url === 'string') : [],
         bookmarks: Array.isArray(raw.bookmarks) ? raw.bookmarks.filter((b) => b && typeof b.url === 'string') : [],
         // Downloads still in progress when Orbis closed can't continue; they are shown as interrupted.
         downloads: Array.isArray(raw.downloads) ? raw.downloads.map((d) => (d.state === 'progressing' ? { ...d, state: 'interrupted' as const } : d)) : [],
-        permissions: raw.permissions && typeof raw.permissions === 'object' ? raw.permissions : {},
         searches: Array.isArray(raw.searches) ? raw.searches.filter((s) => s && typeof s.query === 'string' && typeof s.searchedAt === 'number') : [],
         picks: raw.picks && typeof raw.picks === 'object' ? raw.picks : {},
         shortcuts: Array.isArray(raw.shortcuts)
@@ -109,14 +100,12 @@ export class BrowserLibrary {
               .filter((s) => s && typeof s.id === 'string' && typeof s.url === 'string' && shortcutUrl(s.url))
               .map((s) => ({ id: s.id, name: shortcutName(String(s.name ?? ''), shortcutUrl(s.url)!), url: shortcutUrl(s.url)!, addedAt: Number(s.addedAt) || 0, ...(validIcon(s.icon) ? { icon: s.icon } : s.icon === null ? { icon: null } : {}) }))
               .slice(0, MAX_SHORTCUTS)
-          : [],
-        readingList: Array.isArray(raw.readingList) ? raw.readingList.filter((r) => r && typeof r.url === 'string' && typeof r.addedAt === 'number').slice(0, MAX_READING) : [],
-        savedPages: Array.isArray(raw.savedPages) ? raw.savedPages.filter((s) => s && typeof s.url === 'string' && typeof s.path === 'string').slice(0, MAX_SAVED_PAGES) : [],
-        screenshots: Array.isArray(raw.screenshots) ? raw.screenshots.filter((s) => s && typeof s.id === 'string' && typeof s.path === 'string').slice(0, MAX_SCREENSHOTS) : []
+          : []
       }
     } catch {
       // No library yet, or a damaged file: start empty rather than failing the browser.
       this.data = EMPTY()
+      this.legacy = {}
     }
   }
 
@@ -144,7 +133,7 @@ export class BrowserLibrary {
       clearTimeout(this.saveTimer)
       this.saveTimer = null
     }
-    const data = JSON.stringify(this.data)
+    const data = JSON.stringify({ ...this.data, ...this.legacy })
     this.writing = this.writing.then(async () => {
       const dir = join(this.file, '..')
       await mkdir(dir, { recursive: true })
@@ -160,165 +149,10 @@ export class BrowserLibrary {
       history: this.data.history.slice(0, 1000),
       bookmarks: [...this.data.bookmarks],
       downloads: [...this.data.downloads],
-      permissions: { ...this.data.permissions },
       searches: this.data.searches.slice(0, 100),
       picks: { ...this.data.picks },
-      shortcuts: this.data.shortcuts.map((s) => ({ ...s })),
-      readingList: [...this.data.readingList],
-      savedPages: [...this.data.savedPages],
-      screenshots: [...this.data.screenshots]
+      shortcuts: this.data.shortcuts.map((s) => ({ ...s }))
     }
-  }
-
-  // ---------------------------------------------------------------- reading list
-
-  /**
-   * Pages set aside to read. A bookmark says "keep this"; a reading list says "I have not read this yet", which is why
-   * the two are separate lists rather than one with a flag.
-   */
-  addToReadingList(url: string, title = ''): boolean {
-    if (!recordable(url)) return false
-    const key = pageKey(url)
-    const already = this.data.readingList.find((r) => pageKey(r.url) === key)
-    if (already) {
-      // Adding something already on the list means "I want to read this again".
-      delete already.readAt
-      this.changed()
-      return true
-    }
-    this.data.readingList.unshift({ url, title: title.slice(0, 300), addedAt: this.now() })
-    this.data.readingList = this.data.readingList.slice(0, MAX_READING)
-    this.changed()
-    return true
-  }
-
-  inReadingList(url: string): boolean {
-    const key = pageKey(url)
-    return this.data.readingList.some((r) => pageKey(r.url) === key)
-  }
-
-  setReadingListRead(url: string, read: boolean): void {
-    const key = pageKey(url)
-    const item = this.data.readingList.find((r) => pageKey(r.url) === key)
-    if (!item) return
-    if (read) item.readAt = this.now()
-    else delete item.readAt
-    this.changed()
-  }
-
-  removeFromReadingList(url: string): void {
-    const key = pageKey(url)
-    const before = this.data.readingList.length
-    this.data.readingList = this.data.readingList.filter((r) => pageKey(r.url) !== key)
-    if (this.data.readingList.length !== before) this.changed()
-  }
-
-  clearReadReadingList(): number {
-    const before = this.data.readingList.length
-    this.data.readingList = this.data.readingList.filter((r) => !r.readAt)
-    const removed = before - this.data.readingList.length
-    if (removed) this.changed()
-    return removed
-  }
-
-  // ---------------------------------------------------------------- saved pages
-
-  /** Records a page saved to disk, so there is a list of them rather than a folder somebody has to remember. */
-  recordSavedPage(url: string, title: string, path: string): void {
-    this.data.savedPages = [{ url, title: title.slice(0, 300), path, savedAt: this.now() }, ...this.data.savedPages.filter((s) => s.path !== path)].slice(0, MAX_SAVED_PAGES)
-    this.changed()
-  }
-
-  /** Forgets a saved page. The file itself is the user's, and is left where it is. */
-  removeSavedPage(path: string): void {
-    const before = this.data.savedPages.length
-    this.data.savedPages = this.data.savedPages.filter((s) => s.path !== path)
-    if (this.data.savedPages.length !== before) this.changed()
-  }
-
-  // ---------------------------------------------------------------- screenshots
-
-  recordScreenshot(shot: PageShot): void {
-    this.data.screenshots = [shot, ...this.data.screenshots.filter((s) => s.id !== shot.id)].slice(0, MAX_SCREENSHOTS)
-    this.changed()
-  }
-
-  screenshot(id: string): PageShot | undefined {
-    return this.data.screenshots.find((s) => s.id === id)
-  }
-
-  removeScreenshot(id: string): PageShot | undefined {
-    const going = this.data.screenshots.find((s) => s.id === id)
-    if (!going) return undefined
-    this.data.screenshots = this.data.screenshots.filter((s) => s.id !== id)
-    this.changed()
-    return going
-  }
-
-  // ---------------------------------------------------------------- history
-
-  /** Records a visit. A revisit of the same page soon after updates the existing entry. */
-  visit(url: string, title = ''): void {
-    if (!recordable(url)) return
-    const key = pageKey(url)
-    const time = this.now()
-    const latest = this.data.history.find((h) => pageKey(h.url) === key)
-    if (latest && time - latest.visitedAt < REVISIT_MS) {
-      latest.visitedAt = time
-      if (title) latest.title = title
-      this.data.history = [latest, ...this.data.history.filter((h) => h !== latest)]
-    } else {
-      this.data.history.unshift({ url, title, visitedAt: time })
-      if (this.data.history.length > MAX_HISTORY) this.data.history.length = MAX_HISTORY
-    }
-    this.changed()
-  }
-
-  /** A page's title arrived after the visit was recorded. */
-  retitle(url: string, title: string): void {
-    const entry = this.data.history.find((h) => pageKey(h.url) === pageKey(url))
-    if (!entry || !title || entry.title === title) return
-    entry.title = title
-    const bookmark = this.data.bookmarks.find((b) => pageKey(b.url) === pageKey(url))
-    if (bookmark && !bookmark.title) bookmark.title = title
-    this.changed()
-  }
-
-  /** History entries, newest first, filtered by text (URL or title) and visit time. */
-  searchHistory(options: { query?: string; from?: number; to?: number; limit?: number }): BrowserHistoryEntry[] {
-    const q = options.query?.toLowerCase().trim()
-    const out: BrowserHistoryEntry[] = []
-    const limit = Math.max(1, Math.min(options.limit ?? 100, MAX_HISTORY))
-    for (const h of this.data.history) {
-      if (q && !h.url.toLowerCase().includes(q) && !h.title.toLowerCase().includes(q)) continue
-      if (options.from !== undefined && h.visitedAt < options.from) continue
-      if (options.to !== undefined && h.visitedAt > options.to) continue
-      out.push({ ...h })
-      if (out.length >= limit) break
-    }
-    return out
-  }
-
-  /** Removes the entries visited between two times; returns how many. */
-  removeHistoryRange(from: number, to: number): number {
-    const before = this.data.history.length
-    this.data.history = this.data.history.filter((h) => h.visitedAt < from || h.visitedAt > to)
-    const removed = before - this.data.history.length
-    if (removed) this.changed()
-    return removed
-  }
-
-  removeHistory(url: string): void {
-    const before = this.data.history.length
-    this.data.history = this.data.history.filter((h) => pageKey(h.url) !== pageKey(url))
-    if (this.data.history.length !== before) this.changed()
-  }
-
-  /** Clears history and what was learned from it (suggestion picks). */
-  clearHistory(): void {
-    this.data.history = []
-    this.data.picks = {}
-    this.changed()
   }
 
   // ---------------------------------------------------------------- address bar searches and learning
@@ -334,19 +168,17 @@ export class BrowserLibrary {
     this.changed()
   }
 
-  /** Forgets a search, including the matching search result pages in history. */
+  /** Forgets a search the address bar remembered (Chromium's own history is the browser's to keep). */
   removeSearch(query: string): void {
     const key = cleanQuery(query).toLowerCase()
     if (!key) return
     this.data.searches = this.data.searches.filter((s) => s.query.toLowerCase() !== key)
-    this.data.history = this.data.history.filter((h) => searchedFor(h.url) !== key)
     delete this.data.picks[`q:${key}`]
     this.changed()
   }
 
   clearSearches(): void {
     this.data.searches = []
-    this.data.history = this.data.history.filter((h) => !searchedFor(h.url))
     this.data.picks = Object.fromEntries(Object.entries(this.data.picks).filter(([key]) => !key.startsWith('q:')))
     this.changed()
   }
@@ -412,102 +244,19 @@ export class BrowserLibrary {
     return this.data.bookmarks.some((b) => pageKey(b.url) === pageKey(url))
   }
 
-  /** Adds pages that aren't bookmarked yet; returns how many were added. */
-  addBookmarks(pages: { url: string; title: string }[]): number {
-    let added = 0
-    for (const page of pages) {
-      if (!recordable(page.url) || this.isBookmarked(page.url)) continue
-      this.data.bookmarks.unshift({ url: page.url, title: page.title || page.url, addedAt: this.now() })
-      added++
-    }
-    if (added) this.changed()
-    return added
-  }
+  // ---------------------------------------------------------------- Chromium's own lists
 
-  /** Bookmarks the page, or removes its bookmark; returns whether it is bookmarked now. */
-  toggleBookmark(url: string, title: string): boolean {
-    if (this.isBookmarked(url)) {
-      this.removeBookmark(url)
-      return false
-    }
-    return this.addBookmarks([{ url, title }]) > 0
-  }
-
-  removeBookmark(url: string): void {
-    this.data.bookmarks = this.data.bookmarks.filter((b) => pageKey(b.url) !== pageKey(url))
+  /**
+   * Replaces the history, bookmarks and downloads shown in the Orbis window with what the Orbis browser (Chromium) has: they live
+   * in the browser's own profile, and this is a copy for the address-bar suggestions, the new-tab widgets and Galaxy. Nothing else in the
+   * library (shortcuts, searches, what the address bar learned) is touched. Listeners are told only when something differs.
+   */
+  mirrorBrowser(lists: { history: BrowserHistoryEntry[]; bookmarks: BrowserBookmark[]; downloads: BrowserDownload[] }): void {
+    const next = { history: lists.history.filter((h) => recordable(h.url)).slice(0, 1000), bookmarks: lists.bookmarks.filter((b) => recordable(b.url)), downloads: lists.downloads.slice(0, 200) }
+    if (JSON.stringify(next) === JSON.stringify({ history: this.data.history, bookmarks: this.data.bookmarks, downloads: this.data.downloads })) return
+    this.data.history = next.history
+    this.data.bookmarks = next.bookmarks
+    this.data.downloads = next.downloads
     this.changed()
   }
-
-  // ---------------------------------------------------------------- downloads
-
-  upsertDownload(download: BrowserDownload): void {
-    const index = this.data.downloads.findIndex((d) => d.id === download.id)
-    if (index >= 0) this.data.downloads[index] = download
-    else {
-      this.data.downloads.unshift(download)
-      if (this.data.downloads.length > MAX_DOWNLOADS) this.data.downloads.length = MAX_DOWNLOADS
-    }
-    this.changed()
-  }
-
-  download(id: string): BrowserDownload | undefined {
-    return this.data.downloads.find((d) => d.id === id)
-  }
-
-  /** Removes one finished download from the list (the file itself stays where it is). */
-  removeDownload(id: string): boolean {
-    const record = this.download(id)
-    if (!record || record.state === 'progressing' || record.state === 'paused') return false
-    this.data.downloads = this.data.downloads.filter((d) => d.id !== id)
-    this.changed()
-    return true
-  }
-
-  clearFinishedDownloads(): void {
-    this.data.downloads = this.data.downloads.filter((d) => d.state === 'progressing')
-    this.changed()
-  }
-
-  // ---------------------------------------------------------------- permissions
-
-  /** A remembered decision for an origin and permission, if the user asked Orbis to remember it. */
-  permission(origin: string, permission: string): SitePermissionDecision | undefined {
-    return this.data.permissions[`${origin} ${permission}`]
-  }
-
-  rememberPermission(origin: string, permission: string, decision: SitePermissionDecision): void {
-    this.data.permissions[`${origin} ${permission}`] = decision
-    this.changed()
-  }
-
-  forgetPermissions(origin?: string): void {
-    this.data.permissions = origin ? Object.fromEntries(Object.entries(this.data.permissions).filter(([key]) => !key.startsWith(`${origin} `))) : {}
-    this.changed()
-  }
-}
-
-/** The lower-cased query of a Google, Bing, DuckDuckGo or YouTube results page, or "" for other pages. */
-function searchedFor(url: string): string {
-  try {
-    const u = new URL(url)
-    const host = u.hostname.replace(/^www\./, '')
-    let q: string | null = null
-    if (/^google\.[a-z.]+$/.test(host) && u.pathname === '/search') q = u.searchParams.get('q')
-    else if (host === 'bing.com' && u.pathname === '/search') q = u.searchParams.get('q')
-    else if (host === 'duckduckgo.com' && u.pathname === '/') q = u.searchParams.get('q')
-    else if ((host === 'youtube.com' || host === 'm.youtube.com') && u.pathname === '/results') q = u.searchParams.get('search_query')
-    return q ? cleanQuery(q).toLowerCase() : ''
-  } catch {
-    return ''
-  }
-}
-
-/** A file name in `dir` that doesn't overwrite an existing download: "report.pdf", then "report (1).pdf", ... */
-export function uniqueDownloadName(name: string, taken: (candidate: string) => boolean): string {
-  const safe = basename(name).replace(/[<>:"/\\|?* -]/g, '_').trim() || 'download'
-  const ext = extname(safe)
-  const stem = ext ? safe.slice(0, -ext.length) : safe
-  let candidate = safe
-  for (let n = 1; taken(candidate); n++) candidate = `${stem} (${n})${ext}`
-  return candidate
 }

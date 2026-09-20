@@ -35,11 +35,11 @@ import OrionAnswer from './OrionAnswer'
 // The quick Workflows panel (and the run dialog it uses) loads the first time the button is opened.
 const WorkflowQuickPanel = lazy(() => import('./WorkflowQuickPanel'))
 import { useDismiss, useDropdownOpen } from '../lib/useDismiss'
-import { bool, failure, int, readResult, reportControlState, str, unverified, useControlRendered, useControlScope, verified, waitUntil } from '../lib/browserControl'
+import { bool, failure, int, readResult, str, unverified, useControlRendered, useControlScope, verified, waitUntil } from '../lib/browserControl'
 
 interface Props {
   /** The Orbis browser's current page URL, or empty when no page is open. */
-  url: string
+  url?: string
   /** The current page's title, for bookmarking. */
   title?: string
   /** The active browser tab. Each tab keeps its own half-typed text, restored when the user comes back to it. */
@@ -63,7 +63,7 @@ interface Props {
   onOpenWorkflows?(): void
 }
 
-const EMPTY_LIBRARY: BrowserLibrarySnapshot = { history: [], bookmarks: [], downloads: [], permissions: {}, searches: [], picks: {}, shortcuts: [], readingList: [], savedPages: [], screenshots: [] }
+const EMPTY_LIBRARY: BrowserLibrarySnapshot = { history: [], bookmarks: [], downloads: [], searches: [], picks: {}, shortcuts: [] }
 const CACHE_SIZE = 200
 
 /** Remembers recent prediction responses so retyping or backspacing shows them instantly. */
@@ -193,7 +193,7 @@ function Highlight({ text, typed }: { text: string; typed: string }): React.JSX.
  * Otherwise it always shows the page the browser is really on. Ctrl+L, Ctrl+E, Alt+D and F6 focus it.
  */
 export default function UrlBar({
-  url,
+  url = '',
   title = '',
   tabKey = '',
   onNavigate,
@@ -448,16 +448,6 @@ export default function UrlBar({
   bar.current = { typed, editing, shown, items, ask }
   const actions = useRef({ submit, go, askOrion, openInDefaultBrowser })
   actions.current = { submit, go, askOrion, openInDefaultBrowser }
-  useEffect(() => {
-    reportControlState({
-      addressBar: {
-        value: shown,
-        editing,
-        focused: document.activeElement === inputRef.current,
-        suggestions: open ? items.map((item, index) => ({ index, kind: item.kind, text: item.text, ...(item.url ? { url: item.url } : {}) })) : []
-      }
-    })
-  }, [shown, editing, items, open])
   /** Puts text in the bar as if typed: it becomes the tab's draft and suggestions open. */
   const typeText = async (text: string): Promise<boolean> => {
     inputRef.current?.focus()

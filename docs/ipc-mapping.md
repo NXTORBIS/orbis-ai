@@ -31,16 +31,8 @@ The service and Orion channels are the easy two thirds. The browser channels are
 
 | Channel | Does | Chromium equivalent |
 | --- | --- | --- |
-| `browser:focus` | Focuses the browser | `Browser::window()->Show()` |
-| `browser:popout` | Opens a page in its own window | `Browser` creation with a single tab |
-| `chromium:available` | Whether Orbis's own Chromium is installed | Nothing: Chromium is the browser; this only says whether it is there |
 | `chromium:open` | Opens the Orbis browser (Chromium) at an address or a search | `BrowserManager.open`: starts Chromium over a pipe, then a tab |
-| `browser:save-page` | Saves the page | `content::WebContents::OnSavePage` |
-| `browser:clear-data`, `browser:clear-private` | Clears browsing data | `BrowsingDataRemover` |
-| `browser:permission-answer` | Answers a site's request | `permissions::PermissionRequestManager` |
-| `browser:device-answer`, `browser:pending-devices` | Picks a USB/HID/serial device | Chromium's device chooser controllers |
-| `browser:protected-media` | Whether Widevine is there | `CdmRegistry` |
-| `browser:watch-page-moves` | Pointer movement for fullscreen bars | Input observer on `RenderWidgetHost` |
+| `chat:browser-confirm` | The user's yes or no to a browser action Orion proposes in chat | Unchanged: an approval card in the Orbis window |
 | `window:fullscreen`, `window:is-fullscreen` | Window fullscreen | `FullscreenController` |
 | `shell:openExternal` | Opens a link outside Orbis | `platform_util::OpenExternal` |
 | `files:pickImages`, `files:pickText` | File dialogs | `ui::SelectFileDialog` |
@@ -52,16 +44,12 @@ This is the one place where Chromium does it better than we do, and the port is 
 
 | Channel | Does | Chromium equivalent |
 | --- | --- | --- |
-| `library:get` | Everything at once | `HistoryService`, `BookmarkModel`, `DownloadManager` |
-| `library:toggle-bookmark`, `library:add-bookmarks`, `library:remove-bookmark` | Bookmarks | `BookmarkModel` |
-| `library:remove-history`, `library:clear-history` | History | `HistoryService::DeleteURLs` |
-| `library:download-action`, `library:clear-downloads` | Downloads | `DownloadItem` (pause, resume, cancel, show) |
+| `library:get` | Everything at once | Orbis's own library plus a copy of Chromium's history, bookmarks and downloads, refreshed on demand (`browserMirror.ts`) |
+| `library:toggle-bookmark` | Bookmarks | Bookmarks are Chromium's: this adds or removes the bookmark in the browser through its extension, then refreshes the copy the window shows |
+| `library:remove-history` | Removes a page from history | Chromium's history (`history.delete`), then the copy is refreshed |
+| `library:download-action` | Show or open a download | Chromium's `chrome.downloads.show` / `open`, through the extension |
 | `library:record-search`, `library:remove-search`, `library:clear-searches` | What was searched | Orbis's own; Chromium has no equivalent worth using |
 | `library:record-pick` | Which suggestion was taken | Orbis's own, feeds the omnibox ranking |
-| `library:forget-permissions` | Forgets a site's remembered answers | `HostContentSettingsMap` |
-| `library:reading-add`, `library:reading-read`, `library:reading-remove`, `library:reading-clear-read` | The reading list | Orbis's own; Chromium's reading list is tied to a Google account, ours is not |
-| `library:forget-saved-page` | Forgets a saved page | Orbis's own; Chromium saves pages but does not list them |
-| `library:keep-screenshot`, `library:read-screenshot`, `library:remove-screenshot` | Pictures kept of pages | Orbis's own |
 
 ### Control — the Browser Control Layer, which Orion and workflows both drive
 
@@ -72,31 +60,18 @@ This is the one place where Chromium does it better than we do, and the port is 
 | `control:state` | What the browser looks like now | Read from `TabStripModel` and `NavigationController` directly |
 | `control:confirm-answer` | The user's yes or no | Unchanged |
 | `control:run-plan`, `control:run-control`, `control:runs`, `control:log` | Runs a sequence and records it | Unchanged; the steps underneath become Mojo calls |
-| `control:window-scope`, `control:window-state`, `control:window-result` | Capabilities the window provides | Removed. In Chromium the browser process owns this state, so the window does not have to lend it |
+| `control:window-scope`, `control:window-result` | Capabilities the Orbis window provides (its address bar) | Unchanged: the Orbis window is still Electron, so it lends these. The browser's own tab state is no longer reported by the window: it is read from Chromium |
 
-The last row matters: three channels exist only because Electron's main process cannot see what the window knows.
-Chromium's browser process owns the tab strip, so they stop being necessary at all.
+The window's browser-state report is gone: the window used to report the in-app browser's tabs. The main process now follows Chromium's own tabs (`browserState.ts`).
 
-### Extensions — becomes Chromium's own extensions system
+### Extensions — Chromium's own
 
-| Channel | Does | Chromium equivalent |
-| --- | --- | --- |
-| `extensions:list`, `extensions:remove`, `extensions:set-enabled`, `extensions:update` | Managing them | `ExtensionRegistry`, `ExtensionService` |
-| `extensions:click-action`, `extensions:set-pinned` | The toolbar | `ExtensionActionManager`, `ToolbarActionsModel` |
-| `extensions:prompt-answer` | Permission prompts | `ExtensionInstallPrompt` |
-| `extensions:report-tabs`, `extensions:window-answer` | Answering `chrome.tabs` for extensions | Removed. Chromium implements `chrome.tabs` itself |
-| `orbis-ext:call` | Our bridge for extension APIs | Removed, for the same reason |
-
-Three channels disappear because we are currently reimplementing what Chromium already has.
+All of the extension-management channels (and the extension bridge) are gone with the Electron extension host: Chromium runs extensions itself. What Orbis still does
+with them is a control-layer capability set (`extensions.list`, `extensions.setEnabled`, `extensions.remove`) registered by `src/main/chromium`.
 
 ### Ad blocking
 
-| Channel | Does | Chromium equivalent |
-| --- | --- | --- |
-| `adblock:state`, `adblock:settings`, `adblock:site`, `adblock:allow-resource`, `adblock:remove-exception` | Settings and exceptions | Orbis's own, unchanged |
-| `adblock:report` | What was blocked on this page | Unchanged; counted in the throttle |
-| `adblock:update`, `adblock:rollback` | The filter lists | Unchanged |
-| `@ghostery/adblocker/inject-cosmetic-filters`, `@ghostery/adblocker/is-mutation-observer-enabled` | The engine's own page-side channels | Replaced by a `URLLoaderThrottle` and a renderer-side script |
+The blocker is the Orbis extension in Chromium. The Electron session blocker's settings and report channels are gone; chat's ad-blocking commands talk to the extension (`adblockChat.ts`).
 
 ### Services — Orbis's own data, hardly touched
 
@@ -127,7 +102,6 @@ None of these ever touched Electron beyond the channel itself. They are a servic
 | Channel | Becomes |
 | --- | --- |
 | `chat:send`, `chat:abort`, `chat:complete`, `chat:title`, `chat:suggest` | Mojo, same service |
-| `chat:browser-target`, `chat:browser-confirm` | Mojo, same service |
 | `automation:classify`, `automation:control`, `automation:steer` | Mojo, same service |
 | `image:edit`, `image:save` | Mojo, same service |
 | `voice:transcribe`, `voice:cancel`, `voice:hardware` | Mojo, same service |
@@ -139,22 +113,16 @@ same way Galaxy and workspace changes already are.
 
 ## What this tells us about the size of the job
 
+The Electron in-app browser is gone (`docs/electron-removal.md`), and with it the browser channels that existed only to drive it:
+tabs' focus and pop-out windows, permission and device prompts, the extension host, the Electron ad blocker's settings and report, and the
+library's reading list, saved pages, pictures of pages and download bookkeeping. What is left is what the Orbis window itself asks for.
+
 | Kind | Channels | Effort |
 | --- | ---: | --- |
-| Unchanged behind a new transport (Orion, services) | 41 | Mechanical |
-| Ours, kept, but rehosted (adblock, omnibox, searches) | 13 | Small |
-| Becomes Chromium's own and gets better (library, extensions, permissions, downloads) | 26 | Real work, real gain |
-| Disappears — Chromium already does it | 6 | Deletion |
-| Browser plumbing to rebuild | 16 | The migration proper |
+| Orion and what it uses (chat, automation, steps, images, voice, memory, skills, search, Galaxy, omnibox) | 62 | Unchanged behind a new transport |
+| Orbis's own services (vault, settings, conversations, updates, sidebar layout, widgets, shortcuts, files, system) | 45 | Unchanged |
+| Control layer | 12 | Unchanged; the browser side is Chromium's capabilities |
+| Library (Orbis's own memory of searches, shortcuts and picks, plus a copy of Chromium's lists) | 8 | Small |
+| Opening the Orbis browser, window fullscreen | 4 | Small |
 
-Six channels are deleted outright and twenty-six are replaced by something better than what Orbis has now. Only
-sixteen are genuine new plumbing.
-
-## Order of work
-
-1. **Orion and services** first (41 channels). They prove the Mojo transport works without touching the browser.
-2. **Library** next (12). Moving history, bookmarks and downloads onto Chromium's services is the biggest single
-   quality gain and it is self-contained.
-3. **Control layer** (10). Orion and workflows both depend on it, and three channels vanish.
-4. **Extensions** (9), where five are deleted rather than ported.
-5. **Browser plumbing and ad blocking** last, because they are the most engine-specific.
+131 channels in all.

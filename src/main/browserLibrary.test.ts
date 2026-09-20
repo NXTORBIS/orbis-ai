@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { BrowserLibrary, uniqueDownloadName } from './browserLibrary.ts'
+import { BrowserLibrary } from './browserLibrary.ts'
 
 async function library(): Promise<{ lib: BrowserLibrary; dir: string; clock: { t: number }; done(): Promise<void> }> {
   const dir = await mkdtemp(join(tmpdir(), 'orbis-library-'))
@@ -68,8 +68,6 @@ test('address-bar searches are remembered, counted, removable, and cleared with 
     lib.recordSearch('  Best   AI models ')
     lib.recordSearch('   ')
     assert.deepEqual(lib.snapshot().searches.map((s) => [s.query, s.count]), [['Best AI models', 2], ['react docs', 1]])
-    lib.visit('https://www.google.com/search?q=react+docs', 'react docs - Google Search')
-    lib.visit('https://react.dev/', 'React')
     lib.recordPick('q:react docs')
     lib.recordPick('q:react docs')
     lib.recordPick('u:react.dev')
@@ -78,76 +76,63 @@ test('address-bar searches are remembered, counted, removable, and cleared with 
     assert.equal(lib.snapshot().picks.bogus, undefined)
     lib.removeSearch('REACT DOCS')
     assert.deepEqual(lib.snapshot().searches.map((s) => s.query), ['Best AI models'])
-    assert.deepEqual(lib.snapshot().history.map((h) => h.url), ['https://react.dev/'], 'its results page leaves history too')
     assert.equal(lib.snapshot().picks['q:react docs'], undefined)
     lib.clearSearches()
     assert.equal(lib.snapshot().searches.length, 0)
     assert.ok(lib.snapshot().picks['u:react.dev'], 'clearing searches keeps learned pages')
-    lib.clearHistory()
-    assert.deepEqual(lib.snapshot().picks, {})
   } finally {
     await done()
   }
 })
 
-test('history records real pages, merges quick revisits and keeps the newest first', async () => {
-  const { lib, clock, done } = await library()
-  try {
-    lib.visit('https://a.example/one', 'One')
-    clock.t += 60_000
-    lib.visit('https://b.example/', 'B')
-    clock.t += 60_000
-    lib.visit('https://a.example/one#section', '')
-    lib.visit('about:blank')
-    lib.visit('chrome-error://chromewebdata/')
-    const history = lib.snapshot().history
-    assert.deepEqual(history.map((h) => h.url), ['https://a.example/one', 'https://b.example/'])
-    assert.equal(history[0].title, 'One', 'a revisit without a title keeps the known title')
-    clock.t += 2 * 60 * 60_000
-    lib.visit('https://a.example/one', 'One again')
-    assert.equal(lib.snapshot().history.length, 3, 'a visit hours later is a new entry')
-    lib.retitle('https://b.example/', 'B page')
-    assert.equal(lib.snapshot().history.find((h) => h.url === 'https://b.example/')?.title, 'B page')
-    lib.removeHistory('https://a.example/one')
-    assert.deepEqual(lib.snapshot().history.map((h) => h.url), ['https://b.example/'])
-    lib.clearHistory()
-    assert.equal(lib.snapshot().history.length, 0)
-  } finally {
-    await done()
-  }
-})
-
-test('bookmarks toggle, ignore duplicates and non-web pages, and bookmark all tabs', async () => {
+test("Chromium's history, bookmarks and downloads are mirrored in; what the address bar learned is left alone", async () => {
   const { lib, done } = await library()
   try {
-    assert.equal(lib.toggleBookmark('https://a.example/', 'A'), true)
-    assert.equal(lib.isBookmarked('https://a.example/#x'), true)
-    assert.equal(lib.addBookmarks([{ url: 'https://a.example/', title: 'A' }, { url: 'https://b.example/', title: '' }, { url: 'about:blank', title: 'Blank' }]), 1)
-    assert.deepEqual(lib.snapshot().bookmarks.map((b) => [b.url, b.title]), [['https://b.example/', 'https://b.example/'], ['https://a.example/', 'A']])
-    assert.equal(lib.toggleBookmark('https://a.example/', 'A'), false)
-    assert.equal(lib.isBookmarked('https://a.example/'), false)
+    lib.recordSearch('ai news')
+    lib.addShortcut('GitHub', 'github.com')
+    let changes = 0
+    lib.addListener(() => changes++)
+    const lists = {
+      history: [
+        { url: 'https://a.example/', title: 'A', visitedAt: 2 },
+        { url: 'chrome://settings/', title: 'Settings', visitedAt: 1 }
+      ],
+      bookmarks: [{ url: 'https://b.example/', title: 'B', addedAt: 3 }],
+      downloads: [{ id: '7', url: 'https://c.example/f.zip', filename: 'f.zip', path: 'C:/Downloads/f.zip', state: 'completed' as const, receivedBytes: 10, totalBytes: 10, startedAt: 1 }]
+    }
+    lib.mirrorBrowser(lists)
+    const snap = lib.snapshot()
+    assert.deepEqual(snap.history.map((h) => h.url), ['https://a.example/'], 'only web pages are kept')
+    assert.deepEqual(snap.bookmarks.map((b) => b.url), ['https://b.example/'])
+    assert.equal(snap.downloads[0].state, 'completed')
+    assert.equal(snap.searches.length, 1)
+    assert.equal(snap.shortcuts.length, 1)
+    assert.equal(changes, 1)
+    lib.mirrorBrowser(lists)
+    assert.equal(changes, 1, 'the same lists are not a change')
+    assert.equal(lib.isBookmarked('https://b.example/#x'), true)
+    lib.mirrorBrowser({ ...lists, bookmarks: [] })
+    assert.equal(lib.isBookmarked('https://b.example/'), false, 'a bookmark removed in the browser goes away here')
   } finally {
     await done()
   }
 })
 
-test('the library is saved atomically and survives a restart; interrupted downloads are marked so', async () => {
+test('the library is saved atomically and survives a restart; downloads that were running are marked interrupted', async () => {
   const { lib, dir, done } = await library()
   try {
-    lib.visit('https://a.example/', 'A')
-    lib.toggleBookmark('https://a.example/', 'A')
-    lib.rememberPermission('https://meet.example', 'media', 'allow')
-    lib.upsertDownload({ id: 'd1', url: 'https://a.example/f.zip', filename: 'f.zip', path: 'C:/Downloads/f.zip', state: 'progressing', receivedBytes: 10, totalBytes: 100, startedAt: 1 })
+    lib.mirrorBrowser({
+      history: [{ url: 'https://a.example/', title: 'A', visitedAt: 1 }],
+      bookmarks: [{ url: 'https://a.example/', title: 'A', addedAt: 1 }],
+      downloads: [{ id: 'd1', url: 'https://a.example/f.zip', filename: 'f.zip', path: 'C:/Downloads/f.zip', state: 'progressing', receivedBytes: 10, totalBytes: 100, startedAt: 1 }]
+    })
     await lib.flush()
     const reopened = new BrowserLibrary(dir)
     await reopened.load()
     const snap = reopened.snapshot()
     assert.equal(snap.history[0].url, 'https://a.example/')
     assert.equal(snap.bookmarks.length, 1)
-    assert.equal(reopened.permission('https://meet.example', 'media'), 'allow')
     assert.equal(snap.downloads[0].state, 'interrupted')
-    reopened.forgetPermissions('https://meet.example')
-    assert.equal(reopened.permission('https://meet.example', 'media'), undefined)
   } finally {
     await done()
   }
@@ -159,76 +144,28 @@ test('a damaged library file starts empty instead of breaking the browser', asyn
     await writeFile(join(dir, 'browser-library.json'), '{not json')
     const lib = new BrowserLibrary(dir)
     await lib.load()
-    assert.deepEqual(lib.snapshot(), { history: [], bookmarks: [], downloads: [], permissions: {}, searches: [], picks: {}, shortcuts: [], readingList: [], savedPages: [], screenshots: [] })
-    lib.visit('https://a.example/', 'A')
+    assert.deepEqual(lib.snapshot(), { history: [], bookmarks: [], downloads: [], searches: [], picks: {}, shortcuts: [] })
+    lib.recordSearch('a search')
     await lib.flush()
-    assert.match(await readFile(join(dir, 'browser-library.json'), 'utf8'), /a\.example/)
+    assert.match(await readFile(join(dir, 'browser-library.json'), 'utf8'), /a search/)
   } finally {
     await done()
   }
 })
 
-test('downloads never overwrite an existing file and get safe names', () => {
-  const taken = new Set(['report.pdf', 'report (1).pdf'])
-  assert.equal(uniqueDownloadName('report.pdf', (n) => taken.has(n)), 'report (2).pdf')
-  assert.equal(uniqueDownloadName('new.pdf', (n) => taken.has(n)), 'new.pdf')
-  assert.equal(uniqueDownloadName('../../evil:name?.exe', () => false), 'evil_name_.exe')
-  assert.equal(uniqueDownloadName('', () => false), 'download')
-})
-
-test('a reading list is a queue, not a second set of bookmarks', async () => {
+test('lists an earlier Orbis kept (reading list, saved pages, pictures of pages) are written back as they were', async () => {
   const { dir, done } = await library()
   try {
+    const legacy = { readingList: [{ url: 'https://a.example/article', title: 'An article', addedAt: 1 }], savedPages: [{ url: 'https://a.example/', title: 'A', path: 'C:/pages/a.html', at: 1 }], screenshots: [{ id: 'one', path: 'C:/shots/one.png' }] }
+    await writeFile(join(dir, 'browser-library.json'), JSON.stringify({ history: [], bookmarks: [], downloads: [], shortcuts: [], ...legacy }))
     const lib = new BrowserLibrary(dir)
     await lib.load()
-
-    assert.equal(lib.addToReadingList('https://a.example/article', 'An article'), true)
-    assert.equal(lib.addToReadingList('orbis://search?q=x', 'Not a web page'), false, 'only real pages can be set aside')
-    assert.equal(lib.inReadingList('https://a.example/article'), true)
-    assert.equal(lib.isBookmarked('https://a.example/article'), false, 'setting something aside does not bookmark it')
-
-    lib.setReadingListRead('https://a.example/article', true)
-    assert.ok(lib.snapshot().readingList[0].readAt, 'it knows what has been read')
-
-    // Adding it again means reading it again, rather than a second copy.
-    lib.addToReadingList('https://a.example/article', 'An article')
-    assert.equal(lib.snapshot().readingList.length, 1)
-    assert.equal(lib.snapshot().readingList[0].readAt, undefined)
-
-    lib.addToReadingList('https://b.example/other', 'Other')
-    lib.setReadingListRead('https://b.example/other', true)
-    assert.equal(lib.clearReadReadingList(), 1, 'clearing what is read leaves what is not')
-    assert.deepEqual(lib.snapshot().readingList.map((r) => r.url), ['https://a.example/article'])
-
-    lib.removeFromReadingList('https://a.example/article')
-    assert.equal(lib.snapshot().readingList.length, 0)
-  } finally {
-    await done()
-  }
-})
-
-test('saved pages and screenshots are listed, and survive a restart', async () => {
-  const { dir, done } = await library()
-  try {
-    const lib = new BrowserLibrary(dir)
-    await lib.load()
-    lib.recordSavedPage('https://a.example/', 'A', 'C:/pages/a.html')
-    lib.recordSavedPage('https://a.example/', 'A again', 'C:/pages/a.html')
-    assert.equal(lib.snapshot().savedPages.length, 1, 'saving over the same file replaces its entry')
-
-    lib.recordScreenshot({ id: 'one', url: 'https://a.example/', title: 'A', path: 'C:/shots/one.png', at: 1, width: 800, height: 600 })
-    assert.equal(lib.screenshot('one')?.width, 800)
+    lib.recordSearch('something')
     await lib.flush()
-
-    const later = new BrowserLibrary(dir)
-    await later.load()
-    assert.deepEqual(later.snapshot().savedPages.map((s) => s.path), ['C:/pages/a.html'])
-    assert.deepEqual(later.snapshot().screenshots.map((s) => s.id), ['one'])
-
-    assert.equal(later.removeScreenshot('one')?.path, 'C:/shots/one.png', 'removing one says which file to delete')
-    assert.equal(later.removeScreenshot('one'), undefined)
-    later.removeSavedPage('C:/pages/a.html')
-    assert.equal(later.snapshot().savedPages.length, 0)
+    const written = JSON.parse(await readFile(join(dir, 'browser-library.json'), 'utf8')) as Record<string, unknown>
+    assert.deepEqual(written.readingList, legacy.readingList)
+    assert.deepEqual(written.savedPages, legacy.savedPages)
+    assert.deepEqual(written.screenshots, legacy.screenshots)
   } finally {
     await done()
   }

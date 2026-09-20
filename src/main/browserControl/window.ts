@@ -20,16 +20,14 @@ export interface WindowControlOptions {
 
 /** Why a window part's capabilities can't run while that part isn't open. */
 const CLOSED_REASON: Record<string, string> = {
-  'browser-panel': 'The browser is closed. Open it first (browser.open).',
-  'address-bar': 'The address bar is not ready yet.',
-  app: 'The Orbis window is not ready yet.'
+  'address-bar': 'The address bar is not ready yet.'
 }
 
 /**
- * The Orbis window's side of the control layer. Tabs, groups, the address bar, find, zoom and the browser panel live in
- * the window, so their capabilities are carried out there by the same functions its buttons and shortcuts use; the
- * window registers what it can do and reports its browser state whenever that changes (never on a timer). This class
- * also asks the user to approve consequential actions, and runs multi-step plans.
+ * The Orbis window's side of the control layer. The address bar lives in the window, so its capabilities are carried out
+ * there by the same functions its typing and clicks use: the window registers what it can do, and answers when asked. The
+ * browser itself is Chromium; its tab list is fed into `state` from the browser (see `browserState.ts`). This class also asks the
+ * user to approve consequential actions, and runs multi-step plans.
  */
 export class WindowControl {
   private readonly o: WindowControlOptions
@@ -38,7 +36,7 @@ export class WindowControl {
   private readonly confirmations = new Map<string, (approved: boolean) => void>()
   private readonly runs = new Map<string, PlanRun>()
   private readonly finished: RunState[] = []
-  /** The window's latest browser state: the one source of truth, as the window itself reports it. */
+  /** The browser's latest tab report: the one source of truth, as the browser itself gives it. */
   state: WindowBrowserState | null = null
   private stateWaiters: (() => void)[] = []
   private readonly verifications = new WeakMap<ControlContext, WindowRunResult['verification']>()
@@ -56,7 +54,8 @@ export class WindowControl {
     try {
       const saved = JSON.parse(await fs.readFile(this.o.capabilityCache, 'utf8')) as Record<string, CapabilityDescriptor[]>
       for (const [scope, list] of Object.entries(saved)) {
-        if (this.scopes.has(scope) || !Array.isArray(list)) continue
+        // Only parts of the window that still exist: an earlier Orbis also remembered its in-app browser's capabilities here, which are Chromium's now.
+        if (!(scope in CLOSED_REASON) || this.scopes.has(scope) || !Array.isArray(list)) continue
         this.known.set(scope, list)
         for (const d of list) if (!this.o.control.has(d.id)) this.registerClosed(scope, d)
       }

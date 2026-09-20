@@ -13,7 +13,6 @@ import type { WhiteboardStore } from './whiteboard'
 import type { WorkspacesStore } from './workspaces'
 import type { ProfilesStore } from './profiles'
 import type { Profile } from '../../shared/profiles'
-import { partitionFor } from '../../shared/profiles'
 import type { Workspace } from '../../shared/workspaces'
 import { openPlan } from '../../shared/workspaces'
 
@@ -25,7 +24,7 @@ export interface PersonalIpcOptions {
   workspaces: WorkspacesStore
   profiles: ProfilesStore
   /** Moves Orbis to another profile: its session, its browsing data and its pages. */
-  switchProfile(id: string): Promise<{ profile: Profile; partition: string }>
+  switchProfile(id: string): Promise<{ profile: Profile }>
   control: BrowserControl
   getWindow(): BrowserWindow | null
   /** The page in front: its address, title and the text the user has selected. */
@@ -165,7 +164,7 @@ export function registerPersonalIpc(o: PersonalIpcOptions): void {
 
   // ---------------------------------------------------------------- profiles
 
-  handle('profiles:list', async () => ({ profiles: await o.profiles.list(), activeId: await o.profiles.activeId(), partition: partitionFor(await o.profiles.activeId()) }))
+  handle('profiles:list', async () => ({ profiles: await o.profiles.list(), activeId: await o.profiles.activeId() }))
   handle('profiles:create', async (_e, name) => o.profiles.create({ name: str(name, 40) || 'New profile' }))
   handle('profiles:save', (_e, profile) => o.profiles.save(profile as Profile))
   handle('profiles:rename', (_e, id, name) => o.profiles.rename(str(id, 80), str(name, 40)))
