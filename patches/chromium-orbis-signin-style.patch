@@ -1,0 +1,20 @@
+diff --git a/chrome/browser/resources/signin/profile_picker/profile_picker_app.css b/chrome/browser/resources/signin/profile_picker/profile_picker_app.css
+index 71c1edf585..8af7ef47d5 100644
+--- a/chrome/browser/resources/signin/profile_picker/profile_picker_app.css
++++ b/chrome/browser/resources/signin/profile_picker/profile_picker_app.css
+@@ -83,13 +83,8 @@
+     display: none;
+   }
+ 
+-  background-image: url(shared_gradient_light_background.svg);
+-  background-repeat: no-repeat;
+-  background-size: 100% 100%;
+-
+-  @media (prefers-color-scheme: dark) {
+-    background-image: url(shared_gradient_dark_background.svg);
+-  }
++  /* Orbis: a plain Orbis surface instead of the stock gradient. */
++  background-color: #0b0e14;
+ }
+ 
+ 
