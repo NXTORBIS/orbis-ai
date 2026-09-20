@@ -1,5 +1,6 @@
 import { cp, mkdir, rm, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { execFile } from 'node:child_process'
+import { dirname, join } from 'node:path'
 import type { BrowserControl } from '../browserControl/registry.ts'
 import { newToken } from '../../helper/auth.ts'
 import { createHandlers } from '../../helper/handlers.ts'
@@ -64,6 +65,19 @@ export function looksLikeAddress(input: string): string | null {
   return null
 }
 
+/**
+ * The browser's sandbox needs its own program folder to be readable by sandboxed (app-container) processes. Chromium's installer
+ * sets that; Orbis installs the browser itself, so it does the same for its own folder: read and run for "ALL RESTRICTED
+ * APPLICATION PACKAGES" and "ALL APPLICATION PACKAGES", nothing more. Best effort and harmless to repeat.
+ */
+export async function allowSandboxToRead(chromeExe: string): Promise<void> {
+  if (process.platform !== 'win32') return
+  const dir = dirname(chromeExe)
+  for (const sid of ['*S-1-15-2-2', '*S-1-15-2-1']) {
+    await new Promise<void>((done) => execFile('icacls', [dir, '/grant', `${sid}:(OI)(CI)(RX)`, '/T', '/C', '/Q'], { windowsHide: true }, () => done()))
+  }
+}
+
 export class BrowserManager {
   private running: Promise<Running> | null = null
   private active: Running | null = null
@@ -114,6 +128,7 @@ export class BrowserManager {
     await writeFile(join(extensionDir, 'helper.json'), JSON.stringify({ port, token, pid: process.pid, startedAt: Date.now() }), { encoding: 'utf8', mode: 0o600 })
 
     try {
+      await allowSandboxToRead(this.o.chrome)
       const service = await launchOrbisChromium({
         chrome: this.o.chrome,
         profileDir: join(this.o.dataDir, 'profiles', profileId, 'browser'),
