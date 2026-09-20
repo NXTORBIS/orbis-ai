@@ -1,4 +1,4 @@
-import type { PageHandle } from '../pageHandle'
+import type { PageHandle } from '../pageHandle.ts'
 import { noteAutomatedInput } from '../browserShortcuts.ts'
 import type { ElementInfo } from '../browserSafety.ts'
 

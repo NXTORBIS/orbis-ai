@@ -1,10 +1,10 @@
-import { asPageHandle } from '../pageHandle'
+import { asPageHandle } from '../pageHandle.ts'
 import { detect, safeSignals } from '../../shared/captcha.ts'
 import type { PageSignals } from '../../shared/captcha.ts'
 import { BrowserControl, fail } from './registry.ts'
 import * as page from './page.ts'
 import type { PageResolver } from './pageCapabilities.ts'
-import type { PageHandle } from '../pageHandle'
+import type { PageHandle } from '../pageHandle.ts'
 
 /**
  * Looking at a page to see whether it is asking for a person.

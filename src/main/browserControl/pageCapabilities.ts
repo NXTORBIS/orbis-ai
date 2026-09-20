@@ -1,5 +1,5 @@
-import { asPageHandle } from '../pageHandle'
-import type { PageHandle } from '../pageHandle'
+import { asPageHandle } from '../pageHandle.ts'
+import type { PageHandle } from '../pageHandle.ts'
 import type { ParamSpec } from '../../shared/browserControl.ts'
 import { assessAction } from '../browserSafety.ts'
 import { BrowserControl, fail } from './registry.ts'
