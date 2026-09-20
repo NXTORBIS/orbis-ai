@@ -82,6 +82,9 @@ export function looksLikeAddress(input: string): string | null {
 export async function allowSandboxToRead(chromeExe: string): Promise<void> {
   if (process.platform !== 'win32') return
   const dir = dirname(chromeExe)
+  // Already granted (the usual case after the first start): reading one file's permissions is instant, the recursive grant is not.
+  const has = await new Promise<boolean>((done) => execFile('icacls', [chromeExe], { windowsHide: true }, (_e, out) => done(/APPLICATION PACKAGES/i.test(String(out)))))
+  if (has) return
   for (const sid of ['*S-1-15-2-2', '*S-1-15-2-1']) {
     await new Promise<void>((done) => execFile('icacls', [dir, '/grant', `${sid}:(OI)(CI)(RX)`, '/T', '/C', '/Q'], { windowsHide: true }, () => done()))
   }
