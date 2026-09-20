@@ -17,7 +17,7 @@ import { BrowserControl, fail } from './registry.ts'
 import type { ControlContext } from './registry.ts'
 import * as page from './page.ts'
 import type { Locator } from './page.ts'
-import { resolvePage } from './pageCapabilities.ts'
+import { resolvePage } from './electronPages.ts'
 import { compare } from './runner.ts'
 import type { WindowControl } from './window.ts'
 

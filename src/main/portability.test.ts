@@ -25,6 +25,8 @@ const BROWSER_LAYER = new Set([
   'main/adblock/electron.ts',
   'main/browserAgent.ts',
   'main/browserControl/mainCapabilities.ts',
+  // The one place the page capabilities meet Electron's WebContents: they take a page resolver, and this is Electron's.
+  'main/browserControl/electronPages.ts',
   'main/browserControl/page.ts',
   'main/browserControl/pageCapabilities.ts',
   'main/browserControl/setup.ts',

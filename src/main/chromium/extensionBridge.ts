@@ -40,6 +40,36 @@ export class ExtensionBridge {
     return sessionId
   }
 
+  private readonly listeners = new Set<() => void>()
+  private watching = false
+
+  /**
+   * Calls `listener` whenever the browser's tabs or windows change (opened, closed, moved, switched, navigated), so the
+   * Orbis side follows the real browser by its own events instead of asking over and over. The extension reports each
+   * change through a binding on the connection; nothing is polled.
+   */
+  async watch(listener: () => void): Promise<() => void> {
+    this.listeners.add(listener)
+    if (!this.watching) {
+      this.watching = true
+      this.browser.conn.on('event', (event: { method: string; params: { name?: string }; sessionId?: string }) => {
+        if (event.method === 'Runtime.bindingCalled' && event.params.name === 'orbisTabsChanged') for (const l of this.listeners) l()
+      })
+      await this.run('1')
+      await this.browser.conn.send('Runtime.addBinding', { name: 'orbisTabsChanged' }, this.sessionId)
+      await this.run(`(() => {
+        if (globalThis.__orbisWatching) return true
+        globalThis.__orbisWatching = true
+        const changed = () => globalThis.orbisTabsChanged('x')
+        for (const e of ['onActivated', 'onUpdated', 'onRemoved', 'onCreated', 'onMoved', 'onAttached', 'onDetached', 'onReplaced']) chrome.tabs[e].addListener(changed)
+        chrome.windows.onFocusChanged.addListener(changed)
+        chrome.tabGroups.onUpdated.addListener(changed)
+        return true
+      })()`)
+    }
+    return () => void this.listeners.delete(listener)
+  }
+
   /** Runs an expression in the extension (it may `await` and use `chrome.*`) and returns its JSON-able value. */
   async run<T = unknown>(expression: string): Promise<T> {
     for (let attempt = 0; ; attempt++) {

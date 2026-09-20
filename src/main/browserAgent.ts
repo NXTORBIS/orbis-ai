@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto'
 import type { PageHandle } from './pageHandle'
 import type { BrowserControl } from './browserControl/registry.ts'
-import type { WindowControl } from './browserControl/window.ts'
 import { automationProgress } from '../shared/automation.ts'
 import type { AutomationState, BrowserConfirmation, BrowserStep, StreamEvent } from '../shared/types'
 import { assessAction } from './browserSafety.ts'
@@ -66,7 +65,8 @@ export interface BrowserAgentOptions {
   instructions: string[]
   /** The Orbis Browser Control Layer: everything beyond the page (tabs, groups, windows, downloads, settings…). */
   control?: BrowserControl
-  windowControl?: WindowControl
+  /** Where the tabs are, as the browser reports them (the window's control in Electron; Chromium's own tab list in the Chromium build). */
+  windowControl?: { state: { tabs: { active?: boolean; webContentsId?: number | null }[] } | null }
 }
 
 /** Groq models that call tools reliably, most capable first. */

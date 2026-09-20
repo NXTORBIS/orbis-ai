@@ -1,13 +1,11 @@
-import { webContents } from 'electron'
 import { asPageHandle } from '../pageHandle'
-import type { WebContents } from 'electron'
+import type { PageHandle } from '../pageHandle'
 import type { ParamSpec } from '../../shared/browserControl.ts'
 import { assessAction } from '../browserSafety.ts'
 import { BrowserControl, fail } from './registry.ts'
 import type { Assessment, ControlContext } from './registry.ts'
 import * as page from './page.ts'
 import type { Locator } from './page.ts'
-import type { WindowControl } from './window.ts'
 
 const LOCATOR: ParamSpec = {
   type: 'object',
@@ -17,26 +15,8 @@ const LOCATOR: ParamSpec = {
 }
 const TAB: Record<string, ParamSpec> = {}
 
-/** The tab (or extension page) a page capability acts on: the command's target, or the active tab. */
-export function resolvePage(ctx: Pick<ControlContext, 'target'>, windowControl: WindowControl, getHost: () => WebContents | null): WebContents {
-  const state = windowControl.state
-  let id = ctx.target?.webContentsId ?? null
-  if (id === null && ctx.target?.tabId) {
-    const tab = state?.tabs.find((t) => t.id === ctx.target!.tabId) ?? fail('not-found', `No tab with id ${ctx.target.tabId}. Read state.snapshot for the current tabs.`, true)
-    id = tab.webContentsId ?? fail('unavailable', 'That tab has no page yet.', true)
-  }
-  if (id === null) {
-    const active = state?.open ? state.tabs.find((t) => t.active) : undefined
-    if (!active) fail('unavailable', 'The browser is closed or has no active tab. Open it first (browser.open).', true)
-    id = active!.webContentsId ?? fail('unavailable', 'The active tab has no page open yet. Navigate it first (navigation.go).', true)
-  }
-  const contents = webContents.fromId(id!)
-  const host = getHost()
-  if (!contents || contents.isDestroyed()) fail('not-found', 'That tab closed.', true)
-  // Only Orbis's own browser tabs and extension pages inside the Orbis window: never the Orbis window itself.
-  if (contents!.getType() !== 'webview' || !host || contents!.hostWebContents !== host) fail('blocked', 'Orbis only controls pages inside its own browser.')
-  return contents!
-}
+/** Finds the page a capability acts on: the command's target, or the active tab. Electron and Chromium each provide their own. */
+export type PageResolver = (ctx: Pick<ControlContext, 'target'>) => PageHandle
 
 const quote = (text: string): string => {
   const clean = text.replace(/\s+/g, ' ').trim()
@@ -51,7 +31,7 @@ const hostOf = (url: string): string => {
   }
 }
 
-async function located(wc: WebContents, locator: unknown): Promise<{ ref: number; method: string; count: number; target: page.TargetInfo }> {
+async function located(wc: PageHandle, locator: unknown): Promise<{ ref: number; method: string; count: number; target: page.TargetInfo }> {
   const found = await page.locate(asPageHandle(wc), (locator ?? {}) as Locator)
   if ('error' in found) fail('not-found', found.error, true)
   return found as { ref: number; method: string; count: number; target: page.TargetInfo }
@@ -76,11 +56,11 @@ const actionName = (target: page.TargetInfo): string => quote(target.label || (t
  * by the same safety policy as Orion's browser agent and need the user's approval; passwords, payment details and
  * one-time codes are never typed by Orbis.
  */
-export function registerPageCapabilities(control: BrowserControl, windowControl: WindowControl, getHost: () => WebContents | null): void {
-  const tab = (ctx: ControlContext): WebContents => resolvePage(ctx, windowControl, getHost)
+export function registerPageCapabilities(control: BrowserControl, resolve: PageResolver): void {
+  const tab = (ctx: ControlContext): PageHandle => resolve(ctx)
   const pageUnavailable = (ctx: Pick<ControlContext, 'target'>): string | null => {
     try {
-      resolvePage(ctx, windowControl, getHost)
+      resolve(ctx)
       return null
     } catch (err) {
       return err instanceof Error ? err.message : 'No page.'

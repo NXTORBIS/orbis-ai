@@ -1556,7 +1556,7 @@ if (!app.requestSingleInstanceLock()) {
           signals: async (target) => {
             const wc = activePage(target)
             // No page is not a challenge. Saying otherwise would stop runs for the wrong reason.
-            return wc ? readSignals(wc) : { url: '' }
+            return wc ? readSignals(asPageHandle(wc)) : { url: '' }
           },
           observe: async () => {
             const result = await browserControl!.control.execute(

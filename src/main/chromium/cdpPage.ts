@@ -251,6 +251,13 @@ export class CdpPage implements PageHandle {
     }
   }
 
+  /** The browser's own paste command, so the page sees a real paste (its handlers and the clipboard permission rules apply). */
+  paste(): void {
+    this.inputQueue = this.inputQueue.then(() =>
+      this.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'v', code: 'KeyV', windowsVirtualKeyCode: 86, modifiers: 2, commands: ['paste'] }).catch(() => undefined)
+    )
+  }
+
   async loadURL(url: string): Promise<void> {
     const done = new Promise<void>((resolve) => {
       const timer = setTimeout(resolve, 30_000)

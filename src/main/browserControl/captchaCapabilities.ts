@@ -1,11 +1,10 @@
-import type { WebContents } from 'electron'
 import { asPageHandle } from '../pageHandle'
 import { detect, safeSignals } from '../../shared/captcha.ts'
 import type { PageSignals } from '../../shared/captcha.ts'
 import { BrowserControl, fail } from './registry.ts'
 import * as page from './page.ts'
-import { resolvePage } from './pageCapabilities.ts'
-import type { WindowControl } from './window.ts'
+import type { PageResolver } from './pageCapabilities.ts'
+import type { PageHandle } from '../pageHandle'
 
 /**
  * Looking at a page to see whether it is asking for a person.
@@ -65,8 +64,8 @@ export const SIGNALS_SCRIPT = `(() => {
 })()`
 
 /** Everything the page is prepared to say about itself, with anything secret-shaped already discarded. */
-export async function readSignals(wc: WebContents, status?: number): Promise<PageSignals> {
-  const raw = await page.exec<PageSignals>(asPageHandle(wc), SIGNALS_SCRIPT).catch(() => null)
+export async function readSignals(wc: PageHandle, status?: number): Promise<PageSignals> {
+  const raw = await page.exec<PageSignals>(wc, SIGNALS_SCRIPT).catch(() => null)
   if (!raw) return safeSignals({ url: wc.getURL(), status })
   return safeSignals({ ...raw, status })
 }
@@ -94,9 +93,9 @@ const SCROLL_SCRIPT = `(() => {
  * scrolling it are what a browser does. Everything that would actually answer the challenge is left to the person,
  * because it is theirs to answer.
  */
-export function registerCaptchaCapabilities(control: BrowserControl, windowControl: WindowControl, getHost: () => WebContents | null): void {
-  const common = { domain: 'captcha' as const, unavailable: (): string | null => (getHost() ? null : 'The Orbis window is not open.') }
-  const target = (ctx: { target?: { tabId?: string; webContentsId?: number } }): WebContents => resolvePage(ctx, windowControl, getHost)
+export function registerCaptchaCapabilities(control: BrowserControl, resolve: PageResolver, unavailable: () => string | null = () => null): void {
+  const common = { domain: 'captcha' as const, unavailable }
+  const target = (ctx: { target?: { tabId?: string; webContentsId?: number } }): PageHandle => resolve(ctx)
 
   control.register({
     ...common,

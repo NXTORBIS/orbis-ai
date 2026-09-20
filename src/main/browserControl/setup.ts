@@ -5,6 +5,10 @@ import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import type { BrowserCommand, CapabilityDescriptor, ControlSource, Plan, RunControl, WindowBrowserState } from '../../shared/browserControl.ts'
 import { BrowserControl } from './registry.ts'
+import type { ControlContext } from './registry.ts'
+import { asPageHandle } from '../pageHandle'
+import type { PageHandle } from '../pageHandle'
+import { resolvePage } from './electronPages.ts'
 import { WindowControl } from './window.ts'
 import type { WindowRunResult } from './window.ts'
 import { registerPageCapabilities } from './pageCapabilities.ts'
@@ -64,10 +68,12 @@ export function setupBrowserControl(deps: BrowserControlDeps): { control: Browse
     contents.once('destroyed', () => navigations.delete(id))
   }
 
-  registerPageCapabilities(control, windowControl, () => deps.getWindow()?.webContents ?? null)
+  const host = (): WebContents | null => deps.getWindow()?.webContents ?? null
+  const resolve = (ctx: Pick<ControlContext, 'target'>): PageHandle => asPageHandle(resolvePage(ctx, windowControl, host))
+  registerPageCapabilities(control, resolve)
   registerMainCapabilities({ ...deps, control, windowControl, navigation: (wcId) => navigations.get(wcId) })
   registerUiCapabilities(control, deps.getWindow)
-  registerCaptchaCapabilities(control, windowControl, () => deps.getWindow()?.webContents ?? null)
+  registerCaptchaCapabilities(control, resolve, () => (host() ? null : 'The Orbis window is not open.'))
 
   const fromWindow = (event: IpcMainEvent | IpcMainInvokeEvent): boolean => {
     const win: BrowserWindow | null = deps.getWindow()

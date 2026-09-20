@@ -80,6 +80,8 @@ export interface PageHandle {
   /** Clicks, key presses, scrolling: real input, delivered the way the platform delivers it. */
   sendInputEvent(event: InputEvent): void
 
+  /** Pastes what is on the clipboard into the focused field, as the browser's own paste does. */
+  paste(): void
   loadURL(url: string): Promise<void>
   reload(): void
   readonly navigationHistory: PageHistory
