@@ -68,7 +68,7 @@ test('the Chromium control service serves Orion: page and browser capabilities o
     const found = await run<{ ref: number }>('page.find', { locator: { label: 'Search' } })
     assert.ok(found.ok, JSON.stringify(found.error))
     ok(await run('page.type', { locator: { label: 'Search' }, text: 'blue chair' }), 'page.type')
-    ok(await run('page.press', { key: 'Enter' }), 'page.press')
+    ok(await run('page.press', { keys: ['Enter'] }), 'page.press')
     for (let i = 0; i < 40; i++) {
       const tab = (await run<{ url: string; active: boolean }[]>('tabs.list')).data?.find((x) => x.active)
       if (tab?.url.includes('/results')) break
