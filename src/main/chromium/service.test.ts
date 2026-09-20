@@ -70,7 +70,7 @@ test('the Chromium control service serves Orion: page and browser capabilities o
     ok(await run('page.type', { locator: { label: 'Search' }, text: 'blue chair' }), 'page.type')
     ok(await run('page.press', { key: 'Enter' }), 'page.press')
     for (let i = 0; i < 40; i++) {
-      const tab = (await run<{ url: string }[]>('tabs.list')).data?.find((x) => (x as { active: boolean }).active)
+      const tab = (await run<{ url: string; active: boolean }[]>('tabs.list')).data?.find((x) => x.active)
       if (tab?.url.includes('/results')) break
       await wait(150)
     }
