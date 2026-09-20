@@ -15,7 +15,16 @@
     "storage",
     "topSites",
     "search",
-    "favicon"
+    "favicon",
+    "downloads",
+    "history",
+    "bookmarks",
+    "cookies",
+    "browsingData",
+    "tabGroups",
+    "sessions",
+    "management",
+    "debugger"
   ],
   "host_permissions": [
     "http://127.0.0.1/*",
