@@ -101,6 +101,13 @@ const others = [
     text: 'Orbis blocks ads and trackers using filter lists written and maintained by other people. They are not shipped with Orbis: they are downloaded on first run and updated daily, and each carries its own licence in its header. Orbis\'s own compatibility rules are its own.'
   },
   {
+    name: 'H.264, AAC and HEVC media codecs',
+    version: 'built into the browser',
+    license: 'Patent-licensed formats',
+    homepage: 'https://www.via-la.com',
+    text: 'The Orbis browser includes decoders for the H.264 (AVC), AAC and HEVC (H.265) formats so that ordinary web video and audio play. These formats are covered by patents that are licensed separately, for example through patent pools such as Via LA and Access Advance. Those patent licences are the responsibility of whoever distributes the browser; the open-source licence of the code does not grant them.'
+  },
+  {
     name: 'Real-ESRGAN (realesr-general-x4v3 model)',
     version: 'v0.2.5.0, converted to ONNX',
     license: 'BSD-3-Clause',

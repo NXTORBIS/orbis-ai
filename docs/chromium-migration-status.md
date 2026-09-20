@@ -1,4 +1,4 @@
-# Chromium migration: where things stand
+﻿# Chromium migration: where things stand
 
 As of 2026-09-20. Every "verified" item was run against the real Chromium 154 build (`out\Default`, with H.264/AAC enabled) and the Orbis
 extension; "written, not run" means the code exists and typechecks but has not been seen working in a real browser.
@@ -49,12 +49,13 @@ When a Chromium build is installed, the Orbis app opens Chromium for everything 
 
 - Main-process Electron browser code is still in the source but no longer reachable from the interface: `browserIntegration`, `extensions/manager`, `adblock/electron`, `BrowserLibrary`, the Electron capability set in `browserControl/mainCapabilities.ts`, and dead `.browser-*` styles. Chat features (ad-block chat commands, library data) still use some of it, so removing it is its own careful change.
 - Address bar and menus stay Chromium's own (restyled), per `docs/chromium-hosting-decision.md`; no Orbis-drawn tab strip. CDP cannot drive the omnibox, so `addressBar.*` uses real key input plus UI Automation reads (needs the browser window in front; Windows only).
-- Shortcut decisions (Ctrl+N, Ctrl+Shift+N, Ctrl+E, Ctrl+K, Ctrl+B, Ctrl+Shift+O, Ctrl+Shift+M vs Chromium's own).
+- Shortcut decisions: written in `docs/chromium-shortcuts.md` (Chromium wins); per-key verification in the running browser not yet done.
 - Widevine, Safe Browsing and Sync (need Google licences/keys; not faked). H.264/AAC ship enabled: redistribution needs patent-licence awareness.
-- Existing profiles keep Google as their search engine until Orbis Search is chosen once in Settings.
+- Existing profiles: `patches/chromium-orbis-default-search.patch` now runs a one-time migration (pref `orbis.default_search_migrated`) that switches the default to Orbis Search only when it is the untouched prepopulated Google engine. Verified on a copy of an old profile (Google -> Orbis Search), with the migration disabled (stays Google), and with DuckDuckGo chosen in Settings (stays DuckDuckGo after the migration runs). Limitation: an owner who deliberately picked untouched prepopulated Google earlier cannot be told from the old default and is switched once; Google remains selectable.
 
 ## Known differences from the Electron browser
 
 - Private browsing is Chromium's separate-window incognito, not Orbis's in-window private tabs.
 - The layout modes are `full` only in the Electron code; no new modes were built (user decision).
 - Weather, news, quote and the app-backed new-tab widgets are not on the extension new-tab page (see `docs/newtab-parity.md`).
+
