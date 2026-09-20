@@ -42,6 +42,7 @@ export interface BrowserManagerOptions {
   /** The one Browser Control Layer of the app: Chromium fills it. */
   control?: BrowserControl
   saveDir?: string
+  clipboard?: { readText(): Promise<string> | string; hasImage(): Promise<boolean> | boolean }
   /** Extra command-line switches for the browser (tests use this to allow autoplay). */
   chromeArgs?: string[]
   /** The browser was closed (by the person, or a crash). Nothing restarts it by itself. */
@@ -137,6 +138,7 @@ export class BrowserManager {
         urls: ['chrome://newtab'],
         control: this.o.control,
         saveDir: this.o.saveDir,
+        clipboard: this.o.clipboard,
         args: this.o.chromeArgs,
         waitMs: 60_000,
         onClosed: () => {

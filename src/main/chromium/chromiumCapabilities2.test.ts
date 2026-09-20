@@ -10,6 +10,8 @@ import { BrowserControl } from '../browserControl/registry.ts'
 import { CdpBrowser } from './cdpPage.ts'
 import { registerChromiumCapabilities } from './chromiumCapabilities.ts'
 import { nearestGroupColor, registerMoreChromiumCapabilities, ZOOM_STEPS } from './chromiumCapabilities2.ts'
+import { execFileSync } from 'node:child_process'
+import { registerBrowserToolCapabilities } from './chromiumCapabilities4.ts'
 import { registerFindInPage, registerSitePermissionCapabilities } from './chromiumCapabilities3.ts'
 import { ExtensionBridge } from './extensionBridge.ts'
 
@@ -43,6 +45,10 @@ test('tab groups, zoom, save and print, extensions, reading list and download co
       }, 400)
       res.on('close', () => clearInterval(timer))
       return
+    }
+    if (url.pathname === '/img') {
+      res.writeHead(200, { 'Content-Type': 'text/html' })
+      return res.end('<!doctype html><title>Img</title><img id=i width=20 height=20 src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==">')
     }
     res.writeHead(200, { 'Content-Type': 'text/html' })
     res.end(`<!doctype html><title>Doc ${url.pathname}</title><h1>Hello ${url.pathname}</h1><p>Some text for the printed page.</p>`)
@@ -78,8 +84,18 @@ test('tab groups, zoom, save and print, extensions, reading list and download co
   const control = new BrowserControl()
   registerChromiumCapabilities({ control, browser, bridge })
   registerMoreChromiumCapabilities({ control, browser, bridge, saveDir: out, selfExtensionId: EXTENSION_ID })
+  let activePart = '/a'
   registerSitePermissionCapabilities({ control, browser, bridge })
   registerFindInPage({ control, browser, bridge, activePage: async () => browser!.list().find((p) => p.getURL().includes('/a'))! })
+  const ps = (command: string): string => execFileSync('powershell.exe', ['-NoProfile', '-Command', command], { encoding: 'utf8' }).trim()
+  registerBrowserToolCapabilities({
+    control,
+    browser,
+    bridge,
+    activePage: async () => browser!.list().find((p) => p.getURL().includes(activePart))!,
+    readClipboardText: async () => ps('Get-Clipboard -Raw'),
+    hasClipboardImage: async () => ps('if (Get-Clipboard -Format Image) { "yes" } else { "no" }') === 'yes'
+  })
   const run = async <T = unknown>(capability: string, params: Record<string, unknown> = {}): Promise<CommandResult<T>> => control.execute({ capability, params, source: 'orion' }, { confirm: async () => true }) as Promise<CommandResult<T>>
   const ok = (r: CommandResult, what: string): void => assert.ok(r.ok && r.verification?.verified !== false, `${what}: ${JSON.stringify(r.error ?? r.verification)}`)
   const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
@@ -167,5 +183,40 @@ test('tab groups, zoom, save and print, extensions, reading list and download co
     const found = await run<{ matches: number; at: number }>('find.text', { text: 'printed page' })
     assert.ok(found.ok && found.data!.matches >= 1 && found.data!.at === 1, JSON.stringify(found))
     assert.equal((await run<{ matches: number }>('find.text', { text: 'zzz-not-here-zzz' })).data!.matches, 0)
+  })
+
+  await t.test('copy from the page, console, network, navigation details and the ad blocker settings work on the real browser', async () => {
+    ok(await run('tabs.activate', { tabId: a }), 'activate')
+    const page = browser!.list().find((p) => p.getURL().includes('/a'))!
+    await page.executeJavaScript(`getSelection().selectAllChildren(document.querySelector('p'))`)
+    ok(await run('clipboard.copyFromPage'), 'copy text')
+    assert.match(ps('Get-Clipboard -Raw'), /Some text for the printed page/)
+
+    ok(await run('devtools.consoleCapture', { on: true }), 'console on')
+    await page.executeJavaScript(`console.warn('hello from the page')`)
+    await wait(300)
+    const lines = (await run<{ level: string; message: string }[]>('devtools.console', { level: 'warn' })).data!
+    assert.ok(lines.some((l) => l.message.includes('hello from the page')), JSON.stringify(lines))
+    ok(await run('devtools.consoleCapture', { on: false }), 'console off')
+    const net = await run<{ count: number; requests: { url: string; status?: number }[] }>('devtools.network', { durationMs: 1500, reload: true })
+    assert.ok(net.ok && net.data!.requests.some((r) => r.url.includes('/a') && r.status === 200), JSON.stringify(net.data))
+
+    const info = (await run<{ url: string; canGoBack: boolean; entries: unknown[] }>('navigation.info')).data!
+    assert.ok(info.url.includes('/a') && info.entries.length >= 1, JSON.stringify(info))
+    assert.equal((await run('devtools.open')).ok, false, 'developer tools honestly report they are unavailable')
+
+    const before = (await run<{ settings: { enabled: boolean } }>('settings.adblock')).data!
+    assert.equal(before.settings.enabled, true)
+    ok(await run('settings.adblockSite', { host: 'example.test', allowed: true }), 'site exception')
+    assert.ok(((await run<{ settings: { siteExceptions: string[] } }>('settings.adblock')).data!).settings.siteExceptions.includes('example.test'))
+    ok(await run('settings.adblockSite', { host: 'example.test', allowed: false }), 'remove exception')
+    ok(await run('settings.setAdblock', { level: 'strict' }), 'strict')
+    ok(await run('settings.setAdblock', { level: 'standard' }), 'standard')
+
+    const img = (await run<{ tabId: string }>('tabs.create', { url: `${base}/img` })).data!.tabId
+    await wait(1000)
+    ok(await run('tabs.activate', { tabId: img }), 'activate image tab')
+    activePart = '/img'
+    ok(await run('clipboard.copyImageFromPage', { selector: '#i' }), 'copy image')
   })
 })

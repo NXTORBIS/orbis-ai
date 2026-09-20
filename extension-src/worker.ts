@@ -206,6 +206,23 @@ async function state(tabId?: number): Promise<unknown> {
   }
 }
 
+// The same operations for Orbis itself (the app's control layer runs code in this worker), not reachable from web pages.
+;(globalThis as Record<string, unknown>).__orbisAdblock = {
+  state: async () => (await whenReady(), state()),
+  settings: async (update: Partial<AdBlockSettings>) => {
+    await whenReady()
+    core.updateSettings(update)
+    await persistSettings()
+    return state()
+  },
+  site: async (host: string, allowed: boolean) => {
+    await whenReady()
+    core.setSite(host, allowed)
+    await persistSettings()
+    return state()
+  }
+}
+
 chrome.runtime.onMessage.addListener((message: { type?: string; [k: string]: unknown }, sender, reply) => {
   if (!message || typeof message.type !== 'string' || !message.type.startsWith('adblock:')) return false
   const isPanel = sender.url?.startsWith(chrome.runtime.getURL('')) ?? false
