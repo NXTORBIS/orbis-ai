@@ -20,6 +20,16 @@ extraResources:
   # The licences of everything Orbis is built from. Most of them require their text to travel with the app.
   - from: resources/notices.json
     to: notices.json
+  # Orbis's own Chromium build, and the Orbis extension it loads (built by `npm run stage:browser`).
+  - from: resources/chromium
+    to: chromium
+  - from: extension
+    to: extension
+    filter:
+      - "**/*"
+      - "!**/*.map"
+      - "!_metadata/**"
+      - "!helper.json"
 win:
   target: nsis
   artifactName: ${productName}-Setup-${version}.${ext}
