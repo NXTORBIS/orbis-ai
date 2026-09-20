@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Orbis theme",
+  "version": "0.1.0",
+  "description": "The Orbis look for the browser frame, tabs and toolbar.",
+  "theme": {
+    "colors": {
+      "frame": [11, 14, 20],
+      "frame_inactive": [11, 14, 20],
+      "frame_incognito": [11, 14, 20],
+      "toolbar": [19, 24, 36],
+      "tab_text": [232, 236, 244],
+      "tab_background_text": [139, 149, 168],
+      "bookmark_text": [232, 236, 244],
+      "ntp_background": [11, 14, 20],
+      "ntp_text": [232, 236, 244],
+      "button_background": [26, 33, 51],
+      "toolbar_button_icon": [139, 149, 168]
+    },
+    "tints": {
+      "buttons": [0.55, 0.05, 0.75]
+    }
+  }
+}
