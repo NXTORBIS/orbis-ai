@@ -33,7 +33,7 @@ test('the address bar and developer tools, driven by real key input', { skip: ru
   const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`
   const port = 9900 + Math.floor(Math.random() * 100)
   const profile = join(tmpdir(), `orbis-ui-test-${process.pid}`)
-  const child = spawn(CHROME, [`--user-data-dir=${profile}`, `--load-extension=${EXTENSION}`, `--remote-debugging-port=${port}`, '--no-first-run', '--no-default-browser-check', `${base}/start`], { stdio: 'ignore' })
+  const child = spawn(CHROME, [`--user-data-dir=${profile}`, `--orbis-extension-dir=${EXTENSION}`, `--remote-debugging-port=${port}`, '--no-first-run', '--no-default-browser-check', `${base}/start`], { stdio: 'ignore' })
   child.on('exit', (code, sig) => { if (process.env.ORBIS_UI_DEBUG) console.error('[chrome exit]', code, sig) })
   const service = await startChromiumControl({ port, extensionId: 'gcaebckmlhiagfagcplpjmibhkhjljab', pid: child.pid, waitMs: 60_000 })
   t.after(() => {

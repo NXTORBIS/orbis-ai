@@ -67,9 +67,11 @@ test('Orbis opens its own Chromium for a search and an address, with its own hel
     assert.equal((await tabs()).length, before + 1)
   })
 
-  await t.test('the browser has its own extension copy, helper connection and per-profile data folder', () => {
-    const helper = JSON.parse(readFileSync(join(dir, 'chromium', 'extension', 'helper.json'), 'utf8')) as { port: number; token: string }
-    assert.ok(helper.port > 0 && helper.token.length === 64)
+  await t.test('the browser has its own data folder per profile, and the helper connection is in memory only (no file)', async () => {
+    const svc = await manager.ensure()
+    const stored = (await svc.bridge.run("chrome.storage.session.get('orbis.helper').then((r) => r['orbis.helper'])")) as { port: number; token: string }
+    assert.ok(stored.port > 0 && stored.token.length === 64)
+    assert.equal(existsSync(join(dir, 'chromium', 'extension', 'helper.json')), false, 'no token file')
     assert.ok(existsSync(join(dir, 'chromium', 'profiles', 'profile-one', 'browser')), 'the profile has its own browser data folder')
   })
 

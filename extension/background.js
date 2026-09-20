@@ -1,11 +1,4 @@
-// Clicking the Orbis button in the toolbar opens the side panel beside the page. That is all this file does; every
-// real thing Orbis does is done by the helper running on this computer, which the panel talks to directly.
-chrome.runtime.onInstalled.addListener(() => {
-  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {})
-})
-chrome.runtime.onStartup.addListener(() => {
-  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {})
-})
-
-// Orbis ad blocking (network rules, page filtering, popups, statistics). Built by scripts/build-extension.mjs.
+// Orbis's component extension. The Orbis panel is built into the browser (chrome://orbis); what remains here is ad blocking
+// (network rules, page filtering, popups, statistics; built by scripts/build-extension.mjs) and, until the built-in pages replace
+// them, the new tab page and the search results page. The app reaches this worker over the browser's debugging pipe.
 import './adblock.js'

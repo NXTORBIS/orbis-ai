@@ -1,28 +1,55 @@
 // Talking to the Orbis helper running on this computer.
 //
-// The helper writes its port and this run's secret token to helper.json inside this extension's own folder. Only the
-// extension can read that file (it is not listed as a web-accessible resource, so no webpage can fetch it), and the
-// token is what the helper checks on every request. Nothing here logs or stores the token anywhere else.
+// Where the port and this run's secret token come from depends on where this runs:
+//  - in the built-in chrome://orbis page, from the browser itself: the page asks with chrome.send('orbis.getHelper') and only
+//    that page is ever answered (the browser never puts them in an address or in any other page);
+//  - in the extension's own pages (new tab, results; until the built-in pages replace them), from the extension worker's
+//    session storage, which only the extension can read and which lives in memory only.
+// The token is what the helper checks on every request. Nothing here logs or stores the token anywhere else.
 
 let cached = null
+let nextWebUiCallback = 1
+const webUiCallbacks = new Map()
+
+// The browser answers chrome.send('orbis.getHelper') by calling cr.webUIResponse(id, ok, value).
+if (typeof chrome !== 'undefined' && typeof chrome.send === 'function' && !(globalThis.cr && globalThis.cr.webUIResponse)) {
+  globalThis.cr = globalThis.cr || {}
+  globalThis.cr.webUIResponse = (id, ok, value) => {
+    const waiting = webUiCallbacks.get(id)
+    if (!waiting) return
+    webUiCallbacks.delete(id)
+    ok ? waiting.resolve(value) : waiting.reject(value)
+  }
+}
+
+function fromBrowser() {
+  return new Promise((resolve, reject) => {
+    const id = `orbis${nextWebUiCallback++}`
+    webUiCallbacks.set(id, { resolve, reject })
+    chrome.send('orbis.getHelper', [id])
+  })
+}
+
+async function fromExtension() {
+  // The worker sets this a moment after the browser starts; a page opened at that very moment waits briefly for it.
+  for (let i = 0; i < 40; i++) {
+    const stored = (await chrome.storage.session.get('orbis.helper'))['orbis.helper']
+    if (stored && stored.port && stored.token) return stored
+    await new Promise((r) => setTimeout(r, 250))
+  }
+  return null
+}
 
 async function connection(force = false) {
   if (cached && !force) return cached
-  let response
+  let found = null
   try {
-    // In the extension the file sits in its own folder; in the built-in chrome://orbis page the browser serves it.
-    response = await fetch(typeof chrome !== 'undefined' && chrome.runtime?.getURL ? chrome.runtime.getURL('helper.json') : 'helper.json', { cache: 'no-store' })
+    found = typeof chrome !== 'undefined' && chrome.storage?.session ? await fromExtension() : typeof chrome !== 'undefined' && chrome.send ? await fromBrowser() : null
   } catch {
-    throw new HelperDown('Orbis is not running. Start it from run-orbis-chromium.bat.')
+    found = null
   }
-  if (!response.ok) throw new HelperDown('Orbis is not running. Start it from run-orbis-chromium.bat.')
-  let port, token
-  try {
-    ;({ port, token } = await response.json())
-  } catch {
-    throw new HelperDown('Orbis is not running. Start it from run-orbis-chromium.bat.')
-  }
-  cached = { url: `http://127.0.0.1:${port}/rpc`, token }
+  if (!found || !found.port || !found.token) throw new HelperDown('Orbis is not running. Start it from run-orbis-chromium.bat.')
+  cached = { url: `http://127.0.0.1:${found.port}/rpc`, token: found.token }
   return cached
 }
 

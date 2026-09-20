@@ -23,7 +23,7 @@ test('Orbis starts Chromium itself and controls it over a pipe, with no debuggin
   const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`
   const profile = join(tmpdir(), `orbis-pipe-test-${process.pid}`)
   let closed = false
-  const service = await launchOrbisChromium({ chrome: CHROME, profileDir: profile, extensionDir: EXTENSION, extensionId: 'gcaebckmlhiagfagcplpjmibhkhjljab', urls: ['about:blank'], waitMs: 60_000, onClosed: () => (closed = true) })
+  const service = await launchOrbisChromium({ chrome: CHROME, profileDir: profile, extensionId: 'gcaebckmlhiagfagcplpjmibhkhjljab', urls: ['about:blank'], waitMs: 60_000, onClosed: () => (closed = true) })
   t.after(() => {
     service.stop()
     server.close()

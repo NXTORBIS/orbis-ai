@@ -1,0 +1,29 @@
+diff --git a/extensions/browser/api/declarative_net_request/action_tracker.cc b/extensions/browser/api/declarative_net_request/action_tracker.cc
+index 8517106129..c7a8941db5 100644
+--- a/extensions/browser/api/declarative_net_request/action_tracker.cc
++++ b/extensions/browser/api/declarative_net_request/action_tracker.cc
+@@ -423,7 +423,9 @@ void ActionTracker::DispatchOnRuleMatchedDebugIfNeeded(
+     return;
+   }
+ 
+-  DCHECK(Manifest::IsUnpackedLocation(extension->location()));
++  // Orbis: its built-in ad blocker is a component extension and reports what was blocked through this event too.
++  DCHECK(Manifest::IsUnpackedLocation(extension->location()) ||
++         extension->location() == mojom::ManifestLocation::kComponent);
+ 
+   // Create and dispatch the OnRuleMatchedDebug event.
+   dnr_api::MatchedRule matched_rule;
+diff --git a/extensions/common/api/_api_features.json b/extensions/common/api/_api_features.json
+index fa5b150c53..be033a2942 100644
+--- a/extensions/common/api/_api_features.json
++++ b/extensions/common/api/_api_features.json
+@@ -164,6 +164,9 @@
+   }, {
+     "dependencies": ["permission:declarativeNetRequestFeedback", "permission:declarativeNetRequestWithHostAccess"],
+     "location": "unpacked"
++  }, {
++    "dependencies": ["permission:declarativeNetRequestFeedback", "permission:declarativeNetRequest"],
++    "location": "component"
+   }],
+   "declarativeNetRequest.testMatchOutcome": [{
+     "dependencies": ["permission:declarativeNetRequest"],

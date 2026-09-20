@@ -41,8 +41,16 @@ The Orbis UI is delivered through five Chromium-native layers, each of which kee
    re-implementing drag, groups, pinning, muting, audio and loading indicators, cross-window moves and restore, which is the definition of
    feature-loss risk. So the tab strip stays Chromium's and is restyled through the colour system and `tab_style.cc`.
    Revisit only if Chromium ships a WebUI tab strip, or if a specific Orbis tab behaviour cannot be met.
-4. **Side panel (done for Ask/Search/Blocking).** Orbis's sidebar features live in Chromium's own side panel through the Orbis extension plus the local
-   helper. The Orion, Notes, Tasks, Galaxy, Workflows and Secrets panels move there one at a time.
+4. **Side panel (built in, phase 1b).** Orbis's panel is `chrome://orbis`, a WebUI compiled into the browser and hosted by Chromium's native side panel
+   (toolbar button, app menu, Ctrl+Shift+Y); it replaces the extension-hosted UI. The app starts the browser with `--orbis-helper-port` / `--orbis-helper-token`;
+   only the `chrome://orbis` document can read them (`chrome.send('orbis.getHelper')`, answered by a handler that exists only in that WebUI; never in a URL),
+   its CSP allows `connect-src` only to `http://127.0.0.1:<that port>`, and the helper answers origin `chrome://orbis` (plus the component's own pages) with the token.
+   Ad blocking is a **component extension** (id gcaebckmlhiagfagcplpjmibhkhjljab, `chrome/browser/extensions/component_loader.cc`) loaded from
+   `resources/orbis_extension` (built from `extension/` by `scripts/stage-orbis-extension.mjs`): not listed in chrome://extensions, not removable, no toolbar
+   button or side panel. `--orbis-extension-dir` runs it from a writable copy so filter-list updates keep working; `--load-extension` is used only when
+   `ORBIS_DEV_EXTENSION=1`. The panel's Blocking tab reaches the worker through the helper (`adblock:control`, run by the app's ExtensionBridge over CDP).
+   The component's new tab page and results page remain extension pages until phase 2 replaces them; they read the helper connection from the worker's
+   in-memory session storage (no `helper.json` file).
 5. **Product identity (done).** Product name, strings, logo, icons and the new-tab page (Chromium's own `chrome_url_overrides`, local, Orbis logo, no Google).
 
 Control and intelligence sit beside this, not inside it:

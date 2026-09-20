@@ -54,6 +54,11 @@ export interface HandlerDeps {
   searchSessions?: SearchSessionsDeps['store']
   profileId?: string
   adblock?: { extensionDir: string; listsDir: string; bundledDir: string }
+  /**
+   * How the built-in Orbis panel reaches the ad blocker's worker (a component of the browser, not reachable from a chrome:// page).
+   * The app runs the operation in the worker; without it the channel does not exist.
+   */
+  adblockControl?: (message: { type: string; [key: string]: unknown }) => Promise<unknown>
 }
 
 const ROLES = new Set(['user', 'assistant'])
@@ -73,6 +78,16 @@ function readMessages(value: unknown): ChatMessage[] {
   })
 }
 
+const ADBLOCK_CONTROL = new Set(['adblock:state', 'adblock:settings', 'adblock:site', 'adblock:resource', 'adblock:remove-exception', 'adblock:reload-lists'])
+
+function createAdblockControl(run: NonNullable<HandlerDeps['adblockControl']>): Handler {
+  return ([message]) => {
+    const m = message as { type?: unknown } | null
+    if (!m || typeof m !== 'object' || typeof m.type !== 'string' || !ADBLOCK_CONTROL.has(m.type)) throw new HelperError('bad-request', 'Not an ad blocking operation.')
+    return run(m as { type: string })
+  }
+}
+
 export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
   const doFetch = (url: string, init?: RequestInit): Promise<Response> => (deps.fetchFn ?? fetch)(url, init)
   // Orbis Search is two providers: ordinary web search, and a specialized one for every other category. Neither can
@@ -86,6 +101,7 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
     ...(deps.workflows ? createWorkflowHandlers(deps.workflows) : {}),
     ...(deps.galaxy ? createGalaxyHandlers(deps.galaxy) : {}),
     ...(deps.appServices ? createAppServiceHandlers(deps.appServices) : {}),
+    ...(deps.adblockControl ? { 'adblock:control': createAdblockControl(deps.adblockControl) } : {}),
     ...(deps.adblock ? createAdblockHandlers({ ...deps.adblock, fetchFn: doFetch }) : {}),
     /** Whether the helper is there and the token works. Says nothing about the person's data. */
     'helper:ping': () => ({ ok: true, version: deps.version ?? 'dev', hasApiKey: deps.apiKeys.length > 0 }),

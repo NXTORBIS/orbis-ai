@@ -61,7 +61,7 @@ test('tab groups, zoom, save and print, extensions, reading list and download co
   mkdirSync(join(profile, 'Default'), { recursive: true })
   mkdirSync(out, { recursive: true })
   writeFileSync(join(profile, 'Default', 'Preferences'), JSON.stringify({ download: { default_directory: out, prompt_for_download: false } }))
-  const chrome: ChildProcess = spawn(CHROME, [`--user-data-dir=${profile}`, `--load-extension=${EXTENSION}`, `--remote-debugging-port=${port}`, '--no-first-run', '--no-default-browser-check', 'about:blank'], { stdio: 'ignore' })
+  const chrome: ChildProcess = spawn(CHROME, [`--user-data-dir=${profile}`, `--orbis-extension-dir=${EXTENSION}`, `--remote-debugging-port=${port}`, '--no-first-run', '--no-default-browser-check', 'about:blank'], { stdio: 'ignore' })
   let browser: CdpBrowser | undefined
   t.after(() => {
     browser?.close()
@@ -143,7 +143,7 @@ test('tab groups, zoom, save and print, extensions, reading list and download co
 
   await t.test('extensions come from the browser and Orbis protects itself; recently closed comes from the session history', async () => {
     const exts = (await run<{ id: string; name: string; enabled: boolean }[]>('extensions.list')).data ?? []
-    assert.ok(exts.some((e) => e.id === EXTENSION_ID), 'the Orbis extension is listed')
+    assert.ok(!exts.some((e) => e.id === EXTENSION_ID), 'the Orbis component extension is built in and not listed like an installed extension')
     const refused = await run('extensions.setEnabled', { id: EXTENSION_ID, enabled: false })
     assert.equal(refused.ok, false, 'it cannot turn itself off')
     await run('tabs.close', { tabId: b })

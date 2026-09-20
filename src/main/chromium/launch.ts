@@ -14,8 +14,11 @@ export interface LaunchOptions {
   chrome: string
   /** This Orbis profile's own browser data folder (profiles never share one). */
   profileDir: string
-  /** The Orbis extension (side panel, ad blocker, new tab, search results). */
-  extensionDir: string
+  /**
+   * Development only: load the Orbis extension from a folder as an ordinary unpacked extension. Normally there is none: Orbis's
+   * extension is a component built into the browser (it is not listed in chrome://extensions and cannot be removed).
+   */
+  extensionDir?: string
   /** Pages to open at start. */
   urls?: string[]
   /** Anything else to pass the browser. */
@@ -32,7 +35,7 @@ export interface LaunchedChromium {
 export function launchChromium(o: LaunchOptions): LaunchedChromium {
   const args = [
     `--user-data-dir=${o.profileDir}`,
-    `--load-extension=${o.extensionDir}`,
+    ...(o.extensionDir ? [`--load-extension=${o.extensionDir}`] : []),
     '--remote-debugging-pipe',
     '--no-first-run',
     '--no-default-browser-check',

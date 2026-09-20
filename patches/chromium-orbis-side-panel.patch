@@ -244,6 +244,21 @@ index f949b9ea7c..b1950fdb87 100644
    map.AddWebUIConfig(std::make_unique<CustomizeChromeUIConfig>());
    map.AddWebUIConfig(
        std::make_unique<
+diff --git a/chrome/browser/ui/webui/chrome_web_ui_controller_factory.cc b/chrome/browser/ui/webui/chrome_web_ui_controller_factory.cc
+index c3020dfdea..0df9ed8c00 100644
+--- a/chrome/browser/ui/webui/chrome_web_ui_controller_factory.cc
++++ b/chrome/browser/ui/webui/chrome_web_ui_controller_factory.cc
+@@ -354,7 +354,9 @@ bool ChromeWebUIControllerFactory::IsWebUIAllowedToMakeNetworkRequests(
+       // https://crbug.com/376417346
+       origin.host() == chrome::kChromeUIExtensionsHost ||
+       // https://crbug.com/509216218
+-      origin.host() == chrome::kChromeUIDrivePickerHostHost;
++      origin.host() == chrome::kChromeUIDrivePickerHostHost ||
++      // Orbis: the panel talks to the local helper over loopback HTTP.
++      origin.host() == chrome::kChromeUIOrbisHost;
+ }
+ 
+ ChromeWebUIControllerFactory::ChromeWebUIControllerFactory() = default;
 diff --git a/chrome/browser/ui/webui/orbis/BUILD.gn b/chrome/browser/ui/webui/orbis/BUILD.gn
 new file mode 100644
 index 0000000000..c0f07d906b
@@ -275,10 +290,10 @@ index 0000000000..c0f07d906b
 \ No newline at end of file
 diff --git a/chrome/browser/ui/webui/orbis/orbis_ui.cc b/chrome/browser/ui/webui/orbis/orbis_ui.cc
 new file mode 100644
-index 0000000000..ad5f64286b
+index 0000000000..916ebbd2df
 --- /dev/null
 +++ b/chrome/browser/ui/webui/orbis/orbis_ui.cc
-@@ -0,0 +1,82 @@
+@@ -0,0 +1,130 @@
 +// Copyright 2026 The Orbis Authors. All rights reserved.
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -291,6 +306,13 @@ index 0000000000..ad5f64286b
 +#include "base/command_line.h"
 +#include "base/functional/bind.h"
 +#include "base/memory/ref_counted_memory.h"
++#include "base/strings/string_number_conversions.h"
++#include "base/values.h"
++#include "content/public/browser/web_ui_message_handler.h"
++#include "content/public/browser/web_contents.h"
++#include "content/public/common/url_constants.h"
++#include "url/gurl.h"
++#include <memory>
 +#include "base/strings/strcat.h"
 +#include "chrome/browser/profiles/profile.h"
 +#include "chrome/common/webui_url_constants.h"
@@ -307,22 +329,60 @@ index 0000000000..ad5f64286b
 +constexpr char kHelperPortSwitch[] = "orbis-helper-port";
 +constexpr char kHelperTokenSwitch[] = "orbis-helper-token";
 +
-+bool ShouldHandle(const std::string& path) {
-+  return path == "helper.json";
++// The one port the page may talk to, or empty when the helper is not running
++// or the switch is not a plain port number.
++std::string HelperPort() {
++  const base::CommandLine* cl = base::CommandLine::ForCurrentProcess();
++  std::string port = cl->GetSwitchValueASCII(kHelperPortSwitch);
++  int value = 0;
++  if (!base::StringToInt(port, &value) || value < 1 || value > 65535) {
++    return std::string();
++  }
++  return base::NumberToString(value);
 +}
 +
-+void HandleRequest(const std::string& path,
-+                   content::WebUIDataSource::GotDataCallback callback) {
-+  const base::CommandLine* cl = base::CommandLine::ForCurrentProcess();
-+  std::string body;
-+  if (cl->HasSwitch(kHelperPortSwitch) && cl->HasSwitch(kHelperTokenSwitch)) {
-+    body = base::StrCat({"{\"port\":", cl->GetSwitchValueASCII(kHelperPortSwitch),
-+                         ",\"token\":\"",
-+                         cl->GetSwitchValueASCII(kHelperTokenSwitch), "\"}"});
++// Hands the helper's port and token to the chrome://orbis page and to nothing
++// else: the handler exists only inside this WebUI, so no web page and no other
++// chrome:// page can send "orbis.getHelper" to it, and the values are never in
++// an address or a resource anyone can request.
++class OrbisHelperHandler : public content::WebUIMessageHandler {
++ public:
++  OrbisHelperHandler() = default;
++  OrbisHelperHandler(const OrbisHelperHandler&) = delete;
++  OrbisHelperHandler& operator=(const OrbisHelperHandler&) = delete;
++
++  void RegisterMessages() override {
++    web_ui()->RegisterMessageCallback(
++        "orbis.getHelper",
++        base::BindRepeating(&OrbisHelperHandler::HandleGetHelper,
++                            base::Unretained(this)));
 +  }
-+  std::move(callback).Run(
-+      base::MakeRefCounted<base::RefCountedString>(std::move(body)));
-+}
++
++ private:
++  void HandleGetHelper(const base::ListValue& args) {
++    if (args.empty() || !args[0].is_string()) {
++      return;
++    }
++    const std::string& callback_id = args[0].GetString();
++    AllowJavascript();
++    // Only the top-level chrome://orbis document is answered.
++    const GURL& url = web_ui()->GetWebContents()->GetLastCommittedURL();
++    const base::CommandLine* cl = base::CommandLine::ForCurrentProcess();
++    const std::string port = HelperPort();
++    if (url.scheme() != content::kChromeUIScheme ||
++        url.host() != chrome::kChromeUIOrbisHost || port.empty() ||
++        !cl->HasSwitch(kHelperTokenSwitch)) {
++      ResolveJavascriptCallback(callback_id, base::Value());
++      return;
++    }
++    base::DictValue result;
++    int port_number = 0;
++    base::StringToInt(port, &port_number);
++    result.Set("port", port_number);
++    result.Set("token", cl->GetSwitchValueASCII(kHelperTokenSwitch));
++    ResolveJavascriptCallback(callback_id, result);
++  }
++};
 +
 +}  // namespace
 +
@@ -349,12 +409,15 @@ index 0000000000..ad5f64286b
 +  source->AddResourcePath("orbis.css", IDR_ORBIS_CSS);
 +  source->AddResourcePath("orbis-components.js", IDR_ORBIS_COMPONENTS_JS);
 +  source->AddResourcePath("orbis-ring.png", IDR_ORBIS_RING_PNG);
-+  source->SetRequestFilter(base::BindRepeating(&ShouldHandle),
-+                           base::BindRepeating(&HandleRequest));
-+  // The panel talks to the local helper over loopback HTTP.
++  web_ui->AddMessageHandler(std::make_unique<OrbisHelperHandler>());
++  // The panel talks to the local helper over loopback HTTP, at the one port
++  // the helper listens on and nowhere else.
++  const std::string port = HelperPort();
 +  source->OverrideContentSecurityPolicy(
 +      network::mojom::CSPDirectiveName::ConnectSrc,
-+      "connect-src 'self' http://127.0.0.1:* http://localhost:*;");
++      port.empty() ? std::string("connect-src 'self';")
++                   : base::StrCat({"connect-src 'self' http://127.0.0.1:", port,
++                                   ";"}));
 +  source->OverrideContentSecurityPolicy(
 +      network::mojom::CSPDirectiveName::ImgSrc,
 +      "img-src 'self' data: https: http://127.0.0.1:*;");

@@ -128,6 +128,44 @@ test('a page using DNS rebinding is refused, because its own domain is in Host',
     assert.equal(reply.status, 403)
   }))
 
+test('the built-in panel (chrome://orbis) is allowed with the token, gets CORS, and other chrome:// pages and the other panel origin lookalikes are not', async () => {
+  const server = createHelperServer({ token: TOKEN, allowedOrigins: [PANEL, 'chrome://orbis'], handlers: echo })
+  const { port } = await server.listen()
+  try {
+    const ok = await call(port, { headers: { ...authed, Origin: 'chrome://orbis' }, body: rpc('test:echo', ['hi']) })
+    assert.equal(ok.status, 200)
+    assert.deepEqual(ok.lines, [{ result: { value: 'hi' } }])
+    assert.equal(ok.headers['access-control-allow-origin'], 'chrome://orbis')
+    const pre = await call(port, { method: 'OPTIONS', headers: { Origin: 'chrome://orbis', 'Access-Control-Request-Method': 'POST' } })
+    assert.equal(pre.status, 204)
+    assert.equal(pre.headers['access-control-allow-origin'], 'chrome://orbis')
+    for (const origin of ['chrome://settings', 'chrome://orbis.evil.example', 'chrome-untrusted://orbis', 'http://orbis', 'https://orbis', 'null']) {
+      const denied = await call(port, { headers: { ...authed, Origin: origin }, body: rpc('test:echo') })
+      assert.equal(denied.status, 403, origin)
+      assert.equal(denied.headers['access-control-allow-origin'], undefined, origin)
+    }
+    // Right origin, missing token: still refused.
+    assert.equal((await call(port, { headers: { Origin: 'chrome://orbis' }, body: rpc('test:echo') })).status, 401)
+  } finally {
+    await server.close()
+  }
+})
+
+test('adblock:control runs only the panel’s ad blocking operations, in the browser’s blocker, and exists only when the app provides it', async () => {
+  const seen: unknown[] = []
+  const handlers = createHandlers({ apiKeys: [], adblockControl: async (m) => (seen.push(m), { ok: m.type }) })
+  await withServer(handlers, async (port) => {
+    const good = await call(port, { headers: authed, body: rpc('adblock:control', [{ type: 'adblock:state' }]) })
+    assert.deepEqual(good.lines, [{ result: { ok: 'adblock:state' } }])
+    const bad = await call(port, { headers: authed, body: rpc('adblock:control', [{ type: 'adblock:cosmetics' }]) })
+    assert.equal((bad.lines[0] as { error: { code: string } }).error.code, 'bad-request')
+    assert.equal(seen.length, 1)
+  })
+  await withServer(createHandlers({ apiKeys: [] }), async (port) => {
+    assert.equal((await call(port, { headers: authed, body: rpc('adblock:control', [{ type: 'adblock:state' }]) })).status, 404)
+  })
+})
+
 test('only POST to /rpc is served', () =>
   withServer(echo, async (port) => {
     assert.equal((await call(port, { method: 'GET', headers: authed })).status, 405)

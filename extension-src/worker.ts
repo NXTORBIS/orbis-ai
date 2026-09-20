@@ -95,6 +95,8 @@ chrome.declarativeNetRequest.onRuleMatchedDebug?.addListener((info) => {
 })
 
 async function updateBadge(tabId: number): Promise<void> {
+  // The component has no toolbar button (the count is shown in the built-in panel), so there is no badge to set.
+  if (!chrome.action) return
   const report = core.report(tabId)
   const total = report ? report.counts.ads + report.counts.trackers + report.counts.annoyances + report.counts.popups + report.counts.redirects : 0
   await chrome.action.setBadgeText({ tabId, text: core.settings.enabled && total ? (total > 999 ? '999+' : String(total)) : '' }).catch(() => undefined)
@@ -220,6 +222,22 @@ async function state(tabId?: number): Promise<unknown> {
     core.setSite(host, allowed)
     await persistSettings()
     return state()
+  },
+  resource: async (resourceUrl: string) => {
+    await whenReady()
+    core.allowResource(resourceUrl)
+    await persistSettings()
+    return state()
+  },
+  removeException: async (kind: 'site' | 'resource', value: string) => {
+    await whenReady()
+    core.removeException(kind, value)
+    await persistSettings()
+    return state()
+  },
+  reloadLists: () => {
+    setTimeout(() => chrome.runtime.reload(), 50)
+    return null
   }
 }
 

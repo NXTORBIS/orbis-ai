@@ -41,7 +41,7 @@ test('Browser Control capabilities act on real Chromium tabs, windows, downloads
   mkdirSync(downloads, { recursive: true })
   // Downloads go to a folder of the test's own, never to the person's Downloads folder.
   writeFileSync(join(profile, 'Default', 'Preferences'), JSON.stringify({ download: { default_directory: downloads, prompt_for_download: false }, savefile: { default_directory: downloads } }))
-  const chrome: ChildProcess = spawn(CHROME, [`--user-data-dir=${profile}`, `--load-extension=${EXTENSION}`, `--remote-debugging-port=${port}`, '--no-first-run', '--no-default-browser-check', 'about:blank'], { stdio: 'ignore' })
+  const chrome: ChildProcess = spawn(CHROME, [`--user-data-dir=${profile}`, `--orbis-extension-dir=${EXTENSION}`, `--remote-debugging-port=${port}`, '--no-first-run', '--no-default-browser-check', 'about:blank'], { stdio: 'ignore' })
   let browser: CdpBrowser | undefined
   t.after(() => {
     browser?.close()

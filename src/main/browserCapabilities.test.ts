@@ -26,7 +26,7 @@ test('window and tab conveniences work on real Chromium and check that they happ
   const port = 9920 + Math.floor(Math.random() * 30)
   const profile = join(tmpdir(), `orbis-extras-test-${process.pid}`)
   mkdirSync(profile, { recursive: true })
-  const chrome: ChildProcess = spawn(CHROME, [`--user-data-dir=${profile}`, `--load-extension=${EXTENSION}`, `--remote-debugging-port=${port}`, '--no-first-run', '--no-default-browser-check', `${base}/first`], { stdio: 'ignore' })
+  const chrome: ChildProcess = spawn(CHROME, [`--user-data-dir=${profile}`, `--orbis-extension-dir=${EXTENSION}`, `--remote-debugging-port=${port}`, '--no-first-run', '--no-default-browser-check', `${base}/first`], { stdio: 'ignore' })
   let browser: CdpBrowser | undefined
   t.after(() => {
     browser?.close()

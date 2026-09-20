@@ -8,7 +8,7 @@ import { createHelperServer } from './server.ts'
 /**
  * Starts the Orbis helper.
  *
- *   node --experimental-strip-types src/helper/main.ts --allow-origin chrome-extension://<panel-id>
+ *   node --experimental-strip-types src/helper/main.ts --allow-origin chrome://orbis [--allow-origin chrome-extension://<id>]
  *
  * The Groq keys come from the ORBIS_GROQ_API_KEYS environment variable (comma separated), the way a build reads them
  * today; they are handed to the handlers and go nowhere else. Once listening, the helper writes its port and this run's

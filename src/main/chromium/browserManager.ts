@@ -1,4 +1,4 @@
-import { cp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { cp, mkdir, rm } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import { dirname, join } from 'node:path'
 import type { BrowserControl } from '../browserControl/registry.ts'
@@ -23,6 +23,29 @@ import type { ChromiumControl } from './service.ts'
  */
 
 export const ORBIS_EXTENSION_ID = 'gcaebckmlhiagfagcplpjmibhkhjljab'
+/** The built-in panel's origin: the only web-facing origin besides the extension's own pages that the helper answers. */
+export const ORBIS_PANEL_ORIGIN = 'chrome://orbis'
+
+/** The code the ad blocker's worker runs for one operation of the panel's Blocking tab. */
+export function adblockCall(message: { type: string; [key: string]: unknown }): string {
+  const j = (v: unknown): string => JSON.stringify(v ?? null)
+  switch (message.type) {
+    case 'adblock:state':
+      return 'globalThis.__orbisAdblock.state()'
+    case 'adblock:settings':
+      return `globalThis.__orbisAdblock.settings(${j(message.update)})`
+    case 'adblock:site':
+      return `globalThis.__orbisAdblock.site(${j(String(message.host))}, ${message.allowed ? 'true' : 'false'})`
+    case 'adblock:resource':
+      return `globalThis.__orbisAdblock.resource(${j(String(message.url))})`
+    case 'adblock:remove-exception':
+      return `globalThis.__orbisAdblock.removeException(${message.kind === 'site' ? "'site'" : "'resource'"}, ${j(String(message.value))})`
+    case 'adblock:reload-lists':
+      return 'globalThis.__orbisAdblock.reloadLists()'
+    default:
+      throw new Error('Not an ad blocking operation.')
+  }
+}
 
 export interface BrowserManagerOptions {
   /** The Chromium executable. */
@@ -131,9 +154,12 @@ export class BrowserManager {
     await cp(this.o.extensionSource, extensionDir, { recursive: true, filter: (source) => !/[\/](helper\.json|_metadata)$/.test(source) })
 
     const token = newToken()
+    const devExtension = process.env.ORBIS_DEV_EXTENSION === '1'
+    // The bridge to the ad blocker's worker exists once the browser is up; the panel's blocking tab calls through it.
+    let bridge: { run(expression: string): Promise<unknown> } | null = null
     const server = createHelperServer({
       token,
-      allowedOrigins: [`chrome-extension://${ORBIS_EXTENSION_ID}`],
+      allowedOrigins: [`chrome-extension://${ORBIS_EXTENSION_ID}`, ORBIS_PANEL_ORIGIN],
       handlers: createHandlers({
         apiKeys: this.o.apiKeys(),
         dataDir: this.o.personalDir(profileId),
@@ -143,24 +169,29 @@ export class BrowserManager {
         appServices: this.o.appServices,
         searchSessions: this.o.searchSessions,
         profileId,
+        adblockControl: (message) => {
+          if (!bridge) throw new Error('The browser is not ready yet.')
+          return bridge.run(adblockCall(message))
+        },
         adblock: { extensionDir, listsDir: this.o.adblockListsDir, bundledDir: this.o.adblockBundledDir }
       })
     })
     const { port } = await server.listen()
-    await writeFile(join(extensionDir, 'helper.json'), JSON.stringify({ port, token, pid: process.pid, startedAt: Date.now() }), { encoding: 'utf8', mode: 0o600 })
+    // The built-in panel gets these from the browser's command line, handed only to chrome://orbis; the extension's own pages
+    // (until the built-in ones replace them) get them from the worker's session storage below. Nothing is written to a file.
 
     try {
       await allowSandboxToRead(this.o.chrome)
       const service = await launchOrbisChromium({
         chrome: this.o.chrome,
         profileDir: join(this.o.dataDir, 'profiles', profileId, 'browser'),
-        extensionDir,
+        ...(devExtension ? { extensionDir } : {}),
         extensionId: ORBIS_EXTENSION_ID,
         urls: ['chrome://newtab'],
         control: this.o.control,
         saveDir: this.o.saveDir,
         clipboard: this.o.clipboard,
-        args: this.o.chromeArgs,
+        args: [`--orbis-helper-port=${port}`, `--orbis-helper-token=${token}`, `--orbis-extension-dir=${extensionDir}`, ...(this.o.chromeArgs ?? [])],
         waitMs: 60_000,
         onClosed: () => {
           this.running = null
@@ -169,6 +200,8 @@ export class BrowserManager {
           this.o.onClosed?.()
         }
       })
+      bridge = service.bridge
+      await service.bridge.run(`chrome.storage.session.set({ 'orbis.helper': ${JSON.stringify({ port, token })} })`)
       // The ad blocker's page scripts run before each page's own, from here (see adblockInjector.ts).
       const injector = new AdblockInjector({
         browser: service.browser,

@@ -1,0 +1,31 @@
+diff --git a/chrome/browser/extensions/component_loader.cc b/chrome/browser/extensions/component_loader.cc
+index e926dac169..5fb10b25ee 100644
+--- a/chrome/browser/extensions/component_loader.cc
++++ b/chrome/browser/extensions/component_loader.cc
+@@ -603,6 +603,26 @@ void ComponentLoader::AddDefaultComponentExtensionsWithBackgroundPages(
+     return;
+   }
+ 
++  // Orbis's own component extension (ad blocking, the Orbis new tab page and
++  // search results until the built-in pages replace them). It ships in the
++  // browser's resources folder, is not listed in chrome://extensions and
++  // cannot be removed; `--orbis-extension-dir` points it at a writable copy
++  // so the ad blocker's filter lists can be updated.
++  if (!skip_session_components) {
++    constexpr char kOrbisExtensionId[] = "gcaebckmlhiagfagcplpjmibhkhjljab";
++    base::FilePath orbis_dir;
++    if (command_line->HasSwitch("orbis-extension-dir")) {
++      orbis_dir = command_line->GetSwitchValuePath("orbis-extension-dir");
++    } else if (base::PathService::Get(base::DIR_ASSETS, &orbis_dir)) {
++      orbis_dir = orbis_dir.AppendASCII("resources").AppendASCII(
++          "orbis_extension");
++    }
++    if (!orbis_dir.empty() && !Exists(kOrbisExtensionId)) {
++      // A few small files, read once at start; the folder is the browser's own.
++      AddOrReplace(orbis_dir);
++    }
++  }
++
+   if (!skip_session_components) {
+ #if BUILDFLAG(IS_CHROMEOS)
+     Add(IDR_ECHO_MANIFEST,

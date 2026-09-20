@@ -30,7 +30,7 @@ test('recording on real Chromium: click, typing, a password (never recorded), En
   const port = 9980 + Math.floor(Math.random() * 9)
   const profile = join(tmpdir(), `orbis-recorder-test-${process.pid}`)
   mkdirSync(join(profile, 'Default'), { recursive: true })
-  const chrome: ChildProcess = spawn(CHROME, [`--user-data-dir=${profile}`, `--load-extension=${EXTENSION}`, `--remote-debugging-port=${port}`, '--no-first-run', '--no-default-browser-check', 'about:blank'], { stdio: 'ignore' })
+  const chrome: ChildProcess = spawn(CHROME, [`--user-data-dir=${profile}`, `--orbis-extension-dir=${EXTENSION}`, `--remote-debugging-port=${port}`, '--no-first-run', '--no-default-browser-check', 'about:blank'], { stdio: 'ignore' })
   let browser: CdpBrowser | undefined
   let pages: ChromiumPages | undefined
   t.after(() => {
@@ -108,7 +108,7 @@ test('recording on real Chromium: tab group, download, pause/resume and stop cle
   const port = 9970 + Math.floor(Math.random() * 9)
   const profile = join(tmpdir(), `orbis-recorder-test2-${process.pid}`)
   mkdirSync(join(profile, 'Default'), { recursive: true })
-  const chrome: ChildProcess = spawn(CHROME, [`--user-data-dir=${profile}`, `--load-extension=${EXTENSION}`, `--remote-debugging-port=${port}`, '--no-first-run', '--no-default-browser-check', 'about:blank'], { stdio: 'ignore' })
+  const chrome: ChildProcess = spawn(CHROME, [`--user-data-dir=${profile}`, `--orbis-extension-dir=${EXTENSION}`, `--remote-debugging-port=${port}`, '--no-first-run', '--no-default-browser-check', 'about:blank'], { stdio: 'ignore' })
   let browser: CdpBrowser | undefined
   let pages: ChromiumPages | undefined
   t.after(() => {

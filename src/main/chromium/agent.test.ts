@@ -36,7 +36,7 @@ test('Orion’s browser agent, unchanged, completes a task on real Chromium', { 
   const base = `http://127.0.0.1:${(server.address() as { port: number }).port}`
   const port = 9850 + Math.floor(Math.random() * 40)
   const profile = join(tmpdir(), `orbis-agent-test-${process.pid}`)
-  const chrome: ChildProcess = spawn(CHROME, [`--user-data-dir=${profile}`, `--load-extension=${EXTENSION}`, `--remote-debugging-port=${port}`, '--no-first-run', '--no-default-browser-check', 'about:blank'], { stdio: 'ignore' })
+  const chrome: ChildProcess = spawn(CHROME, [`--user-data-dir=${profile}`, `--orbis-extension-dir=${EXTENSION}`, `--remote-debugging-port=${port}`, '--no-first-run', '--no-default-browser-check', 'about:blank'], { stdio: 'ignore' })
   let service: ChromiumControl | undefined
   t.after(() => {
     service?.stop()

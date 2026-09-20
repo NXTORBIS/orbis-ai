@@ -127,7 +127,9 @@ class Cdp {
   send<T = Record<string, unknown>>(method: string, params: object = {}, sessionId?: string): Promise<T> {
     const id = ++this.id
     return new Promise((ok, no) => {
-      this.pending.set(id, (m) => (m.error ? no(new Error(`${method}: ${m.error.message}`)) : ok((m.result ?? {}) as T)))
+      // A page in the middle of loading a real site may not answer for a long time; a call that gets no answer fails instead of hanging the test.
+      const timer = setTimeout(() => no(new Error(`${method}: no answer`)), 20_000)
+      this.pending.set(id, (m) => (clearTimeout(timer), m.error ? no(new Error(`${method}: ${m.error.message}`)) : ok((m.result ?? {}) as T)))
       this.ws.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }))
     })
   }
@@ -155,7 +157,6 @@ test('Orbis Search in the real browser: every vertical, the viewer, Orion sessio
     handlers: createHandlers({ apiKeys: keys, dataDir: join(dir, 'userdata'), profileId: 'test-profile' })
   })
   const { port } = await helper.listen()
-  writeFileSync(join(extDir, 'helper.json'), JSON.stringify({ port, token }))
 
   const debugPort = 9700 + Math.floor(Math.random() * 100)
   let chrome: ChildProcess | null = null
@@ -173,7 +174,7 @@ test('Orbis Search in the real browser: every vertical, the viewer, Orion sessio
       }
     }, 4000).unref()
   })
-  chrome = spawn(CHROME, [`--user-data-dir=${join(dir, 'profile')}`, `--load-extension=${extDir}`, `--remote-debugging-port=${debugPort}`, '--headless=new', '--no-first-run', '--no-default-browser-check', '--disable-search-engine-choice-screen', '--window-size=1280,900'], { stdio: 'ignore' })
+  chrome = spawn(CHROME, [`--user-data-dir=${join(dir, 'profile')}`, `--orbis-extension-dir=${extDir}`, `--remote-debugging-port=${debugPort}`, '--headless=new', '--no-first-run', '--no-default-browser-check', '--disable-search-engine-choice-screen', '--window-size=1280,900'], { stdio: 'ignore' })
   let wsUrl = ''
   for (let i = 0; i < 80 && !wsUrl; i++) {
     try {
@@ -185,11 +186,31 @@ test('Orbis Search in the real browser: every vertical, the viewer, Orion sessio
   assert.ok(wsUrl, 'the browser started')
   cdp = await Cdp.connect(wsUrl)
   const c = cdp
+  // The extension's pages get the helper's port and token from the worker's session storage (the app puts them there).
+  {
+    let worker: { targetId: string } | undefined
+    for (let i = 0; i < 40 && !worker; i++) {
+      worker = (await c.send<{ targetInfos: { targetId: string; type: string; url: string }[] }>('Target.getTargets')).targetInfos.find((t) => t.type === 'service_worker' && t.url.startsWith(`chrome-extension://${ORBIS_EXTENSION_ID}/`))
+      if (!worker) await wait(250)
+    }
+    assert.ok(worker, 'the component extension runs in the browser')
+    const attached = (await c.send<{ sessionId: string }>('Target.attachToTarget', { targetId: worker!.targetId, flatten: true })).sessionId
+    await c.send('Runtime.enable', {}, attached)
+    // A worker that has only just started has no `chrome` object yet.
+    let stored = false
+    for (let i = 0; i < 40 && !stored; i++) {
+      const r = await c.send<{ result?: { value?: unknown } }>('Runtime.evaluate', { expression: `typeof chrome !== 'undefined' && !!chrome.storage ? chrome.storage.session.set({ 'orbis.helper': ${JSON.stringify({ port, token })} }).then(() => true) : false`, awaitPromise: true, returnByValue: true }, attached)
+      stored = r.result?.value === true
+      if (!stored) await wait(250)
+    }
+    assert.ok(stored, 'the helper connection was handed to the component')
+  }
 
   const base = `chrome-extension://${ORBIS_EXTENSION_ID}/results.html`
   let session = ''
   const open = async (hash: string, opts: { width?: number; dark?: boolean; offline?: boolean } = {}): Promise<void> => {
-    if (session) await c.send('Target.closeTarget', { targetId: targetId }).catch(() => undefined)
+    // A page that went to a real site (the bang test) can take long to answer a close; do not wait for it.
+    if (session) await Promise.race([c.send('Target.closeTarget', { targetId: targetId }).catch(() => undefined), wait(3000)])
     const created = await c.send<{ targetId: string }>('Target.createTarget', { url: 'about:blank' })
     targetId = created.targetId
     session = (await c.send<{ sessionId: string }>('Target.attachToTarget', { targetId, flatten: true })).sessionId

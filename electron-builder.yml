@@ -20,7 +20,7 @@ extraResources:
   # The licences of everything Orbis is built from. Most of them require their text to travel with the app.
   - from: resources/notices.json
     to: notices.json
-  # Orbis's own Chromium build, and the Orbis extension it loads (built by `npm run stage:browser`).
+  # Orbis's own Chromium build (its resources/orbis_extension is the built-in component extension), plus the extension sources the app copies to a writable folder so ad-block filter lists can be updated (built by `npm run stage:browser`).
   - from: resources/chromium
     to: chromium
   - from: extension

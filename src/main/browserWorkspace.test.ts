@@ -25,7 +25,7 @@ test('a saved workspace opens with its pinned pages and groups, and the tab stat
   const port = 9950 + Math.floor(Math.random() * 30)
   const profile = join(tmpdir(), `orbis-workspace-test-${process.pid}`)
   mkdirSync(profile, { recursive: true })
-  const chrome: ChildProcess = spawn(CHROME, [`--user-data-dir=${profile}`, `--load-extension=${EXTENSION}`, `--remote-debugging-port=${port}`, '--no-first-run', '--no-default-browser-check', `${base}/start`], { stdio: 'ignore' })
+  const chrome: ChildProcess = spawn(CHROME, [`--user-data-dir=${profile}`, `--orbis-extension-dir=${EXTENSION}`, `--remote-debugging-port=${port}`, '--no-first-run', '--no-default-browser-check', `${base}/start`], { stdio: 'ignore' })
   let browser: CdpBrowser | undefined
   t.after(() => {
     browser?.close()

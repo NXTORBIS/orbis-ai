@@ -39,7 +39,7 @@ $helperLog = Join-Path $env:TEMP 'orbis-helper.log'
 $helper = Start-Process -FilePath 'node' -WindowStyle Hidden -PassThru -WorkingDirectory $repo `
   -RedirectStandardOutput $helperLog -RedirectStandardError ($helperLog + '.err') -ArgumentList @(
   '--disable-warning=ExperimentalWarning', '--disable-warning=MODULE_TYPELESS_PACKAGE_JSON', '--experimental-strip-types',
-  'src/helper/main.ts', '--data-dir', "`"$extension`"", '--allow-origin', "chrome-extension://$panelId")
+  'src/helper/main.ts', '--data-dir', "`"$extension`"", '--allow-origin', "chrome-extension://$panelId", '--allow-origin', 'chrome://orbis')
 for ($i = 0; $i -lt 60 -and -not (Test-Path $state); $i++) { Start-Sleep -Milliseconds 250 }
 if (-not (Test-Path $state)) {
   $why = (Get-Content ($helperLog + '.err') -ErrorAction SilentlyContinue | Select-Object -Last 3) -join ' '
@@ -48,6 +48,8 @@ if (-not (Test-Path $state)) {
 Write-Host "Orbis helper is running (pid $($helper.Id))."
 
 # Orbis is a dark browser: --force-dark-mode makes Chromium's own UI use the Orbis palette (patches/chromium-orbis-color-palette.patch).
-$chromeArgs = @("--user-data-dir=`"$Profile`"", "--load-extension=`"$extension`"", '--no-first-run', '--force-dark-mode', '--enable-features=WebUIToolbar') + $Rest
+$info = Get-Content $state -Raw | ConvertFrom-Json
+# The Orbis extension is a component of the browser; --orbis-extension-dir runs it from this working copy (development).
+$chromeArgs = @("--user-data-dir=`"$Profile`"", "--orbis-extension-dir=`"$extension`"", "--orbis-helper-port=$($info.port)", "--orbis-helper-token=$($info.token)", '--no-first-run', '--force-dark-mode', '--enable-features=WebUIToolbar') + $Rest
 Start-Process -FilePath $Chrome -ArgumentList $chromeArgs
 Write-Host 'Chromium opened. Click the Orbis button in the toolbar (or the puzzle-piece menu) to open the side panel.'
