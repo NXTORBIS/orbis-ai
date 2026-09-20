@@ -26,6 +26,7 @@
     "management",
     "debugger",
     "readingList",
+    "contentSettings",
     "downloads.open"
   ],
   "host_permissions": [

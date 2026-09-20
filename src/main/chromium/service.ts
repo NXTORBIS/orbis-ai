@@ -9,6 +9,7 @@ import { launchChromium } from './launch.ts'
 import type { LaunchOptions } from './launch.ts'
 import { registerChromiumCapabilities } from './chromiumCapabilities.ts'
 import { registerMoreChromiumCapabilities } from './chromiumCapabilities2.ts'
+import { registerFindInPage, registerSitePermissionCapabilities } from './chromiumCapabilities3.ts'
 import { ChromiumPages } from './chromiumPages.ts'
 import { ExtensionBridge } from './extensionBridge.ts'
 
@@ -77,6 +78,8 @@ export async function startChromiumControl(o: ChromiumControlOptions): Promise<C
   const deps = { control, browser, bridge }
   registerChromiumCapabilities(deps)
   registerMoreChromiumCapabilities({ ...deps, saveDir: o.saveDir, selfExtensionId: o.extensionId })
+  registerSitePermissionCapabilities(deps)
+  registerFindInPage({ ...deps, activePage: async () => (await pages.getTarget()) as unknown as import('./cdpPage.ts').CdpPage })
   registerPageCapabilities(control, pages.resolve)
   registerCaptchaCapabilities(control, pages.resolve)
 

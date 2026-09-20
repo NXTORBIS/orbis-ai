@@ -39,7 +39,8 @@ When a Chromium build is installed, the Orbis app opens Chromium for everything 
 ## Not done
 
 - Chromium is not yet packaged with the installer (dev builds find it at `C:\chromium\src\out\Default` or `ORBIS_CHROMIUM`).
-- Capabilities still on Electron: permissions and site settings, find in page, clipboard, address-bar capabilities, settings, workflows recorder.
+- Capabilities still on Electron: clipboard, address-bar capabilities, settings, workflows recorder.
+- Done on Chromium (verified, real browser): site permissions (`permissions.set/list/forget` through the content-settings API; lists only what Orbis set, since Chromium keeps the person's own choices and its own prompts) and `find.text` (counts matches on the active tab's page and scrolls to one). Chromium's own Ctrl+F find bar is untouched.
 - Orbis-shaped tab strip (colours and radius only so far), Orbis menus, sidebar/assistant, Galaxy/Workflows/Secrets panels.
 - Shortcut decisions (Ctrl+N, Ctrl+Shift+N, Ctrl+E, Ctrl+K, Ctrl+B, Ctrl+Shift+O, Ctrl+Shift+M vs Chromium's own).
 - Widevine, Safe Browsing and Sync (need Google licences/keys; not faked).

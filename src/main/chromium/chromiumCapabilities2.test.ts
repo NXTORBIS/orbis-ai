@@ -10,6 +10,7 @@ import { BrowserControl } from '../browserControl/registry.ts'
 import { CdpBrowser } from './cdpPage.ts'
 import { registerChromiumCapabilities } from './chromiumCapabilities.ts'
 import { nearestGroupColor, registerMoreChromiumCapabilities, ZOOM_STEPS } from './chromiumCapabilities2.ts'
+import { registerFindInPage, registerSitePermissionCapabilities } from './chromiumCapabilities3.ts'
 import { ExtensionBridge } from './extensionBridge.ts'
 
 test('tab group colours map to the nearest Chromium colour, and zoom steps are the ones Chromium uses', () => {
@@ -77,6 +78,8 @@ test('tab groups, zoom, save and print, extensions, reading list and download co
   const control = new BrowserControl()
   registerChromiumCapabilities({ control, browser, bridge })
   registerMoreChromiumCapabilities({ control, browser, bridge, saveDir: out, selfExtensionId: EXTENSION_ID })
+  registerSitePermissionCapabilities({ control, browser, bridge })
+  registerFindInPage({ control, browser, bridge, activePage: async () => browser!.list().find((p) => p.getURL().includes('/a'))! })
   const run = async <T = unknown>(capability: string, params: Record<string, unknown> = {}): Promise<CommandResult<T>> => control.execute({ capability, params, source: 'orion' }, { confirm: async () => true }) as Promise<CommandResult<T>>
   const ok = (r: CommandResult, what: string): void => assert.ok(r.ok && r.verification?.verified !== false, `${what}: ${JSON.stringify(r.error ?? r.verification)}`)
   const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
@@ -148,5 +151,21 @@ test('tab groups, zoom, save and print, extensions, reading list and download co
     ok(await run('downloads.resume', { id }), 'resume')
     ok(await run('downloads.cancel', { id }), 'cancel')
     assert.equal(readdirSync(out).filter((f) => f === 'slow.bin').length, 0, 'a cancelled download leaves no finished file')
+  })
+
+  await t.test('site permissions are set in the browser, listed as Orbis set them, and forgotten', async () => {
+    ok(await run('permissions.set', { origin: base, permission: 'geolocation', decision: 'block' }), 'set')
+    const listed = (await run<{ remembered: { origin: string; permission: string; decision: string }[] }>('permissions.list')).data!
+    assert.deepEqual(listed.remembered, [{ origin: base, permission: 'geolocation', decision: 'block' }])
+    ok(await run('permissions.set', { origin: base, permission: 'media', decision: 'block' }), 'set media')
+    ok(await run('permissions.forget', { origin: base }), 'forget')
+    assert.deepEqual(((await run<{ remembered: unknown[] }>('permissions.list')).data!).remembered, [])
+    assert.equal((await run('permissions.set', { origin: base, permission: 'nonsense', decision: 'allow' })).ok, false)
+  })
+
+  await t.test('find text counts real matches on the page and reports none for absent text', async () => {
+    const found = await run<{ matches: number; at: number }>('find.text', { text: 'printed page' })
+    assert.ok(found.ok && found.data!.matches >= 1 && found.data!.at === 1, JSON.stringify(found))
+    assert.equal((await run<{ matches: number }>('find.text', { text: 'zzz-not-here-zzz' })).data!.matches, 0)
   })
 })
