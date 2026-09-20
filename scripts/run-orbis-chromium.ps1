@@ -47,6 +47,7 @@ if (-not (Test-Path $state)) {
 }
 Write-Host "Orbis helper is running (pid $($helper.Id))."
 
-$chromeArgs = @("--user-data-dir=`"$Profile`"", "--load-extension=`"$extension`"", '--no-first-run') + $Rest
+# Orbis is a dark browser: --force-dark-mode makes Chromium's own UI use the Orbis palette (patches/chromium-orbis-color-palette.patch).
+$chromeArgs = @("--user-data-dir=`"$Profile`"", "--load-extension=`"$extension`"", '--no-first-run', '--force-dark-mode', '--enable-features=WebUIToolbar') + $Rest
 Start-Process -FilePath $Chrome -ArgumentList $chromeArgs
 Write-Host 'Chromium opened. Click the Orbis button in the toolbar (or the puzzle-piece menu) to open the side panel.'
