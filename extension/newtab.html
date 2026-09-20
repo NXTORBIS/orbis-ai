@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Orbis</title>
+    <link rel="icon" type="image/png" href="assets/icon-32.png" />
+    <link rel="stylesheet" href="newtab.css" />
+  </head>
+  <body>
+    <main>
+      <img class="logo" src="assets/orbis-ring.png" alt="Orbis" width="120" />
+      <h1 id="greeting">Orbis</h1>
+      <p id="clock" class="clock" aria-live="off"></p>
+      <form id="search" role="search">
+        <input id="q" type="text" autocomplete="off" spellcheck="false" placeholder="Search or type a URL" aria-label="Search or type a URL" autofocus />
+      </form>
+      <nav id="sites" class="sites" aria-label="Most visited"></nav>
+    </main>
+    <script type="module" src="newtab.js"></script>
+  </body>
+</html>

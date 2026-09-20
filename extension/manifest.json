@@ -12,7 +12,10 @@
     "webNavigation",
     "tabs",
     "scripting",
-    "storage"
+    "storage",
+    "topSites",
+    "search",
+    "favicon"
   ],
   "host_permissions": [
     "http://127.0.0.1/*",
@@ -27,7 +30,11 @@
     "default_path": "panel.html"
   },
   "action": {
-    "default_title": "Open Orbis"
+    "default_title": "Open Orbis",
+    "default_icon": {
+      "16": "assets/icon-16.png",
+      "32": "assets/icon-32.png"
+    }
   },
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'; connect-src http://127.0.0.1:*"
@@ -79,5 +86,14 @@
       "all_frames": true,
       "match_about_blank": true
     }
-  ]
+  ],
+  "chrome_url_overrides": {
+    "newtab": "newtab.html"
+  },
+  "icons": {
+    "16": "assets/icon-16.png",
+    "32": "assets/icon-32.png",
+    "48": "assets/icon-48.png",
+    "128": "assets/icon-128.png"
+  }
 }
