@@ -10,6 +10,8 @@ export interface RecorderChromium {
   bridge: { run<T>(expression: string): Promise<T>; watch(listener: () => void): Promise<() => void> }
 }
 
+const GROUPS = `chrome.tabGroups.query({}).then((all) => all.map((g) => ({ id: String(g.id), name: String(g.title || 'Group'), color: String(g.color || 'grey') })))`
+
 const DOWNLOADS = `chrome.downloads.search({}).then((all) => all.map((d) => ({ id: String(d.id), filename: String(d.filename || d.url || '').split(/[\\\\/]/).pop() })))`
 
 /**
@@ -23,6 +25,7 @@ export class ChromiumRecorder extends RecorderCore {
   private stops: (() => void)[] = []
   private run = 0
   private chromium: RecorderChromium | null = null
+  private groups: RecorderBrowserState['groups'] = []
 
   constructor(options: { getChromium(): Promise<RecorderChromium>; emit(state: RecordingState): void }) {
     super(options.emit)
@@ -39,6 +42,7 @@ export class ChromiumRecorder extends RecorderCore {
     if (run !== this.run || !this.state.active) return
     this.chromium = chromium
     await chromium.pages.refresh()
+    this.groups = await chromium.bridge.run<RecorderBrowserState['groups']>(GROUPS).catch(() => [])
     this.lastState = this.adapt(chromium)
     for (const page of chromium.browser.list()) void this.attachPage(page)
     this.stops.push(
@@ -58,7 +62,7 @@ export class ChromiumRecorder extends RecorderCore {
     const live = chromium.browser.list()
     return {
       open: true,
-      groups: [],
+      groups: this.groups,
       tabs: chromium.pages.state.tabs.map((t) => ({ ...t, loading: live.find((p) => p.id === t.webContentsId)?.isLoading() ?? false }))
     }
   }
@@ -67,6 +71,8 @@ export class ChromiumRecorder extends RecorderCore {
     const chromium = this.chromium
     if (!chromium || !this.state.active) return
     await chromium.pages.refresh()
+    const groups = await chromium.bridge.run<RecorderBrowserState['groups']>(GROUPS).catch(() => null)
+    if (groups) this.groups = groups
     if (this.state.active) this.onBrowserState(this.adapt(chromium))
   }
 
@@ -74,6 +80,8 @@ export class ChromiumRecorder extends RecorderCore {
     if (!this.chromium || !this.state.active) return
     const list = await this.chromium.bridge.run<{ id: string; filename: string }[]>(DOWNLOADS).catch(() => null)
     if (list) this.onDownloads(list)
+    // Tab groups have no reliable change event through the bridge, so they are polled too.
+    void this.refreshState()
   }
 
   protected end(): void {
