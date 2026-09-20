@@ -217,6 +217,35 @@ test('galaxy: view and describe go to the service with a checked view', async ()
   assert.deepEqual(readView({ depth: 2, from: 5 }), { depth: 2, from: 5, limit: 400 })
 })
 
+test('galaxy: link, unlink and ask validate their arguments and reach the service', async () => {
+  const calls: unknown[][] = []
+  const galaxy = {
+    view: async () => ({}),
+    describe: async () => null,
+    link: async (...x: unknown[]) => (calls.push(['link', ...x]), { id: 'l1' }),
+    unlink: (id: string) => (calls.push(['unlink', id]), true),
+    askAbout: async (ids: string[], q: string) => (calls.push(['ask', ids, q]), 'context')
+  }
+  await withHelper({ galaxy: () => galaxy as never }, async (rpc) => {
+    await rpc('galaxy:link', ['note:1', 'task:2', 'x'.repeat(500)])
+    assert.deepEqual(calls[0], ['link', 'note:1', 'task:2', 'x'.repeat(200)])
+    await rpc('galaxy:link', ['note:1', 'task:2'])
+    assert.equal(calls[1][3], undefined)
+    for (const bad of [[1, 'b'], ['a', ''], ['a', 'b', 5], ['a'.repeat(2200), 'b']]) await assert.rejects(rpc('galaxy:link', bad), (e: any) => e.code === 'bad-request')
+    assert.equal(await rpc('galaxy:unlink', ['l1']), true)
+    await assert.rejects(rpc('galaxy:unlink', [{}]), (e: any) => e.code === 'bad-request')
+    assert.equal(await rpc('galaxy:ask', [['note:1'], 'why?']), 'context')
+    await rpc('galaxy:ask', [['note:1']])
+    assert.equal(calls.at(-1)![2], '')
+    await assert.rejects(rpc('galaxy:ask', ['note:1', 'q']), (e: any) => e.code === 'bad-request')
+    await assert.rejects(rpc('galaxy:ask', [Array(41).fill('a'), 'q']), (e: any) => e.code === 'bad-request')
+    await assert.rejects(rpc('galaxy:ask', [[1], 'q']), (e: any) => e.code === 'bad-request')
+  })
+  await withHelper({ galaxy: () => ({ view: async () => ({}), describe: async () => null }) as never }, async (rpc) => {
+    await assert.rejects(rpc('galaxy:link', ['a', 'b']), (e: any) => e.code === 'unavailable')
+  })
+})
+
 test('without the app the panel has no secrets, workflows or galaxy channels', async () => {
   await withHelper({}, async (rpc) => {
     for (const c of ['secrets:list', 'workflows:list', 'galaxy:view']) await assert.rejects(rpc(c))

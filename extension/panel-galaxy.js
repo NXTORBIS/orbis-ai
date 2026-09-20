@@ -2,8 +2,8 @@ import { call } from './helper.js'
 
 // Galaxy, in the Orbis panel: the same map Electron Orbis draws, from the same source. Every dot is something that exists in an
 // Orbis store (research, a page it used, a note, a task, a memory, a skill, a workflow…) and every line is either written in the
-// data or drawn by the person; selecting a dot says why each of its lines is there. Read only here: making and removing links,
-// and asking Orion about a selection, stay in the Orbis window. The layout is a small force simulation of its own (no library).
+// data or drawn by the person; selecting a dot says why each of its lines is there. Links can be made and removed here, and a selection
+// can be taken to Orion Search. The layout is a small force simulation of its own (no library).
 
 const root = document.getElementById('galaxy')
 const view = document.getElementById('view-galaxy')
@@ -156,6 +156,50 @@ function fit() {
   cam.y = -((y0 + y1) / 2) * cam.k
 }
 
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
+const nebulae = [[0.25, 0.3, 0.55, '110, 90, 255'], [0.75, 0.7, 0.5, '63, 216, 255'], [0.6, 0.2, 0.35, '255, 129, 151']]
+let meteors = []
+let meteorTimer = 0
+
+/** Soft nebula glows, and (unless the person asks for less motion) an occasional meteor across the sky. */
+function drawSky(ctx, w, h) {
+  for (const [x, y, r, rgb] of nebulae) {
+    const g = ctx.createRadialGradient(x * w, y * h, 0, x * w, y * h, r * Math.max(w, h))
+    g.addColorStop(0, `rgba(${rgb}, 0.16)`)
+    g.addColorStop(1, `rgba(${rgb}, 0)`)
+    ctx.fillStyle = g
+    ctx.fillRect(0, 0, w, h)
+  }
+  if (reduceMotion.matches) return
+  const now = performance.now()
+  for (const m of meteors) {
+    const t = (now - m.born) / m.life
+    if (t >= 1) continue
+    const x = m.x + m.dx * t, y = m.y + m.dy * t
+    const g = ctx.createLinearGradient(x, y, x - m.dx * 0.12, y - m.dy * 0.12)
+    g.addColorStop(0, `rgba(255,255,255,${0.9 * (1 - t)})`)
+    g.addColorStop(1, 'rgba(255,255,255,0)')
+    ctx.strokeStyle = g
+    ctx.lineWidth = 1.5
+    ctx.beginPath()
+    ctx.moveTo(x, y)
+    ctx.lineTo(x - m.dx * 0.12, y - m.dy * 0.12)
+    ctx.stroke()
+  }
+  meteors = meteors.filter((m) => now - m.born < m.life)
+}
+
+function startMeteors() {
+  clearInterval(meteorTimer)
+  meteorTimer = setInterval(() => {
+    if (reduceMotion.matches || document.hidden || !canvas || !canvas.isConnected) return
+    const w = canvas.clientWidth, h = canvas.clientHeight
+    meteors.push({ x: Math.random() * w * 0.7, y: Math.random() * h * 0.4, dx: w * 0.5, dy: h * 0.35, born: performance.now(), life: 900 })
+    const tick = () => { paint(); if (meteors.length && !reduceMotion.matches) requestAnimationFrame(tick) }
+    requestAnimationFrame(tick)
+  }, 4000)
+}
+
 function paint() {
   if (!canvas) return
   const ctx = canvas.getContext('2d')
@@ -174,6 +218,7 @@ function paint() {
   ctx.fillStyle = '#fff'
   for (const s of stars) { ctx.globalAlpha = s.a; ctx.fillRect(s.x * w, s.y * h, s.s, s.s) }
   ctx.globalAlpha = 1
+  drawSky(ctx, w, h)
 
   ctx.save()
   ctx.translate(w / 2 + cam.x, h / 2 + cam.y)
@@ -316,6 +361,7 @@ function drawDetails() {
   if (!n) return
   detailBox.append(el('strong', {}, n.label), el('span', { class: 'muted' }, [LABELS[n.type] || n.type, n.detail].filter(Boolean).join(' · ')))
   if (n.url && /^https?:\/\//i.test(n.url)) detailBox.append(el('a', { href: n.url, target: '_blank', rel: 'noopener noreferrer', class: 'muted' }, n.url))
+  detailBox.append(actions(n))
   if (!details) return
   if (!details.links.length) detailBox.append(el('span', { class: 'muted' }, 'Nothing is connected to this yet.'))
   for (const l of details.links.slice(0, 30)) {
@@ -323,7 +369,42 @@ function drawDetails() {
     const rel = RELATIONS[l.edge.relation] || l.edge.relation
     detailBox.append(el('button', { type: 'button', class: 'link', title: l.edge.why, onclick: () => { if (nodes.some((x) => x.id === l.other.id)) { selected = l.other.id; paint(); void describe() } } },
       el('span', { class: 'dot', style: `background:${COLORS[l.other.type] || '#a2a6ae'}` }), `${outgoing ? rel : `${rel} (from)`}: ${l.other.label}${l.edge.origin === 'user' ? ' · yours' : ''}`))
+ 
+    if (l.edge.origin === 'user' && l.edge.linkId) detailBox.append(el('button', { type: 'button', class: 'unlink', 'aria-label': `Remove the connection to ${l.other.label}`, onclick: () => void unlink(l.edge.linkId) }, 'Remove connection'))
   }
+}
+
+let note = ''
+let noteBox = null
+const say = (text) => { note = text; if (noteBox) noteBox.textContent = text }
+
+async function unlink(id) {
+  try {
+    await call('galaxy:unlink', [id])
+    say('Connection removed.')
+    await load()
+  } catch (err) { say(err?.message || 'Could not remove that.') }
+}
+
+/** Connect this item to another, and ask Orion about it: the same actions the Orbis window offers. */
+function actions(n) {
+  const box = el('div', { class: 'row' })
+  const pick = el('select', { 'aria-label': 'Connect to' }, el('option', { value: '' }, 'Connect to…'), ...nodes.filter((x) => x.id !== n.id).slice(0, 300).map((x) => el('option', { value: x.id }, `${LABELS[x.type] || x.type}: ${x.label}`.slice(0, 80))))
+  const why = el('input', { type: 'text', 'aria-label': 'Why (optional)', placeholder: 'Why (optional)', maxlength: '200' })
+  const connect = el('button', { type: 'button', onclick: async () => {
+    if (!pick.value) return say('Choose what to connect it to.')
+    try { await call('galaxy:link', [n.id, pick.value, why.value.trim() || undefined]); say('Connected.'); await load() } catch (err) { say(err?.message || 'Could not connect those.') }
+  } }, 'Connect')
+  const ask = el('button', { type: 'button', onclick: async () => {
+    try {
+      const message = await call('galaxy:ask', [[n.id], 'What does this connect to, and what should I look at next?'])
+      window.open(`orbis://search?q=${encodeURIComponent(String(message).slice(0, 1800))}&in=orion`, '_blank', 'noopener')
+      say('Opened in Orion Search.')
+    } catch (err) { say(err?.message || 'Could not ask Orion.') }
+  } }, 'Ask Orion')
+  noteBox = el('span', { class: 'muted', role: 'status' }, note)
+  box.append(pick, why, connect, ask)
+  return el('div', {}, box, noteBox)
 }
 
 function drawShell() {
@@ -348,6 +429,7 @@ function drawShell() {
   detailBox = el('div', { class: 'galaxy-detail', 'aria-live': 'polite' })
   root.append(canvas, el('p', { class: 'muted' }, `${graph.nodes.length} items, ${graph.edges.length} connections`), detailBox)
   wireCanvas()
+  startMeteors()
   drawDetails()
   requestAnimationFrame(() => { fit(); paint() })
 }
