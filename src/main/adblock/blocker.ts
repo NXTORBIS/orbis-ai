@@ -232,6 +232,11 @@ export class AdBlockCore {
     for (const [id, page] of entries) if (!this.pages.has(id)) this.pages.set(id, page as PageStats)
   }
 
+  /** The registrable domain of an address, as the lists mean it. */
+  domainOf(url: string): string {
+    return siteOf(url)
+  }
+
   /** Network filtering for one request, before it leaves the device. */
   onRequest(d: RequestDetails): RequestDecision {
     const active = this.active()

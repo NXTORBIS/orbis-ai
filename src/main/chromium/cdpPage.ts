@@ -76,6 +76,7 @@ export class CdpPage implements PageHandle {
   /** Input events are sent one after another, in the order they were given, without the caller having to wait. */
   private inputQueue: Promise<unknown> = Promise.resolve()
   private loadWaiters: (() => void)[] = []
+  private readonly eventListeners = new Set<(event: CdpEvent) => void>()
 
   private readonly conn: CdpConnection
   readonly targetId: string
@@ -119,6 +120,7 @@ export class CdpPage implements PageHandle {
 
   /** Browser events for this tab. */
   handle(event: CdpEvent): void {
+    for (const listener of this.eventListeners) listener(event)
     const p = event.params
     switch (event.method) {
       case 'Page.frameStartedLoading':
@@ -139,6 +141,12 @@ export class CdpPage implements PageHandle {
         break
     }
     void p
+  }
+
+  /** Every protocol event this tab sends, for code that needs more than the page contract. */
+  onEvent(listener: (event: CdpEvent) => void): () => void {
+    this.eventListeners.add(listener)
+    return () => this.eventListeners.delete(listener)
   }
 
   /** Target metadata (URL and title) as the browser reports it. */

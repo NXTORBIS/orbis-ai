@@ -4,6 +4,7 @@ import type { BrowserControl } from '../browserControl/registry.ts'
 import { newToken } from '../../helper/auth.ts'
 import { createHandlers } from '../../helper/handlers.ts'
 import { createHelperServer } from '../../helper/server.ts'
+import { AdblockInjector } from './adblockInjector.ts'
 import { launchOrbisChromium } from './service.ts'
 import type { ChromiumControl } from './service.ts'
 
@@ -40,6 +41,8 @@ export interface BrowserManagerOptions {
   /** The one Browser Control Layer of the app: Chromium fills it. */
   control?: BrowserControl
   saveDir?: string
+  /** Extra command-line switches for the browser (tests use this to allow autoplay). */
+  chromeArgs?: string[]
   /** The browser was closed (by the person, or a crash). Nothing restarts it by itself. */
   onClosed?(): void
 }
@@ -47,6 +50,7 @@ export interface BrowserManagerOptions {
 interface Running {
   service: ChromiumControl
   helper: { close(): Promise<void> }
+  injector: AdblockInjector
   profileId: string
 }
 
@@ -118,6 +122,7 @@ export class BrowserManager {
         urls: ['chrome://newtab'],
         control: this.o.control,
         saveDir: this.o.saveDir,
+        args: this.o.chromeArgs,
         waitMs: 60_000,
         onClosed: () => {
           this.running = null
@@ -126,7 +131,14 @@ export class BrowserManager {
           this.o.onClosed?.()
         }
       })
-      return { service, helper: server, profileId }
+      // The ad blocker's page scripts run before each page's own, from here (see adblockInjector.ts).
+      const injector = new AdblockInjector({
+        browser: service.browser,
+        adblockDir: join(extensionDir, 'adblock'),
+        readSettings: () => service.bridge.run("chrome.storage.local.get('orbis.adblock.settings').then((r) => r['orbis.adblock.settings'] ?? null)")
+      })
+      await injector.start()
+      return { service, helper: server, injector, profileId }
     } catch (err) {
       await server.close()
       throw err
@@ -168,6 +180,7 @@ export class BrowserManager {
     this.running = null
     this.active = null
     if (!running) return
+    running.injector.stop()
     running.service.stop()
     await running.helper.close()
   }
