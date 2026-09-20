@@ -97,7 +97,7 @@ function tick() {
       if (d2 > 90000) continue
       if (d2 < 1) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; d2 = 1 }
       const d = Math.sqrt(d2)
-      const push = ((40 + (a.degree + b.degree) * 3) / d2) * alpha * 12
+      const push = ((40 + (a.degree + b.degree) * 3) / d2) * alpha * 40
       a.vx -= dx * push; a.vy -= dy * push
       b.vx += dx * push; b.vy += dy * push
       const min = radius(a) + radius(b) + 4
@@ -151,7 +151,7 @@ function fit() {
   for (const n of nodes) { x0 = Math.min(x0, n.x); y0 = Math.min(y0, n.y); x1 = Math.max(x1, n.x); y1 = Math.max(y1, n.y) }
   const w = Math.max(60, x1 - x0 + 80)
   const h = Math.max(60, y1 - y0 + 80)
-  cam.k = Math.max(0.15, Math.min(2, Math.min(canvas.clientWidth / w, canvas.clientHeight / h)))
+  cam.k = Math.max(0.15, Math.min(3, Math.min(canvas.clientWidth / w, canvas.clientHeight / h)))
   cam.x = -((x0 + x1) / 2) * cam.k
   cam.y = -((y0 + y1) / 2) * cam.k
 }
@@ -258,7 +258,7 @@ function paint() {
     ctx.globalAlpha = dim * 0.85
     ctx.fillStyle = '#fff'
     ctx.beginPath(); ctx.arc(n.x, n.y, r * 0.38, 0, Math.PI * 2); ctx.fill()
-    if (n.id === chosen) {
+    if (n.id === chosen || extra.has(n.id)) {
       ctx.globalAlpha = 1; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5 / cam.k
       ctx.beginPath(); ctx.arc(n.x, n.y, r + 4, 0, Math.PI * 2); ctx.stroke()
     }
@@ -268,7 +268,7 @@ function paint() {
   ctx.font = `${12 / cam.k}px system-ui, sans-serif`
   ctx.textAlign = 'center'
   for (const n of nodes) {
-    if (!(n.id === chosen || n.id === hover || (near.has(n.id) && nodes.length < 400) || (!focused && n.degree >= 6 && cam.k > 0.5))) continue
+    if (!(n.id === chosen || n.id === hover || (near.has(n.id) && nodes.length < 40 && cam.k > 1.6) || (!focused && n.degree >= 6 && cam.k > 0.5))) continue
     const text = n.label.length > 32 ? `${n.label.slice(0, 31)}…` : n.label
     ctx.fillStyle = 'rgba(5, 7, 14, 0.7)'
     ctx.fillText(text, n.x + 0.6 / cam.k, n.y + radius(n) + 14 / cam.k + 0.6 / cam.k)
@@ -322,7 +322,8 @@ function wireCanvas() {
     if (d?.node) d.node.fixed = false
     if (d && !d.moved) {
       const n = hit(e)
-      selected = n?.id ?? null
+      if (e.shiftKey && n && selected && n.id !== selected) extra.has(n.id) ? extra.delete(n.id) : extra.add(n.id)
+      else { selected = n?.id ?? null; extra.clear() }
       paint()
       await describe()
     }
@@ -375,6 +376,9 @@ function drawDetails() {
 }
 
 let note = ''
+/** Stars added to the selection with shift-click, kept together with the selected one. */
+const extra = new Set()
+let projects = null
 let noteBox = null
 const say = (text) => { note = text; if (noteBox) noteBox.textContent = text }
 
@@ -384,6 +388,34 @@ async function unlink(id) {
     say('Connection removed.')
     await load()
   } catch (err) { say(err?.message || 'Could not remove that.') }
+}
+
+/** Keep the selection (shift-click adds more): as a note, on a whiteboard, or in a project. Only ids are sent; the helper builds what is saved. */
+function keepRow(n) {
+  const ids = () => [n.id, ...[...extra].filter((x) => nodes.some((y) => y.id === x))]
+  const count = ids().length
+  const keep = (channel, args, done) => async () => {
+    try { say(done(await call(channel, args()))) } catch (err) { say(err?.message || 'That could not be saved.') }
+  }
+  const project = el('select', { 'aria-label': 'Project' }, el('option', { value: '' }, 'Project…'), el('option', { value: '__new' }, 'New project…'))
+  const name = el('input', { type: 'text', 'aria-label': 'New project name', placeholder: 'New project name', maxlength: '60', hidden: '' })
+  const fill = async () => {
+    if (!projects) { try { projects = await call('galaxy:projects') } catch { projects = [] } }
+    for (const p of projects) project.append(el('option', { value: p.id }, `${p.name} (${p.items})`))
+  }
+  void fill()
+  project.addEventListener('change', () => { name.hidden = project.value !== '__new' })
+  const noun = count === 1 ? 'item' : 'items'
+  return el('div', { class: 'row keep' }, el('span', { class: 'muted' }, `Keep ${count} ${noun} (shift-click adds more):`),
+    el('button', { type: 'button', onclick: keep('galaxy:save-note', () => [ids()], () => 'Note created in Notes.') }, 'As a note'),
+    el('button', { type: 'button', onclick: keep('galaxy:save-board', () => [ids()], (r) => `Put on the whiteboard \u201c${r.name}\u201d.`) }, 'On a whiteboard'),
+    project, name,
+    el('button', { type: 'button', onclick: async () => {
+      if (!project.value) return say('Choose a project.')
+      const target = project.value === '__new' ? { newName: name.value } : project.value
+      await keep('galaxy:save-project', () => [target, ids()], (r) => `Added ${r.added} ${r.added === 1 ? 'item' : 'items'} to the project \u201c${r.name}\u201d.`)()
+      projects = null
+    } }, 'Add to project'))
 }
 
 /** Connect this item to another, and ask Orion about it: the same actions the Orbis window offers. */
@@ -404,7 +436,7 @@ function actions(n) {
   } }, 'Ask Orion')
   noteBox = el('span', { class: 'muted', role: 'status' }, note)
   box.append(pick, why, connect, ask)
-  return el('div', {}, box, noteBox)
+  return el('div', {}, box, keepRow(n), noteBox)
 }
 
 function drawShell() {
