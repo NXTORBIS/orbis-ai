@@ -11,6 +11,8 @@ import { registerChromiumCapabilities } from './chromiumCapabilities.ts'
 import { registerMoreChromiumCapabilities } from './chromiumCapabilities2.ts'
 import { registerFindInPage, registerSitePermissionCapabilities } from './chromiumCapabilities3.ts'
 import { registerBrowserToolCapabilities } from './chromiumCapabilities4.ts'
+import { BrowserUi } from './browserUi.ts'
+import { registerBrowserUiCapabilities } from './chromiumCapabilities5.ts'
 import { ChromiumPages } from './chromiumPages.ts'
 import { ExtensionBridge } from './extensionBridge.ts'
 
@@ -38,6 +40,8 @@ export interface ChromiumControlOptions {
   waitMs?: number
   /** The system clipboard, for checking what a page copied (the app passes Electron's). */
   clipboard?: { readText(): Promise<string> | string; hasImage(): Promise<boolean> | boolean }
+  /** The browser process id Orbis launched: the address-bar and developer-tools capabilities only ever act on that process's windows. */
+  pid?: number
   /** Called when the browser goes away (closed by the person, or crashed). */
   onClosed?: () => void
 }
@@ -89,6 +93,8 @@ export async function startChromiumControl(o: ChromiumControlOptions): Promise<C
     readClipboardText: async () => (o.clipboard ? o.clipboard.readText() : ''),
     hasClipboardImage: async () => (o.clipboard ? o.clipboard.hasImage() : false)
   })
+  const ui = o.pid !== undefined && BrowserUi.supported() ? new BrowserUi(o.pid) : undefined
+  registerBrowserUiCapabilities({ ...deps, activePage: async () => (await pages.getTarget()) as unknown as import('./cdpPage.ts').CdpPage, pid: o.pid, ui })
   registerPageCapabilities(control, pages.resolve)
   registerCaptchaCapabilities(control, pages.resolve)
 
@@ -108,6 +114,7 @@ export async function startChromiumControl(o: ChromiumControlOptions): Promise<C
       }
     },
     stop: () => {
+      ui?.close()
       pages.stop()
       browser!.close()
     }
@@ -125,7 +132,7 @@ export interface LaunchOrbisChromiumOptions extends Omit<ChromiumControlOptions,
 export async function launchOrbisChromium(o: LaunchOrbisChromiumOptions): Promise<ChromiumControl & { process: import('node:child_process').ChildProcess; exited: Promise<number | null> }> {
   const launched = launchChromium(o)
   try {
-    const service = await startChromiumControl({ ...o, connection: launched.connection, onClosed: undefined })
+    const service = await startChromiumControl({ ...o, connection: launched.connection, onClosed: undefined, pid: launched.process.pid })
     void launched.exited.then(() => o.onClosed?.())
     return {
       ...service,

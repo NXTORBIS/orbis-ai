@@ -5,8 +5,8 @@ import type { CdpPage } from './cdpPage.ts'
 
 /**
  * The rest of what the Electron browser's capabilities did that still has meaning on Chromium: copying from the page, reading its
- * console and network, its navigation details, and the ad blocker's settings (which live in the Orbis extension). Chromium's own
- * developer-tools window cannot be opened by a program that talks to it over a pipe, so those three say so instead of pretending.
+ * console and network, its navigation details, and the ad blocker's settings (which live in the Orbis extension). The developer-tools window
+ * and address bar are operated with real key input in chromiumCapabilities5.ts.
  */
 
 const str = (description: string, required = false): ParamSpec => ({ type: 'string', description, required })
@@ -185,24 +185,6 @@ export function registerBrowserToolCapabilities(d: MoreDeps): void {
       return { count: requests.size, requests: [...requests.values()] }
     }
   })
-
-  for (const [id, name] of [
-    ['devtools.open', 'Open developer tools'],
-    ['devtools.close', 'Close developer tools'],
-    ['devtools.inspect', 'Inspect an element']
-  ] as const) {
-    control.register({
-      id,
-      domain: 'devtools',
-      name,
-      description: "Chromium's developer-tools window belongs to the browser's own interface. Use its own shortcut (F12 or Ctrl+Shift+I) in the browser; use devtools.console and devtools.network to read what the tools would show.",
-      params: {},
-      mutates: false,
-      confirmation: 'none',
-      unavailable: () => "Orbis controls Chromium over a private pipe, which cannot open the browser's developer-tools window. Press F12 in the browser, or use devtools.console / devtools.network.",
-      run: () => fail('unavailable', 'Not available.', false)
-    })
-  }
 
   // ---------------------------------------------------------------- navigation details
 
