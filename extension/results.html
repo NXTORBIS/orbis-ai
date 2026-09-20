@@ -3,19 +3,24 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark light" />
     <title>Orbis Search</title>
     <link rel="icon" type="image/png" href="assets/icon-32.png" />
     <link rel="stylesheet" href="results.css" />
   </head>
   <body>
-    <header>
-      <a class="brand" href="chrome://newtab" aria-label="Orbis"><img src="assets/orbis-ring.png" alt="" width="34" /></a>
-      <form id="search" role="search">
-        <input id="q" type="search" autocomplete="off" spellcheck="false" placeholder="Search the web" aria-label="Search the web with Orbis" />
+    <header class="head">
+      <a class="brand" href="newtab.html" aria-label="Orbis home"><img src="assets/orbis-ring.png" alt="" width="34" height="34" /><span class="wordmark">Orbis</span></a>
+      <form id="search" class="box" role="search" autocomplete="off">
+        <input id="q" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="suggest" enterkeyhint="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Search the web" aria-label="Search the web with Orbis" />
+        <button type="submit" class="go" aria-label="Search">Search</button>
+        <ul id="suggest" class="suggest" role="listbox" hidden></ul>
       </form>
       <nav id="verticals" class="verticals" aria-label="What to search"></nav>
     </header>
     <main id="body" aria-live="polite"><p class="status">Searching…</p></main>
+    <div id="viewer" class="viewer" role="dialog" aria-modal="true" hidden></div>
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
     <script src="results.js"></script>
   </body>
 </html>

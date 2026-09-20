@@ -14,6 +14,8 @@ import { createSecretsHandlers } from './secrets.ts'
 import type { SecretsDeps } from './secrets.ts'
 import { createWorkflowHandlers } from './workflows.ts'
 import type { WorkflowsDeps } from './workflows.ts'
+import { createSearchSessionHandlers } from './searchSessions.ts'
+import type { SearchSessionsDeps } from './searchSessions.ts'
 import { createGalaxyHandlers } from './galaxy.ts'
 import type { GalaxyDeps } from './galaxy.ts'
 import { HelperError } from './server.ts'
@@ -44,6 +46,9 @@ export interface HandlerDeps {
   secrets?: () => SecretsDeps | null | undefined
   workflows?: () => WorkflowsDeps | null | undefined
   galaxy?: () => GalaxyDeps | null | undefined
+  /** Saved Orion Search sessions: the app's own store when given, else the helper opens the same database under dataDir. */
+  searchSessions?: SearchSessionsDeps['store']
+  profileId?: string
   adblock?: { extensionDir: string; listsDir: string; bundledDir: string }
 }
 
@@ -71,6 +76,7 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
   const specialized = new SearxngProvider({ endpoint: endpointFromEnvironment(), fetchFn: doFetch })
 
   return {
+    ...createSearchSessionHandlers({ store: deps.searchSessions, userData: deps.dataDir, profileId: deps.profileId, apiKeys: deps.apiKeys, fetchFn: doFetch }),
     ...(deps.dataDir ? createPersonalHandlers({ dataDir: deps.dataDir }) : {}),
     ...(deps.secrets ? createSecretsHandlers(deps.secrets) : {}),
     ...(deps.workflows ? createWorkflowHandlers(deps.workflows) : {}),

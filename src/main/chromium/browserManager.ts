@@ -47,6 +47,8 @@ export interface BrowserManagerOptions {
   secrets?: HandlerDeps['secrets']
   workflows?: HandlerDeps['workflows']
   galaxy?: HandlerDeps['galaxy']
+  /** The app's own saved-research store, so the results page and the Orbis window share one instance. */
+  searchSessions?: HandlerDeps['searchSessions']
   /** The one Browser Control Layer of the app: Chromium fills it. */
   control?: BrowserControl
   saveDir?: string
@@ -136,6 +138,8 @@ export class BrowserManager {
         secrets: this.o.secrets,
         workflows: this.o.workflows,
         galaxy: this.o.galaxy,
+        searchSessions: this.o.searchSessions,
+        profileId,
         adblock: { extensionDir, listsDir: this.o.adblockListsDir, bundledDir: this.o.adblockBundledDir }
       })
     })
