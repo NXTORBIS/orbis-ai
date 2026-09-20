@@ -1,8 +1,155 @@
+diff --git a/chrome/browser/resources/omnibox_popup/omnibox_popup_shared_style.css b/chrome/browser/resources/omnibox_popup/omnibox_popup_shared_style.css
+index 7cb613cbcf..1136527989 100644
+--- a/chrome/browser/resources/omnibox_popup/omnibox_popup_shared_style.css
++++ b/chrome/browser/resources/omnibox_popup/omnibox_popup_shared_style.css
+@@ -27,14 +27,14 @@
+   --cr-composebox-font-size: 14px;
+ 
+   --cr-searchbox-match-icon-container-background-fallback: var(--color-omnibox-results-background-hovered);
+-  --color-searchbox-background: var(--color-omnibox-results-background);
+-  --color-searchbox-foreground: var(--color-omnibox-text);
+-  --color-searchbox-results-background-hovered: var(--color-omnibox-results-background-hover-overlay);
+-  --color-searchbox-results-background-selected: var(--color-omnibox-results-background-selected);
++  --color-searchbox-background: #131824;
++  --color-searchbox-foreground: #e8ecf4;
++  --color-searchbox-results-background-hovered: #1a2133;
++  --color-searchbox-results-background-selected: #232b3b;
+   --color-searchbox-results-button-hover: var(--color-omnibox-results-button-ink-drop-row-hovered);
+-  --color-searchbox-results-focus-indicator: var(--color-omnibox-results-focus-indicator);
+-  --color-searchbox-results-foreground: var(--color-omnibox-text);
+-  --color-searchbox-results-foreground-selected: var(--color-omnibox-results-text-selected);
++  --color-searchbox-results-focus-indicator: #3fd8ff;
++  --color-searchbox-results-foreground: #e8ecf4;
++  --color-searchbox-results-foreground-selected: #e8ecf4;
+   --color-searchbox-results-icon-focused-outline: var(--color-omnibox-results-focus-indicator);
+   --color-searchbox-results-icon-selected: var(--color-omnibox-results-icon-selected);
+   --color-searchbox-answer-icon-background: var(--color-omnibox-answer-icon-g-m3-background);
+diff --git a/chrome/browser/resources/webui_toolbar/location_bar.css b/chrome/browser/resources/webui_toolbar/location_bar.css
+index 59565bb31a..ec5f774a45 100644
+--- a/chrome/browser/resources/webui_toolbar/location_bar.css
++++ b/chrome/browser/resources/webui_toolbar/location_bar.css
+@@ -9,7 +9,7 @@
+ 
+ :host {
+   --border-radius: calc(var(--location-bar-height)/2);
+-  --location-bar-background: var(--color-location-bar-background);
++  --location-bar-background: var(--orbis-panel);
+   --omnibox-start-padding: 0px;
+   align-self: center;
+   align-items: center;
+@@ -47,17 +47,17 @@
+ }
+ 
+ :host(:hover:not([chip-hovered])) {
+-  --location-bar-background: var(--color-location-bar-background-hovered);
++  --location-bar-background: var(--orbis-panel-2);
+ }
+ 
+ @media not (prefers-contrast: more) {
+   :host(.input-in-progress) {
+-    --location-bar-background: var(--color-omnibox-results-background);
++    --location-bar-background: var(--orbis-panel-2);
+     background-color: var(--location-bar-background);
+-    border: 1px solid var(--color-location-bar-border-on-mismatch);
++    border: 1px solid var(--orbis-line);
+   }
+   :host(.input-in-progress:hover:not([chip-hovered])) {
+-    --location-bar-background: var(--color-omnibox-results-background-hovered);
++    --location-bar-background: var(--orbis-panel-2);
+     background-color: var(--location-bar-background);
+   }
+ 
+@@ -70,11 +70,11 @@
+ 
+ @media (prefers-contrast: more) {
+   :host {
+-    border: 1px solid var(--color-location-bar-border);
++    border: 1px solid var(--orbis-line);
+   }
+ 
+   :host:has(> readonly-omnibox:focus-within) {
+-    border: 1px solid var(--color-omnibox-results-background);
++    border: 1px solid var(--orbis-panel-2);
+   }
+ }
+ 
+@@ -85,13 +85,13 @@
+   selector for its specificity.
+ */
+ :host(#location-bar):has(> readonly-omnibox:focus-within) {
+-  --location-bar-background: var(--color-omnibox-results-background);
++  --location-bar-background: var(--orbis-panel-2);
+   background-color: var(--location-bar-background);
+   transition-property: none;
+ }
+ 
+ :host(#location-bar:not(.no-focus-ring)):has(> readonly-omnibox:focus-within) {
+-  box-shadow: inset 0 0 0 2px var(--cr-focus-outline-color);
++  box-shadow: inset 0 0 0 2px var(--orbis-accent);
+ }
+ 
+ @media (forced-colors: active) {
+diff --git a/chrome/browser/resources/webui_toolbar/readonly_omnibox.css b/chrome/browser/resources/webui_toolbar/readonly_omnibox.css
+index 367bc9abc1..d4cf7a3f9f 100644
+--- a/chrome/browser/resources/webui_toolbar/readonly_omnibox.css
++++ b/chrome/browser/resources/webui_toolbar/readonly_omnibox.css
+@@ -14,7 +14,7 @@
+   --omnibox-height: calc(var(--location-bar-height));
+   align-self: center;
+   border: none;
+-  color: var(--color-omnibox-text);
++  color: var(--orbis-text);
+   display: flex;
+   /* Absorbs available free space. This mathematically isolates layout changes
+    * on the left/right sides. */
+@@ -78,8 +78,8 @@
+ }
+ 
+ #textInput::part(searchbox-input)::selection {
+-  background-color: var(--color-omnibox-selection-background);
+-  color: var(--color-omnibox-selection-foreground);
++  background-color: var(--orbis-accent);
++  color: var(--orbis-bg);
+ }
+ 
+ /* We don't want URLs spellchecked */
+@@ -92,11 +92,11 @@
+ }
+ 
+ #textInput::part(searchbox-input)::placeholder {
+-  color: var(--color-omnibox-text);
++  color: var(--orbis-text);
+ }
+ 
+ #textContainer .color-dim {
+-  color: var(--color-omnibox-text-dimmed);
++  color: var(--orbis-muted);
+ }
+ 
+ #textContainer .color-foreground-disabled,
+@@ -139,13 +139,13 @@
+ }
+ 
+ :host(.dragging-over) #textContainer span {
+-  background-color: var(--color-omnibox-selection-background);
+-  color: var(--color-omnibox-selection-foreground);
++  background-color: var(--orbis-accent);
++  color: var(--orbis-bg);
+ }
+ 
+ #inlineAutocomplete {
+-  color: var(--color-omnibox-text);
+-  background-color: var(--color-location-bar-background);
++  color: var(--orbis-text);
++  background-color: var(--orbis-panel);
+   height: var(--omnibox-height);
+   line-height: var(--omnibox-height);
+   /* If [composing] isn't set, this is used only for positioning the additional
 diff --git a/chrome/browser/resources/webui_toolbar/webui_toolbar.css b/chrome/browser/resources/webui_toolbar/webui_toolbar.css
-index db884da574..b271e7b4b8 100644
+index db884da574..aa84720040 100644
 --- a/chrome/browser/resources/webui_toolbar/webui_toolbar.css
 +++ b/chrome/browser/resources/webui_toolbar/webui_toolbar.css
-@@ -14,8 +14,31 @@ body {
+@@ -14,8 +14,32 @@ body {
    height: 100%;
    margin: 0;
    overflow: hidden;
@@ -20,6 +167,7 @@ index db884da574..b271e7b4b8 100644
 +  --orbis-bg: #0b0e14;
 +  --orbis-panel: #131824;
 +  --orbis-line: #232b3b;
++  --orbis-panel-2: #1a2133;
 +  --orbis-text: #e8ecf4;
 +  --orbis-muted: #8b95a8;
 +  --orbis-accent: #3fd8ff;
