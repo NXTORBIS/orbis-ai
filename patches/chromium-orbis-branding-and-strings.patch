@@ -2916,7 +2916,7 @@ index d5f9a09fc0..f20d0ed508 100644
      </messages>
    </release>
 diff --git a/chrome/app/generated_resources.grd b/chrome/app/generated_resources.grd
-index d718a56fe4..80aa6428ab 100644
+index d718a56fe4..0175ab6b13 100644
 --- a/chrome/app/generated_resources.grd
 +++ b/chrome/app/generated_resources.grd
 @@ -7286,7 +7286,7 @@ Keep your key file in a safe place. You will need it to create new versions of y
@@ -2928,6 +2928,24 @@ index d718a56fe4..80aa6428ab 100644
          </message>
          <message name="IDS_ABOUT_BROWSER_SWITCH_INTERNALS_INVALID_URL" desc="about:browser-switch/internals, section URL Checker, specific error message when the url is invalid">
            Invalid URL. Make sure it is formatted properly.
+@@ -7604,7 +7604,7 @@ Keep your key file in a safe place. You will need it to create new versions of y
+         Try again
+       </message>
+       <message name="IDS_GOOGLE_SEARCH_BOX_EMPTY_HINT_MD" desc="The text displayed in the fakebox (on the New Tab page) when it is empty, Google is the default search engine, and the Material Design UI is enabled.">
+-        Search Google or type a URL
++        Search or type a URL
+       </message>
+       <message name="IDS_GOOGLE_SEARCH_BOX_EMPTY_HINT_SHORT" desc="The text displayed in the fakebox (on the New Tab page) when it is empty, Google is the default search engine, and short hint text is enabled.">
+         Search Google
+@@ -7680,7 +7680,7 @@ Keep your key file in a safe place. You will need it to create new versions of y
+         Close
+       </message>
+       <message name="IDS_NTP_SEARCH_BOX_PLACEHOLDER_ASK_OR_TYPE" desc="A steady state placeholder text for the NTP searchbox">
+-        Ask Google or type a URL
++        Ask or type a URL
+       </message>
+       <message name="IDS_NTP_SEARCH_BOX_DYNAMIC_PLACEHOLDER_ASK_GOOGLE" desc="One of the dynamically changing placeholder texts for the NTP searchbox">
+         Ask Google
 @@ -8118,7 +8118,7 @@ Keep your key file in a safe place. You will need it to create new versions of y
          Show less
        </message>
