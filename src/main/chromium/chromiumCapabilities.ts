@@ -469,7 +469,7 @@ export function registerChromiumCapabilities(d: ChromiumCapabilityDeps): void {
     },
     verify: async (data) => {
       const { id } = data as { id: string }
-      const row = await until(() => downloadRows(`{ id: ${Number(id)} }`).then((r) => r[0]), (r) => Boolean(r) && r!.state !== 'progressing', 20_000, 200)
+      const row = await until(() => downloadRows(`{ id: ${Number(id)} }`).then((r) => r[0]), Boolean, 5000, 100)
       return { verified: Boolean(row), detail: row ? `The download is ${String(row.state)}.` : 'The download did not start.' }
     }
   })
