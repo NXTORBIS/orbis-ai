@@ -108,3 +108,30 @@ main { flex: 1; overflow-y: auto; padding: 14px 12px; display: flex; flex-direct
 #tasks .task input[type="checkbox"] { accent-color: var(--accent); margin-top: 12px; }
 #notes input[type="checkbox"] { accent-color: var(--accent); }
 #tasks .seg button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+
+/* Workflows, Galaxy, Secrets */
+.tabs { overflow-x: auto; scrollbar-width: none; }
+.tabs button { white-space: nowrap; }
+#workflows, #galaxy, #secrets { gap: 10px; }
+#workflows .row, #galaxy .row, #secrets .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+#workflows input[type="text"], #workflows input[type="number"], #workflows input[type="password"], #galaxy input[type="search"], #galaxy select, #secrets input[type="text"], #secrets input[type="search"], #secrets input[type="password"], #secrets select { flex: 1; min-width: 0; padding: 6px 9px; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; }
+#workflows input:focus, #galaxy input:focus, #galaxy select:focus, #secrets input:focus, #secrets select:focus, #workflows button:focus-visible, #galaxy button:focus-visible, #secrets button:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+#workflows .editor, #secrets .editor { display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 1px solid var(--accent); border-radius: 10px; }
+#workflows .item, #secrets .item { display: flex; flex-direction: column; gap: 2px; text-align: left; width: 100%; padding: 8px 10px; border-radius: 10px; background: var(--panel); }
+#workflows .muted, #galaxy .muted, #secrets .muted { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+#workflows .problem, #galaxy .problem, #secrets .problem { color: var(--bad); font-size: 12px; }
+#workflows .danger, #secrets .danger { color: var(--bad); }
+#workflows label.check { display: flex; gap: 6px; align-items: center; color: var(--muted); font-size: 12px; cursor: pointer; }
+#workflows input[type="checkbox"] { accent-color: var(--accent); }
+#workflows .wf { display: flex; flex-direction: column; gap: 6px; }
+#workflows .run { display: flex; flex-direction: column; gap: 4px; padding: 10px; border: 1px solid var(--accent); border-radius: 10px; background: var(--panel); }
+#workflows .steps { margin: 0; padding-left: 4px; list-style: none; font-size: 13px; }
+#workflows .steps li.off { color: var(--muted); text-decoration: line-through; }
+#workflows .steps-box { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; }
+#galaxy .seg button { padding: 2px 9px; font-size: 12px; }
+#galaxy .seg button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+#galaxy .dot { display: inline-block; width: 8px; height: 8px; margin-right: 5px; border-radius: 50%; }
+.galaxy-canvas { display: block; width: 100%; height: 280px; min-height: 220px; border: 1px solid var(--line); border-radius: 10px; cursor: grab; touch-action: none; }
+.galaxy-detail { display: flex; flex-direction: column; gap: 4px; }
+.galaxy-detail a { color: var(--accent); }
+.galaxy-detail .link { display: block; text-align: left; padding: 3px 8px; font-size: 12px; border-radius: 8px; }

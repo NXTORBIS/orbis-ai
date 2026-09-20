@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path'
 import type { BrowserControl } from '../browserControl/registry.ts'
 import { newToken } from '../../helper/auth.ts'
 import { createHandlers } from '../../helper/handlers.ts'
+import type { HandlerDeps } from '../../helper/handlers.ts'
 import { createHelperServer } from '../../helper/server.ts'
 import { AdblockInjector } from './adblockInjector.ts'
 import { launchOrbisChromium } from './service.ts'
@@ -39,6 +40,13 @@ export interface BrowserManagerOptions {
   adblockListsDir: string
   /** Where the browser's notes and tasks are kept for this profile. */
   personalDir(profileId: string): string
+  /**
+   * The app's own vault, workflow engine (and recorder, if any) and Galaxy, for the side panel. Each is read when the panel calls, so
+   * they may be created after the browser is. The panel gets names and progress from them, never a secret's value.
+   */
+  secrets?: HandlerDeps['secrets']
+  workflows?: HandlerDeps['workflows']
+  galaxy?: HandlerDeps['galaxy']
   /** The one Browser Control Layer of the app: Chromium fills it. */
   control?: BrowserControl
   saveDir?: string
@@ -122,6 +130,9 @@ export class BrowserManager {
       handlers: createHandlers({
         apiKeys: this.o.apiKeys(),
         dataDir: this.o.personalDir(profileId),
+        secrets: this.o.secrets,
+        workflows: this.o.workflows,
+        galaxy: this.o.galaxy,
         adblock: { extensionDir, listsDir: this.o.adblockListsDir, bundledDir: this.o.adblockBundledDir }
       })
     })

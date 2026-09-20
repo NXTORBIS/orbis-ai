@@ -10,6 +10,12 @@ import { isSpecialized } from '../shared/searchProviders.ts'
 import type { Research } from '../shared/types'
 import { createAdblockHandlers } from './adblock/service.ts'
 import { createPersonalHandlers } from './personal.ts'
+import { createSecretsHandlers } from './secrets.ts'
+import type { SecretsDeps } from './secrets.ts'
+import { createWorkflowHandlers } from './workflows.ts'
+import type { WorkflowsDeps } from './workflows.ts'
+import { createGalaxyHandlers } from './galaxy.ts'
+import type { GalaxyDeps } from './galaxy.ts'
 import { HelperError } from './server.ts'
 import type { Handler } from './server.ts'
 
@@ -31,6 +37,13 @@ export interface HandlerDeps {
   /** Where the extension and the filter lists live, when the helper manages the ad blocker's lists. */
   /** This profile's own data folder for notes and tasks; without it those channels do not exist. */
   dataDir?: string
+  /**
+   * The app's own vault, workflow engine and Galaxy, when the helper runs inside Orbis. Each is read at call time (they may come
+   * into being after the helper does); returning null answers the panel with "not ready". Without them those channels do not exist.
+   */
+  secrets?: () => SecretsDeps | null | undefined
+  workflows?: () => WorkflowsDeps | null | undefined
+  galaxy?: () => GalaxyDeps | null | undefined
   adblock?: { extensionDir: string; listsDir: string; bundledDir: string }
 }
 
@@ -59,6 +72,9 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
 
   return {
     ...(deps.dataDir ? createPersonalHandlers({ dataDir: deps.dataDir }) : {}),
+    ...(deps.secrets ? createSecretsHandlers(deps.secrets) : {}),
+    ...(deps.workflows ? createWorkflowHandlers(deps.workflows) : {}),
+    ...(deps.galaxy ? createGalaxyHandlers(deps.galaxy) : {}),
     ...(deps.adblock ? createAdblockHandlers({ ...deps.adblock, fetchFn: doFetch }) : {}),
     /** Whether the helper is there and the token works. Says nothing about the person's data. */
     'helper:ping': () => ({ ok: true, version: deps.version ?? 'dev', hasApiKey: deps.apiKeys.length > 0 }),

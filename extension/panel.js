@@ -223,13 +223,14 @@ let lastQuery = ''
 let searching = null
 
 function showTab(name) {
-  for (const id of ['ask', 'search', 'block', 'notes', 'tasks']) {
+  for (const id of ['ask', 'search', 'block', 'notes', 'tasks', 'workflows', 'galaxy', 'secrets']) {
     $(`view-${id}`).hidden = id !== name
     $(`tab-${id}`).setAttribute('aria-selected', String(id === name))
   }
   if (name === 'block') document.dispatchEvent(new CustomEvent('orbis:blocking-shown'))
   else if (name === 'notes') document.dispatchEvent(new CustomEvent('orbis:notes-shown'))
   else if (name === 'tasks') document.dispatchEvent(new CustomEvent('orbis:tasks-shown'))
+  else if (['workflows', 'galaxy', 'secrets'].includes(name)) document.dispatchEvent(new CustomEvent(`orbis:${name}-shown`))
   else if (name === 'search') $('query').focus()
   else input.focus()
 }
@@ -238,6 +239,9 @@ $('tab-search').addEventListener('click', () => showTab('search'))
 $('tab-block').addEventListener('click', () => showTab('block'))
 $('tab-notes').addEventListener('click', () => showTab('notes'))
 $('tab-tasks').addEventListener('click', () => showTab('tasks'))
+$('tab-workflows').addEventListener('click', () => showTab('workflows'))
+$('tab-galaxy').addEventListener('click', () => showTab('galaxy'))
+$('tab-secrets').addEventListener('click', () => showTab('secrets'))
 
 function renderResults(outcome) {
   results.replaceChildren()

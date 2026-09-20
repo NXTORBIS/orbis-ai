@@ -1,0 +1,131 @@
+import { SecretsVault, VaultFailure } from '../main/vault/store.ts'
+import { SECRET_KINDS, matchesSearch } from '../shared/vault.ts'
+import type { SecretKind, SecretSummary, VaultStatus } from '../shared/vault'
+import { HelperError } from './server.ts'
+import type { Handler } from './server.ts'
+
+/**
+ * The secrets vault for the panel: the same vault Electron Orbis uses, in the same process.
+ *
+ * The panel is told what a secret says about itself (name, kind, provider, site, username, tags) and can set a NEW value.
+ * It is never sent a value — there is no reveal or copy channel, and nothing here logs an argument — and the master password
+ * is used for one unlock call and not kept. The vault key never leaves the vault object.
+ */
+
+/** What the helper needs from the vault: plain functions, so the helper never holds the vault or a profile itself. */
+export interface SecretsDeps {
+  status(): Promise<VaultStatus>
+  unlock(masterPassword: string): Promise<VaultStatus>
+  lock(): Promise<VaultStatus>
+  list(): Promise<SecretSummary[]>
+  add(input: Record<string, unknown>): Promise<SecretSummary>
+  /** `changes` never contains a value unless the person typed a new one; what is kept of the old secret is the vault's business. */
+  update(id: string, changes: Record<string, unknown>): Promise<SecretSummary>
+  remove(id: string): Promise<void>
+}
+
+/** Wraps the real vault, for the profile in use now. Updates keep the old value and fields unless a new value is given. */
+export function secretsFromVault(vault: SecretsVault, profileId: () => Promise<string>): SecretsDeps {
+  return {
+    status: async () => vault.status(await profileId()),
+    unlock: async (password) => {
+      const id = await profileId()
+      await vault.unlock(id, password)
+      return vault.status(id)
+    },
+    lock: async () => {
+      vault.lock()
+      return vault.status(await profileId())
+    },
+    list: async () => vault.list(await profileId()),
+    add: async (input) => vault.add(await profileId(), input),
+    update: async (id, changes) => {
+      const profile = await profileId()
+      const old = vault.reveal(profile, id) // stays in this function
+      const next = { ...old, ...changes, value: typeof changes.value === 'string' && changes.value !== '' ? changes.value : old.value, fields: old.fields }
+      return vault.update(profile, id, next)
+    },
+    remove: async (id) => vault.remove(await profileId(), id)
+  }
+}
+
+const bad = (message: string): HelperError => new HelperError('bad-request', message)
+function str(value: unknown, field: string, max: number): string {
+  if (typeof value !== 'string' || value.length > max) throw bad(`${field} must be text of at most ${max} characters.`)
+  return value
+}
+function id(value: unknown): string {
+  if (typeof value !== 'string' || !value || value.length > 80) throw bad('Expected an id.')
+  return value
+}
+
+/** The description of a secret from the panel: known fields only. `value` is write-only. */
+export function secretChanges(raw: unknown, { create }: { create: boolean }): Record<string, unknown> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw bad('The secret must be an object.')
+  const r = raw as Record<string, unknown>
+  const out: Record<string, unknown> = {}
+  if (r.kind !== undefined) {
+    if (!SECRET_KINDS.includes(r.kind as SecretKind)) throw bad('Unknown kind.')
+    out.kind = r.kind
+  }
+  if (r.name !== undefined) out.name = str(r.name, 'name', 120)
+  for (const f of ['provider', 'username', 'category'] as const) if (r[f] !== undefined) out[f] = str(r[f], f, 120)
+  if (r.website !== undefined) out.website = str(r.website, 'website', 500)
+  if (r.notes !== undefined) out.notes = str(r.notes, 'notes', 20_000)
+  if (r.value !== undefined) out.value = str(r.value, 'value', 20_000)
+  if (r.favorite !== undefined) {
+    if (typeof r.favorite !== 'boolean') throw bad('favorite must be true or false.')
+    out.favorite = r.favorite
+  }
+  if (r.tags !== undefined) {
+    if (!Array.isArray(r.tags) || r.tags.length > 20) throw bad('tags must be a list of at most 20.')
+    out.tags = r.tags.map((t) => str(t, 'tag', 40))
+  }
+  if (create && !out.name) throw bad('A secret needs a name.')
+  return out
+}
+
+const CODES: Record<string, [string, string]> = {
+  locked: ['locked', 'The vault is locked.'],
+  'wrong-password': ['wrong-password', 'That is not the master password.'],
+  'no-vault': ['no-vault', 'There is no vault on this profile yet.'],
+  'not-found': ['not-found', 'That secret is no longer there.'],
+  'bad-input': ['bad-request', 'There is nothing to save.']
+}
+
+export function createSecretsHandlers(getDeps: () => SecretsDeps | null | undefined): Record<string, Handler> {
+  const need = (): SecretsDeps => {
+    const d = getDeps()
+    if (!d) throw new HelperError('unavailable', 'The vault is not ready yet. Try again in a moment.')
+    return d
+  }
+  // Vault failures carry a code and no data; anything else is reported without its text, which could hold a value.
+  const guarded = (run: (a: unknown[]) => Promise<unknown> | unknown): Handler => async (a) => {
+    try {
+      return await run(a)
+    } catch (err) {
+      if (err instanceof HelperError) throw err
+      if (err instanceof VaultFailure) throw new HelperError(...(CODES[err.code] ?? (['failed', 'The vault could not be read or written.'] as [string, string])))
+      throw new HelperError('failed', 'The vault could not be read or written.')
+    }
+  }
+  return {
+    'secrets:status': guarded(() => need().status()),
+    'secrets:unlock': guarded((a) => need().unlock(str(a[0], 'The master password', 1000))),
+    'secrets:lock': guarded(() => need().lock()),
+    'secrets:list': guarded(async (a) => {
+      const deps = need()
+      const status = await deps.status()
+      if (!status.exists) throw new HelperError('no-vault', 'There is no vault on this profile yet. Make one in Orbis.')
+      if (!status.unlocked) throw new HelperError('locked', 'The vault is locked.')
+      const query = a[0] === undefined ? '' : str(a[0], 'query', 200)
+      return (await deps.list()).filter((s) => matchesSearch(s, query))
+    }),
+    'secrets:add': guarded((a) => need().add(secretChanges(a[0], { create: true }))),
+    'secrets:update': guarded((a) => need().update(id(a[0]), secretChanges(a[1], { create: false }))),
+    'secrets:delete': guarded(async (a) => {
+      await need().remove(id(a[0]))
+      return { removed: true }
+    })
+  }
+}
