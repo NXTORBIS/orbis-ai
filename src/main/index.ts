@@ -70,6 +70,8 @@ import { planNextStep } from './stepPlanner'
 import { WidgetFeeds } from './widgetFeeds'
 import { WorkflowStore } from './workflows/store'
 import { WorkflowRecorder } from './workflows/recorder'
+import { ChromiumRecorder } from './workflows/chromiumRecorder'
+import type { RecorderCore } from './workflows/recorderCore'
 import { WorkflowEngine } from './workflows/engine'
 import { registerWorkflowIpc } from './workflows/ipc'
 import { askOrion, draftWorkflow } from './workflows/orion'
@@ -85,6 +87,8 @@ import type { Profile } from '../shared/profiles'
 import { registerPersonalIpc } from './personal/ipc'
 import { BrowserSidebarStore } from './browserSidebarStore'
 import { SecretsVault, VaultFailure } from './vault/store'
+import { secretsFromVault } from '../helper/secrets'
+import type { SecretsDeps } from '../helper/secrets'
 import { Store } from './store'
 
 // Baked in at build time from GROQ_API_KEY in .env.local (see electron.vite.config.ts).
@@ -164,13 +168,15 @@ let chromiumBrowser: BrowserManager | null = null
 /** Pop-out browser windows that are open. */
 const popouts = new Set<BrowserWindow>()
 /** Records workflows from what the user does (only while recording). */
-let workflowRecorder: WorkflowRecorder | null = null
+let workflowRecorder: (RecorderCore & { attach?(contents: Electron.WebContents): void }) | null = null
 /** Memory for the profile in use; created once the profiles are known. */
 let memory: MemoryStore | null = null
 /** The workflow engine, once it exists, so chat can schedule workflows in words. */
 let workflowEngine: WorkflowEngine | null = null
 /** Galaxy and the workspaces store, once they exist, so chat can give Orion a project's outline when it is named. */
 let galaxyForChat: GalaxyService | null = null
+/** The secrets vault, once it exists, for the Chromium side panel (which never receives a value). */
+let vaultForPanel: SecretsDeps | null = null
 let workspacesForChat: WorkspacesStore | null = null
 
 /** Instructions the user adds to a running automation, per chat request. */
@@ -396,7 +402,7 @@ function createWindow(): BrowserWindow {
   win.webContents.on('did-attach-webview', (_event, contents) => {
     browser?.attachGuest(contents)
     browserControl?.trackGuest(contents)
-    workflowRecorder?.attach(contents)
+    workflowRecorder?.attach?.(contents)
     const openTab = (url: string, details: { disposition: string; features: string }): void => {
       if (!isHttpUrl(url) || win.webContents.isDestroyed()) return
       if (browser) browser.openFromPage(url, details)
@@ -1320,8 +1326,12 @@ if (!app.requestSingleInstanceLock()) {
           adblockBundledDir: app.isPackaged ? join(process.resourcesPath, 'adblock') : join(app.getAppPath(), 'resources', 'adblock'),
           adblockListsDir: join(app.getPath('userData'), 'adblock'),
           personalDir: () => app.getPath('userData'),
+          secrets: () => vaultForPanel,
+          workflows: () => (workflowEngine ? { engine: workflowEngine, recorder: workflowRecorder ?? undefined } : null),
+          galaxy: () => galaxyForChat,
           control: browserControl?.control,
-          saveDir: app.getPath('downloads')
+          saveDir: app.getPath('downloads'),
+          clipboard: { readText: () => clipboard.readText(), hasImage: async () => (await clipboard.read().catch(() => [])).some((item) => item.types.includes('image/png')) }
         })
         app.on('before-quit', () => void chromiumBrowser?.stop())
         profilesStore.onChange(() => void chromiumBrowser?.profileMayHaveChanged())
@@ -1347,7 +1357,7 @@ if (!app.requestSingleInstanceLock()) {
     const fetchForOrion = (url: string, init?: RequestInit): Promise<Response> => net.fetch(url, init)
     // Workflows, and the learned skills built on them, belong to the profile that made them.
     const workflowStore = new WorkflowStore(app.getPath('userData'), platform().secrets, (await profilesStore.active()).id)
-    workflowRecorder = new WorkflowRecorder({ getWindow: () => mainWindow, windowControl: browserControl.windowControl, library: libraryForControl, emit: (state) => sendToWindow('workflows:recording', state) })
+    workflowRecorder = chromiumBrowser ? new ChromiumRecorder({ getChromium: () => chromiumBrowser!.ensure(), emit: (state) => sendToWindow('workflows:recording', state) }) : new WorkflowRecorder({ getWindow: () => mainWindow, windowControl: browserControl.windowControl, library: libraryForControl, emit: (state) => sendToWindow('workflows:recording', state) })
     const workflows = new WorkflowEngine({
       control: browserControl.control,
       windowControl: browserControl.windowControl,
@@ -1375,7 +1385,7 @@ if (!app.requestSingleInstanceLock()) {
 
     registerWorkflowIpc({
       engine: workflows,
-      recorder: workflowRecorder,
+      recorder: workflowRecorder!,
       store: workflowStore,
       control: browserControl.control,
       getWindow: () => mainWindow,
@@ -1489,6 +1499,7 @@ if (!app.requestSingleInstanceLock()) {
     const vault = new SecretsVault(app.getPath('userData'))
     const vaultProfile = async (): Promise<string> => (await profilesStore.active()).id
     vault.whenLocked(() => sendToWindow('vault:locked'))
+    vaultForPanel = secretsFromVault(vault, vaultProfile)
     app.on('before-quit', () => vault.lock())
     // Switching profile takes the vault with it: a vault unlocked for one profile is not unlocked for another.
     profilesStore.onChange(() => vault.lock())
