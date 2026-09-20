@@ -70,7 +70,7 @@ test('Orion’s browser agent, unchanged, completes a task on real Chromium', { 
     mode: 'once',
     model: 'openai/gpt-oss-120b',
     history: [],
-    instructions: '',
+    instructions: [],
     apiKeys: ['test-key'],
     fetchFn,
     signal: new AbortController().signal,
