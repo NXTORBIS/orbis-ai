@@ -36,15 +36,22 @@ All 33 real-browser tests run serially with `npm test` (`--test-concurrency=1`; 
 
 When a Chromium build is installed, the Orbis app opens Chromium for everything that used to open the in-app browser (address bar, links, research sources, "open the browser", `browser.open`) and Orion's browser agent works in Chromium's tabs. Verified on the real app: from the Orbis window, `chromiumOpen('how do tides work')` started Chromium with `--remote-debugging-pipe` (no port), whose window title was the Orbis Search results. The in-app browser panel did not open. Chromium is started per Orbis profile (own data folder), with the extension copied to a folder Orbis owns and the helper running inside Orbis. `ORBIS_BROWSER=electron` is a developer switch that keeps the old in-app browser reachable until it is removed; nothing falls back to it automatically. Not done: shipping Chromium and the extension inside the installer (electron-builder resources), the Electron renderer's browser UI still exists in the source, and the remaining capability families.
 
+## Finished since (2026-09-20, verified on the real browser unless noted)
+
+- Packaging: `npm run stage:browser` builds the ad-block assets and extension bundles and stages Chromium (`resources/chromium`, about 1.6 GB); `electron-builder` ships it with the extension. A packaged copy of the app started Chromium over the pipe and opened the Orbis Search results. Orbis grants the browser's sandbox read access to its own browser folder when it is missing (needed outside the dev build). The NSIS installer itself was not run.
+- Ad blocker: the lists' page scripts and element hiding run before the page's own scripts (CDP-paused loads); a monetized YouTube video showed no ad with it and an ad without.
+- Capabilities on Chromium: site permissions (only those Orbis set), find text, clipboard copy from the page, console and network capture, navigation details, ad-blocker settings. Developer-tools window (`devtools.open/close/inspect`) is reported unavailable: a pipe-controlled browser cannot open it.
+- Workflow recording on Chromium (link click, typing, password never recorded, Enter, new tab). Not recorded: tab groups; downloads are polled and not covered by a test.
+- Side panel: Workflows, Galaxy and Secrets tabs (secret values never reach the panel; no reveal or copy). Galaxy omits meteors, linking, and Ask Orion / save actions.
+- Renderer: the in-app browser UI (`BrowserPanel` and its sidebar, toolbar, tab menu and orb) is deleted; `ORBIS_BROWSER=electron` and webview support are gone. Open browser actions go only to Chromium.
+
 ## Not done
 
-- Chromium is not yet packaged with the installer (dev builds find it at `C:\chromium\src\out\Default` or `ORBIS_CHROMIUM`).
-- Capabilities still on Electron: clipboard, address-bar capabilities, settings, workflows recorder.
-- Done on Chromium (verified, real browser): site permissions (`permissions.set/list/forget` through the content-settings API; lists only what Orbis set, since Chromium keeps the person's own choices and its own prompts) and `find.text` (counts matches on the active tab's page and scrolls to one). Chromium's own Ctrl+F find bar is untouched.
-- Orbis-shaped tab strip (colours and radius only so far), Orbis menus, sidebar/assistant, Galaxy/Workflows/Secrets panels.
+- Main-process Electron browser code is still in the source but no longer reachable from the interface: `browserIntegration`, `extensions/manager`, `adblock/electron`, `BrowserLibrary`, the Electron capability set in `browserControl/mainCapabilities.ts`, and dead `.browser-*` styles. Chat features (ad-block chat commands, library data) still use some of it, so removing it is its own careful change.
+- Address bar and menus stay Chromium's own (restyled), per `docs/chromium-hosting-decision.md`; no Orbis-drawn tab strip. A program cannot drive Chromium's omnibox over the pipe (Orion navigates with `navigation.*`/`tabs.create`).
 - Shortcut decisions (Ctrl+N, Ctrl+Shift+N, Ctrl+E, Ctrl+K, Ctrl+B, Ctrl+Shift+O, Ctrl+Shift+M vs Chromium's own).
-- Widevine, Safe Browsing and Sync (need Google licences/keys; not faked).
-- Removing the Electron browser (only after parity is verified).
+- Widevine, Safe Browsing and Sync (need Google licences/keys; not faked). H.264/AAC ship enabled: redistribution needs patent-licence awareness.
+- Existing profiles keep Google as their search engine until Orbis Search is chosen once in Settings.
 
 ## Known differences from the Electron browser
 

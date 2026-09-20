@@ -84,5 +84,6 @@ test('the boundary is a known size, so the migration can be estimated rather tha
   // 169 → 174: local Whisper speech to text — cancelling a transcription, reading this machine's hardware, and
   // managing model files (status, download, cancel a download, delete, verify) — replacing the single Groq call
   // voice:transcribe used to make on its own.
-  assert.ok(code.length <= 174, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
+  // 174 → 176: opening Chromium, the browser Orbis now uses (whether it is installed, and open it).
+  assert.ok(code.length <= 176, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
 })

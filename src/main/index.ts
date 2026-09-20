@@ -374,7 +374,7 @@ function createWindow(): BrowserWindow {
       nodeIntegration: false,
       sandbox: true,
       spellcheck: true,
-      webviewTag: true
+      webviewTag: false
     }
   })
 
@@ -1316,7 +1316,7 @@ if (!app.requestSingleInstanceLock()) {
     const profilesStore = new ProfilesStore(app.getPath('userData'))
     {
       const chromeExe = [process.env.ORBIS_CHROMIUM, app.isPackaged ? join(process.resourcesPath, 'chromium', 'chrome.exe') : 'C:/chromium/src/out/Default/chrome.exe'].find((p): p is string => Boolean(p) && existsSync(p as string))
-      if (chromeExe && process.env.ORBIS_BROWSER !== 'electron') {
+      if (chromeExe) {
         chromiumBrowser = new BrowserManager({
           chrome: chromeExe,
           extensionSource: app.isPackaged ? join(process.resourcesPath, 'extension') : join(app.getAppPath(), 'extension'),

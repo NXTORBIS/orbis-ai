@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { Attachment, AutomationState, BrowserConfirmation, BrowserStep, ChatMessage, ChatRequest, Conversation, Settings, SettingsUpdate, StreamEvent } from '../../shared/types'
+import type { Attachment, ChatMessage, ChatRequest, Conversation, Settings, SettingsUpdate, StreamEvent } from '../../shared/types'
 import { IMAGE_GEN_STATUS } from '../../shared/types'
 import { themeBase } from '../../shared/themes'
 import { DEFAULT_MODEL, MODELS, isKnownModel, modelLabel } from '../../shared/models'
 import { AUTO_MODEL } from '../../shared/modelRoute'
-import { automationActive, automationProgress } from '../../shared/automation'
+import { automationActive } from '../../shared/automation'
 import { PUSH_TO_TALK_EVENT } from '../../shared/voiceInput'
 import { copyText, newId, titleFromMessage } from './lib/utils'
-import BrowserPanel from './components/BrowserPanel'
 import ChatHeader from './components/ChatHeader'
 import ChatView from './components/ChatView'
 import ImagesView from './components/ImagesView'
@@ -22,7 +21,6 @@ import ControlPrompts from './components/ControlPrompts'
 import { reportControlState, str, unverified, useControlRendered, useControlScope, verified, waitUntil } from './lib/browserControl'
 import { OPEN_URL_EVENT } from './lib/openInBrowser'
 import type { OpenUrlDetail } from './lib/openInBrowser'
-import type { BrowserOrbProps } from './components/BrowserOrb'
 import SystemBar from './components/SystemBar'
 import ImageEditor from './components/ImageEditor'
 import { ImageEditorContext, collectImages, imageMarkdown } from './lib/imageEditor'
@@ -99,13 +97,13 @@ export default function App(): React.JSX.Element {
   /** A chat request waiting for the browser to hand over the tab Orbis should control. */
   const [browserTarget, setBrowserTarget] = useState<string | null>(null)
   /** Chat requests currently operating the browser. */
-  const [browserAgents, setBrowserAgents] = useState<string[]>([])
+  const [, setBrowserAgents] = useState<string[]>([])
   /** The browser's active page, sent with chat requests so "click the first result" has context. */
   const browserPageRef = useRef<{ url: string; title: string; private?: boolean } | null>(null)
   /** The active tab (blank ones too), as state, for the URL bar. */
   const [browserPage, setBrowserPageState] = useState<{ tabId: string; url: string; title: string; private?: boolean } | null>(null)
   /** An address typed in the URL bar, waiting for the browser to open it. */
-  const [browserNavigation, setBrowserNavigation] = useState<(OpenUrlDetail & { id: number }) | null>(null)
+  const [, setBrowserNavigation] = useState<(OpenUrlDetail & { id: number }) | null>(null)
   /** Back at the chat with the browser still open: its tabs, pages and orb stay as they were. */
   const [browserHidden, setBrowserHidden] = useState(false)
   /** The browser's active page is loading, shown in the URL bar. */
@@ -140,90 +138,12 @@ export default function App(): React.JSX.Element {
     setBrowserHidden((isHidden) => !isHidden)
   }, [chromium, openBrowser, openChromium])
 
-  /**
-   * The browser assistant's own task: the words, the answer, and what Orbis did in the page along the way.
-   *
-   * Kept here rather than in a conversation, so nothing the browser assistant is asked ever appears in Orbis Chat.
-   */
-  const [orbTask, setOrbTask] = useState<{
-    requestId: string
-    id: string
-    content: string
-    error?: string
-    steps: BrowserStep[]
-    automation?: AutomationState
-    confirmation?: BrowserConfirmation
-    working: boolean
-    status?: string
-  } | null>(null)
-  const orbOff = useRef<(() => void) | null>(null)
   /** Which model and mode the user is on, read when a task starts rather than captured before there is one. */
   const currentRef = useRef<DraftChat>({ model: DEFAULT_MODEL, incognito: false })
 
-  /** Asks the browser assistant something. Its own request, its own answer, and nothing to do with the chat. */
-  const askBrowserOrion = useCallback(
-    (text: string) => {
-      const task = text.trim()
-      if (!task) return
-      orbOff.current?.()
-      const requestId = newId()
-      setOrbTask({ requestId, id: requestId, content: '', steps: [], working: true })
-
-      const off = window.api.onChatEvent(requestId, (event) => {
-        setOrbTask((now) => {
-          if (!now || now.requestId !== requestId) return now
-          switch (event.type) {
-            case 'delta':
-              return { ...now, content: now.content + (event.content ?? '') }
-            case 'status':
-              return { ...now, status: event.message }
-            case 'step':
-              return { ...now, steps: [...now.steps.filter((s) => s.id !== event.step.id), event.step] }
-            case 'confirm':
-              return { ...now, confirmation: event.confirmation }
-            case 'confirm-done':
-              return now.confirmation?.id === event.id ? { ...now, confirmation: undefined } : now
-            case 'automation':
-              return { ...now, automation: event.automation }
-            case 'error':
-              return { ...now, error: event.message, working: false }
-            case 'done':
-            case 'aborted':
-              return { ...now, working: false }
-            default:
-              return now
-          }
-        })
-        if (event.type === 'done' || event.type === 'error' || event.type === 'aborted') {
-          off()
-          orbOff.current = null
-        }
-      })
-      orbOff.current = off
-
-      void window.api
-        .sendChat({
-          requestId,
-          model: currentRef.current.model,
-          // Left on so the main process still works out what the message is: turning it off skips that entirely, and
-          // with it the decision to read the open page. A browser task never becomes a picture request anyway.
-          images: true,
-          // The page in front travels with the request; without it "summarise this page" has no page.
-          browser: browserPageRef.current ?? undefined,
-          messages: [{ id: requestId, role: 'user', content: task, browserTask: true, createdAt: Date.now() }]
-        })
-        .catch(() => {
-          off()
-          orbOff.current = null
-          setOrbTask((now) => (now?.requestId === requestId ? { ...now, error: 'Orion could not be reached.', working: false } : now))
-        })
-    },
-    []
-  )
-  useEffect(() => () => orbOff.current?.(), [])
 
   /** Latest state of each running browser automation, by chat request, for the browser banner. */
-  const [automations, setAutomations] = useState<Record<string, NonNullable<ChatMessage['automation']>>>({})
+  const [, setAutomations] = useState<Record<string, NonNullable<ChatMessage['automation']>>>({})
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   const [quickPromptsOpen, setQuickPromptsOpen] = useState(false)
   const [notices, setNotices] = useState<Notice[]>([])
@@ -945,11 +865,6 @@ export default function App(): React.JSX.Element {
     [persist, updateConversation]
   )
 
-  const editScreenshot = useCallback(
-    (src: string, title: string) => setEditing({ conversationId: activeId, image: { src, prompt: title }, tool: 'markup' }),
-    [activeId]
-  )
-
   const editGalleryImage = useCallback((image: GalleryImage) => {
     setEditing({ conversationId: image.conversationId, image: { src: image.src, prompt: image.prompt, seed: image.seed, alpha: image.alpha } })
   }, [])
@@ -978,27 +893,11 @@ export default function App(): React.JSX.Element {
     if (browserTarget) provideBrowserTarget(browserTarget, null)
   }, [browserTarget, provideBrowserTarget])
 
-  const stopBrowserAgents = useCallback(() => {
-    // Automations stop with their progress saved; a single task simply ends.
-    for (const requestId of browserAgents) void (automations[requestId] ? window.api.controlAutomation(requestId, 'stop') : window.api.abortChat(requestId))
-  }, [automations, browserAgents])
-
-  const pauseBrowserAgents = useCallback(() => {
-    for (const requestId of browserAgents) if (automations[requestId]) void window.api.controlAutomation(requestId, 'pause')
-  }, [automations, browserAgents])
-
   const controlAutomation = useCallback((messageId: string, action: 'pause' | 'stop') => {
     const stream = Object.values(streamsRef.current).find((s) => s.messageId === messageId)
     if (stream) void window.api.controlAutomation(stream.requestId, action)
   }, [])
 
-  const setBrowserPage = useCallback((page: { tabId: string; url: string; title: string; private?: boolean } | null) => {
-    // Chat requests only get a real page; a blank tab isn't one.
-    browserPageRef.current = page?.url ? { url: page.url, title: page.title, ...(page.private ? { private: true } : {}) } : null
-    setBrowserPageState((current) =>
-      current?.tabId === page?.tabId && current?.url === page?.url && current?.title === page?.title && current?.private === page?.private ? current : page
-    )
-  }, [])
 
   /**
    * From the URL bar, links and research sources: open the browser at the preferred size (a full page unless changed)
@@ -1311,30 +1210,6 @@ export default function App(): React.JSX.Element {
    * This is a standalone request: no conversation is made, nothing is written to the chat store, and the steps,
    * confirmations and automation state come back on the request itself.
    */
-  const orbProps: BrowserOrbProps = {
-    working: Boolean(orbTask?.working),
-    status: orbTask?.status,
-    automation: orbTask?.automation,
-    steps: orbTask?.steps ?? [],
-    confirmation: orbTask?.confirmation,
-    summary: orbTask ? (orbTask.error ?? orbTask.content).replace(/[#*_`>|]+/g, ' ').replace(/\s+/g, ' ').trim() || undefined : undefined,
-    onPrompt: askBrowserOrion,
-    onNotify: notify,
-    onPause: () => {
-      if (orbTask) void window.api.controlAutomation(orbTask.requestId, 'pause')
-    },
-    onStop: () => {
-      if (!orbTask) return
-      if (automationActive(orbTask.automation)) void window.api.controlAutomation(orbTask.requestId, 'stop')
-      else void window.api.abortChat(orbTask.requestId)
-    },
-    onResume: () => {
-      send('Continue', [], true, true)
-    },
-    onAnswer: (confirmationId, approved) => {
-      if (orbTask) void window.api.answerBrowserConfirmation(orbTask.requestId, confirmationId, approved)
-    }
-  }
   const savedConversations = useMemo(() => conversations.filter((c) => !c.incognito), [conversations])
   const researchTopics = useMemo(
     () =>
@@ -1459,31 +1334,6 @@ export default function App(): React.JSX.Element {
           )}
         </main>
 
-        {browserOpen && (
-          <BrowserPanel
-            onClose={closeBrowser}
-            onEditScreenshot={editScreenshot}
-            onNotify={notify}
-            agentRequest={browserTarget}
-            onAgentTarget={provideBrowserTarget}
-            agentActive={browserAgents.length > 0}
-            onStopAgent={stopBrowserAgents}
-            agentStatus={(() => {
-              const running = browserAgents.map((id) => automations[id]).find(automationActive)
-              return running ? automationProgress(running) : undefined
-            })()}
-            onPauseAgent={browserAgents.some((id) => automationActive(automations[id])) ? pauseBrowserAgents : undefined}
-            onPageChange={setBrowserPage}
-            navigation={browserNavigation}
-            orb={orbProps}
-
-            hidden={browserHidden}
-            onBackToChat={() => setBrowserHidden(true)}
-            onLoadingChange={setBrowserLoading}
-            onOpenOrbisView={openOrbisView}
-            experience={experience}
-          />
-        )}
 
         <button className="edge-handle" title="Activity" onClick={toggleActivity}>
           <span />

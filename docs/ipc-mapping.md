@@ -33,6 +33,8 @@ The service and Orion channels are the easy two thirds. The browser channels are
 | --- | --- | --- |
 | `browser:focus` | Focuses the browser | `Browser::window()->Show()` |
 | `browser:popout` | Opens a page in its own window | `Browser` creation with a single tab |
+| `chromium:available` | Whether Orbis's own Chromium is installed | Nothing: Chromium is the browser; this only says whether it is there |
+| `chromium:open` | Opens the Orbis browser (Chromium) at an address or a search | `BrowserManager.open`: starts Chromium over a pipe, then a tab |
 | `browser:save-page` | Saves the page | `content::WebContents::OnSavePage` |
 | `browser:clear-data`, `browser:clear-private` | Clears browsing data | `BrowsingDataRemover` |
 | `browser:permission-answer` | Answers a site's request | `permissions::PermissionRequestManager` |
