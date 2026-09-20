@@ -1,0 +1,27 @@
+diff --git a/chrome/browser/ui/omnibox/chrome_omnibox_client.cc b/chrome/browser/ui/omnibox/chrome_omnibox_client.cc
+index 11b5eebef6..058cb7afa3 100644
+--- a/chrome/browser/ui/omnibox/chrome_omnibox_client.cc
++++ b/chrome/browser/ui/omnibox/chrome_omnibox_client.cc
+@@ -55,6 +55,7 @@
+ #include "chrome/browser/preloading/prerender/prerender_manager.h"
+ #include "chrome/browser/preloading/prerender/prerender_utils.h"
+ #include "chrome/browser/preloading/search_preload/search_preload_service.h"
++#include "chrome/browser/platform_util.h"
+ #include "chrome/browser/profiles/profile.h"
+ #include "chrome/browser/search_engines/ai_mode_button_service_factory.h"
+ #include "chrome/browser/search_engines/template_url_service_factory.h"
+@@ -957,6 +958,14 @@ void ChromeOmniboxClient::OnAutocompleteAccept(
+               text, "match", match, "alternative_nav_match",
+               alternative_nav_match);
+ 
++  // Orbis: Shift+Enter (the "new window" disposition) opens the destination in the system default browser instead.
++  if (disposition == WindowOpenDisposition::NEW_WINDOW &&
++      (destination_url.SchemeIs(url::kHttpScheme) ||
++       destination_url.SchemeIs(url::kHttpsScheme))) {
++    platform_util::OpenExternal(destination_url);
++    return;
++  }
++
+   std::string extra_headers;
+   for (const auto& header : match.extra_headers) {
+     base::StrAppend(&extra_headers,

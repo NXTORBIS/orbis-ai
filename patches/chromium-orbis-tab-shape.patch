@@ -1,0 +1,13 @@
+diff --git a/chrome/browser/ui/tabs/tab_style.cc b/chrome/browser/ui/tabs/tab_style.cc
+index ae95d2dfc2..c22b1ca7ee 100644
+--- a/chrome/browser/ui/tabs/tab_style.cc
++++ b/chrome/browser/ui/tabs/tab_style.cc
+@@ -95,7 +95,7 @@ int TabStyle::GetMinimumInactiveWidth() const {
+ }
+ 
+ int TabStyle::GetTopCornerRadius() const {
+-  return 10;
++  return 8;  // Orbis: the Orbis tab corner radius.
+ }
+ 
+ int TabStyle::GetBottomCornerRadius() const {
