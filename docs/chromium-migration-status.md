@@ -32,9 +32,13 @@ All 33 real-browser tests run serially with `npm test` (`--test-concurrency=1`; 
   on request with real sources, and an explicit "try Google instead"). Existing profiles keep the engine they already have until it is chosen once
   in Settings; new profiles default to Orbis.
 
+## Chromium is now Orbis's browser (2026-09-20)
+
+When a Chromium build is installed, the Orbis app opens Chromium for everything that used to open the in-app browser (address bar, links, research sources, "open the browser", `browser.open`) and Orion's browser agent works in Chromium's tabs. Verified on the real app: from the Orbis window, `chromiumOpen('how do tides work')` started Chromium with `--remote-debugging-pipe` (no port), whose window title was the Orbis Search results. The in-app browser panel did not open. Chromium is started per Orbis profile (own data folder), with the extension copied to a folder Orbis owns and the helper running inside Orbis. `ORBIS_BROWSER=electron` is a developer switch that keeps the old in-app browser reachable until it is removed; nothing falls back to it automatically. Not done: shipping Chromium and the extension inside the installer (electron-builder resources), the Electron renderer's browser UI still exists in the source, and the remaining capability families.
+
 ## Not done
 
-- Nothing in the running Orbis app calls the Chromium control service yet; Orion still goes through Electron.
+- Chromium is not yet packaged with the installer (dev builds find it at `C:\chromium\src\out\Default` or `ORBIS_CHROMIUM`).
 - Capabilities still on Electron: permissions and site settings, find in page, clipboard, address-bar capabilities, settings, workflows recorder.
 - Orbis-shaped tab strip (colours and radius only so far), Orbis menus, sidebar/assistant, Galaxy/Workflows/Secrets panels.
 - Shortcut decisions (Ctrl+N, Ctrl+Shift+N, Ctrl+E, Ctrl+K, Ctrl+B, Ctrl+Shift+O, Ctrl+Shift+M vs Chromium's own).

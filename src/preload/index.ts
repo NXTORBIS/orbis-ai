@@ -133,6 +133,8 @@ const api: NxtorbisApi = {
   steerAutomation: (requestId, text) => ipcRenderer.invoke('automation:steer', requestId, text),
   classifyAutomationMessage: (text, objective) => ipcRenderer.invoke('automation:classify', text, objective),
   getAdBlockState: () => ipcRenderer.invoke('adblock:state'),
+  chromiumAvailable: ipcRenderer.sendSync('chromium:available') === true,
+  chromiumOpen: (input: string, options?: { newTab?: boolean; more?: string[] }) => ipcRenderer.invoke('chromium:open', input, options),
   updateAdBlockSettings: (update) => ipcRenderer.invoke('adblock:settings', update),
   setAdBlockSite: (host, allowed) => ipcRenderer.invoke('adblock:site', host, allowed),
   allowAdBlockResource: (url) => ipcRenderer.invoke('adblock:allow-resource', url),

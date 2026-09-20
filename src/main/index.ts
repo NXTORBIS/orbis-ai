@@ -50,6 +50,7 @@ import { fetchFavicon } from './favicon'
 import { ExtensionsManager } from './extensions/manager'
 import type { ReportedTab, WindowRequest } from './extensions/bridge'
 import { setupBrowserControl } from './browserControl/setup'
+import { BrowserManager } from './chromium/browserManager'
 import { readSignals } from './browserControl/captchaCapabilities'
 import { StepRun } from './stepRunner'
 import { SkillManager } from './skillManager'
@@ -158,6 +159,8 @@ let browser: BrowserIntegration | null = null
 let browserLibrary: BrowserLibrary | null = null
 /** The Orbis Browser Control Layer: every browser capability, for the window, Orion and automations. */
 let browserControl: ReturnType<typeof setupBrowserControl> | null = null
+/** Orbis's browser: Chromium, started when the browser is first needed. Null only when no Chromium build is installed. */
+let chromiumBrowser: BrowserManager | null = null
 /** Pop-out browser windows that are open. */
 const popouts = new Set<BrowserWindow>()
 /** Records workflows from what the user does (only while recording). */
@@ -645,13 +648,17 @@ function registerIpc(): void {
               fetchFn: (url, init) => net.fetch(url, init),
               signal: controller.signal,
               emit,
-              getTarget: async () => asPageHandle(await requestBrowserTarget(request.requestId, sender, emit, controller.signal)),
+              // The browser is Chromium: the agent works in Chromium's active tab, and follows the person when they switch tabs.
+              getTarget: chromiumBrowser
+                ? async () => (await chromiumBrowser!.ensure()).agent.getTarget()
+                : async () => asPageHandle(await requestBrowserTarget(request.requestId, sender, emit, controller.signal)),
               findPage: (id) => {
+                if (chromiumBrowser) return chromiumBrowser.current?.agent.findPage(id) ?? null
                 const found = webContents.fromId(id)
                 return found && !found.isDestroyed() ? asPageHandle(found) : null
               },
               control: browserControl?.control,
-              windowControl: browserControl?.windowControl,
+              windowControl: chromiumBrowser ? { get state() { return chromiumBrowser?.current?.agent.windowControl.state ?? null } } : browserControl?.windowControl,
               confirm: (confirmation) => requestBrowserConfirmation(request.requestId, confirmation, emit, controller.signal)
             })
           } finally {
@@ -851,6 +858,23 @@ ${summaryBlock(summary)}`
   })
 
   ipcMain.handle('browser:popout', (_event, url: string) => Boolean(popOutBrowser(url)))
+  // Orbis's browser is Chromium. Everything that used to open the in-app browser (the address bar, links, research sources, "open the
+  // browser") opens it here instead: an address as a page, anything else as an Orbis Search.
+  ipcMain.on('chromium:available', (event) => {
+    event.returnValue = chromiumBrowser !== null
+  })
+  ipcMain.handle('chromium:open', async (_event, input: unknown, options: unknown) => {
+    if (!chromiumBrowser) return { ok: false, detail: 'The Orbis browser (Chromium) is not installed on this computer.' }
+    const o = (options && typeof options === 'object' ? options : {}) as { newTab?: unknown; more?: unknown }
+    try {
+      return await chromiumBrowser.open(typeof input === 'string' ? input.slice(0, 2000) : '', {
+        newTab: o.newTab === false ? false : true,
+        more: Array.isArray(o.more) ? o.more.filter((u): u is string => typeof u === 'string').slice(0, 20) : []
+      })
+    } catch (err) {
+      return { ok: false, detail: `The Orbis browser could not start: ${err instanceof Error ? err.message : String(err)}` }
+    }
+  })
   // Whether pages that use protected media (Spotify, Netflix and the like) can play here.
   ipcMain.handle('browser:protected-media', () => protectedMedia)
 
@@ -1284,6 +1308,25 @@ if (!app.requestSingleInstanceLock()) {
     // Profiles: separate browsing identities. Each has its own cookies, logins, site storage, history, bookmarks,
     // downloads and open pages; extensions are installed once and follow whichever profile is in use.
     const profilesStore = new ProfilesStore(app.getPath('userData'))
+    {
+      const chromeExe = [process.env.ORBIS_CHROMIUM, app.isPackaged ? join(process.resourcesPath, 'chromium', 'chrome.exe') : 'C:/chromium/src/out/Default/chrome.exe'].find((p): p is string => Boolean(p) && existsSync(p as string))
+      if (chromeExe && process.env.ORBIS_BROWSER !== 'electron') {
+        chromiumBrowser = new BrowserManager({
+          chrome: chromeExe,
+          extensionSource: app.isPackaged ? join(process.resourcesPath, 'extension') : join(app.getAppPath(), 'extension'),
+          dataDir: join(app.getPath('userData'), 'chromium'),
+          profileId: async () => (await profilesStore.active()).id,
+          apiKeys: () => GROQ_API_KEYS,
+          adblockBundledDir: app.isPackaged ? join(process.resourcesPath, 'adblock') : join(app.getAppPath(), 'resources', 'adblock'),
+          adblockListsDir: join(app.getPath('userData'), 'adblock'),
+          personalDir: () => app.getPath('userData'),
+          control: browserControl?.control,
+          saveDir: app.getPath('downloads')
+        })
+        app.on('before-quit', () => void chromiumBrowser?.stop())
+        profilesStore.onChange(() => void chromiumBrowser?.profileMayHaveChanged())
+      }
+    }
     // Conversations belong to the profile in use. The window is told to read them again whenever that changes.
     const reloadConversations = (): void => {
       if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('conversations:reload')

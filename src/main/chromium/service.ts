@@ -88,8 +88,11 @@ export async function startChromiumControl(o: ChromiumControlOptions): Promise<C
     agent: {
       getTarget: () => pages.getTarget(),
       findPage: (id) => pages.findPage(id),
-      get windowControl() {
-        return { state: pages.state }
+      // A getter, so the agent reads the tabs as they are when it looks, not as they were when it started.
+      windowControl: {
+        get state() {
+          return pages.state
+        }
       }
     },
     stop: () => {

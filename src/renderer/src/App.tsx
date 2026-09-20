@@ -119,16 +119,26 @@ export default function App(): React.JSX.Element {
    * It fills the content area, always. It used to be a window that could be docked, shrunk to a preset or dragged to
    * a size, which meant five ways to be looking at a browser and four of them worse than the fifth.
    */
+  // Orbis's browser is Chromium, a window of its own: opening "the browser" shows that window, and the in-app browser stays closed.
+  const chromium = window.api.chromiumAvailable
+  const notifyRef = useRef<(text: string, kind?: NoticeKind) => void>(() => undefined)
+  const openChromium = useCallback((input: string, options?: { newTab?: boolean; more?: string[] }) => {
+    void window.api.chromiumOpen(input, options).then((result) => {
+      if (!result.ok) notifyRef.current(result.detail, 'error')
+    })
+  }, [])
   const openBrowser = useCallback(() => {
+    if (chromium) return openChromium('')
     setBrowserOpen(true)
     setBrowserHidden(false)
-  }, [])
+  }, [chromium, openChromium])
 
   /** Sidebar and /browser: open it, or switch between the browser and the chat without closing it. */
   const toggleBrowser = useCallback(() => {
+    if (chromium) return openChromium('')
     if (!browserStateRef.current.open) return openBrowser()
     setBrowserHidden((isHidden) => !isHidden)
-  }, [openBrowser])
+  }, [chromium, openBrowser, openChromium])
 
   /**
    * The browser assistant's own task: the words, the answer, and what Orbis did in the page along the way.
@@ -259,6 +269,7 @@ export default function App(): React.JSX.Element {
     setToasts((current) => [...current.slice(-3), toast])
     setTimeout(() => setToasts((current) => current.filter((t) => t.id !== toast.id)), kind === 'info' ? 3000 : 5000)
   }, [])
+  notifyRef.current = notify
 
   const logActivity = useCallback((text: string, kind: NoticeKind) => {
     setNotices((current) => [...current.slice(-49), { id: newId(), text, kind, at: Date.now() }])
@@ -995,10 +1006,11 @@ export default function App(): React.JSX.Element {
    */
   const openInBrowser = useCallback(
     (input: string, options?: Omit<OpenUrlDetail, 'url'>) => {
+      if (chromium) return openChromium(input, { newTab: options?.newTab, more: options?.more })
       openBrowser()
       setBrowserNavigation({ url: input, id: Date.now(), ...options })
     },
-    [openBrowser]
+    [chromium, openBrowser, openChromium]
   )
 
   useEffect(() => {
@@ -1025,6 +1037,10 @@ export default function App(): React.JSX.Element {
       params: { url: str('An address or search text to open.') },
       mutates: true,
       run: async (p) => {
+        if (chromium) {
+          const opened = await window.api.chromiumOpen(typeof p.url === 'string' ? p.url.trim() : '')
+          return opened.ok ? verified(opened.detail) : unverified(opened.detail)
+        }
         if (typeof p.url === 'string' && p.url.trim()) openInBrowser(p.url.trim())
         else openBrowser()
         const ok = await waitUntil(() => appLive.current.browserOpen && !appLive.current.browserHidden)

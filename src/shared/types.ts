@@ -865,6 +865,10 @@ export interface NxtorbisApi {
   allowAdBlockResource(url: string): Promise<AdBlockState | null>
   removeAdBlockException(kind: 'site' | 'resource', value: string): Promise<AdBlockState | null>
   /** What was blocked on a browser tab's current page. */
+  /** Whether Orbis's browser (Chromium) is installed. When it is, the browser is Chromium and nothing opens the in-app one. */
+  chromiumAvailable: boolean
+  /** Opens an address as a page, or searches anything else with Orbis Search, in Orbis's Chromium (started if needed). */
+  chromiumOpen(input: string, options?: { newTab?: boolean; more?: string[] }): Promise<{ ok: boolean; detail: string }>
   getAdBlockReport(webContentsId: number): Promise<AdBlockPageReport | null>
   updateAdBlockFilters(): Promise<AdBlockState | null>
   rollbackAdBlockFilters(): Promise<AdBlockState | null>
