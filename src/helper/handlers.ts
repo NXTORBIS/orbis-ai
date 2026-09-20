@@ -9,6 +9,7 @@ import { answerContext, runResearch } from '../main/research.ts'
 import { isSpecialized } from '../shared/searchProviders.ts'
 import type { Research } from '../shared/types'
 import { createAdblockHandlers } from './adblock/service.ts'
+import { createPersonalHandlers } from './personal.ts'
 import { HelperError } from './server.ts'
 import type { Handler } from './server.ts'
 
@@ -28,6 +29,8 @@ export interface HandlerDeps {
   fetchFn?: typeof fetch
   version?: string
   /** Where the extension and the filter lists live, when the helper manages the ad blocker's lists. */
+  /** This profile's own data folder for notes and tasks; without it those channels do not exist. */
+  dataDir?: string
   adblock?: { extensionDir: string; listsDir: string; bundledDir: string }
 }
 
@@ -55,6 +58,7 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
   const specialized = new SearxngProvider({ endpoint: endpointFromEnvironment(), fetchFn: doFetch })
 
   return {
+    ...(deps.dataDir ? createPersonalHandlers({ dataDir: deps.dataDir }) : {}),
     ...(deps.adblock ? createAdblockHandlers({ ...deps.adblock, fetchFn: doFetch }) : {}),
     /** Whether the helper is there and the token works. Says nothing about the person's data. */
     'helper:ping': () => ({ ok: true, version: deps.version ?? 'dev', hasApiKey: deps.apiKeys.length > 0 }),

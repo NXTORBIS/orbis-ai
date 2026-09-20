@@ -36,7 +36,7 @@ const apiKeys = (process.env.ORBIS_GROQ_API_KEYS ?? '')
   .filter(Boolean)
 
 const token = newToken()
-const server = createHelperServer({ token, allowedOrigins, handlers: createHandlers({ apiKeys, adblock: { extensionDir: dataDir, listsDir: join(homedir(), '.orbis', 'adblock'), bundledDir: join(import.meta.dirname, '../../resources/adblock') } }) })
+const server = createHelperServer({ token, allowedOrigins, handlers: createHandlers({ apiKeys, dataDir: join(dataDir, 'personal-data'), adblock: { extensionDir: dataDir, listsDir: join(homedir(), '.orbis', 'adblock'), bundledDir: join(import.meta.dirname, '../../resources/adblock') } }) })
 const { port } = await server.listen()
 
 await mkdir(dataDir, { recursive: true })
