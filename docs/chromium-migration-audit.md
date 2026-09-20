@@ -256,3 +256,11 @@ sizes/modes designed as new features. Otherwise keep native chrome plus side pan
 - Removing Orbis's own history/bookmarks/downloads store means a one-time migration and losing Orbis-specific
   fields (reading list, saved pages, screenshots) unless kept in the helper.
 - The 96 IPC channels (`docs/ipc-mapping.md`) all need a new transport; per-domain migration with probes re-run.
+
+## Update 2026-09-20: the hosting spike has a precedent in our own build
+
+Chromium 154.0.8037.44 (our build) already contains a WebUI toolbar: started with `--enable-features=WebUIToolbar`, the browser
+lists a `browser_ui` page at `chrome://webui-toolbar.top-chrome/` (source: `chrome/browser/resources/webui_toolbar/`,
+`chrome/browser/ui/views/toolbar/webui_*`). Chromium's own toolbar can therefore be a web page hosted in the browser frame, which is
+what an Orbis-styled chrome needs. Next step: fork that WebUI so it loads Orbis's tab strip and single address bar, and drive one real
+tab from it. No new browser modes are being built (user decision: only the existing full/window/dock).

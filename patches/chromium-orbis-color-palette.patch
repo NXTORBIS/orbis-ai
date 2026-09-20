@@ -1,0 +1,75 @@
+diff --git a/ui/color/sys_color_mixer.cc b/ui/color/sys_color_mixer.cc
+index 8725df360a..7b5fd99b0b 100644
+--- a/ui/color/sys_color_mixer.cc
++++ b/ui/color/sys_color_mixer.cc
+@@ -109,6 +109,58 @@ void AddGrayscaleSysColorOverrides(ColorMixer& mixer,
+                                                 : kColorRefNeutral94};
+ }
+ 
++// Orbis: the fixed Orbis palette for the whole browser UI (dark). Every Views surface and every WebUI page that reads the
++// Material "sys" tokens, which is nearly all of the browser's own UI, takes these colours.
++void AddOrbisSysColorOverrides(ColorMixer& mixer) {
++  constexpr SkColor kBg = SkColorSetRGB(0x0B, 0x0E, 0x14);
++  constexpr SkColor kPanel = SkColorSetRGB(0x13, 0x18, 0x24);
++  constexpr SkColor kPanel2 = SkColorSetRGB(0x1A, 0x21, 0x33);
++  constexpr SkColor kPanel3 = SkColorSetRGB(0x23, 0x2B, 0x3B);
++  constexpr SkColor kText = SkColorSetRGB(0xE8, 0xEC, 0xF4);
++  constexpr SkColor kMuted = SkColorSetRGB(0x8B, 0x95, 0xA8);
++  constexpr SkColor kAccent = SkColorSetRGB(0x3F, 0xD8, 0xFF);
++  constexpr SkColor kOnAccent = SkColorSetRGB(0x04, 0x12, 0x1A);
++  constexpr SkColor kAccentContainer = SkColorSetRGB(0x0F, 0x3A, 0x4A);
++
++  mixer[kColorSysPrimary] = {kAccent};
++  mixer[kColorSysOnPrimary] = {kOnAccent};
++  mixer[kColorSysPrimaryContainer] = {kAccentContainer};
++  mixer[kColorSysOnPrimaryContainer] = {SkColorSetRGB(0xBF, 0xF2, 0xFF)};
++  mixer[kColorSysSecondaryContainer] = {kPanel2};
++  mixer[kColorSysOnSecondaryContainer] = {kText};
++  mixer[kColorSysOnSurface] = {kText};
++  mixer[kColorSysOnSurfaceVariant] = {kMuted};
++  mixer[kColorSysOutline] = {kPanel3};
++  mixer[kColorSysSurfaceVariant] = {kPanel2};
++
++  mixer[kColorSysSurface] = {kBg};
++  mixer[kColorSysSurface1] = {SkColorSetRGB(0x0F, 0x13, 0x1C)};
++  mixer[kColorSysSurface2] = {kPanel};
++  mixer[kColorSysSurface3] = {SkColorSetRGB(0x16, 0x1C, 0x2A)};
++  mixer[kColorSysSurface4] = {kPanel2};
++  mixer[kColorSysSurface5] = {SkColorSetRGB(0x1E, 0x27, 0x39)};
++  mixer[kColorSysOnSurfaceSecondary] = {kMuted};
++  mixer[kColorSysOnSurfaceSubtle] = {kMuted};
++  mixer[kColorSysOnSurfacePrimary] = {kAccent};
++  mixer[kColorSysTonalContainer] = {kAccentContainer};
++  mixer[kColorSysBaseTonalContainer] = {kAccentContainer};
++  mixer[kColorSysNeutralContainer] = {kPanel2};
++  mixer[kColorSysDivider] = {kPanel3};
++
++  mixer[kColorSysBase] = {kPanel};
++  mixer[kColorSysBaseContainer] = {kPanel};
++  mixer[kColorSysBaseContainerElevated] = {kPanel2};
++  mixer[kColorSysHeader] = {kBg};
++  mixer[kColorSysHeaderInactive] = {kBg};
++  mixer[kColorSysHeaderContainer] = {kPanel};
++  mixer[kColorSysHeaderContainerInactive] = {kPanel};
++  mixer[kColorSysOnHeaderPrimary] = {kText};
++  mixer[kColorSysOnHeaderPrimaryInactive] = {kMuted};
++  mixer[kColorSysOnHeaderDivider] = {kPanel3};
++  mixer[kColorSysOnHeaderDividerInactive] = {kPanel3};
++  mixer[kColorSysStateFocusRing] = {kAccent};
++}
++
+ }  // namespace
+ 
+ void AddSysColorMixer(ColorProvider* provider, const ColorProviderKey& key) {
+@@ -398,6 +450,11 @@ void AddSysColorMixer(ColorProvider* provider, const ColorProviderKey& key) {
+              key.user_color.has_value()) {
+     AddThemedSysColorOverrides(mixer, key);
+   }
++
++  // Orbis: always the Orbis palette in dark mode, on top of whatever else was chosen.
++  if (dark_mode) {
++    AddOrbisSysColorOverrides(mixer);
++  }
+ }
+ 
+ }  // namespace ui
