@@ -18,7 +18,7 @@ import { join } from 'node:path'
 const ROOT = join(import.meta.dirname, '..')
 
 /** Must never touch Electron: this is the part that moves to Chromium as it is. */
-const PORTABLE = ['shared', 'main/update', 'main/personal', 'main/experience', 'main/workflows', 'main/knowledge', 'helper']
+const PORTABLE = ['shared', 'main/update', 'main/personal', 'main/experience', 'main/workflows', 'main/knowledge', 'helper', 'chromium']
 
 /** Talks to the engine on purpose, and is rewritten against Chromium. Listed so the list itself stays honest. */
 const BROWSER_LAYER = new Set([
