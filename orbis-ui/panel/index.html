@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Orbis</title>
+    <link rel="stylesheet" href="orbis-tokens.css" />
+    <link rel="stylesheet" href="orbis.css" />
+    <link rel="stylesheet" href="panel.css" />
+  </head>
+  <body>
+    <header>
+      <span class="mark" aria-hidden="true"></span>
+      <strong>Orbis</strong>
+      <span id="status" class="status" role="status" aria-live="polite">Connecting…</span>
+      <select id="model" aria-label="Model"></select>
+      <button id="new" type="button" title="Start a new conversation">New</button>
+    </header>
+
+    <nav class="tabs" role="tablist" aria-label="Orbis">
+      <button id="tab-ask" type="button" role="tab" aria-selected="true">Ask</button>
+      <button id="tab-search" type="button" role="tab" aria-selected="false">Search</button>
+      <button id="tab-block" type="button" role="tab" aria-selected="false">Blocking</button>
+      <button id="tab-notes" type="button" role="tab" aria-selected="false">Notes</button>
+      <button id="tab-tasks" type="button" role="tab" aria-selected="false">Tasks</button>
+      <button id="tab-workflows" type="button" role="tab" aria-selected="false">Workflows</button>
+      <button id="tab-galaxy" type="button" role="tab" aria-selected="false">Galaxy</button>
+      <button id="tab-secrets" type="button" role="tab" aria-selected="false">Secrets</button>
+    </nav>
+
+    <section id="view-ask" class="view" role="tabpanel" aria-labelledby="tab-ask">
+      <main id="messages" aria-live="polite">
+        <p id="empty" class="empty">Ask Orion anything. Everything runs on this computer, with your own key.</p>
+      </main>
+      <form id="composer">
+        <label class="web" title="Orion reads real pages first and tells you which page each claim came from">
+          <input id="web" type="checkbox" /> Search the web
+        </label>
+        <div class="row">
+          <textarea id="input" rows="2" placeholder="Ask Orion…" aria-label="Message"></textarea>
+          <button id="send" type="submit">Send</button>
+          <button id="stop" type="button" hidden>Stop</button>
+        </div>
+      </form>
+    </section>
+
+    <section id="view-search" class="view" role="tabpanel" aria-labelledby="tab-search" hidden>
+      <form id="search-form">
+        <input id="query" type="search" placeholder="Search the web…" aria-label="Search" autocomplete="off" />
+        <button type="submit">Search</button>
+      </form>
+      <main id="results" aria-live="polite">
+        <p id="search-empty" class="empty">Search the web with Orbis. Nothing is sent anywhere but the search itself.</p>
+      </main>
+      <div id="search-actions" hidden>
+        <button id="ask-about" type="button">Ask Orion, with sources</button>
+      </div>
+    </section>
+
+    <section id="view-block" class="view" role="tabpanel" aria-labelledby="tab-block" hidden>
+      <main id="block" aria-live="polite"></main>
+    </section>
+
+    <section id="view-notes" class="view" role="tabpanel" aria-labelledby="tab-notes" hidden>
+      <main id="notes"></main>
+    </section>
+
+    <section id="view-tasks" class="view" role="tabpanel" aria-labelledby="tab-tasks" hidden>
+      <main id="tasks"></main>
+    </section>
+
+    <section id="view-workflows" class="view" role="tabpanel" aria-labelledby="tab-workflows" hidden>
+      <main id="workflows"></main>
+    </section>
+
+    <section id="view-galaxy" class="view" role="tabpanel" aria-labelledby="tab-galaxy" hidden>
+      <main id="galaxy"></main>
+    </section>
+
+    <section id="view-secrets" class="view" role="tabpanel" aria-labelledby="tab-secrets" hidden>
+      <main id="secrets"></main>
+    </section>
+
+    <script type="module" src="panel.js"></script>
+    <script type="module" src="panel-adblock.js"></script>
+    <script type="module" src="panel-notes.js"></script>
+    <script type="module" src="panel-tasks.js"></script>
+    <script type="module" src="panel-workflows.js"></script>
+    <script type="module" src="panel-galaxy.js"></script>
+    <script type="module" src="panel-secrets.js"></script>
+  </body>
+</html>

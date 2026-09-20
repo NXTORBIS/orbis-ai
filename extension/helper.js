@@ -10,12 +10,18 @@ async function connection(force = false) {
   if (cached && !force) return cached
   let response
   try {
-    response = await fetch(chrome.runtime.getURL('helper.json'), { cache: 'no-store' })
+    // In the extension the file sits in its own folder; in the built-in chrome://orbis page the browser serves it.
+    response = await fetch(typeof chrome !== 'undefined' && chrome.runtime?.getURL ? chrome.runtime.getURL('helper.json') : 'helper.json', { cache: 'no-store' })
   } catch {
     throw new HelperDown('Orbis is not running. Start it from run-orbis-chromium.bat.')
   }
   if (!response.ok) throw new HelperDown('Orbis is not running. Start it from run-orbis-chromium.bat.')
-  const { port, token } = await response.json()
+  let port, token
+  try {
+    ;({ port, token } = await response.json())
+  } catch {
+    throw new HelperDown('Orbis is not running. Start it from run-orbis-chromium.bat.')
+  }
   cached = { url: `http://127.0.0.1:${port}/rpc`, token }
   return cached
 }

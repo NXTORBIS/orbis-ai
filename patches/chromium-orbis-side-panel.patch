@@ -1,0 +1,413 @@
+diff --git a/chrome/app/chrome_command_ids.h b/chrome/app/chrome_command_ids.h
+index 0e9128249b..fb0ae479dd 100644
+--- a/chrome/app/chrome_command_ids.h
++++ b/chrome/app/chrome_command_ids.h
+@@ -293,6 +293,7 @@
+ #define IDC_SHOW_READING_MODE_KEYBOARD 40303
+ #define IDC_SHOW_TABS_FROM_OTHER_DEVICES_SIDE_PANEL 40304
+ #define IDC_CHROME_ENTERPRISE_RELEASE_NOTES 40305
++#define IDC_SHOW_ORBIS_SIDE_PANEL 40306
+ 
+ // Spell-check
+ #define IDC_SPELLCHECK_SUGGESTION_0     41000
+diff --git a/chrome/browser/browser_resources.grd b/chrome/browser/browser_resources.grd
+index 87ae613c0a..e299e52ebf 100644
+--- a/chrome/browser/browser_resources.grd
++++ b/chrome/browser/browser_resources.grd
+@@ -103,6 +103,20 @@
+         <include name="IDR_SEARCH_ENGINE_HISTORICAL_SEARCH_URLS_JSON" file="../../third_party/search_engines_data/resources_internal/definitions/historical_search_urls.json" type="BINDATA" />
+       </if>
+ 
++      <include name="IDR_ORBIS_INDEX_HTML" file="resources\orbis\index.html" type="BINDATA" />
++      <include name="IDR_ORBIS_PANEL_JS" file="resources\orbis\panel.js" type="BINDATA" />
++      <include name="IDR_ORBIS_PANEL_CSS" file="resources\orbis\panel.css" type="BINDATA" />
++      <include name="IDR_ORBIS_HELPER_JS" file="resources\orbis\helper.js" type="BINDATA" />
++      <include name="IDR_ORBIS_PANEL_ADBLOCK_JS" file="resources\orbis\panel-adblock.js" type="BINDATA" />
++      <include name="IDR_ORBIS_PANEL_NOTES_JS" file="resources\orbis\panel-notes.js" type="BINDATA" />
++      <include name="IDR_ORBIS_PANEL_TASKS_JS" file="resources\orbis\panel-tasks.js" type="BINDATA" />
++      <include name="IDR_ORBIS_PANEL_WORKFLOWS_JS" file="resources\orbis\panel-workflows.js" type="BINDATA" />
++      <include name="IDR_ORBIS_PANEL_GALAXY_JS" file="resources\orbis\panel-galaxy.js" type="BINDATA" />
++      <include name="IDR_ORBIS_PANEL_SECRETS_JS" file="resources\orbis\panel-secrets.js" type="BINDATA" />
++      <include name="IDR_ORBIS_TOKENS_CSS" file="resources\orbis\orbis-tokens.css" type="BINDATA" />
++      <include name="IDR_ORBIS_CSS" file="resources\orbis\orbis.css" type="BINDATA" />
++      <include name="IDR_ORBIS_COMPONENTS_JS" file="resources\orbis\orbis-components.js" type="BINDATA" />
++      <include name="IDR_ORBIS_RING_PNG" file="resources\orbis\orbis-ring.png" type="BINDATA" />
+       <include name="IDR_AD_NETWORK_HASHES" file="resources\ad_networks.dat" type="BINDATA" />
+       <if expr="is_chromeos">
+         <include name="IDR_CHROME_APP_MANIFEST" file="resources\chrome_app\manifest.json" type="BINDATA" />
+diff --git a/chrome/browser/ui/BUILD.gn b/chrome/browser/ui/BUILD.gn
+index 0ab25c63c9..a9810c0293 100644
+--- a/chrome/browser/ui/BUILD.gn
++++ b/chrome/browser/ui/BUILD.gn
+@@ -1548,6 +1548,7 @@ static_library("ui") {
+       "//chrome/browser/ui/webui/settings",
+       "//chrome/browser/ui/webui/settings:impl",
+       "//chrome/browser/ui/webui/side_panel/bookmarks:impl",
++      "//chrome/browser/ui/webui/orbis:impl",
+       "//chrome/browser/ui/webui/side_panel/comments:impl",
+       "//chrome/browser/ui/webui/side_panel/customize_chrome:impl",
+       "//chrome/browser/ui/webui/side_panel/reading_list:impl",
+@@ -1617,6 +1618,7 @@ static_library("ui") {
+       "//chrome/browser/ui/webui/password_manager:password_manager_ui",
+       "//chrome/browser/ui/webui/search_engine_choice",
+       "//chrome/browser/ui/webui/side_panel/bookmarks",
++      "//chrome/browser/ui/webui/orbis",
+       "//chrome/browser/ui/webui/side_panel/comments",
+       "//chrome/browser/ui/webui/side_panel/customize_chrome:customize_chrome_ui",
+       "//chrome/browser/ui/webui/side_panel/customize_chrome/customize_toolbar",
+diff --git a/chrome/browser/ui/accelerator_table.cc b/chrome/browser/ui/accelerator_table.cc
+index 532ec4748b..cdb4a01e8a 100644
+--- a/chrome/browser/ui/accelerator_table.cc
++++ b/chrome/browser/ui/accelerator_table.cc
+@@ -252,6 +252,8 @@ const AcceleratorMapping kAcceleratorMap[] = {
+      IDC_SHOW_BOOKMARK_MANAGER},
+     {ui::VKEY_J, ui::EF_CONTROL_DOWN, IDC_SHOW_DOWNLOADS},
+     {ui::VKEY_H, ui::EF_CONTROL_DOWN, IDC_SHOW_HISTORY},
++    {ui::VKEY_Y, ui::EF_SHIFT_DOWN | ui::EF_CONTROL_DOWN,
++     IDC_SHOW_ORBIS_SIDE_PANEL},
+ #if !BUILDFLAG(IS_CHROMEOS)
+     // On Chrome OS, these keys are assigned to change UI scale.
+     {ui::VKEY_OEM_MINUS, ui::EF_SHIFT_DOWN | ui::EF_CONTROL_DOWN,
+diff --git a/chrome/browser/ui/actions/chrome_action_id.h b/chrome/browser/ui/actions/chrome_action_id.h
+index 954c2933aa..7fb6e4f650 100644
+--- a/chrome/browser/ui/actions/chrome_action_id.h
++++ b/chrome/browser/ui/actions/chrome_action_id.h
+@@ -488,6 +488,7 @@
+   E(kActionSidePanelShowAssistant) \
+   E(kActionSidePanelShowBookmarks, IDC_SHOW_BOOKMARK_SIDE_PANEL) \
+   E(kActionSidePanelShowComments, IDC_SHOW_COMMENTS_SIDE_PANEL) \
++  E(kActionSidePanelShowOrbis, IDC_SHOW_ORBIS_SIDE_PANEL) \
+   E(kActionSidePanelShowCustomizeChrome, IDC_SHOW_CUSTOMIZE_CHROME_SIDE_PANEL) \
+   E(kActionSidePanelShowCustomizeChromeFooter) \
+   E(kActionSidePanelShowCustomizeChromeToolbar, \
+diff --git a/chrome/browser/ui/browser_actions.cc b/chrome/browser/ui/browser_actions.cc
+index 73053a0a02..d2ee8de873 100644
+--- a/chrome/browser/ui/browser_actions.cc
++++ b/chrome/browser/ui/browser_actions.cc
+@@ -395,6 +395,11 @@ void BrowserActions::InitializeSidePanelActions() {
+                           : kBookmarksSidePanelRefreshOldIcon,
+                       kActionSidePanelShowBookmarks, bwi, true)
+           .Build());
++  root_action_item_->AddChild(
++      SidePanelAction(SidePanelEntryId::kOrbis, IDS_PRODUCT_NAME,
++                      IDS_PRODUCT_NAME, kCircleCircleFilledIcon,
++                      kActionSidePanelShowOrbis, bwi, true)
++          .Build());
+   root_action_item_->AddChild(
+       SidePanelAction(SidePanelEntryId::kReadingList, IDS_READ_LATER_TITLE,
+                       IDS_READ_LATER_TITLE,
+diff --git a/chrome/browser/ui/browser_command_controller.cc b/chrome/browser/ui/browser_command_controller.cc
+index e366925102..b9cc3fc4ff 100644
+--- a/chrome/browser/ui/browser_command_controller.cc
++++ b/chrome/browser/ui/browser_command_controller.cc
+@@ -1264,6 +1264,11 @@ void BrowserCommandController::HandleCommandWithDisposition(
+     case IDC_SHOW_DOWNLOADS:
+       ShowDownloads(webui::GetBrowserForOpeningWebUi(browser_));
+       break;
++    case IDC_SHOW_ORBIS_SIDE_PANEL:
++      browser_->GetFeatures().side_panel_ui()->Toggle(
++          SidePanelEntryKey(SidePanelEntryId::kOrbis),
++          SidePanelOpenTrigger::kAppMenu);
++      break;
+     case IDC_SHOW_COMMENTS_SIDE_PANEL:
+       browser_->GetFeatures().side_panel_ui()->Show(
+           SidePanelEntryId::kComments, SidePanelOpenTrigger::kAppMenu);
+@@ -1861,6 +1866,7 @@ void BrowserCommandController::InitCommandState() {
+       TabsFromOtherDevicesSidePanelCoordinator::IsSupported(profile()));
+   command_updater_->UpdateCommandEnabled(IDC_SHOW_DOWNLOADS, true);
+   command_updater_->UpdateCommandEnabled(IDC_SHOW_COMMENTS_SIDE_PANEL, true);
++  command_updater_->UpdateCommandEnabled(IDC_SHOW_ORBIS_SIDE_PANEL, true);
+   command_updater_->UpdateCommandEnabled(IDC_FIND_AND_EDIT_MENU, true);
+   command_updater_->UpdateCommandEnabled(IDC_SAVE_AND_SHARE_MENU, true);
+   command_updater_->UpdateCommandEnabled(IDC_SHOW_READING_MODE_SIDE_PANEL,
+diff --git a/chrome/browser/ui/side_panel/side_panel_entry_id.h b/chrome/browser/ui/side_panel/side_panel_entry_id.h
+index 3e9dc27c0b..e2caf910a5 100644
+--- a/chrome/browser/ui/side_panel/side_panel_entry_id.h
++++ b/chrome/browser/ui/side_panel/side_panel_entry_id.h
+@@ -25,6 +25,7 @@
+   V(kReadAnything, kActionSidePanelShowReadAnything, "ReadAnything")          \
+   V(kFeed, kActionSidePanelShowFeed, "Feed")                                  \
+   V(kWebView, std::nullopt, "WebView")                                        \
++  V(kOrbis, kActionSidePanelShowOrbis, "Orbis")                               \
+   V(kContextualTasks, kActionSidePanelShowContextualTasks, "ContextualTasks") \
+   /* Contextual Entries */                                                    \
+   V(kSideSearch, kActionSidePanelShowSideSearch, "SideSearch")                \
+diff --git a/chrome/browser/ui/toolbar/app_menu_model.cc b/chrome/browser/ui/toolbar/app_menu_model.cc
+index 45cd05f343..7f93f287c8 100644
+--- a/chrome/browser/ui/toolbar/app_menu_model.cc
++++ b/chrome/browser/ui/toolbar/app_menu_model.cc
+@@ -2310,6 +2310,10 @@ void AppMenuModel::Build() {
+         GetIndexOfCommandId(kRecentTabsMenuPlaceholder).value(),
+         kHistoryMenuItem);
+   }
++  AddItemWithIcon(IDC_SHOW_ORBIS_SIDE_PANEL, u"Orbis",
++                  ui::ImageModel::FromVectorIcon(
++                      kCircleCircleFilledIcon, ui::kColorMenuIcon,
++                      ui::SimpleMenuModel::kDefaultIconSize));
+   AddItemWithStringIdAndVectorIcon(
+       this, IDC_SHOW_DOWNLOADS, IDS_SHOW_DOWNLOADS,
+       features::IsRoundedIconsEnabled() ? kDownloadIcon : kDownloadMenuOldIcon);
+diff --git a/chrome/browser/ui/toolbar/toolbar_pref_names.cc b/chrome/browser/ui/toolbar/toolbar_pref_names.cc
+index d93b933b81..78268f637c 100644
+--- a/chrome/browser/ui/toolbar/toolbar_pref_names.cc
++++ b/chrome/browser/ui/toolbar/toolbar_pref_names.cc
+@@ -14,6 +14,12 @@ namespace toolbar {
+ 
+ void RegisterProfilePrefs(user_prefs::PrefRegistrySyncable* registry) {
+   base::ListValue default_pinned_actions;
++  // Orbis is pinned by default: its toolbar button opens the built-in panel.
++  const std::optional<std::string>& orbis_action =
++      actions::ActionIdMap::ActionIdToString(kActionSidePanelShowOrbis);
++  if (orbis_action.has_value()) {
++    default_pinned_actions.Append(orbis_action.value());
++  }
+   const std::optional<std::string>& chrome_labs_action =
+       actions::ActionIdMap::ActionIdToString(kActionShowChromeLabs);
+   // ActionIdToStringMappings are not initialized in unit tests, therefore will
+diff --git a/chrome/browser/ui/views/side_panel/side_panel_helper.cc b/chrome/browser/ui/views/side_panel/side_panel_helper.cc
+index e1e7ccb48c..eccb768f01 100644
+--- a/chrome/browser/ui/views/side_panel/side_panel_helper.cc
++++ b/chrome/browser/ui/views/side_panel/side_panel_helper.cc
+@@ -4,11 +4,16 @@
+ 
+ #include "chrome/browser/ui/views/side_panel/side_panel_helper.h"
+ 
++#include <memory>
++
++#include "base/functional/bind.h"
++#include "base/functional/callback_helpers.h"
+ #include "chrome/browser/history_clusters/history_clusters_service_factory.h"
+ #include "chrome/browser/profiles/profile.h"
+ #include "chrome/browser/ui/browser_actions.h"
+ #include "chrome/browser/ui/browser_window/public/browser_window_features.h"
+ #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
++#include "chrome/browser/ui/side_panel/side_panel_entry.h"
+ #include "chrome/browser/ui/side_panel/side_panel_registry.h"
+ #include "chrome/browser/ui/side_panel/side_panel_ui.h"
+ #include "chrome/browser/ui/ui_features.h"
+@@ -19,9 +24,24 @@
+ #include "chrome/browser/ui/views/side_panel/reading_list/reading_list_side_panel_coordinator.h"
+ #include "chrome/browser/ui/views/side_panel/tabs_from_other_devices/tabs_from_other_devices_side_panel_coordinator.h"
+ #include "chrome/browser/ui/webui_browser/webui_browser.h"
++#include "chrome/common/webui_url_constants.h"
+ #include "components/history_clusters/core/features.h"
+ #include "components/history_clusters/core/history_clusters_service.h"
+ #include "ui/actions/actions.h"
++#include "ui/views/controls/webview/webview.h"
++
++namespace {
++
++// The Orbis panel: chrome://orbis hosted in a native side panel entry.
++std::unique_ptr<views::View> CreateOrbisSidePanelView(
++    Profile* profile,
++    SidePanelEntryScope& scope) {
++  auto view = std::make_unique<views::WebView>(profile);
++  view->LoadInitialURL(GURL(chrome::kChromeUIOrbisURL));
++  return view;
++}
++
++}  // namespace
+ 
+ // static
+ void SidePanelHelper::PopulateGlobalEntries(
+@@ -31,6 +51,13 @@ void SidePanelHelper::PopulateGlobalEntries(
+   ReadingListSidePanelCoordinator::From(browser)->CreateAndRegisterEntry(
+       window_registry);
+ 
++  // Add Orbis.
++  window_registry->Register(std::make_unique<SidePanelEntry>(
++      SidePanelEntry::Key(SidePanelEntry::Id::kOrbis),
++      base::BindRepeating(&CreateOrbisSidePanelView,
++                          base::Unretained(browser->GetProfile())),
++      /*default_content_width_callback=*/base::NullCallback()));
++
+   // Add bookmarks.
+   BookmarksSidePanelCoordinator::From(browser)->CreateAndRegisterEntry(
+       window_registry);
+diff --git a/chrome/browser/ui/webui/chrome_web_ui_configs.cc b/chrome/browser/ui/webui/chrome_web_ui_configs.cc
+index f949b9ea7c..b1950fdb87 100644
+--- a/chrome/browser/ui/webui/chrome_web_ui_configs.cc
++++ b/chrome/browser/ui/webui/chrome_web_ui_configs.cc
+@@ -126,6 +126,7 @@
+ #include "chrome/browser/ui/webui/search_engine_choice/search_engine_choice_ui.h"
+ #include "chrome/browser/ui/webui/settings/settings_ui.h"
+ #include "chrome/browser/ui/webui/side_panel/bookmarks/bookmarks_side_panel_ui.h"
++#include "chrome/browser/ui/webui/orbis/orbis_ui.h"
+ #include "chrome/browser/ui/webui/side_panel/comments/comments_side_panel_ui.h"
+ #include "chrome/browser/ui/webui/side_panel/customize_chrome/customize_chrome_ui.h"
+ #include "chrome/browser/ui/webui/side_panel/history/history_side_panel_ui.h"
+@@ -343,6 +344,7 @@ void RegisterChromeWebUIConfigs() {
+   map.AddWebUIConfig(std::make_unique<BookmarksUIConfig>());
+   map.AddWebUIConfig(std::make_unique<ColorPipelineInternalsUIConfig>());
+   map.AddWebUIConfig(std::make_unique<CommentsSidePanelUIConfig>());
++  map.AddWebUIConfig(std::make_unique<OrbisUIConfig>());
+   map.AddWebUIConfig(std::make_unique<CustomizeChromeUIConfig>());
+   map.AddWebUIConfig(
+       std::make_unique<
+diff --git a/chrome/browser/ui/webui/orbis/BUILD.gn b/chrome/browser/ui/webui/orbis/BUILD.gn
+new file mode 100644
+index 0000000000..c0f07d906b
+--- /dev/null
++++ b/chrome/browser/ui/webui/orbis/BUILD.gn
+@@ -0,0 +1,22 @@
++# Copyright 2026 The Orbis Authors. All rights reserved.
++# Use of this source code is governed by a BSD-style license that can be
++# found in the LICENSE file.
++
++assert(!is_android)
++
++source_set("orbis") {
++  public = [ "orbis_ui.h" ]
++  public_deps = [ "//content/public/browser" ]
++}
++
++source_set("impl") {
++  sources = [ "orbis_ui.cc" ]
++  public_deps = [ ":orbis" ]
++  deps = [
++    "//base",
++    "//chrome/browser:resources",
++    "//chrome/browser/profiles:profile",
++    "//chrome/common",
++    "//services/network/public/mojom:mojom_content_security_policy",
++  ]
++}
+\ No newline at end of file
+diff --git a/chrome/browser/ui/webui/orbis/orbis_ui.cc b/chrome/browser/ui/webui/orbis/orbis_ui.cc
+new file mode 100644
+index 0000000000..ad5f64286b
+--- /dev/null
++++ b/chrome/browser/ui/webui/orbis/orbis_ui.cc
+@@ -0,0 +1,82 @@
++// Copyright 2026 The Orbis Authors. All rights reserved.
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++#include "chrome/browser/ui/webui/orbis/orbis_ui.h"
++
++#include <string>
++#include <utility>
++
++#include "base/command_line.h"
++#include "base/functional/bind.h"
++#include "base/memory/ref_counted_memory.h"
++#include "base/strings/strcat.h"
++#include "chrome/browser/profiles/profile.h"
++#include "chrome/common/webui_url_constants.h"
++#include "chrome/grit/browser_resources.h"
++#include "content/public/browser/web_ui.h"
++#include "content/public/browser/web_ui_data_source.h"
++#include "services/network/public/mojom/content_security_policy.mojom.h"
++
++namespace {
++
++// The helper (the Orbis desktop app) tells the browser where it listens with
++// these switches. Absent switches mean the panel shows an honest "Orbis is not
++// running" state; nothing is faked.
++constexpr char kHelperPortSwitch[] = "orbis-helper-port";
++constexpr char kHelperTokenSwitch[] = "orbis-helper-token";
++
++bool ShouldHandle(const std::string& path) {
++  return path == "helper.json";
++}
++
++void HandleRequest(const std::string& path,
++                   content::WebUIDataSource::GotDataCallback callback) {
++  const base::CommandLine* cl = base::CommandLine::ForCurrentProcess();
++  std::string body;
++  if (cl->HasSwitch(kHelperPortSwitch) && cl->HasSwitch(kHelperTokenSwitch)) {
++    body = base::StrCat({"{\"port\":", cl->GetSwitchValueASCII(kHelperPortSwitch),
++                         ",\"token\":\"",
++                         cl->GetSwitchValueASCII(kHelperTokenSwitch), "\"}"});
++  }
++  std::move(callback).Run(
++      base::MakeRefCounted<base::RefCountedString>(std::move(body)));
++}
++
++}  // namespace
++
++OrbisUIConfig::OrbisUIConfig()
++    : content::DefaultWebUIConfig<OrbisUI>(content::kChromeUIScheme,
++                                           chrome::kChromeUIOrbisHost) {}
++
++OrbisUI::OrbisUI(content::WebUI* web_ui) : content::WebUIController(web_ui) {
++  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
++      Profile::FromWebUI(web_ui), chrome::kChromeUIOrbisHost);
++  source->AddResourcePath("", IDR_ORBIS_INDEX_HTML);
++  source->AddResourcePath("index.html", IDR_ORBIS_INDEX_HTML);
++  source->AddResourcePath("panel.html", IDR_ORBIS_INDEX_HTML);
++  source->AddResourcePath("panel.js", IDR_ORBIS_PANEL_JS);
++  source->AddResourcePath("panel.css", IDR_ORBIS_PANEL_CSS);
++  source->AddResourcePath("helper.js", IDR_ORBIS_HELPER_JS);
++  source->AddResourcePath("panel-adblock.js", IDR_ORBIS_PANEL_ADBLOCK_JS);
++  source->AddResourcePath("panel-notes.js", IDR_ORBIS_PANEL_NOTES_JS);
++  source->AddResourcePath("panel-tasks.js", IDR_ORBIS_PANEL_TASKS_JS);
++  source->AddResourcePath("panel-workflows.js", IDR_ORBIS_PANEL_WORKFLOWS_JS);
++  source->AddResourcePath("panel-galaxy.js", IDR_ORBIS_PANEL_GALAXY_JS);
++  source->AddResourcePath("panel-secrets.js", IDR_ORBIS_PANEL_SECRETS_JS);
++  source->AddResourcePath("orbis-tokens.css", IDR_ORBIS_TOKENS_CSS);
++  source->AddResourcePath("orbis.css", IDR_ORBIS_CSS);
++  source->AddResourcePath("orbis-components.js", IDR_ORBIS_COMPONENTS_JS);
++  source->AddResourcePath("orbis-ring.png", IDR_ORBIS_RING_PNG);
++  source->SetRequestFilter(base::BindRepeating(&ShouldHandle),
++                           base::BindRepeating(&HandleRequest));
++  // The panel talks to the local helper over loopback HTTP.
++  source->OverrideContentSecurityPolicy(
++      network::mojom::CSPDirectiveName::ConnectSrc,
++      "connect-src 'self' http://127.0.0.1:* http://localhost:*;");
++  source->OverrideContentSecurityPolicy(
++      network::mojom::CSPDirectiveName::ImgSrc,
++      "img-src 'self' data: https: http://127.0.0.1:*;");
++}
++
++OrbisUI::~OrbisUI() = default;
+\ No newline at end of file
+diff --git a/chrome/browser/ui/webui/orbis/orbis_ui.h b/chrome/browser/ui/webui/orbis/orbis_ui.h
+new file mode 100644
+index 0000000000..be5d491b1d
+--- /dev/null
++++ b/chrome/browser/ui/webui/orbis/orbis_ui.h
+@@ -0,0 +1,29 @@
++// Copyright 2026 The Orbis Authors. All rights reserved.
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++#ifndef CHROME_BROWSER_UI_WEBUI_ORBIS_ORBIS_UI_H_
++#define CHROME_BROWSER_UI_WEBUI_ORBIS_ORBIS_UI_H_
++
++#include "content/public/browser/web_ui_controller.h"
++#include "content/public/browser/webui_config.h"
++
++class OrbisUI;
++
++// chrome://orbis: the Orbis panel (Ask, Search, Blocking, Notes, Tasks,
++// Workflows, Galaxy, Secrets). It is a tab-capable WebUI and is also hosted
++// by the native Orbis side panel entry.
++class OrbisUIConfig : public content::DefaultWebUIConfig<OrbisUI> {
++ public:
++  OrbisUIConfig();
++};
++
++class OrbisUI : public content::WebUIController {
++ public:
++  explicit OrbisUI(content::WebUI* web_ui);
++  OrbisUI(const OrbisUI&) = delete;
++  OrbisUI& operator=(const OrbisUI&) = delete;
++  ~OrbisUI() override;
++};
++
++#endif  // CHROME_BROWSER_UI_WEBUI_ORBIS_ORBIS_UI_H_
+\ No newline at end of file
+diff --git a/chrome/common/webui_url_constants.h b/chrome/common/webui_url_constants.h
+index 23b1c1220e..a9db56b270 100644
+--- a/chrome/common/webui_url_constants.h
++++ b/chrome/common/webui_url_constants.h
+@@ -233,6 +233,8 @@ inline constexpr char kChromeUIUntrustedNtpMicrosoftAuthURL[] =
+     "chrome-untrusted://ntp-microsoft-auth/";
+ inline constexpr char kChromeUINTPTilesInternalsHost[] = "ntp-tiles-internals";
+ inline constexpr char kChromeUIOmniboxHost[] = "omnibox";
++inline constexpr char kChromeUIOrbisHost[] = "orbis";
++inline constexpr char kChromeUIOrbisURL[] = "chrome://orbis/";
+ inline constexpr char kChromeUIOmniboxAimEligibilityPage[] =
+     "omnibox/aim-eligibility";
+ inline constexpr char kChromeUIOmniboxPopupHost[] = "omnibox-popup.top-chrome";

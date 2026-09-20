@@ -5,7 +5,8 @@ import { call } from './helper.js'
 // blocking; nothing here counts or decides anything. Text is only ever put on the page as text.
 
 const root = document.getElementById('block')
-const send = (message) => chrome.runtime.sendMessage(message)
+// The blocking worker is the extension's; the built-in page has none, so it reports that honestly.
+const send = (message) => (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage ? chrome.runtime.sendMessage(message) : Promise.reject(new Error('Ad blocking controls are not connected in this view.')))
 const el = (tag, attrs = {}, ...children) => {
   const node = document.createElement(tag)
   for (const [k, v] of Object.entries(attrs)) {
