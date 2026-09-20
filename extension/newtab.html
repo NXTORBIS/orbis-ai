@@ -8,15 +8,47 @@
     <link rel="stylesheet" href="newtab.css" />
   </head>
   <body>
+    <button id="openSettings" class="gear" type="button" aria-label="Customize this page">Customize</button>
     <main>
       <img class="logo" src="assets/orbis-ring.png" alt="Orbis" width="120" />
       <h1 id="greeting">Orbis</h1>
       <p id="clock" class="clock" aria-live="off"></p>
+      <p id="countdown" class="countdown"></p>
       <form id="search" role="search">
         <input id="q" type="text" autocomplete="off" spellcheck="false" placeholder="Search or type a URL" aria-label="Search or type a URL" autofocus />
       </form>
+      <p id="empty" class="empty" hidden>No shortcuts yet. Add the sites you use most.</p>
+      <nav id="shortcuts" class="sites" aria-label="Shortcuts"></nav>
       <nav id="sites" class="sites" aria-label="Most visited"></nav>
     </main>
+
+    <dialog id="shortcutDialog">
+      <form id="shortcutForm" method="dialog">
+        <h2 id="scTitle">Add shortcut</h2>
+        <label>Name (optional)<input id="scName" type="text" maxlength="60" autocomplete="off" /></label>
+        <label>Web address<input id="scUrl" type="text" autocomplete="off" spellcheck="false" placeholder="example.com" /></label>
+        <p id="scError" class="err" role="alert"></p>
+        <div class="row"><button type="button" id="scCancel">Cancel</button><button type="submit" class="primary">Save</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="settingsDialog">
+      <form id="settingsForm" method="dialog">
+        <h2>Customize</h2>
+        <label>Your name (for the greeting)<input id="sName" type="text" maxlength="40" autocomplete="off" /></label>
+        <label class="chk"><input id="sGreeting" type="checkbox" />Show greeting</label>
+        <label class="chk"><input id="sClock" type="checkbox" />Show date and time</label>
+        <label class="chk"><input id="sHour12" type="checkbox" />12-hour clock</label>
+        <label class="chk"><input id="sSeconds" type="checkbox" />Show seconds</label>
+        <label class="chk"><input id="sShortcuts" type="checkbox" />Show shortcuts</label>
+        <label>Background<select id="sWallpaper"></select></label>
+        <label>Use my own picture<input id="sPicture" type="file" accept="image/png,image/jpeg,image/webp" /></label>
+        <label>Countdown label<input id="sCdLabel" type="text" maxlength="60" autocomplete="off" /></label>
+        <label>Countdown date (empty for none)<input id="sCdDate" type="date" /></label>
+        <p id="sError" class="err" role="alert"></p>
+        <div class="row"><button type="button" id="sCancel">Cancel</button><button type="submit" class="primary">Save</button></div>
+      </form>
+    </dialog>
     <script type="module" src="newtab.js"></script>
   </body>
 </html>

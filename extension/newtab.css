@@ -18,3 +18,26 @@ h1 { margin: 6px 0 0; font-size: 34px; font-weight: 600; letter-spacing: 0.02em;
 .site img { width: 24px; height: 24px; }
 .site span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (prefers-reduced-motion: no-preference) { main { animation: rise 0.35s ease-out; } @keyframes rise { from { opacity: 0; transform: translateY(6px); } } }
+.countdown { margin: 0 0 10px; color: var(--accent); font-size: 13px; }
+.countdown:empty, .clock:empty { display: none; }
+.empty { color: var(--muted); margin: 18px 0 0; font-size: 13px; }
+.sites:empty { display: none; }
+.tile { position: relative; display: flex; flex-direction: column; align-items: center; }
+.tile .acts { display: flex; gap: 4px; opacity: 0; height: 22px; }
+.tile:hover .acts, .tile:focus-within .acts { opacity: 1; }
+.mini { font: inherit; font-size: 11px; color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 8px; padding: 1px 6px; cursor: pointer; }
+.mini:hover, .mini:focus-visible { color: var(--text); border-color: var(--accent); outline: none; }
+.addtile { background: transparent; border: 0; font: inherit; font-size: 12px; cursor: pointer; }
+.gear { position: fixed; top: 14px; right: 14px; font: inherit; font-size: 12px; color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; cursor: pointer; }
+.gear:hover, .gear:focus-visible { color: var(--text); border-color: var(--accent); outline: none; }
+dialog { color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 20px; width: min(420px, 92vw); }
+dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
+dialog h2 { margin: 0 0 12px; font-size: 18px; }
+dialog label { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; font-size: 13px; color: var(--muted); }
+dialog label.chk { flex-direction: row; align-items: center; gap: 8px; }
+dialog input[type="text"], dialog input[type="date"], dialog select { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+dialog input:focus-visible, dialog select:focus-visible, dialog button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+dialog .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+dialog button { font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 7px 16px; cursor: pointer; }
+dialog button.primary { background: var(--accent); color: #05222b; border-color: var(--accent); }
+.err { color: #ff8a8a; font-size: 12px; min-height: 1em; margin: 0; }
