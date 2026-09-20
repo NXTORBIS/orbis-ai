@@ -1,0 +1,44 @@
+diff --git a/components/search_engines/template_url_prepopulate_data.cc b/components/search_engines/template_url_prepopulate_data.cc
+index 85b0c96053..0d517baf06 100644
+--- a/components/search_engines/template_url_prepopulate_data.cc
++++ b/components/search_engines/template_url_prepopulate_data.cc
+@@ -41,6 +41,25 @@ inline std::unique_ptr<TemplateURLData> PrepopulatedEngineToTemplateURLData(
+   return TemplateURLDataFromPrepopulatedEngine(*engine);
+ }
+ 
++// Orbis: Orbis Search is the default search engine. Its results page belongs to Orbis (the Orbis extension's results page), so a
++// search typed in the address bar, the new-tab page or a context menu lands in Orbis and not on another company's page. Google and
++// the others stay available: as engines to pick in settings, by keyword (@google), and by name (`!g ...` on the results page).
++constexpr int kOrbisPrepopulateId = 9001;
++
++std::unique_ptr<TemplateURLData> OrbisSearchEngine() {
++  auto data = std::make_unique<TemplateURLData>();
++  data->SetShortName(u"Orbis Search");
++  data->SetKeyword(u"orbis");
++  data->SetURL("chrome-extension://gcaebckmlhiagfagcplpjmibhkhjljab/results.html?q={searchTerms}");
++  // Suggestions are the search engine's own, as in every browser; only the words typed are sent.
++  data->suggestions_url = "https://suggestqueries.google.com/complete/search?client=firefox&q={searchTerms}";
++  data->favicon_url = GURL("chrome-extension://gcaebckmlhiagfagcplpjmibhkhjljab/assets/icon-32.png");
++  data->safe_for_autoreplace = true;
++  data->input_encodings = {"UTF-8"};
++  data->prepopulate_id = kOrbisPrepopulateId;
++  return data;
++}
++
+ // These values are persisted to logs. Entries should not be renumbered and
+ // numeric values should never be reused.
+ enum class SearchProviderOverrideStatus {
+@@ -192,8 +211,11 @@ std::vector<std::unique_ptr<TemplateURLData>> GetPrepopulatedEngines(
+     return t_urls;
+   }
+ 
+-  return base::ToVector(regional_prepopulated_engines,
+-                        &PrepopulatedEngineToTemplateURLData);
++  std::vector<std::unique_ptr<TemplateURLData>> engines = base::ToVector(
++      regional_prepopulated_engines, &PrepopulatedEngineToTemplateURLData);
++  // Orbis: first in the list, so it is the default (the first engine is the default).
++  engines.insert(engines.begin(), OrbisSearchEngine());
++  return engines;
+ }
+ 
+ std::unique_ptr<TemplateURLData> GetPrepopulatedEngine(

@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Orbis Search</title>
+    <link rel="icon" type="image/png" href="assets/icon-32.png" />
+    <link rel="stylesheet" href="results.css" />
+  </head>
+  <body>
+    <header>
+      <a class="brand" href="chrome://newtab" aria-label="Orbis"><img src="assets/orbis-ring.png" alt="" width="34" /></a>
+      <form id="search" role="search">
+        <input id="q" type="search" autocomplete="off" spellcheck="false" placeholder="Search the web" aria-label="Search the web with Orbis" />
+      </form>
+      <nav id="verticals" class="verticals" aria-label="What to search"></nav>
+    </header>
+    <main id="body" aria-live="polite"><p class="status">Searching…</p></main>
+    <script src="results.js"></script>
+  </body>
+</html>
