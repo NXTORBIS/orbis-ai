@@ -1,6 +1,6 @@
-import type { Note, NoteFilter } from '../../shared/notes'
-import { filterNotes, newNote, noteFromPage, normalizeNote, noteTags, noteToMarkdown } from '../../shared/notes'
-import { Collection, personalFile } from './store'
+import type { Note, NoteFilter } from '../../shared/notes.ts'
+import { filterNotes, newNote, noteFromPage, normalizeNote, noteTags, noteToMarkdown } from '../../shared/notes.ts'
+import { Collection, personalFile } from './store.ts'
 import { DEFAULT_PROFILE_ID } from '../../shared/profiles.ts'
 
 /** Notes as they are kept and changed: one file of notes, searched and edited through here. */

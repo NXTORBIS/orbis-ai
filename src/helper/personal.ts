@@ -115,7 +115,14 @@ export function createPersonalHandlers(o: { dataDir: string }): Record<string, H
   const first = (a: unknown[]): unknown => a[0]
   // Every answer is written to disk before it is sent, so nothing acknowledged can be lost to a quick shutdown.
   const saved = (run: (a: unknown[]) => Promise<unknown> | unknown): Handler => async (a) => {
-    const result = await run(a)
+    let result: unknown
+    try {
+      result = await run(a)
+    } catch (err) {
+      // The services word this one for the person; other failures stay in the helper.
+      if (err instanceof Error && /no longer exists/.test(err.message)) throw new HelperError('not-found', err.message)
+      throw err
+    }
     await Promise.all([notes.flush(), tasks.flush()])
     return result
   }

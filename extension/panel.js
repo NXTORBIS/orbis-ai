@@ -223,17 +223,21 @@ let lastQuery = ''
 let searching = null
 
 function showTab(name) {
-  for (const id of ['ask', 'search', 'block']) {
+  for (const id of ['ask', 'search', 'block', 'notes', 'tasks']) {
     $(`view-${id}`).hidden = id !== name
     $(`tab-${id}`).setAttribute('aria-selected', String(id === name))
   }
   if (name === 'block') document.dispatchEvent(new CustomEvent('orbis:blocking-shown'))
+  else if (name === 'notes') document.dispatchEvent(new CustomEvent('orbis:notes-shown'))
+  else if (name === 'tasks') document.dispatchEvent(new CustomEvent('orbis:tasks-shown'))
   else if (name === 'search') $('query').focus()
   else input.focus()
 }
 $('tab-ask').addEventListener('click', () => showTab('ask'))
 $('tab-search').addEventListener('click', () => showTab('search'))
 $('tab-block').addEventListener('click', () => showTab('block'))
+$('tab-notes').addEventListener('click', () => showTab('notes'))
+$('tab-tasks').addEventListener('click', () => showTab('tasks'))
 
 function renderResults(outcome) {
   results.replaceChildren()

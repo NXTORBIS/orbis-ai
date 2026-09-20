@@ -19,6 +19,8 @@
       <button id="tab-ask" type="button" role="tab" aria-selected="true">Ask</button>
       <button id="tab-search" type="button" role="tab" aria-selected="false">Search</button>
       <button id="tab-block" type="button" role="tab" aria-selected="false">Blocking</button>
+      <button id="tab-notes" type="button" role="tab" aria-selected="false">Notes</button>
+      <button id="tab-tasks" type="button" role="tab" aria-selected="false">Tasks</button>
     </nav>
 
     <section id="view-ask" class="view" role="tabpanel" aria-labelledby="tab-ask">
@@ -54,7 +56,17 @@
       <main id="block" aria-live="polite"></main>
     </section>
 
+    <section id="view-notes" class="view" role="tabpanel" aria-labelledby="tab-notes" hidden>
+      <main id="notes"></main>
+    </section>
+
+    <section id="view-tasks" class="view" role="tabpanel" aria-labelledby="tab-tasks" hidden>
+      <main id="tasks"></main>
+    </section>
+
     <script type="module" src="panel.js"></script>
     <script type="module" src="panel-adblock.js"></script>
+    <script type="module" src="panel-notes.js"></script>
+    <script type="module" src="panel-tasks.js"></script>
   </body>
 </html>

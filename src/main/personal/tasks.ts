@@ -1,6 +1,6 @@
-import type { Task, TaskFilter, TaskList } from '../../shared/tasks'
-import { completeTask, filterTasks, INBOX_LIST_ID, newList, newTask, normalizeList, normalizeTask, taskCounts, taskFromPage } from '../../shared/tasks'
-import { Collection, personalFile } from './store'
+import type { Task, TaskFilter, TaskList } from '../../shared/tasks.ts'
+import { completeTask, filterTasks, INBOX_LIST_ID, newList, newTask, normalizeList, normalizeTask, taskCounts, taskFromPage } from '../../shared/tasks.ts'
+import { Collection, personalFile } from './store.ts'
 import { DEFAULT_PROFILE_ID } from '../../shared/profiles.ts'
 
 export interface TasksSnapshot {
