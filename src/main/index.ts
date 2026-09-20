@@ -32,6 +32,10 @@ import { answerContext, runResearch } from './research'
 import { adblockCommand } from './adblockChat'
 import { BrowserLibrary } from './browserLibrary'
 import { registerLibraryIpc } from './libraryIpc'
+import { registerBrowserExtras } from './browserCapabilities'
+import { SearchWatcher } from './browserSearches'
+import { openWorkspaceScript } from './browserWorkspace'
+import type { WorkspaceGroupWanted, WorkspaceTabWanted } from './browserWorkspace'
 import { mirrorChromiumInto } from './browserMirror'
 import { closedBrowserState, followChromiumTabs } from './browserState'
 import type { ChromiumControl } from './chromium/service'
@@ -60,6 +64,7 @@ import { planCompression, summarise, summaryBlock } from './compress'
 import { parseSchedule, scheduleRequest } from '../shared/schedulePhrase'
 import { MemoryFull, MemoryRefused, MemoryStore } from './knowledge/memory'
 import { SearchSessionStore } from './knowledge/searchSessions'
+import type { AppServicesDeps } from '../helper/appServices'
 import { GalaxyService } from './knowledge/galaxyService'
 import { projectsMentioned } from '../shared/workspaces'
 import type { GalaxyNodeType, GalaxyView } from '../shared/galaxy'
@@ -183,6 +188,10 @@ let vaultForPanel: SecretsDeps | null = null
 /** What the Chromium side panel's Workflows tab needs beyond the engine: remembered secrets and Orion drafts. */
 let workflowExtrasForPanel: { store: WorkflowStore; draft(instruction: string, current: Workflow | null): Promise<Workflow> } | null = null
 let workspacesForChat: WorkspacesStore | null = null
+/** The app's search-box suggestions and local speech to text, lent to the pages in the Orbis browser. */
+let appServicesForBrowser: AppServicesDeps | null = null
+/** Saved Orion Search research, once it exists: the results page in the browser and the Orbis window share this one store. */
+let searchSessionsForBrowser: SearchSessionStore | null = null
 
 /** Instructions the user adds to a running automation, per chat request. */
 const automationInstructions = new Map<string, string[]>()
@@ -786,7 +795,7 @@ ${summaryBlock(summary)}`
   })
 
   // Address-bar predictions send the typed text off the device, so both follow the "Web search suggestions" setting.
-  ipcMain.handle('omnibox:web', async (_event, query: unknown): Promise<string[]> => {
+  const webSuggestions = async (query: unknown): Promise<string[]> => {
     const text = typeof query === 'string' ? query.replace(/\s+/g, ' ').trim() : ''
     if (!text || text.length > 200 || !(await store.getSettings()).searchSuggestions) return []
     try {
@@ -797,12 +806,13 @@ ${summaryBlock(summary)}`
     } catch {
       return []
     }
-  })
-
-  ipcMain.handle('omnibox:predict', async (_event, input: unknown): Promise<string[]> => {
+  }
+  const orionPredictions = async (input: unknown): Promise<string[]> => {
     if (typeof input !== 'string' || !(await store.getSettings()).searchSuggestions) return []
     return predictQueries(input, GROQ_API_KEYS, (url, init) => net.fetch(url, init))
-  })
+  }
+  ipcMain.handle('omnibox:web', (_event, query: unknown) => webSuggestions(query))
+  ipcMain.handle('omnibox:predict', (_event, input: unknown) => orionPredictions(input))
 
   // Orbis's browser is Chromium. Everything that used to open the in-app browser (the address bar, links, research sources, "open the
   // browser") opens it here instead: an address as a page, anything else as an Orbis Search.
@@ -957,11 +967,8 @@ ${summaryBlock(summary)}`
   // process the same way the window cancelling a session would, so nothing is left running for words nobody wants.
   let voiceAbort: AbortController | null = null
 
-  ipcMain.handle('voice:transcribe', async (event, audioData: unknown, options: unknown) => {
-    if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
+  const transcribeClip = async (audio: Buffer, o: { model?: unknown; language?: unknown }) => {
     if (!whisper) return { ok: false as const, code: 'runtime-error' as const, message: 'Speech input is not ready yet.' }
-    const o = (options ?? {}) as { model?: unknown; language?: unknown }
-    const audio = audioData instanceof Uint8Array ? Buffer.from(audioData) : Buffer.alloc(0)
     const bad = checkAudio(audio.length)
     if (bad) return { ok: false as const, code: bad, message: describeError(bad) }
 
@@ -982,7 +989,22 @@ ${summaryBlock(summary)}`
     } finally {
       if (voiceAbort === controller) voiceAbort = null
     }
+  }
+
+  ipcMain.handle('voice:transcribe', async (event, audioData: unknown, options: unknown) => {
+    if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
+    return transcribeClip(audioData instanceof Uint8Array ? Buffer.from(audioData) : Buffer.alloc(0), (options ?? {}) as { model?: unknown; language?: unknown })
   })
+
+  // What the pages in the Orbis browser (the search results) may use of the app: the same suggestions and the same local speech to text.
+  appServicesForBrowser = {
+    suggestWeb: webSuggestions,
+    suggestOrion: orionPredictions,
+    transcribe: (audio, options) => transcribeClip(Buffer.from(audio), options),
+    cancelTranscription: () => voiceAbort?.abort(),
+    voiceHardware: () => whisper?.hardware() ?? null,
+    voiceModels: async () => (whisper ? await whisper.status() : { installed: [], downloading: [] })
+  }
 
   ipcMain.handle('voice:cancel', (event) => {
     if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
@@ -1137,7 +1159,12 @@ if (!app.requestSingleInstanceLock()) {
           }
         },
         close: async () => void (await chromiumBrowser?.stop()),
-        isOpen: () => Boolean(chromiumBrowser?.current)
+        isOpen: () => Boolean(chromiumBrowser?.current),
+        openWorkspace: async (tabs, groups, replace) => {
+          if (!chromiumBrowser) throw new Error(NO_BROWSER)
+          const service = await chromiumBrowser.ensure()
+          return service.bridge.run(openWorkspaceScript(tabs as unknown as WorkspaceTabWanted[], groups as WorkspaceGroupWanted[], replace))
+        }
       },
       resolvePage: (ctx) => {
         const service = chromiumBrowser?.current
@@ -1164,6 +1191,8 @@ if (!app.requestSingleInstanceLock()) {
           secrets: () => vaultForPanel,
           workflows: () => (workflowEngine ? { engine: workflowEngine, recorder: workflowRecorder ?? undefined, ...(workflowExtrasForPanel ?? {}) } : null),
           galaxy: () => galaxyForChat,
+          appServices: () => appServicesForBrowser,
+          searchSessions: () => searchSessionsForBrowser,
           control: browserControl?.control,
           saveDir: app.getPath('downloads'),
           clipboard: { readText: () => clipboard.readText(), hasImage: async () => (await clipboard.read().catch(() => [])).some((item) => item.types.includes('image/png')) },
@@ -1172,11 +1201,23 @@ if (!app.requestSingleInstanceLock()) {
           // Whenever the browser starts: the control layer's tab state follows its real tabs, and the app's copy of its history,
           // bookmarks and downloads is refreshed (at most once every few seconds) whenever those tabs change.
           let mirrored = 0
+          const watcher = new SearchWatcher()
           const refreshMirror = (): void => {
+            // A search made in the browser is remembered like one typed in the Orbis address bar, unless suggestions from what the
+            // person searched are off or the tab is private.
+            const state = browserControl?.windowControl.state
+            const searched = watcher.next((state?.tabs ?? []).map((t) => ({ id: t.id, url: t.url, private: t.private })))
+            if (searched.length && browserLibrary) {
+              const library = browserLibrary
+              void store.getSettings().then((settings) => {
+                if (settings.personalizedSuggestions !== false) for (const query of searched) library.recordSearch(query)
+              })
+            }
             if (!browserLibrary || Date.now() - mirrored < 3000) return
             mirrored = Date.now()
             void mirrorChromiumInto(browserLibrary, service).catch(() => undefined)
           }
+          registerBrowserExtras({ control: service.control, windowControl: browserControl!.windowControl, bridge: service.bridge })
           void followChromiumTabs(service, browserControl!.windowControl, refreshMirror).catch((err: unknown) => console.error('[browser] could not follow tabs', err))
         }, () => browserControl?.windowControl.setState(closedBrowserState()))
         app.on('before-quit', () => void chromiumBrowser?.stop())
@@ -1566,6 +1607,7 @@ if (!app.requestSingleInstanceLock()) {
     const category = (value: unknown): MemoryCategory | undefined => (['about', 'preference', 'project', 'general'].includes(String(value)) ? (value as MemoryCategory) : undefined)
     /** Orion Search sessions, saved per profile. Never read into or out of Orbis Chat. */
     const searchSessions = new SearchSessionStore(app.getPath('userData'), await stepProfile())
+    searchSessionsForBrowser = searchSessions
     searchSessions.onChange(() => sendToWindow('search-sessions:changed'))
     profilesStore.onChange(() => {
       void stepProfile().then((id) => searchSessions.useProfile(id))

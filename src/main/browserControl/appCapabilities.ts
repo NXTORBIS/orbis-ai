@@ -1,4 +1,4 @@
-import { clipboard, ClipboardItem, nativeImage } from 'electron'
+import { clipboard, ClipboardItem, nativeImage, shell } from 'electron'
 import type { BrowserWindow } from 'electron'
 import type { Settings, SettingsUpdate } from '../../shared/types'
 import type { Condition, ParamSpec } from '../../shared/browserControl.ts'
@@ -21,7 +21,13 @@ export interface AppCapabilityDeps {
   /** The page a page-reading check acts on: the Orbis browser's (Chromium's) tab the command names, or its active tab. Throws when there is none. */
   resolvePage(ctx: Pick<ControlContext, 'target'>): PageHandle
   /** The Orbis browser (Chromium): opened on demand, closed when asked. */
-  browser: { open(input: string): Promise<{ ok: boolean; detail: string }>; close(): Promise<void>; isOpen(): boolean }
+  browser: {
+    open(input: string): Promise<{ ok: boolean; detail: string }>
+    close(): Promise<void>
+    isOpen(): boolean
+    /** Opens a saved set of pages and groups in the browser; what it did. */
+    openWorkspace(tabs: Record<string, unknown>[], groups: Record<string, unknown>[], replace: boolean): Promise<{ tabIds: string[]; groups: string[] }>
+  }
 }
 
 const str = (description: string, required = false, extra: Partial<ParamSpec> = {}): ParamSpec => ({ type: 'string', description, required, ...extra })
@@ -68,6 +74,56 @@ export function registerAppCapabilities(d: AppCapabilityDeps): void {
       return { detail: opened.detail }
     },
     verify: () => ({ verified: d.browser.isOpen(), detail: d.browser.isOpen() ? 'The browser is open.' : 'The browser did not open.' })
+  })
+
+  control.register({
+    id: 'browser.openWorkspace',
+    domain: 'browser',
+    name: 'Open a workspace',
+    description: 'Opens a saved set of pages and groups. With replace, the pages that are open and not part of it are closed first.',
+    params: {
+      tabs: { type: 'array', description: 'The pages: url, title, pinned, group, active.', required: true },
+      groups: { type: 'array', description: 'The groups: name, color, collapsed.' },
+      replace: bool('Close the pages that are not part of it (default true).')
+    },
+    mutates: true,
+    confirmation: 'none',
+    run: async (p) => {
+      const wanted = (Array.isArray(p.tabs) ? p.tabs : []).filter((t): t is Record<string, unknown> => Boolean(t) && typeof (t as { url?: unknown }).url === 'string' && /^https?:[/][/]/i.test((t as { url: string }).url))
+      if (!wanted.length) fail('invalid-params', 'That workspace has no pages in it.')
+      return d.browser.openWorkspace(wanted, Array.isArray(p.groups) ? (p.groups as Record<string, unknown>[]) : [], p.replace !== false)
+    },
+    verify: async (data) => {
+      const { tabIds } = data as { tabIds: string[] }
+      // The tab list follows the browser's own events; give it a moment to catch up with what was just opened.
+      const deadline = Date.now() + 2500
+      let missing = tabIds.length
+      while (Date.now() < deadline) {
+        const open = new Set((windowControl.state?.tabs ?? []).map((t) => t.id))
+        missing = tabIds.filter((id) => !open.has(id)).length
+        if (!missing) break
+        await new Promise((resolve) => setTimeout(resolve, 150))
+      }
+      return { verified: missing === 0, detail: missing ? `${missing} of ${tabIds.length} pages are not showing yet.` : `Opened ${tabIds.length} pages.` }
+    }
+  })
+
+  control.register({
+    id: 'navigation.openExternal',
+    domain: 'navigation',
+    name: 'Open in the default browser',
+    description: "Opens a tab's page (or an address) in the system's default browser.",
+    params: { url: str("An address (default: the active tab's page)."), tabId: str('Tab id from tabs.list.') },
+    mutates: true,
+    confirmation: 'none',
+    run: async (p, ctx) => {
+      const given = typeof p.url === 'string' ? p.url.trim() : ''
+      const url = given || d.resolvePage({ target: p.tabId ? { tabId: String(p.tabId) } : ctx.target }).getURL()
+      if (!/^https?:[/][/]/i.test(url)) fail('invalid-params', 'There is no web page to open.')
+      await shell.openExternal(url)
+      return { url }
+    },
+    verify: (data) => ({ verified: true, detail: `Handed ${(data as { url: string }).url} to the default browser.` })
   })
 
   control.register({

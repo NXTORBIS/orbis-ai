@@ -16,6 +16,8 @@ import { createWorkflowHandlers } from './workflows.ts'
 import type { WorkflowsDeps } from './workflows.ts'
 import { createSearchSessionHandlers } from './searchSessions.ts'
 import type { SearchSessionsDeps } from './searchSessions.ts'
+import { createAppServiceHandlers } from './appServices.ts'
+import type { AppServicesDeps } from './appServices.ts'
 import { createGalaxyHandlers } from './galaxy.ts'
 import type { GalaxyDeps } from './galaxy.ts'
 import { HelperError } from './server.ts'
@@ -46,6 +48,8 @@ export interface HandlerDeps {
   secrets?: () => SecretsDeps | null | undefined
   workflows?: () => WorkflowsDeps | null | undefined
   galaxy?: () => GalaxyDeps | null | undefined
+  /** The app's search-box suggestions and local speech to text, for the pages in the browser (search results); when given, those channels exist. */
+  appServices?: () => AppServicesDeps | null | undefined
   /** Saved Orion Search sessions: the app's own store when given, else the helper opens the same database under dataDir. */
   searchSessions?: SearchSessionsDeps['store']
   profileId?: string
@@ -81,6 +85,7 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
     ...(deps.secrets ? createSecretsHandlers(deps.secrets) : {}),
     ...(deps.workflows ? createWorkflowHandlers(deps.workflows) : {}),
     ...(deps.galaxy ? createGalaxyHandlers(deps.galaxy) : {}),
+    ...(deps.appServices ? createAppServiceHandlers(deps.appServices) : {}),
     ...(deps.adblock ? createAdblockHandlers({ ...deps.adblock, fetchFn: doFetch }) : {}),
     /** Whether the helper is there and the token works. Says nothing about the person's data. */
     'helper:ping': () => ({ ok: true, version: deps.version ?? 'dev', hasApiKey: deps.apiKeys.length > 0 }),
