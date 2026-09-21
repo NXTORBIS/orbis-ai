@@ -60,3 +60,56 @@ browserUi.test.ts: reproduced by hand (the same spawn, control service and capab
 Menus (colours already come from the token palette through the Material "sys" ids, so no C++ change was needed): app menu, omnibox/page context menu (hover row, disabled Undo/Paste/Translate dimmed, separators, icons, submenu chevrons, zoom row) and the find bar, in dark and light at 100% and 150%: `docs/views1-shots/views1_menu_{appmenu,pagemenu,find}_{dark,light}{100,150}.png`. The black frame around menus in the pictures is a PrintWindow artefact of the menu's shadow window, not a UI defect.
 
 Not done in this run (no screenshots, so not verified): tab context menu, link/image/selection context menus, profile/avatar popup and profile creation, downloads bubble, bookmark bubble, extension menu, site-information bubble, permission prompts, zoom bubble, fullscreen-exit bubble, tab hover card, tooltips, alert/confirm/beforeunload dialogs, toasts. They read the same colour ids, so they will follow the palette, but that is expectation, not evidence.
+
+
+## Views 2 (every remaining native surface)
+
+Method: `scripts/orbis-views2-shots.mjs` starts my own browser (dark/light profile, 100% and 150% scale), serves a local test site on 127.0.0.1:9445 (page with link/image/selection, slow/failing/small downloads, audio + canvas video, login form, beforeunload page, Spanish page) and drives each surface with real input through `BrowserUi` (foreground window and window under the cursor must both belong to that pid; UI Automation finds toolbar/menu elements; `clickElement`, `clickScreen`, `hoverAt`, `elements` are new). Pictures are `PrintWindow` of that process's own windows (`scripts/orbis-capture.ps1`, new `-Each` mode for windows outside the main one, e.g. picture-in-picture). All 4 configurations were captured in full: `docs/views2-shots/v2_<surface>_{dark,light}{100,150}.png` (about 190 files). The black frame around popups in the pictures is the PrintWindow artefact of layered windows, not a UI defect.
+
+Result of the first pass: the Views 1 palette (Material "sys" colour ids) and the corner/elevation work already carried nearly every bubble, menu and dialog (rounded 12-14px surfaces, popover surface, accent default button, tonal secondary, accent toggles, accent progress). The defects that were real, and their fixes (patch `patches/chromium-orbis-views-bubbles.patch`, plus folds into the palette and tabstrip patches):
+
+- Tooltips: square white-bordered black box. Now radius 6 (token `sm`), hairline outline from the palette, popover surface and text colours (`ui/views/corewm/tooltip_view_aura.cc`), translucent tooltip widget enabled on Windows so the corners are real (`tooltip_aura.cc`). Caveat: a tooltip window is not parented to the browser window, so it follows the OS light/dark setting, not the browser theme: with a light browser theme on a dark OS the tooltip stays dark (light100/150 pictures).
+- Fullscreen "press Esc to exit" bubble: square slab `#282C32`. Now radius 10, Orbis popover surface `#101216`, key-cap radius 4 (`components/fullscreen_control`).
+- Tab with a group colour outline had flared folder-tab feet (old border path). The outline now follows the flat pill (`horizontal_tab_style_views.cc`, tabstrip patch).
+- Omnibox site chip on `chrome://` pages showed the stock Chrome logo; now the Orbis ring mark (`chrome_location_bar_model_delegate.cc`).
+- Tooltip and fullscreen colours also added to the Orbis colour mixer (palette patch).
+
+Per surface (file stem is `v2_<name>`; each exists for dark100/dark150/light100/light150 unless noted):
+
+| Surface | File stem | Verdict | Notes |
+|---|---|---|---|
+| Tab context menu | tabctx | Done, verified | rounded, separators, disabled rows dimmed, shortcuts right-aligned |
+| Page / link / image / selection context menus | pagectx, linkctx, imgctx, selctx | Done, verified | same menu style |
+| Omnibox context menu | omniboxctx | Done, verified | focus ring on the omnibox visible |
+| Profile / avatar popup | profile, profilebubble | Done, verified | Chromium's own account popup, "Your Orbis", no Orbis Chat link |
+| Sign-in chip states | seen in many pictures ("Sign in to Orbis?" chip, then the avatar button) | Verified as rendered; the chip is the real Chromium promo chip and it is palette-tinted | nothing connected to Orbis Chat |
+| Profile creation flow | profilepicker, profilecreate | NOT verified | `chrome://profile-picker/` opened in a tab is blank (it needs its own window); clicking "Add Orbis profile" opened no second window in 22 s. Not diagnosed |
+| Downloads bubble: progress, completed, error (with Resume) | dlprogress, dldone, dlfail | Done, verified | accent progress bar, red error text, no change needed |
+| Bookmark bubble | bookmarkbubble | Done, verified | accent Done, tonal Remove, focus ring on the name field |
+| Bookmarks bar, folder menu, bookmark context menu | bookmarkfolder, bookmarkctx | Done, verified | |
+| Extensions menu | extensions | Partly: the app-menu "Extensions" row and its submenu were opened; the toolbar puzzle button does not exist in this build (only the pinned Orbis action), so that menu could not be captured | |
+| Site information bubble | siteinfo, siteinfoperm | Done, verified | connection, cookies, site settings; permission rows with accent toggles, Reset permissions (siteinfoperm uses http://localhost:9445 with stored permissions) |
+| Permission prompts: location, camera+mic (live preview), notifications | permgeo, permcam, permnotif | Done, verified | origin, permission, Allow while visiting / Allow this time / Never allow. All three buttons are the same tonal style (Chromium's design); I did not make Allow the accent button |
+| Find bar | findbar | Done, verified | count 1/1, prev/next, close |
+| Zoom bubble | zoom | Done, verified | |
+| Fullscreen-exit bubble | fullscreen | Fixed, verified | see above |
+| Tab hover card | tabhover | Done, verified | |
+| Tooltips | tooltip | Fixed, verified in dark; light browser theme on a dark OS stays dark (see caveat) | |
+| alert / confirm / prompt / beforeunload dialogs | alert, confirm, prompt, beforeunload | Done, verified | accent default button with focus ring, tonal Cancel, scrim |
+| Tab-search bubble | tabsearch | Done, verified | |
+| Save-password bubble | savepw | Done, verified except the header illustration (stock blue/green artwork, not recoloured) | |
+| Translate bubble | translate | NOT reachable: no translate bubble appeared on a lang="es" page (needs Google's translate service) | |
+| Autofill address bubble | - | NOT captured (form page exists, save-address bubble not triggered) | |
+| Media controls hub | media | Done, verified | title/artist, accent scrubber, Live Caption toggle |
+| Picture-in-picture | pip, pipwin | Window captured (video plus origin label); its hover control bar was NOT captured | |
+| Window frame: maximised, narrow (520px), short (330px) | frame_max, frame_narrow, frame_short | Done, verified | narrow shows the toolbar overflow chevron |
+| Tab strip overflow (15 tabs) | taboverflow | Done, verified | tabs shrink to favicons; titles clip hard ("Oth") as stock |
+| Tab group editor bubble and group context menu | groupeditor, groupctx | Done, verified | rename field, colour dots, menu rows. Grey group renders as a near-white chip in dark, which is Chromium's design; not changed |
+| App menu | appmenu | Done, verified | |
+| Keyboard focus ring | focusring_toolbar | Partly: omnibox focus ring (accent) and the dialog/bubble default-button and text-field rings are visible; a toolbar-button ring was not captured | |
+
+Known, not caused by Orbis UI code: the "Error" chip on the app menu button is Chromium's extension-warning badge; the menu row it opens says "Extension error" and, on this machine, "New extension added (Adobe Acrobat ...)", i.e. Chrome's external-extension registration on this PC. I could not find which extension warning the first row refers to (the two component extensions load with their rulesets enabled, `chrome://extensions-internals` lists no warning text). Sign-in chip and "Error" chip both appear in every picture.
+
+Regression tests (serial): launch 4/4, browserManager 6/6, chromiumCapabilities 8/8, chromiumCapabilities2 11/11, browserUi 11/11, service 5/5, agent 4/4 pass.
+
+Tooling note: `src/main/chromium/browserUi.ts` now writes its PowerShell helper to a temp .ps1 file instead of `-EncodedCommand` (the script outgrew the 32K command-line limit).
