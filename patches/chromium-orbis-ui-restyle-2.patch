@@ -1,0 +1,92 @@
+diff --git a/components/security_interstitials/core/common/resources/interstitial_core.css b/components/security_interstitials/core/common/resources/interstitial_core.css
+index 29af336800..9c0112aec7 100644
+--- a/components/security_interstitials/core/common/resources/interstitial_core.css
++++ b/components/security_interstitials/core/common/resources/interstitial_core.css
+@@ -9,11 +9,11 @@ a {
+ body {
+   --background-color: #fff;
+   --error-code-color: var(--google-gray-700);
+-  --google-blue-50: rgb(232, 240, 254);
+-  --google-blue-100: rgb(210, 227, 252);
+-  --google-blue-300: rgb(138, 180, 248);
+-  --google-blue-600: rgb(26, 115, 232);
+-  --google-blue-700: rgb(25, 103, 210);
++  --google-blue-50: rgb(230, 245, 251);
++  --google-blue-100: rgb(204, 234, 246);
++  --google-blue-300: rgb(63, 216, 255);
++  --google-blue-600: rgb(10, 127, 179);
++  --google-blue-700: rgb(8, 102, 145);
+   --google-gray-100: rgb(241, 243, 244);
+   --google-gray-300: rgb(218, 220, 224);
+   --google-gray-500: rgb(154, 160, 166);
+diff --git a/components/webui/version/resources/about_version.html b/components/webui/version/resources/about_version.html
+index 950b0a5c48..6bf1c60fee 100644
+--- a/components/webui/version/resources/about_version.html
++++ b/components/webui/version/resources/about_version.html
+@@ -30,16 +30,7 @@ about:version template page
+     <div id="outer">
+       <div id="logo">
+ <if expr="not is_android and not is_ios">
+-        <!-- Version for themes. -->
+-        <picture>
+-          <source srcset="chrome://theme/IDR_PRODUCT_LOGO_WHITE,
+-                          chrome://theme/IDR_PRODUCT_LOGO_WHITE@2x 2x"
+-                  media="(prefers-color-scheme: dark)">
+-          <source srcset="chrome://theme/IDR_PRODUCT_LOGO,
+-                          chrome://theme/IDR_PRODUCT_LOGO@2x 2x"
+-                  media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)">
+-          <img alt="$i18n{logo_alt_text}" src="chrome://theme/IDR_PRODUCT_LOGO">
+-        </picture>
++        <img alt="$i18n{logo_alt_text}" srcset="chrome://theme/current-channel-logo@1x 1x, chrome://theme/current-channel-logo@2x 2x">
+ </if>
+ <if expr="is_ios or is_android">
+         <picture>
+diff --git a/ui/webui/resources/cr_elements/cr_shared_vars.css b/ui/webui/resources/cr_elements/cr_shared_vars.css
+index f478ceca5c..2f08eda51f 100644
+--- a/ui/webui/resources/cr_elements/cr_shared_vars.css
++++ b/ui/webui/resources/cr_elements/cr_shared_vars.css
+@@ -9,25 +9,25 @@
+ 
+ /* Common css variables for Material Design WebUI */
+ html {
+-  --google-blue-50-rgb: 232, 240, 254;  /* #e8f0fe */
++  --google-blue-50-rgb: 230, 245, 251;  /* #e8f0fe */
+   --google-blue-50: rgb(var(--google-blue-50-rgb));
+-  --google-blue-100-rgb: 210, 227, 252;  /* #d2e3fc */
++  --google-blue-100-rgb: 204, 234, 246;  /* #d2e3fc */
+   --google-blue-100: rgb(var(--google-blue-100-rgb));
+-  --google-blue-200-rgb: 174, 203, 250;  /* #aecbfa */
++  --google-blue-200-rgb: 140, 210, 236;  /* #aecbfa */
+   --google-blue-200: rgb(var(--google-blue-200-rgb));
+-  --google-blue-300-rgb: 138, 180, 248;  /* #8ab4f8 */
++  --google-blue-300-rgb: 63, 216, 255;  /* #8ab4f8 */
+   --google-blue-300: rgb(var(--google-blue-300-rgb));
+-  --google-blue-400-rgb: 102, 157, 246;  /* #669df6 */
++  --google-blue-400-rgb: 63, 190, 235;  /* #669df6 */
+   --google-blue-400: rgb(var(--google-blue-400-rgb));
+-  --google-blue-500-rgb: 66, 133, 244;  /* #4285f4 */
++  --google-blue-500-rgb: 10, 127, 179;  /* #4285f4 */
+   --google-blue-500: rgb(var(--google-blue-500-rgb));
+-  --google-blue-600-rgb: 26, 115, 232;  /* #1a73e8 */
++  --google-blue-600-rgb: 10, 127, 179;  /* #1a73e8 */
+   --google-blue-600: rgb(var(--google-blue-600-rgb));
+-  --google-blue-700-rgb: 25, 103, 210;  /* #1967d2 */
++  --google-blue-700-rgb: 8, 102, 145;  /* #1967d2 */
+   --google-blue-700: rgb(var(--google-blue-700-rgb));
+-  --google-blue-800-rgb: 24, 90, 188;  /* #185abc */
++  --google-blue-800-rgb: 6, 80, 115;  /* #185abc */
+   --google-blue-800: rgb(var(--google-blue-800-rgb));
+-  --google-blue-900-rgb: 23, 78, 166;  /* #174ea6 */
++  --google-blue-900-rgb: 5, 64, 92;  /* #174ea6 */
+   --google-blue-900: rgb(var(--google-blue-900-rgb));
+ 
+   --google-green-50-rgb: 230, 244, 234;  /* #e6f4ea */
+diff --git a/ui/webui/resources/images/chrome_logo_dark.svg b/ui/webui/resources/images/chrome_logo_dark.svg
+index 19ba047be4..7003ac7f96 100644
+--- a/ui/webui/resources/images/chrome_logo_dark.svg
++++ b/ui/webui/resources/images/chrome_logo_dark.svg
+@@ -1 +1 @@
+-<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><g clip-path="url(#a)" fill="#fff"><path d="M5.225 10.265A6.996 6.996 0 0 1 12 5h9.733a11.976 11.976 0 0 0-19.512.061l3.004 5.204zM22.898 7h-6.003a6.979 6.979 0 0 1 1.162 8.498l.008.004-4.872 8.438A11.98 11.98 0 0 0 22.898 7zm-9.009 11.735A6.964 6.964 0 0 1 5.944 15.5l-.004.002-4.87-8.435a11.98 11.98 0 0 0 9.812 16.877l3.007-5.21z"/><path d="M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10z"/></g><defs><clipPath id="a"><path fill="#fff" d="M0 0h24v24H0z"/></clipPath></defs></svg>
+\ No newline at end of file
++<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="8.5" stroke="#fff" stroke-width="3"/></svg>
+\ No newline at end of file
