@@ -82,8 +82,12 @@ export function icon(name, size = 16) {
   svg.setAttribute('focusable', 'false')
   svg.classList.add('ico')
   // The path data above is fixed text in this file, never page or user data.
-  const holder = new DOMParser().parseFromString(`<svg xmlns="${NS}">${P[name] ?? '<circle cx="12" cy="12" r="8"/>'}</svg>`, 'image/svg+xml')
-  for (const child of [...holder.documentElement.childNodes]) svg.append(document.importNode(child, true))
+  // Built with createElementNS, not a parser: the built-in pages require Trusted Types, which forbids parsing markup strings.
+  for (const m of (P[name] ?? '<circle cx="12" cy="12" r="8"/>').matchAll(/<(\w+)((?:\s+[\w-]+="[^"]*")*)\s*\/>/g)) {
+    const node = document.createElementNS(NS, m[1])
+    for (const a of m[2].matchAll(/([\w-]+)="([^"]*)"/g)) node.setAttribute(a[1], a[2])
+    svg.append(node)
+  }
   return svg
 }
 

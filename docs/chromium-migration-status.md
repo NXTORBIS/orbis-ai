@@ -61,3 +61,21 @@ When a Chromium build is installed, the Orbis app opens Chromium for everything 
 
 ## Installer test (2026-09-21)
 NSIS installer builds (532 MB), installs, launches Chromium from the installed location, ACL granted automatically, uninstalls cleanly. Details: docs/installer-test.md.
+
+## Update 2026-09-21 (panel rail, real-browser check, packaging)
+
+Verified in a real build (own launched Chromium 154.0.8037.44, real helper, temp-dir stores seeded through the app's own store classes; harness `scripts/panel-real-check.mjs`):
+- The rail (sidebar.js) rendered nothing in the real WebUI at first: the icon helper used `DOMParser`, which Trusted Types forbids on the built-in pages. Fixed (`orbis-ui/panel/rail/icons.js` builds SVG nodes with `createElementNS`); the headless-Chrome harness could not show this. After the fix the whole rail renders in the native side panel (screenshots `docs/native-side-panel-rail.png`, `docs/panel-rail-tabs-view.png`).
+- Rows checked against real data: Tabs (favicons through chrome://favicon2, pin, move, close; activate through the row), Tab groups (group created and listed), Media (a tab made audible by WebAudio is listed and muted from the row), Controls (zoom step, real percentage read through `zoom.get`, reload), Saved pages, Screenshots (incl. a missing file), Reminders, Clipboard (secret masked, reveal shows it), Whiteboard, Research and Sources (window.open of `chrome://orbis-search/#q=...&s=<id>` opens the results page in the real WebUI; a source opens its page), Workspaces (save, list, open through `browser.openWorkspace`), rail resize, arrange mode, pin and drag reorder (persisted through `sidebar:save`).
+- `zoom.get` has a real-browser assertion in `chromiumCapabilities2.test.ts`.
+- Customize-chrome side panel: the mini/corner new-tab mock svgs no longer carry the Chrome logo or Google blues (Orbis ring mark, token colours); the theme colour swatch seeds (blue, aqua, green, citron, rose) are Orbis accent-family colours. Built, not screenshotted in the running panel.
+- Picture-in-picture: the hover bar is already in the Orbis palette (dark scrim, accent progress, accent badge) through the colour tokens; captured with PrintWindow (`docs/pip-hover-bar.png`). No further restyle.
+- Installer 0.3.0 (549 MB) installed silently, smoke-tested (search opens over the pipe, title, ACL, built-in panel via Ctrl+Shift+Y shows Connected), uninstalled: `docs/installer-test.md`.
+
+Not verified / limits:
+- The panel's own document in the side panel (as opposed to the same WebUI opened as a tab) was only looked at, not scripted: row checks drove chrome://orbis in a tab. The tab stays visible so the panel's polling views ran there. The app registers `browser.openWorkspace` itself (src/main/index.ts); the harness registered the same capability on the browser control.
+- The panel is narrow (about 480 px) beside a 190 px labelled rail, so content is cramped; no auto-collapse to icons yet.
+- Customize-chrome panel was not opened in the running browser after the swatch/svg edit.
+- Helper token is passed on the browser command line (`--orbis-helper-token`), visible to same-user processes.
+- One stray Ctrl+Shift+Y was sent to the desktop when a capture script failed to compile before its foreground check (fixed: the script now stops on error); no other keys were sent outside a verified browser window.
+- Widevine, Sync and Safe Browsing remain unavailable (licences/keys).

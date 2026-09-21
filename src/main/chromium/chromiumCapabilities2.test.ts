@@ -125,9 +125,14 @@ test('tab groups, zoom, save and print, extensions, reading list and download co
 
   await t.test('zoom changes the real browser zoom of the page', async () => {
     ok(await run('tabs.activate', { tabId: a }), 'activate')
+    const read = async (): Promise<number> => (await run<{ factor: number }>('zoom.get')).data!.factor
+    assert.equal(await read(), 1, 'starts at 100%')
     ok(await run('zoom.set', { factor: 1.25 }), 'set')
+    assert.ok(Math.abs((await read()) - 1.25) < 0.01, 'zoom.get reads 125%')
     ok(await run('zoom.set', { action: 'in' }), 'in')
+    assert.ok((await read()) > 1.25, 'zoom.get reads the next step')
     ok(await run('zoom.set', { action: 'reset' }), 'reset')
+    assert.equal(await read(), 1, 'zoom.get reads 100% after reset')
   })
 
   await t.test('the page is printed to PDF and saved as MHTML by the browser, and its source opened', async () => {
