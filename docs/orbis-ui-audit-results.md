@@ -139,3 +139,11 @@ Patches: `chromium-orbis-native-leftovers.patch`, `chromium-orbis-webui-pages.pa
 | Regression tests (serial) | launch 4, browserManager 6, chromiumCapabilities 8, chromiumCapabilities2 11, browserUi 11, service 5, agent 4, orbisSearchPage 14: all pass | |
 
 Not done in this pass: the full dark/light x 1x/2x x narrow/wide sweep, settings subpage-by-subpage layout work, generated CSS from tokens for WebUI shared styles (shared foundations only got the toolbar colour and About icon), interstitials, print preview, first run, side panels, switching/deleting profiles, PDF restyle.
+
+## Views 4 (final pass) - partial
+
+Status: this pass was NOT completed. Only item H and a branding probe were done.
+
+- (H) Regression: launch(4), browserManager(6), chromiumCapabilities(8), chromiumCapabilities2(11), browserUi(11), service(5), agent(4), orbisSearchPage(14), chromiumRecorder(2), chromiumControl(8): all pass, 0 fail. `npm test` non-Chromium parts not run.
+- (C) Probe of out\Default\chrome.exe VERSIONINFO: FileDescription=Orbis, ProductName=Orbis, InternalName=chrome_exe, OriginalFilename=chrome.exe, CompanyName="The Chromium Authors" (remaining leak; CompanyName still needs a branding change).
+- Not done: A (remaining pages review), B (token-generated shared CSS/Inter), rest of C, D (a11y/DPI), E (perf numbers), F (shortcut verification), G (installer build/install smoke).
