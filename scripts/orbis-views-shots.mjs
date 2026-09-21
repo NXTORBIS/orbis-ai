@@ -91,7 +91,12 @@ try {
   await ui.focus(win)
   const shot = (file, moveX, moveY) => execFileSync('powershell.exe', ['-NoProfile', '-File', join(repo, 'scripts', 'orbis-capture.ps1'),
     '-ProcId', String(pid), '-Out', join(outDir, file), ...(moveX !== undefined ? ['-MoveX', String(moveX), '-MoveY', String(moveY)] : [])], { stdio: 'inherit' })
-  if (popup) {
+  const keys = opt('--keys', '')
+  if (keys) {
+    for (const k of keys.split(',')) { if (k.startsWith('wait')) await sleep(Number(k.slice(4))); else await ui.press(win, k) }
+    await sleep(700)
+    shot(`${name}.png`)
+  } else if (popup) {
     await ui.press(win, 'ctrl+l')
     await ui.type(win, popup)
     await sleep(1800)
