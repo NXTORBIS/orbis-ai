@@ -202,7 +202,7 @@ index 32980d1..114cf71 100644
  
  // static
 diff --git a/chrome/browser/ui/views/tabs/horizontal_tab_style_views.cc b/chrome/browser/ui/views/tabs/horizontal_tab_style_views.cc
-index 4851028..3418f06 100644
+index 4851028593..edaa59485d 100644
 --- a/chrome/browser/ui/views/tabs/horizontal_tab_style_views.cc
 +++ b/chrome/browser/ui/views/tabs/horizontal_tab_style_views.cc
 @@ -30,6 +30,9 @@
@@ -263,6 +263,18 @@ index 4851028..3418f06 100644
  }
  
  void HorizontalTabStyleViews::PaintTabBackgroundWithImages(
+@@ -804,9 +840,9 @@ void HorizontalTabStyleViews::PaintBackgroundStroke(
+     return;
+   }
+ 
++  // Orbis: the (group-coloured) outline follows the flat pill, not the old folder-tab border with its flared feet.
+   SkPath outer_path =
+-      GetPath(TabStyle::PathType::kBorder, canvas->image_scale(),
+-              {.should_paint_extension = false});
++      GetPath(TabStyle::PathType::kHighlight, canvas->image_scale(), {});
+   gfx::ScopedCanvas scoped_canvas(canvas);
+   float scale = canvas->UndoDeviceScaleFactor();
+   cc::PaintFlags flags;
 @@ -832,7 +868,7 @@ void HorizontalTabStyleViews::PaintSeparators(gfx::Canvas* canvas) const {
    const auto separator_color = [separator_base_color](float opacity) {
      return SkColorSetA(separator_base_color,

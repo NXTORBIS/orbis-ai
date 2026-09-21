@@ -1,7 +1,7 @@
 # Captures one browser process's own windows (main window plus its popups, e.g. the omnibox suggestion list) with PrintWindow, which
 # reads each window's own content, never the screen: nothing belonging to another application can end up in the picture.
 # Optionally moves the mouse to hover a point of the window, but only if the topmost window at that point belongs to this pid.
-param([Parameter(Mandatory)][int]$ProcId, [Parameter(Mandatory)][string]$Out, [int]$MoveX = -1, [int]$MoveY = -1)
+param([Parameter(Mandatory)][int]$ProcId, [Parameter(Mandatory)][string]$Out, [int]$MoveX = -1, [int]$MoveY = -1, [switch]$Each)
 Add-Type -AssemblyName System.Drawing
 Add-Type @"
 using System; using System.Collections.Generic; using System.Runtime.InteropServices; using System.Text;
@@ -72,6 +72,17 @@ if ($MoveX -ge 0) {
   if ([OrbisCap]::OwnerOf($top) -ne [uint32]$ProcId) { $op = [OrbisCap]::OwnerOf($top); $pn = (Get-Process -Id $op -ea 0).ProcessName; Write-Error "the window at that point belongs to $pn ($op), not pid $ProcId; mouse not moved"; exit 2 }
   [OrbisCap]::SetCursorPos($pt.X, $pt.Y) | Out-Null; Start-Sleep -Milliseconds 300
   [OrbisCap]::SetCursorPos($pt.X + 1, $pt.Y + 1) | Out-Null; Start-Sleep -Milliseconds 700
+}
+if ($Each) {
+  # Every window of the pid on its own (for windows that sit outside the main window, e.g. picture-in-picture).
+  $n = 0
+  foreach ($h in $wins) {
+    $r = $rects[$h]; $bw = $r.R - $r.L; $bh = $r.B - $r.T
+    $tmp = New-Object System.Drawing.Bitmap $bw, $bh
+    $tg = [System.Drawing.Graphics]::FromImage($tmp); $dc = $tg.GetHdc(); [OrbisCap]::PrintWindow($h, $dc, 2) | Out-Null; $tg.ReleaseHdc($dc); $tg.Dispose()
+    $tmp.Save(($Out -replace '\.png$', "-w$n.png")); $tmp.Dispose(); $n++
+  }
+  "saved $n windows"; exit 0
 }
 $w = $m.R - $m.L; $ht = $m.B - $m.T
 $b = New-Object System.Drawing.Bitmap $w, $ht

@@ -1,0 +1,105 @@
+diff --git a/chrome/browser/ui/toolbar/chrome_location_bar_model_delegate.cc b/chrome/browser/ui/toolbar/chrome_location_bar_model_delegate.cc
+index 4e23238dea..8ee95fc198 100644
+--- a/chrome/browser/ui/toolbar/chrome_location_bar_model_delegate.cc
++++ b/chrome/browser/ui/toolbar/chrome_location_bar_model_delegate.cc
+@@ -42,6 +42,7 @@
+ 
+ #if !BUILDFLAG(IS_ANDROID)
+ #include "chrome/browser/extensions/extension_ui_util.h"
++#include "chrome/app/vector_icons/vector_icons.h"
+ #include "components/omnibox/browser/vector_icons.h"  // nogncheck
+ #include "components/vector_icons/vector_icons.h"     // nogncheck
+ #endif
+@@ -195,9 +196,8 @@ const gfx::VectorIcon* ChromeLocationBarModelDelegate::GetVectorIconOverride()
+   }
+ 
+   if (url.SchemeIs(content::kChromeUIScheme)) {
+-    return &(features::IsRoundedIconsEnabled()
+-                 ? omnibox::kChromeProductIcon
+-                 : omnibox::kProductChromeRefreshOldIcon);
++    // Orbis: the Orbis ring mark (the same one as the Orbis menu item), not the stock Chrome logo, for internal pages.
++    return &kCircleCircleFilledIcon;
+   }
+ 
+   // If there is no active WebContents (which can happen during toolbar
+diff --git a/components/fullscreen_control/color_mixer.cc b/components/fullscreen_control/color_mixer.cc
+index 1e78f84f84..5118688f19 100644
+--- a/components/fullscreen_control/color_mixer.cc
++++ b/components/fullscreen_control/color_mixer.cc
+@@ -16,7 +16,7 @@ void AddColorMixer(ui::ColorProvider* provider,
+                    const ui::ColorProviderKey& key) {
+   ui::ColorMixer& mixer = provider->AddMixer();
+   mixer[color::kFullscreenNotificationOpaqueBackgroundColor] = {
+-      SkColorSetRGB(0x28, 0x2c, 0x32)};
++      SkColorSetRGB(0x10, 0x12, 0x16)};  // Orbis popover surface (dark);
+   mixer[color::kFullscreenNotificationTransparentBackgroundColor] = {
+       ui::SetAlpha(color::kFullscreenNotificationOpaqueBackgroundColor, 0xcc)};
+ }
+diff --git a/components/fullscreen_control/subtle_notification_view.cc b/components/fullscreen_control/subtle_notification_view.cc
+index d65b63c5ca..3859bc0673 100644
+--- a/components/fullscreen_control/subtle_notification_view.cc
++++ b/components/fullscreen_control/subtle_notification_view.cc
+@@ -20,6 +20,7 @@
+ #include "ui/base/resource/resource_bundle.h"
+ #include "ui/gfx/font_list.h"
+ #include "ui/gfx/geometry/insets.h"
++#include "ui/gfx/geometry/rounded_corners_f.h"
+ #include "ui/views/accessibility/view_accessibility.h"
+ #include "ui/views/border.h"
+ #include "ui/views/bubble/bubble_border.h"
+@@ -39,7 +40,7 @@ const int kOuterPaddingVertPx = 8;
+ // Spacing around the key name.
+ const int kKeyNameMarginHorizPx = 7;
+ const int kKeyNameBorderPx = 1;
+-const int kKeyNameCornerRadius = 2;
++const int kKeyNameCornerRadius = 4;
+ const int kKeyNamePaddingPx = 5;
+ 
+ // Spacing between the key name and image, if any.
+@@ -205,6 +206,7 @@ SubtleNotificationView::SubtleNotificationView() : instruction_view_(nullptr) {
+   auto bubble_border = std::make_unique<views::BubbleBorder>(
+       views::BubbleBorder::NONE, views::BubbleBorder::NO_SHADOW);
+   bubble_border->SetColor(GetSubtleNotificationBackgroundColor());
++  bubble_border->set_rounded_corners(gfx::RoundedCornersF(10));  // Orbis: rounded (radius md token), not a square slab.
+   SetBackground(std::make_unique<views::BubbleBackground>(bubble_border.get()));
+   SetBorder(std::move(bubble_border));
+ 
+diff --git a/ui/views/corewm/tooltip_aura.cc b/ui/views/corewm/tooltip_aura.cc
+index 4a593a63bf..f6a93971d4 100644
+--- a/ui/views/corewm/tooltip_aura.cc
++++ b/ui/views/corewm/tooltip_aura.cc
+@@ -41,7 +41,7 @@ namespace {
+ static constexpr int kTooltipMaxWidth = 800;
+ 
+ bool CanUseTranslucentTooltipWidget() {
+-#if BUILDFLAG(IS_WIN)
++#if BUILDFLAG(IS_WIN) && 0  // Orbis: Windows tooltips are translucent too, so their rounded corners show.
+   return false;
+ #else
+   // On Linux, when using the toolkit theme (eg. Adwaita, the default GTK
+diff --git a/ui/views/corewm/tooltip_view_aura.cc b/ui/views/corewm/tooltip_view_aura.cc
+index 71b6a7965f..0dd45aed43 100644
+--- a/ui/views/corewm/tooltip_view_aura.cc
++++ b/ui/views/corewm/tooltip_view_aura.cc
+@@ -23,6 +23,7 @@ namespace views::corewm {
+ namespace {
+ 
+ constexpr int kTooltipBorderThickness = 1;
++constexpr int kTooltipCornerRadius = 6;
+ constexpr gfx::Insets kBorderInset = gfx::Insets::TLBR(4, 8, 5, 8);
+ 
+ }  // namespace
+@@ -32,10 +33,10 @@ TooltipViewAura::TooltipViewAura()
+   render_text_->SetWordWrapBehavior(gfx::WRAP_LONG_WORDS);
+   render_text_->SetMultiline(true);
+ 
+-  SetBackground(views::CreateSolidBackground(ui::kColorTooltipBackground));
++  // Orbis: rounded (radius 6, the sm token) tooltip with a hairline outline from the palette instead of a square white-bordered box.
++  SetBackground(views::CreateRoundedRectBackground(ui::kColorTooltipBackground, kTooltipCornerRadius));
+   SetBorder(views::CreatePaddedBorder(
+-      views::CreateSolidBorder(kTooltipBorderThickness,
+-                               ui::kColorTooltipForeground),
++      views::CreateRoundedRectBorder(kTooltipBorderThickness, kTooltipCornerRadius, ui::kColorSysOutline),
+       kBorderInset - gfx::Insets(kTooltipBorderThickness)));
+ 
+   GetViewAccessibility().SetRole(ax::mojom::Role::kTooltip);

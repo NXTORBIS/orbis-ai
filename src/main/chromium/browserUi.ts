@@ -1,4 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { writeFileSync, unlinkSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 /**
  * Real operating-system input for the browser's own window (Windows only). CDP cannot operate Chromium's address bar or its
@@ -102,6 +105,27 @@ public static class OrbisUi {
     if (right) { mouse_event(8, 0, 0, 0, UIntPtr.Zero); mouse_event(16, 0, 0, 0, UIntPtr.Zero); } else { mouse_event(2, 0, 0, 0, UIntPtr.Zero); mouse_event(4, 0, 0, 0, UIntPtr.Zero); }
     return true;
   }
+  [DllImport("user32.dll")] static extern IntPtr WindowFromPoint(POINT p);
+  [DllImport("user32.dll")] static extern IntPtr GetAncestor(IntPtr h, uint f);
+  [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X, Y; }
+  // Real click at a screen point, only if the foreground window and the window under the point both belong to this pid.
+  public static string ClickAtPid(uint pid, int x, int y, bool right) {
+    var fg = GetForegroundWindow(); uint p; GetWindowThreadProcessId(fg, out p);
+    if (p != pid) return "foreground-not-ours";
+    var pt = new POINT(); pt.X = x; pt.Y = y; var top = GetAncestor(WindowFromPoint(pt), 2); uint q; GetWindowThreadProcessId(top, out q);
+    if (q != pid) return "point-not-ours";
+    SetCursorPos(x, y); System.Threading.Thread.Sleep(120);
+    if (right) { mouse_event(8, 0, 0, 0, UIntPtr.Zero); mouse_event(16, 0, 0, 0, UIntPtr.Zero); } else { mouse_event(2, 0, 0, 0, UIntPtr.Zero); mouse_event(4, 0, 0, 0, UIntPtr.Zero); }
+    return "ok";
+  }
+  public static string Hover(uint pid, int x, int y) {
+    var fg = GetForegroundWindow(); uint p; GetWindowThreadProcessId(fg, out p);
+    if (p != pid) return "foreground-not-ours";
+    var pt = new POINT(); pt.X = x; pt.Y = y; var top = GetAncestor(WindowFromPoint(pt), 2); uint q; GetWindowThreadProcessId(top, out q);
+    if (q != pid) return "point-not-ours";
+    SetCursorPos(x, y); System.Threading.Thread.Sleep(150); SetCursorPos(x + 1, y + 1);
+    return "ok";
+  }
   // For a menu the browser just opened (a popup window of the same process holds the foreground).
   public static bool ChordIfPid(uint pid, ushort[] vks) {
     var fg = GetForegroundWindow(); uint p; GetWindowThreadProcessId(fg, out p);
@@ -184,6 +208,19 @@ while ($true) {
         }
         $out = '{"ok":true,"data":' + (ConvertTo-Json -Compress -InputObject @($names)) + '}'
       }
+      'clickAt' { $out = '{"ok":true,"data":"' + [OrbisUi]::ClickAtPid([uint32]$q.pid, [int]$q.x, [int]$q.y, [bool]$q.right) + '"}' }
+      'hoverAt' { $out = '{"ok":true,"data":"' + [OrbisUi]::Hover([uint32]$q.pid, [int]$q.x, [int]$q.y) + '"}' }
+      'elements' {
+        # Interactive elements (name, type, centre) of every window of this pid, popups included; web content is skipped.
+        $res = @()
+        $types = @('Button','TabItem','MenuItem','SplitButton','CheckBox','ListItem','Edit','ComboBox','Hyperlink','RadioButton')
+        $wins = [System.Windows.Automation.AutomationElement]::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children, (New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ProcessIdProperty, [int]$q.pid)))
+        foreach ($w in $wins) {
+          $all = $w.FindAll([System.Windows.Automation.TreeScope]::Descendants, (New-Object System.Windows.Automation.OrCondition(@($types | % { New-Object System.Windows.Automation.PropertyCondition([System.Windows.Automation.AutomationElement]::ControlTypeProperty, [System.Windows.Automation.ControlType]::($_)) }))))
+          foreach ($e in $all) { $r = $e.Current.BoundingRectangle; if ($r.Width -gt 0 -and $r.Height -gt 0 -and $r.Top -lt 5000) { $res += [pscustomobject]@{ n = ([string]$e.Current.Name) -replace '[\x00-\x1f]',' '; t = $e.Current.ControlType.ProgrammaticName -replace 'ControlType.',''; x = [int]($r.Left + $r.Width / 2); y = [int]($r.Top + $r.Height / 2); w = [int]$r.Width; h = [int]$r.Height } } }
+        }
+        $out = '{"ok":true,"data":' + (ConvertTo-Json -Compress -InputObject @($res)) + '}'
+      }
       default { $out = '{"ok":false,"error":"unknown command"}' }
     }
   } catch {
@@ -229,8 +266,11 @@ export class BrowserUi {
   private start(): Promise<void> {
     if (this.ready) return this.ready
     if (!BrowserUi.supported()) throw new BrowserUiError('unsupported', 'Controlling the browser window is only available on Windows.')
-    const encoded = Buffer.from(PS, 'utf16le').toString('base64')
-    const ps = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encoded], { windowsHide: true })
+    // Written to a file: the script outgrew the 32K command-line limit that -EncodedCommand is subject to.
+    const script = join(tmpdir(), `orbis-ui-helper-${process.pid}-${Date.now()}.ps1`)
+    writeFileSync(script, '\uFEFF' + PS, 'utf8')
+    const ps = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', script], { windowsHide: true })
+    ps.once('exit', () => { try { unlinkSync(script) } catch { /* gone */ } })
     this.ps = ps
     ps.stdout.setEncoding('utf8')
     ps.stdout.on('data', (chunk: string) => {
@@ -362,6 +402,38 @@ export class BrowserUi {
       await sleep(200)
     }
     throw new BrowserUiError('focus-refused', 'The browser window kept losing the foreground, so the click was not sent.')
+  }
+
+  /** Interactive UI Automation elements of this process's windows (popups included), with their screen centres. */
+  elements(): Promise<{ n: string; t: string; x: number; y: number; w: number; h: number }[]> {
+    return this.call({ cmd: 'elements', pid: this.pid })
+  }
+
+  /** Clicks the element whose name matches, but only while this process's window is in front and owns the point. */
+  async clickElement(win: UiWindow, name: RegExp, right = false, type?: string): Promise<string> {
+    await this.focus(win)
+    const list = await this.elements()
+    const el = list.find((e) => name.test(e.n) && (!type || e.t === type))
+    if (!el) throw new BrowserUiError('not-found', `No element matching ${name} (have: ${list.map((e) => e.n).filter(Boolean).slice(0, 60).join(' | ')})`)
+    const r = await this.call<string>({ cmd: 'clickAt', pid: this.pid, x: el.x, y: el.y, right })
+    if (r !== 'ok') throw new BrowserUiError('focus-refused', `click refused: ${r}`)
+    await sleep(120)
+    return el.n
+  }
+
+  /** Clicks a screen point (same ownership checks as clickElement). */
+  async clickScreen(win: UiWindow, x: number, y: number, right = false): Promise<void> {
+    await this.focus(win)
+    const r = await this.call<string>({ cmd: 'clickAt', pid: this.pid, x, y, right })
+    if (r !== 'ok') throw new BrowserUiError('focus-refused', `click refused: ${r}`)
+    await sleep(120)
+  }
+
+  /** Real cursor move onto a point (screen pixels), same ownership checks; nothing is clicked. */
+  async hoverAt(win: UiWindow, x: number, y: number): Promise<void> {
+    await this.focus(win)
+    const r = await this.call<string>({ cmd: 'hoverAt', pid: this.pid, x, y })
+    if (r !== 'ok') throw new BrowserUiError('focus-refused', `hover refused: ${r}`)
   }
 
   /** The address bar's text, read through UI Automation; null if the address bar is not exposed. */
