@@ -6,6 +6,9 @@ electronDist: node_modules/electron/dist
 directories:
   buildResources: build
   output: dist
+asarUnpack:
+  # koffi's native library (Win32 calls that embed the browser window) must be a real file on disk.
+  - node_modules/koffi/**
 files:
   - out/**
   - package.json

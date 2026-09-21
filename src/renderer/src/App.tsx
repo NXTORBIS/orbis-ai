@@ -9,6 +9,7 @@ import { PUSH_TO_TALK_EVENT } from '../../shared/voiceInput'
 import { copyText, newId, titleFromMessage } from './lib/utils'
 import ChatHeader from './components/ChatHeader'
 import ChatView from './components/ChatView'
+import BrowserView from './components/BrowserView'
 import ImagesView from './components/ImagesView'
 import { useExperience } from './lib/experience'
 import HudBackground from './components/HudBackground'
@@ -99,16 +100,44 @@ export default function App(): React.JSX.Element {
    * It fills the content area, always. It used to be a window that could be docked, shrunk to a preset or dragged to
    * a size, which meant five ways to be looking at a browser and four of them worse than the fifth.
    */
-  // Orbis's browser is Chromium, a window of its own: opening "the browser" shows that window.
+  // Orbis's browser is Chromium. Its window sits inside this window, over the browser view (the old full-page mode): opening the
+  // browser shows the view, "Return to chat" hides it and Chromium keeps running with its tabs.
+  const [browserOpen, setBrowserOpen] = useState(false)
+  const [browserHidden, setBrowserHidden] = useState(false)
+  const browserLive = useRef({ open: false, hidden: false })
+  browserLive.current = { open: browserOpen, hidden: browserHidden }
   const notifyRef = useRef<(text: string, kind?: NoticeKind) => void>(() => undefined)
   const openChromium = useCallback((input: string, options?: { newTab?: boolean; more?: string[] }) => {
+    setBrowserOpen(true)
+    setBrowserHidden(false)
     void window.api.chromiumOpen(input, options).then((result) => {
       if (!result.ok) notifyRef.current(result.detail, 'error')
     })
   }, [])
   const openBrowser = useCallback(() => openChromium(''), [openChromium])
-  /** Sidebar and /browser: show the browser. */
-  const toggleBrowser = openBrowser
+  /** Sidebar and /browser: show the browser, or go back to the chat when it is already showing. */
+  const toggleBrowser = useCallback(() => {
+    const { open, hidden } = browserLive.current
+    if (open && !hidden) setBrowserHidden(true)
+    else if (open) {
+      setBrowserHidden(false)
+      void window.api.chromiumOpen('', { newTab: false })
+    } else openChromium('')
+  }, [openChromium])
+  useEffect(() => {
+    const offShow = window.api.onChromiumShow(() => {
+      setBrowserOpen(true)
+      setBrowserHidden(false)
+    })
+    const offClosed = window.api.onChromiumClosed(() => {
+      setBrowserOpen(false)
+      setBrowserHidden(false)
+    })
+    return () => {
+      offShow()
+      offClosed()
+    }
+  }, [])
 
   /** Which model and mode the user is on, read when a task starts rather than captured before there is one. */
   const currentRef = useRef<DraftChat>({ model: DEFAULT_MODEL, incognito: false })
@@ -1192,6 +1221,7 @@ export default function App(): React.JSX.Element {
             onNewChat={newChat}
             onSearch={openSearch}
           />
+          {browserOpen && <BrowserView hidden={browserHidden || settingsOpen || shortcutsOpen} onBackToChat={() => setBrowserHidden(true)} />}
           {imagesOpen && (
             <ImagesView images={galleryImages} onClose={() => setImagesOpen(false)} onOpenChat={selectChat} onEdit={editGalleryImage} onNotify={notify} />
           )}

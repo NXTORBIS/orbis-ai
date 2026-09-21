@@ -32,6 +32,7 @@ The service and Orion channels are the easy two thirds. The browser channels are
 | Channel | Does | Chromium equivalent |
 | --- | --- | --- |
 | `chromium:open` | Opens the Orbis browser (Chromium) at an address or a search | `BrowserManager.open`: starts Chromium over a pipe, then a tab |
+| `chromium:embed-region` | The renderer's browser view rectangle (CSS pixels, device pixel ratio, visible flag) so Chromium's window sits exactly over it inside the Orbis window | `EmbedController.setRegion`: SetWindowPos on the child HWND (see docs/embedded-browser.md) |
 | `chat:browser-confirm` | The user's yes or no to a browser action Orion proposes in chat | Unchanged: an approval card in the Orbis window |
 | `window:fullscreen`, `window:is-fullscreen` | Window fullscreen | `FullscreenController` |
 | `shell:openExternal` | Opens a link outside Orbis | `platform_util::OpenExternal` |

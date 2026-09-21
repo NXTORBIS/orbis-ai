@@ -642,6 +642,9 @@ export interface NxtorbisApi {
   /** What a message sent during an automation means for it. */
   classifyAutomationMessage(text: string, objective: string): Promise<'stop' | 'pause' | 'resume' | 'steer' | 'other'>
   /** Opens an address as a page, or searches anything else with Orbis Search, in Orbis's Chromium (started if needed). */
+  chromiumEmbedRegion(region: { x: number; y: number; width: number; height: number; dpr: number; visible: boolean; viewportWidth?: number }): void
+  onChromiumShow(callback: () => void): () => void
+  onChromiumClosed(callback: () => void): () => void
   chromiumOpen(input: string, options?: { newTab?: boolean; more?: string[] }): Promise<{ ok: boolean; detail: string }>
   getBrowserLibrary(): Promise<BrowserLibrarySnapshot>
   /** How this profile has arranged the browser sidebar. */

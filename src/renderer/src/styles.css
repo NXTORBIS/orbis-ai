@@ -11081,3 +11081,42 @@ html[data-motion='reduced'] .tool-btn.recording {
   min-width: 200px;
   margin: 0;
 }
+/* Browser view: Chromium's own window sits inside this region of the Orbis window (see docs/embedded-browser.md). */
+.browser-view {
+  position: absolute;
+  inset: 0;
+  z-index: 45;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-mid);
+}
+.browser-view[hidden] {
+  display: none;
+}
+.browser-view-bar {
+  display: flex;
+  align-items: center;
+  height: 36px;
+  padding: 0 10px;
+  flex: none;
+  border-bottom: 1px solid var(--line-strong);
+}
+.browser-back-chat {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.browser-back-chat:hover {
+  background: var(--bg-hover, rgba(127, 127, 127, 0.15));
+}
+.browser-view-region {
+  flex: 1;
+  min-height: 0;
+}

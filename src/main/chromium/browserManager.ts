@@ -86,6 +86,10 @@ export interface BrowserManagerOptions {
   clipboard?: { readText(): Promise<string> | string; hasImage(): Promise<boolean> | boolean }
   /** Extra command-line switches for the browser (tests use this to allow autoplay). */
   chromeArgs?: string[]
+  /** The browser process started (its window follows a moment later). */
+  onStarted?(pid: number): void
+  /** The browser lives inside the Orbis window (no separate window to bring to the front). */
+  embedded?: boolean
   /** The browser was closed (by the person, or a crash). Nothing restarts it by itself. */
   onClosed?(): void
 }
@@ -209,6 +213,7 @@ export class BrowserManager {
           this.o.onClosed?.()
         }
       })
+      if (service.process.pid) this.o.onStarted?.(service.process.pid)
       bridge = service.bridge
       // The ad blocker's page scripts run before each page's own, from here (see adblockInjector.ts).
       const injector = new AdblockInjector({
@@ -244,7 +249,7 @@ export class BrowserManager {
     }
     for (const extra of options.more ?? []) if (looksLikeAddress(extra)) await exec('tabs.create', { url: looksLikeAddress(extra), active: false })
     // Bring the browser to the front: opening a page from Orbis should show it.
-    await service.bridge.run('chrome.windows.getAll().then((all) => all[0] && chrome.windows.update(all[0].id, { focused: true }))').catch(() => undefined)
+    if (!this.o.embedded) await service.bridge.run('chrome.windows.getAll().then((all) => all[0] && chrome.windows.update(all[0].id, { focused: true }))').catch(() => undefined)
     return { ok: result.ok, detail: result.ok ? (text ? 'Opened in the Orbis browser.' : 'The Orbis browser is open.') : (result.error?.message ?? 'The browser could not open that.') }
   }
 

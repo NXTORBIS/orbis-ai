@@ -56,6 +56,8 @@ import { parseWebSuggestions } from '../shared/omnibox'
 import { fetchFavicon } from './favicon'
 import { setupBrowserControl } from './browserControl/setup'
 import { BrowserManager } from './chromium/browserManager'
+import { EmbedController, parseRegion } from './chromium/embedController'
+import { embedSupported, hwndFromHandle } from './chromium/embed'
 import { readSignals } from './browserControl/captchaCapabilities'
 import { StepRun } from './stepRunner'
 import { SkillManager } from './skillManager'
@@ -176,6 +178,9 @@ let browserLibrary: BrowserLibrary | null = null
 let browserControl: ReturnType<typeof setupBrowserControl> | null = null
 /** Orbis's browser: Chromium, started when the browser is first needed. Null only when no Chromium build is installed. */
 let chromiumBrowser: BrowserManager | null = null
+/** Puts Chromium's window inside the Orbis window (Windows), over the renderer's browser view. */
+const embedController = new EmbedController(() => (mainWindow && !mainWindow.isDestroyed() ? hwndFromHandle(mainWindow.getNativeWindowHandle()) : null))
+const embeddedBrowser = process.platform === 'win32' && process.env.ORBIS_BROWSER_WINDOW !== 'separate' && embedSupported()
 /** Records workflows from what the user does (only while recording). */
 let workflowRecorder: RecorderCore | null = null
 /** Memory for the profile in use; created once the profiles are known. */
@@ -245,6 +250,11 @@ class FollowedBrowser extends BrowserManager {
     await super.stop()
     this.followed = null
     this.onStopped()
+  }
+  override async open(input: string, options: { newTab?: boolean; more?: string[] } = {}): Promise<{ ok: boolean; detail: string }> {
+    // Whoever opens the browser (the sidebar, Orion, a link), the Orbis window switches to its browser view.
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('chromium:show')
+    return super.open(input, options)
   }
   override async ensure(): Promise<ChromiumControl> {
     const service = await super.ensure()
@@ -821,6 +831,11 @@ ${summaryBlock(summary)}`
 
   // Orbis's browser is Chromium. Everything that used to open the in-app browser (the address bar, links, research sources, "open the
   // browser") opens it here instead: an address as a page, anything else as an Orbis Search.
+  // The renderer's browser view: where Chromium's window goes inside the Orbis window (see chromium/embed.ts).
+  ipcMain.on('chromium:embed-region', (_event, region: unknown) => {
+    const r = parseRegion(region)
+    if (r) embedController.setRegion(r)
+  })
   ipcMain.handle('chromium:open', async (_event, input: unknown, options: unknown) => {
     if (!chromiumBrowser) return { ok: false, detail: 'The Orbis browser (Chromium) is not installed on this computer.' }
     const o = (options && typeof options === 'object' ? options : {}) as { newTab?: unknown; more?: unknown }
@@ -1208,7 +1223,16 @@ if (!app.requestSingleInstanceLock()) {
           control: browserControl?.control,
           saveDir: app.getPath('downloads'),
           clipboard: { readText: () => clipboard.readText(), hasImage: async () => (await clipboard.read().catch(() => [])).some((item) => item.types.includes('image/png')) },
-          onClosed: () => browserControl?.windowControl.setState(closedBrowserState())
+          embedded: embeddedBrowser,
+          chromeArgs: embeddedBrowser ? ['--orbis-embedded'] : [],
+          onStarted: (pid) => {
+            if (embeddedBrowser) embedController.attach(pid)
+          },
+          onClosed: () => {
+            embedController.detach()
+            browserControl?.windowControl.setState(closedBrowserState())
+            if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('chromium:closed')
+          }
         }, (service) => {
           // Whenever the browser starts: the control layer's tab state follows its real tabs, and the app's copy of its history,
           // bookmarks and downloads is refreshed (at most once every few seconds) whenever those tabs change.

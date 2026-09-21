@@ -121,6 +121,17 @@ const api: NxtorbisApi = {
   controlAutomation: (requestId, action) => ipcRenderer.invoke('automation:control', requestId, action),
   steerAutomation: (requestId, text) => ipcRenderer.invoke('automation:steer', requestId, text),
   classifyAutomationMessage: (text, objective) => ipcRenderer.invoke('automation:classify', text, objective),
+  chromiumEmbedRegion: (region: { x: number; y: number; width: number; height: number; dpr: number; visible: boolean; viewportWidth?: number }) => ipcRenderer.send('chromium:embed-region', region),
+  onChromiumShow: (callback: () => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on('chromium:show', listener)
+    return () => ipcRenderer.removeListener('chromium:show', listener)
+  },
+  onChromiumClosed: (callback: () => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on('chromium:closed', listener)
+    return () => ipcRenderer.removeListener('chromium:closed', listener)
+  },
   chromiumOpen: (input: string, options?: { newTab?: boolean; more?: string[] }) => ipcRenderer.invoke('chromium:open', input, options),
   getBrowserLibrary: () => ipcRenderer.invoke('library:get'),
   getBrowserSidebar: () => ipcRenderer.invoke('browser-sidebar:get'),
