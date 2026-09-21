@@ -173,6 +173,7 @@ export class BrowserManager {
         appServices: this.o.appServices,
         searchSessions: this.o.searchSessions,
         sidebar: this.o.sidebar,
+        browserControl: () => this.o.control ?? this.active?.service.control,
         profileId,
         adblockControl: (message) => {
           if (!bridge) throw new Error('The browser is not ready yet.')

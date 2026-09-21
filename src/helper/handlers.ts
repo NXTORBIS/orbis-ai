@@ -20,6 +20,8 @@ import { createAppServiceHandlers } from './appServices.ts'
 import type { AppServicesDeps } from './appServices.ts'
 import { createGalaxyHandlers } from './galaxy.ts'
 import type { GalaxyDeps } from './galaxy.ts'
+import { createBrowserControlHandlers } from './browserControl.ts'
+import type { PanelControl } from './browserControl.ts'
 import { HelperError } from './server.ts'
 import type { Handler } from './server.ts'
 
@@ -116,6 +118,7 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
           'sidebar:reset': () => sidebarOf(deps.sidebar!).reset()
         }
       : {}),
+    ...(deps.browserControl ? createBrowserControlHandlers(deps.browserControl) : {}),
     ...(deps.adblockControl ? { 'adblock:control': createAdblockControl(deps.adblockControl) } : {}),
     ...(deps.adblock ? createAdblockHandlers({ ...deps.adblock, fetchFn: doFetch }) : {}),
     /** Whether the helper is there and the token works. Says nothing about the person's data. */
