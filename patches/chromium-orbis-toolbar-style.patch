@@ -1,29 +1,16 @@
 diff --git a/chrome/browser/resources/omnibox_popup/omnibox_popup_shared_style.css b/chrome/browser/resources/omnibox_popup/omnibox_popup_shared_style.css
-index 7cb613cbcf..1136527989 100644
+index 7cb613cbcf..442b38bb85 100644
 --- a/chrome/browser/resources/omnibox_popup/omnibox_popup_shared_style.css
 +++ b/chrome/browser/resources/omnibox_popup/omnibox_popup_shared_style.css
-@@ -27,14 +27,14 @@
-   --cr-composebox-font-size: 14px;
- 
+@@ -29,7 +29,7 @@
    --cr-searchbox-match-icon-container-background-fallback: var(--color-omnibox-results-background-hovered);
--  --color-searchbox-background: var(--color-omnibox-results-background);
--  --color-searchbox-foreground: var(--color-omnibox-text);
+   --color-searchbox-background: var(--color-omnibox-results-background);
+   --color-searchbox-foreground: var(--color-omnibox-text);
 -  --color-searchbox-results-background-hovered: var(--color-omnibox-results-background-hover-overlay);
--  --color-searchbox-results-background-selected: var(--color-omnibox-results-background-selected);
-+  --color-searchbox-background: #131824;
-+  --color-searchbox-foreground: #e8ecf4;
-+  --color-searchbox-results-background-hovered: #1a2133;
-+  --color-searchbox-results-background-selected: #232b3b;
++  --color-searchbox-results-background-hovered: var(--color-omnibox-results-background-hovered);
+   --color-searchbox-results-background-selected: var(--color-omnibox-results-background-selected);
    --color-searchbox-results-button-hover: var(--color-omnibox-results-button-ink-drop-row-hovered);
--  --color-searchbox-results-focus-indicator: var(--color-omnibox-results-focus-indicator);
--  --color-searchbox-results-foreground: var(--color-omnibox-text);
--  --color-searchbox-results-foreground-selected: var(--color-omnibox-results-text-selected);
-+  --color-searchbox-results-focus-indicator: #3fd8ff;
-+  --color-searchbox-results-foreground: #e8ecf4;
-+  --color-searchbox-results-foreground-selected: #e8ecf4;
-   --color-searchbox-results-icon-focused-outline: var(--color-omnibox-results-focus-indicator);
-   --color-searchbox-results-icon-selected: var(--color-omnibox-results-icon-selected);
-   --color-searchbox-answer-icon-background: var(--color-omnibox-answer-icon-g-m3-background);
+   --color-searchbox-results-focus-indicator: var(--color-omnibox-results-focus-indicator);
 diff --git a/chrome/browser/resources/webui_toolbar/location_bar.css b/chrome/browser/resources/webui_toolbar/location_bar.css
 index 59565bb31a..ec5f774a45 100644
 --- a/chrome/browser/resources/webui_toolbar/location_bar.css
@@ -145,15 +132,27 @@ index 367bc9abc1..d4cf7a3f9f 100644
    height: var(--omnibox-height);
    line-height: var(--omnibox-height);
    /* If [composing] isn't set, this is used only for positioning the additional
+diff --git a/chrome/browser/resources/webui_toolbar/toolbar_button.css b/chrome/browser/resources/webui_toolbar/toolbar_button.css
+index 9ab3521995..c506a1d48b 100644
+--- a/chrome/browser/resources/webui_toolbar/toolbar_button.css
++++ b/chrome/browser/resources/webui_toolbar/toolbar_button.css
+@@ -27,6 +27,7 @@
+ }
+ 
+ cr-icon-button {
++  border-radius: var(--orbis-radius-control, 8px);
+   cursor: default;
+   margin: 0;
+   --cr-icon-button-size: var(--toolbar-button-height);
 diff --git a/chrome/browser/resources/webui_toolbar/webui_toolbar.css b/chrome/browser/resources/webui_toolbar/webui_toolbar.css
-index db884da574..aa84720040 100644
+index db884da574..aeb0e1eb9c 100644
 --- a/chrome/browser/resources/webui_toolbar/webui_toolbar.css
 +++ b/chrome/browser/resources/webui_toolbar/webui_toolbar.css
-@@ -14,8 +14,32 @@ body {
+@@ -14,8 +14,25 @@ body {
    height: 100%;
    margin: 0;
    overflow: hidden;
-+  background: var(--orbis-bg);
++  background: transparent;
 +  color: var(--orbis-text);
 +  font-family: system-ui, 'Segoe UI', sans-serif;
  }
@@ -162,23 +161,16 @@ index db884da574..aa84720040 100644
    width: max-content;
  }
 +
-+/* Orbis: the toolbar takes the Orbis look (colours and shape) instead of the stock browser theme. */
++/* Orbis: the WebUI toolbar parts (reload button, location bar) take the same Orbis look as the Views toolbar: every colour is the
++ * browser theme colour, which the colour mixer fills from orbis-ui/tokens.json (one token source), so light and dark both follow. */
 +:root {
-+  --orbis-bg: #0b0e14;
-+  --orbis-panel: #131824;
-+  --orbis-line: #232b3b;
-+  --orbis-panel-2: #1a2133;
-+  --orbis-text: #e8ecf4;
-+  --orbis-muted: #8b95a8;
-+  --orbis-accent: #3fd8ff;
-+  --color-location-bar-background: var(--orbis-panel);
-+  --color-location-bar-background-hovered: #1a2133;
-+  --color-omnibox-results-background: #1a2133;
-+  --color-omnibox-results-background-hovered: #1f283b;
-+  --color-location-bar-border: var(--orbis-line);
-+  --color-location-bar-border-on-mismatch: var(--orbis-line);
++  --orbis-bg: var(--color-toolbar);
++  --orbis-panel: var(--color-location-bar-background);
++  --orbis-panel-2: var(--color-location-bar-background-hovered);
++  --orbis-line: var(--color-location-bar-border);
++  --orbis-text: var(--color-omnibox-text);
++  --orbis-muted: var(--color-omnibox-text-dimmed);
++  --orbis-accent: var(--color-sys-primary);
++  --orbis-radius-control: 8px; /* tokens.json scale.radius.control */
 +  --cr-focus-outline-color: var(--orbis-accent);
-+  --color-omnibox-text: var(--orbis-text);
-+  --color-toolbar-button-icon: var(--orbis-muted);
-+  --color-toolbar-button-icon-hovered: var(--orbis-accent);
 +}
