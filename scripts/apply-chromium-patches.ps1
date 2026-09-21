@@ -1,17 +1,29 @@
 # Re-applies Orbis's changes to the Chromium source after a `gclient sync` / `git checkout --force` has reset the tree.
-# Safe to run repeatedly: a patch that is already applied is skipped. chromium-orbis-pages-final.patch is stacked on top of the
-# others (it edits files they also touch), so it is applied last, and if it is already applied the whole stack is.
-param([string]$Src = 'C:\chromium\src')
+# Order: sync-orbis-panel.ps1 (copies orbis-ui resources, generated tokens/fonts into the tree), then the patches by name,
+# then chromium-orbis-pages-final.patch (stacked on the others: it edits files they also touch), then
+# chromium-orbis-uncaptured.patch (raw byte delta for tree changes no other patch carries; applied with core.autocrlf=false).
+# Idempotent: if the last patch of the stack reverse-checks, the whole stack is applied and nothing is done; otherwise
+# each patch that already reverse-checks is skipped. Any patch that fails to apply throws.
+# -Exclude: patch file names to leave out (used by prove-patches.ps1 -Regenerate).
+param([string]$Src = 'C:\chromium\src', [string[]]$Exclude = @())
+$ErrorActionPreference = 'Continue'
 & (Join-Path $PSScriptRoot 'sync-orbis-panel.ps1') -Src $Src
-$all = Get-ChildItem (Join-Path $PSScriptRoot '..\patches') -Filter 'chromium-*.patch' | Sort-Object Name
-$final = $all | Where-Object Name -eq 'chromium-orbis-pages-final.patch'
-$patches = @($all | Where-Object Name -ne 'chromium-orbis-pages-final.patch') + @($final)
-git -C $Src apply --check --reverse $final.FullName 2>$null
-if ($LASTEXITCODE -eq 0) { 'already applied: whole stack (chromium-orbis-pages-final.patch is on top)'; return }
+$all = @(Get-ChildItem (Join-Path $PSScriptRoot '..\patches') -Filter 'chromium-*.patch' | Where-Object { $Exclude -notcontains $_.Name } | Sort-Object Name)
+$tail = 'chromium-orbis-pages-final.patch', 'chromium-orbis-uncaptured.patch'
+$patches = @($all | Where-Object { $tail -notcontains $_.Name }) + @($tail | ForEach-Object { $n = $_; $all | Where-Object Name -eq $n })
+function Apply-Git([string]$Check, [string]$File) {
+  # the raw-byte delta must not go through any line-ending conversion; the others were made against a normal (autocrlf) checkout
+  $a = @('-C', $Src)
+  if ($File -like '*uncaptured*') { $a += @('-c', 'core.autocrlf=false') }
+  $a += @('apply', '--binary')
+  if ($Check -eq 'reverse') { $a += @('--check', '--reverse') }
+  & git @a $File 2>$null
+  return $LASTEXITCODE
+}
+$last = $patches[-1]
+if ((Apply-Git 'reverse' $last.FullName) -eq 0) { "already applied: whole stack ($($last.Name) is on top)"; return }
 foreach ($p in $patches) {
-  git -C $Src apply --check --reverse $p.FullName 2>$null
-  if ($LASTEXITCODE -eq 0) { "already applied: $($p.Name)"; continue }
-  git -C $Src apply $p.FullName
-  if ($LASTEXITCODE -ne 0) { throw "could not apply $($p.Name)" }
+  if ((Apply-Git 'reverse' $p.FullName) -eq 0) { "already applied: $($p.Name)"; continue }
+  if ((Apply-Git 'apply' $p.FullName) -ne 0) { throw "could not apply $($p.Name)" }
   "applied: $($p.Name)"
 }
