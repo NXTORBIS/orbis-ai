@@ -58,3 +58,6 @@ When a Chromium build is installed, the Orbis app opens Chromium for everything 
 - The layout modes are `full` only in the Electron code; no new modes were built (user decision).
 - Weather, news, quote and the app-backed new-tab widgets are not on the built-in new-tab page (see `docs/newtab-parity.md`).
 
+
+## Installer test (2026-09-21)
+NSIS installer builds (532 MB), installs, launches Chromium from the installed location, ACL granted automatically, uninstalls cleanly. Details: docs/installer-test.md.
