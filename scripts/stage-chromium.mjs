@@ -14,7 +14,7 @@ for (const name of readdirSync(from)) {
   const p = join(from, name)
   const s = statSync(p)
   if (s.isDirectory()) {
-    if (keepDirs.has(name)) cpSync(p, join(to, name), { recursive: true })
+    if (keepDirs.has(name)) cpSync(p, join(to, name), { recursive: true, filter: (src) => name !== 'locales' || !/\.pak$/i.test(src) || /en-US\.pak$/i.test(src) })
   } else if ((/\.(dll|pak|bin|dat|json)$/i.test(name) && !skipExt.test(name)) || /^(chrome|chrome_proxy|notification_helper|chrome_pwa_launcher|elevation_service)\.exe$/i.test(name) || name === 'chrome.VisualElementsManifest.xml' || /^[0-9.]+.manifest$/.test(name)) cpSync(p, join(to, name))
 }
 console.log('staged', to)

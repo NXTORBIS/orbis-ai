@@ -1,0 +1,473 @@
+[
+ {
+  "url": "chrome://version",
+  "title": "About Version",
+  "hits": [
+   "Copyright 2026 The Chromium Authors. All rights reserved.  <DIV#copyright>",
+   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36  <TD#useragent>",
+   "C:/chromium/src/out/Default/chrome.exe --user-data-dir=\"C:\\Users\\ksran\\AppData\\Local\\Temp\\orbis-brand-0jCROu\" --no-first-run --no-default-browser-check --remote  <TD#command_line>",
+   "C:\\chromium\\src\\out\\Default\\chrome.exe  <TD#executable_path>"
+  ]
+ },
+ {
+  "url": "chrome://settings",
+  "title": "Settings",
+  "hits": [
+   "[label] Sync and Google services",
+   "Sync and Google services  <DIV#label>",
+   "[label] Google services",
+   "Google services  <DIV#label>",
+   "[aria-label] Sync and Google services subpage back button",
+   "Sync and Google services  <H1>",
+   "[aria-label] Learn more about: Sync and Google services",
+   "[label] Control how browsing history is used with your other data across Google services",
+   "Control how browsing history is used with your other data across Google services  <DIV#label>",
+   "[aria-label] Use Google’s default encryption for the passwords in your Google Account",
+   "Use Google’s default encryption for the passwords in your Google Account  <CR-RADIO-BUTTON>",
+   "to encrypt all the Orbis data in your Google Account. Payment methods and addresses from Google Pay won’t be encrypted. Browsing history from Orbis won’t sync.  <SPAN>",
+   "Other Google services  <H2>",
+   "[aria-label] Sign in to Orbis when you sign in to other Google services",
+   "Sign in to Orbis when you sign in to other Google services  <DIV>",
+   "When signing into Google services like Gmail or Youtube with , you can automatically sign in to Orbis with the same account  <DIV#chromeSigninChoiceDescription>",
+   "[sub-label] Sends URLs of pages you visit to Google",
+   "Sends URLs of pages you visit to Google  <SPAN#sub-label-text>",
+   "Choice saved. Your choice will apply when you sign in to other Google services.  <DIV>",
+   "In your Google Account  <H2>",
+   "When on, data is saved in your Google Account and can be used on all your devices. When off, data is saved only to this device.  <DIV>",
+   "Payment methods and other info from Google Wallet  <DIV>",
+   "[aria-label] Payment methods and other info from Google Wallet",
+   "[aria-label] Google services subpage back button",
+   "Google services  <H1>"
+  ]
+ },
+ {
+  "url": "chrome://settings/help",
+  "title": "Settings - About Orbis",
+  "hits": [
+   "Copyright 2026 The Chromium Authors. All rights reserved.  <DIV>",
+   "Chromium  <A>"
+  ]
+ },
+ {
+  "url": "chrome://settings/people",
+  "title": "Settings - You and sign-in",
+  "hits": [
+   "[label] Sync and Google services",
+   "Sync and Google services  <DIV#label>",
+   "[label] Google services",
+   "Google services  <DIV#label>",
+   "[aria-label] Sync and Google services subpage back button",
+   "Sync and Google services  <H1>",
+   "[aria-label] Learn more about: Sync and Google services",
+   "[label] Control how browsing history is used with your other data across Google services",
+   "Control how browsing history is used with your other data across Google services  <DIV#label>",
+   "[aria-label] Use Google’s default encryption for the passwords in your Google Account",
+   "Use Google’s default encryption for the passwords in your Google Account  <CR-RADIO-BUTTON>",
+   "to encrypt all the Orbis data in your Google Account. Payment methods and addresses from Google Pay won’t be encrypted. Browsing history from Orbis won’t sync.  <SPAN>",
+   "Other Google services  <H2>",
+   "[aria-label] Sign in to Orbis when you sign in to other Google services",
+   "Sign in to Orbis when you sign in to other Google services  <DIV>",
+   "When signing into Google services like Gmail or Youtube with , you can automatically sign in to Orbis with the same account  <DIV#chromeSigninChoiceDescription>",
+   "[sub-label] Sends URLs of pages you visit to Google",
+   "Sends URLs of pages you visit to Google  <SPAN#sub-label-text>",
+   "Choice saved. Your choice will apply when you sign in to other Google services.  <DIV>",
+   "In your Google Account  <H2>",
+   "When on, data is saved in your Google Account and can be used on all your devices. When off, data is saved only to this device.  <DIV>",
+   "Payment methods and other info from Google Wallet  <DIV>",
+   "[aria-label] Payment methods and other info from Google Wallet",
+   "[aria-label] Google services subpage back button",
+   "Google services  <H1>"
+  ]
+ },
+ {
+  "url": "chrome://settings/defaultBrowser",
+  "title": "Settings - Default browser",
+  "hits": []
+ },
+ {
+  "url": "chrome://settings/languages",
+  "title": "Settings - Languages",
+  "hits": [
+   "Please check with your network administrator to make sure that the firewall is not blocking downloads from Google servers.  <DIV>",
+   "Google Translate  <H2#title>",
+   "[label] Use Google Translate",
+   "[sub-label] When on, Google Translate will offer to translate sites into your preferred language. It can also automatically translate sites.",
+   "Use Google Translate  <DIV>",
+   "When on, Google Translate will offer to translate sites into your preferred language. It can also automatically translate sites.  <SPAN#sub-label-text>",
+   "[aria-label] Use Google Translate"
+  ]
+ },
+ {
+  "url": "chrome://settings/onStartup",
+  "title": "Settings - On startup",
+  "hits": []
+ },
+ {
+  "url": "chrome://welcome",
+  "title": "chrome://welcome/",
+  "hits": []
+ },
+ {
+  "url": "chrome://management",
+  "title": "Settings - Management",
+  "hits": []
+ },
+ {
+  "url": "chrome://flags",
+  "title": "Experiments",
+  "hits": [
+   "Mac, Windows, Linux, ChromeOS, Android  <SPAN>",
+   "Mac, Windows, Linux, ChromeOS  <SPAN>",
+   "extensions-on-chrome-urls  <A>",
+   "Windows, Linux, ChromeOS, Android  <SPAN>",
+   "Windows, ChromeOS  <SPAN>",
+   "Enables touch UI layout in the browser's top chrome.  <SPAN>",
+   "top-chrome-touch-ui  <A>",
+   "Mac, Windows, ChromeOS, Android  <SPAN>",
+   "Use Google Payments sandbox servers  <H2#wallet-service-use-sandbox_name>",
+   "For developers: use the sandbox service for Google Payments API calls.  <SPAN>",
+   "Enabled IPH_DesktopCustomizeChromeAutoOpen  <OPTION>",
+   "Enabled IPH_DesktopCustomizeChromeExperiment  <OPTION>",
+   "Enables the reporting of destination tab titles in Chrome Enterprise URL navigation logs.  <SPAN>",
+   "Use Chrome Sync sandbox  <H2#use-sync-sandbox_name>",
+   "Connects to the testing server for Chrome Sync.  <SPAN>",
+   "Enables logging of all messages exchanged between websites, Chrome, and Cast receivers in chrome://media-router-internals.  <SPAN>",
+   "Chrome Fallback  <OPTION>",
+   "Enables a new option to upload credit cards to Google Payments for sync to all Chrome devices.  <SPAN>",
+   "App-store purchases (e.g., Google Play Store) within a TWA can be requested using the Payment Request API. This flag removes the restriction that the TWA has to  <SPAN>",
+   "Google head non personalized search suggestions provided by a compact on device model for non-incognito. Turn off this feature if you have other apps running wh  <SPAN>",
+   "Google head non personalized search suggestions provided by a compact on device model for incognito. Turn off this feature if you have other apps running which   <SPAN>",
+   "Google tail non personalized search suggestions provided by a compact on device model.  <SPAN>",
+   "Forces Chrome to use a specific color profile instead of the color of the window's current monitor, as specified by the operating system.  <SPAN>",
+   "Whether to force the Google Drive disclaimer to be accepted. This flag is only used for testing purposes.  <SPAN>",
+   "Enables Google Drive option in the Composebox context menu.  <SPAN>",
+   "Enables the disclaimer flow for the Google Drive option in the Composebox context menu.  <SPAN>",
+   "Enables the sign-in promo for the Google Drive option in the Composebox context menu.  <SPAN>",
+   "Chrome Dark Neutrals 26  <H2#chrome-dark-neutrals-26_name>",
+   "chrome-dark-neutrals-26  <A>",
+   "NTP Customize Chrome Auto Promo  <H2#ntp-customize-chrome-auto-open_name>",
+   "Shows the Customize Chrome on the New Tab Page automatically.  <SPAN>",
+   "ntp-customize-chrome-auto-open  <A>",
+   "Enables the ability to save PDFs to Google Drive.  <SPAN>",
+   "Reading Mode Google Docs Integration  <H2#read-anything-docs-integration_name>",
+   "Allows Reading Mode to work on Google Docs.  <SPAN>",
+   "Reading Mode Google Docs Load More Button  <H2#read-anything-docs-load-more-button_name>",
+   "Enables support for XFA forms in PDFs. Has no effect if Chrome was not built with XFA support, or if controlled by an enterprise policy.  <SPAN>",
+   "Enable chrome.mimeHandler extension API  <H2#api-mime-handler_name>",
+   "Enables the chrome.mimeHandler extension API for extensions with a mime_types_handler manifest entry. The API is currently limited to a small set of MIME types   <SPAN>",
+   "Enables the collection and reporting of browser launch-related metadata for Chrome Enterprise, including CLI switches and launch timestamp  <SPAN>",
+   "If enabled, the 'Ask Google about this page' action will route to cobrowse.  <SPAN>",
+   "Enables Gemini Enterprise in Chrome (GEiC) side panel integration.  <SPAN>",
+   "Enables native UI affordances (e.g., in the Extensions menu and management page) for leaving reviews on installed Chrome Web Store extensions.  <SPAN>",
+   "When enabled, Chrome checks and fetches metadata for installed extensions more frequently.  <SPAN>",
+   "Enables opening links from Chrome in an installed PWA. Currently under reimplementation.  <SPAN>",
+   "Enables opening links from Chrome in an installed PWA by default for testing.  <SPAN>",
+   "Enables mock software-backed cryptographic keys for Google session credentials binding and Chrome refresh tokens binding (not secure). This is intended to be us  <SPAN>",
+   "Shows permission grants created by Related Website Sets in Chrome Settings UI and Page Info Bubble, default is hidden  <SPAN>",
+   "Device Bound Session Credentials (Standard) on Google  <H2#enable-standard-device-bound-session-google_name>",
+   "Enables Device Bound Session Credentials (Standard) to register sessions on Google sites  <SPAN>",
+   "enable-standard-device-bound-session-google  <A>",
+   "If this client is a Google-internal dogfood client, overrides enterprise policy to enable model quality logs. Googlers: See go/chrome-mqls-debug-logging for det  <SPAN>",
+   "Enables the Semantic Embedder API, allowing you to generate semantic embeddings with a built-in model in Chrome. The API may be subject to changes including the  <SPAN>",
+   "Enables the user consent toggle in Chrome settings for the Gemini Enterprise integration.  <SPAN>",
+   "Enables the EnterprisePublishedSkills policy in Chrome.  <SPAN>",
+   "Enables Skills in Gemini in Chrome  <SPAN>",
+   "When enabled, Chrome will send a specific URL parameter to Gaia to trigger the server-side experiment for binding the OAuthMultilogin cookies for Youtube to cry  <SPAN>",
+   "Chrome Refresh Token Binding Upgrade  <H2#enable-chrome-refresh-token-binding-upgrade_name>",
+   "Enables opportunistic binding of existing unbound Chrome refresh tokens and session cookies to cryptographic keys. Requires Chrome Refresh Token Binding to be e  <SPAN>",
+   "enable-chrome-refresh-token-binding-upgrade  <A>",
+   "MagiChrome Passkey Sign-in  <H2#magichrome-passkey-signin_name>",
+   "Enables the MagiChrome passkey sign-in experiment, enabling either the Autofill promo flow or the native Views banner flow.  <SPAN>",
+   "magichrome-passkey-signin  <A>",
+   "When enabled, the system tracing service is started along with Chrome's tracing service (if the system tracing service is registered).  <SPAN>",
+   "Enables the framework to show OS Notification when Chrome is no longer the default browser.  <SPAN>",
+   "Enable launching Chrome on Windows startup  <H2#startup-launch_name>",
+   "When enabled, Launch Chrome on Startup can be turned on from Settings  <SPAN>",
+   "Enable Launch Chrome on Startup prompt  <H2#startup-launch-infobar_name>",
+   "When enabled, shows an infobar prompting to launch Chrome on Windows startup  <SPAN>",
+   "When enabled, in-product help UI will be shown the first time a card added outside of Chrome appears in Autofill card suggestions.  <SPAN>",
+   "Enable AI-based checkout amount extraction on Chrome  <H2#autofill-enable-ai-based-amount-extraction_name>",
+   "When enabled, Chrome will extract the checkout amount from the checkout page using server-side AI.  <SPAN>",
+   "Enables the profile signals reporting flow for Chrome Enterprise.  <SPAN>",
+   "Enable Chrome Web Store Promotion Banner  <H2#cws-promotion-banner-flag_name>",
+   "Enables showing the promotion banner on chromewebstore page.  <SPAN>",
+   "Autofill AI Google Wallet flight reservations  <H2#autofill-ai-wallet-flight-reservation_name>",
+   "Enables Autofill AI support for flight reservation entities from Google Wallet.  <SPAN>",
+   "Autofill AI Google Wallet private passes  <H2#autofill-ai-wallet-private-passes_name>",
+   "Enables Autofill AI support for private passes from Google Wallet.  <SPAN>",
+   "Autofill AI Google Wallet private passes deep link  <H2#autofill-ai-wallet-private-passes-deep-link_name>",
+   "Enables Autofill AI support for deep linking to private passes from Google Wallet.  <SPAN>",
+   "Autofill AI Google Wallet vehicle registration  <H2#autofill-ai-wallet-vehicle-registration_name>",
+   "Enables Autofill AI support for vehicle registration entities from Google Wallet.  <SPAN>",
+   "Enable Pay Now Pay Later tabs UI for payments autofill on Chrome  <H2#autofill-enable-pay-now-pay-later-tabs_name>",
+   "When enabled, Chrome will use the Pay Now Pay Later tabs UI for payments autofill when buy now pay later options are available for the merchant webpage.  <SPAN>",
+   "Enables the protocol monitor panel, which displays the Chrome DevTools Protocol (CDP) traffic between DevTools and the browser.  <SPAN>",
+   "Chrome Finds Internals  <H2#chrome-finds-internals_name>",
+   "chrome-finds-internals  <A>",
+   "Further update Google Pay and Google Wallet branding where applicable  <H2#autofill-enable-wallet-branding-v2_name>",
+   "When enabled, further brings certain strings and images referencing Google Pay and Google Wallet into consistency with branding requirements.  <SPAN>",
+   "autofill-enable-gradient-google-logos  <A>",
+   "Autofill AI Google Wallet Pass Branding Updates  <H2#autofill-ai-wallet-pass-branding-2026_name>",
+   "When enabled, brings Autofill AI strings and images referencing passes in Google Wallet into consistency with 2026 branding requirements.  <SPAN>",
+   "Enabled  - Best of Google  <OPTION>",
+   "Enabled  - Your Chrome  <OPTION>",
+   "Enabled  - Best of Google with push notification  <OPTION>",
+   "Enabled  - Your Chrome with push notification  <OPTION>",
+   "Enables the Startup Enterprise Signals Disclaimer. The disclaimer will be shown to managed users missing the device signals permission on chrome startup.  <SPAN>",
+   "Surfaces critical actions, such as password fills and file downloads, performed during user-initiated AI agent browsing sessions alongside page visits on the Ch  <SPAN>",
+   "When enabled, direct offers synced via Google Wallet will be available for autofill into merchant promo code fields during checkout.  <SPAN>",
+   "Enables remote actors to request passwords from the signed in Google account. When requested, the user will be prompted to select a password and authenticate.  <SPAN>",
+   "When enabled, calls to Google Payments include the Chrome client type and major version, instead of parsing the user agent.  <SPAN>",
+   "autofill-add-chrome-user-context-fields  <A>",
+   "Linux, ChromeOS, Fuchsia  <SPAN>",
+   "ChromeOS, Android  <SPAN>",
+   "Initialize Vulkan from inside ANGLE and share the instance with Chrome.  <SPAN>",
+   "ChromeOS  <SPAN>",
+   "When enabled, Chrome will attempt to connect to the system tracing service  <SPAN>",
+   "Enables Google session credentials binding to cryptographic keys.  <SPAN>",
+   "Chrome Refresh Token Binding  <H2#enable-chrome-refresh-token-binding_name>",
+   "Enables binding of Chrome refresh tokens to cryptographic keys.  <SPAN>",
+   "enable-chrome-refresh-token-binding  <A>"
+  ]
+ },
+ {
+  "url": "chrome://extensions",
+  "title": "Extensions",
+  "hits": [
+   "Chrome Web Store  <A>"
+  ]
+ },
+ {
+  "url": "chrome://history",
+  "title": "History",
+  "hits": [
+   "Your Google Account may have other forms of browsing history at  <DIV>",
+   "myactivity.google.com  <A#footerGoogleMyActivityLink>",
+   "Your Google Account may have your  <DIV>",
+   "Your searches, best matches, and their page contents are sent to Google and may be seen by human reviewers to improve this feature.  <DIV#historyEmbeddingsDisclaimerContent>"
+  ]
+ },
+ {
+  "url": "chrome://bookmarks",
+  "title": "Bookmarks",
+  "hits": [
+   "0 bookmarks are saved only to this device. To use them on your other devices, save them in your Google Account.  <DIV#description>"
+  ]
+ },
+ {
+  "url": "chrome://downloads",
+  "title": "Download history",
+  "hits": []
+ },
+ {
+  "url": "chrome://net-error/-105",
+  "title": "chrome://net-error/-105",
+  "hits": []
+ },
+ {
+  "url": "chrome://print",
+  "title": "",
+  "hits": []
+ },
+ {
+  "url": "chrome://intro",
+  "title": "",
+  "hits": []
+ },
+ {
+  "url": "chrome://sync-confirmation",
+  "title": "?",
+  "hits": [
+   "(no result: page crashed or timed out)"
+  ]
+ },
+ {
+  "url": "chrome://whats-new",
+  "title": "chrome://whats-new/",
+  "hits": []
+ },
+ {
+  "url": "chrome://password-manager",
+  "title": "Password Manager",
+  "hits": [
+   "[aria-label] Automated password change. If Orbis finds one of your passwords in a public data breach, Google Password Manager can offer to change it for you when you're sign",
+   "[sub-label] If Orbis finds one of your passwords in a public data breach, Google Password Manager can offer to change it for you when you're signed in.",
+   "If Orbis finds one of your passwords in a public data breach, Google Password Manager can offer to change it for you when you're signed in.  <DIV#subLabel>"
+  ]
+ },
+ {
+  "url": "chrome://profile-picker",
+  "title": "Welcome to Orbis profiles",
+  "hits": [
+   "To add a new profile and use it with Glic, sign in to Orbis with a different Google Account.  <DIV#footer-text>"
+  ]
+ },
+ {
+  "url": "chrome://profile-customization",
+  "title": "?",
+  "hits": [
+   "(no result: page crashed or timed out)"
+  ]
+ },
+ {
+  "url": "chrome://signin-error",
+  "title": "chrome://signin-error/",
+  "hits": []
+ },
+ {
+  "url": "chrome://credits",
+  "title": "Credits",
+  "hits": []
+ },
+ {
+  "url": "chrome://terms",
+  "title": "",
+  "hits": []
+ },
+ {
+  "url": "chrome://policy",
+  "title": "Policies",
+  "hits": [
+   "Chrome Policies  <H2#policy-header>",
+   "chrome  <P>",
+   "[title] Learn more about BrowserSwitcherChromeParameters policy",
+   "BrowserSwitcherChromeParameters  <SPAN#name>",
+   "[title] Copy the value of BrowserSwitcherChromeParameters policy",
+   "[aria-label] Copy the value of BrowserSwitcherChromeParameters policy",
+   "[title] Learn more about BrowserSwitcherChromePath policy",
+   "BrowserSwitcherChromePath  <SPAN#name>",
+   "[title] Copy the value of BrowserSwitcherChromePath policy",
+   "[aria-label] Copy the value of BrowserSwitcherChromePath policy",
+   "[title] Learn more about BrowserSwitcherKeepLastChromeTab policy",
+   "BrowserSwitcherKeepLastChromeTab  <SPAN#name>",
+   "[title] Copy the value of BrowserSwitcherKeepLastChromeTab policy",
+   "[aria-label] Copy the value of BrowserSwitcherKeepLastChromeTab policy",
+   "[title] Learn more about ChromeDataRegionSetting policy",
+   "ChromeDataRegionSetting  <SPAN#name>",
+   "[title] Copy the value of ChromeDataRegionSetting policy",
+   "[aria-label] Copy the value of ChromeDataRegionSetting policy",
+   "[title] Learn more about ChromeForTestingAllowed policy",
+   "ChromeForTestingAllowed  <SPAN#name>",
+   "[title] Copy the value of ChromeForTestingAllowed policy",
+   "[aria-label] Copy the value of ChromeForTestingAllowed policy",
+   "[title] Learn more about ChromeSuggestionsSettings policy",
+   "ChromeSuggestionsSettings  <SPAN#name>",
+   "[title] Copy the value of ChromeSuggestionsSettings policy",
+   "[aria-label] Copy the value of ChromeSuggestionsSettings policy",
+   "[title] Learn more about ChromeVariations policy",
+   "ChromeVariations  <SPAN#name>",
+   "[title] Copy the value of ChromeVariations policy",
+   "[aria-label] Copy the value of ChromeVariations policy",
+   "[title] Learn more about DevToolsGoogleDeveloperProgramProfileAvailability policy",
+   "DevToolsGoogleDeveloperProgramProfileAvailability  <SPAN#name>",
+   "[title] Copy the value of DevToolsGoogleDeveloperProgramProfileAvailability policy",
+   "[aria-label] Copy the value of DevToolsGoogleDeveloperProgramProfileAvailability policy",
+   "[title] Learn more about ForceGoogleSafeSearch policy",
+   "ForceGoogleSafeSearch  <SPAN#name>",
+   "[title] Copy the value of ForceGoogleSafeSearch policy",
+   "[aria-label] Copy the value of ForceGoogleSafeSearch policy",
+   "[title] Learn more about GeminiChromeFileUploadSettings policy",
+   "GeminiChromeFileUploadSettings  <SPAN#name>",
+   "[title] Copy the value of GeminiChromeFileUploadSettings policy",
+   "[aria-label] Copy the value of GeminiChromeFileUploadSettings policy",
+   "[title] Learn more about GoogleSearchSidePanelEnabled policy",
+   "GoogleSearchSidePanelEnabled  <SPAN#name>",
+   "[title] Copy the value of GoogleSearchSidePanelEnabled policy",
+   "[aria-label] Copy the value of GoogleSearchSidePanelEnabled policy",
+   "[title] Learn more about RestrictPdfSaveToGoogleDriveAccountsToPattern policy",
+   "RestrictPdfSaveToGoogleDriveAccountsToPattern  <SPAN#name>",
+   "[title] Copy the value of RestrictPdfSaveToGoogleDriveAccountsToPattern policy",
+   "[aria-label] Copy the value of RestrictPdfSaveToGoogleDriveAccountsToPattern policy",
+   "Google Update Policies  <H2#policy-header>"
+  ]
+ },
+ {
+  "url": "chrome://components",
+  "title": "Components",
+  "hits": []
+ },
+ {
+  "url": "chrome://newtab",
+  "title": "New Tab",
+  "hits": []
+ },
+ {
+  "url": "chrome://feedback",
+  "title": "?",
+  "hits": [
+   "(no result: page crashed or timed out)"
+  ]
+ },
+ {
+  "url": "chrome://certificate-manager",
+  "title": "Certificate Manager",
+  "hits": [
+   "Chrome Root Store  <A#crsMenuItem>",
+   "Chrome Root Store  <H2>",
+   "The Chrome Root Store contains certificates from Certificate Authorities trusted by the\n      Chrome Root Program, and is continually reviewed on an ongoing bas  <DIV>",
+   "[aria-label] Learn more about the Chrome Root Store in a new tab."
+  ]
+ },
+ {
+  "url": "chrome://settings/reset",
+  "title": "Settings - Reset settings",
+  "hits": []
+ },
+ {
+  "url": "chrome://settings/privacy",
+  "title": "Settings - Privacy and security",
+  "hits": []
+ },
+ {
+  "url": "chrome://settings/security",
+  "title": "Settings - Security",
+  "hits": [
+   "[sub-label] Real-time, AI-powered protection against dangerous sites, downloads, and extensions that's based on your browsing data getting sent to Google",
+   "Real-time, AI-powered protection against dangerous sites, downloads, and extensions that's based on your browsing data getting sent to Google  <DIV#sub-label>",
+   "Warns you about dangerous sites, even ones Google didn't know about before, by analyzing more data from sites than standard protection. You can choose to skip O  <DIV>",
+   "When you're signed in, protects you across Google services.  <DIV>",
+   "Sends the URLs of sites you visit and a small sample of page content, downloads, extension activity, and system information to Google Safe Browsing to check if   <DIV>",
+   "When you're signed in, this data is linked to your Google Account to protect you across Google services, for example increasing protection in Gmail after a secu  <DIV>",
+   "Protects against sites, downloads, and extensions that are known to be dangerous. If a page does something suspicious, URLs and bits of page content are sent to  <DIV#sub-label>",
+   "[sub-label] Does not protect you against dangerous websites, downloads, and extensions. Your Safe Browsing settings in other Google products won't be affected.",
+   "Does not protect you against dangerous websites, downloads, and extensions. Your Safe Browsing settings in other Google products won't be affected.  <DIV#sub-label>",
+   "When you use a password, Orbis warns you if it has been published online. When doing this, your passwords and usernames are encrypted, so they can’t be read by   <SPAN#sub-label-text>",
+   "Google (Public DNS)  <OPTION>",
+   "[label] Google Advanced Protection Program",
+   "[sub-label] Provides Google’s strongest account security for people at risk of targeted attacks",
+   "Google Advanced Protection Program  <DIV#label>",
+   "Provides Google’s strongest account security for people at risk of targeted attacks  <DIV#subLabel>"
+  ]
+ },
+ {
+  "url": "chrome://managed-user-profile-notice",
+  "title": "?",
+  "hits": [
+   "(no result: page crashed or timed out)"
+  ]
+ },
+ {
+  "url": "chrome://default-browser",
+  "title": "Set Orbis as your default browser",
+  "hits": []
+ },
+ {
+  "url": "chrome://history-sync-optin",
+  "title": "?",
+  "hits": [
+   "(no result: page crashed or timed out)"
+  ]
+ },
+ {
+  "url": "chrome://search-engine-choice",
+  "title": "chrome://search-engine-choice/",
+  "hits": []
+ },
+ {
+  "url": "chrome://extensions/shortcuts",
+  "title": "Extensions",
+  "hits": [
+   "Chrome Web Store  <A>"
+  ]
+ }
+]

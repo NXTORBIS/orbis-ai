@@ -147,3 +147,6 @@ Status: this pass was NOT completed. Only item H and a branding probe were done.
 - (H) Regression: launch(4), browserManager(6), chromiumCapabilities(8), chromiumCapabilities2(11), browserUi(11), service(5), agent(4), orbisSearchPage(14), chromiumRecorder(2), chromiumControl(8): all pass, 0 fail. `npm test` non-Chromium parts not run.
 - (C) Probe of out\Default\chrome.exe VERSIONINFO: FileDescription=Orbis, ProductName=Orbis, InternalName=chrome_exe, OriginalFilename=chrome.exe, CompanyName="The Chromium Authors" (remaining leak; CompanyName still needs a branding change).
 - Not done: A (remaining pages review), B (token-generated shared CSS/Inter), rest of C, D (a11y/DPI), E (perf numbers), F (shortcut verification), G (installer build/install smoke).
+
+## Branding sweep (2026-09-21)
+See `docs/orbis-branding-audit.md`. VERSIONINFO CompanyName leak (item C above) fixed: CompanyName=Orbis. Settings "You and Google" -> "You and sign-in". About, version, settings, flags, extensions, history, error, password manager, profile picker scanned: remaining hits are real Google services, attribution, or internal/dev pages (justified in that doc). Screenshots: `docs/branding-audit-shots/`.
