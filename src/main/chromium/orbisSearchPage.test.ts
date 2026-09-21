@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { spawn, type ChildProcess } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync, cpSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer, type Server } from 'node:http'
 import { deflateSync } from 'node:zlib'
 import { tmpdir } from 'node:os'
@@ -9,7 +9,7 @@ import test from 'node:test'
 import { newToken } from '../../helper/auth.ts'
 import { createHandlers } from '../../helper/handlers.ts'
 import { createHelperServer } from '../../helper/server.ts'
-import { ORBIS_EXTENSION_ID } from './browserManager.ts'
+import { ORBIS_BUILTIN_ORIGINS } from './browserManager.ts'
 
 /**
  * Orbis Search, the results page of the Orbis browser, driven in the real browser: every vertical with results, the viewer, Orion's
@@ -23,7 +23,7 @@ import { ORBIS_EXTENSION_ID } from './browserManager.ts'
 
 const CHROME = process.env.ORBIS_CHROMIUM ?? 'C:/chromium/src/out/Default/chrome.exe'
 const REPO = resolve(import.meta.dirname, '../../..')
-const run = existsSync(CHROME) && existsSync(join(REPO, 'extension', 'results.js'))
+const run = existsSync(CHROME) && existsSync(join(REPO, 'orbis-ui', 'results', 'results.js'))
 const SHOTS = process.env.ORBIS_SHOTS
 
 const keys = (() => {
@@ -140,7 +140,7 @@ class Cdp {
 
 const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
 
-test('Orbis Search in the real browser: every vertical, the viewer, Orion sessions, box, bangs and looks', { skip: run ? false : 'no Chromium build with the Orbis extension built', timeout: 420_000 }, async (t) => {
+test('Orbis Search in the real browser: every vertical, the viewer, Orion sessions, box, bangs and looks', { skip: run ? false : 'no Chromium build with the built-in Orbis pages', timeout: 420_000 }, async (t) => {
   const dir = join(tmpdir(), `orbis-search-page-${process.pid}`)
   rmSync(dir, { recursive: true, force: true })
   mkdirSync(dir, { recursive: true })
@@ -148,12 +148,10 @@ test('Orbis Search in the real browser: every vertical, the viewer, Orion sessio
 
   const service = await stand_in()
   process.env.ORBIS_SEARCH_ENDPOINT = `http://127.0.0.1:${service.port}`
-  const extDir = join(dir, 'extension')
-  cpSync(join(REPO, 'extension'), extDir, { recursive: true, filter: (s) => !/[\\/](helper\.json|_metadata)$/.test(s) })
   const token = newToken()
   const helper = createHelperServer({
     token,
-    allowedOrigins: [`chrome-extension://${ORBIS_EXTENSION_ID}`],
+    allowedOrigins: ORBIS_BUILTIN_ORIGINS,
     handlers: createHandlers({ apiKeys: keys, dataDir: join(dir, 'userdata'), profileId: 'test-profile' })
   })
   const { port } = await helper.listen()
@@ -174,7 +172,7 @@ test('Orbis Search in the real browser: every vertical, the viewer, Orion sessio
       }
     }, 4000).unref()
   })
-  chrome = spawn(CHROME, [`--user-data-dir=${join(dir, 'profile')}`, `--orbis-extension-dir=${extDir}`, `--remote-debugging-port=${debugPort}`, '--headless=new', '--no-first-run', '--no-default-browser-check', '--disable-search-engine-choice-screen', '--window-size=1280,900'], { stdio: 'ignore' })
+  chrome = spawn(CHROME, [`--user-data-dir=${join(dir, 'profile')}`, `--orbis-helper-port=${port}`, `--orbis-helper-token=${token}`, `--remote-debugging-port=${debugPort}`, '--headless=new', '--no-first-run', '--no-default-browser-check', '--disable-search-engine-choice-screen', '--window-size=1280,900'], { stdio: 'ignore' })
   let wsUrl = ''
   for (let i = 0; i < 80 && !wsUrl; i++) {
     try {
@@ -186,27 +184,8 @@ test('Orbis Search in the real browser: every vertical, the viewer, Orion sessio
   assert.ok(wsUrl, 'the browser started')
   cdp = await Cdp.connect(wsUrl)
   const c = cdp
-  // The extension's pages get the helper's port and token from the worker's session storage (the app puts them there).
-  {
-    let worker: { targetId: string } | undefined
-    for (let i = 0; i < 40 && !worker; i++) {
-      worker = (await c.send<{ targetInfos: { targetId: string; type: string; url: string }[] }>('Target.getTargets')).targetInfos.find((t) => t.type === 'service_worker' && t.url.startsWith(`chrome-extension://${ORBIS_EXTENSION_ID}/`))
-      if (!worker) await wait(250)
-    }
-    assert.ok(worker, 'the component extension runs in the browser')
-    const attached = (await c.send<{ sessionId: string }>('Target.attachToTarget', { targetId: worker!.targetId, flatten: true })).sessionId
-    await c.send('Runtime.enable', {}, attached)
-    // A worker that has only just started has no `chrome` object yet.
-    let stored = false
-    for (let i = 0; i < 40 && !stored; i++) {
-      const r = await c.send<{ result?: { value?: unknown } }>('Runtime.evaluate', { expression: `typeof chrome !== 'undefined' && !!chrome.storage ? chrome.storage.session.set({ 'orbis.helper': ${JSON.stringify({ port, token })} }).then(() => true) : false`, awaitPromise: true, returnByValue: true }, attached)
-      stored = r.result?.value === true
-      if (!stored) await wait(250)
-    }
-    assert.ok(stored, 'the helper connection was handed to the component')
-  }
-
-  const base = `chrome-extension://${ORBIS_EXTENSION_ID}/results.html`
+  // The built-in page gets the helper's port and token from the browser itself (chrome.send('orbis.getHelper')); nothing else does.
+  const base = 'chrome://orbis-search/'
   let session = ''
   const open = async (hash: string, opts: { width?: number; dark?: boolean; offline?: boolean } = {}): Promise<void> => {
     // A page that went to a real site (the bang test) can take long to answer a close; do not wait for it.
@@ -346,8 +325,11 @@ test('Orbis Search in the real browser: every vertical, the viewer, Orion sessio
   })
 
   await t.test('the browser’s default search engine (what the address bar uses) lands on this same page', async () => {
+    // The new tab page searches the way the address bar does: through the browser's default search engine.
     await open('#q=hello', { dark: true })
-    await js('chrome.search.query({ text: "how do magnets work", disposition: "NEW_TAB" })')
+    await c.send('Page.navigate', { url: 'chrome://orbis-newtab/' }, session)
+    await until("document.getElementById('q')")
+    await js("chrome.send('orbis.search', ['t1', 'how do magnets work'])")
     let found: { url: string; title: string } | undefined
     for (let i = 0; i < 40 && !found; i++) {
       const targets = ((await (await fetch(`http://127.0.0.1:${debugPort}/json/list`)).json()) as { url: string; title: string }[])
@@ -360,7 +342,7 @@ test('Orbis Search in the real browser: every vertical, the viewer, Orion sessio
 
   await t.test('a bang goes to the site asked for, on purpose', async () => {
     await open('#q=%21g%20cats')
-    await until("location.hostname !== '' && !location.href.startsWith('chrome-extension')", 20_000).catch(() => undefined)
+    await until("location.protocol !== 'chrome:'", 20_000).catch(() => undefined)
     const now = await js<string>('location.href').catch(() => '')
     assert.ok(/google\.com\/search\?q=cats|chrome-error/.test(now) || now.startsWith('https://'), now)
   })
@@ -369,7 +351,7 @@ test('Orbis Search in the real browser: every vertical, the viewer, Orion sessio
     await open('#q=everest&in=images', { width: 390, dark: false })
     await until("document.querySelector('.images img')")
     assert.ok((await js<number>('document.documentElement.scrollWidth')) <= 392, 'no sideways scrolling')
-    assert.equal(await js('getComputedStyle(document.body).backgroundColor'), 'rgb(245, 247, 251)')
+    assert.equal(await js('getComputedStyle(document.body).backgroundColor'), 'rgb(217, 223, 232)')
     await shot('images-light-narrow')
     await open('#q=everest&in=videos', { width: 390, dark: false })
     await until("document.querySelector('.thumbbox')")

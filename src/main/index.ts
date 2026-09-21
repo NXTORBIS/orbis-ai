@@ -190,6 +190,8 @@ let workflowExtrasForPanel: { store: WorkflowStore; draft(instruction: string, c
 let workspacesForChat: WorkspacesStore | null = null
 /** The app's search-box suggestions and local speech to text, lent to the pages in the Orbis browser. */
 let appServicesForBrowser: AppServicesDeps | null = null
+/** The sidebar arrangement store, for the sidebar inside the built-in Orbis pages of the browser. */
+let browserSidebarForBrowser: BrowserSidebarStore | null = null
 /** Saved Orion Search research, once it exists: the results page in the browser and the Orbis window share this one store. */
 let searchSessionsForBrowser: SearchSessionStore | null = null
 
@@ -1193,6 +1195,12 @@ if (!app.requestSingleInstanceLock()) {
           galaxy: () => galaxyForChat,
           appServices: () => appServicesForBrowser,
           searchSessions: () => searchSessionsForBrowser,
+          sidebar: () => {
+            const store = browserSidebarForBrowser
+            if (!store) return null
+            const active = async (): Promise<string> => (await profilesStore.active()).id
+            return { read: async () => store.read(await active()), write: async (layout) => store.write(await active(), layout), reset: async () => store.reset(await active()) }
+          },
           control: browserControl?.control,
           saveDir: app.getPath('downloads'),
           clipboard: { readText: () => clipboard.readText(), hasImage: async () => (await clipboard.read().catch(() => [])).some((item) => item.types.includes('image/png')) },
@@ -1797,6 +1805,7 @@ if (!app.requestSingleInstanceLock()) {
     })
 
     const browserSidebar = new BrowserSidebarStore(app.getPath('userData'))
+    browserSidebarForBrowser = browserSidebar
     const sidebarProfile = async (): Promise<string> => (await profilesStore.active()).id
     ipcMain.handle('browser-sidebar:get', async (event) => {
       if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')

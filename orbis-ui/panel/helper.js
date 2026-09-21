@@ -3,13 +3,15 @@
 // Where the port and this run's secret token come from depends on where this runs:
 //  - in the built-in chrome://orbis page, from the browser itself: the page asks with chrome.send('orbis.getHelper') and only
 //    that page is ever answered (the browser never puts them in an address or in any other page);
-//  - in the extension's own pages (new tab, results; until the built-in pages replace them), from the extension worker's
+//  - in an extension page (only when developing with ORBIS_DEV_EXTENSION=1), from the extension worker's
 //    session storage, which only the extension can read and which lives in memory only.
 // The token is what the helper checks on every request. Nothing here logs or stores the token anywhere else.
 
 let cached = null
-let nextWebUiCallback = 1
-const webUiCallbacks = new Map()
+// Shared by every copy of this file on the page (a bundled page script and a module each carry one), so a reply is always delivered
+// to the copy that asked.
+const webUi = (globalThis.__orbisWebUi ??= { next: 1, callbacks: new Map() })
+const webUiCallbacks = webUi.callbacks
 
 // The browser answers chrome.send('orbis.getHelper') by calling cr.webUIResponse(id, ok, value).
 if (typeof chrome !== 'undefined' && typeof chrome.send === 'function' && !(globalThis.cr && globalThis.cr.webUIResponse)) {
@@ -22,13 +24,15 @@ if (typeof chrome !== 'undefined' && typeof chrome.send === 'function' && !(glob
   }
 }
 
-function fromBrowser() {
+// Asks the browser's built-in Orbis handler (C++, chrome://orbis*) something and waits for its answer.
+export function askBrowser(message, ...args) {
   return new Promise((resolve, reject) => {
-    const id = `orbis${nextWebUiCallback++}`
+    const id = `orbis${webUi.next++}`
     webUiCallbacks.set(id, { resolve, reject })
-    chrome.send('orbis.getHelper', [id])
+    chrome.send(message, [id, ...args])
   })
 }
+const fromBrowser = () => askBrowser('orbis.getHelper')
 
 async function fromExtension() {
   // The worker sets this a moment after the browser starts; a page opened at that very moment waits briefly for it.

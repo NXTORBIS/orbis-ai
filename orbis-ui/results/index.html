@@ -5,12 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="dark light" />
     <title>Orbis Search</title>
-    <link rel="icon" type="image/png" href="assets/icon-32.png" />
+    <link rel="icon" type="image/png" href="orbis-ring.png" />
+    <style>html { background: #060708; } @media (prefers-color-scheme: light) { html { background: #d9dfe8; } }</style>
+    <link rel="stylesheet" href="orbis-tokens.css" />
     <link rel="stylesheet" href="results.css" />
+    <link rel="stylesheet" href="orb.css" />
   </head>
   <body>
     <header class="head">
-      <a class="brand" href="newtab.html" aria-label="Orbis home"><img src="assets/orbis-ring.png" alt="" width="34" height="34" /><span class="wordmark">Orbis</span></a>
+      <a class="brand" href="chrome://orbis-newtab/" aria-label="Orbis home"><img src="orbis-ring.png" alt="" width="34" height="34" /><span class="wordmark">Orbis</span></a>
       <form id="search" class="box" role="search" autocomplete="off">
         <input id="q" type="text" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="suggest" enterkeyhint="search" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Search the web" aria-label="Search the web with Orbis" />
         <button type="submit" class="go" aria-label="Search">Search</button>

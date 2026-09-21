@@ -1,27 +1,23 @@
-// The Orbis new-tab page (Chromium chrome_url_overrides). Loads entirely from the extension; no request is made to any
-// website to render it. Search uses chrome.search (the person's own engine); tiles are chrome.topSites.
+// The Orbis new tab page: chrome://orbis-newtab, built into the browser (a WebUI, not an extension page). Chromium's new tab page URL
+// resolves to it, so a new tab, Ctrl+T, a new window and startup all show it from the first paint. No request is made to any website
+// to render it.
 //
-// PARITY WITH THE ELECTRON START PAGE (details: docs/newtab-parity.md)
-// Electron has: logo, private note, shortcuts grid (24, add/edit/remove, icons), widgets (clock, countdown, timer, tasks,
-// notes, bookmarks, downloads, tabs, workspaces, clipboard, whiteboard, quote, games, calculator, greeting, world clock,
-// weather, news, recent), wallpaper (image data URL or Orbis gradient), greeting (userName), clock option, quote option,
-// "restore tabs", quick links.
-// PORTED here: shortcuts (chrome.storage.local), greeting with name, clock (12h/24h, seconds), wallpaper (Orbis gradients
-// + own image kept locally), countdown. Most-visited tiles stay (Chromium-native).
-// NOT PORTED: weather/news (network feeds), quote (needs the Electron-side collection; not duplicated), tasks/notes/
-// clipboard/whiteboard/workspaces/games/timer/calculator/world clock (live in the Orbis app's own stores, not reachable
-// from an extension page), restore-last-time (Chromium's own session restore), private-tab note (extension pages do not
-// know about incognito here).
+// Kept from the extension's page (details: docs/newtab-parity.md): search, greeting with name, clock (12h/24h, seconds), countdown,
+// wallpaper (Orbis gradients or a picture kept locally), shortcuts (add/edit/remove), most visited, customization; all per profile.
+// Searching and most-visited tiles come from the browser through the built-in handler. The quote, widgets and timers of the old
+// Electron start page live in the Orbis app's own stores and are not on this page (see the parity doc).
 
 import { GRADIENTS, MAX_IMAGE_BYTES, MAX_SHORTCUTS, clockText, countdownText, greetingText, normalizeSettings, removeShortcut, saveShortcut, siteUrl } from './newtab-logic.js'
 import * as store from './newtab-store.js'
+import { askBrowser } from './helper.js'
+import { mountOrb } from './orb.js'
 
 const $ = (id) => document.getElementById(id)
 let state = { settings: normalizeSettings(null), shortcuts: [], image: '' }
 let timer = 0
 
 const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n }
-const favicon = (u) => `${chrome.runtime.getURL('/_favicon/')}?pageUrl=${encodeURIComponent(u)}&size=32`
+const favicon = (u) => `chrome://favicon2/?size=32&scaleFactor=2x&pageUrl=${encodeURIComponent(u)}`
 
 function applyWallpaper() {
   const s = state.settings
@@ -58,7 +54,7 @@ $('search').addEventListener('submit', (e) => {
   if (!text) return
   const url = looksLikeUrl(text)
   if (url) location.href = url
-  else chrome.search.query({ text, disposition: 'CURRENT_TAB' })
+  else askBrowser('orbis.search', text).catch(() => { location.href = `chrome://orbis-search/#q=${encodeURIComponent(text)}` })
 })
 
 function tile(href, name, extra) {
@@ -124,10 +120,10 @@ $('scCancel').addEventListener('click', () => $('shortcutDialog').close())
 
 async function topSites() {
   try {
-    const top = await chrome.topSites.get()
+    const top = await askBrowser('orbis.mostVisited')
     const nav = $('sites')
     // Chromium seeds the list with a Chrome Web Store tile before anything has been visited; that is Google's, not the person's.
-    for (const s of top.filter((t) => !/^https:\/\/chrome(web)?store\.google\.com\//.test(t.url)).slice(0, 8)) nav.append(tile(s.url, s.title || hostOf(s.url)))
+    for (const s of top.filter((t) => !/^https:\/\/(chrome\.google\.com\/webstore|chromewebstore\.google\.com\/)/.test(t.url)).slice(0, 8)) nav.append(tile(s.url, s.title || hostOf(s.url)))
   } catch { /* no history yet */ }
 }
 
@@ -175,3 +171,4 @@ async function init() {
   void topSites()
 }
 void init()
+mountOrb()

@@ -1,16 +1,18 @@
-import { readBang, siteOf, tidyResults, VERTICALS, wantsAnswer } from '../src/shared/orbisSearch.ts'
-import type { SearchVertical } from '../src/shared/orbisSearch.ts'
-import { addSources, addTurn, buildAsk, changesTopic, constraintIn, isFollowUp, newSearchSession, referencedItems, wantsFreshResearch, withConstraint, withTopic } from '../src/shared/orionSearch.ts'
-import type { OrionSearchSession } from '../src/shared/orionSearch.ts'
-import { checkCitations, comparison, mergeResults, planQueries, rankSources } from '../src/shared/researchPlan.ts'
-import { resumeRequest } from '../src/shared/searchSessions.ts'
-import type { SavedSearchSummary } from '../src/shared/searchSessions.ts'
-import { saidCount, saidDuration } from '../src/shared/searchProviders.ts'
+import { readBang, siteOf, tidyResults, VERTICALS, wantsAnswer } from '../../src/shared/orbisSearch.ts'
+import type { SearchVertical } from '../../src/shared/orbisSearch.ts'
+import { addSources, addTurn, buildAsk, changesTopic, constraintIn, isFollowUp, newSearchSession, referencedItems, wantsFreshResearch, withConstraint, withTopic } from '../../src/shared/orionSearch.ts'
+import type { OrionSearchSession } from '../../src/shared/orionSearch.ts'
+import { checkCitations, comparison, mergeResults, planQueries, rankSources } from '../../src/shared/researchPlan.ts'
+import { resumeRequest } from '../../src/shared/searchSessions.ts'
+import type { SavedSearchSummary } from '../../src/shared/searchSessions.ts'
+import { saidCount, saidDuration } from '../../src/shared/searchProviders.ts'
 // @ts-expect-error the helper client is plain JavaScript shared with the side panel
-import { call, HelperDown } from '../extension/helper.js'
+import { call, HelperDown } from '../panel/helper.js'
+// @ts-expect-error the orb is plain JavaScript shared with the new tab page
+import { mountOrb } from '../panel/orb.js'
 
 /**
- * Orbis Search, as the page a search in the Orbis browser lands on. It is the browser's default search engine (`results.html#q=…`),
+ * Orbis Search, as the page a search in the Orbis browser lands on. It is the browser's default search engine (`chrome://orbis-search/#q=…`),
  * so typing in the address bar, the new-tab search box and "search for …" in a context menu all arrive here, and nothing is sent to
  * Google, or anywhere else, until the web is actually searched.
  *
@@ -103,7 +105,7 @@ const pageHash = (q: string, v: SearchVertical, extra: Record<string, string> = 
   for (const [k, val] of Object.entries(extra)) p.set(k, val)
   return `#${p.toString()}`
 }
-const pageUrl = (q: string, v: SearchVertical): string => `results.html${pageHash(q, v)}`
+const pageUrl = (q: string, v: SearchVertical): string => `chrome://orbis-search/${pageHash(q, v)}`
 
 let toastTimer = 0
 function toast(message: string): void {
@@ -282,7 +284,7 @@ function siteLine(href: string, name: string): HTMLElement {
   icon.alt = ''
   icon.width = 16
   icon.height = 16
-  icon.src = `${chrome.runtime.getURL('/_favicon/')}?pageUrl=${encodeURIComponent(href)}&size=16`
+  icon.src = `chrome://favicon2/?size=16&scaleFactor=2x&pageUrl=${encodeURIComponent(href)}`
   site.append(icon, el('span', undefined, name))
   return site
 }
@@ -625,7 +627,7 @@ function drawOrion(): void {
   const head = el('div', 'orion-head')
   head.append(el('span', 'orion-topic', session?.topic ?? ''))
   head.append(button('chip', 'Earlier research', () => void showEarlier()))
-  if (turns.length) head.append(button('chip', 'New search', () => (location.href = 'newtab.html')))
+  if (turns.length) head.append(button('chip', 'New search', () => (location.href = 'chrome://orbis-newtab/')))
   nodes.push(head, earlierBox)
   const thread = el('ol', 'thread')
   for (const turn of turns) {
@@ -908,3 +910,4 @@ window.addEventListener('online', () => {
 })
 
 void search()
+mountOrb()

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Orbis",
   "version": "0.1.0",
-  "description": "Orbis ad blocking and pages for the Orbis browser (a component of the browser).",
+  "description": "Orbis ad blocking for the Orbis browser (a hidden component of the browser). The new tab page, search results and panel are built into the browser (chrome://orbis*).",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA2bdK4/Y5pjUegT972VVL7ow+9NTb02Sl0P8IjQqeYWCIhO1a7b9YjjnJhC1A1mAafQrkurSCDZn9Z4F4rJVGNkvB3HIB2HvXJQN5LOnFcccJ+pR6fa/GJWY5Zido3HEvsPZjuR0J6RAxv0+zAe9+vC2/AV8akaxvsX2z8atzQdmGy3QayEBX7rJMV1t3B+joakce19/BRzvlOhMDikn2/23c1VhyBG0krR803mQ0jOj3q2MPQr1AKe45kbrrfpFVodHJjW0aCKZE86hv2Q60ua4e/YgyrL0b3xNzT0yzbVU+mZLiQBgZmuW+ObyTGWf7EVUUaIxoodSYnWqeNOX31wIDAQAB",
   "minimum_chrome_version": "114",
   "permissions": [
@@ -88,9 +88,6 @@
       "match_about_blank": true
     }
   ],
-  "chrome_url_overrides": {
-    "newtab": "newtab.html"
-  },
   "icons": {
     "16": "assets/icon-16.png",
     "32": "assets/icon-32.png",

@@ -20,5 +20,6 @@ extension/adblock/
 extension/adblock.staging/
 extension/adblock.previous/
 extension/_metadata/
-extension/results.js
+orbis-ui/results/results.js
 resources/chromium/
+orbis-ui/panel/sidebar.js

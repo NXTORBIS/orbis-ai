@@ -49,8 +49,22 @@ The Orbis UI is delivered through five Chromium-native layers, each of which kee
    `resources/orbis_extension` (built from `extension/` by `scripts/stage-orbis-extension.mjs`): not listed in chrome://extensions, not removable, no toolbar
    button or side panel. `--orbis-extension-dir` runs it from a writable copy so filter-list updates keep working; `--load-extension` is used only when
    `ORBIS_DEV_EXTENSION=1`. The panel's Blocking tab reaches the worker through the helper (`adblock:control`, run by the app's ExtensionBridge over CDP).
-   The component's new tab page and results page remain extension pages until phase 2 replaces them; they read the helper connection from the worker's
-   in-memory session storage (no `helper.json` file).
+   **Phase 2: the new tab page and Orbis Search are built in too.** `chrome://orbis-newtab` and `chrome://orbis-search` are WebUIs of the same `orbis` target
+   (`orbis_ui.cc`; sources `orbis-ui/newtab`, `orbis-ui/results`, shared `orbis-ui/panel/helper.js`, `orb.js`). The extension keeps only the ad blocker (no page files,
+   no `chrome_url_overrides`, no helper connection in session storage). One message handler serves the three pages: `orbis.getHelper` (all three; port and token
+   are given to those documents only, judged by the frame's real address, never to any other page), `orbis.search` and `orbis.mostVisited` (new tab page only: the search
+   goes through the AutocompleteClassifier, i.e. the person's own default engine, exactly as the address bar), `orbis.openPanel` (new tab and results, to show the
+   native side panel). CSP `connect-src` is the loopback helper port only; images may come from https and from `chrome://favicon2`. The helper answers the origins
+   `chrome://orbis`, `chrome://orbis-newtab`, `chrome://orbis-search`.
+   **The new tab page URL** (`chrome/browser/search/search.cc`, `NewTabURLDetails::ForProfile`) is `chrome://orbis-newtab/` for every non-incognito profile whatever the
+   search engine is, so `chrome://newtab` (Ctrl+T, the new tab button, a new window, startup) is rewritten to it before a navigation starts: the Google NTP
+   (`chrome://new-tab-page`) and the third party NTP are never loaded, not even briefly. Verified by DevTools: the first main-frame navigation of a new tab is
+   `chrome://orbis-newtab/` with no other request. (The tab's visible/virtual URL stays `chrome://newtab/`, so the omnibox is empty there, as in every browser.)
+   **Default search** is `chrome://orbis-search/#q={searchTerms}` (`chromium-orbis-default-search.patch`). The query is in the fragment and a first navigation to a
+   `chrome://` page with a fragment works (the extension-page `ERR_UNKNOWN_URL_SCHEME` quirk does not exist here; tested). Profiles whose default is the earlier
+   `chrome-extension://gcaebck.../results.html` engine are moved to it once (`orbis.default_search_scheme_migrated`); explicit choices of any other engine are kept.
+   **Ctrl+Enter** in the omnibox is an Orion answer inside Orbis (`chromium-orbis-newtab-and-orion.patch`: `OpenAiMode` opens `chrome://orbis-search/#q=...&in=orion`);
+   **Shift+Enter** opens the destination in the system default browser (`chromium-orbis-shift-enter.patch`).
 5. **Product identity (done).** Product name, strings, logo, icons and the new-tab page (Chromium's own `chrome_url_overrides`, local, Orbis logo, no Google).
 
 Control and intelligence sit beside this, not inside it:

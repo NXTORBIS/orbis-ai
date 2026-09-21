@@ -22,15 +22,14 @@ All 33 real-browser tests run serially with `npm test` (`--test-concurrency=1`; 
 ## Written, not yet run in a real browser
 
 - Side-panel Notes and Tasks tabs and their helper channels (the channels have HTTP-level tests; the panel UI has only been syntax-checked).
-- New-tab page features: shortcuts, greeting, clock, background, countdown (pure logic tested; UI not seen).
-- Orbis Search results page as Chromium's default search (see below).
+- New-tab page (`chrome://orbis-newtab`, built in; Chromium's new tab URL resolves to it from the first paint): shortcuts, greeting, clock, background, countdown, search, most visited; verified in the real build.
+- Orbis Search results (`chrome://orbis-search`, built in) as Chromium's default search; Ctrl+Enter = Orion answer; verified in the real build.
 
 ## In progress
 
 - **Orbis Search as the default search engine.** Chromium patch `patches/chromium-orbis-default-search.patch` makes "Orbis Search" the first (default)
-  engine; its results page is `extension/results.html` (mirrors the Electron results page: search box, verticals, results with real sites, Orion
-  on request with real sources, and an explicit "try Google instead"). Existing profiles keep the engine they already have until it is chosen once
-  in Settings; new profiles default to Orbis.
+  engine; its results page is the built-in `chrome://orbis-search` (phase 2; mirrors the Electron results page: search box, verticals, results with real sites, Orion
+  on request with real sources, and an explicit "try Google instead"). Profiles that still had the untouched Google default, or the earlier extension-page Orbis engine, are moved once; any engine the person chose is kept.
 
 ## Chromium is now Orbis's browser (2026-09-20)
 
@@ -57,5 +56,5 @@ When a Chromium build is installed, the Orbis app opens Chromium for everything 
 
 - Private browsing is Chromium's separate-window incognito, not Orbis's in-window private tabs.
 - The layout modes are `full` only in the Electron code; no new modes were built (user decision).
-- Weather, news, quote and the app-backed new-tab widgets are not on the extension new-tab page (see `docs/newtab-parity.md`).
+- Weather, news, quote and the app-backed new-tab widgets are not on the built-in new-tab page (see `docs/newtab-parity.md`).
 

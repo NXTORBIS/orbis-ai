@@ -1,0 +1,64 @@
+diff --git a/chrome/browser/search/search.cc b/chrome/browser/search/search.cc
+index 621d90a741..19acbca3f7 100644
+--- a/chrome/browser/search/search.cc
++++ b/chrome/browser/search/search.cc
+@@ -175,6 +175,13 @@ struct NewTabURLDetails {
+ #if BUILDFLAG(IS_ANDROID)
+     const GURL local_url;
+ #else
++    // Orbis: the new tab page is the built-in Orbis page (chrome://orbis-newtab), whatever the search engine is; neither the
++    // Google new tab page nor a search provider's own new tab page is ever loaded, not even briefly. Chromium's new tab page URL
++    // (chrome://newtab, Ctrl+T, the new tab button, a new window, startup) is rewritten to this address before anything loads.
++    if (profile) {
++      return NewTabURLDetails(GURL(chrome::kChromeUIOrbisNewTabURL),
++                              NEW_TAB_URL_VALID);
++    }
+     const bool default_is_google = DefaultSearchProviderIsGoogle(profile);
+     const GURL local_url(default_is_google
+                              ? chrome::ChromeUINewTabPageURLAsGURL()
+diff --git a/chrome/browser/ui/omnibox/omnibox_edit_model.cc b/chrome/browser/ui/omnibox/omnibox_edit_model.cc
+index 97d8f09eb2..71524af1a4 100644
+--- a/chrome/browser/ui/omnibox/omnibox_edit_model.cc
++++ b/chrome/browser/ui/omnibox/omnibox_edit_model.cc
+@@ -25,6 +25,7 @@
+ #include "base/strings/string_number_conversions.h"
+ #include "base/strings/string_util.h"
+ #include "base/strings/utf_string_conversions.h"
++#include "base/strings/escape.h"
+ #include "base/time/time.h"
+ #include "base/trace_event/trace_event.h"
+ #include "base/trace_event/typed_macros.h"
+@@ -844,6 +845,19 @@ void OmniboxEditModel::OpenAiMode(AimActivation activation) {
+ 
+   RecordAiModeMetrics(query_text, activation);
+ 
++  // Orbis: Ctrl+Enter is an Orion answer inside Orbis, not Google AI Mode: open the built-in results page in Orion mode with what
++  // was typed.
++  if (controller_->client()->GetTemplateURLService()) {
++    if (query_text.empty()) {
++      query_text = user_text_;
++    }
++    controller_->client()->OpenUrl(GURL(
++        "chrome://orbis-search/#q=" +
++        base::EscapeQueryParamValue(base::UTF16ToUTF8(query_text), true) +
++        "&in=orion"));
++    return;
++  }
++
+   if (GetAiModeButtonUiConfig(controller_)->id !=
+       SearchEngineType::SEARCH_ENGINE_GOOGLE) {
+     NavigateToThirdPartyAiMode(query_text);
+diff --git a/chrome/browser/ui/views/omnibox/omnibox_view_views.cc b/chrome/browser/ui/views/omnibox/omnibox_view_views.cc
+index 68ed923c1b..b4447d7a44 100644
+--- a/chrome/browser/ui/views/omnibox/omnibox_view_views.cc
++++ b/chrome/browser/ui/views/omnibox/omnibox_view_views.cc
+@@ -2004,7 +2004,8 @@ bool OmniboxViewViews::HandleKeyEvent(views::Textfield* textfield,
+   const bool command = event.IsCommandDown();
+   switch (event.key_code()) {
+     case ui::VKEY_RETURN: {
+-      if (omnibox::kShowRhsAimHint.Get()) {
++      // Orbis: Ctrl+Enter (Command+Enter on Mac) always asks Orion inside Orbis.
++      if (true) {
+ #if BUILDFLAG(IS_MAC)
+         const bool ai_mode_modifier = command;
+ #else

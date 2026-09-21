@@ -3,14 +3,18 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Orbis</title>
-    <link rel="icon" type="image/png" href="assets/icon-32.png" />
+    <title>New Tab</title>
+    <meta name="color-scheme" content="dark light" />
+    <style>html { background: #060708; } @media (prefers-color-scheme: light) { html { background: #d9dfe8; } }</style>
+    <link rel="icon" type="image/png" href="orbis-ring.png" />
+    <link rel="stylesheet" href="orbis-tokens.css" />
     <link rel="stylesheet" href="newtab.css" />
+    <link rel="stylesheet" href="orb.css" />
   </head>
   <body>
     <button id="openSettings" class="gear" type="button" aria-label="Customize this page">Customize</button>
     <main>
-      <img class="logo" src="assets/orbis-ring.png" alt="Orbis" width="120" />
+      <img class="logo" src="orbis-ring.png" alt="Orbis" width="120" />
       <h1 id="greeting">Orbis</h1>
       <p id="clock" class="clock" aria-live="off"></p>
       <p id="countdown" class="countdown"></p>

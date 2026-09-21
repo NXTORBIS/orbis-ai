@@ -7,8 +7,11 @@
     <link rel="stylesheet" href="orbis-tokens.css" />
     <link rel="stylesheet" href="orbis.css" />
     <link rel="stylesheet" href="panel.css" />
+    <link rel="stylesheet" href="sidebar.css" />
   </head>
   <body>
+    <aside id="rail" aria-label="Orbis sidebar"></aside>
+    <div id="app">
     <header>
       <span class="mark" aria-hidden="true"></span>
       <strong>Orbis</strong>
@@ -81,6 +84,8 @@
       <main id="secrets"></main>
     </section>
 
+    </div>
+    <script src="sidebar.js"></script>
     <script type="module" src="panel.js"></script>
     <script type="module" src="panel-adblock.js"></script>
     <script type="module" src="panel-notes.js"></script>

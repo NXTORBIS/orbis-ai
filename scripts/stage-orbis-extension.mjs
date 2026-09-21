@@ -10,7 +10,7 @@ const to = join(out, 'resources', 'orbis_extension')
 if (!existsSync(join(from, 'adblock', 'index.json'))) throw new Error('The ad blocker is not built (run src/helper/adblock/cli.ts and scripts/build-extension.mjs).')
 rmSync(to, { recursive: true, force: true })
 mkdirSync(to, { recursive: true })
-// The panel is built into the browser now (orbis-ui/panel), so its files are not part of the extension; tests and per-run state are not shipped.
+// The panel, the new tab page and the search results are built into the browser (orbis-ui/*), so none of their files are part of the extension; tests and per-run state are not shipped.
 const skip = (source) => /^(_metadata|helper\.json|panel.*|.*\.test\.mjs)$/.test(basename(source))
 cpSync(from, to, { recursive: true, filter: (source) => !skip(source) })
 console.log('staged', to)

@@ -11,14 +11,26 @@ index 0e9128249b..fb0ae479dd 100644
  // Spell-check
  #define IDC_SPELLCHECK_SUGGESTION_0     41000
 diff --git a/chrome/browser/browser_resources.grd b/chrome/browser/browser_resources.grd
-index 87ae613c0a..e299e52ebf 100644
+index 87ae613c0a..dfe156d76e 100644
 --- a/chrome/browser/browser_resources.grd
 +++ b/chrome/browser/browser_resources.grd
-@@ -103,6 +103,20 @@
+@@ -103,6 +103,32 @@
          <include name="IDR_SEARCH_ENGINE_HISTORICAL_SEARCH_URLS_JSON" file="../../third_party/search_engines_data/resources_internal/definitions/historical_search_urls.json" type="BINDATA" />
        </if>
  
 +      <include name="IDR_ORBIS_INDEX_HTML" file="resources\orbis\index.html" type="BINDATA" />
++      <include name="IDR_ORBIS_NEWTAB_HTML" file="resources\orbis\newtab.html" type="BINDATA" />
++      <include name="IDR_ORBIS_NEWTAB_JS" file="resources\orbis\newtab.js" type="BINDATA" />
++      <include name="IDR_ORBIS_NEWTAB_CSS" file="resources\orbis\newtab.css" type="BINDATA" />
++      <include name="IDR_ORBIS_NEWTAB_LOGIC_JS" file="resources\orbis\newtab-logic.js" type="BINDATA" />
++      <include name="IDR_ORBIS_NEWTAB_STORE_JS" file="resources\orbis\newtab-store.js" type="BINDATA" />
++      <include name="IDR_ORBIS_RESULTS_HTML" file="resources\orbis\results.html" type="BINDATA" />
++      <include name="IDR_ORBIS_RESULTS_JS" file="resources\orbis\results.js" type="BINDATA" />
++      <include name="IDR_ORBIS_RESULTS_CSS" file="resources\orbis\results.css" type="BINDATA" />
++      <include name="IDR_ORBIS_ORB_JS" file="resources\orbis\orb.js" type="BINDATA" />
++      <include name="IDR_ORBIS_ORB_CSS" file="resources\orbis\orb.css" type="BINDATA" />
++      <include name="IDR_ORBIS_SIDEBAR_JS" file="resources\orbis\sidebar.js" type="BINDATA" />
++      <include name="IDR_ORBIS_SIDEBAR_CSS" file="resources\orbis\sidebar.css" type="BINDATA" />
 +      <include name="IDR_ORBIS_PANEL_JS" file="resources\orbis\panel.js" type="BINDATA" />
 +      <include name="IDR_ORBIS_PANEL_CSS" file="resources\orbis\panel.css" type="BINDATA" />
 +      <include name="IDR_ORBIS_HELPER_JS" file="resources\orbis\helper.js" type="BINDATA" />
@@ -225,7 +237,7 @@ index e1e7ccb48c..eccb768f01 100644
    BookmarksSidePanelCoordinator::From(browser)->CreateAndRegisterEntry(
        window_registry);
 diff --git a/chrome/browser/ui/webui/chrome_web_ui_configs.cc b/chrome/browser/ui/webui/chrome_web_ui_configs.cc
-index f949b9ea7c..b1950fdb87 100644
+index f949b9ea7c..6224b0e1ec 100644
 --- a/chrome/browser/ui/webui/chrome_web_ui_configs.cc
 +++ b/chrome/browser/ui/webui/chrome_web_ui_configs.cc
 @@ -126,6 +126,7 @@
@@ -236,35 +248,39 @@ index f949b9ea7c..b1950fdb87 100644
  #include "chrome/browser/ui/webui/side_panel/comments/comments_side_panel_ui.h"
  #include "chrome/browser/ui/webui/side_panel/customize_chrome/customize_chrome_ui.h"
  #include "chrome/browser/ui/webui/side_panel/history/history_side_panel_ui.h"
-@@ -343,6 +344,7 @@ void RegisterChromeWebUIConfigs() {
+@@ -343,6 +344,9 @@ void RegisterChromeWebUIConfigs() {
    map.AddWebUIConfig(std::make_unique<BookmarksUIConfig>());
    map.AddWebUIConfig(std::make_unique<ColorPipelineInternalsUIConfig>());
    map.AddWebUIConfig(std::make_unique<CommentsSidePanelUIConfig>());
 +  map.AddWebUIConfig(std::make_unique<OrbisUIConfig>());
++  map.AddWebUIConfig(std::make_unique<OrbisNewTabUIConfig>());
++  map.AddWebUIConfig(std::make_unique<OrbisSearchUIConfig>());
    map.AddWebUIConfig(std::make_unique<CustomizeChromeUIConfig>());
    map.AddWebUIConfig(
        std::make_unique<
 diff --git a/chrome/browser/ui/webui/chrome_web_ui_controller_factory.cc b/chrome/browser/ui/webui/chrome_web_ui_controller_factory.cc
-index c3020dfdea..0df9ed8c00 100644
+index c3020dfdea..56431bf838 100644
 --- a/chrome/browser/ui/webui/chrome_web_ui_controller_factory.cc
 +++ b/chrome/browser/ui/webui/chrome_web_ui_controller_factory.cc
-@@ -354,7 +354,9 @@ bool ChromeWebUIControllerFactory::IsWebUIAllowedToMakeNetworkRequests(
+@@ -354,7 +354,11 @@ bool ChromeWebUIControllerFactory::IsWebUIAllowedToMakeNetworkRequests(
        // https://crbug.com/376417346
        origin.host() == chrome::kChromeUIExtensionsHost ||
        // https://crbug.com/509216218
 -      origin.host() == chrome::kChromeUIDrivePickerHostHost;
 +      origin.host() == chrome::kChromeUIDrivePickerHostHost ||
 +      // Orbis: the panel talks to the local helper over loopback HTTP.
-+      origin.host() == chrome::kChromeUIOrbisHost;
++      origin.host() == chrome::kChromeUIOrbisHost ||
++      origin.host() == chrome::kChromeUIOrbisNewTabHost ||
++      origin.host() == chrome::kChromeUIOrbisSearchHost;
  }
  
  ChromeWebUIControllerFactory::ChromeWebUIControllerFactory() = default;
 diff --git a/chrome/browser/ui/webui/orbis/BUILD.gn b/chrome/browser/ui/webui/orbis/BUILD.gn
 new file mode 100644
-index 0000000000..c0f07d906b
+index 0000000000..cf535cec0f
 --- /dev/null
 +++ b/chrome/browser/ui/webui/orbis/BUILD.gn
-@@ -0,0 +1,22 @@
+@@ -0,0 +1,27 @@
 +# Copyright 2026 The Orbis Authors. All rights reserved.
 +# Use of this source code is governed by a BSD-style license that can be
 +# found in the LICENSE file.
@@ -282,7 +298,12 @@ index 0000000000..c0f07d906b
 +  deps = [
 +    "//base",
 +    "//chrome/browser:resources",
++    "//chrome/browser/autocomplete",
++    "//chrome/browser/history",
 +    "//chrome/browser/profiles:profile",
++    "//components/history/core/browser",
++    "//components/omnibox/browser",
++    "//third_party/metrics_proto",
 +    "//chrome/common",
 +    "//services/network/public/mojom:mojom_content_security_policy",
 +  ]
@@ -290,46 +311,63 @@ index 0000000000..c0f07d906b
 \ No newline at end of file
 diff --git a/chrome/browser/ui/webui/orbis/orbis_ui.cc b/chrome/browser/ui/webui/orbis/orbis_ui.cc
 new file mode 100644
-index 0000000000..916ebbd2df
+index 0000000000..665ce0c684
 --- /dev/null
 +++ b/chrome/browser/ui/webui/orbis/orbis_ui.cc
-@@ -0,0 +1,130 @@
+@@ -0,0 +1,324 @@
 +// Copyright 2026 The Orbis Authors. All rights reserved.
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
 +
 +#include "chrome/browser/ui/webui/orbis/orbis_ui.h"
 +
++#include <memory>
 +#include <string>
 +#include <utility>
 +
 +#include "base/command_line.h"
 +#include "base/functional/bind.h"
-+#include "base/memory/ref_counted_memory.h"
-+#include "base/strings/string_number_conversions.h"
-+#include "base/values.h"
-+#include "content/public/browser/web_ui_message_handler.h"
-+#include "content/public/browser/web_contents.h"
-+#include "content/public/common/url_constants.h"
-+#include "url/gurl.h"
-+#include <memory>
++#include "base/memory/ref_counted.h"
++#include "base/memory/weak_ptr.h"
 +#include "base/strings/strcat.h"
++#include "base/strings/string_number_conversions.h"
++#include "base/strings/utf_string_conversions.h"
++#include "base/values.h"
++#include "chrome/browser/autocomplete/autocomplete_classifier_factory.h"
++#include "chrome/browser/history/top_sites_factory.h"
 +#include "chrome/browser/profiles/profile.h"
++#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
++#include "chrome/browser/ui/browser_window/public/browser_window_features.h"
++#include "chrome/browser/ui/side_panel/side_panel_entry_id.h"
++#include "chrome/browser/ui/side_panel/side_panel_ui.h"
 +#include "chrome/common/webui_url_constants.h"
 +#include "chrome/grit/browser_resources.h"
++#include "components/history/core/browser/history_types.h"
++#include "components/history/core/browser/top_sites.h"
++#include "components/omnibox/browser/autocomplete_classifier.h"
++#include "components/omnibox/browser/autocomplete_match.h"
++#include "content/public/browser/navigation_controller.h"
++#include "content/public/browser/render_frame_host.h"
++#include "content/public/browser/web_contents.h"
 +#include "content/public/browser/web_ui.h"
 +#include "content/public/browser/web_ui_data_source.h"
++#include "content/public/browser/web_ui_message_handler.h"
++#include "content/public/common/url_constants.h"
 +#include "services/network/public/mojom/content_security_policy.mojom.h"
++#include "third_party/metrics_proto/omnibox_event.pb.h"
++#include "ui/base/page_transition_types.h"
++#include "chrome/browser/ui/webui/webui_embedding_context.h"
++#include "url/gurl.h"
 +
 +namespace {
 +
 +// The helper (the Orbis desktop app) tells the browser where it listens with
-+// these switches. Absent switches mean the panel shows an honest "Orbis is not
++// these switches. Absent switches mean the pages show an honest "Orbis is not
 +// running" state; nothing is faked.
 +constexpr char kHelperPortSwitch[] = "orbis-helper-port";
 +constexpr char kHelperTokenSwitch[] = "orbis-helper-token";
 +
-+// The one port the page may talk to, or empty when the helper is not running
++// The one port the pages may talk to, or empty when the helper is not running
 +// or the switch is not a plain port number.
 +std::string HelperPort() {
 +  const base::CommandLine* cl = base::CommandLine::ForCurrentProcess();
@@ -341,37 +379,72 @@ index 0000000000..916ebbd2df
 +  return base::NumberToString(value);
 +}
 +
-+// Hands the helper's port and token to the chrome://orbis page and to nothing
-+// else: the handler exists only inside this WebUI, so no web page and no other
-+// chrome:// page can send "orbis.getHelper" to it, and the values are never in
-+// an address or a resource anyone can request.
-+class OrbisHelperHandler : public content::WebUIMessageHandler {
++// The built-in Orbis pages, and only those, may read the helper connection.
++bool IsOrbisHost(const GURL& url) {
++  return url.SchemeIs(content::kChromeUIScheme) &&
++         (url.host() == chrome::kChromeUIOrbisHost ||
++          url.host() == chrome::kChromeUIOrbisNewTabHost ||
++          url.host() == chrome::kChromeUIOrbisSearchHost);
++}
++
++// The messages the built-in Orbis pages send to the browser. The handler exists
++// only inside these WebUIs, so no web page and no other chrome:// page can send
++// them; each message also checks that the top-level document is a page that is
++// allowed to ask. Values are never in an address or a resource anyone can
++// request.
++//   orbis.getHelper     the helper's port and token (all three pages)
++//   orbis.search        run a search as the address bar would, with the
++//                       person's default engine (new tab page only)
++//   orbis.mostVisited   the most visited sites (new tab page only)
++//   orbis.openPanel     show the native Orbis side panel of this window (new tab
++//                       page and search results, for the assistant orb)
++class OrbisPageHandler : public content::WebUIMessageHandler {
 + public:
-+  OrbisHelperHandler() = default;
-+  OrbisHelperHandler(const OrbisHelperHandler&) = delete;
-+  OrbisHelperHandler& operator=(const OrbisHelperHandler&) = delete;
++  OrbisPageHandler() = default;
++  OrbisPageHandler(const OrbisPageHandler&) = delete;
++  OrbisPageHandler& operator=(const OrbisPageHandler&) = delete;
 +
 +  void RegisterMessages() override {
 +    web_ui()->RegisterMessageCallback(
 +        "orbis.getHelper",
-+        base::BindRepeating(&OrbisHelperHandler::HandleGetHelper,
++        base::BindRepeating(&OrbisPageHandler::HandleGetHelper,
++                            base::Unretained(this)));
++    web_ui()->RegisterMessageCallback(
++        "orbis.search", base::BindRepeating(&OrbisPageHandler::HandleSearch,
++                                            base::Unretained(this)));
++    web_ui()->RegisterMessageCallback(
++        "orbis.openPanel",
++        base::BindRepeating(&OrbisPageHandler::HandleOpenPanel,
++                            base::Unretained(this)));
++    web_ui()->RegisterMessageCallback(
++        "orbis.mostVisited",
++        base::BindRepeating(&OrbisPageHandler::HandleMostVisited,
 +                            base::Unretained(this)));
 +  }
 +
 + private:
++  // The address of the page that is really showing. The tab's own address (GetLastCommittedURL of the contents) is the one the
++  // person sees, so the new tab page is chrome://newtab there; the frame's is chrome://orbis-newtab.
++  const GURL& PageUrl() {
++    return web_ui()->GetWebContents()->GetPrimaryMainFrame()->GetLastCommittedURL();
++  }
++
++  bool FromNewTabPage() {
++    const GURL& url = PageUrl();
++    return url.SchemeIs(content::kChromeUIScheme) &&
++           url.host() == chrome::kChromeUIOrbisNewTabHost;
++  }
++
 +  void HandleGetHelper(const base::ListValue& args) {
 +    if (args.empty() || !args[0].is_string()) {
 +      return;
 +    }
 +    const std::string& callback_id = args[0].GetString();
 +    AllowJavascript();
-+    // Only the top-level chrome://orbis document is answered.
-+    const GURL& url = web_ui()->GetWebContents()->GetLastCommittedURL();
 +    const base::CommandLine* cl = base::CommandLine::ForCurrentProcess();
 +    const std::string port = HelperPort();
-+    if (url.scheme() != content::kChromeUIScheme ||
-+        url.host() != chrome::kChromeUIOrbisHost || port.empty() ||
-+        !cl->HasSwitch(kHelperTokenSwitch)) {
++    if (!IsOrbisHost(PageUrl()) ||
++        port.empty() || !cl->HasSwitch(kHelperTokenSwitch)) {
 +      ResolveJavascriptCallback(callback_id, base::Value());
 +      return;
 +    }
@@ -382,7 +455,110 @@ index 0000000000..916ebbd2df
 +    result.Set("token", cl->GetSwitchValueASCII(kHelperTokenSwitch));
 +    ResolveJavascriptCallback(callback_id, result);
 +  }
++
++  void HandleSearch(const base::ListValue& args) {
++    if (args.size() < 2 || !args[0].is_string() || !args[1].is_string()) {
++      return;
++    }
++    const std::string& callback_id = args[0].GetString();
++    AllowJavascript();
++    const std::string& text = args[1].GetString();
++    AutocompleteClassifier* classifier =
++        AutocompleteClassifierFactory::GetForProfile(
++            Profile::FromWebUI(web_ui()));
++    if (!FromNewTabPage() || !classifier || text.empty() ||
++        text.size() > 4096) {
++      RejectJavascriptCallback(callback_id, base::Value());
++      return;
++    }
++    AutocompleteMatch match;
++    GURL alternate;
++    classifier->Classify(base::UTF8ToUTF16(text), false, true,
++                         metrics::OmniboxEventProto::NTP, &match, &alternate);
++    if (!match.destination_url.is_valid()) {
++      RejectJavascriptCallback(callback_id, base::Value());
++      return;
++    }
++    content::NavigationController::LoadURLParams params(match.destination_url);
++    params.transition_type = ui::PAGE_TRANSITION_GENERATED;
++    web_ui()->GetWebContents()->GetController().LoadURLWithParams(params);
++    ResolveJavascriptCallback(callback_id, base::Value());
++  }
++
++  void HandleOpenPanel(const base::ListValue& args) {
++    if (args.empty() || !args[0].is_string()) {
++      return;
++    }
++    const std::string& callback_id = args[0].GetString();
++    AllowJavascript();
++    BrowserWindowInterface* browser =
++        webui::GetBrowserWindowInterface(web_ui()->GetWebContents());
++    const GURL& url = PageUrl();
++    if (!browser || !IsOrbisHost(url) ||
++        url.host() == chrome::kChromeUIOrbisHost) {
++      RejectJavascriptCallback(callback_id, base::Value());
++      return;
++    }
++    browser->GetFeatures().side_panel_ui()->Show(SidePanelEntryId::kOrbis);
++    ResolveJavascriptCallback(callback_id, base::Value());
++  }
++
++  void HandleMostVisited(const base::ListValue& args) {
++    if (args.empty() || !args[0].is_string()) {
++      return;
++    }
++    const std::string callback_id = args[0].GetString();
++    AllowJavascript();
++    scoped_refptr<history::TopSites> top_sites =
++        TopSitesFactory::GetForProfile(Profile::FromWebUI(web_ui()));
++    if (!FromNewTabPage() || !top_sites) {
++      ResolveJavascriptCallback(callback_id, base::ListValue());
++      return;
++    }
++    top_sites->GetMostVisitedURLs(
++        base::BindOnce(&OrbisPageHandler::OnMostVisited,
++                       weak_factory_.GetWeakPtr(), callback_id));
++  }
++
++  void OnMostVisited(const std::string& callback_id,
++                     const history::MostVisitedURLList& sites) {
++    base::ListValue list;
++    for (const history::MostVisitedURL& site : sites) {
++      base::DictValue entry;
++      entry.Set("url", site.url.spec());
++      entry.Set("title", base::UTF16ToUTF8(site.title));
++      list.Append(std::move(entry));
++    }
++    ResolveJavascriptCallback(callback_id, list);
++  }
++
++  base::WeakPtrFactory<OrbisPageHandler> weak_factory_{this};
 +};
++
++// The resources every built-in Orbis page shares: the library, the helper
++// client, the logo.
++void AddSharedResources(content::WebUIDataSource* source) {
++  source->AddResourcePath("helper.js", IDR_ORBIS_HELPER_JS);
++  source->AddResourcePath("orbis-tokens.css", IDR_ORBIS_TOKENS_CSS);
++  source->AddResourcePath("orbis.css", IDR_ORBIS_CSS);
++  source->AddResourcePath("orbis-components.js", IDR_ORBIS_COMPONENTS_JS);
++  source->AddResourcePath("orbis-ring.png", IDR_ORBIS_RING_PNG);
++}
++
++// The pages talk to the local helper over loopback HTTP, at the one port the
++// helper listens on and nowhere else; favicons come from the browser.
++void ApplyPolicy(content::WebUIDataSource* source) {
++  const std::string port = HelperPort();
++  source->OverrideContentSecurityPolicy(
++      network::mojom::CSPDirectiveName::ConnectSrc,
++      port.empty() ? std::string("connect-src 'self';")
++                   : base::StrCat({"connect-src 'self' http://127.0.0.1:", port,
++                                   ";"}));
++  source->OverrideContentSecurityPolicy(
++      network::mojom::CSPDirectiveName::ImgSrc,
++      "img-src 'self' data: blob: https: http://127.0.0.1:* "
++      "chrome://favicon2;");
++}
 +
 +}  // namespace
 +
@@ -398,39 +574,77 @@ index 0000000000..916ebbd2df
 +  source->AddResourcePath("panel.html", IDR_ORBIS_INDEX_HTML);
 +  source->AddResourcePath("panel.js", IDR_ORBIS_PANEL_JS);
 +  source->AddResourcePath("panel.css", IDR_ORBIS_PANEL_CSS);
-+  source->AddResourcePath("helper.js", IDR_ORBIS_HELPER_JS);
 +  source->AddResourcePath("panel-adblock.js", IDR_ORBIS_PANEL_ADBLOCK_JS);
 +  source->AddResourcePath("panel-notes.js", IDR_ORBIS_PANEL_NOTES_JS);
 +  source->AddResourcePath("panel-tasks.js", IDR_ORBIS_PANEL_TASKS_JS);
 +  source->AddResourcePath("panel-workflows.js", IDR_ORBIS_PANEL_WORKFLOWS_JS);
 +  source->AddResourcePath("panel-galaxy.js", IDR_ORBIS_PANEL_GALAXY_JS);
 +  source->AddResourcePath("panel-secrets.js", IDR_ORBIS_PANEL_SECRETS_JS);
-+  source->AddResourcePath("orbis-tokens.css", IDR_ORBIS_TOKENS_CSS);
-+  source->AddResourcePath("orbis.css", IDR_ORBIS_CSS);
-+  source->AddResourcePath("orbis-components.js", IDR_ORBIS_COMPONENTS_JS);
-+  source->AddResourcePath("orbis-ring.png", IDR_ORBIS_RING_PNG);
-+  web_ui->AddMessageHandler(std::make_unique<OrbisHelperHandler>());
-+  // The panel talks to the local helper over loopback HTTP, at the one port
-+  // the helper listens on and nowhere else.
-+  const std::string port = HelperPort();
-+  source->OverrideContentSecurityPolicy(
-+      network::mojom::CSPDirectiveName::ConnectSrc,
-+      port.empty() ? std::string("connect-src 'self';")
-+                   : base::StrCat({"connect-src 'self' http://127.0.0.1:", port,
-+                                   ";"}));
-+  source->OverrideContentSecurityPolicy(
-+      network::mojom::CSPDirectiveName::ImgSrc,
-+      "img-src 'self' data: https: http://127.0.0.1:*;");
++  source->AddResourcePath("sidebar.js", IDR_ORBIS_SIDEBAR_JS);
++  source->AddResourcePath("sidebar.css", IDR_ORBIS_SIDEBAR_CSS);
++  AddSharedResources(source);
++  web_ui->AddMessageHandler(std::make_unique<OrbisPageHandler>());
++  ApplyPolicy(source);
 +}
 +
 +OrbisUI::~OrbisUI() = default;
-\ No newline at end of file
++
++OrbisNewTabUIConfig::OrbisNewTabUIConfig()
++    : content::DefaultWebUIConfig<OrbisNewTabUI>(
++          content::kChromeUIScheme,
++          chrome::kChromeUIOrbisNewTabHost) {}
++
++OrbisNewTabUI::OrbisNewTabUI(content::WebUI* web_ui)
++    : content::WebUIController(web_ui) {
++  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
++      Profile::FromWebUI(web_ui), chrome::kChromeUIOrbisNewTabHost);
++  source->AddResourcePath("", IDR_ORBIS_NEWTAB_HTML);
++  source->AddResourcePath("index.html", IDR_ORBIS_NEWTAB_HTML);
++  source->AddResourcePath("newtab.js", IDR_ORBIS_NEWTAB_JS);
++  source->AddResourcePath("newtab.css", IDR_ORBIS_NEWTAB_CSS);
++  source->AddResourcePath("newtab-logic.js", IDR_ORBIS_NEWTAB_LOGIC_JS);
++  source->AddResourcePath("newtab-store.js", IDR_ORBIS_NEWTAB_STORE_JS);
++  source->AddResourcePath("orb.js", IDR_ORBIS_ORB_JS);
++  source->AddResourcePath("orb.css", IDR_ORBIS_ORB_CSS);
++  AddSharedResources(source);
++  web_ui->AddMessageHandler(std::make_unique<OrbisPageHandler>());
++  ApplyPolicy(source);
++}
++
++OrbisNewTabUI::~OrbisNewTabUI() = default;
++
++OrbisSearchUIConfig::OrbisSearchUIConfig()
++    : content::DefaultWebUIConfig<OrbisSearchUI>(
++          content::kChromeUIScheme,
++          chrome::kChromeUIOrbisSearchHost) {}
++
++OrbisSearchUI::OrbisSearchUI(content::WebUI* web_ui)
++    : content::WebUIController(web_ui) {
++  content::WebUIDataSource* source = content::WebUIDataSource::CreateAndAdd(
++      Profile::FromWebUI(web_ui), chrome::kChromeUIOrbisSearchHost);
++  source->AddResourcePath("", IDR_ORBIS_RESULTS_HTML);
++  source->AddResourcePath("index.html", IDR_ORBIS_RESULTS_HTML);
++  source->AddResourcePath("results.js", IDR_ORBIS_RESULTS_JS);
++  source->AddResourcePath("results.css", IDR_ORBIS_RESULTS_CSS);
++  source->AddResourcePath("orb.css", IDR_ORBIS_ORB_CSS);
++  AddSharedResources(source);
++  web_ui->AddMessageHandler(std::make_unique<OrbisPageHandler>());
++  ApplyPolicy(source);
++  // The viewer embeds a video from the site that hosts it.
++  source->OverrideContentSecurityPolicy(
++      network::mojom::CSPDirectiveName::FrameSrc, "frame-src https:;");
++  source->OverrideContentSecurityPolicy(
++      network::mojom::CSPDirectiveName::MediaSrc,
++      "media-src 'self' https: blob:;");
++}
++
++OrbisSearchUI::~OrbisSearchUI() = default;
 diff --git a/chrome/browser/ui/webui/orbis/orbis_ui.h b/chrome/browser/ui/webui/orbis/orbis_ui.h
 new file mode 100644
-index 0000000000..be5d491b1d
+index 0000000000..324d6b1cf7
 --- /dev/null
 +++ b/chrome/browser/ui/webui/orbis/orbis_ui.h
-@@ -0,0 +1,29 @@
+@@ -0,0 +1,62 @@
 +// Copyright 2026 The Orbis Authors. All rights reserved.
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -451,6 +665,39 @@ index 0000000000..be5d491b1d
 +  OrbisUIConfig();
 +};
 +
++class OrbisNewTabUI;
++class OrbisSearchUI;
++
++// chrome://orbis-newtab: the Orbis new tab page. Chromium's new tab page URL
++// resolves to it (chrome/browser/search/search.cc).
++class OrbisNewTabUIConfig : public content::DefaultWebUIConfig<OrbisNewTabUI> {
++ public:
++  OrbisNewTabUIConfig();
++};
++
++// chrome://orbis-search: Orbis Search, the results page of the default search
++// engine (chrome://orbis-search/#q={searchTerms}).
++class OrbisSearchUIConfig : public content::DefaultWebUIConfig<OrbisSearchUI> {
++ public:
++  OrbisSearchUIConfig();
++};
++
++class OrbisNewTabUI : public content::WebUIController {
++ public:
++  explicit OrbisNewTabUI(content::WebUI* web_ui);
++  OrbisNewTabUI(const OrbisNewTabUI&) = delete;
++  OrbisNewTabUI& operator=(const OrbisNewTabUI&) = delete;
++  ~OrbisNewTabUI() override;
++};
++
++class OrbisSearchUI : public content::WebUIController {
++ public:
++  explicit OrbisSearchUI(content::WebUI* web_ui);
++  OrbisSearchUI(const OrbisSearchUI&) = delete;
++  OrbisSearchUI& operator=(const OrbisSearchUI&) = delete;
++  ~OrbisSearchUI() override;
++};
++
 +class OrbisUI : public content::WebUIController {
 + public:
 +  explicit OrbisUI(content::WebUI* web_ui);
@@ -462,15 +709,19 @@ index 0000000000..be5d491b1d
 +#endif  // CHROME_BROWSER_UI_WEBUI_ORBIS_ORBIS_UI_H_
 \ No newline at end of file
 diff --git a/chrome/common/webui_url_constants.h b/chrome/common/webui_url_constants.h
-index 23b1c1220e..a9db56b270 100644
+index 23b1c1220e..0bed339f6f 100644
 --- a/chrome/common/webui_url_constants.h
 +++ b/chrome/common/webui_url_constants.h
-@@ -233,6 +233,8 @@ inline constexpr char kChromeUIUntrustedNtpMicrosoftAuthURL[] =
+@@ -233,6 +233,12 @@ inline constexpr char kChromeUIUntrustedNtpMicrosoftAuthURL[] =
      "chrome-untrusted://ntp-microsoft-auth/";
  inline constexpr char kChromeUINTPTilesInternalsHost[] = "ntp-tiles-internals";
  inline constexpr char kChromeUIOmniboxHost[] = "omnibox";
 +inline constexpr char kChromeUIOrbisHost[] = "orbis";
 +inline constexpr char kChromeUIOrbisURL[] = "chrome://orbis/";
++inline constexpr char kChromeUIOrbisNewTabHost[] = "orbis-newtab";
++inline constexpr char kChromeUIOrbisNewTabURL[] = "chrome://orbis-newtab/";
++inline constexpr char kChromeUIOrbisSearchHost[] = "orbis-search";
++inline constexpr char kChromeUIOrbisSearchURL[] = "chrome://orbis-search/";
  inline constexpr char kChromeUIOmniboxAimEligibilityPage[] =
      "omnibox/aim-eligibility";
  inline constexpr char kChromeUIOmniboxPopupHost[] = "omnibox-popup.top-chrome";

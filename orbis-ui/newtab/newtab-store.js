@@ -1,8 +1,9 @@
-// chrome.storage.local access for the new-tab page (per browser profile). Values are re-validated on every read.
+// Per-profile storage for the new tab page (chrome://orbis-newtab keeps its own localStorage inside the browser profile).
+// Values are re-validated on every read.
 import { normalizeSettings, normalizeShortcuts } from './newtab-logic.js'
 
-const get = (keys) => new Promise((res) => chrome.storage.local.get(keys, (v) => res(v || {})))
-const set = (obj) => new Promise((res, rej) => chrome.storage.local.set(obj, () => (chrome.runtime.lastError ? rej(new Error(chrome.runtime.lastError.message)) : res())))
+const get = async (keys) => Object.fromEntries(keys.map((k) => { try { const v = localStorage.getItem(k); return [k, v === null ? undefined : JSON.parse(v)] } catch { return [k, undefined] } }))
+const set = async (obj) => { for (const [k, v] of Object.entries(obj)) localStorage.setItem(k, JSON.stringify(v)) }
 
 export async function load() {
   const v = await get(['orbisNtSettings', 'orbisNtShortcuts', 'orbisNtImage'])

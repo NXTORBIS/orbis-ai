@@ -52,6 +52,8 @@ export interface HandlerDeps {
   appServices?: () => AppServicesDeps | null | undefined
   /** Saved Orion Search sessions: the app's own store when given, else the helper opens the same database under dataDir. */
   searchSessions?: SearchSessionsDeps['store']
+  /** How this profile has arranged the browser sidebar (the app's own store); when given, the sidebar:* channels exist. */
+  sidebar?: () => { read(): Promise<unknown>; write(layout: unknown): Promise<unknown>; reset(): Promise<unknown> } | null | undefined
   profileId?: string
   adblock?: { extensionDir: string; listsDir: string; bundledDir: string }
   /**
@@ -67,6 +69,12 @@ const MAX_CONTENT = 400_000
 const EFFORTS = new Set<ReasoningEffort>(['low', 'high', 'max'])
 
 /** A conversation from the panel, checked: the panel is trusted with the token, not with the shape of what it sends. */
+function sidebarOf(get: NonNullable<HandlerDeps['sidebar']>): NonNullable<ReturnType<NonNullable<HandlerDeps['sidebar']>>> {
+  const sidebar = get()
+  if (!sidebar) throw Object.assign(new Error('The Orbis app is not ready.'), { code: 'not-ready' })
+  return sidebar
+}
+
 function readMessages(value: unknown): ChatMessage[] {
   if (!Array.isArray(value) || value.length === 0 || value.length > MAX_MESSAGES) throw new HelperError('bad-request', 'Expected a conversation of 1 to 200 messages.')
   return value.map((raw, i): ChatMessage => {
@@ -101,6 +109,13 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
     ...(deps.workflows ? createWorkflowHandlers(deps.workflows) : {}),
     ...(deps.galaxy ? createGalaxyHandlers(deps.galaxy) : {}),
     ...(deps.appServices ? createAppServiceHandlers(deps.appServices) : {}),
+    ...(deps.sidebar
+      ? {
+          'sidebar:get': () => sidebarOf(deps.sidebar!).read(),
+          'sidebar:save': ([layout]: unknown[]) => sidebarOf(deps.sidebar!).write(layout),
+          'sidebar:reset': () => sidebarOf(deps.sidebar!).reset()
+        }
+      : {}),
     ...(deps.adblockControl ? { 'adblock:control': createAdblockControl(deps.adblockControl) } : {}),
     ...(deps.adblock ? createAdblockHandlers({ ...deps.adblock, fetchFn: doFetch }) : {}),
     /** Whether the helper is there and the token works. Says nothing about the person's data. */

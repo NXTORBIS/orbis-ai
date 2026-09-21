@@ -14,8 +14,8 @@ import type { ChromiumControl } from './service.ts'
  * Orbis's browser: one Chromium per running Orbis, started when the browser is first needed and reached over a pipe.
  *
  * What happens when Orbis opens its browser:
- *  1. The Orbis extension is copied to a folder of Orbis's own, so the browser never runs the installed files and the local
- *     helper's connection details (a port and a one-time secret) can be written beside it, readable only by the extension.
+ *  1. The Orbis extension (the ad blocker) is copied to a folder of Orbis's own, so the browser never runs the installed files; the local
+ *     helper's connection details (a port and a one-time secret) go to the built-in Orbis pages through the browser's command line, never to a file.
  *  2. The Orbis helper (search, Orion, notes, tasks, filter lists) is started inside Orbis, on this computer's loopback address only.
  *     The Groq keys are handed to it here and go nowhere else.
  *  3. Chromium is started with this Orbis profile's own data folder, so profiles never share cookies, history or bookmarks, and
@@ -23,8 +23,10 @@ import type { ChromiumControl } from './service.ts'
  */
 
 export const ORBIS_EXTENSION_ID = 'gcaebckmlhiagfagcplpjmibhkhjljab'
-/** The built-in panel's origin: the only web-facing origin besides the extension's own pages that the helper answers. */
+/** The built-in panel's origin. */
 export const ORBIS_PANEL_ORIGIN = 'chrome://orbis'
+/** The built-in Orbis pages (panel, new tab page, search results): the only web-facing origins the helper answers. */
+export const ORBIS_BUILTIN_ORIGINS = [ORBIS_PANEL_ORIGIN, 'chrome://orbis-newtab', 'chrome://orbis-search']
 
 /** The code the ad blocker's worker runs for one operation of the panel's Blocking tab. */
 export function adblockCall(message: { type: string; [key: string]: unknown }): string {
@@ -74,6 +76,8 @@ export interface BrowserManagerOptions {
   appServices?: HandlerDeps['appServices']
   /** The app's own saved-research store, so the results page and the Orbis window share one instance. */
   searchSessions?: HandlerDeps['searchSessions']
+  /** How this profile arranged the sidebar (the app's own store), for the sidebar in the built-in Orbis pages. */
+  sidebar?: HandlerDeps['sidebar']
   /** The one Browser Control Layer of the app: Chromium fills it. */
   control?: BrowserControl
   saveDir?: string
@@ -159,7 +163,7 @@ export class BrowserManager {
     let bridge: { run(expression: string): Promise<unknown> } | null = null
     const server = createHelperServer({
       token,
-      allowedOrigins: [`chrome-extension://${ORBIS_EXTENSION_ID}`, ORBIS_PANEL_ORIGIN],
+      allowedOrigins: [`chrome-extension://${ORBIS_EXTENSION_ID}`, ...ORBIS_BUILTIN_ORIGINS],
       handlers: createHandlers({
         apiKeys: this.o.apiKeys(),
         dataDir: this.o.personalDir(profileId),
@@ -168,6 +172,7 @@ export class BrowserManager {
         galaxy: this.o.galaxy,
         appServices: this.o.appServices,
         searchSessions: this.o.searchSessions,
+        sidebar: this.o.sidebar,
         profileId,
         adblockControl: (message) => {
           if (!bridge) throw new Error('The browser is not ready yet.')
@@ -177,8 +182,8 @@ export class BrowserManager {
       })
     })
     const { port } = await server.listen()
-    // The built-in panel gets these from the browser's command line, handed only to chrome://orbis; the extension's own pages
-    // (until the built-in ones replace them) get them from the worker's session storage below. Nothing is written to a file.
+    // The built-in pages (chrome://orbis, chrome://orbis-newtab, chrome://orbis-search) get these from the browser's command line,
+    // handed only to those three pages. Nothing is written to a file.
 
     try {
       await allowSandboxToRead(this.o.chrome)
@@ -201,7 +206,6 @@ export class BrowserManager {
         }
       })
       bridge = service.bridge
-      await service.bridge.run(`chrome.storage.session.set({ 'orbis.helper': ${JSON.stringify({ port, token })} })`)
       // The ad blocker's page scripts run before each page's own, from here (see adblockInjector.ts).
       const injector = new AdblockInjector({
         browser: service.browser,

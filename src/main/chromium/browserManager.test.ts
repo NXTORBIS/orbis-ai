@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import test from 'node:test'
@@ -43,12 +43,12 @@ test('Orbis opens its own Chromium for a search and an address, with its own hel
 
   assert.equal(manager.isRunning, false, 'nothing runs until the browser is needed')
 
-  await t.test('a search opens the Orbis results page in the browser', async () => {
+  await t.test('a search opens the built-in Orbis results page (chrome://orbis-search) in the browser', async () => {
     const result = await manager.open('how do tides work')
     assert.ok(result.ok, result.detail)
     let hit: { url: string; title: string } | undefined
     for (let i = 0; i < 60 && !hit; i++) {
-      hit = (await tabs()).find((x) => x.url.includes('results.html') && /how do tides work . Orbis Search/.test(x.title))
+      hit = (await tabs()).find((x) => x.url.startsWith('chrome://orbis-search/') && /how do tides work . Orbis Search/.test(x.title))
       if (!hit) await wait(300)
     }
     assert.ok(hit, JSON.stringify(await tabs()))
@@ -67,10 +67,7 @@ test('Orbis opens its own Chromium for a search and an address, with its own hel
     assert.equal((await tabs()).length, before + 1)
   })
 
-  await t.test('the browser has its own data folder per profile, and the helper connection is in memory only (no file)', async () => {
-    const svc = await manager.ensure()
-    const stored = (await svc.bridge.run("chrome.storage.session.get('orbis.helper').then((r) => r['orbis.helper'])")) as { port: number; token: string }
-    assert.ok(stored.port > 0 && stored.token.length === 64)
+  await t.test('the browser has its own data folder per profile, and the helper connection is never written to a file', async () => {
     assert.equal(existsSync(join(dir, 'chromium', 'extension', 'helper.json')), false, 'no token file')
     assert.ok(existsSync(join(dir, 'chromium', 'profiles', 'profile-one', 'browser')), 'the profile has its own browser data folder')
   })
