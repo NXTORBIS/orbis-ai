@@ -30,3 +30,6 @@ div.rail-head { cursor: default; }
 .rail-problem { margin: 0; padding: var(--space-2); font-size: var(--text-xs); color: var(--muted); }
 #rail[data-mode="icons"] .rail-problem { display: none; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* Narrow side panel: the label rail takes at most 40% of the width so the panel keeps room. */
+#rail[data-mode="labels"] { max-width: 40vw; }

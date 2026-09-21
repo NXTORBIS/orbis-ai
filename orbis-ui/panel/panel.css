@@ -168,3 +168,6 @@ main { flex: 1; overflow-y: auto; padding: 14px 12px; display: flex; flex-direct
 
 /* Forced colors (Windows high contrast): the selected tab must not rely on an accent colour alone. */
 @media (forced-colors: active) { .tabs button[aria-selected="true"] { border-bottom: 4px solid Highlight; font-weight: 700; text-decoration: underline; } }
+
+/* Narrow side panel (a small window): the header wraps and the select shrinks instead of pushing New out of view. */
+@media (max-width: 480px) { header { flex-wrap: wrap; row-gap: 4px; } header select { flex: 1 1 80px; min-width: 0; max-width: 100%; } .status { flex-basis: 100%; order: 5; } }

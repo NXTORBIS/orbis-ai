@@ -176,3 +176,65 @@ Foundation: `scripts/build-orbis-ui.mjs` generates `orbis-ui/generated/cr_shared
 | crashed tab (chrome://kill), print preview, PiP hover bar | NOT done | |
 
 Regression (serial): launch 4/4, browserManager 6/6, service 5/5, browserUi 11/11, chromiumCapabilities 8/8, orbisSearchPage 14/14. pages-final reverse-checks; chromium-orbis-branding-and-strings and chromium-orbis-views-bubbles already fail a standalone reverse-check because later patches touch the same files (not caused by this work).
+
+## Final verification (Views 6, 2026-09-21)
+
+Everything below was run on the real build (`out\Default`, own pid, temp profiles, foreground of the pid verified before every OS-level key/click, no Shift+Enter).
+Scripts: `scripts/orbis-views6-*.mjs`, `scripts/orbis-uia-dump.ps1`, `scripts/orbis-uia-focus.ps1`. Screenshots (only ones that were looked at): `docs/views6-shots/`.
+Keyboard results are in `docs/chromium-shortcuts.md` (second pass), numbers in `docs/orbis-performance.md`.
+
+### Fixed in this pass (patch `patches/chromium-orbis-a11y-final.patch`, resources in `orbis-ui/`)
+1. **Orbis panel swallowed every browser shortcut while focused** (Ctrl+Shift+Y could not close it, Ctrl+N/Ctrl+T dead). `OrbisPanelWebView` in `side_panel_helper.cc` now hands unhandled keys to the window. Verified: toggle on/off/on, Ctrl+T and Ctrl+N work with the panel open.
+2. **Forced colors**: in the panel and in Orbis Search the selected tab / vertical was told apart only by an accent colour that forced colors removes; now a thicker system-colour border, bold and underline (`panel.css`, `results.css`). Verified in a screenshot (Ask is clearly marked).
+3. **Reduced motion**: the new tab search box kept a 0.15 s transition; now none under `prefers-reduced-motion: reduce` (`newtab.css`).
+4. **Narrow panel** (window 500 px wide): the header pushed "New" out of view and a horizontal scrollbar appeared; the header now wraps and the rail takes at most 40 % of the width (`panel.css`, `sidebar.css`). Verified at 500x400 (`dpi1.0-500x400-panel.png`).
+
+The patch is ordered after `chromium-orbis-pages-final.patch` by `scripts/apply-chromium-patches.ps1`; `git apply --reverse --check` passes on the tree. It contains only the C++ change: the CSS reaches the tree through `sync-orbis-panel.ps1` like the other Orbis resources.
+
+### D1 UI Automation (`scripts/orbis-views6-a11y.mjs`, `orbis-views6-menus.mjs`)
+The native UI was dumped in five states (main window with the panel open, app menu, omnibox popup, tab context menu, profile chip). Every Button, TabItem, Edit and MenuItem has a non-empty Name with the right ControlType:
+caption buttons (Minimize/Maximize/Close), Back, Forward, Reload (Button), "Address and search bar" (Edit), "Bookmark this tab", "Orbis - pinned", "Sign in to Orbis?" (avatar chip), "Orbis" (app menu button),
+panel "Unpin from toolbar" and "Close side panel", "Tab search", tabs (TabItem) named by page title, "Close" (tab close, Button), "New Tab" (Button); the app menu has 24 MenuItems, all named (with accelerators); the tab context menu 13, all named.
+Violations, left as they are: the container elements `ToolbarView` (ToolBar), the tab strip container (Tab) and the menu scroll containers have an empty Name (stock Chromium, not interactive controls).
+Every tab close button is just named "Close" without the tab title (stock behaviour; not changed).
+The profile chip bubble is a WebUI bubble and was not walked by the native dump. The WebUI pages were checked through the CDP accessibility tree: chrome://orbis, chrome://orbis-newtab, chrome://orbis-search have 0 unnamed buttons/links/inputs/tabs;
+chrome://settings, /appearance, /privacy have 16-17 unnamed `image` nodes each (stock decorative icons, not controls).
+
+### D2 keyboard only (`scripts/orbis-views6-kbd.mjs`)
+Alt+Shift+T then Tab walks the toolbar in a loop (Reload, Site information, Address and search bar, Bookmark this tab, Orbis pinned, profile chip, app menu). A visible focus ring was seen on the Reload button (rounded square) and on
+Bookmark this tab (circle): `kbd-focus-strip.png`. Alt+F opens the app menu, Down/Up move, Escape closes; Shift+F10 opens the address bar context menu, Down moves, Escape closes; omnibox: typed text gives suggestion rows,
+Down/Up move, Escape closes the popup then restores the address, Enter navigates. Not done: arrows/Enter inside submenus, the profile chip bubble by keyboard.
+
+### D3 forced colors (`scripts/orbis-views6-web.mjs`, `Emulation.setEmulatedMedia forced-colors: active`)
+Looked at chrome://orbis, orbis-newtab, orbis-search (`web-orbis_-forced.png`, `web-orbis_newtab_-forced.png`, `web-orbis_search_q_hello_in_orion-forced.png`) and settings, /appearance, /privacy (`web-settings*-forced.png`):
+all legible (system colours, borders kept, text and controls visible). One weakness found and fixed: the selected tab (item 2). This is emulation of the media feature, not the real Windows high-contrast theme, and the native (Views) UI was not
+checked under a real high-contrast theme (the OS theme was not changed on this machine).
+
+### D4 reduced motion
+Emulated `prefers-reduced-motion: reduce`: chrome://orbis, orbis-newtab (after the fix) and orbis-search have 0 running animations, max transition duration 0, max animation duration 0.
+Settings pages (stock) keep 0.1-0.5 s transitions under reduce; not changed (not Orbis pages).
+
+### D5 200 % zoom and 390 px
+At 640x400 CSS px with device scale 2 (= 200 % of 1280): no clipped or overflowing element on the three Orbis pages or the three settings pages. At 390 px: orbis and orbis-newtab (`web-orbis_newtab_-w390.png`) have no overflow;
+orbis-search's row of verticals runs past the edge by design (it scrolls horizontally, scrollbar hidden, reachable by keyboard focus); the settings pages (stock) keep a 553 px minimum content width and scroll sideways at 390 px (stock, not changed).
+
+### D6 DPI and window size (`scripts/orbis-views6-dpi.mjs`)
+`--force-device-scale-factor` 1.0, 1.25, 1.5, 1.75, 2.0: toolbar, tabs, omnibox, the "Sign in to Orbis?" chip and the window buttons scale together with nothing clipped or overlapping (`dpi-strip.png` shows all five);
+the open app menu is complete at 2.0 (`dpi2.0-1200x800-menu.png`). The black rectangle around menus in these captures is PrintWindow not handling the popup's transparent corners, not a rendering fault.
+Narrow (516 px is the browser's minimum window width) and short (400 px): tab strip, chip (collapses to its icon), overflow chevron and menu (`dpi1.0-500x400-menu.png`) are fine; the panel problem found here was fixed (item 4).
+Limit: at 516 px the panel leaves about 130 px for the page; that is the panel's width, not a clipping bug.
+
+### D7 two windows / two profiles
+Two profiles in one browser process (the second opened with `--profile-directory`): the two windows have different browser contexts, the panel opened in one window is not present in the other, and a Ctrl+N window starts without the panel.
+Not verifiable visually: the toolbar orb and the panel do not display a profile name, and the profile chip reads "Sign in to Orbis?" in both profiles (no profile name is shown while signed out), so "shows the right profile" was checked only through the browser contexts.
+
+### Open observations (not changed)
+- The chip says "Sign in to Orbis?" and Settings shows "Google services" / "Your Orbis" under "You and sign-in": the migration requirement says sign-in is removed; this is product wording, not touched here.
+- The profile chip bubble and the Orbis profile menu content were not read through UI Automation.
+
+### E performance
+See `docs/orbis-performance.md` (medians of 5, honest limits; there is no pre-restyle baseline).
+
+### Regression (serial)
+launch 4/4, browserManager 6/6, service 5/5, browserUi 11/11, chromiumCapabilities 8/8, chromiumCapabilities2 11/11, agent 4/4, orbisSearchPage 14/14.
+`browserUi.ts` gained a test-only `hold()` (typematic key hold) used by the shortcut checks.

@@ -2,7 +2,7 @@
 import { launch, sleep, capture, ROOT } from './orbis-views6-lib.mjs'
 const shots = ROOT + 'docs/views6-shots/'
 const log = (...a) => console.log(...a)
-const cases = [['1.0', '1200,800'], ['1.25', '1200,800'], ['1.5', '1200,800'], ['1.75', '1200,800'], ['2.0', '1200,800'], ['1.0', '500,800'], ['1.0', '1200,400'], ['1.0', '500,400']]
+const cases = process.env.CASES ? JSON.parse(process.env.CASES) : [['1.0', '1200,800'], ['1.25', '1200,800'], ['1.5', '1200,800'], ['1.75', '1200,800'], ['2.0', '1200,800'], ['1.0', '500,800'], ['1.0', '1200,400'], ['1.0', '500,400']]
 for (const [scale, size] of cases) {
   const tag = `dpi${scale}-${size.replace(',', 'x')}`
   const b = await launch({ name: 'dpi', args: [`--force-device-scale-factor=${scale}`], size, url: 'chrome://orbis-newtab/' })
