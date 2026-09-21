@@ -251,3 +251,25 @@ Only the pages below were captured (dark + light, shots in docs/views7-shots/) a
 | other settings subpages, shortcuts, captive portal, billing (interstitials list page is unstyled, sans-serif font) | same folder | Captured, NOT looked at | none |
 
 Not done: extension details, print preview, crashed tab, history clusters, customize-chrome, PDF viewer controls, PiP, remaining interstitials, timed-out/blocked pages.
+
+### Final pages (Views 7, completed pass)
+
+Screenshots: docs/views7-shots/{after,after2,after3,final,final2}/ (dark + light each; `*-w0.png` are PrintWindow captures of the own browser window).
+
+| Page | Screenshot | Verdict | Fix |
+|---|---|---|---|
+| settings privacy, camera, microphone, location, notifications, javascript, popups, languages, reset, onStartup, defaultBrowser, fonts, searchEngines | (first sweep, docs/views7-shots/*.png) | Orbis in both themes; Orbis Search is the default engine | languages page stock green text -> secondary text colour |
+| settings/privacy/guide + privacy page banner | after/chrome_settings_privacy_guide_*, chrome_settings_privacy_* | stock blue cloud illustration, white box in light | all privacy-guide banners/graphics -> Orbis shield SVG |
+| header logo (settings/extensions/history) | first sweep vs after | dark plate in light | one theme-aware ring SVG in cr_toolbar |
+| chrome://apps | after/chrome_apps_* | stayed dark, blue laptop | follows browser scheme; Orbis ring illustration; forced-dark button colours removed |
+| offline error | after3/offline_* | stock dino + game | game disabled, Orbis error mark, heading "No internet" |
+| timed out (-118), blocked by client (-20), DNS (-105) | after/chrome_network_error_* | Orbis, OK | none |
+| interstitials ssl, ssl hsts, clock, lookalike, https_only, insecure_form, safebrowsing malware/phishing/billing, enterprise-block, captiveportal, supervised-user-verify/-site-blocked | after/chrome_interstitials_* | OK (malware/phishing intentionally red); https_only "Continue" was stock dark/pale blue | https_only secondary button uses the standard Orbis secondary |
+| chrome://interstitials (index) | after/chrome_interstitials_* | internal dev index, unstyled; not user facing | none |
+| extension details, list, shortcuts | final/extension_* | Orbis, OK (Chrome Web Store link/icon kept: legitimate service) | none |
+| crashed tab (chrome://kill) | final2/window_crashed_tab_* | Orbis "Aw, Snap" OK. Toolbar shows "Sign in to Orbis?" chip although sign-in is meant to be removed: NOT fixed | none |
+| history journeys + history-clusters/customize-chrome side panels | after/chrome_history_*, chrome_customize_* | Orbis; customize-chrome theme mock still shows a Chrome-style logo and stock colour swatches: NOT fixed | none |
+| PDF viewer: zoom +, fit, rotate, sidebar toggle, more menu (Present etc.), print | final/pdf_*, final2/pdf_* | controls work, Orbis dark toolbar with cyan selection | none |
+| print preview | final/window_print_*-w0 | Orbis dialog OK | none |
+| picture-in-picture bar | - | NOT captured | - |
+| keyboard find/search inside PDF, presentation mode | - | menu item seen, mode itself not exercised | - |

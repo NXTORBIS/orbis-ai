@@ -1,0 +1,8 @@
+extension id eclcoeedadcbdffjbmgohlkfbcadneof
+kill capture via cdp ok
+kill FAIL Cannot read properties of undefined (reading 'data')
+pdf title 
+extension id eclcoeedadcbdffjbmgohlkfbcadneof
+kill capture via cdp ok
+kill FAIL Cannot read properties of undefined (reading 'data')
+pdf title 

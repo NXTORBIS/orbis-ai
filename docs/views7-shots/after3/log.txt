@@ -1,0 +1,6 @@
+offline_https_example_com__dark.png "{\"dark\":null,\"bg\":\"rgb(14, 16, 19)\",\"font\":\"\\\"Inter Variable\\\", \\\"Segoe UI\\\", system-ui,\",\"title\":\"example.com\"}"
+chrome_interstitials_https_only_dark.png "{\"dark\":null,\"bg\":\"rgb(14, 16, 19)\",\"font\":\"\\\"Inter Variable\\\", \\\"Segoe UI\\\", system-ui,\",\"title\":\"Site is not secure\"}"
+chrome_settings_languages_dark.png "{\"dark\":null,\"bg\":\"rgba(0, 0, 0, 0)\",\"font\":\"\\\"Inter Variable\\\", \\\"Segoe UI\\\", system-ui,\",\"title\":\"Settings - Languages\"}"
+offline_https_example_com__light.png "{\"dark\":null,\"bg\":\"rgb(232, 236, 241)\",\"font\":\"\\\"Inter Variable\\\", \\\"Segoe UI\\\", system-ui,\",\"title\":\"example.com\"}"
+chrome_interstitials_https_only_light.png "{\"dark\":null,\"bg\":\"rgb(232, 236, 241)\",\"font\":\"\\\"Inter Variable\\\", \\\"Segoe UI\\\", system-ui,\",\"title\":\"Site is not secure\"}"
+chrome_settings_languages_light.png "{\"dark\":null,\"bg\":\"rgba(0, 0, 0, 0)\",\"font\":\"\\\"Inter Variable\\\", \\\"Segoe UI\\\", system-ui,\",\"title\":\"Settings - Languages\"}"
