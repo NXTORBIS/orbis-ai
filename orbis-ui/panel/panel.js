@@ -223,10 +223,10 @@ let lastQuery = ''
 let searching = null
 
 function showTab(name) {
-  for (const id of ['ask', 'search', 'block', 'notes', 'tasks', 'workflows', 'galaxy', 'secrets']) {
-    $(`view-${id}`).hidden = id !== name
-    $(`tab-${id}`).setAttribute('aria-selected', String(id === name))
-  }
+  // Every view in the panel, including the rail's own (Tabs, Clipboard, ...), so choosing a tab always hides whichever was in front.
+  for (const view of document.querySelectorAll('.view')) view.hidden = view.id !== `view-${name}`
+  for (const id of ['ask', 'search', 'block', 'notes', 'tasks', 'workflows', 'galaxy', 'secrets']) $(`tab-${id}`).setAttribute('aria-selected', String(id === name))
+  document.dispatchEvent(new CustomEvent('orbis:view', { detail: { name } }))
   if (name === 'block') document.dispatchEvent(new CustomEvent('orbis:blocking-shown'))
   else if (name === 'notes') document.dispatchEvent(new CustomEvent('orbis:notes-shown'))
   else if (name === 'tasks') document.dispatchEvent(new CustomEvent('orbis:tasks-shown'))

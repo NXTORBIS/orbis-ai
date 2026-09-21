@@ -37,7 +37,25 @@ test('invalid arguments never reach the browser', async () => {
 })
 
 test('a failing capability and a missing browser are reported', async () => {
-  await assert.rejects(setup(false).handlers['browser:tabs']([], ctx), /nope/)
+  await assert.rejects(Promise.resolve(setup(false).handlers['browser:tabs']([], ctx)), /nope/)
   const none = createBrowserControlHandlers(() => null)
-  await assert.rejects(none['browser:tabs']([], ctx), /not ready/)
+  await assert.rejects(Promise.resolve(none['browser:tabs']([], ctx)), /not ready/)
+})
+
+test('open, stop, zoom reading, navigation info and group colours map to capabilities; bad addresses and colours never reach the browser', async () => {
+  const { handlers, calls } = setup()
+  await handlers['browser:do'](['open', { url: 'example.com/a' }], ctx)
+  await handlers['browser:do'](['stop'], ctx)
+  await handlers['browser:do'](['zoom-get'], ctx)
+  await handlers['browser:do'](['nav-info'], ctx)
+  await handlers['browser:do'](['group-rename', { groupId: '3', name: 'Work', color: '#34d399' }], ctx)
+  await handlers['browser:do'](['group-create', { tabIds: ['1'], name: 'Play', color: 'blue' }], ctx)
+  assert.deepEqual(calls.map((c) => c.capability), ['tabs.create', 'navigation.stop', 'zoom.get', 'navigation.info', 'groups.rename', 'groups.create'])
+  assert.deepEqual(calls[0].params, { url: 'https://example.com/a', active: true })
+  assert.deepEqual(calls[4].params, { groupId: '3', name: 'Work', color: '#34d399' })
+  const before = calls.length
+  for (const bad of [['open', { url: 'javascript:alert(1)' }], ['open', { url: 'file:///C:/x' }], ['open', { url: '' }], ['open', { url: 'a'.repeat(3000) }], ['group-rename', { groupId: '3', name: 'x', color: 'url(x)' }], ['group-create', { tabIds: [], name: 'x', color: 5 }]]) {
+    await assert.rejects(Promise.resolve().then(() => handlers['browser:do'](bad, ctx)), /not valid|Only web/)
+  }
+  assert.equal(calls.length, before)
 })

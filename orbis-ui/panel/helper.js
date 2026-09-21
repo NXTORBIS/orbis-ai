@@ -44,11 +44,22 @@ async function fromExtension() {
   return null
 }
 
+// TEST ONLY: the panel checked in an ordinary browser tab, served by scripts/panel-ui-check.mjs. The handoff is the address
+//   http://127.0.0.1:<page port>/index.html?orbis-test-helper=<helper port>#<token>
+// and is accepted only on an http: page whose host is exactly 127.0.0.1. In the shipped built-in page (chrome://orbis) the protocol is
+// chrome:, so this returns null and the browser's own handoff above is the only way in; it cannot weaken it.
+function fromTestAddress() {
+  if (location.protocol !== 'http:' || location.hostname !== '127.0.0.1') return null
+  const port = new URLSearchParams(location.search).get('orbis-test-helper') || ''
+  const token = location.hash.slice(1)
+  return /^\d{2,5}$/.test(port) && /^[\w-]{16,200}$/.test(token) ? { port: Number(port), token } : null
+}
+
 async function connection(force = false) {
   if (cached && !force) return cached
-  let found = null
+  let found = fromTestAddress()
   try {
-    found = typeof chrome !== 'undefined' && chrome.storage?.session ? await fromExtension() : typeof chrome !== 'undefined' && chrome.send ? await fromBrowser() : null
+    if (!found) found = typeof chrome !== 'undefined' && chrome.storage?.session ? await fromExtension() : typeof chrome !== 'undefined' && chrome.send ? await fromBrowser() : null
   } catch {
     found = null
   }

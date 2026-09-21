@@ -1,6 +1,6 @@
-import type { Board, BoardElement } from '../../shared/whiteboard'
-import { boardToSvg, MAX_ELEMENTS, newBoard, normalizeBoard, normalizeElement, topZ } from '../../shared/whiteboard'
-import { Collection, personalFile } from './store'
+import type { Board, BoardElement } from '../../shared/whiteboard.ts'
+import { boardToSvg, MAX_ELEMENTS, newBoard, normalizeBoard, normalizeElement, topZ } from '../../shared/whiteboard.ts'
+import { Collection, personalFile } from './store.ts'
 import { DEFAULT_PROFILE_ID } from '../../shared/profiles.ts'
 
 /** Whiteboards as they are kept and changed: one file of boards, each with everything drawn on it. */

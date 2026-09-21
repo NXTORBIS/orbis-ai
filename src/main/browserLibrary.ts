@@ -155,6 +155,50 @@ export class BrowserLibrary {
     }
   }
 
+  // ---------------------------------------------------------------- pages and pictures an earlier Orbis kept (listed by the sidebar)
+
+  /** Pages saved to this computer, newest first. Damaged rows are left out of the list, never rewritten. */
+  savedPages(): { url: string; title: string; path: string; savedAt: number }[] {
+    const rows = Array.isArray(this.legacy.savedPages) ? (this.legacy.savedPages as Record<string, unknown>[]) : []
+    return rows
+      .filter((r) => r && typeof r.path === 'string' && r.path && typeof r.url === 'string')
+      .map((r) => ({ url: String(r.url), title: typeof r.title === 'string' ? r.title.slice(0, 300) : '', path: String(r.path), savedAt: Number(r.savedAt) || 0 }))
+      .sort((a, b) => b.savedAt - a.savedAt)
+  }
+
+  /** Forgets a saved page here. The file it points at is not touched. */
+  forgetSavedPage(path: string): boolean {
+    const rows = Array.isArray(this.legacy.savedPages) ? (this.legacy.savedPages as Record<string, unknown>[]) : []
+    const kept = rows.filter((r) => !(r && r.path === path))
+    if (kept.length === rows.length) return false
+    this.legacy = { ...this.legacy, savedPages: kept }
+    this.changed()
+    return true
+  }
+
+  /** Pictures taken of pages, newest first. */
+  screenshots(): { id: string; url: string; title: string; path: string; at: number; width: number; height: number }[] {
+    const rows = Array.isArray(this.legacy.screenshots) ? (this.legacy.screenshots as Record<string, unknown>[]) : []
+    return rows
+      .filter((r) => r && typeof r.id === 'string' && r.id && typeof r.path === 'string' && r.path)
+      .map((r) => ({ id: String(r.id), url: typeof r.url === 'string' ? r.url : '', title: typeof r.title === 'string' ? r.title.slice(0, 300) : '', path: String(r.path), at: Number(r.at) || 0, width: Number(r.width) || 0, height: Number(r.height) || 0 }))
+      .sort((a, b) => b.at - a.at)
+  }
+
+  screenshot(id: string): ReturnType<BrowserLibrary['screenshots']>[number] | undefined {
+    return this.screenshots().find((s) => s.id === id)
+  }
+
+  /** Forgets a picture and says which file it was, so the caller can delete it. */
+  removeScreenshot(id: string): ReturnType<BrowserLibrary['screenshots']>[number] | undefined {
+    const rows = Array.isArray(this.legacy.screenshots) ? (this.legacy.screenshots as Record<string, unknown>[]) : []
+    const going = this.screenshot(id)
+    if (!going) return undefined
+    this.legacy = { ...this.legacy, screenshots: rows.filter((r) => !(r && r.id === id)) }
+    this.changed()
+    return going
+  }
+
   // ---------------------------------------------------------------- address bar searches and learning
 
   /** Records a search run from the address bar; repeats move it to the top and count up. */

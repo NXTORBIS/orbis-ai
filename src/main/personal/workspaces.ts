@@ -1,6 +1,6 @@
-import type { Workspace, WorkspaceTab } from '../../shared/workspaces'
-import { fromBrowserState, newWorkspace, normalizeWorkspace, summarize } from '../../shared/workspaces'
-import { Collection, personalFile } from './store'
+import type { Workspace, WorkspaceTab } from '../../shared/workspaces.ts'
+import { fromBrowserState, newWorkspace, normalizeWorkspace, summarize } from '../../shared/workspaces.ts'
+import { Collection, personalFile } from './store.ts'
 import { DEFAULT_PROFILE_ID } from '../../shared/profiles.ts'
 
 /** What the browser window currently holds, as the control layer reports it. */

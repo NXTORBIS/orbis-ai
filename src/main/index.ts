@@ -65,6 +65,7 @@ import { parseSchedule, scheduleRequest } from '../shared/schedulePhrase'
 import { MemoryFull, MemoryRefused, MemoryStore } from './knowledge/memory'
 import { SearchSessionStore } from './knowledge/searchSessions'
 import type { AppServicesDeps } from '../helper/appServices'
+import type { PanelStores } from '../helper/panelStores'
 import { GalaxyService } from './knowledge/galaxyService'
 import { projectsMentioned } from '../shared/workspaces'
 import type { GalaxyNodeType, GalaxyView } from '../shared/galaxy'
@@ -194,6 +195,8 @@ let appServicesForBrowser: AppServicesDeps | null = null
 let browserSidebarForBrowser: BrowserSidebarStore | null = null
 /** Saved Orion Search research, once it exists: the results page in the browser and the Orbis window share this one store. */
 let searchSessionsForBrowser: SearchSessionStore | null = null
+/** The stores behind the Orbis panel's saved pages, screenshots, clipboard, reminders, whiteboard, workspaces and sources rows (set once they exist). */
+let panelStoresForBrowser: PanelStores | null = null
 
 /** Instructions the user adds to a running automation, per chat request. */
 const automationInstructions = new Map<string, string[]>()
@@ -1195,6 +1198,7 @@ if (!app.requestSingleInstanceLock()) {
           galaxy: () => galaxyForChat,
           appServices: () => appServicesForBrowser,
           searchSessions: () => searchSessionsForBrowser,
+          stores: () => panelStoresForBrowser,
           sidebar: () => {
             const store = browserSidebarForBrowser
             if (!store) return null
@@ -1864,6 +1868,17 @@ if (!app.requestSingleInstanceLock()) {
         return { dataUrl: image.dataUrl, width: image.width ?? 0, height: image.height ?? 0, url: about.url ?? '', title: about.title ?? '' }
       }
     })
+    panelStoresForBrowser = {
+      library: browserLibrary ?? undefined,
+      removeFile: (path) => fs.rm(path, { force: true }),
+      openFile: (path) => shell.openPath(path),
+      clipboard: clipboardHistory,
+      tasks: tasksStore,
+      whiteboard: whiteboardStore,
+      workspaces: workspacesStore,
+      research: { withSources: (limit) => searchSessionsForBrowser?.withSources(limit) ?? [] },
+      control: browserControl.control as unknown as PanelStores['control']
+    }
     void clipboardHistory.start().catch((err: unknown) => console.error('[clipboard] failed to start', err))
     app.on('before-quit', () => {
       clipboardHistory.stop()

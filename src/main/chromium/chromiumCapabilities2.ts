@@ -256,6 +256,21 @@ export function registerMoreChromiumCapabilities(d: ChromiumCapabilityDeps & { s
     }
   })
 
+  control.register({
+    id: 'zoom.get',
+    domain: 'zoom',
+    name: "Read the page's zoom",
+    description: "The page's real browser zoom for its site, as a factor (1 is 100%).",
+    params: { tabId: TAB_ID },
+    mutates: false,
+    confirmation: 'none',
+    run: async (p) => {
+      const tab = await tabFor(p.tabId)
+      const factor = await call<number>(`chrome.tabs.getZoom(${Number(tab.id)})`)
+      return { tabId: tab.id, factor }
+    }
+  })
+
   // ---------------------------------------------------------------- print, save, view source (the page itself, through the browser)
 
   const safeName = (s: string): string => s.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || 'page'

@@ -10,7 +10,7 @@ import type { Handler } from './server.ts'
 
 export interface SearchSessionsDeps {
   /** The app's own store when the helper runs inside Orbis; otherwise the helper opens the same database itself. */
-  store?: () => Pick<SearchSessionStore, 'save' | 'list' | 'get' | 'find' | 'remove' | 'clear'> | null | undefined
+  store?: () => Pick<SearchSessionStore, 'save' | 'list' | 'get' | 'find' | 'remove' | 'clear' | 'withSources'> | null | undefined
   userData?: string
   profileId?: string
   apiKeys: string[]

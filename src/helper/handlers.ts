@@ -22,6 +22,8 @@ import { createGalaxyHandlers } from './galaxy.ts'
 import type { GalaxyDeps } from './galaxy.ts'
 import { createBrowserControlHandlers } from './browserControl.ts'
 import type { PanelControl } from './browserControl.ts'
+import { createPanelStoreHandlers } from './panelStores.ts'
+import type { PanelStores } from './panelStores.ts'
 import { HelperError } from './server.ts'
 import type { Handler } from './server.ts'
 
@@ -56,6 +58,13 @@ export interface HandlerDeps {
   searchSessions?: SearchSessionsDeps['store']
   /** How this profile has arranged the browser sidebar (the app's own store); when given, the sidebar:* channels exist. */
   sidebar?: () => { read(): Promise<unknown>; write(layout: unknown): Promise<unknown>; reset(): Promise<unknown> } | null | undefined
+  /** The Browser Control Layer, for the rail's Tabs, Tab groups, Media and Controls rows; when given, the browser:* channels exist. */
+  browserControl?: () => PanelControl | null | undefined
+  /**
+   * The stores behind the sidebar's saved pages, screenshots, clipboard, reminders, whiteboard, workspaces and sources rows, read at call
+   * time. A store that is missing answers its channels with "not available" and nothing else.
+   */
+  stores?: () => PanelStores | null | undefined
   profileId?: string
   adblock?: { extensionDir: string; listsDir: string; bundledDir: string }
   /**
@@ -119,6 +128,7 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
         }
       : {}),
     ...(deps.browserControl ? createBrowserControlHandlers(deps.browserControl) : {}),
+    ...(deps.stores ? createPanelStoreHandlers(deps.stores) : {}),
     ...(deps.adblockControl ? { 'adblock:control': createAdblockControl(deps.adblockControl) } : {}),
     ...(deps.adblock ? createAdblockHandlers({ ...deps.adblock, fetchFn: doFetch }) : {}),
     /** Whether the helper is there and the token works. Says nothing about the person's data. */
