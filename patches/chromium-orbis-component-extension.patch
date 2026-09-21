@@ -1,8 +1,16 @@
 diff --git a/chrome/browser/extensions/component_loader.cc b/chrome/browser/extensions/component_loader.cc
-index e926dac169..5fb10b25ee 100644
+index e926dac169..70d53cb1b7 100644
 --- a/chrome/browser/extensions/component_loader.cc
 +++ b/chrome/browser/extensions/component_loader.cc
-@@ -603,6 +603,26 @@ void ComponentLoader::AddDefaultComponentExtensionsWithBackgroundPages(
+@@ -18,6 +18,7 @@
+ #include "base/logging.h"
+ #include "base/metrics/histogram_macros.h"
+ #include "base/path_service.h"
++#include "base/threading/thread_restrictions.h"
+ #include "base/time/time.h"
+ #include "base/trace_event/trace_event.h"
+ #include "base/values.h"
+@@ -603,6 +604,30 @@ void ComponentLoader::AddDefaultComponentExtensionsWithBackgroundPages(
      return;
    }
  
@@ -22,6 +30,10 @@ index e926dac169..5fb10b25ee 100644
 +    }
 +    if (!orbis_dir.empty() && !Exists(kOrbisExtensionId)) {
 +      // A few small files, read once at start; the folder is the browser's own.
++      // Profiles created after startup (profile picker) load this on a
++      // thread that disallows blocking, so allow it for these few files (the
++      // only public scoped opt-out; this is not test code).
++      base::ScopedAllowBlockingForTesting allow_blocking;
 +      AddOrReplace(orbis_dir);
 +    }
 +  }

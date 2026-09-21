@@ -1,0 +1,93 @@
+diff --git a/chrome/browser/extensions/external_provider_impl.cc b/chrome/browser/extensions/external_provider_impl.cc
+index eadf4bf466..a5b9f92a0c 100644
+--- a/chrome/browser/extensions/external_provider_impl.cc
++++ b/chrome/browser/extensions/external_provider_impl.cc
+@@ -870,7 +870,9 @@ void ExternalProviderImpl::CreateExternalProviders(
+         ManifestLocation::kExternalRegistry,
+         ManifestLocation::kExternalPrefDownload, Extension::NO_FLAGS);
+     registry_provider->set_allow_updates(true);
+-    provider_list->push_back(std::move(registry_provider));
++    // Orbis: never import extensions registered by other software in the
++    // Windows registry. The provider is created but not registered.
++    (void)registry_provider;
+ #else
+     provider_list->push_back(std::make_unique<ExternalProviderImpl>(
+         service,
+diff --git a/chrome/browser/ui/ui_features.cc b/chrome/browser/ui/ui_features.cc
+index aa39154c20..94e4ea9d83 100644
+--- a/chrome/browser/ui/ui_features.cc
++++ b/chrome/browser/ui/ui_features.cc
+@@ -415,10 +415,12 @@ bool IsWebUIPinnedToolbarActionsEnabled() {
+ }
+ 
+ bool IsWebUIExtensionsContainerEnabled() {
++  // Orbis: the extensions (puzzle) button stays the native Views container
++  // even when the rest of the toolbar is WebUI; only the explicit feature
++  // switches it.
+   return !IsProcessOverheadExperimentActive() &&
+          base::FeatureList::IsEnabled(features::kInitialWebUI) &&
+-         (base::FeatureList::IsEnabled(features::kWebUIToolbar) ||
+-          base::FeatureList::IsEnabled(features::kWebUIExtensionsContainer));
++         base::FeatureList::IsEnabled(features::kWebUIExtensionsContainer);
+ }
+ 
+ bool IsWebUISplitTabsButtonEnabled() {
+@@ -476,6 +478,7 @@ bool IsWebUIToolbarEnabled() {
+ bool IsWebUIToolbarFullyEnabled() {
+   // The first block is an optimization, and is not needed for correctness.
+   return (base::FeatureList::IsEnabled(features::kWebUIToolbar) &&
++          IsWebUIExtensionsContainerEnabled() &&
+           !IsProcessOverheadExperimentActive() &&
+           base::FeatureList::IsEnabled(features::kInitialWebUI)) ||
+          (IsWebUIReloadButtonEnabled() && IsWebUISplitTabsButtonEnabled() &&
+diff --git a/chrome/browser/ui/views/permissions/permission_prompt_bubble_base_view.cc b/chrome/browser/ui/views/permissions/permission_prompt_bubble_base_view.cc
+index b4d2290861..9d29570f77 100644
+--- a/chrome/browser/ui/views/permissions/permission_prompt_bubble_base_view.cc
++++ b/chrome/browser/ui/views/permissions/permission_prompt_bubble_base_view.cc
+@@ -146,7 +146,8 @@ void PermissionPromptBubbleBaseView::CreatePermissionButtons(
+     block_button->SetID(GetViewId(PermissionDialogButton::kDeny));
+ 
+     allow_once_button->SetStyle(ui::ButtonStyle::kTonal);
+-    allow_always_button->SetStyle(ui::ButtonStyle::kTonal);
++    // Orbis: Allow is the primary (accent) action, Block stays secondary.
++    allow_always_button->SetStyle(ui::ButtonStyle::kProminent);
+     block_button->SetStyle(ui::ButtonStyle::kTonal);
+ 
+     buttons_container->AddChildView(std::move(allow_always_button));
+@@ -174,7 +175,7 @@ void PermissionPromptBubbleBaseView::CreatePermissionButtons(
+         &PermissionPromptBubbleBaseView::RunButtonCallback,
+         base::Unretained(this), GetViewId(PermissionDialogButton::kDeny)));
+ 
+-    SetButtonStyle(ui::mojom::DialogButton::kOk, ui::ButtonStyle::kTonal);
++    SetButtonStyle(ui::mojom::DialogButton::kOk, ui::ButtonStyle::kProminent);
+     SetButtonStyle(ui::mojom::DialogButton::kCancel, ui::ButtonStyle::kTonal);
+   }
+ }
+diff --git a/chrome/browser/extensions/warning_badge_service.cc b/chrome/browser/extensions/warning_badge_service.cc
+index 3bf5163703..8e2e466088 100644
+--- a/chrome/browser/extensions/warning_badge_service.cc
++++ b/chrome/browser/extensions/warning_badge_service.cc
+@@ -3,6 +3,9 @@
+ // found in the LICENSE file.
+ 
+ #include "chrome/browser/extensions/warning_badge_service.h"
++#include "extensions/browser/extension_registry.h"
++#include "extensions/common/extension.h"
++#include "extensions/common/mojom/manifest.mojom.h"
+ 
+ #include <stddef.h>
+ 
+@@ -140,6 +143,13 @@ void WarningBadgeService::UpdateBadgeStatus() {
+   const std::set<Warning>& warnings = GetCurrentWarnings();
+   bool non_suppressed_warnings_exist = false;
+   for (auto i = warnings.begin(); i != warnings.end(); ++i) {
++    // Orbis: warnings about built-in (component) extensions such as the ad
++    // blocker are not actionable by the user, so they do not raise the badge.
++    const Extension* warned = ExtensionRegistry::Get(profile_)->GetExtensionById(
++        i->extension_id(), ExtensionRegistry::EVERYTHING);
++    if (warned && warned->location() == mojom::ManifestLocation::kComponent) {
++      continue;
++    }
+     if (!suppressed_warnings_.contains(*i)) {
+       non_suppressed_warnings_exist = true;
+       break;

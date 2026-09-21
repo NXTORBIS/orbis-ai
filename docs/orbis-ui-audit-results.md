@@ -113,3 +113,29 @@ Known, not caused by Orbis UI code: the "Error" chip on the app menu button is C
 Regression tests (serial): launch 4/4, browserManager 6/6, chromiumCapabilities 8/8, chromiumCapabilities2 11/11, browserUi 11/11, service 5/5, agent 4/4 pass.
 
 Tooling note: `src/main/chromium/browserUi.ts` now writes its PowerShell helper to a temp .ps1 file instead of `-EncodedCommand` (the script outgrew the 32K command-line limit).
+
+
+## Views 3 (WebUI pages, native leftovers) - partial
+
+Method: `scripts/orbis-views3-shots.mjs` (own spawned browser, temp profile with `browser.theme.color_scheme2` 1/2, CDP `Page.captureScreenshot` + `Emulation.setDeviceMetricsOverride`), `scripts/orbis-views3-flow.mjs` (profile menu via real input), `scripts/orbis-views3-fresh.mjs` (fresh profile), plus `orbis-views2-shots.mjs --only ... --tag v3`. Screenshots in `docs/views3-shots/`. Light really applies on the WebUI pages that read the colour system (history, settings, downloads, extensions); the profile picker, version page and net-error pages use `prefers-color-scheme` (OS), so they follow the OS scheme, not the browser pref.
+
+Patches: `chromium-orbis-native-leftovers.patch`, `chromium-orbis-webui-pages.patch`, folded: `chromium-orbis-component-extension.patch`, `chromium-orbis-signin-style.patch`. All pass `git apply --reverse --check`.
+
+| Surface | Status | Evidence / notes |
+|---|---|---|
+| Permission prompt (geolocation) | Done, verified (dark 1x) | v3_permgeo_dark100: "Allow" accent, others tonal. Cause was explicit `kTonal` on both buttons. Light not captured. |
+| Extensions (puzzle) button | Explained, verified | Not hidden by a patch: stock 154 hides the container while the profile has no user extensions. Appears with one loaded (v3ext_appmenu_dark100). I also made the WebUI toolbar keep the native extensions container (`IsWebUIExtensionsContainerEnabled`). Restyle is by palette only. |
+| External extensions / chip | Done, verified on a fresh profile | Windows registry provider no longer registered. The remaining "Error" chip on a fresh profile was an extension warning about the built-in (component) ad blocker; warnings for component extensions no longer raise the badge (v3_fresh2_toolbar: no chip). Root warning type not identified. |
+| Profile creation (menu > Add Orbis profile) | Done, verified | Was crashing the browser (DCHECK: blocking file call in ComponentLoader on the UI thread for a second profile). Now creates `Profile 1`, opens a window and the Orbis-styled customization dialog (v3_flow_after_add2-w0/w1). Switch and delete NOT exercised. chrome://profile-picker in a plain tab renders; its Add button cannot work in a tab (needs the picker window). Profiles use separate directories; sign-in is unavailable (no OAuth client). |
+| chrome://profile-picker | Done, dark and light 1x | Stock gradient replaced by Canvas surface; text follows OS scheme. |
+| chrome://history | Done, dark and light 1x | Orbis illustration, Google copy removed (history_strings + generated_resources), toolbar title uses primary text colour. Sync promo string in generated_resources also neutralised. |
+| chrome://settings, /help, /appearance, /search, /privacy | Captured dark and light; About sidebar icon replaced by Orbis ring (settings icon set); other subpages not individually reviewed | "You and Google", "Google services" kept (real Google features). |
+| chrome://version | Orbis colours (both schemes via OS media query), Orbis mark | Copyright line "The Chromium Authors" and UA "Chrome/154" kept. |
+| Error page (DNS/unsafe port) | Done, light 1x | Orbis ring-exclamation replaces the pixel icon; copy is stock. Offline, SSL, connection refused not captured. |
+| chrome://downloads, bookmarks, extensions, flags, policy, password-manager, certificate-manager, management, apps, tab-search, interstitial debug page | Captured (dark and light where in log), only downloads/extensions reviewed | Extensions page still shows the Chrome Web Store icon (real store). Interstitials: only the "debug pages disabled" page captured; real SSL/phishing interstitials NOT captured. |
+| PDF viewer | Captured dark 1x | Works (thumbnails, zoom, fit, download, print); toolbar is stock grey, thumbnail selection accent; not restyled. |
+| Print preview, first-run/welcome, crash, side panels, PiP control bar, toolbar focus ring | PiP and focus ring captured (v3_pipwin..., v3_focusring_toolbar) but only the focus ring viewed (accent ring on the omnibox looks right); print preview, first run, side panels NOT verified | chrome://crash hung my capture script (renderer crash), so it was skipped. |
+| 2x and 390px | Only settings and history at 2x/390 dark were shot, not reviewed | |
+| Regression tests (serial) | launch 4, browserManager 6, chromiumCapabilities 8, chromiumCapabilities2 11, browserUi 11, service 5, agent 4, orbisSearchPage 14: all pass | |
+
+Not done in this pass: the full dark/light x 1x/2x x narrow/wide sweep, settings subpage-by-subpage layout work, generated CSS from tokens for WebUI shared styles (shared foundations only got the toolbar colour and About icon), interstitials, print preview, first run, side panels, switching/deleting profiles, PDF restyle.

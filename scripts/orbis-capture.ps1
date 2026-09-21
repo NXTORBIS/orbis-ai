@@ -80,7 +80,7 @@ if ($Each) {
     $r = $rects[$h]; $bw = $r.R - $r.L; $bh = $r.B - $r.T
     $tmp = New-Object System.Drawing.Bitmap $bw, $bh
     $tg = [System.Drawing.Graphics]::FromImage($tmp); $dc = $tg.GetHdc(); [OrbisCap]::PrintWindow($h, $dc, 2) | Out-Null; $tg.ReleaseHdc($dc); $tg.Dispose()
-    $tmp.Save(($Out -replace '\.png$', "-w$n.png")); $tmp.Dispose(); $n++
+    $tmp.Save(($Out -replace '\.png$', "-w$n.png")); $tmp.Dispose(); "rect w$n $($r.L) $($r.T) $($r.R) $($r.B)"; $n++
   }
   "saved $n windows"; exit 0
 }

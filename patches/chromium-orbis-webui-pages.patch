@@ -1,0 +1,376 @@
+diff --git a/chrome/browser/resources/history/images/avatar_surrounding_illustration_dark.svg b/chrome/browser/resources/history/images/avatar_surrounding_illustration_dark.svg
+index 008f862686..31e9a9dd15 100644
+--- a/chrome/browser/resources/history/images/avatar_surrounding_illustration_dark.svg
++++ b/chrome/browser/resources/history/images/avatar_surrounding_illustration_dark.svg
+@@ -1,20 +1 @@
+-<svg width="320" height="165" viewBox="0 0 320 165" fill="none" xmlns="http://www.w3.org/2000/svg">
+-<path d="M236.183 68.9138C234.215 57.4586 229.726 46.8652 223.307 37.7249M233.317 106.667C227.476 124.104 215.589 138.769 200.145 148.172M83.3613 71.91C84.9576 59.7841 89.3645 48.5438 95.9061 38.8647M92.8654 120.449C106.188 143.721 131.263 159.401 159.999 159.401C167.221 159.401 174.211 158.41 180.842 156.558M202.226 17.3352C190.087 9.40425 175.582 4.79395 159.999 4.79395C140.296 4.79395 122.314 12.1658 108.661 24.3018" stroke="#3C4043" stroke-width="2.397" stroke-linecap="round"/>
+-<path d="M221.123 161.343C237.31 148.839 249.56 131.486 255.697 111.46M98.8757 161.343C86.8801 152.077 77.0465 140.148 70.2606 126.441M221.123 2.85181C235.172 13.7039 246.255 28.2087 252.95 44.9433M98.8757 2.85181C84.8269 13.7039 73.7435 28.2087 67.0483 44.9433" stroke="#3C4043" stroke-width="2.397" stroke-linecap="round"/>
+-<rect x="-1.45732" y="0.865465" width="70.4452" height="49.0211" rx="3.59551" transform="matrix(-0.969037 -0.246915 -0.246915 0.969037 314.373 64.3943)" stroke="#9AA0A6" stroke-width="2.397"/>
+-<path d="M312.109 118.747L224.913 96.5288V96.5288C224.475 98.2487 225.514 99.9982 227.234 100.436L308.201 121.067C309.921 121.505 311.671 120.466 312.109 118.747V118.747Z" fill="#9AA0A6"/>
+-<circle cx="0.846126" cy="0.846126" r="0.846126" transform="matrix(-0.969037 -0.246915 -0.246915 0.969037 281.964 58.8623)" fill="#BDC1C6"/>
+-<rect x="38.6281" y="57.1662" width="33.5581" height="69.5131" rx="3.59551" transform="rotate(-15.4688 38.6281 57.1662)" stroke="#9AA0A6" stroke-width="2.397"/>
+-<circle cx="43.1614" cy="60.1497" r="1.18629" transform="rotate(-15.4688 43.1614 60.1497)" fill="#BDC1C6"/>
+-<rect width="14.2354" height="2.37257" rx="1.18629" transform="matrix(-0.963776 0.266714 0.266714 0.963776 78.4175 111.933)" fill="#BDC1C6"/>
+-<rect width="9.58801" height="9.58801" rx="2.397" transform="matrix(-0.779502 -0.6264 -0.6264 0.779502 108.123 29.9385)" fill="#34A853"/>
+-<circle cx="191.161" cy="153.408" r="3.59551" fill="#F28B82"/>
+-<circle cx="209.927" cy="22.9607" r="3.59551" transform="rotate(3.0994 209.927 22.9607)" fill="#8AB4F8"/>
+-<circle cx="217.897" cy="30.1411" r="3.59551" transform="rotate(3.0994 217.897 30.1411)" fill="#8AB4F8"/>
+-<rect x="55.7397" y="73.6389" width="9.58801" height="16.779" rx="4.79401" transform="rotate(-0.827347 55.7397 73.6389)" fill="#8AB4F8"/>
+-<circle cx="61.5236" cy="99.8276" r="3.59551" transform="rotate(-4.54839 61.5236 99.8276)" fill="#FDD663"/>
+-<circle cx="61.5236" cy="64.3711" r="3.59551" transform="rotate(-4.54839 61.5236 64.3711)" fill="#34A853"/>
+-<rect x="254.745" y="68.5276" width="9.58801" height="16.779" rx="4.79401" transform="rotate(-2.45422 254.745 68.5276)" fill="#FDD663"/>
+-<circle cx="257.319" cy="59.6286" r="3.59551" transform="rotate(13.0153 257.319 59.6286)" fill="#F28B82"/>
+-<circle cx="259.058" cy="93.7792" r="3.59551" transform="rotate(13.0153 259.058 93.7792)" fill="#3C4043"/>
+-</svg>
++<svg xmlns="http://www.w3.org/2000/svg" width="320" height="165" viewBox="0 0 320 165" fill="none"><circle cx="160.0" cy="82.5" r="71.6" stroke="#6e727b" stroke-width="1.5"/><circle cx="160.0" cy="82.5" r="57.8" stroke="#6e727b" stroke-width="1.5" stroke-dasharray="3 7"/><circle cx="160.0" cy="82.5" r="46.2" stroke="#3fd8ff" stroke-width="12.9"/><circle cx="217.8" cy="73.3" r="6.5" fill="#3fd8ff"/></svg>
+diff --git a/chrome/browser/resources/history/images/avatar_surrounding_illustration_light.svg b/chrome/browser/resources/history/images/avatar_surrounding_illustration_light.svg
+index c7d52f7c50..fbde444b35 100644
+--- a/chrome/browser/resources/history/images/avatar_surrounding_illustration_light.svg
++++ b/chrome/browser/resources/history/images/avatar_surrounding_illustration_light.svg
+@@ -1,20 +1 @@
+-<svg width="320" height="165" viewBox="0 0 320 165" fill="none" xmlns="http://www.w3.org/2000/svg">
+-<path d="M236.183 68.9138C234.215 57.4586 229.726 46.8652 223.307 37.7249M233.317 106.667C227.476 124.104 215.589 138.769 200.145 148.172M83.3613 71.91C84.9576 59.7841 89.3645 48.5438 95.9061 38.8647M92.8654 120.449C106.188 143.721 131.263 159.401 159.999 159.401C167.221 159.401 174.211 158.41 180.842 156.558M202.226 17.3352C190.087 9.40425 175.582 4.79395 159.999 4.79395C140.296 4.79395 122.314 12.1658 108.661 24.3018" stroke="#E8EAED" stroke-width="2.397" stroke-linecap="round"/>
+-<path d="M221.123 161.343C237.31 148.839 249.56 131.486 255.697 111.46M98.8757 161.343C86.8801 152.077 77.0465 140.148 70.2606 126.441M221.123 2.85181C235.172 13.7039 246.255 28.2087 252.95 44.9433M98.8757 2.85181C84.8269 13.7039 73.7435 28.2087 67.0483 44.9433" stroke="#E8EAED" stroke-width="2.397" stroke-linecap="round"/>
+-<rect x="-1.45732" y="0.865465" width="70.4452" height="49.0211" rx="3.59551" transform="matrix(-0.969037 -0.246915 -0.246915 0.969037 314.373 64.3943)" fill="#F8F9FA" stroke="#9AA0A6" stroke-width="2.397"/>
+-<path d="M312.109 118.747L224.913 96.5288V96.5288C224.475 98.2487 225.514 99.9982 227.234 100.436L308.201 121.067C309.921 121.505 311.671 120.466 312.109 118.747V118.747Z" fill="#9AA0A6"/>
+-<circle cx="0.846126" cy="0.846126" r="0.846126" transform="matrix(-0.969037 -0.246915 -0.246915 0.969037 281.964 58.8623)" fill="#BDC1C6"/>
+-<rect x="38.6281" y="57.1662" width="33.5581" height="69.5131" rx="3.59551" transform="rotate(-15.4688 38.6281 57.1662)" fill="#F8F9FA" stroke="#9AA0A6" stroke-width="2.397"/>
+-<circle cx="43.1614" cy="60.1497" r="1.18629" transform="rotate(-15.4688 43.1614 60.1497)" fill="#BDC1C6"/>
+-<rect width="14.2354" height="2.37257" rx="1.18629" transform="matrix(-0.963776 0.266714 0.266714 0.963776 78.4175 111.933)" fill="#BDC1C6"/>
+-<rect width="9.58801" height="9.58801" rx="2.397" transform="matrix(-0.779502 -0.6264 -0.6264 0.779502 108.123 29.9385)" fill="#34A853"/>
+-<circle cx="191.161" cy="153.408" r="3.59551" fill="#EA4335"/>
+-<circle cx="209.927" cy="22.9607" r="3.59551" transform="rotate(3.0994 209.927 22.9607)" fill="#4285F4"/>
+-<circle cx="217.897" cy="30.1411" r="3.59551" transform="rotate(3.0994 217.897 30.1411)" fill="#4285F4"/>
+-<rect x="55.7397" y="73.6389" width="9.58801" height="16.779" rx="4.79401" transform="rotate(-0.827347 55.7397 73.6389)" fill="#4285F4"/>
+-<circle cx="61.5236" cy="99.8276" r="3.59551" transform="rotate(-4.54839 61.5236 99.8276)" fill="#FBBC04"/>
+-<circle cx="61.5236" cy="64.3711" r="3.59551" transform="rotate(-4.54839 61.5236 64.3711)" fill="#34A853"/>
+-<rect x="254.745" y="68.5276" width="9.58801" height="16.779" rx="4.79401" transform="rotate(-2.45422 254.745 68.5276)" fill="#FBBC04"/>
+-<circle cx="257.319" cy="59.6286" r="3.59551" transform="rotate(13.0153 257.319 59.6286)" fill="#EA4335"/>
+-<circle cx="259.058" cy="93.7792" r="3.59551" transform="rotate(13.0153 259.058 93.7792)" fill="#E8EAED"/>
+-</svg>
++<svg xmlns="http://www.w3.org/2000/svg" width="320" height="165" viewBox="0 0 320 165" fill="none"><circle cx="160.0" cy="82.5" r="71.6" stroke="#8294aa" stroke-width="1.5"/><circle cx="160.0" cy="82.5" r="57.8" stroke="#8294aa" stroke-width="1.5" stroke-dasharray="3 7"/><circle cx="160.0" cy="82.5" r="46.2" stroke="#0a7fb3" stroke-width="12.9"/><circle cx="217.8" cy="73.3" r="6.5" fill="#0a7fb3"/></svg>
+diff --git a/chrome/browser/resources/history/images/compare_sync_promo.svg b/chrome/browser/resources/history/images/compare_sync_promo.svg
+index 8c6d01139e..78e3453436 100644
+--- a/chrome/browser/resources/history/images/compare_sync_promo.svg
++++ b/chrome/browser/resources/history/images/compare_sync_promo.svg
+@@ -1 +1 @@
+-<svg xmlns="http://www.w3.org/2000/svg" width="476" height="205" fill="none" viewBox="0 0 476 205"><path stroke="url(#a)" stroke-width="2.4" d="m289.382 65.834 3.534 2.594a24.003 24.003 0 0 0 10.566 4.377l4.333.664a21.6 21.6 0 0 1 18.077 18.077l.664 4.333a24.01 24.01 0 0 0 4.377 10.566l2.594 3.534a21.598 21.598 0 0 1 0 25.565l-2.594 3.534a24.003 24.003 0 0 0-4.377 10.565l-.664 4.334a21.6 21.6 0 0 1-18.077 18.077l-4.333.664a24 24 0 0 0-10.566 4.377l-3.534 2.594a21.601 21.601 0 0 1-25.565 0l-3.533-2.594a24 24 0 0 0-10.566-4.377l-4.333-.664a21.6 21.6 0 0 1-18.077-18.077l-.665-4.334a23.99 23.99 0 0 0-4.376-10.565l-2.595-3.534a21.601 21.601 0 0 1 0-25.565l2.595-3.534a23.996 23.996 0 0 0 4.376-10.566l.665-4.333a21.6 21.6 0 0 1 18.077-18.077l4.333-.664a24.002 24.002 0 0 0 10.566-4.377l3.533-2.594a21.6 21.6 0 0 1 25.565 0Z"/><rect width="117.6" height="85.2" x="179.2" y="59.761" fill="url(#b)" stroke="#7CACF8" stroke-width="2.4" rx="3.6"/><path fill="#fff" stroke="#7CACF8" stroke-width="2.4" d="M182.8 65.761h110.4a3.6 3.6 0 0 1 3.6 3.6v72.001a3.6 3.6 0 0 1-3.6 3.6H182.8a3.6 3.6 0 0 1-3.6-3.6v-72a3.6 3.6 0 0 1 3.6-3.6Z"/><path fill="#fff" d="M185.2 63.361a2.4 2.4 0 0 1 2.4-2.4h18a2.4 2.4 0 0 1 2.4 2.4v3.6h-22.8v-3.6Z"/><path fill="#fff" fill-rule="evenodd" d="M209.199 66.962a1.2 1.2 0 0 1-1.199-1.2v1.2h1.199Zm-25.197 0a1.2 1.2 0 0 0 1.198-1.2v1.2h-1.198Z" clip-rule="evenodd"/><rect width="86.4" height="4.8" x="194.8" y="69.362" fill="#D3E3FD" rx="2.4"/><rect width="27.6" height="24" x="192.4" y="82.561" fill="#A8C7FA" rx="4.8"/><path fill="#D3E3FD" d="M254.8 108.962h27.6v8.4h-27.6zm0 9.6h27.6v8.4h-27.6zm0 9.6h27.6v8.4h-27.6zm-31.2-19.201h27.6v8.4h-27.6zm-31.2 0H220v8.4h-27.6zm31.2 9.601h27.6v8.4h-27.6zm-31.2 0H220v8.4h-27.6zm31.2 9.6h27.6v8.4h-27.6zm-31.2 0H220v8.4h-27.6z"/><path stroke="#7CACF8" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.2" d="m203.2 123.362 1.2 1.2 3.6-3.6m27.6-7.2 1.2 1.2 3.6-3.6m26.4 2.4 1.2 1.2 3.6-3.6m-36 21.6 1.2 1.2 3.6-3.6"/><rect width="27.6" height="24" x="223.6" y="82.561" fill="#6DD58C" rx="4.8"/><rect width="27.6" height="24" x="254.8" y="82.561" fill="#5AB3F0" rx="4.8"/><g filter="url(#c)"><circle cx="161.4" cy="144.361" r="27" fill="url(#d)" fill-opacity=".5"/></g><g filter="url(#e)"><path fill="url(#f)" fill-opacity=".5" d="M284.69 51.666c-6.269-14.434 8.381-29.084 22.815-22.815l2.387 1.037a17.342 17.342 0 0 0 13.817 0l2.386-1.037c14.434-6.269 29.084 8.381 22.816 22.815l-1.037 2.387a17.342 17.342 0 0 0 0 13.817l1.037 2.386c6.268 14.435-8.382 29.085-22.816 22.816l-2.386-1.037a17.342 17.342 0 0 0-13.817 0l-2.387 1.037c-14.434 6.269-29.084-8.381-22.815-22.816l1.036-2.386a17.342 17.342 0 0 0 0-13.817l-1.036-2.387Z"/></g><defs><linearGradient id="a" x1="266.327" x2="268.382" y1="68.316" y2="173.098" gradientUnits="userSpaceOnUse"><stop stop-color="#D3E3FD"/><stop offset="1" stop-color="#C4EED0"/></linearGradient><linearGradient id="b" x1="188.2" x2="291.4" y1="65.162" y2="65.162" gradientUnits="userSpaceOnUse"><stop stop-color="#7CACF8"/><stop offset="1" stop-color="#A8C7FA"/></linearGradient><linearGradient id="d" x1="157.309" x2="158.128" y1="122.68" y2="164.407" gradientUnits="userSpaceOnUse"><stop stop-color="#D3E3FD"/><stop offset="1" stop-color="#C4EED0"/></linearGradient><linearGradient id="f" x1="311.709" x2="312.727" y1="33.98" y2="85.907" gradientUnits="userSpaceOnUse"><stop stop-color="#D3E3FD"/><stop offset="1" stop-color="#C4EED0"/></linearGradient><filter id="c" width="63.6" height="63.6" x="129.6" y="112.561" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feGaussianBlur in="BackgroundImageFix" stdDeviation="2.4"/><feComposite in2="SourceAlpha" operator="in" result="effect1_backgroundBlur_1455_31393"/><feBlend in="SourceGraphic" in2="effect1_backgroundBlur_1455_31393" result="shape"/></filter><filter id="e" width="76.8" height="76.8" x="278.4" y="22.561" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feGaussianBlur in="BackgroundImageFix" stdDeviation="2.4"/><feComposite in2="SourceAlpha" operator="in" result="effect1_backgroundBlur_1455_31393"/><feBlend in="SourceGraphic" in2="effect1_backgroundBlur_1455_31393" result="shape"/></filter></defs></svg>
+\ No newline at end of file
++<svg xmlns="http://www.w3.org/2000/svg" width="476" height="205" viewBox="0 0 476 205" fill="none"><circle cx="238.0" cy="102.5" r="89.0" stroke="#8294aa" stroke-width="1.5"/><circle cx="238.0" cy="102.5" r="71.8" stroke="#8294aa" stroke-width="1.5" stroke-dasharray="3 7"/><circle cx="238.0" cy="102.5" r="57.4" stroke="#0a7fb3" stroke-width="16.1"/><circle cx="309.8" cy="91.0" r="8.0" fill="#0a7fb3"/></svg>
+diff --git a/chrome/browser/resources/history/images/compare_sync_promo_dark.svg b/chrome/browser/resources/history/images/compare_sync_promo_dark.svg
+index 30238d5e7e..2a327ce458 100644
+--- a/chrome/browser/resources/history/images/compare_sync_promo_dark.svg
++++ b/chrome/browser/resources/history/images/compare_sync_promo_dark.svg
+@@ -1 +1 @@
+-<svg xmlns="http://www.w3.org/2000/svg" width="476" height="204" fill="none" viewBox="0 0 476 204"><g stroke-width="2.4" opacity=".8"><path stroke="url(#a)" d="M263.817 64.873a21.6 21.6 0 0 1 25.565 0l3.534 2.594a24.003 24.003 0 0 0 10.566 4.376l4.333.665a21.6 21.6 0 0 1 18.077 18.077l.664 4.333a24.012 24.012 0 0 0 4.377 10.566l2.594 3.534a21.597 21.597 0 0 1 0 25.564l-2.594 3.534a24.012 24.012 0 0 0-4.377 10.566l-.664 4.333a21.6 21.6 0 0 1-18.077 18.077l-4.333.665a23.999 23.999 0 0 0-10.566 4.376l-3.534 2.594a21.598 21.598 0 0 1-25.565 0l-3.533-2.594a23.999 23.999 0 0 0-10.566-4.376l-4.333-.665a21.599 21.599 0 0 1-18.077-18.077l-.665-4.333a23.999 23.999 0 0 0-4.376-10.566l-2.595-3.534a21.6 21.6 0 0 1 0-25.564l2.595-3.534a23.998 23.998 0 0 0 4.376-10.566l.665-4.333a21.6 21.6 0 0 1 18.077-18.077l4.333-.665a24.003 24.003 0 0 0 10.566-4.376l3.533-2.594Z"/><path stroke="url(#b)" d="M263.817 64.873a21.6 21.6 0 0 1 25.565 0l3.534 2.594a24.003 24.003 0 0 0 10.566 4.376l4.333.665a21.6 21.6 0 0 1 18.077 18.077l.664 4.333a24.012 24.012 0 0 0 4.377 10.566l2.594 3.534a21.597 21.597 0 0 1 0 25.564l-2.594 3.534a24.012 24.012 0 0 0-4.377 10.566l-.664 4.333a21.6 21.6 0 0 1-18.077 18.077l-4.333.665a23.999 23.999 0 0 0-10.566 4.376l-3.534 2.594a21.598 21.598 0 0 1-25.565 0l-3.533-2.594a23.999 23.999 0 0 0-10.566-4.376l-4.333-.665a21.599 21.599 0 0 1-18.077-18.077l-.665-4.333a23.999 23.999 0 0 0-4.376-10.566l-2.595-3.534a21.6 21.6 0 0 1 0-25.564l2.595-3.534a23.998 23.998 0 0 0 4.376-10.566l.665-4.333a21.6 21.6 0 0 1 18.077-18.077l4.333-.665a24.003 24.003 0 0 0 10.566-4.376l3.533-2.594Z"/></g><rect width="118" height="85.6" x="179" y="58.6" fill="#1B6EF3" stroke="#1B6EF3" stroke-width="2" rx="3"/><path fill="#1F1F1F" stroke="#1B6EF3" stroke-width="2.4" d="M179.2 68.4a3.6 3.6 0 0 1 3.6-3.6h110.4a3.6 3.6 0 0 1 3.6 3.6v72a3.6 3.6 0 0 1-3.6 3.6H182.8a3.6 3.6 0 0 1-3.6-3.6v-72Z"/><path fill="#1F1F1F" d="M185.2 62.4a2.4 2.4 0 0 1 2.4-2.4h18a2.4 2.4 0 0 1 2.4 2.4V66h-22.8v-3.6Z"/><path fill="#1F1F1F" fill-rule="evenodd" d="M209.199 66A1.2 1.2 0 0 1 208 64.8V66h1.199Zm-25.197 0a1.2 1.2 0 0 0 1.198-1.2V66h-1.198Z" clip-rule="evenodd"/><rect width="86.4" height="4.8" x="194.8" y="68.4" fill="#0842A0" rx="2.4"/><rect width="27.6" height="24" x="192.4" y="81.6" fill="#0B57D0" rx="4.8"/><path fill="#0842A0" d="M254.8 108h27.6v8.4h-27.6zm0 9.6h27.6v8.4h-27.6zm0 9.6h27.6v8.4h-27.6zM223.6 108h27.6v8.4h-27.6zm-31.2 0H220v8.4h-27.6zm31.2 9.6h27.6v8.4h-27.6zm-31.2 0H220v8.4h-27.6zm31.2 9.6h27.6v8.4h-27.6zm-31.2 0H220v8.4h-27.6z"/><path stroke="#7CACF8" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.2" d="m203.2 122.4 1.2 1.2 3.6-3.6m27.6-7.2 1.2 1.2 3.6-3.6m26.4 2.4 1.2 1.2 3.6-3.6m-36 21.6 1.2 1.2 3.6-3.6"/><rect width="27.6" height="24" x="223.6" y="81.6" fill="#146C2E" rx="4.8"/><rect width="27.6" height="24" x="254.8" y="81.6" fill="#0B57D0" rx="4.8"/><g filter="url(#c)"><circle cx="161.4" cy="143.4" r="27" fill="url(#d)" fill-opacity=".5"/></g><g filter="url(#e)" opacity=".5"><path fill="url(#f)" d="M284.69 50.705c-6.269-14.434 8.381-29.084 22.815-22.815l2.387 1.036a17.343 17.343 0 0 0 13.817 0l2.386-1.036c14.434-6.27 29.084 8.38 22.816 22.815l-1.037 2.386a17.342 17.342 0 0 0 0 13.817l1.037 2.387c6.268 14.434-8.382 29.084-22.816 22.815l-2.386-1.036a17.343 17.343 0 0 0-13.817 0l-2.387 1.036c-14.434 6.27-29.084-8.38-22.815-22.815l1.036-2.387a17.342 17.342 0 0 0 0-13.817l-1.036-2.386Z"/></g><defs><linearGradient id="a" x1="266.327" x2="268.382" y1="67.355" y2="172.136" gradientUnits="userSpaceOnUse"><stop stop-color="#D3E3FD"/><stop offset="1" stop-color="#C4EED0"/></linearGradient><linearGradient id="b" x1="266.327" x2="268.382" y1="67.355" y2="172.136" gradientUnits="userSpaceOnUse"><stop stop-color="#0842A0"/><stop offset=".785" stop-color="#0F5223"/></linearGradient><linearGradient id="d" x1="157.309" x2="158.128" y1="121.718" y2="163.445" gradientUnits="userSpaceOnUse"><stop stop-color="#0842A0"/><stop offset=".785" stop-color="#0F5223"/></linearGradient><linearGradient id="f" x1="311.709" x2="312.727" y1="33.018" y2="84.945" gradientUnits="userSpaceOnUse"><stop stop-color="#0842A0"/><stop offset=".785" stop-color="#0F5223"/></linearGradient><filter id="c" width="59.763" height="59.763" x="131.519" y="113.518" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feGaussianBlur in="BackgroundImageFix" stdDeviation="1.441"/><feComposite in2="SourceAlpha" operator="in" result="effect1_backgroundBlur_2590_40441"/><feBlend in="SourceGraphic" in2="effect1_backgroundBlur_2590_40441" result="shape"/></filter><filter id="e" width="71.7" height="71.7" x="280.95" y="24.15" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feGaussianBlur in="BackgroundImageFix" stdDeviation="1.125"/><feComposite in2="SourceAlpha" operator="in" result="effect1_backgroundBlur_2590_40441"/><feBlend in="SourceGraphic" in2="effect1_backgroundBlur_2590_40441" result="shape"/></filter></defs></svg>
+\ No newline at end of file
++<svg xmlns="http://www.w3.org/2000/svg" width="476" height="205" viewBox="0 0 476 205" fill="none"><circle cx="238.0" cy="102.5" r="89.0" stroke="#6e727b" stroke-width="1.5"/><circle cx="238.0" cy="102.5" r="71.8" stroke="#6e727b" stroke-width="1.5" stroke-dasharray="3 7"/><circle cx="238.0" cy="102.5" r="57.4" stroke="#3fd8ff" stroke-width="16.1"/><circle cx="309.8" cy="91.0" r="8.0" fill="#3fd8ff"/></svg>
+diff --git a/chrome/browser/resources/history/images/history_embeddings_promo.svg b/chrome/browser/resources/history/images/history_embeddings_promo.svg
+index aa84639a50..df13922d14 100644
+--- a/chrome/browser/resources/history/images/history_embeddings_promo.svg
++++ b/chrome/browser/resources/history/images/history_embeddings_promo.svg
+@@ -1 +1 @@
+-<svg xmlns="http://www.w3.org/2000/svg" width="250" height="121" fill="none" viewBox="0 0 250 121"><rect width="20" height="8" x="95" y="35" fill="#C4EED0" rx="2" transform="rotate(180 95 35)"/><rect width="21" height="8" x="172" y="35" fill="#C4EED0" rx="2" transform="rotate(180 172 35)"/><rect width="17" height="8" x="167" y="71" fill="#C4EED0" rx="2" transform="rotate(180 167 71)"/><rect width="15" height="8" x="93" y="71" fill="#C4EED0" rx="2" transform="rotate(180 93 71)"/><rect width="33" height="8" x="100" y="53" fill="#D3E3FD" rx="2" transform="rotate(180 100 53)"/><rect width="31" height="8" x="182" y="53" fill="#D3E3FD" rx="2" transform="rotate(180 182 53)"/><mask id="a" width="66" height="69" x="89" y="14" maskUnits="userSpaceOnUse" style="mask-type:alpha"><path fill="#D9D9D9" d="M102.5 14h35L155 32.5V65l-18.5 18H89V36.5L102.5 14Z"/></mask><g mask="url(#a)"><rect width="62" height="12" x="174" y="55" fill="#A8C7FA" rx="4" transform="rotate(180 174 55)"/><rect width="62" height="12" x="105" y="55" fill="#A8C7FA" rx="4" transform="rotate(180 105 55)"/><rect width="50" height="12" x="130" y="37" fill="#C4EED0" rx="4" transform="rotate(180 130 37)"/><rect width="26" height="12" x="167" y="37" fill="#C4EED0" rx="4" transform="rotate(180 167 37)"/><rect width="59" height="12" x="164" y="73" fill="#C4EED0" rx="4" transform="rotate(180 164 73)"/></g><path fill="#1B6EF3" d="m143.12 75.61 5.658-5.657 14.849 14.85-5.657 5.656z"/><path fill="#1B6EF3" d="M153.021 89.752a7 7 0 0 1 0-9.9 7 7 0 0 1 9.899 0l27.349 27.35a2.322 2.322 0 0 1 0 3.284l-6.614 6.615a2.323 2.323 0 0 1-3.285 0l-27.349-27.349Z"/><g filter="url(#b)"><path fill="url(#c)" d="M51.792 66.09a7.111 7.111 0 0 1 8.416 0l2.009 1.474a7.112 7.112 0 0 0 3.13 1.297l2.463.377a7.113 7.113 0 0 1 5.952 5.952l.377 2.463a7.112 7.112 0 0 0 1.297 3.13l1.475 2.009a7.111 7.111 0 0 1 0 8.416l-1.475 2.009a7.112 7.112 0 0 0-1.297 3.13l-.377 2.463a7.112 7.112 0 0 1-5.952 5.952l-2.463.377a7.118 7.118 0 0 0-3.13 1.297l-2.009 1.475a7.113 7.113 0 0 1-8.416 0l-2.009-1.475a7.118 7.118 0 0 0-3.13-1.297l-2.463-.377a7.112 7.112 0 0 1-5.952-5.952l-.377-2.463a7.112 7.112 0 0 0-1.297-3.13l-1.475-2.009a7.111 7.111 0 0 1 0-8.416l1.475-2.009a7.112 7.112 0 0 0 1.297-3.13l.377-2.463a7.111 7.111 0 0 1 5.952-5.952l2.463-.377a7.112 7.112 0 0 0 3.13-1.297l2.009-1.475Z"/></g><path fill="url(#d)" d="M176.532 10.68c-2.239-5.155 2.993-10.387 8.148-8.148l.853.37a6.192 6.192 0 0 0 4.934 0l.853-.37c5.155-2.239 10.387 2.993 8.148 8.148l-.37.853a6.19 6.19 0 0 0 0 4.934l.37.853c2.239 5.155-2.993 10.387-8.148 8.148l-.853-.37a6.192 6.192 0 0 0-4.934 0l-.853.37c-5.155 2.239-10.387-2.993-8.148-8.148l.37-.853a6.19 6.19 0 0 0 0-4.934l-.37-.853Z"/><circle cx="122" cy="49" r="35" stroke="url(#e)" stroke-width="6"/><circle cx="122" cy="49" r="29" fill="url(#f)"/><defs><linearGradient id="c" x1="52.364" x2="53.091" y1="67.727" y2="104.818" gradientUnits="userSpaceOnUse"><stop stop-color="#D3E3FD"/><stop offset=".785" stop-color="#C4EED0"/></linearGradient><linearGradient id="d" x1="186.182" x2="186.545" y1="4.364" y2="22.909" gradientUnits="userSpaceOnUse"><stop stop-color="#D3E3FD"/><stop offset=".785" stop-color="#C4EED0"/></linearGradient><linearGradient id="e" x1="94.5" x2="148.5" y1="22" y2="76" gradientUnits="userSpaceOnUse"><stop stop-color="#A8C7FA"/><stop offset="1" stop-color="#1B6EF3"/></linearGradient><radialGradient id="f" cx="0" cy="0" r="1" gradientTransform="matrix(0 29 -29 0 122 49)" gradientUnits="userSpaceOnUse"><stop offset=".65" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#fff" stop-opacity=".7"/></radialGradient><filter id="b" width="48.368" height="48.368" x="31.816" y="62.816" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feGaussianBlur in="BackgroundImageFix" stdDeviation=".947"/><feComposite in2="SourceAlpha" operator="in" result="effect1_backgroundBlur_603_34602"/><feBlend in="SourceGraphic" in2="effect1_backgroundBlur_603_34602" result="shape"/></filter></defs></svg>
+\ No newline at end of file
++<svg xmlns="http://www.w3.org/2000/svg" width="250" height="121" viewBox="0 0 250 121" fill="none"><circle cx="125.0" cy="60.5" r="52.5" stroke="#8294aa" stroke-width="1.5"/><circle cx="125.0" cy="60.5" r="42.4" stroke="#8294aa" stroke-width="1.5" stroke-dasharray="3 7"/><circle cx="125.0" cy="60.5" r="33.9" stroke="#0a7fb3" stroke-width="9.5"/><circle cx="167.3" cy="53.7" r="4.7" fill="#0a7fb3"/></svg>
+diff --git a/chrome/browser/resources/history/images/history_embeddings_promo_dark.svg b/chrome/browser/resources/history/images/history_embeddings_promo_dark.svg
+index f69b6399f1..30d295faae 100644
+--- a/chrome/browser/resources/history/images/history_embeddings_promo_dark.svg
++++ b/chrome/browser/resources/history/images/history_embeddings_promo_dark.svg
+@@ -1 +1 @@
+-<svg xmlns="http://www.w3.org/2000/svg" width="250" height="121" fill="none" viewBox="0 0 250 121"><rect width="20" height="8" x="95" y="35" fill="#0F5223" rx="2" transform="rotate(180 95 35)"/><rect width="21" height="8" x="172" y="35" fill="#0F5223" rx="2" transform="rotate(180 172 35)"/><rect width="17" height="8" x="167" y="71" fill="#0F5223" rx="2" transform="rotate(180 167 71)"/><rect width="15" height="8" x="93" y="71" fill="#0F5223" rx="2" transform="rotate(180 93 71)"/><rect width="33" height="8" x="100" y="53" fill="#0B57D0" rx="2" transform="rotate(180 100 53)"/><rect width="31" height="8" x="182" y="53" fill="#0B57D0" rx="2" transform="rotate(180 182 53)"/><mask id="a" width="66" height="69" x="89" y="14" maskUnits="userSpaceOnUse" style="mask-type:alpha"><path fill="#D9D9D9" d="M102.5 14h35L155 32.5V65l-18.5 18H89V36.5L102.5 14Z"/></mask><g mask="url(#a)"><rect width="62" height="12" x="174" y="55" fill="#0B57D0" rx="4" transform="rotate(180 174 55)"/><rect width="62" height="12" x="105" y="55" fill="#0B57D0" rx="4" transform="rotate(180 105 55)"/><rect width="50" height="12" x="130" y="37" fill="#0F5223" rx="4" transform="rotate(180 130 37)"/><rect width="26" height="12" x="167" y="37" fill="#0F5223" rx="4" transform="rotate(180 167 37)"/><rect width="59" height="12" x="164" y="73" fill="#0F5223" rx="4" transform="rotate(180 164 73)"/></g><path fill="#1B6EF3" d="m143.12 75.61 5.658-5.657 14.849 14.85-5.657 5.656z"/><path fill="#1B6EF3" d="M153.021 89.752a7 7 0 0 1 0-9.9 7 7 0 0 1 9.899 0l27.349 27.35a2.322 2.322 0 0 1 0 3.284l-6.614 6.615a2.323 2.323 0 0 1-3.285 0l-27.349-27.349Z"/><g filter="url(#b)"><path fill="url(#c)" d="M51.792 66.09a7.111 7.111 0 0 1 8.416 0l2.009 1.474a7.112 7.112 0 0 0 3.13 1.297l2.463.377a7.113 7.113 0 0 1 5.952 5.952l.377 2.463a7.112 7.112 0 0 0 1.297 3.13l1.475 2.009a7.111 7.111 0 0 1 0 8.416l-1.475 2.009a7.112 7.112 0 0 0-1.297 3.13l-.377 2.463a7.112 7.112 0 0 1-5.952 5.952l-2.463.377a7.118 7.118 0 0 0-3.13 1.297l-2.009 1.475a7.113 7.113 0 0 1-8.416 0l-2.009-1.475a7.118 7.118 0 0 0-3.13-1.297l-2.463-.377a7.112 7.112 0 0 1-5.952-5.952l-.377-2.463a7.112 7.112 0 0 0-1.297-3.13l-1.475-2.009a7.111 7.111 0 0 1 0-8.416l1.475-2.009a7.112 7.112 0 0 0 1.297-3.13l.377-2.463a7.111 7.111 0 0 1 5.952-5.952l2.463-.377a7.112 7.112 0 0 0 3.13-1.297l2.009-1.475Z"/></g><path fill="url(#d)" d="M176.532 10.68c-2.239-5.155 2.993-10.387 8.148-8.148l.853.37a6.192 6.192 0 0 0 4.934 0l.853-.37c5.155-2.239 10.387 2.993 8.148 8.148l-.37.853a6.19 6.19 0 0 0 0 4.934l.37.853c2.239 5.155-2.993 10.387-8.148 8.148l-.853-.37a6.192 6.192 0 0 0-4.934 0l-.853.37c-5.155 2.239-10.387-2.993-8.148-8.148l.37-.853a6.19 6.19 0 0 0 0-4.934l-.37-.853Z"/><circle cx="122" cy="49" r="35" stroke="url(#e)" stroke-width="6"/><circle cx="122" cy="49" r="29" fill="url(#f)"/><defs><linearGradient id="c" x1="52.364" x2="53.091" y1="67.727" y2="104.818" gradientUnits="userSpaceOnUse"><stop stop-color="#0842A0"/><stop offset=".785" stop-color="#0F5223"/></linearGradient><linearGradient id="d" x1="186.182" x2="186.545" y1="4.364" y2="22.909" gradientUnits="userSpaceOnUse"><stop stop-color="#0842A0"/><stop offset=".785" stop-color="#0F5223"/></linearGradient><linearGradient id="e" x1="94.5" x2="148.5" y1="22" y2="76" gradientUnits="userSpaceOnUse"><stop stop-color="#062E6F"/><stop offset="1" stop-color="#1B6EF3"/></linearGradient><radialGradient id="f" cx="0" cy="0" r="1" gradientTransform="matrix(0 29 -29 0 122 49)" gradientUnits="userSpaceOnUse"><stop offset=".495" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#fff" stop-opacity=".3"/></radialGradient><filter id="b" width="48.368" height="48.368" x="31.816" y="62.816" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse"><feFlood flood-opacity="0" result="BackgroundImageFix"/><feGaussianBlur in="BackgroundImageFix" stdDeviation=".947"/><feComposite in2="SourceAlpha" operator="in" result="effect1_backgroundBlur_603_34622"/><feBlend in="SourceGraphic" in2="effect1_backgroundBlur_603_34622" result="shape"/></filter></defs></svg>
+\ No newline at end of file
++<svg xmlns="http://www.w3.org/2000/svg" width="250" height="121" viewBox="0 0 250 121" fill="none"><circle cx="125.0" cy="60.5" r="52.5" stroke="#6e727b" stroke-width="1.5"/><circle cx="125.0" cy="60.5" r="42.4" stroke="#6e727b" stroke-width="1.5" stroke-dasharray="3 7"/><circle cx="125.0" cy="60.5" r="33.9" stroke="#3fd8ff" stroke-width="9.5"/><circle cx="167.3" cy="53.7" r="4.7" fill="#3fd8ff"/></svg>
+diff --git a/chrome/browser/resources/history/images/sign_in_promo.svg b/chrome/browser/resources/history/images/sign_in_promo.svg
+index 73d2fa522c..c3e349dbd4 100644
+--- a/chrome/browser/resources/history/images/sign_in_promo.svg
++++ b/chrome/browser/resources/history/images/sign_in_promo.svg
+@@ -1 +1 @@
+-<svg width="1189" height="444" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><defs><path id="a" d="M0 127h169V0H0v127z"/><path id="c" d="M101 0H0v211h101z"/><path id="f" d="M0 256h403V16H0z"/><path id="g" d="M0 215h388V0H0z"/><path id="j" d="M.01.896h115v172H.01z"/><path id="k" d="M0 1h103v153H0z"/><filter x="-2.6%" y="-3.1%" width="105.2%" height="108.8%" filterUnits="objectBoundingBox" id="e"><feOffset dy="3" in="SourceAlpha" result="shadowOffsetOuter1"/><feGaussianBlur stdDeviation="3" in="shadowOffsetOuter1" result="shadowBlurOuter1"/><feColorMatrix values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.06 0" in="shadowBlurOuter1"/></filter><filter x="-9.6%" y="-4.1%" width="119.1%" height="112.8%" filterUnits="objectBoundingBox" id="i"><feOffset dy="4" in="SourceAlpha" result="shadowOffsetOuter1"/><feGaussianBlur stdDeviation="3" in="shadowOffsetOuter1" result="shadowBlurOuter1"/><feColorMatrix values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.241649683 0" in="shadowBlurOuter1"/></filter></defs><g fill="none" fill-rule="evenodd"><g transform="translate(93 296)"><mask id="b" fill="#fff"><use xlink:href="#a"/></mask><path d="M84.865 0H0c0 88.164 47.14 127 47.14 127h74.72S169 88.164 169 0H84.865z" fill="#E4EAEE" mask="url(#b)"/></g><g transform="translate(79 32)"><mask id="d" fill="#fff"><use xlink:href="#c"/></mask><path d="M99.233 210.415S121.44 96.44 8.393 0c0 0-27.026 84.53 15.915 152.732 42.94 68.204 74.925 57.683 74.925 57.683" fill="#E4EAEE" mask="url(#d)"/></g><path d="M201.538 185.694c2.632-4.527 48.842-20.348 55.46-113.145.393-5.53-47.993 30.452-74.356 118.722C156.277 279.543 176.244 305 176.244 305h9.535s-25.873-47.705 15.759-119.306M153 257.713s-16.798-26.77-53.804-32.9c-37.004-6.13-51.986 23.98-45.869 37.877C61.68 281.662 153 257.713 153 257.713" fill="#E4EAEE"/><path d="M207.277 248.763c-9.453 5.769-22.277 2.069-22.277 2.069s2.504-13.052 11.957-18.82c9.453-5.768 19.426-6.694 22.277-2.068 2.85 4.626-2.503 13.051-11.957 18.82" fill="#E4EAEE"/><path d="M139.615 252s30.431 7.813 36.385 34.745L173.126 292s-2.418-21.677-40.126-38.099l6.615-1.901z" fill="#EAEAEA"/><path fill="#FFF" d="M318.164 0v389.346H263V422h662v-32.654h-55.192V0z"/><path fill="#C2D4F4" d="M332 388h520V24H332z"/><path fill="#4A4A4A" opacity=".113" d="M332 388h520v-31H332z"/><path fill="#FFF" opacity=".438" d="M577 203h245V57H577z"/><g transform="translate(374 78)"><use fill="#000" filter="url(#e)" xlink:href="#f"/><use fill="#FFF" xlink:href="#f"/></g><path fill="#FFF" d="M384 95h82l-9.787-17h-62.426z"/><path fill="#FFF" opacity=".78" d="M455 95h82l-9.787-17h-62.426z"/><g transform="translate(381 112)"><mask id="h" fill="#fff"><use xlink:href="#g"/></mask><use fill="#F8F8F8" xlink:href="#g"/><ellipse fill="#FBE8B0" mask="url(#h)" cx="538" cy="289" rx="344" ry="276"/></g><path fill="#E4EAEE" d="M0 423h1189v21H0z"/><g transform="translate(885 112)"><rect fill="#FFF" x="59" width="164" height="310" rx="22.68"/><path fill="#C2D4F4" d="M71 15h139v270H71z"/><path fill="#4A4A4A" opacity=".113" d="M71 15h139v8H71zm0 254h139v16H71z"/><path fill="#FFF" opacity=".78" d="M91 65h104v127H91z"/><path fill="#B8CEF6" d="M95 74h94v115H95z"/><g transform="rotate(-6 574.13 21.522)"><use fill="#000" filter="url(#i)" xlink:href="#j"/><use fill="#FFF" xlink:href="#j"/></g><g transform="rotate(-6 688.693 -39.441)"><mask id="l" fill="#fff"><use xlink:href="#k"/></mask><use fill="#FBE8B0" xlink:href="#k"/><path fill="#FFF" opacity=".4" mask="url(#l)" d="M-7.106 59.039h117v116h-117z"/><circle fill="#FF9962" mask="url(#l)" cx="86.669" cy="58.868" r="7.5"/></g><path fill="#4A4A4A" opacity=".258" d="M79 32h8v8h-8z"/><rect fill="#4A4A4A" opacity=".258" x="183" y="32" width="8" height="8" rx="4"/><rect fill="#4A4A4A" opacity=".258" x="197" y="32" width="8" height="8" rx="4"/></g></g></svg>
+\ No newline at end of file
++<svg xmlns="http://www.w3.org/2000/svg" width="300" height="150" viewBox="0 0 300 150" fill="none"><circle cx="150.0" cy="75.0" r="65.1" stroke="#8294aa" stroke-width="1.5"/><circle cx="150.0" cy="75.0" r="52.5" stroke="#8294aa" stroke-width="1.5" stroke-dasharray="3 7"/><circle cx="150.0" cy="75.0" r="42.0" stroke="#0a7fb3" stroke-width="11.8"/><circle cx="202.5" cy="66.6" r="5.9" fill="#0a7fb3"/></svg>
+diff --git a/chrome/browser/resources/history/images/sign_in_promo_dark.svg b/chrome/browser/resources/history/images/sign_in_promo_dark.svg
+index d2d1b2dcca..66b0fad493 100644
+--- a/chrome/browser/resources/history/images/sign_in_promo_dark.svg
++++ b/chrome/browser/resources/history/images/sign_in_promo_dark.svg
+@@ -1 +1 @@
+-<svg width="1189" height="444" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><defs><path id="b" d="M0 256h403V16H0z"/><path id="c" d="M0 215h388V0H0z"/><path id="f" d="M.01.896h115v172H.01z"/><path id="g" d="M0 1h103v153H0z"/><filter x="-2.6%" y="-3.1%" width="105.2%" height="108.8%" filterUnits="objectBoundingBox" id="a"><feOffset dy="3" in="SourceAlpha" result="shadowOffsetOuter1"/><feGaussianBlur stdDeviation="3" in="shadowOffsetOuter1" result="shadowBlurOuter1"/><feColorMatrix values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.06 0" in="shadowBlurOuter1"/></filter><filter x="-9.6%" y="-4.1%" width="119.1%" height="112.8%" filterUnits="objectBoundingBox" id="e"><feOffset dy="4" in="SourceAlpha" result="shadowOffsetOuter1"/><feGaussianBlur stdDeviation="3" in="shadowOffsetOuter1" result="shadowBlurOuter1"/><feColorMatrix values="0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.241649683 0" in="shadowBlurOuter1"/></filter></defs><g fill="none" fill-rule="evenodd"><path d="M225.253 296H305c0 88.164-47.14 127-47.14 127h-74.72S136 384.164 136 296h79.296c-.971-3.253-1.911-7.489-2.537-12.866-3.523-6.303-10.667-15.088-25.063-23.378-22.701 5.36-84.565 18.389-91.369 2.934-6.117-13.897 8.865-44.007 45.87-37.877 37.005 6.13 53.803 32.9 53.803 32.9l-.009.002c5.365 3.06 11.367 7.524 16.029 13.8-.131-7.842.377-17.297 1.942-28.6-11.8-.88-36.921-9.368-67.654-58.183C103.368 116.53 130.393 32 130.393 32c71.428 60.935 88.859 128.871 92.013 170.634a453.053 453.053 0 0 1 3.236-11.363c26.363-88.27 74.75-124.252 74.356-118.722-6.618 92.797-52.828 108.618-55.46 113.145-30.962 53.25-24.587 93.283-19.285 110.306zm25.024-47.237c-9.453 5.769-22.277 2.069-22.277 2.069s2.504-13.052 11.957-18.82c9.453-5.768 19.426-6.694 22.277-2.068 2.85 4.626-2.503 13.051-11.957 18.82z" fill-opacity=".351" fill="#F8F9FA" opacity=".199"/><path d="M180 32H79v211h101z"/><path fill="#4F5154" d="M298.164 0v389.346H243V422h662v-32.654h-55.192V0z"/><path fill="#C2D4F4" d="M312 388h520V24H312z"/><path fill="#4A4A4A" opacity=".113" d="M312 388h520v-31H312z"/><path fill="#FFF" opacity=".438" d="M557 203h245V57H557z"/><g transform="translate(354 78)"><use fill="#000" filter="url(#a)" xlink:href="#b"/><use fill="#FFF" xlink:href="#b"/></g><path fill="#FFF" d="M364 95h82l-9.787-17h-62.426z"/><path fill="#FFF" opacity=".78" d="M435 95h82l-9.787-17h-62.426z"/><g transform="translate(361 112)"><mask id="d" fill="#fff"><use xlink:href="#c"/></mask><use fill="#F8F8F8" xlink:href="#c"/><ellipse fill="#FBE8B0" mask="url(#d)" cx="538" cy="289" rx="344" ry="276"/></g><g transform="translate(813 112)"><rect fill="#4F5154" x="59" width="164" height="310" rx="22.68"/><path fill="#C2D4F4" d="M71 15h139v270H71z"/><path fill="#4A4A4A" opacity=".113" d="M71 15h139v8H71zm0 254h139v16H71z"/><path fill="#FFF" opacity=".78" d="M91 65h104v127H91z"/><path fill="#B8CEF6" d="M95 74h94v115H95z"/><g transform="rotate(-6 574.13 21.522)"><use fill="#000" filter="url(#e)" xlink:href="#f"/><use fill="#FFF" xlink:href="#f"/></g><g transform="rotate(-6 688.693 -39.441)"><mask id="h" fill="#fff"><use xlink:href="#g"/></mask><use fill="#FBE8B0" xlink:href="#g"/><path fill="#FFF" opacity=".4" mask="url(#h)" d="M-7.106 59.039h117v116h-117z"/><circle fill="#FF9962" mask="url(#h)" cx="86.669" cy="58.868" r="7.5"/></g><path fill="#4A4A4A" opacity=".258" d="M79 32h8v8h-8z"/><rect fill="#4A4A4A" opacity=".258" x="183" y="32" width="8" height="8" rx="4"/><rect fill="#4A4A4A" opacity=".258" x="197" y="32" width="8" height="8" rx="4"/></g><path fill-opacity=".351" fill="#F8F9FA" opacity=".199" d="M0 423h1189v21H0z"/></g></svg>
+\ No newline at end of file
++<svg xmlns="http://www.w3.org/2000/svg" width="300" height="150" viewBox="0 0 300 150" fill="none"><circle cx="150.0" cy="75.0" r="65.1" stroke="#6e727b" stroke-width="1.5"/><circle cx="150.0" cy="75.0" r="52.5" stroke="#6e727b" stroke-width="1.5" stroke-dasharray="3 7"/><circle cx="150.0" cy="75.0" r="42.0" stroke="#3fd8ff" stroke-width="11.8"/><circle cx="202.5" cy="66.6" r="5.9" fill="#3fd8ff"/></svg>
+diff --git a/chrome/browser/resources/history/images/sync_history_promo.svg b/chrome/browser/resources/history/images/sync_history_promo.svg
+index 36a9a7501e..4fd03c9291 100644
+--- a/chrome/browser/resources/history/images/sync_history_promo.svg
++++ b/chrome/browser/resources/history/images/sync_history_promo.svg
+@@ -1,46 +1 @@
+-<svg width="300" height="162" viewBox="0 0 300 162" fill="none" xmlns="http://www.w3.org/2000/svg">
+-<rect x="220.693" y="96.8115" width="63" height="46.5" rx="23.25" transform="rotate(13.447 220.693 96.8115)" fill="#D2E3FC"/>
+-<rect x="42" y="115.945" width="42" height="31.5" rx="15.75" transform="rotate(-12.5657 42 115.945)" fill="#D2E3FC"/>
+-<rect x="214.385" y="86.9921" width="52.481" height="38.0559" rx="4.5" transform="rotate(13.1128 214.385 86.9921)" fill="#D2E3FC" stroke="#1B6EF3" stroke-width="3"/>
+-<path d="M198.043 126.079L262.884 141.183V141.183C262.467 142.974 260.677 144.087 258.887 143.67L200.53 130.076C198.739 129.659 197.626 127.87 198.043 126.079V126.079Z" fill="#1A73E8"/>
+-<mask id="mask0_27482_22475" style="mask-type:alpha" maskUnits="userSpaceOnUse" x="205" y="86" width="62" height="51">
+-<rect x="213.264" y="85.1909" width="55.481" height="41.0559" rx="6" transform="rotate(13.1128 213.264 85.1909)" fill="#D2E3FC"/>
+-</mask>
+-<g mask="url(#mask0_27482_22475)">
+-<path d="M263.289 118.859L208.025 118.14C201.315 118.053 199.544 127.368 205.818 129.749L258.998 149.93C262.673 151.324 266.674 148.868 267.093 144.959L269.177 125.497C269.554 121.982 266.825 118.905 263.289 118.859Z" fill="black"/>
+-</g>
+-<rect x="214.385" y="86.9921" width="52.481" height="38.0559" rx="4.5" transform="rotate(13.1128 214.385 86.9921)" fill="#D2E3FC" stroke="#1B6EF3" stroke-width="3"/>
+-<mask id="mask1_27482_22475" style="mask-type:alpha" maskUnits="userSpaceOnUse" x="205" y="86" width="62" height="51">
+-<rect x="213.264" y="85.1909" width="55.481" height="41.0559" rx="6" transform="rotate(13.1128 213.264 85.1909)" fill="#D2E3FC"/>
+-</mask>
+-<g mask="url(#mask1_27482_22475)">
+-<path d="M263.289 118.859L208.025 118.14C201.315 118.053 199.544 127.368 205.818 129.749L258.998 149.93C262.673 151.324 266.674 148.868 267.093 144.959L269.177 125.497C269.554 121.982 266.825 118.905 263.289 118.859Z" fill="#AECBFA"/>
+-</g>
+-<rect x="214.385" y="86.9921" width="52.481" height="38.0559" rx="4.5" transform="rotate(13.1128 214.385 86.9921)" stroke="#1B6EF3" stroke-width="3"/>
+-<rect x="51.6421" y="90.0936" width="22.2091" height="43.5525" rx="4.5" transform="rotate(-12.5156 51.6421 90.0936)" fill="#D2E3FC" stroke="#1B6EF3" stroke-width="3"/>
+-<mask id="mask2_27482_22475" style="mask-type:alpha" maskUnits="userSpaceOnUse" x="54" y="87" width="27" height="44">
+-<rect x="53.4315" y="91.2329" width="19.2091" height="40.5525" rx="3" transform="rotate(-12.5156 53.4315 91.2329)" fill="#D2E3FC"/>
+-</mask>
+-<g mask="url(#mask2_27482_22475)">
+-<path d="M85.9905 117.899L54.7141 114.354C50.9659 113.93 47.7601 117.028 48.0571 120.789L49.684 141.389C49.981 145.149 53.6334 147.706 57.2685 146.698L87.6008 138.289C90.3694 137.521 92.2053 134.899 91.9791 132.034L91.2962 123.388C91.07 120.524 88.8452 118.222 85.9905 117.899Z" fill="#AECBFA"/>
+-</g>
+-<path d="M130.835 54.4535L124.985 35.8294C124.797 35.2327 124.849 34.656 125.139 34.0995C125.443 33.5177 125.893 33.1331 126.49 32.9456L138.271 29.245C138.868 29.0576 139.447 29.1187 140.01 29.4284C140.586 29.7128 140.967 30.1534 141.155 30.7501L147.005 49.3742L137.831 48.4489L130.835 54.4535ZM131.986 50.4436L137.079 46.0523L143.767 46.743L138.96 31.4395L127.179 35.1401L131.986 50.4436ZM127.179 35.1401L138.96 31.4395L133.07 33.2898L127.179 35.1401Z" fill="#1B6EF3"/>
+-<path d="M158.072 45.6289L162.558 44.2342L165.885 47.5724L165.943 42.8815L170.08 40.7471L165.683 39.2345L164.918 34.5917L162.103 38.3272L157.505 37.6378L160.188 41.4417L158.072 45.6289ZM153.584 49.4534L157.517 41.6604L152.468 34.5355L161.115 35.873L166.314 28.8886L167.7 37.4849L175.987 40.2923L168.218 44.2797L168.107 53.0082L161.918 46.8506L153.584 49.4534Z" fill="#1B6EF3"/>
+-<circle cx="5.34335" cy="5.34335" r="5.34335" transform="matrix(0.755578 -0.655059 -0.655059 -0.755578 110.424 53.436)" fill="#FBBC04"/>
+-<circle cx="3" cy="3" r="3" transform="matrix(0.755578 -0.655059 -0.655059 -0.755578 84.8542 75.9639)" fill="#D2E3FC"/>
+-<path d="M98.8408 54.836C99.9853 54.9892 100.535 56.3239 99.8298 57.2385L95.8647 62.3829C95.1598 63.2975 93.7292 63.106 93.2896 62.0383L90.8169 56.0322C90.3773 54.9644 91.2585 53.8212 92.403 53.9744L98.8408 54.836Z" fill="#FCC934"/>
+-<circle cx="211.152" cy="81.1642" r="2.43893" transform="rotate(-157.147 211.152 81.1642)" fill="#D2E3FC"/>
+-<circle cx="79.6191" cy="82.695" r="2.43893" transform="rotate(-157.147 79.6191 82.695)" fill="#D2E3FC"/>
+-<circle cx="206.547" cy="71.6231" r="3.14724" transform="rotate(-157.147 206.547 71.6231)" fill="#D2E3FC"/>
+-<circle cx="197.819" cy="61.3946" r="4.5" transform="rotate(-157.147 197.819 61.3946)" fill="#5BB974"/>
+-<path d="M149.924 9L150.674 17.25" stroke="#D2E3FC" stroke-width="3" stroke-linecap="round"/>
+-<path d="M183.271 22.8208L179.576 26.1352" stroke="#D2E3FC" stroke-width="3" stroke-linecap="round"/>
+-<path d="M116.587 24.2563L119.736 27.6994" stroke="#D2E3FC" stroke-width="3" stroke-linecap="round"/>
+-<path d="M119.924 60.8364L123.073 56.9999" stroke="#D2E3FC" stroke-width="3" stroke-linecap="round"/>
+-<path d="M178.122 59.3057L175.423 55.4996" stroke="#D2E3FC" stroke-width="3" stroke-linecap="round"/>
+-<rect x="182.358" y="42" width="10.5" height="10.5" rx="3" transform="rotate(13.4034 182.358 42)" fill="#34A853"/>
+-<path d="M86.9238 92.9994C111.674 59.9994 165.405 45.7444 202.424 90.1355" stroke="#D2E3FC" stroke-width="3" stroke-linecap="round"/>
+-<path d="M95.9238 99.0003C116.924 70.5003 164.174 61.5003 193.424 94.5003" stroke="#D2E3FC" stroke-width="3" stroke-linecap="round"/>
+-<path d="M204.573 85.5836C204.41 84.4344 203.06 83.8972 202.153 84.6206L196.77 88.9112C195.869 89.6291 196.08 91.0521 197.15 91.4779L203.497 94.0031C204.567 94.4289 205.698 93.5398 205.537 92.3994L204.573 85.5836Z" fill="#D2E3FC"/>
+-<path d="M94.8919 93.269C95.3226 92.1912 96.7616 91.9899 97.4715 92.9082L101.682 98.3541C102.386 99.2653 101.843 100.598 100.703 100.757L93.9382 101.703C92.7976 101.863 91.9102 100.731 92.3375 99.6611L94.8919 93.269Z" fill="#D2E3FC"/>
+-</svg>
++<svg xmlns="http://www.w3.org/2000/svg" width="300" height="162" viewBox="0 0 300 162" fill="none"><circle cx="150.0" cy="81.0" r="70.3" stroke="#8294aa" stroke-width="1.5"/><circle cx="150.0" cy="81.0" r="56.7" stroke="#8294aa" stroke-width="1.5" stroke-dasharray="3 7"/><circle cx="150.0" cy="81.0" r="45.4" stroke="#0a7fb3" stroke-width="12.7"/><circle cx="206.7" cy="71.9" r="6.4" fill="#0a7fb3"/></svg>
+diff --git a/chrome/browser/resources/history/images/sync_history_promo_dark.svg b/chrome/browser/resources/history/images/sync_history_promo_dark.svg
+index 2270c68ac5..1d36d7d98f 100644
+--- a/chrome/browser/resources/history/images/sync_history_promo_dark.svg
++++ b/chrome/browser/resources/history/images/sync_history_promo_dark.svg
+@@ -1,46 +1 @@
+-<svg width="300" height="162" viewBox="0 0 300 162" fill="none" xmlns="http://www.w3.org/2000/svg">
+-<rect x="220.693" y="96.8115" width="63" height="46.5" rx="23.25" transform="rotate(13.447 220.693 96.8115)" fill="#3C4043"/>
+-<rect x="42" y="115.945" width="42" height="31.5" rx="15.75" transform="rotate(-12.5657 42 115.945)" fill="#3C4043"/>
+-<rect x="214.385" y="86.9921" width="52.481" height="38.0559" rx="4.5" transform="rotate(13.1128 214.385 86.9921)" fill="#185ABC" stroke="#1B6EF3" stroke-width="3"/>
+-<path d="M198.043 126.079L262.884 141.183V141.183C262.467 142.974 260.677 144.087 258.887 143.67L200.53 130.076C198.739 129.659 197.626 127.87 198.043 126.079V126.079Z" fill="#1A73E8"/>
+-<mask id="mask0_27482_22514" style="mask-type:alpha" maskUnits="userSpaceOnUse" x="205" y="86" width="62" height="51">
+-<rect x="213.264" y="85.1909" width="55.481" height="41.0559" rx="6" transform="rotate(13.1128 213.264 85.1909)" fill="#D2E3FC"/>
+-</mask>
+-<g mask="url(#mask0_27482_22514)">
+-<path d="M263.289 118.859L208.025 118.14C201.315 118.053 199.544 127.368 205.818 129.749L258.998 149.93C262.673 151.324 266.674 148.868 267.093 144.959L269.177 125.497C269.554 121.982 266.825 118.905 263.289 118.859Z" fill="black"/>
+-</g>
+-<rect x="214.385" y="86.9921" width="52.481" height="38.0559" rx="4.5" transform="rotate(13.1128 214.385 86.9921)" fill="#185ABC" stroke="#1B6EF3" stroke-width="3"/>
+-<mask id="mask1_27482_22514" style="mask-type:alpha" maskUnits="userSpaceOnUse" x="205" y="86" width="62" height="51">
+-<rect x="213.264" y="85.1909" width="55.481" height="41.0559" rx="6" transform="rotate(13.1128 213.264 85.1909)" fill="#D2E3FC"/>
+-</mask>
+-<g mask="url(#mask1_27482_22514)">
+-<path d="M263.289 118.859L208.025 118.14C201.315 118.053 199.544 127.368 205.818 129.749L258.998 149.93C262.673 151.324 266.674 148.868 267.093 144.959L269.177 125.497C269.554 121.982 266.825 118.905 263.289 118.859Z" fill="#1967D2"/>
+-</g>
+-<rect x="214.385" y="86.9921" width="52.481" height="38.0559" rx="4.5" transform="rotate(13.1128 214.385 86.9921)" stroke="#4285F4" stroke-width="3"/>
+-<rect x="51.6422" y="90.0936" width="22.2091" height="43.5525" rx="4.5" transform="rotate(-12.5156 51.6422 90.0936)" fill="#185ABC" stroke="#4285F4" stroke-width="3"/>
+-<mask id="mask2_27482_22514" style="mask-type:alpha" maskUnits="userSpaceOnUse" x="54" y="87" width="27" height="44">
+-<rect x="53.4316" y="91.2329" width="19.2091" height="40.5525" rx="3" transform="rotate(-12.5156 53.4316 91.2329)" fill="#D2E3FC"/>
+-</mask>
+-<g mask="url(#mask2_27482_22514)">
+-<path d="M85.9905 117.899L54.7141 114.354C50.9659 113.93 47.7602 117.028 48.0572 120.789L49.6841 141.389C49.981 145.149 53.6334 147.706 57.2685 146.698L87.6008 138.289C90.3694 137.521 92.2053 134.899 91.9791 132.034L91.2963 123.388C91.0701 120.524 88.8453 118.222 85.9905 117.899Z" fill="#1967D2"/>
+-</g>
+-<path d="M130.835 54.4535L124.985 35.8294C124.797 35.2327 124.849 34.656 125.139 34.0995C125.443 33.5177 125.893 33.1331 126.49 32.9456L138.271 29.245C138.868 29.0576 139.447 29.1187 140.01 29.4284C140.586 29.7128 140.967 30.1534 141.155 30.7501L147.005 49.3742L137.831 48.4489L130.835 54.4535ZM131.986 50.4436L137.079 46.0523L143.767 46.743L138.96 31.4395L127.179 35.1401L131.986 50.4436ZM127.179 35.1401L138.96 31.4395L133.07 33.2898L127.179 35.1401Z" fill="#4285F4"/>
+-<path d="M158.072 45.6289L162.558 44.2342L165.885 47.5724L165.943 42.8815L170.08 40.7471L165.683 39.2345L164.918 34.5917L162.103 38.3272L157.505 37.6378L160.188 41.4417L158.072 45.6289ZM153.584 49.4534L157.517 41.6604L152.468 34.5355L161.115 35.873L166.314 28.8886L167.7 37.4849L175.987 40.2923L168.218 44.2797L168.107 53.0082L161.918 46.8506L153.584 49.4534Z" fill="#4285F4"/>
+-<circle cx="5.34335" cy="5.34335" r="5.34335" transform="matrix(0.755578 -0.655059 -0.655059 -0.755578 110.424 53.436)" fill="#FBBC04"/>
+-<circle cx="3" cy="3" r="3" transform="matrix(0.755578 -0.655059 -0.655059 -0.755578 84.8542 75.9639)" fill="#174EA6"/>
+-<path d="M98.8408 54.836C99.9853 54.9892 100.535 56.3239 99.8298 57.2385L95.8647 62.3829C95.1598 63.2975 93.7292 63.106 93.2896 62.0383L90.8169 56.0322C90.3773 54.9644 91.2585 53.8212 92.403 53.9744L98.8408 54.836Z" fill="#F9AB00"/>
+-<circle cx="211.152" cy="81.1642" r="2.43893" transform="rotate(-157.147 211.152 81.1642)" fill="#174EA6"/>
+-<circle cx="79.6191" cy="82.695" r="2.43893" transform="rotate(-157.147 79.6191 82.695)" fill="#174EA6"/>
+-<circle cx="206.547" cy="71.6231" r="3.14724" transform="rotate(-157.147 206.547 71.6231)" fill="#174EA6"/>
+-<circle cx="197.819" cy="61.3946" r="4.5" transform="rotate(-157.147 197.819 61.3946)" fill="#1E8E3E"/>
+-<path d="M149.924 9L150.674 17.25" stroke="#174EA6" stroke-width="3" stroke-linecap="round"/>
+-<path d="M183.271 22.8208L179.576 26.1352" stroke="#174EA6" stroke-width="3" stroke-linecap="round"/>
+-<path d="M116.587 24.2563L119.736 27.6994" stroke="#174EA6" stroke-width="3" stroke-linecap="round"/>
+-<path d="M119.924 60.8364L123.073 56.9999" stroke="#174EA6" stroke-width="3" stroke-linecap="round"/>
+-<path d="M178.122 59.3057L175.423 55.4996" stroke="#174EA6" stroke-width="3" stroke-linecap="round"/>
+-<rect x="182.358" y="42" width="10.5" height="10.5" rx="3" transform="rotate(13.4034 182.358 42)" fill="#34A853"/>
+-<path d="M86.9238 92.9994C111.674 59.9994 165.405 45.7444 202.424 90.1355" stroke="#174EA6" stroke-width="3" stroke-linecap="round"/>
+-<path d="M95.9238 99.0003C116.924 70.5003 164.174 61.5003 193.424 94.5003" stroke="#174EA6" stroke-width="3" stroke-linecap="round"/>
+-<path d="M204.573 85.5836C204.41 84.4344 203.06 83.8972 202.153 84.6206L196.77 88.9112C195.869 89.6291 196.08 91.0521 197.15 91.4779L203.497 94.0031C204.567 94.4289 205.698 93.5398 205.537 92.3994L204.573 85.5836Z" fill="#174EA6"/>
+-<path d="M94.8919 93.269C95.3226 92.1912 96.7616 91.9899 97.4715 92.9082L101.682 98.3541C102.386 99.2653 101.843 100.598 100.703 100.757L93.9382 101.703C92.7976 101.863 91.9102 100.731 92.3375 99.6611L94.8919 93.269Z" fill="#174EA6"/>
+-</svg>
++<svg xmlns="http://www.w3.org/2000/svg" width="300" height="162" viewBox="0 0 300 162" fill="none"><circle cx="150.0" cy="81.0" r="70.3" stroke="#6e727b" stroke-width="1.5"/><circle cx="150.0" cy="81.0" r="56.7" stroke="#6e727b" stroke-width="1.5" stroke-dasharray="3 7"/><circle cx="150.0" cy="81.0" r="45.4" stroke="#3fd8ff" stroke-width="12.7"/><circle cx="206.7" cy="71.9" r="6.4" fill="#3fd8ff"/></svg>
+diff --git a/components/neterror/resources/neterror.css b/components/neterror/resources/neterror.css
+index dbdbeac156..48e96ff7ca 100644
+--- a/components/neterror/resources/neterror.css
++++ b/components/neterror/resources/neterror.css
+@@ -701,3 +701,15 @@ html[dir='rtl'].offline .icon-offline {
+     display: none;
+   }
+ }
++
++/* Orbis error mark (replaces the stock pixel icons). */
++.icon-generic, .icon-offline {
++  content: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='72' viewBox='0 0 72 72' fill='none'%3E%3Ccircle cx='36' cy='36' r='28' stroke='%230a7fb3' stroke-width='6'/%3E%3Cpath d='M36 22v17' stroke='%230a7fb3' stroke-width='6' stroke-linecap='round'/%3E%3Ccircle cx='36' cy='49' r='3.6' fill='%230a7fb3'/%3E%3C/svg%3E");
++  width: 72px;
++  height: 72px;
++}
++@media (prefers-color-scheme: dark) {
++  .icon-generic, .icon-offline {
++    content: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='72' viewBox='0 0 72 72' fill='none'%3E%3Ccircle cx='36' cy='36' r='28' stroke='%233fd8ff' stroke-width='6'/%3E%3Cpath d='M36 22v17' stroke='%233fd8ff' stroke-width='6' stroke-linecap='round'/%3E%3Ccircle cx='36' cy='49' r='3.6' fill='%233fd8ff'/%3E%3C/svg%3E");
++  }
++}
+diff --git a/ui/webui/resources/cr_elements/cr_toolbar/cr_toolbar.css b/ui/webui/resources/cr_elements/cr_toolbar/cr_toolbar.css
+index de24f1a045..1bf13f59e8 100644
+--- a/ui/webui/resources/cr_elements/cr_toolbar/cr_toolbar.css
++++ b/ui/webui/resources/cr_elements/cr_toolbar/cr_toolbar.css
+@@ -14,7 +14,7 @@
+ :host {
+   align-items: center;
+   box-sizing: border-box;
+-  color: var(--google-grey-900);
++  color: var(--cr-primary-text-color);
+   display: flex;
+   height: var(--cr-toolbar-height);
+ }
+@@ -26,6 +26,7 @@
+ }
+ 
+ h1 {
++  color: var(--cr-primary-text-color);
+   flex: 1;
+   font-size: 170%;
+   font-weight: var(--cr-toolbar-header-font-weight, 500);
+diff --git a/chrome/app/profiles_strings.grdp b/chrome/app/profiles_strings.grdp
+index db742e65b5..d8c6eba7f1 100644
+--- a/chrome/app/profiles_strings.grdp
++++ b/chrome/app/profiles_strings.grdp
+@@ -1375,7 +1375,7 @@
+       To quickly get back to sites you’ve visited, sync your history and tabs
+     </message>
+     <message name="IDS_HISTORY_SYNC_OPT_IN_DESCRIPTION" desc="Description of the history sync opt in screen which offers the user to turn on the data types history, tabs, and saved tab groups.">
+-      You can stop syncing anytime in settings. Google may personalize Search and other services based on your history.
++      You can stop syncing anytime in settings.
+     </message>
+     <message name="IDS_HISTORY_SYNC_OPT_IN_ACCEPT_BUTTON" desc="Accept button of the history sync opt in screen which offers the user to turn on the data types history, tabs, and saved tab groups.">
+       Yes, I’m in
+diff --git a/chrome/app/generated_resources.grd b/chrome/app/generated_resources.grd
+index 28730053b5..65852c1c33 100644
+--- a/chrome/app/generated_resources.grd
++++ b/chrome/app/generated_resources.grd
+@@ -549,16 +549,16 @@ are declared in tools/grit/grit_args.gni.
+         Browse across devices
+       </message>
+       <message name="IDS_RECENT_TABS_SYNC_HISTORY_PROMO_BODY_SIGNED_OUT" desc="Body of the sync hystory promo for signed out users. Tells users to sign in and sync hystory to see synced tabs, passwords, and other data from other devices.">
+-        To get your tabs from your other devices, sign in and sync history. You’ll also get your passwords and more on all your devices. You can stop syncing anytime in settings. Google may personalize Search and other services based on your history.
++        To get your tabs from your other devices, sign in and sync history. You’ll also get your passwords and more on all your devices. You can stop syncing anytime in settings.
+       </message>
+       <message name="IDS_RECENT_TABS_SYNC_HISTORY_PROMO_BODY_PENDING_SIGN_IN" desc="Body of the sync hystory promo for users with pending sign in, who have history sync off.">
+-        To get your tabs from your other devices, verify it’s you and sync your history and tabs. You can stop syncing anytime in settings. Google may personalize Search and other services based on your history.
++        To get your tabs from your other devices, verify it’s you and sync your history and tabs. You can stop syncing anytime in settings.
+       </message>
+       <message name="IDS_RECENT_TABS_SYNC_HISTORY_PROMO_BODY_PENDING_SIGN_IN_SYNC_HISTORY_ON" desc="Body of the sync hystory promo for users with pending sign in, who have history sync on.">
+-        To get your tabs from your other devices, verify it’s you. You can stop syncing anytime in settings. Google may personalize Search and other services based on your history.
++        To get your tabs from your other devices, verify it’s you. You can stop syncing anytime in settings.
+       </message>
+       <message name="IDS_RECENT_TABS_SYNC_HISTORY_PROMO_BODY_SIGNED_IN_SYNC_OFF" desc="Body of the sync hystory promo for signed in users with sync turned off.">
+-        To get your tabs from your other devices, sync your history and tabs to <ph name="ACCOUNT_EMAIL">$1<ex>john@google.com</ex></ph>. You can stop syncing anytime in settings. Google may personalize Search and other services based on your history.
++        To get your tabs from your other devices, sync your history and tabs to <ph name="ACCOUNT_EMAIL">$1<ex>john@google.com</ex></ph>. You can stop syncing anytime in settings.
+       </message>
+       <message name="IDS_HISTORY_SYNC_HISTORY_BUTTON" desc="Label displayed on a button to let user turn on sync history or sign in to Chrome to get synced tab history.">
+         Sync history
+@@ -13282,7 +13282,7 @@ Check your passwords anytime in <ph name="GOOGLE_PASSWORD_MANAGER">$1<ex>Google
+           Sync history
+         </message>
+         <message name="IDS_SYNC_HISTORY_FOOTER" desc="The footer of dialog that prompts users to sign in and opt in to history sync.">
+-          You can stop syncing anytime in settings. Google may personalize Search and other services based on your history.
++          You can stop syncing anytime in settings.
+         </message>
+       <!-- /History Sync Opt In Flows -->
+ 
+@@ -14757,7 +14757,7 @@ This can include information about installed software, files, your browser, the
+         History and more
+       </message>
+       <message name="IDS_SYNC_CONFIRMATION_TANGIBLE_SYNC_INFO_DESC" desc="This string appears in the footer on a screen that asks users if they want to turn on sync. This string informs the user that if they choose to sync, then their history may be used to personalize Search and other services. Translate 'history' according to https://localization.google.com/glossary/termset?gid=27517723&amp;tsid=59c3162">
+-        You can always choose what to sync in settings. Google may personalize Search and other services based on your history.
++        You can always choose what to sync in settings.
+       </message>
+ 
+       <!--  Sync Confirmation section of the Signin Intercept first run experience flow -->
+diff --git a/components/history_strings.grdp b/components/history_strings.grdp
+index f56d4a90fe..8926489729 100644
+--- a/components/history_strings.grdp
++++ b/components/history_strings.grdp
+@@ -162,16 +162,16 @@
+     See your history on other devices
+   </message>
+   <message name="IDS_HISTORY_SYNC_PROMO_BODY_SIGNED_OUT" desc="The promo body text for signed out users.">
+-    To get your history from your other devices, sign in and sync history. You’ll also get your passwords and more on all your devices. You can stop syncing anytime in settings. Google may personalize Search and other services based on your history.
++    To get your history from your other devices, sign in and sync history. You’ll also get your passwords and more on all your devices. You can stop syncing anytime in settings.
+   </message>
+   <message name="IDS_HISTORY_SYNC_PROMO_BODY_SIGN_IN_PENDING" desc="The promo body text for pending sign in users with sync history off.">
+-    To get your history from your other devices, verify it’s you and sync your history and tabs. You can stop syncing anytime in settings. Google may personalize Search and other services based on your history.
++    To get your history from your other devices, verify it’s you and sync your history and tabs. You can stop syncing anytime in settings.
+   </message>
+   <message name="IDS_HISTORY_SYNC_PROMO_BODY_SIGN_IN_PENDING_SYNC_HISTORY_ON" desc="The promo body text for pending sign in users with sync history on.">
+-    To get your history from your other devices, verify it’s you. You can stop syncing anytime in settings. Google may personalize Search and other services based on your history.
++    To get your history from your other devices, verify it’s you. You can stop syncing anytime in settings.
+   </message>
+   <message name="IDS_HISTORY_SYNC_PROMO_BODY_SIGNED_IN" desc="The promo body text for signed in users with sync history off.">
+-    To get your history from your other devices, sync your history and tabs to <ph name="ACCOUNT_EMAIL">$1<ex>john@google.com</ex></ph>. You can stop syncing anytime in settings. Google may personalize Search and other services based on your history.
++    To get your history from your other devices, sync your history and tabs to <ph name="ACCOUNT_EMAIL">$1<ex>john@google.com</ex></ph>. You can stop syncing anytime in settings.
+   </message>
+ 
+   <message name="IDS_HISTORY_EMBEDDINGS_DISCLAIMER" desc="On the history page, the persistent disclaimer text shown below the search box indicating what content is sent to Google for the history search feature.">
+diff --git a/components/webui/version/resources/about_version.css b/components/webui/version/resources/about_version.css
+index 5b7c6b03bf..1782d0fbab 100644
+--- a/components/webui/version/resources/about_version.css
++++ b/components/webui/version/resources/about_version.css
+@@ -7,19 +7,19 @@ html {
+   --google-grey-200: rgb(var(--google-grey-200-rgb));
+   --google-grey-900-rgb: 32, 33, 36;
+   --google-grey-900: rgb(var(--google-grey-900-rgb));
+-  --primary-color: var(--google-grey-900);
++  --primary-color: #1a2a40;
+   --active-background-color: rgba(var(--google-grey-900-rgb), .16);
+   --hover-background-color: rgba(var(--google-grey-900-rgb), .1);
+-  --background-color: white;
++  --background-color: #e8ecf1;
+   background: var(--background-color);
+ }
+ 
+ @media (prefers-color-scheme: dark) {
+   html {
+-    --primary-color: var(--google-grey-200);
++    --primary-color: #ededef;
+     --active-background-color: rgba(var(--google-grey-200-rgb), .16);
+     --hover-background-color: rgba(var(--google-grey-200-rgb), .1);
+-    --background-color: var(--google-grey-900);
++    --background-color: #0e1013;
+     background: var(--background-color);
+   }
+ }
+diff --git a/ui/webui/resources/cr_elements/icons.html.ts b/ui/webui/resources/cr_elements/icons.html.ts
+index d3f4f9fb26..c070c8e956 100644
+--- a/ui/webui/resources/cr_elements/icons.html.ts
++++ b/ui/webui/resources/cr_elements/icons.html.ts
+@@ -95,7 +95,7 @@ if (document.documentElement.hasAttribute('webui-rounded-icons')) {
+         <path d="m13.05 12-4.1-4.102a.87.87 0 0 1-.274-.636.87.87 0 0 1 .273-.637.879.879 0 0 1 1.277 0l4.75 4.75a.84.84 0 0 1 .188.29c.04.105.063.218.063.335 0 .117-.024.23-.063.336a.84.84 0 0 1-.187.289l-4.75 4.75a.822.822 0 0 1-.625.262.902.902 0 0 1-.625-.285.883.883 0 0 1-.278-.641.88.88 0 0 1 .278-.637Zm0 0"></path>
+       </g>
+       <g id="chrome-product">
+-        <path d="M9.45 14.574c.698.7 1.55 1.051 2.55 1.051 1 0 1.852-.352 2.55-1.05.7-.7 1.052-1.552 1.052-2.552s-.352-1.847-1.051-2.546C13.85 8.773 13 8.426 12 8.426c-1 0-1.852.347-2.55 1.05-.7.7-1.052 1.547-1.052 2.547 0 1 .352 1.852 1.051 2.551ZM12 17.426c.184 0 .371-.004.563-.012.19-.012.378-.039.562-.09l-2.45 4.2c-2.402-.266-4.378-1.31-5.937-3.126-1.558-1.816-2.34-3.941-2.34-6.375 0-.714.082-1.418.239-2.109.16-.691.398-1.371.715-2.039l4 6.852A4.988 4.988 0 0 0 9.3 16.71a5.346 5.346 0 0 0 2.699.715Zm0-10.801a5.114 5.114 0 0 0-3.164 1.05 5.499 5.499 0 0 0-1.938 2.7L4.45 6.125a8.93 8.93 0 0 1 3.313-2.738A9.61 9.61 0 0 1 12 2.426c1.582 0 3.074.375 4.477 1.125a9.739 9.739 0 0 1 3.449 3.074Zm8.898 1.8c.25.583.43 1.177.54 1.774.109.602.164 1.211.164 1.824 0 2.586-.836 4.754-2.5 6.516-1.668 1.758-3.793 2.777-6.375 3.063l3.921-6.875c.235-.418.418-.852.551-1.301a5.058 5.058 0 0 0-.176-3.324A5.943 5.943 0 0 0 16 8.426Zm0 0"></path>
++        <path fill-rule="evenodd" d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm0 3.5a5.5 5.5 0 1 1 0 11 5.5 5.5 0 0 1 0-11Z"></path>
+       </g>
+       <g id="close">
+         <path d="m12 13.273-4.102 4.102a.816.816 0 0 1-.625.262.91.91 0 0 1-.625-.285.879.879 0 0 1 0-1.278L10.727 12 6.625 7.898a.83.83 0 0 1-.262-.636.914.914 0 0 1 .285-.637.879.879 0 0 1 1.278 0L12 10.727l4.102-4.102a.87.87 0 0 1 .636-.273.87.87 0 0 1 .637.273.87.87 0 0 1 .273.637.87.87 0 0 1-.273.636L13.273 12l4.102 4.102c.184.183.273.39.273.625 0 .23-.09.441-.273.625a.87.87 0 0 1-.637.273.87.87 0 0 1-.636-.273Zm0 0"></path>
+@@ -318,7 +318,7 @@ if (document.documentElement.hasAttribute('webui-rounded-icons')) {
+         <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"></path>
+       </g>
+       <g id="chrome-product" viewBox="0 -960 960 960">
+-        <path d="M336-479q0 60 42 102t102 42q60 0 102-42t42-102q0-60-42-102t-102-42q-60 0-102 42t-42 102Zm144 216q11 0 22.5-.5T525-267L427-99q-144-16-237.5-125T96-479q0-43 9.5-84.5T134-645l160 274q28 51 78 79.5T480-263Zm0-432q-71 0-126.5 42T276-545l-98-170q53-71 132.5-109.5T480-863q95 0 179 45t138 123H480Zm356 72q15 35 21.5 71t6.5 73q0 155-100 260.5T509-96l157-275q14-25 22-52t8-56q0-40-15-77t-41-67h196Z">
++        <path fill-rule="evenodd" d="M480-864a384 384 0 1 0 0 768 384 384 0 0 0 0-768Zm0 164a220 220 0 1 1 0 440 220 220 0 0 1 0-440Z">
+         </path>
+       </g>
+       <g id="close">
