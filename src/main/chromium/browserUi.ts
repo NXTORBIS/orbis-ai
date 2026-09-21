@@ -331,7 +331,8 @@ export class BrowserUi {
   async press(win: UiWindow, chord: string): Promise<void> {
     const vks = parseChord(chord)
     await this.guarded(win, (hwnd) => this.call<boolean>({ cmd: 'chord', hwnd, vks }), `the key input "${chord}"`)
-    await sleep(60)
+    // Moving focus to the address bar (ctrl+l, ctrl+k, alt+d, f6) takes the browser a moment; text typed before it lands is lost.
+    await sleep(/^(ctrl\+[lk]|alt\+d|f6)$/i.test(chord.trim()) ? 450 : 60)
   }
 
   /** Types text into whatever has focus in the window, after checking the window is in front. */

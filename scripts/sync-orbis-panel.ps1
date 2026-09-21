@@ -18,3 +18,8 @@ if (-not (Test-Path (Join-Path $ui 'results\results.js'))) { throw 'orbis-ui/res
 foreach ($f in 'results.js','results.css') { Copy-Item (Join-Path $ui "results\$f") (Join-Path $dest $f) -Force }
 Copy-Item (Join-Path $ui 'results\index.html') (Join-Path $dest 'results.html') -Force
 "synced orbis page resources into $dest"
+# The generated design-token header for Views (scripts/build-orbis-ui.mjs writes it from orbis-ui/tokens.json).
+$hdr = Join-Path $ui 'generated\orbis_tokens.h'
+if (-not (Test-Path $hdr)) { throw 'orbis-ui/generated/orbis_tokens.h is missing (node scripts/build-orbis-ui.mjs).' }
+Copy-Item $hdr (Join-Path $Src 'ui\color\orbis_tokens.h') -Force
+"synced ui/color/orbis_tokens.h"

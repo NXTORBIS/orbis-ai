@@ -1,0 +1,559 @@
+diff --git a/chrome/browser/resources/omnibox_popup/omnibox_popup_shared_style.css b/chrome/browser/resources/omnibox_popup/omnibox_popup_shared_style.css
+index 22bd7b6..035c455 100644
+--- a/chrome/browser/resources/omnibox_popup/omnibox_popup_shared_style.css
++++ b/chrome/browser/resources/omnibox_popup/omnibox_popup_shared_style.css
+@@ -27,14 +27,14 @@
+   --cr-composebox-font-size: 14px;
+ 
+   --cr-searchbox-match-icon-container-background-fallback: var(--color-omnibox-results-background-hovered);
+-  --color-searchbox-background: #131824;
+-  --color-searchbox-foreground: #e8ecf4;
+-  --color-searchbox-results-background-hovered: #1a2133;
+-  --color-searchbox-results-background-selected: #232b3b;
++  --color-searchbox-background: var(--color-omnibox-results-background);
++  --color-searchbox-foreground: var(--color-omnibox-text);
++  --color-searchbox-results-background-hovered: var(--color-omnibox-results-background-hovered);
++  --color-searchbox-results-background-selected: var(--color-omnibox-results-background-selected);
+   --color-searchbox-results-button-hover: var(--color-omnibox-results-button-ink-drop-row-hovered);
+-  --color-searchbox-results-focus-indicator: #3fd8ff;
+-  --color-searchbox-results-foreground: #e8ecf4;
+-  --color-searchbox-results-foreground-selected: #e8ecf4;
++  --color-searchbox-results-focus-indicator: var(--color-omnibox-results-focus-indicator);
++  --color-searchbox-results-foreground: var(--color-omnibox-text);
++  --color-searchbox-results-foreground-selected: var(--color-omnibox-results-text-selected);
+   --color-searchbox-results-icon-focused-outline: var(--color-omnibox-results-focus-indicator);
+   --color-searchbox-results-icon-selected: var(--color-omnibox-results-icon-selected);
+   --color-searchbox-answer-icon-background: var(--color-omnibox-answer-icon-g-m3-background);
+diff --git a/chrome/browser/resources/webui_toolbar/toolbar_button.css b/chrome/browser/resources/webui_toolbar/toolbar_button.css
+index 233f841..9b2ee8a 100644
+--- a/chrome/browser/resources/webui_toolbar/toolbar_button.css
++++ b/chrome/browser/resources/webui_toolbar/toolbar_button.css
+@@ -27,6 +27,7 @@
+ }
+ 
+ cr-icon-button {
++  border-radius: var(--orbis-radius-control, 8px);
+   cursor: default;
+   margin: 0;
+   --cr-icon-button-size: var(--toolbar-button-height);
+diff --git a/chrome/browser/resources/webui_toolbar/webui_toolbar.css b/chrome/browser/resources/webui_toolbar/webui_toolbar.css
+index 5a8d1ca..df07207 100644
+--- a/chrome/browser/resources/webui_toolbar/webui_toolbar.css
++++ b/chrome/browser/resources/webui_toolbar/webui_toolbar.css
+@@ -14,7 +14,7 @@ body {
+   height: 100%;
+   margin: 0;
+   overflow: hidden;
+-  background: var(--orbis-bg);
++  background: transparent;
+   color: var(--orbis-text);
+   font-family: system-ui, 'Segoe UI', sans-serif;
+ }
+@@ -23,23 +23,16 @@ toolbar-app[webui-toolbar-fully-enabled] {
+   width: max-content;
+ }
+ 
+-/* Orbis: the toolbar takes the Orbis look (colours and shape) instead of the stock browser theme. */
++/* Orbis: the WebUI toolbar parts (reload button, location bar) take the same Orbis look as the Views toolbar: every colour is the
++ * browser theme colour, which the colour mixer fills from orbis-ui/tokens.json (one token source), so light and dark both follow. */
+ :root {
+-  --orbis-bg: #0b0e14;
+-  --orbis-panel: #131824;
+-  --orbis-line: #232b3b;
+-  --orbis-panel-2: #1a2133;
+-  --orbis-text: #e8ecf4;
+-  --orbis-muted: #8b95a8;
+-  --orbis-accent: #3fd8ff;
+-  --color-location-bar-background: var(--orbis-panel);
+-  --color-location-bar-background-hovered: #1a2133;
+-  --color-omnibox-results-background: #1a2133;
+-  --color-omnibox-results-background-hovered: #1f283b;
+-  --color-location-bar-border: var(--orbis-line);
+-  --color-location-bar-border-on-mismatch: var(--orbis-line);
++  --orbis-bg: var(--color-toolbar);
++  --orbis-panel: var(--color-location-bar-background);
++  --orbis-panel-2: var(--color-location-bar-background-hovered);
++  --orbis-line: var(--color-location-bar-border);
++  --orbis-text: var(--color-omnibox-text);
++  --orbis-muted: var(--color-omnibox-text-dimmed);
++  --orbis-accent: var(--color-sys-primary);
++  --orbis-radius-control: 8px; /* tokens.json scale.radius.control */
+   --cr-focus-outline-color: var(--orbis-accent);
+-  --color-omnibox-text: var(--orbis-text);
+-  --color-toolbar-button-icon: var(--orbis-muted);
+-  --color-toolbar-button-icon-hovered: var(--orbis-accent);
+ }
+diff --git a/chrome/browser/ui/color/chrome_color_mixers.cc b/chrome/browser/ui/color/chrome_color_mixers.cc
+index 9698e80..95808f3 100644
+--- a/chrome/browser/ui/color/chrome_color_mixers.cc
++++ b/chrome/browser/ui/color/chrome_color_mixers.cc
+@@ -23,6 +23,11 @@
+ #include "chrome/browser/ui/color/product_specifications_color_mixer.h"
+ #include "chrome/browser/ui/color/tab_strip_color_mixer.h"
+ #include "ui/color/color_provider_utils.h"
++#include "ui/color/color_recipe.h"
++#include "ui/color/color_transform.h"
++#include "ui/color/orbis_tokens.h"
++#include "ui/color/color_provider.h"
++#include "ui/color/color_provider_key.h"
+ 
+ namespace {
+ 
+@@ -51,6 +56,124 @@ bool ChromeColorProviderUtilsCallbacks::ColorIdName(
+ // .inc file serves to undefine the macros the first inclusion defined.
+ #include "ui/color/color_id_map_macros.inc"
+ 
++
++// Orbis: the browser chrome (tab strip, toolbar, location bar, omnibox popup) in the Orbis design language. Every value comes
++// from orbis-ui/tokens.json through ui/color/orbis_tokens.h: one flat bar, subtle inactive tabs, a raised active pill.
++struct OrbisChrome {
++  SkColor bg, surface, surface2, surface3, text, muted, faint, accent, accent_fill, green, red, danger, line, hover, input_bg,
++      input_border, popover;
++};
++constexpr OrbisChrome kOrbisChromeDark = {
++    orbis::dark::kBg,     orbis::dark::kSurface,   orbis::dark::kSurface2,    orbis::dark::kSurface3,
++    orbis::dark::kText,   orbis::dark::kMuted,     orbis::dark::kFaint,       orbis::dark::kAccent,
++    orbis::dark::kAccentFill, orbis::dark::kGreen, orbis::dark::kRed,         orbis::dark::kDanger,
++    orbis::dark::kLine,   orbis::dark::kHover,     orbis::dark::kInputBg,     orbis::dark::kInputBorder,
++    orbis::dark::kPopover};
++constexpr OrbisChrome kOrbisChromeLight = {
++    orbis::light::kBg,     orbis::light::kSurface,   orbis::light::kSurface2,    orbis::light::kSurface3,
++    orbis::light::kText,   orbis::light::kMuted,     orbis::light::kFaint,       orbis::light::kAccent,
++    orbis::light::kAccentFill, orbis::light::kGreen, orbis::light::kRed,         orbis::light::kDanger,
++    orbis::light::kLine,   orbis::light::kHover,     orbis::light::kInputBg,     orbis::light::kInputBorder,
++    orbis::light::kPopover};
++
++void AddOrbisChromeMixer(ui::ColorProvider* provider, const ui::ColorProviderKey& key) {
++  const bool dark = key.color_mode == ui::ColorProviderKey::ColorMode::kDark;
++  const OrbisChrome& s = dark ? kOrbisChromeDark : kOrbisChromeLight;
++  ui::ColorMixer& m = provider->AddMixer();
++
++  // Frame and toolbar: one flat surface.
++  m[ui::kColorFrameActive] = {s.surface};
++  m[ui::kColorFrameInactive] = {s.surface};
++  m[kColorToolbar] = {s.surface};
++  m[kColorToolbarContentAreaSeparator] = ui::GetResultingPaintColor(s.line, s.surface);
++  m[kColorToolbarTopSeparatorFrameActive] = {s.surface};
++  m[kColorToolbarTopSeparatorFrameInactive] = {s.surface};
++
++  // Tabs: inactive tabs are subtle (no fill), hover is a wash, the active tab is a raised pill.
++  m[kColorTabBackgroundActiveFrameActive] = {s.surface2};
++  m[kColorTabBackgroundActiveFrameInactive] = {s.surface2};
++  m[kColorDetachedTabBackgroundActiveFrameActive] = {s.surface2};
++  m[kColorTabBackgroundInactiveFrameActive] = {s.surface};
++  m[kColorTabBackgroundInactiveFrameInactive] = {s.surface};
++  m[kColorTabBackgroundInactiveHoverFrameActive] = ui::GetResultingPaintColor(s.hover, s.surface);
++  m[kColorTabBackgroundInactiveHoverFrameInactive] = ui::GetResultingPaintColor(s.hover, s.surface);
++  m[kColorTabBackgroundSelectedFrameActive] = {s.surface3};
++  m[kColorTabBackgroundSelectedFrameInactive] = {s.surface3};
++  m[kColorTabBackgroundSelectedHoverFrameActive] = {s.surface3};
++  m[kColorTabBackgroundSelectedHoverFrameInactive] = {s.surface3};
++  m[kColorTabForegroundActiveFrameActive] = {s.text};
++  m[kColorTabForegroundActiveFrameInactive] = {s.text};
++  m[kColorTabForegroundInactiveFrameActive] = {s.muted};
++  m[kColorTabForegroundInactiveFrameInactive] = {s.muted};
++  m[kColorTabDividerFrameActive] = {SK_ColorTRANSPARENT};
++  m[kColorTabDividerFrameInactive] = {SK_ColorTRANSPARENT};
++  m[kColorTabStrokeFrameActive] = {SK_ColorTRANSPARENT};
++  m[kColorTabStrokeFrameInactive] = {SK_ColorTRANSPARENT};
++  m[kColorTabHoverCardBackground] = {s.popover};
++  m[kColorTabThrobber] = {s.accent};
++  m[kColorTabThrobberPreconnect] = {s.muted};
++  m[kColorTabAlertAudioPlayingActiveFrameActive] = {s.accent};
++  m[kColorTabAlertAudioPlayingActiveFrameInactive] = {s.accent};
++  m[kColorTabAlertAudioPlayingInactiveFrameActive] = {s.accent};
++  m[kColorTabAlertAudioPlayingInactiveFrameInactive] = {s.accent};
++  m[kColorNewTabButtonCRForegroundFrameActive] = {s.muted};
++  m[kColorNewTabButtonCRForegroundFrameInactive] = {s.muted};
++  m[kColorNewTabButtonCRBackgroundFrameActive] = {SK_ColorTRANSPARENT};
++  m[kColorNewTabButtonCRBackgroundFrameInactive] = {SK_ColorTRANSPARENT};
++  m[kColorTabSearchButtonCRForegroundFrameActive] = {s.muted};
++  m[kColorTabSearchButtonCRForegroundFrameInactive] = {s.muted};
++  m[kColorTabStripControlButtonInkDrop] = {s.hover};
++  m[kColorTabStripComboButtonSeparator] = {s.line};
++
++  // Toolbar buttons: muted glyphs, bright on hover, accent when pressed; a hover wash and a real disabled state.
++  m[kColorToolbarButtonIcon] = {s.muted};
++  m[kColorToolbarButtonIconHovered] = {s.text};
++  m[kColorToolbarButtonIconPressed] = {s.accent};
++  m[kColorToolbarButtonIconInactive] = {s.faint};
++  m[kColorToolbarButtonIconDisabled] = ui::SetAlpha({s.muted}, 0x59);
++  m[kColorToolbarInkDrop] = {s.text};
++  m[kColorToolbarInkDropHover] = {s.hover};
++  m[kColorToolbarInkDropRipple] = ui::SetAlpha({s.text}, 0x1F);
++  m[kColorAppMenuChipInkDropHover] = {s.hover};
++  m[kColorAppMenuChipInkDropRipple] = ui::SetAlpha({s.text}, 0x1F);
++  m[ui::kColorSysStateHoverOnSubtle] = {s.hover};
++  m[ui::kColorSysStateHeaderHover] = {s.hover};
++  m[ui::kColorSysStateHeaderHoverInactive] = {s.hover};
++  m[ui::kColorSysStateRippleNeutralOnSubtle] = ui::SetAlpha({s.text}, 0x1F);
++
++  // Location bar: a rounded input on the raised surface; the focus ring is the accent.
++  // The input sits on the raised popover surface in light (a translucent wash would vanish on the light bar), on a wash in dark.
++  const ui::ColorTransform location_bar_fill = dark ? ui::GetResultingPaintColor(s.input_bg, s.surface) : ui::ColorTransform(s.popover);
++  m[kColorToolbarBackgroundSubtleEmphasis] = location_bar_fill;
++  m[kColorToolbarBackgroundSubtleEmphasisHovered] = {s.surface2};
++  m[kColorLocationBarBackground] = location_bar_fill;
++  m[kColorLocationBarBackgroundHovered] = {s.surface2};
++  m[kColorLocationBarBorder] = {s.input_border};
++  m[kColorLocationBarBorderOpaque] = ui::GetResultingPaintColor(s.input_border, s.surface);
++  m[kColorLocationBarBorderOnMismatch] = {s.input_border};
++  m[ui::kColorFocusableBorderFocused] = {s.accent};
++  m[kColorOmniboxText] = {s.text};
++  m[kColorOmniboxTextDimmed] = {s.muted};
++  m[kColorOmniboxSelectionBackground] = ui::SetAlpha({s.accent}, 0x59);
++  m[kColorOmniboxSelectionForeground] = {s.text};
++  m[kColorOmniboxSecurityChipDefault] = {s.muted};
++  m[kColorOmniboxSecurityChipSecure] = {s.green};
++  m[kColorOmniboxSecurityChipDangerous] = {s.danger};
++
++  // Omnibox popup: a popover surface; rows hover with a wash, the selected row is accent-tinted with an accent focus mark.
++  m[kColorOmniboxResultsBackground] = {s.popover};
++  m[kColorOmniboxResultsBackgroundIph] = {s.surface2};
++  m[kColorOmniboxResultsBackgroundHovered] = ui::GetResultingPaintColor(s.hover, s.popover);
++  m[kColorOmniboxResultsBackgroundSelected] = ui::GetResultingPaintColor(s.accent_fill, s.popover);
++  m[kColorOmniboxResultsFocusIndicator] = {s.accent};
++  m[kColorOmniboxResultsTextSelected] = {s.text};
++  m[kColorOmniboxResultsTextDimmed] = {s.muted};
++  m[kColorOmniboxResultsTextDimmedSelected] = {s.muted};
++  m[kColorOmniboxResultsUrl] = {s.accent};
++  m[kColorOmniboxResultsUrlSelected] = {s.accent};
++  m[kColorOmniboxResultsIcon] = {s.muted};
++  m[kColorOmniboxResultsIconSelected] = {s.accent};
++}
+ }  // namespace
+ 
+ void AddChromeColorMixers(ui::ColorProvider* provider,
+@@ -74,6 +197,9 @@ void AddChromeColorMixers(ui::ColorProvider* provider,
+   // Must be the last one in order to override other mixer colors.
+   AddNativeChromeColorMixer(provider, key);
+ 
++  // Orbis: the Orbis chrome look, after every stock mixer.
++  AddOrbisChromeMixer(provider, key);
++
+   if (key.custom_theme) {
+     key.custom_theme->AddColorMixers(provider, key);
+   }
+diff --git a/chrome/browser/ui/layout_constants.cc b/chrome/browser/ui/layout_constants.cc
+index 7d1a2d7..3f0306e 100644
+--- a/chrome/browser/ui/layout_constants.cc
++++ b/chrome/browser/ui/layout_constants.cc
+@@ -3,6 +3,7 @@
+ // found in the LICENSE file.
+ 
+ #include "chrome/browser/ui/layout_constants.h"
++#include "ui/color/orbis_tokens.h"
+ 
+ #include "base/notreached.h"
+ #include "build/build_config.h"
+@@ -74,7 +75,7 @@ int GetLayoutConstant(LayoutConstant constant) {
+     case LayoutConstant::kLocationBarTrailingDecorationInnerPadding:
+       return touch_ui ? 3 : 8;
+     case LayoutConstant::kLocationBarHeight:
+-      return touch_ui ? 36 : 34;
++      return touch_ui ? 36 : orbis::size::kOmniboxHeight;
+     // LINT.IfChange(LocationBarIconSize)
+     case LayoutConstant::kLocationBarIconSize:
+       return touch_ui ? 20 : 16;
+@@ -119,7 +120,7 @@ int GetLayoutConstant(LayoutConstant constant) {
+     case LayoutConstant::kTabstripToolbarOverlap:
+       return 1;
+     case LayoutConstant::kToolbarButtonHeight:
+-      return touch_ui ? 48 : 34;
++      return touch_ui ? 48 : orbis::size::kHitTarget;
+     case LayoutConstant::kToolbarButtonIconSize:
+       return touch_ui ? kDefaultTouchableIconSize
+                       : kDefaultIconSizeChromeRefresh;
+diff --git a/chrome/browser/ui/tabs/tab_style.cc b/chrome/browser/ui/tabs/tab_style.cc
+index c22b1ca..d453a68 100644
+--- a/chrome/browser/ui/tabs/tab_style.cc
++++ b/chrome/browser/ui/tabs/tab_style.cc
+@@ -11,6 +11,7 @@
+ #include "chrome/browser/ui/ui_features.h"
+ #include "ui/base/ui_base_features.h"
+ #include "ui/color/color_provider.h"
++#include "ui/color/orbis_tokens.h"
+ #include "ui/gfx/color_utils.h"
+ #include "ui/gfx/favicon_size.h"
+ #include "ui/views/layout/layout_provider.h"
+@@ -95,7 +96,7 @@ int TabStyle::GetMinimumInactiveWidth() const {
+ }
+ 
+ int TabStyle::GetTopCornerRadius() const {
+-  return 8;  // Orbis: the Orbis tab corner radius.
++  return orbis::size::kRadiusTab;  // Orbis tab radius (tokens).
+ }
+ 
+ int TabStyle::GetBottomCornerRadius() const {
+diff --git a/chrome/browser/ui/views/location_bar/location_bar_view.cc b/chrome/browser/ui/views/location_bar/location_bar_view.cc
+index 32980d1..114cf71 100644
+--- a/chrome/browser/ui/views/location_bar/location_bar_view.cc
++++ b/chrome/browser/ui/views/location_bar/location_bar_view.cc
+@@ -3,6 +3,7 @@
+ // found in the LICENSE file.
+ 
+ #include "chrome/browser/ui/views/location_bar/location_bar_view.h"
++#include "ui/color/orbis_tokens.h"
+ 
+ #include <algorithm>
+ #include <memory>
+@@ -514,8 +515,7 @@ int LocationBarView::GetBorderRadius() const {
+ 
+ // static
+ int LocationBarView::ComputeBorderRadius(gfx::Size size) {
+-  return ChromeLayoutProvider::Get()->GetCornerRadiusMetric(
+-      views::Emphasis::kMaximum, size);
++  return orbis::size::kRadiusMd;  // Orbis: a rounded input, not a capsule.
+ }
+ 
+ // static
+diff --git a/chrome/browser/ui/views/tabs/horizontal_tab_style_views.cc b/chrome/browser/ui/views/tabs/horizontal_tab_style_views.cc
+index 4851028..3418f06 100644
+--- a/chrome/browser/ui/views/tabs/horizontal_tab_style_views.cc
++++ b/chrome/browser/ui/views/tabs/horizontal_tab_style_views.cc
+@@ -30,6 +30,9 @@
+ #include "third_party/skia/include/core/SkPathBuilder.h"
+ #include "third_party/skia/include/core/SkRRect.h"
+ #include "ui/base/theme_provider.h"
++#include "ui/color/color_id.h"
++#include "ui/color/color_provider.h"
++#include "ui/color/orbis_tokens.h"
+ #include "ui/gfx/animation/tween.h"
+ #include "ui/gfx/canvas.h"
+ #include "ui/gfx/favicon_size.h"
+@@ -83,7 +86,9 @@ SkPath HorizontalTabStyleViews::GetPath(TabStyle::PathType path_type,
+                                   scale;
+ 
+   // Selected, hover, and inactive tab fills are a detached squarcle tab.
++  // Orbis: the active tab is the same detached pill as the hover and highlight fills (no folder-tab extension).
+   if (path_type == TabStyle::PathType::kHighlight ||
++      path_type == TabStyle::PathType::kActiveTab ||
+       path_type == TabStyle::PathType::kHitTest) {
+     float top_left_corner_radius = content_corner_radius;
+     float top_right_corner_radius = content_corner_radius;
+@@ -361,6 +366,37 @@ void HorizontalTabStyleViews::PaintTab(gfx::Canvas* canvas) const {
+   } else {
+     PaintTabBackground(canvas, IsHoverAnimationActive(), std::nullopt);
+   }
++  PaintOrbisIndicator(canvas);
++}
++
++// Orbis: the active tab carries an accent bar along the bottom of its pill, so it is distinguished by shape and mark, not by
++// colour alone.
++void HorizontalTabStyleViews::PaintOrbisIndicator(gfx::Canvas* canvas) const {
++  if (!delegate_->IsActive() || delegate_->IsClosing()) {
++    return;
++  }
++  const ui::ColorProvider* cp = delegate_->GetView()->GetColorProvider();
++  if (!cp) {
++    return;
++  }
++  const SkPath pill = GetPath(TabStyle::PathType::kHighlight, canvas->image_scale(), {});
++  gfx::ScopedCanvas scoped_canvas(canvas);
++  const float scale = canvas->UndoDeviceScaleFactor();
++  const SkRect r = pill.getBounds();
++  const float thickness = orbis::size::kIndicatorThickness * scale;
++  float inset = 12 * scale;
++  if (r.width() < 2 * inset + 8 * scale) {
++    inset = 6 * scale;
++  }
++  if (r.width() < 2 * inset + 4 * scale) {
++    return;
++  }
++  cc::PaintFlags flags;
++  flags.setAntiAlias(true);
++  flags.setColor(cp->GetColor(ui::kColorSysPrimary));
++  canvas->sk_canvas()->drawRoundRect(
++      SkRect::MakeLTRB(r.left() + inset, r.bottom() - thickness - scale, r.right() - inset, r.bottom() - scale),
++      thickness / 2, thickness / 2, flags);
+ }
+ 
+ void HorizontalTabStyleViews::PaintTabBackgroundWithImages(
+@@ -832,7 +868,7 @@ void HorizontalTabStyleViews::PaintSeparators(gfx::Canvas* canvas) const {
+   const auto separator_color = [separator_base_color](float opacity) {
+     return SkColorSetA(separator_base_color,
+                        gfx::Tween::IntValueBetween(opacity, SK_AlphaTRANSPARENT,
+-                                                   SK_AlphaOPAQUE));
++                                                   SkColorGetA(separator_base_color)));  // Orbis: alpha-scaled, so the transparent divider token hides separators.
+   };
+ 
+   cc::PaintFlags flags;
+diff --git a/chrome/browser/ui/views/tabs/horizontal_tab_style_views.h b/chrome/browser/ui/views/tabs/horizontal_tab_style_views.h
+index 85c32a2..ab9a483 100644
+--- a/chrome/browser/ui/views/tabs/horizontal_tab_style_views.h
++++ b/chrome/browser/ui/views/tabs/horizontal_tab_style_views.h
+@@ -106,6 +106,7 @@ class HorizontalTabStyleViews : public TabStyleViews {
+   void PaintTabBackground(gfx::Canvas* canvas,
+                           bool hovered,
+                           std::optional<int> fill_id) const;
++  void PaintOrbisIndicator(gfx::Canvas* canvas) const;
+   void PaintTabBackgroundWithImages(
+       gfx::Canvas* canvas,
+       std::optional<int> active_tab_fill_id,
+diff --git a/chrome/browser/ui/views/tabs/tab_group_style.cc b/chrome/browser/ui/views/tabs/tab_group_style.cc
+index bb48bb9..fbf09d0 100644
+--- a/chrome/browser/ui/views/tabs/tab_group_style.cc
++++ b/chrome/browser/ui/views/tabs/tab_group_style.cc
+@@ -12,6 +12,7 @@
+ #include "chrome/browser/ui/views/tabs/tab_group_views.h"
+ #include "third_party/skia/include/core/SkPath.h"
+ #include "third_party/skia/include/core/SkRRect.h"
++#include "ui/color/orbis_tokens.h"
+ #include "ui/gfx/geometry/insets.h"
+ #include "ui/gfx/geometry/rect.h"
+ #include "ui/gfx/geometry/rect_conversions.h"
+@@ -30,7 +31,7 @@ constexpr int kSyncIconWidth = 16;
+ constexpr int kAttentionIndicatorWidth = 8;
+ // The size of the empty chip.
+ constexpr int kEmptyChipSize = 20;
+-constexpr int kCornerRadius = 6;
++constexpr int kCornerRadius = orbis::size::kRadiusSm;
+ constexpr int kTabGroupOverlapAdjustment = 2;
+ 
+ }  // namespace
+diff --git a/chrome/browser/ui/views/toolbar/toolbar_button.cc b/chrome/browser/ui/views/toolbar/toolbar_button.cc
+index d4c4f01..451e80e 100644
+--- a/chrome/browser/ui/views/toolbar/toolbar_button.cc
++++ b/chrome/browser/ui/views/toolbar/toolbar_button.cc
+@@ -3,6 +3,7 @@
+ // found in the LICENSE file.
+ 
+ #include "chrome/browser/ui/views/toolbar/toolbar_button.h"
++#include "ui/color/orbis_tokens.h"
+ 
+ #include <algorithm>
+ #include <memory>
+@@ -165,8 +166,7 @@ void ToolbarButton::ClearHighlight() {
+ }
+ 
+ int ToolbarButton::GetRoundedCornerRadius() const {
+-  return ChromeLayoutProvider::Get()->GetCornerRadiusMetric(
+-      views::Emphasis::kMaximum, GetTargetSize());
++  return orbis::size::kRadiusControl;  // Orbis: rounded-square hit targets, not circles.
+ }
+ 
+ float ToolbarButton::GetCornerRadiusFor(ToolbarButton::Edge edge) const {
+diff --git a/ui/color/sys_color_mixer.cc b/ui/color/sys_color_mixer.cc
+index 7b5fd99..3252d7c 100644
+--- a/ui/color/sys_color_mixer.cc
++++ b/ui/color/sys_color_mixer.cc
+@@ -3,6 +3,7 @@
+ // found in the LICENSE file.
+ 
+ #include "ui/color/sys_color_mixer.h"
++#include "ui/color/orbis_tokens.h"
+ 
+ #include "third_party/skia/include/core/SkColor.h"
+ #include "ui/color/color_id.h"
+@@ -109,23 +110,36 @@ void AddGrayscaleSysColorOverrides(ColorMixer& mixer,
+                                                 : kColorRefNeutral94};
+ }
+ 
+-// Orbis: the fixed Orbis palette for the whole browser UI (dark). Every Views surface and every WebUI page that reads the
+-// Material "sys" tokens, which is nearly all of the browser's own UI, takes these colours.
+-void AddOrbisSysColorOverrides(ColorMixer& mixer) {
+-  constexpr SkColor kBg = SkColorSetRGB(0x0B, 0x0E, 0x14);
+-  constexpr SkColor kPanel = SkColorSetRGB(0x13, 0x18, 0x24);
+-  constexpr SkColor kPanel2 = SkColorSetRGB(0x1A, 0x21, 0x33);
+-  constexpr SkColor kPanel3 = SkColorSetRGB(0x23, 0x2B, 0x3B);
+-  constexpr SkColor kText = SkColorSetRGB(0xE8, 0xEC, 0xF4);
+-  constexpr SkColor kMuted = SkColorSetRGB(0x8B, 0x95, 0xA8);
+-  constexpr SkColor kAccent = SkColorSetRGB(0x3F, 0xD8, 0xFF);
+-  constexpr SkColor kOnAccent = SkColorSetRGB(0x04, 0x12, 0x1A);
+-  constexpr SkColor kAccentContainer = SkColorSetRGB(0x0F, 0x3A, 0x4A);
++// Orbis: the Orbis palette for the whole browser UI, dark and light, generated from orbis-ui/tokens.json (orbis_tokens.h).
++// Every Views surface and every WebUI page that reads the Material "sys" tokens takes these colours.
++// Source-over composite of a translucent token colour on an opaque one (both 0xAARRGGBB).
++constexpr SkColor OrbisOver(SkColor fg, SkColor bg) {
++  const uint32_t a = fg >> 24;
++  auto ch = [&](int shift) { return static_cast<uint32_t>((((fg >> shift) & 0xFF) * a + ((bg >> shift) & 0xFF) * (255 - a)) / 255); };
++  return SkColorSetRGB(ch(16), ch(8), ch(0));
++}
++struct OrbisScheme {
++  SkColor bg, surface, surface2, surface3, text, muted, accent, accent_fill, line, hover, popover, on_accent;
++};
++constexpr OrbisScheme kOrbisDark = {orbis::dark::kBg,      orbis::dark::kSurface,  orbis::dark::kSurface2,
++                                    orbis::dark::kSurface3, orbis::dark::kText,     orbis::dark::kMuted,
++                                    orbis::dark::kAccent,  orbis::dark::kAccentFill, orbis::dark::kLine,
++                                    orbis::dark::kHover,   orbis::dark::kPopover,  orbis::dark::kBg};
++constexpr OrbisScheme kOrbisLight = {orbis::light::kBg,      orbis::light::kSurface,  orbis::light::kSurface2,
++                                     orbis::light::kSurface3, orbis::light::kText,     orbis::light::kMuted,
++                                     orbis::light::kAccent,  orbis::light::kAccentFill, orbis::light::kLine,
++                                     orbis::light::kHover,   orbis::light::kPopover,  SK_ColorWHITE};
++
++void AddOrbisSysColorOverrides(ColorMixer& mixer, bool dark) {
++  const OrbisScheme& s = dark ? kOrbisDark : kOrbisLight;
++  const SkColor kBg = s.bg, kPanel = s.surface, kPanel2 = s.surface2, kPanel3 = s.surface3;
++  const SkColor kText = s.text, kMuted = s.muted, kAccent = s.accent;
++  const SkColor kAccentContainer = OrbisOver(s.accent_fill, s.surface);
+ 
+   mixer[kColorSysPrimary] = {kAccent};
+-  mixer[kColorSysOnPrimary] = {kOnAccent};
++  mixer[kColorSysOnPrimary] = {s.on_accent};
+   mixer[kColorSysPrimaryContainer] = {kAccentContainer};
+-  mixer[kColorSysOnPrimaryContainer] = {SkColorSetRGB(0xBF, 0xF2, 0xFF)};
++  mixer[kColorSysOnPrimaryContainer] = {kText};
+   mixer[kColorSysSecondaryContainer] = {kPanel2};
+   mixer[kColorSysOnSecondaryContainer] = {kText};
+   mixer[kColorSysOnSurface] = {kText};
+@@ -133,34 +147,34 @@ void AddOrbisSysColorOverrides(ColorMixer& mixer) {
+   mixer[kColorSysOutline] = {kPanel3};
+   mixer[kColorSysSurfaceVariant] = {kPanel2};
+ 
+-  mixer[kColorSysSurface] = {kBg};
+-  mixer[kColorSysSurface1] = {SkColorSetRGB(0x0F, 0x13, 0x1C)};
++  mixer[kColorSysSurface] = {kPanel};
++  mixer[kColorSysSurface1] = {kPanel};
+   mixer[kColorSysSurface2] = {kPanel};
+-  mixer[kColorSysSurface3] = {SkColorSetRGB(0x16, 0x1C, 0x2A)};
++  mixer[kColorSysSurface3] = {kPanel2};
+   mixer[kColorSysSurface4] = {kPanel2};
+-  mixer[kColorSysSurface5] = {SkColorSetRGB(0x1E, 0x27, 0x39)};
++  mixer[kColorSysSurface5] = {kPanel3};
+   mixer[kColorSysOnSurfaceSecondary] = {kMuted};
+   mixer[kColorSysOnSurfaceSubtle] = {kMuted};
+   mixer[kColorSysOnSurfacePrimary] = {kAccent};
+   mixer[kColorSysTonalContainer] = {kAccentContainer};
+   mixer[kColorSysBaseTonalContainer] = {kAccentContainer};
+   mixer[kColorSysNeutralContainer] = {kPanel2};
+-  mixer[kColorSysDivider] = {kPanel3};
++  mixer[kColorSysDivider] = {s.line};
+ 
+   mixer[kColorSysBase] = {kPanel};
+   mixer[kColorSysBaseContainer] = {kPanel};
+-  mixer[kColorSysBaseContainerElevated] = {kPanel2};
+-  mixer[kColorSysHeader] = {kBg};
+-  mixer[kColorSysHeaderInactive] = {kBg};
+-  mixer[kColorSysHeaderContainer] = {kPanel};
+-  mixer[kColorSysHeaderContainerInactive] = {kPanel};
++  mixer[kColorSysBaseContainerElevated] = {s.popover};
++  mixer[kColorSysHeader] = {kPanel};
++  mixer[kColorSysHeaderInactive] = {kPanel};
++  mixer[kColorSysHeaderContainer] = {kPanel2};
++  mixer[kColorSysHeaderContainerInactive] = {kPanel2};
+   mixer[kColorSysOnHeaderPrimary] = {kText};
+   mixer[kColorSysOnHeaderPrimaryInactive] = {kMuted};
+-  mixer[kColorSysOnHeaderDivider] = {kPanel3};
+-  mixer[kColorSysOnHeaderDividerInactive] = {kPanel3};
++  mixer[kColorSysOnHeaderDivider] = {s.line};
++  mixer[kColorSysOnHeaderDividerInactive] = {s.line};
+   mixer[kColorSysStateFocusRing] = {kAccent};
++  (void)kBg;
+ }
+-
+ }  // namespace
+ 
+ void AddSysColorMixer(ColorProvider* provider, const ColorProviderKey& key) {
+@@ -451,10 +465,8 @@ void AddSysColorMixer(ColorProvider* provider, const ColorProviderKey& key) {
+     AddThemedSysColorOverrides(mixer, key);
+   }
+ 
+-  // Orbis: always the Orbis palette in dark mode, on top of whatever else was chosen.
+-  if (dark_mode) {
+-    AddOrbisSysColorOverrides(mixer);
+-  }
++  // Orbis: always the Orbis palette (dark or light), on top of whatever else was chosen.
++  AddOrbisSysColorOverrides(mixer, dark_mode);
+ }
+ 
+ }  // namespace ui
