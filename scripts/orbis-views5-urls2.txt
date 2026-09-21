@@ -1,0 +1,5 @@
+http://127.0.0.1:8781/sample.pdf
+https://127.0.0.1:8782/
+http://127.0.0.1:8784/
+https://no-such-host.invalid/
+offline:http://127.0.0.1:8783/

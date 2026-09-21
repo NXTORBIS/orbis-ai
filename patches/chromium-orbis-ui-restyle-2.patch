@@ -41,46 +41,6 @@ index 950b0a5c48..6bf1c60fee 100644
  </if>
  <if expr="is_ios or is_android">
          <picture>
-diff --git a/ui/webui/resources/cr_elements/cr_shared_vars.css b/ui/webui/resources/cr_elements/cr_shared_vars.css
-index f478ceca5c..2f08eda51f 100644
---- a/ui/webui/resources/cr_elements/cr_shared_vars.css
-+++ b/ui/webui/resources/cr_elements/cr_shared_vars.css
-@@ -9,25 +9,25 @@
- 
- /* Common css variables for Material Design WebUI */
- html {
--  --google-blue-50-rgb: 232, 240, 254;  /* #e8f0fe */
-+  --google-blue-50-rgb: 230, 245, 251;  /* #e8f0fe */
-   --google-blue-50: rgb(var(--google-blue-50-rgb));
--  --google-blue-100-rgb: 210, 227, 252;  /* #d2e3fc */
-+  --google-blue-100-rgb: 204, 234, 246;  /* #d2e3fc */
-   --google-blue-100: rgb(var(--google-blue-100-rgb));
--  --google-blue-200-rgb: 174, 203, 250;  /* #aecbfa */
-+  --google-blue-200-rgb: 140, 210, 236;  /* #aecbfa */
-   --google-blue-200: rgb(var(--google-blue-200-rgb));
--  --google-blue-300-rgb: 138, 180, 248;  /* #8ab4f8 */
-+  --google-blue-300-rgb: 63, 216, 255;  /* #8ab4f8 */
-   --google-blue-300: rgb(var(--google-blue-300-rgb));
--  --google-blue-400-rgb: 102, 157, 246;  /* #669df6 */
-+  --google-blue-400-rgb: 63, 190, 235;  /* #669df6 */
-   --google-blue-400: rgb(var(--google-blue-400-rgb));
--  --google-blue-500-rgb: 66, 133, 244;  /* #4285f4 */
-+  --google-blue-500-rgb: 10, 127, 179;  /* #4285f4 */
-   --google-blue-500: rgb(var(--google-blue-500-rgb));
--  --google-blue-600-rgb: 26, 115, 232;  /* #1a73e8 */
-+  --google-blue-600-rgb: 10, 127, 179;  /* #1a73e8 */
-   --google-blue-600: rgb(var(--google-blue-600-rgb));
--  --google-blue-700-rgb: 25, 103, 210;  /* #1967d2 */
-+  --google-blue-700-rgb: 8, 102, 145;  /* #1967d2 */
-   --google-blue-700: rgb(var(--google-blue-700-rgb));
--  --google-blue-800-rgb: 24, 90, 188;  /* #185abc */
-+  --google-blue-800-rgb: 6, 80, 115;  /* #185abc */
-   --google-blue-800: rgb(var(--google-blue-800-rgb));
--  --google-blue-900-rgb: 23, 78, 166;  /* #174ea6 */
-+  --google-blue-900-rgb: 5, 64, 92;  /* #174ea6 */
-   --google-blue-900: rgb(var(--google-blue-900-rgb));
- 
-   --google-green-50-rgb: 230, 244, 234;  /* #e6f4ea */
 diff --git a/ui/webui/resources/images/chrome_logo_dark.svg b/ui/webui/resources/images/chrome_logo_dark.svg
 index 19ba047be4..7003ac7f96 100644
 --- a/ui/webui/resources/images/chrome_logo_dark.svg

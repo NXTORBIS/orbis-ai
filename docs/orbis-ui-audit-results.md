@@ -150,3 +150,29 @@ Status: this pass was NOT completed. Only item H and a branding probe were done.
 
 ## Branding sweep (2026-09-21)
 See `docs/orbis-branding-audit.md`. VERSIONINFO CompanyName leak (item C above) fixed: CompanyName=Orbis. Settings "You and Google" -> "You and sign-in". About, version, settings, flags, extensions, history, error, password manager, profile picker scanned: remaining hits are real Google services, attribution, or internal/dev pages (justified in that doc). Screenshots: `docs/branding-audit-shots/`.
+
+## Views 5 (shared style foundation, WebUI sweep)
+
+Method: `scripts/orbis-views5-shots.mjs` (own browser per scheme, temp profile `color_scheme2` 1 light / 2 dark, CDP screenshots, restart on hang), `scripts/orbis-views5-servers.mjs` (local PDF, self-signed https, refused port), `scripts/orbis-montage.ps1` (dark left, light right). Sheets in `docs/views5-shots/sheets/` (sheetNN.jpg = 2 pages x dark|light, alphabetical by URL). Patch: `patches/chromium-orbis-pages-final.patch`, stacked on top of the others; `scripts/apply-chromium-patches.ps1` applies it last and treats a reverse-checking final patch as "whole stack applied".
+
+Foundation: `scripts/build-orbis-ui.mjs` generates `orbis-ui/generated/cr_shared_vars.css` (from Chromium 154's stock file in `orbis-ui/stock/`: blue ramp, fallback colours, card radius, spacing, menu/card shadow, `--orbis-*` vars), `md_colors.css` and the Windows WebUI font string, all from `tokens.json`; `sync-orbis-panel.ps1` copies them into the tree. Font: the Orbis app bundles Inter Variable (@fontsource-variable/inter, SIL OFL 1.1). Its two woff2 files ship as `chrome://resources/inter/*` with `@font-face` in `text_defaults_md.css`, and `IDS_WEB_FONT_FAMILY` is the token stack (verified: computed font is "Inter Variable"). OFL licence entry added to notices generation (notices.json not regenerated in this pass). Views (native UI) was NOT given Inter: no clean ui/gfx font registration path was implemented, it keeps Segoe UI. Colours follow the colour pipeline (`var(--color-sys-*, fallback)`); pages without the pipeline still fall back to the OS scheme.
+
+| Surface | Verdict | Fix / note |
+|---|---|---|
+| settings: /, appearance, autofill, passwords, privacy, cookies, content (+cookies, location, camera, notifications, javascript, siteData, all), security, search, searchEngines, defaultBrowser, onStartup, languages, downloads, accessibility, system, reset, people, performance, help | Captured dark+light after the change; LOOKED at /, appearance, autofill, people, performance, privacy, content, searchEngines, security, downloads, help, system, accessibility. Orbis accent, Inter, token radius. The rest captured, not individually viewed | shared vars from tokens |
+| flags | Fixed, verified dark+light | page had its own Google blue/grey vars; now tokens |
+| policy | Fixed, verified dark+light | own shared vars; now tokens |
+| bookmarks, downloads, history (+journeys), password-manager, certificate-manager, extensions (+shortcuts), apps, management | Verified dark+light | apps empty-state laptop illustration keeps stock blue artwork |
+| extension details | NOT captured (needs an installed extension) | |
+| profile picker | Fixed, verified dark+light | follows the browser pref via pipeline |
+| version | Verified | its own colours still follow the OS media query (Orbis palette either way), not the browser pref |
+| error pages: connection refused, DNS, invalid URL | Fixed, verified dark+light | Orbis mark keeps accent in dark (stock rule inverted it) |
+| error page offline | Shot taken (offline_...), same template; not separately viewed | |
+| SSL interstitial (real self-signed https), clock, lookalike, quiet | Fixed, verified dark+light | Orbis surface/type/accent buttons; warning triangle stays red |
+| interstitials captiveportal, billing, phishing, malware, supervised-user | Captured, not each viewed | same stylesheet base |
+| PDF viewer | Restyled (Orbis dark surfaces, accent), verified loads and renders toolbar, thumbnails, page/zoom fields; always dark by design | search, presentation, print, rotate NOT clicked through |
+| tab-search, bookmarks/history-clusters/customize side panels, reading list | Tab-search and reading list viewed (reading-list artwork recoloured, verified dark). Others captured, not viewed closely | |
+| welcome, whats-new | Not pages in this build (invalid-URL error page shown) | |
+| crashed tab (chrome://kill), print preview, PiP hover bar | NOT done | |
+
+Regression (serial): launch 4/4, browserManager 6/6, service 5/5, browserUi 11/11, chromiumCapabilities 8/8, orbisSearchPage 14/14. pages-final reverse-checks; chromium-orbis-branding-and-strings and chromium-orbis-views-bubbles already fail a standalone reverse-check because later patches touch the same files (not caused by this work).

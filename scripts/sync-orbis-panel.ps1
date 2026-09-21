@@ -23,3 +23,20 @@ $hdr = Join-Path $ui 'generated\orbis_tokens.h'
 if (-not (Test-Path $hdr)) { throw 'orbis-ui/generated/orbis_tokens.h is missing (node scripts/build-orbis-ui.mjs).' }
 Copy-Item $hdr (Join-Path $Src 'ui\color\orbis_tokens.h') -Force
 "synced ui/color/orbis_tokens.h"
+# Shared WebUI style foundation, generated from tokens.json by scripts/build-orbis-ui.mjs.
+$gen = Join-Path $ui 'generated'
+foreach ($f in 'cr_shared_vars.css') { if (-not (Test-Path (Join-Path $gen $f))) { throw "orbis-ui/generated/$f is missing (node scripts/build-orbis-ui.mjs)." } }
+Copy-Item (Join-Path $gen 'cr_shared_vars.css') (Join-Path $Src 'ui\webui\resources\cr_elements\cr_shared_vars.css') -Force
+Copy-Item (Join-Path $gen 'md_colors.css') (Join-Path $Src 'ui\webui\resources\css\md_colors.css') -Force
+# The Inter variable font (SIL OFL 1.1, from @fontsource-variable/inter, the same font the Orbis app uses), served as chrome://resources/inter/...
+$fdir = Join-Path $Src 'ui\webui\resources\inter'
+New-Item -ItemType Directory -Force $fdir | Out-Null
+foreach ($f in 'inter-latin-wght-normal.woff2','inter-latin-ext-wght-normal.woff2') { Copy-Item (Join-Path $root "node_modules\@fontsource-variable\inter\files\$f") (Join-Path $fdir $f) -Force }
+Copy-Item (Join-Path $root 'node_modules\@fontsource-variable\inter\LICENSE') (Join-Path $fdir 'LICENSE') -Force
+# Windows WebUI font family (IDS_WEB_FONT_FAMILY) = the token font stack.
+$grd = Join-Path $Src 'ui\strings\app_locale_settings.grd'
+$stack = ((Get-Content (Join-Path $gen 'webui_font_family.txt') -Raw).Trim()) -replace '"',"'"
+$txt = [IO.File]::ReadAllText($grd)
+$new = [regex]::Replace($txt, "(<message name=`"IDS_WEB_FONT_FAMILY`" use_name_for_id=`"true`">\s*)('Inter Variable'[^\r\n]*|'Segoe UI', Tahoma, sans-serif)", { param($m) $m.Groups[1].Value + $stack }, 'None', [TimeSpan]::FromSeconds(5))
+if ($new -ne $txt) { [IO.File]::WriteAllText($grd, $new) }
+"synced shared WebUI style foundation (cr_shared_vars.css, md_colors.css, Inter, web font family)"

@@ -62,3 +62,103 @@ constexpr char kFontFamily[] = "Segoe UI";
 mkdirSync(new URL('../orbis-ui/generated/', import.meta.url), { recursive: true })
 writeFileSync(new URL('../orbis-ui/generated/orbis_tokens.h', import.meta.url), h)
 console.log('wrote orbis-tokens.css and generated/orbis_tokens.h')
+
+// ---- Shared WebUI style foundation (synced into ui/webui/resources by scripts/sync-orbis-panel.ps1) ----
+// orbis-ui/stock/cr_shared_vars.css is Chromium 154.0.8037.44's file, unmodified. Every colour, radius, spacing and shadow that Orbis
+// changes is written here from tokens.json, so the tokens stay the only place a value lives.
+const rgbOf = (s) => {
+  s = s.trim()
+  let m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(s)
+  if (m) return [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)]
+  m = /^rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/i.exec(s)
+  return m ? [+m[1], +m[2], +m[3]] : null
+}
+const mix = (a, b, w) => a.map((v, i) => Math.round(v * (1 - w) + b[i] * w)) // w = share of b
+const trip = (c) => c.join(', ')
+const over = (fg, bg) => { const m = /rgba\(\s*[\d.]+\s*,\s*[\d.]+\s*,\s*[\d.]+\s*,\s*([\d.]+)\)/.exec(fg); const a = m ? +m[1] : 1; return mix(rgbOf(bg), rgbOf(fg), a) }
+const WHITE = [255, 255, 255], BLACK = [0, 0, 0]
+let crvars = readFileSync(new URL('../orbis-ui/stock/cr_shared_vars.css', import.meta.url), 'utf8').replace(/\r\n/g, '\n')
+const setVar = (text, name, value) => {
+  const re = new RegExp(`(--${name.replace(/[-]/g, '\\-')}:)[^;]*;`)
+  if (!re.test(text)) throw new Error('cr_shared_vars.css: no --' + name)
+  return text.replace(re, `$1 ${value};`)
+}
+const aL = rgbOf(t.light.accent), aD = rgbOf(t.dark.accent)
+const ramp = { 50: mix(aL, WHITE, 0.9), 100: mix(aL, WHITE, 0.8), 200: mix(aL, WHITE, 0.55), 300: aD, 400: mix(aD, BLACK, 0.12), 500: aL, 600: aL, 700: mix(aL, BLACK, 0.2), 800: mix(aL, BLACK, 0.37), 900: mix(aL, BLACK, 0.5) }
+for (const [k, c] of Object.entries(ramp)) crvars = setVar(crvars, `google-blue-${k}-rgb`, trip(c))
+const sp = t.scale.space, rad = t.scale.radius
+crvars = setVar(crvars, 'cr-card-border-radius', rad.md)
+crvars = setVar(crvars, 'cr-button-edge-spacing', sp['3'])
+crvars = setVar(crvars, 'cr-section-vertical-padding', sp['3'])
+crvars = setVar(crvars, 'cr-section-padding', `${px(sp['4']) + 4}px`)
+crvars = setVar(crvars, 'cr-menu-shadow', t.light.shadow)
+crvars = setVar(crvars, 'cr-card-shadow', `0 0 0 1px ${t.light.line}`)
+const fallback = (T, isLight) => {
+  const surf = T.surface, on = rgbOf(T.text), accent = T.accent
+  const cont = over(T['accent-fill'], surf)
+  const inv = isLight ? t.dark : t.light
+  const rgb = (c) => `rgb(${trip(c)})`
+  const o = {}
+  o['cr-fallback-color-primary'] = rgb(rgbOf(accent))
+  o['cr-fallback-color-on-primary'] = isLight ? 'rgb(255, 255, 255)' : rgb(rgbOf(T.bg))
+  o['cr-fallback-color-primary-container'] = rgb(cont)
+  o['cr-fallback-color-on-primary-container'] = rgb(on)
+  o['cr-fallback-color-secondary-container'] = rgb(rgbOf(T['surface-2']))
+  o['cr-fallback-color-on-secondary-container'] = rgb(on)
+  o['cr-fallback-color-tonal-container'] = rgb(rgbOf(T['surface-2']))
+  o['cr-fallback-color-on-tonal-container'] = rgb(on)
+  o['cr-fallback-color-tonal-outline'] = rgb(rgbOf(accent))
+  o['cr-fallback-color-outline'] = rgb(rgbOf(T.muted))
+  o['cr-fallback-color-neutral-container'] = rgb(rgbOf(T['surface-2']))
+  o['cr-fallback-color-neutral-outline'] = rgb(rgbOf(T['surface-3']))
+  o['cr-fallback-color-surface'] = rgb(rgbOf(surf))
+  for (const n of [1, 2]) o[`cr-fallback-color-surface${n}`] = rgb(rgbOf(surf))
+  for (const n of [3, 4]) o[`cr-fallback-color-surface${n}`] = rgb(rgbOf(T['surface-2']))
+  o['cr-fallback-color-surface5'] = rgb(rgbOf(T['surface-3']))
+  o['cr-fallback-color-on-surface-rgb'] = trip(on)
+  o['cr-fallback-color-surface-variant'] = rgb(rgbOf(T['surface-2']))
+  o['cr-fallback-color-on-surface-variant'] = rgb(rgbOf(T.muted))
+  o['cr-fallback-color-on-surface-subtle'] = rgb(rgbOf(T.muted))
+  o['cr-fallback-color-inverse-primary'] = rgb(rgbOf(inv.accent))
+  o['cr-fallback-color-inverse-surface'] = rgb(rgbOf(inv.surface))
+  o['cr-fallback-color-inverse-on-surface'] = rgb(rgbOf(inv.text))
+  o['cr-fallback-color-error'] = rgb(rgbOf(T.danger))
+  o['cr-fallback-color-divider'] = rgb(rgbOf(T['surface-3']))
+  o['cr-fallback-color-base-container'] = rgb(rgbOf(T['surface-2']))
+  o['cr-fallback-color-state-ripple-primary-rgb_'] = trip(rgbOf(accent))
+  return o
+}
+const PIPE = { primary: 'primary', 'on-primary': 'on-primary', 'primary-container': 'primary-container', 'on-primary-container': 'on-primary-container', 'secondary-container': 'secondary-container', 'on-secondary-container': 'on-secondary-container', surface: 'surface', surface1: 'surface-1', surface2: 'surface-2', surface3: 'surface-3', surface4: 'surface-4', surface5: 'surface-5', 'surface-variant': 'surface-variant', 'on-surface-variant': 'on-surface-variant', outline: 'outline', error: 'error' }
+const pipe = (o) => { for (const k of Object.keys(o)) { const n = k.replace('cr-fallback-color-', ''); if (PIPE[n] && k.startsWith('cr-fallback-color-')) o[k] = 'var(--color-sys-' + PIPE[n] + ', ' + o[k] + ')' } return o }
+const darkStart = crvars.indexOf('@media (prefers-color-scheme: dark) {\n  html {')
+const darkEnd = crvars.indexOf('@media (forced-colors: active)')
+let head = crvars.slice(0, darkStart), dark = crvars.slice(darkStart, darkEnd), tail = crvars.slice(darkEnd)
+for (const [k, v] of Object.entries(pipe(fallback(t.light, true)))) head = setVar(head, k, v)
+let di = dark.replace('@media (prefers-color-scheme: dark) {\n  html {', '').replace(/\n {2}}\n}\s*$/, '')
+for (const [k, v] of Object.entries(pipe(fallback(t.dark, false)))) di = setVar(di, k, v)
+const both = [
+  ['cr-card-background-color', 'surface'], ['cr-menu-background-color', 'popover'], ['cr-menu-background-focus-color', 'surface-3'],
+  ['cr-focused-item-color', 'surface-2'], ['cr-scrollable-border-color', 'surface-3'], ['cr-iph-anchor-highlight-color', 'accent-fill'],
+  ['cr-separator-color', 'line'], ['cr-title-text-color', 'muted']
+]
+for (const [n, tk] of both) { head = setVar(head, n, t.light[tk]); if (n !== 'cr-title-text-color') di = setVar(di, n, t.dark[tk]) }
+di = setVar(di, 'cr-menu-shadow', t.dark.shadow)
+const orbisVars = (T) => `--orbis-font-sans: ${t.font.sans};\n  --orbis-font-mono: ${t.font.mono};\n  --orbis-radius-control: ${rad.control};\n  --orbis-radius-card: ${rad.md};\n  --orbis-radius-pill: ${rad.pill};\n  --orbis-accent: ${T.accent};\n  --orbis-danger: ${T.danger};\n  --orbis-line: ${T.line};`
+head = head.replace(/\n}\n\nhtml\[webui-refresh-2026\]/, `\n  ${orbisVars(t.light)}\n}\n\nhtml[webui-refresh-2026]`)
+// The stock dark block follows the OS (prefers-color-scheme); Orbis follows the browser's own colour scheme, via the colour pipeline (--color-sys-*), with the OS scheme only as the fallback for pages without it.
+const banner = '/* GENERATED by scripts/build-orbis-ui.mjs from orbis-ui/tokens.json over orbis-ui/stock/cr_shared_vars.css - do not edit */\n'
+writeFileSync(new URL('../orbis-ui/generated/cr_shared_vars.css', import.meta.url), `${banner}${head}@media (prefers-color-scheme: dark) {\n  html {${di}\n  ${orbisVars(t.dark)}\n  }\n}\n\n${tail}`)
+writeFileSync(new URL('../orbis-ui/generated/md_colors.css', import.meta.url), `${banner}html {
+  --md-background-color: ${t.light.bg};
+  --md-loading-message-color: ${t.light.muted};
+  --md-toolbar-height: 56px;
+  --md-toolbar-border: 1px solid ${t.light.line};
+}
+@media (prefers-color-scheme: dark) { html {
+  --md-background-color: ${t.dark.bg};
+  --md-loading-message-color: ${t.dark.muted};
+  --md-toolbar-border: 1px solid ${t.dark.line};
+} }
+`)
+writeFileSync(new URL('../orbis-ui/generated/webui_font_family.txt', import.meta.url), t.font.sans)
+console.log('wrote generated/cr_shared_vars.css, md_colors.css, webui_font_family.txt')
