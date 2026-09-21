@@ -99,6 +99,21 @@ public static class OrbisUi {
     var arr = list.ToArray();
     return SendInput((uint)arr.Length, arr, Marshal.SizeOf(typeof(INPUT))) == arr.Length;
   }
+  // Holds a chord like a real keyboard: press all, wait the typematic delay (500 ms), then repeat the last key at ~30/s until holdMs has passed, release.
+  // The foreground check is repeated before every repeat, so a lost focus ends the hold. Returns how many key-down events were sent (first + repeats), -1 if not in front.
+  public static int Hold(long hwnd, ushort[] vks, int holdMs) {
+    var h = new IntPtr(hwnd); if (GetForegroundWindow() != h) return -1;
+    int n = 0; var sw = System.Diagnostics.Stopwatch.StartNew();
+    foreach (var v in vks) { var a = new INPUT[] { Key(v, (ushort)MapVirtualKey(v, 0), Ext(v) ? 1u : 0u) }; SendInput(1, a, Marshal.SizeOf(typeof(INPUT))); }
+    n = 1; var last = vks[vks.Length - 1];
+    System.Threading.Thread.Sleep(500);
+    while (sw.ElapsedMilliseconds < holdMs && GetForegroundWindow() == h) {
+      var a = new INPUT[] { Key(last, (ushort)MapVirtualKey(last, 0), Ext(last) ? 1u : 0u) }; SendInput(1, a, Marshal.SizeOf(typeof(INPUT))); n++;
+      System.Threading.Thread.Sleep(33);
+    }
+    for (int i = vks.Length - 1; i >= 0; i--) { var a = new INPUT[] { Key(vks[i], (ushort)MapVirtualKey(vks[i], 0), 2u | (Ext(vks[i]) ? 1u : 0u)) }; SendInput(1, a, Marshal.SizeOf(typeof(INPUT))); }
+    return n;
+  }
   public static bool Click(long hwnd, int x, int y, bool right) {
     if (GetForegroundWindow() != new IntPtr(hwnd)) return false;
     SetCursorPos(x, y); System.Threading.Thread.Sleep(80);
@@ -169,6 +184,7 @@ while ($true) {
       'focus' { $out = '{"ok":true,"data":' + ([OrbisUi]::Focus([long]$q.hwnd).ToString().ToLower()) + '}' }
       'chord' { $out = '{"ok":true,"data":' + ([OrbisUi]::Chord([long]$q.hwnd, [uint16[]]@($q.vks)).ToString().ToLower()) + '}' }
       'chordPid' { $out = '{"ok":true,"data":' + ([OrbisUi]::ChordIfPid([uint32]$q.pid, [uint16[]]@($q.vks)).ToString().ToLower()) + '}' }
+      'hold' { $out = '{"ok":true,"data":' + ([OrbisUi]::Hold([long]$q.hwnd, [uint16[]]@($q.vks), [int]$q.ms)) + '}' }
       'text' { $t = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($q.b64)); $out = '{"ok":true,"data":' + ([OrbisUi]::Text([long]$q.hwnd, $t).ToString().ToLower()) + '}' }
       'click' {
         $root = [System.Windows.Automation.AutomationElement]::FromHandle([IntPtr]::new([long]$q.hwnd))
@@ -373,6 +389,15 @@ export class BrowserUi {
     await this.guarded(win, (hwnd) => this.call<boolean>({ cmd: 'chord', hwnd, vks }), `the key input "${chord}"`)
     // Moving focus to the address bar (ctrl+l, ctrl+k, alt+d, f6) takes the browser a moment; text typed before it lands is lost.
     await sleep(/^(ctrl\+[lk]|alt\+d|f6)$/i.test(chord.trim()) ? 450 : 60)
+  }
+
+  /** Holds a chord (typematic auto-repeat of the last key) for `ms`; returns the number of key-down events sent. Test tooling only. */
+  async hold(win: UiWindow, chord: string, ms: number): Promise<number> {
+    await this.focus(win)
+    const n = await this.call<number>({ cmd: 'hold', hwnd: win.hwnd, vks: parseChord(chord), ms })
+    if (n < 0) throw new BrowserUiError('focus-refused', 'The browser window was not in front, so the held key was not sent.')
+    await sleep(60)
+    return n
   }
 
   /** Types text into whatever has focus in the window, after checking the window is in front. */

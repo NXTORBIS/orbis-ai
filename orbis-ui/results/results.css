@@ -146,3 +146,6 @@ audio.preview { width: 100%; max-width: 360px; height: 32px; margin-top: 4px; }
   .go { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .caret { animation: none; } html { scroll-behavior: auto; } }
+
+/* Forced colors: the current vertical is marked by weight, underline and a thicker border, not by colour alone. */
+@media (forced-colors: active) { .vertical.on { border-bottom: 4px solid Highlight; font-weight: 700; text-decoration: underline; } }

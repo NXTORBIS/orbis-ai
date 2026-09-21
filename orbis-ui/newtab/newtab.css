@@ -41,3 +41,5 @@ dialog .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8p
 dialog button { font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 7px 16px; cursor: pointer; }
 dialog button.primary { background: var(--accent); color: #05222b; border-color: var(--accent); }
 .err { color: #ff8a8a; font-size: 12px; min-height: 1em; margin: 0; }
+
+@media (prefers-reduced-motion: reduce) { #q { transition: none; } }

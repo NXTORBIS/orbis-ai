@@ -1,0 +1,44 @@
+diff --git a/chrome/browser/ui/views/side_panel/side_panel_helper.cc b/chrome/browser/ui/views/side_panel/side_panel_helper.cc
+index eccb768..855d3b1 100644
+--- a/chrome/browser/ui/views/side_panel/side_panel_helper.cc
++++ b/chrome/browser/ui/views/side_panel/side_panel_helper.cc
+@@ -27,16 +27,38 @@
+ #include "chrome/common/webui_url_constants.h"
+ #include "components/history_clusters/core/features.h"
+ #include "components/history_clusters/core/history_clusters_service.h"
++#include "components/input/native_web_keyboard_event.h"
+ #include "ui/actions/actions.h"
++#include "ui/views/controls/webview/unhandled_keyboard_event_handler.h"
+ #include "ui/views/controls/webview/webview.h"
+ 
+ namespace {
+ 
++// A plain views::WebView is the WebContentsDelegate of its page but does not handle keys the page leaves alone, so a key the page does not use is dropped and no browser shortcut (Ctrl+T, Ctrl+N,
++// Ctrl+Shift+Y to close the panel, ...) works while the panel has focus. This hands unhandled keys back to the browser window's accelerators,
++// as the other side panels do.
++class OrbisPanelWebView : public views::WebView {
++ public:
++  explicit OrbisPanelWebView(Profile* profile) : views::WebView(profile) {}
++  OrbisPanelWebView(const OrbisPanelWebView&) = delete;
++  OrbisPanelWebView& operator=(const OrbisPanelWebView&) = delete;
++  ~OrbisPanelWebView() override = default;
++
++  bool HandleKeyboardEvent(content::WebContents* source,
++                           const input::NativeWebKeyboardEvent& event) override {
++    return unhandled_keyboard_event_handler_.HandleKeyboardEvent(
++        event, GetFocusManager());
++  }
++
++ private:
++  views::UnhandledKeyboardEventHandler unhandled_keyboard_event_handler_;
++};
++
+ // The Orbis panel: chrome://orbis hosted in a native side panel entry.
+ std::unique_ptr<views::View> CreateOrbisSidePanelView(
+     Profile* profile,
+     SidePanelEntryScope& scope) {
+-  auto view = std::make_unique<views::WebView>(profile);
++  auto view = std::make_unique<OrbisPanelWebView>(profile);
+   view->LoadInitialURL(GURL(chrome::kChromeUIOrbisURL));
+   return view;
+ }
