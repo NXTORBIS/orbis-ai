@@ -238,3 +238,16 @@ See `docs/orbis-performance.md` (medians of 5, honest limits; there is no pre-re
 ### Regression (serial)
 launch 4/4, browserManager 6/6, service 5/5, browserUi 11/11, chromiumCapabilities 8/8, chromiumCapabilities2 11/11, agent 4/4, orbisSearchPage 14/14.
 `browserUi.ts` gained a test-only `hold()` (typematic key hold) used by the shortcut checks.
+
+## Final pages (Views 7, partial)
+
+Only the pages below were captured (dark + light, shots in docs/views7-shots/) and only a sample was opened and looked at. No patch changes and no rebuild were made in this pass.
+
+| Page | Screenshot | Verdict | Fix |
+|---|---|---|---|
+| settings/content/camera (dark) | chrome_settings_content_camera_dark.png | Looked at: Orbis-styled, OK | none |
+| chrome://apps (light) | chrome_apps_light.png | Looked at: FAIL. Stays dark in light scheme; stock blue laptop illustration remains | not fixed (needs Orbis mark illustration + light theming, rebuild) |
+| offline error (dark) | offline_https_example_com__dark.png | Looked at: OK, Orbis palette; stock dino kept | none |
+| other settings subpages, shortcuts, captive portal, billing (interstitials list page is unstyled, sans-serif font) | same folder | Captured, NOT looked at | none |
+
+Not done: extension details, print preview, crashed tab, history clusters, customize-chrome, PDF viewer controls, PiP, remaining interstitials, timed-out/blocked pages.
