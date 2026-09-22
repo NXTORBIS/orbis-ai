@@ -35,6 +35,7 @@ export class EmbedController {
   private region: EmbedRegion | null = null
   private child: Embedded | null = null
   private timer: NodeJS.Timeout | null = null
+  private keepOnTop: NodeJS.Timeout | null = null
   private readonly parent: () => bigint | null
 
   constructor(parent: () => bigint | null) {
@@ -60,6 +61,9 @@ export class EmbedController {
       if (parent && hwnd) {
         this.child = embedWindow(parent, hwnd)
         this.timer = null
+        this.keepOnTop = setInterval(() => {
+          if (this.child && this.region?.visible) this.child.raise()
+        }, 250)
         this.apply()
         return
       }
@@ -71,6 +75,8 @@ export class EmbedController {
   detach(): void {
     if (this.timer) clearTimeout(this.timer)
     this.timer = null
+    if (this.keepOnTop) clearInterval(this.keepOnTop)
+    this.keepOnTop = null
     this.child = null
   }
 

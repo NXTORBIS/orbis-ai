@@ -21,6 +21,8 @@ export interface LaunchOptions {
   extensionDir?: string
   /** Pages to open at start. */
   urls?: string[]
+  /** Start with the window hidden (the Orbis window embeds it, so it must not flash as a window of its own). */
+  hidden?: boolean
   /** Anything else to pass the browser. */
   args?: string[]
 }
@@ -43,7 +45,7 @@ export function launchChromium(o: LaunchOptions): LaunchedChromium {
     ...(o.args ?? []),
     ...(o.urls ?? [])
   ]
-  const child = spawn(o.chrome, args, { stdio: ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'], windowsHide: false })
+  const child = spawn(o.chrome, args, { stdio: ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'], windowsHide: o.hidden === true })
   const toBrowser = child.stdio[3] as Writable | null
   const fromBrowser = child.stdio[4] as Readable | null
   if (!toBrowser || !fromBrowser) {

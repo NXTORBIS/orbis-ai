@@ -30,6 +30,7 @@ public static class OrbisUi {
   [DllImport("user32.dll")] static extern bool EnumWindows(EnumProc p, IntPtr l);
   [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
   [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
+  [DllImport("user32.dll")] static extern IntPtr GetParent(IntPtr h);
   [DllImport("user32.dll")] static extern bool IsIconic(IntPtr h);
   [DllImport("user32.dll")] static extern IntPtr GetWindow(IntPtr h, uint c);
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
@@ -53,7 +54,41 @@ public static class OrbisUi {
   [StructLayout(LayoutKind.Sequential)] struct KBD { public ushort vk, scan; public uint flags, time; public UIntPtr extra; }
   [StructLayout(LayoutKind.Sequential)] struct MOUSE { public int dx, dy; public uint data, flags, time; public UIntPtr extra; }
   [StructLayout(LayoutKind.Explicit)] struct INPUT { [FieldOffset(0)] public uint type; [FieldOffset(8)] public KBD k; [FieldOffset(8)] public MOUSE m; }
+  [DllImport("user32.dll")] static extern bool EnumChildWindows(IntPtr p, EnumProc cb, IntPtr l);
+  [DllImport("user32.dll")] static extern IntPtr GetAncestor(IntPtr h, uint f);
+  [DllImport("user32.dll")] static extern IntPtr SetFocus(IntPtr h);
+  // The window is in front when it, or the window it is embedded in (Orbis's own), is the foreground window.
+  static bool IsFg(IntPtr h) { var fg = GetForegroundWindow(); return fg == h || (fg != IntPtr.Zero && fg == GetAncestor(h, 2)); }
+  // The foreground window is this process's, or has a window of this process embedded in it.
+  static bool FgOurs(uint pid) {
+    var fg = GetForegroundWindow(); uint p; GetWindowThreadProcessId(fg, out p);
+    if (p == pid) return true;
+    bool found = false;
+    EnumChildWindows(fg, (c, l) => { uint q; GetWindowThreadProcessId(c, out q); if (q == pid) { found = true; return false; } return true; }, IntPtr.Zero);
+    return found;
+  }
+  static void Collect(IntPtr h, uint pid, IntPtr fg, StringBuilder sb, ref bool first) {
+    if (!IsWindowVisible(h) || GetWindow(h, 4) != IntPtr.Zero) return;
+    var cls = new StringBuilder(256); GetClassName(h, cls, 256);
+    if (cls.ToString() != "Chrome_WidgetWin_1") return;
+    var t = new StringBuilder(512); GetWindowText(h, t, 512);
+    if (t.Length == 0) return;
+    RECT r; GetWindowRect(h, out r);
+    if (!first) sb.Append(","); first = false;
+    sb.Append("{\"hwnd\":" + h.ToInt64() + ",\"title\":\"" + Esc(t.ToString()) + "\",\"left\":" + r.L + ",\"top\":" + r.T + ",\"right\":" + r.R + ",\"bottom\":" + r.B + ",\"minimized\":" + (IsIconic(h) ? "true" : "false") + ",\"foreground\":" + (IsFg(h) ? "true" : "false") + "}");
+  }
+  // This process's windows: its top-level windows, and the ones embedded as children in another window (the Orbis window).
   public static string Windows(uint pid) {
+    var sb = new StringBuilder("["); bool first = true; var fg = GetForegroundWindow();
+    EnumWindows((h, l) => {
+      uint p; GetWindowThreadProcessId(h, out p);
+      if (p == pid) Collect(h, pid, fg, sb, ref first);
+      else { bool f2 = first; var sb2 = sb; var top = h; EnumChildWindows(h, (c, l2) => { uint q; GetWindowThreadProcessId(c, out q); if (q == pid && GetParent(c) == top) Collect(c, pid, fg, sb, ref first); return true; }, IntPtr.Zero); }
+      return true;
+    }, IntPtr.Zero);
+    return sb.Append("]").ToString();
+  }
+  public static string WindowsOld(uint pid) {
     var sb = new StringBuilder("[");
     var fg = GetForegroundWindow(); bool first = true;
     EnumWindows((h, l) => {
@@ -71,12 +106,13 @@ public static class OrbisUi {
     return sb.Append("]").ToString();
   }
   static string Esc(string s) { var b = new StringBuilder(); foreach (var c in s) { if (c == '"' || c == '\\') b.Append('\\').Append(c); else if (c < 32) b.Append(' '); else b.Append(c); } return b.ToString(); }
+  public static long ForegroundFor(long hwnd) { return IsFg(new IntPtr(hwnd)) ? hwnd : GetForegroundWindow().ToInt64(); }
   public static long Foreground() { return GetForegroundWindow().ToInt64(); }
   public static bool Focus(long hwnd) {
     var h = new IntPtr(hwnd);
     if (!IsWindow(h)) return false;
     if (IsIconic(h)) ShowWindow(h, 9);
-    if (GetForegroundWindow() == h) return true;
+    if (IsFg(h)) { FocusInto(h); return true; }
     uint dummy; var fg = GetForegroundWindow();
     uint fgThread = fg == IntPtr.Zero ? 0 : GetWindowThreadProcessId(fg, out dummy);
     uint me = GetCurrentThreadId(); bool attached = false;
@@ -85,14 +121,20 @@ public static class OrbisUi {
     if (fgThread != 0 && fgThread != me) attached = AttachThreadInput(me, fgThread, true);
     BringWindowToTop(h); SetForegroundWindow(h);
     if (attached) AttachThreadInput(me, fgThread, false);
-    for (int i = 0; i < 10; i++) { if (GetForegroundWindow() == h) return true; System.Threading.Thread.Sleep(30); }
-    return GetForegroundWindow() == h;
+    for (int i = 0; i < 10; i++) { if (IsFg(h)) { FocusInto(h); return true; } System.Threading.Thread.Sleep(30); }
+    return false;
+  }
+  // An embedded window lives in another process's window: give it keyboard focus by joining its input queue for the call.
+  static void FocusInto(IntPtr h) {
+    if (GetAncestor(h, 2) == h) return;
+    uint dummy; uint t = GetWindowThreadProcessId(h, out dummy); uint me = GetCurrentThreadId();
+    bool a = AttachThreadInput(me, t, true); SetFocus(h); if (a) AttachThreadInput(me, t, false);
   }
   static INPUT Key(ushort vk, ushort scan, uint flags) { var i = new INPUT(); i.type = 1; i.k.vk = vk; i.k.scan = scan; i.k.flags = flags; return i; }
   static bool Ext(ushort vk) { return vk == 0x25 || vk == 0x26 || vk == 0x27 || vk == 0x28 || vk == 0x2E || vk == 0x24 || vk == 0x23 || vk == 0x21 || vk == 0x22 || vk == 0x2D; }
   // Presses the keys in order, then releases them in reverse: a chord such as Ctrl+Shift+I.
   public static bool Chord(long hwnd, ushort[] vks) {
-    if (GetForegroundWindow() != new IntPtr(hwnd)) return false;
+    if (!IsFg(new IntPtr(hwnd))) return false;
     var list = new List<INPUT>();
     foreach (var v in vks) list.Add(Key(v, (ushort)MapVirtualKey(v, 0), Ext(v) ? 1u : 0u));
     for (int i = vks.Length - 1; i >= 0; i--) list.Add(Key(vks[i], (ushort)MapVirtualKey(vks[i], 0), 2u | (Ext(vks[i]) ? 1u : 0u)));
@@ -102,12 +144,12 @@ public static class OrbisUi {
   // Holds a chord like a real keyboard: press all, wait the typematic delay (500 ms), then repeat the last key at ~30/s until holdMs has passed, release.
   // The foreground check is repeated before every repeat, so a lost focus ends the hold. Returns how many key-down events were sent (first + repeats), -1 if not in front.
   public static int Hold(long hwnd, ushort[] vks, int holdMs) {
-    var h = new IntPtr(hwnd); if (GetForegroundWindow() != h) return -1;
+    var h = new IntPtr(hwnd); if (!IsFg(h)) return -1;
     int n = 0; var sw = System.Diagnostics.Stopwatch.StartNew();
     foreach (var v in vks) { var a = new INPUT[] { Key(v, (ushort)MapVirtualKey(v, 0), Ext(v) ? 1u : 0u) }; SendInput(1, a, Marshal.SizeOf(typeof(INPUT))); }
     n = 1; var last = vks[vks.Length - 1];
     System.Threading.Thread.Sleep(500);
-    while (sw.ElapsedMilliseconds < holdMs && GetForegroundWindow() == h) {
+    while (sw.ElapsedMilliseconds < holdMs && IsFg(h)) {
       var a = new INPUT[] { Key(last, (ushort)MapVirtualKey(last, 0), Ext(last) ? 1u : 0u) }; SendInput(1, a, Marshal.SizeOf(typeof(INPUT))); n++;
       System.Threading.Thread.Sleep(33);
     }
@@ -115,7 +157,7 @@ public static class OrbisUi {
     return n;
   }
   public static bool Click(long hwnd, int x, int y, bool right) {
-    if (GetForegroundWindow() != new IntPtr(hwnd)) return false;
+    if (!IsFg(new IntPtr(hwnd))) return false;
     SetCursorPos(x, y); System.Threading.Thread.Sleep(80);
     if (right) { mouse_event(8, 0, 0, 0, UIntPtr.Zero); mouse_event(16, 0, 0, 0, UIntPtr.Zero); } else { mouse_event(2, 0, 0, 0, UIntPtr.Zero); mouse_event(4, 0, 0, 0, UIntPtr.Zero); }
     return true;
@@ -125,30 +167,27 @@ public static class OrbisUi {
   [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X, Y; }
   // Real click at a screen point, only if the foreground window and the window under the point both belong to this pid.
   public static string ClickAtPid(uint pid, int x, int y, bool right) {
-    var fg = GetForegroundWindow(); uint p; GetWindowThreadProcessId(fg, out p);
-    if (p != pid) return "foreground-not-ours";
-    var pt = new POINT(); pt.X = x; pt.Y = y; var top = GetAncestor(WindowFromPoint(pt), 2); uint q; GetWindowThreadProcessId(top, out q);
+    if (!FgOurs(pid)) return "foreground-not-ours";
+    var pt = new POINT(); pt.X = x; pt.Y = y; var top = WindowFromPoint(pt); uint q; GetWindowThreadProcessId(top, out q);
     if (q != pid) return "point-not-ours";
     SetCursorPos(x, y); System.Threading.Thread.Sleep(120);
     if (right) { mouse_event(8, 0, 0, 0, UIntPtr.Zero); mouse_event(16, 0, 0, 0, UIntPtr.Zero); } else { mouse_event(2, 0, 0, 0, UIntPtr.Zero); mouse_event(4, 0, 0, 0, UIntPtr.Zero); }
     return "ok";
   }
   public static string Hover(uint pid, int x, int y) {
-    var fg = GetForegroundWindow(); uint p; GetWindowThreadProcessId(fg, out p);
-    if (p != pid) return "foreground-not-ours";
-    var pt = new POINT(); pt.X = x; pt.Y = y; var top = GetAncestor(WindowFromPoint(pt), 2); uint q; GetWindowThreadProcessId(top, out q);
+    if (!FgOurs(pid)) return "foreground-not-ours";
+    var pt = new POINT(); pt.X = x; pt.Y = y; var top = WindowFromPoint(pt); uint q; GetWindowThreadProcessId(top, out q);
     if (q != pid) return "point-not-ours";
     SetCursorPos(x, y); System.Threading.Thread.Sleep(150); SetCursorPos(x + 1, y + 1);
     return "ok";
   }
   // For a menu the browser just opened (a popup window of the same process holds the foreground).
   public static bool ChordIfPid(uint pid, ushort[] vks) {
-    var fg = GetForegroundWindow(); uint p; GetWindowThreadProcessId(fg, out p);
-    if (p != pid) return false;
-    return Chord(fg.ToInt64(), vks);
+    if (!FgOurs(pid)) return false;
+    return Chord(GetForegroundWindow().ToInt64(), vks);
   }
   public static bool Text(long hwnd, string s) {
-    if (GetForegroundWindow() != new IntPtr(hwnd)) return false;
+    if (!IsFg(new IntPtr(hwnd))) return false;
     var list = new List<INPUT>();
     foreach (var c in s) { list.Add(Key(0, c, 4)); list.Add(Key(0, c, 4 | 2)); }
     var arr = list.ToArray();
@@ -180,7 +219,7 @@ while ($true) {
     $q = $line | ConvertFrom-Json
     switch ($q.cmd) {
       'windows' { $out = '{"ok":true,"data":' + [OrbisUi]::Windows([uint32]$q.pid) + '}' }
-      'foreground' { $out = '{"ok":true,"data":' + [OrbisUi]::Foreground() + '}' }
+      'foreground' { $out = '{"ok":true,"data":' + [OrbisUi]::ForegroundFor([long]$q.hwnd) + '}' }
       'focus' { $out = '{"ok":true,"data":' + ([OrbisUi]::Focus([long]$q.hwnd).ToString().ToLower()) + '}' }
       'chord' { $out = '{"ok":true,"data":' + ([OrbisUi]::Chord([long]$q.hwnd, [uint16[]]@($q.vks)).ToString().ToLower()) + '}' }
       'chordPid' { $out = '{"ok":true,"data":' + ([OrbisUi]::ChordIfPid([uint32]$q.pid, [uint16[]]@($q.vks)).ToString().ToLower()) + '}' }
@@ -366,7 +405,7 @@ export class BrowserUi {
     for (let i = 0; i < attempts; i++) {
       if (await this.call<boolean>({ cmd: 'focus', hwnd: win.hwnd })) {
         await sleep(80)
-        if ((await this.call<number>({ cmd: 'foreground' })) === win.hwnd) return
+        if ((await this.call<number>({ cmd: 'foreground', hwnd: win.hwnd })) === win.hwnd) return
       }
       await sleep(250 * (i + 1))
     }

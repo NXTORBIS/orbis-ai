@@ -1,0 +1,90 @@
+diff --git a/chrome/browser/ui/views/frame/browser_frame_view_win.cc b/chrome/browser/ui/views/frame/browser_frame_view_win.cc
+index 207ea26540..6d5bd1bb2d 100644
+--- a/chrome/browser/ui/views/frame/browser_frame_view_win.cc
++++ b/chrome/browser/ui/views/frame/browser_frame_view_win.cc
+@@ -58,6 +58,7 @@
+ #include "ui/views/widget/widget.h"
+ #include "ui/views/widget/widget_observer.h"
+ #include "ui/views/win/hwnd_util.h"
++#include "base/command_line.h"
+ #include "ui/views/window/client_view.h"
+ 
+ std::array<HICON, BrowserFrameViewWin::kThrobberIconCount>
+@@ -275,7 +276,23 @@ gfx::Rect BrowserFrameViewWin::GetWindowBoundsForClientBounds(
+                    client_bounds.width(), client_bounds.height() + top_inset);
+ }
+ 
++// Orbis: with --orbis-embedded, a browser window that the Orbis app has made a child of its own window is frameless: no caption
++// buttons, no caption or resize hit areas (the parent window owns moving and sizing). Other windows (Ctrl+N) stay normal.
++bool BrowserFrameViewWin::IsOrbisEmbedded() const {
++  return base::CommandLine::ForCurrentProcess()->HasSwitch("orbis-embedded") &&
++         ::GetParent(HWNDForView(this)) != nullptr;
++}
++
+ int BrowserFrameViewWin::NonClientHitTest(const gfx::Point& point) {
++  const int component = NonClientHitTestUnlessEmbedded(point);
++  if (IsOrbisEmbedded() && component != HTNOWHERE && component != HTCLIENT &&
++      component != HTMENU && component != HTSYSMENU) {
++    return HTCLIENT;
++  }
++  return component;
++}
++
++int BrowserFrameViewWin::NonClientHitTestUnlessEmbedded(const gfx::Point& point) {
+   int super_component = BrowserFrameView::NonClientHitTest(point);
+   if (super_component != HTNOWHERE) {
+     return super_component;
+@@ -730,6 +747,11 @@ void BrowserFrameViewWin::LayoutTitleBar() {
+ void BrowserFrameViewWin::LayoutCaptionButtons() {
+   TRACE_EVENT0("views.frame", "BrowserFrameViewWin::LayoutCaptionButtons");
+ 
++  if (IsOrbisEmbedded()) {
++    caption_button_container_->SetVisible(false);
++    caption_button_container_->SetBounds(width(), WindowTopY(), 0, 0);
++    return;
++  }
+   caption_button_container_->SetVisible(
+       !browser_widget()->IsFullscreen() ||
+       GetBrowserView()->IsWindowControlsOverlayEnabled());
+diff --git a/chrome/browser/ui/views/frame/browser_frame_view_win.h b/chrome/browser/ui/views/frame/browser_frame_view_win.h
+index e731b2c4c1..6ed97ea3ac 100644
+--- a/chrome/browser/ui/views/frame/browser_frame_view_win.h
++++ b/chrome/browser/ui/views/frame/browser_frame_view_win.h
+@@ -48,6 +48,8 @@ class BrowserFrameViewWin : public BrowserFrameView, public TabIconViewModel {
+   gfx::Rect GetWindowBoundsForClientBounds(
+       const gfx::Rect& client_bounds) const override;
+   int NonClientHitTest(const gfx::Point& point) override;
++  bool IsOrbisEmbedded() const;
++  int NonClientHitTestUnlessEmbedded(const gfx::Point& point);
+   void UpdateWindowIcon() override;
+   void UpdateWindowTitle() override;
+   void ResetWindowControls() override;
+diff --git a/ui/views/win/hwnd_message_handler.cc b/ui/views/win/hwnd_message_handler.cc
+index 42fd008731..2dfde4d839 100644
+--- a/ui/views/win/hwnd_message_handler.cc
++++ b/ui/views/win/hwnd_message_handler.cc
+@@ -15,6 +15,7 @@
+ #include <utility>
+ 
+ #include "base/auto_reset.h"
++#include "base/command_line.h"
+ #include "base/containers/heap_array.h"
+ #include "base/debug/gdi_debug_util_win.h"
+ #include "base/functional/bind.h"
+@@ -2342,6 +2343,16 @@ LRESULT HWNDMessageHandler::OnMouseActivate(UINT message,
+ LRESULT HWNDMessageHandler::OnMouseRange(UINT message,
+                                          WPARAM w_param,
+                                          LPARAM l_param) {
++  // Orbis: an embedded browser window (a child of the Orbis app's window, made by
++  // --orbis-embedded) takes keyboard focus when it is clicked; the parent belongs to another
++  // process, so nothing else would give it the focus.
++  if ((message == WM_LBUTTONDOWN || message == WM_RBUTTONDOWN ||
++       message == WM_MBUTTONDOWN) &&
++      (::GetWindowLong(hwnd(), GWL_STYLE) & WS_CHILD) && ::GetParent(hwnd()) &&
++      base::CommandLine::ForCurrentProcess()->HasSwitch("orbis-embedded") &&
++      ::GetFocus() != hwnd()) {
++    ::SetFocus(hwnd());
++  }
+   return HandleMouseEventInternal(message, w_param, l_param, true);
+ }
+ 

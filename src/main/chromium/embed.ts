@@ -15,7 +15,6 @@ const WS_CLIPCHILDREN = 0x02000000
 const STYLE_STRIP = 0x00c00000 | 0x00040000 | 0x00080000 | 0x00020000 | 0x00010000 | 0x80000000
 // dlgmodalframe, windowedge, clientedge, appwindow, toolwindow, staticedge
 const EX_STRIP = 0x1 | 0x100 | 0x200 | 0x40000 | 0x80 | 0x20000
-const SWP_NOZORDER = 0x0004
 const SWP_NOACTIVATE = 0x0010
 const SWP_FRAMECHANGED = 0x0020
 const SWP_SHOWWINDOW = 0x0040
@@ -41,6 +40,7 @@ interface Api {
   setPos(hwnd: bigint, r: Rect, show: boolean): void
   show(hwnd: bigint, visible: boolean): void
   focus(hwnd: bigint): void
+  raise(hwnd: bigint): boolean
   rect(hwnd: bigint): Rect
   clientRect(hwnd: bigint): Rect
   clientToScreen(hwnd: bigint, x: number, y: number): { x: number; y: number }
@@ -67,6 +67,7 @@ function load(): Api | null {
     const GetWindowLongPtrW = user32.func('intptr_t __stdcall GetWindowLongPtrW(void *hwnd, int idx)')
     const SetWindowLongPtrW = user32.func('intptr_t __stdcall SetWindowLongPtrW(void *hwnd, int idx, intptr_t v)')
     const SetWindowPos = user32.func('bool __stdcall SetWindowPos(void *hwnd, void *after, int x, int y, int cx, int cy, uint32 flags)')
+    const GetWindow = user32.func('void *__stdcall GetWindow(void *hwnd, uint32 cmd)')
     const ShowWindow = user32.func('bool __stdcall ShowWindow(void *hwnd, int cmd)')
     const SetFocus = user32.func('void *__stdcall SetFocus(void *hwnd)')
     const GetWindowRect = user32.func('bool __stdcall GetWindowRect(void *hwnd, _Out_ ORBIS_RECT *r)')
@@ -109,9 +110,15 @@ function load(): Api | null {
         SetWindowLongPtrW(ptr(h), GWL_STYLE, style | 0)
         SetWindowLongPtrW(ptr(h), GWL_EXSTYLE, ex | 0)
       },
-      setPos: (h, r, show) => void SetWindowPos(ptr(h), null, r.x, r.y, r.width, r.height, SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED | (show ? SWP_SHOWWINDOW : 0)),
+      setPos: (h, r, show) => void SetWindowPos(ptr(h), null, r.x, r.y, r.width, r.height, SWP_NOACTIVATE | SWP_FRAMECHANGED | (show ? SWP_SHOWWINDOW : 0)),
       show: (h, v) => void ShowWindow(ptr(h), v ? SW_SHOWNA : SW_HIDE),
       focus: (h) => void SetFocus(ptr(h)),
+      // The Orbis renderer's own window can sit above the browser window and would take its mouse clicks: keep the browser on top.
+      raise(h) {
+        if (big(GetWindow(ptr(h), 3)) === 0n) return false
+        SetWindowPos(ptr(h), null, 0, 0, 0, 0, 0x0001 | 0x0002 | SWP_NOACTIVATE)
+        return true
+      },
       rect: (h) => rectOf(GetWindowRect as never, h),
       clientRect: (h) => rectOf(GetClientRect as never, h),
       clientToScreen(h, x, y) {
@@ -136,7 +143,7 @@ export function findBrowserWindow(pid: number): bigint | null {
   if (!api) return null
   let best: { hwnd: bigint; area: number } | null = null
   for (const w of api.enumWindows(pid)) {
-    if (w.cls !== 'Chrome_WidgetWin_1' || !w.visible) continue
+    if (w.cls !== 'Chrome_WidgetWin_1') continue
     const r = api.rect(w.hwnd)
     const area = r.width * r.height
     if (area > (best?.area ?? 0)) best = { hwnd: w.hwnd, area }
@@ -155,6 +162,8 @@ export interface Embedded {
   /** Places the window over a region of the parent's client area, in physical pixels. */
   place(r: Rect, visible: boolean): void
   hide(): void
+  /** Puts the window back on top of its siblings if something covered it. Returns whether it had to. */
+  raise(): boolean
   focus(): void
   isVisible(): boolean
   parent(): bigint
@@ -174,6 +183,7 @@ export function embedWindow(parent: bigint, child: bigint): Embedded {
     hwnd: child,
     place: (r, visible) => api.setPos(child, r, visible),
     hide: () => api.show(child, false),
+    raise: () => api.raise(child),
     focus: () => api.focus(child),
     isVisible: () => api.isVisible(child),
     parent: () => api.getParent(child),

@@ -201,6 +201,7 @@ export class BrowserManager {
         ...(devExtension ? { extensionDir } : {}),
         extensionId: ORBIS_EXTENSION_ID,
         urls: ['chrome://newtab'],
+        hidden: false,
         control: this.o.control,
         saveDir: this.o.saveDir,
         clipboard: this.o.clipboard,
