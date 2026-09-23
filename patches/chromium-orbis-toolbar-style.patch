@@ -1,165 +1,1398 @@
 diff --git a/chrome/browser/resources/omnibox_popup/omnibox_popup_shared_style.css b/chrome/browser/resources/omnibox_popup/omnibox_popup_shared_style.css
-index 7cb613cbcf..442b38bb85 100644
+index 7cb613cbcf..035c455688 100644
 --- a/chrome/browser/resources/omnibox_popup/omnibox_popup_shared_style.css
 +++ b/chrome/browser/resources/omnibox_popup/omnibox_popup_shared_style.css
-@@ -29,7 +29,7 @@
-   --cr-searchbox-match-icon-container-background-fallback: var(--color-omnibox-results-background-hovered);
-   --color-searchbox-background: var(--color-omnibox-results-background);
-   --color-searchbox-foreground: var(--color-omnibox-text);
+@@ -1,88 +1,88 @@
+-/* Copyright 2025 The Chromium Authors
+- * Use of this source code is governed by a BSD-style license that can be
+- * found in the LICENSE file. */
+-
+-/* #css_wrapper_metadata_start
+- * #type=style-lit
+- * #scheme=relative
+- * #css_wrapper_metadata_end */
+-
+-:host {
+-  /* TODO(b/524320143): aim_app.css has different definitions for the following
+-   * colors. We should reconcile these, so that all popups use the same color.
+-   * Requires UX input to determine which color is the correct one:
+-   *   - --color-composebox-context-entrypoint-background
+-   *   - --color-composebox-context-entrypoint-hover-background
+-   *   - --color-composebox-context-entrypoint-text
+-   *   - --composebox-context-menu-entrypoint-button-color */
+-  --color-composebox-context-entrypoint-background: var(--color-omnibox-action-icon-hover);
+-  --color-composebox-context-entrypoint-hover-background: var(--color-omnibox-action-icon-hover);
+-  --color-composebox-context-entrypoint-text: var(--color-omnibox-context-entrypoint-text);
+-  --color-composebox-document-chip-icon: var(--color-sys-on-surface-subtle);
+-  --color-composebox-file-carousel-divider: var(--color-omnibox-composebox-divider);
+-  --color-composebox-file-chip-background: var(--color-omnibox-composebox-chip-background);
+-  --color-composebox-file-chip-favicon-background: var(--color-omnibox-composebox-favicon-background);
+-  --color-composebox-file-chip-text: var(--color-omnibox-text);
+-  --composebox-context-menu-entrypoint-button-color: var(--color-omnibox-context-entrypoint-text);
+-  --cr-composebox-font-size: 14px;
+-
+-  --cr-searchbox-match-icon-container-background-fallback: var(--color-omnibox-results-background-hovered);
+-  --color-searchbox-background: var(--color-omnibox-results-background);
+-  --color-searchbox-foreground: var(--color-omnibox-text);
 -  --color-searchbox-results-background-hovered: var(--color-omnibox-results-background-hover-overlay);
+-  --color-searchbox-results-background-selected: var(--color-omnibox-results-background-selected);
+-  --color-searchbox-results-button-hover: var(--color-omnibox-results-button-ink-drop-row-hovered);
+-  --color-searchbox-results-focus-indicator: var(--color-omnibox-results-focus-indicator);
+-  --color-searchbox-results-foreground: var(--color-omnibox-text);
+-  --color-searchbox-results-foreground-selected: var(--color-omnibox-results-text-selected);
+-  --color-searchbox-results-icon-focused-outline: var(--color-omnibox-results-focus-indicator);
+-  --color-searchbox-results-icon-selected: var(--color-omnibox-results-icon-selected);
+-  --color-searchbox-answer-icon-background: var(--color-omnibox-answer-icon-g-m3-background);
+-  --color-searchbox-answer-icon-foreground: var(--color-omnibox-answer-icon-g-m3-foreground);
+-  --color-searchbox-results-action-chip-focus-outline: var(--color-omnibox-results-focus-indicator);
+-  --color-searchbox-results-action-chip: var(--color-omnibox-results-button-border);
+-  --color-searchbox-results-action-chip-icon: var(--color-omnibox-results-button-icon);
+-  --color-searchbox-results-action-chip-icon-selected: var(--color-omnibox-results-button-icon-selected);
+-  --color-searchbox-results-background: var(--color-omnibox-results-background);
+-  --color-searchbox-results-button-selected-hover: var(--color-omnibox-results-button-ink-drop-row-selected);
+-  --color-searchbox-results-dim-selected: var(--color-omnibox-results-text-dimmed-selected);
+-  --color-searchbox-results-foreground-dimmed: var(--color-omnibox-results-text-dimmed);
+-  --color-searchbox-results-icon: var(--color-omnibox-results-icon);
+-  --color-searchbox-results-icon-container-background: unset;
+-  --color-searchbox-results-starter-pack-icon: var(--color-omnibox-results-starter-pack-icon);
+-  --color-searchbox-results-typed-prefix: unset;
+-  --color-searchbox-results-url-selected: var(--color-omnibox-results-url-selected);
+-  --color-searchbox-results-url: var(--color-omnibox-results-url);
+-  --color-searchbox-search-icon-background: var(--color-omnibox-results-icon);
+-  --cr-searchbox-match-text-padding-inline-start: 12px;
+-
+-  /* Closely resembles the views Omnibox input font size.
+-   * TODO(crbug.com/450640041): Investigate webUI blink & views rendering
+-   * difference. */
+-  --omnibox-font-size: 14.3px;
+-  --omnibox-context-menu-container-margin-top: 2px;
+-}
+-
+-cr-searchbox-dropdown {
+-  --cr-searchbox-dropdown-header-padding-inline-start: 16px;
+-  --cr-searchbox-icon-container-size: 28px;
+-  --cr-searchbox-match-font-weight: 700;
+-  --cr-searchbox-match-padding: 6px;
+-  --cr-searchbox-match-padding-inline-start: 16px;
+-  --cr-searchbox-match-text-padding-inline-end: 8px;
+-  --cr-searchbox-results-action-chip-height: 26px;
+-  --cr-searchbox-results-search-icon-size: 16px;
+-}
+-
+-/**
+- * Show the secondary side if it can be shown and is currently available to be
+- * shown.
+- */
+-:host([can-show-secondary-side][has-secondary-side]) cr-searchbox-dropdown {
+-  --cr-searchbox-secondary-side-display: block;
+-}
+-
+-.dropdownContainer:has(omnibox-popup-contextual-entrypoint[show-context-entrypoint_]) {
+-  --cr-searchbox-results-padding-bottom: 0;
+-  padding-bottom: 10px;
+-}
++/* Copyright 2025 The Chromium Authors
++ * Use of this source code is governed by a BSD-style license that can be
++ * found in the LICENSE file. */
++
++/* #css_wrapper_metadata_start
++ * #type=style-lit
++ * #scheme=relative
++ * #css_wrapper_metadata_end */
++
++:host {
++  /* TODO(b/524320143): aim_app.css has different definitions for the following
++   * colors. We should reconcile these, so that all popups use the same color.
++   * Requires UX input to determine which color is the correct one:
++   *   - --color-composebox-context-entrypoint-background
++   *   - --color-composebox-context-entrypoint-hover-background
++   *   - --color-composebox-context-entrypoint-text
++   *   - --composebox-context-menu-entrypoint-button-color */
++  --color-composebox-context-entrypoint-background: var(--color-omnibox-action-icon-hover);
++  --color-composebox-context-entrypoint-hover-background: var(--color-omnibox-action-icon-hover);
++  --color-composebox-context-entrypoint-text: var(--color-omnibox-context-entrypoint-text);
++  --color-composebox-document-chip-icon: var(--color-sys-on-surface-subtle);
++  --color-composebox-file-carousel-divider: var(--color-omnibox-composebox-divider);
++  --color-composebox-file-chip-background: var(--color-omnibox-composebox-chip-background);
++  --color-composebox-file-chip-favicon-background: var(--color-omnibox-composebox-favicon-background);
++  --color-composebox-file-chip-text: var(--color-omnibox-text);
++  --composebox-context-menu-entrypoint-button-color: var(--color-omnibox-context-entrypoint-text);
++  --cr-composebox-font-size: 14px;
++
++  --cr-searchbox-match-icon-container-background-fallback: var(--color-omnibox-results-background-hovered);
++  --color-searchbox-background: var(--color-omnibox-results-background);
++  --color-searchbox-foreground: var(--color-omnibox-text);
 +  --color-searchbox-results-background-hovered: var(--color-omnibox-results-background-hovered);
-   --color-searchbox-results-background-selected: var(--color-omnibox-results-background-selected);
-   --color-searchbox-results-button-hover: var(--color-omnibox-results-button-ink-drop-row-hovered);
-   --color-searchbox-results-focus-indicator: var(--color-omnibox-results-focus-indicator);
++  --color-searchbox-results-background-selected: var(--color-omnibox-results-background-selected);
++  --color-searchbox-results-button-hover: var(--color-omnibox-results-button-ink-drop-row-hovered);
++  --color-searchbox-results-focus-indicator: var(--color-omnibox-results-focus-indicator);
++  --color-searchbox-results-foreground: var(--color-omnibox-text);
++  --color-searchbox-results-foreground-selected: var(--color-omnibox-results-text-selected);
++  --color-searchbox-results-icon-focused-outline: var(--color-omnibox-results-focus-indicator);
++  --color-searchbox-results-icon-selected: var(--color-omnibox-results-icon-selected);
++  --color-searchbox-answer-icon-background: var(--color-omnibox-answer-icon-g-m3-background);
++  --color-searchbox-answer-icon-foreground: var(--color-omnibox-answer-icon-g-m3-foreground);
++  --color-searchbox-results-action-chip-focus-outline: var(--color-omnibox-results-focus-indicator);
++  --color-searchbox-results-action-chip: var(--color-omnibox-results-button-border);
++  --color-searchbox-results-action-chip-icon: var(--color-omnibox-results-button-icon);
++  --color-searchbox-results-action-chip-icon-selected: var(--color-omnibox-results-button-icon-selected);
++  --color-searchbox-results-background: var(--color-omnibox-results-background);
++  --color-searchbox-results-button-selected-hover: var(--color-omnibox-results-button-ink-drop-row-selected);
++  --color-searchbox-results-dim-selected: var(--color-omnibox-results-text-dimmed-selected);
++  --color-searchbox-results-foreground-dimmed: var(--color-omnibox-results-text-dimmed);
++  --color-searchbox-results-icon: var(--color-omnibox-results-icon);
++  --color-searchbox-results-icon-container-background: unset;
++  --color-searchbox-results-starter-pack-icon: var(--color-omnibox-results-starter-pack-icon);
++  --color-searchbox-results-typed-prefix: unset;
++  --color-searchbox-results-url-selected: var(--color-omnibox-results-url-selected);
++  --color-searchbox-results-url: var(--color-omnibox-results-url);
++  --color-searchbox-search-icon-background: var(--color-omnibox-results-icon);
++  --cr-searchbox-match-text-padding-inline-start: 12px;
++
++  /* Closely resembles the views Omnibox input font size.
++   * TODO(crbug.com/450640041): Investigate webUI blink & views rendering
++   * difference. */
++  --omnibox-font-size: 14.3px;
++  --omnibox-context-menu-container-margin-top: 2px;
++}
++
++cr-searchbox-dropdown {
++  --cr-searchbox-dropdown-header-padding-inline-start: 16px;
++  --cr-searchbox-icon-container-size: 28px;
++  --cr-searchbox-match-font-weight: 700;
++  --cr-searchbox-match-padding: 6px;
++  --cr-searchbox-match-padding-inline-start: 16px;
++  --cr-searchbox-match-text-padding-inline-end: 8px;
++  --cr-searchbox-results-action-chip-height: 26px;
++  --cr-searchbox-results-search-icon-size: 16px;
++}
++
++/**
++ * Show the secondary side if it can be shown and is currently available to be
++ * shown.
++ */
++:host([can-show-secondary-side][has-secondary-side]) cr-searchbox-dropdown {
++  --cr-searchbox-secondary-side-display: block;
++}
++
++.dropdownContainer:has(omnibox-popup-contextual-entrypoint[show-context-entrypoint_]) {
++  --cr-searchbox-results-padding-bottom: 0;
++  padding-bottom: 10px;
++}
+diff --git a/chrome/browser/resources/webui_toolbar/app.html.ts b/chrome/browser/resources/webui_toolbar/app.html.ts
+index b2203b9056..5b148dc4f5 100644
+--- a/chrome/browser/resources/webui_toolbar/app.html.ts
++++ b/chrome/browser/resources/webui_toolbar/app.html.ts
+@@ -1,91 +1,94 @@
+-// Copyright 2026 The Chromium Authors
+-// Use of this source code is governed by a BSD-style license that can be
+-// found in the LICENSE file.
+-
+-import {html} from '//resources/lit/v3_0/lit.rollup.js';
+-
+-import type {ToolbarAppElement} from './app.js';
+-
+-export function getHtml(this: ToolbarAppElement) {
+-  // clang-format off
+-  return html`<!--_html_template_start_-->
+-  <link rel="stylesheet"
+-   href="layout_constants_v${this.navigationControlsState_.layoutConstantsVersion}.css">
+-${this.isBackForwardButtonEnabled_ ? html`
+-  <back-forward-button id="back" direction="back"
+-   .state="${this.navigationControlsState_.backForwardControlState.backButtonState}"
+-   .windowIsMaximizedOrFullscreen="${this.navigationControlsState_.backForwardControlState.windowIsMaximizedOrFullscreen}"
+-   .touchUi="${this.navigationControlsState_.touchUi}">
+-  </back-forward-button>
+-  <back-forward-button id="forward" direction="forward"
+-   .state="${this.navigationControlsState_.backForwardControlState.forwardButtonState}"
+-   .hidden="${!this.navigationControlsState_.backForwardControlState.forwardButtonState.shouldBeShown}"
+-   .touchUi="${this.navigationControlsState_.touchUi}">
+-  </back-forward-button>` : ''}
+-  ${this.isReloadButtonEnabled_ ? html`
+-    <reload-button id="reload"
+-      .state="${this.navigationControlsState_.reloadControlState}"
+-      .touchUi="${this.navigationControlsState_.touchUi}">
+-    </reload-button>
+-  ` : ''}
+-  ${this.isHomeButtonEnabled_ ? html`
+-    <home-button id="home"
+-      .state="${this.navigationControlsState_.homeControlState}"
+-      .hidden="${!this.navigationControlsState_.homeControlState.shouldBeShown}"
+-      .touchUi="${this.navigationControlsState_.touchUi}">
+-    </home-button>
+-  ` : ''}
+-  ${this.isSplitTabsButtonEnabled_ ? html`
+-    <split-tabs-button id="split-tabs"
+-        .state="${this.navigationControlsState_.splitTabsControlState}"
+-        .hidden="${!this.navigationControlsState_.splitTabsControlState.shouldBeShown}">
+-    </split-tabs-button>
+-  ` : ''}
+-  ${this.isLocationBarEnabled_ ? html`
+-    <location-bar id="location-bar"
+-        .locationBarState="${this.navigationControlsState_.locationBarState}"
+-        .touchUi="${this.navigationControlsState_.touchUi}">
+-    </location-bar>
+-  ` : ''}
+-  ${this.isExtensionsContainerEnabled_ ? html`
+-    <webui-toolbar-extensions id="extensions"
+-        .states="${this.navigationControlsState_.extensionsState}">
+-    </webui-toolbar-extensions>
+-  ` : ''}
+-  ${this.isPinnedToolbarActionsEnabled_ ? html`
+-    <pinned-toolbar-actions id="pinnedToolbarActions"
+-        .states="${this.navigationControlsState_.pinnedToolbarActionsState}">
+-    </pinned-toolbar-actions>
+-  ` : ''}
+-  ${this.isBatterySaverButtonEnabled_ ? html`
+-    <battery-saver-button id="battery-saver"
+-        .hidden="${!this.navigationControlsState_.batterySaverButtonVisible}">
+-    </battery-saver-button>
+-  ` : ''}
+-  ${this.isPerformanceInterventionButtonEnabled_ ? html`
+-    <performance-intervention-button id="performance-intervention"
+-      .state="${
+-        this.navigationControlsState_.performanceInterventionControlState}"
+-      .hidden="${
+-        !this.navigationControlsState_.performanceInterventionControlState
+-            .shouldBeShown}">
+-    </performance-intervention-button>
+-  ` : ''}
+-  ${this.isAvatarButtonEnabled_ ? html`
+-    <avatar-button id="avatar"
+-        .state="${this.navigationControlsState_.avatarControlState}">
+-    </avatar-button>
+-  ` : ''}
+-  ${this.webUIToolbarFullyEnabled_ ? html`
+-    <overflow-button id="overflow" hidden
+-        .getOverflowedMenuItems="${() => this.getOverflowedMenuItems()}">
+-    </overflow-button>
+-  ` : ''}
+-  ${this.isAppMenuButtonEnabled_ ? html`
+-    <app-menu-button id="app-menu"
+-        .state="${this.navigationControlsState_.appMenuControlState}">
+-    </app-menu-button>
+-  ` : ''}
+-<!--_html_template_end_-->`;
+-  // clang-format on
+-}
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++import {html} from '//resources/lit/v3_0/lit.rollup.js';
++
++import type {ToolbarAppElement} from './app.js';
++
++export function getHtml(this: ToolbarAppElement) {
++  // clang-format off
++  return html`<!--_html_template_start_-->
++  <link rel="stylesheet"
++   href="layout_constants_v${this.navigationControlsState_.layoutConstantsVersion}.css">
++${this.isBackForwardButtonEnabled_ ? html`
++  <back-forward-button id="back" direction="back"
++   .state="${this.navigationControlsState_.backForwardControlState.backButtonState}"
++   .windowIsMaximizedOrFullscreen="${this.navigationControlsState_.backForwardControlState.windowIsMaximizedOrFullscreen}"
++   .touchUi="${this.navigationControlsState_.touchUi}">
++  </back-forward-button>
++  <back-forward-button id="forward" direction="forward"
++   .state="${this.navigationControlsState_.backForwardControlState.forwardButtonState}"
++   .hidden="${!this.navigationControlsState_.backForwardControlState.forwardButtonState.shouldBeShown}"
++   .touchUi="${this.navigationControlsState_.touchUi}">
++  </back-forward-button>` : ''}
++  ${this.isReloadButtonEnabled_ ? html`
++    <reload-button id="reload"
++      .state="${this.navigationControlsState_.reloadControlState}"
++      .touchUi="${this.navigationControlsState_.touchUi}">
++    </reload-button>
++  ` : ''}
++  ${this.isHomeButtonEnabled_ ? html`
++    <home-button id="home"
++      .state="${this.navigationControlsState_.homeControlState}"
++      .hidden="${!this.navigationControlsState_.homeControlState.shouldBeShown}"
++      .touchUi="${this.navigationControlsState_.touchUi}">
++    </home-button>
++  ` : ''}
++  ${this.isSplitTabsButtonEnabled_ ? html`
++    <split-tabs-button id="split-tabs"
++        .state="${this.navigationControlsState_.splitTabsControlState}"
++        .hidden="${!this.navigationControlsState_.splitTabsControlState.shouldBeShown}">
++    </split-tabs-button>
++  ` : ''}
++  ${this.isLocationBarEnabled_ ? html`
++    <location-bar id="location-bar"
++        .locationBarState="${this.navigationControlsState_.locationBarState}"
++        .touchUi="${this.navigationControlsState_.touchUi}">
++    </location-bar>
++  ` : ''}
++  <!-- Orbis: the pinned actions come before the extensions, not after. Orbis is the first of them
++       (chrome/browser/ui/toolbar/toolbar_pref_names.cc pins it ahead of the rest), so this is what puts the Orbis
++       button hard against the address bar instead of two slots away behind the puzzle piece. -->
++  ${this.isPinnedToolbarActionsEnabled_ ? html`
++    <pinned-toolbar-actions id="pinnedToolbarActions"
++        .states="${this.navigationControlsState_.pinnedToolbarActionsState}">
++    </pinned-toolbar-actions>
++  ` : ''}
++  ${this.isExtensionsContainerEnabled_ ? html`
++    <webui-toolbar-extensions id="extensions"
++        .states="${this.navigationControlsState_.extensionsState}">
++    </webui-toolbar-extensions>
++  ` : ''}
++  ${this.isBatterySaverButtonEnabled_ ? html`
++    <battery-saver-button id="battery-saver"
++        .hidden="${!this.navigationControlsState_.batterySaverButtonVisible}">
++    </battery-saver-button>
++  ` : ''}
++  ${this.isPerformanceInterventionButtonEnabled_ ? html`
++    <performance-intervention-button id="performance-intervention"
++      .state="${
++        this.navigationControlsState_.performanceInterventionControlState}"
++      .hidden="${
++        !this.navigationControlsState_.performanceInterventionControlState
++            .shouldBeShown}">
++    </performance-intervention-button>
++  ` : ''}
++  ${this.isAvatarButtonEnabled_ ? html`
++    <avatar-button id="avatar"
++        .state="${this.navigationControlsState_.avatarControlState}">
++    </avatar-button>
++  ` : ''}
++  ${this.webUIToolbarFullyEnabled_ ? html`
++    <overflow-button id="overflow" hidden
++        .getOverflowedMenuItems="${() => this.getOverflowedMenuItems()}">
++    </overflow-button>
++  ` : ''}
++  ${this.isAppMenuButtonEnabled_ ? html`
++    <app-menu-button id="app-menu"
++        .state="${this.navigationControlsState_.appMenuControlState}">
++    </app-menu-button>
++  ` : ''}
++<!--_html_template_end_-->`;
++  // clang-format on
++}
 diff --git a/chrome/browser/resources/webui_toolbar/location_bar.css b/chrome/browser/resources/webui_toolbar/location_bar.css
-index 59565bb31a..ec5f774a45 100644
+index 59565bb31a..326c4240cf 100644
 --- a/chrome/browser/resources/webui_toolbar/location_bar.css
 +++ b/chrome/browser/resources/webui_toolbar/location_bar.css
-@@ -9,7 +9,7 @@
- 
- :host {
-   --border-radius: calc(var(--location-bar-height)/2);
+@@ -1,157 +1,157 @@
+-/* Copyright 2026 The Chromium Authors
+- * Use of this source code is governed by a BSD-style license that can be
+- * found in the LICENSE file. */
+-
+-/* #css_wrapper_metadata_start
+- * #type=style-lit
+- * #scheme=relative
+- * #css_wrapper_metadata_end */
+-
+-:host {
+-  --border-radius: calc(var(--location-bar-height)/2);
 -  --location-bar-background: var(--color-location-bar-background);
-+  --location-bar-background: var(--orbis-panel);
-   --omnibox-start-padding: 0px;
-   align-self: center;
-   align-items: center;
-@@ -47,17 +47,17 @@
- }
- 
- :host(:hover:not([chip-hovered])) {
+-  --omnibox-start-padding: 0px;
+-  align-self: center;
+-  align-items: center;
+-  background-color: var(--location-bar-background);
+-  border: none;
+-  border-radius: var(--border-radius);
+-  box-sizing: border-box;
+-  display: flex;
+-  flex: 1;
+-  height: var(--location-bar-height);
+-  margin: 0 calc(var(--location-bar-margin) -
+-                 var(--toolbar-icon-default-margin));
+-  /* Note: this works differently from how LocationBarView does things.
+-   * It basically lays out first and then clips the omnibox area to this;
+-   * so it normally doesn't do anything since the chips take up the space
+-   * anyway. We may need to compensate in chip positioning (or change the
+-   * approach once they exist
+-   */
+-  padding-inline-start: var(--border-radius);
+-  padding-inline-end: var(--location-bar-trailing-decoration-edge-padding);
+-  transition-property: background-color;
+-  transition-duration: 200ms;
+-  transition-timing-function: linear;
+-
+-  user-select: contain;
+-
+-  /* TODO(crbug.com/474060468): Hardcoded width needs fixing */
+-  width: 400px;
+-}
+-
+-/* If all controls are WebUI, the location bar (and all other buttons) are
+- * sized/hidden by a script, rather than by relying on flex layout logic. */
+-:host-context([webui-toolbar-fully-enabled]) {
+-  flex: none;
+-}
+-
+-:host(:hover:not([chip-hovered])) {
 -  --location-bar-background: var(--color-location-bar-background-hovered);
-+  --location-bar-background: var(--orbis-panel-2);
- }
- 
- @media not (prefers-contrast: more) {
-   :host(.input-in-progress) {
+-}
+-
+-@media not (prefers-contrast: more) {
+-  :host(.input-in-progress) {
 -    --location-bar-background: var(--color-omnibox-results-background);
-+    --location-bar-background: var(--orbis-panel-2);
-     background-color: var(--location-bar-background);
+-    background-color: var(--location-bar-background);
 -    border: 1px solid var(--color-location-bar-border-on-mismatch);
-+    border: 1px solid var(--orbis-line);
-   }
-   :host(.input-in-progress:hover:not([chip-hovered])) {
+-  }
+-  :host(.input-in-progress:hover:not([chip-hovered])) {
 -    --location-bar-background: var(--color-omnibox-results-background-hovered);
-+    --location-bar-background: var(--orbis-panel-2);
-     background-color: var(--location-bar-background);
-   }
- 
-@@ -70,11 +70,11 @@
- 
- @media (prefers-contrast: more) {
-   :host {
+-    background-color: var(--location-bar-background);
+-  }
+-
+-  /* The border override for input-in-progress is only visible if
+-   * the location bar isn't visibly focused */
+-  :host(#location-bar):has(> readonly-omnibox:focus-within) {
+-    border: none;
+-  }
+-}
+-
+-@media (prefers-contrast: more) {
+-  :host {
 -    border: 1px solid var(--color-location-bar-border);
-+    border: 1px solid var(--orbis-line);
-   }
- 
-   :host:has(> readonly-omnibox:focus-within) {
+-  }
+-
+-  :host:has(> readonly-omnibox:focus-within) {
 -    border: 1px solid var(--color-omnibox-results-background);
-+    border: 1px solid var(--orbis-panel-2);
-   }
- }
- 
-@@ -85,13 +85,13 @@
-   selector for its specificity.
- */
- :host(#location-bar):has(> readonly-omnibox:focus-within) {
+-  }
+-}
+-
+-/*The location bar acts focused when the omnibox within it is
+-   (but not if, say, the page icon is), hence the :has() use here and below.
+-
+-  This should take precedence over :hover rules, so it throws in an ID
+-  selector for its specificity.
+-*/
+-:host(#location-bar):has(> readonly-omnibox:focus-within) {
 -  --location-bar-background: var(--color-omnibox-results-background);
-+  --location-bar-background: var(--orbis-panel-2);
-   background-color: var(--location-bar-background);
-   transition-property: none;
- }
- 
- :host(#location-bar:not(.no-focus-ring)):has(> readonly-omnibox:focus-within) {
+-  background-color: var(--location-bar-background);
+-  transition-property: none;
+-}
+-
+-:host(#location-bar:not(.no-focus-ring)):has(> readonly-omnibox:focus-within) {
 -  box-shadow: inset 0 0 0 2px var(--cr-focus-outline-color);
+-}
+-
+-@media (forced-colors: active) {
+-  :host(#location-bar:not(.no-focus-ring)):has(
+-      > readonly-omnibox:focus-within) {
+-    outline: var(--cr-focus-outline-hcm);
+-  }
+-}
+-
+-permission-dashboard {
+-  flex-shrink: 0;
+-  /* Mirrors identically to 'icon_left' (5) and 'text_left' (8) mathematically
+-   * processed from internal LocationBarView::Layout(). */
+-  margin-inline-start: calc(5px - var(--border-radius));
+-  margin-inline-end: 8px;
+-}
+-
+-permission-dashboard:not([visible]) {
+-  display: none;
+-}
+-
+-location-icon {
+-  flex-shrink: 1;
+-  margin: 4px;
+-  margin-inline-start: calc(5px - var(--border-radius));
+-  margin-inline-end: 8px;
+-  max-width: 50%; /* See kLeadingDecorationMaxFraction */
+-}
+-
+-/* We expand out spacing between icon and text to line things up with the
+-   popup. This is mostly done by the omnibox, since it wants to accept clicks
+-   from that area, but for location icon we need to undo some of the
+-   compensation that does. */
+-:host(.popup-open) {
+-  --omnibox-start-padding: calc(14px - var(--touch-mode)*10px);
+-}
+-
+-:host(.popup-open) location-icon {
+-  margin-inline-start: calc(12px - var(--border-radius));
+-  margin-inline-end: var(--omnibox-start-padding);
+-}
+-
+-selected-keyword {
+-  flex-shrink: 1;
+-  max-width: 50%; /* See kLeadingDecorationMaxFraction */
+-}
+-
+-content-settings-icons {
+-  /* Matches kContentSettingIntraItemPadding in LocationBarView.
+-   * Because native trailing decorations are evaluated as a flat array, the gap
+-   * between the right-most Content Setting icon and the adjacent Page Actions
+-   * container is naturally treated by C++ as an intra-item gap. */
+-  margin-inline-end: 8px;
+-}
+-
+-#clear-all {
+-  --cr-icon-button-icon-size: var(--location-bar-icon-size);
+-  --cr-icon-button-size: calc(
+-      var(--location-bar-height) -
+-      2 * var(--location-bar-page-info-icon-vertical-padding));
+-  flex-shrink: 0;
+-}
+-
++/* Copyright 2026 The Chromium Authors
++ * Use of this source code is governed by a BSD-style license that can be
++ * found in the LICENSE file. */
++
++/* #css_wrapper_metadata_start
++ * #type=style-lit
++ * #scheme=relative
++ * #css_wrapper_metadata_end */
++
++:host {
++  --border-radius: calc(var(--location-bar-height)/2);
++  --location-bar-background: var(--orbis-panel);
++  --omnibox-start-padding: 0px;
++  align-self: center;
++  align-items: center;
++  background-color: var(--location-bar-background);
++  border: none;
++  border-radius: var(--border-radius);
++  box-sizing: border-box;
++  display: flex;
++  flex: 1;
++  height: var(--location-bar-height);
++  margin: 0 calc(var(--location-bar-margin) -
++                 var(--toolbar-icon-default-margin));
++  /* Note: this works differently from how LocationBarView does things.
++   * It basically lays out first and then clips the omnibox area to this;
++   * so it normally doesn't do anything since the chips take up the space
++   * anyway. We may need to compensate in chip positioning (or change the
++   * approach once they exist
++   */
++  padding-inline-start: var(--border-radius);
++  padding-inline-end: var(--location-bar-trailing-decoration-edge-padding);
++  transition-property: background-color;
++  transition-duration: 200ms;
++  transition-timing-function: linear;
++
++  user-select: contain;
++
++  /* TODO(crbug.com/474060468): Hardcoded width needs fixing */
++  width: 400px;
++}
++
++/* If all controls are WebUI, the location bar (and all other buttons) are
++ * sized/hidden by a script, rather than by relying on flex layout logic. */
++:host-context([webui-toolbar-fully-enabled]) {
++  flex: none;
++}
++
++:host(:hover:not([chip-hovered])) {
++  --location-bar-background: var(--orbis-panel-2);
++}
++
++@media not (prefers-contrast: more) {
++  :host(.input-in-progress) {
++    --location-bar-background: var(--orbis-panel-2);
++    background-color: var(--location-bar-background);
++    border: 1px solid var(--orbis-line);
++  }
++  :host(.input-in-progress:hover:not([chip-hovered])) {
++    --location-bar-background: var(--orbis-panel-2);
++    background-color: var(--location-bar-background);
++  }
++
++  /* The border override for input-in-progress is only visible if
++   * the location bar isn't visibly focused */
++  :host(#location-bar):has(> readonly-omnibox:focus-within) {
++    border: none;
++  }
++}
++
++@media (prefers-contrast: more) {
++  :host {
++    border: 1px solid var(--orbis-line);
++  }
++
++  :host:has(> readonly-omnibox:focus-within) {
++    border: 1px solid var(--orbis-panel-2);
++  }
++}
++
++/*The location bar acts focused when the omnibox within it is
++   (but not if, say, the page icon is), hence the :has() use here and below.
++
++  This should take precedence over :hover rules, so it throws in an ID
++  selector for its specificity.
++*/
++:host(#location-bar):has(> readonly-omnibox:focus-within) {
++  --location-bar-background: var(--orbis-panel-2);
++  background-color: var(--location-bar-background);
++  transition-property: none;
++}
++
++:host(#location-bar:not(.no-focus-ring)):has(> readonly-omnibox:focus-within) {
 +  box-shadow: inset 0 0 0 2px var(--orbis-accent);
- }
- 
- @media (forced-colors: active) {
++}
++
++@media (forced-colors: active) {
++  :host(#location-bar:not(.no-focus-ring)):has(
++      > readonly-omnibox:focus-within) {
++    outline: var(--cr-focus-outline-hcm);
++  }
++}
++
++permission-dashboard {
++  flex-shrink: 0;
++  /* Mirrors identically to 'icon_left' (5) and 'text_left' (8) mathematically
++   * processed from internal LocationBarView::Layout(). */
++  margin-inline-start: calc(5px - var(--border-radius));
++  margin-inline-end: 8px;
++}
++
++permission-dashboard:not([visible]) {
++  display: none;
++}
++
++location-icon {
++  flex-shrink: 1;
++  margin: 4px;
++  margin-inline-start: calc(5px - var(--border-radius));
++  margin-inline-end: 8px;
++  max-width: 50%; /* See kLeadingDecorationMaxFraction */
++}
++
++/* We expand out spacing between icon and text to line things up with the
++   popup. This is mostly done by the omnibox, since it wants to accept clicks
++   from that area, but for location icon we need to undo some of the
++   compensation that does. */
++:host(.popup-open) {
++  --omnibox-start-padding: calc(14px - var(--touch-mode)*10px);
++}
++
++:host(.popup-open) location-icon {
++  margin-inline-start: calc(12px - var(--border-radius));
++  margin-inline-end: var(--omnibox-start-padding);
++}
++
++selected-keyword {
++  flex-shrink: 1;
++  max-width: 50%; /* See kLeadingDecorationMaxFraction */
++}
++
++content-settings-icons {
++  /* Matches kContentSettingIntraItemPadding in LocationBarView.
++   * Because native trailing decorations are evaluated as a flat array, the gap
++   * between the right-most Content Setting icon and the adjacent Page Actions
++   * container is naturally treated by C++ as an intra-item gap. */
++  margin-inline-end: 8px;
++}
++
++#clear-all {
++  --cr-icon-button-icon-size: var(--location-bar-icon-size);
++  --cr-icon-button-size: calc(
++      var(--location-bar-height) -
++      2 * var(--location-bar-page-info-icon-vertical-padding));
++  flex-shrink: 0;
++}
++
 diff --git a/chrome/browser/resources/webui_toolbar/readonly_omnibox.css b/chrome/browser/resources/webui_toolbar/readonly_omnibox.css
-index 367bc9abc1..d4cf7a3f9f 100644
+index 367bc9abc1..2d3595e898 100644
 --- a/chrome/browser/resources/webui_toolbar/readonly_omnibox.css
 +++ b/chrome/browser/resources/webui_toolbar/readonly_omnibox.css
-@@ -14,7 +14,7 @@
-   --omnibox-height: calc(var(--location-bar-height));
-   align-self: center;
-   border: none;
+@@ -1,222 +1,222 @@
+-/* Copyright 2026 The Chromium Authors
+- * Use of this source code is governed by a BSD-style license that can be
+- * found in the LICENSE file. */
+-
+-/* #css_wrapper_metadata_start
+- * #type=style-lit
+- * #scheme=relative
+- * #css_wrapper_metadata_end */
+-
+-:host {
+-  /* To help make things line up nicely between the rich-text readonly view and
+-   * the interactive <input>, we give everything here the same height,
+-   * the height of the location bar. */
+-  --omnibox-height: calc(var(--location-bar-height));
+-  align-self: center;
+-  border: none;
 -  color: var(--color-omnibox-text);
-+  color: var(--orbis-text);
-   display: flex;
-   /* Absorbs available free space. This mathematically isolates layout changes
-    * on the left/right sides. */
-@@ -78,8 +78,8 @@
- }
- 
- #textInput::part(searchbox-input)::selection {
+-  display: flex;
+-  /* Absorbs available free space. This mathematically isolates layout changes
+-   * on the left/right sides. */
+-  flex: 1;
+-  font-family: var(--omnibox-primary-font-family);
+-  font-size: var(--omnibox-primary-font-size);
+-  font-weight: var(--omnibox-primary-font-weight);
+-  line-height: var(--omnibox-primary-line-height);
+-  height: var(--omnibox-height);
+-}
+-
+-/* #textContainerWrap exists to fill up space in a way that's sensitive to
+- * user locale's text direction, even when #textContainer is forced into LTR.
+- */
+-#textContainerWrap {
+-  display: flex;
+-  flex: 1;
+-  height: var(--omnibox-height);
+-  /* We want to position textInput off of us */
+-  position: relative;
+-  /* Giving this a width makes flex shrink it to fit available space when this
+-   * is too long. The exact value will get replaced by whatever flex computes,
+-   * but it also won't go below this.
+-   */
+-  width: 0;
+-}
+-
+-/* When the popup is expanded, we take control of spacing between us and icons,
+- * so that clicks delivered before the expansion still end up with us.
+- */
+-:host-context(.popup-open) #textContainer,
+-:host-context(.popup-open) #textInput {
+-  padding-inline-start: var(--omnibox-start-padding);
+-  margin-inline-start: calc(-1*var(--omnibox-start-padding));
+-}
+-
+-#textContainer {
+-  /* Both #textContainer and #textInput are included in the layout, with opacity
+-   * used to determine which one is actually visible. Since the <input> element
+-   * is always actually present, any interaction goes to it directly, making
+-   * the switchover painless. #textContainer always being present lets
+-   * #inlineAutocomplete use it to position itself in the right spot.
+-   */
+-  flex: 0 1 min-content;
+-  height: var(--omnibox-height);
+-  opacity: 1;
+-  outline: none;
+-  overflow: hidden;
+-  pointer-events: none;
+-  text-overflow: ellipsis;
+-  white-space: pre;
+-}
+-
+-#textContainer span {
+-  line-height: var(--omnibox-height);
+-  vertical-align: middle;
+-}
+-
+-#textContainer.force-ltr {
+-  direction: ltr;
+-}
+-
+-#textInput::part(searchbox-input)::selection {
 -  background-color: var(--color-omnibox-selection-background);
 -  color: var(--color-omnibox-selection-foreground);
-+  background-color: var(--orbis-accent);
-+  color: var(--orbis-bg);
- }
- 
- /* We don't want URLs spellchecked */
-@@ -92,11 +92,11 @@
- }
- 
- #textInput::part(searchbox-input)::placeholder {
+-}
+-
+-/* We don't want URLs spellchecked */
+-#textInput::part(searchbox-input)::spelling-error {
+-  text-decoration: none;
+-}
+-
+-#textInput::part(searchbox-input)::grammar-error {
+-  text-decoration: none;
+-}
+-
+-#textInput::part(searchbox-input)::placeholder {
 -  color: var(--color-omnibox-text);
-+  color: var(--orbis-text);
- }
- 
- #textContainer .color-dim {
+-}
+-
+-#textContainer .color-dim {
 -  color: var(--color-omnibox-text-dimmed);
-+  color: var(--orbis-muted);
- }
- 
- #textContainer .color-foreground-disabled,
-@@ -139,13 +139,13 @@
- }
- 
- :host(.dragging-over) #textContainer span {
+-}
+-
+-#textContainer .color-foreground-disabled,
+-#textInput.color-foreground-disabled::part(searchbox-input)::placeholder  {
+-  color: var(--color-omnibox-foreground-disabled);
+-}
+-
+-#textContainer .color-danger {
+-  color: var(--color-omnibox-security-chip-dangerous);
+-}
+-
+-#textContainer .strikethrough {
+-  text-decoration: line-through;
+-}
+-
+-#textInput {
+-  opacity: 0;
+-}
+-
+-#textInput,
+-#textInput::part(searchbox-input) {
+-  --cr-searchbox-input-height: var(--omnibox-height);
+-  appearance: none;
+-  background-color: transparent;
+-  border: none;
+-  color: inherit;
+-  font-family: inherit;
+-  font-size: inherit;
+-  font-weight: inherit;
+-  height: var(--omnibox-height);
+-  outline: none;
+-  padding: 0;
+-  position: absolute;
+-  top: 0;
+-  width: 100%;
+-}
+-
+-#textInput::part(icon) {
+-  display: none;
+-}
+-
+-:host(.dragging-over) #textContainer span {
 -  background-color: var(--color-omnibox-selection-background);
 -  color: var(--color-omnibox-selection-foreground);
-+  background-color: var(--orbis-accent);
-+  color: var(--orbis-bg);
- }
- 
- #inlineAutocomplete {
+-}
+-
+-#inlineAutocomplete {
 -  color: var(--color-omnibox-text);
 -  background-color: var(--color-location-bar-background);
+-  height: var(--omnibox-height);
+-  line-height: var(--omnibox-height);
+-  /* If [composing] isn't set, this is used only for positioning the additional
+-   * text. */
+-  visibility: hidden;
+-  white-space: pre;
+-}
+-
+-#inlineAutocomplete[composing] {
+-  visibility: visible;
+-}
+-
+-#additionalText {
+-  color: var(--color-omnibox-results-url);
+-  /* fonts are the same as for the omnibox proper */
+-  height: var(--omnibox-height);
+-  line-height: var(--omnibox-height);
+-  pointer-events: none;
+-  position: relative;
+-  white-space: pre;
+-
+-  /* Since the <input> is full-width, we want to be on top */
+-  z-index: 102;
+-}
+-
+-#dragTemplate {
+-  align-items: center;
+-  color: var(--color-textfield-foreground);
+-  display: flex;
+-  font-family: var(--drag-template-font-family);
+-  font-size: var(--drag-template-font-size);
+-  font-weight: var(--drag-template-font-weight);
+-  /* Matches native drag image preferred height calculation from
+-   * button_drag_utils.cc (button->GetPreferredSize({}): 16px gfx::kFaviconSize
+-   * icon + 8px LabelButton padding).
+-   */
+-  height: 24px;
+-  /* Position off-screen so the template is not visible in the transparent
+-   * WebUI, while keeping its full layout intact for
+-   * dataTransfer.setDragImage().
+-   */
+-  left: -10000px;
+-  max-width: 150px;
+-  pointer-events: none;
+-  position: absolute;
+-  top: -10000px;
+-  white-space: nowrap;
+-}
+-
+-#dragFavicon {
+-  flex-shrink: 0;
+-  /* Standard favicon display size (gfx::kFaviconSize). */
+-  height: 16px;
+-  margin-inline-end: 12px;
+-  width: 16px;
+-}
+-
+-#dragTitle {
+-  overflow: hidden;
+-  padding-inline: 2px;
+-  text-overflow: ellipsis;
+-  text-shadow:
+-      0 0 1px var(--color-textfield-background),
+-      0 0 1px var(--color-textfield-background),
+-      0 0 2px var(--color-textfield-background),
+-      0 0 2px var(--color-textfield-background);
+-  white-space: nowrap;
+-}
+-
+-/* Used for accessibility mark up only */
+-#announcementDistraction {
+-  position: absolute;
+-  left: -10000px;
+-}
++/* Copyright 2026 The Chromium Authors
++ * Use of this source code is governed by a BSD-style license that can be
++ * found in the LICENSE file. */
++
++/* #css_wrapper_metadata_start
++ * #type=style-lit
++ * #scheme=relative
++ * #css_wrapper_metadata_end */
++
++:host {
++  /* To help make things line up nicely between the rich-text readonly view and
++   * the interactive <input>, we give everything here the same height,
++   * the height of the location bar. */
++  --omnibox-height: calc(var(--location-bar-height));
++  align-self: center;
++  border: none;
++  color: var(--orbis-text);
++  display: flex;
++  /* Absorbs available free space. This mathematically isolates layout changes
++   * on the left/right sides. */
++  flex: 1;
++  font-family: var(--omnibox-primary-font-family);
++  font-size: var(--omnibox-primary-font-size);
++  font-weight: var(--omnibox-primary-font-weight);
++  line-height: var(--omnibox-primary-line-height);
++  height: var(--omnibox-height);
++}
++
++/* #textContainerWrap exists to fill up space in a way that's sensitive to
++ * user locale's text direction, even when #textContainer is forced into LTR.
++ */
++#textContainerWrap {
++  display: flex;
++  flex: 1;
++  height: var(--omnibox-height);
++  /* We want to position textInput off of us */
++  position: relative;
++  /* Giving this a width makes flex shrink it to fit available space when this
++   * is too long. The exact value will get replaced by whatever flex computes,
++   * but it also won't go below this.
++   */
++  width: 0;
++}
++
++/* When the popup is expanded, we take control of spacing between us and icons,
++ * so that clicks delivered before the expansion still end up with us.
++ */
++:host-context(.popup-open) #textContainer,
++:host-context(.popup-open) #textInput {
++  padding-inline-start: var(--omnibox-start-padding);
++  margin-inline-start: calc(-1*var(--omnibox-start-padding));
++}
++
++#textContainer {
++  /* Both #textContainer and #textInput are included in the layout, with opacity
++   * used to determine which one is actually visible. Since the <input> element
++   * is always actually present, any interaction goes to it directly, making
++   * the switchover painless. #textContainer always being present lets
++   * #inlineAutocomplete use it to position itself in the right spot.
++   */
++  flex: 0 1 min-content;
++  height: var(--omnibox-height);
++  opacity: 1;
++  outline: none;
++  overflow: hidden;
++  pointer-events: none;
++  text-overflow: ellipsis;
++  white-space: pre;
++}
++
++#textContainer span {
++  line-height: var(--omnibox-height);
++  vertical-align: middle;
++}
++
++#textContainer.force-ltr {
++  direction: ltr;
++}
++
++#textInput::part(searchbox-input)::selection {
++  background-color: var(--orbis-accent);
++  color: var(--orbis-bg);
++}
++
++/* We don't want URLs spellchecked */
++#textInput::part(searchbox-input)::spelling-error {
++  text-decoration: none;
++}
++
++#textInput::part(searchbox-input)::grammar-error {
++  text-decoration: none;
++}
++
++#textInput::part(searchbox-input)::placeholder {
++  color: var(--orbis-text);
++}
++
++#textContainer .color-dim {
++  color: var(--orbis-muted);
++}
++
++#textContainer .color-foreground-disabled,
++#textInput.color-foreground-disabled::part(searchbox-input)::placeholder  {
++  color: var(--color-omnibox-foreground-disabled);
++}
++
++#textContainer .color-danger {
++  color: var(--color-omnibox-security-chip-dangerous);
++}
++
++#textContainer .strikethrough {
++  text-decoration: line-through;
++}
++
++#textInput {
++  opacity: 0;
++}
++
++#textInput,
++#textInput::part(searchbox-input) {
++  --cr-searchbox-input-height: var(--omnibox-height);
++  appearance: none;
++  background-color: transparent;
++  border: none;
++  color: inherit;
++  font-family: inherit;
++  font-size: inherit;
++  font-weight: inherit;
++  height: var(--omnibox-height);
++  outline: none;
++  padding: 0;
++  position: absolute;
++  top: 0;
++  width: 100%;
++}
++
++#textInput::part(icon) {
++  display: none;
++}
++
++:host(.dragging-over) #textContainer span {
++  background-color: var(--orbis-accent);
++  color: var(--orbis-bg);
++}
++
++#inlineAutocomplete {
 +  color: var(--orbis-text);
 +  background-color: var(--orbis-panel);
-   height: var(--omnibox-height);
-   line-height: var(--omnibox-height);
-   /* If [composing] isn't set, this is used only for positioning the additional
++  height: var(--omnibox-height);
++  line-height: var(--omnibox-height);
++  /* If [composing] isn't set, this is used only for positioning the additional
++   * text. */
++  visibility: hidden;
++  white-space: pre;
++}
++
++#inlineAutocomplete[composing] {
++  visibility: visible;
++}
++
++#additionalText {
++  color: var(--color-omnibox-results-url);
++  /* fonts are the same as for the omnibox proper */
++  height: var(--omnibox-height);
++  line-height: var(--omnibox-height);
++  pointer-events: none;
++  position: relative;
++  white-space: pre;
++
++  /* Since the <input> is full-width, we want to be on top */
++  z-index: 102;
++}
++
++#dragTemplate {
++  align-items: center;
++  color: var(--color-textfield-foreground);
++  display: flex;
++  font-family: var(--drag-template-font-family);
++  font-size: var(--drag-template-font-size);
++  font-weight: var(--drag-template-font-weight);
++  /* Matches native drag image preferred height calculation from
++   * button_drag_utils.cc (button->GetPreferredSize({}): 16px gfx::kFaviconSize
++   * icon + 8px LabelButton padding).
++   */
++  height: 24px;
++  /* Position off-screen so the template is not visible in the transparent
++   * WebUI, while keeping its full layout intact for
++   * dataTransfer.setDragImage().
++   */
++  left: -10000px;
++  max-width: 150px;
++  pointer-events: none;
++  position: absolute;
++  top: -10000px;
++  white-space: nowrap;
++}
++
++#dragFavicon {
++  flex-shrink: 0;
++  /* Standard favicon display size (gfx::kFaviconSize). */
++  height: 16px;
++  margin-inline-end: 12px;
++  width: 16px;
++}
++
++#dragTitle {
++  overflow: hidden;
++  padding-inline: 2px;
++  text-overflow: ellipsis;
++  text-shadow:
++      0 0 1px var(--color-textfield-background),
++      0 0 1px var(--color-textfield-background),
++      0 0 2px var(--color-textfield-background),
++      0 0 2px var(--color-textfield-background);
++  white-space: nowrap;
++}
++
++/* Used for accessibility mark up only */
++#announcementDistraction {
++  position: absolute;
++  left: -10000px;
++}
 diff --git a/chrome/browser/resources/webui_toolbar/toolbar_button.css b/chrome/browser/resources/webui_toolbar/toolbar_button.css
-index 9ab3521995..c506a1d48b 100644
+index 9ab3521995..9b2ee8a634 100644
 --- a/chrome/browser/resources/webui_toolbar/toolbar_button.css
 +++ b/chrome/browser/resources/webui_toolbar/toolbar_button.css
-@@ -27,6 +27,7 @@
- }
- 
- cr-icon-button {
+@@ -1,100 +1,101 @@
+-/* Copyright 2026 The Chromium Authors
+- * Use of this source code is governed by a BSD-style license that can be
+- * found in the LICENSE file. */
+-
+-/* #css_wrapper_metadata_start
+- * #type=style-lit
+- * #import=//resources/cr_elements/cr_hidden_style_lit.css.js
+- * #import=/shared/help_bubble_anchor.css.js
+- * #scheme=relative
+- * #include=cr-hidden-style-lit help-bubble-anchor
+- * #css_wrapper_metadata_end */
+-
+-:host {
+-  align-items: center;
+-  display: inline-flex;
+-  flex: none;
+-  justify-content: center;
+-  position: relative;
+-  --button-height: var(--toolbar-button-height);
+-  --button-width: var(--toolbar-button-height);
+-  height: var(--button-height);
+-  width: var(--button-width);
+-}
+-
+-:host([overflow-display-none]) {
+-  display: none !important;
+-}
+-
+-cr-icon-button {
+-  cursor: default;
+-  margin: 0;
+-  --cr-icon-button-size: var(--toolbar-button-height);
+-  --cr-icon-button-icon-size: var(--toolbar-button-icon-size);
+-  --cr-icon-button-fill-color: var(--color-toolbar-button-icon);
+-}
+-
+-cr-button {
+-  cursor: default;
+-  /* Zero out font-size and line-height because cr-button wraps slotted content
+-   * in an inline span. This collapses the font baseline offset, ensuring the
+-   * icon is vertically centered. This is safe as toolbar buttons using
+-   * cr-button are strictly icon-only and have no text. */
+-  font-size: 0;
+-  line-height: 0;
+-  margin: 0;
+-  padding: 0;
+-  min-width: var(--toolbar-button-height);
+-  --cr-button-size: var(--toolbar-button-height);
+-  --cr-button-height: var(--toolbar-button-height);
+-  --cr-button-icon-size: var(--toolbar-button-icon-size);
+-  --cr-button-fill-color: var(--color-toolbar-button-icon);
+-  --cr-button-background-color: transparent;
+-  --cr-button-border-color: transparent;
+-  --cr-button-border: 0;
+-}
+-
+-cr-icon-button[is-menu-open],
+-cr-button[is-menu-open],
+-:host(.anchor-highlight) cr-icon-button {
+-  background-color: var(--cr-active-background-color);
+-}
+-
+-/* The "Blue Bar" status indicator that appears when a split is active */
+-.status-indicator {
+-  background-color: var(--color-toolbar-action-item-engaged,
+-      var(--google-blue-600));
+-
+-  height: var(--split-tabs-indicator-height);
+-  width: var(--split-tabs-indicator-width);
+-  border-radius: 1px;
+-
+-  position: absolute;
+-  left: 50%;
+-  transform: translateX(-50%);
+-
+-  /* Calculated to align with icon bottom */
+-  bottom: calc((var(--toolbar-button-height) -
+-                var(--toolbar-button-icon-size)) / 2 -
+-               var(--split-tabs-indicator-spacing) -
+-               var(--split-tabs-indicator-height));
+-
+-  pointer-events: none; /* Allows clicks to pass through to the button */
+-  z-index: 1; /* Renders above the button background */
+-}
+-
+-cr-icon-button[is-activated] {
+-  --cr-icon-button-fill-color: var(--color-toolbar-action-item-engaged,
+-      var(--google-blue-600));
+-}
+-
+-cr-button[is-activated] {
+-  --cr-button-fill-color: var(--color-toolbar-action-item-engaged,
+-      var(--google-blue-600));
+-}
+-
+-icon-from-table {
+-  width: var(--toolbar-button-icon-size);
+-  height: var(--toolbar-button-icon-size);
+-  --icon-size: var(--toolbar-button-icon-size);
+-}
++/* Copyright 2026 The Chromium Authors
++ * Use of this source code is governed by a BSD-style license that can be
++ * found in the LICENSE file. */
++
++/* #css_wrapper_metadata_start
++ * #type=style-lit
++ * #import=//resources/cr_elements/cr_hidden_style_lit.css.js
++ * #import=/shared/help_bubble_anchor.css.js
++ * #scheme=relative
++ * #include=cr-hidden-style-lit help-bubble-anchor
++ * #css_wrapper_metadata_end */
++
++:host {
++  align-items: center;
++  display: inline-flex;
++  flex: none;
++  justify-content: center;
++  position: relative;
++  --button-height: var(--toolbar-button-height);
++  --button-width: var(--toolbar-button-height);
++  height: var(--button-height);
++  width: var(--button-width);
++}
++
++:host([overflow-display-none]) {
++  display: none !important;
++}
++
++cr-icon-button {
 +  border-radius: var(--orbis-radius-control, 8px);
-   cursor: default;
-   margin: 0;
-   --cr-icon-button-size: var(--toolbar-button-height);
++  cursor: default;
++  margin: 0;
++  --cr-icon-button-size: var(--toolbar-button-height);
++  --cr-icon-button-icon-size: var(--toolbar-button-icon-size);
++  --cr-icon-button-fill-color: var(--color-toolbar-button-icon);
++}
++
++cr-button {
++  cursor: default;
++  /* Zero out font-size and line-height because cr-button wraps slotted content
++   * in an inline span. This collapses the font baseline offset, ensuring the
++   * icon is vertically centered. This is safe as toolbar buttons using
++   * cr-button are strictly icon-only and have no text. */
++  font-size: 0;
++  line-height: 0;
++  margin: 0;
++  padding: 0;
++  min-width: var(--toolbar-button-height);
++  --cr-button-size: var(--toolbar-button-height);
++  --cr-button-height: var(--toolbar-button-height);
++  --cr-button-icon-size: var(--toolbar-button-icon-size);
++  --cr-button-fill-color: var(--color-toolbar-button-icon);
++  --cr-button-background-color: transparent;
++  --cr-button-border-color: transparent;
++  --cr-button-border: 0;
++}
++
++cr-icon-button[is-menu-open],
++cr-button[is-menu-open],
++:host(.anchor-highlight) cr-icon-button {
++  background-color: var(--cr-active-background-color);
++}
++
++/* The "Blue Bar" status indicator that appears when a split is active */
++.status-indicator {
++  background-color: var(--color-toolbar-action-item-engaged,
++      var(--google-blue-600));
++
++  height: var(--split-tabs-indicator-height);
++  width: var(--split-tabs-indicator-width);
++  border-radius: 1px;
++
++  position: absolute;
++  left: 50%;
++  transform: translateX(-50%);
++
++  /* Calculated to align with icon bottom */
++  bottom: calc((var(--toolbar-button-height) -
++                var(--toolbar-button-icon-size)) / 2 -
++               var(--split-tabs-indicator-spacing) -
++               var(--split-tabs-indicator-height));
++
++  pointer-events: none; /* Allows clicks to pass through to the button */
++  z-index: 1; /* Renders above the button background */
++}
++
++cr-icon-button[is-activated] {
++  --cr-icon-button-fill-color: var(--color-toolbar-action-item-engaged,
++      var(--google-blue-600));
++}
++
++cr-button[is-activated] {
++  --cr-button-fill-color: var(--color-toolbar-action-item-engaged,
++      var(--google-blue-600));
++}
++
++icon-from-table {
++  width: var(--toolbar-button-icon-size);
++  height: var(--toolbar-button-icon-size);
++  --icon-size: var(--toolbar-button-icon-size);
++}
 diff --git a/chrome/browser/resources/webui_toolbar/webui_toolbar.css b/chrome/browser/resources/webui_toolbar/webui_toolbar.css
-index db884da574..aeb0e1eb9c 100644
+index db884da574..df072077f9 100644
 --- a/chrome/browser/resources/webui_toolbar/webui_toolbar.css
 +++ b/chrome/browser/resources/webui_toolbar/webui_toolbar.css
-@@ -14,8 +14,25 @@ body {
-   height: 100%;
-   margin: 0;
-   overflow: hidden;
+@@ -1,21 +1,38 @@
+-/* Copyright 2026 The Chromium Authors
+- * Use of this source code is governed by a BSD-style license that can be
+- * found in the LICENSE file. */
+-
+-/* #css_wrapper_metadata_start
+- * #type=style-lit
+- * #scheme=relative
+- * #css_wrapper_metadata_end */
+-
+-html,
+-body {
+-  /* Ensure the WebUI viewport matches the full height of the parent WebView
+-   * container, allowing inner flex elements to center vertically. */
+-  height: 100%;
+-  margin: 0;
+-  overflow: hidden;
+-}
+-
+-toolbar-app[webui-toolbar-fully-enabled] {
+-  width: max-content;
+-}
++/* Copyright 2026 The Chromium Authors
++ * Use of this source code is governed by a BSD-style license that can be
++ * found in the LICENSE file. */
++
++/* #css_wrapper_metadata_start
++ * #type=style-lit
++ * #scheme=relative
++ * #css_wrapper_metadata_end */
++
++html,
++body {
++  /* Ensure the WebUI viewport matches the full height of the parent WebView
++   * container, allowing inner flex elements to center vertically. */
++  height: 100%;
++  margin: 0;
++  overflow: hidden;
 +  background: transparent;
 +  color: var(--orbis-text);
 +  font-family: system-ui, 'Segoe UI', sans-serif;
- }
- 
- toolbar-app[webui-toolbar-fully-enabled] {
-   width: max-content;
- }
++}
++
++toolbar-app[webui-toolbar-fully-enabled] {
++  width: max-content;
++}
 +
 +/* Orbis: the WebUI toolbar parts (reload button, location bar) take the same Orbis look as the Views toolbar: every colour is the
 + * browser theme colour, which the colour mixer fills from orbis-ui/tokens.json (one token source), so light and dark both follow. */
