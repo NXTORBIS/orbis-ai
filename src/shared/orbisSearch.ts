@@ -12,6 +12,8 @@
  */
 
 /** Orbis's own pages. In Chromium these become real internal pages; the shape is chosen now so it does not change. */
+import { normalizeUrl } from './research.ts'
+
 export const ORBIS_SCHEME = 'orbis:'
 export const SEARCH_PAGE = 'orbis://search'
 
@@ -150,7 +152,9 @@ export function tidyResults(hits: { title: string; url: string; snippet: string 
     const site = siteOf(hit.url)
     // A link back to another search engine is not a result; it is the thing being replaced.
     if (/^(www\.)?(google|bing|duckduckgo|yahoo|yandex)\./i.test(site)) continue
-    const key = hit.url.replace(/[#?].*$/, '').replace(/\/$/, '').toLowerCase()
+    // The page itself, not the address it was reached by: the mobile and desktop hosts of one page are one result, and two
+    // pages that differ only in the query (two videos on the same watch path) stay two.
+    const key = normalizeUrl(hit.url)
     if (!key || seen.has(key)) continue
     seen.add(key)
     out.push({ title: hit.title.trim() || site, url: hit.url, snippet: hit.snippet.trim(), site })

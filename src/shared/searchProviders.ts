@@ -14,6 +14,8 @@
  */
 
 /** The categories that go to the specialized provider. Ordinary web search is not one of them. */
+import { normalizeUrl } from './research.ts'
+
 export type SpecializedCategory = 'images' | 'videos' | 'news' | 'maps' | 'music' | 'science' | 'files' | 'social'
 
 export const SPECIALIZED_CATEGORIES: SpecializedCategory[] = ['images', 'videos', 'news', 'maps', 'music', 'science', 'files', 'social']
@@ -230,7 +232,8 @@ export function readOutcome(payload: unknown, kind: SpecializedCategory, query: 
   for (const row of ordered) {
     const result = readResult(row, kind)
     if (!result) continue
-    const key = (result.image ?? result.url).replace(/[#?].*$/, '').toLowerCase()
+    // The same page under a mobile and a desktop host is one result; two pages that differ only in the query stay two.
+    const key = normalizeUrl(result.image ?? result.url)
     if (seen.has(key)) continue
     seen.add(key)
     results.push(result)

@@ -298,30 +298,14 @@ test('Orbis Search in the real browser: every vertical, the viewer, Orion sessio
     await specialized('social', '.results .title', /everest post 1[\s\S]*someone/)
     assert.equal(await js('document.querySelectorAll(".results a.result").length'), 3)
   })
-  await t.test('the search box: recent searches, arrow keys, Escape, "/" and bangs', async () => {
-    await open('#q=first%20thing', { dark: true })
-    await until("document.querySelector('.vertical')")
-    await js('localStorage.setItem("orbis.search.recent", JSON.stringify(["alpha cats", "alpha dogs", "beta"]))')
-    await js('document.getElementById("q").focus(); document.getElementById("q").value = "alpha"; document.getElementById("q").dispatchEvent(new Event("input"))')
-    await until("!document.getElementById('suggest').hidden")
-    assert.deepEqual(await js('[...document.querySelectorAll("#suggest li span:nth-child(2)")].map(s => s.textContent)'), ['alpha cats', 'alpha dogs'])
-    await shot('suggest-dark')
-    await c.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'ArrowDown', code: 'ArrowDown', windowsVirtualKeyCode: 40 }, session)
-    assert.equal(await js('document.querySelector("#suggest li[aria-selected=true] span:nth-child(2)").textContent'), 'alpha cats')
-    await c.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 }, session)
-    assert.equal(await js('document.getElementById("suggest").hidden'), true)
-    await js('document.getElementById("q").blur()')
-    await c.send('Input.dispatchKeyEvent', { type: 'keyDown', key: '/', code: 'Slash', text: '/', windowsVirtualKeyCode: 191 }, session)
-    assert.equal(await js('document.activeElement.id'), 'q')
-    // A submitted search opens a new Orbis Search, in the vertical being looked at.
-    await js('document.getElementById("q").value = "second thing"; document.getElementById("search").requestSubmit()')
-    await until("location.hash.includes('second%20thing') || location.hash.includes('second+thing')")
-    assert.match(await js<string>('localStorage.getItem("orbis.search.recent")'), /second thing/)
-    // The reserved characters of a query survive the trip through the address.
+  // The page has no search box of its own any more: the browser's address bar is the one search box. What is still the
+  // page's own to get right is that the query it was given arrives whole and is never treated as markup.
+  await t.test('the reserved characters of a query survive the address, and nothing from it becomes markup', async () => {
     await open(`#q=${encodeURIComponent('a&b=c #1 <script>x</script>')}`, { dark: true })
     await until("document.querySelector('.status, .results')")
-    assert.equal(await js('document.getElementById("q").value'), 'a&b=c #1 <script>x</script>')
+    assert.equal(await js('document.title'), 'a&b=c #1 <script>x</script> · Orbis Search', 'the whole query arrived')
     assert.equal(await js('document.querySelectorAll("script:not([src])").length'), 0, 'nothing from a query is ever put in as markup')
+    assert.equal(await js('document.querySelector("#q, #search, .brand")'), null, 'the page offers no search box of its own')
   })
 
   await t.test('the browser’s default search engine (what the address bar uses) lands on this same page', async () => {

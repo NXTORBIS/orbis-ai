@@ -16,7 +16,7 @@ import { mountOrb } from '../panel/orb.js'
  * so typing in the address bar, the new-tab search box and "search for …" in a context menu all arrive here, and nothing is sent to
  * Google, or anywhere else, until the web is actually searched.
  *
- * The same search Orbis has always had: a search box with recent searches, the verticals (Orion, All, Images, Videos, News, Maps, Music,
+ * The same search Orbis has always had, minus a search box of its own (the address bar is the one search box): the verticals (Orion, All, Images, Videos, News, Maps, Music,
  * Science, Files, Social), each result drawn as the kind of thing it is, pictures and videos looked at in a viewer, Orion's answers in
  * a saved session with numbered sources, and a plain link to search Google instead. Results are the providers' real results; a field
  * that did not arrive is not drawn. Nothing untrusted is ever put into the page as markup: every node is built with textContent.
@@ -120,7 +120,6 @@ function toast(message: string): void {
 function go(text: string, v: SearchVertical): void {
   const typed = text.trim()
   if (!typed) return
-  remember(typed)
   const bang = readBang(typed)
   if (bang) location.href = `${bang.site.url}${encodeURIComponent(bang.query)}`
   else location.href = pageUrl(typed, v)
@@ -131,111 +130,9 @@ const arrived = readBang(query)
 if (arrived) location.replace(`${arrived.site.url}${encodeURIComponent(arrived.query)}`)
 
 document.title = query ? `${query} · Orbis Search` : 'Orbis Search'
-const box = $('q') as HTMLInputElement
-box.value = query
 
-// ---------------------------------------------------------------- recent searches and the search box
-
-const RECENT_KEY = 'orbis.search.recent'
-const readRecent = (): string[] => {
-  try {
-    const list = JSON.parse(localStorage.getItem(RECENT_KEY) ?? '[]') as unknown
-    return Array.isArray(list) ? list.filter((x): x is string => typeof x === 'string').slice(0, 30) : []
-  } catch {
-    return []
-  }
-}
-const writeRecent = (list: string[]): void => {
-  try {
-    localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, 30)))
-  } catch {
-    // Storage may be unavailable; recent searches are a convenience.
-  }
-}
-function remember(text: string): void {
-  writeRecent([text, ...readRecent().filter((r) => r.toLowerCase() !== text.toLowerCase())])
-}
-if (query && !arrived) remember(query)
-
-const list = $('suggest')
-let selected = -1
-const closeSuggest = (): void => {
-  list.hidden = true
-  box.setAttribute('aria-expanded', 'false')
-  selected = -1
-}
-function openSuggest(): void {
-  const typed = box.value.trim().toLowerCase()
-  const items = readRecent().filter((r) => r.toLowerCase() !== typed && (!typed || r.toLowerCase().includes(typed))).slice(0, 7)
-  list.replaceChildren()
-  selected = -1
-  if (!items.length) return closeSuggest()
-  items.forEach((text, i) => {
-    const li = el('li')
-    li.id = `sg${i}`
-    li.setAttribute('role', 'option')
-    li.append(el('span', 'clock', '↺'), el('span', undefined, text))
-    const x = el('button', 'x', '×')
-    x.type = 'button'
-    x.tabIndex = -1
-    x.setAttribute('aria-label', `Forget ${text}`)
-    x.addEventListener('mousedown', (e) => {
-      e.preventDefault()
-      e.stopPropagation()
-      writeRecent(readRecent().filter((r) => r !== text))
-      openSuggest()
-    })
-    li.append(x)
-    li.addEventListener('mousedown', (e) => {
-      e.preventDefault()
-      go(text, vertical)
-    })
-    list.append(li)
-  })
-  list.hidden = false
-  box.setAttribute('aria-expanded', 'true')
-}
-function highlight(next: number): void {
-  const rows = [...list.children] as HTMLElement[]
-  rows.forEach((r, i) => r.setAttribute('aria-selected', String(i === next)))
-  selected = next
-  if (next >= 0) box.setAttribute('aria-activedescendant', rows[next].id)
-  else box.removeAttribute('aria-activedescendant')
-}
-box.addEventListener('focus', openSuggest)
-box.addEventListener('input', openSuggest)
-box.addEventListener('blur', () => setTimeout(closeSuggest, 80))
-box.addEventListener('keydown', (e) => {
-  const rows = list.children.length
-  if (e.key === 'ArrowDown' && rows) {
-    e.preventDefault()
-    if (list.hidden) openSuggest()
-    else highlight(selected + 1 >= rows ? -1 : selected + 1)
-  } else if (e.key === 'ArrowUp' && rows && !list.hidden) {
-    e.preventDefault()
-    highlight(selected <= -1 ? rows - 1 : selected - 1)
-  } else if (e.key === 'Escape') {
-    if (!list.hidden) closeSuggest()
-    else box.blur()
-  } else if (e.key === 'Enter' && selected >= 0) {
-    e.preventDefault()
-    go((list.children[selected] as HTMLElement).querySelector('span:nth-child(2)')?.textContent ?? box.value, vertical)
-  }
-})
-$('search').addEventListener('submit', (e) => {
-  e.preventDefault()
-  go(box.value, vertical)
-})
-// "/" jumps to the search box from anywhere on the page, the way search pages have always worked.
-document.addEventListener('keydown', (e) => {
-  const target = e.target as HTMLElement
-  const typing = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable
-  if (e.key === '/' && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
-    e.preventDefault()
-    box.focus()
-    box.select()
-  }
-})
+// The page keeps no list of recent searches: it has no search box of its own to offer them in, and the address bar the
+// search came from keeps its own history.
 
 // ---------------------------------------------------------------- the verticals
 
@@ -385,7 +282,7 @@ function renderResults(results: Result[], outcome: Outcome, category: SearchVert
 }
 
 async function search(): Promise<void> {
-  if (!query) return status('Search the web with Orbis. Type above, or press / to jump to the box.')
+  if (!query) return status('Search the web with Orbis. Type in the address bar above.')
   if (vertical === 'orion') return void orion()
   if (!navigator.onLine) return status(downMessage(null), () => void search())
   status(vertical === 'all' ? 'Searching the web…' : `Searching ${LABEL[vertical].toLowerCase()}…`)
@@ -774,7 +671,6 @@ async function reopen(id: string): Promise<void> {
   followups = []
   history.replaceState(null, '', pageHash(found.topic || query, 'orion', { s: id }))
   document.title = `${found.topic} · Orbis Search`
-  box.value = found.topic
   drawOrion()
 }
 

@@ -1,12 +1,22 @@
 import type { ChatMessage, Research, ResearchSource } from './types'
 
 /** A URL reduced to what identifies the page: no fragment, tracking parameters, "www." or trailing slash. */
+/**
+ * The same page reached different ways gives the same string: `www.`, a mobile host (`m.example.com`, `en.m.wikipedia.org`)
+ * and the tracking parameters a link was shared with are all the same page, and a list that keeps them apart says one thing twice.
+ */
 export function normalizeUrl(url: string): string {
   try {
     const parsed = new URL(url)
     for (const key of [...parsed.searchParams.keys()]) if (/^(utm_.*|fbclid|gclid|mc_cid|mc_eid)$/i.test(key)) parsed.searchParams.delete(key)
     const search = parsed.searchParams.toString()
-    return `${parsed.hostname.replace(/^www\./, '').toLowerCase()}${parsed.pathname.replace(/\/+$/, '')}${search ? `?${search}` : ''}`
+    const host = parsed.hostname
+      .toLowerCase()
+      .replace(/^www\./, '')
+      // m.example.com and mobile.example.com, and the language-qualified form wikipedia uses: en.m.wikipedia.org.
+      .replace(/^(?:m|mobile)\./, '')
+      .replace(/^([a-z0-9-]+)\.m\./, '$1.')
+    return `${host}${parsed.pathname.replace(/\/+$/, '')}${search ? `?${search}` : ''}`
   } catch {
     return url.trim()
   }
