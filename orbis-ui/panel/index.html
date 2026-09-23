@@ -17,6 +17,7 @@
       <strong>Orbis</strong>
       <span id="status" class="status" role="status" aria-live="polite">Connecting…</span>
       <select id="model" aria-label="Model"></select>
+      <button id="chats" type="button" title="Earlier chats" aria-expanded="false" aria-controls="chats-list">Chats</button>
       <button id="new" type="button" title="Start a new conversation">New</button>
     </header>
 
@@ -32,6 +33,7 @@
     </nav>
 
     <section id="view-ask" class="view" role="tabpanel" aria-labelledby="tab-ask">
+      <div id="chats-list" class="chats-list" aria-label="Earlier chats" hidden></div>
       <main id="messages" aria-live="polite">
         <p id="empty" class="empty">Ask Orion anything. Everything runs on this computer, with your own key.</p>
       </main>

@@ -15,9 +15,146 @@ const stop = $('stop')
 const modelSelect = $('model')
 
 const MODEL_KEY = 'orbis.model'
-let history = []
 let controller = null
 let connected = false
+
+// ---------------------------------------------------------------- the chat being held, and the ones held before
+//
+// The messages on screen are the chat, and the chat is kept in the store the Orbis window itself reads (conversations:*),
+// so one started here can be opened there and the other way round. `held` is that chat; there is no second copy of the
+// messages to keep in step with it.
+
+const EMPTY_TEXT = 'Ask Orion anything. Everything runs on this computer, with your own key.'
+const newId = () => (typeof crypto?.randomUUID === 'function' ? crypto.randomUUID() : `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`)
+
+/** The same first-line rule the Orbis window titles a chat by, so a chat is called the same thing in both. */
+function titleFrom(text) {
+  const line = String(text ?? '').replace(/\s+/g, ' ').trim()
+  if (!line) return 'New chat'
+  return line.length > 48 ? `${line.slice(0, 47).trimEnd()}…` : line
+}
+
+function blankChat() {
+  const at = Date.now()
+  return { id: newId(), title: '', model: '', messages: [], createdAt: at, updatedAt: at }
+}
+
+let held = blankChat()
+
+/** Adds a message to the chat. What Orion is sent is these same messages, so the two can never disagree. */
+function remember(role, content) {
+  held.messages.push({ id: newId(), role, content, createdAt: Date.now() })
+  held.updatedAt = Date.now()
+  if (!held.title && role === 'user') held.title = titleFrom(content)
+}
+
+/** Keeps the chat. A chat that failed to save is still on screen, so this never interrupts to say so. */
+async function keep() {
+  if (!held.messages.length) return
+  held.model = modelSelect.value || held.model
+  try {
+    await call('conversations:save', [held])
+  } catch {
+    // Nothing worth stopping the conversation over; the next exchange tries again.
+  }
+}
+
+/** Draws the held chat from its messages, so opening an earlier one and carrying on look the same. */
+function drawMessages() {
+  messages.replaceChildren()
+  if (!held.messages.length) {
+    const empty = document.createElement('p')
+    empty.id = 'empty'
+    empty.className = 'empty'
+    empty.textContent = EMPTY_TEXT
+    messages.append(empty)
+    return
+  }
+  for (const m of held.messages) {
+    const el = add(m.role, '')
+    // Sources are not kept with a chat, so a [1] in an older answer stays the text it was written as.
+    if (m.role === 'assistant') renderAnswer(el, m.content, [])
+    else el.textContent = m.content
+  }
+}
+
+function startNew() {
+  controller?.abort()
+  held = blankChat()
+  drawMessages()
+  hideChats()
+}
+
+async function openChat(id) {
+  controller?.abort()
+  let found
+  try {
+    found = await call('conversations:get', [id])
+  } catch {
+    return note('That chat could not be opened.', true)
+  }
+  if (!found) return note('That chat is no longer here.', true)
+  held = { ...found, messages: Array.isArray(found.messages) ? found.messages : [] }
+  if (held.model) modelSelect.value = held.model
+  drawMessages()
+  hideChats()
+}
+
+function hideChats() {
+  $('chats-list').hidden = true
+  $('chats').setAttribute('aria-expanded', 'false')
+}
+
+/** The chats kept before this one: enough of each to recognise it, and nothing of what was said in it. */
+async function showChats() {
+  const box = $('chats-list')
+  box.hidden = false
+  $('chats').setAttribute('aria-expanded', 'true')
+  const line = (text) => {
+    const p = document.createElement('p')
+    p.className = 'empty'
+    p.textContent = text
+    return p
+  }
+  box.replaceChildren(line('Loading…'))
+  let list
+  try {
+    list = await call('conversations:list')
+  } catch (err) {
+    return void box.replaceChildren(line(err instanceof HelperDown ? 'Start Orbis to see earlier chats.' : 'Earlier chats could not be read.'))
+  }
+  if (!Array.isArray(list) || !list.length) return void box.replaceChildren(line('No earlier chats yet.'))
+
+  const rows = document.createElement('ul')
+  rows.className = 'chats'
+  for (const c of list) {
+    const row = document.createElement('li')
+    const open = document.createElement('button')
+    open.type = 'button'
+    open.className = 'chat-open'
+    const title = document.createElement('b')
+    title.textContent = c.title || 'New chat'
+    const about = document.createElement('small')
+    about.textContent = `${c.messages} message${c.messages === 1 ? '' : 's'} · ${new Date(c.updatedAt).toLocaleDateString()}`
+    open.append(title, about)
+    open.addEventListener('click', () => void openChat(c.id))
+    const drop = document.createElement('button')
+    drop.type = 'button'
+    drop.className = 'chat-drop'
+    drop.title = `Delete ${c.title || 'this chat'}`
+    drop.setAttribute('aria-label', drop.title)
+    drop.textContent = '×'
+    drop.addEventListener('click', async () => {
+      await call('conversations:remove', [c.id]).catch(() => undefined)
+      // The one on screen was just deleted: it would otherwise be written back on the next reply.
+      if (c.id === held.id) startNew()
+      void showChats()
+    })
+    row.append(open, drop)
+    rows.append(row)
+  }
+  box.replaceChildren(rows)
+}
 
 function setStatus(text, state) {
   status.textContent = text
@@ -129,15 +266,12 @@ async function connect() {
 
 modelSelect.addEventListener('change', () => localStorage.setItem(MODEL_KEY, modelSelect.value))
 
-$('new').addEventListener('click', () => {
-  controller?.abort()
-  history = []
-  messages.replaceChildren()
-  const empty = document.createElement('p')
-  empty.id = 'empty'
-  empty.className = 'empty'
-  empty.textContent = 'Ask Orion anything. Everything runs on this computer, with your own key.'
-  messages.append(empty)
+$('new').addEventListener('click', startNew)
+$('chats').addEventListener('click', () => {
+  if (!$('chats-list').hidden) return hideChats()
+  // The list belongs to the Ask view, and the button is in the header on every tab: go where it leads.
+  showTab('ask')
+  void showChats()
 })
 
 stop.addEventListener('click', () => controller?.abort())
@@ -158,7 +292,7 @@ $('composer').addEventListener('submit', async (e) => {
 
   input.value = ''
   add('user', text)
-  history.push({ role: 'user', content: text })
+  remember('user', text)
   const reply = add('assistant')
   reply.classList.add('working')
   let answer = ''
@@ -169,7 +303,7 @@ $('composer').addEventListener('submit', async (e) => {
   send.hidden = true
   stop.hidden = false
   try {
-    await call('chat:send', [{ model: modelSelect.value, webSearch: $('web').checked, messages: history.slice(-30) }], {
+    await call('chat:send', [{ model: modelSelect.value, webSearch: $('web').checked, messages: held.messages.slice(-30) }], {
       signal: controller.signal,
       onEvent: (event) => {
         if (event.type === 'delta' && typeof event.content === 'string') {
@@ -193,15 +327,15 @@ $('composer').addEventListener('submit', async (e) => {
         }
       }
     })
-    if (answer) history.push({ role: 'assistant', content: answer })
-    else history.pop()
+    if (answer) remember('assistant', answer)
+    else held.messages.pop()
   } catch (err) {
     if (controller?.signal.aborted) {
       // Stopped by the person: what was written stays, and the conversation continues from it.
-      if (answer) history.push({ role: 'assistant', content: answer })
-      else history.pop()
+      if (answer) remember('assistant', answer)
+      else held.messages.pop()
     } else {
-      history.pop()
+      held.messages.pop()
       note(err?.message || 'That did not work.', true)
     }
   } finally {
@@ -213,6 +347,9 @@ $('composer').addEventListener('submit', async (e) => {
     send.hidden = false
     stop.hidden = true
     input.focus()
+    // Kept after the exchange rather than during it: an answer being written is not yet a thing worth keeping, and a
+    // stopped one is — what was written stays, and the chat carries on from it.
+    void keep()
   }
 })
 
