@@ -138,12 +138,22 @@ for (const [k, v] of Object.entries(pipe(fallback(t.light, true)))) head = setVa
 let di = dark.replace('@media (prefers-color-scheme: dark) {\n  html {', '').replace(/\n {2}}\n}\s*$/, '')
 for (const [k, v] of Object.entries(pipe(fallback(t.dark, false)))) di = setVar(di, k, v)
 const both = [
-  ['cr-card-background-color', 'surface'], ['cr-menu-background-color', 'popover'], ['cr-menu-background-focus-color', 'surface-3'],
+  ['cr-menu-background-color', 'popover'], ['cr-menu-background-focus-color', 'surface-3'],
   ['cr-focused-item-color', 'surface-2'], ['cr-scrollable-border-color', 'surface-3'], ['cr-iph-anchor-highlight-color', 'accent-fill'],
   ['cr-separator-color', 'line'], ['cr-title-text-color', 'muted']
 ]
 for (const [n, tk] of both) { head = setVar(head, n, t.light[tk]); if (n !== 'cr-title-text-color') di = setVar(di, n, t.dark[tk]) }
 di = setVar(di, 'cr-menu-shadow', t.dark.shadow)
+// The card hairline is declared only in the light block upstream, so dark mode inherited a blue
+// light-theme line on every cr-based page. It is a per-scheme colour and belongs in both, so the
+// dark block gains a declaration of its own rather than an override of one that is not there.
+di += `
+  --cr-card-shadow: 0 0 0 1px ${t.dark.line};`
+// A card has to be a different colour from the page it sits on, or it is not a card. The page background
+// comes from the browser theme (the toolbar colour), so the card is the surface above that one: the raised
+// panel in dark, the popover white in light. Matching them made cards visible only by their hairline.
+head = setVar(head, 'cr-card-background-color', t.light.popover)
+di = setVar(di, 'cr-card-background-color', t.dark['surface-2'])
 const orbisVars = (T) => `--orbis-font-sans: ${t.font.sans};\n  --orbis-font-mono: ${t.font.mono};\n  --orbis-radius-control: ${rad.control};\n  --orbis-radius-card: ${rad.md};\n  --orbis-radius-pill: ${rad.pill};\n  --orbis-accent: ${T.accent};\n  --orbis-danger: ${T.danger};\n  --orbis-line: ${T.line};`
 head = head.replace(/\n}\n\nhtml\[webui-refresh-2026\]/, `\n  ${orbisVars(t.light)}\n}\n\nhtml[webui-refresh-2026]`)
 // The stock dark block follows the OS (prefers-color-scheme); Orbis follows the browser's own colour scheme, via the colour pipeline (--color-sys-*), with the OS scheme only as the fallback for pages without it.

@@ -1,5 +1,5 @@
 diff --git a/ui/color/sys_color_mixer.cc b/ui/color/sys_color_mixer.cc
-index 8725df360a..dec306db5a 100644
+index 8725df360a..2ed398f49a 100644
 --- a/ui/color/sys_color_mixer.cc
 +++ b/ui/color/sys_color_mixer.cc
 @@ -3,6 +3,7 @@
@@ -10,7 +10,7 @@ index 8725df360a..dec306db5a 100644
  
  #include "third_party/skia/include/core/SkColor.h"
  #include "ui/color/color_id.h"
-@@ -109,6 +110,73 @@ void AddGrayscaleSysColorOverrides(ColorMixer& mixer,
+@@ -109,6 +110,78 @@ void AddGrayscaleSysColorOverrides(ColorMixer& mixer,
                                                  : kColorRefNeutral94};
  }
  
@@ -76,6 +76,11 @@ index 8725df360a..dec306db5a 100644
 +  mixer[kColorSysOnHeaderPrimaryInactive] = {kMuted};
 +  mixer[kColorSysOnHeaderDivider] = {s.line};
 +  mixer[kColorSysOnHeaderDividerInactive] = {s.line};
++  // Orbis: this is what a WebUI card is painted with (via kColorWebuiCardBackground).
++  // Upstream points it at surface1, which Orbis maps to the same panel colour the page
++  // itself uses, so settings, history and downloads drew cards that were exactly the
++  // colour of the page behind them. A card has to be the surface above the one it sits on.
++  mixer[kColorSysSurfaceSection] = {dark ? kPanel2 : s.popover};
 +  mixer[kColorSysStateFocusRing] = {kAccent};
 +  mixer[kColorTooltipBackground] = {s.popover};
 +  mixer[kColorTooltipForeground] = {kText};
@@ -84,7 +89,7 @@ index 8725df360a..dec306db5a 100644
  }  // namespace
  
  void AddSysColorMixer(ColorProvider* provider, const ColorProviderKey& key) {
-@@ -398,6 +466,9 @@ void AddSysColorMixer(ColorProvider* provider, const ColorProviderKey& key) {
+@@ -398,6 +471,9 @@ void AddSysColorMixer(ColorProvider* provider, const ColorProviderKey& key) {
               key.user_color.has_value()) {
      AddThemedSysColorOverrides(mixer, key);
    }

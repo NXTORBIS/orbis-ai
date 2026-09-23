@@ -104,7 +104,7 @@ html {
   --google-yellow-700-rgb: 240, 147, 0;  /* #f09300 */
   --google-yellow-700: rgb(var(--google-yellow-700-rgb));
 
-  --cr-card-background-color: #e8ecf1;
+  --cr-card-background-color: #f6f8fb;
 
   /* Vars to help define --cr-elevation-* vars. Components should use the
    * --cr-elevation-* variables instead of these colors directly. */
@@ -350,7 +350,7 @@ html[webui-refresh-2026] {
     --cr-fallback-color-state-ripple-primary-rgb_: 63, 216, 255;
     --cr-fallback-color-base-container: rgb(27, 29, 32);
 
-    --cr-card-background-color: #0e1013;
+    --cr-card-background-color: #1b1d20;
     --cr-focused-item-color: #1b1d20;
     --cr-form-field-label-color: var(--dark-secondary-color);
     --cr-hairline-rgb: 255, 255, 255;
@@ -362,6 +362,7 @@ html[webui-refresh-2026] {
     --cr-separator-color: rgba(255,255,255,0.09);
     --cr-title-text-color: var(--cr-primary-text-color);
     --cr-scrollable-border-color: #292b2e;
+  --cr-card-shadow: 0 0 0 1px rgba(255,255,255,0.09);
   --orbis-font-sans: 'Inter Variable','Segoe UI',system-ui,sans-serif;
   --orbis-font-mono: 'JetBrains Mono','Cascadia Code',Consolas,monospace;
   --orbis-radius-control: 8px;
