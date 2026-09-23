@@ -1,5 +1,5 @@
 diff --git a/chrome/browser/ui/color/chrome_color_mixers.cc b/chrome/browser/ui/color/chrome_color_mixers.cc
-index 9698e807b1..e82aafe7ec 100644
+index 9698e807b1..ed1f1869bb 100644
 --- a/chrome/browser/ui/color/chrome_color_mixers.cc
 +++ b/chrome/browser/ui/color/chrome_color_mixers.cc
 @@ -23,6 +23,11 @@
@@ -14,7 +14,7 @@ index 9698e807b1..e82aafe7ec 100644
  
  namespace {
  
-@@ -51,6 +56,128 @@ bool ChromeColorProviderUtilsCallbacks::ColorIdName(
+@@ -51,6 +56,146 @@ bool ChromeColorProviderUtilsCallbacks::ColorIdName(
  // .inc file serves to undefine the macros the first inclusion defined.
  #include "ui/color/color_id_map_macros.inc"
  
@@ -139,11 +139,29 @@ index 9698e807b1..e82aafe7ec 100644
 +  m[kColorOmniboxResultsUrlSelected] = {s.accent};
 +  m[kColorOmniboxResultsIcon] = {s.muted};
 +  m[kColorOmniboxResultsIconSelected] = {s.accent};
++
++  // Colours that upstream still writes as literal Google greys and blues, found
++  // by auditing what every browser-facing page actually resolves its custom
++  // properties to. Each one below was painting a visible surface in Chromium's
++  // palette rather than Orbis's.
++  m[kColorSearchboxBorder] = {s.input_border};
++  m[kColorSearchboxPlaceholder] = {s.muted};
++  m[kColorSearchboxSearchIconBackground] = {s.muted};
++  m[kColorSearchboxResultsFocusIndicator] = {s.accent};
++  m[kColorSearchboxResultsIconSelected] = {s.accent};
++  m[kColorSearchboxForeground] = {s.text};
++  m[kColorSearchboxBackground] = {s.popover};
++  m[kColorSearchboxBackgroundHovered] = {s.surface2};
++  m[kColorSearchboxResultsBackgroundHovered] = ui::GetResultingPaintColor(s.hover, s.popover);
++  m[kColorTabHoverCardForeground] = {s.muted};
++  m[kColorTabHoverCardBackground] = {s.popover};
++  m[ui::kColorTabContentSeparator] = ui::GetResultingPaintColor(s.line, s.surface);
++  m[kColorOmniboxBubbleOutline] = {s.input_border};
 +}
  }  // namespace
  
  void AddChromeColorMixers(ui::ColorProvider* provider,
-@@ -74,6 +201,9 @@ void AddChromeColorMixers(ui::ColorProvider* provider,
+@@ -74,6 +219,9 @@ void AddChromeColorMixers(ui::ColorProvider* provider,
    // Must be the last one in order to override other mixer colors.
    AddNativeChromeColorMixer(provider, key);
  
