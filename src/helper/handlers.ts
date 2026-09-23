@@ -14,6 +14,9 @@ import { createSecretsHandlers } from './secrets.ts'
 import type { SecretsDeps } from './secrets.ts'
 import { createWorkflowHandlers } from './workflows.ts'
 import type { WorkflowsDeps } from './workflows.ts'
+import { createConversationHandlers } from './conversations.ts'
+import type { ConversationsDeps } from './conversations.ts'
+import { createFaviconHandlers } from './favicons.ts'
 import { createSearchSessionHandlers } from './searchSessions.ts'
 import type { SearchSessionsDeps } from './searchSessions.ts'
 import { createAppServiceHandlers } from './appServices.ts'
@@ -56,6 +59,8 @@ export interface HandlerDeps {
   appServices?: () => AppServicesDeps | null | undefined
   /** Saved Orion Search sessions: the app's own store when given, else the helper opens the same database under dataDir. */
   searchSessions?: SearchSessionsDeps['store']
+  /** Chats: the app's own store when given, else the helper opens the same folder under dataDir. */
+  conversations?: ConversationsDeps['store']
   /** How this profile has arranged the browser sidebar (the app's own store); when given, the sidebar:* channels exist. */
   sidebar?: () => { read(): Promise<unknown>; write(layout: unknown): Promise<unknown>; reset(): Promise<unknown> } | null | undefined
   /** The Browser Control Layer, for the rail's Tabs, Tab groups, Media and Controls rows; when given, the browser:* channels exist. */
@@ -115,6 +120,8 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
 
   return {
     ...createSearchSessionHandlers({ store: deps.searchSessions, userData: deps.dataDir, profileId: deps.profileId, apiKeys: deps.apiKeys, fetchFn: doFetch }),
+    ...createFaviconHandlers({ fetchFn: doFetch }),
+    ...createConversationHandlers({ store: deps.conversations, userData: deps.dataDir, profileId: deps.profileId }),
     ...(deps.dataDir ? createPersonalHandlers({ dataDir: deps.dataDir }) : {}),
     ...(deps.secrets ? createSecretsHandlers(deps.secrets) : {}),
     ...(deps.workflows ? createWorkflowHandlers(deps.workflows) : {}),

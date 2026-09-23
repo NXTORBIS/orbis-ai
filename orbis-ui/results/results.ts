@@ -175,15 +175,61 @@ function shareButton(result: { url: string; title: string }): HTMLButtonElement 
   return b
 }
 
+/**
+ * Every result wears its own site's icon.
+ *
+ * `chrome://favicon2` only knows sites this browser has already been to, and a page of results is mostly sites it has not,
+ * so asking it leaves nearly every row with the same blank globe. The helper asks each site for its own icon instead
+ * (`favicon:get`), once per host. Until one arrives — and for a site that has none — the tile carries the site's first
+ * letter, so a row is never a hole and nothing moves when the real icon lands.
+ */
+const iconKnown = new Map<string, string | null>()
+const iconTiles = new Map<string, HTMLElement[]>()
+
+function wearIcon(tile: HTMLElement, src: string): void {
+  const img = el('img') as HTMLImageElement
+  img.src = src
+  img.alt = ''
+  img.width = 16
+  img.height = 16
+  img.addEventListener('error', () => tile.classList.add('letter'))
+  tile.classList.remove('letter')
+  tile.replaceChildren(img)
+}
+
 function siteLine(href: string, name: string): HTMLElement {
   const site = el('span', 'site')
-  const icon = el('img', 'favicon')
-  icon.alt = ''
-  icon.width = 16
-  icon.height = 16
-  icon.src = `chrome://favicon2/?size=16&scaleFactor=2x&pageUrl=${encodeURIComponent(href)}`
-  site.append(icon, el('span', undefined, name))
+  const tile = el('span', 'favicon letter')
+  let host = ''
+  try {
+    host = new URL(href).host.toLowerCase()
+  } catch {
+    host = ''
+  }
+  tile.textContent = (name || host).replace(/^www\./, '').charAt(0).toUpperCase() || '?'
+  const known = host ? iconKnown.get(host) : undefined
+  if (known) wearIcon(tile, known)
+  else if (host) iconTiles.set(host, [...(iconTiles.get(host) ?? []), tile])
+  site.append(tile, el('span', undefined, name))
   return site
+}
+
+/** Asks for every host on the page in one call and puts each icon in place as it comes back. A letter stands in meanwhile. */
+async function paintIcons(): Promise<void> {
+  const wanted = [...iconTiles.keys()].filter((host) => !iconKnown.has(host))
+  if (!wanted.length) return
+  let icons: Record<string, string | null> = {}
+  try {
+    ;({ icons } = (await call('favicon:get', [wanted.map((host) => `https://${host}`)])) as { icons: Record<string, string | null> })
+  } catch {
+    return // An icon is never worth a visible failure: the letters stay.
+  }
+  for (const host of wanted) {
+    const src = icons?.[host] ?? null
+    iconKnown.set(host, src)
+    if (!src) continue
+    for (const tile of iconTiles.get(host) ?? []) wearIcon(tile, src)
+  }
 }
 
 const factsOf = (r: Result): string =>
@@ -279,6 +325,7 @@ function renderResults(results: Result[], outcome: Outcome, category: SearchVert
   const body = $('body')
   body.replaceChildren(listEl, footLine(listEl.children.length, outcome.tookMs ?? 0, category === 'all'))
   if (outcome.unavailable?.length) body.append(el('p', 'foot', `${outcome.unavailable.length === 1 ? 'One source' : `${outcome.unavailable.length} sources`} could not be reached: ${outcome.unavailable.join(', ')}.`))
+  void paintIcons()
 }
 
 async function search(): Promise<void> {
@@ -622,6 +669,7 @@ function drawOrion(): void {
   nodes.push(form)
   const hadFocus = document.activeElement?.tagName === 'TEXTAREA'
   body.replaceChildren(...nodes)
+  void paintIcons()
   if (hadFocus || !turns.length) ta.focus()
   if (asking) window.scrollTo({ top: document.body.scrollHeight })
 }
