@@ -2,6 +2,7 @@
 // Layer, the same verbs Orion uses). What is shown is what the browser reports right now; while the view is on screen it is
 // re-read every two seconds, and not at all while it is hidden or the page is not visible.
 import { el, fill, icon, iconButton, labelButton, host, ask, state, favicon, registerView, poller } from './ui.js'
+import { askBrowser } from '../helper.js'
 
 const POLL_MS = 2000
 export const GROUP_COLORS = { grey: '#9aa0a6', blue: '#5b9cf5', red: '#f2696b', yellow: '#e6b800', green: '#3fb56b', pink: '#f06db8', purple: '#a878f0', cyan: '#2cb8d0', orange: '#f0913a' }
@@ -10,8 +11,32 @@ const swatch = (name) => GROUP_COLORS[name] ?? name ?? GROUP_COLORS.grey
 /** The browser's tabs and groups as one state object every view here shares, refreshed by whichever view is on screen. */
 const shared = { tabs: [], groups: [], note: '', error: '', loaded: false, signature: '', listeners: new Set() }
 
+/**
+ * The browser's own answer, when the helper has nobody behind it.
+ *
+ * `browser:tabs` goes to the helper, and from there through the app's control layer and the extension, so the Tabs view only
+ * works while the Orbis app is running. chrome://orbis is a page of the browser itself and can ask it directly, which is the
+ * same tab strip with no round trip and no app. The browser knows the strip but not everything the control layer can do to it,
+ * so this is the fallback and not the first choice: a tab read this way can be shown and closed, and says so for the rest.
+ */
+let browserCanAnswer = typeof chrome !== 'undefined' && typeof chrome.send === 'function'
+const NATIVE = 'native:'
+
+async function readTabs() {
+  const viaApp = await ask('browser:tabs')
+  if (viaApp.ok || !browserCanAnswer) return viaApp
+  try {
+    const rows = await askBrowser('orbis.tabs.list')
+    if (!Array.isArray(rows) || !rows.length) return viaApp
+    return { ok: true, value: rows.map((t) => ({ ...t, id: `${NATIVE}${t.index}` })) }
+  } catch {
+    browserCanAnswer = false // An older build with no such handler: stop asking.
+    return viaApp
+  }
+}
+
 async function refresh() {
-  const [tabs, groups] = await Promise.all([ask('browser:tabs'), ask('browser:groups')])
+  const [tabs, groups] = await Promise.all([readTabs(), ask('browser:groups')])
   let signature
   if (!tabs.ok) {
     shared.error = tabs.message
@@ -30,10 +55,23 @@ async function refresh() {
   }
 }
 
+/** A tab the browser itself told us about: it can be shown and it can be closed, and the rest needs the app. */
+async function actOnBrowserTab(action, args) {
+  const index = Number(String(args.tabId).slice(NATIVE.length))
+  const channel = action === 'activate' ? 'orbis.tabs.activate' : action === 'close' ? 'orbis.tabs.close' : null
+  if (!channel) return { ok: false, message: 'Start Orbis to do that to a tab.' }
+  try {
+    await askBrowser(channel, index)
+    return { ok: true }
+  } catch {
+    return { ok: false, message: 'That tab is no longer there.' }
+  }
+}
+
 /** Does something in the browser, then re-reads. Returns the error text, or ''. */
 async function act(action, args) {
   shared.note = ''
-  const result = await ask('browser:do', [action, args])
+  const result = String(args?.tabId ?? '').startsWith(NATIVE) ? await actOnBrowserTab(action, args) : await ask('browser:do', [action, args])
   await refresh()
   shared.note = result.ok ? '' : result.message
   shared.signature = ''

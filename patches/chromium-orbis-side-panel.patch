@@ -311,10 +311,10 @@ index 0000000000..cf535cec0f
 \ No newline at end of file
 diff --git a/chrome/browser/ui/webui/orbis/orbis_ui.cc b/chrome/browser/ui/webui/orbis/orbis_ui.cc
 new file mode 100644
-index 0000000000..665ce0c684
+index 0000000000..a12d86211f
 --- /dev/null
 +++ b/chrome/browser/ui/webui/orbis/orbis_ui.cc
-@@ -0,0 +1,324 @@
+@@ -0,0 +1,430 @@
 +// Copyright 2026 The Orbis Authors. All rights reserved.
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -340,6 +340,8 @@ index 0000000000..665ce0c684
 +#include "chrome/browser/ui/browser_window/public/browser_window_features.h"
 +#include "chrome/browser/ui/side_panel/side_panel_entry_id.h"
 +#include "chrome/browser/ui/side_panel/side_panel_ui.h"
++#include "chrome/browser/ui/tabs/tab_enums.h"
++#include "chrome/browser/ui/tabs/tab_strip_model.h"
 +#include "chrome/common/webui_url_constants.h"
 +#include "chrome/grit/browser_resources.h"
 +#include "components/history/core/browser/history_types.h"
@@ -398,6 +400,13 @@ index 0000000000..665ce0c684
 +//   orbis.mostVisited   the most visited sites (new tab page only)
 +//   orbis.openPanel     show the native Orbis side panel of this window (new tab
 +//                       page and search results, for the assistant orb)
++//   orbis.tabs.list     the tabs of this window
++//   orbis.tabs.activate show one of them
++//   orbis.tabs.close    close one of them
++//
++// The tabs channels are what the panel's Tabs view used chrome.tabs for. Asking
++// the tab strip directly is the same answer from the browser itself, and spares
++// the Orbis extension a permission that also reaches the content of every page.
 +class OrbisPageHandler : public content::WebUIMessageHandler {
 + public:
 +  OrbisPageHandler() = default;
@@ -419,6 +428,18 @@ index 0000000000..665ce0c684
 +    web_ui()->RegisterMessageCallback(
 +        "orbis.mostVisited",
 +        base::BindRepeating(&OrbisPageHandler::HandleMostVisited,
++                            base::Unretained(this)));
++    web_ui()->RegisterMessageCallback(
++        "orbis.tabs.list",
++        base::BindRepeating(&OrbisPageHandler::HandleTabsList,
++                            base::Unretained(this)));
++    web_ui()->RegisterMessageCallback(
++        "orbis.tabs.activate",
++        base::BindRepeating(&OrbisPageHandler::HandleTabsActivate,
++                            base::Unretained(this)));
++    web_ui()->RegisterMessageCallback(
++        "orbis.tabs.close",
++        base::BindRepeating(&OrbisPageHandler::HandleTabsClose,
 +                            base::Unretained(this)));
 +  }
 +
@@ -530,6 +551,91 @@ index 0000000000..665ce0c684
 +      list.Append(std::move(entry));
 +    }
 +    ResolveJavascriptCallback(callback_id, list);
++  }
++
++  // The tab strip of the window this page is in. The panel's Tabs view asked
++  // the Orbis extension's chrome.tabs for this; the strip itself is the same
++  // answer, and it costs no permission that also reaches every page's content.
++  TabStripModel* Tabs() {
++    BrowserWindowInterface* browser =
++        webui::GetBrowserWindowInterface(web_ui()->GetWebContents());
++    return browser && IsOrbisHost(PageUrl()) ? browser->GetTabStripModel()
++                                             : nullptr;
++  }
++
++  void HandleTabsList(const base::ListValue& args) {
++    if (args.empty() || !args[0].is_string()) {
++      return;
++    }
++    const std::string callback_id = args[0].GetString();
++    AllowJavascript();
++    base::ListValue list;
++    TabStripModel* tabs = Tabs();
++    if (!tabs) {
++      ResolveJavascriptCallback(callback_id, list);
++      return;
++    }
++    for (int i = 0; i < tabs->count(); ++i) {
++      content::WebContents* contents = tabs->GetWebContentsAt(i);
++      if (!contents) {
++        continue;
++      }
++      base::DictValue entry;
++      entry.Set("index", i);
++      entry.Set("url", contents->GetLastCommittedURL().spec());
++      entry.Set("title", base::UTF16ToUTF8(contents->GetTitle()));
++      entry.Set("active", i == tabs->active_index());
++      entry.Set("audible", contents->IsCurrentlyAudible());
++      list.Append(std::move(entry));
++    }
++    ResolveJavascriptCallback(callback_id, list);
++  }
++
++  // The index is the one orbis.tabs.list gave. A strip can change under the
++  // panel between the two calls, so an index that no longer exists is refused
++  // rather than acted on: closing whatever has moved into that slot would be
++  // the one mistake this cannot take back.
++  int AskedIndex(const base::ListValue& args, TabStripModel* tabs) {
++    if (args.size() < 2 || !args[1].is_int() || !tabs) {
++      return -1;
++    }
++    const int index = args[1].GetInt();
++    return index >= 0 && index < tabs->count() ? index : -1;
++  }
++
++  void HandleTabsActivate(const base::ListValue& args) {
++    if (args.empty() || !args[0].is_string()) {
++      return;
++    }
++    const std::string callback_id = args[0].GetString();
++    AllowJavascript();
++    TabStripModel* tabs = Tabs();
++    const int index = AskedIndex(args, tabs);
++    if (index < 0) {
++      RejectJavascriptCallback(callback_id, base::Value());
++      return;
++    }
++    tabs->ActivateTabAt(index);
++    ResolveJavascriptCallback(callback_id, base::Value(true));
++  }
++
++  void HandleTabsClose(const base::ListValue& args) {
++    if (args.empty() || !args[0].is_string()) {
++      return;
++    }
++    const std::string callback_id = args[0].GetString();
++    AllowJavascript();
++    TabStripModel* tabs = Tabs();
++    const int index = AskedIndex(args, tabs);
++    if (index < 0) {
++      RejectJavascriptCallback(callback_id, base::Value());
++      return;
++    }
++    // Recorded, so the tab can be reopened: closing from the panel should be
++    // no more final than closing from the strip.
++    tabs->CloseWebContentsAt(index,
++                             CLOSE_USER_GESTURE | CLOSE_CREATE_HISTORICAL_TAB);
++    ResolveJavascriptCallback(callback_id, base::Value(true));
 +  }
 +
 +  base::WeakPtrFactory<OrbisPageHandler> weak_factory_{this};
