@@ -36,6 +36,8 @@ export class EmbedController {
   private child: Embedded | null = null
   private timer: NodeJS.Timeout | null = null
   private keepOnTop: NodeJS.Timeout | null = null
+  /** Whether the browser is currently showing, so the keyboard is handed over once on the way in rather than on every region update. */
+  private shown = false
   private readonly parent: () => bigint | null
 
   constructor(parent: () => bigint | null) {
@@ -77,18 +79,33 @@ export class EmbedController {
     this.timer = null
     if (this.keepOnTop) clearInterval(this.keepOnTop)
     this.keepOnTop = null
+    if (this.shown) this.child?.holdInput(false)
     this.child = null
+    this.shown = false
   }
 
   private apply(): void {
     if (!this.child || !this.region) return
-    if (!this.region.visible || this.region.width <= 0 || this.region.height <= 0) this.child.hide()
-    else {
+    if (!this.region.visible || this.region.width <= 0 || this.region.height <= 0) {
+      this.child.hide()
+      if (this.shown) {
+        this.shown = false
+        // Back to the chat: the queues part again so the chat's own typing is its own.
+        this.child.holdInput(false)
+      }
+    } else {
       // The true scale is the parent's real client width over the renderer's viewport width; devicePixelRatio is only the fallback.
       const parent = this.parent()
       const client = parent ? clientSize(parent) : null
       const dpr = client && this.region.viewportWidth ? client.width / this.region.viewportWidth : this.region.dpr
       this.child.place(physicalRect({ ...this.region, dpr }), true)
+      // Only on the way in: the region is re-sent as the window moves, and focusing on every one would take the keyboard back mid-typing.
+      if (!this.shown) {
+        this.shown = true
+        // The queues stay joined for as long as the browser is showing, or the keyboard goes back to the chat behind it.
+        this.child.holdInput(true)
+        this.child.focus()
+      }
     }
   }
 }

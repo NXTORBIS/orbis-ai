@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { ArrowLeft } from 'lucide-react'
 import type { Attachment, ChatMessage, ChatRequest, Conversation, Settings, SettingsUpdate, StreamEvent } from '../../shared/types'
 import { IMAGE_GEN_STATUS } from '../../shared/types'
 import { themeBase } from '../../shared/themes'
@@ -1117,6 +1118,8 @@ export default function App(): React.JSX.Element {
     [savedConversations]
   )
   const galleryImages = useMemo(() => collectImages(savedConversations), [savedConversations])
+  /** The browser is on screen: it takes the whole window below the address bar, so none of the chat's own bars are shown. */
+  const browserShowing = browserOpen && !browserHidden && !settingsOpen && !shortcutsOpen
 
   return (
     <ImageEditorContext.Provider value={openImageEditor}>
@@ -1125,45 +1128,58 @@ export default function App(): React.JSX.Element {
       inert={welcome === 'open'}
     >
       <HudBackground animated={effects} />
-      <UrlBar
-        onNavigate={openInBrowser}
-        research={researchTopics}
-        incognito={current.incognito}
-        searchSuggestions={settings?.searchSuggestions !== false}
-        personalizedSuggestions={settings?.personalizedSuggestions !== false}
-        askModel={current.model}
-        onNotify={notify}
-        onOpenWorkflows={() => openOrbisView('workflows')}
-      />
-      <SystemBar
-        dark={dark}
-        unread={unread}
-        onToggleHistory={toggleSidebar}
-        sidebarCollapsed={sidebarCollapsed}
-        onNewChat={newChat}
-        onSearch={openSearch}
-        onQuickPrompts={() => setQuickPromptsOpen((open) => !open)}
-        webSearch={webSearch}
-        onToggleWebSearch={() => {
-          notify(webSearch ? 'Web search off.' : 'Web search on. Replies will use live results.')
-          setWebSearch(!webSearch)
-        }}
-        onToggleActivity={toggleActivity}
-        onToggleTheme={() => void updateSettings({ theme: dark ? 'light' : 'dark' })}
-      >
-        <ChatHeader
-          title={active?.title ?? 'New chat'}
-          hasConversation={Boolean(active)}
-          thinking={Boolean(active && streams[active.id])}
-          userInitial={settings?.userName.trim().charAt(0).toUpperCase() || 'U'}
+      {/* The browser has an address bar of its own, so this row drops its one and carries the way back to the chat. It stays
+          36px either way: it is the window's title bar, with the Windows buttons drawn over its right end. */}
+      {browserShowing ? (
+        <div className="url-strip">
+          <button type="button" className="browser-back-chat" title="Back to the Orbis chat. The browser stays open" onClick={() => setBrowserHidden(true)}>
+            <ArrowLeft size={15} />
+            <span>Chat</span>
+          </button>
+        </div>
+      ) : (
+        <UrlBar
+          onNavigate={openInBrowser}
+          research={researchTopics}
           incognito={current.incognito}
-          onToggleIncognito={toggleIncognito}
-          onRename={(title) => active && renameConversation(active.id, title)}
-          onShare={() => active && shareConversation(active.id)}
-          onDelete={() => active && deleteConversation(active.id)}
-          onOpenSettings={() => setSettingsOpen(true)}
+          searchSuggestions={settings?.searchSuggestions !== false}
+          personalizedSuggestions={settings?.personalizedSuggestions !== false}
+          askModel={current.model}
+          onNotify={notify}
+          onOpenWorkflows={() => openOrbisView('workflows')}
         />
-      </SystemBar>
+      )}
+      {!browserShowing && (
+        <SystemBar
+          dark={dark}
+          unread={unread}
+          onToggleHistory={toggleSidebar}
+          sidebarCollapsed={sidebarCollapsed}
+          onNewChat={newChat}
+          onSearch={openSearch}
+          onQuickPrompts={() => setQuickPromptsOpen((open) => !open)}
+          webSearch={webSearch}
+          onToggleWebSearch={() => {
+            notify(webSearch ? 'Web search off.' : 'Web search on. Replies will use live results.')
+            setWebSearch(!webSearch)
+          }}
+          onToggleActivity={toggleActivity}
+          onToggleTheme={() => void updateSettings({ theme: dark ? 'light' : 'dark' })}
+        >
+          <ChatHeader
+            title={active?.title ?? 'New chat'}
+            hasConversation={Boolean(active)}
+            thinking={Boolean(active && streams[active.id])}
+            userInitial={settings?.userName.trim().charAt(0).toUpperCase() || 'U'}
+            incognito={current.incognito}
+            onToggleIncognito={toggleIncognito}
+            onRename={(title) => active && renameConversation(active.id, title)}
+            onShare={() => active && shareConversation(active.id)}
+            onDelete={() => active && deleteConversation(active.id)}
+            onOpenSettings={() => setSettingsOpen(true)}
+          />
+        </SystemBar>
+      )}
 
       <div className="hud-body">
         <Sidebar
@@ -1221,7 +1237,6 @@ export default function App(): React.JSX.Element {
             onNewChat={newChat}
             onSearch={openSearch}
           />
-          {browserOpen && <BrowserView hidden={browserHidden || settingsOpen || shortcutsOpen} onBackToChat={() => setBrowserHidden(true)} />}
           {imagesOpen && (
             <ImagesView images={galleryImages} onClose={() => setImagesOpen(false)} onOpenChat={selectChat} onEdit={editGalleryImage} onNotify={notify} />
           )}
@@ -1232,6 +1247,8 @@ export default function App(): React.JSX.Element {
           <span />
         </button>
         {activityOpen && <ActivityPanel items={notices} onClear={() => setNotices([])} onClose={() => setActivityOpen(false)} />}
+        {/* Outside .stage on purpose: the browser fills everything below the title bar, sidebar included. */}
+        {browserOpen && <BrowserView hidden={!browserShowing} />}
       </div>
 
       <ToastStack toasts={toasts} onDismiss={(id) => setToasts((current) => current.filter((t) => t.id !== id))} />

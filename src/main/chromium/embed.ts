@@ -40,6 +40,7 @@ interface Api {
   setPos(hwnd: bigint, r: Rect, show: boolean): void
   show(hwnd: bigint, visible: boolean): void
   focus(hwnd: bigint): void
+  holdInput(hwnd: bigint, join: boolean): boolean
   raise(hwnd: bigint): boolean
   rect(hwnd: bigint): Rect
   clientRect(hwnd: bigint): Rect
@@ -70,6 +71,8 @@ function load(): Api | null {
     const GetWindow = user32.func('void *__stdcall GetWindow(void *hwnd, uint32 cmd)')
     const ShowWindow = user32.func('bool __stdcall ShowWindow(void *hwnd, int cmd)')
     const SetFocus = user32.func('void *__stdcall SetFocus(void *hwnd)')
+    const AttachThreadInput = user32.func('bool __stdcall AttachThreadInput(uint32 attach, uint32 to, bool join)')
+    const GetCurrentThreadId = koffi.load('kernel32.dll').func('uint32 __stdcall GetCurrentThreadId()')
     const GetWindowRect = user32.func('bool __stdcall GetWindowRect(void *hwnd, _Out_ ORBIS_RECT *r)')
     const GetClientRect = user32.func('bool __stdcall GetClientRect(void *hwnd, _Out_ ORBIS_RECT *r)')
     const ClientToScreen = user32.func('bool __stdcall ClientToScreen(void *hwnd, _Inout_ ORBIS_POINT *p)')
@@ -113,6 +116,21 @@ function load(): Api | null {
       setPos: (h, r, show) => void SetWindowPos(ptr(h), null, r.x, r.y, r.width, r.height, SWP_NOACTIVATE | SWP_FRAMECHANGED | (show ? SWP_SHOWWINDOW : 0)),
       show: (h, v) => void ShowWindow(ptr(h), v ? SW_SHOWNA : SW_HIDE),
       focus: (h) => void SetFocus(ptr(h)),
+      /**
+       * Joins this process's input queue to the browser's, or parts them again.
+       *
+       * Windows sends a key to whatever has the focus *in the foreground thread's own queue*. The browser is a window of
+       * another process embedded in ours, so while ours is the foreground window its keys go to our focus, not to the
+       * browser, and the address bar cannot be typed in. Attaching merges the two queues so the browser's focus is the one
+       * that counts. It has to stay attached for as long as the browser is showing: attaching only long enough to call
+       * SetFocus parts the queues again straight away and the keyboard goes back to the window behind.
+       */
+      holdInput(h, join) {
+        const target = GetWindowThreadProcessId(ptr(h), [0]) as number
+        const me = GetCurrentThreadId() as number
+        if (!target || target === me) return false
+        return AttachThreadInput(me, target, join) as boolean
+      },
       // The Orbis renderer's own window can sit above the browser window and would take its mouse clicks: keep the browser on top.
       raise(h) {
         if (big(GetWindow(ptr(h), 3)) === 0n) return false
@@ -165,6 +183,8 @@ export interface Embedded {
   /** Puts the window back on top of its siblings if something covered it. Returns whether it had to. */
   raise(): boolean
   focus(): void
+  /** Joins this process's input queue to the browser's (or parts them), so the keyboard reaches the embedded window. */
+  holdInput(join: boolean): boolean
   isVisible(): boolean
   parent(): bigint
   screenRect(): Rect
@@ -185,6 +205,7 @@ export function embedWindow(parent: bigint, child: bigint): Embedded {
     hide: () => api.show(child, false),
     raise: () => api.raise(child),
     focus: () => api.focus(child),
+    holdInput: (join) => api.holdInput(child, join),
     isVisible: () => api.isVisible(child),
     parent: () => api.getParent(child),
     screenRect: () => api.rect(child)

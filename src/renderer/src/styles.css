@@ -11093,14 +11093,6 @@ html[data-motion='reduced'] .tool-btn.recording {
 .browser-view[hidden] {
   display: none;
 }
-.browser-view-bar {
-  display: flex;
-  align-items: center;
-  height: 36px;
-  padding: 0 10px;
-  flex: none;
-  border-bottom: 1px solid var(--line-strong);
-}
 .browser-back-chat {
   display: inline-flex;
   align-items: center;

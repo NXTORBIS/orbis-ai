@@ -592,7 +592,9 @@ export default function UrlBar({
         role="search"
         onSubmit={(e) => {
           e.preventDefault()
-          submit(false)
+          // This bar sits above the chat, not above a page: what is typed here starts something new, so it opens its own
+          // tab and shows the browser over the whole window rather than replacing whatever the last tab was on.
+          submit(true)
         }}
       >
         {loading ? (

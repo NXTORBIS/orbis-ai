@@ -1,11 +1,11 @@
 import { useEffect, useRef } from 'react'
-import { ArrowLeft } from 'lucide-react'
 
 /**
  * The browser view: the region of the Orbis window that Chromium's own window sits in (the main process places the native window
- * over it). It measures itself and tells the main process; a header keeps "Return to chat" (the browser stays open behind it).
+ * over it). It measures itself and tells the main process. The way back to the chat lives in the window's title bar, so the
+ * whole of this is the browser.
  */
-export default function BrowserView({ hidden, onBackToChat }: { hidden: boolean; onBackToChat: () => void }): React.JSX.Element {
+export default function BrowserView({ hidden }: { hidden: boolean }): React.JSX.Element {
   const region = useRef<HTMLDivElement>(null)
   const live = useRef({ hidden })
   live.current.hidden = hidden
@@ -39,12 +39,6 @@ export default function BrowserView({ hidden, onBackToChat }: { hidden: boolean;
 
   return (
     <div className="browser-view" hidden={hidden}>
-      <div className="browser-view-bar">
-        <button type="button" className="browser-back-chat" title="Back to the Orbis chat. The browser stays open" onClick={onBackToChat}>
-          <ArrowLeft size={15} />
-          <span>Return to chat</span>
-        </button>
-      </div>
       <div className="browser-view-region" ref={region} data-testid="browser-view-region" />
     </div>
   )
