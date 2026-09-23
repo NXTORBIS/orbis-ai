@@ -30,6 +30,7 @@
       <button id="tab-workflows" type="button" role="tab" aria-selected="false">Workflows</button>
       <button id="tab-galaxy" type="button" role="tab" aria-selected="false">Galaxy</button>
       <button id="tab-secrets" type="button" role="tab" aria-selected="false">Secrets</button>
+      <button id="tab-account" type="button" role="tab" aria-selected="false">Account</button>
     </nav>
 
     <section id="view-ask" class="view" role="tabpanel" aria-labelledby="tab-ask">
@@ -47,6 +48,10 @@
           <button id="stop" type="button" hidden>Stop</button>
         </div>
       </form>
+    </section>
+
+    <section id="view-account" class="view" role="tabpanel" aria-labelledby="tab-account" hidden>
+      <div id="account-body" class="acct" aria-live="polite"></div>
     </section>
 
     <section id="view-search" class="view" role="tabpanel" aria-labelledby="tab-search" hidden>
@@ -95,5 +100,6 @@
     <script type="module" src="panel-workflows.js"></script>
     <script type="module" src="panel-galaxy.js"></script>
     <script type="module" src="panel-secrets.js"></script>
+    <script type="module" src="panel-account.js"></script>
   </body>
 </html>

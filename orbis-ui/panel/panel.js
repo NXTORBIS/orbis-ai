@@ -362,7 +362,7 @@ let searching = null
 function showTab(name) {
   // Every view in the panel, including the rail's own (Tabs, Clipboard, ...), so choosing a tab always hides whichever was in front.
   for (const view of document.querySelectorAll('.view')) view.hidden = view.id !== `view-${name}`
-  for (const id of ['ask', 'search', 'block', 'notes', 'tasks', 'workflows', 'galaxy', 'secrets']) $(`tab-${id}`).setAttribute('aria-selected', String(id === name))
+  for (const id of ['ask', 'search', 'block', 'notes', 'tasks', 'workflows', 'galaxy', 'secrets', 'account']) $(`tab-${id}`).setAttribute('aria-selected', String(id === name))
   document.dispatchEvent(new CustomEvent('orbis:view', { detail: { name } }))
   if (name === 'block') document.dispatchEvent(new CustomEvent('orbis:blocking-shown'))
   else if (name === 'notes') document.dispatchEvent(new CustomEvent('orbis:notes-shown'))
@@ -372,6 +372,11 @@ function showTab(name) {
   else input.focus()
 }
 $('tab-ask').addEventListener('click', () => showTab('ask'))
+$('tab-account').addEventListener('click', () => {
+  showTab('account')
+  // Read afresh every time it is opened: an account can change in another window while this panel sits there.
+  document.dispatchEvent(new CustomEvent('orbis:account-shown'))
+})
 $('tab-search').addEventListener('click', () => showTab('search'))
 $('tab-block').addEventListener('click', () => showTab('block'))
 $('tab-notes').addEventListener('click', () => showTab('notes'))
