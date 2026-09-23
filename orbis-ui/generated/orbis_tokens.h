@@ -77,10 +77,12 @@ constexpr int kSpace3 = 12;
 constexpr int kSpace4 = 16;
 constexpr int kSpace5 = 24;
 constexpr int kSpace6 = 32;
-// Chrome geometry derived from the Orbis look (28px tab pill, 32px hit targets).
+// Chrome geometry, from tokens.json scale.chrome.
 constexpr int kTabPillHeight = 28;
 constexpr int kHitTarget = 32;
-constexpr int kOmniboxHeight = 32;
+constexpr int kOmniboxHeight = 36;
+constexpr int kOmniboxRadius = 12;
+constexpr int kOmniboxRing = 2;
 constexpr int kIndicatorThickness = 2;
 constexpr int kMotionFastMs = 120;
 }  // namespace size

@@ -44,12 +44,13 @@ h += `// Sizes in DIPs.\nnamespace size {\n`
 for (const [k, v] of Object.entries(t.scale.radius)) h += `constexpr int kRadius${camel(k).slice(1)} = ${k === 'pill' ? 999 : px(v)};\n`
 for (const [k, v] of Object.entries(t.scale.text)) h += `constexpr int kText${camel(k).slice(1)} = ${px(v)};\n`
 for (const [k, v] of Object.entries(t.scale.space)) h += `constexpr int kSpace${k} = ${px(v)};\n`
-h += `// Chrome geometry derived from the Orbis look (28px tab pill, 32px hit targets).
-constexpr int kTabPillHeight = 28;
-constexpr int kHitTarget = 32;
-constexpr int kOmniboxHeight = 32;
-constexpr int kIndicatorThickness = 2;
-constexpr int kMotionFastMs = ${px(t.scale.motion.fast)};
+// The geometry of the browser chrome itself — tab pill, hit targets, the omnibox. These live in tokens.json
+// alongside the colours so the Views browser and the web surfaces are shaped by one source and cannot drift apart.
+h += `// Chrome geometry, from tokens.json scale.chrome.
+`
+for (const [k, v] of Object.entries(t.scale.chrome)) h += `constexpr int k${camel(k).slice(1)} = ${px(v)};
+`
+h += `constexpr int kMotionFastMs = ${px(t.scale.motion.fast)};
 }  // namespace size
 
 // Font: first family of the token stack that ships with Windows (the Views UI cannot load web fonts).

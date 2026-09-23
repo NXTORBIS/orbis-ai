@@ -20,6 +20,12 @@
   --radius-md: 10px;
   --radius-lg: 14px;
   --radius-pill: 999px;
+  --chrome-tab-pill-height: 28px;
+  --chrome-hit-target: 32px;
+  --chrome-omnibox-height: 36px;
+  --chrome-omnibox-radius: 12px;
+  --chrome-omnibox-ring: 2px;
+  --chrome-indicator-thickness: 2px;
   --motion-fast: 120ms;
   --motion-base: 200ms;
   --motion-ease: cubic-bezier(.2,.8,.2,1);

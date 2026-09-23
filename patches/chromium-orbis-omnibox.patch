@@ -1,0 +1,81 @@
+diff --git a/chrome/browser/ui/views/location_bar/location_bar_view.cc b/chrome/browser/ui/views/location_bar/location_bar_view.cc
+index b9988028f4..393d367a17 100644
+--- a/chrome/browser/ui/views/location_bar/location_bar_view.cc
++++ b/chrome/browser/ui/views/location_bar/location_bar_view.cc
+@@ -3,6 +3,7 @@
+ // found in the LICENSE file.
+ 
+ #include "chrome/browser/ui/views/location_bar/location_bar_view.h"
++#include "ui/color/orbis_tokens.h"
+ 
+ #include <algorithm>
+ #include <memory>
+@@ -237,7 +238,12 @@ LocationBarView::LocationBarView(BrowserWindowInterface* browser,
+                  !v->GetOmniboxController()->IsPopupOpen();
+         }));
+     views::FocusRing::Get(this)->SetOutsetFocusRingDisabled(true);
+-    views::InstallPillHighlightPathGenerator(this);
++    views::FocusRing::Get(this)->SetHaloThickness(orbis::size::kOmniboxRing);
++    // Orbis: the ring traces the omnibox itself. A pill generator here would draw a
++    // capsule around a rounded rectangle, which is what made focus read as a glow
++    // sitting on top of the field rather than as the edge of the field.
++    views::InstallRoundRectHighlightPathGenerator(
++        this, gfx::Insets(), orbis::size::kOmniboxRadius);
+ 
+ #if BUILDFLAG(OS_LEVEL_GEOLOCATION_PERMISSION_SUPPORTED)
+     if (features::IsOsLevelGeolocationPermissionSupportEnabled()) {
+@@ -514,8 +520,7 @@ int LocationBarView::GetBorderRadius() const {
+ 
+ // static
+ int LocationBarView::ComputeBorderRadius(gfx::Size size) {
+-  return ChromeLayoutProvider::Get()->GetCornerRadiusMetric(
+-      views::Emphasis::kMaximum, size);
++  return orbis::size::kOmniboxRadius;  // Orbis: a rounded input, not a capsule.
+ }
+ 
+ // static
+@@ -1373,7 +1378,10 @@ void LocationBarView::RefreshBackground() {
+     background_color_ = gfx::Tween::ColorValueBetween(opacity, normal, hovered);
+   }
+ 
+-  SkColor border_color = SK_ColorTRANSPARENT;
++  // Orbis: the omnibox carries a hairline edge at rest. Without one the field has
++  // no boundary of its own and dissolves into the toolbar behind it; with one it
++  // reads as a surface, which is the whole point of the control.
++  SkColor border_color = color_provider->GetColor(kColorLocationBarBorder);
+   if (high_contrast) {
+     // High contrast schemes get a border stroke even on a rounded omnibox.
+     border_color =
+@@ -1486,9 +1494,9 @@ void LocationBarView::RefreshAiModePageAction() {
+       ai_mode_hint_label_->SetVisible(false);
+     }
+ #if BUILDFLAG(IS_MAC)
+-    ai_mode_hint_label_->SetText(u"⌘ + return for AI Mode");
++    ai_mode_hint_label_->SetText(u"⌘ + return for Orion");
+ #else
+-    ai_mode_hint_label_->SetText(u"Ctrl + Enter for AI Mode");
++    ai_mode_hint_label_->SetText(u"Ctrl + Enter for Orion");
+ #endif
+     ai_mode_hint_label_->SetEnabledColor(kColorOmniboxTextDimmed);
+   }
+diff --git a/ui/webui/resources/cr_components/searchbox/searchbox_match.css b/ui/webui/resources/cr_components/searchbox/searchbox_match.css
+index 812e441a5a..777367423a 100644
+--- a/ui/webui/resources/cr_components/searchbox/searchbox_match.css
++++ b/ui/webui/resources/cr_components/searchbox/searchbox_match.css
+@@ -77,6 +77,16 @@
+   border-end-end-radius: 24px;
+ }
+ 
++/* Orbis: in the browser's own omnibox popup a row is a row — inset the same
++ * amount on both sides and rounded the same amount at all four corners. The
++ * stock shape is square on the leading edge and a 24px capsule on the trailing
++ * one, which leaves the selected row looking like it is sliding off the panel. */
++:host([is-top-chrome-searchbox_]) .container:not(.actions) {
++  border-radius: 10px;
++  margin-inline-end: 8px;
++  margin-inline-start: 8px;
++}
++
+ :host-context([has-secondary-side]):host-context([can-show-secondary-side]) .container:not(.actions) {
+   margin-inline-end: 0;
+ }
