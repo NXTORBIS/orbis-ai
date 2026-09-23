@@ -24,6 +24,7 @@
   --chrome-hit-target: 32px;
   --chrome-omnibox-height: 36px;
   --chrome-omnibox-radius: 12px;
+  --chrome-omnibox-popup-radius: 12px;
   --chrome-omnibox-ring: 2px;
   --chrome-indicator-thickness: 2px;
   --motion-fast: 120ms;

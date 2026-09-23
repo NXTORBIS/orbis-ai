@@ -1,63 +1,53 @@
-diff --git a/chrome/browser/ui/views/location_bar/location_bar_view.cc b/chrome/browser/ui/views/location_bar/location_bar_view.cc
-index b9988028f4..393d367a17 100644
---- a/chrome/browser/ui/views/location_bar/location_bar_view.cc
-+++ b/chrome/browser/ui/views/location_bar/location_bar_view.cc
-@@ -3,6 +3,7 @@
- // found in the LICENSE file.
- 
- #include "chrome/browser/ui/views/location_bar/location_bar_view.h"
+diff --git a/chrome/browser/ui/color/chrome_color_id.h b/chrome/browser/ui/color/chrome_color_id.h
+index 0f4b952a4b..8df47e5e9c 100644
+--- a/chrome/browser/ui/color/chrome_color_id.h
++++ b/chrome/browser/ui/color/chrome_color_id.h
+@@ -533,6 +533,7 @@
+   E_CPONLY(kColorOmniboxSecurityChipInkDropRipple) \
+   E_CPONLY(kColorOmniboxSecurityChipSecure) \
+   E_CPONLY(kColorOmniboxSecurityChipText) \
++  E_CPONLY(kColorOmniboxFocusRing) /* Orbis: calmer than the shared ring */ \
+   E_CPONLY(kColorOmniboxSelectionBackground) \
+   E_CPONLY(kColorOmniboxSelectionForeground) \
+   E_CPONLY(kColorOmniboxText) \
+diff --git a/chrome/browser/ui/views/omnibox/rounded_omnibox_results_frame.cc b/chrome/browser/ui/views/omnibox/rounded_omnibox_results_frame.cc
+index 4d5b3f6dd0..124e71bff2 100644
+--- a/chrome/browser/ui/views/omnibox/rounded_omnibox_results_frame.cc
++++ b/chrome/browser/ui/views/omnibox/rounded_omnibox_results_frame.cc
+@@ -25,6 +25,7 @@
+ #include "ui/base/metadata/metadata_impl_macros.h"
+ #include "ui/base/pointer/touch_ui_controller.h"
+ #include "ui/compositor/layer.h"
 +#include "ui/color/orbis_tokens.h"
- 
- #include <algorithm>
- #include <memory>
-@@ -237,7 +238,12 @@ LocationBarView::LocationBarView(BrowserWindowInterface* browser,
-                  !v->GetOmniboxController()->IsPopupOpen();
-         }));
-     views::FocusRing::Get(this)->SetOutsetFocusRingDisabled(true);
--    views::InstallPillHighlightPathGenerator(this);
-+    views::FocusRing::Get(this)->SetHaloThickness(orbis::size::kOmniboxRing);
-+    // Orbis: the ring traces the omnibox itself. A pill generator here would draw a
-+    // capsule around a rounded rectangle, which is what made focus read as a glow
-+    // sitting on top of the field rather than as the edge of the field.
-+    views::InstallRoundRectHighlightPathGenerator(
-+        this, gfx::Insets(), orbis::size::kOmniboxRadius);
- 
- #if BUILDFLAG(OS_LEVEL_GEOLOCATION_PERMISSION_SUPPORTED)
-     if (features::IsOsLevelGeolocationPermissionSupportEnabled()) {
-@@ -514,8 +520,7 @@ int LocationBarView::GetBorderRadius() const {
- 
- // static
- int LocationBarView::ComputeBorderRadius(gfx::Size size) {
--  return ChromeLayoutProvider::Get()->GetCornerRadiusMetric(
--      views::Emphasis::kMaximum, size);
-+  return orbis::size::kOmniboxRadius;  // Orbis: a rounded input, not a capsule.
+ #include "ui/gfx/geometry/rounded_corners_f.h"
+ #include "ui/views/bubble/bubble_border.h"
+ #include "ui/views/layout/layout_provider.h"
+@@ -235,8 +236,10 @@ RoundedOmniboxResultsFrame::RoundedOmniboxResultsFrame(
+     LocationBar* location_bar,
+     bool forward_mouse_events)
+     : contents_(contents), forward_mouse_events_(forward_mouse_events) {
+-  const int corner_radius = views::LayoutProvider::Get()->GetCornerRadiusMetric(
+-      views::ShapeContextTokens::kOmniboxExpandedRadius);
++  // Orbis: the prediction panel is the omnibox continued downwards, so it is
++  // cornered like the omnibox. At 16 against the field's 12 the two read as a
++  // box with a differently-shaped box hanging off it.
++  const int corner_radius = orbis::size::kOmniboxPopupRadius;
+   auto* webui_content = GetOmniboxPopupWebUIBaseContent();
+   const bool masks_to_bounds =
+       webui_content && webui_content->ShouldSizeWebViewToPreferredHeight();
+@@ -365,8 +368,10 @@ void RoundedOmniboxResultsFrame::SetCutoutVisibility(bool visible) {
  }
  
- // static
-@@ -1373,7 +1378,10 @@ void LocationBarView::RefreshBackground() {
-     background_color_ = gfx::Tween::ColorValueBetween(opacity, normal, hovered);
-   }
- 
--  SkColor border_color = SK_ColorTRANSPARENT;
-+  // Orbis: the omnibox carries a hairline edge at rest. Without one the field has
-+  // no boundary of its own and dissolves into the toolbar behind it; with one it
-+  // reads as a surface, which is the whole point of the control.
-+  SkColor border_color = color_provider->GetColor(kColorLocationBarBorder);
-   if (high_contrast) {
-     // High contrast schemes get a border stroke even on a rounded omnibox.
-     border_color =
-@@ -1486,9 +1494,9 @@ void LocationBarView::RefreshAiModePageAction() {
-       ai_mode_hint_label_->SetVisible(false);
-     }
- #if BUILDFLAG(IS_MAC)
--    ai_mode_hint_label_->SetText(u"⌘ + return for AI Mode");
-+    ai_mode_hint_label_->SetText(u"⌘ + return for Orion");
- #else
--    ai_mode_hint_label_->SetText(u"Ctrl + Enter for AI Mode");
-+    ai_mode_hint_label_->SetText(u"Ctrl + Enter for Orion");
- #endif
-     ai_mode_hint_label_->SetEnabledColor(kColorOmniboxTextDimmed);
-   }
+ void RoundedOmniboxResultsFrame::SetElevation(int elevation) {
+-  const int corner_radius = views::LayoutProvider::Get()->GetCornerRadiusMetric(
+-      views::ShapeContextTokens::kOmniboxExpandedRadius);
++  // Orbis: the prediction panel is the omnibox continued downwards, so it is
++  // cornered like the omnibox. At 16 against the field's 12 the two read as a
++  // box with a differently-shaped box hanging off it.
++  const int corner_radius = orbis::size::kOmniboxPopupRadius;
+   auto border = std::make_unique<views::BubbleBorder>(
+       views::BubbleBorder::Arrow::NONE,
+       elevation == 0 ? views::BubbleBorder::Shadow::NO_SHADOW
 diff --git a/ui/webui/resources/cr_components/searchbox/searchbox_match.css b/ui/webui/resources/cr_components/searchbox/searchbox_match.css
 index 812e441a5a..777367423a 100644
 --- a/ui/webui/resources/cr_components/searchbox/searchbox_match.css

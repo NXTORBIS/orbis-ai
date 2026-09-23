@@ -1,5 +1,5 @@
 diff --git a/chrome/browser/ui/color/chrome_color_mixers.cc b/chrome/browser/ui/color/chrome_color_mixers.cc
-index 9698e80..95808f3 100644
+index 9698e807b1..e82aafe7ec 100644
 --- a/chrome/browser/ui/color/chrome_color_mixers.cc
 +++ b/chrome/browser/ui/color/chrome_color_mixers.cc
 @@ -23,6 +23,11 @@
@@ -14,7 +14,7 @@ index 9698e80..95808f3 100644
  
  namespace {
  
-@@ -51,6 +56,124 @@ bool ChromeColorProviderUtilsCallbacks::ColorIdName(
+@@ -51,6 +56,128 @@ bool ChromeColorProviderUtilsCallbacks::ColorIdName(
  // .inc file serves to undefine the macros the first inclusion defined.
  #include "ui/color/color_id_map_macros.inc"
  
@@ -114,6 +114,10 @@ index 9698e80..95808f3 100644
 +  m[kColorLocationBarBorderOpaque] = ui::GetResultingPaintColor(s.input_border, s.surface);
 +  m[kColorLocationBarBorderOnMismatch] = {s.input_border};
 +  m[ui::kColorFocusableBorderFocused] = {s.accent};
++  // Orbis: focus on the omnibox is stated by the ring and by the surface under
++  // it together, so the ring does not have to carry the whole signal at full
++  // accent. At 70% it is still a clear 2px indicator and stops reading as neon.
++  m[kColorOmniboxFocusRing] = ui::SetAlpha({s.accent}, 0xB3);
 +  m[kColorOmniboxText] = {s.text};
 +  m[kColorOmniboxTextDimmed] = {s.muted};
 +  m[kColorOmniboxSelectionBackground] = ui::SetAlpha({s.accent}, 0x59);
@@ -139,7 +143,7 @@ index 9698e80..95808f3 100644
  }  // namespace
  
  void AddChromeColorMixers(ui::ColorProvider* provider,
-@@ -74,6 +197,9 @@ void AddChromeColorMixers(ui::ColorProvider* provider,
+@@ -74,6 +201,9 @@ void AddChromeColorMixers(ui::ColorProvider* provider,
    // Must be the last one in order to override other mixer colors.
    AddNativeChromeColorMixer(provider, key);
  
@@ -150,7 +154,7 @@ index 9698e80..95808f3 100644
      key.custom_theme->AddColorMixers(provider, key);
    }
 diff --git a/chrome/browser/ui/layout_constants.cc b/chrome/browser/ui/layout_constants.cc
-index 7d1a2d7..3f0306e 100644
+index 7d1a2d797f..3f0306eb71 100644
 --- a/chrome/browser/ui/layout_constants.cc
 +++ b/chrome/browser/ui/layout_constants.cc
 @@ -3,6 +3,7 @@
@@ -180,7 +184,7 @@ index 7d1a2d7..3f0306e 100644
        return touch_ui ? kDefaultTouchableIconSize
                        : kDefaultIconSizeChromeRefresh;
 diff --git a/chrome/browser/ui/views/location_bar/location_bar_view.cc b/chrome/browser/ui/views/location_bar/location_bar_view.cc
-index 32980d1..114cf71 100644
+index b9988028f4..0058999a4b 100644
 --- a/chrome/browser/ui/views/location_bar/location_bar_view.cc
 +++ b/chrome/browser/ui/views/location_bar/location_bar_view.cc
 @@ -3,6 +3,7 @@
@@ -191,16 +195,55 @@ index 32980d1..114cf71 100644
  
  #include <algorithm>
  #include <memory>
-@@ -514,8 +515,7 @@ int LocationBarView::GetBorderRadius() const {
+@@ -237,7 +238,13 @@ LocationBarView::LocationBarView(BrowserWindowInterface* browser,
+                  !v->GetOmniboxController()->IsPopupOpen();
+         }));
+     views::FocusRing::Get(this)->SetOutsetFocusRingDisabled(true);
+-    views::InstallPillHighlightPathGenerator(this);
++    views::FocusRing::Get(this)->SetHaloThickness(orbis::size::kOmniboxRing);
++    views::FocusRing::Get(this)->SetColorId(kColorOmniboxFocusRing);
++    // Orbis: the ring traces the omnibox itself. A pill generator here would draw a
++    // capsule around a rounded rectangle, which is what made focus read as a glow
++    // sitting on top of the field rather than as the edge of the field.
++    views::InstallRoundRectHighlightPathGenerator(
++        this, gfx::Insets(), orbis::size::kOmniboxRadius);
+ 
+ #if BUILDFLAG(OS_LEVEL_GEOLOCATION_PERMISSION_SUPPORTED)
+     if (features::IsOsLevelGeolocationPermissionSupportEnabled()) {
+@@ -514,8 +521,7 @@ int LocationBarView::GetBorderRadius() const {
  
  // static
  int LocationBarView::ComputeBorderRadius(gfx::Size size) {
 -  return ChromeLayoutProvider::Get()->GetCornerRadiusMetric(
 -      views::Emphasis::kMaximum, size);
-+  return orbis::size::kRadiusMd;  // Orbis: a rounded input, not a capsule.
++  return orbis::size::kOmniboxRadius;  // Orbis: a rounded input, not a capsule.
  }
  
  // static
+@@ -1373,7 +1379,10 @@ void LocationBarView::RefreshBackground() {
+     background_color_ = gfx::Tween::ColorValueBetween(opacity, normal, hovered);
+   }
+ 
+-  SkColor border_color = SK_ColorTRANSPARENT;
++  // Orbis: the omnibox carries a hairline edge at rest. Without one the field has
++  // no boundary of its own and dissolves into the toolbar behind it; with one it
++  // reads as a surface, which is the whole point of the control.
++  SkColor border_color = color_provider->GetColor(kColorLocationBarBorder);
+   if (high_contrast) {
+     // High contrast schemes get a border stroke even on a rounded omnibox.
+     border_color =
+@@ -1486,9 +1495,9 @@ void LocationBarView::RefreshAiModePageAction() {
+       ai_mode_hint_label_->SetVisible(false);
+     }
+ #if BUILDFLAG(IS_MAC)
+-    ai_mode_hint_label_->SetText(u"⌘ + return for AI Mode");
++    ai_mode_hint_label_->SetText(u"⌘ + return for Orion");
+ #else
+-    ai_mode_hint_label_->SetText(u"Ctrl + Enter for AI Mode");
++    ai_mode_hint_label_->SetText(u"Ctrl + Enter for Orion");
+ #endif
+     ai_mode_hint_label_->SetEnabledColor(kColorOmniboxTextDimmed);
+   }
 diff --git a/chrome/browser/ui/views/tabs/horizontal_tab_style_views.cc b/chrome/browser/ui/views/tabs/horizontal_tab_style_views.cc
 index 4851028593..edaa59485d 100644
 --- a/chrome/browser/ui/views/tabs/horizontal_tab_style_views.cc
@@ -285,7 +328,7 @@ index 4851028593..edaa59485d 100644
  
    cc::PaintFlags flags;
 diff --git a/chrome/browser/ui/views/tabs/horizontal_tab_style_views.h b/chrome/browser/ui/views/tabs/horizontal_tab_style_views.h
-index 85c32a2..ab9a483 100644
+index 85c32a2260..ab9a48335d 100644
 --- a/chrome/browser/ui/views/tabs/horizontal_tab_style_views.h
 +++ b/chrome/browser/ui/views/tabs/horizontal_tab_style_views.h
 @@ -106,6 +106,7 @@ class HorizontalTabStyleViews : public TabStyleViews {
@@ -297,7 +340,7 @@ index 85c32a2..ab9a483 100644
        gfx::Canvas* canvas,
        std::optional<int> active_tab_fill_id,
 diff --git a/chrome/browser/ui/views/tabs/tab_group_style.cc b/chrome/browser/ui/views/tabs/tab_group_style.cc
-index bb48bb9..fbf09d0 100644
+index bb48bb9303..fbf09d01a9 100644
 --- a/chrome/browser/ui/views/tabs/tab_group_style.cc
 +++ b/chrome/browser/ui/views/tabs/tab_group_style.cc
 @@ -12,6 +12,7 @@
@@ -318,7 +361,7 @@ index bb48bb9..fbf09d0 100644
  
  }  // namespace
 diff --git a/chrome/browser/ui/views/toolbar/toolbar_button.cc b/chrome/browser/ui/views/toolbar/toolbar_button.cc
-index d4c4f01..451e80e 100644
+index d4c4f01c14..451e80e361 100644
 --- a/chrome/browser/ui/views/toolbar/toolbar_button.cc
 +++ b/chrome/browser/ui/views/toolbar/toolbar_button.cc
 @@ -3,6 +3,7 @@

@@ -82,6 +82,7 @@ constexpr int kTabPillHeight = 28;
 constexpr int kHitTarget = 32;
 constexpr int kOmniboxHeight = 36;
 constexpr int kOmniboxRadius = 12;
+constexpr int kOmniboxPopupRadius = 12;
 constexpr int kOmniboxRing = 2;
 constexpr int kIndicatorThickness = 2;
 constexpr int kMotionFastMs = 120;
