@@ -76,6 +76,7 @@ export interface BrowserManagerOptions {
   appServices?: HandlerDeps['appServices']
   /** The app's own saved-research store, so the results page and the Orbis window share one instance. */
   searchSessions?: HandlerDeps['searchSessions']
+  conversations?: HandlerDeps['conversations']
   /** The app's own stores behind the sidebar's saved pages, screenshots, clipboard, reminders, whiteboard, workspaces and sources rows. */
   stores?: HandlerDeps['stores']
   /** How this profile arranged the sidebar (the app's own store), for the sidebar in the built-in Orbis pages. */
@@ -178,6 +179,7 @@ export class BrowserManager {
         galaxy: this.o.galaxy,
         appServices: this.o.appServices,
         searchSessions: this.o.searchSessions,
+        conversations: this.o.conversations,
         sidebar: this.o.sidebar,
         stores: this.o.stores,
         browserControl: () => this.o.control ?? this.active?.service.control,

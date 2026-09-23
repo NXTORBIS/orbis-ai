@@ -1213,6 +1213,8 @@ if (!app.requestSingleInstanceLock()) {
           galaxy: () => galaxyForChat,
           appServices: () => appServicesForBrowser,
           searchSessions: () => searchSessionsForBrowser,
+          // The app's own store, so a chat held in the panel and a chat held in the Orbis window are one chat.
+          conversations: () => store,
           stores: () => panelStoresForBrowser,
           sidebar: () => {
             const store = browserSidebarForBrowser
