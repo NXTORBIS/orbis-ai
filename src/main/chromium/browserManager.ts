@@ -81,6 +81,8 @@ export interface BrowserManagerOptions {
   stores?: HandlerDeps['stores']
   /** How this profile arranged the sidebar (the app's own store), for the sidebar in the built-in Orbis pages. */
   sidebar?: HandlerDeps['sidebar']
+  /** The name the person gave themselves in the app, so the browser names them the same way. */
+  identity?: HandlerDeps['identity']
   /** The one Browser Control Layer of the app: Chromium fills it. */
   control?: BrowserControl
   saveDir?: string
@@ -181,6 +183,7 @@ export class BrowserManager {
         searchSessions: this.o.searchSessions,
         conversations: this.o.conversations,
         sidebar: this.o.sidebar,
+        identity: this.o.identity,
         stores: this.o.stores,
         browserControl: () => this.o.control ?? this.active?.service.control,
         profileId,

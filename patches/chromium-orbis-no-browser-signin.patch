@@ -1,0 +1,22 @@
+diff --git a/chrome/browser/ui/views/toolbar/avatar_toolbar_button_interface.cc b/chrome/browser/ui/views/toolbar/avatar_toolbar_button_interface.cc
+index c8f0fd8603..cd82217f13 100644
+--- a/chrome/browser/ui/views/toolbar/avatar_toolbar_button_interface.cc
++++ b/chrome/browser/ui/views/toolbar/avatar_toolbar_button_interface.cc
+@@ -21,9 +21,15 @@ bool AvatarToolbarButtonInterface::CanShowForProfile(Profile* profile) {
+           profile->GetOTRProfileID().IsCaptivePortal());
+ #else
+   // DevTools profiles are OffTheRecord, so hide it there.
++  //
++  // Orbis: the avatar button exists to surface Google sign-in, which this
++  // browser does not have — on a regular profile it only ever offered to sign
++  // in to an account that cannot exist here. The account lives in the Orbis
++  // panel instead. Incognito and Guest keep their badge: those say something
++  // true about how the window handles the user's data, and hiding them would
++  // conceal a privacy state rather than a piece of branding.
+   return profile->IsIncognitoProfile() || profile->IsGuestSession() ||
+-         profile->IsEnterpriseIsolatedModeProfile() ||
+-         profile->IsRegularProfile();
++         profile->IsEnterpriseIsolatedModeProfile();
+ #endif
+ }
+ 

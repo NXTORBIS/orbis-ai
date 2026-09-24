@@ -38,10 +38,10 @@ index 87ae613c0a..c38e66fe6c 100644
          <include name="IDR_CHROME_APP_MANIFEST" file="resources\chrome_app\manifest.json" type="BINDATA" />
 diff --git a/chrome/browser/ui/webui/orbis/BUILD.gn b/chrome/browser/ui/webui/orbis/BUILD.gn
 new file mode 100644
-index 0000000000..312693b42f
+index 0000000000..cf535cec0f
 --- /dev/null
 +++ b/chrome/browser/ui/webui/orbis/BUILD.gn
-@@ -0,0 +1,30 @@
+@@ -0,0 +1,27 @@
 +# Copyright 2026 The Orbis Authors. All rights reserved.
 +# Use of this source code is governed by a BSD-style license that can be
 +# found in the LICENSE file.
@@ -62,9 +62,6 @@ index 0000000000..312693b42f
 +    "//chrome/browser/autocomplete",
 +    "//chrome/browser/history",
 +    "//chrome/browser/profiles:profile",
-+    "//chrome/browser/signin",
-+    "//components/signin/public/base",
-+    "//components/signin/public/identity_manager",
 +    "//components/history/core/browser",
 +    "//components/omnibox/browser",
 +    "//third_party/metrics_proto",
@@ -75,10 +72,10 @@ index 0000000000..312693b42f
 \ No newline at end of file
 diff --git a/chrome/browser/ui/webui/orbis/orbis_ui.cc b/chrome/browser/ui/webui/orbis/orbis_ui.cc
 new file mode 100644
-index 0000000000..f8bfc74595
+index 0000000000..430bebabbe
 --- /dev/null
 +++ b/chrome/browser/ui/webui/orbis/orbis_ui.cc
-@@ -0,0 +1,556 @@
+@@ -0,0 +1,431 @@
 +// Copyright 2026 The Orbis Authors. All rights reserved.
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -102,17 +99,10 @@ index 0000000000..f8bfc74595
 +#include "chrome/browser/profiles/profile.h"
 +#include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 +#include "chrome/browser/ui/browser_window/public/browser_window_features.h"
-+#include "chrome/browser/signin/identity_manager_factory.h"
 +#include "chrome/browser/ui/side_panel/side_panel_entry_id.h"
 +#include "chrome/browser/ui/side_panel/side_panel_ui.h"
-+#include "chrome/browser/ui/signin/signin_view_controller.h"
 +#include "chrome/browser/ui/tabs/tab_enums.h"
 +#include "chrome/browser/ui/tabs/tab_strip_model.h"
-+#include "components/signin/public/base/consent_level.h"
-+#include "components/signin/public/base/signin_metrics.h"
-+#include "components/signin/public/identity_manager/account_info.h"
-+#include "components/signin/public/identity_manager/identity_manager.h"
-+#include "components/signin/public/identity_manager/primary_account_mutator.h"
 +#include "chrome/common/webui_url_constants.h"
 +#include "chrome/grit/browser_resources.h"
 +#include "components/history/core/browser/history_types.h"
@@ -174,9 +164,6 @@ index 0000000000..f8bfc74595
 +//   orbis.tabs.list     the tabs of this window
 +//   orbis.tabs.activate show one of them
 +//   orbis.tabs.close    close one of them
-+//   orbis.signin.state  the browser account, as Chromium has it
-+//   orbis.signin.start  hand over to Chromium's own sign-in
-+//   orbis.signin.signOut  sign the browser out (and only the browser)
 +//
 +// The tabs channels are what the panel's Tabs view used chrome.tabs for. Asking
 +// the tab strip directly is the same answer from the browser itself, and spares
@@ -214,18 +201,6 @@ index 0000000000..f8bfc74595
 +    web_ui()->RegisterMessageCallback(
 +        "orbis.tabs.close",
 +        base::BindRepeating(&OrbisPageHandler::HandleTabsClose,
-+                            base::Unretained(this)));
-+    web_ui()->RegisterMessageCallback(
-+        "orbis.signin.state",
-+        base::BindRepeating(&OrbisPageHandler::HandleSigninState,
-+                            base::Unretained(this)));
-+    web_ui()->RegisterMessageCallback(
-+        "orbis.signin.start",
-+        base::BindRepeating(&OrbisPageHandler::HandleSigninStart,
-+                            base::Unretained(this)));
-+    web_ui()->RegisterMessageCallback(
-+        "orbis.signin.signOut",
-+        base::BindRepeating(&OrbisPageHandler::HandleSignOut,
 +                            base::Unretained(this)));
 +  }
 +
@@ -421,109 +396,6 @@ index 0000000000..f8bfc74595
 +    // no more final than closing from the strip.
 +    tabs->CloseWebContentsAt(index,
 +                             CLOSE_USER_GESTURE | CLOSE_CREATE_HISTORICAL_TAB);
-+    ResolveJavascriptCallback(callback_id, base::Value(true));
-+  }
-+
-+  // ---------------------------------------------------------------- browser account
-+  //
-+  // The browser's own account, and nothing to do with the account Orbis Chat or Orion use: different identity, different
-+  // store, different sign-out. Everything here is read from Chromium's IdentityManager at the moment it is asked for, so
-+  // the panel can only ever show what the browser actually believes — there is no cached copy of a signed-in state to
-+  // drift out of date, and nothing here can say "signed in" before Chromium does.
-+  //
-+  // No token, cookie or refresh token is ever put in one of these answers. What goes back is what a person needs to see
-+  // that it is their account: the address, their name, and the picture. Those live in the profile already.
-+
-+  signin::IdentityManager* Identity() {
-+    return IsOrbisHost(PageUrl())
-+               ? IdentityManagerFactory::GetForProfile(Profile::FromWebUI(web_ui()))
-+               : nullptr;
-+  }
-+
-+  void HandleSigninState(const base::ListValue& args) {
-+    if (args.empty() || !args[0].is_string()) {
-+      return;
-+    }
-+    const std::string callback_id = args[0].GetString();
-+    AllowJavascript();
-+    base::DictValue state;
-+    signin::IdentityManager* identity = Identity();
-+    if (!identity) {
-+      state.Set("available", false);
-+      state.Set("signedIn", false);
-+      ResolveJavascriptCallback(callback_id, state);
-+      return;
-+    }
-+    state.Set("available", true);
-+    const bool signed_in =
-+        identity->HasPrimaryAccount(signin::ConsentLevel::kSignin);
-+    state.Set("signedIn", signed_in);
-+    // Sync is a second, separate consent: signed in is not syncing, and the panel must not imply that it is.
-+    state.Set("syncing", identity->HasPrimaryAccount(signin::ConsentLevel::kSync));
-+    if (signed_in) {
-+      const CoreAccountInfo core =
-+          identity->GetPrimaryAccountInfo(signin::ConsentLevel::kSignin);
-+      state.Set("email", core.email);
-+      const AccountInfo info = identity->FindExtendedAccountInfo(core);
-+      const std::optional<std::string_view> name = info.GetFullName();
-+      const std::optional<std::string_view> avatar = info.GetAvatarUrl();
-+      if (name.has_value()) {
-+        state.Set("name", std::string(name.value()));
-+      }
-+      if (avatar.has_value()) {
-+        state.Set("avatarUrl", std::string(avatar.value()));
-+      }
-+      // A token that has gone stale is still "signed in", but the browser cannot act for the account until the person
-+      // authenticates again. Saying so is the difference between a panel that is honest and one that merely looks calm.
-+      state.Set("needsReauth",
-+                !identity->HasPrimaryAccountWithRefreshToken(
-+                    signin::ConsentLevel::kSignin));
-+    }
-+    ResolveJavascriptCallback(callback_id, state);
-+  }
-+
-+  // Hands over to Chromium's own sign-in. Orbis draws the way in; the authentication itself is the browser's, which is
-+  // why no password ever passes through anything written here.
-+  void HandleSigninStart(const base::ListValue& args) {
-+    if (args.empty() || !args[0].is_string()) {
-+      return;
-+    }
-+    const std::string callback_id = args[0].GetString();
-+    AllowJavascript();
-+    BrowserWindowInterface* browser =
-+        webui::GetBrowserWindowInterface(web_ui()->GetWebContents());
-+    if (!browser || !IsOrbisHost(PageUrl())) {
-+      RejectJavascriptCallback(callback_id, base::Value());
-+      return;
-+    }
-+    SigninViewController* controller =
-+        browser->GetFeatures().signin_view_controller();
-+    if (!controller) {
-+      RejectJavascriptCallback(callback_id, base::Value());
-+      return;
-+    }
-+    controller->ShowDiceEnableSyncTab(
-+        signin_metrics::AccessPoint::kSettings,
-+        signin_metrics::PromoAction::PROMO_ACTION_NO_SIGNIN_PROMO,
-+        std::string());
-+    // Started, not finished: the panel goes on reading orbis.signin.state and only shows an account when Chromium has one.
-+    ResolveJavascriptCallback(callback_id, base::Value(true));
-+  }
-+
-+  // The browser account only. Orbis Chat and Orion keep their own identity and are not touched from here.
-+  void HandleSignOut(const base::ListValue& args) {
-+    if (args.empty() || !args[0].is_string()) {
-+      return;
-+    }
-+    const std::string callback_id = args[0].GetString();
-+    AllowJavascript();
-+    signin::IdentityManager* identity = Identity();
-+    if (!identity || !identity->HasPrimaryAccount(signin::ConsentLevel::kSignin)) {
-+      RejectJavascriptCallback(callback_id, base::Value());
-+      return;
-+    }
-+    identity->GetPrimaryAccountMutator()->ClearPrimaryAccount(
-+        signin_metrics::ProfileSignout::kUserClickedSignoutSettings);
 +    ResolveJavascriptCallback(callback_id, base::Value(true));
 +  }
 +

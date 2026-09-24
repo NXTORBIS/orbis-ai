@@ -1213,6 +1213,12 @@ if (!app.requestSingleInstanceLock()) {
           galaxy: () => galaxyForChat,
           appServices: () => appServicesForBrowser,
           searchSessions: () => searchSessionsForBrowser,
+          // Orbis has no account and nothing to sign in to. This is the name the person typed into the app, read fresh each
+          // time so renaming yourself in the Orbis window renames you in the browser too, with no restart and no second identity.
+          identity: async () => {
+            const s = await store.getSettings()
+            return { name: s.userName, title: s.userTitle }
+          },
           // The app's own store, so a chat held in the panel and a chat held in the Orbis window are one chat.
           conversations: () => store,
           stores: () => panelStoresForBrowser,

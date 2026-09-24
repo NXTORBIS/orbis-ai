@@ -61,6 +61,12 @@ export interface HandlerDeps {
   searchSessions?: SearchSessionsDeps['store']
   /** Chats: the app's own store when given, else the helper opens the same folder under dataDir. */
   conversations?: ConversationsDeps['store']
+  /**
+   * Who the person says they are. Orbis has no account and nothing to sign in to; this is the name they typed into the app,
+   * and the browser shows it so the same person is named the same way on both sides. Read at call time so a rename in the
+   * Orbis window reaches the browser without a restart. Only the name and the title: nothing else in settings comes through.
+   */
+  identity?: () => Promise<{ name: string; title: string } | null>
   /** How this profile has arranged the browser sidebar (the app's own store); when given, the sidebar:* channels exist. */
   sidebar?: () => { read(): Promise<unknown>; write(layout: unknown): Promise<unknown>; reset(): Promise<unknown> } | null | undefined
   /** The Browser Control Layer, for the rail's Tabs, Tab groups, Media and Controls rows; when given, the browser:* channels exist. */
@@ -127,6 +133,14 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
     ...(deps.workflows ? createWorkflowHandlers(deps.workflows) : {}),
     ...(deps.galaxy ? createGalaxyHandlers(deps.galaxy) : {}),
     ...(deps.appServices ? createAppServiceHandlers(deps.appServices) : {}),
+    ...(deps.identity
+      ? {
+          'identity:get': async () => {
+            const who = await deps.identity!()
+            return who ? { name: who.name, title: who.title } : null
+          }
+        }
+      : {}),
     ...(deps.sidebar
       ? {
           'sidebar:get': () => sidebarOf(deps.sidebar!).read(),
