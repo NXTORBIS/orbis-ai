@@ -21,7 +21,6 @@ export type PanelId =
   | 'readingList'
   | 'savedPages'
   | 'workspaces'
-  | 'profiles'
   | 'extensions'
   | 'research'
   | 'sources'
@@ -64,7 +63,6 @@ export const PANELS: PanelInfo[] = [
   { id: 'readingList', label: 'Reading list', home: 'browsing', description: 'Pages set aside to read' },
   { id: 'savedPages', label: 'Saved pages', home: 'browsing', description: 'Pages saved to this computer, readable offline' },
   { id: 'workspaces', label: 'Workspaces', home: 'browsing', description: 'Sets of tabs kept together and reopened as one' },
-  { id: 'profiles', label: 'Profiles', home: 'browsing', description: 'The separate browsing lives kept on this computer' },
   { id: 'extensions', label: 'Extensions', home: 'browsing', description: 'What is installed, and whether it is on' },
 
   { id: 'research', label: 'Research', home: 'work', description: 'What Orion has looked into, and what it found' },
@@ -111,7 +109,7 @@ export function panelLabel(id: PanelId): string {
 const HOME_GROUPS: { id: string; label: string; panels: PanelId[] }[] = [
   { id: 'tabs', label: 'Tabs', panels: ['tabs', 'tabGroups'] },
   { id: 'library', label: 'Library', panels: ['bookmarks', 'history', 'downloads', 'readingList', 'savedPages'] },
-  { id: 'spaces', label: 'Spaces', panels: ['workspaces', 'profiles'] },
+  { id: 'spaces', label: 'Spaces', panels: ['workspaces'] },
   { id: 'notes', label: 'Notes', panels: ['notes', 'tasks', 'reminders', 'clipboard', 'whiteboard'] },
   { id: 'research', label: 'Research', panels: ['research', 'sources', 'galaxy'] },
   { id: 'media', label: 'Media', panels: ['screenshots', 'media'] },

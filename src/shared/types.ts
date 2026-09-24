@@ -224,6 +224,12 @@ export interface Settings {
   effects: boolean
   /** First-launch setup (the welcome screen and name) has been finished on this installation. */
   welcomeCompleted: boolean
+  /**
+   * Which version of the browser's first-launch introduction this installation has already seen. It is written only once the
+   * browser has actually come up, so a crash partway through leaves it unwritten and the introduction is shown again rather
+   * than silently skipped. Versioned, not a flag, so a later release can deliberately introduce itself again.
+   */
+  introVersion: number
   /** The address bar asks the search engine and Orion for predictions (sends the typed text). */
   searchSuggestions: boolean
   /** The address bar suggests from local history, searches, bookmarks and research, and learns from picks. */

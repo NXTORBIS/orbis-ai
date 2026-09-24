@@ -67,6 +67,14 @@ export interface HandlerDeps {
    * Orbis window reaches the browser without a restart. Only the name and the title: nothing else in settings comes through.
    */
   identity?: () => Promise<{ name: string; title: string } | null>
+  /**
+   * The browser's first-launch introduction: whether this installation has seen it, and a way to record that it has. It is
+   * kept with the app's settings rather than in the browser profile, so switching or adding a profile does not replay it.
+   */
+  intro?: {
+    seen: () => Promise<number>
+    markSeen: (version: number) => Promise<void>
+  }
   /** How this profile has arranged the browser sidebar (the app's own store); when given, the sidebar:* channels exist. */
   sidebar?: () => { read(): Promise<unknown>; write(layout: unknown): Promise<unknown>; reset(): Promise<unknown> } | null | undefined
   /** The Browser Control Layer, for the rail's Tabs, Tab groups, Media and Controls rows; when given, the browser:* channels exist. */
@@ -133,6 +141,17 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
     ...(deps.workflows ? createWorkflowHandlers(deps.workflows) : {}),
     ...(deps.galaxy ? createGalaxyHandlers(deps.galaxy) : {}),
     ...(deps.appServices ? createAppServiceHandlers(deps.appServices) : {}),
+    ...(deps.intro
+      ? {
+          'intro:get': async () => ({ seen: await deps.intro!.seen() }),
+          'intro:seen': async ([version]: unknown[]) => {
+            // Only a number this side recognises is recorded, so a page cannot mark a version that does not exist as done.
+            const v = typeof version === 'number' && Number.isFinite(version) ? Math.max(0, Math.floor(version)) : 0
+            await deps.intro!.markSeen(v)
+            return true
+          }
+        }
+      : {}),
     ...(deps.identity
       ? {
           'identity:get': async () => {

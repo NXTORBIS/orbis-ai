@@ -1219,6 +1219,12 @@ if (!app.requestSingleInstanceLock()) {
             const s = await store.getSettings()
             return { name: s.userName, title: s.userTitle }
           },
+          // The introduction belongs to the installation, not to a browsing profile: adding or switching a profile must not
+          // replay it. Recorded only when the browser page says it finished, so a crash partway through shows it again.
+          intro: {
+            seen: async () => (await store.getSettings()).introVersion,
+            markSeen: async (version) => void (await store.updateSettings({ introVersion: version }))
+          },
           // The app's own store, so a chat held in the panel and a chat held in the Orbis window are one chat.
           conversations: () => store,
           stores: () => panelStoresForBrowser,

@@ -23,6 +23,7 @@ const DEFAULTS: Omit<Settings, 'hasApiKey'> = {
   userTitle: 'Commander',
   effects: true,
   welcomeCompleted: false,
+  introVersion: 0,
   searchSuggestions: true,
   personalizedSuggestions: true,
   openBrowserOnLaunch: false
@@ -78,6 +79,8 @@ export class Store {
     if (typeof update.userName === 'string') next.userName = update.userName.trim().slice(0, 40) || DEFAULTS.userName
     if (typeof update.userTitle === 'string') next.userTitle = update.userTitle.trim().slice(0, 40)
     if (typeof update.welcomeCompleted === 'boolean') next.welcomeCompleted = update.welcomeCompleted
+    if (typeof update.introVersion === 'number' && Number.isFinite(update.introVersion))
+      next.introVersion = Math.max(0, Math.floor(update.introVersion))
     if (typeof update.searchSuggestions === 'boolean') next.searchSuggestions = update.searchSuggestions
     if (typeof update.personalizedSuggestions === 'boolean') next.personalizedSuggestions = update.personalizedSuggestions
     if (typeof update.openBrowserOnLaunch === 'boolean') next.openBrowserOnLaunch = update.openBrowserOnLaunch

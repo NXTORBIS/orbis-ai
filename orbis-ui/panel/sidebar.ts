@@ -43,7 +43,6 @@ const CHROMIUM_PAGE: Partial<Record<PanelId, string>> = {
   downloads: 'chrome://downloads/',
   readingList: 'chrome://bookmarks/',
   extensions: 'chrome://extensions/',
-  profiles: 'chrome://settings/manageProfile',
   customize: 'chrome://settings/',
   privacy: 'chrome://settings/privacy',
   tracking: 'chrome://settings/privacy'

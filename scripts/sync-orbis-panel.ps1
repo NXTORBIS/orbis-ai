@@ -12,7 +12,7 @@ New-Item -ItemType Directory -Force $dest | Out-Null
 if (-not (Test-Path (Join-Path $ui 'panel/sidebar.js'))) { throw 'orbis-ui/panel/sidebar.js is not built (node scripts/build-extension.mjs).' }
 foreach ($f in Get-ChildItem (Join-Path $ui 'panel') -File | Where-Object { $_.Extension -ne '.ts' }) { Copy-Item $f.FullName (Join-Path $dest $f.Name) -Force }
 foreach ($f in 'orbis-tokens.css','orbis.css','orbis-components.js') { Copy-Item (Join-Path $ui $f) (Join-Path $dest $f) -Force }
-foreach ($f in 'newtab.js','newtab.css','newtab-logic.js','newtab-store.js') { Copy-Item (Join-Path $ui "newtab\$f") (Join-Path $dest $f) -Force }
+foreach ($f in 'newtab.js','newtab.css','newtab-logic.js','newtab-store.js','intro.js','intro.css') { Copy-Item (Join-Path $ui "newtab\$f") (Join-Path $dest $f) -Force }
 Copy-Item (Join-Path $ui 'newtab\index.html') (Join-Path $dest 'newtab.html') -Force
 if (-not (Test-Path (Join-Path $ui 'results\results.js'))) { throw 'orbis-ui/results/results.js is not built (node scripts/build-extension.mjs).' }
 foreach ($f in 'results.js','results.css') { Copy-Item (Join-Path $ui "results\$f") (Join-Path $dest $f) -Force }

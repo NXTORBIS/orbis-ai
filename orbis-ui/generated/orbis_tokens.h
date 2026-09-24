@@ -80,10 +80,10 @@ constexpr int kSpace6 = 32;
 // Chrome geometry, from tokens.json scale.chrome.
 constexpr int kTabPillHeight = 28;
 constexpr int kHitTarget = 32;
-constexpr int kOmniboxHeight = 36;
-constexpr int kOmniboxRadius = 12;
+constexpr int kOmniboxHeight = 30;
+constexpr int kOmniboxRadius = 999;
 constexpr int kOmniboxPopupRadius = 12;
-constexpr int kOmniboxRing = 2;
+constexpr int kOmniboxRing = 3;
 constexpr int kIndicatorThickness = 2;
 constexpr int kMotionFastMs = 120;
 }  // namespace size

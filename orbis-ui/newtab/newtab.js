@@ -11,6 +11,7 @@ import { GRADIENTS, MAX_IMAGE_BYTES, MAX_SHORTCUTS, clockText, countdownText, gr
 import * as store from './newtab-store.js'
 import { askBrowser } from './helper.js'
 import { mountOrb } from './orb.js'
+import { introWanted, runIntro } from './intro.js'
 
 const $ = (id) => document.getElementById(id)
 let state = { settings: normalizeSettings(null), shortcuts: [], image: '' }
@@ -165,10 +166,19 @@ $('settingsForm').addEventListener('submit', async (e) => {
 
 function render() { applyWallpaper(); tick(); schedule(); renderShortcuts() }
 
-async function init() {
+async function load() {
   try { state = await store.load() } catch { /* storage unavailable: defaults */ }
   render()
   void topSites()
+}
+
+async function init() {
+  // The introduction is asked for before anything is drawn, so the page is never seen and then covered over.
+  if (!(await introWanted())) return void load()
+  await runIntro(document, async ({ say }) => {
+    say('Loading your page')
+    await load()
+  })
 }
 void init()
 mountOrb()
