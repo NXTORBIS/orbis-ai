@@ -359,10 +359,25 @@ const results = $('results')
 let lastQuery = ''
 let searching = null
 
+/**
+ * Every view has an address. chrome://orbis#galaxy opens Galaxy, chrome://orbis#workflows opens Workflows, and so on — so a
+ * feature is a page you can open, link to, bookmark and land on directly, the way chrome://history and chrome://downloads are,
+ * rather than something reachable only by clicking a tab inside one panel.
+ */
+const VIEWS = ['ask', 'search', 'block', 'notes', 'tasks', 'workflows', 'galaxy', 'secrets', 'account']
+
+const viewFromAddress = () => {
+  const wanted = (location.hash || '').replace(/^#\/?/, '').toLowerCase()
+  return VIEWS.includes(wanted) ? wanted : null
+}
+
 function showTab(name) {
   // Every view in the panel, including the rail's own (Tabs, Clipboard, ...), so choosing a tab always hides whichever was in front.
   for (const view of document.querySelectorAll('.view')) view.hidden = view.id !== `view-${name}`
   for (const id of ['ask', 'search', 'block', 'notes', 'tasks', 'workflows', 'galaxy', 'secrets', 'account']) $(`tab-${id}`).setAttribute('aria-selected', String(id === name))
+  // Keep the address in step with what is on screen, without adding a history entry
+  // for every tab press: the address describes the page, it is not a trail through it.
+  if (viewFromAddress() !== name) history.replaceState(null, '', `#${name}`)
   document.dispatchEvent(new CustomEvent('orbis:view', { detail: { name } }))
   if (name === 'block') document.dispatchEvent(new CustomEvent('orbis:blocking-shown'))
   else if (name === 'notes') document.dispatchEvent(new CustomEvent('orbis:notes-shown'))
@@ -456,6 +471,15 @@ $('ask-about').addEventListener('click', () => {
   showTab('ask')
   input.value = lastQuery
   $('composer').requestSubmit()
+})
+
+// Open on whatever the address names, so chrome://orbis#galaxy lands on Galaxy rather than on Ask and a click.
+const opening = viewFromAddress()
+if (opening) showTab(opening)
+// And follow the address afterwards: going back, or pasting a different one, moves the view.
+window.addEventListener('hashchange', () => {
+  const wanted = viewFromAddress()
+  if (wanted) showTab(wanted)
 })
 
 connect()
