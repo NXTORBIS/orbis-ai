@@ -16,6 +16,27 @@ index feff9bdf64..16f183802a 100644
    }
  
    // <if expr="not is_chromeos">
+diff --git a/chrome/browser/ui/profiles/profile_picker.cc b/chrome/browser/ui/profiles/profile_picker.cc
+index ec4549aae0..7171d4cf18 100644
+--- a/chrome/browser/ui/profiles/profile_picker.cc
++++ b/chrome/browser/ui/profiles/profile_picker.cc
+@@ -160,6 +160,16 @@ bool ProfilePicker::Shown() {
+ 
+ // static
+ StartupProfileMode ProfilePicker::GetStartupMode() {
++  // Orbis: the browser has one profile and no account, so there is never a
++  // choice of profile to present. Without this, a second local profile turns
++  // every launch into "Who's using Orbis?" — a chooser for a concept the
++  // product does not have. Profiles themselves are untouched; only the chooser
++  // is gone, and the browser opens straight into its window.
++  constexpr bool kOrbisShowsAProfileChooser = false;
++  if (!kOrbisShowsAProfileChooser) {
++    return StartupProfileMode::kBrowserWindow;
++  }
++
+   AvailabilityOnStartup availability_on_startup = GetAvailabilityOnStartup();
+ 
+   if (availability_on_startup == AvailabilityOnStartup::kDisabled) {
 diff --git a/chrome/browser/ui/toolbar/app_menu_model.cc b/chrome/browser/ui/toolbar/app_menu_model.cc
 index 45cd05f343..a1afd28003 100644
 --- a/chrome/browser/ui/toolbar/app_menu_model.cc
@@ -79,3 +100,63 @@ index c8f0fd8603..cd82217f13 100644
  #endif
  }
  
+diff --git a/components/search_engines/template_url_prepopulate_data.cc b/components/search_engines/template_url_prepopulate_data.cc
+index 85b0c96053..bb2b80775c 100644
+--- a/components/search_engines/template_url_prepopulate_data.cc
++++ b/components/search_engines/template_url_prepopulate_data.cc
+@@ -41,6 +41,29 @@ inline std::unique_ptr<TemplateURLData> PrepopulatedEngineToTemplateURLData(
+   return TemplateURLDataFromPrepopulatedEngine(*engine);
+ }
+ 
++// Orbis: Orbis Search is the default search engine. Its results page belongs to Orbis (the built-in chrome://orbis-search page), so a
++// search typed in the address bar, the new-tab page or a context menu lands in Orbis and not on another company's page. Google and
++// the others stay available: as engines to pick in settings, by keyword (@google), and by name (`!g ...` on the results page).
++constexpr int kOrbisPrepopulateId = 9001;
++
++std::unique_ptr<TemplateURLData> OrbisSearchEngine() {
++  auto data = std::make_unique<TemplateURLData>();
++  // "Orbis", not "Orbis Search": Chromium builds its own sentences around the
++  // engine name — "Search <name> or type a URL" in the placeholder and
++  // "<query> - <name> Search" on the match — so a name ending in "Search"
++  // reads as "Search Orbis Search or type a URL" and "dgf - Orbis Search Search".
++  data->SetShortName(u"Orbis");
++  data->SetKeyword(u"orbis");
++  data->SetURL("chrome://orbis-search/#q={searchTerms}");
++  // Suggestions are the search engine's own, as in every browser; only the words typed are sent.
++  data->suggestions_url = "https://suggestqueries.google.com/complete/search?client=firefox&q={searchTerms}";
++  data->favicon_url = GURL("chrome://orbis-search/orbis-ring.png");
++  data->safe_for_autoreplace = true;
++  data->input_encodings = {"UTF-8"};
++  data->prepopulate_id = kOrbisPrepopulateId;
++  return data;
++}
++
+ // These values are persisted to logs. Entries should not be renumbered and
+ // numeric values should never be reused.
+ enum class SearchProviderOverrideStatus {
+@@ -192,8 +215,11 @@ std::vector<std::unique_ptr<TemplateURLData>> GetPrepopulatedEngines(
+     return t_urls;
+   }
+ 
+-  return base::ToVector(regional_prepopulated_engines,
+-                        &PrepopulatedEngineToTemplateURLData);
++  std::vector<std::unique_ptr<TemplateURLData>> engines = base::ToVector(
++      regional_prepopulated_engines, &PrepopulatedEngineToTemplateURLData);
++  // Orbis: first in the list, so it is the default (the first engine is the default).
++  engines.insert(engines.begin(), OrbisSearchEngine());
++  return engines;
+ }
+ 
+ std::unique_ptr<TemplateURLData> GetPrepopulatedEngine(
+@@ -317,9 +343,8 @@ std::unique_ptr<TemplateURLData> GetPrepopulatedFallbackSearch(
+     PrefService& prefs,
+     const std::vector<raw_ptr<const PrepopulatedEngine>>&
+         regional_prepopulated_engines) {
+-  return FindPrepopulatedEngineInternal(prefs, regional_prepopulated_engines,
+-                                        google.id,
+-                                        /*use_first_as_fallback=*/true);
++  // Orbis: the fallback default is Orbis Search, not Google (which the stock code looks up by id first).
++  return OrbisSearchEngine();
+ }
+ 
+ }  // namespace TemplateURLPrepopulateData

@@ -1,0 +1,46 @@
+# Copyright 2026 The Chromium Authors
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+
+import("//testing/test.gni")
+
+# Orbis's ad blocking, in the browser rather than in an extension. The rules are
+# held in Chromium's own URL pattern index and matched in the network service's
+# path, so blocking does not depend on an extension being installed or enabled.
+source_set("adblock") {
+  sources = [
+    "orbis_filter_parser.cc",
+    "orbis_filter_parser.h",
+    "orbis_ruleset.cc",
+    "orbis_ruleset.h",
+  ]
+
+  deps = [
+    "//base",
+    "//components/subresource_filter/core/common",
+    "//components/url_pattern_index",
+    "//components/url_pattern_index/proto:url_pattern_index",
+    # indexed_ruleset.h is a public header that includes the generated
+    # flatbuffers header, but subresource_filter keeps flatbuffers in its private
+    # deps, so the include path does not come with it. Consumers have to ask.
+    "//third_party/flatbuffers",
+    "//url",
+  ]
+}
+
+test("orbis_adblock_unittests") {
+  sources = [
+    "orbis_filter_parser_unittest.cc",
+    "orbis_ruleset_unittest.cc",
+  ]
+
+  deps = [
+    ":adblock",
+    "//base",
+    "//base/test:run_all_unittests",
+    "//components/url_pattern_index/proto:url_pattern_index",
+    "//testing/gtest",
+    "//third_party/flatbuffers",
+    "//url",
+  ]
+}

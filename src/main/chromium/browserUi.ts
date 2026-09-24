@@ -163,7 +163,9 @@ public static class OrbisUi {
     return true;
   }
   [DllImport("user32.dll")] static extern IntPtr WindowFromPoint(POINT p);
-  [DllImport("user32.dll")] static extern IntPtr GetAncestor(IntPtr h, uint f);
+  // GetAncestor is declared once, further up. Declaring it again here made the
+  // whole OrbisUi type fail to compile ("already defines a member called
+  // GetAncestor"), which took every capability in this file down with it.
   [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X, Y; }
   // Real click at a screen point, only if the foreground window and the window under the point both belong to this pid.
   public static string ClickAtPid(uint pid, int x, int y, bool right) {

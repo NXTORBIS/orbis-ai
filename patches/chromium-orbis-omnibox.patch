@@ -1,19 +1,123 @@
-diff --git a/chrome/browser/ui/color/chrome_color_id.h b/chrome/browser/ui/color/chrome_color_id.h
-index 0f4b952a4b..90af334f02 100644
---- a/chrome/browser/ui/color/chrome_color_id.h
-+++ b/chrome/browser/ui/color/chrome_color_id.h
-@@ -533,6 +533,9 @@
-   E_CPONLY(kColorOmniboxSecurityChipInkDropRipple) \
-   E_CPONLY(kColorOmniboxSecurityChipSecure) \
-   E_CPONLY(kColorOmniboxSecurityChipText) \
-+  E_CPONLY(kColorOmniboxFocusRing) /* Orbis: calmer than the shared ring */ \
-+  E_CPONLY(kColorOmniboxFocusBorder) /* Orbis: the focused edge itself */ \
-+  E_CPONLY(kColorOmniboxResultsGlass) /* Orbis: the blurred panel surface */ \
-   E_CPONLY(kColorOmniboxSelectionBackground) \
-   E_CPONLY(kColorOmniboxSelectionForeground) \
-   E_CPONLY(kColorOmniboxText) \
+diff --git a/chrome/browser/resources/omnibox_popup/app.css b/chrome/browser/resources/omnibox_popup/app.css
+index 48ae23bb48..acb3dd0fbd 100644
+--- a/chrome/browser/resources/omnibox_popup/app.css
++++ b/chrome/browser/resources/omnibox_popup/app.css
+@@ -35,3 +35,41 @@
+   display: block;
+   width: 50%;
+ }
++
++/* Orbis: the key hints along the foot of the prediction list. Measured from the
++ * Electron browser's own footer: a hairline above, muted text, and keycaps in the
++ * mono face at 10px. It is out of the accessibility tree because a screen reader
++ * announcing three shortcuts after every keystroke would be noise, not help —
++ * the bindings are reachable and documented elsewhere. */
++.orbis-foot {
++  display: flex;
++  align-items: center;
++  margin-top: 3px;
++  padding: 6px 10px 4px;
++  border-top: 1px solid var(--color-omnibox-results-background-hovered, rgba(255, 255, 255, 0.09));
++}
++
++.orbis-foot[hidden] {
++  display: none;
++}
++
++.orbis-keys {
++  overflow: hidden;
++  color: var(--color-omnibox-text-dimmed);
++  font-size: 11px;
++  white-space: nowrap;
++  text-overflow: ellipsis;
++}
++
++.orbis-keys kbd {
++  margin: 0 3px 0 8px;
++  padding: 0 4px;
++  border: 1px solid var(--color-omnibox-results-background-hovered, rgba(255, 255, 255, 0.09));
++  border-radius: 4px;
++  font-family: var(--orbis-font-mono, ui-monospace, 'Cascadia Code', Consolas, monospace);
++  font-size: 10px;
++}
++
++.orbis-keys kbd:first-child {
++  margin-left: 0;
++}
+diff --git a/chrome/browser/resources/omnibox_popup/app.html.ts b/chrome/browser/resources/omnibox_popup/app.html.ts
+index 439163d320..0e7d1064e8 100644
+--- a/chrome/browser/resources/omnibox_popup/app.html.ts
++++ b/chrome/browser/resources/omnibox_popup/app.html.ts
+@@ -20,6 +20,17 @@ export function getHtml(this: OmniboxPopupAppElement) {
+       ?hidden="${!this.hasVisibleMatches_}">
+   </cr-searchbox-dropdown>
+   <omnibox-popup-contextual-entrypoint></omnibox-popup-contextual-entrypoint>
++  <!-- Orbis: what the keys do, along the foot of the list, as the Electron browser
++       shows it. These are statements about bindings that already exist, not
++       controls: there is nothing here to click and nothing here that can be
++       wrong about the browser's state. -->
++  <div class="orbis-foot" ?hidden="${!this.hasVisibleMatches_}" aria-hidden="true">
++    <span class="orbis-keys">
++      <kbd>Enter</kbd> open
++      <kbd>Ctrl+Enter</kbd> ask Orion
++      <kbd>Shift+Enter</kbd> default browser
++    </span>
++  </div>
+ </div>
+ <!--_html_template_end_-->`;
+   // clang-format on
+diff --git a/chrome/browser/resources/omnibox_popup/omnibox_popup_shared_style.css b/chrome/browser/resources/omnibox_popup/omnibox_popup_shared_style.css
+index 7cb613cbcf..e0bd43a2b8 100644
+--- a/chrome/browser/resources/omnibox_popup/omnibox_popup_shared_style.css
++++ b/chrome/browser/resources/omnibox_popup/omnibox_popup_shared_style.css
+@@ -29,7 +29,7 @@
+   --cr-searchbox-match-icon-container-background-fallback: var(--color-omnibox-results-background-hovered);
+   --color-searchbox-background: var(--color-omnibox-results-background);
+   --color-searchbox-foreground: var(--color-omnibox-text);
+-  --color-searchbox-results-background-hovered: var(--color-omnibox-results-background-hover-overlay);
++  --color-searchbox-results-background-hovered: var(--color-omnibox-results-background-hovered);
+   --color-searchbox-results-background-selected: var(--color-omnibox-results-background-selected);
+   --color-searchbox-results-button-hover: var(--color-omnibox-results-button-ink-drop-row-hovered);
+   --color-searchbox-results-focus-indicator: var(--color-omnibox-results-focus-indicator);
+@@ -66,9 +66,14 @@
+ cr-searchbox-dropdown {
+   --cr-searchbox-dropdown-header-padding-inline-start: 16px;
+   --cr-searchbox-icon-container-size: 28px;
+-  --cr-searchbox-match-font-weight: 700;
+-  --cr-searchbox-match-padding: 6px;
+-  --cr-searchbox-match-padding-inline-start: 16px;
++  /* Orbis: 700 on the matched span made every suggestion shout. The weight is
++   * what separates what you typed from what was suggested, so it only has to be
++   * heavier than the rest of the line, not heavy. */
++  --cr-searchbox-match-font-weight: 600;
++  /* Orbis: rows want room. 6px packs them tightly enough that the list reads as
++   * one block of text rather than a set of separate things you can choose. */
++  --cr-searchbox-match-padding: 9px;
++  --cr-searchbox-match-padding-inline-start: 14px;
+   --cr-searchbox-match-text-padding-inline-end: 8px;
+   --cr-searchbox-results-action-chip-height: 26px;
+   --cr-searchbox-results-search-icon-size: 16px;
+@@ -86,3 +91,4 @@ cr-searchbox-dropdown {
+   --cr-searchbox-results-padding-bottom: 0;
+   padding-bottom: 10px;
+ }
++
+diff --git a/chrome/browser/ui/views/omnibox/omnibox_view_views.cc b/chrome/browser/ui/views/omnibox/omnibox_view_views.cc
+index 68ed923c1b..b4447d7a44 100644
+--- a/chrome/browser/ui/views/omnibox/omnibox_view_views.cc
++++ b/chrome/browser/ui/views/omnibox/omnibox_view_views.cc
+@@ -2004,7 +2004,8 @@ bool OmniboxViewViews::HandleKeyEvent(views::Textfield* textfield,
+   const bool command = event.IsCommandDown();
+   switch (event.key_code()) {
+     case ui::VKEY_RETURN: {
+-      if (omnibox::kShowRhsAimHint.Get()) {
++      // Orbis: Ctrl+Enter (Command+Enter on Mac) always asks Orion inside Orbis.
++      if (true) {
+ #if BUILDFLAG(IS_MAC)
+         const bool ai_mode_modifier = command;
+ #else
 diff --git a/chrome/browser/ui/views/omnibox/rounded_omnibox_results_frame.cc b/chrome/browser/ui/views/omnibox/rounded_omnibox_results_frame.cc
-index 4d5b3f6dd0..dcfe7c42e7 100644
+index 4d5b3f6dd0..8fe4f9552a 100644
 --- a/chrome/browser/ui/views/omnibox/rounded_omnibox_results_frame.cc
 +++ b/chrome/browser/ui/views/omnibox/rounded_omnibox_results_frame.cc
 @@ -25,6 +25,7 @@
@@ -37,27 +141,19 @@ index 4d5b3f6dd0..dcfe7c42e7 100644
    auto* webui_content = GetOmniboxPopupWebUIBaseContent();
    const bool masks_to_bounds =
        webui_content && webui_content->ShouldSizeWebViewToPreferredHeight();
-@@ -245,12 +248,18 @@ RoundedOmniboxResultsFrame::RoundedOmniboxResultsFrame(
-       views::Builder<views::View>()
-           .CopyAddressTo(&contents_host_)
-           .SetBackground(
--              views::CreateSolidBackground(kColorOmniboxResultsBackground))
-+              views::CreateSolidBackground(kColorOmniboxResultsGlass))
-           .SetPaintToLayer()
-           .CustomConfigure(base::BindOnce(
+@@ -251,6 +254,11 @@ RoundedOmniboxResultsFrame::RoundedOmniboxResultsFrame(
                [](const int corner_radius, const bool masks_to_bounds,
                   views::View* view) {
                  view->layer()->SetFillsBoundsOpaquely(false);
-+                // Orbis: the panel is glass, as it is in the Electron browser —
-+                // a translucent surface blurring what sits behind it. The radius
-+                // is given to the blur too, or the blur squares off the corners
-+                // the layer has just rounded.
-+                view->layer()->SetBackgroundBlur(14);
-+                view->layer()->SetBackdropFilterQuality(0.5f);
++                // No background blur here. This host also contains the view that
++                // covers the location bar so the panel looks attached to it, so a
++                // backdrop blur on it smears the omnibox text underneath — you
++                // could not read what you were typing. Glass on this surface would
++                // have to be applied to the results area alone, below the field.
                  if (masks_to_bounds) {
                    view->layer()->SetMasksToBounds(true);
                  }
-@@ -365,8 +374,10 @@ void RoundedOmniboxResultsFrame::SetCutoutVisibility(bool visible) {
+@@ -365,8 +373,10 @@ void RoundedOmniboxResultsFrame::SetCutoutVisibility(bool visible) {
  }
  
  void RoundedOmniboxResultsFrame::SetElevation(int elevation) {
@@ -70,3 +166,66 @@ index 4d5b3f6dd0..dcfe7c42e7 100644
    auto border = std::make_unique<views::BubbleBorder>(
        views::BubbleBorder::Arrow::NONE,
        elevation == 0 ? views::BubbleBorder::Shadow::NO_SHADOW
+diff --git a/ui/webui/resources/cr_components/searchbox/searchbox_dropdown.css b/ui/webui/resources/cr_components/searchbox/searchbox_dropdown.css
+index 9f47ed3e7d..8f23f5701a 100644
+--- a/ui/webui/resources/cr_components/searchbox/searchbox_dropdown.css
++++ b/ui/webui/resources/cr_components/searchbox/searchbox_dropdown.css
+@@ -73,6 +73,27 @@ cr-searchbox-match:-webkit-any(:focus-within, [selected]) {
+   z-index: 1;
+ }
+ 
++/* Orbis: in the browser's own popup a section heading is a label, not a row. The
++ * stock header reserves 44px to match a result's height, which puts as much weight
++ * on "Recent searches" as on the searches themselves. Measured from the Electron
++ * browser: small mono capitals, widely tracked, sitting just above their group. */
++:host-context([is-top-chrome-searchbox_]) .header,
++:host([is-top-chrome-searchbox_]) .header {
++  height: auto;
++  padding-top: 7px;
++  padding-bottom: 3px;
++  padding-inline-start: 10px;
++}
++
++:host-context([is-top-chrome-searchbox_]) .header .text,
++:host([is-top-chrome-searchbox_]) .header .text {
++  font-family: var(--orbis-font-mono, ui-monospace, 'Cascadia Code', Consolas, monospace);
++  font-size: 10px;
++  font-weight: 600;
++  letter-spacing: 0.1em;
++  text-transform: uppercase;
++}
++
+ @media (forced-colors: active) {
+   cr-searchbox-match:-webkit-any(:hover, :focus-within, [selected]) {
+     background-color: Highlight;
+diff --git a/ui/webui/resources/cr_components/searchbox/searchbox_match.css b/ui/webui/resources/cr_components/searchbox/searchbox_match.css
+index 812e441a5a..e639176f21 100644
+--- a/ui/webui/resources/cr_components/searchbox/searchbox_match.css
++++ b/ui/webui/resources/cr_components/searchbox/searchbox_match.css
+@@ -77,6 +77,26 @@
+   border-end-end-radius: 24px;
+ }
+ 
++/* Orbis: in the browser's own omnibox popup a row is a row — inset the same
++ * amount on both sides and rounded the same amount at all four corners. The
++ * stock shape is square on the leading edge and a 24px capsule on the trailing
++ * one, which leaves the selected row looking like it is sliding off the panel.
++ * Geometry measured from the Electron browser's own list. */
++:host([is-top-chrome-searchbox_]) .container:not(.actions) {
++  border-radius: 8px;
++  margin-inline-end: 8px;
++  margin-inline-start: 8px;
++  min-height: 34px;
++  padding-inline-start: 10px;
++}
++
++/* The selected row is marked down its leading edge rather than filled. A block of
++ * colour across the whole row is the thing the Electron browser deliberately did
++ * not do: the accent says which row, the surface stays quiet enough to read. */
++:host([is-top-chrome-searchbox_]:is(:focus-visible, [selected])) .container:not(.actions) {
++  box-shadow: inset 2px 0 0 var(--color-omnibox-results-focus-indicator, currentColor);
++}
++
+ :host-context([has-secondary-side]):host-context([can-show-secondary-side]) .container:not(.actions) {
+   margin-inline-end: 0;
+ }
