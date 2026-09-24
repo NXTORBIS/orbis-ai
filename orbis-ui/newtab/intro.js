@@ -54,15 +54,15 @@ function build(doc) {
   spark.className = 'intro-spark'
   const halo = doc.createElement('span')
   halo.className = 'intro-halo'
+  orbit.append(spark, halo)
+
+  // The real logo, wordmark and all — not a ring with the name set beside it in a
+  // typeface that is not the one the logo is drawn in. The ring is the logo's own O,
+  // so the halo that opened a moment ago hands straight over to it.
   const mark = doc.createElement('img')
   mark.className = 'intro-mark'
-  mark.src = 'orbis-ring.png'
-  mark.alt = ''
-  orbit.append(spark, halo, mark)
-
-  const word = doc.createElement('p')
-  word.className = 'intro-word'
-  word.textContent = 'ORBIS'
+  mark.src = 'orbis-wordmark.png'
+  mark.alt = 'Orbis'
 
   const status = doc.createElement('p')
   status.className = 'intro-status'
@@ -70,7 +70,7 @@ function build(doc) {
   status.setAttribute('role', 'status')
   status.setAttribute('aria-live', 'polite')
 
-  stage.append(orbit, word, status)
+  stage.append(orbit, mark, status)
 
   const skip = doc.createElement('button')
   skip.type = 'button'

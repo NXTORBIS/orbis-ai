@@ -1,5 +1,5 @@
 diff --git a/chrome/browser/ui/color/chrome_color_mixers.cc b/chrome/browser/ui/color/chrome_color_mixers.cc
-index 9698e807b1..ed1f1869bb 100644
+index 9698e807b1..e420f7b6be 100644
 --- a/chrome/browser/ui/color/chrome_color_mixers.cc
 +++ b/chrome/browser/ui/color/chrome_color_mixers.cc
 @@ -23,6 +23,11 @@
@@ -14,7 +14,7 @@ index 9698e807b1..ed1f1869bb 100644
  
  namespace {
  
-@@ -51,6 +56,146 @@ bool ChromeColorProviderUtilsCallbacks::ColorIdName(
+@@ -51,6 +56,152 @@ bool ChromeColorProviderUtilsCallbacks::ColorIdName(
  // .inc file serves to undefine the macros the first inclusion defined.
  #include "ui/color/color_id_map_macros.inc"
  
@@ -23,20 +23,20 @@ index 9698e807b1..ed1f1869bb 100644
 +// from orbis-ui/tokens.json through ui/color/orbis_tokens.h: one flat bar, subtle inactive tabs, a raised active pill.
 +struct OrbisChrome {
 +  SkColor bg, surface, surface2, surface3, text, muted, faint, accent, accent_fill, green, red, danger, line, hover, input_bg,
-+      input_border, popover;
++      input_border, popover, glass;
 +};
 +constexpr OrbisChrome kOrbisChromeDark = {
 +    orbis::dark::kBg,     orbis::dark::kSurface,   orbis::dark::kSurface2,    orbis::dark::kSurface3,
 +    orbis::dark::kText,   orbis::dark::kMuted,     orbis::dark::kFaint,       orbis::dark::kAccent,
 +    orbis::dark::kAccentFill, orbis::dark::kGreen, orbis::dark::kRed,         orbis::dark::kDanger,
 +    orbis::dark::kLine,   orbis::dark::kHover,     orbis::dark::kInputBg,     orbis::dark::kInputBorder,
-+    orbis::dark::kPopover};
++    orbis::dark::kPopover,  orbis::dark::kGlass};
 +constexpr OrbisChrome kOrbisChromeLight = {
 +    orbis::light::kBg,     orbis::light::kSurface,   orbis::light::kSurface2,    orbis::light::kSurface3,
 +    orbis::light::kText,   orbis::light::kMuted,     orbis::light::kFaint,       orbis::light::kAccent,
 +    orbis::light::kAccentFill, orbis::light::kGreen, orbis::light::kRed,         orbis::light::kDanger,
 +    orbis::light::kLine,   orbis::light::kHover,     orbis::light::kInputBg,     orbis::light::kInputBorder,
-+    orbis::light::kPopover};
++    orbis::light::kPopover,  orbis::light::kGlass};
 +
 +void AddOrbisChromeMixer(ui::ColorProvider* provider, const ui::ColorProviderKey& key) {
 +  const bool dark = key.color_mode == ui::ColorProviderKey::ColorMode::kDark;
@@ -114,10 +114,12 @@ index 9698e807b1..ed1f1869bb 100644
 +  m[kColorLocationBarBorderOpaque] = ui::GetResultingPaintColor(s.input_border, s.surface);
 +  m[kColorLocationBarBorderOnMismatch] = {s.input_border};
 +  m[ui::kColorFocusableBorderFocused] = {s.accent};
-+  // Orbis: focus on the omnibox is stated by the ring and by the surface under
-+  // it together, so the ring does not have to carry the whole signal at full
-+  // accent. At 70% it is still a clear 2px indicator and stops reading as neon.
-+  m[kColorOmniboxFocusRing] = ui::SetAlpha({s.accent}, 0xB3);
++  // Orbis: the focused address bar in the Electron browser is a dim-cyan hairline
++  // with a soft fill outside it — border-color cyan-dim, box-shadow 0 0 0 3px
++  // cyan-fill. Two values, not one: the edge says where the field is, and the fill
++  // gives the focus indicator its area without a hard stroke of neon.
++  m[kColorOmniboxFocusBorder] = ui::SetAlpha({s.accent}, 0x8C);  // 55%, cyan-dim
++  m[kColorOmniboxFocusRing] = ui::SetAlpha({s.accent}, 0x29);    // 16%, cyan-fill
 +  m[kColorOmniboxText] = {s.text};
 +  m[kColorOmniboxTextDimmed] = {s.muted};
 +  m[kColorOmniboxSelectionBackground] = ui::SetAlpha({s.accent}, 0x59);
@@ -127,6 +129,10 @@ index 9698e807b1..ed1f1869bb 100644
 +  m[kColorOmniboxSecurityChipDangerous] = {s.danger};
 +
 +  // Omnibox popup: a popover surface; rows hover with a wash, the selected row is accent-tinted with an accent focus mark.
++  // Orbis: the Electron browser's prediction panel is glass — a translucent surface
++  // over whatever is behind it, blurred, with a hairline. The opaque popover colour
++  // is kept for anything that cannot blur; the frame itself uses the glass one.
++  m[kColorOmniboxResultsGlass] = {s.glass};
 +  m[kColorOmniboxResultsBackground] = {s.popover};
 +  m[kColorOmniboxResultsBackgroundIph] = {s.surface2};
 +  m[kColorOmniboxResultsBackgroundHovered] = ui::GetResultingPaintColor(s.hover, s.popover);
@@ -161,7 +167,7 @@ index 9698e807b1..ed1f1869bb 100644
  }  // namespace
  
  void AddChromeColorMixers(ui::ColorProvider* provider,
-@@ -74,6 +219,9 @@ void AddChromeColorMixers(ui::ColorProvider* provider,
+@@ -74,6 +225,9 @@ void AddChromeColorMixers(ui::ColorProvider* provider,
    // Must be the last one in order to override other mixer colors.
    AddNativeChromeColorMixer(provider, key);
  
@@ -202,7 +208,7 @@ index 7d1a2d797f..3f0306eb71 100644
        return touch_ui ? kDefaultTouchableIconSize
                        : kDefaultIconSizeChromeRefresh;
 diff --git a/chrome/browser/ui/views/location_bar/location_bar_view.cc b/chrome/browser/ui/views/location_bar/location_bar_view.cc
-index b9988028f4..0058999a4b 100644
+index b9988028f4..041cc6ecc8 100644
 --- a/chrome/browser/ui/views/location_bar/location_bar_view.cc
 +++ b/chrome/browser/ui/views/location_bar/location_bar_view.cc
 @@ -3,6 +3,7 @@
@@ -213,32 +219,59 @@ index b9988028f4..0058999a4b 100644
  
  #include <algorithm>
  #include <memory>
-@@ -237,7 +238,13 @@ LocationBarView::LocationBarView(BrowserWindowInterface* browser,
+@@ -237,6 +238,11 @@ LocationBarView::LocationBarView(BrowserWindowInterface* browser,
                   !v->GetOmniboxController()->IsPopupOpen();
          }));
      views::FocusRing::Get(this)->SetOutsetFocusRingDisabled(true);
--    views::InstallPillHighlightPathGenerator(this);
 +    views::FocusRing::Get(this)->SetHaloThickness(orbis::size::kOmniboxRing);
 +    views::FocusRing::Get(this)->SetColorId(kColorOmniboxFocusRing);
-+    // Orbis: the ring traces the omnibox itself. A pill generator here would draw a
-+    // capsule around a rounded rectangle, which is what made focus read as a glow
-+    // sitting on top of the field rather than as the edge of the field.
-+    views::InstallRoundRectHighlightPathGenerator(
-+        this, gfx::Insets(), orbis::size::kOmniboxRadius);
++    // Orbis: the ring traces the omnibox itself. Ring and surface must agree on the
++    // shape — a capsule drawn around a rounded rectangle is what made focus read as
++    // a glow sitting on top of the field rather than as the edge of it.
+     views::InstallPillHighlightPathGenerator(this);
  
  #if BUILDFLAG(OS_LEVEL_GEOLOCATION_PERMISSION_SUPPORTED)
-     if (features::IsOsLevelGeolocationPermissionSupportEnabled()) {
-@@ -514,8 +521,7 @@ int LocationBarView::GetBorderRadius() const {
+@@ -315,6 +321,13 @@ void LocationBarView::Init() {
+   const gfx::FontList& font_list = typography_provider.GetFont(
+       CONTEXT_OMNIBOX_PRIMARY, views::style::STYLE_PRIMARY);
+ 
++  // Orbis: the Electron browser sets what you have typed in the mono face and the
++  // placeholder in the interface face — a URL is easier to read and to pick apart
++  // character by character in mono, while the prompt is prose and belongs in prose.
++  // Views keeps the two font lists separately, so the same split is exact here.
++  const gfx::FontList orbis_input_font({orbis::kFontMono}, gfx::Font::NORMAL, 13,
++                                       gfx::Font::Weight::NORMAL);
++
+   const gfx::FontList& omnibox_chip_font_list = typography_provider.GetFont(
+       CONTEXT_OMNIBOX_PRIMARY, views::style::STYLE_BODY_4_EMPHASIS);
+   const gfx::FontList& page_action_font_list = typography_provider.GetFont(
+@@ -337,9 +350,11 @@ void LocationBarView::Init() {
+           /*location_bar=*/this, browser_, profile_));
+   auto omnibox_view = std::make_unique<OmniboxViewViews>(
+       is_popup_mode_, omnibox_controller_.get(),
+-      /*location_bar_view=*/this, font_list);
++      /*location_bar_view=*/this, orbis_input_font);
+ 
+   omnibox_view_ = AddChildView(std::move(omnibox_view));
++  // The prompt stays in the interface face; only what the person types is mono.
++  omnibox_view_->set_placeholder_font_list(font_list);
+   omnibox_view_->Init();
+ 
+   const bool is_web_app =
+@@ -514,8 +529,10 @@ int LocationBarView::GetBorderRadius() const {
  
  // static
  int LocationBarView::ComputeBorderRadius(gfx::Size size) {
 -  return ChromeLayoutProvider::Get()->GetCornerRadiusMetric(
 -      views::Emphasis::kMaximum, size);
-+  return orbis::size::kOmniboxRadius;  // Orbis: a rounded input, not a capsule.
++  // Orbis: a pill, as the Electron browser's address bar is. Clamped to the
++  // control's own height so it stays a capsule at any size rather than a
++  // rectangle with an absurd radius.
++  return std::min(orbis::size::kOmniboxRadius, size.height() / 2);
  }
  
  // static
-@@ -1373,7 +1379,10 @@ void LocationBarView::RefreshBackground() {
+@@ -1373,7 +1390,14 @@ void LocationBarView::RefreshBackground() {
      background_color_ = gfx::Tween::ColorValueBetween(opacity, normal, hovered);
    }
  
@@ -247,10 +280,14 @@ index b9988028f4..0058999a4b 100644
 +  // no boundary of its own and dissolves into the toolbar behind it; with one it
 +  // reads as a surface, which is the whole point of the control.
 +  SkColor border_color = color_provider->GetColor(kColorLocationBarBorder);
++  if (is_caret_visible) {
++    // Focused: the edge itself brightens. The ring outside it is the soft fill.
++    border_color = color_provider->GetColor(kColorOmniboxFocusBorder);
++  }
    if (high_contrast) {
      // High contrast schemes get a border stroke even on a rounded omnibox.
      border_color =
-@@ -1486,9 +1495,9 @@ void LocationBarView::RefreshAiModePageAction() {
+@@ -1486,9 +1510,9 @@ void LocationBarView::RefreshAiModePageAction() {
        ai_mode_hint_label_->SetVisible(false);
      }
  #if BUILDFLAG(IS_MAC)

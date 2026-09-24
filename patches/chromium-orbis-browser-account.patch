@@ -1,8 +1,8 @@
 diff --git a/chrome/browser/browser_resources.grd b/chrome/browser/browser_resources.grd
-index 87ae613c0a..c38e66fe6c 100644
+index 87ae613c0a..0d9de1a7ba 100644
 --- a/chrome/browser/browser_resources.grd
 +++ b/chrome/browser/browser_resources.grd
-@@ -103,6 +103,33 @@
+@@ -103,6 +103,36 @@
          <include name="IDR_SEARCH_ENGINE_HISTORICAL_SEARCH_URLS_JSON" file="../../third_party/search_engines_data/resources_internal/definitions/historical_search_urls.json" type="BINDATA" />
        </if>
  
@@ -10,6 +10,9 @@ index 87ae613c0a..c38e66fe6c 100644
 +      <include name="IDR_ORBIS_NEWTAB_HTML" file="resources\orbis\newtab.html" type="BINDATA" />
 +      <include name="IDR_ORBIS_NEWTAB_JS" file="resources\orbis\newtab.js" type="BINDATA" />
 +      <include name="IDR_ORBIS_NEWTAB_CSS" file="resources\orbis\newtab.css" type="BINDATA" />
++      <include name="IDR_ORBIS_INTRO_JS" file="resources\orbis\intro.js" type="BINDATA" />
++      <include name="IDR_ORBIS_INTRO_CSS" file="resources\orbis\intro.css" type="BINDATA" />
++      <include name="IDR_ORBIS_WORDMARK_PNG" file="resources\orbis\orbis-wordmark.png" type="BINDATA" />
 +      <include name="IDR_ORBIS_NEWTAB_LOGIC_JS" file="resources\orbis\newtab-logic.js" type="BINDATA" />
 +      <include name="IDR_ORBIS_NEWTAB_STORE_JS" file="resources\orbis\newtab-store.js" type="BINDATA" />
 +      <include name="IDR_ORBIS_RESULTS_HTML" file="resources\orbis\results.html" type="BINDATA" />
@@ -72,10 +75,10 @@ index 0000000000..cf535cec0f
 \ No newline at end of file
 diff --git a/chrome/browser/ui/webui/orbis/orbis_ui.cc b/chrome/browser/ui/webui/orbis/orbis_ui.cc
 new file mode 100644
-index 0000000000..430bebabbe
+index 0000000000..2ed2206d6f
 --- /dev/null
 +++ b/chrome/browser/ui/webui/orbis/orbis_ui.cc
-@@ -0,0 +1,431 @@
+@@ -0,0 +1,434 @@
 +// Copyright 2026 The Orbis Authors. All rights reserved.
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -470,6 +473,9 @@ index 0000000000..430bebabbe
 +  source->AddResourcePath("index.html", IDR_ORBIS_NEWTAB_HTML);
 +  source->AddResourcePath("newtab.js", IDR_ORBIS_NEWTAB_JS);
 +  source->AddResourcePath("newtab.css", IDR_ORBIS_NEWTAB_CSS);
++  source->AddResourcePath("intro.js", IDR_ORBIS_INTRO_JS);
++  source->AddResourcePath("intro.css", IDR_ORBIS_INTRO_CSS);
++  source->AddResourcePath("orbis-wordmark.png", IDR_ORBIS_WORDMARK_PNG);
 +  source->AddResourcePath("newtab-logic.js", IDR_ORBIS_NEWTAB_LOGIC_JS);
 +  source->AddResourcePath("newtab-store.js", IDR_ORBIS_NEWTAB_STORE_JS);
 +  source->AddResourcePath("orb.js", IDR_ORBIS_ORB_JS);

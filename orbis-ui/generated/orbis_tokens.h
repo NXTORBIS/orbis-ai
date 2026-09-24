@@ -90,6 +90,10 @@ constexpr int kMotionFastMs = 120;
 
 // Font: first family of the token stack that ships with Windows (the Views UI cannot load web fonts).
 constexpr char kFontFamily[] = "Segoe UI";
+// The address bar sets a URL in the mono face, as the Electron browser does. Consolas rather than the first
+// family of the token stack: it is the one in that stack Windows is guaranteed to have, and Views cannot fall
+// back through a web font list.
+constexpr char kFontMono[] = "Consolas";
 
 }  // namespace orbis
 

@@ -1,17 +1,19 @@
 diff --git a/chrome/browser/ui/color/chrome_color_id.h b/chrome/browser/ui/color/chrome_color_id.h
-index 0f4b952a4b..8df47e5e9c 100644
+index 0f4b952a4b..90af334f02 100644
 --- a/chrome/browser/ui/color/chrome_color_id.h
 +++ b/chrome/browser/ui/color/chrome_color_id.h
-@@ -533,6 +533,7 @@
+@@ -533,6 +533,9 @@
    E_CPONLY(kColorOmniboxSecurityChipInkDropRipple) \
    E_CPONLY(kColorOmniboxSecurityChipSecure) \
    E_CPONLY(kColorOmniboxSecurityChipText) \
 +  E_CPONLY(kColorOmniboxFocusRing) /* Orbis: calmer than the shared ring */ \
++  E_CPONLY(kColorOmniboxFocusBorder) /* Orbis: the focused edge itself */ \
++  E_CPONLY(kColorOmniboxResultsGlass) /* Orbis: the blurred panel surface */ \
    E_CPONLY(kColorOmniboxSelectionBackground) \
    E_CPONLY(kColorOmniboxSelectionForeground) \
    E_CPONLY(kColorOmniboxText) \
 diff --git a/chrome/browser/ui/views/omnibox/rounded_omnibox_results_frame.cc b/chrome/browser/ui/views/omnibox/rounded_omnibox_results_frame.cc
-index 4d5b3f6dd0..124e71bff2 100644
+index 4d5b3f6dd0..dcfe7c42e7 100644
 --- a/chrome/browser/ui/views/omnibox/rounded_omnibox_results_frame.cc
 +++ b/chrome/browser/ui/views/omnibox/rounded_omnibox_results_frame.cc
 @@ -25,6 +25,7 @@
@@ -35,7 +37,27 @@ index 4d5b3f6dd0..124e71bff2 100644
    auto* webui_content = GetOmniboxPopupWebUIBaseContent();
    const bool masks_to_bounds =
        webui_content && webui_content->ShouldSizeWebViewToPreferredHeight();
-@@ -365,8 +368,10 @@ void RoundedOmniboxResultsFrame::SetCutoutVisibility(bool visible) {
+@@ -245,12 +248,18 @@ RoundedOmniboxResultsFrame::RoundedOmniboxResultsFrame(
+       views::Builder<views::View>()
+           .CopyAddressTo(&contents_host_)
+           .SetBackground(
+-              views::CreateSolidBackground(kColorOmniboxResultsBackground))
++              views::CreateSolidBackground(kColorOmniboxResultsGlass))
+           .SetPaintToLayer()
+           .CustomConfigure(base::BindOnce(
+               [](const int corner_radius, const bool masks_to_bounds,
+                  views::View* view) {
+                 view->layer()->SetFillsBoundsOpaquely(false);
++                // Orbis: the panel is glass, as it is in the Electron browser —
++                // a translucent surface blurring what sits behind it. The radius
++                // is given to the blur too, or the blur squares off the corners
++                // the layer has just rounded.
++                view->layer()->SetBackgroundBlur(14);
++                view->layer()->SetBackdropFilterQuality(0.5f);
+                 if (masks_to_bounds) {
+                   view->layer()->SetMasksToBounds(true);
+                 }
+@@ -365,8 +374,10 @@ void RoundedOmniboxResultsFrame::SetCutoutVisibility(bool visible) {
  }
  
  void RoundedOmniboxResultsFrame::SetElevation(int elevation) {
@@ -48,24 +70,3 @@ index 4d5b3f6dd0..124e71bff2 100644
    auto border = std::make_unique<views::BubbleBorder>(
        views::BubbleBorder::Arrow::NONE,
        elevation == 0 ? views::BubbleBorder::Shadow::NO_SHADOW
-diff --git a/ui/webui/resources/cr_components/searchbox/searchbox_match.css b/ui/webui/resources/cr_components/searchbox/searchbox_match.css
-index 812e441a5a..777367423a 100644
---- a/ui/webui/resources/cr_components/searchbox/searchbox_match.css
-+++ b/ui/webui/resources/cr_components/searchbox/searchbox_match.css
-@@ -77,6 +77,16 @@
-   border-end-end-radius: 24px;
- }
- 
-+/* Orbis: in the browser's own omnibox popup a row is a row — inset the same
-+ * amount on both sides and rounded the same amount at all four corners. The
-+ * stock shape is square on the leading edge and a 24px capsule on the trailing
-+ * one, which leaves the selected row looking like it is sliding off the panel. */
-+:host([is-top-chrome-searchbox_]) .container:not(.actions) {
-+  border-radius: 10px;
-+  margin-inline-end: 8px;
-+  margin-inline-start: 8px;
-+}
-+
- :host-context([has-secondary-side]):host-context([can-show-secondary-side]) .container:not(.actions) {
-   margin-inline-end: 0;
- }

@@ -1,3 +1,62 @@
+diff --git a/chrome/browser/resources/settings/page_visibility.ts b/chrome/browser/resources/settings/page_visibility.ts
+index feff9bdf64..16f183802a 100644
+--- a/chrome/browser/resources/settings/page_visibility.ts
++++ b/chrome/browser/resources/settings/page_visibility.ts
+@@ -43,8 +43,12 @@ export interface PrivacyPageVisibility {
+ }
+ 
+ function createPageVisibility(): PageVisibility|undefined {
++  // Orbis: there is no account and no second profile, so "You and sign-in" has
++  // nothing to show — it offered a Google sign-in this build cannot perform and
++  // a profile manager for profiles that do not exist. Hidden for everyone, not
++  // only for guests, which is the case the rest of this function handles.
+   if (!loadTimeData.getBoolean('isGuest')) {
+-    return undefined;
++    return {people: false};
+   }
+ 
+   // <if expr="not is_chromeos">
+diff --git a/chrome/browser/ui/toolbar/app_menu_model.cc b/chrome/browser/ui/toolbar/app_menu_model.cc
+index 45cd05f343..a1afd28003 100644
+--- a/chrome/browser/ui/toolbar/app_menu_model.cc
++++ b/chrome/browser/ui/toolbar/app_menu_model.cc
+@@ -2265,22 +2265,9 @@ void AppMenuModel::Build() {
+ 
+   AddSeparator(ui::NORMAL_SEPARATOR);
+ 
+-#if !BUILDFLAG(IS_CHROMEOS)
+-  sub_menus_.push_back(std::make_unique<ProfileSubMenuModel>(
+-      this, browser()->GetProfile(),
+-      BrowserWindow::FromBrowser(browser())->GetColorProvider()));
+-  auto* const profile_submenu_model =
+-      static_cast<ProfileSubMenuModel*>(sub_menus_.back().get());
+-  AddSubMenu(kProfileMenuPlaceholder, profile_submenu_model->profile_name(),
+-             profile_submenu_model);
+-  SetIconForCommandId(kProfileMenuPlaceholder,
+-                      profile_submenu_model->avatar_image_model());
+-  SetElementIdentifierAt(GetIndexOfCommandId(kProfileMenuPlaceholder).value(),
+-                         kProfileMenuItem);
+-  SetAccessibleNameAt(GetIndexOfCommandId(kProfileMenuPlaceholder).value(),
+-                      profile_submenu_model->accessible_name());
+-  AddSeparator(ui::SPACING_SEPARATOR);
+-#endif
++  // Orbis: no profile submenu. The browser has one profile and no account, so
++  // this offered a way to sign in that cannot work and a way to switch between
++  // profiles that do not exist. The person is named in the Orbis panel instead.
+ 
+   if (!browser_->GetProfile()->IsGuestSession()) {
+     sub_menus_.push_back(
+@@ -2310,6 +2297,10 @@ void AppMenuModel::Build() {
+         GetIndexOfCommandId(kRecentTabsMenuPlaceholder).value(),
+         kHistoryMenuItem);
+   }
++  AddItemWithIcon(IDC_SHOW_ORBIS_SIDE_PANEL, u"Orbis",
++                  ui::ImageModel::FromVectorIcon(
++                      kCircleCircleFilledIcon, ui::kColorMenuIcon,
++                      ui::SimpleMenuModel::kDefaultIconSize));
+   AddItemWithStringIdAndVectorIcon(
+       this, IDC_SHOW_DOWNLOADS, IDS_SHOW_DOWNLOADS,
+       features::IsRoundedIconsEnabled() ? kDownloadIcon : kDownloadMenuOldIcon);
 diff --git a/chrome/browser/ui/views/toolbar/avatar_toolbar_button_interface.cc b/chrome/browser/ui/views/toolbar/avatar_toolbar_button_interface.cc
 index c8f0fd8603..cd82217f13 100644
 --- a/chrome/browser/ui/views/toolbar/avatar_toolbar_button_interface.cc
