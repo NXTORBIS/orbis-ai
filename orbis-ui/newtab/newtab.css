@@ -4,18 +4,24 @@ html, body { height: 100%; margin: 0; }
 body { display: grid; place-items: center; background: radial-gradient(1200px 600px at 50% 30%, var(--surface), var(--bg)); color: var(--text); font: 15px/1.5 var(--font-sans); }
 main { width: min(680px, 92vw); display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: -6vh; }
 .logo { filter: drop-shadow(0 0 28px rgba(63, 216, 255, 0.25)); }
-h1 { margin: 6px 0 0; font-size: 34px; font-weight: 600; letter-spacing: 0.02em; }
+/* The greeting, as the Electron browser set it: Orbitron at 700, filled with a gradient from the brightest text
+   colour to the muted one. It is the one place Orbis speaks in its display face rather than its reading face. */
+h1 { margin: 6px 0 0; padding: 0 32px; font-family: var(--font-display); font-size: clamp(28px, 2.2vw, 40px); font-weight: 700;
+     letter-spacing: -0.02em; background: linear-gradient(135deg, var(--text) 0%, var(--muted) 100%);
+     -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
 .clock { margin: 0 0 14px; color: var(--muted); }
 #search { width: 100%; }
 #q { width: 100%; padding: 14px 20px; font: inherit; font-size: 16px; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 999px; outline: none; transition: border-color 0.15s, background 0.15s; }
 #q::placeholder { color: var(--muted); }
 #q:hover { background: var(--panel2); }
 #q:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(63, 216, 255, 0.18); }
-.sites { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; margin-top: 26px; }
-.site { width: 96px; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 12px 6px; border-radius: 14px; color: var(--text); text-decoration: none; font-size: 12px; }
+.sites { display: flex; flex-wrap: nowrap; justify-content: center; gap: 4px; margin-top: 30px; max-width: 100%; overflow: hidden; }
+/* Narrow enough to run out of room, the row wraps rather than hiding the last few. */
+@media (max-width: 900px) { .sites { flex-wrap: wrap; } }
+.site { width: 112px; flex: none; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 8px; border-radius: 12px; color: var(--text); text-decoration: none; font-size: 12px; }
 .site:hover, .site:focus-visible { background: var(--panel); outline: none; }
-.site .ico { width: 40px; height: 40px; display: grid; place-items: center; background: var(--panel2); border-radius: 12px; }
-.site img { width: 24px; height: 24px; }
+.site .ico { width: 48px; height: 48px; display: grid; place-items: center; background: var(--panel2); border-radius: 50%; }
+.site img { width: 26px; height: 26px; }
 .site span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (prefers-reduced-motion: no-preference) { main { animation: rise 0.35s ease-out; } @keyframes rise { from { opacity: 0; transform: translateY(6px); } } }
 .countdown { margin: 0 0 10px; color: var(--accent); font-size: 13px; }
@@ -28,7 +34,8 @@ h1 { margin: 6px 0 0; font-size: 34px; font-weight: 600; letter-spacing: 0.02em;
 .mini { font: inherit; font-size: 11px; color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 8px; padding: 1px 6px; cursor: pointer; }
 .mini:hover, .mini:focus-visible { color: var(--text); border-color: var(--accent); outline: none; }
 .addtile { background: transparent; border: 0; font: inherit; font-size: 12px; cursor: pointer; }
-.gear { position: fixed; top: 14px; right: 14px; font: inherit; font-size: 12px; color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; cursor: pointer; }
+.topright { position: fixed; top: 14px; right: 14px; display: flex; gap: 8px; z-index: 2; }
+.gear { font: inherit; font-size: 12px; color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; cursor: pointer; }
 .gear:hover, .gear:focus-visible { color: var(--text); border-color: var(--accent); outline: none; }
 dialog { color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 20px; width: min(420px, 92vw); }
 dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
@@ -43,3 +50,54 @@ dialog button.primary { background: var(--accent); color: #05222b; border-color:
 .err { color: #ff8a8a; font-size: 12px; min-height: 1em; margin: 0; }
 
 @media (prefers-reduced-motion: reduce) { #q { transition: none; } }
+
+/* ---- widgets: the board on the page, and the picker that fills it */
+.widgets { display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-start; gap: 14px; margin: 30px auto 40px; width: min(1100px, 100%); }
+.w-card { display: flex; flex-direction: column; gap: 8px; text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 12px 14px; }
+.w-small { width: 200px; }
+.w-medium { width: 300px; }
+.w-large { width: 460px; }
+.w-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.w-head h2 { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+/* The controls stay out of the way until the card is wanted, so a board of widgets does not read as a board of buttons. */
+.w-acts { display: flex; gap: 2px; opacity: 0; transition: opacity 120ms ease; }
+.w-card:hover .w-acts, .w-card:focus-within .w-acts { opacity: 1; }
+.w-icon { font: inherit; font-size: 13px; line-height: 1; color: var(--muted); background: transparent; border: 0; border-radius: 8px; padding: 4px 6px; cursor: pointer; }
+.w-icon:hover, .w-icon:focus-visible { color: var(--text); background: var(--panel2); outline: none; }
+.w-body { display: flex; flex-direction: column; gap: 6px; min-height: 40px; }
+.w-big { font-size: 26px; font-weight: 300; letter-spacing: -0.01em; color: var(--text); }
+.w-sub { font-size: 12px; color: var(--muted); }
+.w-quiet { margin: 0; font-size: 12px; color: var(--muted); }
+.w-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.w-mini { font: inherit; font-size: 12px; color: var(--text); background: var(--panel2); border: 1px solid var(--line); border-radius: 999px; padding: 4px 10px; cursor: pointer; }
+.w-mini:hover, .w-mini:focus-visible { border-color: var(--accent); outline: none; }
+.w-pick { font: inherit; font-size: 13px; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 6px 8px; }
+.w-pick:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.w-note { font: inherit; font-size: 13px; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; min-height: 96px; resize: vertical; }
+.w-note:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.w-list { display: flex; flex-direction: column; gap: 5px; margin: 0; padding: 0; list-style: none; font-size: 13px; }
+.w-list li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.w-list a { color: inherit; text-decoration: none; }
+.w-list a:hover { text-decoration: underline; }
+.hint { margin: -6px 0 12px; font-size: 12px; color: var(--muted); }
+.choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; max-height: 46vh; overflow: auto; margin-bottom: 10px; }
+.w-choice { display: flex; flex-direction: column; gap: 3px; text-align: left; font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; cursor: pointer; }
+.w-choice:hover, .w-choice:focus-visible { border-color: var(--accent); outline: none; }
+.w-choice strong { font-size: 13px; font-weight: 600; }
+.w-choice span { font-size: 11px; color: var(--muted); }
+#widgetDialog { width: min(560px, 94vw); }
+
+/* ---- the Orbis rail: every feature, down the margin that used to be empty */
+.rail { position: fixed; left: 0; top: 0; bottom: 0; z-index: 3; display: flex; flex-direction: column; justify-content: center; gap: 2px; width: 56px; padding: 8px 6px; overflow: hidden auto; background: color-mix(in srgb, var(--panel) 70%, transparent); border-right: 1px solid var(--line); transition: width 140ms ease; }
+/* Names appear when the rail is wanted, so it reads as icons at rest and as a menu when it is being used. */
+.rail:hover, .rail:focus-within { width: 186px; background: var(--panel); }
+.rail[hidden] { display: none; }
+.rail-item { display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 12px; border-radius: 10px; color: var(--muted); text-decoration: none; white-space: nowrap; }
+.rail-item:hover, .rail-item:focus-visible { color: var(--text); background: var(--panel2); outline: none; }
+.rail-item:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
+.rail-item .ico { flex: none; }
+.rail-label { font-size: 13px; opacity: 0; transition: opacity 120ms ease; }
+.rail:hover .rail-label, .rail:focus-within .rail-label { opacity: 1; }
+/* The page keeps clear of the rail at rest; the rail expands over it rather than pushing it about. */
+body:has(.rail:not([hidden])) main { padding-left: 56px; }
+@media (max-width: 720px) { .rail { position: static; flex-direction: row; width: auto; height: 52px; justify-content: flex-start; border-right: 0; border-bottom: 1px solid var(--line); } .rail .rail-label { display: none; } body:has(.rail:not([hidden])) main { padding-left: 0; } }

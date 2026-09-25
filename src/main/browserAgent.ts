@@ -1143,7 +1143,20 @@ ${capabilityCatalog}` : systemPrompt(mode) },
           wc = next
           tab = next
         }
-        let result = await runTool(call, wc)
+        // A step that fails is a step that failed, not a task that ends. A page can navigate under a running
+        // script, a frame can go away mid-call, a site can hang: the model is told what went wrong and tries another
+        // way, exactly as it does for any other refused action. Only a lost browser or a stop ends the run, and those
+        // are re-thrown below.
+        let result: string
+        try {
+          result = await runTool(call, wc)
+        } catch (err) {
+          if (signal.aborted) throw err
+          const why = err instanceof Error ? err.message : String(err)
+          if (/browser (tab )?(was )?closed|not open|disconnected/i.test(why)) throw err
+          result = `Error: that did not work (${why}). Try a different way.`
+          step(`Could not ${call.function.name.replace(/_/g, ' ')}: ${why}`, 'blocked')
+        }
         if (call.function.name === 'use_capability' && /^(tabs|groups|browser|window)\./.test(String((JSON.parse(call.function.arguments || '{}') as { capability?: string }).capability ?? ''))) {
           const next = activeTab()
           if (next && next.id !== wc.id) {

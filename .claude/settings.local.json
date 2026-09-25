@@ -81,7 +81,8 @@
       "Bash(\\\\.7z\" | tail -5)",
       "PowerShell(\\(Get-Item \"C:\\\\Users\\\\ksran\\\\Downloads\\\\Orbis AI desktop app\\\\dist\\\\Orbis-Setup-0.1.0.exe\"\\).Length / 1MB)",
       "Bash(timeout 300 bash -c 'until stat -c%Y \"C:\\\\Users\\\\ksran\\\\Downloads\\\\Orbis AI desktop app\\\\dist\\\\Orbis-Setup-0.1.0.exe\" 2>/dev/null | grep -q \"\"; do sleep 5; done; echo \"Build ready!\"; ls -lh \"C:\\\\Users\\\\ksran\\\\Downloads\\\\Orbis AI desktop app\\\\dist\\\\Orbis-Setup-0.1.0.exe\"')",
-      "PowerShell($exe = \"C:\\\\Users\\\\ksran\\\\Downloads\\\\Orbis AI desktop app\\\\dist\\\\Orbis-Setup-0.1.0.exe\"; if \\(Test-Path $exe\\) { $size = \\(Get-Item $exe\\).Length / 1MB; Write-Host \"✅ Ready: Orbis-Setup-0.1.0.exe \\($\\([math]::Round\\($size,1\\)\\) MB\\)\" } else { Write-Host \"❌ Build failed\" })"
+      "PowerShell($exe = \"C:\\\\Users\\\\ksran\\\\Downloads\\\\Orbis AI desktop app\\\\dist\\\\Orbis-Setup-0.1.0.exe\"; if \\(Test-Path $exe\\) { $size = \\(Get-Item $exe\\).Length / 1MB; Write-Host \"✅ Ready: Orbis-Setup-0.1.0.exe \\($\\([math]::Round\\($size,1\\)\\) MB\\)\" } else { Write-Host \"❌ Build failed\" })",
+      "Bash(ls \"C:/chromium/src/out/Default/chrome.exe\" 2>/dev/null && echo \"--- FOUND ---\" || echo \"--- NOT FOUND ---\")"
     ]
   }
 }

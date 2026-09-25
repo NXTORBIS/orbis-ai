@@ -59,3 +59,15 @@ test('open, stop, zoom reading, navigation info and group colours map to capabil
   }
   assert.equal(calls.length, before)
 })
+
+test('the Orb asks for the real page, and the amount it may read is bounded', async () => {
+  const { handlers, calls } = setup()
+  await handlers['browser:do'](['page-read', {}], ctx)
+  await handlers['browser:do'](['page-read', { maxChars: 500 }], ctx)
+  // Nonsense and absurd limits fall back to the default rather than reaching the browser as given.
+  await handlers['browser:do'](['page-read', { maxChars: -1 }], ctx)
+  await handlers['browser:do'](['page-read', { maxChars: 10_000_000 }], ctx)
+  assert.deepEqual(calls.map((c) => c.capability), ['page.read', 'page.read', 'page.read', 'page.read'])
+  assert.deepEqual(calls.map((c) => (c.params as { maxChars: number }).maxChars), [12_000, 500, 12_000, 12_000])
+
+})

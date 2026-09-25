@@ -28,6 +28,10 @@ if (Test-Path $envFile) {
 if (-not $keys) { Write-Host 'No GROQ_API_KEY found in .env.local: the panel will open, but Orion cannot answer until it is set.' }
 $env:ORBIS_GROQ_API_KEYS = $keys
 
+# Addresses to open, passed through to the helper, which passes them to the browser it starts.
+$urlArgs = @()
+if ($Rest) { foreach ($u in ($Rest | Where-Object { $_ })) { $urlArgs += @('--url', $u) } }
+
 # Replace any helper still running from before, and any token file it left behind.
 if (Test-Path $state) {
   try { $old = (Get-Content $state -Raw | ConvertFrom-Json).pid; if ($old) { Stop-Process -Id $old -Force -ErrorAction SilentlyContinue } } catch {}
@@ -35,21 +39,24 @@ if (Test-Path $state) {
 }
 
 # Paths here contain spaces, and Start-Process does not quote array items, so the one that can is quoted by hand.
-$helperLog = Join-Path $env:TEMP 'orbis-helper.log'
-$helper = Start-Process -FilePath 'node' -WindowStyle Hidden -PassThru -WorkingDirectory $repo `
-  -RedirectStandardOutput $helperLog -RedirectStandardError ($helperLog + '.err') -ArgumentList @(
+#
+# The helper starts the browser, rather than this script starting both. That is what gives Orbis control of it: Chromium
+# is the helper's child, connected over the pipe --remote-debugging-pipe gives a parent, and only the process holding
+# that pipe can drive the browser. Started separately, the two could see each other but not reach each other, and every
+# request to act on the browser failed with "the browser is not ready".
+$helperArgs = @(
   '--disable-warning=ExperimentalWarning', '--disable-warning=MODULE_TYPELESS_PACKAGE_JSON', '--experimental-strip-types',
-  'src/helper/main.ts', '--data-dir', "`"$extension`"", '--allow-origin', "chrome-extension://$panelId", '--allow-origin', 'chrome://orbis', '--allow-origin', 'chrome://orbis-newtab', '--allow-origin', 'chrome://orbis-search')
+  'src/helper/main.ts', '--data-dir', "`"$extension`"",
+  '--allow-origin', "chrome-extension://$panelId", '--allow-origin', 'chrome://orbis', '--allow-origin', 'chrome://orbis-newtab',
+  '--allow-origin', 'chrome://orbis-search', '--allow-origin', 'chrome://orbis-orb',
+  '--chrome', "`"$Chrome`"", '--profile', "`"$Profile`"", '--extension-dir', "`"$extension`"", '--extension-id', $panelId
+) + $urlArgs
+# Deliberately not redirected. Redirecting this process's output stops the pipe handles reaching Chromium, so the
+# browser starts and never speaks; the helper writes its own log beside helper.json instead.
+$helper = Start-Process -FilePath 'node' -WindowStyle Hidden -PassThru -WorkingDirectory $repo -ArgumentList $helperArgs
 for ($i = 0; $i -lt 60 -and -not (Test-Path $state); $i++) { Start-Sleep -Milliseconds 250 }
 if (-not (Test-Path $state)) {
-  $why = (Get-Content ($helperLog + '.err') -ErrorAction SilentlyContinue | Select-Object -Last 3) -join ' '
+  $why = (Get-Content (Join-Path $extension 'helper.log') -ErrorAction SilentlyContinue | Select-Object -Last 3) -join ' '
   throw "The Orbis helper did not start. $why"
 }
-Write-Host "Orbis helper is running (pid $($helper.Id))."
-
-# Orbis is a dark browser: --force-dark-mode makes Chromium's own UI use the Orbis palette (patches/chromium-orbis-color-palette.patch).
-$info = Get-Content $state -Raw | ConvertFrom-Json
-# The Orbis extension is a component of the browser; --orbis-extension-dir runs it from this working copy (development).
-$chromeArgs = @("--user-data-dir=`"$Profile`"", "--orbis-extension-dir=`"$extension`"", "--orbis-helper-port=$($info.port)", "--orbis-helper-token=$($info.token)", '--no-first-run', '--force-dark-mode', '--enable-features=WebUIToolbar') + $Rest
-Start-Process -FilePath $Chrome -ArgumentList $chromeArgs
-Write-Host 'Chromium opened. Click the Orbis button in the toolbar (or the puzzle-piece menu) to open the side panel.'
+Write-Host "Orbis is running (helper pid $($helper.Id)). The browser is its own; closing the browser stops Orbis."

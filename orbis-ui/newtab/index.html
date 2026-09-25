@@ -13,10 +13,13 @@
     <link rel="stylesheet" href="intro.css" />
   </head>
   <body>
-    <button id="openSettings" class="gear" type="button" aria-label="Customize this page">Customize</button>
+    <div class="topright">
+      <button id="addWidget" class="gear" type="button" aria-label="Add a widget to this page">+ Widget</button>
+      <button id="openSettings" class="gear" type="button" aria-label="Customize this page">Customize</button>
+    </div>
+    <nav id="rail" class="rail" aria-label="Orbis"></nav>
     <main>
       <img class="logo" src="orbis-ring.png" alt="Orbis" width="120" />
-      <h1 id="greeting">Orbis</h1>
       <p id="clock" class="clock" aria-live="off"></p>
       <p id="countdown" class="countdown"></p>
       <form id="search" role="search">
@@ -24,7 +27,7 @@
       </form>
       <p id="empty" class="empty" hidden>No shortcuts yet. Add the sites you use most.</p>
       <nav id="shortcuts" class="sites" aria-label="Shortcuts"></nav>
-      <nav id="sites" class="sites" aria-label="Most visited"></nav>
+      <div id="widgets" class="widgets" hidden></div>
     </main>
 
     <dialog id="shortcutDialog">
@@ -37,15 +40,24 @@
       </form>
     </dialog>
 
+    <dialog id="widgetDialog">
+      <form id="widgetForm" method="dialog">
+        <h2>Add a widget</h2>
+        <p class="hint">Each one shows what Orbis actually holds. Add as many as you like; move, resize or remove them from the card itself.</p>
+        <div id="widgetChoices" class="choices"></div>
+        <p id="widgetError" class="err" role="alert"></p>
+        <div class="row"><button type="button" id="widgetCancel">Close</button></div>
+      </form>
+    </dialog>
+
     <dialog id="settingsDialog">
       <form id="settingsForm" method="dialog">
         <h2>Customize</h2>
-        <label>Your name (for the greeting)<input id="sName" type="text" maxlength="40" autocomplete="off" /></label>
-        <label class="chk"><input id="sGreeting" type="checkbox" />Show greeting</label>
         <label class="chk"><input id="sClock" type="checkbox" />Show date and time</label>
         <label class="chk"><input id="sHour12" type="checkbox" />12-hour clock</label>
         <label class="chk"><input id="sSeconds" type="checkbox" />Show seconds</label>
         <label class="chk"><input id="sShortcuts" type="checkbox" />Show shortcuts</label>
+        <label class="chk"><input id="sRail" type="checkbox" />Show the Orbis rail</label>
         <label>Background<select id="sWallpaper"></select></label>
         <label>Use my own picture<input id="sPicture" type="file" accept="image/png,image/jpeg,image/webp" /></label>
         <label>Countdown label<input id="sCdLabel" type="text" maxlength="60" autocomplete="off" /></label>

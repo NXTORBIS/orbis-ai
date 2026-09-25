@@ -45,6 +45,9 @@ export function createBrowserControlHandlers(get: () => PanelControl | null | un
     reload: () => ['navigation.reload', {}],
     stop: () => ['navigation.stop', {}],
     'nav-info': () => ['navigation.info', {}],
+    // What the Orb means by "this page": the real address, title, visible text and whatever the person has selected.
+    // page.read reads; it changes nothing and asks for no confirmation, which is why the Orb may have it without one.
+    'page-read': (a) => ['page.read', { maxChars: Number.isInteger(a.maxChars) && (a.maxChars as number) > 0 && (a.maxChars as number) <= 100_000 ? (a.maxChars as number) : 12_000 }],
     'zoom-get': () => ['zoom.get', {}],
     open: (a) => ['tabs.create', { url: address(a.url), active: true }],
     zoom: (a) => {

@@ -1,0 +1,128 @@
+/* The Orbis Command Center: tokens only, so it is the same Orbis as everything else. */
+
+.cc { display: flex; flex-direction: column; gap: var(--space-3); height: 100%; min-height: 0; padding: var(--space-3); overflow: hidden auto; }
+
+.cc-head { display: flex; align-items: center; gap: var(--space-2); }
+.cc-logo { flex: none; }
+.cc-name { margin: 0; font-family: var(--font-display); font-size: 15px; font-weight: 700; letter-spacing: 0.01em; color: var(--text); }
+
+.cc-find { position: sticky; top: 0; z-index: 2; padding-bottom: 2px; background: var(--bg); }
+.cc-search { width: 100%; font: inherit; font-size: var(--text-md); color: var(--text); background: var(--input-bg); border: 1px solid var(--input-border); border-radius: var(--radius-pill); padding: 9px 14px; }
+.cc-search::placeholder { color: var(--muted); }
+.cc-search:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-fill); }
+
+/* The categories, as a quiet strip rather than a second navigation competing with the browser's own. */
+.cc-nav { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.cc-nav::-webkit-scrollbar { display: none; }
+.cc-tab { display: inline-flex; align-items: center; gap: 6px; flex: none; font: inherit; font-size: var(--text-sm); color: var(--muted); background: transparent; border: 0; border-radius: var(--radius-pill); padding: 5px 10px; cursor: pointer; white-space: nowrap; }
+.cc-tab:hover { color: var(--text); background: var(--hover); }
+.cc-tab[aria-current='true'] { color: var(--text); background: var(--active); }
+.cc-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.cc-notice { margin: 0; min-height: 0; color: var(--danger); font-size: var(--text-sm); }
+.cc-notice:empty { display: none; }
+
+.cc-body, .cc-results { display: flex; flex-direction: column; gap: var(--space-3); }
+/* display:flex beats the hidden attribute's own rule, so searching left the Overview showing underneath the results. */
+.cc-body[hidden], .cc-results[hidden] { display: none; }
+.cc-block { display: flex; flex-direction: column; gap: var(--space-2); }
+.cc-h { margin: 0; font-size: var(--text-sm); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.cc-title { margin: 0; font-size: 17px; font-weight: 600; color: var(--text); }
+.cc-desc { color: var(--muted); font-size: var(--text-sm); }
+.cc-quiet { margin: 0; color: var(--muted); font-size: var(--text-sm); }
+
+/* A capability: what it is, and whether it can be used. */
+.cc-list { display: flex; flex-direction: column; gap: 2px; }
+.cc-item { display: flex; align-items: center; gap: 4px; border-radius: var(--radius-md); }
+.cc-item:hover { background: var(--hover); }
+.cc-open { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; font: inherit; text-align: left; color: var(--text); background: transparent; border: 0; border-radius: var(--radius-md); padding: 9px 10px; cursor: pointer; }
+.cc-open:disabled { cursor: default; opacity: 0.55; }
+.cc-open:focus-visible, .cc-pin:focus-visible, .cc-cat:focus-visible, .cc-back:focus-visible, .cc-chip-open:focus-visible, .cc-chip-move:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.cc-words { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
+.cc-words strong { font-size: var(--text-md); font-weight: 500; }
+.cc-words .cc-desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Something that cannot be used says so in its own line; it is not hidden, because hiding it reads as "Orbis cannot do this". */
+.cc-off .cc-desc { color: var(--amber); }
+
+.cc-pin { flex: none; display: grid; place-items: center; width: 30px; height: 30px; color: var(--muted); background: transparent; border: 0; border-radius: var(--radius-sm); cursor: pointer; opacity: 0; }
+.cc-item:hover .cc-pin, .cc-pin.on, .cc-pin:focus-visible { opacity: 1; }
+.cc-pin:hover { color: var(--text); background: var(--panel2); }
+.cc-pin.on { color: var(--accent); }
+
+/* Categories on the Overview. */
+.cc-cat { display: flex; align-items: center; gap: 10px; font: inherit; text-align: left; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-md); padding: 11px 12px; cursor: pointer; }
+.cc-cat:hover { border-color: var(--accent); background: var(--panel2); }
+.cc-cat strong { font-size: var(--text-md); font-weight: 500; }
+.cc-cat .cc-desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.cc-back { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; font: inherit; font-size: var(--text-sm); color: var(--muted); background: transparent; border: 0; border-radius: var(--radius-sm); padding: 4px 6px; cursor: pointer; }
+.cc-back:hover { color: var(--text); }
+.cc-cat-head { display: flex; flex-direction: column; gap: 2px; }
+
+/* What is pinned: the same order the toolbar has. */
+.cc-pins { display: flex; flex-wrap: wrap; gap: 6px; }
+.cc-chip { display: inline-flex; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-pill); overflow: hidden; }
+.cc-chip-open { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: var(--text-sm); color: var(--text); background: transparent; border: 0; padding: 5px 10px; cursor: pointer; }
+.cc-chip-open:hover { background: var(--hover); }
+.cc-chip-move { font: inherit; font-size: 12px; line-height: 1; color: var(--muted); background: transparent; border: 0; border-left: 1px solid var(--line); padding: 6px 7px; cursor: pointer; }
+.cc-chip-move:hover:not(:disabled) { color: var(--text); background: var(--panel2); }
+.cc-chip-move:disabled { opacity: 0.35; cursor: default; }
+
+/* What Orbis is doing. Only things that were really read appear here. */
+.cc-facts { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0; font-size: var(--text-sm); }
+.cc-facts dt { color: var(--muted); }
+.cc-facts dd { margin: 0; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (prefers-reduced-motion: reduce) { .cc * { transition: none !important; animation: none !important; } }
+
+/* ---------------------------------------------------------------- the rail
+   The panel's one navigation. Icons at rest so it takes almost no room; the words arrive when somebody reaches for it,
+   over the content rather than pushing it about, so nothing reflows under the pointer. */
+
+.nav { position: relative; z-index: 3; display: flex; flex-direction: column; width: 52px; height: 100%; min-height: 0; padding: var(--space-2) 6px; background: var(--panel); border-right: 1px solid var(--line); transition: width var(--motion-fast) var(--motion-ease); }
+.nav:hover, .nav:focus-within { width: 208px; box-shadow: var(--shadow); }
+
+.nav-top { display: flex; align-items: center; height: 34px; padding: 0 8px; margin-bottom: var(--space-2); }
+.nav-mark { flex: none; opacity: 0.95; }
+
+.nav-list { display: flex; flex-direction: column; gap: 1px; min-height: 0; overflow: hidden auto; scrollbar-width: none; }
+.nav-list::-webkit-scrollbar { display: none; }
+.nav-rule { height: 1px; margin: 6px 8px; background: var(--line); flex: none; }
+
+.nav-item { position: relative; display: flex; align-items: center; gap: 12px; flex: none; height: 38px; padding: 0 10px; font: inherit; font-size: var(--text-md); color: var(--muted); background: transparent; border: 0; border-radius: var(--radius-md); cursor: pointer; white-space: nowrap; overflow: hidden; }
+.nav-item:hover { color: var(--text); background: var(--hover); }
+.nav-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.nav-item .ico { flex: none; }
+
+/* Where you are: the mark is a bar at the edge and a tint, not a colour change on the icon alone. */
+.nav-item[aria-current='true'] { color: var(--text); background: var(--active); }
+.nav-item[aria-current='true']::before { content: ''; position: absolute; left: 0; top: 9px; bottom: 9px; width: 2px; border-radius: 0 2px 2px 0; background: var(--accent); }
+
+.nav-label { opacity: 0; transition: opacity var(--motion-fast) var(--motion-ease); }
+.nav:hover .nav-label, .nav:focus-within .nav-label { opacity: 1; }
+
+.nav-foot { margin-top: auto; padding: var(--space-2) 10px 0; }
+.nav-state { margin: 0; font-size: var(--text-sm); color: var(--muted); opacity: 0; transition: opacity var(--motion-fast) var(--motion-ease); }
+.nav:hover .nav-state, .nav:focus-within .nav-state { opacity: 1; }
+.nav-state:empty { display: none; }
+
+@media (prefers-reduced-motion: reduce) { .nav, .nav-label, .nav-state { transition: none; } }
+
+/* Asking in words, when a name found nothing. */
+.cc-ask { display: inline-flex; align-items: center; gap: 8px; align-self: flex-start; font: inherit; font-size: var(--text-sm); color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-pill); padding: 7px 13px; cursor: pointer; }
+.cc-ask:hover:not(:disabled) { border-color: var(--accent); background: var(--panel2); }
+.cc-ask:disabled { opacity: 0.6; cursor: default; }
+.cc-ask:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* ---------------------------------------------------------------- as a surface
+   Over the page, not instead of it. The backdrop dims what is behind (the browser blurs it); the Command Center itself
+   is a panel on top, so the page is still visibly there and still exactly where it was. */
+
+/* The page has no wrapper of its own: the rail and the panel are body's children. So the document is the backdrop and
+   the body is the card, which needs no extra element and no change to the ordinary layout. */
+html.surface { height: 100%; display: grid; place-items: center; padding: min(6vh, 56px) min(6vw, 64px); background: color-mix(in srgb, #05070a 62%, transparent); }
+html.surface body { width: min(1080px, 100%); height: min(760px, 100%); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: 0 24px 80px rgba(0, 0, 0, 0.55); overflow: hidden; }
+@media (prefers-reduced-motion: no-preference) {
+  html.surface body { animation: cc-rise 140ms var(--motion-ease) both; }
+}
+@keyframes cc-rise { from { opacity: 0; transform: translateY(8px) scale(0.99); } }

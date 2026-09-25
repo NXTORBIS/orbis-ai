@@ -1,69 +1,18 @@
+/* What the panel's page needs around its content: the rail on the left, the panel beside it, and the styles the
+   rail's own views (Tabs, Screenshots, Workspaces, ...) are built from.
+
+   The rail's own chrome used to live here -- modes, densities, group headers, drag targets -- for a rail that
+   listed twenty-six features in five groups. The Command Center replaced that, and those rules went with it;
+   the rail is styled in command-center.css now. */
 /* The Orbis sidebar rail. Shared tokens only (orbis-tokens.css). The page around it: the rail on the left, the panel (#app) beside it. */
 body { flex-direction: row; }
 #app { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-#rail { flex: none; display: flex; flex-direction: column; min-height: 0; background: var(--surface); border-right: 1px solid var(--line); }
-#rail[data-mode="icons"] { width: 52px; }
-#rail { position: relative; }
-#rail[data-mode="labels"] { width: 190px; }
-.rail-list { flex: 1; overflow-y: auto; padding: var(--space-2) var(--space-1); }
-.rail-group { display: flex; flex-direction: column; gap: 2px; }
-.rail-sep { border: 0; border-top: 1px solid var(--line); margin: var(--space-1) var(--space-2); }
-.rail-head { display: block; width: 100%; text-align: left; padding: var(--space-2) var(--space-2) var(--space-1); font: inherit; font-size: var(--text-xs); letter-spacing: 0.06em; text-transform: uppercase; color: var(--faint); background: none; border: 0; cursor: pointer; }
-div.rail-head { cursor: default; }
-.rail-row { display: flex; align-items: center; }
-.rail-item { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-2); min-height: 32px; font: inherit; color: var(--text); background: none; border: 0; border-radius: var(--radius-sm); cursor: pointer; text-align: left; }
-#rail[data-density="comfortable"] .rail-item { min-height: 38px; }
-#rail[data-mode="icons"] .rail-item { justify-content: center; }
-.rail-item:hover { background: var(--hover); }
-.rail-item[aria-disabled="true"] { color: var(--faint); cursor: default; }
-.rail-item[aria-disabled="true"]:hover { background: none; }
-.rail-mark { flex: none; width: 24px; height: 24px; display: grid; place-items: center; font-size: var(--text-sm); font-weight: 600; color: var(--accent); background: var(--accent-fill); border-radius: var(--radius-sm); }
-.rail-item[aria-disabled="true"] .rail-mark { color: var(--faint); background: var(--input-bg); }
-.rail-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-md); }
-.rail-tools { display: flex; }
-#rail[data-mode="icons"] .rail-tools { flex-direction: column; position: absolute; left: 52px; background: var(--popover); border: 1px solid var(--border); border-radius: var(--radius-sm); z-index: 5; }
-.rail-tool { min-width: 26px; height: 26px; padding: 0 var(--space-1); font: inherit; color: var(--muted); background: none; border: 0; border-radius: var(--radius-sm); cursor: pointer; }
-.rail-tool:hover:not(:disabled), .rail-tool[aria-pressed="true"] { color: var(--text); background: var(--hover); }
-.rail-tool:disabled { opacity: .35; cursor: default; }
-.rail-item:focus-visible, .rail-tool:focus-visible, .rail-head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.rail-foot { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: var(--space-2) var(--space-1); border-top: 1px solid var(--line); }
-#rail[data-mode="labels"] .rail-foot { flex-direction: row; justify-content: space-around; }
-.rail-problem { margin: 0; padding: var(--space-2); font-size: var(--text-xs); color: var(--muted); }
-#rail[data-mode="icons"] .rail-problem { display: none; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 
 /* Narrow side panel: the label rail takes at most 40% of the width so the panel keeps room. */
-#rail[data-mode="labels"] { max-width: 40vw; }
 
 /* ---- the rail: icons, arranging, resizing --------------------------------------------------------------------------------------------- */
 .ico { flex: none; display: block; }
-.rail-mark .ico { width: 16px; height: 16px; }
-.rail-item[aria-current="page"] { background: var(--active); box-shadow: inset 2px 0 var(--accent); }
-.rail-item[aria-current="page"] .rail-mark { background: var(--accent); color: var(--bg); }
-.rail-item:focus-visible, .rail-tool:focus-visible, .rail-head:focus-visible, .rail-resizer:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.rail-tool { display: inline-grid; place-items: center; }
-.rail-tool.on { color: var(--amber); }
-.rail-tool[aria-pressed="true"] { background: var(--active); color: var(--accent); }
-.rail-head { display: flex; align-items: center; gap: var(--space-1); }
-.rail-head.static { cursor: default; }
-.rail-headrow { display: flex; align-items: center; }
-.rail-headrow .rail-head { flex: 1; min-width: 0; }
-.rail-headrow .rail-head span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rail-rename { flex: 1; min-width: 0; margin: 2px var(--space-2); font: inherit; font-size: var(--text-sm); color: var(--text); background: var(--input-bg); border: 1px solid var(--accent); border-radius: var(--radius-sm); padding: 2px 6px; }
-.rail-hint { margin: 0; padding: var(--space-1) var(--space-2) var(--space-2); font-size: var(--text-xs); color: var(--faint); }
-.rail-row.arranging { flex-wrap: wrap; cursor: grab; }
-.rail-row.dragging { opacity: .45; }
-.rail-row.arranging .rail-tools { flex-basis: 100%; justify-content: flex-end; padding-bottom: 2px; }
-.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
-.drop-after { box-shadow: inset 0 -2px 0 var(--accent); }
-.drop-into { background: var(--accent-fill); outline: 1px dashed var(--accent); outline-offset: -2px; }
-.hidden-item { color: var(--muted); }
-#rail[data-mode="icons"] .rail-row.arranging { flex-direction: column; align-items: stretch; }
-#rail[data-mode="icons"] .rail-tools { position: static; flex-direction: row; flex-wrap: wrap; border: 0; background: none; justify-content: center; }
-#rail[data-mode="icons"] .rail-headrow { display: none; }
-.rail-resizer { position: absolute; top: 0; right: -3px; width: 7px; height: 100%; cursor: col-resize; z-index: 6; touch-action: none; }
-.rail-resizer::after { content: ""; position: absolute; top: 0; bottom: 0; left: 3px; width: 1px; background: transparent; transition: background var(--motion-fast) var(--motion-ease); }
-.rail-resizer:hover::after, .rail-resizer:focus-visible::after { background: var(--accent); width: 2px; left: 2px; }
 
 /* ---- the rail's own views -------------------------------------------------------------------------------------------------------------- */
 .rv-head { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--line); background: var(--panel, var(--surface)); color: var(--accent); }
@@ -157,11 +106,9 @@ div.rail-head { cursor: default; }
   .rv-check { margin: 0 2px; }
 }
 @media (forced-colors: active) {
-  .rv-item.on, .rail-item[aria-current="page"] { outline: 2px solid Highlight; }
   .rv-chip::before, .rv-dot, .rv-sw { forced-color-adjust: none; }
   .rv-sw.on { outline: 2px solid CanvasText; }
 }
-@media (prefers-reduced-motion: reduce) { .rail-resizer::after { transition: none; } }
 @media (max-width: 420px) {
   .rv-body { padding: var(--space-2); }
   .rv-shots { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }

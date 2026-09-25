@@ -23,3 +23,14 @@
 .orb.dragging { cursor: grabbing; transition: none; border-color: var(--accent); }
 .orb:active { cursor: grabbing; }
 .orb { cursor: grab; }
+
+/* ---- states: the orb says what it is doing, and stops saying it when it stops doing it */
+.orb-status { margin: 0; color: var(--muted); font-size: var(--text-sm); }
+.orb-status:empty { display: none; }
+.orb-chip { margin: 0; color: var(--muted); font-size: var(--text-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.orb-chip:empty { display: none; }
+/* Working: the ring breathes. Reduced motion gets a steady border instead of a pulse. */
+.orb[data-state='reading'], .orb[data-state='thinking'], .orb[data-state='streaming'] { border-color: var(--accent); animation: orb-pulse 1.6s ease-in-out infinite; }
+.orb[data-state='error'] { border-color: var(--danger); }
+@keyframes orb-pulse { 0%, 100% { box-shadow: 0 0 0 0 var(--accent-fill); } 50% { box-shadow: 0 0 0 6px transparent; } }
+@media (prefers-reduced-motion: reduce) { .orb[data-state='reading'], .orb[data-state='thinking'], .orb[data-state='streaming'] { animation: none; } }

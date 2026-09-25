@@ -83,6 +83,8 @@ export interface BrowserManagerOptions {
   sidebar?: HandlerDeps['sidebar']
   /** The name the person gave themselves in the app, so the browser names them the same way. */
   identity?: HandlerDeps['identity']
+  /** Put the browser away and show the chat: what the browser's own Chat button asks for. */
+  showChat?: HandlerDeps['showChat']
   /** Whether this installation has seen the browser's first-launch introduction, and how to record that it has. */
   intro?: HandlerDeps['intro']
   /** The one Browser Control Layer of the app: Chromium fills it. */
@@ -186,6 +188,7 @@ export class BrowserManager {
         conversations: this.o.conversations,
         sidebar: this.o.sidebar,
         identity: this.o.identity,
+        showChat: this.o.showChat,
         intro: this.o.intro,
         stores: this.o.stores,
         browserControl: () => this.o.control ?? this.active?.service.control,

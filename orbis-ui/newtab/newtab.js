@@ -7,14 +7,16 @@
 // Searching and most-visited tiles come from the browser through the built-in handler. The quote, widgets and timers of the old
 // Electron start page live in the Orbis app's own stores and are not on this page (see the parity doc).
 
-import { GRADIENTS, MAX_IMAGE_BYTES, MAX_SHORTCUTS, clockText, countdownText, greetingText, normalizeSettings, removeShortcut, saveShortcut, siteUrl } from './newtab-logic.js'
+import { GRADIENTS, MAX_IMAGE_BYTES, MAX_SHORTCUTS, MAX_TILES, clockText, countdownText, normalizeSettings, removeShortcut, saveShortcut, siteUrl } from './newtab-logic.js'
 import * as store from './newtab-store.js'
 import { askBrowser } from './helper.js'
 import { mountOrb } from './orb.js'
 import { introWanted, runIntro } from './intro.js'
+import { mountWidgets, widgetsFollowSettings } from './widgets.js'
+import { mountRail } from './rail.js'
 
 const $ = (id) => document.getElementById(id)
-let state = { settings: normalizeSettings(null), shortcuts: [], image: '' }
+let state = { settings: normalizeSettings(null), shortcuts: [], top: [], widgets: [], image: '' }
 let timer = 0
 
 const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n }
@@ -33,7 +35,6 @@ function applyWallpaper() {
 function tick() {
   const s = state.settings
   const now = new Date()
-  $('greeting').textContent = s.greeting ? greetingText(now, s.name) : 'Orbis'
   $('clock').textContent = s.clock ? clockText(now, s) : ''
   $('countdown').textContent = countdownText(s.countdown, now)
 }
@@ -49,6 +50,13 @@ function looksLikeUrl(text) {
   if (/^[^\s/]+\.[a-z]{2,}(:\d+)?(\/.*)?$/i.test(text)) return `https://${text}`
   return null
 }
+// Two search boxes would be two places to type, and only one of them is where what you type goes. Touching the one on
+// the page hands the caret to the window's own address bar, exactly as the Electron browser did. The page's box is kept
+// because it is where the eye lands on a new tab; it is a way in to the real one, not a second one.
+const toOmnibox = (e) => { e.preventDefault(); $('q').blur(); askBrowser('orbis.focusOmnibox').catch(() => { /* not in a browser window: the box below stays usable */ }) }
+$('q').addEventListener('pointerdown', toOmnibox)
+$('q').addEventListener('focus', toOmnibox)
+
 $('search').addEventListener('submit', (e) => {
   e.preventDefault()
   const text = $('q').value.trim()
@@ -73,12 +81,20 @@ function tile(href, name, extra) {
 }
 const hostOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, '') } catch { return u } }
 
+/**
+ * One row of tiles, the way a new tab page is read: the shortcuts somebody kept, then the sites they actually use, then
+ * a way to add one. It used to be two rows -- kept shortcuts above, most visited below -- which showed the same site
+ * twice under two names and read as two unrelated lists.
+ */
 function renderShortcuts() {
   const box = $('shortcuts')
   box.replaceChildren()
   box.hidden = !state.settings.shortcuts
   if (!state.settings.shortcuts) return
+
+  const seen = new Set()
   for (const s of state.shortcuts) {
+    seen.add(hostOf(s.url))
     const name = s.name || hostOf(s.url)
     const edit = el('button', 'mini', 'Edit'); edit.type = 'button'; edit.setAttribute('aria-label', `Edit ${name}`)
     edit.addEventListener('click', () => openShortcutForm(s))
@@ -87,14 +103,21 @@ function renderShortcuts() {
     box.append(tile(s.url, name, [el('div', 'acts')]))
     box.lastChild.querySelector('.acts').append(edit, del)
   }
+
+  // A site that is already a shortcut is not shown again under whatever the page happens to call itself.
+  const room = Math.max(0, MAX_TILES - state.shortcuts.length)
+  for (const site of state.top.filter((t) => !seen.has(hostOf(t.url))).slice(0, room)) {
+    seen.add(hostOf(site.url))
+    box.append(tile(site.url, site.title || hostOf(site.url)))
+  }
+
   if (state.shortcuts.length < MAX_SHORTCUTS) {
     const add = el('button', 'site addtile'); add.type = 'button'
     add.append(el('div', 'ico', '+'), el('span', '', 'Add shortcut'))
     add.addEventListener('click', () => openShortcutForm(null))
     box.append(add)
   }
-  if (!state.shortcuts.length) $('empty').hidden = false
-  else $('empty').hidden = true
+  $('empty').hidden = Boolean(state.shortcuts.length || state.top.length)
 }
 
 function openShortcutForm(existing) {
@@ -122,17 +145,17 @@ $('scCancel').addEventListener('click', () => $('shortcutDialog').close())
 async function topSites() {
   try {
     const top = await askBrowser('orbis.mostVisited')
-    const nav = $('sites')
     // Chromium seeds the list with a Chrome Web Store tile before anything has been visited; that is Google's, not the person's.
-    for (const s of top.filter((t) => !/^https:\/\/(chrome\.google\.com\/webstore|chromewebstore\.google\.com\/)/.test(t.url)).slice(0, 8)) nav.append(tile(s.url, s.title || hostOf(s.url)))
+    state.top = top.filter((t) => !/^https:\/\/(chrome\.google\.com\/webstore|chromewebstore\.google\.com\/)/.test(t.url))
+    renderShortcuts()
   } catch { /* no history yet */ }
 }
 
 // ---- settings dialog
 function fillSettings() {
   const s = state.settings
-  $('sName').value = s.name; $('sGreeting').checked = s.greeting; $('sClock').checked = s.clock; $('sHour12').checked = s.hour12
-  $('sSeconds').checked = s.seconds; $('sShortcuts').checked = s.shortcuts
+  $('sClock').checked = s.clock; $('sHour12').checked = s.hour12
+  $('sSeconds').checked = s.seconds; $('sShortcuts').checked = s.shortcuts; $('sRail').checked = s.rail
   $('sCdLabel').value = s.countdown ? s.countdown.label : ''; $('sCdDate').value = s.countdown ? s.countdown.date : ''
   const sel = $('sWallpaper'); sel.replaceChildren()
   for (const g of GRADIENTS) { const o = el('option', '', g.name); o.value = g.id; sel.append(o) }
@@ -155,20 +178,23 @@ $('settingsForm').addEventListener('submit', async (e) => {
   e.preventDefault()
   const date = $('sCdDate').value
   state.settings = normalizeSettings({
-    name: $('sName').value, greeting: $('sGreeting').checked, clock: $('sClock').checked, hour12: $('sHour12').checked,
-    seconds: $('sSeconds').checked, shortcuts: $('sShortcuts').checked, wallpaper: $('sWallpaper').value,
+    clock: $('sClock').checked, hour12: $('sHour12').checked,
+    seconds: $('sSeconds').checked, shortcuts: $('sShortcuts').checked, rail: $('sRail').checked, wallpaper: $('sWallpaper').value,
     countdown: date ? { label: $('sCdLabel').value, date } : null
   })
   await store.saveSettings(state.settings)
   $('settingsDialog').close()
   render()
+  widgetsFollowSettings(state.settings)
 })
 
-function render() { applyWallpaper(); tick(); schedule(); renderShortcuts() }
+function render() { applyWallpaper(); tick(); schedule(); renderShortcuts(); mountRail($('rail'), state.settings.rail) }
 
 async function load() {
-  try { state = await store.load() } catch { /* storage unavailable: defaults */ }
+  try { state = { ...state, ...(await store.load()) } } catch { /* storage unavailable: defaults */ }
   render()
+  // The board keeps its own copy from here on; the page hands it what was saved and a way to save it again.
+  mountWidgets({ saved: state.widgets, persist: (w) => { state.widgets = w; return store.saveWidgets(w) }, use12Hour: state.settings.hour12 })
   void topSites()
 }
 

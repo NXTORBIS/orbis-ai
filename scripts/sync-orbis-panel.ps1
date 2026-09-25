@@ -12,7 +12,13 @@ New-Item -ItemType Directory -Force $dest | Out-Null
 if (-not (Test-Path (Join-Path $ui 'panel/sidebar.js'))) { throw 'orbis-ui/panel/sidebar.js is not built (node scripts/build-extension.mjs).' }
 foreach ($f in Get-ChildItem (Join-Path $ui 'panel') -File | Where-Object { $_.Extension -ne '.ts' }) { Copy-Item $f.FullName (Join-Path $dest $f.Name) -Force }
 foreach ($f in 'orbis-tokens.css','orbis.css','orbis-components.js') { Copy-Item (Join-Path $ui $f) (Join-Path $dest $f) -Force }
-foreach ($f in 'newtab.js','newtab.css','newtab-logic.js','newtab-store.js','intro.js','intro.css','orbis-wordmark.png') { Copy-Item (Join-Path $ui "newtab\$f") (Join-Path $dest $f) -Force }
+foreach ($f in 'newtab.js','newtab.css','newtab-logic.js','newtab-store.js','widgets.js','widget-logic.js','rail.js','intro.js','intro.css','orbis-wordmark.png') { Copy-Item (Join-Path $ui "newtab\$f") (Join-Path $dest $f) -Force }
+Copy-Item (Join-Path $ui 'panel\rail\icons.js') (Join-Path $dest 'orbis-icons.js') -Force
+# The Command Center imports the icon set at the path it really has, so the page and the working copy agree.
+New-Item -ItemType Directory -Force (Join-Path $dest 'rail') | Out-Null
+Copy-Item (Join-Path $ui 'panel\rail\icons.js') (Join-Path $dest 'rail\icons.js') -Force
+foreach ($f in 'orb-app.js','orb-app.css') { Copy-Item (Join-Path $ui "orb\$f") (Join-Path $dest $f) -Force }
+Copy-Item (Join-Path $ui 'orb\index.html') (Join-Path $dest 'orb.html') -Force
 Copy-Item (Join-Path $ui 'newtab\index.html') (Join-Path $dest 'newtab.html') -Force
 if (-not (Test-Path (Join-Path $ui 'results\results.js'))) { throw 'orbis-ui/results/results.js is not built (node scripts/build-extension.mjs).' }
 foreach ($f in 'results.js','results.css') { Copy-Item (Join-Path $ui "results\$f") (Join-Path $dest $f) -Force }
@@ -33,6 +39,11 @@ $fdir = Join-Path $Src 'ui\webui\resources\inter'
 New-Item -ItemType Directory -Force $fdir | Out-Null
 foreach ($f in 'inter-latin-wght-normal.woff2','inter-latin-ext-wght-normal.woff2') { Copy-Item (Join-Path $root "node_modules\@fontsource-variable\inter\files\$f") (Join-Path $fdir $f) -Force }
 Copy-Item (Join-Path $root 'node_modules\@fontsource-variable\inter\LICENSE') (Join-Path $fdir 'LICENSE') -Force
+# Orbitron (SIL OFL 1.1), the display face of the greeting, served as chrome://resources/orbitron/.
+$odir = Join-Path $Src 'ui\webui\resources\orbitron'
+New-Item -ItemType Directory -Force $odir | Out-Null
+Copy-Item (Join-Path $root 'node_modules\@fontsource\orbitron\files\orbitron-latin-700-normal.woff2') (Join-Path $odir 'orbitron-latin-700-normal.woff2') -Force
+Copy-Item (Join-Path $root 'node_modules\@fontsource\orbitron\LICENSE') (Join-Path $odir 'LICENSE') -Force
 # Windows WebUI font family (IDS_WEB_FONT_FAMILY) = the token font stack.
 $grd = Join-Path $Src 'ui\strings\app_locale_settings.grd'
 $stack = ((Get-Content (Join-Path $gen 'webui_font_family.txt') -Raw).Trim()) -replace '"',"'"

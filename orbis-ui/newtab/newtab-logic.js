@@ -1,5 +1,7 @@
 // Pure logic for the new-tab page: no DOM, no chrome.* (tested with node --test).
 export const MAX_SHORTCUTS = 24
+/** Tiles in the row altogether: the kept shortcuts and the sites in use, before it stops being a row. */
+export const MAX_TILES = 10
 export const MAX_IMAGE_BYTES = 2_000_000
 export const GRADIENTS = [
   { id: 'orbis', name: 'Orbis night', css: 'radial-gradient(1200px 600px at 50% 30%, #101622, #0b0e14)' },
@@ -7,7 +9,7 @@ export const GRADIENTS = [
   { id: 'dusk', name: 'Dusk', css: 'linear-gradient(160deg, #0b0e14 0%, #22163a 60%, #3a1d4a 100%)' },
   { id: 'forest', name: 'Forest', css: 'linear-gradient(150deg, #0b0e14 0%, #0f2a1f 100%)' }
 ]
-export const DEFAULT_SETTINGS = { name: '', greeting: true, clock: true, hour12: false, seconds: false, shortcuts: true, wallpaper: 'orbis', countdown: null }
+export const DEFAULT_SETTINGS = { clock: true, hour12: false, seconds: false, shortcuts: true, rail: true, wallpaper: 'orbis', countdown: null }
 
 /** A typed address as an http(s) URL (https:// added), or null. Same rule as the Electron ShortcutsGrid. */
 export function siteUrl(input) {
@@ -55,14 +57,9 @@ export function normalizeSettings(raw) {
   const c = r.countdown
   const countdown = c && typeof c === 'object' && typeof c.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(c.date) && !Number.isNaN(Date.parse(c.date))
     ? { label: String(c.label ?? '').trim().slice(0, 60), date: c.date } : null
-  return { name: String(r.name ?? '').trim().slice(0, 40), greeting: b(r.greeting, true), clock: b(r.clock, true), hour12: b(r.hour12, false), seconds: b(r.seconds, false), shortcuts: b(r.shortcuts, true), wallpaper, countdown }
+  return { clock: b(r.clock, true), hour12: b(r.hour12, false), seconds: b(r.seconds, false), shortcuts: b(r.shortcuts, true), rail: b(r.rail, true), wallpaper, countdown }
 }
 
-export function greetingText(date, name = '') {
-  const h = date.getHours()
-  const base = h < 5 ? 'Good night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'
-  return name ? `${base}, ${name}` : base
-}
 export function clockText(date, { hour12 = false, seconds = false } = {}, locale) {
   const time = date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', ...(seconds ? { second: '2-digit' } : {}), hour12 })
   const day = date.toLocaleDateString(locale, { weekday: 'long', month: 'long', day: 'numeric' })

@@ -1,4 +1,6 @@
-import { call, HelperDown } from './helper.js'
+import { askBrowser, call, HelperDown } from './helper.js'
+import { mountCommandCenter, show as showCommandCenter, useRail } from './command-center.js'
+import { mountRail } from './rail-nav.js'
 
 // The Orbis side panel. Everything it shows comes from the helper; this file only draws it and sends what is typed.
 //
@@ -364,7 +366,9 @@ let searching = null
  * feature is a page you can open, link to, bookmark and land on directly, the way chrome://history and chrome://downloads are,
  * rather than something reachable only by clicking a tab inside one panel.
  */
-const VIEWS = ['ask', 'search', 'block', 'notes', 'tasks', 'workflows', 'galaxy', 'secrets', 'account']
+// 'home' is the Command Center, and it is where the panel opens: everything Orbis can do, and the way to each of
+// them. The rest are the places it leads to, each still reachable by its own address as before.
+const VIEWS = ['home', 'ask', 'search', 'block', 'notes', 'tasks', 'workflows', 'galaxy', 'secrets', 'account']
 
 const viewFromAddress = () => {
   const wanted = (location.hash || '').replace(/^#\/?/, '').toLowerCase()
@@ -374,7 +378,7 @@ const viewFromAddress = () => {
 function showTab(name) {
   // Every view in the panel, including the rail's own (Tabs, Clipboard, ...), so choosing a tab always hides whichever was in front.
   for (const view of document.querySelectorAll('.view')) view.hidden = view.id !== `view-${name}`
-  for (const id of ['ask', 'search', 'block', 'notes', 'tasks', 'workflows', 'galaxy', 'secrets', 'account']) $(`tab-${id}`).setAttribute('aria-selected', String(id === name))
+  for (const id of VIEWS) $(`tab-${id}`)?.setAttribute('aria-selected', String(id === name))
   // Keep the address in step with what is on screen, without adding a history entry
   // for every tab press: the address describes the page, it is not a trail through it.
   if (viewFromAddress() !== name) history.replaceState(null, '', `#${name}`)
@@ -383,22 +387,45 @@ function showTab(name) {
   else if (name === 'notes') document.dispatchEvent(new CustomEvent('orbis:notes-shown'))
   else if (name === 'tasks') document.dispatchEvent(new CustomEvent('orbis:tasks-shown'))
   else if (['workflows', 'galaxy', 'secrets'].includes(name)) document.dispatchEvent(new CustomEvent(`orbis:${name}-shown`))
+  // Read afresh every time it is opened, however it was opened: the name can change
+  // in the Orbis window while this panel sits here.
+  else if (name === 'account') document.dispatchEvent(new CustomEvent('orbis:account-shown'))
+  else if (name === 'home') void commandCenter?.refresh()
   else if (name === 'search') $('query').focus()
   else input.focus()
 }
-$('tab-ask').addEventListener('click', () => showTab('ask'))
-$('tab-account').addEventListener('click', () => {
-  showTab('account')
-  // Read afresh every time it is opened: an account can change in another window while this panel sits there.
-  document.dispatchEvent(new CustomEvent('orbis:account-shown'))
+// The sidebar is the only navigation now; the row of tabs that repeated it is gone.
+// These listeners are kept behind a guard so the panel still works if the row ever
+// comes back — and so removing it cannot take the panel down with it.
+for (const id of VIEWS) {
+  $(`tab-${id}`)?.addEventListener('click', () => showTab(id))
+}
+
+// The Command Center is built once, when the panel loads, and asked to read the world again whenever it is shown.
+// Over the page, or in the side panel. The Command Center is the same thing either way; as a surface it is drawn on a
+// backdrop, takes the whole window, and Escape puts it away -- the page behind it was never touched, so there it still is.
+const asSurface = new URLSearchParams(location.search).get('surface') === 'overlay'
+if (asSurface) {
+  document.documentElement.classList.add('surface')
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return
+    // Escape belongs to whatever is in front: a dialog, or a search box with something in it, answers first.
+    if (document.querySelector('dialog[open]')) return
+    const box = document.querySelector('.cc-search')
+    if (box && document.activeElement === box && box.value) return
+    e.preventDefault()
+    askBrowser('orbis.command.close').catch(() => { /* not the surface: nothing to close */ })
+  })
+}
+
+// One navigation. The rail says where to go; the Command Center shows what is there. Choosing a category always lands
+// on the Command Center, so the rail's mark and the panel agree about where you are.
+const commandCenter = mountCommandCenter($('view-home'))
+const rail = mountRail($('rail'), (view) => {
+  showTab('home')
+  showCommandCenter(view)
 })
-$('tab-search').addEventListener('click', () => showTab('search'))
-$('tab-block').addEventListener('click', () => showTab('block'))
-$('tab-notes').addEventListener('click', () => showTab('notes'))
-$('tab-tasks').addEventListener('click', () => showTab('tasks'))
-$('tab-workflows').addEventListener('click', () => showTab('workflows'))
-$('tab-galaxy').addEventListener('click', () => showTab('galaxy'))
-$('tab-secrets').addEventListener('click', () => showTab('secrets'))
+useRail(rail)
 
 function renderResults(outcome) {
   results.replaceChildren()
@@ -474,8 +501,9 @@ $('ask-about').addEventListener('click', () => {
 })
 
 // Open on whatever the address names, so chrome://orbis#galaxy lands on Galaxy rather than on Ask and a click.
+// With no address, the Command Center: the panel opens on everything Orbis can do rather than on one of them.
 const opening = viewFromAddress()
-if (opening) showTab(opening)
+showTab(opening ?? 'home')
 // And follow the address afterwards: going back, or pasting a different one, moves the view.
 window.addEventListener('hashchange', () => {
   const wanted = viewFromAddress()

@@ -323,7 +323,10 @@ export const extractScript = (selector: string | undefined, fields: Record<strin
   const clean = (s) => String(s == null ? '' : s).replace(/\\s+/g, ' ').trim();
   const selector = ${JSON.stringify(selector ?? null)}, fields = ${JSON.stringify(fields ?? null)}, attribute = ${JSON.stringify(attribute ?? null)};
   const read = (el, attr) => !attr || attr === 'text' ? clean(el.innerText || el.textContent || el.value) : attr === 'value' ? clean(el.value) : attr === 'html' ? el.outerHTML.slice(0, 5000) : attr === 'href' ? (el.href || el.getAttribute('href') || '') : clean(el.getAttribute(attr));
-  if (!selector) return { url: location.href, title: document.title, text: clean(document.body ? document.body.innerText : '').slice(0, 20000) };
+  // innerText, not a walk of the text nodes: it reaches into shadow DOM, and whole sites (YouTube among them) keep
+  // everything a person reads inside shadow roots. A walker over the light DOM returns nothing for those pages.
+  // Enough is taken first and cleaned after, so the cost is the size of what was asked for, not of the document.
+  if (!selector) return { url: location.href, title: document.title, text: clean((document.body ? document.body.innerText : '').slice(0, 80000)).slice(0, 20000) };
   let nodes;
   try { nodes = [...document.querySelectorAll(selector)].slice(0, ${limit}); } catch (e) { return { error: 'Invalid selector: ' + e.message }; }
   if (!fields) return { count: nodes.length, values: nodes.map((n) => read(n, attribute)) };

@@ -9,3 +9,5 @@ await build({ ...shared, entryPoints: ['extension-src/worker.ts'], outfile: 'ext
 await build({ ...shared, entryPoints: ['extension-src/content.ts'], outfile: 'extension/adblock-content.js', format: 'iife', platform: 'browser' })
 await build({ ...shared, entryPoints: ['orbis-ui/panel/sidebar.ts'], outfile: 'orbis-ui/panel/sidebar.js', format: 'iife', platform: 'browser' })
 await build({ ...shared, entryPoints: ['orbis-ui/results/results.ts'], outfile: 'orbis-ui/results/results.js', format: 'iife', platform: 'browser' })
+// The capability registry the Command Center reads. Built from src/shared, so the page and the app share one list.
+await build({ ...shared, minify: false, entryPoints: ['orbis-ui/panel/command-registry.ts'], outfile: 'orbis-ui/panel/command-registry.js', format: 'esm', platform: 'browser' })

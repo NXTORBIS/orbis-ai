@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft } from 'lucide-react'
 import type { Attachment, ChatMessage, ChatRequest, Conversation, Settings, SettingsUpdate, StreamEvent } from '../../shared/types'
 import { IMAGE_GEN_STATUS } from '../../shared/types'
 import { themeBase } from '../../shared/themes'
@@ -130,12 +129,14 @@ export default function App(): React.JSX.Element {
       setBrowserOpen(true)
       setBrowserHidden(false)
     })
+    const offHide = window.api.onChromiumHide(() => setBrowserHidden(true))
     const offClosed = window.api.onChromiumClosed(() => {
       setBrowserOpen(false)
       setBrowserHidden(false)
     })
     return () => {
       offShow()
+      offHide()
       offClosed()
     }
   }, [])
@@ -1128,15 +1129,11 @@ export default function App(): React.JSX.Element {
       inert={welcome === 'open'}
     >
       <HudBackground animated={effects} />
-      {/* The browser has an address bar of its own, so this row drops its one and carries the way back to the chat. It stays
-          36px either way: it is the window's title bar, with the Windows buttons drawn over its right end. */}
+      {/* The browser has an address bar of its own, so this row drops its one. The way back to the chat moved onto the
+          browser's own toolbar, beside that address bar, where the eye already is; this stays as the window's title
+          bar, 36px either way, with the Windows buttons drawn over its right end. */}
       {browserShowing ? (
-        <div className="url-strip">
-          <button type="button" className="browser-back-chat" title="Back to the Orbis chat. The browser stays open" onClick={() => setBrowserHidden(true)}>
-            <ArrowLeft size={15} />
-            <span>Chat</span>
-          </button>
-        </div>
+        <div className="url-strip" />
       ) : (
         <UrlBar
           onNavigate={openInBrowser}

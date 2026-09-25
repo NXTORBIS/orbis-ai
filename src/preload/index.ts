@@ -127,6 +127,13 @@ const api: NxtorbisApi = {
     ipcRenderer.on('chromium:show', listener)
     return () => ipcRenderer.removeListener('chromium:show', listener)
   },
+  // The way back to the chat, asked for from inside the browser: the Chat button lives on the browser's own toolbar
+  // now, so the browser is what says "show me the chat again".
+  onChromiumHide: (callback: () => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on('chromium:hide', listener)
+    return () => ipcRenderer.removeListener('chromium:hide', listener)
+  },
   onChromiumClosed: (callback: () => void) => {
     const listener = (): void => callback()
     ipcRenderer.on('chromium:closed', listener)

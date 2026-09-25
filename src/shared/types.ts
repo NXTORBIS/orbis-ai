@@ -650,6 +650,8 @@ export interface NxtorbisApi {
   /** Opens an address as a page, or searches anything else with Orbis Search, in Orbis's Chromium (started if needed). */
   chromiumEmbedRegion(region: { x: number; y: number; width: number; height: number; dpr: number; visible: boolean; viewportWidth?: number }): void
   onChromiumShow(callback: () => void): () => void
+  /** The browser asked to be put away and the chat shown; the browser stays open behind it. */
+  onChromiumHide(callback: () => void): () => void
   onChromiumClosed(callback: () => void): () => void
   chromiumOpen(input: string, options?: { newTab?: boolean; more?: string[] }): Promise<{ ok: boolean; detail: string }>
   getBrowserLibrary(): Promise<BrowserLibrarySnapshot>

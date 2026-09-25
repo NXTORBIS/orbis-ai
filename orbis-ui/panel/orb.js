@@ -7,6 +7,31 @@
 // Not here: a floating orb over web pages themselves (a chrome:// page cannot draw over another page; see docs/orbis-ui-inventory.md).
 import { call, askBrowser, HelperDown } from './helper.js'
 
+// State is real and named (orb-state on the orb, a word in the prompt): idle, reading, thinking, streaming, done,
+// error, cancelled. Nothing says "Thinking" after a request has failed, and nothing says it while the page is being read.
+//
+// "This page" and "this" mean the real page and the real selection. The Orb asks the Browser Control Layer for them
+// (browser:do page-read, which reads and changes nothing), shows what it is about to use, and if the read fails it says
+// so and asks without the context rather than inventing any.
+const STATES = ['idle', 'reading', 'thinking', 'streaming', 'done', 'error', 'cancelled']
+
+/** True when the question is about the page in front of the person rather than the world in general. */
+export function needsPageContext(text) {
+  return /\b(this page|this site|this article|this tab|the page|this selection|this text|here|summari[sz]e|tl;?dr|explain this|translate this)\b/i.test(String(text ?? ''))
+}
+
+/** The context block Orion is given. Only what was actually read; never a placeholder. */
+export function contextBlock(page) {
+  if (!page) return ''
+  const parts = []
+  if (page.url) parts.push(`Address: ${page.url}`)
+  if (page.title) parts.push(`Title: ${page.title}`)
+  if (page.selection && page.selection.trim()) parts.push(`The person has selected this text:${String.fromCharCode(10)}${page.selection.trim().slice(0, 5000)}`)
+  else if (page.text && page.text.trim()) parts.push(`The page reads:${String.fromCharCode(10)}${page.text.trim().slice(0, 12000)}`)
+  if (!parts.length) return ''
+  return `This is the page the person is looking at.${String.fromCharCode(10)}${parts.join(String.fromCharCode(10))}`
+}
+
 const MODEL_KEY = 'orbis.model'
 const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n }
 
@@ -23,18 +48,45 @@ export function mountOrb(root = document.body) {
   pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', 'Ask Orion'); pop.hidden = true
   const answer = el('div', 'orb-answer'); answer.setAttribute('aria-live', 'polite')
   const note = el('p', 'orb-note')
+  const status = el('p', 'orb-status')
+  const chip = el('p', 'orb-chip')
   const form = el('form', 'orb-form')
   const input = el('input'); input.type = 'text'; input.placeholder = 'Ask Orion…'; input.setAttribute('aria-label', 'Ask Orion'); input.autocomplete = 'off'; input.spellcheck = false
   const go = el('button', 'orb-go', 'Ask'); go.type = 'submit'
   const stop = el('button', 'orb-stop', 'Stop'); stop.type = 'button'; stop.hidden = true
   form.append(input, go, stop)
   const foot = el('div', 'orb-foot')
+  const retry = el('button', 'orb-link', 'Retry'); retry.type = 'button'; retry.hidden = true
   const panel = el('button', 'orb-link', 'Open the Orbis panel'); panel.type = 'button'
-  foot.append(panel)
-  pop.append(answer, note, form, foot)
+  foot.append(retry, panel)
+  pop.append(chip, answer, status, note, form, foot)
   root.append(pop, orb)
 
   let controller = null
+  /** The one place state is set: the orb, the word, and nothing else. A state not in STATES is a bug, not a label. */
+  const WORDS = { idle: '', reading: 'Reading the page…', thinking: 'Thinking…', streaming: 'Answering…', done: '', error: '', cancelled: 'Stopped.' }
+  let state = 'idle'
+  const setState = (next) => {
+    if (!STATES.includes(next)) return
+    state = next
+    orb.dataset.state = next
+    status.textContent = WORDS[next]
+    orb.setAttribute('aria-busy', String(next === 'reading' || next === 'thinking' || next === 'streaming'))
+  }
+  setState('idle')
+
+  /**
+   * The real page, through the Browser Control Layer. Returns null when it cannot be had — the caller says so and asks
+   * without it. It never returns a stand-in: an answer about a page Orion was not given is worse than no answer.
+   */
+  const readPage = async () => {
+    try {
+      const page = await call('browser:do', ['page-read', {}])
+      return page && typeof page === 'object' ? page : null
+    } catch {
+      return null
+    }
+  }
   const open = (on) => {
     pop.hidden = !on
     orb.setAttribute('aria-expanded', String(on))
@@ -150,6 +202,12 @@ export function mountOrb(root = document.body) {
   })
   panel.addEventListener('click', () => { askBrowser('orbis.openPanel').catch(() => { note.textContent = 'The panel could not be opened.' }) })
   stop.addEventListener('click', () => controller?.abort())
+  retry.addEventListener('click', () => {
+    if (!retry.dataset.text) return
+    input.value = retry.dataset.text
+    retry.hidden = true
+    form.requestSubmit()
+  })
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault()
@@ -158,27 +216,49 @@ export function mountOrb(root = document.body) {
     input.value = ''
     answer.textContent = ''
     note.textContent = ''
+    chip.textContent = ''
     controller = new AbortController()
     go.hidden = true; stop.hidden = false
     let model
     try { model = localStorage.getItem(MODEL_KEY) || undefined } catch { /* none saved */ }
     try {
+      // The page is read first, and only when the question is about it. What was actually read is shown, so nobody has
+      // to guess whether the answer had the page in front of it.
+      let context = ''
+      if (needsPageContext(text)) {
+        setState('reading')
+        const page = await readPage()
+        if (controller.signal.aborted) return
+        context = contextBlock(page)
+        if (context) chip.textContent = page.selection && page.selection.trim() ? `Using your selection on ${page.title || page.url}` : `Using this page: ${page.title || page.url}`
+        else chip.textContent = 'This page could not be read, so the answer is without it.'
+      }
+
+      setState('thinking')
       const list = await call('models:list').catch(() => null)
       if (list && !list.models.some((m) => m.id === model)) model = list.default
-      await call('chat:send', [{ model, webSearch: false, messages: [{ role: 'user', content: text }] }], {
+      const content = context ? `${context}${String.fromCharCode(10)}${String.fromCharCode(10)}Question: ${text}` : text
+      await call('chat:send', [{ model, webSearch: false, messages: [{ role: 'user', content }] }], {
         signal: controller.signal,
         onEvent: (event) => {
-          if (event.type === 'delta' && typeof event.content === 'string') answer.textContent += event.content
-          else if (event.type === 'error') note.textContent = event.message || 'Orion could not answer.'
+          if (event.type === 'delta' && typeof event.content === 'string') { setState('streaming'); answer.textContent += event.content }
+          else if (event.type === 'error') { setState('error'); note.textContent = event.message || 'Orion could not answer.' }
         }
       })
+      // A request that ended without an error and without a word is not a success worth claiming.
+      if (state !== 'error') setState(answer.textContent ? 'done' : 'error')
+      if (state === 'error' && !note.textContent) note.textContent = 'Orion returned nothing.'
     } catch (err) {
-      if (!controller?.signal.aborted) note.textContent = err instanceof HelperDown ? err.message : err?.message || 'That did not work.'
+      if (controller?.signal.aborted) setState('cancelled')
+      else { setState('error'); note.textContent = err instanceof HelperDown ? err.message : err?.message || 'That did not work.' }
+      // What was asked is kept, so Retry does not mean typing it again.
+      if (state === 'error') { retry.hidden = false; retry.dataset.text = text }
     } finally {
       controller = null
       go.hidden = false; stop.hidden = true
       input.focus()
     }
   })
+
   return { open }
 }

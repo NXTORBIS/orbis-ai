@@ -1215,6 +1215,10 @@ if (!app.requestSingleInstanceLock()) {
           searchSessions: () => searchSessionsForBrowser,
           // Orbis has no account and nothing to sign in to. This is the name the person typed into the app, read fresh each
           // time so renaming yourself in the Orbis window renames you in the browser too, with no restart and no second identity.
+          // The Chat button is on the browser's toolbar now, so this is how it gets back here.
+          showChat: () => {
+            if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('chromium:hide')
+          },
           identity: async () => {
             const s = await store.getSettings()
             return { name: s.userName, title: s.userTitle }

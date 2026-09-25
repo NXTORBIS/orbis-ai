@@ -28,14 +28,14 @@ test('normalizeShortcuts drops junk and dupes', () => {
 })
 test('normalizeSettings', () => {
   assert.deepEqual(L.normalizeSettings(undefined), L.DEFAULT_SETTINGS)
-  const s = L.normalizeSettings({ name: '  Ana ', wallpaper: 'bogus', hour12: true, countdown: { date: '2030-01-05', label: 'Trip' } })
-  assert.equal(s.name, 'Ana'); assert.equal(s.wallpaper, 'orbis'); assert.equal(s.hour12, true); assert.equal(s.countdown.label, 'Trip')
+  const s = L.normalizeSettings({ wallpaper: 'bogus', hour12: true, countdown: { date: '2030-01-05', label: 'Trip' } })
+  assert.equal(s.wallpaper, 'orbis'); assert.equal(s.hour12, true); assert.equal(s.countdown.label, 'Trip')
+  // The greeting is gone from the page, and its name with it: a setting nothing reads is a setting that misleads.
+  assert.equal('name' in s, false); assert.equal('greeting' in s, false)
   assert.equal(L.normalizeSettings({ countdown: { date: 'nope' } }).countdown, null)
 })
-test('greeting and clock', () => {
-  assert.equal(L.greetingText(new Date(2026, 0, 1, 9), 'Ana'), 'Good morning, Ana')
-  assert.equal(L.greetingText(new Date(2026, 0, 1, 2)), 'Good night')
-  assert.equal(L.greetingText(new Date(2026, 0, 1, 19)), 'Good evening')
+test('the clock', () => {
+  assert.equal(L.greetingText, undefined, 'the greeting was removed from the page, so nothing should still make one')
   const d = new Date(2026, 0, 1, 15, 4, 5)
   assert.match(L.clockText(d, { hour12: false }, 'en-US'), /15:04$/)
   assert.match(L.clockText(d, { hour12: true, seconds: true }, 'en-US'), /03:04:05\sPM$/)

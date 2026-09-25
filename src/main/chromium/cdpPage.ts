@@ -107,6 +107,13 @@ export class CdpPage implements PageHandle {
 
   /** Starts listening to this tab. Called once, after the browser has attached to it. */
   async start(): Promise<void> {
+    // First, before anything that needs the page to be running.
+    //
+    // A renderer attached to before it began is paused, waiting to be told to go. Nothing says so: the tab looks
+    // ordinary, its title and address are right, and every command that does not need the page to run works. Only
+    // the ones that do never come back -- and Page.enable is one of them, so asking this afterwards is asking from
+    // behind the thing it was meant to unblock. It is harmless for a tab that was not waiting.
+    await this.send('Runtime.runIfWaitingForDebugger').catch(() => undefined)
     await this.send('Page.enable')
     await this.send('Runtime.enable')
     await this.send('Page.setLifecycleEventsEnabled', { enabled: true }).catch(() => undefined)
@@ -344,7 +351,10 @@ export class CdpBrowser {
     })
     this.pages.set(info.targetId, page)
     this.bySession.set(sessionId, page)
-    await page.start().catch(() => undefined)
+    // Bounded, and never fatal. Adopting a tab is not worth the whole browser: one page that will not answer
+    // used to leave the control layer waiting for it forever, so Orbis came up with no browser at all and said
+    // so about every request. A tab that does not start is simply a tab that is listed and not yet listening.
+    await Promise.race([page.start(), new Promise((r) => setTimeout(r, 10_000))]).catch(() => undefined)
     for (const l of this.listeners) l({ type: 'opened', page })
     return page
   }

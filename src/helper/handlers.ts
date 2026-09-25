@@ -24,6 +24,8 @@ import type { AppServicesDeps } from './appServices.ts'
 import { createGalaxyHandlers } from './galaxy.ts'
 import type { GalaxyDeps } from './galaxy.ts'
 import { createBrowserControlHandlers } from './browserControl.ts'
+import { createBrowserTaskHandlers } from './browser/tasks.ts'
+import type { BrowserHost } from './browser/host.ts'
 import type { PanelControl } from './browserControl.ts'
 import { createPanelStoreHandlers } from './panelStores.ts'
 import type { PanelStores } from './panelStores.ts'
@@ -75,8 +77,19 @@ export interface HandlerDeps {
     seen: () => Promise<number>
     markSeen: (version: number) => Promise<void>
   }
+  /**
+   * Put the browser away and show the chat. Given only by the Orbis app, which is the only place there is a chat to
+   * go back to: run on its own, Orbis is the browser and the channel does not exist.
+   */
+  showChat?: () => void
   /** How this profile has arranged the browser sidebar (the app's own store); when given, the sidebar:* channels exist. */
   sidebar?: () => { read(): Promise<unknown>; write(layout: unknown): Promise<unknown>; reset(): Promise<unknown> } | null | undefined
+  /**
+   * The browser the helper holds, when it holds one (src/helper/browser/host.ts). This is what makes Orbis able to act
+   * on the browser rather than only talk about it: with it, the browser:task channels exist and the whole control layer
+   * is reachable. Read at call time, because a browser can be closed and started again under a running helper.
+   */
+  browser?: () => BrowserHost | null | undefined
   /** The Browser Control Layer, for the rail's Tabs, Tab groups, Media and Controls rows; when given, the browser:* channels exist. */
   browserControl?: () => PanelControl | null | undefined
   /**
@@ -141,6 +154,14 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
     ...(deps.workflows ? createWorkflowHandlers(deps.workflows) : {}),
     ...(deps.galaxy ? createGalaxyHandlers(deps.galaxy) : {}),
     ...(deps.appServices ? createAppServiceHandlers(deps.appServices) : {}),
+    ...(deps.browser
+      ? createBrowserTaskHandlers({
+          host: () => deps.browser!(),
+          apiKeys: deps.apiKeys,
+          fetchFn: doFetch as unknown as typeof fetch,
+          defaultModel: DEFAULT_MODEL
+        })
+      : {}),
     ...(deps.intro
       ? {
           'intro:get': async () => ({ seen: await deps.intro!.seen() }),
@@ -152,6 +173,7 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
           }
         }
       : {}),
+    ...(deps.showChat ? { 'app:show-chat': () => (deps.showChat!(), { shown: true }) } : {}),
     ...(deps.identity
       ? {
           'identity:get': async () => {
@@ -167,7 +189,11 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
           'sidebar:reset': () => sidebarOf(deps.sidebar!).reset()
         }
       : {}),
-    ...(deps.browserControl ? createBrowserControlHandlers(deps.browserControl) : {}),
+    // The control layer, from whichever side has one: the app's when Orbis runs it, or the browser the helper
+    // itself started. The rail's tabs and navigation rows and the Orb's reading of the page all come through here.
+    ...(deps.browserControl || deps.browser
+      ? createBrowserControlHandlers(() => deps.browserControl?.() ?? deps.browser?.()?.control ?? null)
+      : {}),
     ...(deps.stores ? createPanelStoreHandlers(deps.stores) : {}),
     ...(deps.adblockControl ? { 'adblock:control': createAdblockControl(deps.adblockControl) } : {}),
     ...(deps.adblock ? createAdblockHandlers({ ...deps.adblock, fetchFn: doFetch }) : {}),
