@@ -16,6 +16,8 @@ import {
   ArrowLeft,
   Mic,
   Search,
+  LayoutGrid,
+  PanelTop,
   ShoppingBag,
   Sparkles,
   Square,
@@ -67,11 +69,34 @@ const EMPTY_LIBRARY: BrowserLibrarySnapshot = { history: [], bookmarks: [], down
 const CACHE_SIZE = 200
 
 /** Remembers recent prediction responses so retyping or backspacing shows them instantly. */
-function useCache(): { get(key: string): string[] | undefined; set(key: string, items: string[]): void } {
+/**
+ * What the providers have already said, kept for a moment.
+ *
+ * Two kinds of hit. An exact one is the answer. A *prefix* one is a head start: having asked about "python" and been
+ * told "python tutorial, python download", typing "python t" can show the one that still fits immediately, while the
+ * real request for "python t" is still in flight. It is never the final answer -- fresh results replace it the moment
+ * they arrive -- but it removes the blank moment that makes typing feel slow.
+ */
+function useCache(): { get(key: string): string[] | undefined; headStart(key: string): string[] | undefined; set(key: string, items: string[]): void } {
   const map = useRef(new Map<string, string[]>())
   return useMemo(
     () => ({
       get: (key) => map.current.get(key),
+      headStart: (key) => {
+        const exact = map.current.get(key)
+        if (exact) return exact
+        // The longest thing already asked that this extends: the closest question to the one being asked now.
+        let best: string[] | undefined
+        let bestLength = 0
+        for (const [cached, items] of map.current) {
+          if (cached.length >= key.length || !key.startsWith(cached) || cached.length <= bestLength) continue
+          const fits = items.filter((item) => item.toLowerCase().startsWith(key))
+          if (!fits.length) continue
+          best = fits
+          bestLength = cached.length
+        }
+        return best
+      },
       set: (key, items) => {
         map.current.delete(key)
         map.current.set(key, items)
@@ -100,6 +125,9 @@ function usePredictions(text: string, enabled: boolean, delay: number, minLength
       setResult({ query: q, items: hit })
       return
     }
+    // Nothing exact, but something close: show it now so the list does not go blank, and keep asking properly below.
+    const head = cache.headStart(key)
+    if (head?.length) setResult({ query: q, items: head })
     const timer = setTimeout(() => {
       void fetcher(q)
         .catch(() => [])
@@ -168,6 +196,11 @@ function SuggestionIcon({ item }: { item: OmniSuggestion }): React.JSX.Element {
     }
     case 'site':
       return <Favicon url={item.url ?? ''} fallback={<Search size={size} />} />
+    // A tab shows the site it is, because that is how somebody recognises which of their open tabs this is.
+    case 'tab':
+      return <Favicon url={item.url ?? ''} fallback={<PanelTop size={size} />} />
+    case 'workspace':
+      return <LayoutGrid size={size} />
     default:
       return <Favicon url={item.url ?? ''} fallback={<Globe size={size} />} />
   }
@@ -306,6 +339,58 @@ export default function UrlBar({
 
   const personalized = personalizedSuggestions && !incognito
   const typing = editing && typed.trim() !== ''
+
+  /**
+   * The tabs and workspaces that really exist, read when the box is opened rather than on a timer.
+   *
+   * Reading on focus rather than every few seconds is the whole difference between a useful source and a background
+   * cost: nobody needs the tab list refreshed while the omnibox is closed, and the list cannot go meaningfully stale
+   * in the seconds between opening the box and typing into it.
+   */
+  const [openTabs, setOpenTabs] = useState<{ id: string; title: string; url: string; active?: boolean; group?: string }[]>([])
+  const [workspaces, setWorkspaces] = useState<{ id: string; name: string; tabCount?: number }[]>([])
+  useEffect(() => {
+    if (!editing || !personalized) return
+    let live = true
+    void window.api
+      .getControlState(['browser'])
+      .then((state) => {
+        if (!live) return
+        const browser = (state as Record<string, { tabs?: unknown[]; groups?: unknown[] }>).browser
+        const groups = new Map(
+          ((browser?.groups ?? []) as { id?: unknown; name?: unknown }[])
+            .filter((g) => typeof g?.id === 'string')
+            .map((g) => [String(g.id), String(g.name ?? '')])
+        )
+        setOpenTabs(
+          ((browser?.tabs ?? []) as Record<string, unknown>[])
+            .filter((t) => typeof t?.id === 'string' && typeof t?.url === 'string')
+            .map((t) => ({
+              id: String(t.id),
+              title: String(t.title ?? ''),
+              url: String(t.url),
+              active: t.active === true,
+              ...(typeof t.groupId === 'string' && groups.get(t.groupId) ? { group: groups.get(t.groupId)! } : {})
+            }))
+        )
+      })
+      .catch(() => {
+        // No browser to ask. No tabs is the honest answer, not a stale list from before.
+        if (live) setOpenTabs([])
+      })
+    void window.api
+      .listWorkspaces()
+      .then((result) => {
+        if (live) setWorkspaces(result.workspaces.map((w) => ({ id: w.id, name: w.name, tabCount: w.summary?.tabs })))
+      })
+      .catch(() => {
+        if (live) setWorkspaces([])
+      })
+    return () => {
+      live = false
+    }
+  }, [editing, personalized])
+
   const web = usePredictions(typing ? typed : '', searchSuggestions, 90, 1, fetchWeb)
   const orion = usePredictions(typing ? typed : '', searchSuggestions, 450, 3, fetchOrion)
 
@@ -318,6 +403,8 @@ export default function UrlBar({
       research,
       web: web.items,
       orion: orion.items,
+      tabs: openTabs,
+      workspaces,
       now: Date.now(),
       personalized,
       currentUrl: url
@@ -357,6 +444,32 @@ export default function UrlBar({
 
   const go = (item: OmniSuggestion, newTab = false): void => {
     learn(item)
+
+    // A page that is already open is switched to, not opened again. Navigating to its address instead would leave the
+    // person with two copies and lose the one that had their scroll position, their half-filled form and their place
+    // in the video -- which is the whole reason the suggestion was offered.
+    if (item.kind === 'tab' && item.tabId && !newTab) {
+      void window.api
+        .executeControl({ capability: 'tabs.activate', params: { tabId: item.tabId }, source: 'user' })
+        .then((result) => {
+          // The tab went away between the list being built and this being pressed. Opening it is the next best thing.
+          if (!result.ok && item.url) onNavigate(item.url, { newTab: false })
+        })
+        .catch(() => {
+          if (item.url) onNavigate(item.url, { newTab: false })
+        })
+      close()
+      return
+    }
+
+    if (item.kind === 'workspace' && item.workspaceId) {
+      void window.api.openWorkspace(item.workspaceId).catch(() => {
+        // Nothing opened, and nothing pretends it did.
+      })
+      close()
+      return
+    }
+
     if (item.url) onNavigate(item.url, { newTab })
     else {
       const query = item.query ?? item.text

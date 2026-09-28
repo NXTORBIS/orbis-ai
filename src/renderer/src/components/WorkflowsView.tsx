@@ -10,6 +10,7 @@ import {
   Pencil,
   PenLine,
   Pin,
+  ShieldAlert,
   PinOff,
   Play,
   Plus,
@@ -28,6 +29,7 @@ import type { NoticeKind } from '../App'
 import { countSteps } from '../lib/workflowSteps'
 import WorkflowEditor from './WorkflowEditor'
 import { RunDialog } from './WorkflowRunPanel'
+import { HealthBadge } from './WorkflowInsights'
 
 interface Props {
   onClose(): void
@@ -64,6 +66,8 @@ export default function WorkflowsView({ onClose, onNotify }: Props): React.JSX.E
   const [filter, setFilter] = useState<Filter>('all')
   const [query, setQuery] = useState('')
   const [openId, setOpenId] = useState<string | null>(null)
+  /** Workflows this Orbis can no longer run, read once when the library loads rather than per card. */
+  const [broken, setBroken] = useState<{ workflow: Workflow; problems: { detail: string }[] }[]>([])
   const [runs, setRuns] = useState<Record<string, ActiveWorkflowRun>>({})
   const [records, setRecords] = useState<Record<string, StepRecord[]>>({})
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
@@ -98,6 +102,12 @@ export default function WorkflowsView({ onClose, onNotify }: Props): React.JSX.E
       setLibrary(lib)
       setRuns((current) => ({ ...Object.fromEntries(lib.active.map((r) => [r.runId, r])), ...Object.fromEntries(Object.entries(current).filter(([id]) => lib.active.some((r) => r.runId === id))) }))
     })
+    // Read alongside the library so the banner can never describe a library that has moved on. A failure here is not
+    // worth a message: it means Orbis could not check, which is different from finding nothing wrong.
+    void window.api
+      .workflowsAffectedByUpdate()
+      .then(setBroken)
+      .catch(() => setBroken([]))
   }, [])
 
   useEffect(() => {
@@ -243,6 +253,25 @@ export default function WorkflowsView({ onClose, onNotify }: Props): React.JSX.E
         </div>
       </header>
 
+      {/*
+        Workflows an Orbis change has broken, found together rather than one failure at a time on a weekday morning.
+        Only what is genuinely absent: a workflow that merely needs a page open is not broken and is not listed here.
+      */}
+      {broken.length > 0 && (
+        <div className="wf-banner bad" role="status">
+          <ShieldAlert size={14} />
+          <span>
+            {broken.length === 1 ? 'One workflow uses' : `${broken.length} workflows use`} something this version of Orbis no longer has.
+            {' '}
+            {broken.slice(0, 3).map((b) => b.workflow.name).join(', ')}
+            {broken.length > 3 ? ` and ${broken.length - 3} more` : ''}.
+          </span>
+          <button type="button" className="wf-link" onClick={() => setOpenId(broken[0].workflow.id)}>
+            Open the first
+          </button>
+        </div>
+      )}
+
       {recording?.active && (
         <div className="wf-banner recording" role="status">
           <Radio size={14} className={recording.paused ? '' : 'wf-pulse'} />
@@ -375,6 +404,8 @@ export default function WorkflowsView({ onClose, onNotify }: Props): React.JSX.E
                       {w.trigger.type !== 'manual' ? ` · starts ${w.trigger.type === 'appStart' ? 'with Orbis' : `on ${w.trigger.type}`}` : ''}
                     </small>
                   </div>
+                  {/* Beside the name, so a broken workflow is visible in the list rather than on opening it. */}
+                  <HealthBadge report={library.health?.[w.id]} />
                   <button type="button" className={`b-icon${w.favorite ? ' active' : ''}`} aria-label={w.favorite ? 'Remove from favorites' : 'Add to favorites'} aria-pressed={w.favorite} onClick={() => void act(() => window.api.saveWorkflow({ ...w, favorite: !w.favorite }), "Couldn't update")}>
                     <Star size={13} fill={w.favorite ? 'currentColor' : 'none'} />
                   </button>
@@ -515,11 +546,18 @@ export default function WorkflowsView({ onClose, onNotify }: Props): React.JSX.E
               if (!draftText.trim()) return
               setDrafting(true)
               void act(async () => {
-                const draft = await window.api.draftWorkflow(draftText)
+                const { workflow: draft, issues } = await window.api.draftWorkflow(draftText)
                 const saved = await window.api.saveWorkflow({ ...draft, status: 'draft' }, 'Drafted by Orion')
                 setDraftOpen(false)
                 setDraftText('')
-                onNotify('Orion drafted the workflow. Review the steps before running it.')
+                // The draft was checked against this browser as soon as Orion wrote it. Anything it got wrong is said
+                // now, not discovered part-way through a real run.
+                const broken = issues.filter((i) => i.level === 'error')
+                if (broken.length) {
+                  onNotify(`Orion drafted it, but ${broken.length} step${broken.length === 1 ? '' : 's'} will not run as written: ${broken[0].message}`, 'error')
+                } else {
+                  onNotify('Orion drafted the workflow. Review the steps before running it.')
+                }
                 setOpenId(saved.id)
               }, "Orion couldn't draft it").finally(() => setDrafting(false))
             }}

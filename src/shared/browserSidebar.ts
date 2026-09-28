@@ -87,7 +87,10 @@ export const PANELS: PanelInfo[] = [
   { id: 'workflows', label: 'Workflows', home: 'orbis', description: 'Sequences Orbis runs for you, and what they did' },
   { id: 'secrets', label: 'Secrets', home: 'settings', description: 'API keys, passwords and notes, locked behind a master password' },
   { id: 'orion', label: 'Orion', home: 'orbis', description: 'Ask about this page, summarise it, or research it' },
-  { id: 'customize', label: 'Customize', home: 'orbis', description: 'Themes, wallpapers, widgets and how Orbis looks' }
+  { id: 'customize', label: 'Customize', home: 'orbis', description: 'Themes, wallpapers, widgets and how Orbis looks' },
+  // Named in `PanelId`, placed in the Settings group below, and given an icon -- but never described here, so every
+  // lookup for it found nothing and the arrangement shipped with a panel that could not be drawn.
+  { id: 'account', label: 'Account', home: 'settings', description: 'Who is signed in to Orbis on this computer' }
 ]
 
 export const PANEL_IDS: PanelId[] = PANELS.map((p) => p.id)

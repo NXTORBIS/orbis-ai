@@ -1,8 +1,9 @@
-import type { CapabilityDescriptor } from '../../shared/browserControl'
-import type { Workflow } from '../../shared/workflows'
-import { importWorkflow, WORKFLOW_FORMAT } from '../../shared/workflows'
-import type { AskRequest, AskResult } from '../browserControl/runner'
-import { requestJson } from '../suggest'
+import type { CapabilityDescriptor } from '../../shared/browserControl.ts'
+import type { Workflow, WorkflowIssue } from '../../shared/workflows.ts'
+import { importWorkflow, validateWorkflow, WORKFLOW_FORMAT } from '../../shared/workflows.ts'
+import { routeModel } from '../../shared/modelRoute.ts'
+import type { AskRequest, AskResult } from '../browserControl/runner.ts'
+import { requestJson } from '../suggest.ts'
 
 type FetchFn = (url: string, init?: RequestInit) => Promise<Response>
 
@@ -27,7 +28,11 @@ function limit(value: unknown, chars: number): unknown {
 /** Orion answers a workflow's question as structured, checked data. */
 export async function askOrion(request: AskRequest, apiKeys: string[], fetchFn: FetchFn, signal: AbortSignal): Promise<AskResult> {
   const user = JSON.stringify({ question: request.prompt, expects: request.expects, ...(request.choices ? { choices: request.choices } : {}), context: limit(request.context, 14_000) })
-  const parsed = await requestJson(ASK_INSTRUCTIONS, user, apiKeys, fetchFn, 30_000, { maxTokens: 1500, model: 'openai/gpt-oss-120b' })
+  // Auto Mode, per question rather than per system. "Is this the login page?" and "work out which of these six
+  // results is the supplier's" are not the same job, and giving both the same model wastes one and underserves the
+  // other. The router reads the question the workflow actually asked.
+  const { model } = routeModel({ text: request.prompt, attachmentChars: JSON.stringify(request.context ?? {}).length })
+  const parsed = await requestJson(ASK_INSTRUCTIONS, user, apiKeys, fetchFn, 30_000, { maxTokens: 1500, model })
   if (signal.aborted) throw new Error('Stopped.')
   if (!parsed) throw new Error("Orion couldn't be reached.")
   const confidence = Math.min(1, Math.max(0, Number(parsed.confidence) || 0))
@@ -66,15 +71,28 @@ const DRAFT_INSTRUCTIONS = [
   'When given an existing workflow and a change to make, return the whole updated workflow, keeping the steps that should stay the same.'
 ].join('\n')
 
-/** Capabilities to show the model: those related to the request, plus the everyday ones. */
+/**
+ * Capabilities to show the model: the ones related to the request first, then the rest.
+ *
+ * Ordering, not filtering. The old version kept only what shared a word with the request, which meant a goal phrased
+ * in ordinary language could not reach a capability whose description happened to use different words -- "save this
+ * for later" never finding `bookmarks.add`. For a goal-oriented workflow that is the difference between planning and
+ * failing to, so everything stays visible and relevance decides the order.
+ */
 function relevantCapabilities(instruction: string, capabilities: CapabilityDescriptor[]): CapabilityDescriptor[] {
   const core = new Set(['navigation.go', 'page.find', 'page.click', 'page.type', 'page.select', 'page.check', 'page.press', 'page.read', 'page.extract', 'page.waitFor', 'tabs.create', 'tabs.activateMatching', 'tabs.closeMatching', 'clipboard.write', 'clipboard.read', 'downloads.waitFor', 'state.check', 'settings.set'])
   const words = instruction.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 2)
   const scored = capabilities
-    .map((c) => ({ c, score: (core.has(c.id) ? 100 : 0) + words.filter((w) => `${c.id} ${c.name} ${c.description}`.toLowerCase().includes(w)).length }))
-    .filter((x) => x.score > 0)
-    .sort((a, b) => b.score - a.score)
-  return scored.slice(0, 45).map((x) => x.c)
+    .map((c) => ({
+      c,
+      score:
+        (core.has(c.id) ? 100 : 0) +
+        words.filter((w) => `${c.id} ${c.name} ${c.description} ${c.domain}`.toLowerCase().includes(w)).length
+    }))
+    // Available first -- planning around something the browser cannot do now is planning to fail -- then relevance,
+    // then a stable order so two drafts of the same goal see the same catalogue.
+    .sort((a, b) => Number(b.c.available) - Number(a.c.available) || b.score - a.score || a.c.id.localeCompare(b.c.id))
+  return scored.slice(0, 80).map((x) => x.c)
 }
 
 /**
@@ -100,7 +118,10 @@ export async function draftWorkflow(
   ]
     .filter(Boolean)
     .join('\n\n')
-  const parsed = await requestJson(DRAFT_INSTRUCTIONS, user, apiKeys, fetchFn, 60_000, { maxTokens: 6000, model: 'openai/gpt-oss-120b' })
+  // Writing a workflow is planning, which is the kind of thing the router sends to the careful model; a one-line
+  // change to an existing one may not be. Asked rather than assumed.
+  const { model } = routeModel({ text: instruction, attachmentChars: catalog.length })
+  const parsed = await requestJson(DRAFT_INSTRUCTIONS, user, apiKeys, fetchFn, 60_000, { maxTokens: 6000, model })
   if (!parsed) throw new Error("Orion couldn't draft the workflow. Try again in a moment.")
   const draft = importWorkflow({ format: WORKFLOW_FORMAT, workflow: { ...parsed, steps: Array.isArray(parsed.steps) ? parsed.steps : [] } }, newId)
   if (!draft.steps.length) throw new Error("Orion's draft had no steps. Describe the task in a little more detail.")
@@ -108,4 +129,29 @@ export async function draftWorkflow(
   return current
     ? { ...current, name: draft.name || current.name, description: draft.description || current.description, inputs: draft.inputs, outputs: draft.outputs, steps: draft.steps, updatedAt: Date.now() }
     : { ...draft, createdBy: 'orion' }
+}
+
+/**
+ * A drafted workflow, checked against the browser it would run on.
+ *
+ * Orion writing a workflow is not evidence that the workflow is possible. It is told which capabilities exist and to
+ * use no others, but being told is not being prevented: a draft can still name something this Orbis does not have, ask
+ * for a parameter that does not exist, or use a variable before anything creates it. Left unchecked, the person finds
+ * out when it fails halfway through, having already done the first three steps to their real browser.
+ *
+ * So the draft is validated the moment it exists, against the live registry, and the problems travel with it. Nothing
+ * is silently repaired -- a workflow quietly rewritten is one nobody can trust -- and nothing is hidden.
+ */
+export async function draftValidatedWorkflow(
+  instruction: string,
+  current: Workflow | null,
+  capabilities: CapabilityDescriptor[],
+  apiKeys: string[],
+  fetchFn: FetchFn,
+  newId: () => string,
+  others: Workflow[] = []
+): Promise<{ workflow: Workflow; issues: WorkflowIssue[] }> {
+  const workflow = await draftWorkflow(instruction, current, capabilities, apiKeys, fetchFn, newId)
+  const issues = validateWorkflow(workflow, { capabilities, workflows: others })
+  return { workflow, issues }
 }

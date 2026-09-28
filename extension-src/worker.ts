@@ -21,26 +21,72 @@ const url = (path: string): string => chrome.runtime.getURL(`adblock/${path}`)
 
 // ---------------------------------------------------------------- start-up
 
-let ready: Promise<void> | null = null
-async function init(): Promise<void> {
+/**
+ * Starting up, network protection first.
+ *
+ * These are two jobs of very different weight, and they used to be one. Loading the cosmetic engines means fetching
+ * three multi-megabyte binaries and deserialising them; enabling the network rulesets means one storage read and one
+ * `updateEnabledRulesets` call. They were sequenced so that the second waited for the first, which meant the layer
+ * that stops an advertisement *before it is fetched* came up behind the layer that hides one *after it has arrived*.
+ *
+ * Measured on a real build, that left about four seconds from launch in which a page loaded its advertising normally:
+ * at 2.9s a known ad script still loaded, at 3.9s it was blocked. A browser that is unprotected for the first page
+ * somebody opens is, from where they are sitting, a browser without an ad blocker.
+ *
+ * So the order is now the order of the priorities: settings, then the network rulesets, then -- separately, and
+ * without anything waiting on it -- the cosmetic engines. Nothing was removed; the slow half simply stopped holding
+ * the fast half up.
+ */
+let settingsReady: Promise<void> | null = null
+let enginesReady: Promise<void> | null = null
+
+/** The fast half: what the person chose, and the browser's own network rules put into effect. */
+async function loadSettings(): Promise<void> {
   const stored = await chrome.storage.local.get(SETTINGS_KEY)
   core.settings = normalizeSettings(stored[SETTINGS_KEY])
   const session = await chrome.storage.session.get(PAGES_KEY).catch(() => ({}) as Record<string, unknown>)
   if (Array.isArray(session[PAGES_KEY])) core.importPages(session[PAGES_KEY] as [number, unknown][])
+}
+
+/** The slow half: the cosmetic engines, for the elements that survive the network layer. */
+async function loadEngines(): Promise<void> {
   try {
     const engines: Partial<Record<EngineCategory, FiltersEngine>> = {}
-    for (const category of ['ads', 'trackers', 'annoyances'] as const) {
-      const response = await fetch(url(`engines/${category}.bin`))
-      if (response.ok) engines[category] = FiltersEngine.deserialize(new Uint8Array(await response.arrayBuffer()))
-    }
+    // Together rather than one after another: they are independent files and nothing reads one before the others.
+    const loaded = await Promise.all(
+      (['ads', 'trackers', 'annoyances'] as const).map(async (category) => {
+        const response = await fetch(url(`engines/${category}.bin`))
+        return response.ok ? ([category, FiltersEngine.deserialize(new Uint8Array(await response.arrayBuffer()))] as const) : null
+      })
+    )
+    for (const entry of loaded) if (entry) engines[entry[0]] = entry[1]
     const popupHosts = (await (await fetch(url('popup-hosts.json'))).json()) as string[]
     core.setEngines(engines, popupHosts)
   } catch {
-    // No lists built yet: the network rulesets (if any) still work; page filtering starts once the lists are built.
+    // No lists built yet: the network rulesets still work; page filtering starts once the lists are built.
   }
 }
-const whenReady = (): Promise<void> => (ready ??= init())
-void whenReady()
+
+const whenSettings = (): Promise<void> => (settingsReady ??= loadSettings())
+const whenEngines = (): Promise<void> => (enginesReady ??= loadEngines())
+/** Kept for the callers that genuinely need everything, such as answering a question about the lists themselves. */
+const whenReady = (): Promise<void> => Promise.all([whenSettings(), whenEngines()]).then(() => undefined)
+
+/**
+ * The first thing that happens, on every start: turn the network rules on.
+ *
+ * Before the engines, before the badges, before anything that can wait. `applyExceptions` comes with it because an
+ * exception the person set is part of being correct, not part of being fast -- protection that ignores their
+ * allowlist for four seconds is its own kind of wrong.
+ */
+async function protectNow(): Promise<void> {
+  await whenSettings()
+  await applyRulesets()
+  await applyExceptions()
+}
+void protectNow()
+// Started here rather than awaited anywhere: the cosmetic layer arrives when it arrives.
+void whenEngines()
 
 async function applyRulesets(): Promise<void> {
   const active = core.active()
@@ -76,8 +122,10 @@ async function persistSettings(): Promise<void> {
   await refreshBadges()
 }
 
-chrome.runtime.onInstalled.addListener(() => void whenReady().then(persistSettings))
-chrome.runtime.onStartup.addListener(() => void whenReady().then(persistSettings))
+// On install and on every browser start, the network rules go on first. `persistSettings` then does the rest --
+// badges and storage -- which are not worth a single unprotected request.
+chrome.runtime.onInstalled.addListener(() => void protectNow().then(persistSettings))
+chrome.runtime.onStartup.addListener(() => void protectNow().then(persistSettings))
 
 // ---------------------------------------------------------------- statistics: real matches only
 

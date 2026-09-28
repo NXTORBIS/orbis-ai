@@ -12,6 +12,8 @@ import type { Dashboard } from './dashboards'
 import { normalizeDashboards } from './dashboards.ts'
 import type { StoredTheme } from './themes'
 import { cleanTokens, themeExists, themeName, themeTokens } from './themes.ts'
+import { builtInPreset, cleanPresets, presetVariables, type StoredPreset } from './presets.ts'
+import { cleanRules, type StoredRule } from './rules.ts'
 import type { VoiceInputConfig } from './voiceInput'
 import { defaultVoiceConfig, normalizeVoiceConfig } from './voiceInput.ts'
 
@@ -124,8 +126,12 @@ export interface ExperienceConfig {
   activeDashboardId: string | null
   widgets: WidgetInstance[]
   scenes: unknown[]
-  rules: unknown[]
-  presets: unknown[]
+  /** "Tell me when...": what Orbis is watching, and what it should say when it becomes true. */
+  rules: StoredRule[]
+  /** The looks Orbis offers and the ones the person has made. */
+  presets: StoredPreset[]
+  /** Which one is being worn, or null for whatever the appearance below happens to say. */
+  activePresetId: string | null
   shortcuts: unknown[]
   /** Changed at, so two configurations can be told apart. */
   updatedAt: number
@@ -151,6 +157,7 @@ export function defaultConfig(): ExperienceConfig {
     scenes: [],
     rules: [],
     presets: [],
+    activePresetId: null,
     shortcuts: [],
     updatedAt: 0
   }
@@ -253,8 +260,9 @@ export function normalizeConfig(raw: unknown): ExperienceConfig {
     activeDashboardId: typeof r.activeDashboardId === 'string' && dashboards.some((d) => d.id === r.activeDashboardId) ? r.activeDashboardId : null,
     widgets: normalizeWidgets(list(r.widgets)),
     scenes: list(r.scenes),
-    rules: list(r.rules),
-    presets: list(r.presets),
+    rules: cleanRules(r.rules),
+    presets: cleanPresets(r.presets),
+    activePresetId: typeof r.activePresetId === 'string' ? r.activePresetId : null,
     shortcuts: list(r.shortcuts),
     updatedAt: num(r.updatedAt, 0, 0, Number.MAX_SAFE_INTEGER)
   }
@@ -443,6 +451,17 @@ export function describeConfig(config: ExperienceConfig): string[] {
 // ---------------------------------------------------------------- what the window applies
 
 /**
+ * The preset Orbis is wearing, whether it is one of its own or one the person made.
+ *
+ * A preset that has been deleted, or that came from a newer Orbis, is simply not worn: the appearance already stored
+ * in the configuration still applies, so nothing is lost and nothing is invented to replace it.
+ */
+export function activePreset(config: ExperienceConfig): StoredPreset | null {
+  if (!config.activePresetId) return null
+  return builtInPreset(config.activePresetId) ?? config.presets.find((p) => p.id === config.activePresetId) ?? null
+}
+
+/**
  * The only things the runtime changes about how Orbis looks, as plain CSS variables. Anything the user has not
  * personalised is left out entirely, so Orbis keeps its own value and the default experience is untouched.
  */
@@ -470,7 +489,11 @@ export function appearanceVariables(config: ExperienceConfig, systemReducedMotio
     out['--pill-border'] = 'rgba(255, 255, 255, 0.35)'
   }
   if (config.accessibility.largerText) out['--font-scale'] = String(Math.max(Number(out['--font-scale'] ?? 1), 1.15))
-  void systemReducedMotion
+  // The preset on top: how much the interface moves, and the background it was designed around. It comes last so the
+  // accessibility rules above cannot be undone by a look, and it is told whether movement is wanted at all -- which
+  // is what finally gives this function a use for the system setting it is handed.
+  const worn = activePreset(config)
+  if (worn) Object.assign(out, presetVariables(worn, wantsReducedMotion(config, systemReducedMotion)))
   return out
 }
 

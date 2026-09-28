@@ -1,4 +1,5 @@
 import { askBrowser, call, HelperDown } from './helper.js'
+import { mountOmnibox } from './omnibox-ui.js'
 import { mountCommandCenter, show as showCommandCenter, useRail } from './command-center.js'
 import { mountRail } from './rail-nav.js'
 
@@ -10,157 +11,36 @@ import { mountRail } from './rail-nav.js'
 
 const $ = (id) => document.getElementById(id)
 const status = $('status')
-const messages = $('messages')
-const input = $('input')
-const send = $('send')
-const stop = $('stop')
-const modelSelect = $('model')
 
-const MODEL_KEY = 'orbis.model'
 let controller = null
 let connected = false
 
-// ---------------------------------------------------------------- the chat being held, and the ones held before
-//
-// The messages on screen are the chat, and the chat is kept in the store the Orbis window itself reads (conversations:*),
-// so one started here can be opened there and the other way round. `held` is that chat; there is no second copy of the
-// messages to keep in step with it.
-
-const EMPTY_TEXT = 'Ask Orion anything. Everything runs on this computer, with your own key.'
-const newId = () => (typeof crypto?.randomUUID === 'function' ? crypto.randomUUID() : `c${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`)
-
-/** The same first-line rule the Orbis window titles a chat by, so a chat is called the same thing in both. */
-function titleFrom(text) {
-  const line = String(text ?? '').replace(/\s+/g, ' ').trim()
-  if (!line) return 'New chat'
-  return line.length > 48 ? `${line.slice(0, 47).trimEnd()}…` : line
+/**
+ * What the dot beside the Orbis name in the header is saying.
+ *
+ * `state` is the class panel.css draws: `ok` green, `warn` amber, `down` red. The page opens on the "Connecting…" in
+ * index.html and lands on one of these as soon as it has asked the helper anything.
+ */
+const RUNTIME_STATES = {
+  ready: { label: 'Ready', detail: 'Orbis is running on this computer.', state: 'ok' },
+  'no-key': {
+    label: 'No model',
+    detail: 'Orbis is running, but no model has been set up yet. Add one in the Orbis window.',
+    state: 'warn'
+  },
+  down: { label: 'Stopped', detail: 'Orbis is not running. Start Orbis and this connects by itself.', state: 'down' },
+  unreachable: { label: 'No answer', detail: 'Orbis is running but did not answer. It may still be starting.', state: 'down' }
 }
 
-function blankChat() {
-  const at = Date.now()
-  return { id: newId(), title: '', model: '', messages: [], createdAt: at, updatedAt: at }
-}
-
-let held = blankChat()
-
-/** Adds a message to the chat. What Orion is sent is these same messages, so the two can never disagree. */
-function remember(role, content) {
-  held.messages.push({ id: newId(), role, content, createdAt: Date.now() })
-  held.updatedAt = Date.now()
-  if (!held.title && role === 'user') held.title = titleFrom(content)
-}
-
-/** Keeps the chat. A chat that failed to save is still on screen, so this never interrupts to say so. */
-async function keep() {
-  if (!held.messages.length) return
-  held.model = modelSelect.value || held.model
-  try {
-    await call('conversations:save', [held])
-  } catch {
-    // Nothing worth stopping the conversation over; the next exchange tries again.
-  }
-}
-
-/** Draws the held chat from its messages, so opening an earlier one and carrying on look the same. */
-function drawMessages() {
-  messages.replaceChildren()
-  if (!held.messages.length) {
-    const empty = document.createElement('p')
-    empty.id = 'empty'
-    empty.className = 'empty'
-    empty.textContent = EMPTY_TEXT
-    messages.append(empty)
-    return
-  }
-  for (const m of held.messages) {
-    const el = add(m.role, '')
-    // Sources are not kept with a chat, so a [1] in an older answer stays the text it was written as.
-    if (m.role === 'assistant') renderAnswer(el, m.content, [])
-    else el.textContent = m.content
-  }
-}
-
-function startNew() {
-  controller?.abort()
-  held = blankChat()
-  drawMessages()
-  hideChats()
-}
-
-async function openChat(id) {
-  controller?.abort()
-  let found
-  try {
-    found = await call('conversations:get', [id])
-  } catch {
-    return note('That chat could not be opened.', true)
-  }
-  if (!found) return note('That chat is no longer here.', true)
-  held = { ...found, messages: Array.isArray(found.messages) ? found.messages : [] }
-  if (held.model) modelSelect.value = held.model
-  drawMessages()
-  hideChats()
-}
-
-function hideChats() {
-  $('chats-list').hidden = true
-  $('chats').setAttribute('aria-expanded', 'false')
-}
-
-/** The chats kept before this one: enough of each to recognise it, and nothing of what was said in it. */
-async function showChats() {
-  const box = $('chats-list')
-  box.hidden = false
-  $('chats').setAttribute('aria-expanded', 'true')
-  const line = (text) => {
-    const p = document.createElement('p')
-    p.className = 'empty'
-    p.textContent = text
-    return p
-  }
-  box.replaceChildren(line('Loading…'))
-  let list
-  try {
-    list = await call('conversations:list')
-  } catch (err) {
-    return void box.replaceChildren(line(err instanceof HelperDown ? 'Start Orbis to see earlier chats.' : 'Earlier chats could not be read.'))
-  }
-  if (!Array.isArray(list) || !list.length) return void box.replaceChildren(line('No earlier chats yet.'))
-
-  const rows = document.createElement('ul')
-  rows.className = 'chats'
-  for (const c of list) {
-    const row = document.createElement('li')
-    const open = document.createElement('button')
-    open.type = 'button'
-    open.className = 'chat-open'
-    const title = document.createElement('b')
-    title.textContent = c.title || 'New chat'
-    const about = document.createElement('small')
-    about.textContent = `${c.messages} message${c.messages === 1 ? '' : 's'} · ${new Date(c.updatedAt).toLocaleDateString()}`
-    open.append(title, about)
-    open.addEventListener('click', () => void openChat(c.id))
-    const drop = document.createElement('button')
-    drop.type = 'button'
-    drop.className = 'chat-drop'
-    drop.title = `Delete ${c.title || 'this chat'}`
-    drop.setAttribute('aria-label', drop.title)
-    drop.textContent = '×'
-    drop.addEventListener('click', async () => {
-      await call('conversations:remove', [c.id]).catch(() => undefined)
-      // The one on screen was just deleted: it would otherwise be written back on the next reply.
-      if (c.id === held.id) startNew()
-      void showChats()
-    })
-    row.append(open, drop)
-    rows.append(row)
-  }
-  box.replaceChildren(rows)
-}
-
-function setStatus(text, state) {
-  status.textContent = text
-  status.className = `status ${state ?? ''}`
+function setStatus(name) {
+  const it = RUNTIME_STATES[name] ?? RUNTIME_STATES.unreachable
+  status.textContent = it.label
+  status.title = it.detail
+  status.className = `status ${it.state}`
+  // Working is the ordinary case, and the ordinary case does not need a badge. A strip that permanently says
+  // "Connecting..." or "Ready" is a row of browser space spent telling a person what they can already see; this says
+  // something only when something is wrong, which is the only time the answer is worth the space.
+  status.hidden = it.state === 'ok'
 }
 
 /** The address if it is a web address, otherwise null. */
@@ -182,79 +62,13 @@ function link(href, className) {
   return a
 }
 
-// ---------------------------------------------------------------- Ask
-
-function add(role, text = '') {
-  $('empty')?.remove()
-  const el = document.createElement('div')
-  el.className = `msg ${role}`
-  el.textContent = text
-  messages.append(el)
-  messages.scrollTop = messages.scrollHeight
-  return el
-}
-
-function note(text, isError = false) {
-  const el = document.createElement('div')
-  el.className = `note${isError ? ' error' : ''}`
-  el.textContent = text
-  messages.append(el)
-  messages.scrollTop = messages.scrollHeight
-}
-
-/** Writes an answer, turning [n] into a link to source n when there is such a source. Rebuilt on every update. */
-function renderAnswer(el, text, sources) {
-  const byNumber = new Map(sources.map((s) => [s.n, s]))
-  const parts = text.split(/(\[\d{1,2}\])/g)
-  const nodes = parts.map((part) => {
-    const m = /^\[(\d{1,2})\]$/.exec(part)
-    const source = m && byNumber.get(Number(m[1]))
-    const href = source && safeUrl(source.url)
-    if (!href) return document.createTextNode(part)
-    const a = link(href, 'cite')
-    a.textContent = part
-    a.title = source.title
-    return a
-  })
-  el.replaceChildren(...nodes)
-}
-
-function renderSources(sources) {
-  const box = document.createElement('div')
-  box.className = 'sources'
-  const heading = document.createElement('h3')
-  heading.textContent = 'Sources'
-  box.append(heading)
-  for (const s of sources) {
-    const href = safeUrl(s.url)
-    const row = document.createElement('div')
-    const n = document.createElement('span')
-    n.className = 'n'
-    n.textContent = `[${s.n}]`
-    row.append(n)
-    if (href) {
-      const a = link(href)
-      a.textContent = s.title || s.domain
-      row.append(a)
-    } else {
-      row.append(document.createTextNode(s.title || s.domain))
-    }
-    const dom = document.createElement('span')
-    dom.className = 'dom'
-    dom.textContent = ` — ${s.domain}${s.published ? `, ${s.published}` : ''}`
-    row.append(dom)
-    box.append(row)
-  }
-  messages.append(box)
-  messages.scrollTop = messages.scrollHeight
-}
 
 async function connect() {
   try {
     const ping = await call('helper:ping')
     const list = await call('models:list')
     connected = true
-    setStatus(ping.hasApiKey ? 'Connected' : 'Connected, but the helper has no Groq key', ping.hasApiKey ? 'ok' : 'down')
+    setStatus(ping.hasApiKey ? 'ready' : 'no-key')
     if (!modelSelect.options.length) {
       for (const m of list.models) modelSelect.add(new Option(m.label, m.id))
       const saved = localStorage.getItem(MODEL_KEY)
@@ -262,98 +76,10 @@ async function connect() {
     }
   } catch (err) {
     connected = false
-    setStatus(err instanceof HelperDown ? err.message : 'Could not reach Orbis.', 'down')
+    // The error's own words never reach the header: it is a diagnostic, and the header is not a log.
+    setStatus(err instanceof HelperDown ? 'down' : 'unreachable')
   }
 }
-
-modelSelect.addEventListener('change', () => localStorage.setItem(MODEL_KEY, modelSelect.value))
-
-$('new').addEventListener('click', startNew)
-$('chats').addEventListener('click', () => {
-  if (!$('chats-list').hidden) return hideChats()
-  // The list belongs to the Ask view, and the button is in the header on every tab: go where it leads.
-  showTab('ask')
-  void showChats()
-})
-
-stop.addEventListener('click', () => controller?.abort())
-
-input.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
-    e.preventDefault()
-    $('composer').requestSubmit()
-  }
-})
-
-$('composer').addEventListener('submit', async (e) => {
-  e.preventDefault()
-  const text = input.value.trim()
-  if (!text || controller) return
-  if (!connected) await connect()
-  if (!connected) return note('Orbis is not running, so nothing was sent.', true)
-
-  input.value = ''
-  add('user', text)
-  remember('user', text)
-  const reply = add('assistant')
-  reply.classList.add('working')
-  let answer = ''
-  let sources = []
-  let searchStatus = null
-
-  controller = new AbortController()
-  send.hidden = true
-  stop.hidden = false
-  try {
-    await call('chat:send', [{ model: modelSelect.value, webSearch: $('web').checked, messages: held.messages.slice(-30) }], {
-      signal: controller.signal,
-      onEvent: (event) => {
-        if (event.type === 'delta' && typeof event.content === 'string') {
-          searchStatus?.remove()
-          searchStatus = null
-          answer += event.content
-          renderAnswer(reply, answer, sources)
-          messages.scrollTop = messages.scrollHeight
-        } else if (event.type === 'research') {
-          sources = event.research?.sources ?? []
-        } else if (event.type === 'error') {
-          note(event.message || 'Orion could not answer.', true)
-        } else if (event.type === 'status') {
-          // Searching-the-web progress is shown in one line that is replaced as it changes, then goes when the answer starts.
-          if (!searchStatus) {
-            searchStatus = document.createElement('div')
-            searchStatus.className = 'note'
-            messages.insertBefore(searchStatus, reply)
-          }
-          searchStatus.textContent = event.message
-        }
-      }
-    })
-    if (answer) remember('assistant', answer)
-    else held.messages.pop()
-  } catch (err) {
-    if (controller?.signal.aborted) {
-      // Stopped by the person: what was written stays, and the conversation continues from it.
-      if (answer) remember('assistant', answer)
-      else held.messages.pop()
-    } else {
-      held.messages.pop()
-      note(err?.message || 'That did not work.', true)
-    }
-  } finally {
-    searchStatus?.remove()
-    reply.classList.remove('working')
-    if (!answer) reply.remove()
-    if (sources.length && answer) renderSources(sources)
-    controller = null
-    send.hidden = false
-    stop.hidden = true
-    input.focus()
-    // Kept after the exchange rather than during it: an answer being written is not yet a thing worth keeping, and a
-    // stopped one is — what was written stays, and the chat carries on from it.
-    void keep()
-  }
-})
 
 // ---------------------------------------------------------------- Search
 
@@ -368,11 +94,22 @@ let searching = null
  */
 // 'home' is the Command Center, and it is where the panel opens: everything Orbis can do, and the way to each of
 // them. The rest are the places it leads to, each still reachable by its own address as before.
-const VIEWS = ['home', 'ask', 'search', 'block', 'notes', 'tasks', 'workflows', 'galaxy', 'secrets', 'account']
+const VIEWS = ['home', 'search', 'block', 'notes', 'tasks', 'workflows', 'galaxy', 'secrets', 'account']
 
 const viewFromAddress = () => {
-  const wanted = (location.hash || '').replace(/^#\/?/, '').toLowerCase()
-  return VIEWS.includes(wanted) ? wanted : null
+  // The hash is how a person names a view; ?view= is how the browser does, when a toolbar button opens this page over
+  // the tab and wants it already showing one thing. Either way it is the same set of names and the same landing.
+  const hash = (location.hash || '').replace(/^#\/?/, '').toLowerCase()
+  if (VIEWS.includes(hash)) return hash
+  const asked = (new URLSearchParams(location.search).get('view') || '').toLowerCase()
+  return VIEWS.includes(asked) ? asked : null
+}
+
+// How the surface moves this page once it is up. Opening the Command Center a second time must not reload it -- that
+// would throw away whatever was typed into it -- so the browser calls in instead of navigating.
+window.orbisGoTo = (view) => {
+  const wanted = String(view || '').toLowerCase()
+  showTab(VIEWS.includes(wanted) ? wanted : 'home')
 }
 
 function showTab(name) {
@@ -407,6 +144,9 @@ for (const id of VIEWS) {
 const asSurface = new URLSearchParams(location.search).get('surface') === 'overlay'
 if (asSurface) {
   document.documentElement.classList.add('surface')
+  document.getElementById('cc-close')?.addEventListener('click', () => {
+    askBrowser('orbis.command.close').catch(() => { /* not the surface: nothing to close */ })
+  })
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return
     // Escape belongs to whatever is in front: a dialog, or a search box with something in it, answers first.
@@ -460,8 +200,66 @@ function renderResults(outcome) {
   }
 }
 
+/**
+ * Live predictions under the search box, from Chromium's real autocomplete providers.
+ *
+ * The box used to do nothing until Enter. Now every keystroke starts a real `AutocompleteController` query in the
+ * browser, and what comes back -- search suggestions, history, URLs, bookmarks, keywords, open tabs -- is merged with
+ * the one thing Chromium cannot know about, this person's workspaces, and drawn in Orbis's own design.
+ *
+ * Submitting still works exactly as it did, for plain words with no row chosen.
+ */
+const omnibox = mountOmnibox({
+  input: $('query'),
+  // The same helper the rest of the panel talks to. This is what makes the microphone real rather than decorative:
+  // without it the control is not shown at all.
+  call: (channel, args = []) => call(channel, args),
+  /** Workspaces, which Chromium has never heard of. Its own providers already cover history, bookmarks and tabs. */
+  orbisSuggestions: async (text) => {
+    const words = text.trim().toLowerCase()
+    if (!words || !connected) return []
+    try {
+      const spaces = await call('workspaces:list', [])
+      return (Array.isArray(spaces) ? spaces : [])
+        .filter((w) => String(w.name ?? '').toLowerCase().includes(words))
+        .slice(0, 5)
+        .map((w, i) => ({
+          id: `ws:${w.id}`,
+          kind: 'workspace',
+          text: w.name,
+          // The real count, from the real workspace. Never a placeholder.
+          detail: `${w.tabs} ${w.tabs === 1 ? 'tab' : 'tabs'}${w.current ? ' — current' : ''}`,
+          workspaceId: w.id,
+          score: 100 - i
+        }))
+    } catch {
+      // Orbis not running is not a reason to show nothing: the native rows stand on their own.
+      return []
+    }
+  },
+  onSearch: (query) => {
+    $('query').value = query
+    $('search-form').requestSubmit()
+  },
+  onAskOrion: (query) => {
+    $('query').value = query
+  },
+  onOpenExternally: (target) => {
+    void call('browser:openExternal', [target]).catch(() => {
+      // Nothing opened rather than something opened in the wrong place.
+    })
+  },
+  onOrbisAction: (candidate) => {
+    if (candidate.action === 'OPEN_WORKSPACE') {
+      const id = String(candidate.id ?? '').replace(/^OPEN_WORKSPACE:/, '')
+      void call('workspaces:open', [id, false]).catch(() => {})
+    }
+  }
+})
+
 $('search-form').addEventListener('submit', async (e) => {
   e.preventDefault()
+  omnibox.dismiss()
   const query = $('query').value.trim()
   if (!query) return
   searching?.abort()
@@ -492,13 +290,6 @@ $('search-form').addEventListener('submit', async (e) => {
 })
 
 // From results to an answer: the same question, asked with the web read first so the answer names its sources.
-$('ask-about').addEventListener('click', () => {
-  if (!lastQuery) return
-  $('web').checked = true
-  showTab('ask')
-  input.value = lastQuery
-  $('composer').requestSubmit()
-})
 
 // Open on whatever the address names, so chrome://orbis#galaxy lands on Galaxy rather than on Ask and a click.
 // With no address, the Command Center: the panel opens on everything Orbis can do rather than on one of them.

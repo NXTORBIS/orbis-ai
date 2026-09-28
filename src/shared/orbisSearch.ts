@@ -25,6 +25,12 @@ export const SEARCH_PAGE = 'orbis://search'
  * either can be replaced, or be down, without the other noticing.
  */
 export type SearchVertical = 'orion' | 'all' | 'images' | 'videos' | 'news' | 'maps' | 'music' | 'science' | 'files' | 'social'
+// The order the tabs appear in. The expected ones lead, and Orbis's own follow, because a working vertical is not
+// worth losing to a tidier row.
+//
+// There is no Shopping tab. Shopping needs a product catalogue with real prices and ratings, and every general one
+// requires an account and a key; Orbis calls public APIs directly and does not scrape. A tab that could only ever be
+// empty, or filled with invented prices, is worse than no tab -- so until there is a source, there is no tab.
 export const VERTICALS: SearchVertical[] = ['orion', 'all', 'images', 'videos', 'news', 'maps', 'music', 'science', 'files', 'social']
 
 /** Asking Orion, which is its own way of searching rather than something added to the top of the web results. */

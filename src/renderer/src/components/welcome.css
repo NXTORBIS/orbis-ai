@@ -689,3 +689,179 @@
     transform: none;
   }
 }
+
+/* ---------------------------------------------------------------- the account password
+ *
+ * On the same screen as the name, and drawn with the same field, the same border, the same glow. It reveals itself once
+ * there is a name rather than existing from the first frame, so the screen still opens as the single question it always
+ * was. Everything here reuses what the name field already established; nothing new was invented to hold a password.
+ */
+
+.welcome-secure {
+  width: 100%;
+  margin-top: 22px;
+  /* Collapsed to nothing until there is a name, so the button does not sit in the middle of the screen waiting. */
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transition:
+    max-height 0.55s var(--ease-out),
+    opacity 0.45s ease 0.1s;
+}
+
+.welcome-secure.is-shown {
+  /* Generous enough for the longest message any of the three notes can show, at any text size. */
+  max-height: 420px;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.welcome-label {
+  display: block;
+  margin: 0 0 8px;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  color: #aab4be;
+}
+
+.welcome-secure .welcome-field {
+  /* The name field's entrance animation is its own; these should not replay it every time the section reveals. */
+  animation: none;
+}
+
+.welcome-secure .welcome-field + .welcome-label {
+  margin-top: 18px;
+}
+
+/* The field with the reveal button in it: the input takes what is left, so the button never overlaps the text. */
+.welcome-field.has-reveal .welcome-input {
+  padding-right: 52px;
+}
+
+.welcome-reveal {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  transform: translateY(-50%);
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: #8b96a2;
+  cursor: pointer;
+  transition:
+    color 0.25s ease,
+    background 0.25s ease;
+}
+
+.welcome-reveal:hover {
+  color: #d6e6f2;
+  background: rgba(63, 216, 255, 0.1);
+}
+
+.welcome-reveal:focus-visible {
+  outline: 2px solid rgba(160, 236, 255, 0.8);
+  outline-offset: 2px;
+}
+
+/*
+ * The strength meter.
+ *
+ * One bar that fills, tinted by the verdict. The colour is a second way of saying what the words below already say, not
+ * the only way -- somebody who cannot tell the tints apart still reads "Fair" or "Strong".
+ */
+.welcome-meter {
+  position: relative;
+  height: 3px;
+  margin: 10px 0 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+}
+
+.welcome-meter > span {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: #6e727b;
+  transition:
+    width 0.35s var(--ease-out),
+    background 0.35s ease;
+}
+
+.welcome-meter[data-strength='none'] > span {
+  width: 0 !important;
+}
+
+.welcome-meter[data-strength='weak'] > span {
+  background: #ff6b6b;
+}
+
+.welcome-meter[data-strength='fair'] > span {
+  background: #ffbe4d;
+}
+
+.welcome-meter[data-strength='good'] > span {
+  background: #4fd1a5;
+}
+
+.welcome-meter[data-strength='strong'] > span {
+  background: #3fd8ff;
+}
+
+.welcome-note {
+  min-height: 18px;
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: #8b96a2;
+}
+
+.welcome-note[role='alert'] {
+  color: #ff8a8a;
+}
+
+.welcome-note.is-quiet {
+  margin-top: 16px;
+  color: #6e727b;
+}
+
+/* Nothing here animates for somebody who asked not to be moved; it simply appears. */
+.welcome.reduced .welcome-secure,
+.welcome.reduced .welcome-meter > span,
+.welcome.reduced .welcome-reveal {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .welcome-secure,
+  .welcome-meter > span,
+  .welcome-reveal {
+    transition: none;
+  }
+}
+
+/* Why the lock screen is here, when it appeared in the middle of somebody's work.
+   Quieter than the instruction above it: it explains, it does not ask for anything. It fades in with the rest rather
+   than appearing at once, so the screen assembles as one thing. */
+.welcome-because {
+  margin: -18px 0 24px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #7c8794;
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity 0.6s ease 0.1s,
+    transform 0.6s var(--ease-out) 0.1s;
+}
+
+.welcome-because.is-shown {
+  opacity: 1;
+  transform: none;
+}

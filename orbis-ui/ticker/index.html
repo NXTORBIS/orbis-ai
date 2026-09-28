@@ -1,0 +1,84 @@
+<!doctype html>
+<!--
+  The market strip along the bottom of the browser.
+
+  It draws what Orbis sends it and nothing else. There is no placeholder row, no
+  sample symbol and no number in this file: an empty strip means nothing is
+  configured, and a strip with no prices means the provider has none.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="color-scheme" content="dark" />
+    <title>Markets</title>
+    <link rel="stylesheet" href="orbis-tokens.css" />
+    <link rel="stylesheet" href="ticker.css" />
+  </head>
+  <body>
+    <div class="strip" id="strip">
+      <!-- The group the strip is showing, and the way to change it. -->
+      <button type="button" class="strip-group" id="group" title="Change which markets are shown">
+        <span id="group-name">Markets</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+          <path d="m6 9 6 6 6-6" />
+        </svg>
+      </button>
+
+      <!--
+        The moving part.
+
+        A viewport with one long rail inside it, moved by transform. The rail holds
+        the items twice over, so when the first copy has gone past the left edge the
+        transform resets to zero with the second copy exactly where the first was --
+        which is what makes the loop seamless rather than a jump.
+      -->
+      <div class="strip-viewport" id="viewport" role="marquee" aria-live="off">
+        <div class="strip-rail" id="rail"></div>
+      </div>
+
+      <!--
+        The same information, still, for a screen reader and for anybody who has
+        turned motion off. Not a second copy of the data: the same items, rendered
+        once, with the moving rail hidden from assistive technology entirely.
+      -->
+      <ul class="strip-static" id="static" hidden></ul>
+
+      <div class="strip-tools">
+        <button type="button" class="strip-tool" id="pause" aria-pressed="false" title="Pause the ticker">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" class="icon-pause">
+            <rect x="7" y="5" width="3.5" height="14" rx="1" />
+            <rect x="13.5" y="5" width="3.5" height="14" rx="1" />
+          </svg>
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" class="icon-play">
+            <path d="M8 5.5v13l11-6.5z" />
+          </svg>
+        </button>
+        <span class="strip-state" id="state" title="Where these prices come from"></span>
+      </div>
+    </div>
+
+    <!-- What one asset looks like when it is clicked. Filled from real data, never pre-filled. -->
+    <div class="peek" id="peek" hidden role="dialog" aria-label="Market details">
+      <div class="peek-head">
+        <b id="peek-symbol"></b>
+        <span id="peek-freshness" class="peek-fresh"></span>
+        <button type="button" class="strip-tool" id="peek-close" aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
+      </div>
+      <div class="peek-price" id="peek-price"></div>
+      <div class="peek-change" id="peek-change"></div>
+      <dl class="peek-facts" id="peek-facts"></dl>
+      <div class="peek-actions">
+        <button type="button" class="peek-btn" data-do="chart">Chart</button>
+        <button type="button" class="peek-btn" data-do="watch">Watch</button>
+        <button type="button" class="peek-btn" data-do="alert">Alert</button>
+      </div>
+      <p class="peek-source" id="peek-source"></p>
+    </div>
+
+    <script type="module" src="ticker.js"></script>
+  </body>
+</html>

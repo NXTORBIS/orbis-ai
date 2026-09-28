@@ -1,5 +1,4 @@
-import { nativeImage } from 'electron'
-import { GROQ_BASE_URL } from './nim'
+import { GROQ_BASE_URL } from './nim.ts'
 
 export type FetchFn = (url: string, init?: RequestInit) => Promise<Response>
 
@@ -34,9 +33,22 @@ const SIZE = 768
 const WATERMARK_STRIP = 64
 
 /** Same seed + a revised prompt keeps the composition, which is how edits stay close to the original. */
-export async function generateImage(prompt: string, fetchFn: FetchFn, seed = Math.floor(Math.random() * 1e6)): Promise<{ dataUrl: string; seed: number }> {
+/**
+ * A picture, from a prompt.
+ *
+ * `crop` trims the strip Pollinations can put its mark on. Electron passes one built on nativeImage; the helper runs in
+ * plain Node and has none, so it asks for an image the size it wants and takes it as it comes. Rather than crop badly,
+ * it does not crop at all.
+ */
+export async function generateImage(
+  prompt: string,
+  fetchFn: FetchFn,
+  seed = Math.floor(Math.random() * 1e6),
+  crop?: (jpeg: Buffer, strip: number) => string
+): Promise<{ dataUrl: string; seed: number }> {
   // gen.pollinations.ai requires an API key for uncached prompts; this endpoint is still keyless.
-  const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=${SIZE}&height=${SIZE + WATERMARK_STRIP}&nologo=true&seed=${seed}`
+  const strip = crop ? WATERMARK_STRIP : 0
+  const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=${SIZE}&height=${SIZE + strip}&nologo=true&seed=${seed}`
   let res = await fetchFn(url)
   // Pollinations sometimes answers 5xx/429 under load; a short retry almost always succeeds.
   for (let attempt = 1; attempt <= 2 && (res.status >= 500 || res.status === 429); attempt++) {
@@ -47,11 +59,10 @@ export async function generateImage(prompt: string, fetchFn: FetchFn, seed = Mat
   const type = res.headers.get('content-type') ?? ''
   if (!type.startsWith('image/')) throw new Error(`Pollinations returned ${type || 'no content type'} instead of an image`)
 
-  const image = nativeImage.createFromBuffer(Buffer.from(await res.arrayBuffer()))
-  const { width, height } = image.getSize()
-  if (image.isEmpty() || width === 0) throw new Error('Pollinations returned an unreadable image')
-  const cropped = image.crop({ x: 0, y: 0, width, height: Math.max(1, height - Math.round((WATERMARK_STRIP * height) / (SIZE + WATERMARK_STRIP))) })
-  return { dataUrl: `data:image/jpeg;base64,${cropped.toJPEG(92).toString('base64')}`, seed }
+  const bytes = Buffer.from(await res.arrayBuffer())
+  if (bytes.length === 0) throw new Error('Pollinations returned an empty image')
+  if (crop) return { dataUrl: crop(bytes, WATERMARK_STRIP), seed }
+  return { dataUrl: `data:${type.split(';')[0]};base64,${bytes.toString('base64')}`, seed }
 }
 
 const REWRITE_INSTRUCTIONS =

@@ -2,7 +2,7 @@ import { Component, useEffect, useRef, useState } from 'react'
 import type { ErrorInfo, ReactNode } from 'react'
 import { ChevronDown, ChevronUp, CircleAlert, RotateCcw, X } from 'lucide-react'
 import type { WidgetFailure, WidgetInstance, ZoneName } from '../../../../shared/widgets'
-import { afterFailure, widgetById, widgetsInZone, ZONES } from '../../../../shared/widgets'
+import { afterFailure, clearWidgetPlacement, placedWidgets, placeWidgetFreely, widgetById, widgetsInZone, ZONES } from '../../../../shared/widgets'
 import { WIDGET_VIEWS } from './views'
 
 /**
@@ -62,6 +62,70 @@ export default function WidgetHost({ widgets, onOpen, onChange }: WidgetHostProp
   const live = widgets.filter((w) => !w.disabled)
   if (!live.length) return null
 
+  const surface = useRef<HTMLDivElement>(null)
+
+  /**
+   * Dragging a widget to put it somewhere.
+   *
+   * Two things make this feel like moving an object rather than operating a control. The first is that the position
+   * is written straight onto the element while the pointer moves -- asking React to re-render the whole board on
+   * every pointer event would make a widget lag behind the hand holding it. The second is that nothing is saved
+   * until the pointer is released: a drag is one decision, not a hundred.
+   *
+   * A small movement stays a click, so the fold button and everything inside the widget still work.
+   */
+  const startDrag = (instance: WidgetInstance, event: React.PointerEvent<HTMLElement>): void => {
+    if (event.button !== 0) return
+    const host = surface.current
+    const card = event.currentTarget.closest('.wg-card') as HTMLElement | null
+    if (!host || !card) return
+
+    const bounds = host.getBoundingClientRect()
+    if (bounds.width <= 0 || bounds.height <= 0) return
+    const from = card.getBoundingClientRect()
+    // Where in the widget it was grabbed, kept for the whole drag so the card does not jump under the pointer.
+    const grabX = event.clientX - from.left
+    const grabY = event.clientY - from.top
+    const startX = event.clientX
+    const startY = event.clientY
+    let moved = false
+    let place = { x: 0, y: 0 }
+
+    const move = (e: PointerEvent): void => {
+      if (!moved && Math.hypot(e.clientX - startX, e.clientY - startY) < 5) return
+      if (!moved) {
+        moved = true
+        card.classList.add('dragging')
+        // From here it is placed, so it is positioned rather than laid out by its row.
+        card.style.position = 'absolute'
+        card.style.width = `${from.width}px`
+      }
+      const left = Math.min(Math.max(e.clientX - grabX - bounds.left, 0), Math.max(0, bounds.width - from.width))
+      const top = Math.min(Math.max(e.clientY - grabY - bounds.top, 0), Math.max(0, bounds.height - from.height))
+      card.style.left = `${left}px`
+      card.style.top = `${top}px`
+      // Kept as a fraction of the surface, so the same arrangement survives a different window on a different screen.
+      place = { x: left / bounds.width, y: top / bounds.height }
+    }
+
+    const end = (): void => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', end)
+      window.removeEventListener('pointercancel', end)
+      card.classList.remove('dragging')
+      // The inline position was only for the drag; where it ended up is now the board's business, not the DOM's.
+      card.style.position = ''
+      card.style.left = ''
+      card.style.top = ''
+      card.style.width = ''
+      if (moved) onChange(placeWidgetFreely(widgets, instance.id, place))
+    }
+
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', end)
+    window.addEventListener('pointercancel', end)
+  }
+
   const fail = (instance: WidgetInstance, message: string): void => {
     const result = afterFailure(failures.current, instance.id, message)
     failures.current = result.failures
@@ -69,41 +133,63 @@ export default function WidgetHost({ widgets, onOpen, onChange }: WidgetHostProp
     if (result.disable) onChange(widgets.map((w) => (w.id === instance.id ? { ...w, disabled: true } : w)))
   }
 
+  /**
+   * One widget, wherever it is.
+   *
+   * The same card is used whether the widget is in a row or has been put somewhere by hand, so a widget does not
+   * change into a different thing by being moved.
+   */
+  const card = (instance: WidgetInstance): React.JSX.Element | null => {
+    const definition = widgetById(instance.widget)
+    const View = WIDGET_VIEWS[instance.widget]
+    if (!definition || !View) return null
+    return (
+      <section
+        key={instance.id}
+        className={`wg-card wg-${instance.size}${instance.collapsed ? ' collapsed' : ''}${instance.place ? ' placed' : ''}`}
+        aria-label={definition.name}
+        style={instance.place ? { left: `${(instance.place.x * 100).toFixed(3)}%`, top: `${(instance.place.y * 100).toFixed(3)}%` } : undefined}
+      >
+        <header
+          className="wg-head"
+          onPointerDown={(event) => startDrag(instance, event)}
+          // Put back where it came from, for anyone who has moved one somewhere they did not mean to.
+          onDoubleClick={() => instance.place && onChange(clearWidgetPlacement(widgets, instance.id))}
+          title={instance.place ? 'Drag to move. Double-click to put it back in its row' : 'Drag to move'}
+        >
+          <b>{definition.name}</b>
+          <button
+            type="button"
+            className="wg-icon"
+            aria-label={instance.collapsed ? `Open ${definition.name}` : `Fold ${definition.name} away`}
+            onClick={() => onChange(widgets.map((w) => (w.id === instance.id ? { ...w, collapsed: !w.collapsed } : w)))}
+          >
+            {instance.collapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+          </button>
+        </header>
+        {!instance.collapsed && (
+          <WidgetBoundary name={definition.name} onFailure={(message) => fail(instance, message)}>
+            <View instance={instance} onOpen={onOpen} />
+          </WidgetBoundary>
+        )}
+      </section>
+    )
+  }
+
   return (
-    <div className="wg-zones">
+    <div className="wg-zones" ref={surface}>
       {ZONES.map((zone: ZoneName) => {
         const inZone = widgetsInZone(widgets, zone)
         if (!inZone.length) return null
         return (
           <div key={zone} className={`wg-zone wg-zone-${zone}`}>
-            {inZone.map((instance) => {
-              const definition = widgetById(instance.widget)
-              const View = WIDGET_VIEWS[instance.widget]
-              if (!definition || !View) return null
-              return (
-                <section key={instance.id} className={`wg-card wg-${instance.size}${instance.collapsed ? ' collapsed' : ''}`} aria-label={definition.name}>
-                  <header className="wg-head">
-                    <b>{definition.name}</b>
-                    <button
-                      type="button"
-                      className="wg-icon"
-                      aria-label={instance.collapsed ? `Open ${definition.name}` : `Fold ${definition.name} away`}
-                      onClick={() => onChange(widgets.map((w) => (w.id === instance.id ? { ...w, collapsed: !w.collapsed } : w)))}
-                    >
-                      {instance.collapsed ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-                    </button>
-                  </header>
-                  {!instance.collapsed && (
-                    <WidgetBoundary name={definition.name} onFailure={(message) => fail(instance, message)}>
-                      <View instance={instance} onOpen={onOpen} />
-                    </WidgetBoundary>
-                  )}
-                </section>
-              )
-            })}
+            {inZone.map(card)}
           </div>
         )
       })}
+      {/* The widgets someone has put somewhere. Drawn over the rows rather than inside them, because that is what
+          having been placed means: it is no longer part of any row's arrangement. */}
+      {placedWidgets(widgets).map(card)}
       {widgets.some((w) => w.disabled) && (
         <div className="wg-setaside">
           {widgets

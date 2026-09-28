@@ -138,3 +138,52 @@ test('web suggestion responses are cleaned and de-duplicated', () => {
   assert.deepEqual(parseWebSuggestions(['react', ['react', 'React docs', 'react  docs', 'react hooks', 42]], 'react'), ['React docs', 'react hooks'])
   assert.deepEqual(parseWebSuggestions({ nope: true }, 'x'), [])
 })
+
+// ---------------------------------------------------------------- pages that are already open
+
+test('a page that is already open is offered as a switch, not a second copy of itself', () => {
+  const result = buildSuggestions('physics', sources({
+    history: [{ url: 'https://example.com/physics', title: 'Physics notes', visitedAt: NOW - H, visits: 5 } as never],
+    tabs: [{ id: 't7', title: 'Physics notes', url: 'https://example.com/physics' }]
+  }))
+  const forPage = result.items.filter((i) => i.url === 'https://example.com/physics')
+  // One row, not two: the same page offered twice wastes a slot and makes somebody choose between identical things.
+  assert.equal(forPage.length, 1)
+  assert.equal(forPage[0].kind, 'tab')
+  assert.equal(forPage[0].tabId, 't7')
+})
+
+test('switching to an open page outranks the same page in history', () => {
+  const result = buildSuggestions('physics', sources({
+    history: [{ url: 'https://example.com/physics', title: 'Physics notes', visitedAt: NOW - H, visits: 9 } as never],
+    tabs: [{ id: 't1', title: 'Physics notes', url: 'https://example.com/physics' }]
+  }))
+  const first = result.items.find((i) => i.url === 'https://example.com/physics')
+  assert.equal(first?.kind, 'tab', 'the open tab is what is offered')
+})
+
+test('the tab you are already looking at is not offered', () => {
+  const result = buildSuggestions('physics', sources({
+    tabs: [{ id: 't1', title: 'Physics notes', url: 'https://example.com/physics', active: true }]
+  }))
+  assert.equal(result.items.some((i) => i.kind === 'tab'), false)
+})
+
+test('a tab in a group says which group, so two similar pages can be told apart', () => {
+  const result = buildSuggestions('physics', sources({
+    tabs: [{ id: 't1', title: 'Physics notes', url: 'https://example.com/physics', group: 'JEE Preparation' }]
+  }))
+  assert.equal(result.items.find((i) => i.kind === 'tab')?.detail, 'Open in JEE Preparation')
+})
+
+test('a workspace is offered by name, and says how many tabs it holds', () => {
+  const result = buildSuggestions('jee', sources({ workspaces: [{ id: 'w1', name: 'JEE Preparation', tabCount: 6 }] }))
+  const workspace = result.items.find((i) => i.kind === 'workspace')
+  assert.equal(workspace?.workspaceId, 'w1')
+  assert.equal(workspace?.detail, 'Workspace · 6 tabs')
+})
+
+test('tabs and workspaces are absent rather than empty when nothing was passed', () => {
+  const result = buildSuggestions('physics', sources())
+  assert.equal(result.items.some((i) => i.kind === 'tab' || i.kind === 'workspace'), false)
+})

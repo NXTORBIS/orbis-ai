@@ -15,6 +15,17 @@
 // steps that happened, and when the helper is not running the Orb says so instead of pretending.
 
 import { call, askBrowser, HelperDown } from './helper.js'
+import { mountControls } from './controls.js'
+
+/**
+ * What the Orb says when Orbis itself is not there.
+ *
+ * Never the error's own words. `HelperDown` carries `Orbis is not running. Start it from run-orbis-chromium.bat.`,
+ * which is a launcher instruction with a batch filename in it, and it was being printed into the Orb as though the
+ * assistant had said it. The condition is real and is still reported; the sentence is written here, for a person,
+ * rather than lifted from a diagnostic meant for whoever is debugging the launcher.
+ */
+const ORBIS_UNAVAILABLE = 'Orbis is not running yet, so there is nothing to ask. This connects by itself once Orbis starts.'
 
 const DRAG_THRESHOLD = 5
 
@@ -23,25 +34,26 @@ const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls)
 
 // ---------------------------------------------------------------- the mark
 
-const NS = 'http://www.w3.org/2000/svg'
-/** The Orbis mark, drawn rather than fetched: this window paints before any image could arrive. */
+/**
+ * The Orbis mark: the real logo, not a drawing of it.
+ *
+ * This used to be two SVG ellipses -- an approximation of the ring, good enough at 20px and wrong everywhere else. The
+ * actual artwork ships with the browser (orbis-ring.png, the same file the new tab page and the Command Center use),
+ * so the Orb wears the real mark and there is one logo in Orbis rather than one logo and a sketch of it.
+ *
+ * If the image cannot be loaded the element is left empty rather than falling back to a drawing: an Orb with nothing
+ * in it is a loading problem somebody can see, while a lookalike is one nobody would ever notice.
+ */
 function orbisMark(size) {
-  const svg = document.createElementNS(NS, 'svg')
-  svg.setAttribute('viewBox', '0 0 24 24')
-  svg.setAttribute('width', String(size))
-  svg.setAttribute('height', String(size))
-  svg.setAttribute('fill', 'none')
-  svg.setAttribute('aria-hidden', 'true')
-  const ring = (rx, ry, rot) => {
-    const e = document.createElementNS(NS, 'ellipse')
-    e.setAttribute('cx', '12'); e.setAttribute('cy', '12')
-    e.setAttribute('rx', String(rx)); e.setAttribute('ry', String(ry))
-    e.setAttribute('transform', `rotate(${rot} 12 12)`)
-    e.setAttribute('stroke', 'currentColor'); e.setAttribute('stroke-width', '1.4')
-    return e
-  }
-  svg.append(ring(9, 5.2, -24), ring(9, 5.2, 24))
-  return svg
+  const img = document.createElement('img')
+  img.className = 'orbis-mark'
+  img.src = 'orbis-ring.png'
+  img.alt = ''
+  img.width = size
+  img.height = size
+  img.draggable = false
+  img.addEventListener('error', () => img.remove())
+  return img
 }
 
 // ---------------------------------------------------------------- state
@@ -50,6 +62,10 @@ function orbisMark(size) {
 const state = {
   open: false,
   working: false,
+  /** Whether the controls are showing instead of the conversation. One panel, two things it can be. */
+  controls: false,
+  /** An approval the controls are waiting on, kept apart from the agent's so one cannot answer the other. */
+  controlAsk: null,
   /** 'idle' | 'reading' | 'thinking' | 'streaming' | 'done' | 'error' | 'cancelled' */
   phase: 'idle',
   status: '',
@@ -57,6 +73,12 @@ const state = {
   automation: null,
   confirmation: null,
   summary: '',
+  /** A picture Orbis made, when it made one. */
+  image: null,
+  /** The seed of the last picture, so "make it darker" changes that picture rather than making another. */
+  lastSeed: null,
+  /** The pages an answer was read from, when it was read from pages. */
+  sources: [],
   error: ''
 }
 
@@ -129,6 +151,9 @@ function drawOrb() {
     orb.classList.remove('dragging')
     // The click that follows a drag is the end of the drag, not a request to open.
     if (moved) orb.dataset.justDragged = '1'
+    // Telling the browser the drag is over is what stops the Orb leaning towards an edge and what saves where it was
+    // left. A drag that ends without this would keep its assistance and be forgotten by the next launch.
+    if (moved) chrome.send('orbis.orb.dragend', ['orbDragEnd'])
   }
   orb.addEventListener('pointerup', end)
   orb.addEventListener('pointercancel', end)
@@ -151,12 +176,52 @@ function drawPanel() {
   const head = el('header', 'orb-panel-head')
   head.append(orbisMark(18), el('b', '', 'Orbis'))
   head.append(el('span', `orb-panel-state${state.working ? ' live' : ''}`, state.status || HEADLINE[state.phase]))
+  const controls = el('button', `b-icon${state.controls ? ' on' : ''}`)
+  controls.type = 'button'
+  controls.title = state.controls ? 'Back to asking' : 'Everything the browser can do'
+  controls.setAttribute('aria-label', controls.title)
+  controls.setAttribute('aria-pressed', String(state.controls))
+  controls.textContent = state.controls ? '←' : '⚙'
+  controls.addEventListener('click', () => { state.controls = !state.controls; draw() })
+  head.append(controls)
+
   const close = el('button', 'b-icon', '×'); close.type = 'button'; close.title = 'Collapse (Esc)'
   close.setAttribute('aria-label', 'Collapse assistant')
   close.addEventListener('click', toggle)
   head.append(close)
 
   const body = el('div', 'orb-panel-body')
+
+  if (state.controls) {
+    // An approval raised by a control is the Orb's own approval box, so approving a click from here looks exactly
+    // like approving one the agent asked for -- and is answered on its own channel, never the agent's.
+    if (state.controlAsk) {
+      const c = state.controlAsk
+      const box = el('div', 'orb-confirm')
+      box.setAttribute('role', 'alertdialog')
+      box.setAttribute('aria-label', 'Approve this action')
+      box.append(el('div', 'orb-confirm-head', 'Orbis wants to:'))
+      box.append(el('p', 'orb-confirm-action', c.action || ''))
+      box.append(el('p', 'orb-confirm-reason', `${c.reason || ''} Nothing happens until you approve.`))
+      const acts = el('div', 'orb-actions')
+      const no = el('button', 'text-btn', 'Cancel'); no.type = 'button'
+      const yes = el('button', 'primary-btn', 'Approve'); yes.type = 'button'
+      no.addEventListener('click', () => { const settle = c.settle; state.controlAsk = null; draw(); settle(false) })
+      yes.addEventListener('click', () => { const settle = c.settle; state.controlAsk = null; draw(); settle(true) })
+      acts.append(no, yes)
+      box.append(acts)
+      body.append(box)
+    }
+    const host = el('div', 'orb-controls')
+    body.append(host)
+    panel.append(head, body)
+    // Mounted after the panel is in the document so the search box can take focus.
+    queueMicrotask(() => mountControls(host, {
+      ask: (confirmation) => new Promise((settle) => { state.controlAsk = { ...confirmation, settle }; draw() }),
+      say: (message) => { state.status = message; const line = document.querySelector('.orb-panel-state'); if (line) line.textContent = message }
+    }))
+    return panel
+  }
 
   if (state.automation) {
     const a = state.automation
@@ -201,6 +266,28 @@ function drawPanel() {
       ol.append(li)
     }
     body.append(ol)
+  }
+
+  if (state.image) {
+    const figure = el('figure', 'orb-image')
+    const img = el('img'); img.src = state.image.url; img.alt = state.image.prompt || 'The picture Orbis made'
+    figure.append(img)
+    if (state.image.prompt) figure.append(el('figcaption', '', state.image.prompt))
+    body.append(figure)
+  }
+
+  if (state.sources.length) {
+    body.append(el('div', 'orb-sources-head', 'Read from'))
+    const list = el('ol', 'orb-sources')
+    for (const source of state.sources) {
+      const li = el('li')
+      const a = el('a', '', source.title || source.url || 'Source')
+      a.href = source.url || '#'
+      a.target = '_blank'
+      li.append(a)
+      list.append(li)
+    }
+    body.append(list)
   }
 
   if (state.summary && !state.working) {
@@ -265,11 +352,11 @@ async function checkReady() {
   try {
     const ready = await call('browser:task-ready')
     if (!ready.browser) state.error = 'The Orbis browser is not connected, so Orbis cannot act on this page.'
-    else if (!ready.key) state.error = 'Orion has no API key, so nothing can be planned. Set GROQ_API_KEY.'
+    else if (!ready.key) state.error = 'Orion is not available on this installation.'
     else if (ready.busy) state.error = 'Orbis is already working in the browser.'
     else state.error = ''
   } catch (err) {
-    state.error = err instanceof HelperDown ? err.message : 'Orbis is not answering.'
+    state.error = err instanceof HelperDown ? ORBIS_UNAVAILABLE : 'Orbis is not answering.'
   }
   draw()
 }
@@ -288,9 +375,13 @@ function answer(approved) {
   state.confirmation = null
   draw()
   if (!waiting) return
+  // The answer goes back to whichever asked. A step the Orb's own loop is running answers on its channel; one the
+  // browser agent raised answers on the agent's. Sending it to the wrong one would leave the action waiting forever
+  // for an answer that had already been given.
+  const channel = String(waiting.id ?? '').startsWith('orb-') ? 'orb:answer' : 'browser:task-answer'
   // The task is streaming on another request, so the answer travels on its own. Until it arrives, the action waits;
   // if this fails, nothing was approved, which is the safe way for an approval to fail.
-  call('browser:task-answer', [waiting.id, approved === true]).catch(() => {
+  call(channel, [waiting.id, approved === true]).catch(() => {
     state.error = 'Orbis could not be told your answer, so nothing was done.'
     setPhase('error')
   })
@@ -315,12 +406,18 @@ async function submit() {
   state.automation = null
   state.confirmation = null
   state.summary = ''
+  state.image = null
+  state.sources = []
   state.error = ''
   controller = new AbortController()
   setPhase('thinking')
 
   try {
-    await call('browser:task', [{ task: text }], {
+    // One way in, and it is the control loop: Orbis looks at the real browser, works out what would have to happen,
+    // plans it against the capabilities the browser actually has, carries it out, and checks each step against what
+    // the browser says afterwards. Anything that is not browser work -- a picture, a question, research, a look at the
+    // page -- it hands to the router Orbis already has, so there is one answer to a question rather than two.
+    await call('orb:ask', [text], {
       signal: controller.signal,
       onEvent: (event) => {
         if (event.type === 'step' && event.step) {
@@ -342,6 +439,40 @@ async function submit() {
           setPhase('streaming')
         } else if (event.type === 'status' && typeof event.message === 'string') {
           setPhase('streaming', event.message)
+        } else if (event.type === 'image' && event.url) {
+          state.image = { url: event.url, prompt: event.prompt || '' }
+          state.lastSeed = typeof event.seed === 'number' ? event.seed : null
+          setPhase('streaming')
+        } else if (event.type === 'research' && event.research) {
+          state.sources = Array.isArray(event.research.sources) ? event.research.sources.slice(0, 6) : []
+          setPhase('streaming')
+        } else if (event.type === 'plan' && Array.isArray(event.steps)) {
+          // The plan, before anything runs: what Orbis worked out it would have to do.
+          state.steps = event.steps.map((s) => ({ id: s.id, text: s.name, status: 'planned' }))
+          setPhase('streaming', `${event.steps.length} step${event.steps.length === 1 ? '' : 's'} planned`)
+        } else if (event.type === 'context' && event.because) {
+          setPhase('streaming', `Using ${event.because}`)
+        } else if (event.type === 'refused-step' && event.why) {
+          // Something Orbis cannot do, said rather than silently left out of the plan.
+          state.steps.push({ id: `x${state.steps.length}`, text: `${event.name}: ${event.why}`, status: 'failed' })
+          draw()
+        } else if (event.type === 'refused' && event.why) {
+          state.error = event.why
+          setPhase('error')
+        } else if (event.type === 'recovery') {
+          const said = { retry: 'trying again', 're-perceive': 'looking again', 're-plan': 'finding another way', 'ask-user': 'needs you', 'give-up': 'cannot go on' }[event.decision] || event.decision
+          setPhase('streaming', `${event.step}: ${said}`)
+        } else if (event.type === 'ask-user' && event.question) {
+          state.error = event.question
+          setPhase('done')
+        } else if (event.type === 'outcome') {
+          // What really happened, verified or not. Never a cheerful ending over a failed step.
+          state.summary = event.text || ''
+          setPhase(event.status === 'done' ? 'done' : 'error')
+          if (event.status !== 'done') state.error = event.text || ''
+        } else if (event.type === 'answer' && typeof event.text === 'string') {
+          state.summary = event.text
+          setPhase('streaming')
         } else if (event.type === 'error') {
           state.error = event.message || 'Orbis could not do that.'
           setPhase('error')
@@ -353,7 +484,7 @@ async function submit() {
   } catch (err) {
     if (controller?.signal.aborted) setPhase('cancelled')
     else {
-      state.error = err instanceof HelperDown ? err.message : (err?.message || 'That did not work.')
+      state.error = err instanceof HelperDown ? ORBIS_UNAVAILABLE : (err?.message || 'That did not work.')
       setPhase('error')
     }
   } finally {

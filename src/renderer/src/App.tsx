@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Attachment, ChatMessage, ChatRequest, Conversation, Settings, SettingsUpdate, StreamEvent } from '../../shared/types'
+import { isRefusal } from '../../shared/account'
 import { IMAGE_GEN_STATUS } from '../../shared/types'
 import { themeBase } from '../../shared/themes'
 import { DEFAULT_MODEL, MODELS, isKnownModel, modelLabel } from '../../shared/models'
@@ -14,6 +15,22 @@ import ImagesView from './components/ImagesView'
 import { useExperience } from './lib/experience'
 import HudBackground from './components/HudBackground'
 import Sidebar from './components/Sidebar'
+import type { FeatureId } from './components/Sidebar'
+// Orbis's own screens. Each was finished and unreachable: nothing imported them, so no amount of looking would have
+// found them. They are loaded lazily because only one is ever open and most sessions open none.
+// Lazy like the rest: the chart and its indicators are a large bundle for a screen most sessions never open.
+const MarketsView = lazy(() => import('./components/MarketsView'))
+const WorkflowsView = lazy(() => import('./components/WorkflowsView'))
+const GalaxyView = lazy(() => import('./components/GalaxyView'))
+const NotesView = lazy(() => import('./components/NotesView'))
+const TasksView = lazy(() => import('./components/TasksView'))
+const WhiteboardView = lazy(() => import('./components/WhiteboardView'))
+const PagesView = lazy(() => import('./components/PagesView'))
+const ClipboardView = lazy(() => import('./components/ClipboardView'))
+const WorkspacesView = lazy(() => import('./components/WorkspacesView'))
+const SecretsPanel = lazy(() => import('./components/SecretsPanel'))
+const CustomizeView = lazy(() => import('./components/CustomizeView'))
+const ProfilesView = lazy(() => import('./components/ProfilesView'))
 import { ActivityPanel, ShortcutsModal, ToastStack } from './components/Overlays'
 import SettingsModal from './components/SettingsModal'
 import WelcomeExperience from './components/WelcomeExperience'
@@ -70,6 +87,23 @@ export default function App(): React.JSX.Element {
   const [welcome, setWelcome] = useState<'closed' | 'open' | 'leaving'>('open')
   /** No valid name is saved, so startup continues into the name step. Set once, when settings load. */
   const [needsName, setNeedsName] = useState(false)
+  /**
+   * This profile has an account password and it has not been given yet.
+   *
+   * Read from the main process at startup, never from anything a window stores: whether an account is open is the main
+   * process's answer, and a window that could decide it for itself would be the lock.
+   */
+  const [needsUnlock, setNeedsUnlock] = useState(false)
+  /**
+   * Whether the account has been asked about yet.
+   *
+   * Startup must not decide to let anyone in before this is true. Without it, a profile with a password could be entered
+   * simply because reading the settings finished first -- the lock would appear a moment later, over an interface that
+   * had already been handed over. So this gates readiness, exactly as loading the settings does.
+   */
+  const [accountChecked, setAccountChecked] = useState(false)
+  /** Why Orbis locked itself, so the unlock screen can say so. Null when this is an ordinary start. */
+  const [lockedReason, setLockedReason] = useState<string | null>(null)
   const [loadError, setLoadError] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try {
@@ -79,6 +113,8 @@ export default function App(): React.JSX.Element {
     }
   })
   const [imagesOpen, setImagesOpen] = useState(false)
+  /** Which of Orbis's own screens is open, or null for the chat. Only ever one. */
+  const [feature, setFeature] = useState<FeatureId | null>(null)
   /** Everything the user has personalised, applied to the window; an untouched Orbis is left exactly as it is. */
   const experience = useExperience()
 
@@ -219,6 +255,17 @@ export default function App(): React.JSX.Element {
         commitConversations(list)
         // A blank saved name means setup never really finished.
         setNeedsName(!s.welcomeCompleted || !s.userName.trim())
+        // Asked separately, because an account's password is not a setting: it lives with the profile, and the answer
+        // comes from the process that holds it.
+        void window.api
+          .accountStatus()
+          .then((status) => {
+            if (!isRefusal(status)) setNeedsUnlock(status.hasPassword && !status.unlocked)
+          })
+          // A refusal or a failure leaves `needsUnlock` false, which is the state an account with no password is in.
+          // That is the right way to fail: an account that cannot be asked about is not one this can lock somebody out
+          // of, and the main process refuses every protected operation on its own anyway.
+          .finally(() => setAccountChecked(true))
         setLoadError(false)
         setLoaded(true)
       },
@@ -789,6 +836,21 @@ export default function App(): React.JSX.Element {
 
   const newChat = useCallback(() => startChat(false), [startChat])
 
+  const closeFeature = useCallback(() => setFeature(null), [])
+  /**
+   * Galaxy offers to ask about something it is showing. Doing so leaves Galaxy and starts a chat with that question,
+   * which is what "ask about this" means: the answer arrives in the chat, not in a corner of the graph.
+   */
+  const askFromFeature = useCallback(
+    (message: string) => {
+      setFeature(null)
+      startChat(false)
+      // After the new chat exists, so the message lands in it rather than in the one being left.
+      setTimeout(() => sendRef.current(message, []), 0)
+    },
+    [startChat]
+  )
+
   const toggleIncognito = useCallback(() => {
     const on = !(activeId ? conversationsRef.current.find((c) => c.id === activeId)?.incognito : draft.incognito)
     startChat(on)
@@ -813,12 +875,72 @@ export default function App(): React.JSX.Element {
     return next
   }, [])
 
+  /**
+   * Finishing account creation: the name and the password, in that order.
+   *
+   * The password first would leave a protected account with no name if the name then failed to save; the name first
+   * leaves at worst a named account with no password, which is exactly the state every account made before passwords
+   * existed is already in -- and which Orbis already knows how to offer a password to. So the order is the one whose
+   * failure is recoverable.
+   *
+   * Throwing is what tells the welcome screen to keep what was typed and say it did not work.
+   */
   const completeWelcome = useCallback(
-    async (name: string) => {
+    async (name: string, password: string) => {
       const next = await updateSettings({ userName: name, welcomeCompleted: true })
       if (!next.welcomeCompleted || !next.userName.trim()) throw new Error('Setup was not saved')
+
+      const made = await window.api.accountCreate(password, name)
+      if (isRefusal(made)) throw new Error(made.message ?? 'The password could not be saved.')
+      if (!made.hasPassword) throw new Error('The password could not be saved.')
     },
     [updateSettings]
+  )
+
+  /**
+   * Giving the password to the account.
+   *
+   * Nothing is decided here. The answer -- right, wrong, or too soon -- comes from the main process, and this only turns
+   * it into a sentence and stops asking once it is open.
+   */
+  const unlockAccount = useCallback(
+    async (password: string): Promise<{ ok: true } | { ok: false; why: string; waitMs: number }> => {
+      const said = await window.api.accountUnlock(password)
+      if (isRefusal(said)) {
+        const seconds = Math.ceil((said.waitMs ?? 0) / 1000)
+        const why =
+          said.error === 'cooling-down'
+            ? `Too many attempts. Try again in ${seconds} second${seconds === 1 ? '' : 's'}.`
+            : (said.message ?? 'That password is not right.')
+        return { ok: false, why, waitMs: said.waitMs ?? 0 }
+      }
+      if (!said.unlocked) return { ok: false, why: 'That password is not right.', waitMs: 0 }
+      setNeedsUnlock(false)
+      setLockedReason(null)
+      return { ok: true }
+    },
+    []
+  )
+
+  /**
+   * Orbis locked itself while it was open.
+   *
+   * The same screen as at startup, reopened -- there is one unlock screen and one authentication, which is what stops
+   * this becoming a second security system with its own way of being wrong. The reason travels with it so the screen can
+   * say why it appeared rather than looking like a fault.
+   *
+   * `accountChecked` is set as well: the startup check may never have run in a session that locked before it finished,
+   * and without it the screen would wait for a check that is no longer coming.
+   */
+  useEffect(
+    () =>
+      window.api.onAccountLocked((event) => {
+        setLockedReason(event?.reason ?? 'manual')
+        setNeedsUnlock(true)
+        setAccountChecked(true)
+        setWelcome('open')
+      }),
+    []
   )
 
   const enterFromWelcome = useCallback(() => {
@@ -1187,6 +1309,11 @@ export default function App(): React.JSX.Element {
           streams={streams}
           imageCount={galleryImages.length}
           imagesOpen={imagesOpen}
+          feature={feature}
+          onFeature={(id) => {
+            setImagesOpen(false)
+            setFeature((current) => (current === id ? null : id))
+          }}
           searchToken={searchToken}
           userName={settings?.userName ?? 'You'}
           userTitle={settings?.userTitle ?? ''}
@@ -1237,6 +1364,22 @@ export default function App(): React.JSX.Element {
           {imagesOpen && (
             <ImagesView images={galleryImages} onClose={() => setImagesOpen(false)} onOpenChat={selectChat} onEdit={editGalleryImage} onNotify={notify} />
           )}
+          {feature && (
+            <Suspense fallback={<div className="feature-loading" role="status">Opening…</div>}>
+              {feature === 'pages' && <PagesView onClose={closeFeature} onNotify={notify} />}
+              {feature === 'markets' && <MarketsView onClose={closeFeature} onNotify={notify} />}
+              {feature === 'workflows' && <WorkflowsView onClose={closeFeature} onNotify={notify} />}
+              {feature === 'galaxy' && <GalaxyView onClose={closeFeature} onNotify={notify} onAsk={askFromFeature} />}
+              {feature === 'notes' && <NotesView onClose={closeFeature} onNotify={notify} />}
+              {feature === 'tasks' && <TasksView onClose={closeFeature} onNotify={notify} />}
+              {feature === 'whiteboard' && <WhiteboardView onClose={closeFeature} onNotify={notify} />}
+              {feature === 'clipboard' && <ClipboardView onClose={closeFeature} onNotify={notify} />}
+              {feature === 'workspaces' && <WorkspacesView onClose={closeFeature} onNotify={notify} />}
+              {feature === 'secrets' && <SecretsPanel onNotify={notify} />}
+              {feature === 'customize' && <CustomizeView experience={experience} onClose={closeFeature} onNotify={notify} />}
+              {feature === 'profiles' && <ProfilesView onClose={closeFeature} onNotify={notify} />}
+            </Suspense>
+          )}
         </main>
 
 
@@ -1265,12 +1408,15 @@ export default function App(): React.JSX.Element {
     </div>
     {welcome !== 'closed' && (
       <WelcomeExperience
-        ready={loaded}
+        ready={loaded && accountChecked}
         needsName={needsName}
         loadError={loadError}
         effects={effects}
         onRetryLoad={load}
+        needsUnlock={needsUnlock}
+        lockedReason={lockedReason}
         onComplete={completeWelcome}
+        onUnlock={unlockAccount}
         onEnter={enterFromWelcome}
         onFinished={finishWelcome}
       />

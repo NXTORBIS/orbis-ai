@@ -157,14 +157,64 @@ function capabilityRow(capability) {
   return row
 }
 
-/** Where a capability opens. A panel view stays here; anything else is a page, and the browser opens it. */
+/**
+ * What choosing a capability does.
+ *
+ * A panel view stays here. A page is opened by the browser. A `do` capability is the browser performing something, and
+ * the only thing said afterwards is what the browser actually reported: if the handler refuses -- no page, no address,
+ * policy -- the refusal is what appears, not a confirmation.
+ */
 function go(capability) {
   if (capability.target.kind === 'panel') {
     location.hash = `#${capability.target.view}`
     return
   }
+  if (capability.target.kind === 'do') {
+    perform(capability)
+    return
+  }
+  if (capability.target.kind === 'ask') {
+    askOrbis(capability)
+    return
+  }
   const address = addressFor(capability)
   askBrowser('orbis.open', address).catch(() => { location.href = address })
+}
+
+/**
+ * Something Orbis does, asked of Orbis.
+ *
+ * What is said afterwards comes from what actually happened -- how many tabs locked, or the reason it could not -- rather
+ * than from having sent the request. A message that appears whether or not the work happened is the kind of thing that
+ * makes somebody believe a tab is locked when it is not.
+ */
+function askOrbis(capability) {
+  call(capability.target.channel, []).then(
+    (result) => {
+      const count = result && typeof result.locked === 'number' ? result.locked : null
+      if (capability.id === 'lockAllTabs') {
+        say(count === 0 ? 'Nothing was left to lock.' : `Locked ${count} tab${count === 1 ? '' : 's'}.`)
+      } else if (capability.id === 'lockTab') {
+        say(result && result.locked ? 'This tab is locked.' : 'This tab has no tab password yet.')
+      } else {
+        say('Orbis is locked.')
+      }
+    },
+    (err) => say((err && err.message) || `${capability.name} could not be done here.`)
+  )
+}
+
+/** What each `do` capability says once the browser has actually done it. Nothing is said before that. */
+const DONE = { copyLink: (url) => `Copied ${url}` }
+
+function perform(capability) {
+  askBrowser(capability.target.message).then(
+    (result) => {
+      const done = DONE[capability.id]
+      if (done) say(done(typeof result === 'string' ? result : ''))
+    },
+    () => say(`${capability.name} could not be done here.`)
+  )
 }
 
 /**
@@ -273,7 +323,7 @@ function drawHome() {
   const fact = (label, value) => { facts.append(el('dt', '', label), el('dd', '', value)) }
 
   fact('Browser', state.ready.browser ? 'Connected' : 'Not connected')
-  fact('Orion', !state.ready.helper ? 'Orbis is not running' : state.ready.key ? 'Ready' : 'No key')
+  fact('Orion', !state.ready.helper ? 'Orbis is not running' : state.ready.key ? 'Ready' : 'Unavailable')
   fact('This page', state.facts.page ? (state.facts.page.title || state.facts.page.url) : 'Nothing Orbis can act on')
   // Read, or not known. Never a cheerful "ON" that nothing confirmed.
   fact('Ad blocking', state.facts.adblock === null ? 'Not known' : state.facts.adblock.on ? 'On' : 'Off')
@@ -284,17 +334,29 @@ function drawHome() {
   now.append(facts)
   main.append(now)
 
-  // ---- everything else, by category
+  // ---- everything else, laid out the way Orbis lays out settings: one surface, headings down it, every row visible.
+  //
+  // It used to be nine buttons that led to nine lists, which meant the answer to "where is Whiteboard" was a guess at
+  // which of nine words contained it. Nothing was gained by the hiding: the whole registry is forty-one rows, which is
+  // a page to scroll, not a place to get lost in. So the categories became headings and the features came out from
+  // behind them. The rail still narrows this to one heading when you ask it to; that is a filter, not the only way in.
   for (const category of CATEGORIES) {
     const items = capabilitiesIn(category.id)
     if (!items.length) continue
-    const block = el('section', 'cc-block')
-    const head = el('button', 'cc-cat'); head.type = 'button'
-    head.append(icon(category.icon, 18), el('strong', '', category.label), el('span', 'cc-desc', category.blurb))
-    head.addEventListener('click', () => show(category.id))
-    block.append(head)
-    main.append(block)
+    main.append(categorySection(category, items))
   }
+}
+
+/** One heading and the rows under it: a category, shown rather than linked to. */
+function categorySection(category, items) {
+  const block = el('section', 'cc-section')
+  const head = el('div', 'cc-sec-head')
+  head.append(icon(category.icon, 17), el('h3', 'cc-sec-title', category.label), el('p', 'cc-sec-blurb', category.blurb))
+  block.append(head)
+  const list = el('div', 'cc-list')
+  for (const capability of items) list.append(capabilityRow(capability))
+  block.append(list)
+  return block
 }
 
 /**
@@ -351,7 +413,7 @@ const CATEGORY_FACTS = {
     const tabs = await call('browser:tabs').catch(() => null)
     return tabs ? [['Open tabs', String(tabs.length)]] : []
   },
-  ai: async () => [['Orion', !state.ready.helper ? 'Orbis is not running' : state.ready.key ? 'Ready' : 'No key']]
+  ai: async () => [['Orion', !state.ready.helper ? 'Orbis is not running' : state.ready.key ? 'Ready' : 'Unavailable']]
 }
 
 /** One category, opened. */

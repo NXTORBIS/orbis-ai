@@ -10,7 +10,6 @@
 import { GRADIENTS, MAX_IMAGE_BYTES, MAX_SHORTCUTS, MAX_TILES, clockText, countdownText, normalizeSettings, removeShortcut, saveShortcut, siteUrl } from './newtab-logic.js'
 import * as store from './newtab-store.js'
 import { askBrowser } from './helper.js'
-import { mountOrb } from './orb.js'
 import { introWanted, runIntro } from './intro.js'
 import { mountWidgets, widgetsFollowSettings } from './widgets.js'
 import { mountRail } from './rail.js'
@@ -57,13 +56,31 @@ const toOmnibox = (e) => { e.preventDefault(); $('q').blur(); askBrowser('orbis.
 $('q').addEventListener('pointerdown', toOmnibox)
 $('q').addEventListener('focus', toOmnibox)
 
+/**
+ * Ctrl+Enter asks Orion instead of searching.
+ *
+ * Not "search, then offer Orion at the top": a question you already know you want answered should not cost you a page
+ * of links first. So the same words go to the same place, and the key says which of the two things you wanted.
+ * Recorded on the way down because the submit that follows cannot see which keys were held.
+ */
+let askOrion = false
+$('q').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) askOrion = true
+})
+
 $('search').addEventListener('submit', (e) => {
   e.preventDefault()
   const text = $('q').value.trim()
+  const orion = askOrion
+  askOrion = false
   if (!text) return
   const url = looksLikeUrl(text)
-  if (url) location.href = url
-  else askBrowser('orbis.search', text).catch(() => { location.href = `chrome://orbis-search/#q=${encodeURIComponent(text)}` })
+  if (url) return void (location.href = url)
+  if (orion) {
+    location.href = `chrome://orbis-search/#q=${encodeURIComponent(text)}&in=orion`
+    return
+  }
+  askBrowser('orbis.search', text).catch(() => { location.href = `chrome://orbis-search/#q=${encodeURIComponent(text)}` })
 })
 
 function tile(href, name, extra) {
@@ -207,4 +224,3 @@ async function init() {
   })
 }
 void init()
-mountOrb()

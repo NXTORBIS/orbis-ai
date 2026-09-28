@@ -44,6 +44,18 @@ export interface ChromiumControlOptions {
   pid?: number
   /** Called when the browser goes away (closed by the person, or crashed). */
   onClosed?: () => void
+  /**
+   * Tab Lock.
+   *
+   * `redactTabs` is what stops a locked tab's address appearing in a listing; `sync` is how the security layer follows the
+   * real browser. Both are optional: without them the layer behaves exactly as it did before tab locking existed, which is
+   * what makes this safe to leave out of a test.
+   */
+  tabLock?: {
+    redactTabs<T extends { id: string; url: string; title: string }>(rows: T[]): (T & { locked: boolean })[]
+    sync(rows: { id: string; url: string; title: string; active: boolean }[]): void
+    restore(rows: { id: string; url: string; title: string }[]): Promise<number> | void
+  }
 }
 
 export interface ChromiumControl {
@@ -82,7 +94,7 @@ export async function startChromiumControl(o: ChromiumControlOptions): Promise<C
   await pages.start()
 
   const control = o.control ?? new BrowserControl(o.controlOptions)
-  const deps = { control, browser, bridge }
+  const deps = { control, browser, bridge, redactTabs: o.tabLock?.redactTabs }
   registerChromiumCapabilities(deps)
   registerMoreChromiumCapabilities({ ...deps, saveDir: o.saveDir, selfExtensionId: o.extensionId })
   registerSitePermissionCapabilities(deps)
@@ -97,6 +109,27 @@ export async function startChromiumControl(o: ChromiumControlOptions): Promise<C
   registerBrowserUiCapabilities({ ...deps, activePage: async () => (await pages.getTarget()) as unknown as import('./cdpPage.ts').CdpPage, pid: o.pid, ui })
   registerPageCapabilities(control, pages.resolve)
   registerCaptchaCapabilities(control, pages.resolve)
+
+  /**
+   * Tab Lock follows the browser by the browser's own events.
+   *
+   * `bridge.watch` is the same signal the tab list already uses -- one "something changed" from the extension, on switch,
+   * open, close and navigation. The security layer reads the rows and works out which of those happened. Nothing polls,
+   * so a browser sitting still costs nothing.
+   */
+  let unwatch: (() => void) | undefined
+  if (o.tabLock) {
+    const lock = o.tabLock
+    const rows = async (): Promise<{ id: string; url: string; title: string; active: boolean }[]> => {
+      const state = pages.state
+      return (state?.tabs ?? []).map((t) => ({ id: String(t.id), url: t.url, title: t.title, active: t.active }))
+    }
+    // The tabs as they are at startup, so anything that was locked when Orbis closed comes back locked before the person
+    // can reach it.
+    await Promise.resolve(lock.restore(await rows())).catch(() => 0)
+    unwatch = await bridge.watch(() => void rows().then((r) => lock.sync(r)).catch(() => {}))
+    lock.sync(await rows())
+  }
 
   return {
     control,
@@ -114,6 +147,7 @@ export async function startChromiumControl(o: ChromiumControlOptions): Promise<C
       }
     },
     stop: () => {
+      unwatch?.()
       ui?.close()
       pages.stop()
       browser!.close()

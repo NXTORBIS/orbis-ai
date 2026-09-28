@@ -6,6 +6,7 @@
  */
 import type { CapabilityDescriptor, Condition, ControlError, ControlSource, RetryPolicy, RunState, StepRecord } from './browserControl.ts'
 import { readPath } from './browserControl.ts'
+import type { HealthReport } from './workflowHealth.ts'
 
 export const WORKFLOW_FORMAT = 1
 
@@ -160,6 +161,20 @@ export type WorkflowTrigger =
   | { type: 'tabOpened'; urlMatches?: string }
   | { type: 'navigationCompleted'; urlMatches?: string }
   | { type: 'downloadCompleted'; nameMatches?: string }
+  /**
+   * Watches one page and starts the workflow when something on it meaningfully changes.
+   *
+   * "Meaningfully" is the whole feature: clocks, view counters, session ids and rotating adverts change constantly
+   * and mean nothing, and a watcher that fires on those teaches somebody to ignore it -- and then the one that
+   * mattered is ignored too. What counts as a change is decided by src/shared/workflowDiff.ts.
+   *
+   * It is a poll, honestly named, because a page Orbis is not looking at sends no events. `everyMinutes` has a floor
+   * so a workflow cannot be set to hammer a website.
+   */
+  | { type: 'pageChanged'; url: string; everyMinutes: number }
+
+/** The least often a page may be checked. Below this it stops being a monitor and becomes a load on somebody's site. */
+export const MIN_WATCH_MINUTES = 5
 
 export interface WorkflowSchedule {
   enabled: boolean
@@ -734,6 +749,11 @@ export interface RecordingState {
 export interface WorkflowLibrary {
   workflows: Workflow[]
   stats: Record<string, WorkflowStats>
+  /**
+   * How each one is actually doing, from its own run history. Carried with the library so a list of forty workflows
+   * costs one read rather than forty, and so a badge can never disagree with the detail behind it.
+   */
+  health: Record<string, HealthReport>
   nextRuns: Record<string, number>
   active: ActiveWorkflowRun[]
   checkpoints: WorkflowCheckpoint[]

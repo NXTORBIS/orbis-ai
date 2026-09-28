@@ -10,6 +10,13 @@ export interface AppServicesDeps {
   suggestWeb(query: string): Promise<string[]>
   /** Orion's predictions for what is being typed; the same setting, the same answer of [] when it is off. */
   suggestOrion(input: string): Promise<string[]>
+  /**
+   * Whether suggestions may be drawn from what the person has done before.
+   *
+   * The browser's address bar asks this before offering a question Orion researched, because the setting that governs
+   * it lives in the Orbis window and the answer has to be the same in both address bars.
+   */
+  personalizedSuggestions?(): Promise<boolean>
   /** Local speech to text (whisper.cpp on this computer). The audio is a recorded clip; nothing leaves the device. */
   transcribe(audio: Uint8Array, options: { model?: unknown; language?: unknown }): Promise<{ ok: true; text: string } | { ok: false; code: string; message: string }>
   cancelTranscription(): void

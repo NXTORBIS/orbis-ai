@@ -56,7 +56,10 @@ export function mountRail(root, pickCategory) {
   logo.alt = 'Orbis'
   logo.width = 24
   logo.height = 24
-  root.append(el('div', 'nav-top')).lastElementChild?.append(logo)
+  // append() returns undefined, not the node, so the mark is put in its holder before the holder goes in.
+  const top = el('div', 'nav-top')
+  top.append(logo)
+  root.append(top)
 
   const list = el('nav', 'nav-list')
   list.setAttribute('aria-label', 'Orbis')

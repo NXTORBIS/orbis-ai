@@ -32,7 +32,8 @@ body { font: 400 13px/1.45 var(--font-sans); color: var(--text); }
   padding: 0;
   border: 1px solid var(--border);
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, rgba(63, 216, 255, 0.28), rgba(6, 10, 16, 0.94) 70%);
+  background: radial-gradient(circle at 35% 30%, rgba(63, 216, 255, 0.16), rgba(6, 10, 16, 0.92) 72%);
+  overflow: hidden;
   box-shadow: 0 8px 26px rgba(0, 0, 0, 0.45), 0 0 18px rgba(63, 216, 255, 0.25);
   cursor: grab;
   pointer-events: auto;
@@ -349,3 +350,104 @@ body { font: 400 13px/1.45 var(--font-sans); color: var(--text); }
     transform: scale(0.92);
   }
 }
+
+/* A picture Orbis made, and the pages an answer was read from. */
+.orb-image { margin: 0; display: flex; flex-direction: column; gap: 4px; }
+.orb-image img { width: 100%; border-radius: var(--radius-md); border: 1px solid var(--border); }
+.orb-image figcaption { color: var(--muted); font-size: var(--text-sm); }
+.orb-sources-head { color: var(--muted); font-size: var(--text-sm); }
+.orb-sources { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; font-size: var(--text-sm); }
+.orb-sources a { color: var(--accent); text-decoration: none; }
+.orb-sources a:hover { text-decoration: underline; }
+
+/* The real mark inside the Orb. It fills the ball rather than sitting in the middle of it, because the artwork is
+   already a ring with its own space around it -- inset twice and it reads as a dot. */
+.orbis-mark {
+  width: 86%;
+  height: 86%;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  filter: drop-shadow(0 0 6px rgba(63, 216, 255, 0.35));
+}
+
+.orb-panel-head .orbis-mark { width: 18px; height: 18px; filter: none; }
+
+/* The Orb's controls: everything the browser can do, and the way to run any of it.
+   The list is the browser's own registry, so this styles a shape rather than a fixed set of buttons. */
+
+.orb-controls { display: flex; flex-direction: column; gap: 10px; }
+
+.orb-cap-search {
+  width: 100%;
+  padding: 7px 10px;
+  color: var(--text);
+  background: var(--input-bg, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  font: inherit;
+  font-size: 12.5px;
+}
+.orb-cap-search:focus { outline: none; border-color: var(--accent); }
+
+/* The handful people reach for. Everything else is one search away. */
+.orb-quick { display: flex; flex-wrap: wrap; gap: 6px; }
+.orb-quick-btn {
+  padding: 5px 11px;
+  color: var(--text);
+  background: var(--panel2, rgba(255, 255, 255, 0.05));
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.orb-quick-btn:hover:not(:disabled) { border-color: var(--accent); }
+.orb-quick-btn:disabled, .orb-quick-btn.off { opacity: 0.4; cursor: default; }
+
+.orb-caps { display: flex; flex-direction: column; gap: 2px; max-height: 240px; overflow-y: auto; }
+.orb-cap { border-radius: 8px; }
+.orb-cap:hover { background: rgba(255, 255, 255, 0.04); }
+/* Something the browser says it cannot do now is shown, dimmed, with its reason -- not hidden, which would read
+   as Orbis being unable to do it at all. */
+.orb-cap.off { opacity: 0.55; }
+
+.orb-cap-open {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 8px;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.orb-cap-name { font-size: 12.5px; }
+.orb-cap-id { flex: 1; min-width: 0; overflow: hidden; color: var(--muted); font-size: 10.5px; text-overflow: ellipsis; white-space: nowrap; }
+.orb-cap-tag { flex: none; padding: 1px 6px; color: var(--amber, #e0a33e); border: 1px solid currentColor; border-radius: 999px; font-size: 9.5px; }
+
+.orb-cap-detail { display: flex; flex-direction: column; gap: 8px; padding: 0 8px 10px; }
+.orb-cap-desc { margin: 0; color: var(--muted); font-size: 11.5px; line-height: 1.5; }
+.orb-cap-why { margin: 0; color: var(--amber, #e0a33e); font-size: 11.5px; }
+
+.orb-params { display: flex; flex-direction: column; gap: 6px; }
+.orb-param { display: grid; grid-template-columns: 90px 1fr; align-items: center; gap: 8px; font-size: 11.5px; }
+.orb-param-name { color: var(--muted); }
+.orb-param input[type='text'], .orb-param input[type='number'], .orb-param select {
+  width: 100%;
+  padding: 4px 8px;
+  color: var(--text);
+  background: var(--input-bg, rgba(255, 255, 255, 0.04));
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 11.5px;
+}
+.orb-param input[type='checkbox'] { justify-self: start; }
+
+.orb-cap-note { margin: 0; color: var(--muted); font-size: 11px; }

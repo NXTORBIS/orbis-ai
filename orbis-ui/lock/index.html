@@ -1,0 +1,89 @@
+<!doctype html>
+<!--
+  The surface over a locked tab.
+
+  Deliberately the smallest Orbis page there is. It knows a label and a tab id and
+  nothing else -- not the address, not the title, not the site -- so there is
+  nothing here that could leak what it is covering even if it tried.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="color-scheme" content="dark" />
+    <title>Locked</title>
+    <link rel="stylesheet" href="orbis-tokens.css" />
+    <link rel="stylesheet" href="lock.css" />
+  </head>
+  <body>
+    <main class="lock" aria-labelledby="lock-heading">
+      <div class="lock-glow" aria-hidden="true"></div>
+
+      <div class="lock-badge" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"
+             stroke-linecap="round" stroke-linejoin="round">
+          <rect x="4" y="10.5" width="16" height="11" rx="2.5" />
+          <path d="M8 10.5V7a4 4 0 0 1 8 0v3.5" />
+          <circle cx="12" cy="16" r="1.4" fill="currentColor" stroke="none" />
+        </svg>
+      </div>
+
+      <h1 id="lock-heading">Locked Tab</h1>
+      <p class="lock-say">Enter the password for this tab to continue.</p>
+
+      <form id="unlock" novalidate>
+        <div class="lock-field">
+          <input
+            id="password"
+            type="password"
+            autocomplete="current-password"
+            spellcheck="false"
+            aria-label="Password for this protected tab"
+            aria-describedby="problem"
+            autofocus
+          />
+          <button type="button" id="reveal" class="lock-reveal" aria-label="Show password">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12Z" />
+              <circle cx="12" cy="12" r="2.8" />
+            </svg>
+          </button>
+        </div>
+
+        <p id="problem" class="lock-problem" role="alert" aria-live="assertive"></p>
+
+        <button type="submit" id="submit" class="lock-go">Unlock</button>
+      </form>
+
+      <button type="button" id="forgot" class="lock-forgot">Forgot password?</button>
+
+      <!-- The recovery path: the account password authorises a new tab password.
+           It never reveals the old one. -->
+      <form id="recover" class="lock-recover" hidden novalidate>
+        <p class="lock-say">
+          Your Orbis account password can set a new password for this tab. The old one is not
+          shown and cannot be recovered.
+        </p>
+        <label class="lock-label" for="account">Orbis account password</label>
+        <div class="lock-field">
+          <input id="account" type="password" autocomplete="current-password" spellcheck="false" />
+        </div>
+        <label class="lock-label" for="fresh">New tab password</label>
+        <div class="lock-field">
+          <input id="fresh" type="password" autocomplete="new-password" spellcheck="false" />
+        </div>
+        <label class="lock-label" for="again">Confirm</label>
+        <div class="lock-field">
+          <input id="again" type="password" autocomplete="new-password" spellcheck="false" />
+        </div>
+        <p id="recover-problem" class="lock-problem" role="alert" aria-live="assertive"></p>
+        <div class="lock-row">
+          <button type="submit" id="reset" class="lock-go">Set new password</button>
+          <button type="button" id="cancel" class="lock-quiet">Back</button>
+        </div>
+      </form>
+    </main>
+
+    <script type="module" src="lock.js"></script>
+  </body>
+</html>

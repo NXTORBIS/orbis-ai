@@ -10,6 +10,7 @@
   --bg-edge: #000000;
   --grid: rgba(255, 255, 255, 0.045);
   --line-strong: rgba(255, 255, 255, 0.09);
+  --line: rgba(255, 255, 255, 0.055);
   --bar-bg: rgba(0, 0, 0, 0.65);
   --rail-bg: rgba(0, 0, 0, 0.4);
 
@@ -34,6 +35,7 @@
   --glass-border: rgba(160, 210, 255, 0.13);
   --glass-shadow: 0 12px 40px rgba(0, 0, 0, 0.65);
   --hover: rgba(255, 255, 255, 0.07);
+  --hover-strong: rgba(255, 255, 255, 0.12);
   --active: rgba(63, 216, 255, 0.1);
   --pill-bg: rgba(12, 13, 16, 0.75);
   --pill-bg-strong: rgba(255, 255, 255, 0.06);
@@ -72,6 +74,7 @@
     --bg-edge: #cad2dd;
     --grid: rgba(40, 90, 170, 0.05);
     --line-strong: rgba(40, 90, 170, 0.1);
+  --line: rgba(40, 90, 170, 0.07);
     --bar-bg: rgba(232, 236, 241, 0.85);
     --rail-bg: rgba(217, 223, 232, 0.6);
 
@@ -96,6 +99,7 @@
     --glass-border: rgba(60, 100, 170, 0.15);
     --glass-shadow: 0 12px 36px rgba(30, 60, 110, 0.08);
     --hover: rgba(40, 90, 170, 0.06);
+  --hover-strong: rgba(40, 90, 170, 0.11);
     --active: rgba(40, 110, 220, 0.1);
     --pill-bg: rgba(217, 223, 232, 0.5);
     --pill-bg-strong: rgba(60, 110, 200, 0.08);
@@ -133,6 +137,7 @@
   --bg-edge: #cad2dd;
   --grid: rgba(40, 90, 170, 0.05);
   --line-strong: rgba(40, 90, 170, 0.1);
+  --line: rgba(40, 90, 170, 0.07);
   --bar-bg: rgba(232, 236, 241, 0.85);
   --rail-bg: rgba(217, 223, 232, 0.6);
 
@@ -157,6 +162,7 @@
   --glass-border: rgba(60, 100, 170, 0.15);
   --glass-shadow: 0 12px 36px rgba(30, 60, 110, 0.08);
   --hover: rgba(40, 90, 170, 0.06);
+  --hover-strong: rgba(40, 90, 170, 0.11);
   --active: rgba(40, 110, 220, 0.1);
   --pill-bg: rgba(217, 223, 232, 0.5);
   --pill-bg-strong: rgba(60, 110, 200, 0.08);
@@ -194,6 +200,7 @@
   --bg-edge: #000000;
   --grid: rgba(255, 255, 255, 0.045);
   --line-strong: rgba(255, 255, 255, 0.09);
+  --line: rgba(255, 255, 255, 0.055);
   --bar-bg: rgba(0, 0, 0, 0.65);
   --rail-bg: rgba(0, 0, 0, 0.4);
 
@@ -218,6 +225,7 @@
   --glass-border: rgba(160, 210, 255, 0.13);
   --glass-shadow: 0 12px 40px rgba(0, 0, 0, 0.65);
   --hover: rgba(255, 255, 255, 0.07);
+  --hover-strong: rgba(255, 255, 255, 0.12);
   --active: rgba(63, 216, 255, 0.1);
   --pill-bg: rgba(12, 13, 16, 0.75);
   --pill-bg-strong: rgba(255, 255, 255, 0.06);
@@ -346,11 +354,236 @@ select {
   font-size: 14px;
 }
 
+/*
+ * The background.
+ *
+ * A preset may replace what is drawn here, and may ask for one of the movements below. Both are opt-in: with no
+ * preset, `--preset-background` is unset and the fallback is the background Orbis has always drawn, motionless.
+ */
 .hud-bg {
   position: fixed;
   inset: 0;
   z-index: 0;
-  background: radial-gradient(ellipse 80% 70% at 50% 45%, var(--bg-center) 0%, var(--bg-mid) 55%, var(--bg-edge) 100%);
+  background: var(
+    --preset-background,
+    radial-gradient(ellipse 80% 70% at 50% 45%, var(--bg-center) 0%, var(--bg-mid) 55%, var(--bg-edge) 100%)
+  );
+}
+
+/*
+ * Movement, on a layer of its own.
+ *
+ * Every one of these animates only `transform` and `opacity`, so the compositor does the work and the main thread --
+ * which is drawing the page, the tabs and whatever is being typed -- is not asked to lay anything out again. The layer
+ * exists at all only while a preset is asking for it: `[data-backdrop]` is absent otherwise, so there is no element,
+ * no animation and no cost.
+ *
+ * It is behind everything and cannot be touched. `pointer-events: none` is not decoration here: the layer covers the
+ * window, and without it the background would swallow every click meant for the page.
+ */
+[data-backdrop] .hud-bg::before,
+[data-backdrop] .hud-bg::after {
+  content: '';
+  position: absolute;
+  inset: -20%;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+/* Paused while the window is not being looked at, so a background costs nothing when nobody can see it. */
+[data-window='hidden'] .hud-bg::before,
+[data-window='hidden'] .hud-bg::after {
+  animation-play-state: paused;
+}
+
+/* drift -- the whole field breathing. The quietest movement there is: nothing crosses the screen. */
+[data-backdrop='drift'] .hud-bg::before {
+  background: radial-gradient(
+    55% 45% at 30% 25%,
+    color-mix(in srgb, var(--cyan) 14%, transparent) 0%,
+    transparent 70%
+  );
+  animation: backdrop-drift var(--backdrop-cycle, 40s) ease-in-out infinite alternate;
+}
+
+@keyframes backdrop-drift {
+  from {
+    transform: translate3d(-3%, -2%, 0) scale(1.02);
+    opacity: 0.55;
+  }
+  to {
+    transform: translate3d(3%, 2%, 0) scale(1.12);
+    opacity: 0.9;
+  }
+}
+
+/* aurora -- two light fields crossing at different rates, so the pattern never visibly repeats. */
+[data-backdrop='aurora'] .hud-bg::before {
+  background: radial-gradient(
+    50% 35% at 25% 20%,
+    color-mix(in srgb, var(--cyan) 26%, transparent) 0%,
+    transparent 72%
+  );
+  animation: backdrop-aurora-a var(--backdrop-cycle, 40s) ease-in-out infinite alternate;
+}
+
+[data-backdrop='aurora'] .hud-bg::after {
+  background: radial-gradient(45% 30% at 75% 30%, rgba(140, 150, 255, 0.2) 0%, transparent 70%);
+  animation: backdrop-aurora-b calc(var(--backdrop-cycle, 40s) * 1.6) ease-in-out infinite alternate;
+}
+
+@keyframes backdrop-aurora-a {
+  from {
+    transform: translate3d(-8%, -4%, 0) scale(1) rotate(-2deg);
+    opacity: 0.45;
+  }
+  to {
+    transform: translate3d(10%, 6%, 0) scale(1.25) rotate(3deg);
+    opacity: 0.95;
+  }
+}
+
+@keyframes backdrop-aurora-b {
+  from {
+    transform: translate3d(9%, 5%, 0) scale(1.15);
+    opacity: 0.8;
+  }
+  to {
+    transform: translate3d(-7%, -6%, 0) scale(1);
+    opacity: 0.35;
+  }
+}
+
+/*
+ * stars -- a field of points, drawn once as a repeating gradient and then simply moved.
+ *
+ * No element per star. A hundred divs would be a hundred things to composite; this is one layer whose position
+ * changes, which costs the same whether it shows ten points or ten thousand.
+ */
+[data-backdrop='stars'] .hud-bg::before {
+  background-image:
+    radial-gradient(1px 1px at 20% 30%, rgba(255, 255, 255, 0.85) 0%, transparent 100%),
+    radial-gradient(1px 1px at 70% 15%, rgba(255, 255, 255, 0.6) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 45% 70%, rgba(255, 255, 255, 0.75) 0%, transparent 100%),
+    radial-gradient(1px 1px at 85% 60%, rgba(255, 255, 255, 0.5) 0%, transparent 100%),
+    radial-gradient(1px 1px at 10% 85%, rgba(255, 255, 255, 0.7) 0%, transparent 100%),
+    radial-gradient(1px 1px at 60% 90%, rgba(255, 255, 255, 0.45) 0%, transparent 100%);
+  background-size: 260px 260px;
+  background-repeat: repeat;
+  animation: backdrop-stars calc(var(--backdrop-cycle, 40s) * 5) linear infinite;
+}
+
+/* A second, larger field moving slower: the near stars pass the far ones, which is what reads as depth. */
+[data-backdrop='stars'] .hud-bg::after {
+  background-image:
+    radial-gradient(1.5px 1.5px at 35% 25%, rgba(255, 255, 255, 0.55) 0%, transparent 100%),
+    radial-gradient(2px 2px at 80% 75%, rgba(200, 215, 255, 0.4) 0%, transparent 100%);
+  background-size: 520px 520px;
+  background-repeat: repeat;
+  animation: backdrop-stars calc(var(--backdrop-cycle, 40s) * 11) linear infinite reverse;
+}
+
+@keyframes backdrop-stars {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-260px, 130px, 0);
+  }
+}
+
+/* flow -- colour moving across the window, the way light does at the end of the day. */
+[data-backdrop='flow'] .hud-bg::before {
+  background: linear-gradient(
+    115deg,
+    transparent 0%,
+    color-mix(in srgb, var(--cyan) 18%, transparent) 40%,
+    transparent 70%
+  );
+  animation: backdrop-flow calc(var(--backdrop-cycle, 40s) * 1.5) linear infinite;
+}
+
+@keyframes backdrop-flow {
+  from {
+    transform: translate3d(-40%, 0, 0);
+  }
+  to {
+    transform: translate3d(40%, 0, 0);
+  }
+}
+
+/* waves -- broad bands rising, slowly, like light through water. */
+[data-backdrop='waves'] .hud-bg::before {
+  background: repeating-linear-gradient(
+    0deg,
+    transparent 0,
+    transparent 70px,
+    color-mix(in srgb, var(--cyan) 7%, transparent) 78px,
+    transparent 92px
+  );
+  animation: backdrop-waves calc(var(--backdrop-cycle, 40s) * 2) linear infinite;
+}
+
+@keyframes backdrop-waves {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(0, -92px, 0);
+  }
+}
+
+/*
+ * scan -- a faint line crossing, over a faint grid.
+ *
+ * The line is one gradient at 4% opacity. Anything stronger is a flicker, and a flicker in the background of a browser
+ * is a thing people cannot read through.
+ */
+[data-backdrop='scan'] .hud-bg::before {
+  background: repeating-linear-gradient(
+    0deg,
+    transparent 0,
+    transparent 2px,
+    rgba(255, 255, 255, 0.022) 3px,
+    transparent 4px
+  );
+  opacity: 0.8;
+  animation: none;
+}
+
+[data-backdrop='scan'] .hud-bg::after {
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    color-mix(in srgb, var(--cyan) 10%, transparent) 50%,
+    transparent 100%
+  );
+  height: 28%;
+  inset: -20% -20% auto -20%;
+  animation: backdrop-scan calc(var(--backdrop-cycle, 40s) * 0.3) linear infinite;
+}
+
+@keyframes backdrop-scan {
+  from {
+    transform: translate3d(0, -30vh, 0);
+  }
+  to {
+    transform: translate3d(0, 130vh, 0);
+  }
+}
+
+/*
+ * Whatever the preset asked for, a person who asked not to be moved is not moved.
+ *
+ * There is deliberately no `@media (prefers-reduced-motion: reduce)` rule here. Orbis's own setting has three states,
+ * and one of them is "off" -- an explicit "I want the movement, whatever my system says". A media query cannot see
+ * that, so a media query here would quietly overrule the person on any machine with animations turned off. Reduced
+ * motion is decided once, by `wantsReducedMotion`, which reads the system preference *and* the person's answer; the
+ * result arrives as `data-motion` and as the absence of `data-backdrop`.
+ */
+[data-motion='reduced'] .hud-bg::before,
+[data-motion='reduced'] .hud-bg::after {
+  animation: none;
 }
 
 .hud-grid {
@@ -8520,6 +8753,268 @@ html[data-density] .wg-card {
   padding: calc(12px * var(--pad-scale, 1)) calc(14px * var(--pad-scale, 1));
 }
 
+/* ---------------------------------------------------------------- the account password, in Settings
+ *
+ * Built from the tokens the rest of Settings uses, so it reads as another setting rather than a security product that
+ * wandered in. The meter is the same one the welcome screen draws, because it is the same judgement.
+ */
+
+.pw-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.pw-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  color: var(--faint);
+  font-size: 12.5px;
+}
+
+.pw-done {
+  margin-left: 4px;
+  color: var(--green);
+}
+
+.pw-form {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  max-width: 420px;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line-strong);
+  background: var(--pill-bg-strong);
+}
+
+.pw-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.pw-row > span:first-child {
+  color: var(--faint);
+  font-size: 12px;
+}
+
+.pw-field {
+  position: relative;
+  display: block;
+}
+
+.pw-field input {
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: 9px;
+  border: 1px solid var(--line-strong);
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+/* Room for the button, so it never sits on top of what is typed. */
+.pw-field.has-reveal input {
+  padding-right: 42px;
+}
+
+.pw-reveal {
+  position: absolute;
+  top: 50%;
+  right: 5px;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  transform: translateY(-50%);
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+}
+
+.pw-reveal:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.pw-meter {
+  height: 3px;
+  margin: 8px 0 6px;
+  border-radius: 999px;
+  background: var(--line-strong);
+  overflow: hidden;
+}
+
+.pw-meter > span {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: var(--faint);
+  transition:
+    width 0.3s ease,
+    background 0.3s ease;
+}
+
+.pw-meter[data-strength='none'] > span {
+  width: 0 !important;
+}
+
+.pw-meter[data-strength='weak'] > span {
+  background: var(--red);
+}
+
+.pw-meter[data-strength='fair'] > span {
+  background: var(--amber);
+}
+
+.pw-meter[data-strength='good'] > span {
+  background: var(--green);
+}
+
+.pw-meter[data-strength='strong'] > span {
+  background: var(--cyan);
+}
+
+.pw-note {
+  min-height: 17px;
+  margin: 0;
+  color: var(--faint);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.pw-note[role='alert'] {
+  color: var(--red);
+}
+
+.pw-note.is-quiet {
+  margin-top: 8px;
+}
+
+.pw-acts {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+[data-motion='reduced'] .pw-meter > span {
+  transition: none;
+}
+
+/* ---------------------------------------------------------------- "Tell me when" */
+
+/*
+ * A rule is read as a sentence, so it is laid out as one: the words that never change sit at their natural size and
+ * the boxes take what is left. Wrapping rather than scrolling, because the sentence gets long in a narrow window and a
+ * sentence you have to scroll sideways to read is not one.
+ */
+.cz-rule-make {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0 14px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line-strong);
+  background: var(--pill-bg-strong);
+}
+
+.cz-rule-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+
+.cz-rule-word {
+  min-width: 36px;
+  color: var(--faint);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.cz-rule-row select,
+.cz-rule-row input {
+  flex: 1 1 130px;
+  min-width: 0;
+  padding: 6px 9px;
+  border-radius: 9px;
+  border: 1px solid var(--line-strong);
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.cz-rule-acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* The sentence takes the room, so the two buttons end up together at the right where they are expected. */
+.cz-rule-acts > .view-muted {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.cz-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cz-rule {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line-strong);
+  background: var(--pill-bg-strong);
+}
+
+/* A rule that has been told to stay quiet looks quiet, and still reads. */
+.cz-rule.off {
+  opacity: 0.55;
+}
+
+.cz-rule-face {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cz-rule-name {
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cz-rule-why,
+.cz-rule-when {
+  color: var(--faint);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
 /* ---------------------------------------------------------------- themes, wallpapers and dashboards in Customize */
 
 .cz-theme-grid {
@@ -11112,3 +11607,6121 @@ html[data-motion='reduced'] .tool-btn.recording {
   flex: 1;
   min-height: 0;
 }
+
+/* ---------------------------------------------------------------- what a workflow's runs show
+
+   Three tones, and they mean the same thing everywhere: green is working, amber is worth a look, red will not run.
+   A workflow with too few runs to judge gets the muted tone rather than a colour it has not earned. */
+
+.wf-health {
+  flex: none;
+  padding: 2px 8px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.wf-health.ok { color: var(--green, #4ade80); }
+.wf-health.warn { color: var(--amber, #e0a33e); }
+.wf-health.bad { color: var(--danger, #f87171); }
+.wf-health.muted { color: var(--muted); border-color: var(--line); }
+
+.wf-insights { display: flex; flex-direction: column; gap: 14px; padding: 4px 2px 20px; }
+.wf-insights-head { display: flex; align-items: center; justify-content: space-between; }
+.wf-insights-head h3 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+
+/* The verdict, with the sentence it is based on directly underneath it. */
+.wf-verdict { padding: 14px 16px; border: 1px solid var(--glass-border); border-left-width: 3px; border-radius: 12px; background: var(--panel, rgba(255, 255, 255, 0.03)); }
+.wf-verdict p { margin: 4px 0 0; font-size: 13px; line-height: 1.55; }
+.wf-verdict-label { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+.wf-verdict.ok { border-left-color: var(--green, #4ade80); }
+.wf-verdict.ok .wf-verdict-label { color: var(--green, #4ade80); }
+.wf-verdict.warn { border-left-color: var(--amber, #e0a33e); }
+.wf-verdict.warn .wf-verdict-label { color: var(--amber, #e0a33e); }
+.wf-verdict.bad { border-left-color: var(--danger, #f87171); }
+.wf-verdict.bad .wf-verdict-label { color: var(--danger, #f87171); }
+.wf-verdict.muted { border-left-color: var(--line); }
+.wf-verdict.muted .wf-verdict-label { color: var(--muted); }
+
+.wf-issue { display: flex; gap: 10px; padding: 13px 15px; border: 1px solid var(--glass-border); border-radius: 12px; }
+.wf-issue > svg { flex: none; margin-top: 2px; color: var(--muted); }
+.wf-issue > div { min-width: 0; flex: 1; }
+.wf-issue b { display: block; font-size: 13px; }
+.wf-issue p { margin: 3px 0 0; font-size: 12.5px; line-height: 1.55; }
+.wf-issue.warn { border-color: color-mix(in srgb, var(--amber, #e0a33e) 45%, transparent); }
+.wf-issue.warn > svg { color: var(--amber, #e0a33e); }
+.wf-issue.bad { border-color: color-mix(in srgb, var(--danger, #f87171) 45%, transparent); }
+.wf-issue.bad > svg { color: var(--danger, #f87171); }
+
+.wf-repair, .wf-finding { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--glass-border); }
+.wf-repair:first-of-type, .wf-finding:first-of-type { margin-top: 8px; }
+
+/* A migration: the exact before and after, so nobody has to trust a summary of what would change. */
+.wf-changes { list-style: none; margin: 6px 0 10px; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; }
+.wf-changes code { padding: 1px 5px; border-radius: 4px; background: var(--panel2, rgba(255, 255, 255, 0.06)); font-size: 11.5px; }
+
+.wf-insights .wf-muted { color: var(--muted); font-size: 12px; }
+.wf-none { display: flex; align-items: center; gap: 7px; margin: 0; padding: 12px 14px; color: var(--muted); border: 1px dashed var(--glass-border); border-radius: 12px; font-size: 12.5px; }
+
+.wf-banner.bad { border-color: color-mix(in srgb, var(--danger, #f87171) 45%, transparent); }
+.wf-banner.bad > svg { color: var(--danger, #f87171); }
+.wf-link { padding: 0; color: var(--cyan); background: none; border: 0; font: inherit; font-size: 12.5px; cursor: pointer; }
+.wf-link:hover { text-decoration: underline; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .spin { animation: wf-spin 0.9s linear infinite; }
+}
+@keyframes wf-spin { to { transform: rotate(360deg); } }
+
+
+/* A question scrolled to sits a little below the top edge rather than jammed against it, so the turn reads as a turn
+   and the reply beneath it is visible straight away. */
+.msg-slot {
+  scroll-margin-top: 16px;
+}
+
+
+/* Presets. The swatch carries the preset's own background and accent, so the grid is a row of real answers to
+   "what would Orbis look like" rather than a row of names. */
+.cz-presets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 10px;
+  margin: 12px 0 18px;
+}
+.cz-preset {
+  position: relative;
+  border: 1px solid var(--pill-border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--pill-bg);
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+.cz-preset:hover { border-color: var(--line-strong); }
+.cz-preset.on { border-color: var(--cyan); }
+.cz-preset-face {
+  display: block;
+  width: 100%;
+  padding: 0 0 10px;
+  background: none;
+  border: 0;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cz-preset-swatch {
+  position: relative;
+  display: block;
+  height: 66px;
+  /* The default preset has no gradient of its own, so it shows the one Orbis is already drawing. */
+  background: linear-gradient(180deg, var(--bg-center), var(--bg-edge));
+  border-bottom: 1px solid var(--pill-border);
+}
+.cz-preset-dot {
+  position: absolute;
+  right: 9px;
+  bottom: 9px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--cyan);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35);
+}
+.cz-preset-name {
+  display: block;
+  padding: 8px 10px 2px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.cz-preset-why {
+  display: block;
+  padding: 0 10px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--muted);
+}
+.cz-preset-acts {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.cz-preset:hover .cz-preset-acts,
+.cz-preset:focus-within .cz-preset-acts { opacity: 1; }
+
+
+/* Widgets that have been put somewhere by hand. The rows keep their own layout; these sit over them, which is what
+   being placed means. */
+.wg-zones {
+  position: relative;
+}
+.wg-card .wg-head {
+  cursor: grab;
+  touch-action: none;
+}
+.wg-card.placed {
+  position: absolute;
+  z-index: 2;
+  margin: 0;
+}
+.wg-card.dragging {
+  /* Lifted while it is being carried, and not animated: a card that eases towards the pointer feels like lag. */
+  z-index: 40;
+  cursor: grabbing;
+  transition: none;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.55);
+}
+.wg-card.dragging .wg-head {
+  cursor: grabbing;
+}
+
+/* ---------------------------------------------------------------- Tab Lock
+   Built from the account password panel's own pieces -- .pw-form, .pw-row, .pw-field, .pw-meter, .pw-note, .queue-btn --
+   so the two security screens are visibly one thing rather than two designs that happen to sit together. What is added
+   here is only what Tab Lock has and the account password does not: a list of credentials, a list of rules, and a delay
+   to choose. */
+
+.tl .pw-panel {
+  width: 100%;
+}
+
+.tl-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 560px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tl-group {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line-strong);
+  background: var(--pill-bg);
+}
+
+.tl-group-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.tl-group-head > svg {
+  color: var(--faint);
+  flex: none;
+}
+
+.tl-meta {
+  color: var(--faint);
+  font-size: 11.5px;
+}
+
+.tl-group-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-left: auto;
+}
+
+.queue-btn.tiny {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.queue-btn.danger {
+  color: var(--red);
+  border-color: color-mix(in srgb, var(--red) 40%, transparent);
+}
+
+.queue-btn.danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--red) 14%, transparent);
+}
+
+.queue-btn.ghost {
+  background: transparent;
+  color: var(--faint);
+}
+
+.queue-btn.is-on {
+  color: var(--cyan);
+  border-color: color-mix(in srgb, var(--cyan) 45%, transparent);
+  background: color-mix(in srgb, var(--cyan) 12%, transparent);
+}
+
+.pw-form.inner {
+  max-width: none;
+  margin-top: 10px;
+  padding: 12px;
+  background: var(--pill-bg-strong);
+}
+
+.tl-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+/* ---- how strict ---- */
+
+.tl-presets {
+  margin: 12px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.tl-presets legend {
+  padding: 0;
+  color: var(--faint);
+  font-size: 12px;
+}
+
+.tl-presets label {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
+  gap: 4px 8px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  cursor: pointer;
+}
+
+.tl-presets label.is-on {
+  border-color: color-mix(in srgb, var(--cyan) 45%, transparent);
+  background: color-mix(in srgb, var(--cyan) 10%, transparent);
+}
+
+.tl-presets label b {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.tl-presets label span {
+  grid-column: 2;
+  color: var(--faint);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.tl-presets.row {
+  display: flex;
+  gap: 6px;
+  margin: 10px 0 14px;
+}
+
+.tl-presets.row label {
+  margin: 0;
+}
+
+/* ---- the blocks below the credentials ---- */
+
+.tl-block {
+  width: 100%;
+  max-width: 560px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.tl-block h4 {
+  margin: 0 0 4px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.tl-block h4:not(:first-child) {
+  margin-top: 20px;
+}
+
+.tl-delay {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 0;
+  color: var(--text);
+  font-size: 12.5px;
+}
+
+.tl-delay select,
+.tl-rule-add select {
+  padding: 5px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+
+.tl-switch {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  color: var(--text);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.tl-switch input {
+  flex: none;
+  accent-color: var(--cyan);
+}
+
+/* ---- rules ---- */
+
+.tl-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tl-rules li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--pill-bg);
+  font-size: 12.5px;
+}
+
+.tl-rules li > svg {
+  color: var(--faint);
+  flex: none;
+}
+
+.tl-rules code {
+  font-size: 12px;
+}
+
+.tl-rules li > span {
+  margin-left: auto;
+  color: var(--faint);
+  font-size: 11.5px;
+}
+
+.tl-icon {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+}
+
+.tl-icon:hover:not(:disabled) {
+  color: var(--red);
+  background: var(--hover);
+}
+
+.tl-rule-add {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.tl-rule-add input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 6px 10px;
+  border-radius: 9px;
+  border: 1px solid var(--line-strong);
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+}
+
+/* What a security policy actually does, listed. Not a status light: sentences, because the useful thing to know is what
+   will happen rather than whether something is "on". */
+.tl-explains {
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tl-explains li {
+  position: relative;
+  padding: 3px 0 3px 16px;
+  color: var(--faint);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.tl-explains li::before {
+  content: '';
+  position: absolute;
+  top: 10px;
+  left: 3px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--cyan);
+}
+
+/* ---------------------------------------------------------------- Markets
+   The same pieces as the security panels -- .tl-block, .tl-switch, .tl-delay, .pw-note -- so Markets is visibly part of
+   Settings rather than a second design. What is added is the one thing Markets has that they do not: rows of live numbers,
+   which need tabular figures so a price changing does not shift the columns. */
+
+.mk-rows,
+.mk-results {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mk-row,
+.mk-results li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--pill-bg);
+  font-size: 12.5px;
+}
+
+.mk-row b,
+.mk-results b {
+  flex: none;
+  min-width: 78px;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+.mk-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--faint);
+  font-size: 11.5px;
+}
+
+.mk-venue {
+  flex: none;
+  color: var(--faint);
+  font-size: 11px;
+}
+
+/* Tabular figures: a price that changes must not move the column next to it. */
+.mk-price,
+.mk-change {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+.mk-price {
+  min-width: 96px;
+  text-align: right;
+}
+
+.mk-change {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 74px;
+  justify-content: flex-end;
+  font-size: 11.5px;
+}
+
+.mk-change.up {
+  color: var(--green);
+}
+
+.mk-change.down {
+  color: var(--red);
+}
+
+.mk-change.flat {
+  color: var(--faint);
+}
+
+/* Freshness beside the number it describes, never colour alone. */
+.mk-fresh {
+  flex: none;
+  min-width: 56px;
+  color: var(--faint);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-align: right;
+}
+
+.mk-fresh.is-real-time {
+  color: var(--green);
+}
+
+.mk-fresh.is-delayed {
+  color: var(--amber);
+}
+
+.mk-fresh.is-stale {
+  color: var(--red);
+}
+
+.mk-quiet {
+  color: var(--faint);
+  font-size: 11.5px;
+  border: 0;
+  background: transparent;
+  padding: 4px 2px;
+}
+
+.mk-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill, 999px);
+  background: var(--pill-bg);
+  color: var(--faint);
+}
+
+.mk-search input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 32px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  outline: none;
+}
+
+/* ---------------------------------------------------------------- Markets, the screen
+ *
+ * Built on the same tokens as the rest of Orbis, so the screen follows the theme rather than carrying a trading-terminal
+ * palette of its own. Direction is never colour alone: every rise and fall also carries a glyph, which is what keeps the
+ * numbers readable without colour vision.
+ */
+
+.markets-view {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.markets-view .view-head {
+  gap: 10px;
+  /* Four section tabs, a search box and two buttons: on a narrow window these wrap as a group rather than leaving the
+     close button stranded on a line of its own. */
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+.markets-view .view-actions {
+  /* A small basis so the actions sit beside the section tabs rather than wrapping under them and leaving a band of
+     empty header above the content. */
+  flex: 1 1 200px;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+/*
+ * Six sections is a lot of header. At narrow widths the labels go and the icons carry it — except on the selected tab,
+ * which keeps its label so you can always tell where you are. A row of six anonymous icons is a puzzle.
+ */
+@media (max-width: 1240px) {
+  .mk-modes button:not(.on) span.mk-mode-label {
+    display: none;
+  }
+}
+
+.mk-head-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--faint);
+  font-size: 11.5px;
+}
+
+.mk-conn {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.mk-conn.is-connected {
+  color: var(--green);
+}
+
+.mk-conn.is-delayed,
+.mk-conn.is-reconnecting {
+  color: var(--amber);
+}
+
+/* Ready is neither live nor broken: configured, reachable, nothing subscribed yet. */
+.mk-conn.is-idle {
+  color: var(--muted);
+}
+
+.mk-conn.is-disconnected,
+.mk-conn.is-not-configured {
+  color: var(--red);
+}
+
+/* The search sits in the header, and its results float over the body rather than pushing it down. */
+.markets-view .view-actions .mk-search {
+  position: relative;
+  margin-top: 0;
+  flex: 1 1 180px;
+  min-width: 140px;
+  max-width: 340px;
+}
+
+.markets-view .mk-results {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 40;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: var(--glass);
+  box-shadow: var(--glass-shadow);
+}
+
+.markets-view .mk-results li button {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.markets-view .mk-results li button:hover {
+  background: var(--hover);
+}
+
+/*
+ * `display: grid` beats the user agent's `[hidden] { display: none }`, so hiding this needs saying explicitly. Without
+ * it the dashboard stayed on screen underneath the screener.
+ */
+.mk-body[hidden] {
+  display: none;
+}
+
+.mk-body {
+  display: grid;
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  gap: 14px;
+  min-height: 0;
+  flex: 1 1 auto;
+  padding: 0 4px 10px;
+}
+
+.mk-side {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.mk-main {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.mk-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill, 999px);
+  background: var(--pill-bg);
+}
+
+.mk-tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  flex: 1 1 auto;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: var(--radius-pill, 999px);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.mk-tabs button.on {
+  background: var(--active);
+  color: var(--cyan);
+}
+
+.mk-tabs.is-wide button {
+  flex: 0 0 auto;
+}
+
+.mk-tabs button small {
+  color: var(--faint);
+  font-size: 10px;
+}
+
+.mk-seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--pill-bg);
+}
+
+.mk-seg button {
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.mk-seg button.on {
+  background: var(--cyan-fill);
+  color: var(--cyan);
+}
+
+.mk-breadth {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--rail-bg);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mk-breadth .up {
+  color: var(--green);
+}
+
+.mk-breadth .down {
+  color: var(--red);
+}
+
+.mk-breadth .flat {
+  color: var(--faint);
+}
+
+.mk-breadth small {
+  margin-left: auto;
+  color: var(--faint);
+  font-size: 10.5px;
+}
+
+.mk-sub {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 6px 0 0;
+  color: var(--muted-strong);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.mk-sub small {
+  color: var(--faint);
+  font-size: 10.5px;
+  font-weight: 400;
+}
+
+.mk-rank {
+  width: 16px;
+  color: var(--faint);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.mk-row-name {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mk-row-name:hover b {
+  color: var(--cyan);
+}
+
+.mk-vol {
+  color: var(--faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  min-width: 52px;
+  text-align: right;
+}
+
+/* ---- heatmap: tiles sized by their share of the turnover of what is drawn */
+
+.mk-heat {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.mk-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 1px;
+  min-height: 46px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--hover);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.mk-tile b {
+  font-size: 11.5px;
+  letter-spacing: 0.01em;
+}
+
+.mk-tile span {
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mk-tile.up {
+  border-color: rgba(62, 229, 138, 0.3);
+  background: rgba(62, 229, 138, 0.14);
+}
+
+.mk-tile.up span {
+  color: var(--green);
+}
+
+.mk-tile.down {
+  border-color: rgba(255, 77, 109, 0.3);
+  background: rgba(255, 77, 109, 0.13);
+}
+
+.mk-tile.down span {
+  color: var(--red);
+}
+
+.mk-tile.flat span {
+  color: var(--faint);
+}
+
+.mk-tile:hover {
+  border-color: var(--cyan-dim);
+}
+
+/* ---- watchlists */
+
+.mk-list-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mk-list-head select {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+
+/* ---- one market */
+
+.mk-detail-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--rail-bg);
+}
+
+.mk-ident {
+  min-width: 0;
+}
+
+.mk-ident h3 {
+  margin: 0;
+  font-size: 15px;
+  letter-spacing: 0.01em;
+}
+
+.mk-ident p {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 0;
+  flex-wrap: wrap;
+}
+
+.mk-sym {
+  color: var(--muted-strong);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.mk-big {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.mk-big strong {
+  font-size: 22px;
+  letter-spacing: -0.01em;
+}
+
+.mk-big small {
+  color: var(--faint);
+  font-size: 10px;
+}
+
+.mk-detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mk-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--pill-bg);
+  color: var(--faint);
+  font-size: 11px;
+}
+
+.mk-stats b {
+  color: var(--text);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  margin-left: 5px;
+}
+
+/* ---- the chart */
+
+.mk-chart-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.mk-chart-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.mk-chart-bar select {
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 11.5px;
+}
+
+.mk-chart {
+  position: relative;
+  min-height: 240px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+}
+
+.mk-chart-note {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--pill-bg);
+  color: var(--faint);
+  font-size: 10.5px;
+}
+
+.mk-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mk-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 4px 3px 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--pill-bg);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.mk-legend input {
+  width: 46px;
+  height: 22px;
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+}
+
+.mk-readout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--pill-bg);
+  color: var(--faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mk-readout b {
+  color: var(--text);
+  font-weight: 600;
+  margin-left: 4px;
+}
+
+/* ---- order book */
+
+.mk-book-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  padding: 7px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--pill-bg);
+  color: var(--faint);
+  font-size: 11px;
+}
+
+.mk-book-head b {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  margin-left: 5px;
+}
+
+.mk-book-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.mk-book-cols h5 {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.mk-ladder {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mk-ladder li {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.8fr);
+  gap: 8px;
+  padding: 2px 6px;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+}
+
+/* The bar is the level's size against the deepest level shown: a real proportion, not a decorative width. */
+.mk-depth {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  pointer-events: none;
+}
+
+.mk-ladder.is-bid .mk-depth {
+  background: rgba(62, 229, 138, 0.14);
+}
+
+.mk-ladder.is-ask .mk-depth {
+  background: rgba(255, 77, 109, 0.13);
+}
+
+.mk-ladder.is-bid .mk-lvl-price {
+  color: var(--green);
+}
+
+.mk-ladder.is-ask .mk-lvl-price {
+  color: var(--red);
+}
+
+.mk-lvl-size,
+.mk-lvl-total {
+  position: relative;
+  color: var(--muted);
+  text-align: right;
+}
+
+.mk-lvl-total {
+  color: var(--faint);
+}
+
+.mk-lvl-price {
+  position: relative;
+  font-weight: 600;
+}
+
+/* ---- the tape */
+
+.mk-tape table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mk-tape th {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--line);
+  color: var(--faint);
+  font-size: 10.5px;
+  font-weight: 600;
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.mk-tape td {
+  padding: 3px 8px;
+  color: var(--muted-strong);
+}
+
+.mk-tape td:last-child {
+  color: var(--faint);
+}
+
+.mk-tape tr.buy td:nth-child(2) {
+  color: var(--green);
+}
+
+.mk-tape tr.sell td:nth-child(2) {
+  color: var(--red);
+}
+
+/* ---- nothing here */
+
+.mk-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-height: 220px;
+  padding: 30px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.mk-empty p {
+  margin: 0;
+  max-width: 44ch;
+}
+
+.mk-empty svg {
+  color: var(--faint);
+}
+
+.mk-empty-small {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 14px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.mk-empty-small p {
+  margin: 0;
+}
+
+.mk-fresh.is-unavailable {
+  color: var(--faint);
+}
+
+@media (max-width: 1080px) {
+  /* Fewer panels at once rather than everything shrunk: a two-column order book at 300px is unreadable. */
+  .mk-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mk-side {
+    max-height: 40vh;
+  }
+
+  .mk-book-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .markets-view .view-actions .mk-search {
+    min-width: 160px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mk-tile,
+  .mk-row-name {
+    transition: none;
+  }
+}
+
+/* ---------------------------------------------------------------- Markets: screener and alerts */
+
+.mk-modes {
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill, 999px);
+  background: var(--pill-bg);
+}
+
+.mk-modes button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border: 0;
+  border-radius: var(--radius-pill, 999px);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.mk-modes button.on {
+  background: var(--cyan-fill);
+  color: var(--cyan);
+}
+
+.mk-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--faint);
+  font-size: 11.5px;
+}
+
+.mk-inline select,
+.mk-inline input {
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 11.5px;
+}
+
+.mk-inline input {
+  width: 62px;
+}
+
+/* ---- the screener */
+
+.mk-screener {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 4px 12px;
+}
+
+.mk-screener-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--rail-bg);
+}
+
+.mk-screener-bar > select {
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 11.5px;
+}
+
+.mk-conditions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mk-conditions li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.mk-conditions select,
+.mk-conditions > li > input {
+  height: 28px;
+  padding: 0 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 11.5px;
+}
+
+.mk-conditions > li > input {
+  width: 96px;
+}
+
+.mk-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.mk-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mk-table th {
+  position: sticky;
+  top: 0;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line-strong);
+  background: var(--bar-bg);
+  color: var(--faint);
+  font-size: 10.5px;
+  font-weight: 600;
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.mk-table td {
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted-strong);
+  white-space: nowrap;
+}
+
+.mk-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.mk-table tr:hover td {
+  background: var(--hover);
+}
+
+.mk-table td .mk-row-name {
+  gap: 8px;
+}
+
+/* The footer is where the screener admits what it could not reach. It should read, not hide. */
+.mk-screener-foot {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--pill-bg);
+  color: var(--faint);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.mk-screener-foot svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.mk-screener-foot b {
+  color: var(--amber);
+  font-weight: 600;
+}
+
+.mk-saved {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.mk-saved h5 {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.mk-saved ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mk-saved li {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 6px 4px 11px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--pill-bg);
+  font-size: 11.5px;
+}
+
+.mk-saved li > button:first-child {
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.mk-saved li > button:first-child:hover {
+  color: var(--cyan);
+}
+
+/* ---- alerts */
+
+.mk-alerts {
+  display: grid;
+  grid-template-columns: minmax(320px, 420px) minmax(0, 1fr);
+  gap: 14px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 4px 12px;
+}
+
+.mk-alert-form {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  align-self: flex-start;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--rail-bg);
+}
+
+.mk-alert-form h4,
+.mk-alert-head h4,
+.mk-alert-head h5 {
+  margin: 0;
+  color: var(--muted-strong);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.mk-alert-target .mk-search {
+  position: relative;
+  margin-top: 0;
+}
+
+.mk-alert-target .mk-results {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: var(--glass);
+  box-shadow: var(--glass-shadow);
+}
+
+.mk-alert-target .mk-results li button {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mk-alert-target .mk-results li button:hover {
+  background: var(--hover);
+}
+
+.mk-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px 5px 11px;
+  border: 1px solid var(--cyan-dim);
+  border-radius: 999px;
+  background: var(--cyan-fill);
+  font-size: 12px;
+}
+
+.mk-alert-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.mk-alert-row select,
+.mk-alert-row > input {
+  height: 28px;
+  padding: 0 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 11.5px;
+}
+
+.mk-alert-row > input {
+  flex: 1 1 90px;
+  min-width: 80px;
+}
+
+.mk-alert-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mk-alert-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.mk-alert-now {
+  color: var(--muted);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* A paused alert is dimmed but still legible: it is a state, not a deletion. */
+.mk-alert.is-off {
+  opacity: 0.55;
+}
+
+.mk-history {
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+@media (max-width: 1080px) {
+  .mk-alerts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---------------------------------------------------------------- Markets: the simulated portfolio */
+
+.mk-portfolio {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 4px 12px;
+}
+
+/*
+ * The simulated badge.
+ *
+ * Amber rather than red: this is not an error, it is a standing fact about every number on the screen. It has to be
+ * noticeable without reading like something has gone wrong.
+ */
+.mk-sim-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 6px;
+  padding: 3px 10px;
+  border: 1px solid rgba(255, 190, 77, 0.34);
+  border-radius: 999px;
+  background: rgba(255, 190, 77, 0.12);
+  color: var(--amber);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.mk-pf-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--rail-bg);
+}
+
+.mk-pf-head .mk-big {
+  align-items: flex-start;
+}
+
+.mk-pf-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mk-assumptions {
+  margin: 0;
+  padding: 10px 14px 10px 30px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--pill-bg);
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+.mk-assumptions li {
+  margin: 0;
+}
+
+.mk-pf-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 20px;
+  padding: 9px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--pill-bg);
+  color: var(--faint);
+  font-size: 11px;
+}
+
+.mk-pf-stats b {
+  color: var(--text);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  margin-left: 5px;
+}
+
+/* The change colours apply to the bold value inside a stat, not the label beside it. */
+.mk-pf-stats b.mk-change.up {
+  color: var(--green);
+}
+
+.mk-pf-stats b.mk-change.down {
+  color: var(--red);
+}
+
+.mk-pf-stats b.mk-change.flat {
+  color: var(--text);
+}
+
+.mk-pf-body {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.mk-pf-main {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mk-pf-main h4 {
+  margin: 6px 0 0;
+  color: var(--muted-strong);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+/* ---- the order ticket */
+
+.mk-ticket {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  position: sticky;
+  top: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--rail-bg);
+}
+
+.mk-ticket h4 {
+  margin: 0;
+  color: var(--muted-strong);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.mk-ticket .mk-search {
+  position: relative;
+  margin-top: 0;
+}
+
+.mk-ticket .mk-results {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: var(--glass);
+  box-shadow: var(--glass-shadow);
+}
+
+.mk-ticket .mk-results li button {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mk-ticket .mk-results li button:hover {
+  background: var(--hover);
+}
+
+.mk-side {
+  display: flex;
+}
+
+.mk-side button {
+  flex: 1 1 auto;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+
+.mk-side button.on.buy {
+  background: rgba(62, 229, 138, 0.16);
+  color: var(--green);
+}
+
+.mk-side button.on.sell {
+  background: rgba(255, 77, 109, 0.14);
+  color: var(--red);
+}
+
+.mk-start {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.mk-start select {
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+
+/* ---- tables and rows */
+
+.mk-cash-row td {
+  color: var(--faint);
+  font-style: italic;
+}
+
+.mk-order .mk-row-name {
+  cursor: default;
+}
+
+.mk-order.is-rejected {
+  opacity: 0.7;
+}
+
+.mk-order.is-rejected .mk-quiet:first-of-type {
+  color: var(--red);
+}
+
+.mk-order.is-cancelled {
+  opacity: 0.6;
+}
+
+.mk-footnote {
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  line-height: 1.6;
+}
+
+@media (max-width: 1080px) {
+  .mk-pf-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mk-ticket {
+    position: static;
+  }
+}
+
+/* ---------------------------------------------------------------- Markets: strategies and backtesting */
+
+.mk-backtest {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 4px 12px;
+}
+
+.mk-bt-top {
+  display: grid;
+  grid-template-columns: minmax(240px, 300px) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.mk-bt-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mk-bt-list .mk-search {
+  position: relative;
+  margin-top: 0;
+}
+
+.mk-bt-list .mk-results {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 30;
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: var(--glass);
+  box-shadow: var(--glass-shadow);
+}
+
+.mk-bt-list .mk-results li button {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mk-bt-list .mk-results li button:hover {
+  background: var(--hover);
+}
+
+.mk-row.is-on {
+  border-color: var(--cyan-dim);
+  background: var(--active);
+}
+
+.mk-bt-builder {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--rail-bg);
+}
+
+.mk-bt-builder > .mk-alert-row > input[type='text'],
+.mk-bt-builder > .mk-alert-row > input:not([type]) {
+  flex: 1 1 160px;
+}
+
+/* ---- rules */
+
+.mk-rulegroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--pill-bg);
+}
+
+.mk-rulehead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mk-rulehead h5 {
+  margin: 0;
+  color: var(--muted-strong);
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.mk-rulehead select {
+  height: 24px;
+  padding: 0 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  background: var(--bar-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+}
+
+.mk-rulehead button {
+  margin-left: auto;
+}
+
+.mk-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mk-rules li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 5px;
+}
+
+.mk-rules select,
+.mk-rules input {
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: var(--bar-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 11.5px;
+}
+
+.mk-rules input {
+  width: 68px;
+}
+
+/* Why a strategy cannot run, said before the button is pressed rather than after. */
+.mk-problems {
+  margin: 0;
+  padding: 9px 12px 9px 28px;
+  border: 1px solid rgba(255, 190, 77, 0.3);
+  border-radius: 10px;
+  background: rgba(255, 190, 77, 0.09);
+  color: var(--amber);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+/* ---- the result */
+
+.mk-bt-result {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 4px;
+  border-top: 1px solid var(--line);
+}
+
+.mk-bt-result h4,
+.mk-out-of-sample h5,
+.mk-sweep h5 {
+  margin: 6px 0 0;
+  color: var(--muted-strong);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.mk-bt-result .mk-big strong {
+  font-size: 26px;
+}
+
+.mk-equity {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+}
+
+.mk-equity-key {
+  position: absolute;
+  bottom: 2px;
+  left: 10px;
+  display: flex;
+  gap: 12px;
+  margin: 0;
+  color: var(--faint);
+  font-size: 10px;
+}
+
+.mk-equity-key span::before {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 2px;
+  margin-right: 5px;
+  vertical-align: middle;
+}
+
+.mk-equity-key .strategy::before {
+  background: var(--cyan);
+}
+
+.mk-equity-key .benchmark::before {
+  background: var(--muted);
+}
+
+.mk-equity-key .held::before {
+  height: 8px;
+  background: rgba(63, 216, 255, 0.18);
+}
+
+.mk-out-of-sample,
+.mk-sweep {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--pill-bg);
+}
+
+/* An exit that was assumed rather than observed. Amber, because it qualifies the row it sits in. */
+.mk-ambiguous {
+  color: var(--amber);
+  font-size: 10.5px;
+}
+
+.mk-bt-runs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+@media (max-width: 1080px) {
+  .mk-bt-top {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---------------------------------------------------------------- Markets: replay */
+
+.mk-replay {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 4px 12px;
+}
+
+.mk-replay-bar,
+.mk-replay-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--rail-bg);
+}
+
+.mk-replay-bar select,
+.mk-replay-controls select {
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 11.5px;
+}
+
+/* The scrub bar takes the rest of the row: it is the control somebody reaches for most. */
+.mk-scrub {
+  flex: 1 1 180px;
+  min-width: 120px;
+  height: 4px;
+  accent-color: var(--cyan);
+  cursor: pointer;
+}
+
+.mk-replay-position {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--pill-bg);
+  color: var(--muted);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mk-replay-position b {
+  font-weight: 600;
+}
+
+/* Amber, because it is about to be true rather than true: the fill is at a price not yet revealed. */
+.mk-replay-position.is-pending {
+  border-color: rgba(255, 190, 77, 0.3);
+  background: rgba(255, 190, 77, 0.09);
+  color: var(--amber);
+}
+
+.mk-replay-position.is-flat {
+  color: var(--faint);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The replay's motion is the point of it, so it is not disabled — but nothing else here should animate. */
+  .mk-replay-position {
+    transition: none;
+  }
+}
+
+/* ---------------------------------------------------------------- Markets: news */
+
+.mk-news {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 4px 12px;
+}
+
+.mk-headlines {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mk-headlines li {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 12px;
+  border: 1px solid transparent;
+  border-bottom-color: var(--line);
+  border-radius: 8px;
+}
+
+.mk-headlines li:hover {
+  border-color: var(--line-strong);
+  background: var(--hover);
+}
+
+.mk-headlines a {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.45;
+  text-decoration: none;
+}
+
+.mk-headlines a:hover {
+  color: var(--cyan);
+}
+
+.mk-headlines a svg {
+  flex: 0 0 auto;
+  color: var(--faint);
+}
+
+/* The publisher's name is never optional: a headline without one cannot be weighed. */
+.mk-news-meta {
+  color: var(--faint);
+  font-size: 11px;
+}
+
+.mk-news-meta b {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.mk-news-assets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.mk-news-assets button {
+  padding: 1px 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--pill-bg);
+  color: var(--muted);
+  font: inherit;
+  font-size: 10.5px;
+  cursor: pointer;
+}
+
+.mk-news-assets button:hover {
+  border-color: var(--cyan-dim);
+  color: var(--cyan);
+}
+
+/* ---------------------------------------------------------------- Markets: asset logos */
+
+.mk-logo {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  /* The image itself is not stretched: a logo squashed to fit is a logo altered. */
+  object-fit: contain;
+  overflow: hidden;
+  vertical-align: middle;
+}
+
+/* A neutral space while the real one loads. Never a stand-in logo, which would flash the wrong coin. */
+.mk-logo-loading {
+  background: var(--hover);
+}
+
+/*
+ * The fallback: the asset's own letters on a neutral mark.
+ *
+ * Not a generic coin — every unknown asset would then look like the same asset. Neutral rather than coloured, so it
+ * cannot be mistaken for branding this asset does not have.
+ */
+.mk-logo-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--pill-bg);
+  color: var(--muted);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.mk-row-name .mk-logo,
+.mk-results .mk-logo,
+.mk-table .mk-logo {
+  margin-right: 1px;
+}
+
+.mk-detail-head > .mk-logo {
+  margin-top: 2px;
+}
+
+.mk-tile .mk-logo {
+  margin-bottom: 1px;
+}
+
+/* ---------------------------------------------------------------- Markets: the currency picker */
+
+.mk-currency {
+  position: relative;
+}
+
+.mk-currency-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill, 999px);
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.mk-currency-button:hover {
+  border-color: var(--cyan-dim);
+}
+
+.mk-currency-button b {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* Prices are not in the currency the button names. Worth a mark on the button itself. */
+.mk-cur-warn {
+  color: var(--amber);
+}
+
+.mk-currency-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 60;
+  width: 320px;
+  max-width: 88vw;
+  padding: 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  background: var(--glass);
+  box-shadow: var(--glass-shadow);
+}
+
+.mk-currency-menu .mk-search {
+  margin-top: 0;
+}
+
+.mk-currency-list {
+  max-height: 320px;
+  overflow-y: auto;
+  margin-top: 8px;
+}
+
+.mk-currency-list h6 {
+  margin: 8px 0 3px;
+  padding: 0 6px;
+  color: var(--faint);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.mk-currency-list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mk-currency-list li {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.mk-currency-list li > button:first-child {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mk-currency-list li > button:first-child:hover {
+  background: var(--hover);
+}
+
+.mk-currency-list li.is-on > button:first-child {
+  background: var(--active);
+  color: var(--cyan);
+}
+
+/* The symbol is never alone: $ is five currencies, so the code sits beside it. */
+.mk-cur-symbol {
+  width: 22px;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.mk-currency-list .tl-icon .is-on {
+  color: var(--amber);
+}
+
+.mk-currency-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.mk-currency-foot p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* ============================================================================
+ * Markets: the first launch, and the explanations afterwards.
+ *
+ * One design system, configured. There is no "beginner stylesheet" and no "professional stylesheet" -- the density
+ * attribute below changes spacing and row heights on the same components, which is what keeps one screen from drifting
+ * into two.
+ *
+ * Reduced motion follows the Orbis convention: `data-motion='reduced'` on the document, decided once by
+ * `wantsReducedMotion` from the system preference *and* the person's own answer. No media query here would be able to
+ * see the difference between "my system says no" and "I asked for it anyway".
+ * ========================================================================= */
+
+.mk-onboard {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 18px 20px 20px;
+  overflow-y: auto;
+}
+
+.mk-onboard-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.mk-onboard-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--display);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cyan);
+}
+
+.mk-onboard-rail {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1 1 auto;
+  min-width: 80px;
+}
+
+.mk-onboard-rail i {
+  height: 3px;
+  flex: 1 1 auto;
+  max-width: 34px;
+  border-radius: 2px;
+  background: var(--line-strong);
+  transition: background 160ms ease;
+}
+
+[data-motion='reduced'] .mk-onboard-rail i {
+  transition: none;
+}
+
+.mk-onboard-rail i.done {
+  background: var(--cyan-dim);
+}
+
+.mk-onboard-rail i.on {
+  background: var(--cyan);
+  box-shadow: 0 0 10px var(--cyan-glow-soft);
+}
+
+.mk-onboard-count {
+  font-size: 11px;
+  color: var(--faint);
+  white-space: nowrap;
+}
+
+.mk-onboard-skip {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill, 999px);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  padding: 4px 12px;
+  cursor: pointer;
+}
+
+.mk-onboard-skip:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.mk-onboard-resumed {
+  margin: -8px 0 0;
+  font-size: 11px;
+  color: var(--cyan);
+}
+
+.mk-onboard-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1 1 auto;
+  min-height: 0;
+  animation: mk-onboard-in 220ms ease both;
+}
+
+[data-motion='reduced'] .mk-onboard-body {
+  animation: none;
+}
+
+@keyframes mk-onboard-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0);
+  }
+}
+
+.mk-onboard-body h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.mk-onboard-why {
+  margin: 0;
+  max-width: 62ch;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.mk-onboard-affects {
+  margin: auto 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.mk-onboard-affects b {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.mk-onboard-welcome p {
+  margin: 0 0 10px;
+  max-width: 62ch;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted-strong);
+}
+
+.mk-onboard-welcome ul {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+/* The cards. One grid that reflows, so nothing is clipped at any window size. */
+.mk-onboard-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 8px;
+  align-content: start;
+}
+
+.mk-onboard-cards.is-levels {
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+}
+
+.mk-onboard-cards.is-many {
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
+
+.mk-onboard-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 11px 13px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 140ms ease,
+    background 140ms ease;
+}
+
+[data-motion='reduced'] .mk-onboard-card {
+  transition: none;
+}
+
+.mk-onboard-card:hover {
+  border-color: var(--line-strong);
+  background: var(--hover);
+}
+
+.mk-onboard-card:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+.mk-onboard-card.on {
+  border-color: var(--cyan-dim);
+  background: var(--active);
+}
+
+.mk-onboard-card b {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.mk-onboard-card small {
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+.mk-onboard-tick {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  color: var(--cyan);
+}
+
+.mk-onboard-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+
+.mk-onboard-preview i {
+  font-style: normal;
+  font-size: 10.5px;
+  color: var(--faint);
+}
+
+.mk-onboard-card.on .mk-onboard-preview i {
+  color: var(--muted);
+}
+
+/* Choosing real markets. */
+.mk-onboard-assets,
+.mk-onboard-currency {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.mk-onboard-suggest,
+.mk-onboard-chosen {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mk-onboard-suggest button {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill, 999px);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+.mk-onboard-suggest button:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.mk-onboard-chosen button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--cyan-dim);
+  border-radius: var(--radius-pill, 999px);
+  background: var(--active);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  padding: 3px 8px 3px 5px;
+  cursor: pointer;
+}
+
+.mk-onboard-results {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.mk-onboard-results button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mk-onboard-results button:hover {
+  background: var(--hover);
+}
+
+.mk-onboard-results button.on {
+  border-color: var(--cyan-dim);
+  background: var(--active);
+}
+
+.mk-onboard-results b {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.mk-onboard-results small {
+  flex: 1 1 auto;
+  font-size: 11px;
+  color: var(--faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mk-onboard-symbol {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  font-size: 13px;
+  color: var(--cyan);
+}
+
+.mk-onboard-review dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.mk-onboard-review dl > div {
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--pill-bg);
+}
+
+.mk-onboard-review dt {
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.mk-onboard-review dd {
+  margin: 3px 0 0;
+  font-size: 12.5px;
+  color: var(--text);
+  text-transform: capitalize;
+}
+
+.mk-onboard-problems {
+  margin: 0 0 10px;
+  padding: 9px 12px 9px 28px;
+  border: 1px solid var(--danger-border);
+  border-radius: 10px;
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: 12px;
+}
+
+.mk-onboard-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.mk-onboard-foot button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill, 999px);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.mk-onboard-foot button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.mk-onboard-foot button.mk-primary,
+.mk-onboard-centre .mk-primary {
+  border-color: var(--cyan-dim);
+  background: var(--cyan-fill);
+  color: var(--text);
+}
+
+.mk-onboard-foot button.mk-primary:not(:disabled):hover,
+.mk-onboard-centre .mk-primary:hover {
+  box-shadow: 0 0 16px var(--cyan-glow-soft);
+}
+
+.mk-onboard-centre {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex: 1 1 auto;
+  text-align: center;
+}
+
+.mk-onboard-centre h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.mk-onboard-centre .mk-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border: 1px solid var(--cyan-dim);
+  border-radius: var(--radius-pill, 999px);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.mk-onboard-summary {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mk-onboard-summary li {
+  padding: 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill, 999px);
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: capitalize;
+}
+
+.mk-spin {
+  color: var(--cyan);
+  animation: mk-spin 900ms linear infinite;
+}
+
+[data-motion='reduced'] .mk-spin {
+  animation: none;
+}
+
+@keyframes mk-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---------------------------------------------------------------- explanations */
+
+.mk-term {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.mk-explain {
+  position: relative;
+  display: inline-flex;
+  vertical-align: middle;
+}
+
+.mk-explain-ask {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+}
+
+.mk-explain-ask:hover,
+.mk-explain-ask.on {
+  color: var(--cyan);
+  background: var(--active);
+}
+
+.mk-explain-card {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: max-content;
+  max-width: min(320px, calc(100vw - 32px));
+  padding: 11px 13px;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: var(--glass);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(14px);
+  text-align: left;
+  white-space: normal;
+}
+
+.mk-explain-card strong {
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.mk-explain-card b {
+  margin-top: 4px;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--cyan);
+}
+
+.mk-explain-card p {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--muted-strong);
+}
+
+.mk-explain-related {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+
+.mk-explain-related button {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill, 999px);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 10.5px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.mk-explain-related button:hover {
+  color: var(--cyan);
+  border-color: var(--cyan-dim);
+}
+
+.mk-introduce {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 11px 13px;
+  border: 1px solid var(--cyan-dim);
+  border-radius: 12px;
+  background: var(--cyan-fill);
+}
+
+.mk-introduce-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mk-introduce-head strong {
+  font-size: 12.5px;
+}
+
+.mk-introduce-head button {
+  display: inline-flex;
+  padding: 2px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.mk-introduce p {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--muted-strong);
+}
+
+.mk-introduce-ok {
+  align-self: flex-start;
+  margin-top: 2px;
+  padding: 4px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill, 999px);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+/* ---------------------------------------------------------------- density
+ *
+ * The same components, tighter or looser. This is the whole of "information density": one attribute on the Markets view,
+ * set from the resolved experience, changing spacing and row height. Nothing here hides a figure -- a dense watchlist has
+ * more columns because the experience asked for more columns, not because this stylesheet removed any.
+ */
+.markets-view[data-density='minimal'] .mk-row,
+.markets-view[data-density='minimal'] .mk-results li {
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+
+.markets-view[data-density='minimal'] .mk-body,
+.markets-view[data-density='balanced'] .mk-body {
+  gap: 14px;
+}
+
+.markets-view[data-density='detailed'] .mk-row,
+.markets-view[data-density='detailed'] .mk-results li {
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+
+.markets-view[data-density='dense'] .mk-body,
+.markets-view[data-density='maximum'] .mk-body {
+  gap: 9px;
+}
+
+.markets-view[data-density='dense'] .mk-row,
+.markets-view[data-density='dense'] .mk-results li {
+  padding-top: 4px;
+  padding-bottom: 4px;
+  font-size: 12px;
+}
+
+.markets-view[data-density='maximum'] .mk-row,
+.markets-view[data-density='maximum'] .mk-results li {
+  padding-top: 2px;
+  padding-bottom: 2px;
+  font-size: 11.5px;
+}
+
+.markets-view[data-density='maximum'] .mk-side,
+.markets-view[data-density='dense'] .mk-side {
+  gap: 7px;
+}
+
+@media (max-width: 760px) {
+  .mk-onboard {
+    padding: 14px 16px 16px;
+  }
+
+  .mk-onboard-body h1 {
+    font-size: 18px;
+  }
+
+  .mk-onboard-cards,
+  .mk-onboard-cards.is-levels,
+  .mk-onboard-cards.is-many {
+    grid-template-columns: 1fr;
+  }
+
+  .mk-onboard-results {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Sections that are one click away rather than in the header. Reordering, never removing. */
+.mk-more {
+  position: relative;
+  display: inline-flex;
+}
+
+.mk-more-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  min-width: 150px;
+  padding: 4px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--glass);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(14px);
+}
+
+.mk-more-menu button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 9px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mk-more-menu button:hover {
+  background: var(--hover);
+}
+
+.mk-more-menu button.on {
+  color: var(--cyan);
+}
+
+.mk-chart-jump {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill, 999px);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.mk-chart-jump:hover {
+  color: var(--cyan);
+  border-color: var(--cyan-dim);
+}
+
+.mk-learn-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  color: var(--cyan);
+}
+
+/* Markets Experience, in Settings. The same preferences the first-launch questions set. */
+.mk-xp h4 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mk-xp-levels {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 7px;
+  margin: 10px 0;
+}
+
+.mk-xp-mine {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border: 1px solid var(--cyan-dim);
+  border-radius: var(--radius-pill, 999px);
+  font-size: 9.5px;
+  font-style: normal;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--cyan);
+}
+
+.mk-xp-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 11px 13px;
+  margin-bottom: 10px;
+  border: 1px solid var(--cyan-dim);
+  border-radius: 12px;
+  background: var(--cyan-fill);
+  font-size: 12px;
+}
+
+.mk-xp-confirm p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.mk-xp-confirm span {
+  display: flex;
+  gap: 7px;
+}
+
+.mk-xp-confirm button,
+.mk-xp-toggle,
+.mk-xp-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 13px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill, 999px);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.mk-xp-confirm button.mk-primary {
+  border-color: var(--cyan-dim);
+  background: var(--cyan-fill);
+}
+
+.mk-xp-actions button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.mk-xp-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 6px;
+  margin: 0 0 10px;
+}
+
+.mk-xp-summary > div {
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--pill-bg);
+}
+
+.mk-xp-summary dt {
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.mk-xp-summary dd {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  color: var(--text);
+  text-transform: capitalize;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mk-xp-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.mk-xp-field select {
+  text-transform: capitalize;
+}
+
+.mk-xp-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 4px;
+}
+
+/* ============================================================================
+ * The analysed tape, and derivatives.
+ *
+ * The pressure bar is the one piece here that must not mislead: it is drawn from the classified volume only, with the
+ * unclassified share stated beside it in words. Two colours that silently absorbed unknown volume into one side would be
+ * the easiest way to make a guess look like a measurement.
+ * ========================================================================= */
+
+.mk-seg.is-small button {
+  padding: 2px 8px;
+  font-size: 10.5px;
+}
+
+.mk-pressure {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+  padding: 8px 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--pill-bg);
+}
+
+.mk-pressure-verdict {
+  padding: 2px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill, 999px);
+  font-size: 10.5px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.mk-pressure-verdict.is-buying {
+  color: var(--green);
+  border-color: rgba(62, 229, 138, 0.4);
+}
+
+.mk-pressure-verdict.is-selling {
+  color: var(--red);
+  border-color: rgba(255, 77, 109, 0.4);
+}
+
+.mk-pressure-verdict.is-unclassified,
+.mk-pressure-verdict.is-thin {
+  color: var(--faint);
+}
+
+.mk-pressure-bar {
+  display: flex;
+  flex: 1 1 120px;
+  min-width: 90px;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--line);
+}
+
+.mk-pressure-bar i.up {
+  background: var(--green);
+}
+
+.mk-pressure-bar i.down {
+  background: var(--red);
+}
+
+.mk-pressure-figures {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+}
+
+.mk-pressure-figures b.up {
+  color: var(--green);
+}
+
+.mk-pressure-figures b.down {
+  color: var(--red);
+}
+
+.mk-pressure-caveat {
+  flex: 1 1 100%;
+  font-size: 10.5px;
+  color: var(--amber);
+}
+
+.mk-tape-stats {
+  flex-wrap: wrap;
+}
+
+.mk-tape-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.mk-tape-threshold {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.mk-tape-threshold input {
+  width: 110px;
+}
+
+.mk-tape-scroll {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.mk-tape tr.is-large td {
+  /* A large print is marked, not recoloured: the side colour still has to read. */
+  background: rgba(255, 190, 77, 0.08);
+  font-weight: 600;
+}
+
+/* ---------------------------------------------------------------- derivatives */
+
+.mk-derivs {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.mk-derivs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 9px;
+}
+
+.mk-derivs-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 11px 13px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--pill-bg);
+}
+
+.mk-derivs-card h4 {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0 0 2px;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.mk-derivs-card > strong {
+  font-family: var(--mono);
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.mk-derivs-card > strong.up {
+  color: var(--green);
+}
+
+.mk-derivs-card > strong.down {
+  color: var(--red);
+}
+
+.mk-derivs-card dl {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 6px 0 0;
+}
+
+.mk-derivs-card dl > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mk-derivs-card dt {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.mk-derivs-card dd {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--text);
+}
+
+.mk-derivs-card dd.up {
+  color: var(--green);
+}
+
+.mk-derivs-card dd.down {
+  color: var(--red);
+}
+
+.mk-derivs-card p {
+  margin: 4px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.mk-spark {
+  width: 100%;
+  height: 30px;
+  margin-top: 6px;
+}
+
+.mk-spark path {
+  fill: none;
+  stroke-width: 1.4;
+  vector-effect: non-scaling-stroke;
+}
+
+.mk-spark path.up {
+  stroke: var(--green);
+}
+
+.mk-spark path.down {
+  stroke: var(--red);
+}
+
+.mk-spark line.zero {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.mk-liq-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.mk-liq-list li {
+  display: grid;
+  grid-template-columns: auto 42px 1fr auto;
+  gap: 6px;
+  align-items: baseline;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--muted);
+}
+
+.mk-liq-list li.up b {
+  color: var(--green);
+}
+
+.mk-liq-list li.down b {
+  color: var(--red);
+}
+
+/* ============================================================================
+ * The order book.
+ *
+ * `is-stale` is the important rule: a book whose stream broke continuity keeps its levels on screen and is visibly dimmed,
+ * because they were true a moment ago and are no longer current. Hiding it would lose information; showing it unchanged
+ * would be a lie.
+ * ========================================================================= */
+
+.mk-book-warning {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  padding: 7px 11px;
+  border: 1px solid rgba(255, 190, 77, 0.35);
+  border-radius: 10px;
+  background: rgba(255, 190, 77, 0.1);
+  color: var(--amber);
+  font-size: 11.5px;
+}
+
+.mk-book-touch b.up {
+  color: var(--green);
+}
+
+.mk-book-touch b.down {
+  color: var(--red);
+}
+
+.mk-book-lean {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+  padding: 7px 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--pill-bg);
+  font-size: 11px;
+}
+
+.mk-book-lean > span:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mk-book-ladder {
+  min-height: 0;
+  overflow-y: auto;
+  transition: opacity 160ms ease;
+}
+
+[data-motion='reduced'] .mk-book-ladder {
+  transition: none;
+}
+
+.mk-book-ladder.is-stale {
+  /* Dimmed, not hidden. The levels were true a moment ago; the warning above says they are not current. */
+  opacity: 0.5;
+}
+
+.mk-book-ladder table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.mk-book-ladder th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 4px 8px;
+  background: var(--bg-center);
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+  text-align: right;
+}
+
+.mk-book-ladder th:first-child {
+  text-align: left;
+}
+
+.mk-book-ladder td {
+  position: relative;
+  padding: 2px 8px;
+  text-align: right;
+  color: var(--muted-strong);
+  white-space: nowrap;
+}
+
+.mk-book-ladder td:first-child {
+  text-align: left;
+  font-weight: 600;
+}
+
+.mk-book-ladder td.up {
+  color: var(--green);
+}
+
+.mk-book-ladder td.down {
+  color: var(--red);
+}
+
+.mk-book-bar {
+  width: 70px;
+  padding: 0 !important;
+}
+
+.mk-book-bar i {
+  display: block;
+  height: 10px;
+  border-radius: 2px;
+  opacity: 0.22;
+}
+
+.mk-book-bar i.up {
+  background: var(--green);
+}
+
+.mk-book-bar i.down {
+  background: var(--red);
+}
+
+.mk-book-ladder tbody.mid td {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 8px;
+  border-top: 1px solid var(--line-strong);
+  border-bottom: 1px solid var(--line-strong);
+  background: var(--pill-bg);
+  text-align: left;
+}
+
+.mk-book-ladder tbody.mid b {
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.mk-depth-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mk-depth-chart svg {
+  width: 100%;
+  height: 72px;
+}
+
+.mk-depth-chart path {
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.mk-depth-chart path.up {
+  fill: rgba(62, 229, 138, 0.18);
+  stroke: var(--green);
+}
+
+.mk-depth-chart path.down {
+  fill: rgba(255, 77, 109, 0.18);
+  stroke: var(--red);
+}
+
+.mk-depth-axis {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  color: var(--faint);
+}
+
+.mk-depth-axis i {
+  font-style: normal;
+}
+
+/* A market kept. The star is an outline until it is one. */
+.mk-fav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+}
+
+.mk-fav:hover {
+  color: var(--amber);
+  background: var(--hover);
+}
+
+.mk-fav.on {
+  color: var(--amber);
+}
+
+.mk-fav.on svg {
+  fill: currentColor;
+}
+
+/* ---------------------------------------------------------------- Orbis Pages
+
+   The library and the frame a Page sits in. Every colour here is a token rather than a literal, so a Page inherits the
+   theme somebody chose instead of carrying its own idea of what Orbis looks like. */
+
+.pages-view {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.pages-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--pill-border);
+  border-radius: 999px;
+  background: var(--pill-bg);
+  color: var(--muted);
+}
+
+.pages-search input {
+  width: 190px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  outline: none;
+}
+
+.pages-search input::placeholder {
+  color: var(--faint);
+}
+
+.pages-body {
+  display: grid;
+  grid-template-columns: minmax(150px, 210px) 1fr;
+  gap: 16px;
+  min-height: 0;
+  overflow: hidden;
+  padding: 12px 16px 16px;
+}
+
+/* Narrow windows stack rather than squeezing the subject list into unreadability. */
+@media (max-width: 860px) {
+  .pages-body {
+    grid-template-columns: 1fr;
+  }
+
+  .pages-side {
+    flex-direction: row;
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+}
+
+.pages-side {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.pages-side-head {
+  margin: 14px 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.pages-cat,
+.pages-recent {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pages-cat:hover,
+.pages-recent:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.pages-cat.active {
+  border-color: var(--cyan-dim);
+  background: var(--cyan-fill);
+  color: var(--text);
+}
+
+.pages-cat-name {
+  text-transform: capitalize;
+}
+
+.pages-count {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.pages-main {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.pages-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.pages-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: var(--glass);
+}
+
+.pages-card:hover {
+  border-color: var(--line-strong);
+}
+
+.pages-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pages-card-head h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.pages-card-title {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pages-card-title:hover {
+  color: var(--cyan);
+}
+
+.pages-card-desc {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.pages-card-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pages-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border: 1px solid var(--pill-border);
+  border-radius: 999px;
+  background: var(--pill-bg);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  text-transform: capitalize;
+}
+
+.pages-url {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--faint);
+  overflow-wrap: anywhere;
+}
+
+.pages-why {
+  margin: 0;
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.pages-empty {
+  margin: 24px 0;
+  color: var(--muted);
+}
+
+.pages-unavailable {
+  margin-top: 20px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--pill-bg);
+}
+
+.pages-unavailable h3 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--amber);
+}
+
+.pages-unavailable p {
+  margin: 4px 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ---- what a Page may do */
+
+.pages-permissions {
+  margin: 0 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: var(--glass);
+}
+
+.pages-permissions h4 {
+  margin: 12px 0 4px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.pages-perm {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 5px 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.pages-perm.allow {
+  color: var(--text);
+}
+
+.pages-perm.allow > svg {
+  color: var(--green);
+}
+
+.pages-perm.prompt > svg,
+.pages-perm.deny > svg,
+.pages-perm.unavailable > svg {
+  color: var(--faint);
+}
+
+.pages-perm-why {
+  flex: 1 1 220px;
+  color: var(--faint);
+}
+
+.pages-limitation {
+  margin: 4px 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ---- a Page's own surface */
+
+.pages-page {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.page-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 760px;
+}
+
+.page-row {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.page-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 110px;
+}
+
+.page-field.wide {
+  flex: 1 1 320px;
+}
+
+.page-field.narrow {
+  max-width: 96px;
+}
+
+.page-field > span {
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.page-field input {
+  padding: 7px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+  outline: none;
+}
+
+.page-field input:focus-visible {
+  border-color: var(--cyan);
+}
+
+.page-arrow {
+  margin-bottom: 9px;
+  color: var(--faint);
+}
+
+.page-answer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid var(--cyan-dim);
+  border-radius: 10px;
+  background: var(--cyan-fill);
+  font-size: 15px;
+  color: var(--text);
+}
+
+.page-answer code {
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.page-answer-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.page-label {
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.page-problem {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--red);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--red);
+}
+
+.page-note {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--faint);
+}
+
+.page-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.page-chip {
+  padding: 3px 9px;
+  border: 1px solid var(--pill-border);
+  border-radius: 999px;
+  background: var(--pill-bg);
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.page-chip:hover {
+  border-color: var(--cyan-dim);
+  color: var(--text);
+}
+
+.page-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.page-table th,
+.page-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+
+.page-table th {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.page-table td {
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.page-steps {
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--pill-bg);
+  font-size: 12px;
+}
+
+.page-steps summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.page-steps p {
+  margin: 6px 0;
+  color: var(--muted);
+}
+
+/* ---------------------------------------------------------------- Pages: the newer tools
+
+   Plots, tables, statistics and the notes that travel with them. The notes are styled as content rather than as a
+   footnote on purpose: an engine's caveat is the difference between a number somebody can use and one that will
+   mislead them, so it is given the same weight on screen as the number it belongs to. */
+
+.page-field textarea {
+  padding: 7px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--pill-bg);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.5;
+  resize: vertical;
+  outline: none;
+}
+
+.page-field textarea:focus-visible {
+  border-color: var(--cyan);
+}
+
+.page-chip.on {
+  border-color: var(--cyan-dim);
+  background: var(--cyan-fill);
+  color: var(--text);
+}
+
+.page-notes {
+  display: flex;
+  gap: 8px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--cyan-dim);
+  border-radius: 8px;
+  background: var(--pill-bg);
+  color: var(--muted);
+}
+
+.page-notes > svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--cyan-dim);
+}
+
+.page-notes ul {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.page-notes li + li {
+  margin-top: 4px;
+}
+
+.page-note > svg {
+  vertical-align: -2px;
+  margin-right: 4px;
+}
+
+.page-problem > svg {
+  vertical-align: -2px;
+  margin-right: 4px;
+}
+
+/* ---- the plot */
+
+.page-plot {
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--pill-bg);
+}
+
+.page-plot-grid {
+  stroke: var(--grid);
+  stroke-width: 1;
+}
+
+.page-plot-axis {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
+
+.page-plot-label {
+  fill: var(--faint);
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.page-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.page-legend i {
+  display: inline-block;
+  width: 10px;
+  height: 2px;
+  border-radius: 1px;
+}
+
+/* ---- statistics */
+
+.page-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 1px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.page-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 12px;
+  background: var(--pill-bg);
+}
+
+.page-stat span {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.page-stat strong {
+  font-family: var(--mono);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.page-result {
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--pill-bg);
+}
+
+.page-result h4 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--muted-strong);
+}
+
+.page-result p {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.page-result p.page-note {
+  color: var(--faint);
+}
+
+/* ---- tables */
+
+.page-table-wrap {
+  max-height: 380px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.page-table-wrap .page-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bar-bg);
+  backdrop-filter: blur(8px);
+}
+
+.page-table th span {
+  display: block;
+  color: var(--muted-strong);
+}
+
+.page-table th em {
+  display: block;
+  font-style: normal;
+  font-family: var(--mono);
+  font-size: 9px;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--faint);
+}
+
+/* The four kinds of nothing, shown as four different things rather than all as blank. A cell Orbis could not read
+   must not look like a cell that was empty, because they mean opposite things about the data. */
+
+.page-cell-missing {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.page-cell-empty {
+  font-size: 10px;
+  font-style: italic;
+  color: var(--faint);
+}
+
+.page-cell-invalid {
+  color: var(--amber);
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+.page-cell-null {
+  color: var(--faint);
+}
+
+/* ================================================================ Markets: the panels that had engines and no screens
+
+   Seven pieces: the chart's drawing toolbar, the comparison view, the panel workspace, the margin panel,
+   walk-forward and Monte Carlo in the backtest panel, the trigger editor, and the screener's groups.
+
+   Everything here reuses the tokens the rest of Markets already uses, so a caveat in the margin panel and a caveat in
+   the tape panel look like the same kind of thing -- which they are. */
+
+/* ---- shared, because several of these panels needed the same three things */
+
+.mk-problem {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--red);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--red) 8%, transparent);
+  color: var(--red);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+.mk-problem > svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+.mk-up {
+  color: var(--green);
+}
+
+.mk-down {
+  color: var(--red);
+}
+
+/* A labelled figure. Sits inside the existing `.mk-stats` row, which is a flex strip. */
+.mk-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mk-stat > span {
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.mk-stat > b {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.mk-danger:hover {
+  color: var(--red);
+  border-color: var(--red);
+}
+
+.mk-primary {
+  border-color: var(--cyan-dim);
+  background: var(--cyan-fill);
+  color: var(--text);
+}
+
+.mk-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.mk-search-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 220px;
+  padding: 5px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--pill-bg);
+  color: var(--faint);
+}
+
+.mk-search-field input {
+  flex: 1;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  outline: none;
+}
+
+/* ---- 1. the drawing toolbar */
+
+.mk-draw {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+}
+
+.mk-draw-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--pill-bg);
+  width: fit-content;
+}
+
+.mk-draw-tools button {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 5px 7px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.mk-draw-tools button:hover {
+  background: var(--line);
+  color: var(--text);
+}
+
+.mk-draw-tools button.on {
+  background: var(--cyan-fill);
+  color: var(--cyan);
+}
+
+.mk-draw-tools button b {
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.mk-draw-divider {
+  width: 1px;
+  height: 16px;
+  margin: 0 3px;
+  background: var(--line-strong);
+}
+
+.mk-draw-hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.mk-draw-list {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--pill-bg);
+}
+
+.mk-draw-list header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.mk-draw-bulk {
+  display: flex;
+  gap: 4px;
+}
+
+.mk-draw-bulk button {
+  padding: 3px 8px;
+  border: 1px solid var(--pill-border);
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  font-size: 10.5px;
+  cursor: pointer;
+}
+
+.mk-draw-list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 200px;
+  overflow: auto;
+}
+
+.mk-draw-list li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.mk-draw-list li.on {
+  background: var(--cyan-fill);
+  border-radius: 6px;
+}
+
+.mk-draw-list li > button {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 3px 5px;
+  border-radius: 6px;
+}
+
+.mk-draw-pick {
+  display: flex !important;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  font-size: 11.5px;
+}
+
+.mk-draw-pick em {
+  font-style: normal;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mk-draw-edit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--pill-bg);
+}
+
+.mk-draw-swatches {
+  display: flex;
+  gap: 4px;
+}
+
+.mk-draw-swatches button {
+  width: 16px;
+  height: 16px;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  padding: 0;
+}
+
+.mk-draw-swatches button.on {
+  border-color: var(--text);
+}
+
+.mk-draw-label {
+  flex: 1 1 160px;
+  padding: 4px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: var(--bar-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+}
+
+/* ---- 2. the comparison view */
+
+.mk-compare {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mk-compare-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.mk-compare-chips {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.mk-compare-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--pill-bg);
+  font-size: 11px;
+  color: var(--text);
+}
+
+.mk-compare-chip i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.mk-compare-chip button {
+  border: 0;
+  background: none;
+  color: var(--faint);
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+}
+
+.mk-compare-chip button:hover {
+  color: var(--red);
+}
+
+.mk-compare-intervals {
+  display: flex;
+  gap: 3px;
+}
+
+.mk-compare-intervals button {
+  padding: 3px 9px;
+  border: 1px solid var(--pill-border);
+  border-radius: 999px;
+  background: var(--pill-bg);
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.mk-compare-intervals button.on {
+  border-color: var(--cyan-dim);
+  background: var(--cyan-fill);
+  color: var(--text);
+}
+
+.mk-compare-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  position: relative;
+}
+
+.mk-compare-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 20;
+  margin: 4px 0 0;
+  padding: 4px;
+  list-style: none;
+  min-width: 260px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--bar-bg);
+  backdrop-filter: blur(10px);
+}
+
+.mk-compare-results button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--text);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mk-compare-results button:hover {
+  background: var(--line);
+}
+
+.mk-compare-chart {
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--pill-bg);
+}
+
+.mk-compare-grid {
+  stroke: var(--grid);
+  stroke-width: 1;
+}
+
+/* The 100 line: solid, because it is what everything else is measured from. */
+.mk-compare-base {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
+
+.mk-compare-label {
+  fill: var(--faint);
+  font-family: var(--mono);
+  font-size: 9.5px;
+}
+
+.mk-compare-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  vertical-align: -1px;
+}
+
+.mk-compare-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 18px;
+  justify-content: center;
+}
+
+.mk-corr h4 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--muted-strong);
+}
+
+.mk-corr-table td {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- 3. the panel workspace */
+
+.mk-body.is-workspace {
+  display: block;
+  padding: 10px;
+}
+
+.mk-ws {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  min-height: 0;
+}
+
+.mk-ws-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--faint);
+}
+
+.mk-ws-spacer {
+  flex: 1;
+}
+
+.mk-ws-tree {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.mk-ws-split {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  gap: 0;
+}
+
+.mk-ws-split.is-row {
+  flex-direction: row;
+}
+
+.mk-ws-split.is-column {
+  flex-direction: column;
+}
+
+.mk-ws-pane {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* The grab area is wider than the line, because a one-pixel target is one nobody can hit. */
+.mk-ws-divider {
+  position: absolute;
+  z-index: 5;
+  background: transparent;
+}
+
+.mk-ws-divider.is-row {
+  top: 0;
+  right: -3px;
+  width: 7px;
+  height: 100%;
+  cursor: col-resize;
+}
+
+.mk-ws-divider.is-column {
+  left: 0;
+  bottom: -3px;
+  height: 7px;
+  width: 100%;
+  cursor: row-resize;
+}
+
+.mk-ws-divider:hover,
+.mk-ws-divider:focus-visible {
+  background: var(--cyan-glow-soft);
+  outline: none;
+}
+
+.mk-ws-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  margin: 3px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--pill-bg);
+  overflow: hidden;
+}
+
+.mk-ws-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bar-bg);
+}
+
+.mk-ws-head select {
+  padding: 2px 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+}
+
+.mk-ws-pin {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--pill-border);
+  border-radius: 999px;
+  background: none;
+  color: var(--faint);
+  font-size: 10.5px;
+  cursor: pointer;
+}
+
+.mk-ws-pin.on {
+  border-color: var(--cyan-dim);
+  color: var(--cyan);
+}
+
+.mk-ws-menu {
+  position: absolute;
+  top: 100%;
+  left: 60px;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  min-width: 170px;
+  padding: 4px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--bar-bg);
+  backdrop-filter: blur(10px);
+}
+
+.mk-ws-menu button {
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--muted);
+  font-size: 11.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mk-ws-menu button:hover {
+  background: var(--line);
+  color: var(--text);
+}
+
+.mk-ws-menu button.on {
+  color: var(--cyan);
+}
+
+.mk-ws-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px;
+}
+
+.mk-ws-empty {
+  display: block;
+  padding: 16px;
+  text-align: center;
+  line-height: 1.6;
+}
+
+.mk-mode-workspace {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* ---- 4. the margin panel */
+
+.mk-margin {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Above the switch, not below it. Somebody reading downward meets it before the control. */
+.mk-margin-warn {
+  display: flex;
+  gap: 9px;
+  padding: 10px 12px;
+  border: 1px solid var(--amber);
+  border-left-width: 3px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--amber) 7%, transparent);
+  color: var(--muted-strong);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+.mk-margin-warn > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--amber);
+}
+
+.mk-margin-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mk-margin-arm {
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--pill-bg);
+}
+
+.mk-margin-arm p {
+  margin: 0 0 8px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.mk-margin-arm div {
+  display: flex;
+  gap: 6px;
+}
+
+.mk-margin-arm button {
+  padding: 5px 12px;
+  border: 1px solid var(--pill-border);
+  border-radius: 8px;
+  background: var(--pill-bg);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.mk-margin-lever {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-width: 460px;
+}
+
+.mk-margin-lever input[type='range'] {
+  accent-color: var(--cyan);
+}
+
+.mk-margin-health {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-left-width: 3px;
+  border-radius: 10px;
+  background: var(--pill-bg);
+}
+
+.mk-margin-health strong {
+  display: block;
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.mk-margin-health span {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.mk-margin-health.is-none {
+  border-left-color: var(--line-strong);
+}
+
+.mk-margin-health.is-comfortable {
+  border-left-color: var(--green);
+}
+
+.mk-margin-health.is-comfortable > svg {
+  color: var(--green);
+}
+
+.mk-margin-health.is-tight {
+  border-left-color: var(--amber);
+}
+
+.mk-margin-health.is-tight > svg {
+  color: var(--amber);
+}
+
+.mk-margin-health.is-critical {
+  border-left-color: var(--red);
+}
+
+.mk-margin-health.is-critical > svg {
+  color: var(--red);
+}
+
+/* ---- 5. walk-forward and Monte Carlo */
+
+.mk-validate {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--pill-bg);
+}
+
+.mk-validate h5 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted-strong);
+}
+
+.mk-validate-head {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+/* The out-of-sample figure, alone and large. If only one number is read it has to be this one. */
+.mk-validate-headline {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.mk-validate-headline > span {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.mk-validate-headline > b {
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.mk-validate-headline > small {
+  font-size: 10.5px;
+}
+
+/* Above the numbers, because it says this is not a forecast. */
+.mk-validate-note {
+  margin: 0;
+  padding: 8px 11px;
+  border: 1px solid var(--line-strong);
+  border-left: 3px solid var(--cyan-dim);
+  border-radius: 9px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.mk-carlo {
+  width: 100%;
+  height: auto;
+}
+
+.mk-carlo-up {
+  fill: color-mix(in srgb, var(--green) 55%, transparent);
+}
+
+.mk-carlo-down {
+  fill: color-mix(in srgb, var(--red) 55%, transparent);
+}
+
+.mk-carlo-zero {
+  stroke: var(--text);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  opacity: 0.55;
+}
+
+.mk-carlo-label {
+  fill: var(--faint);
+  font-family: var(--mono);
+  font-size: 9.5px;
+}
+
+/* ---- 6. the trigger editor */
+
+.mk-triggers {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mk-triggers-intro {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--cyan-dim);
+  border-radius: 10px;
+  background: var(--pill-bg);
+}
+
+.mk-triggers-intro > svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--cyan);
+}
+
+.mk-triggers-intro p {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.mk-trigger-build {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--pill-bg);
+}
+
+.mk-alert-condition {
+  flex: 1;
+  min-width: 0;
+  font-size: 11.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- 7. screener groups */
+
+.mk-screen-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 4px 0 8px;
+}
+
+.mk-screen-groupmatch {
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.mk-screen-group {
+  padding: 8px 10px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--cyan) 3%, transparent);
+}
+
+.mk-screen-group > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+/* ================================================================ The Page studio
+
+   Building a Page, packaging one, and finding out why one is misbehaving. Three screens that share one arrangement:
+   the thing you act on, then what Orbis says about it. Every caveat is rendered as content rather than behind a
+   disclosure, because a caveat somebody has to think to open is one nobody reads. */
+
+.pages-studio-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 20px 28px;
+}
+
+.studio {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 1100px;
+}
+
+.studio-note {
+  display: flex;
+  gap: 9px;
+  padding: 10px 13px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--cyan-dim);
+  border-radius: 10px;
+  background: var(--pill-bg);
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.65;
+}
+
+.studio-note > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--cyan-dim);
+}
+
+.studio-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--pill-bg);
+}
+
+.studio-block h4 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.studio-block h5 {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--muted-strong);
+}
+
+/* ---- the builder */
+
+.studio-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(280px, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+@media (max-width: 1000px) {
+  .studio-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+.studio-edit,
+.studio-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--pill-bg);
+}
+
+.studio-preview {
+  position: sticky;
+  top: 0;
+}
+
+.studio-preview > header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.studio-preview > header em {
+  font-style: normal;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.studio-pill {
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 1px solid var(--red);
+  border-radius: 999px;
+  color: var(--red);
+  font-size: 10px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.studio-pill.ok {
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.studio-render {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bar-bg);
+}
+
+.studio-h {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.studio-hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 2px 0;
+}
+
+.studio-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.studio-list > li {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.studio-list > li:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.studio-list select,
+.studio-wide {
+  padding: 6px 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--bar-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+}
+
+.studio-wide {
+  width: 100%;
+  font-family: var(--mono);
+  font-size: 11.5px;
+}
+
+.studio-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* Errors and warnings sit apart. One stops the Page running and the other does not, and that is what somebody acts on. */
+.studio-problems {
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--amber);
+  border-radius: 9px;
+  background: var(--bar-bg);
+}
+
+.studio-problems.is-error {
+  border-left-color: var(--red);
+}
+
+.studio-problems h4 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 5px;
+  font-size: 11.5px;
+  color: var(--muted-strong);
+}
+
+.studio-problems p {
+  margin: 3px 0;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.studio-problems code {
+  margin-right: 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--faint);
+}
+
+/* ---- packaging */
+
+.studio-secrets {
+  padding: 9px 12px;
+  border: 1px solid var(--amber);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--amber) 7%, transparent);
+}
+
+.studio-secrets p {
+  margin: 0 0 7px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--muted-strong);
+}
+
+.studio-inspect {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--bar-bg);
+}
+
+.studio-inspect h5 {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text);
+}
+
+/* The part somebody has to read before deciding. Given the weight of content, not of a footnote. */
+.studio-decide {
+  margin: 0;
+  padding: 10px 12px 10px 28px;
+  border: 1px solid var(--cyan-dim);
+  border-radius: 9px;
+  background: var(--cyan-fill);
+  font-size: 11.5px;
+  line-height: 1.65;
+  color: var(--text);
+}
+
+.studio-decide li + li {
+  margin-top: 5px;
+}
+
+/* ---- diagnostics */
+
+.studio-diagnosis {
+  padding: 11px 13px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--bar-bg);
+}
+
+.studio-diagnosis > strong {
+  display: block;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.studio-diagnosis > p {
+  margin: 5px 0 0;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.studio-recover {
+  margin: 9px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.studio-recover li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 11.5px;
+}
+
+.studio-recover b {
+  color: var(--text);
+}
+
+.studio-recover em {
+  font-style: normal;
+  font-size: 10.5px;
+  color: var(--faint);
+}
+
+/* What a recovery costs, in the colour of a warning rather than the colour of a caption. */
+.studio-recover em.is-cost {
+  color: var(--amber);
+}
+
+.studio-findings {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.studio-findings li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 11px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--faint);
+  border-radius: 8px;
+  font-size: 11.5px;
+}
+
+.studio-findings li.is-blocker {
+  border-left-color: var(--red);
+}
+
+.studio-findings li.is-serious {
+  border-left-color: var(--amber);
+}
+
+.studio-findings b {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--faint);
+}
+
+.studio-findings span {
+  color: var(--text);
+  line-height: 1.55;
+}
+
+.studio-findings em {
+  font-style: normal;
+  color: var(--cyan);
+}
+
+/* The list that stops a clean audit reading as a certificate. Styled to be read, not skimmed past. */
+.studio-cannot {
+  margin: 0;
+  padding: 10px 12px 10px 28px;
+  border: 1px solid var(--amber);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--amber) 6%, transparent);
+  font-size: 11.5px;
+  line-height: 1.65;
+  color: var(--muted-strong);
+}
+
+.studio-cannot li + li {
+  margin-top: 5px;
+}
+
+.studio-checked summary {
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.studio-checked ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+/* ---- between Pages: who can send, and who accepts */
+
+.studio-routes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.studio-routes h5 {
+  margin: 0 0 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.studio-routes ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.studio-routes li {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bar-bg);
+  font-size: 11.5px;
+  color: var(--text);
+}
+
+.studio-routes em {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-style: normal;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--faint);
+}
+
+.studio-routes code {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--cyan);
+}
+

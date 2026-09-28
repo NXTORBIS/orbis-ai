@@ -18,10 +18,29 @@ body { display: flex; flex-direction: column; background: var(--bg); color: var(
 
 header { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); background: var(--panel); }
 .mark { width: 14px; height: 14px; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #fff, var(--accent) 55%, transparent 70%); box-shadow: 0 0 10px var(--accent); }
-.status { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 12px; }
-.status.ok::before, .status.down::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; }
+/*
+ * The runtime state, as a badge rather than a sentence.
+ *
+ * It used to be `flex: 1` holding whatever an error object said, which meant a long internal message took the whole
+ * header and squeezed the model picker and the buttons into the corner. A state has a handful of possible words, so it
+ * can be sized to them: it takes the room it needs, never grows, and the spacer beside it is what absorbs the rest.
+ */
+.status {
+  display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto;
+  max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  padding: 3px 10px 3px 8px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--bg);
+  color: var(--muted); font-size: 11.5px;
+}
+.status::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.status.ok { color: #3ee58a; border-color: color-mix(in srgb, #3ee58a 35%, var(--line)); }
 .status.ok::before { background: #3ee58a; }
+.status.warn { color: var(--amber, #ffbe4d); border-color: color-mix(in srgb, #ffbe4d 35%, var(--line)); }
+.status.warn::before { background: var(--amber, #ffbe4d); }
+.status.down { color: var(--bad); border-color: color-mix(in srgb, #ff4d6d 35%, var(--line)); }
 .status.down::before { background: var(--bad); }
+/* What actually takes the leftover room, so the badge never has to. */
+.head-gap { flex: 1 1 auto; min-width: 8px; }
 
 select, button, textarea { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; }
 select { max-width: 130px; padding: 4px 6px; }
@@ -183,7 +202,7 @@ main { flex: 1; overflow-y: auto; padding: 14px 12px; display: flex; flex-direct
 @media (forced-colors: active) { .tabs button[aria-selected="true"] { border-bottom: 4px solid Highlight; font-weight: 700; text-decoration: underline; } }
 
 /* Narrow side panel (a small window): the header wraps and the select shrinks instead of pushing New out of view. */
-@media (max-width: 480px) { header { flex-wrap: wrap; row-gap: 4px; } header select { flex: 1 1 80px; min-width: 0; max-width: 100%; } .status { flex-basis: 100%; order: 5; } }
+@media (max-width: 480px) { header { flex-wrap: wrap; row-gap: 4px; } header select { flex: 1 1 80px; min-width: 0; max-width: 100%; } .status { order: 5; } }
 
 /* ---------------------------------------------------------------- Browser account
    The Chromium browser's own account, not the one Orbis Chat uses. Everything below draws a state the browser really

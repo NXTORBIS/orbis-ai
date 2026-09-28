@@ -229,7 +229,24 @@ export function registerPageCapabilities(control: BrowserControl, resolve: PageR
       await wc.insertText(text)
       // Typed input doesn't always land (for example when the tab isn't focused); set the value directly if it didn't.
       await page.exec(asPageHandle(wc), page.fillScript(found.ref, existing + text))
-      if (p.submit) await page.pressNamedKey(asPageHandle(wc), 'Enter')
+      if (p.submit) {
+        // Quiet first, then Enter.
+        //
+        // A key event goes to whatever the page is at the moment it arrives, and a page that is still loading has no form
+        // to submit yet. Waiting costs almost nothing on a page that is already quiet.
+        //
+        // `pressNamedKey` now waits for the key to be delivered before it returns, which is the part that actually
+        // matters here -- it used to return with the key still queued, so the verification below read the page before the
+        // press had happened.
+        //
+        // Deliberately not a retry. Pressing Enter twice on a form that is not a search is a second order, a second
+        // message or a second payment, and no amount of convenience is worth that.
+        await page.settle(asPageHandle(wc), ctx.signal)
+        const fromUrl = wc.getURL()
+        await page.pressNamedKey(asPageHandle(wc), 'Enter')
+        // And wait for the submission to become a navigation, or to turn out not to be one.
+        await page.settleSubmission(asPageHandle(wc), fromUrl, ctx.signal)
+      }
       // What was typed is never part of the result (it can be private); verification reads it from the call's own parameters.
       return { ref: found.ref, existingLength: existing.length, submitted: p.submit === true }
     },

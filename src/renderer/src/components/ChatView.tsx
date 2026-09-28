@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useLayoutEffect, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ArrowDown, HatGlasses } from 'lucide-react'
 import type { Attachment, Conversation, Settings } from '../../../shared/types'
 import type { NoticeKind, StreamState } from '../App'
@@ -8,6 +8,17 @@ import MemoryOffer from './MemoryOffer'
 import ChatRail from './ChatRail'
 import Greeting from './Greeting'
 import MessageItem from './MessageItem'
+import type { Anchored, ChatScrollState, ScrollAction, Viewport } from '../../../shared/chatScroll'
+import {
+  jumpVisible,
+  keepAnchored,
+  newChatScrollState,
+  onJumpPressed,
+  onLayoutChanged,
+  onRendered,
+  onScrolled,
+  settled
+} from '../../../shared/chatScroll'
 
 interface Props {
   conversation?: Conversation
@@ -46,22 +57,166 @@ export default function ChatView(props: Props): React.JSX.Element {
   const { conversation, stream, settings } = props
   const messages = conversation?.messages ?? []
   const scrollRef = useRef<HTMLDivElement>(null)
-  const stickToBottomRef = useRef(true)
+  /**
+   * When Orbis may move the page.
+   *
+   * Every decision is in `shared/chatScroll.ts`, which knows nothing about the DOM and is tested on its own. This is
+   * the part that measures the scroller and carries the answers out -- deliberately the smaller half, because the
+   * deciding is what used to be wrong.
+   */
+  const scroll = useRef<ChatScrollState>(newChatScrollState())
   const [showJump, setShowJump] = useState(false)
+  const showJumpRef = useRef(false)
+  showJumpRef.current = showJump
 
-  // Follow streaming output only while the user hasn't scrolled up.
+  /**
+   * The message the reader is looking at, and where it sat.
+   *
+   * Kept current by everything that moves the scroller, not just by the last layout change -- otherwise it would say
+   * the reader was wherever they happened to be when an image last loaded, and putting them back "where they were"
+   * would move them somewhere they had left.
+   */
+  const was = useRef<Anchored & { id: string | null }>({ scrollTop: 0, anchorTop: 0, id: null })
+
+  /**
+   * The topmost message still on screen.
+   *
+   * That is the one whose movement the reader would notice. Found by walking from the top, which is cheap because it
+   * stops at the first one and the messages are in order.
+   */
+  const anchorOf = useCallback((el: HTMLElement): { id: string | null; anchorTop: number } => {
+    const top = el.scrollTop
+    for (const node of Array.from(el.querySelectorAll<HTMLElement>('[data-msg-id]'))) {
+      if (node.offsetTop + node.offsetHeight > top) {
+        return { id: node.dataset.msgId ?? null, anchorTop: node.offsetTop }
+      }
+    }
+    return { id: null, anchorTop: 0 }
+  }, [])
+
+  const measure = useCallback(
+    (el: HTMLElement): Viewport => {
+      const anchor = anchorOf(el)
+      was.current = { scrollTop: el.scrollTop, anchorTop: anchor.anchorTop, id: anchor.id }
+      return { scrollTop: el.scrollTop, scrollHeight: el.scrollHeight, clientHeight: el.clientHeight }
+    },
+    [anchorOf]
+  )
+
+  /**
+   * Carries out one decision, and records where the scroller ended up.
+   *
+   * Recording it is what lets the scroll event this causes be recognised as Orbis's own rather than the person's --
+   * without which every move Orbis made would be undone by its own echo a frame later.
+   */
+  /**
+   * Writes the mode onto the scroller.
+   *
+   * The state itself is a ref, so that a wheel turn does not render the conversation -- but a state nothing can see is
+   * a state nothing can check. One attribute makes it readable by a test, by the styles, and by anybody wondering why
+   * the page did or did not move.
+   */
+  const reflect = useCallback((el: HTMLElement): void => {
+    el.dataset.follow = scroll.current.mode
+  }, [])
+
+  const perform = useCallback((el: HTMLElement, action: ScrollAction): void => {
+    reflect(el)
+    if (action.kind === 'none') return
+    if (action.kind === 'toTurn') {
+      el.querySelector(`[data-msg-id="${CSS.escape(action.messageId)}"]`)?.scrollIntoView({ block: 'start' })
+    } else if (action.smooth) {
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+    } else {
+      el.scrollTop = el.scrollHeight
+    }
+    // Read back rather than assumed: a smooth scroll has not arrived yet, and `scrollIntoView` lands where the layout
+    // allows rather than where it was asked to.
+    scroll.current = settled(scroll.current, el.scrollTop)
+    const now = measure(el)
+    reflect(el)
+    // The button is decided from where the scroller now is, not left to the scroll event this may or may not produce:
+    // a move to where it already was fires nothing, and a move Orbis made is ignored as its own echo. Without this the
+    // way back would stay on screen after the very press that made it unnecessary.
+    setShowJump((shown) => jumpVisible(now, shown))
+  }, [measure, reflect])
+
   useLayoutEffect(() => {
     const el = scrollRef.current
-    if (el && stickToBottomRef.current) el.scrollTop = el.scrollHeight
-  }, [conversation])
+    if (!el) return
+    const { state, action } = onRendered(scroll.current, {
+      conversationId: conversation?.id ?? null,
+      lastUserId: messages.findLast((m) => m.role === 'user')?.id ?? null
+    })
+    scroll.current = state
+    perform(el, action)
+  }, [conversation, messages, perform])
 
-  const onScroll = (): void => {
+  /**
+   * The page changing shape for reasons that are not new messages: the window resizing, the sidebar opening, an image
+   * finishing loading, a code block being highlighted.
+   *
+   * A follower is kept at the end. A reader is put back where they were, by the number of pixels that appeared above
+   * them -- which is what stops the thing they are reading sliding out from under them.
+   */
+  useEffect(() => {
     const el = scrollRef.current
     if (!el) return
-    const distance = el.scrollHeight - el.scrollTop - el.clientHeight
-    stickToBottomRef.current = distance < 80
-    setShowJump(distance > 240)
-  }
+    measure(el)
+    const observer = new ResizeObserver(() => {
+      const before = was.current
+      const action = onLayoutChanged(scroll.current)
+      if (action.kind === 'none') {
+        // Only the same message can be compared with itself. If the one the reader was looking at has gone -- a
+        // conversation switched, a message deleted -- there is nothing to hold still and nothing is moved.
+        const node = before.id
+          ? el.querySelector<HTMLElement>(`[data-msg-id="${CSS.escape(before.id)}"]`)
+          : null
+        const next = node
+          ? keepAnchored(before, { anchorTop: node.offsetTop }, el.scrollHeight - el.clientHeight)
+          : null
+        if (next !== null) {
+          el.scrollTop = next
+          scroll.current = settled(scroll.current, el.scrollTop)
+        }
+      } else {
+        perform(el, action)
+      }
+      measure(el)
+    })
+    observer.observe(el)
+    // The content, not just the box: a code block growing changes the scroll height without changing the scroller.
+    for (const child of Array.from(el.children)) observer.observe(child)
+    // And children that arrive later, which is most of them: a message added after this ran would otherwise grow
+    // unobserved, and the reader would be moved by something nothing was watching.
+    const watcher = new MutationObserver((changes) => {
+      for (const change of changes) {
+        for (const added of Array.from(change.addedNodes)) {
+          if (added instanceof Element) observer.observe(added)
+        }
+      }
+    })
+    watcher.observe(el, { childList: true })
+    return () => {
+      watcher.disconnect()
+      observer.disconnect()
+    }
+  }, [measure, perform, conversation?.id])
+
+  /**
+   * A scroll happened. Whose it was is decided by position, then acted on.
+   *
+   * The state is a ref rather than React state so that a wheel turn does not render the conversation. Only the jump
+   * button's visibility is state, and only when it actually changes.
+   */
+  const onScroll = useCallback((): void => {
+    const el = scrollRef.current
+    if (!el) return
+    const outcome = onScrolled(scroll.current, measure(el), showJumpRef.current)
+    scroll.current = outcome.state
+    reflect(el)
+    if (outcome.showJump !== showJumpRef.current) setShowJump(outcome.showJump)
+  }, [measure, reflect])
 
   const messagesRef = useRef(messages)
   messagesRef.current = messages
@@ -94,10 +249,7 @@ export default function ChatView(props: Props): React.JSX.Element {
       quickPromptsOpen={props.quickPromptsOpen}
       onQuickPromptsChange={props.onQuickPromptsChange}
       onModelChange={props.onModelChange}
-      onSend={(text, attachments) => {
-        stickToBottomRef.current = true
-        return props.onSend(text, attachments)
-      }}
+      onSend={(text, attachments) => props.onSend(text, attachments)}
       onCommand={props.onCommand}
       onStop={props.onStop}
       onNotify={props.onNotify}
@@ -156,7 +308,6 @@ export default function ChatView(props: Props): React.JSX.Element {
                 canEdit={!stream}
                 canSuggest
                 onSuggest={(text) => {
-                  stickToBottomRef.current = true
                   props.onSend(text, [])
                 }}
                 onRegenerate={props.onRegenerate}
@@ -178,8 +329,14 @@ export default function ChatView(props: Props): React.JSX.Element {
           className="jump-btn glass"
           title="Scroll to bottom"
           onClick={() => {
-            stickToBottomRef.current = true
-            scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
+            const el = scrollRef.current
+            if (!el) return
+            // Asked for, so it is given -- and from here the newest output is followed until they leave again.
+            // Instantly for somebody who has asked for less movement; the journey is the only part that is optional.
+            const reducedMotion = document.documentElement.dataset.motion === 'reduced'
+            const { state, action } = onJumpPressed(scroll.current, reducedMotion)
+            scroll.current = state
+            perform(el, action)
           }}
         >
           <ArrowDown size={15} />

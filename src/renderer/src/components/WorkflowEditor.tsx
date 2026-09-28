@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
+  Activity,
   ArrowDown,
   ArrowLeft,
   ArrowUp,
@@ -26,6 +27,7 @@ import type { NoticeKind } from '../App'
 import { newId } from '../lib/utils'
 import { branches, copyStep, findStep, insertStep, moveStep, newStep, removeStep, STEP_TYPES, stepSummary, updateStep } from '../lib/workflowSteps'
 import { LiveRun, RunSummaryView } from './WorkflowRunPanel'
+import WorkflowInsights from './WorkflowInsights'
 
 interface Props {
   workflowId: string
@@ -36,7 +38,7 @@ interface Props {
   onRun(workflow: Workflow, debug: boolean): void
 }
 
-type Tab = 'steps' | 'settings' | 'plan' | 'history' | 'versions'
+type Tab = 'steps' | 'settings' | 'plan' | 'history' | 'versions' | 'insights'
 
 /** A JSON value edited as text; applied when the text is valid JSON. */
 function JsonField({ label, value, onChange, rows = 3, hint }: { label: string; value: unknown; onChange(value: unknown): void; rows?: number; hint?: string }): React.JSX.Element {
@@ -530,11 +532,17 @@ export default function WorkflowEditor({ workflowId, runs, records, onBack, onNo
     if (!change.trim()) return
     setDrafting(true)
     try {
-      const updated = await window.api.draftWorkflow(change, dirty ? undefined : workflow.id)
+      const { workflow: updated, issues } = await window.api.draftWorkflow(change, dirty ? undefined : workflow.id)
       // The change comes back as unsaved edits to review; nothing is saved or run.
       setWorkflow(dirty ? { ...workflow, steps: updated.steps, inputs: updated.inputs, outputs: updated.outputs } : { ...updated, id: workflow.id })
       setChange('')
-      onNotify('Orion updated the steps. Review them, then save.')
+      const broken = issues.filter((i) => i.level === 'error')
+      onNotify(
+        broken.length
+          ? `Orion changed the steps, but ${broken.length} will not run as written: ${broken[0].message}`
+          : 'Orion updated the steps. Review them, then save.',
+        broken.length ? 'error' : undefined
+      )
     } catch (err) {
       onNotify(err instanceof Error ? err.message : String(err), 'error')
     } finally {
@@ -579,7 +587,8 @@ export default function WorkflowEditor({ workflowId, runs, records, onBack, onNo
             ['settings', 'Settings', Settings2],
             ['plan', 'Plan', CircleCheck],
             ['history', 'History', History],
-            ['versions', 'Versions', Undo2]
+            ['versions', 'Versions', Undo2],
+            ['insights', 'Insights', Activity]
           ] as const
         ).map(([id, label, Icon]) => (
           <button key={id} type="button" className={`wf-tab${tab === id ? ' active' : ''}`} aria-pressed={tab === id} onClick={() => setTab(id)}>
@@ -880,6 +889,15 @@ export default function WorkflowEditor({ workflowId, runs, records, onBack, onNo
             </div>
             <div className="wf-col wf-col-props">{openRun && history.find((h) => h.runId === openRun) ? <RunSummaryView summary={history.find((h) => h.runId === openRun)!} /> : <p className="wf-muted">Choose a run to see each step.</p>}</div>
           </>
+        )}
+
+        {/* What the runs actually show: how it is doing, whether it still fits this Orbis, and what is worth changing. */}
+        {tab === 'insights' && saved && (
+          <WorkflowInsights
+            workflow={saved}
+            onNotify={onNotify}
+            onChanged={() => void window.api.getWorkflow(workflowId).then((w) => { if (w) { setWorkflow(w); setSaved(w) } })}
+          />
         )}
 
         {tab === 'versions' && (

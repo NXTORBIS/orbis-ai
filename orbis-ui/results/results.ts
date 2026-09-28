@@ -8,8 +8,9 @@ import type { SavedSearchSummary } from '../../src/shared/searchSessions.ts'
 import { saidCount, saidDuration } from '../../src/shared/searchProviders.ts'
 // @ts-expect-error the helper client is plain JavaScript shared with the side panel
 import { call, HelperDown } from '../panel/helper.js'
-// @ts-expect-error the orb is plain JavaScript shared with the new tab page
-import { mountOrb } from '../panel/orb.js'
+import { mountTray, pinButton, syncPins } from './tray.ts'
+import { renderComposedPage } from './modules.ts'
+import type { ComposedPage } from './modules.ts'
 
 /**
  * Orbis Search, as the page a search in the Orbis browser lands on. It is the browser's default search engine (`chrome://orbis-search/#q=…`),
@@ -70,6 +71,9 @@ const PATHS: Record<string, string> = {
   close: 'M18 6L6 18M6 6l12 12',
   trash: 'M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6',
   prev: 'M15 18l-6-6 6-6',
+  lens: 'M12 9.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5M4 9V6a2 2 0 0 1 2-2h3M15 4h3a2 2 0 0 1 2 2v3M20 15v3a2 2 0 0 1-2 2h-3M9 20H6a2 2 0 0 1-2-2v-3',
+  more: 'M12 5.5v.01M12 12v.01M12 18.5v.01',
+  bookmark: 'M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z',
   next: 'M9 18l6-6-6-6',
   play: 'M7 4l13 8-13 8z',
   up: 'M12 19V5M5 12l7-7 7 7',
@@ -144,14 +148,83 @@ for (const name of VERTICALS) {
   nav.append(a)
 }
 
+// The space beside the verticals is the one part of this page that outlives the vertical you are looking at, which is
+// exactly what a tray holding results from several of them needs.
+// The tray is an extra; searching is what this page is for. Kept apart on purpose: a throw in here used to stop the
+// script before `search()` at the foot of this file ever ran, and the page sat on its placeholder "Searching…" for
+// every query, on every vertical, with nothing said about why.
+try {
+  mountTray($('verticals').parentElement ?? $('verticals'), toast)
+} catch (err) {
+  console.error('The comparison tray could not be set up; searching is unaffected.', err)
+}
+
 function status(text: string, retry?: () => void): void {
   const p = el('p', retry ? 'status problem' : 'status', text)
   if (retry) p.append(button('retry', 'Try again', retry))
   $('body').replaceChildren(p)
 }
+/**
+ * How long the page will wait in silence before it says the search is not coming.
+ *
+ * `call` waits for the helper, and the helper waits for whatever it asked. A source that accepts a connection and then
+ * says nothing leaves both of them waiting for as long as the tab is open -- and the page sitting on "Searching the
+ * web...", which is the one thing a status line must never do.
+ *
+ * The clock measures silence, not elapsed time: every status the search reports restarts it. A slow search that is
+ * visibly getting on with something is never cut off; one that has stopped saying anything is given up on.
+ */
+const SILENCE_LIMIT_MS = 25_000
+
+class WentQuiet extends Error {
+  constructor() {
+    super('The search stopped responding. The source may be unavailable.')
+  }
+}
+
+interface Waiting<T> {
+  /** The answer, or a rejection -- including `WentQuiet` when nothing was heard for long enough. */
+  answer: Promise<T>
+  /** Restarts the clock. Called whenever the search says something. */
+  touch(): void
+}
+
+function waitWithLimit<T>(work: Promise<T>, ms = SILENCE_LIMIT_MS): Waiting<T> {
+  let timer = 0
+  let over = false
+  let give: (() => void) | null = null
+  const answer = new Promise<T>((resolve, reject) => {
+    give = () => {
+      over = true
+      reject(new WentQuiet())
+    }
+    work.then(
+      (value) => {
+        if (over) return
+        window.clearTimeout(timer)
+        resolve(value)
+      },
+      (err) => {
+        // A late rejection from work that was already given up on is ignored, so the message the page settled on is
+        // not replaced by a second one saying the same thing differently.
+        if (over) return
+        window.clearTimeout(timer)
+        reject(err)
+      }
+    )
+  })
+  const touch = (): void => {
+    window.clearTimeout(timer)
+    if (!over) timer = window.setTimeout(() => give?.(), ms)
+  }
+  touch()
+  return { answer, touch }
+}
+
 const downMessage = (err: unknown): string =>
   err instanceof HelperDown
-    ? `${(err as Error).message} Orbis Search runs on this computer: start Orbis, then try again.`
+    // The error's own words are a launcher diagnostic (a .bat filename); the page says the condition in its own.
+    ? 'Orbis is not running yet. Orbis Search runs on this computer, so start Orbis and try again.'
     : !navigator.onLine
       ? 'You are offline. Orbis Search needs the internet; it will try again when you are back online.'
       : (err as { message?: string })?.message || 'The search did not work.'
@@ -260,32 +333,31 @@ let shown: Result[] = []
 
 function renderResults(results: Result[], outcome: Outcome, category: SearchVertical): void {
   shown = results
-  const viewable = category === 'images' || category === 'videos'
-  const images = category === 'images'
-  const listEl = el(images ? 'ul' : 'ol', images ? 'images' : 'results')
+  // Pictures get a board rather than a list: see renderImageBoard for why that is a different thing and not a style.
+  if (category === 'images') {
+    const host = el('div', 'imgboard')
+    renderImageBoard(results, host)
+    const body = $('body')
+    body.replaceChildren(host, footLine(results.length, outcome.tookMs ?? 0, false))
+    // The same honesty the lists get: a source that could not be reached is said, not silently missing.
+    if (outcome.unavailable?.length) {
+      body.append(el('p', 'foot', `${outcome.unavailable.length === 1 ? 'One source' : `${outcome.unavailable.length} sources`} could not be reached: ${outcome.unavailable.join(', ')}.`))
+    }
+    void paintIcons()
+    void addRelatedChips(host)
+    return
+  }
+  // Pictures never reach here -- they returned above, into the wall. Videos are the only vertical left whose rows open
+  // something rather than going somewhere, which is what `viewable` means from here down.
+  const viewable = category === 'videos'
+  const listEl = el('ol', 'results')
   listEl.setAttribute('aria-label', `${LABEL[category]} results`)
   results.forEach((r, i) => {
     const href = safeUrl(r.url)
     if (!href) return
     const li = el('li')
     const thumb = safeUrl(r.thumbnail ?? r.image)
-    if (images) {
-      const b = button('image', '', () => openViewer(i))
-      b.title = `${r.title} - ${r.site}`
-      if (thumb) {
-        const img = el('img')
-        img.src = thumb
-        img.alt = r.title
-        img.loading = 'lazy'
-        img.referrerPolicy = 'no-referrer'
-        img.addEventListener('error', () => li.remove())
-        b.append(img)
-      }
-      const meta = el('span', 'meta')
-      meta.append(el('b', undefined, r.title), el('small', undefined, `${r.site}${r.width && r.height ? ` · ${r.width}×${r.height}` : ''}`))
-      b.append(meta)
-      li.append(b)
-    } else {
+    {
       const row: HTMLElement = viewable ? el('button', 'result') : el('a', 'result')
       if (viewable) {
         ;(row as HTMLButtonElement).type = 'button'
@@ -318,14 +390,64 @@ function renderResults(results: Result[], outcome: Outcome, category: SearchVert
         player.src = audio
         text.append(player)
       }
-      li.append(shareButton(r))
+      li.append(pinButton({ url: href, title: r.title, site: r.site || siteOf(href) }, category), shareButton(r))
     }
     listEl.append(li)
   })
   const body = $('body')
   body.replaceChildren(listEl, footLine(listEl.children.length, outcome.tookMs ?? 0, category === 'all'))
+  // The pins have just been made; this makes the ones for pages already in the tray show it.
+  syncPins()
   if (outcome.unavailable?.length) body.append(el('p', 'foot', `${outcome.unavailable.length === 1 ? 'One source' : `${outcome.unavailable.length} sources`} could not be reached: ${outcome.unavailable.join(', ')}.`))
   void paintIcons()
+}
+
+/**
+ * The ALL page, composed (§5, §57).
+ *
+ * One call does the understanding, the searching and the filling; this draws what came back. A section that could not
+ * be filled reports itself rather than vanishing, and the whole page falls back to a plain list if the composer itself
+ * fails -- a broken clever page should still be a working search.
+ */
+async function composed(): Promise<void> {
+  try {
+    const waiting = waitWithLimit(
+      call('search:page', [query], {
+        onEvent: (event: { type?: string; message?: string }) => {
+          if (event?.type === 'status' && event.message) {
+            // Still working, and saying so: the clock starts again rather than running out mid-search.
+            waiting.touch()
+            status(event.message)
+          }
+        }
+      })
+    )
+    const page = (await waiting.answer) as ComposedPage
+    if (!page?.web?.length && !page?.answer && !page?.knowledge) {
+      return status(`Nothing was found for “${query}”.`, () => void search())
+    }
+    const body = $('body')
+    body.replaceChildren()
+    const holder = el('div', 'mod-page')
+    body.append(holder)
+    renderComposedPage(holder, page, {
+      onSearch: (next) => { location.href = pageUrl(next, 'all') },
+      onVertical: (next) => { location.href = pageUrl(query, next as SearchVertical) },
+      onRetry: () => void composed()
+    })
+    body.append(footLine(page.web.length, page.tookMs, true))
+    syncPins()
+  } catch (err) {
+    // The composer is the better page, not the only one: if it cannot run, the plain list still can.
+    try {
+      const outcome = (await waitWithLimit(call('search:run', [query, 'all'])).answer) as Outcome
+      const results = tidyResults((outcome.results ?? []).map((r) => ({ title: r.title, url: r.url, snippet: r.snippet ?? '' })), 12) as Result[]
+      if (!results.length) return status(downMessage(err), () => void search())
+      renderResults(results, outcome, 'all')
+    } catch {
+      status(downMessage(err), () => void search())
+    }
+  }
 }
 
 async function search(): Promise<void> {
@@ -333,8 +455,13 @@ async function search(): Promise<void> {
   if (vertical === 'orion') return void orion()
   if (!navigator.onLine) return status(downMessage(null), () => void search())
   status(vertical === 'all' ? 'Searching the web…' : `Searching ${LABEL[vertical].toLowerCase()}…`)
+
+  // ALL is composed: the query is understood, and only the sections it earns are built, each from something real.
+  // The other verticals are one list of one kind of thing, which is what they are for, and stay as they were.
+  if (vertical === 'all') return void composed()
+
   try {
-    const outcome = (await call('search:run', [query, vertical])) as Outcome
+    const outcome = (await waitWithLimit(call('search:run', [query, vertical])).answer) as Outcome
     const results = vertical === 'all' ? (tidyResults((outcome.results ?? []).map((r) => ({ title: r.title, url: r.url, snippet: r.snippet ?? '' })), 12) as Result[]) : (outcome.results ?? [])
     if (!results.length) return status(outcome.problem || `Nothing was found for “${query}”.`, () => void search())
     renderResults(results, outcome, vertical)
@@ -349,6 +476,351 @@ async function search(): Promise<void> {
   } catch (err) {
     status(downMessage(err), () => void search())
   }
+}
+
+// ---------------------------------------------------------------- pictures, as a board
+
+/**
+ * The Images board: a wall of pictures on the left, and one picture opened beside it on the right.
+ *
+ * Pictures are not a list. A list makes every result the same height and the same shape, which is exactly the
+ * information a picture carries -- a tall portrait and a wide diagram are different things before you have read a word
+ * of either. So the wall keeps each picture's own proportions and lets the columns fall where they fall, and choosing
+ * one opens it *beside* the wall rather than on top of it, so the next picture is always one glance away.
+ *
+ * That is the whole argument for the shape. The rest of this is the detail that makes it usable: where the selection
+ * goes, what the arrows do, what a picture will and will not claim about itself.
+ *
+ * What it refuses to do is invent. A picture's size badge appears when the result really carries a size, its site line
+ * when the result really names a site, and the chips across the top only when Orbis really found related searches. A
+ * board that fills its gaps with plausible-looking furniture is a board that lies about what was found.
+ */
+
+interface BoardState {
+  /** Which picture is open beside the wall, or null when the wall has it to itself. */
+  open: number | null
+  /** The element the board lives in, which widens and narrows as the panel opens and closes. */
+  host: HTMLElement | null
+  /** The tiles, by index, so the selection can be moved without redrawing the wall. */
+  tiles: HTMLElement[]
+  panel: HTMLElement
+}
+
+const board: BoardState = { open: null, host: null, tiles: [], panel: el('aside', 'imgpanel') }
+
+/** How many pictures of the wall the panel's own "more like this" strip shows. */
+const RELATED_IN_PANEL = 10
+
+/** A picture's real pixel size, or nothing. Never guessed from the thumbnail, which is not the picture. */
+const sizeOf = (r: Result): string | null => (r.width && r.height ? `${r.width} × ${r.height}` : null)
+
+/** One tile on the wall: the picture, what it is called, and where it came from. */
+function imageTile(r: Result, i: number): HTMLElement {
+  const b = button('imgtile', '', () => openBeside(i))
+  b.setAttribute('aria-label', `${r.title} — ${r.site}`)
+  b.title = `${r.title} — ${r.site}`
+  const thumb = safeUrl(r.thumbnail ?? r.image)
+  const frame = el('span', 'imgtile-frame')
+  if (thumb) {
+    const img = el('img')
+    img.src = thumb
+    img.alt = r.title
+    img.loading = 'lazy'
+    img.referrerPolicy = 'no-referrer'
+    // The picture's own proportions, so the wall is a wall and not a grid of identical boxes. Known before it loads
+    // where the result said so, which is what stops the columns jumping as pictures arrive.
+    if (r.width && r.height) img.style.aspectRatio = `${r.width} / ${r.height}`
+    img.addEventListener('error', () => b.remove())
+    frame.append(img)
+  }
+  b.append(frame, el('span', 'imgtile-title', r.title))
+  const href = safeUrl(r.url)
+  if (href) b.append(siteLine(href, r.site))
+  return b
+}
+
+/** The wall. Real masonry, so nothing is cropped to make the rows line up. */
+function imageWall(results: Result[]): HTMLElement {
+  const wall = el('div', 'imgwall')
+  wall.setAttribute('role', 'listbox')
+  wall.setAttribute('aria-label', 'Pictures')
+  board.tiles = []
+  results.forEach((r, i) => {
+    const tile = imageTile(r, i)
+    tile.setAttribute('role', 'option')
+    tile.setAttribute('aria-selected', 'false')
+    board.tiles[i] = tile
+    wall.append(tile)
+  })
+  return wall
+}
+
+/** Marks which tile is open, and brings it into view when the arrows moved it off screen. */
+function markOpen(i: number | null): void {
+  board.tiles.forEach((tile, n) => {
+    const on = n === i
+    tile.classList.toggle('on', on)
+    tile.setAttribute('aria-selected', String(on))
+  })
+  if (i !== null) board.tiles[i]?.scrollIntoView({ block: 'nearest' })
+}
+
+/** Closes the panel and gives the wall the width back. */
+function closeBeside(): void {
+  board.open = null
+  board.panel.hidden = true
+  board.host?.classList.remove('with-panel')
+  markOpen(null)
+}
+
+/**
+ * The overflow menu, with the things that can really be done to a result.
+ *
+ * Each entry does something. An entry that only looks like an option is worse than no menu: it teaches somebody that
+ * the menu is decoration.
+ */
+function resultMenu(r: Result, anchor: HTMLElement): void {
+  const existing = document.querySelector('.imgmenu')
+  if (existing) {
+    existing.remove()
+    return
+  }
+  const menu = el('div', 'imgmenu')
+  menu.setAttribute('role', 'menu')
+  const item = (name: keyof typeof PATHS, label: string, act: () => void): HTMLElement => {
+    const b = button('imgmenu-item', '', () => {
+      menu.remove()
+      act()
+    })
+    b.setAttribute('role', 'menuitem')
+    b.append(icon(name, 16), el('span', undefined, label))
+    return b
+  }
+  menu.append(
+    item('bookmark', 'Save', () => void saveResult(r)),
+    item('share', 'Share', async () => {
+      try {
+        await navigator.clipboard.writeText(r.url)
+        toast('Link copied.')
+      } catch {
+        toast('The link could not be copied.')
+      }
+    }),
+    item('external', 'Open the page it came from', () => window.open(safeUrl(r.url) ?? '', '_blank', 'noopener,noreferrer')),
+    ...(r.image ? [item('download', 'Open the full-size picture', () => window.open(safeUrl(r.image) ?? '', '_blank', 'noopener,noreferrer'))] : []),
+    item('trash', 'Hide this result', () => {
+      // Hidden for this page only, and said out loud. Nothing is remembered about it, because nothing asked to be.
+      const at = shown.indexOf(r)
+      if (at >= 0) board.tiles[at]?.remove()
+      closeBeside()
+      toast('Hidden from these results.')
+    })
+  )
+  document.body.append(menu)
+  const box = anchor.getBoundingClientRect()
+  menu.style.top = `${Math.round(box.bottom + 6)}px`
+  menu.style.right = `${Math.round(window.innerWidth - box.right)}px`
+  const away = (e: Event): void => {
+    if (!menu.contains(e.target as Node)) {
+      menu.remove()
+      document.removeEventListener('pointerdown', away, true)
+    }
+  }
+  document.addEventListener('pointerdown', away, true)
+  ;(menu.firstElementChild as HTMLElement | null)?.focus()
+}
+
+/** Keeping a picture, through Orbis's own notes. Real, or it says it could not. */
+async function saveResult(r: Result): Promise<void> {
+  try {
+    await call('notes:create', [{ title: r.title, body: `${r.url}${r.site ? `
+
+From ${r.site}` : ''}` }])
+    toast('Saved to your notes.')
+  } catch {
+    toast('That could not be saved.')
+  }
+}
+
+/** Opens picture `i` beside the wall. */
+function openBeside(i: number): void {
+  const r = shown[i]
+  if (!r) return
+  board.open = i
+  const href = safeUrl(r.url) ?? ''
+  const full = safeUrl(r.image ?? r.thumbnail)
+  const panel = board.panel
+  panel.replaceChildren()
+  panel.hidden = false
+  board.host?.classList.add('with-panel')
+  markOpen(i)
+
+  // ---- who it belongs to, and the way through the set
+  const head = el('header', 'imgpanel-head')
+  if (href) head.append(siteLine(href, r.site))
+  const nav = el('span', 'imgpanel-nav')
+  const back = iconButton('', 'prev', () => openBeside(i - 1), 'Previous picture', 18)
+  back.disabled = i === 0
+  const on = iconButton('', 'next', () => openBeside(i + 1), 'Next picture', 18)
+  on.disabled = i >= shown.length - 1
+  const more = iconButton('', 'more', () => resultMenu(r, more), 'More', 18)
+  nav.append(back, on, more, iconButton('', 'close', closeBeside, 'Close (Esc)', 18))
+  head.append(nav)
+
+  // ---- the picture itself
+  const stage = el('div', 'imgpanel-stage')
+  if (full) {
+    const img = el('img')
+    img.src = full
+    img.alt = r.title
+    img.referrerPolicy = 'no-referrer'
+    img.addEventListener('error', () => {
+      stage.replaceChildren(el('p', 'imgpanel-none', 'This picture could not be loaded.'))
+    })
+    stage.append(img)
+    // Ask Orion about this picture: Orbis's own answer to the question a magnifier asks, and it goes to the same Orion
+    // the rest of Orbis uses rather than to anybody else's service.
+    stage.append(
+      iconButton('imgpanel-lens', 'lens', () => {
+        location.href = pageUrl(`${r.title} ${r.site}`, 'orion')
+      }, 'Ask Orion about this picture', 18)
+    )
+    const size = sizeOf(r)
+    // Only when the result really carries a size. A badge reading "unknown" is noise; an invented one is a lie.
+    if (size) stage.append(el('span', 'imgpanel-size', size))
+  } else {
+    stage.append(el('p', 'imgpanel-none', 'There is no picture to show for this result.'))
+  }
+
+  // ---- what it is, and what can be done about it
+  const title = el('h2', 'imgpanel-title', r.title)
+  const visit = el('a', 'imgpanel-visit')
+  visit.href = href
+  visit.target = '_blank'
+  visit.rel = 'noopener noreferrer'
+  visit.append(el('span', undefined, 'Visit'), icon('next', 14))
+  const titleRow = el('div', 'imgpanel-titlerow')
+  titleRow.append(title, visit)
+
+  const acts = el('div', 'imgpanel-acts')
+  const share = button('imgpanel-act', '', async () => {
+    try {
+      const nav2 = navigator as Navigator & { share?: (d: { title?: string; url: string }) => Promise<void> }
+      if (nav2.share) await nav2.share({ url: r.url, title: r.title })
+      else {
+        await navigator.clipboard.writeText(r.url)
+        toast('Link copied.')
+      }
+    } catch {
+      /* dismissed, or refused: nothing to say */
+    }
+  })
+  share.append(icon('share', 15), el('span', undefined, 'Share'))
+  const save = button('imgpanel-act', '', () => void saveResult(r))
+  save.append(icon('bookmark', 15), el('span', undefined, 'Save'))
+  acts.append(share, save)
+
+  panel.append(head, stage, titleRow, acts)
+
+  // ---- more of the same wall, so the panel is a place to keep looking rather than a dead end
+  const others = shown.map((other, n) => ({ other, n })).filter(({ n }) => n !== i).slice(0, RELATED_IN_PANEL)
+  if (others.length) {
+    const strip = el('div', 'imgpanel-more')
+    strip.setAttribute('aria-label', 'More pictures')
+    for (const { other, n } of others) strip.append(imageTile(other, n))
+    panel.append(strip)
+  }
+  panel.scrollTop = 0
+}
+
+/**
+ * The chips across the top: other searches Orbis really found for this one.
+ *
+ * Only when there are some. An empty strip where chips would be is a promise the page did not keep, and it takes up
+ * exactly as much room as a full one.
+ */
+function relatedChips(terms: string[], active: string | null): HTMLElement | null {
+  if (!terms.length) return null
+  const strip = el('div', 'imgchips')
+  strip.setAttribute('role', 'list')
+  const row = el('div', 'imgchips-row')
+  if (active) {
+    const off = button('imgchip on', '', () => {
+      location.href = pageUrl(query, 'images')
+    })
+    off.append(icon('close', 13), el('span', undefined, active))
+    off.setAttribute('aria-label', `Stop narrowing by ${active}`)
+    row.append(off)
+  }
+  for (const term of terms) {
+    const chip = el('a', 'imgchip')
+    chip.href = pageUrl(`${query} ${term}`, 'images')
+    chip.append(el('span', undefined, term))
+    chip.setAttribute('role', 'listitem')
+    row.append(chip)
+  }
+  const scroll = (by: number) => row.scrollBy({ left: by, behavior: 'smooth' })
+  const left = iconButton('imgchips-step left', 'prev', () => scroll(-320), 'Scroll left', 16)
+  const right = iconButton('imgchips-step right', 'next', () => scroll(320), 'Scroll right', 16)
+  const ends = (): void => {
+    left.hidden = row.scrollLeft < 8
+    right.hidden = row.scrollLeft + row.clientWidth > row.scrollWidth - 8
+  }
+  row.addEventListener('scroll', ends, { passive: true })
+  strip.append(left, row, right)
+  requestAnimationFrame(ends)
+  return strip
+}
+
+/**
+ * Asks for the related searches and puts the chips up if there are any.
+ *
+ * After the wall, deliberately. The pictures are what somebody came for and they are already there; the chips are a
+ * second thought that arrives from a slower place, and holding the pictures back for them would trade the thing that
+ * matters for the thing that does not.
+ */
+async function addRelatedChips(host: HTMLElement): Promise<void> {
+  let terms: string[] = []
+  try {
+    const got = (await call('search:related', [query])) as string[]
+    terms = Array.isArray(got) ? got.filter((t) => typeof t === 'string' && t.trim()).slice(0, 12) : []
+  } catch {
+    return // No chips is a fine page. A failed strip is not worth saying anything about.
+  }
+  const strip = relatedChips(terms, null)
+  if (strip) host.prepend(strip)
+}
+
+/** Draws the whole board. */
+function renderImageBoard(results: Result[], host: HTMLElement): void {
+  shown = results
+  board.open = null
+  board.host = host
+  board.panel = el('aside', 'imgpanel')
+  board.panel.hidden = true
+  board.panel.setAttribute('aria-label', 'The picture you opened')
+  const main = el('div', 'imgmain')
+  main.append(imageWall(results), board.panel)
+  host.append(main)
+
+  // The arrows walk the wall, and Escape puts it away. On the document, because the panel is open whatever happens to
+  // hold focus, and bound once per board rather than once per tile.
+  document.addEventListener('keydown', (e) => {
+    if (board.open === null || !document.body.contains(host)) return
+    // Never steal a key from somebody typing in the search box above.
+    const on = document.activeElement
+    if (on instanceof HTMLInputElement || on instanceof HTMLTextAreaElement) return
+    if (e.key === 'ArrowRight' && board.open < shown.length - 1) {
+      e.preventDefault()
+      openBeside(board.open + 1)
+    } else if (e.key === 'ArrowLeft' && board.open > 0) {
+      e.preventDefault()
+      openBeside(board.open - 1)
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      closeBeside()
+    }
+  })
 }
 
 // ---------------------------------------------------------------- the viewer (pictures and videos, without leaving the search)
@@ -854,4 +1326,3 @@ window.addEventListener('online', () => {
 })
 
 void search()
-mountOrb()

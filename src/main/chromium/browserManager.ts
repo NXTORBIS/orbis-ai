@@ -8,7 +8,7 @@ import type { HandlerDeps } from '../../helper/handlers.ts'
 import { createHelperServer } from '../../helper/server.ts'
 import { AdblockInjector } from './adblockInjector.ts'
 import { launchOrbisChromium } from './service.ts'
-import type { ChromiumControl } from './service.ts'
+import type { ChromiumControl, ChromiumControlOptions } from './service.ts'
 
 /**
  * Orbis's browser: one Chromium per running Orbis, started when the browser is first needed and reached over a pipe.
@@ -25,8 +25,18 @@ import type { ChromiumControl } from './service.ts'
 export const ORBIS_EXTENSION_ID = 'gcaebckmlhiagfagcplpjmibhkhjljab'
 /** The built-in panel's origin. */
 export const ORBIS_PANEL_ORIGIN = 'chrome://orbis'
-/** The built-in Orbis pages (panel, new tab page, search results): the only web-facing origins the helper answers. */
-export const ORBIS_BUILTIN_ORIGINS = [ORBIS_PANEL_ORIGIN, 'chrome://orbis-newtab', 'chrome://orbis-search']
+/**
+ * The built-in Orbis pages (panel, new tab page, search results, the Orb): the only web-facing origins the helper
+ * answers.
+ *
+ * The Orb belongs here as much as any of them. Left out, every call it made came back 403 and it said "Orbis is not
+ * running yet" while Orbis was running -- which took the Orb's assistant down with it, and the Chat button too, since
+ * going back to the chat is a helper call like any other. The browser's own check had already been taught about the
+ * Orb; this one had not, and a request has to pass both.
+ */
+// The lock surface is here for a sharper reason than the others: the password it takes is checked by Orbis, so a lock
+// screen whose origin the helper refuses is a lock screen that can never open anything.
+export const ORBIS_BUILTIN_ORIGINS = [ORBIS_PANEL_ORIGIN, 'chrome://orbis-newtab', 'chrome://orbis-search', 'chrome://orbis-orb', 'chrome://orbis-lock']
 
 /** The code the ad blocker's worker runs for one operation of the panel's Blocking tab. */
 export function adblockCall(message: { type: string; [key: string]: unknown }): string {
@@ -70,7 +80,13 @@ export interface BrowserManagerOptions {
    * they may be created after the browser is. The panel gets names and progress from them, never a secret's value.
    */
   secrets?: HandlerDeps['secrets']
+  /** Tab Lock, for the browser's own lock surface: it asks Orbis whether a password is right. */
+  tabLockHelper?: HandlerDeps['tabLock']
+  /** Markets, for the strip along the bottom of the browser. */
+  marketsHelper?: HandlerDeps['markets']
   workflows?: HandlerDeps['workflows']
+  /** The app's skill library, so a skill learned in Orbis is the same skill the browser can run. */
+  skills?: HandlerDeps['skills']
   galaxy?: HandlerDeps['galaxy']
   /** The app's search-box suggestions and local speech to text, offered to the results page. */
   appServices?: HandlerDeps['appServices']
@@ -89,6 +105,8 @@ export interface BrowserManagerOptions {
   intro?: HandlerDeps['intro']
   /** The one Browser Control Layer of the app: Chromium fills it. */
   control?: BrowserControl
+  /** Tab Lock: how a listing is redacted, and how the security layer is told what the browser's tabs are doing. */
+  tabLock?: ChromiumControlOptions['tabLock']
   saveDir?: string
   clipboard?: { readText(): Promise<string> | string; hasImage(): Promise<boolean> | boolean }
   /** Extra command-line switches for the browser (tests use this to allow autoplay). */
@@ -165,10 +183,15 @@ export class BrowserManager {
 
   private async start(): Promise<Running> {
     const profileId = await this.o.profileId()
+    // Captured for the browser host below, whose `alive` getter must see the manager rather than its own literal.
+    const self = this
     const extensionDir = join(this.o.dataDir, 'extension')
     await rm(extensionDir, { recursive: true, force: true })
     await mkdir(this.o.dataDir, { recursive: true })
-    await cp(this.o.extensionSource, extensionDir, { recursive: true, filter: (source) => !/[\/](helper\.json|_metadata)$/.test(source) })
+    // Both separators. The class used to be `[\/]`, which is only a forward slash -- so on Windows, where the paths
+    // this filter sees are backslashed, it matched nothing and a stale `helper.json` from a previous run was copied in
+    // with the extension. A page reading it then talked to a port that had been dead for hours.
+    await cp(this.o.extensionSource, extensionDir, { recursive: true, filter: (source) => !/[\\/](helper\.json|_metadata)$/.test(source) })
 
     const token = newToken()
     const devExtension = process.env.ORBIS_DEV_EXTENSION === '1'
@@ -181,7 +204,10 @@ export class BrowserManager {
         apiKeys: this.o.apiKeys(),
         dataDir: this.o.personalDir(profileId),
         secrets: this.o.secrets,
+        tabLock: this.o.tabLockHelper,
+        markets: this.o.marketsHelper,
         workflows: this.o.workflows,
+        skills: this.o.skills,
         galaxy: this.o.galaxy,
         appServices: this.o.appServices,
         searchSessions: this.o.searchSessions,
@@ -192,6 +218,31 @@ export class BrowserManager {
         intro: this.o.intro,
         stores: this.o.stores,
         browserControl: () => this.o.control ?? this.active?.service.control,
+        /**
+         * The browser itself, for the parts of Orbis that need more than the control layer.
+         *
+         * This was missing, and its absence is why the AI did nothing inside the browser. `createHandlers` registers
+         * `browser:task` and `browser:task-ready` only when this is given, so without it the readiness call answered
+         * 404 -- and the panel, which treats any failure there as "no helper at all", reported that Orbis was not
+         * running while Orbis was in fact running and listening. Orion had the same hole from the other side: it was
+         * handed `host()` of undefined, so it could not read the page it was looking at or act on it.
+         *
+         * The running service already is everything a host is; it had simply never been offered as one.
+         */
+        browser: () => {
+          const service = this.active?.service
+          if (!service) return null
+          return {
+            control: service.control,
+            agent: service.agent,
+            bridge: service.bridge,
+            // The browser is alive exactly while this is the running one; `this.active` is cleared on close.
+            get alive() {
+              return self.active?.service === service
+            },
+            stop: () => service.stop()
+          }
+        },
         profileId,
         adblockControl: (message) => {
           if (!bridge) throw new Error('The browser is not ready yet.')
@@ -212,8 +263,10 @@ export class BrowserManager {
         ...(devExtension ? { extensionDir } : {}),
         extensionId: ORBIS_EXTENSION_ID,
         urls: ['chrome://newtab'],
-        hidden: false,
+        // Embedded means the Orbis window is about to take this window into itself, so it is built out of sight.
+        hidden: this.o.embedded === true,
         control: this.o.control,
+        tabLock: this.o.tabLock,
         saveDir: this.o.saveDir,
         clipboard: this.o.clipboard,
         args: [`--orbis-helper-port=${port}`, `--orbis-helper-token=${token}`, `--orbis-extension-dir=${extensionDir}`, ...(this.o.chromeArgs ?? [])],

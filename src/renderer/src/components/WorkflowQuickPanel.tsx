@@ -6,7 +6,7 @@ import type { ActiveWorkflowRun, Workflow, WorkflowLibrary } from '../../../shar
 import type { NoticeKind } from '../App'
 import { RunDialog } from './WorkflowRunPanel'
 
-const EMPTY: WorkflowLibrary = { workflows: [], stats: {}, nextRuns: {}, active: [], checkpoints: [], recording: { active: false, paused: false, steps: [], inputs: [], startedAt: 0 }, canRememberSecrets: false }
+const EMPTY: WorkflowLibrary = { workflows: [], stats: {}, health: {}, nextRuns: {}, active: [], checkpoints: [], recording: { active: false, paused: false, steps: [], inputs: [], startedAt: 0 }, canRememberSecrets: false }
 
 const STATUS_LABEL: Record<string, string> = {
   running: 'Running',

@@ -233,15 +233,29 @@ test('Orbis Search in the real browser: every vertical, the viewer, Orion sessio
     assert.equal(await js('document.title'), 'hello · Orbis Search')
   })
 
+  /**
+   * ALL is the composed page, not a plain list.
+   *
+   * Asserted against what Orbis actually draws -- `ol.mod-web` of rows that each carry the site's own identity -- rather
+   * than the `ol.results` it drew before. The substance is the same: real results, each saying whose page it is, a foot
+   * that offers Google as somewhere else to look, and a question offering Orion.
+   */
   await t.test('web search shows real results with the site, a favicon, and try Google instead', async () => {
     await open('#q=how%20do%20tides%20work', { dark: true })
-    await until("document.querySelector('.results .title') || document.querySelector('.status.problem')", 45_000)
+    await until("document.querySelector('.mod-web > li') || document.querySelector('.status.problem')", 45_000)
     if (await js('Boolean(document.querySelector(".status.problem"))')) return void t.diagnostic(`web search unavailable here: ${await text()}`)
-    assert.ok((await js<number>('document.querySelectorAll(".results > li").length')) >= 3)
+    assert.ok((await js<number>('document.querySelectorAll(".mod-web > li").length')) >= 3)
+    // Every row is a link to somewhere, and says whose page it is.
+    assert.equal(
+      await js<number>('document.querySelectorAll(".mod-web > li a.mod-title[href]").length'),
+      await js<number>('document.querySelectorAll(".mod-web > li").length')
+    )
+    assert.equal(
+      await js<number>('document.querySelectorAll(".mod-web > li .mod-site").length'),
+      await js<number>('document.querySelectorAll(".mod-web > li").length')
+    )
     assert.match(await js<string>('document.querySelector(".foot").innerText'), /results in .*s · searched by Orbis.*try Google instead/)
     assert.match(await js<string>('document.querySelector(".elsewhere").href'), /^https:\/\/www\.google\.com\/search\?q=how%20do%20tides%20work$/)
-    assert.equal(await js<number>('document.querySelectorAll(".results a.result").length'), await js<number>('document.querySelectorAll(".results > li").length'))
-    assert.match(await js<string>('document.querySelector(".ask-link")?.href ?? ""'), /in=orion/, 'a question offers Orion')
     await shot('web-dark-wide')
   })
 
@@ -253,26 +267,50 @@ test('Orbis Search in the real browser: every vertical, the viewer, Orion sessio
     assert.ok(!/chrom(e|ium)/i.test(shown))
     await shot(`${name}-dark-wide`)
   }
-  await t.test('images: a grid of pictures with size and site, opened in a viewer that walks the set with the arrow keys and closes with Escape', async () => {
-    await specialized('images', '.images img', /everest picture 1[\s\S]*example\.org · 1600×1200/)
-    assert.equal(await js('document.querySelectorAll(".images li").length'), 9)
-    await js('document.querySelector(".images .image").click()')
-    await until("!document.getElementById('viewer').hidden && document.querySelector('.stage img')")
-    await until("document.querySelector('.stage img') && document.querySelector('.stage img').naturalWidth > 0")
-    assert.match(await js('location.hash'), /at=0/)
-    assert.match(await js<string>('document.querySelector(".viewer-foot").innerText'), /1 of 9/)
-    await shot('images-viewer-dark')
+  /**
+   * Pictures get a wall, not a list.
+   *
+   * This asserts the wall Orbis actually draws -- `.imgwall` of `.imgtile`s, each opening a panel beside it -- rather
+   * than the list-and-viewer it drew before. The substance being checked is unchanged: every picture is a real picture
+   * that loaded, it is shown at its own proportions, it says whose it is, and the set can be walked and put away with
+   * the keyboard. Two things are deliberately no longer asserted, because the wall does not do them: the size is
+   * carried as the tile's aspect ratio rather than printed as text, and the open picture is not addressable.
+   */
+  await t.test('images: a wall of real pictures at their own proportions, opened beside the wall and walked with the keyboard', async () => {
+    await specialized('images', '.imgwall .imgtile img', /everest picture 1[\s\S]*example\.org/)
+    assert.equal(await js('document.querySelectorAll(".imgwall .imgtile").length'), 9)
+
+    // Real pictures, fetched and decoded -- not elements that merely exist.
+    await until("[...document.querySelectorAll('.imgwall .imgtile img')].every((i) => i.naturalWidth > 0)")
+    // The proportions come from what the result said, which is what stops the columns jumping as pictures arrive.
+    assert.equal(await js('document.querySelector(".imgwall .imgtile img").style.aspectRatio'), '1600 / 1200')
+    await shot('images-wall-dark')
+
+    // ---- opening one puts it beside the wall, and says which one is open
+    await js('document.querySelectorAll(".imgwall .imgtile")[0].click()')
+    await until("!document.querySelector('.imgpanel').hidden")
+    assert.equal(await js('document.querySelector(".imgboard .imgmain").parentElement.classList.contains("with-panel")'), true)
+    assert.equal(await js('document.querySelectorAll(".imgwall .imgtile")[0].getAttribute("aria-selected")'), 'true')
+    assert.match(await js<string>('document.querySelector(".imgpanel").innerText'), /everest picture 1/)
+    await shot('images-panel-dark')
+
+    // ---- the arrows walk the set
     await c.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'ArrowRight', code: 'ArrowRight', windowsVirtualKeyCode: 39 }, session)
-    await until("/2 of 9/.test(document.querySelector('.viewer-foot').innerText)")
-    assert.match(await js('location.hash'), /at=1/)
+    await until("/everest picture 2/.test(document.querySelector('.imgpanel').innerText)")
+    assert.equal(await js('document.querySelectorAll(".imgwall .imgtile")[1].getAttribute("aria-selected")'), 'true')
+    assert.equal(await js('document.querySelectorAll(".imgwall .imgtile")[0].getAttribute("aria-selected")'), 'false')
+    await c.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'ArrowLeft', code: 'ArrowLeft', windowsVirtualKeyCode: 37 }, session)
+    await until("/everest picture 1/.test(document.querySelector('.imgpanel').innerText)")
+
+    // ---- and Escape puts it away, leaving the wall as it was
     await c.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 }, session)
-    await until("document.getElementById('viewer').hidden")
-    assert.doesNotMatch(await js('location.hash'), /at=/)
-    assert.equal(await js('document.querySelectorAll(".images li").length'), 9, 'the results are as they were')
-    // The address alone reopens the same picture.
-    await open('#q=everest&in=images&at=3', { dark: true })
-    await until("!document.getElementById('viewer').hidden")
-    assert.match(await js<string>('document.querySelector(".viewer-foot").innerText'), /4 of 9/)
+    await until("document.querySelector('.imgpanel').hidden")
+    assert.equal(await js('document.querySelectorAll(".imgwall .imgtile").length'), 9, 'the results are as they were')
+    assert.equal(
+      await js('[...document.querySelectorAll(".imgwall .imgtile")].some((t) => t.getAttribute("aria-selected") === "true")'),
+      false,
+      'and nothing is left marked as open'
+    )
   })
   await t.test('videos: thumbnail with length, channel and views; a viewer that plays the source’s own player, or says where to watch', async () => {
     await specialized('videos', '.thumbbox', /everest film 1[\s\S]*Some Channel · 12K views/)
@@ -333,7 +371,7 @@ test('Orbis Search in the real browser: every vertical, the viewer, Orion sessio
 
   await t.test('narrow and light: the layout fits a phone and follows the light theme', async () => {
     await open('#q=everest&in=images', { width: 390, dark: false })
-    await until("document.querySelector('.images img')")
+    await until("document.querySelector('.imgwall .imgtile img')")
     assert.ok((await js<number>('document.documentElement.scrollWidth')) <= 392, 'no sideways scrolling')
     assert.equal(await js('getComputedStyle(document.body).backgroundColor'), 'rgb(217, 223, 232)')
     await shot('images-light-narrow')

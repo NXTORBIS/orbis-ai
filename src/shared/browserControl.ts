@@ -36,6 +36,22 @@ export type ControlDomain =
   | 'workspaces'
   | 'profiles'
   | 'experience'
+  /**
+   * Tab Lock and Profile Lock.
+   *
+   * Its own domain so that "what Orion may do" has one switch for all of it. Note what switching it *off* does: it stops
+   * Orion locking things and reading which tabs are protected. It cannot stop a lock working -- the gate in `execute` is
+   * not a capability and has no switch, so a locked tab is refused whether or not this domain is on.
+   */
+  | 'security'
+  /**
+   * Markets.
+   *
+   * Its own domain so "what Orion may do about markets" is one switch. Note what it cannot do even when it is on: there
+   * is no capability that reaches an exchange, because there is no credential in Orbis that could. The only capability
+   * that moves anything is `market.paperOrder`, and what it moves is simulated.
+   */
+  | 'markets'
   | 'state'
 
 /** Who asked: the person using Orbis, Orion's browser agent, or an automation run. */
@@ -114,6 +130,14 @@ export type ControlErrorCode =
   | 'stale-element'
   | 'declined'
   | 'blocked'
+  /**
+   * The tab is locked.
+   *
+   * Its own code rather than `blocked`, because the two need different answers: `blocked` means the person switched
+   * this kind of action off and nothing can change that now, while this means a password would fix it. A workflow that
+   * cannot tell them apart either gives up on something recoverable or waits for something that will never happen.
+   */
+  | 'tab-locked'
   | 'timeout'
   | 'failed'
   | 'verification-failed'

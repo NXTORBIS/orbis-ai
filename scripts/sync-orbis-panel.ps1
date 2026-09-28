@@ -16,9 +16,18 @@ foreach ($f in 'newtab.js','newtab.css','newtab-logic.js','newtab-store.js','wid
 Copy-Item (Join-Path $ui 'panel\rail\icons.js') (Join-Path $dest 'orbis-icons.js') -Force
 # The Command Center imports the icon set at the path it really has, so the page and the working copy agree.
 New-Item -ItemType Directory -Force (Join-Path $dest 'rail') | Out-Null
-Copy-Item (Join-Path $ui 'panel\rail\icons.js') (Join-Path $dest 'rail\icons.js') -Force
-foreach ($f in 'orb-app.js','orb-app.css') { Copy-Item (Join-Path $ui "orb\$f") (Join-Path $dest $f) -Force }
+# The whole rail, not just its icons: index.js pulls in browser.js and stores.js, and those are where ten of the
+# panel's views are registered. Copying one file of five meant the import failed and none of them existed.
+foreach ($f in 'index.js','ui.js','icons.js','browser.js','stores.js') { Copy-Item (Join-Path $ui "panel\rail\$f") (Join-Path $dest "rail\$f") -Force }
+foreach ($f in 'orb-app.js','orb-app.css','controls.js','voice.js') { Copy-Item (Join-Path $ui "orb\$f") (Join-Path $dest $f) -Force }
 Copy-Item (Join-Path $ui 'orb\index.html') (Join-Path $dest 'orb.html') -Force
+# The lock surface (chrome://orbis-lock), drawn over a locked tab. Its own page, and a deliberately tiny one: it knows a
+# label and a tab id, never an address.
+foreach ($f in 'lock.js','lock.css') { Copy-Item (Join-Path $ui "lock\$f") (Join-Path $dest $f) -Force }
+Copy-Item (Join-Path $ui 'lock\index.html') (Join-Path $dest 'lock.html') -Force
+# The market strip (chrome://orbis-ticker), along the bottom of the browser.
+foreach ($f in 'ticker.js','ticker.css') { Copy-Item (Join-Path $ui "ticker\$f") (Join-Path $dest $f) -Force }
+Copy-Item (Join-Path $ui 'ticker\index.html') (Join-Path $dest 'ticker.html') -Force
 Copy-Item (Join-Path $ui 'newtab\index.html') (Join-Path $dest 'newtab.html') -Force
 if (-not (Test-Path (Join-Path $ui 'results\results.js'))) { throw 'orbis-ui/results/results.js is not built (node scripts/build-extension.mjs).' }
 foreach ($f in 'results.js','results.css') { Copy-Item (Join-Path $ui "results\$f") (Join-Path $dest $f) -Force }

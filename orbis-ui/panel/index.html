@@ -16,32 +16,15 @@
     <header>
       <span class="mark" aria-hidden="true"></span>
       <strong>Orbis</strong>
-      <span id="status" class="status" role="status" aria-live="polite">Connecting…</span>
-      <select id="model" aria-label="Model"></select>
-      <button id="chats" type="button" title="Earlier chats" aria-expanded="false" aria-controls="chats-list">Chats</button>
-      <button id="new" type="button" title="Start a new conversation">New</button>
+      <span id="status" class="status" role="status" aria-live="polite" title="Looking for the Orbis helper." hidden>Connecting…</span>
+      <span class="head-gap" aria-hidden="true"></span>
+      <!-- Only ever seen as a surface over the page; in the side panel the browser already gives a way to close it. -->
+      <button id="cc-close" type="button" title="Close (Esc)" aria-label="Close">&#10005;</button>
     </header>
 
 
     <!-- The Command Center: the panel's home. Everything else here is a place it can take you. -->
     <section id="view-home" class="view" hidden></section>
-    <section id="view-ask" class="view">
-      <div id="chats-list" class="chats-list" aria-label="Earlier chats" hidden></div>
-      <main id="messages" aria-live="polite">
-        <p id="empty" class="empty">Ask Orion anything. Everything runs on this computer, with your own key.</p>
-      </main>
-      <form id="composer">
-        <label class="web" title="Orion reads real pages first and tells you which page each claim came from">
-          <input id="web" type="checkbox" /> Search the web
-        </label>
-        <div class="row">
-          <textarea id="input" rows="2" placeholder="Ask Orion…" aria-label="Message"></textarea>
-          <button id="send" type="submit">Send</button>
-          <button id="stop" type="button" hidden>Stop</button>
-        </div>
-      </form>
-    </section>
-
     <section id="view-account" class="view" hidden>
       <div id="account-body" class="acct" aria-live="polite"></div>
     </section>
@@ -55,7 +38,6 @@
         <p id="search-empty" class="empty">Search the web with Orbis. Nothing is sent anywhere but the search itself.</p>
       </main>
       <div id="search-actions" hidden>
-        <button id="ask-about" type="button">Ask Orion, with sources</button>
       </div>
     </section>
 

@@ -157,3 +157,42 @@ test('a saved order cannot exceed the toolbar', () => {
   const many = ['ask', 'search', 'galaxy', 'workflows', 'notes', 'tasks', 'adblock', 'secrets', 'account']
   assert.equal(normalizePins(many).length, MAX_PINS)
 })
+
+// ---------------------------------------------------------------- doing, rather than going
+
+test('a capability that does something has no address, and is not given one', () => {
+  const copy = capabilityById('copyLink')!
+  assert.equal(copy.target.kind, 'do')
+  // A plausible-looking address would let a caller navigate to it and land on a page that does nothing.
+  assert.equal(addressFor(copy), '')
+})
+
+test('every "do" capability names a handler, and no two name the same one', () => {
+  const doers = CAPABILITIES.filter((c) => c.target.kind === 'do')
+  assert.ok(doers.length > 0)
+  const messages = doers.map((c) => (c.target as { message: string }).message)
+  for (const m of messages) assert.match(m, /^orbis\.[a-z][A-Za-z.]+$/, `${m} is not a handler name`)
+  assert.equal(new Set(messages).size, messages.length)
+})
+
+test('copying a link is not offered where there is no page to copy', () => {
+  const copy = capabilityById('copyLink')!
+  assert.equal(unavailableBecause(copy, all), null)
+  // On a new tab or a built-in page there is no address worth copying, and the row says so rather than copying
+  // chrome://orbis and calling it the link.
+  assert.equal(unavailableBecause(copy, { ...all, page: false }), 'There is no page to act on')
+  assert.equal(unavailableBecause(copy, { ...all, browser: false }), 'The browser is not connected')
+})
+
+test('somebody looking for it finds it, by either of the words they would use', () => {
+  for (const words of ['copy', 'copy link', 'link', 'url', 'clipboard', 'share']) {
+    const found = searchCapabilities(words, all).map((h) => h.capability.id)
+    assert.ok(found.includes('copyLink'), `"${words}" does not find it`)
+  }
+})
+
+test('it is not offered for the toolbar, because no toolbar button exists for it', () => {
+  // `pinnable` is a claim about chrome/browser/ui/browser_actions.cc. Marking it true would put a button in the
+  // Command Center that could never become a button on the toolbar.
+  assert.equal(canPin(capabilityById('copyLink')!), false)
+})

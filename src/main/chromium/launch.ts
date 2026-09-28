@@ -42,6 +42,12 @@ export function launchChromium(o: LaunchOptions): LaunchedChromium {
     '--no-first-run',
     '--no-default-browser-check',
     '--force-dark-mode',
+    // A window the Orbis app is about to embed is built where nobody can see it, and moved in once it is a child of
+    // the Orbis window. `windowsHide` below was carrying this comment's promise and cannot keep it: it hides a
+    // console, not a window. So the browser stood on screen as a window of its own for as long as the embedding took
+    // -- seconds, with Chromium's own restore bubble on it -- which is exactly what a person saw as Orbis "opening a
+    // new window". Off-screen first means there is nothing to see at any point.
+    ...(o.hidden ? ['--window-position=-32000,-32000'] : []),
     ...(o.args ?? []),
     ...(o.urls ?? [])
   ]

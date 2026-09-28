@@ -17,7 +17,16 @@ const KINDS: { domain: ControlDomain; label: string; about: string }[] = [
   { domain: 'whiteboard', label: 'Whiteboard', about: 'Put things on whiteboards' },
   { domain: 'workspaces', label: 'Workspaces', about: 'Save and open sets of tabs' },
   { domain: 'workflows', label: 'Workflows', about: 'Run saved workflows and skills' },
+  {
+    domain: 'markets',
+    label: 'Markets',
+    // What switching it off stops, and what it never could have done: the distinction is the point of the sentence.
+    about: 'Read prices, screen markets, set alerts and place simulated paper trades. Never a real order — Orbis holds no exchange credentials'
+  },
   { domain: 'experience', label: 'New tab and widgets', about: 'Change your widgets, theme and wallpaper' },
+  // Locking things and reading what is protected. Switching this off does not weaken a lock: a locked tab is refused
+  // whatever this says, because that refusal is not a capability and has no switch.
+  { domain: 'security', label: 'Locking tabs and Orbis', about: 'Lock protected tabs, lock Orbis, and see what is protected' },
   { domain: 'settings', label: 'Orbis settings', about: 'Change how Orbis itself is set up' },
   { domain: 'permissions', label: 'Site permissions', about: 'Allow or block camera, location and the like' },
   { domain: 'extensions', label: 'Extensions', about: 'Install, switch off and remove extensions' },

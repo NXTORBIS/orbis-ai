@@ -25,7 +25,44 @@ import type { StepRunView } from './stepPlan'
 import type { Feed, Weather } from './widgetData'
 import type { SpecializedOutcome } from './searchProviders'
 import type { VoiceErrorCode, VoiceModel } from './voiceInput'
+import type { LockTrigger, TabLockPolicy } from './tabLock'
+import type { ProfileLockPolicy } from './profileLock'
+import type { SecurityEvent } from './securityEvents'
+import type { MarketsState, MarketDetail, DiscoveryAnswer, WatchlistsAnswer, AlertsAnswer, ScreenAnswer, PaperAnswer, StrategiesAnswer, BacktestAnswer, NewsAnswer, CurrencyAnswer, ExperienceAnswer, OnboardingAnswer, DerivativesAnswer, TapeAnswer, BookAnswer} from '../main/markets/ipc'
+import type { Contract, FundingPoint, LongShortRatio, OpenInterestPoint } from './markets/derivatives'
+import type { Drawing } from './markets/drawings'
+import type { Layout as PanelLayout } from './markets/panels'
+import type { MarketTrigger } from './markets/triggers'
+import type { MarginSettings, AccountMargin, PositionMargin } from './markets/margin'
+import type { IndexedSeries, CompareStat, CorrelationCell } from './markets/compare'
+import type { WalkSummary, MonteCarloResult } from './markets/validation'
+import type { MarketsExperienceProfile, ExperienceSettings } from './markets/experience'
+import type { OnboardingDraft, DraftProblem } from './markets/onboarding'
+import type { Explanation } from './markets/glossary'
+import type { TickerConfig } from './markets/workspace'
+import type { Instrument, QuoteView } from './markets/instrument'
+import type { Candle, TradePrint } from './markets/provider'
+import type { MarketRow } from './markets/discovery'
+import type { SavedScreen } from './markets/screener'
+import type { Strategy } from './markets/strategy'
+import type { SweepPoint } from './markets/backtest'
+import type { BacktestRun, MarketsLayout } from './markets/workspace'
+import type {
+  ProfileLockDone,
+  ProfileLockRefusal,
+  ProfileLockState,
+  ProfileLockedEvent
+} from './profileLockView'
+import type {
+  TabLockDone,
+  TabLockExplanation,
+  TabLockGroup,
+  TabLockRefusal,
+  TabLockState
+} from './tabLockView'
+import type { PasswordVerdict } from './passwordStrength'
 import type { WhisperModelId, WhisperDownloadProgress, WhisperHardwareInfo } from './whisperModels'
+import type { AccountRefusal, AccountStatus } from './account.ts'
 import type { SecretDetail, SecretInput, SecretSummary, VaultStatus } from './vault'
 
 /** A vault call that could not be done, and why. Never carries anything of the vault. */
@@ -44,6 +81,8 @@ export interface DefaultBrowserState {
 }
 import type { RunControl as WorkflowRunControl, StepRecord } from './browserControl'
 import type { ActiveWorkflowRun, RecordingState, Workflow, WorkflowIssue, WorkflowLibrary, WorkflowRunResult, WorkflowRunSummary, WorkflowVersion } from './workflows'
+import type { Finding, HealthReport, Repair } from './workflowHealth'
+import type { Migration, Missing } from './workflowCompat'
 import type { Note, NoteFilter } from './notes'
 import type { Task, TaskCounts, TaskFilter, TaskList } from './tasks'
 import type { ClipboardSettings, ClipItem, ClipKind } from './clipboardHistory'
@@ -556,6 +595,377 @@ export interface NxtorbisApi {
   /** Kinds of browser action switched off for Orion, skills and workflows. */
   controlSwitches(): Promise<ControlDomain[]>
   setControlSwitch(domain: ControlDomain, on: boolean): Promise<ControlDomain[]>
+  /**
+   * The password on this profile's account.
+   *
+   * Which profile is never passed: the main process reads it from the profile store, so a window cannot ask about
+   * another profile's account.
+   */
+  accountStatus(): Promise<AccountStatus | AccountRefusal>
+  accountCreate(password: string, name: string): Promise<AccountStatus | AccountRefusal>
+  accountUnlock(password: string): Promise<AccountStatus | AccountRefusal>
+  accountLock(): Promise<AccountStatus | AccountRefusal>
+  /** Checks a password without unlocking, for authorising something. */
+  accountVerify(password: string): Promise<{ ok: boolean } | AccountRefusal>
+  accountChange(current: string, next: string, name: string): Promise<AccountStatus | AccountRefusal>
+  /**
+   * Tab Lock: private tabs behind their own password.
+   *
+   * Which profile is never passed, for the same reason the account's is not. Every call answers with the whole tab-lock
+   * state, so a screen never draws half of it -- and never with a locked tab's address, whatever it asked for.
+   */
+  /**
+   * Profile Lock: Orbis itself, behind the account password.
+   *
+   * A different layer from Tab Lock, and a different one from the account password that opens it. Which profile is never
+   * passed, for the same reason as everywhere else in this section.
+   */
+  /**
+   * What Orbis has recorded about its own security.
+   *
+   * Read and cleared, and nothing else: events are recorded by the code that does the thing, so a window cannot put an
+   * event in the log that did not happen. Nothing in the log is an address, a page or a credential -- the shape has no
+   * field for one.
+   */
+  /**
+   * Markets: the bottom strip and what it shows.
+   *
+   * Every call answers with the whole state, so a screen never draws half of it. Which profile is never passed -- the main
+   * process reads it from the profile store, as everywhere else.
+   */
+  marketsState(): Promise<MarketsState | { error: string; message?: string }>
+  /** The master switch. Off releases every market subscription and keeps every saved choice. */
+  marketsSetEnabled(enabled: boolean): Promise<MarketsState | { error: string; message?: string }>
+
+  // ---------------------------------------------------------------- the Markets page
+  /** Opens a market: starts watching it and answers with what its provider can actually be asked for. */
+  marketsOpen(instrumentId: string): Promise<MarketDetail | { error: string; message?: string }>
+  /** Releases what an open market was holding. */
+  marketsClose(instrumentId: string): Promise<{ closed: boolean } | { error: string; message?: string }>
+  marketsDetail(instrumentId: string): Promise<MarketDetail | { error: string; message?: string }>
+  /** The last price of each of these, for a list redrawing its rows without asking a provider per row. */
+  marketsQuotes(
+    instrumentIds: string[],
+    /** Ask a provider for anything that has never been priced, rather than answering from what is held. */
+    refresh?: boolean
+  ): Promise<
+    { quotes: { instrumentId: string; quote: QuoteView | null }[]; connection: string } | { error: string; message?: string }
+  >
+  marketsCandles(
+    instrumentId: string,
+    interval: string,
+    limit?: number
+  ): Promise<{ instrumentId: string; interval: string; candles: Candle[] } | { error: string; message?: string }>
+  /** The book, with whether it is provably current and whether the venue streams depth at all. */
+  marketsBook(instrumentId: string, depth?: number): Promise<BookAnswer | { error: string; message?: string }>
+  marketsBookOpen(instrumentId: string, depth?: number): Promise<BookAnswer | { error: string; message?: string }>
+  marketsBookClose(instrumentId: string): Promise<{ closed: boolean } | { error: string; message?: string }>
+  /** Opens the tape: seeds it from recent trades and starts streaming prints for this instrument only. */
+  marketsTapeOpen(instrumentId: string, limit?: number): Promise<{ trades: TradePrint[] } | { error: string; message?: string }>
+  marketsTape(instrumentId: string): Promise<{ trades: TradePrint[] } | { error: string; message?: string }>
+  marketsTapeClose(instrumentId: string): Promise<{ closed: boolean } | { error: string; message?: string }>
+  /** Movers, volume leaders, the heatmap and breadth, from one snapshot of every market. */
+  marketsDiscover(options?: {
+    limit?: number
+    tiles?: number
+    filter?: { quoteCurrency?: string; minQuoteVolume?: number; text?: string }
+  }): Promise<DiscoveryAnswer | { error: string; message?: string }>
+  marketsMovers(
+    kind: string,
+    limit?: number,
+    filter?: { quoteCurrency?: string; minQuoteVolume?: number; text?: string }
+  ): Promise<{ kind: string; rows: MarketRow[] } | { error: string; message?: string }>
+  marketsWatchlists(): Promise<WatchlistsAnswer | { error: string; message?: string }>
+  marketsWatchlistCreate(name: string): Promise<WatchlistsAnswer | { error: string; message?: string }>
+  marketsWatchlistRename(listId: string, name: string): Promise<WatchlistsAnswer | { error: string; message?: string }>
+  marketsWatchlistRemove(listId: string): Promise<WatchlistsAnswer | { error: string; message?: string }>
+  marketsWatchlistAdd(listId: string, instrumentId: string): Promise<WatchlistsAnswer | { error: string; message?: string }>
+  marketsWatchlistRemoveItem(
+    listId: string,
+    instrumentId: string
+  ): Promise<WatchlistsAnswer | { error: string; message?: string }>
+
+  // ---------------------------------------------------------------- screener and alerts
+  /** Runs a screen. Technical conditions cost a request per market, so the answer says what it examined and what it left out. */
+  marketsScreen(query: unknown): Promise<ScreenAnswer | { error: string; message?: string }>
+  marketsScreens(): Promise<{ screens: SavedScreen[] } | { error: string; message?: string }>
+  marketsScreenSave(
+    name: string,
+    query: unknown,
+    id?: string
+  ): Promise<{ screens: SavedScreen[]; saved: SavedScreen } | { error: string; message?: string }>
+  marketsScreenRemove(id: string): Promise<{ screens: SavedScreen[] } | { error: string; message?: string }>
+  marketsAlerts(): Promise<AlertsAnswer | { error: string; message?: string }>
+  marketsAlertSave(alert: unknown): Promise<AlertsAnswer | { error: string; message?: string }>
+  marketsAlertRemove(id: string): Promise<AlertsAnswer | { error: string; message?: string }>
+  marketsAlertHistoryClear(): Promise<AlertsAnswer | { error: string; message?: string }>
+
+  // ---------------------------------------------------------------- paper trading, always simulated
+  marketsPaper(): Promise<PaperAnswer | { error: string; message?: string }>
+  /** Starts a simulated account. Refuses to replace one with trades in it unless `replace` says so. */
+  marketsPaperStart(
+    startingCash: number,
+    currency?: string,
+    replace?: boolean
+  ): Promise<PaperAnswer | { error: string; message?: string }>
+  marketsPaperClose(): Promise<PaperAnswer | { error: string; message?: string }>
+  marketsPaperSettings(settings: {
+    slippage?: number
+    feeRate?: number
+    allowShort?: boolean
+  }): Promise<PaperAnswer | { error: string; message?: string }>
+  /** Places a simulated order. Nothing here reaches an exchange; there is no credential that could. */
+  marketsPaperOrder(order: {
+    instrumentId: string
+    side: 'buy' | 'sell'
+    type: 'market' | 'limit' | 'stop' | 'stop-limit'
+    quantity: number
+    limitPrice?: number
+    stopPrice?: number
+  }): Promise<(PaperAnswer & { outcome: { detail: string; state: string } }) | { error: string; message?: string }>
+  marketsPaperCancel(orderId: string): Promise<PaperAnswer | { error: string; message?: string }>
+
+  // ---------------------------------------------------------------- strategies and backtesting
+  marketsStrategies(): Promise<StrategiesAnswer | { error: string; message?: string }>
+  marketsStrategySave(
+    strategy: unknown
+  ): Promise<(StrategiesAnswer & { saved: Strategy }) | { error: string; message?: string }>
+  marketsStrategyRemove(id: string): Promise<StrategiesAnswer | { error: string; message?: string }>
+  /** Runs a strategy over real candles. Deterministic: the same inputs give the same result. */
+  marketsBacktest(
+    strategyId: string,
+    options?: {
+      bars?: number
+      startingCash?: number
+      slippage?: number
+      feeRate?: number
+      outOfSamplePercent?: number
+    }
+  ): Promise<BacktestAnswer | { error: string; message?: string }>
+  /** Sweeps one risk parameter. The warning it returns matters as much as the numbers. */
+  marketsBacktestSweep(
+    strategyId: string,
+    field: 'stopLossPercent' | 'takeProfitPercent' | 'trailingStopPercent',
+    values: number[]
+  ): Promise<{ points: SweepPoint[]; warning: string } | { error: string; message?: string }>
+  marketsBacktestRuns(): Promise<{ runs: BacktestRun[] } | { error: string; message?: string }>
+  marketsBacktestRunsClear(): Promise<{ runs: BacktestRun[] } | { error: string; message?: string }>
+
+  // ---------------------------------------------------------------- news, and where Markets was left
+  /** Crypto headlines from publishers' own feeds. Names the sources that could not be reached rather than going quiet. */
+  marketsNews(options?: {
+    limit?: number
+    asset?: string
+  }): Promise<NewsAnswer | { error: string; message?: string }>
+  marketsLayout(): Promise<MarketsLayout | { error: string; message?: string }>
+  marketsSetLayout(layout: Partial<MarketsLayout>): Promise<MarketsLayout | { error: string; message?: string }>
+
+  // ---------------------------------------------------------------- what money is shown in
+  /** The display currency, the rate it converts through, and how much to believe the conversion. */
+  /** Favourites and what was recently opened, with whatever prices the engine already holds. */
+  /** A market condition started a workflow. Said, so it is visible rather than something that happened silently. */
+  onMarketTrigger(
+    listener: (event: { id: string; describe: string; instrumentId: string; value: number | null }) => void
+  ): () => void
+  marketsFavourites(): Promise<
+    | {
+        favourites: { instrumentId: string; instrument: Instrument | null }[]
+        recent: { instrumentId: string; instrument: Instrument | null }[]
+        quotes: { instrumentId: string; quote: QuoteView | null }[]
+      }
+    | { error: string; message?: string }
+  >
+  marketsToggleFavourite(instrumentId: string): Promise<{ favourite: boolean } | { error: string; message?: string }>
+  marketsClearRecent(): Promise<{ cleared: boolean } | { error: string; message?: string }>
+  /** Chart annotations, stored in market coordinates so they survive zooming and reopening. */
+  marketsDrawings(instrumentId: string): Promise<{ drawings: Drawing[] } | { error: string; message?: string }>
+  marketsDrawingSave(
+    drawing: Partial<Drawing>
+  ): Promise<{ drawing: Drawing; drawings: Drawing[] } | { error: string; message?: string }>
+  marketsDrawingRemove(
+    id: string,
+    instrumentId: string
+  ): Promise<{ drawings: Drawing[] } | { error: string; message?: string }>
+  marketsDrawingsClear(instrumentId?: string): Promise<{ drawings: Drawing[] } | { error: string; message?: string }>
+  /** How the panels are arranged, and the arrangements on offer. */
+  marketsPanels(): Promise<
+    | { layout: PanelLayout; presets: { id: string; name: string; describe: string }[] }
+    | { error: string; message?: string }
+  >
+  marketsSetPanels(layout: PanelLayout): Promise<{ layout: PanelLayout } | { error: string; message?: string }>
+  marketsPanelsPreset(presetId: string): Promise<{ layout: PanelLayout } | { error: string; message?: string }>
+  marketsPanelsReset(): Promise<{ layout: PanelLayout } | { error: string; message?: string }>
+  /** What can start a market workflow. Each fires on the edge, never on the state. */
+  marketsTriggers(): Promise<
+    { triggers: { trigger: MarketTrigger; describe: string }[] } | { error: string; message?: string }
+  >
+  marketsTriggerSave(
+    trigger: Partial<MarketTrigger>
+  ): Promise<{ trigger: MarketTrigger; triggers: MarketTrigger[] } | { error: string; message?: string }>
+  marketsTriggerRemove(id: string): Promise<{ triggers: MarketTrigger[] } | { error: string; message?: string }>
+  /** The simulated margin picture. Every figure comes with the assumptions, because a liquidation price is a model's. */
+  marketsMargin(): Promise<
+    | {
+        settings: MarginSettings
+        account: AccountMargin
+        positions: { instrumentId: string; margin: PositionMargin | null }[]
+        assumptions: string[]
+      }
+    | { error: string; message?: string }
+  >
+  marketsSetMargin(
+    patch: Partial<MarginSettings>
+  ): Promise<{ settings: MarginSettings } | { error: string; message?: string }>
+  /** Several markets, indexed to a common start — because absolute prices are not comparable. */
+  marketsCompare(
+    instrumentIds: string[],
+    interval?: string,
+    limit?: number
+  ): Promise<
+    | {
+        interval: string
+        indexed: IndexedSeries[]
+        stats: CompareStat[]
+        correlations: CorrelationCell[]
+        missing: string[]
+        assumptions: string[]
+      }
+    | { error: string; message?: string }
+  >
+  /** Parameters judged on stretches they had not seen. The headline is the out-of-sample figure. */
+  marketsWalkForward(
+    strategyId: string,
+    options?: { windows?: number; trainRatio?: number; anchored?: boolean; limit?: number }
+  ): Promise<{ summary: WalkSummary; assumptions: string[] } | { error: string; message?: string }>
+  /** The same trades in different orders. Generates nothing and forecasts nothing. */
+  marketsMonteCarlo(
+    strategyId: string,
+    options?: { runs?: number; seed?: number; limit?: number }
+  ): Promise<
+    { trades: number; result: MonteCarloResult; assumptions: string[] } | { error: string; message?: string }
+  >
+  /**
+   * Everything about one contract's derivatives state, in one answer.
+   *
+   * Every field is null where the venue does not publish it, and `available` says which panels can exist at all -- so a
+   * derivatives section is absent rather than empty.
+   */
+  marketsDerivatives(
+    instrumentId: string,
+    window?: string
+  ): Promise<DerivativesAnswer | { error: string; message?: string }>
+  marketsFundingHistory(
+    instrumentId: string,
+    limit?: number
+  ): Promise<{ points: FundingPoint[]; available: boolean } | { error: string; message?: string }>
+  marketsOiHistory(
+    instrumentId: string,
+    window?: string,
+    limit?: number
+  ): Promise<{ points: OpenInterestPoint[]; available: boolean } | { error: string; message?: string }>
+  /** Positioning, with whose it is stated: accounts net long is not long open interest. */
+  marketsLongShort(
+    instrumentId: string,
+    window?: string,
+    limit?: number
+  ): Promise<{ points: LongShortRatio[]; available: boolean } | { error: string; message?: string }>
+  marketsContracts(kind?: string): Promise<{ contracts: Contract[] } | { error: string; message?: string }>
+  /** The trade tape with its analysis. Pressure is measured over the whole tape, never the filtered view. */
+  marketsTapeAnalysis(
+    instrumentId: string,
+    options?: { filter?: string; threshold?: number; window?: string; priceBucket?: number; timeBucket?: number }
+  ): Promise<TapeAnswer | { error: string; message?: string }>
+  /** How Markets should behave for this profile: the answers, the resolved settings, and whether setup is still owed. */
+  marketsExperience(): Promise<ExperienceAnswer | { error: string; message?: string }>
+  marketsSetExperience(
+    patch: Partial<MarketsExperienceProfile>
+  ): Promise<ExperienceAnswer | { error: string; message?: string }>
+  /** One setting, set by hand. Recorded as an override so no preset later undoes it. */
+  marketsExperienceOverride(
+    patch: Partial<ExperienceSettings>
+  ): Promise<ExperienceAnswer | { error: string; message?: string }>
+  marketsResetExperience(): Promise<ExperienceAnswer | { error: string; message?: string }>
+  /** Reads a sentence as a request to change the experience, and changes nothing. Null when it was not one. */
+  marketsExperienceRequest(said: string): Promise<
+    | { patch: Partial<MarketsExperienceProfile> | null; applied: boolean; experience: ExperienceAnswer }
+    | { error: string; message?: string }
+  >
+  marketsLearned(termId: string, hint?: boolean): Promise<ExperienceAnswer | { error: string; message?: string }>
+  /** One definition, in this profile's vocabulary. Not found rather than invented. */
+  marketsExplain(
+    asked: string
+  ): Promise<
+    { found: boolean; explanation: Explanation | null; terminology: string } | { error: string; message?: string }
+  >
+  marketsGlossary(
+    surface?: string
+  ): Promise<{ terminology: string; terms: Explanation[] } | { error: string; message?: string }>
+  marketsOnboarding(): Promise<OnboardingAnswer | { error: string; message?: string }>
+  marketsOnboardingDraft(draft: OnboardingDraft): Promise<OnboardingAnswer | { error: string; message?: string }>
+  marketsOnboardingApply(draft: OnboardingDraft): Promise<
+    | { ok: boolean; problems: DraftProblem[]; missing?: number; experience: ExperienceAnswer }
+    | { error: string; message?: string }
+  >
+  marketsOnboardingSkip(): Promise<ExperienceAnswer | { error: string; message?: string }>
+  marketsOnboardingRestart(): Promise<ExperienceAnswer | { error: string; message?: string }>
+  marketsCurrency(): Promise<CurrencyAnswer | { error: string; message?: string }>
+  /** Chooses one by hand. Recorded as manual, so detection never reaches for it again. */
+  marketsSetCurrency(code: string): Promise<CurrencyAnswer | { error: string; message?: string }>
+  marketsResetCurrency(): Promise<CurrencyAnswer | { error: string; message?: string }>
+  marketsCurrencyOptions(patch: {
+    favourites?: string[]
+    compact?: boolean
+  }): Promise<CurrencyAnswer | { error: string; message?: string }>
+  marketsSetTicker(config: Partial<TickerConfig>): Promise<MarketsState | { error: string; message?: string }>
+  marketsSearch(query: string): Promise<{ results: Instrument[] } | { error: string; message?: string }>
+  marketsTickerAdd(instrumentId: string): Promise<MarketsState | { error: string; message?: string }>
+  marketsTickerRemove(instrumentId: string): Promise<MarketsState | { error: string; message?: string }>
+  marketsAddGroup(name: string): Promise<MarketsState | { error: string; message?: string }>
+  marketsSetGroup(groupId: string): Promise<MarketsState | { error: string; message?: string }>
+  marketsRemoveGroup(groupId: string): Promise<MarketsState | { error: string; message?: string }>
+  marketsRefresh(): Promise<MarketsState | { error: string; message?: string }>
+  /** An alert fired. Carries the label and the value, never anything about a page. */
+  onMarketAlert(listener: (event: { id: string; label: string; symbol: string; value: number }) => void): () => void
+  /** The strip asked the window to open something: a chart, a watchlist, an alert, or the group chooser. */
+  onMarketsOpen(listener: (event: { what: string; instrumentId: string }) => void): () => void
+  /** Orion, the Orb or a workflow asking for a market to be brought up on screen. */
+  onMarketsShow(listener: (event: { instrumentId: string; section?: string }) => void): () => void
+  securityLog(): Promise<SecurityEvent[] | AccountRefusal>
+  clearSecurityLog(): Promise<{ ok: true } | AccountRefusal>
+  profileLockState(): Promise<ProfileLockState | ProfileLockRefusal>
+  profileLockSave(policy: Partial<ProfileLockPolicy>): Promise<ProfileLockDone | ProfileLockRefusal>
+  /** Locks Orbis now. Always works, even with Profile Lock switched off: somebody asked. */
+  profileLockNow(): Promise<ProfileLockDone | ProfileLockRefusal>
+  /** Orbis locked itself. Carries why, so the unlock screen can say so rather than looking like a fault. */
+  onAccountLocked(listener: (event: ProfileLockedEvent) => void): () => void
+  tabLockState(): Promise<TabLockState | TabLockRefusal>
+  tabLockJudge(password: string, name: string): Promise<PasswordVerdict>
+  tabLockCreateGroup(name: string, password: string, policy?: Partial<TabLockPolicy>): Promise<{ group: TabLockGroup; state: TabLockState } | TabLockRefusal>
+  tabLockRemoveGroup(groupId: string, password: string): Promise<TabLockDone | TabLockRefusal>
+  tabLockUnlockGroup(groupId: string, password: string): Promise<TabLockDone | TabLockRefusal>
+  tabLockChangeGroupPassword(groupId: string, current: string, next: string): Promise<TabLockDone | TabLockRefusal>
+  /** The account password is the only way back into a forgotten tab password. */
+  tabLockResetGroupPassword(groupId: string, accountPassword: string, next: string): Promise<TabLockDone | TabLockRefusal>
+  tabLockSetGroupPolicy(groupId: string, policy: Partial<TabLockPolicy>): Promise<TabLockDone | TabLockRefusal>
+  tabLockSetDefaultPolicy(policy: Partial<TabLockPolicy>): Promise<TabLockDone | TabLockRefusal>
+  tabLockAddRule(rule: { pattern: string; groupId: string; enabled?: boolean; schedule?: unknown }): Promise<TabLockDone | TabLockRefusal>
+  tabLockRemoveRule(ruleId: string): Promise<TabLockDone | TabLockRefusal>
+  tabLockSetRules(rules: unknown): Promise<TabLockDone | TabLockRefusal>
+  tabLockProtect(tabId: number, groupId: string): Promise<TabLockDone | TabLockRefusal>
+  /** Taking protection off needs the password too: it is as much a decision as putting it on. */
+  tabLockUnprotect(tabId: number, password: string): Promise<TabLockDone | TabLockRefusal>
+  tabLockUnlockTab(tabId: number, password: string): Promise<TabLockDone | TabLockRefusal>
+  tabLockLockTab(tabId: number): Promise<TabLockDone | TabLockRefusal>
+  tabLockSetTabPolicy(tabId: number, policy: Partial<TabLockPolicy> | null): Promise<TabLockDone | TabLockRefusal>
+  /** Everything protected, locked, and every tab password closed. */
+  tabLockLockAll(): Promise<(TabLockDone & { count: number }) | TabLockRefusal>
+  tabLockExplain(tabId: number): Promise<TabLockExplanation | TabLockRefusal>
+  /** Whether a label somebody is typing would give the site away. */
+  tabLockCheckLabel(label: string, url: string): Promise<{ reveals: boolean }>
+  /** A tab locked or unlocked. Carries no address and no title of the page -- only the tab, and why. */
+  onTabLockChanged(listener: (change: { tabId: number; locked: boolean; reason: LockTrigger | null; label: string }) => void): () => void
+  /** Several tabs locked at once: the computer locked, it slept, Orbis started, or somebody asked for everything. */
+  onTabLockSwept(listener: (event: { count: number; reason: LockTrigger }) => void): () => void
   vaultStatus(): Promise<VaultStatus | VaultError>
   vaultQuestion(): Promise<string | null | VaultError>
   vaultCreate(password: string, recovery?: { question: string; answer: string }): Promise<VaultStatus | VaultError>
@@ -728,7 +1138,23 @@ export interface NxtorbisApi {
   resumeWorkflowRun(runId: string, inputs?: Record<string, unknown>): Promise<WorkflowRunResult>
   discardWorkflowCheckpoint(runId: string): Promise<void>
   /** Orion drafts a workflow from words, or changes an existing one; nothing is saved until the user saves it. */
-  draftWorkflow(instruction: string, workflowId?: string): Promise<Workflow>
+  draftWorkflow(instruction: string, workflowId?: string): Promise<{ workflow: Workflow; issues: WorkflowIssue[] }>
+  /** How a workflow is actually doing, from its own run history. */
+  workflowHealth(workflowId: string): Promise<HealthReport>
+  /** What its runs show is worth changing, measured rather than guessed. */
+  workflowFindings(workflowId: string): Promise<Finding[]>
+  /** What to change about one that keeps failing. Proposals for a person; nothing is applied on its own. */
+  workflowRepairs(workflowId: string): Promise<Repair[]>
+  /** Whether it still fits this Orbis, and what it would take. */
+  workflowCompatibility(workflowId: string): Promise<{ ok: boolean; why: string; problems: Missing[]; migration: Migration }>
+  /** Applies a migration the person accepted, as an ordinary save with a version history entry. */
+  applyWorkflowMigration(workflowId: string): Promise<Workflow>
+  /** Which workflows an Orbis change has broken, found together rather than one failure at a time. */
+  workflowsAffectedByUpdate(): Promise<{ workflow: Workflow; problems: Missing[] }[]>
+  /** Workflows waiting for the browser to be free, and what each is waiting on. */
+  workflowsWaiting(): Promise<{ workflowId: string; queuedAt: number; reason: string }[]>
+  /** Takes one out of the queue without running it. */
+  unqueueWorkflow(workflowId: string): Promise<boolean>
   startWorkflowRecording(): Promise<RecordingState>
   pauseWorkflowRecording(paused: boolean): Promise<RecordingState>
   stopWorkflowRecording(): Promise<RecordingState>
@@ -831,4 +1257,391 @@ export interface NxtorbisApi {
   checkExperienceImport(raw: unknown): Promise<ImportCheck & { changes?: ConfigChange[] }>
   importExperience(raw: unknown, how?: 'replace' | 'merge'): Promise<{ config: ExperienceConfig; changes: ConfigChange[] }>
   onExperienceChanged(listener: (config: ExperienceConfig) => void): () => void
+
+  // ---------------------------------------------------------------- Orbis Pages
+
+  /** Everything the Pages library needs in one answer. */
+  pagesState(): Promise<
+    | {
+        pages: PageCard[]
+        unavailable: PageCard[]
+        recent: PageCard[]
+        favourites: PageCard[]
+        categories: PageCategoryNode[]
+        tags: { tag: string; count: number }[]
+        problems: { slug: string; message: string }[]
+      }
+    | { error: string; message?: string }
+  >
+  pagesList(filter?: {
+    category?: string
+    tag?: string
+    kind?: string
+    favourite?: boolean
+    offline?: boolean
+  }): Promise<{ pages: PageCard[] } | { error: string; message?: string }>
+  pagesSearch(
+    query: string,
+    options?: { limit?: number; offlineOnly?: boolean; category?: string }
+  ): Promise<{ results: PageSearchHit[] } | { error: string; message?: string }>
+  pagesSuggest(prefix: string): Promise<{ suggestions: PageCard[] } | { error: string; message?: string }>
+  pagesRelated(
+    pageId: string
+  ): Promise<{ related: { page: PageCard; matched: string[] }[] } | { error: string; message?: string }>
+  /** Reads an address without counting it as a visit, for the router. */
+  pagesResolve(url: string): Promise<PageResolution | { error: string; message?: string }>
+  pagesOpen(url: string): Promise<PageResolution | { error: string; message?: string }>
+  pagesFavourite(
+    pageId: string,
+    favourite: boolean
+  ): Promise<{ favourite: boolean } | { error: string; message?: string }>
+  pagesDetail(pageId: string): Promise<
+    | {
+        page: PageCard
+        requests: { name: string; risk: string; reason: string }[]
+        permissions: PagePermission[] | null
+        projects: PageProjectSummary[]
+        related: { page: PageCard; matched: string[] }[]
+        dependencies: { id: string; atLeast: string; optional: boolean }[]
+        languages: string[]
+      }
+    | { error: string; message?: string }
+  >
+  pagesPermissions(pageId: string): Promise<
+    | { permissions: PagePermission[]; requests: { name: string; risk: string; reason: string }[] }
+    | { error: string; message?: string }
+  >
+  /**
+   * Records a permission after somebody has answered.
+   *
+   * `scope` limits it -- an origin, for a network capability. An empty string means the capability has no scope; a scope
+   * Orbis cannot read becomes a refusal rather than a wider grant.
+   */
+  pagesGrant(
+    pageId: string,
+    capabilityId: string,
+    scope?: string,
+    minutes?: number
+  ): Promise<{ granted: boolean; message?: string; permissions?: PagePermission[] | null }>
+  pagesRevoke(
+    pageId: string,
+    capabilityId?: string
+  ): Promise<{ permissions: PagePermission[] | null } | { error: string; message?: string }>
+  /**
+   * The one door to the computational engines.
+   *
+   * Every operation is checked against the Page's capabilities before an engine runs, so a Page without the capability an
+   * operation needs is refused whatever it asks for.
+   */
+  pagesCompute(request: {
+    pageId: string
+    operation: string
+    input: Record<string, unknown>
+  }): Promise<PageComputeResult>
+  pagesProjects(pageId: string): Promise<{ projects: PageProjectSummary[] } | { error: string; message?: string }>
+  pagesProjectSave(
+    pageId: string,
+    projectId: string | null,
+    name: string,
+    state: Record<string, unknown>
+  ): Promise<
+    | { saved: true; project: PageProjectSummary; projects: PageProjectSummary[] }
+    | { saved: false; error: string; message: string }
+    | { error: string; message?: string }
+  >
+  pagesProjectDelete(
+    pageId: string,
+    projectId: string
+  ): Promise<{ deleted: boolean; projects: PageProjectSummary[] } | { error: string; message?: string }>
+  pagesHealth(): Promise<
+    | { health: PageRegistryHealth; problems: { slug: string; message: string }[] }
+    | { error: string; message?: string }
+  >
+
+  /**
+   * A Page packed up as a file.
+   *
+   * Refused when the scan finds something that looks like a credential. `acceptSecrets` is only ever true because
+   * somebody was shown each finding and chose to include it anyway.
+   */
+  pagesExport(
+    pageId: string,
+    entries: { path: string; content: string }[],
+    acceptSecrets: boolean
+  ): Promise<
+    | { ok: true; package: unknown; secrets: PageSecretFinding[]; notes: string[] }
+    | { ok: false; error: string; message: string }
+    | { error: string; message?: string }
+  >
+
+  /** A package described so somebody can decide about it. Nothing is installed and nothing is granted by this call. */
+  pagesInspectPackage(
+    raw: unknown,
+    packedBytes?: number
+  ): Promise<
+    | {
+        ok: true
+        manifest: unknown
+        files: number
+        requested: { id: string; name: string; description: string; risk: string }[]
+        unknownCapabilities: string[]
+        /** Whether the checksum matched. Means "not corrupted", never "not tampered with". */
+        intact: boolean
+        warnings: string[]
+        beforeYouDecide: string[]
+      }
+    | { ok: false; error: string; message: string }
+    | { error: string; message?: string }
+  >
+
+  /** A fault turned into advice, with what each recovery costs attached to it. */
+  pagesDiagnose(
+    fault: { kind: string; detail: string; at?: number; pageId?: string; repeats?: number },
+    context?: { hasCheckpoint?: boolean; hasUnsavedWork?: boolean; everStarted?: boolean }
+  ): Promise<
+    | {
+        ok: true
+        source: string
+        summary: string
+        consequence: string
+        actionable: boolean
+        recurring: boolean
+        suggestions: { action: string; label: string; cost: string; automatic: boolean }[]
+      }
+    | { error: string; message?: string }
+  >
+
+  /** An accessibility audit. It never comes back as a pass, and `cannotCheck` is the part that says why. */
+  pagesAudit(
+    elements: PageAuditElement[]
+  ): Promise<
+    | {
+        ok: true
+        findings: { severity: string; element: string; problem: string; fix: string; rule: string }[]
+        checked: string[]
+        cannotCheck: string[]
+        counts: Record<string, number>
+        headline: string
+      }
+    | { error: string; message?: string }
+  >
+
+  /** A Page built in the builder, checked before it may run. */
+  pagesCheckDocument(
+    document: unknown
+  ): Promise<
+    | {
+        ok: true
+        problems: { at: string; severity: 'error' | 'warning'; message: string; code: string }[]
+        canRun: boolean
+        operations: string[]
+        unusedFields: string[]
+      }
+    | { error: string; message?: string }
+  >
+
+  /**
+   * A question answered by an engine where it can be.
+   *
+   * `computed: false` means answer it the ordinary way, not that there is no answer. A model must never produce a
+   * number it could have computed, and this is the call that decides which case a question is.
+   */
+  pagesAnswer(
+    question: string
+  ): Promise<
+    | {
+        ok: true
+        computed: true
+        text: string
+        operation: string
+        understood: string
+        notes: string[]
+        pageId: string
+        pageTitle: string
+      }
+    | { ok: true; computed: false; because: string }
+    | { error: string; message?: string }
+  >
+
+  /** Who can receive what from another Page. Only what each Page declared. */
+  pagesParticipants(): Promise<
+    | {
+        participants: {
+          pageId: string
+          title: string
+          slug: string
+          running: boolean
+          accepts: { kind: string; describe: string; replies: boolean }[]
+          canSend: boolean
+        }[]
+      }
+    | { error: string; message?: string }
+  >
+
+  /**
+   * One Page's message to another.
+   *
+   * Both ends have to agree: the sender needs `page.send` and the receiver must have declared it accepts that kind.
+   * Every reason a message cannot be delivered gives the same answer, because the differences between them are a map
+   * of what is installed.
+   */
+  pagesSend(
+    fromPageId: string,
+    toPageId: string,
+    kind: string,
+    body: unknown
+  ): Promise<
+    | { ok: true; to: string; kind: string; hops: number; expectsReply: boolean; notes: string[] }
+    | { ok: false; error: string; message: string }
+    | { error: string; message?: string }
+  >
+
+  /** Which Pages, if any, answer a search better than the results they would displace. */
+  pagesSearchModule(
+    query: string,
+    intents: { intent: string; confidence: number }[],
+    looksLikeUrl: boolean
+  ): Promise<
+    | { ok: true; show: boolean; rank: number; heading: string; because: string; suggestions: PageSuggestionCard[] }
+    | { error: string; message?: string }
+  >
+}
+
+/** Something in an export that looked like a credential. Never carries the value itself. */
+export interface PageSecretFinding {
+  entry: string
+  looksLike: string
+  line: number
+}
+
+/** An element as a Page describes itself for an accessibility audit. */
+export interface PageAuditElement {
+  id: string
+  role: string
+  name?: string
+  keyboardReachable?: boolean
+  focusOrder?: number
+  foreground?: string
+  background?: string
+  fontPixels?: number
+  bold?: boolean
+  width?: number
+  height?: number
+  colourOnly?: boolean
+  animates?: boolean
+  respectsReducedMotion?: boolean
+  alternativeText?: string
+  decorative?: boolean
+}
+
+/** A Page offered as an answer to a search, with the reason it was chosen. */
+export interface PageSuggestionCard {
+  pageId: string
+  slug: string
+  title: string
+  summary: string
+  icon: string
+  confidence: number
+  /** Every signal that contributed, in words. Shown, so a wrong suggestion can be seen to be wrong. */
+  because: string[]
+  prefill: string | null
+}
+
+// ---------------------------------------------------------------- Orbis Pages
+
+/**
+ * One Page, as the interface sees it.
+ *
+ * Deliberately not the whole registry entry: the trust level stays in the main process, because it is not the renderer's
+ * business and anything sent to the renderer eventually gets displayed.
+ */
+export interface PageCard {
+  pageId: string
+  slug: string
+  /** The canonical address. What a bookmark should store. */
+  url: string
+  title: string
+  description: string
+  kind: string
+  icon: string
+  version: string
+  categories: string[]
+  tags: string[]
+  status: 'available' | 'archived' | 'needs-review' | 'incompatible' | 'blocked'
+  /** Whether everything it does works with no network. */
+  offline: boolean
+  favourite: boolean
+  openCount: number
+  lastOpenedAt: number | null
+  /** What the Page says it cannot do. Shown rather than discovered. */
+  limitations: string[]
+  summary: string
+  /** Why it is not available, when it is not. Empty otherwise. */
+  note: string
+}
+
+export interface PageSearchHit {
+  page: PageCard
+  score: number
+  /** Which signals fired, so a ranking can be explained rather than trusted. */
+  matched: string[]
+}
+
+export interface PageCategoryNode {
+  path: string
+  name: string
+  /** Pages filed directly here. */
+  count: number
+  /** Pages here or anywhere below. */
+  total: number
+  children: PageCategoryNode[]
+}
+
+export interface PagePermission {
+  capabilityId: string
+  name: string
+  risk: 'low' | 'medium' | 'high' | 'critical'
+  /** What is actually true now, rather than what the Page asked for. */
+  outcome: 'allow' | 'deny' | 'prompt' | 'unavailable'
+  scope: string
+  message: string
+}
+
+export type PageResolution =
+  | {
+      found: true
+      page: PageCard
+      /** The Page's own navigation within itself. */
+      route: string[]
+      params: Record<string, string>
+      fragment?: string
+      canonicalUrl: string
+      /** Set when an old address redirected here. */
+      redirectedFrom: string | null
+    }
+  | { found: false; reason: 'bad-address' | 'not-found' | 'unavailable'; message: string }
+
+export type PageComputeResult =
+  | { ok: true; operation: string; value: unknown }
+  | { ok: false; operation: string; error: string; message: string; capability?: string }
+
+export interface PageProjectSummary {
+  projectId: string
+  pageId: string
+  name: string
+  createdAt: number
+  updatedAt: number
+  state: Record<string, unknown>
+}
+
+export interface PageRegistryHealth {
+  pages: number
+  available: number
+  archived: number
+  needsReview: number
+  incompatible: number
+  danglingAliases: string[]
+  duplicateSlugs: string[]
+  duplicateIds: string[]
+  healthy: boolean
 }

@@ -47,6 +47,14 @@ export interface ChromiumCapabilityDeps {
   control: BrowserControl
   browser: CdpBrowser
   bridge: ExtensionBridge
+  /**
+   * Reduces locked tabs to what they may say, before a listing leaves this layer.
+   *
+   * A locked tab is not hidden from a listing -- it appears, marked locked, with no address and a neutral title. Hiding it
+   * outright would mean one locked tab made Orion's picture of the browser wrong, and a wrong picture is worse than a
+   * withheld one. Left out entirely, nothing is redacted, which is how this behaved before tab locking existed.
+   */
+  redactTabs?<T extends { id: string; url: string; title: string }>(rows: T[]): (T & { locked: boolean })[]
 }
 
 const webUrl = (input: string): string | null => {
@@ -83,7 +91,14 @@ export function registerChromiumCapabilities(d: ChromiumCapabilityDeps): void {
   }
   const pageFor = (tab: ChromiumTab): CdpPage => browser.list().find((p) => p.targetId === tab.targetId) ?? fail('unavailable', "That tab's page is not reachable.", true)
 
-  control.registerState('tabs', async () => tabRows().catch(() => []))
+  /** Rows as anything outside this layer is allowed to see them. Every listing goes through here; actions do not, because a locked tab is refused before an action runs. */
+  const safeRows = async (): Promise<unknown[]> => {
+    const rows = await tabRows().catch(() => [])
+    const shown = rows.map(({ targetId: _t, ...tab }) => tab)
+    return d.redactTabs ? d.redactTabs(shown) : shown
+  }
+
+  control.registerState('tabs', () => safeRows())
 
   // ---------------------------------------------------------------- tabs
 
@@ -95,7 +110,7 @@ export function registerChromiumCapabilities(d: ChromiumCapabilityDeps): void {
     params: {},
     mutates: false,
     confirmation: 'none',
-    run: async () => (await tabRows()).map(({ targetId: _t, ...tab }) => tab)
+    run: () => safeRows()
   })
 
   control.register({

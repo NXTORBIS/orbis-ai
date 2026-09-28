@@ -11,6 +11,10 @@ import type { Research } from '../shared/types'
 import { createAdblockHandlers } from './adblock/service.ts'
 import { createPersonalHandlers } from './personal.ts'
 import { createSecretsHandlers } from './secrets.ts'
+import { createTabLockHandlers } from './tabLock.ts'
+import type { TabLockDeps } from './tabLock.ts'
+import { createMarketsHandlers } from './markets.ts'
+import type { MarketsHelperDeps } from './markets.ts'
 import type { SecretsDeps } from './secrets.ts'
 import { createWorkflowHandlers } from './workflows.ts'
 import type { WorkflowsDeps } from './workflows.ts'
@@ -25,9 +29,23 @@ import { createGalaxyHandlers } from './galaxy.ts'
 import type { GalaxyDeps } from './galaxy.ts'
 import { createBrowserControlHandlers } from './browserControl.ts'
 import { createBrowserTaskHandlers } from './browser/tasks.ts'
+import { createOrionHandlers } from './orion.ts'
+import { gatherContext } from '../main/context/engine.ts'
+import { capabilityProvider, eventsProvider, pageProvider, tabsProvider, timeProvider } from '../main/context/providers.ts'
+import { bus } from '../main/eventBus.ts'
+import { createMemoryHandlers } from './memory.ts'
+import { createSkillHandlers } from './skills.ts'
+import { createTrayHandlers } from './tray.ts'
+import { createSearchPageHandlers } from './searchPage.ts'
+import { createOrbHandlers } from './orb/run.ts'
+import { WidgetFeeds } from '../main/widgetFeeds.ts'
+import { TrayStore } from '../main/personal/tray.ts'
+import { createVoiceHandlers, type VoiceDeps } from './voice.ts'
+import type { SkillManager } from '../main/skillManager.ts'
 import type { BrowserHost } from './browser/host.ts'
 import type { PanelControl } from './browserControl.ts'
 import { createPanelStoreHandlers } from './panelStores.ts'
+import { createOmniboxSuggestionHandlers } from './omniboxSuggestions.ts'
 import type { PanelStores } from './panelStores.ts'
 import { HelperError } from './server.ts'
 import type { Handler } from './server.ts'
@@ -55,6 +73,20 @@ export interface HandlerDeps {
    * into being after the helper does); returning null answers the panel with "not ready". Without them those channels do not exist.
    */
   secrets?: () => SecretsDeps | null | undefined
+  /**
+   * Tab Lock, for the browser's lock surface.
+   *
+   * The surface is drawn by the browser and the password is held by Orbis, so the surface asks over the helper like any
+   * other Orbis page. Absent when Orbis has no tab passwords yet, in which case the channels simply are not there.
+   */
+  tabLock?: () => TabLockDeps | null | undefined
+  /**
+   * Markets, for the strip along the bottom of the browser.
+   *
+   * Absent when Markets are not set up, in which case the channels simply are not there -- which is how the strip learns
+   * there is nothing to show rather than being told a price of zero.
+   */
+  markets?: () => MarketsHelperDeps | null | undefined
   workflows?: () => WorkflowsDeps | null | undefined
   galaxy?: () => GalaxyDeps | null | undefined
   /** The app's search-box suggestions and local speech to text, for the pages in the browser (search results); when given, those channels exist. */
@@ -104,6 +136,16 @@ export interface HandlerDeps {
    * The app runs the operation in the worker; without it the channel does not exist.
    */
   adblockControl?: (message: { type: string; [key: string]: unknown }) => Promise<unknown>
+  /**
+   * Speech to text, done here rather than sent anywhere: whisper.cpp over a model on this machine. It needs to be told
+   * where the binary is, which only whoever started the helper knows, so without this the voice channels do not exist.
+   */
+  voice?: () => VoiceDeps | null | undefined
+  /**
+   * The app's own skill library when the helper runs inside Orbis. Without it the helper opens the same files itself,
+   * so skills work either way; what it cannot do without a data folder and a workflow engine is have any at all.
+   */
+  skills?: () => { manager: SkillManager } | null | undefined
 }
 
 const ROLES = new Set(['user', 'assistant'])
@@ -125,7 +167,15 @@ function readMessages(value: unknown): ChatMessage[] {
     if (!m || typeof m !== 'object' || !ROLES.has(m.role as string) || typeof m.content !== 'string' || m.content.length > MAX_CONTENT) {
       throw new HelperError('bad-request', `Message ${i + 1} is not a valid message.`)
     }
-    return { id: typeof m.id === 'string' ? m.id.slice(0, 80) : `m${i}`, role: m.role as ChatMessage['role'], content: m.content, createdAt: typeof m.createdAt === 'number' ? m.createdAt : Date.now() }
+    // Pictures come through. Without this a question about an image was answered from its words alone, because the
+    // image was quietly dropped on the way in.
+    const attachments = Array.isArray(m.attachments)
+      ? m.attachments
+          .filter((a) => a && typeof a === 'object' && typeof a.content === 'string' && (a.type === 'image' || a.type === 'text'))
+          .slice(0, 4)
+          .map((a) => ({ name: typeof a.name === 'string' ? a.name.slice(0, 200) : 'image', type: a.type, content: a.content.slice(0, 8_000_000), ...(typeof a.mimeType === 'string' ? { mimeType: a.mimeType.slice(0, 100) } : {}) }))
+      : undefined
+    return { id: typeof m.id === 'string' ? m.id.slice(0, 80) : `m${i}`, role: m.role as ChatMessage['role'], content: m.content, createdAt: typeof m.createdAt === 'number' ? m.createdAt : Date.now(), ...(attachments?.length ? { attachments } : {}) }
   })
 }
 
@@ -139,27 +189,83 @@ function createAdblockControl(run: NonNullable<HandlerDeps['adblockControl']>): 
   }
 }
 
+/** One weather client, made when the first weather search happens and kept for the ones after it. */
+let feeds: WidgetFeeds | null = null
+const weatherFeeds = (fetchFn: typeof fetch, version: string): WidgetFeeds => {
+  feeds ??= new WidgetFeeds({ fetch: fetchFn as never, appVersion: version })
+  return feeds
+}
+
+const trays = new Map<string, TrayStore>()
+/** The tray store for a data folder, made once. Kept here so a helper that never opens the tray never opens its file. */
+function trayStore(dataDir: string): TrayStore {
+  const held = trays.get(dataDir)
+  if (held) return held
+  const made = new TrayStore(dataDir)
+  trays.set(dataDir, made)
+  return made
+}
+
 export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
   const doFetch = (url: string, init?: RequestInit): Promise<Response> => (deps.fetchFn ?? fetch)(url, init)
   // Orbis Search is two providers: ordinary web search, and a specialized one for every other category. Neither can
   // break the other — a category that cannot be reached says so and web search carries on.
   const specialized = new SearxngProvider({ endpoint: endpointFromEnvironment(), fetchFn: doFetch })
 
-  return {
+  // Named, because the router below runs the task agent and the chat that are defined in this same object.
+  const handlers: Record<string, Handler> = {
     ...createSearchSessionHandlers({ store: deps.searchSessions, userData: deps.dataDir, profileId: deps.profileId, apiKeys: deps.apiKeys, fetchFn: doFetch }),
     ...createFaviconHandlers({ fetchFn: doFetch }),
     ...createConversationHandlers({ store: deps.conversations, userData: deps.dataDir, profileId: deps.profileId }),
     ...(deps.dataDir ? createPersonalHandlers({ dataDir: deps.dataDir }) : {}),
     ...(deps.secrets ? createSecretsHandlers(deps.secrets) : {}),
+    ...(deps.tabLock ? createTabLockHandlers(deps.tabLock) : {}),
+    ...(deps.markets ? createMarketsHandlers(deps.markets) : {}),
     ...(deps.workflows ? createWorkflowHandlers(deps.workflows) : {}),
     ...(deps.galaxy ? createGalaxyHandlers(deps.galaxy) : {}),
     ...(deps.appServices ? createAppServiceHandlers(deps.appServices) : {}),
+    // What the browser's own address bar asks Orbis for. It needs both halves -- the app, for Orion's predictions and
+    // for whether history may be used, and the panel's stores, for workspaces and saved research -- and this is the
+    // one place that has both.
+    ...createOmniboxSuggestionHandlers({
+      stores: () => deps.stores?.(),
+      orion: async (input) => (await deps.appServices?.()?.suggestOrion(input)) ?? [],
+      personalized: async () => (await deps.appServices?.()?.personalizedSuggestions?.()) ?? true
+    }),
     ...(deps.browser
       ? createBrowserTaskHandlers({
           host: () => deps.browser!(),
           apiKeys: deps.apiKeys,
           fetchFn: doFetch as unknown as typeof fetch,
           defaultModel: DEFAULT_MODEL
+        })
+      : {}),
+    // Asking Orbis something, and Orbis choosing which of its own systems answers. It runs the task agent and the chat
+    // that are already here rather than repeating either.
+    ...(deps.apiKeys.length
+      ? createOrionHandlers({
+          apiKeys: deps.apiKeys,
+          fetchFn: doFetch as unknown as typeof fetch,
+          host: () => deps.browser?.(),
+          runTask: async (request, ctx) => handlers['browser:task']([request], ctx),
+          chat: async (request, ctx) => handlers['chat:send']([request], ctx),
+          /**
+           * The Context Engine, over the sources this side really has.
+           *
+           * The helper serves the browser's own pages, so it has the page, the tabs, the capability registry and the
+           * event bus -- and not the task or note stores, which belong to the Orbis window. So those providers are not
+           * listed, rather than listed and made to return nothing: a source Orbis does not have here is absent, and
+           * absent is different from empty.
+           */
+          context: async (request, signal) => {
+            const host = deps.browser?.()
+            const control = () => (host && host.alive ? host.control : null)
+            return gatherContext(
+              { text: request.text, ...(deps.profileId ? { profileId: deps.profileId } : {}) },
+              [timeProvider(), pageProvider(control), tabsProvider(control), capabilityProvider(control), eventsProvider(bus)],
+              { signal }
+            )
+          }
         })
       : {}),
     ...(deps.intro
@@ -195,6 +301,87 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
       ? createBrowserControlHandlers(() => deps.browserControl?.() ?? deps.browser?.()?.control ?? null)
       : {}),
     ...(deps.stores ? createPanelStoreHandlers(deps.stores) : {}),
+    // The Orb's control loop. It coordinates the systems above rather than repeating any of them: actions go through
+    // the Browser Control Layer, questions through the same chat Auto Mode picks a model for, and everything else
+    // through the channels already in this object.
+    ...(deps.apiKeys.length
+      ? createOrbHandlers({
+          control: () => deps.browserControl?.() ?? deps.browser?.()?.control ?? null,
+          has: (name) => Object.prototype.hasOwnProperty.call(handlers, name),
+          channel: (name, args, ctx) => {
+            const channel = handlers[name]
+            if (!channel) throw new HelperError('unavailable', `This Orbis has no ${name}.`)
+            return Promise.resolve(channel(args, ctx as never))
+          },
+          ask: async (prompt, signal, options) => {
+            let text = ''
+            await handlers['chat:send'](
+              [
+                {
+                  webSearch: false,
+                  messages: [
+                    {
+                      role: 'user',
+                      content: prompt,
+                      // A picture only when something needs to be looked at; Auto Mode picks the model that can.
+                      ...(options?.image ? { attachments: [{ name: 'page.png', type: 'image', content: options.image }] } : {})
+                    }
+                  ]
+                }
+              ],
+              {
+                emit: (event: StreamEvent) => {
+                  if (event.type === 'delta' && typeof event.content === 'string') text += event.content
+                },
+                signal
+              }
+            )
+            return text
+          }
+        })
+      : {}),
+    // Voice, skills and memory: three things the Orb and the Command Center offer, which until now existed only in the
+    // Electron app. None of them is a new system -- each is the same code the app runs -- but the browser could not
+    // reach any of them, so the buttons for them led nowhere. These are the ways in.
+    // Speech to text twice over would be a bug, not a fallback: the app's own service (appServices) and this one answer
+    // the same three channels. When Orbis is running, its service is the one with the models and the person's settings,
+    // so this exists only for the helper running on its own, where there is no app to ask.
+    ...(deps.voice && !deps.appServices ? createVoiceHandlers(deps.voice) : {}),
+    ...(deps.dataDir
+      ? createMemoryHandlers({ userData: deps.dataDir, profileId: () => deps.profileId })
+      : {}),
+    // The comparison tray: search results pinned side by side, and compared from what their pages say. It needs
+    // somewhere to keep the pins and a way to ask Orion; without either it does not exist, rather than half existing.
+    ...(deps.dataDir && deps.apiKeys.length
+      ? createTrayHandlers({
+          store: () => trayStore(deps.dataDir!),
+          fetchFn: doFetch as unknown as typeof fetch,
+          ask: async (prompt, signal) => {
+            let text = ''
+            await handlers['chat:send'](
+              [{ webSearch: false, messages: [{ role: 'user', content: prompt }] }],
+              {
+                emit: (event: StreamEvent) => {
+                  if (event.type === 'delta' && typeof event.content === 'string') text += event.content
+                },
+                signal
+              }
+            )
+            return text
+          }
+        })
+      : {}),
+    ...(deps.dataDir && deps.workflows
+      ? createSkillHandlers({
+          manager: () => deps.skills?.()?.manager,
+          userData: deps.dataDir,
+          profileId: deps.profileId,
+          workflows: () => deps.workflows!(),
+          // What the browser can do right now, asked of the browser. Null when there is no browser, which is the
+          // honest answer: a skill cannot be checked against a browser that is not running.
+          capabilities: () => deps.browser?.()?.control?.list() ?? null
+        })
+      : {}),
     ...(deps.adblockControl ? { 'adblock:control': createAdblockControl(deps.adblockControl) } : {}),
     ...(deps.adblock ? createAdblockHandlers({ ...deps.adblock, fetchFn: doFetch }) : {}),
     /** Whether the helper is there and the token works. Says nothing about the person's data. */
@@ -211,6 +398,35 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
       return runSearch({ query: words, vertical: 'all', fetchFn: doFetch, signal })
     },
     'search:specialized-health': () => specialized.check(),
+
+    // The composed results page: one query understood, then only the sections that query earns, each filled from
+    // something real. It reuses the searches above rather than opening a second way to search.
+    ...(deps.apiKeys.length
+      ? createSearchPageHandlers({
+          fetchFn: doFetch as unknown as typeof fetch,
+          // The same forecast service the weather widget uses (MET Norway), so a search and a widget can never
+          // disagree about the weather, and neither of them is a sentence somebody generated.
+          weather: async (place) => {
+            const answer = await weatherFeeds(doFetch as unknown as typeof fetch, deps.version ?? 'dev').weather(place)
+            return answer.ok ? answer.data : null
+          },
+          web: async (query, signal) => (await runSearch({ query, vertical: 'all', fetchFn: doFetch, signal })) as { results?: unknown[]; problem?: string },
+          specialized: async (category, query) => (await specialized.search(category as never, query)) as { results?: unknown[]; problem?: string },
+          ask: async (prompt, signal) => {
+            let text = ''
+            await handlers['chat:send'](
+              [{ webSearch: false, messages: [{ role: 'user', content: prompt }] }],
+              {
+                emit: (event: StreamEvent) => {
+                  if (event.type === 'delta' && typeof event.content === 'string') text += event.content
+                },
+                signal
+              }
+            )
+            return text
+          }
+        })
+      : {}),
 
     /**
      * Ask Orion. Streams the same events the Electron window receives (`start`, `delta`, `done`…) and ends with the
@@ -271,4 +487,6 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
       return { model: route.model }
     }
   }
+
+  return handlers
 }

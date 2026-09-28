@@ -14,5 +14,7 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true
   },
-  "include": ["src/renderer/src/**/*", "src/shared/**/*"]
+  "include": ["src/renderer/src/**/*", "src/shared/**/*"],
+  "//": "Tests in src/shared run under Node, not in the browser: they import node:test, which the renderer's type environment has no reason to know about. They are type-checked by tsconfig.node.json instead.",
+  "exclude": ["src/shared/**/*.test.ts"]
 }

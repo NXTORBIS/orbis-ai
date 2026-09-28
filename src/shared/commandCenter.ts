@@ -23,6 +23,7 @@ export type CommandCategory =
   | 'protection'
   | 'workspace'
   | 'customize'
+  | 'settings'
 
 export const CATEGORIES: { id: CommandCategory; label: string; icon: string; blurb: string }[] = [
   { id: 'browser', label: 'Browser', icon: 'tabs', blurb: 'Tabs, navigation, and everything Orbis keeps for you' },
@@ -33,7 +34,8 @@ export const CATEGORIES: { id: CommandCategory; label: string; icon: string; blu
   { id: 'media', label: 'Media', icon: 'media', blurb: 'What is playing, and where' },
   { id: 'protection', label: 'Privacy & Protection', icon: 'privacy', blurb: 'What a page is allowed to do' },
   { id: 'workspace', label: 'Workspace', icon: 'workspaces', blurb: 'Sets of tabs, and the things you are keeping' },
-  { id: 'customize', label: 'Customize', icon: 'customize', blurb: 'How Orbis looks and what sits on the toolbar' }
+  { id: 'customize', label: 'Customize', icon: 'customize', blurb: 'How Orbis looks and what sits on the toolbar' },
+  { id: 'settings', label: 'Settings', icon: 'settings', blurb: 'Every setting, found by name instead of hunted for' }
 ]
 
 /** What a capability needs before it can do anything. Checked before it is offered, not after it fails. */
@@ -55,6 +57,26 @@ export type Target =
   | { kind: 'view'; view: string }
   /** A page in the browser. */
   | { kind: 'page'; url: string }
+  /**
+   * Something the browser does, rather than somewhere it goes.
+   *
+   * `message` is the name of a handler the Orbis page already registers (chrome/browser/ui/webui/orbis/orbis_ui.cc).
+   * Naming the handler rather than describing the work is what keeps this honest: a capability cannot ask for
+   * something the browser has not been built to do, and a capability whose handler is missing does nothing and says
+   * so, rather than reporting a success nobody performed.
+   */
+  | { kind: 'do'; message: string }
+  /**
+   * Something Orbis does, rather than the browser.
+   *
+   * `channel` is a helper channel the Orbis side already answers. Needed because some things the Command Centre offers are
+   * not the browser's to do: only Orbis knows which tabs are protected and only Orbis holds the passwords, so "lock
+   * everything protected" has to be asked of Orbis rather than of the window it is drawn in.
+   *
+   * Same honesty as `do`: naming a channel rather than describing the work means a capability cannot ask for something
+   * that was never built, and one whose channel is missing says so instead of reporting a success nobody performed.
+   */
+  | { kind: 'ask'; channel: string }
 
 export interface OrbisCapability {
   id: string
@@ -84,6 +106,7 @@ export const CAPABILITIES: OrbisCapability[] = [
   { id: 'tabGroups', name: 'Tab groups', category: 'browser', description: 'The groups your tabs are gathered into', icon: 'tabGroups', keywords: ['group', 'collection'], target: { kind: 'view', view: 'tabGroups' }, pinnable: false, needs: ['browser', 'helper'] },
   { id: 'navigation', name: 'Navigation', category: 'browser', description: 'Back, forward, reload and stop', icon: 'back', keywords: ['back', 'forward', 'reload', 'refresh', 'stop'], target: { kind: 'view', view: 'controls' }, pinnable: false, needs: ['browser', 'helper'] },
   { id: 'zoom', name: 'Zoom', category: 'browser', description: 'How large this page is drawn', icon: 'zoomIn', keywords: ['zoom', 'bigger', 'smaller', 'text size'], target: { kind: 'view', view: 'controls' }, pinnable: false, needs: ['browser', 'helper', 'page'] },
+  { id: 'copyLink', name: 'Copy link', category: 'browser', description: "This page's address, on the clipboard", icon: 'clipboard', keywords: ['copy', 'link', 'url', 'address', 'share', 'clipboard'], target: { kind: 'do', message: 'orbis.page.copyLink' }, pinnable: false, needs: ['browser', 'page'] },
   { id: 'bookmarks', name: 'Bookmarks', category: 'browser', description: 'Pages kept for later', icon: 'bookmarks', keywords: ['bookmark', 'favourite', 'favorite', 'saved'], target: { kind: 'page', url: 'chrome://bookmarks/' }, pinnable: false, needs: ['browser'] },
   { id: 'history', name: 'History', category: 'browser', description: 'Where this profile has been', icon: 'history', keywords: ['history', 'visited', 'recent'], target: { kind: 'page', url: 'chrome://history/' }, pinnable: false, needs: ['browser'] },
   { id: 'downloads', name: 'Downloads', category: 'browser', description: 'Files Orbis has fetched', icon: 'downloads', keywords: ['download', 'file', 'saved'], target: { kind: 'page', url: 'chrome://downloads/' }, pinnable: false, needs: ['browser'] },
@@ -116,6 +139,13 @@ export const CAPABILITIES: OrbisCapability[] = [
   { id: 'media', name: 'Media', category: 'media', description: 'What is playing, and where', icon: 'media', keywords: ['media', 'audio', 'video', 'play', 'pause', 'sound', 'music'], target: { kind: 'view', view: 'media' }, pinnable: false, needs: ['browser', 'helper'] },
 
   // ---- Privacy & Protection
+  // Not pinnable: pinning offers a toolbar button, and the toolbar actions the browser registers are the list in
+  // chrome/browser/ui/browser_actions.cc. Marking these pinnable would offer a pin that could never become a button.
+  // "password" is deliberately not a keyword on any of them -- somebody typing it means the Secrets vault, and taking that
+  // word would make the vault harder to find in order to make a lock command easier to.
+  { id: 'lockTab', name: 'Lock this tab', category: 'protection', description: 'Hides this tab behind its tab password, at once', icon: 'privacy', keywords: ['lock', 'private', 'hide', 'protect', 'tab lock'], target: { kind: 'ask', channel: 'security:lockTab' }, pinnable: false, needs: ['browser', 'helper'] },
+  { id: 'lockAllTabs', name: 'Lock every protected tab', category: 'protection', description: 'Locks everything you have protected and closes every tab password', icon: 'privacy', keywords: ['lock', 'all', 'panic', 'private', 'hide', 'everything'], target: { kind: 'ask', channel: 'security:lockAll' }, pinnable: false, needs: ['helper'] },
+  { id: 'lockOrbis', name: 'Lock Orbis', category: 'protection', description: 'Puts Orbis away and asks for your account password. Nothing is closed', icon: 'privacy', keywords: ['lock', 'orbis', 'profile', 'away', 'sign out'], target: { kind: 'ask', channel: 'security:lockProfile' }, pinnable: false, needs: ['helper'] },
   { id: 'adblock', name: 'Ad blocking', category: 'protection', description: 'What was blocked here, and the rules behind it', icon: 'adblock', keywords: ['ad', 'advert', 'advertising', 'block', 'blocker', 'ads'], target: { kind: 'panel', view: 'block' }, pinnable: true, needs: ['helper'] },
   { id: 'permissions', name: 'Site permissions', category: 'protection', description: 'What this site is allowed to do', icon: 'privacy', keywords: ['permission', 'camera', 'microphone', 'location', 'notification', 'site'], target: { kind: 'page', url: 'chrome://settings/content' }, pinnable: false, needs: ['browser'] },
   { id: 'secrets', name: 'Secrets', category: 'protection', description: 'Keys and passwords, behind a master password', icon: 'secrets', keywords: ['secret', 'password', 'key', 'vault', 'credential'], target: { kind: 'panel', view: 'secrets' }, pinnable: true, needs: ['helper'] },
@@ -128,6 +158,16 @@ export const CAPABILITIES: OrbisCapability[] = [
 
   // ---- Customize
   { id: 'customize', name: 'Customize', category: 'customize', description: 'How the new tab page looks, and what it shows', icon: 'customize', keywords: ['customize', 'customise', 'theme', 'appearance', 'wallpaper', 'widget', 'look'], target: { kind: 'page', url: 'chrome://orbis-newtab/' }, pinnable: false, needs: ['browser'] },
+  { id: 'settings', name: 'Settings', category: 'settings', description: 'Everything there is to change', icon: 'settings', keywords: ['settings', 'preferences', 'options', 'configure', 'setup'], target: { kind: 'page', url: 'chrome://settings/' }, pinnable: false, needs: ['browser'] },
+  { id: 'settings.appearance', name: 'Appearance', category: 'settings', description: 'Theme, fonts and how pages are shown', icon: 'customize', keywords: ['appearance', 'browser theme', 'dark mode', 'light mode', 'font', 'font size', 'text size', 'page zoom'], target: { kind: 'page', url: 'chrome://settings/appearance' }, pinnable: false, needs: ['browser'] },
+  { id: 'settings.privacy', name: 'Privacy and security', category: 'settings', description: 'Cookies, tracking, safe browsing and clearing what is kept', icon: 'privacy', keywords: ['privacy', 'security', 'cookies', 'tracking', 'clear', 'delete', 'safe browsing', 'https'], target: { kind: 'page', url: 'chrome://settings/privacy' }, pinnable: false, needs: ['browser'] },
+  { id: 'settings.passwords', name: 'Saved passwords', category: 'settings', description: "The browser's own password manager, separate from the Orbis vault", icon: 'secrets', keywords: ['saved passwords', 'password manager', 'browser passwords', 'autofill', 'login', 'sign in'], target: { kind: 'page', url: 'chrome://password-manager/passwords' }, pinnable: false, needs: ['browser'] },
+  { id: 'settings.search-engines', name: 'Search engines', category: 'settings', description: 'What a search in the address bar uses', icon: 'search', keywords: ['search engine', 'default search', 'address bar', 'omnibox', 'shortcut'], target: { kind: 'page', url: 'chrome://settings/searchEngines' }, pinnable: false, needs: ['browser'] },
+  { id: 'settings.downloads', name: 'Download settings', category: 'settings', description: 'Where files are saved, and whether to ask each time', icon: 'downloads', keywords: ['download', 'downloads', 'save location', 'folder', 'ask where'], target: { kind: 'page', url: 'chrome://settings/downloads' }, pinnable: false, needs: ['browser'] },
+  { id: 'settings.languages', name: 'Languages', category: 'settings', description: 'What to read pages in, and what to translate', icon: 'languages', keywords: ['language', 'languages', 'translate', 'spellcheck', 'locale'], target: { kind: 'page', url: 'chrome://settings/languages' }, pinnable: false, needs: ['browser'] },
+  { id: 'settings.accessibility', name: 'Accessibility', category: 'settings', description: 'Captions, focus and navigating without a mouse', icon: 'accessibility', keywords: ['accessibility', 'a11y', 'caption', 'captions', 'screen reader', 'contrast', 'keyboard'], target: { kind: 'page', url: 'chrome://settings/accessibility' }, pinnable: false, needs: ['browser'] },
+  { id: 'settings.system', name: 'System', category: 'settings', description: 'Startup, hardware acceleration and the proxy', icon: 'system', keywords: ['system', 'startup', 'hardware acceleration', 'gpu', 'proxy', 'background'], target: { kind: 'page', url: 'chrome://settings/system' }, pinnable: false, needs: ['browser'] },
+  { id: 'settings.reset', name: 'Reset settings', category: 'settings', description: 'Put every setting back the way it started', icon: 'reset', keywords: ['reset', 'restore', 'defaults', 'factory', 'start over'], target: { kind: 'page', url: 'chrome://settings/reset' }, pinnable: false, needs: ['browser'] },
   { id: 'account', name: 'Account', category: 'customize', description: 'Who Orbis knows you as', icon: 'account', keywords: ['account', 'profile', 'name', 'identity', 'who'], target: { kind: 'panel', view: 'account' }, pinnable: true, needs: ['helper'] }
 ]
 
@@ -222,9 +262,16 @@ export function searchCapabilities(query: string, ready: Readiness, limit = 8): 
 }
 
 /** The address a capability opens at, for the panel's own routing. */
+/**
+ * The address a capability opens at, or '' for one that has none.
+ *
+ * A capability that does something rather than going somewhere has no address, and is given none. Returning a
+ * plausible-looking one would mean a caller could navigate to it and get a page that does nothing.
+ */
 export function addressFor(capability: OrbisCapability): string {
   if (capability.target.kind === 'panel' || capability.target.kind === 'view') return `chrome://orbis/#${capability.target.view}`
-  return capability.target.url
+  if (capability.target.kind === 'page') return capability.target.url
+  return ''
 }
 
 // ---------------------------------------------------------------- pins

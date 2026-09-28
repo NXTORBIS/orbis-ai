@@ -1,20 +1,32 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
+  CandlestickChart,
   ChevronDown,
   ChevronRight,
   CircleHelp,
+  ClipboardList,
   Globe,
   HatGlasses,
   Images,
+  KeyRound,
   Keyboard,
+  LayoutGrid,
+  LayoutTemplate,
+  ListChecks,
+  NotebookPen,
+  Orbit,
+  Palette,
   Pencil,
+  PenTool,
   Pin,
   PinOff,
   Search,
   Settings,
   SquarePen,
   Trash2,
+  Users,
+  Workflow,
   X } from 'lucide-react'
 import type { Conversation } from '../../../shared/types'
 import type { StreamState } from '../App'
@@ -46,7 +58,45 @@ interface Props {
   onTogglePin(id: string): void
   onSettings(): void
   onHelp(): void
+  /**
+   * Opening one of Orbis's own screens: Workflows, Galaxy, Whiteboard and the rest. Each of these existed and could be
+   * reached from nowhere -- the sidebar offered five things and the settings dialog a handful more, so a finished
+   * feature with no button to it might as well not have been built. This is the button.
+   */
+  onFeature(id: FeatureId): void
+  /** Which one is showing, so the row for it reads as the place you are rather than a thing you could do. */
+  feature: FeatureId | null
 }
+
+/** Orbis's own screens, in the order they appear. The id is what App.tsx renders. */
+export type FeatureId =
+  | 'pages'
+  | 'markets'
+  | 'workflows'
+  | 'galaxy'
+  | 'notes'
+  | 'tasks'
+  | 'whiteboard'
+  | 'clipboard'
+  | 'workspaces'
+  | 'secrets'
+  | 'customize'
+  | 'profiles'
+
+export const FEATURES: { id: FeatureId; label: string; icon: LucideIcon; hint: string }[] = [
+  { id: 'pages', label: 'Pages', icon: LayoutTemplate, hint: "Orbis's own tools, each with its own address" },
+  { id: 'markets', label: 'Markets', icon: CandlestickChart, hint: 'Live crypto prices, charts and watchlists' },
+  { id: 'workflows', label: 'Workflows', icon: Workflow, hint: 'Work Orbis does for you' },
+  { id: 'galaxy', label: 'Galaxy', icon: Orbit, hint: 'What you have read, and how it connects' },
+  { id: 'notes', label: 'Notes', icon: NotebookPen, hint: 'Things written down' },
+  { id: 'tasks', label: 'Tasks', icon: ListChecks, hint: 'Things to do, and things due' },
+  { id: 'whiteboard', label: 'Whiteboard', icon: PenTool, hint: 'Room to think' },
+  { id: 'clipboard', label: 'Clipboard', icon: ClipboardList, hint: 'What you have copied' },
+  { id: 'workspaces', label: 'Workspaces', icon: LayoutGrid, hint: 'Sets of tabs, kept together' },
+  { id: 'secrets', label: 'Secrets', icon: KeyRound, hint: 'The vault, locked until you open it' },
+  { id: 'customize', label: 'Customize', icon: Palette, hint: 'How Orbis looks' },
+  { id: 'profiles', label: 'Profiles', icon: Users, hint: 'Separate lives, separate data' }
+]
 
 interface NavItem {
   label: string
@@ -205,6 +255,23 @@ export default function Sidebar(props: Props): React.JSX.Element {
               </button>
               {brandOpen && (
                 <div className="popover glass sb-popover brand" role="menu">
+                  {FEATURES.map(({ id, label, icon: Icon, hint }) => (
+                    <button
+                      key={id}
+                      type="button"
+                      role="menuitem"
+                      className={`menu-item${props.feature === id ? ' selected' : ''}`}
+                      title={hint}
+                      onClick={() => {
+                        props.onFeature(id)
+                        setBrandOpen(false)
+                      }}
+                    >
+                      <Icon size={14} />
+                      {label}
+                    </button>
+                  ))}
+                  <div className="menu-sep" />
                   <button
                     type="button"
                     role="menuitem"

@@ -12,6 +12,10 @@ const MemorySettings = lazy(() => import('./MemorySettings'))
 const ControlSwitches = lazy(() => import('./ControlSwitches'))
 const MotionNote = lazy(() => import('./MotionNote'))
 const VoiceSettings = lazy(() => import('./VoiceSettings'))
+const AccountPasswordSettings = lazy(() => import('./AccountPasswordSettings'))
+const ProfileLockSettings = lazy(() => import('./ProfileLockSettings'))
+const TabLockSettings = lazy(() => import('./TabLockSettings'))
+const MarketsSettings = lazy(() => import('./MarketsSettings'))
 
 interface Props {
   settings: Settings
@@ -97,6 +101,24 @@ export default function SettingsModal({ settings, onUpdate, onClose }: Props): R
               {profileField('userTitle', 'Address me as', 'Commander')}
             </div>
           </section>
+
+          <Suspense fallback={null}>
+            <AccountPasswordSettings userName={settings.userName} />
+          </Suspense>
+
+          {/* The three layers in the order they nest: the account password opens the profile, Profile Lock puts the whole
+              profile away, and Tab Lock protects single tabs with their own separate passwords. */}
+          <Suspense fallback={null}>
+            <ProfileLockSettings />
+          </Suspense>
+
+          <Suspense fallback={null}>
+            <TabLockSettings userName={settings.userName} />
+          </Suspense>
+
+          <Suspense fallback={null}>
+            <MarketsSettings />
+          </Suspense>
 
           <section className="setting row">
             <div className="setting-label">

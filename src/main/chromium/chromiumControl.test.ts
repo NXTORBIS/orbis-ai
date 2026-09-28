@@ -112,6 +112,10 @@ test('the real Browser Control Layer drives a real Chromium tab', { skip: runRea
     await page.pressNamedKey(wc, 'Enter')
     for (let i = 0; i < 40 && !wc.getURL().includes('/results'); i++) await new Promise((r) => setTimeout(r, 100))
     assert.match(wc.getURL(), /\/results\?q=blue\+chair/)
+    // The URL commits when the navigation starts; the title only exists once the new document has been parsed. Waiting
+    // on the URL alone raced, and when it lost, `getTitle()` was still the fallback -- the URL itself.
+    await page.settle(wc)
+    for (let i = 0; i < 40 && !/Results for blue chair/.test(wc.getTitle()); i++) await new Promise((r) => setTimeout(r, 100))
     assert.match(wc.getTitle(), /Results for blue chair/)
   })
 

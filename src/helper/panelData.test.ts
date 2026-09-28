@@ -315,9 +315,13 @@ test('workflows: controls, rename, duplicate, archive, remove, versions, checkpo
     rememberedSecretNames: async (w: string) => [...remembered.keys()].filter((k) => k.startsWith(`${w}:`)).map((k) => k.slice(w.length + 1))
   }
   let drafted = ''
+  // A draft now arrives already checked against the browser it would run on, so the stub returns both halves.
   const draft = async (text: string) => {
     drafted = text
-    return { ...newWorkflow('Drafted', 'w9'), steps: [{ id: 's1', type: 'action', name: 'Go', capability: 'navigation.go', params: { url: 'https://example.org' } }] } as Workflow
+    return {
+      workflow: { ...newWorkflow('Drafted', 'w9'), steps: [{ id: 's1', type: 'action', name: 'Go', capability: 'navigation.go', params: { url: 'https://example.org' } }] } as Workflow,
+      issues: []
+    }
   }
   store.get('w1')!.steps = [
     { id: 's1', type: 'action', name: 'Sign in', capability: 'page.type', params: { text: 'hi', password: 'hunter2' }, saveAs: 'x', retry: { attempts: 3 } } as never,

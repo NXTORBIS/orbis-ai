@@ -31,6 +31,13 @@ constexpr uint32_t kActive = 0x1A3FD8FF;
 constexpr uint32_t kInputBg = 0x0AFFFFFF;
 constexpr uint32_t kInputBorder = 0x21FFFFFF;
 constexpr uint32_t kPopover = 0xFF101216;
+constexpr uint32_t kPopoverBg = 0xF00E1016;
+constexpr uint32_t kGlassBorder = 0x29A0D2FF;
+constexpr uint32_t kLineStrong = 0x24FFFFFF;
+constexpr uint32_t kMutedStrong = 0xFFC6CAD2;
+constexpr uint32_t kPillBg = 0x0FFFFFFF;
+constexpr uint32_t kPillBgStrong = 0x1CFFFFFF;
+constexpr uint32_t kPillBorder = 0x1FFFFFFF;
 }  // namespace dark
 
 namespace light {
@@ -56,6 +63,13 @@ constexpr uint32_t kActive = 0x1A286EDC;
 constexpr uint32_t kInputBg = 0x80E8ECF1;
 constexpr uint32_t kInputBorder = 0x2E3C64AA;
 constexpr uint32_t kPopover = 0xFFF6F8FB;
+constexpr uint32_t kPopoverBg = 0xF7F6F8FB;
+constexpr uint32_t kGlassBorder = 0x333C64AA;
+constexpr uint32_t kLineStrong = 0x29285AAA;
+constexpr uint32_t kMutedStrong = 0xFF33465E;
+constexpr uint32_t kPillBg = 0x0F285AAA;
+constexpr uint32_t kPillBgStrong = 0x1C285AAA;
+constexpr uint32_t kPillBorder = 0x293C64AA;
 }  // namespace light
 
 // Sizes in DIPs.

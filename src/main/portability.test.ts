@@ -43,7 +43,38 @@ const BROWSER_LAYER = new Set([
   // The adapters between Orbis's services and however the application talks to its window. Rewritten as Mojo.
   'main/experience/ipc.ts',
   'main/personal/ipc.ts',
-  'main/workflows/ipc.ts'
+  'main/workflows/ipc.ts',
+  // Tab Lock's adapter, and the only part of it that knows about Electron: `ipcMain` for the channels, `powerMonitor`
+  // for the computer's own lock and sleep, and the window for focus and minimise. In Chromium those become Mojo and
+  // Chromium's own session and widget observers. Everything Tab Lock decides is deliberately elsewhere and portable --
+  // `shared/tabLock.ts`, `main/tabLockStore.ts`, `main/tabLockWatcher.ts` and `main/tabLock/reconcile.ts` import nothing
+  // from Electron, which is why the move is a rewrite of this one file rather than of the feature.
+  'main/tabLock/ipc.ts',
+  // Profile Lock's adapter, and the only part of it that knows about Electron: `ipcMain` for its three channels,
+  // `powerMonitor` for the computer's own lock, unlock, sleep and wake and for how long it has been idle, and the window
+  // for focus. `shared/profileLock.ts` and `main/profileLockWatcher.ts` import nothing from Electron.
+  'main/profileLock/ipc.ts',
+  // Markets' adapter to the window. `ipcMain` only; the engine, the store, the providers and every calculation are
+  // Electron-free and move to Chromium unchanged.
+  'main/markets/ipc.ts',
+  // The Pages host: the one file that turns a sandbox policy into an actual frame. `WebContentsView` for the frame,
+  // `protocol.handle` for the Page's own origin, `ipcMain` for the single channel a Page talks on, and the session
+  // handlers that refuse navigation, new windows, permission prompts and downloads. In Chromium this becomes a
+  // `WebContents` delegate plus a `URLLoaderFactory`.
+  //
+  // What it enforces it does not decide: the runtime policy, the content policy and the message broker are all in
+  // `shared/pages/sandbox.ts`, and everything about serving a Page's files -- the path-traversal defence, the media
+  // types, the headers -- is in `main/pages/serving.ts`. Neither imports Electron, and both are tested.
+  'main/pages/host.ts',
+  // Orbis Pages' adapter to the window, and the only part of Pages that knows Electron exists: `ipcMain` for its
+  // seventeen channels and nothing else. In Chromium it becomes a WebUI message handler plus a Mojo interface.
+  //
+  // Everything that decides anything is deliberately on the other side of this line: the register, the manifest
+  // validation, the capability and permission engine, the identity and address rules, and every computational engine
+  // import nothing from Electron and move unchanged. That is what makes `pages:compute` a boundary worth having -- the
+  // rule it enforces lives in `shared/pages/capabilities.ts`, so porting this file cannot change what a Page is allowed
+  // to do.
+  'main/pages/ipc.ts'
 ])
 
 async function* typescriptFiles(dir: string, prefix = ''): AsyncGenerator<{ path: string; relative: string }> {

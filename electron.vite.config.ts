@@ -14,8 +14,9 @@ export default defineConfig(({ mode }) => {
     preload: {
       build: {
         rollupOptions: {
-          // The app's preload. (Orbis's browser is Chromium and has no Electron preload scripts of its own.)
-          input: { index: resolve('src/preload/index.ts') }
+          // The app's preload, and the bridge a sandboxed Page talks to. (Orbis's browser is Chromium and has no
+          // Electron preload scripts of its own; `page` is for the Page frames the app itself hosts.)
+          input: { index: resolve('src/preload/index.ts'), page: resolve('src/preload/page.ts') }
         }
       }
     },

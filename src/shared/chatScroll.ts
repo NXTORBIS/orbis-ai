@@ -1,0 +1,239 @@
+/**
+ * When Orbis Chat may move the page, and when it must not.
+ *
+ * All of the deciding is here, with no DOM in sight, because the decisions are the part that was wrong and the part
+ * worth testing. `ChatView` measures the scroller, asks this what to do, and does it. Nothing in this file can scroll
+ * anything, so nothing in this file can scroll something by accident.
+ *
+ * There are exactly three things that entitle Orbis to move the view:
+ *
+ *  - Opening a conversation. A different conversation is a different place.
+ *  - A question that was not there a moment ago. The person just asked it and wants to see it answered.
+ *  - The person asking, by putting themselves at the foot of the answer or pressing the jump button.
+ *
+ * An answer getting longer is not one of them. That is the whole point: a reply arriving in pieces must not drag the
+ * reader down the page, and a long reply must begin at its beginning rather than its last paragraph.
+ */
+
+/** Whether Orbis is keeping up with the newest output, or the person is reading. */
+export type ScrollMode = 'following' | 'reading'
+
+export interface ChatScrollState {
+  mode: ScrollMode
+  /**
+   * Where Orbis last put the scroller, or null when it has not.
+   *
+   * This is how an event Orbis caused is told from one the person caused, and it is a position rather than a flag for
+   * a reason. A flag has to be consumed by the next event -- but a scroll to a place the scroller is already at fires
+   * no event at all, so the flag would still be set when the person's own first scroll arrived, and that scroll would
+   * be thrown away. Comparing positions has no such hole: an event whose position is the one Orbis asked for is
+   * Orbis's, and an event at any other position is theirs, whether or not anything was fired in between.
+   */
+  settledAt: number | null
+  /** The conversation the view is in, so opening another one is recognisable. */
+  conversationId: string | null
+  /** The newest question the view has already been moved to, so the same one is never moved to twice. */
+  shownTurnId: string | null
+}
+
+/** What the scroller looks like right now. Three numbers, which is all any of this needs. */
+export interface Viewport {
+  scrollTop: number
+  scrollHeight: number
+  clientHeight: number
+}
+
+/** What Orbis should do to the scroller. */
+export type ScrollAction =
+  | { kind: 'none' }
+  | { kind: 'toBottom'; smooth: boolean }
+  /** Put the top of this message at the top of the view: the question, with its answer beginning under it. */
+  | { kind: 'toTurn'; messageId: string }
+
+/**
+ * Close enough to the end to count as watching it.
+ *
+ * Not the last pixel. A person who has scrolled down to read the newest sentence is watching the answer, and asking
+ * them to land exactly on the bottom before Orbis keeps up would make following it feel broken.
+ */
+export const FOLLOW_THRESHOLD = 80
+
+/**
+ * Far enough from the end that a way back is worth offering.
+ *
+ * Deliberately much larger than the follow threshold. Between the two, Orbis neither follows nor offers to jump --
+ * which is the quiet band that stops a button flickering in and out while somebody nudges the wheel.
+ */
+export const JUMP_THRESHOLD = 240
+
+export const newChatScrollState = (): ChatScrollState => ({
+  mode: 'following',
+  settledAt: null,
+  conversationId: null,
+  shownTurnId: null
+})
+
+/**
+ * Records where Orbis's own scroll actually left the scroller.
+ *
+ * Called by whoever performed the action, with the position that resulted. Until this is called the state has no
+ * settled position, so every event is read as the person's -- which is the safe way round to be wrong.
+ */
+export const settled = (state: ChatScrollState, scrollTop: number): ChatScrollState => ({
+  ...state,
+  settledAt: scrollTop
+})
+
+export const distanceFromBottom = (v: Viewport): number =>
+  Math.max(0, v.scrollHeight - v.scrollTop - v.clientHeight)
+
+/**
+ * Whether to offer a way back to the newest output, from where the scroller is now.
+ *
+ * Two thresholds rather than one, and the answer between them is whatever it already was. That band is what stops the
+ * button appearing and vanishing while somebody nudges a wheel near the edge of it.
+ *
+ * Asked after a deliberate move as well as after a scroll event, because a move can land without producing an event
+ * that means anything -- a scroll to where the scroller already is fires nothing, and a scroll Orbis caused is
+ * deliberately ignored as its own echo. Left to events alone, the button would stay up after the very press that made
+ * it unnecessary.
+ */
+export function jumpVisible(v: Viewport, showJumpNow: boolean): boolean {
+  const distance = distanceFromBottom(v)
+  if (distance > JUMP_THRESHOLD) return true
+  if (distance <= FOLLOW_THRESHOLD) return false
+  return showJumpNow
+}
+
+export interface Turn {
+  conversationId: string | null
+  /** The newest message from the person, which is what makes a turn new. */
+  lastUserId: string | null
+}
+
+export interface Decision {
+  state: ChatScrollState
+  action: ScrollAction
+}
+
+/**
+ * What to do now that the messages have been drawn.
+ *
+ * Called after every render, including the hundreds that a streaming answer causes -- so the common answer is
+ * `none`, and the interesting part is which two cases are not.
+ */
+export function onRendered(state: ChatScrollState, turn: Turn, reducedMotion = false): Decision {
+  // A different conversation. It lands where opening a chat has always landed: at the end, ready to carry on.
+  if (turn.conversationId !== state.conversationId) {
+    return {
+      state: { mode: 'following', settledAt: null, conversationId: turn.conversationId, shownTurnId: turn.lastUserId },
+      action: { kind: 'toBottom', smooth: false }
+    }
+  }
+
+  // A question that was not there before. Show it, and the beginning of the answer to it.
+  //
+  // `mode` becomes 'reading' rather than 'following': having been put at the top of a new answer, the person is
+  // reading it, and Orbis must not then drag them to the foot of it as it grows. They can still ask to follow it by
+  // scrolling down, which is the only way that mode comes back.
+  if (turn.lastUserId && turn.lastUserId !== state.shownTurnId) {
+    return {
+      state: { ...state, mode: 'reading', shownTurnId: turn.lastUserId },
+      action: { kind: 'toTurn', messageId: turn.lastUserId }
+    }
+  }
+
+  // Everything else is the same turn getting longer.
+  if (state.mode === 'following') {
+    return { state, action: { kind: 'toBottom', smooth: false } }
+  }
+  // Reduced motion is irrelevant when nothing moves, and is taken here only so the signature is the same either way.
+  void reducedMotion
+  return { state, action: { kind: 'none' } }
+}
+
+export interface ScrollOutcome {
+  state: ChatScrollState
+  /** Whether to offer a way back to the newest output. */
+  showJump: boolean
+}
+
+/**
+ * What a scroll event means.
+ *
+ * The first question is whose it was. An event that Orbis caused says nothing about what the person wants, so it is
+ * used only to hand ownership back -- the next event really is theirs. Without this, every move Orbis made would
+ * immediately be read as the person having moved, and the decision behind it would be thrown away a frame later.
+ */
+export function onScrolled(state: ChatScrollState, v: Viewport, showJumpNow: boolean): ScrollOutcome {
+  const distance = distanceFromBottom(v)
+  if (state.settledAt !== null && state.settledAt === v.scrollTop) {
+    // The scroller is exactly where Orbis put it, so this event is the echo of Orbis's own move and says nothing about
+    // what the person wants. The mode is left as the decision that caused the move set it.
+    return { state, showJump: showJumpNow }
+  }
+
+  // Theirs. Being at the foot of the answer is how somebody says "keep showing me the newest part"; leaving it is how
+  // they say they are reading instead.
+  const mode: ScrollMode = distance <= FOLLOW_THRESHOLD ? 'following' : 'reading'
+  // The settled position is cleared: the person has moved the scroller, so Orbis no longer knows of a position that
+  // would be its own doing.
+  return { state: { ...state, mode, settledAt: null }, showJump: jumpVisible(v, showJumpNow) }
+}
+
+/**
+ * The person asked for the newest output.
+ *
+ * An explicit request, so following resumes -- unlike a new answer starting, which does not. Smoothly, because this is
+ * a move somebody asked for and watching it travel tells them where they went; instantly when they have asked for
+ * less movement.
+ */
+export function onJumpPressed(state: ChatScrollState, reducedMotion = false): Decision {
+  return {
+    state: { ...state, mode: 'following' },
+    action: { kind: 'toBottom', smooth: !reducedMotion }
+  }
+}
+
+/**
+ * The view is about to be re-laid-out by something other than new messages -- the window resizing, the sidebar
+ * opening, an image finishing loading, a code block being highlighted.
+ *
+ * Following means staying at the end afterwards. Reading means the number of pixels above has just changed under the
+ * person, so it is put back: `keepAnchored` says by how much.
+ */
+export function onLayoutChanged(state: ChatScrollState): ScrollAction {
+  return state.mode === 'following' ? { kind: 'toBottom', smooth: false } : { kind: 'none' }
+}
+
+/**
+ * What the reader is looking at: one message, and where it sat.
+ *
+ * The position is measured against a *thing*, not against the document's height. That distinction is the whole reason
+ * this works. Comparing heights cannot tell growth above the reader from growth below it -- a code block being
+ * highlighted two messages up and an answer getting longer underneath both make the document taller -- and
+ * compensating for the second one is itself the jump it was meant to prevent. Comparing where one message sits
+ * answers the only question that matters: did the thing they are reading move?
+ */
+export interface Anchored {
+  /** Where the scroller was. */
+  scrollTop: number
+  /** How far the anchor message sat from the top of all the messages. */
+  anchorTop: number
+}
+
+/**
+ * Where to put the scroller so the anchor message is still under the reader's eye.
+ *
+ * `most` is the furthest the scroller can go, which the caller knows and this deliberately does not assume: clamping
+ * to a stale height is how a correction ends up one screen past the end.
+ *
+ * Returns null when the anchor has not moved, so the caller does not write a value it does not need to -- and writing
+ * `scrollTop` needlessly is not free: it produces a scroll event.
+ */
+export function keepAnchored(before: Anchored, after: { anchorTop: number }, most: number): number | null {
+  const moved = after.anchorTop - before.anchorTop
+  if (moved === 0) return null
+  const next = Math.min(Math.max(0, most), Math.max(0, before.scrollTop + moved))
+  return next === before.scrollTop ? null : next
+}

@@ -1,0 +1,315 @@
+/*
+  The lock surface.
+
+  Opaque, on purpose. Not blurred, not dimmed, not translucent: a blurred bank
+  statement is still recognisably a bank statement, so nothing of the page beneath
+  is allowed through at all.
+
+  Every colour here is a token from orbis-tokens.css, so the surface is the same
+  Orbis as everything else rather than a security dialogue that looks bolted on.
+*/
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
+  -webkit-user-select: none;
+  user-select: none;
+  overflow: hidden;
+}
+
+.lock {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 32px 24px;
+  text-align: center;
+}
+
+/* A single slow breath of light behind the badge. Enough that the surface looks
+   like Orbis rather than a blank page, and little enough that it is not a
+   distraction while somebody is typing a password. */
+.lock-glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 520px;
+  height: 520px;
+  margin: -260px 0 0 -260px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--accent-fill) 0%, transparent 62%);
+  opacity: 0.55;
+  pointer-events: none;
+  animation: lock-breathe 7s var(--motion-ease) infinite;
+}
+
+@keyframes lock-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.4;
+  }
+  50% {
+    transform: scale(1.09);
+    opacity: 0.62;
+  }
+}
+
+.lock-badge {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 62px;
+  height: 62px;
+  margin-bottom: 20px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5), 0 18px 44px rgba(0, 0, 0, 0.55);
+}
+
+.lock-badge svg {
+  width: 27px;
+  height: 27px;
+}
+
+h1 {
+  margin: 0 0 8px;
+  font-family: var(--font-display);
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.lock-say {
+  max-width: 360px;
+  margin: 0 0 22px;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  line-height: 1.55;
+}
+
+form {
+  width: 100%;
+  max-width: 320px;
+}
+
+.lock-label {
+  display: block;
+  margin: 12px 0 5px;
+  color: var(--faint);
+  font-size: var(--text-xs);
+  text-align: left;
+}
+
+.lock-field {
+  position: relative;
+}
+
+.lock-field input {
+  width: 100%;
+  height: 40px;
+  padding: 0 44px 0 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-md);
+  letter-spacing: 0.12em;
+  -webkit-user-select: text;
+  user-select: text;
+  transition:
+    border-color var(--motion-base) var(--motion-ease),
+    box-shadow var(--motion-base) var(--motion-ease);
+}
+
+.lock-field input:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 var(--chrome-omnibox-ring) var(--accent-fill);
+}
+
+.lock-reveal {
+  position: absolute;
+  top: 50%;
+  right: 5px;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  transform: translateY(-50%);
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+}
+
+.lock-reveal svg {
+  width: 17px;
+  height: 17px;
+}
+
+.lock-reveal:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+
+/* A struck-through eye while the password is showing, drawn rather than swapped,
+   so there is one icon to keep aligned instead of two. */
+.lock-reveal[aria-pressed='true']::after {
+  content: '';
+  position: absolute;
+  width: 19px;
+  height: 1.7px;
+  border-radius: 2px;
+  background: currentColor;
+  transform: rotate(-45deg);
+}
+
+.lock-problem {
+  min-height: 16px;
+  margin: 9px 2px 0;
+  color: var(--danger);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+  text-align: left;
+}
+
+.lock-go {
+  width: 100%;
+  height: 38px;
+  margin-top: 14px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-pill);
+  background: var(--accent-fill);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-md);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background var(--motion-fast) var(--motion-ease),
+    transform var(--motion-fast) var(--motion-ease);
+}
+
+.lock-go:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
+}
+
+.lock-go:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.lock-go:disabled {
+  border-color: var(--line);
+  background: transparent;
+  color: var(--faint);
+  cursor: default;
+}
+
+.lock-forgot,
+.lock-quiet {
+  margin-top: 16px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--faint);
+  font: inherit;
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.lock-forgot:hover,
+.lock-quiet:hover {
+  color: var(--muted);
+  background: var(--hover);
+}
+
+.lock-recover {
+  max-width: 320px;
+  margin-top: 4px;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--glass);
+}
+
+.lock-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lock-row .lock-go {
+  flex: 1 1 auto;
+}
+
+.lock-row .lock-quiet {
+  margin-top: 14px;
+  flex: none;
+}
+
+/* Wrong password: one short shake, once. A surface that keeps moving while
+   somebody retypes a long passphrase is a surface that gets in the way. */
+.lock.is-wrong .lock-field input {
+  border-color: var(--red);
+  animation: lock-shake 220ms var(--motion-ease);
+}
+
+@keyframes lock-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-5px);
+  }
+  75% {
+    transform: translateX(5px);
+  }
+}
+
+/* Somebody who has turned animation off has turned it off. */
+@media (prefers-reduced-motion: reduce) {
+  .lock-glow,
+  .lock.is-wrong .lock-field input {
+    animation: none;
+  }
+}
+
+/* Short windows: the glow and the badge give way before the form does. */
+@media (max-height: 380px) {
+  .lock-badge {
+    width: 44px;
+    height: 44px;
+    margin-bottom: 12px;
+  }
+  .lock-badge svg {
+    width: 20px;
+    height: 20px;
+  }
+  h1 {
+    font-size: 17px;
+  }
+  .lock-say {
+    margin-bottom: 14px;
+  }
+}

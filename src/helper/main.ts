@@ -89,7 +89,10 @@ const server = createHelperServer({
     apiKeys,
     dataDir: join(dataDir, 'personal-data'),
     browser: () => browserHost,
-    adblock: { extensionDir: dataDir, listsDir: join(homedir(), '.orbis', 'adblock'), bundledDir: join(import.meta.dirname, '../../resources/adblock') }
+    adblock: { extensionDir: dataDir, listsDir: join(homedir(), '.orbis', 'adblock'), bundledDir: join(import.meta.dirname, '../../resources/adblock') },
+    // Speech to text, on this machine. The helper running on its own has no Orbis window to ask, so it runs whisper.cpp
+    // itself over the same bundled binary and the same models folder the app uses -- nothing is sent anywhere.
+    voice: () => ({ userDataDir: dataDir, resourcesPath: join(import.meta.dirname, '../../resources'), fetchFn: fetch })
   })
 })
 const { port } = await server.listen()

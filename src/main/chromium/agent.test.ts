@@ -81,6 +81,14 @@ test('Orion’s browser agent, unchanged, completes a task on real Chromium', { 
     confirm: async () => true
   })
 
+  for (const [i, msgs] of requests.entries()) {
+    const tools = msgs.filter((m) => m.role === 'tool').map((m) => String(m.content))
+    console.log('--- request ' + i + ': ' + tools.length + ' tool results')
+    for (const one of tools) console.log('    ' + one.split(String.fromCharCode(10)).join(' | ').slice(0, 320))
+  }
+  console.log('--- events: ' + JSON.stringify(events.map((e) => e.type)))
+  for (const e of events.filter((x) => x.type === 'error' || x.type === 'step')) console.log('    ' + JSON.stringify(e).slice(0, 240))
+
   await t.test('the agent really used the browser: the tab is where the task ended', async () => {
     const page = await service!.agent.getTarget()
     assert.match(page.getURL(), /\/results\?q=blue\+chair/, page.getURL())

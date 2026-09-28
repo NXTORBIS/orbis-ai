@@ -128,6 +128,22 @@ export interface BrowserControlOptions {
 }
 
 /**
+ * Whether the tab a command would act on is locked.
+ *
+ * Asked before anything is observed, decided or done. It is a function rather than state the layer keeps because the
+ * answer belongs to the security layer, and a copy of it here would be a second source of truth about whether a tab is
+ * protected -- which is the kind of thing that goes stale at exactly the wrong moment.
+ *
+ * Returning the group id as well lets a refusal say which password would fix it, without saying anything about the
+ * page.
+ */
+export type LockedTabCheck = (
+  capability: string,
+  params: Record<string, unknown>,
+  target: ControlTarget | undefined
+) => { locked: boolean; groupId?: string } | null
+
+/**
  * The Orbis Browser Control Layer: one registry of everything the browser can do, used alike by the Orbis window,
  * Orion's browser agent and automations. Each command is validated, checked for availability, approved when it is
  * consequential, carried out, verified against real browser state, retried when that can help, and logged.
@@ -147,6 +163,8 @@ export class BrowserControl {
   private readonly locks = new Map<string, string>()
   /** Kinds of action the person has switched off for Orion and automations. */
   private off = new Set<ControlDomain>()
+  /** How the layer asks whether a tab is locked. Null until the security layer wires itself in. */
+  private lockedCheck: LockedTabCheck | null = null
 
   constructor(options: BrowserControlOptions = {}) {
     this.o = options
@@ -188,6 +206,16 @@ export class BrowserControl {
   /** Registers a named part of the browser state (tabs, downloads, settings...), read only when asked for. */
   registerState(name: string, reader: () => unknown): void {
     this.stateReaders.set(name, reader)
+  }
+
+  /**
+   * Tells the layer how to find out whether a tab is locked.
+   *
+   * Wired once, at startup. Until it is, nothing is treated as locked -- which is the state Orbis was in before tab
+   * locking existed, and the only safe default given that the alternative would be refusing every command.
+   */
+  useLockedTabCheck(check: LockedTabCheck | null): void {
+    this.lockedCheck = check
   }
 
   // ---------------------------------------------------------------- discovery
@@ -297,6 +325,31 @@ export class BrowserControl {
     if (source !== 'user' && this.off.has(def.domain)) {
       this.record('decision', def.id, source, runId, { decision: 'block', reason: 'switched off' })
       return error('blocked', `“${def.domain}” is switched off in Settings → What Orion may do, so Orbis will not do this on your behalf.`)
+    }
+    /*
+     * A locked tab is refused here, before `observe` runs.
+     *
+     * Before, not after, because `observe` reads the page -- and reading a locked page to decide whether it may be read
+     * is the leak this is meant to prevent. One check, in the one place every capability passes through, so a new
+     * capability is protected the day it is registered rather than the day somebody remembers to protect it.
+     *
+     * The refusal names no page. It says a tab is locked and that a password would open it, which is all a workflow
+     * needs to pause properly and all anything else should know.
+     */
+    let locked: { locked: boolean; groupId?: string } | null = null
+    if (this.lockedCheck) {
+      try {
+        locked = this.lockedCheck(def.id, params, ctx.target)
+      } catch {
+        // A check that cannot answer is a broken lock, and a broken lock is shut. Failing open here would mean any fault
+        // in the security layer became a way past every lock in it; failing closed costs a refusal the person can
+        // understand and retry.
+        locked = { locked: true }
+      }
+    }
+    if (locked?.locked) {
+      this.record('decision', def.id, source, runId, { decision: 'block', reason: 'tab locked' })
+      return error('tab-locked', 'That tab is locked. It has to be unlocked before Orbis can act on it.', true)
     }
     readOnly = !def.mutates
     const sensitive = new Set(Object.entries(def.params).filter(([, p]) => p.sensitive).map(([k]) => k))

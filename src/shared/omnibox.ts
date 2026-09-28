@@ -15,6 +15,8 @@ export type SuggestionKind =
   | 'orion' // Orion's prediction
   | 'site' // search inside a specific site
   | 'vertical' // news / images / videos / shopping results
+  | 'tab' // a page that is already open: switch to it rather than opening it twice
+  | 'workspace' // a saved set of tabs, opened as one
 
 export interface OmniSuggestion {
   /** Stable identity: "u:" + page key, or "q:" + lower-cased query. */
@@ -30,6 +32,10 @@ export interface OmniSuggestion {
   query?: string
   /** What removing it deletes. */
   removable?: 'history' | 'search'
+  /** The tab to switch to, for a page that is already open. */
+  tabId?: string
+  /** The workspace to open. */
+  workspaceId?: string
   bookmarked?: boolean
   /** Grouping label for the list shown before typing. */
   section?: string
@@ -49,6 +55,16 @@ export interface OmniSources {
   picks: Record<string, BrowserPick>
   /** Questions Orion researched in saved chats. */
   research: { question: string; at: number }[]
+  /**
+   * The tabs that are open right now.
+   *
+   * A page already open is nearly always better reached by switching to it than by opening a second copy: the first
+   * one has the scroll position, the filled-in form and the video that is half-watched. Left out, the omnibox quietly
+   * encourages duplicate tabs.
+   */
+  tabs?: { id: string; title: string; url: string; active?: boolean; group?: string }[]
+  /** Saved sets of tabs, openable by name. */
+  workspaces?: { id: string; name: string; tabCount?: number }[]
   /** The search engine's suggestions for the current text. */
   web: string[]
   /** Orion's predictions for the current text. */
@@ -326,10 +342,54 @@ export function buildSuggestions(input: string, sources: OmniSources, limit = 8,
         : { id: `q:${queryKey(text)}`, kind: 'query', text, detail: 'Search the web', query: text, score: 10_000 })
   )
 
+  /**
+   * Pages already open.
+   *
+   * Scored above the history entry for the same address, and sharing its id so the two collapse into one row rather
+   * than offering the same page twice. The active tab is left out: offering to switch to where you already are is
+   * noise, and it would outrank the thing actually wanted.
+   */
+  const openTabs = new Map<string, string>()
+  for (const tab of sources.tabs ?? []) {
+    if (!tab?.url || tab.active) continue
+    const match = urlMatch(text, tab.url, tab.title)
+    if (!match) continue
+    const key = `u:${urlKey(tab.url)}`
+    openTabs.set(key, tab.id)
+    const where = tab.group ? `Open in ${tab.group}` : 'Already open'
+    add({
+      id: key,
+      kind: 'tab',
+      text: tab.title || hostOf(tab.url) || tab.url,
+      detail: where,
+      url: tab.url,
+      tabId: tab.id,
+      bookmarked: bookmarked.has(urlKey(tab.url)),
+      // Above the same page in history: switching keeps the scroll, the form and the half-watched video.
+      score: 700 * match + pickBoost(sources, key)
+    })
+  }
+
+  for (const workspace of sources.workspaces ?? []) {
+    const match = textMatch(text, workspace.name)
+    if (!match) continue
+    const key = `w:${workspace.id}`
+    add({
+      id: key,
+      kind: 'workspace',
+      text: workspace.name,
+      detail: workspace.tabCount ? `Workspace · ${workspace.tabCount} tab${workspace.tabCount === 1 ? '' : 's'}` : 'Workspace',
+      workspaceId: workspace.id,
+      score: 640 * match + pickBoost(sources, key)
+    })
+  }
+
   for (const p of pages) {
     const match = urlMatch(text, p.url, p.title)
     if (!match) continue
     const key = `u:${urlKey(p.url)}`
+    // Already offered as an open tab, which is the more useful way to reach it.
+    if (openTabs.has(key)) continue
     const score = 600 * match + 60 * frecency(p.visits, p.last, now) + pickBoost(sources, key)
     add({ id: key, kind: 'history', text: p.title || hostOf(p.url) || p.url, detail: pageDetail(p.url, p.last, now), url: p.url, removable: 'history', bookmarked: bookmarked.has(urlKey(p.url)), score })
   }

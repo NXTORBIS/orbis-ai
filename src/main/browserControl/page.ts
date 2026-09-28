@@ -353,6 +353,33 @@ export async function settle(wc: PageHandle, signal?: AbortSignal, quick = false
   await sleep(quick ? 80 : 450)
 }
 
+/**
+ * Waits for a submission to become a navigation, or to plainly not be one.
+ *
+ * Pressing Enter in a form starts a navigation, but not at once: the key has to reach the renderer, the renderer has to
+ * run whatever the page does about it, and only then does the browser begin to load. `settle` can return inside that gap
+ * -- it begins by sleeping a third of a second and then asks whether the page is loading, and the answer is still no --
+ * which makes a submission that worked look like one that did nothing at all. That is worse than a slow answer: the
+ * caller reports "pressed Enter, nothing changed", and a model told that will try something else on a page that is about
+ * to go somewhere.
+ *
+ * So this waits for the first sign of it -- the address changing, or the page beginning to load -- and then settles
+ * normally. A form that genuinely does nothing costs the grace period once.
+ */
+export async function settleSubmission(
+  wc: PageHandle,
+  fromUrl: string,
+  signal?: AbortSignal,
+  graceMs = 2500
+): Promise<void> {
+  const deadline = Date.now() + graceMs
+  while (!wc.isDestroyed() && !signal?.aborted && Date.now() < deadline) {
+    if (wc.isLoading() || wc.getURL() !== fromUrl) break
+    await sleep(60)
+  }
+  await settle(wc, signal)
+}
+
 export function displayUrl(url: string): string {
   try {
     const u = new URL(url)
@@ -399,12 +426,24 @@ export async function pressNamedKey(wc: PageHandle, name: string, holdMs = 0, mo
   if (char && !modifiers.some((m) => m === 'control' || m === 'meta' || m === 'alt')) wc.sendInputEvent({ type: 'char', keyCode: char, modifiers })
   if (holdMs > 0) await sleep(holdMs)
   wc.sendInputEvent({ type: 'keyUp', keyCode, modifiers })
+  // And waits for all three to be delivered before returning.
+  //
+  // Without this the function returned before the key had reached the page, so a caller that pressed Enter and then read
+  // the page read it as it was *before* the press. The page then looked unchanged, which is exactly what "that action had
+  // no effect" is meant to detect -- so a working submit was reported as a failed one.
+  await wc.flushInput?.()
 }
 
 export type MouseButton = 'left' | 'right' | 'middle'
 
-/** A real mouse click at a point of the page (CSS pixels), for an element already identified. */
-export function mouseClick(wc: PageHandle, x: number, y: number, button: MouseButton = 'left', clickCount = 1): void {
+/**
+ * A real mouse click at a point of the page (CSS pixels), for an element already identified.
+ *
+ * Returns the promise that settles once the click has been delivered. Callers that go on to look at the page should await
+ * it; the ones that only click and move on can ignore it, which is why this stays a function that returns rather than
+ * something a caller must remember to await.
+ */
+export function mouseClick(wc: PageHandle, x: number, y: number, button: MouseButton = 'left', clickCount = 1): Promise<void> {
   const zoom = wc.getZoomFactor()
   const px = Math.round(x * zoom)
   const py = Math.round(y * zoom)
@@ -413,6 +452,7 @@ export function mouseClick(wc: PageHandle, x: number, y: number, button: MouseBu
     wc.sendInputEvent({ type: 'mouseDown', x: px, y: py, button, clickCount: n })
     wc.sendInputEvent({ type: 'mouseUp', x: px, y: py, button, clickCount: n })
   }
+  return wc.flushInput?.() ?? Promise.resolve()
 }
 
 export function mouseMove(wc: PageHandle, x: number, y: number): void {

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ExperienceConfig } from '../../../shared/experience'
-import { appearanceVariables, defaultConfig, wantsReducedMotion } from '../../../shared/experience'
+import { activePreset, appearanceVariables, defaultConfig, wantsReducedMotion } from '../../../shared/experience'
+import { presetBackdrop } from '../../../shared/presets'
 
 /**
  * The Experience Runtime in the window: it applies whatever the user has personalised, and nothing else. Every value
@@ -9,9 +10,31 @@ import { appearanceVariables, defaultConfig, wantsReducedMotion } from '../../..
 
 const MARK = 'data-experience'
 
+/**
+ * Whether anyone is looking.
+ *
+ * A background that moves should stop moving when the window is minimised or covered, and this is the whole of how
+ * that happens: one listener, registered once, writing one attribute that the stylesheet pauses animations on. It is
+ * set up on first use rather than at import so that nothing is registered in a window that never applies a
+ * configuration, and it is never torn down because the document outlives every screen that reads it.
+ */
+let watchingVisibility = false
+
+function watchVisibility(): void {
+  if (watchingVisibility) return
+  watchingVisibility = true
+  const show = (): void => {
+    if (document.visibilityState === 'visible') delete document.documentElement.dataset.window
+    else document.documentElement.dataset.window = 'hidden'
+  }
+  document.addEventListener('visibilitychange', show)
+  show()
+}
+
 /** Puts a configuration on screen. Anything not personalised is removed rather than set to a default. */
 export function applyExperience(config: ExperienceConfig, systemReducedMotion: boolean): void {
   const root = document.documentElement
+  watchVisibility()
   const variables = appearanceVariables(config, systemReducedMotion)
   // Whatever this runtime set last time is taken off first, so turning a setting off really turns it off.
   const previous = (root.getAttribute(MARK) ?? '').split(' ').filter(Boolean)
@@ -54,8 +77,15 @@ export function applyExperience(config: ExperienceConfig, systemReducedMotion: b
   if (config.accessibility.alwaysShowFocus) root.dataset.focusRings = 'always'
   else delete root.dataset.focusRings
 
-  if (wantsReducedMotion(config, systemReducedMotion)) root.dataset.motion = 'reduced'
+  const still = wantsReducedMotion(config, systemReducedMotion)
+  if (still) root.dataset.motion = 'reduced'
   else delete root.dataset.motion
+
+  // Which of Orbis's background animations runs, if any. Naming it on the document rather than as a variable means
+  // stillness is the absence of a rule: nothing is animating at zero speed in the background of a quiet Orbis.
+  const backdrop = presetBackdrop(activePreset(config), still)
+  if (backdrop) root.dataset.backdrop = backdrop
+  else delete root.dataset.backdrop
 }
 
 export interface Experience {

@@ -79,6 +79,18 @@ export interface PageHandle {
   insertText(text: string): Promise<void>
   /** Clicks, key presses, scrolling: real input, delivered the way the platform delivers it. */
   sendInputEvent(event: InputEvent): void
+  /**
+   * Waits until the input sent so far has actually been delivered.
+   *
+   * `sendInputEvent` returns before the event reaches the page -- it has to, because input has to keep its order and a
+   * click is three events. That leaves a gap in which the page has not yet seen the key, and anything that looks at the
+   * page in that gap sees the state before it. Which is how "typed and pressed Enter" came to be reported about a form
+   * that had not been submitted: the key was still in the queue, the page was read, nothing had changed, and the agent
+   * concluded the action had no effect.
+   *
+   * Optional, because a platform whose input is synchronous has nothing to wait for.
+   */
+  flushInput?(): Promise<void>
 
   /** Pastes what is on the clipboard into the focused field, as the browser's own paste does. */
   paste(): void

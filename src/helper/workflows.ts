@@ -53,8 +53,12 @@ export interface WorkflowsDeps {
   engine: WorkflowEngineLike
   recorder?: WorkflowRecorderLike
   store?: WorkflowSecretsLike
-  /** Orion drafts a workflow from words (or changes an existing one). Nothing runs; the person reviews it first. */
-  draft?(instruction: string, current: Workflow | null): Promise<Workflow>
+  /**
+   * Orion drafts a workflow from words (or changes an existing one), already checked against the browser it would run
+   * on. Nothing runs; the person reviews it first -- and reviews the problems with it, which travel with the draft
+   * rather than waiting to be discovered part-way through a real execution.
+   */
+  draft?(instruction: string, current: Workflow | null): Promise<{ workflow: Workflow; issues: WorkflowIssue[] }>
 }
 
 const CONTROLS = ['pause', 'resume', 'stop', 'skip', 'restart-step', 'stop-after-iteration', 'step'] as const
@@ -326,9 +330,11 @@ export function createWorkflowHandlers(getDeps: () => WorkflowsDeps | null | und
       if (!d.draft) throw new HelperError('unavailable', 'Orion cannot draft workflows in this build.')
       if (typeof a[0] !== 'string' || !a[0].trim()) throw bad('Describe the workflow first.')
       const current = a[1] === undefined ? null : await d.engine.get(id(a[1]))
-      const draft = await d.draft(a[0].trim().slice(0, 4000), current)
-      const saved = await d.engine.save({ ...draft, status: 'draft' }, 'Drafted by Orion')
-      return card(saved, await d.engine.stats(saved.id), d.engine.nextRun(saved.id))
+      const { workflow, issues } = await d.draft(a[0].trim().slice(0, 4000), current)
+      const saved = await d.engine.save({ ...workflow, status: 'draft' }, 'Drafted by Orion')
+      // Saved as a draft, with whatever is wrong with it. A draft naming a capability this Orbis does not have is
+      // still worth keeping -- it is most of a workflow, and the editor can fix it -- but it must not look finished.
+      return { ...card(saved, await d.engine.stats(saved.id), d.engine.nextRun(saved.id)), issues }
     },
     'workflows:remembered-secrets': async (a) => (await deps().store?.rememberedSecretNames(id(a[0]))) ?? [],
     /** Write only: the value goes to the app's encrypted store and is never sent back. */

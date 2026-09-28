@@ -54,6 +54,25 @@ export interface WidgetSettingSpec {
   max?: number
 }
 
+/**
+ * A widget put somewhere by hand.
+ *
+ * Kept as a fraction of the surface rather than as pixels. A person arranges their widgets on the screen they have;
+ * they then maximise the window, plug in a second monitor, or open Orbis on a laptop. Pixels would put the widget
+ * off the edge -- fractions put it back where it looked like it was, which is what "where I left it" means to
+ * everyone except a coordinate system.
+ */
+export interface WidgetPlacement {
+  /** Across the surface, 0 at the left edge and 1 at the right. */
+  x: number
+  /** Down the surface, 0 at the top and 1 at the bottom. */
+  y: number
+  /** Width as a fraction of the surface, if it has been resized. Absent keeps the widget's own size. */
+  w?: number
+  /** Height as a fraction of the surface, if it has been resized. */
+  h?: number
+}
+
 export interface WidgetInstance {
   id: string
   /** Which widget this is an instance of. */
@@ -63,6 +82,13 @@ export interface WidgetInstance {
   order: number
   size: WidgetSize
   settings: Record<string, string | number | boolean>
+  /**
+   * Where the person put it, if they have moved it by hand.
+   *
+   * Absent means the widget is laid out by its zone and order, exactly as widgets always have been -- so a layout
+   * made before any of this existed is untouched, and a person who never drags anything never meets it.
+   */
+  place?: WidgetPlacement
   /** Folded away until it is clicked. */
   collapsed: boolean
   /** Set aside after repeated failures; the user can bring it back. */
@@ -380,16 +406,72 @@ export function normalizeWidget(raw: unknown): WidgetInstance | null {
     order: typeof r.order === 'number' && Number.isFinite(r.order) ? r.order : 0,
     size: definition.sizes.includes(r.size as WidgetSize) ? (r.size as WidgetSize) : definition.defaultSize,
     settings: Object.fromEntries(definition.settings.map((s) => [s.name, clampSetting(s, stored[s.name])])),
+    ...(normalizePlacement(r.place) ? { place: normalizePlacement(r.place)! } : {}),
     collapsed: r.collapsed === true,
     disabled: r.disabled === true,
     addedAt: typeof r.addedAt === 'number' ? r.addedAt : Date.now()
   }
 }
 
+/**
+ * A placement that is actually on the surface.
+ *
+ * Everything here is clamped rather than rejected: a widget slightly off the edge is a widget the person can still
+ * reach, and the one outcome to avoid is a widget saved somewhere it can never be grabbed again. A placement that is
+ * not a pair of numbers at all is not a placement, and the widget simply goes back to its zone.
+ */
+export function normalizePlacement(raw: unknown): WidgetPlacement | null {
+  if (!raw || typeof raw !== 'object') return null
+  const p = raw as Partial<WidgetPlacement>
+  const on = (value: unknown): number | null =>
+    typeof value === 'number' && Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : null
+  const x = on(p.x)
+  const y = on(p.y)
+  if (x === null || y === null) return null
+  // A widget is never allowed to be narrower or shorter than something a person can hit.
+  const size = (value: unknown): number | undefined => {
+    const n = on(value)
+    return n === null ? undefined : Math.min(1, Math.max(MIN_WIDGET_FRACTION, n))
+  }
+  const w = size(p.w)
+  const h = size(p.h)
+  return { x, y, ...(w === undefined ? {} : { w }), ...(h === undefined ? {} : { h }) }
+}
+
+/** The smallest a widget may be made, as a fraction of the surface. Below this it stops being usable. */
+export const MIN_WIDGET_FRACTION = 0.08
+
+/** Puts a widget where the person dropped it. */
+export function placeWidgetFreely(widgets: WidgetInstance[], id: string, place: WidgetPlacement): WidgetInstance[] {
+  const wanted = normalizePlacement(place)
+  if (!wanted) return widgets
+  return widgets.map((w) => (w.id === id ? { ...w, place: wanted } : w))
+}
+
+/** Gives a widget back to its zone, as though it had never been moved by hand. */
+export function clearWidgetPlacement(widgets: WidgetInstance[], id: string): WidgetInstance[] {
+  return widgets.map((w) => {
+    if (w.id !== id || !w.place) return w
+    const { place: _dropped, ...rest } = w
+    return rest
+  })
+}
+
+/** The widgets that have been put somewhere by hand. */
+export const placedWidgets = (widgets: WidgetInstance[]): WidgetInstance[] =>
+  widgets.filter((w) => w.place && !w.disabled)
+
+/** The widgets still laid out by their zone, which is every widget nobody has moved. */
+export const flowedWidgets = (widgets: WidgetInstance[]): WidgetInstance[] =>
+  widgets.filter((w) => !w.place && !w.disabled)
+
 export const normalizeWidgets = (raw: unknown): WidgetInstance[] => (Array.isArray(raw) ? raw.map(normalizeWidget).filter((w): w is WidgetInstance => w !== null).slice(0, MAX_WIDGETS) : [])
 
 /** The widgets of one zone, in the order they should appear. */
-export const widgetsInZone = (widgets: WidgetInstance[], zone: ZoneName): WidgetInstance[] => widgets.filter((w) => w.zone === zone && !w.disabled).sort((a, b) => a.order - b.order || a.addedAt - b.addedAt)
+/** The widgets of one zone, in the order they should appear. A widget put somewhere by hand is no longer in a zone's
+ * flow, so it is left out here -- otherwise it would be drawn twice, once where it was dropped and once in the row it
+ * came from. */
+export const widgetsInZone = (widgets: WidgetInstance[], zone: ZoneName): WidgetInstance[] => widgets.filter((w) => w.zone === zone && !w.disabled && !w.place).sort((a, b) => a.order - b.order || a.addedAt - b.addedAt)
 
 /** Moves a widget to a zone at a position, and renumbers that zone so the order is always plain. */
 export function placeWidget(widgets: WidgetInstance[], id: string, zone: ZoneName, index: number): WidgetInstance[] {

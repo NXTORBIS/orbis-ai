@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Check, ChevronDown, ChevronUp, Copy, Download, FileUp, History, Image, LayoutGrid, Paintbrush, Palette, Plus, RotateCcw, ShieldCheck, Sparkles, Trash2, Undo2, X, Zap } from 'lucide-react'
+import { Bell, Check, ChevronDown, ChevronUp, Copy, Download, FileUp, History, Image, LayoutGrid, Paintbrush, Palette, Plus, RotateCcw, ShieldCheck, Sparkles, Trash2, Undo2, X, Zap } from 'lucide-react'
 import type { AppearanceConfig, ExperienceConfig } from '../../../shared/experience'
 import { defaultConfig, describeConfig, diffConfig, isDefaultConfig } from '../../../shared/experience'
 import type { Experience } from '../lib/experience'
@@ -8,16 +8,23 @@ import type { WidgetCategory, WidgetInstance, WidgetSize, ZoneName } from '../..
 import { MAX_WIDGETS, newWidgetInstance, permissionsOf, placeWidget, searchWidgets, widgetById, widgetsInZone, ZONES } from '../../../shared/widgets'
 import type { StoredTheme } from '../../../shared/themes'
 import { BUILT_IN_THEMES, copyOfBuiltIn, MAX_THEMES, newTheme, readability, THEME_TOKENS, themeTokens } from '../../../shared/themes'
+import type { StoredPreset } from '../../../shared/presets'
+import type { PresetCategory } from '../../../shared/presets'
+import { applyPreset, BUILT_IN_PRESETS, copyOfPreset, MAX_PRESETS, presetFromConfig } from '../../../shared/presets'
+import { RulesEditor } from './RulesEditor'
 import type { Dashboard } from '../../../shared/dashboards'
 import { MAX_DASHBOARDS, newDashboard, rememberWidgets, removeDashboard, switchTo } from '../../../shared/dashboards'
 
-type Category = 'appearance' | 'themes' | 'newTab' | 'widgets' | 'accessibility' | 'performance' | 'privacy' | 'advanced'
+type Category = 'presets' | 'appearance' | 'themes' | 'newTab' | 'widgets' | 'notify' | 'accessibility' | 'performance' | 'privacy' | 'advanced'
 
 const CATEGORIES: { id: Category; label: string; icon: typeof Paintbrush }[] = [
+  // First, because it is the one choice that answers the whole question. Everything below it is for afterwards.
+  { id: 'presets', label: 'Presets', icon: Sparkles },
   { id: 'appearance', label: 'Appearance', icon: Paintbrush },
   { id: 'themes', label: 'Themes', icon: Palette },
   { id: 'newTab', label: 'New tab', icon: Sparkles },
   { id: 'widgets', label: 'Widgets', icon: LayoutGrid },
+  { id: 'notify', label: 'Tell me when', icon: Bell },
   { id: 'accessibility', label: 'Accessibility', icon: Check },
   { id: 'performance', label: 'Performance', icon: Zap },
   { id: 'privacy', label: 'Privacy', icon: ShieldCheck },
@@ -64,6 +71,8 @@ export default function CustomizeView({ experience, onClose, onNotify }: { exper
   const [editingTheme, setEditingTheme] = useState<string | null>(null)
   const [widgetSearch, setWidgetSearch] = useState('')
   const [widgetGroup, setWidgetGroup] = useState<WidgetCategory | 'all'>('all')
+  const [presetSearch, setPresetSearch] = useState('')
+  const [presetGroup, setPresetGroup] = useState<PresetCategory | 'all'>('all')
   const [draft, setDraft] = useState<ExperienceConfig>(experience.config)
   const [snapshots, setSnapshots] = useState<{ id: string; reason: string; takenAt: number; summary: string[] }[]>([])
   const [health, setHealth] = useState<{ ok: boolean; problems: string[]; repairs: string[]; snapshots: number } | null>(null)
@@ -90,6 +99,21 @@ export default function CustomizeView({ experience, onClose, onNotify }: { exper
     void loadHistory()
     return window.api.onExperienceChanged(() => void loadHistory())
   }, [])
+
+  /**
+   * The presets to show.
+   *
+   * Searched by name and by description, because somebody looking for "glass" and somebody looking for "see-through"
+   * are looking for the same preset and only one of them knows what it is called.
+   */
+  const shownPresets = useMemo(() => {
+    const q = presetSearch.trim().toLowerCase()
+    return [...BUILT_IN_PRESETS, ...draft.presets].filter((p) => {
+      if (presetGroup !== 'all' && p.category !== presetGroup) return false
+      if (!q) return true
+      return `${p.name} ${p.description} ${p.category}`.toLowerCase().includes(q)
+    })
+  }, [draft.presets, presetGroup, presetSearch])
 
   const changes = useMemo(() => diffConfig(savedConfig.current, draft), [draft])
   const dirty = changes.length > 0
@@ -288,6 +312,125 @@ export default function CustomizeView({ experience, onClose, onNotify }: { exper
         </nav>
 
         <section className="cz-panel" aria-label={CATEGORIES.find((c) => c.id === category)?.label}>
+          {category === 'notify' && <RulesEditor draft={draft} change={change} say={onNotify} />}
+
+          {category === 'presets' && (
+            <>
+              <div className="cz-section-head">
+                <h3>Presets</h3>
+                <button
+                  type="button"
+                  className="queue-btn small"
+                  onClick={() => change({ ...defaultConfig(), presets: draft.presets, themes: draft.themes, widgets: draft.widgets, dashboards: draft.dashboards, activeDashboardId: draft.activeDashboardId })}
+                >
+                  <RotateCcw size={12} /> Back to Orbis
+                </button>
+              </div>
+              <p className="view-muted">
+                A preset sets the palette, how solid the panels are, how tight the layout is and how much Orbis moves.
+                Choosing one shows it straight away; nothing is kept until you say so.
+              </p>
+
+              {/*
+                Thirty-odd presets is too many to read as one wall, so the collection is narrowed the same way the
+                widget list is: by name, or by the kind of thing you are after. Nothing is hidden -- "All" with an
+                empty box is the whole collection.
+              */}
+              <input
+                className="cz-search"
+                value={presetSearch}
+                placeholder="Search presets"
+                aria-label="Search presets"
+                onChange={(e) => setPresetSearch(e.target.value)}
+              />
+              <div className="cz-chips">
+                {(['all', 'Orbis', 'Calm', 'Dark', 'Light', 'Vivid', 'Work'] as const).map((group) => (
+                  <button
+                    key={group}
+                    type="button"
+                    className={`queue-btn small${presetGroup === group ? ' primary' : ''}`}
+                    aria-pressed={presetGroup === group}
+                    onClick={() => setPresetGroup(group)}
+                  >
+                    {group === 'all' ? 'All' : group}
+                  </button>
+                ))}
+              </div>
+
+              <div className="cz-presets">
+                {shownPresets.length === 0 && <p className="view-muted">Nothing matches that.</p>}
+                {shownPresets.map((p) => {
+                  const worn = draft.activePresetId === p.id
+                  return (
+                    <div key={p.id} className={`cz-preset${worn ? ' on' : ''}`}>
+                      <button
+                        type="button"
+                        className="cz-preset-face"
+                        aria-pressed={worn}
+                        title={p.description}
+                        onClick={() => change({ ...applyPreset(draft, p), activePresetId: p.id })}
+                      >
+                        <span
+                          className="cz-preset-swatch"
+                          style={p.background.kind === 'gradient' && p.background.value ? { background: p.background.value } : undefined}
+                        >
+                          <span className="cz-preset-dot" style={p.appearance.accent ? { background: p.appearance.accent } : undefined} />
+                        </span>
+                        <span className="cz-preset-name">{p.name}</span>
+                        <span className="cz-preset-why">{p.description}</span>
+                      </button>
+                      <div className="cz-preset-acts">
+                        {/* Orbis's own are read-only, so starting from one makes a copy and leaves the original alone. */}
+                        <button
+                          type="button"
+                          className="sb-row-action"
+                          title={`Make my own from ${p.name}`}
+                          aria-label={`Make my own from ${p.name}`}
+                          disabled={draft.presets.length >= MAX_PRESETS}
+                          onClick={() => change({ ...draft, presets: [...draft.presets, copyOfPreset(p)] })}
+                        >
+                          <Copy size={13} />
+                        </button>
+                        {!p.builtIn && (
+                          <button
+                            type="button"
+                            className="sb-row-action danger"
+                            title={`Delete ${p.name}`}
+                            aria-label={`Delete ${p.name}`}
+                            onClick={() =>
+                              change({
+                                ...draft,
+                                presets: draft.presets.filter((mine: StoredPreset) => mine.id !== p.id),
+                                // Deleting what is being worn leaves the look in place and simply stops calling it by that name.
+                                activePresetId: draft.activePresetId === p.id ? null : draft.activePresetId
+                              })
+                            }
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
+              <div className="cz-row">
+                <span>Keep how Orbis looks now</span>
+                <button
+                  type="button"
+                  className="queue-btn small"
+                  disabled={draft.presets.length >= MAX_PRESETS}
+                  onClick={() => {
+                    const mine = presetFromConfig(draft, 'My preset')
+                    change({ ...draft, presets: [...draft.presets, mine], activePresetId: mine.id })
+                  }}
+                >
+                  <Plus size={12} /> Save as preset
+                </button>
+              </div>
+            </>
+          )}
           {category === 'appearance' && (
             <>
               <div className="cz-section-head">

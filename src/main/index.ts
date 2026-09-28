@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeTheme, net, Notification, shell } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, nativeTheme, net, Notification, shell } from 'electron'
 import type { MenuItemConstructorOptions, OpenDialogOptions, TitleBarOverlayOptions, IpcMainInvokeEvent } from 'electron'
 import { existsSync, promises as fs } from 'node:fs'
 import os from 'node:os'
@@ -82,7 +82,8 @@ import { ChromiumRecorder } from './workflows/chromiumRecorder'
 import type { RecorderCore } from './workflows/recorderCore'
 import { WorkflowEngine } from './workflows/engine'
 import { registerWorkflowIpc } from './workflows/ipc'
-import { askOrion, draftWorkflow } from './workflows/orion'
+import { askOrion, draftValidatedWorkflow } from './workflows/orion'
+import type { WorkflowIssue } from '../shared/workflows'
 import { NotesStore } from './personal/notes'
 import { TasksStore } from './personal/tasks'
 import { ClipboardHistory } from './personal/clipboard'
@@ -90,6 +91,26 @@ import { WhiteboardStore } from './personal/whiteboard'
 import { WorkspacesStore } from './personal/workspaces'
 import { ProfilesStore } from './personal/profiles'
 import { ExperienceStore } from './experience/store'
+import { mayNotify } from '../shared/rules'
+import { RuleWatcher, workflowReadings } from './ruleWatcher'
+import { AccountFailure, AccountSecurity } from './accountSecurity'
+import { TabLockStore } from './tabLockStore'
+import { registerTabLockIpc } from './tabLock/ipc'
+import { registerProfileLockIpc } from './profileLock/ipc'
+import { registerSecurityCapabilities } from './browserControl/securityCapabilities'
+import { registerMarketCapabilities } from './browserControl/marketCapabilities'
+import { SecurityLog } from './securityLog'
+import { MarketEngine } from './markets/engine'
+import { MarketsStore } from './markets/store'
+import { MarketsRuntime } from './markets/runtime'
+import { BinanceProvider } from './markets/providers/binance'
+import { BinanceFuturesProvider } from './markets/providers/binanceFutures'
+import { registerMarketsIpc } from './markets/ipc'
+import { PagesStore } from './pages/store'
+import { PagesService } from './pages/service'
+import { registerPagesIpc } from './pages/ipc'
+import { FxRates } from './markets/fx'
+import { pushLock } from './chromium/tabLockBridge'
 import { registerExperienceIpc } from './experience/ipc'
 import type { Profile } from '../shared/profiles'
 import { registerPersonalIpc } from './personal/ipc'
@@ -192,7 +213,7 @@ let galaxyForChat: GalaxyService | null = null
 /** The secrets vault, once it exists, for the Chromium side panel (which never receives a value). */
 let vaultForPanel: SecretsDeps | null = null
 /** What the Chromium side panel's Workflows tab needs beyond the engine: remembered secrets and Orion drafts. */
-let workflowExtrasForPanel: { store: WorkflowStore; draft(instruction: string, current: Workflow | null): Promise<Workflow> } | null = null
+let workflowExtrasForPanel: { store: WorkflowStore; draft(instruction: string, current: Workflow | null): Promise<{ workflow: Workflow; issues: WorkflowIssue[] }> } | null = null
 let workspacesForChat: WorkspacesStore | null = null
 /** The app's search-box suggestions and local speech to text, lent to the pages in the Orbis browser. */
 let appServicesForBrowser: AppServicesDeps | null = null
@@ -234,6 +255,18 @@ function requestBrowserConfirmation(
 }
 
 /** Said when a browser task needs Orbis's browser but no Chromium build is installed. */
+/**
+ * Trims the strip Pollinations may mark, using the image support Electron has. The helper has none and asks for an
+ * untrimmed image instead (src/main/imagegen.ts).
+ */
+const cropWatermark = (jpeg: Buffer, strip: number): string => {
+  const image = nativeImage.createFromBuffer(jpeg)
+  const { width, height } = image.getSize()
+  if (image.isEmpty() || width === 0) throw new Error('Pollinations returned an unreadable image')
+  const keep = Math.max(1, height - Math.round((strip * height) / (1024 + strip)))
+  return `data:image/jpeg;base64,${image.crop({ x: 0, y: 0, width, height: keep }).toJPEG(92).toString('base64')}`
+}
+
 const NO_BROWSER = 'The Orbis browser (Chromium) is not installed on this computer.'
 
 /** Orbis's browser, told each time it (re)starts so the app can follow its tabs. */
@@ -342,6 +375,14 @@ async function readImages(paths: string[]): Promise<PickedFiles> {
 const activeRequests = new Map<string, AbortController>()
 let store: Store
 let mainWindow: BrowserWindow | null = null
+/**
+ * The person's experience settings, once they have been read.
+ *
+ * Held here because things that interrupt -- a finished workflow, a rule coming true -- happen long after startup and
+ * need to know whether the person asked not to be interrupted.
+ */
+let experienceStore: ExperienceStore | null = null
+let ruleWatcher: RuleWatcher | null = null
 
 function isHttpUrl(url: string): boolean {
   try {
@@ -352,6 +393,24 @@ function isHttpUrl(url: string): boolean {
   }
 }
 
+/**
+ * Orbis's own icon, for builds that are not packaged.
+ *
+ * A path handed to Electron is loaded quietly: if Windows cannot make an icon of it, nothing is reported and the
+ * window keeps Electron's atom. That is what happened here -- the file was 832x1248, and Windows will not build an
+ * icon from an image that is not square. Loading it here means an unusable icon is a thing this function can see.
+ *
+ * Windows is given the .ico, which carries every size the shell asks for; everywhere else takes the PNG.
+ */
+function orbisIcon(): Electron.NativeImage | undefined {
+  const dir = join(app.getAppPath(), 'build')
+  for (const name of process.platform === 'win32' ? ['icon.ico', 'icon.png'] : ['icon.png']) {
+    const image = nativeImage.createFromPath(join(dir, name))
+    if (!image.isEmpty()) return image
+  }
+  return undefined
+}
+
 function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1200,
@@ -359,8 +418,8 @@ function createWindow(): BrowserWindow {
     minWidth: 720,
     minHeight: 500,
     title: 'Orbis',
-    // Packaged builds take their icon from the executable.
-    ...(app.isPackaged ? {} : { icon: join(app.getAppPath(), 'build', 'icon.png') }),
+    // Packaged builds take their icon from the executable; unpackaged ones get it here, or they wear Electron's.
+    ...(app.isPackaged ? {} : { icon: orbisIcon() }),
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#000000' : '#e6edf8',
     // The HUD's own system bar replaces the native title bar; window buttons are overlaid on it.
     titleBarStyle: 'hidden',
@@ -642,7 +701,7 @@ function registerIpc(): void {
         if (intent?.kind === 'image') {
           emit({ type: 'status', message: IMAGE_GEN_STATUS })
           try {
-            const image = await generateImage(intent.prompt, (url, init) => net.fetch(url, init), intent.seed)
+            const image = await generateImage(intent.prompt, (url, init) => net.fetch(url, init), intent.seed, cropWatermark)
             if (controller.signal.aborted) return emit({ type: 'aborted' })
             emit({ type: 'image', url: image.dataUrl, prompt: intent.prompt, seed: image.seed })
             emit({ type: 'done', model: request.model, truncated: false })
@@ -951,7 +1010,7 @@ ${summaryBlock(summary)}`
     const seed = Number.isSafeInteger(request?.seed) ? request.seed : undefined
     const fetchFn = (url: string, init?: RequestInit): Promise<Response> => net.fetch(url, init)
     const nextPrompt = await rewriteImagePrompt(prompt, instruction, GROQ_API_KEYS, fetchFn)
-    const image = await generateImage(nextPrompt, fetchFn, seed)
+    const image = await generateImage(nextPrompt, fetchFn, seed, cropWatermark)
     return { url: image.dataUrl, prompt: nextPrompt, seed: image.seed }
   })
 
@@ -1020,6 +1079,9 @@ ${summaryBlock(summary)}`
   appServicesForBrowser = {
     suggestWeb: webSuggestions,
     suggestOrion: orionPredictions,
+    // The browser's address bar honours the same setting as this window's: turned off, neither offers rows drawn from
+    // what the person has done before.
+    personalizedSuggestions: async () => (await store.getSettings()).personalizedSuggestions !== false,
     transcribe: (audio, options) => transcribeClip(Buffer.from(audio), options),
     cancelTranscription: () => voiceAbort?.abort(),
     voiceHardware: () => whisper?.hardware() ?? null,
@@ -1196,6 +1258,311 @@ if (!app.requestSingleInstanceLock()) {
     // Profiles: separate browsing identities. Each has its own cookies, logins, site storage, history, bookmarks,
     // downloads and open pages; extensions are installed once and follow whichever profile is in use.
     const profilesStore = new ProfilesStore(app.getPath('userData'))
+
+    /**
+     * The password on the account.
+     *
+     * A separate credential from the vault's, deliberately: the vault's master password protects secrets the person put
+     * there, and this protects the profile itself. They share `vault/crypto.ts` and nothing else.
+     *
+     * The profile id comes from the profile store, exactly as the vault's does. A window says which password to try; it
+     * never says whose account to try it on.
+     *
+     * Made here, before the browser, because Tab Lock needs it: the account password is what can reset a forgotten tab
+     * password, and a tab password made while the account is closed says honestly that it cannot be recovered.
+     */
+    const accounts = new AccountSecurity(app.getPath('userData'))
+    app.on('before-quit', () => accounts.lock())
+    // An account unlocked for one profile is not unlocked for another.
+    profilesStore.onChange(() => accounts.lock())
+
+    /**
+     * Tab Lock: private tabs behind their own password.
+     *
+     * Set up before the browser starts, so the first tab listing the browser produces is already going through the
+     * redaction point rather than a window in which a locked tab's address could be read.
+     */
+    /**
+     * What Orbis records about its own security.
+     *
+     * Per profile, and narrow by construction: the shape an event may have has no field for an address, a page or a
+     * credential, so this cannot leak one whatever is handed to it. It exists so somebody can notice something they did
+     * not do.
+     */
+    const securityLog = new SecurityLog(app.getPath('userData'))
+    const recordSecurity = (event: unknown): void => {
+      void profilesStore
+        .active()
+        .then((p) => securityLog.record(p.id, event))
+        .catch(() => undefined)
+    }
+    app.on('before-quit', () => void securityLog.flush())
+    profilesStore.onChange(() => void securityLog.flush())
+
+    /**
+     * Markets.
+     *
+     * One engine for the whole application, one store per profile, and providers registered into the engine rather than
+     * reached for directly by anything that wants a price. Binance's public endpoints need no key and no account, which is
+     * why real prices are there the first time Orbis is opened; anything that needs a licensed feed reports itself
+     * unconfigured rather than showing a number nobody can stand behind.
+     */
+    const marketEngine = new MarketEngine()
+    marketEngine.add(new BinanceProvider())
+    // Futures are a second provider rather than a mode of the first: a different host, a different universe of symbols,
+    // and prices that are not the spot prices. Registering it separately is what makes a perpetual impossible to confuse
+    // with the spot market it tracks, because the instrument id says which one it is.
+    marketEngine.add(new BinanceFuturesProvider())
+    const marketsStore = new MarketsStore(app.getPath('userData'))
+    const markets = new MarketsRuntime({
+      engine: marketEngine,
+      store: marketsStore,
+      profileId: async () => (await profilesStore.active()).id,
+      onAlert: ({ alert, value, instrument }) => {
+        // Through the window's own notifications, not a second notification system.
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('markets:alert', {
+            id: alert.id,
+            label: alert.label,
+            symbol: instrument?.symbol ?? '',
+            value
+          })
+        }
+      },
+      /**
+       * A market condition has just become true, and a workflow was waiting for it.
+       *
+       * The runtime decides *that* it happened; starting the workflow is the engine's job, through the same `run` every
+       * other trigger uses. No second workflow engine, and no market logic inside the one there is.
+       */
+      onTrigger: ({ trigger, describe, instrumentId, value }) => {
+        if (!workflowEngine) return
+        void workflowEngine
+          .run(trigger.workflowId, {
+            trigger: 'event',
+            inputs: { instrumentId, condition: describe, value }
+          })
+          .catch(() => {
+            // A workflow that no longer exists, or one that refused to start. The trigger's own memory has already
+            // advanced, so this does not retry in a loop -- and nothing is claimed to have run that did not.
+          })
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('markets:trigger', { id: trigger.id, describe, instrumentId, value })
+        }
+      },
+      onTickerChanged: (config) => {
+        // The browser draws the strip, so it is the browser that is told whether to.
+        const pages = chromiumBrowser?.current?.browser.list() ?? []
+        for (const page of pages) {
+          if (!page.getURL().startsWith('chrome://orbis-ticker')) continue
+          void page.executeJavaScript('globalThis.orbisTickerChanged && globalThis.orbisTickerChanged()').catch(() => undefined)
+        }
+        void config
+      }
+    })
+    /** Real exchange rates, from the European Central Bank's daily reference set. No key, and nowhere to put one. */
+    const marketFx = new FxRates({ fetchFn: (url, init) => net.fetch(url as string, init as RequestInit) })
+    /** The feed reader Markets borrows for its news: the same class the new tab's widget uses, with its cache and its backing off. */
+    const marketNewsFeeds = new WidgetFeeds({ fetch: (url, init) => net.fetch(url, init), appVersion: app.getVersion() })
+    void markets.start().catch(() => undefined)
+    // The window's way in: this is where markets are set up. The strip only reads.
+    registerMarketsIpc({
+      engine: marketEngine,
+      store: marketsStore,
+      runtime: markets,
+      getWindow: () => mainWindow,
+      profileId: async () => (await profilesStore.active()).id,
+      // One feed reader for the whole application. A second would be a second set of rate limits to get wrong.
+      readFeed: (url) =>
+        marketNewsFeeds
+          .feed(url)
+          .then((got) => (got.ok ? ({ ok: true, data: got.data } as const) : ({ ok: false, reason: got.reason } as const)))
+          .catch(() => ({ ok: false, reason: 'That feed could not be read.' }) as const),
+      fx: marketFx,
+      /**
+       * Where Orbis thinks the person is, for choosing a starting currency.
+       *
+       * The system locale and the region inside it. Electron knows this without asking anybody for anything, and it is
+       * as much as choosing a currency needs -- there is deliberately no call here that would prompt for location.
+       */
+      detectionSignals: () => {
+        const locale = app.getLocale() || app.getSystemLocale() || ''
+        let region = ''
+        try {
+          region = new Intl.Locale(locale).maximize().region ?? ''
+        } catch {
+          region = ''
+        }
+        return { locale, region }
+      }
+    })
+    /**
+     * What Orion, the Orb, a workflow and a spoken command may do about markets.
+     *
+     * One registration for all four: Voice becomes a transcript, the transcript becomes an Orion request, and Orion, the
+     * Orb and the workflow engine all reach Markets through the same capability registry. There is deliberately no
+     * capability that could reach an exchange -- the only one that moves anything moves the paper account.
+     */
+    registerMarketCapabilities({
+      control: browserControl.control,
+      engine: marketEngine,
+      store: marketsStore,
+      runtime: markets,
+      profileId: async () => (await profilesStore.active()).id,
+      show: async (instrumentId, section) => {
+        const window = mainWindow
+        if (!window || window.isDestroyed()) return false
+        // `markets:show`, not `markets:open`: the latter is already an invoke channel and already an event the strip
+        // uses with a different shape. Two meanings on one channel is a bug waiting for whoever reads it next.
+        window.webContents.send('markets:show', { instrumentId, section })
+        // Brought forward as well: opening something nobody can see is not opening it.
+        if (window.isMinimized()) window.restore()
+        window.focus()
+        return true
+      }
+    })
+    profilesStore.onChange(() => void markets.profileChanged())
+    app.on('before-quit', () => {
+      markets.stop()
+      void marketsStore.flush()
+    })
+
+    /**
+     * Orbis Pages.
+     *
+     * The register is rebuilt from the build at every start, so a Page removed from a release cannot linger as an entry
+     * that resolves to nothing. What a profile has *decided* -- permissions, favourites, each Page's saved work -- lives in
+     * the store and is layered on, which is why the two are separate objects.
+     */
+    const pagesStore = new PagesStore(app.getPath('userData'))
+    const pages = new PagesService({
+      store: pagesStore,
+      profileId: async () => (await profilesStore.active()).id,
+      // Nothing is registered here yet. When a shared engine becomes a versioned dependency a Page can require, this is
+      // where the build says which version it has -- and `compatibility` is what refuses a Page that needs a newer one.
+      engines: {}
+    })
+    pages.start()
+    registerPagesIpc({
+      service: pages,
+      getWindow: () => mainWindow,
+      profileId: async () => (await profilesStore.active()).id
+    })
+    profilesStore.onChange(() => pages.profileChanged())
+    app.on('before-quit', () => {
+      void pagesStore.flush()
+    })
+
+    const tabLockStore = new TabLockStore(app.getPath('userData'), accounts)
+    const tabLock = registerTabLockIpc({
+      store: tabLockStore,
+      control: browserControl.control,
+      getWindow: () => mainWindow,
+      send: (channel, ...args) => {
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, ...args)
+      },
+      profileId: async () => (await profilesStore.active()).id,
+      tabs: async () =>
+        (browserControl?.windowControl.state?.tabs ?? []).map((t) => ({ tabId: Number(t.id), url: t.url, title: t.title })),
+      /**
+       * The decision, carried into the browser.
+       *
+       * Read at call time rather than captured, because the browser is started later and restarted whenever the profile
+       * changes. Failing to reach it is not an error worth stopping for: the tab is already locked everywhere this process
+       * can enforce it, and the browser will be told again the next time anything changes.
+       */
+      // Profile Lock's, passed on: the Command Centre offers all three locking commands together and reaches Orbis
+      // through one helper. `profileLock` is made just below, so this reads it at call time.
+      lockProfile: () => profileLock.lockNow(),
+      log: recordSecurity,
+      tellBrowser: (tab) => {
+        const pages = chromiumBrowser?.current?.browser.list() ?? []
+        if (pages.length === 0) return
+        void pushLock(pages, tab).catch(() => undefined)
+      }
+    })
+    profilesStore.onChange(() => tabLock.profileChanged())
+    app.on('before-quit', () => void tabLock.shutdown())
+
+    /**
+     * Profile Lock: Orbis itself, behind the account password.
+     *
+     * A different thing from Tab Lock and kept a different thing -- but they lock together, because a profile that has
+     * locked with a tab left open would be a profile whose tabs were readable the moment it was unlocked by anybody who
+     * had the account password. The account password is the recovery root for a tab password; it is not the tab password.
+     */
+    const profileLock = registerProfileLockIpc({
+      accounts,
+      getWindow: () => mainWindow,
+      send: (channel, ...args) => {
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, ...args)
+      },
+      profileId: async () => (await profilesStore.active()).id,
+      log: recordSecurity,
+      onLocked: () => {
+        // Everything protected, shut, and every tab password closed. The tabs themselves are untouched.
+        tabLock.watcher.panic()
+        tabLockStore.closeAll()
+      }
+    })
+    profilesStore.onChange(() => profileLock.profileChanged())
+    app.on('before-quit', () => profileLock.stop())
+
+    /*
+     * What Orion and automations may do about security.
+     *
+     * Every one of these either locks something or reports safely. There is no unlock capability: unlocking needs a
+     * password, a password belongs to the person, and the most this layer can do about a locked tab is put its lock screen
+     * in front of them.
+     */
+    registerSecurityCapabilities({
+      control: browserControl.control,
+      protectedTabs: () =>
+        tabLock.watcher.all().map((t) => ({
+          tabId: t.tabId,
+          groupId: t.groupId,
+          locked: t.locked,
+          lockedBy: t.lockedBy,
+          label: tabLock.watcher.policyFor(t.tabId).label
+        })),
+      groups: async () => {
+        const id = (await profilesStore.active()).id
+        return (await tabLockStore.groups(id)).map((g) => ({
+          id: g.id,
+          name: g.name,
+          open: g.open,
+          recoverable: g.recoverable
+        }))
+      },
+      policyFor: (tabId) => tabLock.watcher.policyFor(tabId),
+      policies: async () => {
+        const id = (await profilesStore.active()).id
+        return { tab: await tabLockStore.defaultPolicy(id), profile: await accounts.profileLock(id) }
+      },
+      describe: async (tabId) => {
+        // The real tab, from the browser, described through `safeTabInfo`. If the browser is not up there is nothing to
+        // describe -- which is different from a tab that exists and is hidden, so it answers null rather than a blank.
+        const row = (browserControl?.windowControl.state?.tabs ?? []).find((t) => Number(t.id) === tabId)
+        if (!row) return null
+        return tabLock.watcher.describe({ tabId, url: row.url, title: row.title })
+      },
+      lockTab: (tabId) => tabLock.watcher.lock(tabId, 'manual'),
+      lockAll: () => {
+        const locked = tabLock.watcher.panic()
+        tabLockStore.closeAll()
+        return locked
+      },
+      lockProfile: () => profileLock.lockNow(),
+      bringForward: async (tabId) => {
+        // The browser's own capability, so bringing a tab forward is the same operation here as anywhere else -- and is
+        // logged and switchable like any other.
+        const done = await browserControl!.control.execute(
+          { capability: 'tabs.activate', params: { tabId: String(tabId) }, target: {} },
+          { source: 'user', confirm: async () => true }
+        )
+        return done.ok
+      }
+    })
     {
       const chromeExe = [process.env.ORBIS_CHROMIUM, app.isPackaged ? join(process.resourcesPath, 'chromium', 'chrome.exe') : 'C:/chromium/src/out/Default/chrome.exe'].find((p): p is string => Boolean(p) && existsSync(p as string))
       if (chromeExe) {
@@ -1210,6 +1577,10 @@ if (!app.requestSingleInstanceLock()) {
           personalDir: () => app.getPath('userData'),
           secrets: () => vaultForPanel,
           workflows: () => (workflowEngine ? { engine: workflowEngine, recorder: workflowRecorder ?? undefined, ...(workflowExtrasForPanel ?? {}) } : null),
+          // The same library the Orbis window shows, not a second one over the same files: a skill learned here is the
+          // skill the browser runs, and turning one off turns it off everywhere. Read at call time, because it is made
+          // further down this same start-up.
+          skills: () => (skillsForRuns ? { manager: skillsForRuns } : null),
           galaxy: () => galaxyForChat,
           appServices: () => appServicesForBrowser,
           searchSessions: () => searchSessionsForBrowser,
@@ -1239,10 +1610,44 @@ if (!app.requestSingleInstanceLock()) {
             return { read: async () => store.read(await active()), write: async (layout) => store.write(await active(), layout), reset: async () => store.reset(await active()) }
           },
           control: browserControl?.control,
+          // The browser's lock surface asks Orbis whether a password is right, because Orbis is what holds it. The
+          // surface never sees a credential and never decides anything.
+          tabLockHelper: () => tabLock.forHelper,
+          // The market strip is a page, and pages reach Orbis through the helper.
+          marketsHelper: () => ({
+            tickerState: () => markets.tickerState(),
+            nextBatch: () => markets.nextBatch(),
+            prime: () => markets.prime(),
+            act: async (what, instrumentId) => {
+              // Every one of these is a real action. Nothing here reports success for something it did not do.
+              if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('markets:open', { what, instrumentId })
+                mainWindow.show()
+                return true
+              }
+              return false
+            },
+            openGroups: async () => {
+              if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('markets:open', { what: 'ticker-groups', instrumentId: '' })
+                mainWindow.show()
+              }
+            }
+          }),
+          // Locked tabs never appear in a listing with their address, and the security layer follows the browser's own
+          // tab events through `sync`.
+          tabLock: {
+            redactTabs: (rows) => tabLock.redactRows(rows),
+            sync: (rows) => tabLock.sync(rows),
+            restore: (rows) => tabLock.restore(rows.map((r) => ({ tabId: Number(r.id), url: r.url, title: r.title })))
+          },
           saveDir: app.getPath('downloads'),
           clipboard: { readText: () => clipboard.readText(), hasImage: async () => (await clipboard.read().catch(() => [])).some((item) => item.types.includes('image/png')) },
           embedded: embeddedBrowser,
-          chromeArgs: embeddedBrowser ? ['--orbis-embedded'] : [],
+          // `--hide-crash-restore-bubble` because the embedded browser is not closed by a person clicking its close
+          // button -- the Orbis window takes it down with it -- so Chromium decides it crashed and offers to restore
+          // the pages. That bubble was appearing over a window the person never asked to see in the first place.
+          chromeArgs: embeddedBrowser ? ['--orbis-embedded', '--hide-crash-restore-bubble'] : [],
           onStarted: (pid) => {
             if (embeddedBrowser) embedController.attach(pid)
           },
@@ -1308,8 +1713,19 @@ if (!app.requestSingleInstanceLock()) {
       store: workflowStore,
       library: browserLibrary!,
       ask: (request, signal) => askOrion(request, GROQ_API_KEYS, fetchForOrion, signal),
-      send: sendToWindow,
+      // Everything the engine tells the windows, the rules hear about too -- so a rule about a workflow answers when
+      // the workflow changes rather than up to half a minute later, and the interval is only for readings that nothing
+      // announces. The watcher is built further down this same startup; until it exists there is nothing watching.
+      send: (channel: string, ...args: unknown[]) => {
+        sendToWindow(channel, ...args)
+        void ruleWatcher?.look()
+      },
       notify: (title, body) => {
+        // Quiet hours and the per-category switches were settings nothing read: a person could turn notifications off
+        // and still be interrupted at three in the morning. They are read here, where the interrupting happens.
+        // `experienceStore` is created further down this same startup; by the time a workflow finishes there is one.
+        const settings = experienceStore?.current().notifications
+        if (settings && !mayNotify(settings, 'workflows')) return
         if (Notification.isSupported()) new Notification({ title, body, silent: false }).show()
       }
     })
@@ -1333,10 +1749,15 @@ if (!app.requestSingleInstanceLock()) {
       store: workflowStore,
       control: browserControl.control,
       getWindow: () => mainWindow,
-      draft: (instruction, current) => draftWorkflow(instruction, current, browserControl!.control.list(), GROQ_API_KEYS, fetchForOrion, () => crypto.randomUUID()),
+      draft: async (instruction, current) =>
+        draftValidatedWorkflow(instruction, current, browserControl!.control.list(), GROQ_API_KEYS, fetchForOrion, () => crypto.randomUUID(), await workflowStore.list()),
       regenerateTitle: (workflowId) => workflowTitler.regenerate(workflowId)
     })
-    workflowExtrasForPanel = { store: workflowStore, draft: (instruction, current) => draftWorkflow(instruction, current, browserControl!.control.list(), GROQ_API_KEYS, fetchForOrion, () => crypto.randomUUID()) }
+    workflowExtrasForPanel = {
+      store: workflowStore,
+      draft: async (instruction, current) =>
+        draftValidatedWorkflow(instruction, current, browserControl!.control.list(), GROQ_API_KEYS, fetchForOrion, () => crypto.randomUUID(), await workflowStore.list())
+    }
     void workflows.start().catch((err: unknown) => console.error('[workflows] failed to start', err))
     profilesStore.onChange(() => {
       void profilesStore
@@ -1350,18 +1771,53 @@ if (!app.requestSingleInstanceLock()) {
 
     // The Experience Runtime: everything the user personalises, kept apart from Orbis's own settings so the browser
     // works exactly as it always has until someone chooses otherwise.
-    const experienceStore = new ExperienceStore(app.getPath('userData'), (await profilesStore.active()).id)
-    await experienceStore.load().catch((err: unknown) => console.error('[experience] could not be read', err))
+    // Named locally as well, so everything below keeps a value the compiler can see is there while the module-level
+    // one stays available to the things that interrupt long after this has run.
+    const experience = new ExperienceStore(app.getPath('userData'), (await profilesStore.active()).id)
+    experienceStore = experience
+    await experience.load().catch((err: unknown) => console.error('[experience] could not be read', err))
     // Personalisation follows the profile: the widgets on the new tab, what each is set to, the wallpaper and the theme
     // all belong to whoever is using Orbis, and switching profile swaps all of it rather than sharing it.
     profilesStore.onChange(() => {
       void profilesStore
         .active()
-        .then((profile) => experienceStore.useProfile(profile.id))
+        .then((profile) => experience.useProfile(profile.id))
         .catch((err: unknown) => console.error('[experience] could not switch profile', err))
     })
-    registerExperienceIpc({ store: experienceStore, control: browserControl.control, getWindow: () => mainWindow, send: sendToWindow })
-    app.on('before-quit', () => void experienceStore.flush())
+    registerExperienceIpc({ store: experience, control: browserControl.control, getWindow: () => mainWindow, send: sendToWindow })
+    app.on('before-quit', () => void experience.flush())
+
+    /**
+     * "Tell me when..."
+     *
+     * The rules were stored, cleaned and versioned, and nothing had ever asked them anything. This is what asks. It
+     * reads what the Workflow Engine is really doing, hands it to the rules, and shows whatever they say -- through the
+     * same notification settings as everything else, so quiet hours and the category switches hold here too.
+     *
+     * The readings come from `activeRuns()`, which is the engine's own account of its own runs. Nothing is synthesised:
+     * when nothing is running there are no readings at all, and a rule with nothing to compare stays quiet.
+     */
+    const watcher = new RuleWatcher({
+      read: () => workflowReadings(workflows.activeRuns()),
+      rules: () => experience.current().rules,
+      notifications: () => experience.current().notifications,
+      // Written only when a rule has actually learned something -- which is why the watcher compares by value rather
+      // than by identity. Saving goes through the same store as every other change, so the windows do hear about it;
+      // that is acceptable because it happens when a rule's answer changes, not on every look.
+      remember: async (rules) => {
+        await experience.save({ ...experience.current(), rules }, 'Rules').catch((err: unknown) => {
+          // A rule that could not write down what it saw may say the same thing twice after a restart. That is worth a
+          // line in the log and nothing more; it must not stop the rule working now.
+          console.error('[rules] could not be written', err)
+        })
+      },
+      notify: (title, body) => {
+        if (Notification.isSupported()) new Notification({ title, body, silent: false }).show()
+      }
+    })
+    ruleWatcher = watcher
+    void watcher.start()
+    app.on('before-quit', () => watcher.stop())
 
     // Updating Orbis. Created once the window is on its way, and it looks for a release in the background rather than
     // holding anything up. The endpoint comes from the build, so a released Orbis never asks a development server.
@@ -1452,6 +1908,69 @@ if (!app.requestSingleInstanceLock()) {
       }
     }
     const str = (value: unknown, max = 4096): string => (typeof value === 'string' ? value.slice(0, max) : '')
+
+    const accountCall = <T,>(run: (profileId: string) => Promise<T> | T): ((event: IpcMainInvokeEvent) => Promise<T | { error: string; message?: string; waitMs?: number }>) => {
+      return async (event) => {
+        if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
+        try {
+          return await run(await vaultProfile())
+        } catch (err) {
+          // A code the window can act on, and a sentence it can show. Never anything of the credential itself.
+          if (err instanceof AccountFailure) return { error: err.code, message: err.message, waitMs: err.waitMs }
+          return { error: 'io' }
+        }
+      }
+    }
+
+    ipcMain.handle('account:status', accountCall((id) => accounts.status(id)))
+    ipcMain.handle('account:create', (event, password: unknown, name: unknown) =>
+      accountCall(async (id) => {
+        await accounts.create(id, str(password, 256), str(name, 80))
+        recordSecurity({ kind: 'ACCOUNT_CREATED' })
+        return accounts.status(id)
+      })(event)
+    )
+    ipcMain.handle('account:unlock', (event, password: unknown) =>
+      accountCall(async (id) => {
+        try {
+          await accounts.unlock(id, str(password, 256))
+        } catch (err) {
+          // Recorded, because somebody finding attempts they did not make is the whole reason the log exists. What is
+          // recorded is that one was wrong -- never what was tried.
+          if (err instanceof AccountFailure && err.code === 'wrong-password') {
+            recordSecurity({ kind: 'FAILED_ACCOUNT_UNLOCK' })
+          }
+          throw err
+        }
+        recordSecurity({ kind: 'ACCOUNT_UNLOCKED' })
+        // Somebody has just been here and typed a password into this window, so the idle and focus clocks start again from
+        // now rather than from whenever they last ran.
+        profileLock.unlocked()
+        return accounts.status(id)
+      })(event)
+    )
+    ipcMain.handle('account:lock', accountCall(async (id) => {
+      accounts.lock()
+      return accounts.status(id)
+    }))
+    ipcMain.handle('account:verify', (event, password: unknown) =>
+      accountCall(async (id) => ({ ok: await accounts.verify(id, str(password, 256)) }))(event)
+    )
+    ipcMain.handle('account:change', (event, current: unknown, next: unknown, name: unknown) =>
+      accountCall(async (id) => {
+        await accounts.change(id, str(current, 256), str(next, 256), str(name, 80))
+        recordSecurity({ kind: 'ACCOUNT_PASSWORD_CHANGED' })
+        return accounts.status(id)
+      })(event)
+    )
+
+    // The security log: read and cleared, and nothing else. There is no channel that writes one -- events are recorded by
+    // the code that does the thing, so a window cannot put an event in the log that did not happen.
+    ipcMain.handle('security:log', accountCall((id) => securityLog.all(id)))
+    ipcMain.handle('security:clear-log', accountCall(async (id) => {
+      await securityLog.clear(id)
+      return { ok: true }
+    }))
 
     ipcMain.handle('vault:status', vaultCall((id) => vault.status(id)))
     ipcMain.handle('vault:question', vaultCall((id) => vault.recoveryQuestion(id)))
@@ -1937,6 +2456,9 @@ if (!app.requestSingleInstanceLock()) {
     })
     mainWindow = createWindow()
     mainWindow.on('closed', () => (mainWindow = null))
+    // Tab Lock's focus and minimise triggers hang off this window, and it did not exist when Tab Lock was set up.
+    tabLock.attachWindow()
+    profileLock.attachWindow()
   })
 
   app.on('window-all-closed', () => {

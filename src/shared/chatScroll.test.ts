@@ -1,0 +1,216 @@
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import {
+  distanceFromBottom,
+  FOLLOW_THRESHOLD,
+  JUMP_THRESHOLD,
+  keepAnchored,
+  newChatScrollState,
+  onJumpPressed,
+  onLayoutChanged,
+  onRendered,
+  onScrolled,
+  settled,
+  type ChatScrollState,
+  type Viewport
+} from './chatScroll.ts'
+
+const HEIGHT = 3000
+const CLIENT = 600
+const END = HEIGHT - CLIENT
+
+/** A scroller 600 tall showing a 3000-tall conversation, positioned however the test needs. */
+const view = (scrollTop: number, scrollHeight = HEIGHT, clientHeight = CLIENT): Viewport => ({
+  scrollTop,
+  scrollHeight,
+  clientHeight
+})
+const atEnd = (): Viewport => view(END)
+
+/** Opening a conversation, and recording where the scroll Orbis performed actually left things. */
+const opened = (conversationId = 'c1', lastUserId: string | null = 'u1'): ChatScrollState => {
+  const { state } = onRendered(newChatScrollState(), { conversationId, lastUserId })
+  return settled(state, END)
+}
+
+// ---------------------------------------------------------------- opening a conversation
+
+test('opening a conversation lands at the end, and following', () => {
+  const { state, action } = onRendered(newChatScrollState(), { conversationId: 'c1', lastUserId: 'u1' })
+  assert.deepEqual(action, { kind: 'toBottom', smooth: false })
+  assert.equal(state.mode, 'following')
+  assert.equal(state.conversationId, 'c1')
+  assert.equal(state.shownTurnId, 'u1', 'the question already there is not a new one')
+})
+
+test('opening a conversation does not then treat its newest question as new', () => {
+  const s = opened()
+  assert.notEqual(
+    onRendered(s, { conversationId: 'c1', lastUserId: 'u1' }).action.kind,
+    'toTurn',
+    'it would jump to the top of an answer nobody just asked for'
+  )
+})
+
+test('a different conversation is a different place', () => {
+  let s = opened()
+  s = onScrolled(s, view(400), false).state
+  assert.deepEqual(onRendered(s, { conversationId: 'c2', lastUserId: 'u9' }).action, {
+    kind: 'toBottom',
+    smooth: false
+  })
+})
+
+// ---------------------------------------------------------------- a new question
+
+test('a new question shows the question, not the foot of its answer', () => {
+  const { state, action } = onRendered(opened(), { conversationId: 'c1', lastUserId: 'u2' })
+  assert.deepEqual(action, { kind: 'toTurn', messageId: 'u2' })
+  assert.equal(state.mode, 'reading', 'the answer is read from the top, so its growth must not drag the page')
+})
+
+test('the same question is only moved to once, however many times the answer redraws', () => {
+  let s = settled(onRendered(opened(), { conversationId: 'c1', lastUserId: 'u2' }).state, 1200)
+  // Every token of the answer causes another render. None of them may move anything.
+  for (let i = 0; i < 200; i++) {
+    const { state, action } = onRendered(s, { conversationId: 'c1', lastUserId: 'u2' })
+    assert.deepEqual(action, { kind: 'none' }, `token ${i} moved the page`)
+    s = state
+  }
+})
+
+test('a question asked while reading old messages still brings the reader to it', () => {
+  let s = opened()
+  s = onScrolled(s, view(100), false).state
+  assert.equal(s.mode, 'reading')
+  assert.deepEqual(
+    onRendered(s, { conversationId: 'c1', lastUserId: 'u2' }).action,
+    { kind: 'toTurn', messageId: 'u2' },
+    'they asked it; they should see it'
+  )
+})
+
+// ---------------------------------------------------------------- whose scroll was it
+
+test("the echo of Orbis own scroll is not mistaken for the person's", () => {
+  // The loop this guards against: Orbis moves to a new turn, the browser reports a scroll, and the handler reads it as
+  // the person having scrolled -- undoing the decision a frame after making it.
+  const moved = onRendered(opened(), { conversationId: 'c1', lastUserId: 'u2' })
+  assert.equal(moved.state.mode, 'reading')
+
+  // Orbis's scroll left the scroller at 1180. Landing that close to the end would, under a naive handler, turn
+  // following back on and drag the reader off the top of the answer they were just shown.
+  const s = settled(moved.state, END)
+  const echo = onScrolled(s, view(END), false)
+  assert.equal(echo.state.mode, 'reading', 'the decision stands')
+})
+
+test("a scroll to where the scroller already was does not swallow the person's next one", () => {
+  // Following, already at the end: Orbis asks for the end again and the browser fires nothing, because nothing moved.
+  // A one-shot "that one was mine" flag would still be armed here, and would eat the real scroll below.
+  let s = opened()
+  assert.equal(s.mode, 'following')
+  s = settled(onRendered(s, { conversationId: 'c1', lastUserId: 'u1' }).state, END)
+
+  // The person scrolls up. This is the first event to arrive, and it is theirs.
+  s = onScrolled(s, view(300), false).state
+  assert.equal(s.mode, 'reading', 'their scroll was heard')
+})
+
+test('the person scrolling to the end asks to follow', () => {
+  let s = opened()
+  s = onScrolled(s, view(300), false).state
+  assert.equal(s.mode, 'reading')
+  s = onScrolled(s, atEnd(), true).state
+  assert.equal(s.mode, 'following')
+})
+
+test('the person scrolling away asks to be left alone, for as long as the answer goes on', () => {
+  let s = onScrolled(opened(), view(200), false).state
+  assert.equal(s.mode, 'reading')
+  for (let i = 0; i < 50; i++) {
+    const { action, state } = onRendered(s, { conversationId: 'c1', lastUserId: 'u1' })
+    assert.deepEqual(action, { kind: 'none' })
+    s = state
+  }
+})
+
+test('following keeps up', () => {
+  const s = opened()
+  assert.equal(s.mode, 'following')
+  assert.deepEqual(onRendered(s, { conversationId: 'c1', lastUserId: 'u1' }).action, {
+    kind: 'toBottom',
+    smooth: false
+  })
+})
+
+test('the thresholds are where they say they are', () => {
+  const s = onScrolled(opened(), view(10), false).state
+  assert.equal(onScrolled(s, atEnd(), false).state.mode, 'following')
+  assert.equal(onScrolled(s, view(END - FOLLOW_THRESHOLD), false).state.mode, 'following')
+  assert.equal(onScrolled(s, view(END - FOLLOW_THRESHOLD - 1), false).state.mode, 'reading')
+})
+
+// ---------------------------------------------------------------- the way back
+
+test('a way back is offered only from far enough away, and does not flicker', () => {
+  const s = onScrolled(opened(), view(10), false).state
+  assert.equal(onScrolled(s, atEnd(), false).showJump, false)
+  assert.equal(onScrolled(s, view(END - JUMP_THRESHOLD - 1), false).showJump, true)
+
+  // Between the two thresholds nothing changes, which is what stops a button blinking as somebody nudges the wheel.
+  assert.equal(onScrolled(s, view(END - FOLLOW_THRESHOLD - 10), true).showJump, true, 'still shown')
+  assert.equal(onScrolled(s, view(END - FOLLOW_THRESHOLD - 10), false).showJump, false, 'still hidden')
+})
+
+test('asking for the newest output resumes following, and travels so it can be seen', () => {
+  const { state, action } = onJumpPressed(onScrolled(opened(), view(100), false).state)
+  assert.equal(state.mode, 'following')
+  assert.deepEqual(action, { kind: 'toBottom', smooth: true })
+})
+
+test('somebody who asked for less movement is moved without animation', () => {
+  assert.deepEqual(onJumpPressed(opened(), true).action, { kind: 'toBottom', smooth: false })
+})
+
+// ---------------------------------------------------------------- the page changing shape
+
+test('a resize keeps the end in view for a follower and leaves a reader alone', () => {
+  assert.deepEqual(onLayoutChanged({ ...newChatScrollState(), mode: 'following' }), {
+    kind: 'toBottom',
+    smooth: false
+  })
+  assert.deepEqual(onLayoutChanged({ ...newChatScrollState(), mode: 'reading' }), { kind: 'none' })
+})
+
+test('when the message they are reading moves down, the scroller moves with it', () => {
+  // A code block two messages up gets highlighted and grows 140px. The message being read is now 140px further down
+  // the document, so the scroller goes 140px further down too and nothing on screen appears to move.
+  assert.equal(keepAnchored({ scrollTop: 900, anchorTop: 850 }, { anchorTop: 990 }, 4000), 1040)
+})
+
+test('content appearing below them does not move them, because their message has not moved', () => {
+  // The answer underneath gets longer. The document is taller, but the message being read sits exactly where it sat --
+  // and this is the case that comparing document heights gets wrong, by shifting a reader for whom nothing changed.
+  assert.equal(keepAnchored({ scrollTop: 900, anchorTop: 850 }, { anchorTop: 850 }, 4400), null)
+})
+
+test('a message that moves up pulls the scroller up with it', () => {
+  // Something above collapsed. The message being read is closer to the top now, so the scroller follows it.
+  assert.equal(keepAnchored({ scrollTop: 900, anchorTop: 850 }, { anchorTop: 700 }, 4000), 750)
+})
+
+test('the correction cannot leave the scroller past the end, or before the start', () => {
+  assert.equal(keepAnchored({ scrollTop: 2380, anchorTop: 2300 }, { anchorTop: 2900 }, 2400), 2400)
+  assert.equal(keepAnchored({ scrollTop: 40, anchorTop: 300 }, { anchorTop: 50 }, 4000), 0)
+})
+
+test('a correction that would change nothing is not made', () => {
+  // Writing scrollTop needlessly is not free: it produces a scroll event, which then has to be told from a real one.
+  assert.equal(keepAnchored({ scrollTop: 900, anchorTop: 850 }, { anchorTop: 850 }, 4000), null)
+  assert.equal(keepAnchored({ scrollTop: 0, anchorTop: 0 }, { anchorTop: 0 }, 4000), null)
+})
+
+test('the distance to the end is never negative, however the browser rounds', () => {
+  assert.equal(distanceFromBottom({ scrollTop: 2401, scrollHeight: 3000, clientHeight: 600 }), 0)
+})

@@ -21,7 +21,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 
 /* No search box of its own: the browser's address bar is the one search box, so the header is just the verticals. */
-.head { padding: 6px 28px 0; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--panel) 92%, transparent); backdrop-filter: blur(8px); position: sticky; top: 0; z-index: 5; }
+/* The verticals on the left, the tray on the right. The space between them was empty because nothing owned it;
+   the tray does, because it is the one thing here that belongs to the search rather than to one of its tabs. */
+.head { display: flex; align-items: flex-end; gap: 16px; padding: 6px 28px 0; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--panel) 92%, transparent); backdrop-filter: blur(8px); position: sticky; top: 0; z-index: 5; }
+.verticals { flex: 1; min-width: 0; }
 .verticals { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; }
 .verticals::-webkit-scrollbar { display: none; }
 .vertical { padding: 11px 15px 10px; border-bottom: 2px solid transparent; border-radius: 9px 9px 0 0; color: var(--muted); text-decoration: none; font-size: 13px; letter-spacing: 0.01em; white-space: nowrap; }
@@ -180,4 +183,338 @@ audio.preview { width: 100%; max-width: 360px; height: 32px; margin-top: 6px; }
   .vertical.on { border-bottom: 4px solid Highlight; font-weight: 700; text-decoration: underline; }
   .share { opacity: 1; }
   .results > li:hover { background: none; }
+}
+
+
+/* ---------------------------------------------------------------- the comparison tray */
+
+.tray-strip { flex: none; align-self: center; margin-bottom: 4px; }
+.tray-open { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 10px; color: var(--muted); background: transparent; border: 1px solid transparent; border-radius: 999px; font-size: 13px; cursor: pointer; }
+.tray-open:hover { color: var(--text); background: var(--hover); border-color: var(--line); }
+.tray-strip.has .tray-open { color: var(--text); border-color: var(--line); background: var(--panel2); }
+.tray-word { letter-spacing: 0.01em; }
+.tray-count { min-width: 19px; padding: 1px 6px; border-radius: 999px; background: var(--line); color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; text-align: center; }
+.tray-strip.has .tray-count { background: var(--accent); color: #05070a; font-weight: 600; }
+
+/* The pin on a result. Quiet until the row is under the pointer, loud once the page is in the tray. */
+.pin { flex: none; display: grid; place-items: center; width: 30px; height: 30px; color: var(--muted); background: transparent; border: 0; border-radius: 8px; cursor: pointer; opacity: 0; }
+.results > li:hover .pin, .pin.on, .pin:focus-visible { opacity: 1; }
+.pin:hover { color: var(--text); background: var(--hover); }
+.pin.on { color: var(--accent); }
+
+.tray-panel { width: min(1040px, 94vw); max-height: 86vh; padding: 0; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 16px; }
+.tray-panel::backdrop { background: rgba(0, 0, 0, 0.58); backdrop-filter: blur(3px); }
+.tray-panel header { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.tray-panel header h2 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.tray-panel .x { width: 28px; height: 28px; color: var(--muted); background: transparent; border: 0; border-radius: 8px; cursor: pointer; }
+.tray-panel .x:hover { color: var(--text); background: var(--hover); }
+.tray-body { padding: 16px 18px 20px; overflow: auto; max-height: calc(86vh - 56px); }
+.tray-empty, .tray-status, .tray-summary { color: var(--muted); font-size: 13px; }
+.tray-summary { margin: 0 0 14px; }
+
+.tray-list { list-style: none; margin: 0 0 14px; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.tray-list li { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 9px; }
+.tray-list li:hover { background: var(--hover); }
+.tray-list a { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); text-decoration: none; font-size: 13.5px; }
+.tray-list a:hover { text-decoration: underline; }
+.tray-list small { flex: none; color: var(--muted); font-size: 12px; }
+.tray-list .drop { flex: none; width: 24px; height: 24px; color: var(--muted); background: transparent; border: 0; border-radius: 6px; cursor: pointer; }
+.tray-list .drop::before { content: '¹5'; }
+.tray-list .drop:hover { color: var(--text); background: var(--panel2); }
+
+.tray-actions { display: flex; gap: 8px; margin-top: 14px; }
+.tray-actions .go { padding: 8px 16px; color: #05070a; background: var(--accent); border: 0; border-radius: 999px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.tray-actions .go:hover { filter: brightness(1.08); }
+.tray-actions .clear { padding: 8px 16px; color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 999px; font-size: 13px; cursor: pointer; }
+.tray-actions .clear:hover { color: var(--text); border-color: var(--accent); }
+
+/* The table. Every value shows the page's own words underneath it, because that is the reason to believe it. */
+.cmp-wrap { overflow-x: auto; }
+.cmp { width: 100%; border-collapse: collapse; font-size: 13px; }
+.cmp th, .cmp td { padding: 10px 12px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+.cmp thead th { color: var(--muted); font-weight: 600; white-space: nowrap; }
+.cmp thead th small { display: block; margin-top: 2px; color: var(--muted); font-weight: 400; font-size: 11px; opacity: 0.75; }
+.cmp th.what { max-width: 260px; }
+.cmp tbody th.what a { color: var(--text); text-decoration: none; font-weight: 500; }
+.cmp tbody th.what a:hover { text-decoration: underline; }
+.cmp tbody tr:hover { background: var(--hover); }
+.cmp .val { font-weight: 500; }
+/* Not a dash and not a blank: a page that did not say is different from a page that said nothing was there. */
+.cmp .unsaid { color: var(--muted); font-style: italic; opacity: 0.6; }
+.cmp .why { display: block; margin-top: 4px; color: var(--muted); font-size: 11.5px; line-height: 1.45; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.cmp .disagree { margin-top: 5px; }
+.cmp .disagree summary { color: var(--amber, #e0a33e); font-size: 11.5px; cursor: pointer; }
+.cmp .disagree .alt { margin: 4px 0 0; font-size: 12.5px; }
+
+.tray-unread { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.tray-unread li { display: flex; flex-direction: column; gap: 1px; }
+.tray-unread a { color: var(--text); font-size: 13px; text-decoration: none; }
+.tray-unread a:hover { text-decoration: underline; }
+.tray-unread small { color: var(--muted); font-size: 12px; }
+.tray-body h3 { margin: 18px 0 0; font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+
+@media (max-width: 720px) {
+  .tray-word { display: none; }
+}
+
+/* ---------------------------------------------------------------- the composed page
+
+   The layout belongs to the query rather than to this file: a section appears because the composer produced it, and a
+   section with nothing in it was never drawn at all. The right-hand column exists only when there is a knowledge panel
+   to put in it, so the page never reserves space for an absence. */
+
+.mod-page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 34px; }
+.mod-page.has-side { grid-template-columns: minmax(0, 1fr) 320px; }
+.mod-main { display: flex; flex-direction: column; gap: 28px; min-width: 0; }
+.mod-side { min-width: 0; }
+.mod-h { margin: 0 0 12px; font-size: 13px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); }
+.mod-src { display: block; margin-top: 4px; color: var(--muted); font-size: 11.5px; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mod-src:hover { color: var(--accent); text-decoration: underline; }
+
+/* These are results for... -- the correction, with the original always one click away. */
+.mod-correction { display: flex; flex-direction: column; gap: 2px; }
+.mod-showing { margin: 0; font-size: 15px; color: var(--text); }
+.mod-instead { margin: 0; font-size: 13px; color: var(--muted); }
+.mod-link { padding: 0; color: var(--accent); background: none; border: 0; font: inherit; font-style: italic; cursor: pointer; }
+.mod-link:hover { text-decoration: underline; }
+
+/* A sum or a conversion: the answer, with nothing dressed up around it. */
+.mod-answer { padding: 18px 20px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+.mod-expr { margin: 0; color: var(--muted); font-size: 13px; }
+.mod-value { margin: 4px 0 0; font-size: 32px; font-weight: 600; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+.mod-note { margin: 8px 0 0; color: var(--muted); font-size: 11.5px; }
+
+/* Web results: the site's own identity, then the page. */
+.mod-web { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 22px; }
+.mod-site { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 12.5px; }
+.mod-site img { border-radius: 4px; }
+.mod-title { display: block; margin-top: 3px; color: var(--accent); font-size: 17px; text-decoration: none; }
+.mod-title:hover { text-decoration: underline; }
+.mod-desc { margin: 4px 0 0; color: var(--muted); font-size: 13.5px; line-height: 1.6; }
+
+/* Packs: images, videos, news. A row, and a way through to the whole vertical. */
+.mod-pack-head { display: flex; align-items: baseline; justify-content: space-between; }
+.mod-more { padding: 3px 10px; color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 999px; font-size: 12px; cursor: pointer; }
+.mod-more:hover { color: var(--text); border-color: var(--accent); }
+.mod-strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+.mod-shot { display: block; aspect-ratio: 4 / 3; overflow: hidden; border-radius: 10px; background: var(--panel2); }
+.mod-shot img { width: 100%; height: 100%; object-fit: cover; }
+.mod-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+.mod-card { display: flex; flex-direction: column; gap: 6px; color: var(--text); text-decoration: none; }
+.mod-card img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 10px; background: var(--panel2); }
+.mod-card-title { font-size: 13.5px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.mod-card small { color: var(--muted); font-size: 11.5px; }
+.mod-card:hover .mod-card-title { color: var(--accent); }
+
+/* People also ask. Each question opens on its own and is answered from a page that was really read. */
+.mod-qs { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.mod-q { border-bottom: 1px solid var(--line); }
+.mod-q:last-child { border-bottom: 0; }
+.mod-q summary { padding: 14px 16px; font-size: 14.5px; cursor: pointer; list-style: none; }
+.mod-q summary::-webkit-details-marker { display: none; }
+.mod-q summary::after { content: "+"; float: right; color: var(--muted); }
+.mod-q[open] summary::after { content: "\2212"; }
+.mod-q summary:hover { background: var(--hover); }
+.mod-a { padding: 0 16px 14px; color: var(--muted); font-size: 13.5px; line-height: 1.65; }
+.mod-a p { margin: 0; }
+.mod-wait { font-style: italic; opacity: 0.7; }
+/* Not a hedge: nothing supported an answer, and that is what it says. */
+.mod-none { font-style: italic; opacity: 0.8; }
+
+/* People also search for. Each one says why it is here. */
+.mod-ents { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.mod-ent { display: flex; flex-direction: column; gap: 2px; }
+.mod-ent-go { display: flex; align-items: center; gap: 10px; padding: 8px; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 12px; font: inherit; text-align: left; cursor: pointer; }
+.mod-ent-go:hover { border-color: var(--accent); background: var(--panel2); }
+.mod-ent-go img { width: 40px; height: 40px; flex: none; object-fit: cover; border-radius: 50%; background: var(--panel2); }
+.mod-ent-words { display: flex; flex-direction: column; min-width: 0; }
+.mod-ent-words strong { font-size: 13.5px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mod-ent-words small { color: var(--muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Related searches: queries, so nothing here claims anything. */
+.mod-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.mod-chip { padding: 7px 14px; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 999px; font: inherit; font-size: 13px; cursor: pointer; }
+.mod-chip:hover { border-color: var(--accent); background: var(--panel2); }
+
+/* The About panel. Every row carries the page it came from. */
+.mod-know { position: sticky; top: 74px; padding: 18px; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; max-height: calc(100vh - 100px); overflow-y: auto; }
+.mod-know-img { width: 100%; max-height: 200px; object-fit: cover; border-radius: 12px; margin-bottom: 14px; }
+.mod-know-name { margin: 0; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; }
+.mod-know-kind { margin: 2px 0 16px; color: var(--muted); font-size: 13px; }
+.mod-know-about { margin: 0; font-size: 13.5px; line-height: 1.65; }
+.mod-facts { display: grid; grid-template-columns: auto 1fr; gap: 10px 16px; margin: 16px 0 0; font-size: 13px; }
+.mod-facts dt { color: var(--muted); }
+.mod-facts dd { margin: 0; }
+.mod-official { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+
+/* A section that failed says so, and offers to try again. */
+.mod-unavailable { padding: 14px 16px; color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 12px; font-size: 13px; }
+.mod-unavailable p { margin: 0 0 6px; }
+.mod-retry { padding: 5px 13px; color: var(--text); background: var(--panel2); border: 1px solid var(--line); border-radius: 999px; font-size: 12.5px; cursor: pointer; }
+.mod-retry:hover { border-color: var(--accent); }
+
+/* On a narrow window the panel becomes another section in the one flow, rather than a squeezed column. */
+@media (max-width: 1080px) {
+  .mod-page.has-side { grid-template-columns: minmax(0, 1fr); }
+  .mod-side { order: -1; }
+  .mod-know { position: static; max-height: none; }
+}
+
+/* The forecast. Real numbers, the attribution its licence requires, and the time the forecast was made. */
+.mod-weather { padding: 18px 20px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+.mod-weather-place { margin: 0 0 12px; font-size: 15px; font-weight: 600; }
+.mod-weather-now { display: flex; align-items: center; gap: 20px; }
+.mod-temp { margin: 0; font-size: 46px; font-weight: 300; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.mod-weather-about { display: flex; flex-direction: column; gap: 2px; }
+.mod-cond { margin: 0; font-size: 15px; }
+.mod-range { margin: 0; color: var(--muted); font-size: 12.5px; }
+.mod-hours { display: flex; gap: 6px; margin-top: 16px; overflow-x: auto; scrollbar-width: none; }
+.mod-hours::-webkit-scrollbar { display: none; }
+.mod-hour { flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 52px; padding: 8px 6px; background: var(--panel2); border-radius: 10px; }
+.mod-hour-at { color: var(--muted); font-size: 11px; }
+.mod-hour-t { font-size: 14px; font-variant-numeric: tabular-nums; }
+
+/* A dictionary entry. Wiktionary's words, with the link its licence requires. */
+.mod-define { padding: 18px 20px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+.mod-define-head { display: flex; align-items: baseline; gap: 10px; }
+.mod-word { margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.01em; }
+.mod-lang { color: var(--muted); font-size: 12px; }
+.mod-pos { margin: 16px 0 6px; color: var(--accent); font-size: 12.5px; font-style: italic; }
+.mod-senses { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 14px; line-height: 1.6; }
+.mod-senses li { padding-left: 2px; }
+.mod-example { display: block; margin-top: 4px; color: var(--muted); font-size: 13px; font-style: italic; }
+.mod-example::before { content: '\201c'; }
+.mod-example::after { content: '\201d'; }
+
+/* A life in order. The line down the left is the years; every entry links to the page that says it. */
+.mod-times { list-style: none; margin: 0; padding: 0 0 0 4px; display: flex; flex-direction: column; }
+.mod-times li { position: relative; display: grid; grid-template-columns: 110px 1fr; gap: 4px 16px; padding: 0 0 18px 20px; border-left: 1px solid var(--line); }
+.mod-times li:last-child { border-left-color: transparent; padding-bottom: 0; }
+.mod-times li::before { content: ''; position: absolute; left: -4.5px; top: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.mod-when { color: var(--accent); font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.mod-what { font-size: 13.5px; line-height: 1.55; }
+.mod-times .mod-src { grid-column: 2; margin-top: 0; }
+
+/* Two things side by side: the tray's table, with the query's two subjects as the columns. */
+.mod-vs .cmp th.what { max-width: 180px; color: var(--muted); font-weight: 500; }
+.mod-vs .cmp thead th { font-size: 14px; color: var(--text); }
+
+/* Places. Name, kind, address and directions -- the four things the gazetteer actually holds. */
+.mod-place-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.mod-place-list li { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); margin-bottom: 8px; }
+.mod-place-list li:hover { border-color: var(--accent); }
+.mod-place-name { grid-column: 1; color: var(--text); font-size: 14.5px; font-weight: 500; text-decoration: none; }
+.mod-place-name:hover { color: var(--accent); text-decoration: underline; }
+.mod-place-kind { grid-column: 2; grid-row: 1; align-self: start; padding: 2px 9px; color: var(--muted); background: var(--panel2); border-radius: 999px; font-size: 11.5px; white-space: nowrap; }
+.mod-place-where { grid-column: 1; margin: 0; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
+.mod-place-go { grid-column: 2; grid-row: 2; align-self: end; color: var(--accent); font-size: 12.5px; text-decoration: none; white-space: nowrap; }
+.mod-place-go:hover { text-decoration: underline; }
+
+/* ---------------------------------------------------------------- the Images board
+   A wall of pictures with one opened beside it. Every value is a token, so the board follows the theme rather than
+   carrying a second one of its own. */
+
+.imgboard { display: flex; flex-direction: column; gap: 12px; }
+
+/* ---- the chips: other searches, when there really are some */
+.imgchips { position: relative; display: flex; align-items: center; }
+.imgchips-row { display: flex; gap: 8px; overflow-x: auto; scroll-behavior: smooth; padding: 2px 0 6px; scrollbar-width: none; }
+.imgchips-row::-webkit-scrollbar { display: none; }
+.imgchip {
+  display: inline-flex; align-items: center; gap: 7px; flex: 0 0 auto;
+  height: 38px; padding: 0 16px; border-radius: 999px;
+  background: var(--panel2); border: 1px solid var(--line); color: var(--text);
+  font-size: 13px; white-space: nowrap; text-decoration: none; cursor: pointer;
+  transition: background 140ms var(--ease), border-color 140ms var(--ease);
+}
+.imgchip:hover { background: var(--hover); border-color: var(--accent); }
+/* The one being narrowed by, with the way out of it built in. */
+.imgchip.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.imgchips-step {
+  position: absolute; top: 0; z-index: 2; display: grid; place-items: center;
+  width: 34px; height: 38px; border: none; border-radius: 50%;
+  background: var(--bg); color: var(--text); cursor: pointer;
+}
+.imgchips-step.left { left: 0; box-shadow: 14px 0 16px 8px var(--bg); }
+.imgchips-step.right { right: 0; box-shadow: -14px 0 16px 8px var(--bg); }
+.imgchips-step[hidden] { display: none; }
+
+/* ---- wall and panel, side by side */
+.imgmain { display: flex; gap: 16px; align-items: flex-start; }
+
+/* Real masonry: each picture keeps its own proportions, so nothing is cropped to make rows line up. */
+/*
+ * Columns sized by width, not counted.
+ *
+ * A count has to be guessed from the viewport, and the viewport is the wrong thing to guess from: opening the panel
+ * takes 420px out of the wall without the window changing size at all, so a count that looked right with the panel shut
+ * gives enormous tiles with it open. A width lets the wall work out its own count from the room it actually has, which
+ * is the question that was being asked all along.
+ */
+.imgwall { flex: 1 1 auto; min-width: 0; column-width: 210px; column-gap: 14px; }
+@media (max-width: 620px) { .imgwall { column-width: 150px; } }
+
+.imgtile { display: block; width: 100%; break-inside: avoid; margin: 0 0 16px; padding: 0; background: none; border: none; text-align: left; cursor: pointer; }
+.imgtile-frame {
+  display: block; border-radius: 12px; overflow: hidden; background: var(--panel2);
+  border: 2px solid transparent;
+  transition: border-color 140ms var(--ease), transform 140ms var(--ease);
+}
+.imgtile img { display: block; width: 100%; height: auto; }
+.imgtile:hover .imgtile-frame { border-color: var(--line); transform: translateY(-2px); }
+.imgtile:focus-visible { outline: none; }
+.imgtile:focus-visible .imgtile-frame { border-color: var(--accent); box-shadow: var(--ring); }
+/* The one open beside the wall, so it is never a question which picture the panel belongs to. */
+.imgtile.on .imgtile-frame { border-color: var(--accent); }
+.imgtile-title { display: block; margin-top: 7px; font-size: 12.5px; line-height: 1.35; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.imgtile .site { display: flex; align-items: center; gap: 6px; margin-top: 3px; color: var(--muted); font-size: 11.5px; }
+.imgtile .site span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---- the panel: the picture you opened, beside the wall rather than on top of it */
+.imgpanel {
+  flex: 0 0 420px; align-self: flex-start; position: sticky; top: 12px;
+  max-height: calc(100vh - 24px); overflow-y: auto;
+  padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: var(--panel);
+}
+.imgpanel[hidden] { display: none; }
+.imgpanel-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.imgpanel-head .site { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; }
+.imgpanel-head .site span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.imgpanel-nav { display: flex; align-items: center; gap: 2px; margin-left: auto; }
+.imgpanel-nav button { display: grid; place-items: center; width: 32px; height: 32px; border: none; border-radius: 50%; background: none; color: var(--text); cursor: pointer; }
+.imgpanel-nav button:hover:not(:disabled) { background: var(--hover); }
+.imgpanel-nav button:disabled { opacity: 0.35; cursor: default; }
+
+.imgpanel-stage { position: relative; display: grid; place-items: center; border-radius: 12px; background: var(--panel2); overflow: hidden; min-height: 160px; }
+.imgpanel-stage img { display: block; max-width: 100%; max-height: 380px; width: auto; height: auto; }
+.imgpanel-none { padding: 28px 16px; color: var(--muted); font-size: 13px; text-align: center; }
+/* The magnifier, where a magnifier goes. */
+.imgpanel-lens { position: absolute; left: 10px; bottom: 10px; display: grid; place-items: center; width: 34px; height: 34px; border: none; border-radius: 50%; background: var(--panel); color: var(--text); box-shadow: var(--shadow); cursor: pointer; }
+.imgpanel-lens:hover { background: var(--hover); }
+/* The real size, while the picture is being looked at, and only when the result actually carries one. */
+.imgpanel-size { position: absolute; right: 8px; bottom: 8px; padding: 3px 7px; border-radius: 6px; background: rgb(0 0 0 / 62%); color: #fff; font-size: 11px; opacity: 0; transition: opacity 140ms var(--ease); pointer-events: none; }
+.imgpanel-stage:hover .imgpanel-size { opacity: 1; }
+
+.imgpanel-titlerow { display: flex; align-items: flex-start; gap: 12px; margin: 14px 0 12px; }
+.imgpanel-title { flex: 1 1 auto; margin: 0; font-size: 15px; font-weight: 500; line-height: 1.35; color: var(--text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.imgpanel-visit { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 5px; height: 36px; padding: 0 14px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: 13px; font-weight: 500; text-decoration: none; }
+.imgpanel-visit:hover { filter: brightness(1.08); }
+
+.imgpanel-acts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.imgpanel-act { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 40px; border: none; border-radius: 999px; background: var(--panel2); color: var(--text); font-size: 13px; cursor: pointer; transition: background 140ms var(--ease); }
+.imgpanel-act:hover { background: var(--hover); }
+
+/* More of the wall, inside the panel, so it is somewhere to keep looking rather than a dead end. */
+.imgpanel-more { margin-top: 16px; column-width: 170px; column-gap: 10px; }
+.imgpanel-more .imgtile { margin-bottom: 12px; }
+
+/* ---- the overflow menu */
+.imgmenu { position: fixed; z-index: 60; min-width: 220px; padding: 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); box-shadow: 0 18px 44px rgb(0 0 0 / 40%); }
+.imgmenu-item { display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px; border: none; border-radius: 8px; background: none; color: var(--text); font-size: 13px; text-align: left; cursor: pointer; }
+.imgmenu-item:hover, .imgmenu-item:focus-visible { background: var(--hover); outline: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .imgtile-frame, .imgchip, .imgpanel-act, .imgpanel-size { transition: none; }
+  .imgtile:hover .imgtile-frame { transform: none; }
+  .imgchips-row { scroll-behavior: auto; }
 }

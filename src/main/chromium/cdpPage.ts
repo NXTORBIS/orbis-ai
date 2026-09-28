@@ -235,10 +235,37 @@ export class CdpPage implements PageHandle {
     await this.send('Input.insertText', { text })
   }
 
+  /**
+   * Whether this page has been told to behave as though it were focused.
+   *
+   * Chromium gives keyboard input to the focused widget, and a tab that is not the one in front -- or is in a window
+   * something else is covering -- has no focused widget to give it to. The key is then dropped, silently: the page reports
+   * `document.hasFocus()` as true, `document.activeElement` is the field, and nothing at all happens. It is the same
+   * reason a background tab cannot steal your typing, and it is correct; it just makes driving a tab you are not looking
+   * at impossible.
+   *
+   * `Emulation.setFocusEmulationEnabled` is the way out: the renderer treats itself as focused for input purposes without
+   * anything being raised or taken from the person. Done once, on the first real input, so a page nothing drives is left
+   * exactly as it was.
+   */
+  private focusEmulated = false
+
   sendInputEvent(event: InputEvent): void {
     const command = this.inputCommand(event)
     if (!command) return
+    if (!this.focusEmulated) {
+      this.focusEmulated = true
+      this.inputQueue = this.inputQueue.then(() =>
+        // Not fatal if it is unavailable: input still works on a tab that is in front, which is the common case.
+        this.send('Emulation.setFocusEmulationEnabled', { enabled: true }).catch(() => undefined)
+      )
+    }
     this.inputQueue = this.inputQueue.then(() => this.send(command.method, command.params).catch(() => undefined))
+  }
+
+  /** Waits for the queued input to be delivered. See `flushInput` on PageHandle for why anything needs this. */
+  async flushInput(): Promise<void> {
+    await this.inputQueue
   }
 
   private inputCommand(e: InputEvent): { method: string; params: Record<string, unknown> } | null {

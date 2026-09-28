@@ -22,6 +22,7 @@ import {
   scrollScript,
   selectScript,
   settle,
+  settleSubmission,
   sleep,
   targetScript,
   toWebUrl as toUrl,
@@ -612,6 +613,24 @@ export async function runBrowserAgent(options: BrowserAgentOptions): Promise<voi
     pages.push({ url, text })
     auto.pages = pages.slice(-12)
   }
+  /**
+   * The page the browser is really on when the work stops, as a line under the report.
+   *
+   * The model writes the summary, and a model that has been clicking hopefully for a minute writes that it succeeded.
+   * This is not its account: it is read from the tab. Nothing is claimed here, so nothing here can overclaim.
+   */
+  const endedOn = async (page: PageHandle): Promise<string> => {
+    try {
+      const url = String(page.getURL() ?? '')
+      if (!url) return ''
+      const title = String(page.getTitle() ?? '').trim()
+      return `\n\n_Ended on: ${title ? `${title} — ` : ''}${displayUrl(url)}_`
+    } catch {
+      // The tab went away; better to say nothing than to guess where it was.
+      return ''
+    }
+  }
+
   const finishWith = (content: string, status?: AutomationState['status'], reason?: string): void => {
     if (auto && status) {
       auto.status = status
@@ -783,7 +802,28 @@ export async function runBrowserAgent(options: BrowserAgentOptions): Promise<voi
         await wc.insertText(text)
         // Typed input doesn't always land (for example when the tab isn't focused); set the value directly if it didn't.
         await exec(fillScript(ref, text))
-        if (submit) await pressNamedKey(wc, 'Enter')
+        if (submit) {
+          // Quiet first, then Enter: a page that is still loading has no form to submit yet.
+          //
+          // What actually broke here was in `pressNamedKey`, which used to return with the key still queued for delivery.
+          // This function reads the page immediately afterwards to report what changed, so it read it *before* the press
+          // landed, found it unchanged, and told the model the action had had no effect -- about a form that submitted a
+          // moment later. `pressNamedKey` now waits for the key to arrive.
+          //
+          // Not a retry. Pressing Enter twice on a form that is not a search is a second order, a second message or a
+          // second payment.
+          //
+          // NOTE: this is the second copy of `page.type` -- the capability in browserControl/pageCapabilities.ts is the
+          // other -- and the two had drifted, which is part of why this went unnoticed. The agent cannot call the
+          // capability today because it is given a page and not the control layer; worth collapsing when it is.
+          await settle(wc, signal)
+          const fromUrl = wc.getURL()
+          await pressNamedKey(wc, 'Enter')
+          // And wait for the submission to become a navigation, or to turn out not to be one. Without this the page was
+          // read in the gap between the key arriving and the browser starting to load, so a form that submitted perfectly
+          // well was reported as having had no effect.
+          await settleSubmission(wc, fromUrl, signal)
+        }
         step(`Typed ${quote(text)} into ${field}${submit ? ' and pressed Enter' : ''}`)
         return after(`Typed into ${field}${submit ? ' and pressed Enter' : ''}.`)
       }
@@ -1129,7 +1169,10 @@ ${capabilityCatalog}` : systemPrompt(mode) },
         }
         if (auto) await syncGameProgress(wc)
         const honesty = unverified ? `\n\n_I couldn't confirm from the game that it is finished, so I haven't marked it complete (${automationProgress(auto!)})._` : ''
-        return finishWith((summary ? withFindings(summary) : fallback) + honesty, status, reason)
+        // Where the browser actually is, beside whatever was said about it. The summary is the model's account of what
+        // it did; this is the page itself. When the two disagree, the person can see that they disagree.
+        const ended = await endedOn(wc)
+        return finishWith((summary ? withFindings(summary) : fallback) + honesty + ended, status, reason)
       }
       nudges = 0
       messages.push({ role: 'assistant', content: reply.content ?? null, tool_calls: calls })
@@ -1165,18 +1208,27 @@ ${capabilityCatalog}` : systemPrompt(mode) },
             result += `\n\nNow working in the active tab: ${next.getURL() || '(blank)'}.`
           }
         }
-        if (auto) {
-          auto.actions++
-          errorStreak = result.startsWith('Error') ? errorStreak + 1 : 0
-          const acted = !/^(Error|Blocked|The user (already )?declined)/.test(result)
-          if (STATE_CHANGING.has(call.function.name) && acted) {
-            const print = await fingerprint(wc, mode === 'game')
-            unchanged = print === lastPrint ? unchanged + 1 : 0
-            lastPrint = print
-            if (unchanged === 3) result += '\n\nWarning: the page has not changed after your last 3 actions. Check whether the content has ended, or try a different approach.'
+        // An action that changes nothing is worth noticing whatever the task is. This was counted only during a
+        // continuous automation, so a single task could click the same thing three times over, be told nothing about
+        // it, and then report that it had worked.
+        const acted = !/^(Error|Blocked|The user (already )?declined)/.test(result)
+        if (STATE_CHANGING.has(call.function.name) && acted) {
+          const print = await fingerprint(wc, mode === 'game')
+          unchanged = print === lastPrint ? unchanged + 1 : 0
+          lastPrint = print
+          if (unchanged === 1) {
+            result += '\n\nThe page did not change, so that action had no effect. Do not repeat it; try another way.'
+          } else if (unchanged >= 2) {
+            result += `\n\nThe page still has not changed after ${unchanged + 1} actions. Stop repeating this: try something different, or say plainly that it is not working.`
+          }
+          if (auto) {
             await syncGameProgress(wc)
             if (unchanged === 0) await rememberPage(wc)
           }
+        }
+        if (auto) {
+          auto.actions++
+          errorStreak = result.startsWith('Error') ? errorStreak + 1 : 0
           settleUrl()
         }
         messages.push({ role: 'tool', tool_call_id: call.id, content: result })
