@@ -275,6 +275,16 @@ export const CAPABILITIES: Record<string, CapabilityDefinition> = {
     consent: 'automatic',
     scope: 'none'
   }),
+  'computation.studio': capability({
+    id: 'computation.studio',
+    name: 'Study, music, colour and plans',
+    description:
+      'Work out when to review and how much is remembered, build scales and chords and work out delay times, check colour contrast and build palettes, do timecode and file-size arithmetic, and estimate work with its critical path.',
+    category: 'computation',
+    risk: 'low',
+    consent: 'automatic',
+    scope: 'none'
+  }),
   'computation.wasm': capability({
     id: 'computation.wasm',
     name: 'Compiled code',
