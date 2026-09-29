@@ -4,6 +4,8 @@ import type { NoticeKind } from '../App'
 import type { PageCard, PageCategoryNode, PageComputeResult, PagePermission, PageSearchHit } from '../../../shared/types'
 import { BuilderPanel, ComposePanel, DiagnosticsPanel, PackagePanel, STUDIO_TABS, type StudioTab } from './PageStudio'
 import { LAB_PAGES } from './PageLabs'
+import { DescribePanel, GeneratedHistory, RunDocument } from './PageDescribe'
+import type { PageDocument } from '../../../shared/pages/builder'
 import {
   DataExplorerPage,
   FunctionPlotterPage,
@@ -173,6 +175,15 @@ export default function PagesView({
             // The preview runs under a real Page's capabilities: the builder has no identity of its own, and giving it
             // one would be a second thing that can reach the engines.
             <BuilderPanel pageId={pages[0]?.pageId ?? ''} onNotify={onNotify} />
+          )}
+          {current === 'describe' && (
+            <DescribePanel
+              onNotify={onNotify}
+              onOpened={() => {
+                setScreen({ kind: 'library' })
+                void load()
+              }}
+            />
           )}
           {current === 'compose' && <ComposePanel onNotify={onNotify} />}
           {current === 'package' && <PackagePanel pages={pages} onNotify={onNotify} />}
@@ -445,8 +456,52 @@ function PageFrame({
         {/* The thirteen newer Pages, looked up by slug rather than compared one at a time -- a chain of thirteen more
             comparisons would be the same code with more places to forget one. */}
         {LabPageFor(page.slug, page.pageId, onNotify)}
+        {/* A Page Orbis built. It has no component of its own -- it is a document, rendered by the same runtime the
+            builder's preview uses, running through the same `pages:compute` channel as every Page above. */}
+        {page.categories.includes('generated') && <GeneratedPage pageId={page.pageId} onNotify={onNotify} />}
       </div>
     </div>
+  )
+}
+
+/**
+ * A Page Orbis built, opened.
+ *
+ * The document is fetched rather than carried in the card, because a card is what the library shows for every Page
+ * and a document is only meaningful for this kind. Asking for one is scoped to the profile that built it.
+ */
+function GeneratedPage({
+  pageId,
+  onNotify
+}: {
+  pageId: string
+  onNotify(message: string, kind?: NoticeKind): void
+}): React.JSX.Element {
+  const [document, setDocument] = useState<PageDocument | null>(null)
+  const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    void window.api.pagesGenerateDocument(pageId).then((result) => {
+      if (cancelled) return
+      if ('error' in result) {
+        setMessage(result.message ?? 'That Page has nothing to open.')
+        return
+      }
+      setDocument(result.document as PageDocument)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [pageId])
+
+  if (message !== '') return <p className="page-note">{message}</p>
+  if (document === null) return <p className="page-note">Opening{'…'}</p>
+  return (
+    <>
+      <RunDocument pageId={pageId} document={document} onNotify={onNotify} />
+      <GeneratedHistory pageId={pageId} onNotify={onNotify} onChanged={() => setDocument(null)} />
+    </>
   )
 }
 

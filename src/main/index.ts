@@ -50,7 +50,7 @@ import { WhisperService, LocalVoiceError } from './whisper/service.ts'
 import type { WhisperDownloadProgress } from '../shared/whisperModels.ts'
 import { openDefaultAppsSettings, readDefaultBrowser, requestDefaultBrowser } from './defaultBrowser'
 import { checkAudio, describeError, isVoiceModel } from '../shared/voiceInput'
-import { completeDraft, generateTitle, generateWorkflowTitle, predictQueries, suggestFollowups } from './suggest'
+import { completeDraft, generateTitle, generateWorkflowTitle, predictQueries, requestJson, suggestFollowups } from './suggest'
 import { WorkflowTitler } from './workflows/titler'
 import { parseWebSuggestions } from '../shared/omnibox'
 import { fetchFavicon } from './favicon'
@@ -110,6 +110,9 @@ import { registerPortableIpc } from './portable/ipc'
 import { PagesStore } from './pages/store'
 import { PagesService } from './pages/service'
 import { registerPagesIpc } from './pages/ipc'
+import { GeneratedPages } from './pages/generated'
+import { GeneratedStore } from './pages/generatedStore'
+import { OPERATION_CAPABILITIES } from './pages/service'
 import { FxRates } from './markets/fx'
 import { pushLock } from './chromium/tabLockBridge'
 import { registerExperienceIpc } from './experience/ipc'
@@ -1445,22 +1448,53 @@ if (!app.requestSingleInstanceLock()) {
      * the store and is layered on, which is why the two are separate objects.
      */
     const pagesStore = new PagesStore(app.getPath('userData'))
+    const generatedStore = new GeneratedStore(app.getPath('userData'), OPERATION_CAPABILITIES)
+    /**
+     * Pages somebody asked Orbis to build.
+     *
+     * Declared before the service and handed to it as a hook, because the two need each other in a circle: the
+     * register has to include a profile's generated Pages, and building one has to look at the register first so it
+     * does not build something that already exists.
+     */
+    let generated: GeneratedPages | null = null
     const pages = new PagesService({
       store: pagesStore,
       profileId: async () => (await profilesStore.active()).id,
       // Nothing is registered here yet. When a shared engine becomes a versioned dependency a Page can require, this is
       // where the build says which version it has -- and `compatibility` is what refuses a Page that needs a newer one.
-      engines: {}
+      engines: {},
+      generated: async (profileId) => (generated === null ? [] : generated.forRegistry(profileId))
+    })
+    generated = new GeneratedPages({
+      store: generatedStore,
+      registry: (profileId) => pages.state(profileId),
+      // The engines directly. What a generated Page is *allowed* to run is decided by its manifest, which the gates
+      // check before this is ever called; this is the trial run, and the Page is not registered yet for a permission
+      // check to be about.
+      runOperation: (operation, input) => pages.carryOutFor(operation, input),
+      allOperations: OPERATION_CAPABILITIES,
+      apiKeys: async () => GROQ_API_KEYS,
+      fetchFn: (url, init) => net.fetch(url, init),
+      random: () => crypto.randomUUID().replace(/-/g, ''),
+      ask: requestJson,
+      // A generated Page remembers what was typed into it. Orbis's decision, and the only capability the compiler
+      // does not derive -- see the note at the top of `compiler.ts` about why it is a parameter rather than a field.
+      allowStorage: true
     })
     pages.start()
     registerPagesIpc({
       service: pages,
       getWindow: () => mainWindow,
-      profileId: async () => (await profilesStore.active()).id
+      profileId: async () => (await profilesStore.active()).id,
+      generated
     })
-    profilesStore.onChange(() => pages.profileChanged())
+    profilesStore.onChange(() => {
+      pages.profileChanged()
+      generated?.profileChanged()
+    })
     app.on('before-quit', () => {
       void pagesStore.flush()
+      void generatedStore.flush()
     })
 
     const tabLockStore = new TabLockStore(app.getPath('userData'), accounts)

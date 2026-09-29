@@ -16,6 +16,7 @@ import { describeRequests, type PageManifest } from '../../shared/pages/manifest
 import { versionToText } from '../../shared/pages/identity.ts'
 import { originScope, type Scope } from '../../shared/pages/capabilities.ts'
 import type { PagesService } from './service.ts'
+import type { GeneratedPages } from './generated.ts'
 
 /**
  * How the Orbis interface asks about Pages.
@@ -32,6 +33,14 @@ export interface PagesIpcOptions {
   service: PagesService
   profileId(): Promise<string>
   getWindow(): BrowserWindow | null
+  /**
+   * Building Pages that do not exist yet.
+   *
+   * Optional, and absent is a working state rather than a broken one: a build with no model configured has nothing to
+   * offer, and the channels below say so rather than not existing. A channel that disappears depending on
+   * configuration is one the interface has to guess about.
+   */
+  generated?: GeneratedPages
 }
 
 /** What the renderer gets for one Page. Deliberately not the whole registry entry -- notes and trust stay inside. */
@@ -378,6 +387,116 @@ export function registerPagesIpc(o: PagesIpcOptions): void {
         confidence: typeof one.confidence === 'number' && Number.isFinite(one.confidence) ? Math.min(1, Math.max(0, one.confidence)) : 0
       }))
     return o.service.searchModule(id, str(query, 400), cleaned, looksLikeUrl === true)
+  })
+
+  // ---------------------------------------------------------------- Pages that did not exist yet
+  //
+  // Building is deliberately several calls rather than one. A Page is built, looked at, and only then kept -- and
+  // each of those is something somebody decided, so each is something they can decline.
+
+  const noGenerator = { error: 'unavailable', message: 'Building Pages is not available here.' }
+
+  handle('pages:generate', async (id, request, intents) => {
+    if (!o.generated) return noGenerator
+    const read = Array.isArray(intents)
+      ? (intents as unknown[])
+          .filter((one): one is { intent: string; confidence: number } => typeof one === 'object' && one !== null)
+          .slice(0, 4)
+          .map((one) => ({ intent: String(one.intent) as never, confidence: count(one.confidence, 0, 1, 0) }))
+      : undefined
+    const built = await o.generated.build(id, str(request, 400), { intents: read })
+    return {
+      stage: built.session.stage,
+      sessionId: built.session.sessionId,
+      // The stages it went through, so a screen can show what happened rather than only how it ended.
+      history: built.session.history,
+      failure: built.session.failure,
+      gates: built.session.validation?.gates ?? [],
+      because: built.because,
+      insteadOpen: built.insteadOpen,
+      page:
+        built.page === null
+          ? null
+          : { pageId: built.page.pageId, manifest: built.page.manifest, document: built.page.document }
+    }
+  })
+
+  handle('pages:generate-keep', async (id, pageId) => {
+    if (!o.generated) return noGenerator
+    return o.generated.keep(id, str(pageId, 80))
+  })
+
+  handle('pages:generate-discard', async (_id, pageId) => {
+    if (!o.generated) return noGenerator
+    return { discarded: o.generated.discard(str(pageId, 80)) }
+  })
+
+  handle('pages:generate-rebuild', async (id, pageId, change) => {
+    if (!o.generated) return noGenerator
+    const result = await o.generated.rebuild(id, str(pageId, 80), str(change, 300))
+    return {
+      message: result.message,
+      version: result.version === null ? null : { versionId: result.version.versionId, version: versionToText(result.version.version), reason: result.version.reason },
+      changes: result.difference?.changes ?? [],
+      wantsMore: result.difference?.wantsMore ?? false,
+      newCapabilities: result.difference?.newCapabilities ?? [],
+      dropped: result.carried?.dropped ?? [],
+      stage: result.session?.stage ?? 'failed'
+    }
+  })
+
+  handle('pages:generate-history', async (id, pageId) => {
+    if (!o.generated) return noGenerator
+    const history = await o.generated.history(id, str(pageId, 80))
+    if (history === null) return { error: 'not-found', message: 'There is no such Page.' }
+    return {
+      publishedVersionId: history.publishedVersionId,
+      forkedFrom: history.forkedFrom,
+      versions: history.versions.map((one) => ({
+        versionId: one.versionId,
+        parentVersionId: one.parentVersionId,
+        version: versionToText(one.version),
+        state: one.state,
+        reason: one.reason,
+        createdAt: one.createdAt,
+        title: one.manifest.title
+      }))
+    }
+  })
+
+  handle('pages:generate-publish', async (id, pageId, versionId) => {
+    if (!o.generated) return noGenerator
+    return o.generated.publish(id, str(pageId, 80), str(versionId, 40))
+  })
+
+  handle('pages:generate-withdraw', async (id, pageId, versionId) => {
+    if (!o.generated) return noGenerator
+    return o.generated.withdraw(id, str(pageId, 80), str(versionId, 40))
+  })
+
+  handle('pages:generate-forget', async (id, pageId) => {
+    if (!o.generated) return noGenerator
+    return { forgotten: await o.generated.forget(id, str(pageId, 80)) }
+  })
+
+  handle('pages:generate-sessions', async (id) => {
+    if (!o.generated) return noGenerator
+    return {
+      sessions: (await o.generated.sessions(id)).map((one) => ({
+        sessionId: one.sessionId,
+        request: one.request,
+        stage: one.stage,
+        updatedAt: one.updatedAt,
+        message: one.failure?.message ?? ''
+      }))
+    }
+  })
+
+  /** The document a generated Page opens as, for the runtime that renders it. */
+  handle('pages:generate-document', async (id, pageId) => {
+    const document = await o.service.documentFor(id, str(pageId, 80))
+    if (document === null) return { error: 'not-found', message: 'That Page has nothing to open.' }
+    return { document }
   })
 
   // ---------------------------------------------------------------- one Page, in full

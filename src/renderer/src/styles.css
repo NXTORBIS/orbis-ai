@@ -17428,6 +17428,32 @@ html[data-motion='reduced'] .tool-btn.recording {
   color: var(--text);
 }
 
+/* A section of a built Page: its own title and whatever it holds, stacked. */
+.studio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.studio-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+/* A figure around a table or a plot, so the caption sits with the thing it names. */
+.page-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+}
+
 .studio-hr {
   border: 0;
   border-top: 1px solid var(--line);

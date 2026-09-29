@@ -217,6 +217,14 @@ what a profile has *decided* is persisted, which is why permissions and projects
 | `pages:grant`, `pages:revoke` | Recording an answered prompt, and withdrawing it. Becomes Mojo onto the same policy engine; the trusted prompt itself is already browser UI rather than Page content |
 | `pages:compute` | The one door to the computational engines. Every operation is checked against the Page's capabilities before an engine runs, so there is no second route to reach one. In Chromium this is the interface a Page's renderer is given, narrowed to the operations it has been granted |
 | `pages:projects`, `pages:project-save`, `pages:project-delete` | A Page's own saved work, in the profile's own store, size-capped before it is written |
+| `pages:generate` | A Page built for a request that nothing in the library answers. Runs the whole ladder first, so most requests never reach a model. Becomes Mojo onto the same service; the model call is already a network request made by the browser process |
+| `pages:generate-keep`, `pages:generate-discard` | Keeping a built Page, or throwing it away. Separate from building on purpose: a model writing a calculator is something somebody should look at before it joins their library |
+| `pages:generate-rebuild` | A Page built again from what it is and what somebody wants changed. Adds a version beside the one in use and never replaces it |
+| `pages:generate-history` | One Page's versions, what each was asked to be, and which is in use |
+| `pages:generate-publish`, `pages:generate-withdraw` | Choosing which version opens, and taking one out of use. Going back is publishing an older version rather than building it again |
+| `pages:generate-forget` | A generated Page and its whole history deleted |
+| `pages:generate-sessions` | What has been built recently and what happened to it, including the attempts that failed |
+| `pages:generate-document` | The document a generated Page opens as. Read-only, and scoped to the profile that built it. In Chromium this is what the Page's own renderer is served |
 | `pages:health` | The register checked against itself, for diagnostics: duplicate addresses, duplicate ids, aliases pointing at nothing |
 | `pages:export` | A Page packed up as a file, scanned for anything that looks like a credential and refused if one is found. Becomes Mojo onto the same packer; the file dialog is already browser UI |
 | `pages:inspect-package` | A package described so somebody can decide about it. Nothing is installed and nothing is granted by this call, which is why it is separate from anything that writes |
@@ -270,7 +278,7 @@ library's reading list, saved pages, pictures of pages and download bookkeeping.
 | Profile Lock | 3 | Unchanged; the operating-system events become Chromium's own observers |
 | Security activity | 2 | Unchanged |
 | Markets | 9 | Unchanged; the providers are HTTP and WebSocket either way |
-| Orbis Pages | 26 | A WebUI host plus Mojo onto the same service; `pages:compute` is the narrow interface a Page's renderer gets, and the Page frames themselves are `WebContents` with a `URLLoaderFactory` for their own origin |
+| Orbis Pages | 36 | A WebUI host plus Mojo onto the same service; `pages:compute` is the narrow interface a Page's renderer gets, and the Page frames themselves are `WebContents` with a `URLLoaderFactory` for their own origin |
 | Control layer | 12 | Unchanged; the browser side is Chromium's capabilities |
 | Library (Orbis's own memory of searches, shortcuts and picks, plus a copy of Chromium's lists) | 8 | Small |
 | Opening the Orbis browser, window fullscreen | 4 | Small |

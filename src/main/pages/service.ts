@@ -8,7 +8,7 @@ import {
   type Scope
 } from '../../shared/pages/capabilities.ts'
 import { versionToText } from '../../shared/pages/identity.ts'
-import { compatibility, type PageManifest } from '../../shared/pages/manifest.ts'
+import { compatibility, manifestToJson, type PageManifest } from '../../shared/pages/manifest.ts'
 import {
   canOpen,
   emptyRegistry,
@@ -106,6 +106,14 @@ export interface PagesServiceOptions {
   now?(): number
   /** Engines available in this build, for the compatibility check. */
   engines?: Record<string, { major: number; minor: number; patch: number }>
+  /**
+   * The Pages this profile built, with the document each one opens as.
+   *
+   * A hook rather than a store, so the service does not have to know where generated Pages are kept and a test can
+   * hand it two. They are layered on in `withProfile` rather than in `start`, because a generated Page belongs to one
+   * profile: registering them once at startup would put one person's Pages in front of another.
+   */
+  generated?(profileId: string): Promise<readonly { manifest: PageManifest; document: PageDocument }[]>
 }
 
 export interface ComputeRequest {
@@ -143,12 +151,29 @@ const OPERATION_CAPABILITY: Record<string, string> = {
 
 export const KNOWN_OPERATIONS = Object.freeze(Object.keys(OPERATION_CAPABILITY))
 
+/**
+ * The map itself, for callers that need to know what an operation requires before there is a Page to ask about.
+ *
+ * Frozen, and the same object the check below reads. A second copy would be a second answer to "what does this need",
+ * and the copy is the one that ends up wrong.
+ */
+export const OPERATION_CAPABILITIES: Readonly<Record<string, string>> = Object.freeze({ ...OPERATION_CAPABILITY })
+
 export class PagesService {
   private registry: PageRegistry = emptyRegistry()
   private readonly o: PagesServiceOptions
   private started = false
   /** Problems found while registering the built-in Pages, kept so diagnostics can show them rather than hiding them. */
   private startupProblems: { slug: string; message: string }[] = []
+  /**
+   * The document each generated Page opens as, by profile and then by Page.
+   *
+   * Held rather than looked up again because `withProfile` has just read them and the renderer asks for one
+   * immediately afterwards. Keyed by profile rather than kept as one map that is cleared each time: two profiles
+   * asking at once would otherwise have the second empty the first's entries between it filling them and reading
+   * them, which shows up as a Page that opens as nothing and works on the next try.
+   */
+  private readonly documents = new Map<string, Map<string, PageDocument>>()
 
   constructor(options: PagesServiceOptions) {
     this.o = options
@@ -196,8 +221,30 @@ export class PagesService {
   private async withProfile(profileId: string): Promise<PageRegistry> {
     const favourites = new Set(await this.o.store.favourites(profileId))
     const usage = await this.o.store.usage(profileId)
+
+    // This profile's generated Pages, registered through the same door as every other Page. A generated manifest that
+    // does not validate is left out rather than forced in -- the same rule the built-ins get, and for the same
+    // reason: a Page that appears in a list and fails when somebody clicks it is worse than one that is missing.
+    let base = this.registry
+    const mine = new Map<string, PageDocument>()
+    for (const one of await (this.o.generated?.(profileId) ?? Promise.resolve([]))) {
+      const result = registerPage(base, manifestToJson(one.manifest), {
+        trust: 'user',
+        profileId,
+        now: this.now(),
+        // A generated slug that collides takes the next free one. Refusing would mean a Page somebody built is simply
+        // absent, with no way to find out why.
+        renameOnCollision: true
+      })
+      if ('error' in result) continue
+      base = result.state
+      mine.set(result.page.identity.pageId, one.document)
+    }
+
+    this.documents.set(profileId, mine)
+
     return {
-      pages: this.registry.pages.map((page) => {
+      pages: base.pages.map((page) => {
         const seen = usage[page.identity.pageId]
         return {
           ...page,
@@ -206,7 +253,7 @@ export class PagesService {
           lastOpenedAt: seen?.lastOpenedAt ?? null
         }
       }),
-      aliases: this.registry.aliases
+      aliases: base.aliases
     }
   }
 
@@ -823,9 +870,36 @@ export class PagesService {
   /** Called when the active profile changes: the register keeps its Pages, the decisions are re-read. */
   profileChanged(): void {
     this.o.store.forget()
+    this.documents.clear()
   }
 
   /** For diagnostics: what the register looks like without any profile's decisions on it. */
+  /**
+   * The document a generated Page opens as.
+   *
+   * The register is read first rather than trusting whatever was cached, so asking for another profile's Page finds
+   * nothing instead of finding something.
+   */
+  async documentFor(profileId: string, pageId: string): Promise<PageDocument | null> {
+    await this.state(profileId)
+    return this.documents.get(profileId)?.get(pageId) ?? null
+  }
+
+  /**
+   * One engine operation, run with no Page behind it.
+   *
+   * For the trial run that happens while a Page is being built, where there is nothing registered for a permission
+   * check to be about. It is not a way round the permission check: what a generated Page may run is decided by its
+   * manifest, and the gates in `validation.ts` check that manifest against these same operations before this is
+   * called. The operation is still looked up in the one map, so nothing outside it can be reached here either.
+   */
+  carryOutFor(operation: string, input: Record<string, unknown>): unknown {
+    if (!Object.prototype.hasOwnProperty.call(OPERATION_CAPABILITY, operation)) {
+      throw new BadInput(`Orbis Pages have no operation called "${operation}".`)
+    }
+    return this.carryOut(operation, input)
+  }
+
   rawPages(): readonly RegisteredPage[] {
     this.start()
     return this.registry.pages

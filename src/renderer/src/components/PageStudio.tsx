@@ -9,6 +9,7 @@ import {
   Play,
   Plus,
   Send,
+  Sparkles,
   ShieldAlert,
   Stethoscope,
   Trash2,
@@ -127,6 +128,108 @@ interface CheckAnswer {
   unusedFields: string[]
 }
 
+/**
+ * Running a built Page: its values, and the calculations a change sets off.
+ *
+ * One hook for every Page that is a `PageDocument` -- the one being built in the builder, and the ones Orbis built
+ * for somebody. A second copy would be a second answer to what happens when a field changes, and the copy is the one
+ * that ends up wrong: it is the copy that forgets to follow a chain, or to stop on a refusal.
+ *
+ * Every calculation goes through `pages:compute`, under the identity of a real Page, so a Page running here is
+ * checked against the capabilities that Page was granted exactly as it would be anywhere else.
+ */
+export function useDocumentRunner(
+  document: PageDocument,
+  pageId: string,
+  onNotify: (message: string, kind?: NoticeKind) => void
+): {
+  state: RunState
+  running: boolean
+  change(name: string, value: unknown): Promise<void>
+  run(name: string): Promise<void>
+  reset(): void
+} {
+  const [state, setState] = useState<RunState>(() => initialState(document))
+  const [running, setRunning] = useState(false)
+
+  // The starting values change whenever the fields do, so nothing holds a value for a field that is gone.
+  useEffect(() => {
+    setState(initialState(document))
+  }, [document.fields])
+
+  /** A list of computations run in order, each seeing what the one before it wrote. */
+  const carry = useCallback(
+    async (from: RunState, computations: readonly Computation[]): Promise<void> => {
+      if (computations.length === 0) return
+      let current = from
+      setRunning(true)
+      try {
+        for (const computation of computations) {
+          const input = argumentsFor(computation, current)
+          const result = (await window.api.pagesCompute({
+            pageId,
+            operation: computation.operation,
+            input: input as Record<string, unknown>
+          })) as PageComputeResult
+          if (!result || !('ok' in result) || !result.ok) {
+            // The engine's own sentence, against the field that was being worked out.
+            onNotify(`${computation.name}: ${(result as { message?: string })?.message ?? 'that did not work'}`, 'error')
+            continue
+          }
+          // An engine that refuses the numbers says so inside its answer rather than by failing the request. A check
+          // that noticed only the envelope would write the refusal into the field as though it were a result.
+          const value = result.value
+          if (value !== null && typeof value === 'object' && (value as { ok?: unknown }).ok === false) {
+            onNotify(`${computation.name}: ${String((value as { message?: unknown }).message ?? 'that did not work')}`, 'error')
+            continue
+          }
+          const written = setFieldValue(document, current, computation.writes, value ?? null)
+          if (!('code' in written)) {
+            current = written
+            setState(current)
+          }
+        }
+      } finally {
+        setRunning(false)
+      }
+    },
+    [document, pageId, onNotify]
+  )
+
+  /**
+   * A field changed, and whatever that sets off.
+   *
+   * The order comes from `computationsAfter`, which follows the chain -- so a field computed from a field computed
+   * from this one updates too, and in the right order. `check` has already refused any cycle, so this cannot loop.
+   */
+  const change = useCallback(
+    async (name: string, value: unknown) => {
+      const next = setFieldValue(document, state, name, value)
+      if ('code' in next) {
+        onNotify(next.message, 'error')
+        return
+      }
+      setState(next)
+      await carry(next, computationsAfter(document, name))
+    },
+    [document, state, onNotify, carry]
+  )
+
+  /** A button pressed. Only the one calculation it names, and then whatever that sets off. */
+  const run = useCallback(
+    async (name: string) => {
+      const computation = document.computations.find((one) => one.name === name)
+      if (computation === undefined) return
+      await carry(state, [computation, ...computationsAfter(document, computation.writes)])
+    },
+    [document, state, carry]
+  )
+
+  const reset = useCallback(() => setState(initialState(document)), [document])
+
+  return { state, running, change, run, reset }
+}
+
 export function BuilderPanel({
   pageId,
   onNotify
@@ -137,9 +240,9 @@ export function BuilderPanel({
 }): React.JSX.Element {
   const [document, setDocument] = useState<PageDocument>(STARTER)
   const [answer, setAnswer] = useState<CheckAnswer | null>(null)
-  const [state, setState] = useState<RunState>(() => initialState(STARTER))
   const [tab, setTab] = useState<'fields' | 'components' | 'computations'>('fields')
-  const [running, setRunning] = useState(false)
+  // The one runner, shared with every other Page that is a document. See `useDocumentRunner`.
+  const { state, running, change } = useDocumentRunner(document, pageId, onNotify)
 
   /**
    * Checked on every edit.
@@ -157,59 +260,6 @@ export function BuilderPanel({
       cancelled = true
     }
   }, [document])
-
-  // The starting values change whenever the fields do, so the preview never holds a value for a field that is gone.
-  useEffect(() => {
-    setState(initialState(document))
-  }, [document.fields])
-
-  /**
-   * A field changed in the preview, and whatever that sets off.
-   *
-   * The order comes from `computationsAfter`, which follows the chain — so a field computed from a field computed from
-   * this one updates too, and in the right order. `check` has already refused any cycle, so this cannot loop.
-   */
-  const change = useCallback(
-    async (name: string, value: unknown) => {
-      const next = setFieldValue(document, state, name, value)
-      if ('code' in next) {
-        onNotify(next.message, 'error')
-        return
-      }
-      let current = next
-      setState(current)
-
-      const triggered = computationsAfter(document, name)
-      if (triggered.length === 0) return
-      setRunning(true)
-      try {
-        for (const computation of triggered) {
-          const input = argumentsFor(computation, current)
-          const result = (await window.api.pagesCompute({
-            pageId,
-            operation: computation.operation,
-            input: input as Record<string, unknown>
-          })) as PageComputeResult
-          if (!result || !('ok' in result) || !result.ok) {
-            // The engine's own sentence, against the field that was being worked out.
-            onNotify(
-              `${computation.name}: ${(result as { message?: string })?.message ?? 'that did not work'}`,
-              'error'
-            )
-            continue
-          }
-          const written = setFieldValue(document, current, computation.writes, result.value ?? null)
-          if (!('code' in written)) {
-            current = written
-            setState(current)
-          }
-        }
-      } finally {
-        setRunning(false)
-      }
-    },
-    [document, state, pageId, onNotify]
-  )
 
   const errors = answer?.problems.filter((one) => one.severity === 'error') ?? []
   const warnings = answer?.problems.filter((one) => one.severity === 'warning') ?? []
@@ -663,7 +713,7 @@ export function BuilderPanel({
 }
 
 /** One component, rendered as the Page would show it. */
-function PreviewComponent({
+export function PreviewComponent({
   component,
   document,
   state,
@@ -677,12 +727,35 @@ function PreviewComponent({
   onRun(name: string): void
 }): React.JSX.Element | null {
   const field = component.field ? document.fields.find((one) => one.name === component.field) : undefined
-  const value = component.field ? state.values[component.field] : undefined
+  const held = component.field ? state.values[component.field] : undefined
+  // `pick` reads one property out of a result. The property being absent and the result not having arrived yet are
+  // both `undefined` here, and both mean "nothing to show", so they are not told apart.
+  const value =
+    component.pick !== undefined && held !== null && typeof held === 'object'
+      ? (held as Record<string, unknown>)[component.pick]
+      : component.pick !== undefined
+        ? undefined
+        : held
 
   // The condition is a field's name, never an expression. A Page cannot hide something on a rule nothing can check.
   if (component.showWhen && state.values[component.showWhen] !== true) return null
 
   switch (component.kind) {
+    case 'group':
+    case 'row':
+    case 'column':
+      return (
+        <section className={component.kind === 'row' ? 'studio-row' : 'studio-group'}>
+          {component.label && <h4 className="studio-h">{component.label}</h4>}
+          {(component.children ?? []).map((child) => (
+            <PreviewComponent key={child.id} component={child} document={document} state={state} onChange={onChange} onRun={onRun} />
+          ))}
+        </section>
+      )
+    case 'table':
+      return <PreviewTable label={component.label ?? field?.label ?? ''} value={value} />
+    case 'plot':
+      return <PreviewPlot label={component.label ?? field?.label ?? ''} value={value} />
     case 'heading':
       return <h4 className="studio-h">{component.text || 'Heading'}</h4>
     case 'paragraph':
@@ -780,6 +853,109 @@ function PreviewComponent({
         </p>
       )
   }
+}
+
+/**
+ * Rows an engine returned, as a table.
+ *
+ * Takes the columns from the first row rather than from anywhere that declares them, because an engine's result is a
+ * plain object and nothing describes its shape. A result that is not a list of objects says so instead of drawing an
+ * empty grid, which would read as a calculation that returned nothing.
+ */
+function PreviewTable({ label, value }: { label: string; value: unknown }): React.JSX.Element {
+  const rows = Array.isArray(value) ? value.filter((one) => one !== null && typeof one === 'object') : []
+  if (rows.length === 0) {
+    return (
+      <output className="page-answer-line">
+        <span className="page-label">{label}</span>
+        <span className="page-note">{value === undefined ? 'nothing yet' : 'This is not a table.'}</span>
+      </output>
+    )
+  }
+  const columns = [...new Set(rows.flatMap((one) => Object.keys(one as Record<string, unknown>)))].slice(0, 8)
+  return (
+    <figure className="page-block">
+      <figcaption className="page-label">{label}</figcaption>
+      <table className="page-table">
+        <thead>
+          <tr>
+            {columns.map((one) => (
+              <th key={one}>{one}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.slice(0, 200).map((row, i) => (
+            <tr key={i}>
+              {columns.map((one) => (
+                <td key={one}>{readable((row as Record<string, unknown>)[one])}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {rows.length > 200 && <figcaption className="page-note">Showing the first 200 of {rows.length} rows.</figcaption>}
+    </figure>
+  )
+}
+
+/**
+ * A series an engine returned, drawn.
+ *
+ * Plain SVG, and deliberately plotted from whatever pair of numbers each point actually has rather than from assumed
+ * names: engines return `{x, y}`, `{t, value}` and bare pairs, and a chart that silently drew nothing because it was
+ * looking for the wrong key is worse than one that says it could not find any points.
+ */
+function PreviewPlot({ label, value }: { label: string; value: unknown }): React.JSX.Element {
+  const points: { x: number; y: number }[] = []
+  const list = Array.isArray(value)
+    ? value
+    : value !== null && typeof value === 'object' && Array.isArray((value as { points?: unknown }).points)
+      ? ((value as { points: unknown[] }).points)
+      : []
+  for (const one of list) {
+    if (Array.isArray(one) && typeof one[0] === 'number' && typeof one[1] === 'number') {
+      points.push({ x: one[0], y: one[1] })
+      continue
+    }
+    if (one === null || typeof one !== 'object') continue
+    const numbers = Object.entries(one as Record<string, unknown>).filter(([, held]) => typeof held === 'number') as [string, number][]
+    const xKey = numbers.find(([key]) => key === 'x' || key === 't' || key === 'time')?.[0] ?? numbers[0]?.[0]
+    const yKey = numbers.find(([key]) => key !== xKey)?.[0]
+    if (xKey === undefined || yKey === undefined) continue
+    points.push({ x: (one as Record<string, number>)[xKey], y: (one as Record<string, number>)[yKey] })
+  }
+  if (points.length < 2) {
+    return (
+      <output className="page-answer-line">
+        <span className="page-label">{label}</span>
+        <span className="page-note">{value === undefined ? 'nothing yet' : 'There are not enough points here to draw.'}</span>
+      </output>
+    )
+  }
+  const xs = points.map((one) => one.x)
+  const ys = points.map((one) => one.y)
+  const lowX = Math.min(...xs)
+  const highX = Math.max(...xs)
+  const lowY = Math.min(...ys)
+  const highY = Math.max(...ys)
+  // A flat series has no range to scale by, so it is drawn down the middle rather than divided by zero.
+  const spanX = highX - lowX || 1
+  const spanY = highY - lowY || 1
+  const at = (one: { x: number; y: number }): string =>
+    `${(((one.x - lowX) / spanX) * 300 + 10).toFixed(2)},${(190 - ((one.y - lowY) / spanY) * 170).toFixed(2)}`
+  return (
+    <figure className="page-block">
+      <figcaption className="page-label">{label}</figcaption>
+      <svg className="page-plot" viewBox="0 0 320 200" role="img" aria-label={`${label}: ${points.length} points`}>
+        <polyline points={points.map(at).join(' ')} fill="none" stroke="var(--cyan)" strokeWidth="1.5" />
+      </svg>
+      <figcaption className="page-note">
+        {lowX === highX ? `x = ${readable(lowX)}` : `${readable(lowX)} to ${readable(highX)}`} across,{' '}
+        {lowY === highY ? `y = ${readable(lowY)}` : `${readable(lowY)} to ${readable(highY)}`} up.
+      </figcaption>
+    </figure>
+  )
 }
 
 /**
@@ -1474,6 +1650,9 @@ export function ComposePanel({ onNotify }: { onNotify(message: string, kind?: No
 
 /** The tabs the studio has, so `PagesView` does not need to know what is inside each one. */
 export const STUDIO_TABS = [
+  // Describing comes first because it is what somebody will reach for: building a Page by hand is the thing you do
+  // when describing one did not give you what you wanted.
+  { id: 'describe' as const, label: 'Describe', icon: Sparkles },
   { id: 'builder' as const, label: 'Build', icon: Wrench },
   { id: 'compose' as const, label: 'Between Pages', icon: Send },
   { id: 'package' as const, label: 'Packages', icon: Upload },

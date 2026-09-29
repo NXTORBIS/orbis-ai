@@ -124,6 +124,7 @@ import {
 /** Which capability each of these operations needs. Merged into the service's map, so the same deny-by-default applies. */
 export const ENGINE_CAPABILITY: Readonly<Record<string, string>> = Object.freeze({
   'statistics.summarise': 'computation.statistics',
+  'statistics.weighted': 'computation.statistics',
   'statistics.correlate': 'computation.statistics',
   'statistics.regress': 'computation.statistics',
   'statistics.interval': 'computation.statistics',

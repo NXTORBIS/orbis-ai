@@ -1649,6 +1649,88 @@ export interface NxtorbisApi {
     | { error: string; message?: string }
   >
 
+  // ---------------------------------------------------------------- Pages that did not exist yet
+
+  /**
+   * A Page built for a request nothing in the library answers.
+   *
+   * `page` is null whenever nothing was built, and `because` says why -- which covers a request that was never a
+   * Page, one an existing Page answers (`insteadOpen`), and one that was built and failed its checks. Nothing is
+   * kept by this call.
+   */
+  pagesGenerate(
+    request: string,
+    intents?: readonly { intent: string; confidence: number }[]
+  ): Promise<
+    | {
+        stage: string
+        sessionId: string
+        history: { stage: string; at: number; note: string }[]
+        failure: { code: string; message: string } | null
+        gates: { gate: string; outcome: string; because: string[] }[]
+        because: string[]
+        insteadOpen: string | null
+        page: {
+          pageId: string
+          manifest: {
+            slug: string
+            title: string
+            description: string
+            icon: string
+            capabilities: string[]
+            capabilityReasons: Record<string, string>
+            limitations: string[]
+            categories: string[]
+          }
+          document: unknown
+        } | null
+      }
+    | { error: string; message?: string }
+  >
+  pagesGenerateKeep(pageId: string): Promise<{ kept: boolean; message: string; url: string | null } | { error: string; message?: string }>
+  pagesGenerateDiscard(pageId: string): Promise<{ discarded: boolean } | { error: string; message?: string }>
+  /** A Page built again. Adds a version beside the one in use; it does not replace it. */
+  pagesGenerateRebuild(
+    pageId: string,
+    change: string
+  ): Promise<
+    | {
+        message: string
+        version: { versionId: string; version: string; reason: string | null } | null
+        changes: { kind: string; what: string; name: string; message: string }[]
+        wantsMore: boolean
+        newCapabilities: string[]
+        dropped: { name: string; label: string; why: string }[]
+        stage: string
+      }
+    | { error: string; message?: string }
+  >
+  pagesGenerateHistory(pageId: string): Promise<
+    | {
+        publishedVersionId: string | null
+        forkedFrom: string | null
+        versions: {
+          versionId: string
+          parentVersionId: string | null
+          version: string
+          state: string
+          reason: string | null
+          createdAt: number
+          title: string
+        }[]
+      }
+    | { error: string; message?: string }
+  >
+  pagesGeneratePublish(pageId: string, versionId: string): Promise<{ published: boolean; message: string } | { error: string; message?: string }>
+  pagesGenerateWithdraw(pageId: string, versionId: string): Promise<{ withdrawn: boolean; message: string } | { error: string; message?: string }>
+  pagesGenerateForget(pageId: string): Promise<{ forgotten: boolean } | { error: string; message?: string }>
+  pagesGenerateSessions(): Promise<
+    | { sessions: { sessionId: string; request: string; stage: string; updatedAt: number; message: string }[] }
+    | { error: string; message?: string }
+  >
+  /** The document a generated Page opens as. */
+  pagesGenerateDocument(pageId: string): Promise<{ document: unknown } | { error: string; message?: string }>
+
   /**
    * A Page packed up as a file.
    *

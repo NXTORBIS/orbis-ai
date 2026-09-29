@@ -115,6 +115,14 @@ export interface Component {
   label?: string
   /** The field this reads from and, where it is editable, writes to. */
   field?: string
+  /**
+   * One property out of that field, for a read-only component bound to a result.
+   *
+   * A calculation returns an object with several parts, and a box on screen shows one number. Without this the only
+   * way to show one part would be a second computation that extracted it, which is a calculation that calculates
+   * nothing. A plain property name, never a path, for the same reason as on a computation's inputs.
+   */
+  pick?: string
   /** For a button: which computation it runs. */
   runs?: string
   /** For static content. */
@@ -135,7 +143,7 @@ const BINDING: Readonly<Record<string, { needs: boolean; writes: boolean; accept
   slider: { needs: true, writes: true, accepts: ['number'] },
   'quantity-input': { needs: true, writes: true, accepts: ['quantity'] },
   value: { needs: true, writes: false, accepts: ['number', 'text', 'boolean', 'choice', 'quantity', 'result'] },
-  table: { needs: true, writes: false, accepts: ['table'] },
+  table: { needs: true, writes: false, accepts: ['table', 'result'] },
   plot: { needs: true, writes: false, accepts: ['result'] },
   statistic: { needs: true, writes: false, accepts: ['number', 'quantity', 'result'] }
 })
@@ -148,8 +156,15 @@ export interface Computation {
   name: string
   /** The engine operation, like `units.convert`. Decides which capability is needed. */
   operation: string
-  /** Each argument's value: a field's name, or a literal. */
-  inputs: Readonly<Record<string, { field: string } | { value: unknown }>>
+  /**
+   * Each argument's value: a field's name, or a literal.
+   *
+   * `pick` reads one property out of the field rather than passing the whole thing, which is what makes a chain of
+   * computations possible: an engine returns an object, and the next step wants one number out of it. It is a plain
+   * property name and never a path -- no dots, no brackets, no indices. A path would be a small expression language,
+   * and this file exists partly so that a built Page contains no expression language at all.
+   */
+  inputs: Readonly<Record<string, { field: string; pick?: string } | { value: unknown }>>
   /** The field the result is written into. */
   writes: string
   /** When it runs. `change` on every edit; `button` only when a button runs it. */
@@ -273,6 +288,15 @@ export function check(document: PageDocument): CheckResult {
               `A ${component.kind} cannot show a ${field.type}. "${field.name}" would need to be ${binding.accepts.join(' or ')}.`
             )
           }
+          if (component.pick !== undefined) {
+            if (binding.writes) {
+              add(path, 'pick-on-editable', `This ${component.kind} is something somebody edits, so it cannot show one property out of a result.`)
+            } else if (!NAME_PATTERN.test(component.pick)) {
+              add(path, 'bad-pick', `"${component.pick}" is not a plain property name. A property is a name, never a path.`)
+            } else if (field.type !== 'result') {
+              add(path, 'pick-from-plain-field', `"${field.name}" holds a single value, so there is nothing to read "${component.pick}" out of.`)
+            }
+          }
           if (binding.writes && field.computed === true) {
             add(
               path,
@@ -372,6 +396,23 @@ export function check(document: PageDocument): CheckResult {
           add(`${path}.${argument}`, 'unknown-input', `"${computation.name}" takes "${argument}" from "${source.field}", and there is no field with that name.`)
         } else {
           read.add(source.field)
+        }
+        if (source.pick !== undefined) {
+          if (!NAME_PATTERN.test(source.pick)) {
+            add(
+              `${path}.${argument}`,
+              'bad-pick',
+              `"${computation.name}" reads "${source.pick}" out of "${source.field}", and that is not a plain property name. A property is a name, never a path.`
+            )
+          } else if (fields.get(source.field)?.type !== 'result') {
+            // Picking out of a number or a string would always be `undefined`, so this is a mistake rather than a
+            // choice, and it is worth refusing at build time rather than showing an empty box at run time.
+            add(
+              `${path}.${argument}`,
+              'pick-from-plain-field',
+              `"${computation.name}" reads "${source.pick}" out of "${source.field}", which holds a single value rather than a result. There is nothing to read out of it.`
+            )
+          }
         }
       }
     }
@@ -531,7 +572,17 @@ export function argumentsFor(computation: Computation, state: RunState): Record<
   for (const [argument, source] of Object.entries(computation.inputs)) {
     if (!NAME_PATTERN.test(argument)) continue
     if ('field' in source) {
-      out[argument] = Object.prototype.hasOwnProperty.call(state.values, source.field) ? state.values[source.field] : undefined
+      const held = Object.prototype.hasOwnProperty.call(state.values, source.field) ? state.values[source.field] : undefined
+      if (source.pick === undefined) {
+        out[argument] = held
+      } else if (held !== null && typeof held === 'object' && Object.prototype.hasOwnProperty.call(held, source.pick)) {
+        out[argument] = (held as Record<string, unknown>)[source.pick]
+      } else {
+        // The property is not there -- because the computation that fills this field has not run, or because it
+        // returned a refusal rather than a result. `undefined` is the honest answer; the engine will refuse it, which
+        // is better than passing the whole object and having it refused for a reason that names the wrong thing.
+        out[argument] = undefined
+      }
     } else {
       out[argument] = source.value
     }
