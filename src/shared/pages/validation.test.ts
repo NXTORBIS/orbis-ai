@@ -348,9 +348,16 @@ describe('the running gate', () => {
     assert.ok(result.problems.some((one) => one.includes('between 0 and 90')))
   })
 
-  it('fails when it ran and calculated nothing', () => {
+  it('fails when it ran and there was nothing at all to run', () => {
     const result = validate(inputFor(build(spec()), false, { results: [], notRun: [] }))
     assert.equal(gate(result, 'running').outcome, 'failed')
+  })
+
+  it('does not fail a Page whose calculations all wait for a button', () => {
+    // An ordinary Page that asks before it works. Refusing it here failed every one of them.
+    const result = validate(inputFor(build(spec()), false, { results: [], notRun: ['flight'] }))
+    assert.equal(gate(result, 'running').outcome, 'passed')
+    assert.ok(gate(result, 'running').because[0].includes('waits for a button'))
   })
 
   it('fails when the Page shows a property the calculation does not return', () => {
@@ -408,10 +415,54 @@ describe('whatToRun', () => {
     assert.deepEqual(plan.waiting, ['later'])
   })
 
-  it('never includes a button, because running one is pressing something on somebody’s behalf', () => {
+  it('leaves a button out by default, because running one is pressing something on somebody’s behalf', () => {
     const one = spec()
     const built = build(spec({ steps: [{ ...one.steps[0], when: 'button' }] }))
     assert.deepEqual(whatToRun(built.document).run, [])
     assert.deepEqual(whatToRun(built.document).waiting, ['flight'])
+  })
+
+  it('includes it when asked, which is what the trial run during generation does', () => {
+    const one = spec()
+    const built = build(spec({ steps: [{ ...one.steps[0], when: 'button' }] }))
+    assert.deepEqual(whatToRun(built.document, true).run, ['flight'])
+    assert.deepEqual(whatToRun(built.document, true).waiting, [])
+  })
+
+  it('includes a calculation no field reaches, which is what a Page of constants is', () => {
+    // 52 choose 5 reads no box. Leaving it out was a Page that opened showing "nothing yet" for ever, because the
+    // only thing that ever triggered a calculation was somebody changing something.
+    const one = spec()
+    const built = build(
+      spec({
+        inputs: [one.inputs[0]],
+        steps: [
+          { ...one.steps[0], arguments: { speed: { input: 'speed' }, angle: { value: 45 }, gravity: { value: 9.81 } } },
+          { name: 'fixed', operation: 'statistics.summary', arguments: { values: { value: [1, 2, 3] } }, when: 'change' }
+        ],
+        outputs: [one.outputs[0], { name: 'mean', label: 'Average', display: 'statistic', step: 'fixed', pick: 'mean' }],
+        sections: [{ title: 'The throw', members: ['speed'] }, { title: 'Answers', members: ['range', 'mean'] }]
+      })
+    )
+    const plan = whatToRun(built.document)
+    assert.deepEqual([...plan.run].sort(), ['fixed', 'flight'])
+    assert.deepEqual(plan.waiting, [])
+  })
+
+  it('still leaves a literal-only calculation waiting when it waits for a button', () => {
+    const one = spec()
+    const built = build(
+      spec({
+        steps: [{ ...one.steps[0], when: 'button' }]
+      })
+    )
+    assert.deepEqual(whatToRun(built.document).run, [])
+    assert.deepEqual(whatToRun(built.document).waiting, ['flight'])
+  })
+
+  it('runs each calculation once even when several inputs feed it', () => {
+    const built = build(spec())
+    const plan = whatToRun(built.document, true)
+    assert.deepEqual(plan.run, ['flight'])
   })
 })

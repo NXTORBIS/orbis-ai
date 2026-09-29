@@ -151,6 +151,33 @@ export class GeneratedPages {
     return this.pending.delete(pageId)
   }
 
+  /**
+   * One calculation, for a Page that has been built and not yet kept.
+   *
+   * This exists because `pages:compute` resolves the Page in the register first, and a Page waiting to be kept is not
+   * in the register -- so the preview somebody is deciding about could not run a single calculation, and every answer
+   * on it read "nothing yet". Which is the worst possible thing for that screen to say: it is the screen whose entire
+   * job is to show what the Page does before anybody commits to it.
+   *
+   * It is not a way round the permission check. The operation must be one the pending Page's own manifest asked for,
+   * and that manifest's capabilities were derived from its calculations and checked by the gates before it got here.
+   * A Page that is not pending has no entry, so this reaches nothing.
+   */
+  tryOperation(pageId: string, operation: string, input: Record<string, unknown>): { ok: true; value: unknown } | { ok: false; message: string } {
+    const built = this.pending.get(pageId)
+    if (built === undefined) return { ok: false, message: 'That Page is no longer waiting to be kept.' }
+    const needed = Object.prototype.hasOwnProperty.call(this.o.allOperations, operation) ? this.o.allOperations[operation] : undefined
+    if (needed === undefined) return { ok: false, message: `Orbis Pages have no operation called "${operation}".` }
+    if (!built.manifest.capabilities.includes(needed)) {
+      return { ok: false, message: `This Page did not ask for ${needed}, so it cannot do that.` }
+    }
+    try {
+      return { ok: true, value: this.o.runOperation(operation, input) }
+    } catch (err) {
+      return { ok: false, message: err instanceof Error && err.message.length < 400 ? err.message : 'That calculation did not work.' }
+    }
+  }
+
   // ---------------------------------------------------------------- later versions
 
   /**

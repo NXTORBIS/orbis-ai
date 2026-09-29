@@ -21,7 +21,7 @@ type Generated = {
   stage: string
   sessionId: string
   history: { stage: string; at: number; note: string }[]
-  failure: { code: string; message: string } | null
+  failure: { code: string; message: string; problems: string[] } | null
   gates: { gate: string; outcome: string; because: string[] }[]
   because: string[]
   insteadOpen: string | null
@@ -66,7 +66,7 @@ export function DescribePanel({
   const [request, setRequest] = useState('')
   const [busy, setBusy] = useState(false)
   const [built, setBuilt] = useState<Generated | null>(null)
-  const [mine, setMine] = useState<{ sessionId: string; request: string; stage: string; updatedAt: number; message: string }[]>([])
+  const [mine, setMine] = useState<{ sessionId: string; request: string; stage: string; updatedAt: number; code: string; message: string }[]>([])
 
   const loadSessions = useCallback(async () => {
     const result = await window.api.pagesGenerateSessions()
@@ -163,7 +163,12 @@ export function DescribePanel({
               <li key={one.sessionId}>
                 <span className="page-label">{one.request}</span>
                 <span className="page-note">
-                  {STAGE_WORDS[one.stage] ?? one.stage}
+                  {/* A request nothing needed building for is not a request that failed. */}
+                  {one.code === 'nothing-to-build'
+                    ? 'Nothing needed building'
+                    : one.code === 'cannot-be-built'
+                      ? 'Orbis cannot work this out'
+                      : (STAGE_WORDS[one.stage] ?? one.stage)}
                   {one.message === '' ? '' : ` — ${one.message}`}
                 </span>
               </li>
@@ -187,17 +192,36 @@ function Outcome({
   onNotify(message: string, kind?: NoticeKind): void
 }): React.JSX.Element {
   if (built.page === null) {
+    // Nothing being built is not the same as something going wrong, and the two must not read alike. Being handed a
+    // Page that already does the job is the *best* outcome of the ladder -- saying "it did not work" there would
+    // teach somebody that the feature is unreliable when what happened is that it worked perfectly.
+    const heading =
+      built.insteadOpen !== null
+        ? 'There is already a Page for this'
+        : built.failure?.code === 'nothing-to-build'
+          ? 'Nothing needed building'
+          : built.failure?.code === 'cannot-be-built'
+            ? 'Orbis cannot work this out'
+            : (STAGE_WORDS[built.stage] ?? built.stage)
+    // The failure message and the reasons overlap: the same sentence arrives on both when the ladder is what ended
+    // it. Shown once.
+    const reasons = [
+      ...new Set([
+        ...(built.failure === null ? [] : [built.failure.message, ...built.failure.problems]),
+        ...built.because
+      ])
+    ]
     return (
       <section className="studio-group">
-        <h4 className="studio-h">{STAGE_WORDS[built.stage] ?? built.stage}</h4>
+        <h4 className="studio-h">{heading}</h4>
         {built.insteadOpen !== null && (
           <p className="page-note">
-            A Page that already exists answers this: <code>{built.insteadOpen}</code>
+            <code>{built.insteadOpen}</code>
           </p>
         )}
         {/* The reasons, all of them. A refusal somebody cannot argue with is one they cannot work around either. */}
         <ul className="page-list">
-          {(built.failure === null ? built.because : [built.failure.message, ...built.because]).map((one, i) => (
+          {reasons.map((one, i) => (
             <li key={i} className="page-note">
               {one}
             </li>
@@ -252,7 +276,7 @@ function Outcome({
         The real thing, running under the Page's own identity, before anybody keeps it. Everything a Page shows comes
         back from an engine through `pages:compute`, so this is not a preview of what it would do -- it is what it does.
       */}
-      <RunDocument pageId={built.page.pageId} document={built.page.document as PageDocument} onNotify={onNotify} />
+      <RunDocument pageId={built.page.pageId} document={built.page.document as PageDocument} onNotify={onNotify} pending />
     </section>
   )
 }
@@ -438,13 +462,16 @@ export function GeneratedHistory({
 export function RunDocument({
   pageId,
   document,
-  onNotify
+  onNotify,
+  pending = false
 }: {
   pageId: string
   document: PageDocument
   onNotify(message: string, kind?: NoticeKind): void
+  /** True while the Page is built and not yet kept, when the register does not know about it. */
+  pending?: boolean
 }): React.JSX.Element {
-  const { state, running, change, run } = useDocumentRunner(document, pageId, onNotify)
+  const { state, running, change, run } = useDocumentRunner(document, pageId, onNotify, pending)
   return (
     <div className="studio-preview" aria-busy={running}>
       {document.components.map((component) => (

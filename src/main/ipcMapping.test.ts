@@ -189,7 +189,7 @@ test('the boundary is a known size, so the migration can be estimated rather tha
   //
   // The password crosses on the export and import channels and nothing derived from it comes back on any of them.
   //
-  // 421 → 431: Pages that did not exist yet. Ten, and the count is the shape of the feature rather than an accident.
+  // 421 → 432: Pages that did not exist yet. Eleven, and the count is the shape of the feature rather than an accident.
   // One builds, and building keeps nothing -- so one keeps and one throws away, because a model writing a calculator
   // is something somebody should look at before it joins their library. One builds an existing Page again, which adds
   // a version rather than replacing one. One reads the history, and two choose which version opens, because going
@@ -199,5 +199,5 @@ test('the boundary is a known size, so the migration can be estimated rather tha
   //
   // Nothing here grants anything. What a generated Page is allowed to do is computed from the calculations it uses,
   // in the compiler, and travels in its manifest like every other Page's -- there is no channel that could widen it.
-  assert.ok(code.length <= 431, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
+  assert.ok(code.length <= 432, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
 })

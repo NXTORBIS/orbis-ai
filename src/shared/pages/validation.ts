@@ -377,6 +377,17 @@ function running(evidence: RunEvidence | undefined, document: PageDocument): Gat
     }
   }
   if (evidence.results.length === 0) {
+    // Nothing having run is only a failure when there was nothing to run. A Page whose calculations all wait for a
+    // button is a perfectly ordinary Page -- refusing it here failed every Page that asks before it works.
+    if (evidence.notRun.length > 0) {
+      return {
+        gate: 'running',
+        outcome: 'passed',
+        because: [
+          `Nothing runs on its own; all ${evidence.notRun.length} calculation${evidence.notRun.length === 1 ? '' : 's'} wait${evidence.notRun.length === 1 ? 's' : ''} for a button.`
+        ]
+      }
+    }
     return { gate: 'running', outcome: 'failed', because: ['It was run and nothing calculated anything.'] }
   }
   const missing = missingPicks(document, evidence)
@@ -423,13 +434,20 @@ export function validate(input: ValidateInput): ValidationResult {
 /**
  * The computations a caller should run to produce `RunEvidence`.
  *
- * Every `change` computation, in the order the builder would run them, from the Page's starting values. A `button`
- * computation is deliberately not included: running one means pressing something on somebody's behalf, and the
- * result would not be evidence about the Page opening.
+ * Every `change` computation, in the order the builder would run them, from the Page's starting values.
+ *
+ * `alsoButtons` includes the ones that wait to be asked, and whether to pass it is a real distinction rather than a
+ * convenience. For a Page that exists and belongs to somebody, running a button's calculation is pressing something
+ * on their behalf, and the answer would not be evidence about the Page *opening*. During generation there is no
+ * "their behalf": the Page is not anybody's yet, and every calculation it can contain is a pure computation from the
+ * catalogue with nothing to act on. So the trial run passes true -- and without it a Page whose work all waits for a
+ * button gets no check at all, which is exactly the Page whose properties are most likely to be guessed wrong.
  */
-export function whatToRun(document: PageDocument): { run: readonly string[]; waiting: readonly string[] } {
+export function whatToRun(document: PageDocument, alsoButtons = false): { run: readonly string[]; waiting: readonly string[] } {
   const run: string[] = []
   const seen = new Set<string>()
+  // Following the fields first gets the order right where order matters: a calculation reading what another wrote
+  // comes after it.
   for (const field of document.fields) {
     if (field.computed === true) continue
     for (const computation of computationsAfter(document, field.name)) {
@@ -438,10 +456,18 @@ export function whatToRun(document: PageDocument): { run: readonly string[]; wai
       run.push(computation.name)
     }
   }
-  return {
-    run: Object.freeze(run),
-    waiting: Object.freeze(document.computations.filter((one) => !seen.has(one.name)).map((one) => one.name))
+  // Then the ones no field reaches. A calculation of nothing but literals -- 52 choose 5 -- is reached by no field
+  // change and still has to run, and leaving it out was a Page that opened showing "nothing yet" for ever.
+  for (const computation of document.computations) {
+    if (computation.when !== 'change' || seen.has(computation.name)) continue
+    seen.add(computation.name)
+    run.push(computation.name)
   }
+  const waiting = document.computations.filter((one) => !seen.has(one.name)).map((one) => one.name)
+  if (!alsoButtons) return { run: Object.freeze(run), waiting: Object.freeze(waiting) }
+  // In declaration order, which `check` has already established is an order that works: a computation may only read
+  // fields, and a cycle among them was refused.
+  return { run: Object.freeze([...run, ...waiting]), waiting: Object.freeze([]) }
 }
 
 export const VALIDATION_ASSUMPTIONS: readonly string[] = Object.freeze([

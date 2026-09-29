@@ -291,8 +291,14 @@ const text = (value: unknown, at: string, what: string, limit: number, add: Add,
  * three operations rather than four hundred.
  */
 export interface OperationSignature {
-  /** Argument name to whether it may be left out. */
-  readonly [argument: string]: { optional: boolean }
+  /**
+   * What each argument is, where it is known.
+   *
+   * `options` is the closed set a choice argument accepts. A word outside it is refused here with the real list, so
+   * a model that guessed `hands` where the engine wanted `combinations` is told, rather than being refused later by
+   * the engine with a sentence nobody can act on.
+   */
+  readonly [argument: string]: { optional: boolean; options?: readonly string[] }
 }
 
 export function checkSpec(
@@ -618,9 +624,21 @@ export function checkSpec(
         }
       }
       for (const [argument, about] of Object.entries(signature)) {
-        if (about.optional) continue
-        if (!argumentNames.includes(argument)) {
+        if (!about.optional && !argumentNames.includes(argument)) {
           add(`${at}.arguments`, 'missing-argument', `${operation} needs "${argument}", and "${name}" does not give it one.`)
+          bad = true
+          continue
+        }
+        // A choice given as a literal is checked against what the engine accepts. Only a literal: a choice coming
+        // from an input is whatever somebody picks on the day, and the input's own options were checked above.
+        const given = Object.prototype.hasOwnProperty.call(resolved, argument) ? resolved[argument] : undefined
+        if (about.options === undefined || given === undefined || !('value' in given)) continue
+        if (typeof given.value !== 'string' || !about.options.includes(given.value)) {
+          add(
+            `${at}.arguments.${argument}`,
+            'not-an-option',
+            `${operation} does not accept ${JSON.stringify(given.value)} for "${argument}". It accepts ${about.options.join(', ')}.`
+          )
           bad = true
         }
       }

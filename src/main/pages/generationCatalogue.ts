@@ -133,20 +133,81 @@ export const GENERATION_CATALOGUE: Readonly<Record<string, Readonly<Record<strin
 })
 
 /**
- * The catalogue in the shape `checkSpec` wants.
+ * What a `choice` argument will actually accept.
  *
- * A separate representation rather than a shared one, because the two answer different questions: this file records
- * *what kind* each argument is, for the model, and the checker only needs to know *whether it may be left out*. The
- * conversion is here so there is one place the two agree.
+ * Without this a catalogued operation is unusable: `combinatorics.count(what: choice, n: number, r: number)` tells a
+ * model nothing about what `what` may be, so it guesses a word the engine has never heard of -- or, worse, decides
+ * the operation cannot do the job and says so. That is what this fixes: asking for the number of five-card hands was
+ * refused as impossible while `what: 'combinations'` was sitting in the bridge the whole time.
+ *
+ * Read out of the same `case` blocks as the arguments, and checked against them by the same test, so a new option in
+ * an engine appears here or the test fails.
  */
-export const SPEC_SIGNATURES: Readonly<Record<string, Readonly<Record<string, { optional: boolean }>>>> = Object.freeze(
-  Object.fromEntries(
-    Object.entries(GENERATION_CATALOGUE).map(([operation, signature]) => [
-      operation,
-      Object.freeze(Object.fromEntries(Object.entries(signature).map(([argument, kind]) => [argument, { optional: kind.endsWith('?') }])))
-    ])
+export const CHOICE_OPTIONS: Readonly<Record<string, Readonly<Record<string, readonly string[]>>>> = Object.freeze({
+  'algebra.logic': { what: ['table', 'equivalent', 'dnf', 'cnf'] },
+  'algebra.sequence': { kind: ['arithmetic', 'geometric', 'recursive', 'explicit'], what: ['terms', 'analyse'] },
+  'algebra.series': { knownForm: ['geometric', 'harmonic', 'p-series'] },
+  'algebra.simplify': { domain: ['real', 'positive', 'non-negative', 'non-zero', 'integer', 'natural', 'complex'] },
+  'calculus.pde': { which: ['heat', 'wave'] },
+  'combinatorics.count': { what: ['factorial', 'combinations', 'permutations', 'multinomial', 'stars-and-bars', 'derangements'] },
+  'combinatorics.enumerate': { kind: ['permutations', 'combinations'] },
+  'geometry.claim': { kind: ['collinear', 'concurrent', 'equal-length', 'perpendicular', 'parallel', 'equal-angle', 'on-circle', 'congruent-triangles'] },
+  'geometry.solid': { shape: ['cube', 'cuboid', 'sphere', 'cylinder', 'cone', 'pyramid', 'prism'] },
+  'measurement.repeated': { provenance: ['measured', 'simulated', 'derived', 'imported', 'assumed', 'unknown'] },
+  'motion.compare-projectile': { drag: ['none', 'linear', 'quadratic'] },
+  'optimise.linear': { direction: ['minimise', 'maximise'] },
+  'plot.axis': { scale: ['linear', 'log', 'symlog'] },
+  'precision.combine': { operation: ['add', 'subtract', 'multiply', 'divide', 'power'] },
+  'precision.write': { notation: ['plain', 'scientific', 'engineering'] },
+  'relation.properties': { what: ['properties', 'classes', 'order'] },
+  'simulate.integrate': { method: ['euler', 'rk4', 'adaptive'] },
+  'simulate.invariant': { method: ['euler', 'rk4', 'adaptive'] },
+  'simulate.steps': { method: ['euler', 'rk4'] },
+  'statistics.correlate': { kind: ['pearson', 'spearman'] },
+  'statistics.histogram': { rule: ['freedman-diaconis', 'sturges', 'square-root', 'fixed'] },
+  'statistics.outliers': { method: ['iqr', 'z-score', 'modified-z'] },
+  'statistics.test': { kind: ['one-sample', 'two-sample', 'paired', 'chi-square'] },
+  'wave.standing': { boundary: ['both-fixed', 'both-free', 'one-fixed-one-free'] },
+})
+
+/**
+ * The catalogue in the shape `checkSpec` wants -- with **every argument optional**.
+ *
+ * That looks like giving up on half the check, and it is the opposite. The two directions fail completely
+ * differently:
+ *
+ * - An argument an operation does **not take** is ignored by the engine. The Page works, the answer is wrong or
+ *   fixed, and a control somebody moves does nothing at all. Nothing catches that later, so it is caught here.
+ * - An argument an operation **needs** and did not get is refused by the engine, loudly, with its own sentence about
+ *   what was missing -- and the trial run during generation hits exactly that, and hands the sentence back for a
+ *   second attempt.
+ *
+ * And requiredness is a thing this file cannot honestly know. `combinatorics.count` reads `n` and `r` for a
+ * combination and `parts` and `total` for a partition; the bridge reads all four somewhere in its case, and no amount
+ * of looking at the text says which go together. Marking them all required refused every correct specification for
+ * it, which is what this comment is here to stop somebody helpfully reinstating.
+ */
+export const SPEC_SIGNATURES: Readonly<Record<string, Readonly<Record<string, { optional: boolean; options?: readonly string[] }>>>> =
+  Object.freeze(
+    Object.fromEntries(
+      Object.entries(GENERATION_CATALOGUE).map(([operation, signature]) => {
+        const options = Object.prototype.hasOwnProperty.call(CHOICE_OPTIONS, operation) ? CHOICE_OPTIONS[operation] : {}
+        return [
+          operation,
+          Object.freeze(
+            Object.fromEntries(
+              Object.keys(signature).map((argument) => [
+                argument,
+                Object.prototype.hasOwnProperty.call(options, argument)
+                  ? { optional: true, options: options[argument] }
+                  : { optional: true }
+              ])
+            )
+          )
+        ]
+      })
+    )
   )
-)
 
 /** Operation to the capability it needs, for the operations a generated Page may use. */
 export const generationOperations = (all: Readonly<Record<string, string>>): Readonly<Record<string, string>> =>
@@ -221,8 +282,13 @@ export function catalogueForPrompt(): string {
   for (const operation of CATALOGUED_OPERATIONS) {
     const family = operation.slice(0, operation.indexOf('.'))
     const signature = GENERATION_CATALOGUE[operation]
+    const options = Object.prototype.hasOwnProperty.call(CHOICE_OPTIONS, operation) ? CHOICE_OPTIONS[operation] : {}
     const rendered = Object.entries(signature)
-      .map(([name, kind]) => (kind.endsWith('?') ? `${name}?: ${kind.slice(0, -1)}` : `${name}: ${kind}`))
+      .map(([name, kind]) => {
+        const bare = kind.endsWith('?') ? kind.slice(0, -1) : kind
+        const shown = Object.prototype.hasOwnProperty.call(options, name) ? options[name].join('|') : bare
+        return kind.endsWith('?') ? `${name}?: ${shown}` : `${name}: ${shown}`
+      })
       .join(', ')
     families.set(family, [...(families.get(family) ?? []), `  ${operation}(${rendered})`])
   }

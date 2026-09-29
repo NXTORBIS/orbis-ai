@@ -296,6 +296,45 @@ describe('checking arguments against what an operation really takes', () => {
     assert.ok(problems[0].message.includes('needs \"angle\"'))
   })
 
+  it('refuses a choice the engine has never heard of, and says what it accepts', () => {
+    const withChoice = {
+      'motion.projectile': {
+        speed: { optional: false },
+        angle: { optional: false },
+        mode: { optional: true, options: ['flat', 'from-height'] }
+      }
+    }
+    const spec = minimal()
+    const steps = [{ ...spec.steps[0], arguments: { speed: { input: 'speed' }, angle: { input: 'angle' }, mode: { value: 'ballistic' } } }]
+    const problems = specErrors(checkSpec({ ...spec, steps }, OPERATIONS, withChoice).problems)
+    assert.equal(problems[0].code, 'not-an-option')
+    assert.ok(problems[0].message.includes('flat, from-height'))
+  })
+
+  it('accepts a choice that is one of them', () => {
+    const withChoice = {
+      'motion.projectile': { speed: { optional: false }, angle: { optional: false }, mode: { optional: true, options: ['flat'] } }
+    }
+    const spec = minimal()
+    const steps = [{ ...spec.steps[0], arguments: { speed: { input: 'speed' }, angle: { input: 'angle' }, mode: { value: 'flat' } } }]
+    assert.deepEqual(specErrors(checkSpec({ ...spec, steps }, OPERATIONS, withChoice).problems), [])
+  })
+
+  it('does not second-guess a choice that comes from an input', () => {
+    // Whatever somebody picks on the day. The input's own options were checked when it was read.
+    const withChoice = {
+      'motion.projectile': { speed: { optional: false }, angle: { optional: false }, mode: { optional: true, options: ['flat'] } }
+    }
+    const spec = minimal()
+    const inputs = [
+      ...spec.inputs,
+      { name: 'mode', kind: 'choice' as const, label: 'Ground', options: [{ value: 'flat', label: 'Flat' }] }
+    ]
+    const steps = [{ ...spec.steps[0], arguments: { speed: { input: 'speed' }, angle: { input: 'angle' }, mode: { input: 'mode' } } }]
+    const sections = [{ title: 'The throw', members: ['speed', 'angle', 'mode'] }, spec.sections[1]]
+    assert.deepEqual(specErrors(checkSpec({ ...spec, inputs, steps, sections }, OPERATIONS, withChoice).problems), [])
+  })
+
   it('checks nothing for an operation it has no signature for, rather than assuming it takes nothing', () => {
     const spec = minimal()
     const steps = [

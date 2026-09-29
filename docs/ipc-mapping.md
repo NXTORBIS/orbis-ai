@@ -219,6 +219,7 @@ what a profile has *decided* is persisted, which is why permissions and projects
 | `pages:projects`, `pages:project-save`, `pages:project-delete` | A Page's own saved work, in the profile's own store, size-capped before it is written |
 | `pages:generate` | A Page built for a request that nothing in the library answers. Runs the whole ladder first, so most requests never reach a model. Becomes Mojo onto the same service; the model call is already a network request made by the browser process |
 | `pages:generate-keep`, `pages:generate-discard` | Keeping a built Page, or throwing it away. Separate from building on purpose: a model writing a calculator is something somebody should look at before it joins their library |
+| `pages:generate-try` | One calculation for a Page that is built and not yet kept. Its own channel because `pages:compute` resolves the Page in the register and this one is not there yet; narrow by construction, since it answers only for a Page the coordinator is holding and only for a capability that Page's manifest asked for |
 | `pages:generate-rebuild` | A Page built again from what it is and what somebody wants changed. Adds a version beside the one in use and never replaces it |
 | `pages:generate-history` | One Page's versions, what each was asked to be, and which is in use |
 | `pages:generate-publish`, `pages:generate-withdraw` | Choosing which version opens, and taking one out of use. Going back is publishing an older version rather than building it again |
@@ -278,7 +279,7 @@ library's reading list, saved pages, pictures of pages and download bookkeeping.
 | Profile Lock | 3 | Unchanged; the operating-system events become Chromium's own observers |
 | Security activity | 2 | Unchanged |
 | Markets | 9 | Unchanged; the providers are HTTP and WebSocket either way |
-| Orbis Pages | 36 | A WebUI host plus Mojo onto the same service; `pages:compute` is the narrow interface a Page's renderer gets, and the Page frames themselves are `WebContents` with a `URLLoaderFactory` for their own origin |
+| Orbis Pages | 37 | A WebUI host plus Mojo onto the same service; `pages:compute` is the narrow interface a Page's renderer gets, and the Page frames themselves are `WebContents` with a `URLLoaderFactory` for their own origin |
 | Control layer | 12 | Unchanged; the browser side is Chromium's capabilities |
 | Library (Orbis's own memory of searches, shortcuts and picks, plus a copy of Chromium's lists) | 8 | Small |
 | Opening the Orbis browser, window fullscreen | 4 | Small |

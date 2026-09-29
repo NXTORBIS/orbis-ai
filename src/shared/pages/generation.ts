@@ -92,7 +92,12 @@ const NEXT: Readonly<Record<Stage, readonly Stage[]>> = Object.freeze({
 })
 
 export type FailureCode =
+  /** Nothing needed building: something already does this, or it was never a Page. */
   | 'nothing-to-build'
+  /** It needed building and could not be: nothing Orbis has can work this out. Said apart from the above because
+   *  "there is already a Page for this" is the best outcome and "Orbis cannot do this" is the worst, and a screen
+   *  that renders them the same teaches somebody the feature is unreliable. */
+  | 'cannot-be-built'
   | 'no-model'
   | 'model-failed'
   | 'spec-rejected'

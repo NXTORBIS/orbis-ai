@@ -171,7 +171,9 @@ describe('building a Page', () => {
     const { service } = serviceWith([{ specVersion: 1, cannot: 'Orbis has no tide tables.' }])
     const outcome = await service.generate('p1', 'calculate the tide height at dover tomorrow')
     assert.equal(outcome.session.stage, 'failed')
-    assert.equal(outcome.session.failure?.code, 'nothing-to-build')
+    // Distinct from `nothing-to-build`, which means something already answers it. "Orbis cannot work this out" and
+    // "there is already a Page for this" must not read alike.
+    assert.equal(outcome.session.failure?.code, 'cannot-be-built')
     assert.ok(outcome.session.failure?.message.includes('tide tables'))
   })
 })
@@ -286,15 +288,28 @@ describe('the trial run', () => {
     }
   })
 
-  it('does not press a button on somebody’s behalf', async () => {
+  it('checks a Page whose work waits for a button, rather than leaving it the one Page nobody checked', async () => {
     const waiting = goodSpec()
     ;(waiting.steps as Record<string, unknown>[])[0].when = 'button'
     const { service } = serviceWith([waiting])
     const outcome = await service.generate('p1', 'calculate the range of a projectile')
+    assert.equal(outcome.session.stage, 'ready', JSON.stringify(outcome.session.failure))
     assert.ok(outcome.compiled !== null)
     const evidence = service.tryRun(outcome.compiled.document)
-    assert.deepEqual(evidence.results, [])
-    assert.deepEqual(evidence.notRun, ['flight'])
+    assert.deepEqual(evidence.results.map((one) => one.ok), [true])
+    assert.ok(evidence.results[0].keys?.includes('range'))
+  })
+
+  it('catches a wrong property on a Page whose work waits for a button', async () => {
+    // The whole reason the trial run presses them. Before it did, this Page was built, kept, and showed an empty box.
+    const waiting = goodSpec()
+    ;(waiting.steps as Record<string, unknown>[])[0].when = 'button'
+    ;(waiting.outputs as Record<string, unknown>[])[0].pick = 'distance'
+    const { service, asked } = serviceWith([waiting, goodSpec()])
+    const outcome = await service.generate('p1', 'calculate the range of a projectile')
+    assert.equal(asked.length, 2)
+    assert.ok(asked[1].user.includes('"distance" is not something flight returns'))
+    assert.equal(outcome.session.stage, 'ready')
   })
 
   it('notices an engine that refuses inside its answer rather than by throwing', async () => {

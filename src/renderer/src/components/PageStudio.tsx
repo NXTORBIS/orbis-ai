@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   AlertTriangle,
   Check,
@@ -32,6 +32,7 @@ import {
   type PageDocument,
   type RunState
 } from '../../../shared/pages/builder'
+import { whatToRun } from '../../../shared/pages/validation'
 import type { PageAuditElement, PageCard, PageComputeResult } from '../../../shared/types'
 
 /**
@@ -141,7 +142,15 @@ interface CheckAnswer {
 export function useDocumentRunner(
   document: PageDocument,
   pageId: string,
-  onNotify: (message: string, kind?: NoticeKind) => void
+  onNotify: (message: string, kind?: NoticeKind) => void,
+  /**
+   * Whether this Page is one that has been built and not yet kept.
+   *
+   * It changes which door the calculations go through, and that is not a detail. `pages:compute` resolves the Page in
+   * the register first, and a Page waiting to be kept is not in the register -- so without this the preview somebody
+   * is deciding about can run nothing at all, and every answer on it reads "nothing yet".
+   */
+  pending = false
 ): {
   state: RunState
   running: boolean
@@ -157,6 +166,43 @@ export function useDocumentRunner(
     setState(initialState(document))
   }, [document.fields])
 
+  /**
+   * Worked out once, on opening.
+   *
+   * Without this a Page opens showing "nothing yet" beside every answer until somebody touches a control, which
+   * reads as a Page that is broken rather than one that is waiting. Its starting values are real values -- the
+   * specification gave them, and generation already ran the Page with exactly these and checked what came back -- so
+   * there is an answer to show and no reason to make somebody produce it.
+   *
+   * Only the calculations that happen on their own. A button still waits to be pressed.
+   */
+  useEffect(() => {
+    let cancelled = false
+    const start = initialState(document)
+    // The same list, in the same order, that generation ran the Page with before anybody was offered it. One
+    // implementation, so what a Page shows on opening is what was checked.
+    const named = new Set(whatToRun(document).run)
+    const first = document.computations.filter((one) => named.has(one.name))
+    if (first.length === 0) return
+    void (async () => {
+      // Read through a ref so this does not depend on `carry`, which changes with `state` and would restart the
+      // opening run on its own first result.
+      if (!cancelled) await openingRun.current(start, first)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [document])
+
+  /**
+   * The opening run, held in a ref.
+   *
+   * `carry` is rebuilt whenever `state` changes, so an effect depending on it would fire again the moment its own
+   * first result landed, and again after that -- a Page that recalculates itself for ever. The ref is the same
+   * object across renders, so the effect above depends only on the document.
+   */
+  const openingRun = useRef<(from: RunState, computations: readonly Computation[]) => Promise<void>>(async () => {})
+
   /** A list of computations run in order, each seeing what the one before it wrote. */
   const carry = useCallback(
     async (from: RunState, computations: readonly Computation[]): Promise<void> => {
@@ -166,11 +212,13 @@ export function useDocumentRunner(
       try {
         for (const computation of computations) {
           const input = argumentsFor(computation, current)
-          const result = (await window.api.pagesCompute({
-            pageId,
-            operation: computation.operation,
-            input: input as Record<string, unknown>
-          })) as PageComputeResult
+          const result = (pending
+            ? await window.api.pagesGenerateTry(pageId, computation.operation, input as Record<string, unknown>)
+            : await window.api.pagesCompute({
+                pageId,
+                operation: computation.operation,
+                input: input as Record<string, unknown>
+              })) as PageComputeResult
           if (!result || !('ok' in result) || !result.ok) {
             // The engine's own sentence, against the field that was being worked out.
             onNotify(`${computation.name}: ${(result as { message?: string })?.message ?? 'that did not work'}`, 'error')
@@ -193,7 +241,7 @@ export function useDocumentRunner(
         setRunning(false)
       }
     },
-    [document, pageId, onNotify]
+    [document, pageId, onNotify, pending]
   )
 
   /**
@@ -224,6 +272,8 @@ export function useDocumentRunner(
     },
     [document, state, carry]
   )
+
+  openingRun.current = carry
 
   const reset = useCallback(() => setState(initialState(document)), [document])
 

@@ -7,9 +7,11 @@ import { describe, it } from 'node:test'
 import {
   CATALOGUED_OPERATIONS,
   catalogueForPrompt,
+  CHOICE_OPTIONS,
   checkArguments,
   GENERATION_CATALOGUE,
   signatureOf,
+  SPEC_SIGNATURES,
   type ArgumentKind
 } from './generationCatalogue.ts'
 import { KNOWN_OPERATIONS } from './service.ts'
@@ -47,6 +49,7 @@ const KIND: Readonly<Record<string, ArgumentKind>> = {
 }
 
 const READS = /read\.(has|text|number|optionalNumber|numbers|list|flag|choice|integer|bigint|optionalText|value|object|table|rows)\(\s*'([A-Za-z0-9_]+)'/g
+const CHOICES = /read\.choice\(\s*'([A-Za-z0-9_]+)'\s*,\s*\[([^\]]*)\]/g
 /** A helper handed the whole reader, or the whole input, reads arguments this cannot see. */
 const HIDES = /\b[A-Za-z_][A-Za-z0-9_]*\(\s*(?:read|input)\s*[,)]/
 const CASE = /^\s*case '([a-z]+\.[a-z-]+)':/
@@ -54,6 +57,8 @@ const CASE = /^\s*case '([a-z]+\.[a-z-]+)':/
 interface Derived {
   args: [string, string][]
   hidden: boolean
+  /** The closed set each choice argument accepts, as the bridge writes it. */
+  choices: Record<string, string[]>
 }
 
 function derive(): Map<string, Derived> {
@@ -70,7 +75,15 @@ function derive(): Map<string, Derived> {
         if (!args.some(([name]) => name === match[2])) args.push([match[2], match[1]])
       }
       const hidden = HIDES.test(text)
-      for (const operation of current) out.set(operation, { args, hidden })
+      const choices: Record<string, string[]> = {}
+      for (const match of text.matchAll(CHOICES)) {
+        const options = match[2]
+          .split(',')
+          .map((one) => one.trim().replace(/^['"]|['"]$/g, ''))
+          .filter((one) => one.length > 0)
+        if (options.length > 0) choices[match[1]] = options
+      }
+      for (const operation of current) out.set(operation, { args, hidden, choices })
     }
     for (const line of source) {
       const match = CASE.exec(line)
@@ -168,6 +181,57 @@ describe('checkArguments', () => {
       assert.equal(signatureOf(sneaky), undefined, sneaky)
       assert.equal(checkArguments(sneaky, []).length, 1, sneaky)
     }
+  })
+})
+
+describe('the choices a catalogued operation accepts', () => {
+  it('lists exactly what each bridge accepts', () => {
+    const derived = derive()
+    for (const operation of CATALOGUED_OPERATIONS) {
+      const should = derived.get(operation)?.choices ?? {}
+      const has = Object.prototype.hasOwnProperty.call(CHOICE_OPTIONS, operation) ? CHOICE_OPTIONS[operation] : {}
+      assert.deepEqual(
+        Object.fromEntries(Object.entries(has).map(([k, v]) => [k, [...v]])),
+        Object.keys(should).length === 0 ? {} : should,
+        operation
+      )
+    }
+  })
+
+  it('knows what combinatorics.count actually does', () => {
+    // The concrete case this exists for: without the options, a model asked for the number of five-card hands
+    // decided no operation could do it, while `what: 'combinations'` was in the bridge the whole time.
+    assert.ok(CHOICE_OPTIONS['combinatorics.count'].what.includes('combinations'))
+  })
+
+  it('puts them in front of the model rather than leaving it to guess', () => {
+    assert.ok(catalogueForPrompt().includes('what: factorial|combinations|permutations'))
+  })
+
+  it('found choices at all, so a broken extractor cannot pass by finding none', () => {
+    assert.ok(Object.keys(CHOICE_OPTIONS).length > 10, `only ${Object.keys(CHOICE_OPTIONS).length}`)
+  })
+})
+
+describe('SPEC_SIGNATURES', () => {
+  it('accepts every argument and requires none, on purpose', () => {
+    // Requiredness is a thing this file cannot honestly know: one operation reads different arguments for different
+    // modes, and the bridge reads all of them somewhere in its case. The check that matters is the other direction.
+    for (const [operation, signature] of Object.entries(SPEC_SIGNATURES)) {
+      assert.deepEqual(Object.keys(signature), Object.keys(GENERATION_CATALOGUE[operation]), operation)
+      for (const [argument, about] of Object.entries(signature)) {
+        assert.equal(about.optional, true, `${operation}.${argument}`)
+      }
+    }
+  })
+
+  it('lets a mode-dependent operation through with only the arguments its mode uses', () => {
+    // `combinatorics.count` reads n and r for a combination and parts and total for a partition. Requiring all four
+    // refused every correct specification for it, which is what this test is here to stop coming back.
+    const signature = SPEC_SIGNATURES['combinatorics.count']
+    assert.ok(signature !== undefined)
+    assert.ok(Object.keys(signature).length >= 4)
+    assert.ok(Object.values(signature).every((one) => one.optional))
   })
 })
 

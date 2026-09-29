@@ -172,6 +172,7 @@ const api: NxtorbisApi = {
   pagesGenerate: (request, intents) => ipcRenderer.invoke('pages:generate', request, intents),
   pagesGenerateKeep: (pageId) => ipcRenderer.invoke('pages:generate-keep', pageId),
   pagesGenerateDiscard: (pageId) => ipcRenderer.invoke('pages:generate-discard', pageId),
+  pagesGenerateTry: (pageId, operation, input) => ipcRenderer.invoke('pages:generate-try', pageId, operation, input),
   pagesGenerateRebuild: (pageId, change) => ipcRenderer.invoke('pages:generate-rebuild', pageId, change),
   pagesGenerateHistory: (pageId) => ipcRenderer.invoke('pages:generate-history', pageId),
   pagesGeneratePublish: (pageId, versionId) => ipcRenderer.invoke('pages:generate-publish', pageId, versionId),

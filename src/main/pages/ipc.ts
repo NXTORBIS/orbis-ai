@@ -410,7 +410,16 @@ export function registerPagesIpc(o: PagesIpcOptions): void {
       sessionId: built.session.sessionId,
       // The stages it went through, so a screen can show what happened rather than only how it ended.
       history: built.session.history,
-      failure: built.session.failure,
+      // Including the problems. "This description could not be turned into a Page" is not something anybody can act
+      // on; "steps[0].arguments.n: combinatorics.count does not take n" is.
+      failure:
+        built.session.failure === null
+          ? null
+          : {
+              code: built.session.failure.code,
+              message: built.session.failure.message,
+              problems: built.session.failure.problems.map((one) => (one.at === '' ? one.message : `${one.at}: ${one.message}`))
+            },
       gates: built.session.validation?.gates ?? [],
       because: built.because,
       insteadOpen: built.insteadOpen,
@@ -429,6 +438,22 @@ export function registerPagesIpc(o: PagesIpcOptions): void {
   handle('pages:generate-discard', async (_id, pageId) => {
     if (!o.generated) return noGenerator
     return { discarded: o.generated.discard(str(pageId, 80)) }
+  })
+
+  /**
+   * A calculation for a Page that is built and not yet kept.
+   *
+   * Separate from `pages:compute` because that one resolves the Page in the register, and this Page is not in it.
+   * Narrow by construction: the coordinator only answers for a Page it is holding, and only for a capability that
+   * Page's own manifest asked for.
+   */
+  handle('pages:generate-try', async (_id, pageId, operation, input) => {
+    if (!o.generated) return noGenerator
+    return o.generated.tryOperation(
+      str(pageId, 80),
+      str(operation, 80),
+      typeof input === 'object' && input !== null && !Array.isArray(input) ? (input as Record<string, unknown>) : {}
+    )
   })
 
   handle('pages:generate-rebuild', async (id, pageId, change) => {
@@ -487,6 +512,9 @@ export function registerPagesIpc(o: PagesIpcOptions): void {
         request: one.request,
         stage: one.stage,
         updatedAt: one.updatedAt,
+        // The code as well as the sentence. "Nothing was built" and "it went wrong" are both `failed`, and a screen
+        // that cannot tell them apart tells somebody the feature is unreliable when it worked perfectly.
+        code: one.failure?.code ?? '',
         message: one.failure?.message ?? ''
       }))
     }

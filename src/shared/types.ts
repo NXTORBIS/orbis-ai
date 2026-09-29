@@ -1666,7 +1666,7 @@ export interface NxtorbisApi {
         stage: string
         sessionId: string
         history: { stage: string; at: number; note: string }[]
-        failure: { code: string; message: string } | null
+        failure: { code: string; message: string; problems: string[] } | null
         gates: { gate: string; outcome: string; because: string[] }[]
         because: string[]
         insteadOpen: string | null
@@ -1689,6 +1689,12 @@ export interface NxtorbisApi {
   >
   pagesGenerateKeep(pageId: string): Promise<{ kept: boolean; message: string; url: string | null } | { error: string; message?: string }>
   pagesGenerateDiscard(pageId: string): Promise<{ discarded: boolean } | { error: string; message?: string }>
+  /** One calculation for a Page that is built and not yet kept, which the register does not know about. */
+  pagesGenerateTry(
+    pageId: string,
+    operation: string,
+    input: Record<string, unknown>
+  ): Promise<{ ok: true; value: unknown } | { ok: false; message: string } | { error: string; message?: string }>
   /** A Page built again. Adds a version beside the one in use; it does not replace it. */
   pagesGenerateRebuild(
     pageId: string,
@@ -1725,7 +1731,7 @@ export interface NxtorbisApi {
   pagesGenerateWithdraw(pageId: string, versionId: string): Promise<{ withdrawn: boolean; message: string } | { error: string; message?: string }>
   pagesGenerateForget(pageId: string): Promise<{ forgotten: boolean } | { error: string; message?: string }>
   pagesGenerateSessions(): Promise<
-    | { sessions: { sessionId: string; request: string; stage: string; updatedAt: number; message: string }[] }
+    | { sessions: { sessionId: string; request: string; stage: string; updatedAt: number; code: string; message: string }[] }
     | { error: string; message?: string }
   >
   /** The document a generated Page opens as. */

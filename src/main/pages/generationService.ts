@@ -165,13 +165,14 @@ export class GenerationService {
   }
 
   /**
-   * Runs the Page the way opening it would, and records what came back.
+   * Runs the Page, and records what came back.
    *
-   * Only the calculations that happen on their own. Pressing a button on somebody's behalf is a different thing, and
-   * what it produced would not be evidence about the Page opening.
+   * Every calculation it contains, including the ones that wait for a button. See the note on `whatToRun` about why
+   * that is right here and wrong for a Page that already belongs to somebody: there is nobody's behalf to act on yet,
+   * and a Page whose work all waits for a button would otherwise be the one Page that gets no check at all.
    */
   tryRun(document: PageDocument): RunEvidence {
-    const plan = whatToRun(document)
+    const plan = whatToRun(document, true)
     const state = initialState(document)
     const values: Record<string, unknown> = { ...state.values }
     const results: RunEvidence['results'][number][] = []
@@ -308,7 +309,7 @@ Write it again, fixing those. Everything else about the format is the same.`
       // does not fit is worse than no Page.
       if (typeof raw.cannot === 'string') {
         return this.stop(session, {
-          code: 'nothing-to-build',
+          code: 'cannot-be-built',
           message: `This could not be built from the calculations Orbis has: ${raw.cannot.slice(0, 200)}`,
           problems: []
         })
