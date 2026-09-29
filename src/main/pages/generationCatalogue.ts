@@ -40,6 +40,18 @@ export type ArgumentKind = 'number' | 'number?' | 'text' | 'text?' | 'choice' | 
 /** Operation to its arguments. Derived from the bridges, and checked against them by a test. */
 export const GENERATION_CATALOGUE: Readonly<Record<string, Readonly<Record<string, ArgumentKind>>>> = Object.freeze({
   'algebra.logic': { what: 'choice', maxVariables: 'number?' },
+  'cite.bibliography': { references: 'list' },
+  'cite.identifier': { identifier: 'text' },
+  'date.from-julian-day': { julianDayNumber: 'number', calendar: 'choice' },
+  'date.leap-year': { year: 'number', calendar: 'choice' },
+  'date.timeline': { events: 'list', relations: 'number?' },
+  'measure.agreement': { ratings: 'list' },
+  'measure.inequality': { values: 'numbers', curvePoints: 'number?' },
+  'text.distance': { first: 'text', second: 'text', operations: 'number?' },
+  'text.overlap': { first: 'text', second: 'text', listLength: 'number?' },
+  'text.phonetic': { word: 'text' },
+  'text.readability': { text: 'text', topWords: 'number?' },
+  'text.stats': { text: 'text', topWords: 'number?' },
   'air.saturation': { celsius: 'number', formula: 'choice' },
   'air.standard': { altitude: 'number' },
   'farm.nutrients': { requirements: 'list' },

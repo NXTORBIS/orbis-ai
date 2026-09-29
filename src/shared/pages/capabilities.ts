@@ -265,6 +265,16 @@ export const CAPABILITIES: Record<string, CapabilityDefinition> = {
     consent: 'automatic',
     scope: 'none'
   }),
+  'computation.humanities': capability({
+    id: 'computation.humanities',
+    name: 'Dates, texts and references',
+    description:
+      'Convert dates between calendars and count the days between them, measure how hard a text is to read, format references in a named style, and work out survey reliability, agreement and inequality.',
+    category: 'computation',
+    risk: 'low',
+    consent: 'automatic',
+    scope: 'none'
+  }),
   'computation.wasm': capability({
     id: 'computation.wasm',
     name: 'Compiled code',

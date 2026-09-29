@@ -26,6 +26,7 @@ import { BadInput, ENGINE_CAPABILITY, runEngineOperation } from './engines.ts'
 import { EM_CAPABILITY, runEmOperation } from './emEngines.ts'
 import { ENGINEERING_CAPABILITY, runEngineeringOperation } from './engineeringEngines.ts'
 import { EARTH_CAPABILITY, runEarthOperation } from './earthEngines.ts'
+import { HUMANITIES_CAPABILITY, runHumanitiesOperation } from './humanitiesEngines.ts'
 import { MATH_CAPABILITY, runMathOperation } from './mathEngines.ts'
 import { REASONING_CAPABILITY, runReasoningOperation } from './reasoningEngines.ts'
 import { PHYSICS_CAPABILITY, runPhysicsOperation } from './physicsEngines.ts'
@@ -152,7 +153,8 @@ const OPERATION_CAPABILITY: Record<string, string> = {
   ...PHYSICS_CAPABILITY,
   ...EM_CAPABILITY,
   ...ENGINEERING_CAPABILITY,
-  ...EARTH_CAPABILITY
+  ...EARTH_CAPABILITY,
+  ...HUMANITIES_CAPABILITY
 }
 
 export const KNOWN_OPERATIONS = Object.freeze(Object.keys(OPERATION_CAPABILITY))
@@ -714,6 +716,9 @@ export class PagesService {
     }
     if (Object.prototype.hasOwnProperty.call(EARTH_CAPABILITY, operation)) {
       return runEarthOperation(operation, input)
+    }
+    if (Object.prototype.hasOwnProperty.call(HUMANITIES_CAPABILITY, operation)) {
+      return runHumanitiesOperation(operation, input)
     }
 
     switch (operation) {
