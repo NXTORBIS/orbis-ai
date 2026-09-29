@@ -10,7 +10,7 @@
 
 export type PulsarModelId = 'tiny' | 'base' | 'small' | 'medium' | 'large-v3' | 'large-v3-turbo'
 
-export const WHISPER_MODELS: PulsarModelId[] = ['tiny', 'base', 'small', 'medium', 'large-v3', 'large-v3-turbo']
+export const PULSAR_MODELS: PulsarModelId[] = ['tiny', 'base', 'small', 'medium', 'large-v3', 'large-v3-turbo']
 
 export interface PulsarModelInfo {
   id: PulsarModelId
@@ -28,15 +28,21 @@ export interface PulsarModelInfo {
 const HF_MIRROR = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main'
 
 export const PULSAR_MODEL_INFO: Record<PulsarModelId, PulsarModelInfo> = {
-  tiny: { id: 'tiny', label: 'Whisper Tiny', file: 'ggml-tiny.bin', url: `${HF_MIRROR}/ggml-tiny.bin`, sizeBytes: 77_691_713, ramMb: 273, description: 'Fastest, least accurate. For low-memory machines.' },
-  base: { id: 'base', label: 'Whisper Base', file: 'ggml-base.bin', url: `${HF_MIRROR}/ggml-base.bin`, sizeBytes: 147_951_465, ramMb: 388, description: 'Quick, and noticeably better than Tiny.' },
-  small: { id: 'small', label: 'Whisper Small', file: 'ggml-small.bin', url: `${HF_MIRROR}/ggml-small.bin`, sizeBytes: 487_601_967, ramMb: 852, description: 'A good balance for an ordinary laptop.' },
-  medium: { id: 'medium', label: 'Whisper Medium', file: 'ggml-medium.bin', url: `${HF_MIRROR}/ggml-medium.bin`, sizeBytes: 1_533_763_059, ramMb: 2_100, description: 'Clearly more accurate; wants a capable machine.' },
-  'large-v3': { id: 'large-v3', label: 'Whisper Large v3', file: 'ggml-large-v3.bin', url: `${HF_MIRROR}/ggml-large-v3.bin`, sizeBytes: 3_095_033_483, ramMb: 3_900, description: 'The most accurate model, and the slowest.' },
-  'large-v3-turbo': { id: 'large-v3-turbo', label: 'Whisper Large v3 Turbo', file: 'ggml-large-v3-turbo.bin', url: `${HF_MIRROR}/ggml-large-v3-turbo.bin`, sizeBytes: 1_624_555_275, ramMb: 2_000, description: 'Large-v3 accuracy at a fraction of the time. The default on a capable machine.' }
+  tiny: { id: 'tiny', label: 'Pulsar Tiny', file: 'ggml-tiny.bin', url: `${HF_MIRROR}/ggml-tiny.bin`, sizeBytes: 77_691_713, ramMb: 273, description: 'The fastest, and the least accurate. Good enough for short commands; it will misread unusual words. Pick this on an older or low-memory machine.' },
+  base: { id: 'base', label: 'Pulsar Base', file: 'ggml-base.bin', url: `${HF_MIRROR}/ggml-base.bin`, sizeBytes: 147_951_465, ramMb: 388, description: 'Quick, and noticeably better than Tiny at ordinary speech. A sensible floor if you dictate more than a few words.' },
+  small: { id: 'small', label: 'Pulsar Small', file: 'ggml-small.bin', url: `${HF_MIRROR}/ggml-small.bin`, sizeBytes: 487_601_967, ramMb: 852, description: 'The balance most laptops want: accurate on normal speech and still fast enough not to wait for.' },
+  medium: { id: 'medium', label: 'Pulsar Medium', file: 'ggml-medium.bin', url: `${HF_MIRROR}/ggml-medium.bin`, sizeBytes: 1_533_763_059, ramMb: 2_100, description: 'Clearly more accurate on names, jargon and accents. Wants a capable machine and takes longer.' },
+  'large-v3': { id: 'large-v3', label: 'Pulsar Large', file: 'ggml-large-v3.bin', url: `${HF_MIRROR}/ggml-large-v3.bin`, sizeBytes: 3_095_033_483, ramMb: 3_900, description: 'The most accurate there is, and the slowest by some way. Worth it only if accuracy matters more than waiting.' },
+  'large-v3-turbo': { id: 'large-v3-turbo', label: 'Pulsar Turbo', file: 'ggml-large-v3-turbo.bin', url: `${HF_MIRROR}/ggml-large-v3-turbo.bin`, sizeBytes: 1_624_555_275, ramMb: 2_000, description: 'Large accuracy at a fraction of the time. The one to pick if your machine can hold it.' }
 }
 
-export const isPulsarModelId = (value: unknown): value is PulsarModelId => WHISPER_MODELS.includes(value as PulsarModelId)
+/** A download size somebody can judge at a glance. Gigabytes to one decimal, megabytes whole. */
+export function saidSize(bytes: number): string {
+  if (bytes >= 1_000_000_000) return `${(bytes / 1_000_000_000).toFixed(1)} GB`
+  return `${Math.round(bytes / 1_000_000)} MB`
+}
+
+export const isPulsarModelId = (value: unknown): value is PulsarModelId => PULSAR_MODELS.includes(value as PulsarModelId)
 
 // ---------------------------------------------------------------- what the window is told about a download or a machine
 

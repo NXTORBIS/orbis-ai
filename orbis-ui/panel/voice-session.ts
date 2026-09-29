@@ -1,13 +1,13 @@
 import { checkAudio, describeError, isBusy, nextState, pickFormat } from '../../src/shared/voiceInput.ts'
 import type { VoiceErrorCode, VoiceState, VoiceTarget } from '../../src/shared/voiceInput.ts'
-import { toWhisperWav } from '../../src/renderer/src/lib/audioToWav.ts'
+import { toPulsarWav } from '../../src/renderer/src/lib/audioToWav.ts'
 
 /**
  * Speaking to a built-in Orbis page, through the microphone Orbis already has.
  *
  * This is not a second voice system, and the distinction matters enough to be precise about. Orbis's voice input is
  * one thing in three parts: a state machine and the rules about what may be recorded (src/shared/voiceInput.ts), a
- * converter that turns whatever the microphone produced into what Whisper wants (audioToWav.ts), and a helper channel
+ * converter that turns whatever the microphone produced into what Pulsar wants (audioToWav.ts), and a helper channel
  * that runs the model on this machine (`voice:transcribe`). All three are used here exactly as the Orbis window uses
  * them. What this file adds is the only part that genuinely differs: a `chrome://` page cannot reach Electron's
  * renderer service, so it opens the microphone itself and asks the same helper the same question.
@@ -166,7 +166,7 @@ export function createVoiceSession(options: VoiceSessionOptions): VoiceSessionHa
 
       let wav: Uint8Array
       try {
-        wav = await toWhisperWav(blob)
+        wav = await toPulsarWav(blob)
       } catch {
         return fail('bad-audio')
       }
@@ -182,7 +182,7 @@ export function createVoiceSession(options: VoiceSessionOptions): VoiceSessionHa
           return fail(result?.code ?? 'runtime-error', result?.message)
         }
         const text = String(result.text ?? '').trim()
-        // An empty transcript is not a success with nothing in it; it is Whisper hearing no speech, and it says so.
+        // An empty transcript is not a success with nothing in it; it is Pulsar hearing no speech, and it says so.
         if (!text) return fail('no-speech')
         state = nextState(state, { type: 'transcribed' })
         options.onUpdate({ state, target: options.target, text })

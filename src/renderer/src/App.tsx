@@ -20,6 +20,7 @@ import type { FeatureId } from './components/Sidebar'
 // found them. They are loaded lazily because only one is ever open and most sessions open none.
 // Lazy like the rest: the chart and its indicators are a large bundle for a screen most sessions never open.
 const MarketsView = lazy(() => import('./components/MarketsView'))
+const PulsarSetup = lazy(() => import('./components/PulsarSetup'))
 const WorkflowsView = lazy(() => import('./components/WorkflowsView'))
 const GalaxyView = lazy(() => import('./components/GalaxyView'))
 const NotesView = lazy(() => import('./components/NotesView'))
@@ -184,6 +185,14 @@ export default function App(): React.JSX.Element {
   /** Latest state of each running browser automation, by chat request, for the browser banner. */
   const [, setAutomations] = useState<Record<string, NonNullable<ChatMessage['automation']>>>({})
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  /** Shown when a microphone is pressed and Pulsar has no model yet. Raised by the voice service, not by a button. */
+  const [pulsarSetup, setPulsarSetup] = useState(false)
+
+  useEffect(() => {
+    const open = (): void => setPulsarSetup(true)
+    window.addEventListener('orbis:pulsar-needed', open)
+    return () => window.removeEventListener('orbis:pulsar-needed', open)
+  }, [])
   const [quickPromptsOpen, setQuickPromptsOpen] = useState(false)
   const [notices, setNotices] = useState<Notice[]>([])
   const [unread, setUnread] = useState(0)
@@ -1395,6 +1404,15 @@ export default function App(): React.JSX.Element {
       <ControlPrompts />
       {settingsOpen && settings && <SettingsModal settings={settings} onUpdate={updateSettings} onClose={() => setSettingsOpen(false)} />}
       {shortcutsOpen && <ShortcutsModal onClose={() => setShortcutsOpen(false)} />}
+      {/*
+        Offered the first time a microphone is pressed with no model installed. Raised by the voice service rather
+        than by any one microphone, because there are four of them and each would otherwise need to know about this.
+      */}
+      {pulsarSetup && (
+        <Suspense fallback={null}>
+          <PulsarSetup onClose={() => setPulsarSetup(false)} onReady={() => setPulsarSetup(false)} onNotify={notify} />
+        </Suspense>
+      )}
       {editing && (
         <ImageEditor
           key={editing.image.src.slice(-64)}

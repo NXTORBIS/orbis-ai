@@ -1,9 +1,9 @@
 // orbis-ui/orb/voice.ts
 import { call } from "./helper.js";
 
-// src/shared/whisperModels.ts
+// src/shared/pulsarModels.ts
 var HF_MIRROR = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main";
-var WHISPER_MODEL_INFO = {
+var PULSAR_MODEL_INFO = {
   tiny: { id: "tiny", label: "Whisper Tiny", file: "ggml-tiny.bin", url: `${HF_MIRROR}/ggml-tiny.bin`, sizeBytes: 77691713, ramMb: 273, description: "Fastest, least accurate. For low-memory machines." },
   base: { id: "base", label: "Whisper Base", file: "ggml-base.bin", url: `${HF_MIRROR}/ggml-base.bin`, sizeBytes: 147951465, ramMb: 388, description: "Quick, and noticeably better than Tiny." },
   small: { id: "small", label: "Whisper Small", file: "ggml-small.bin", url: `${HF_MIRROR}/ggml-small.bin`, sizeBytes: 487601967, ramMb: 852, description: "A good balance for an ordinary laptop." },
@@ -58,7 +58,7 @@ function describeError(code) {
     case "insufficient-memory":
       return "Not enough free memory to run the speech model. Choose a smaller one in Settings \u2192 Voice input.";
     case "runtime-error":
-      return "Whisper could not be run just now.";
+      return "Pulsar could not be run just now.";
     case "timeout":
       return "Transcribing took too long and was stopped.";
     case "cancelled":
@@ -79,7 +79,7 @@ function pickFormat(supported) {
 }
 
 // src/renderer/src/lib/audioToWav.ts
-var WHISPER_SAMPLE_RATE = 16e3;
+var PULSAR_SAMPLE_RATE = 16e3;
 var sharedContext = null;
 function context() {
   if (!sharedContext || sharedContext.state === "closed") sharedContext = new AudioContext();
@@ -134,12 +134,12 @@ function encodeWav(samples, sampleRate) {
   }
   return new Uint8Array(buffer);
 }
-async function toWhisperWav(blob) {
+async function toPulsarWav(blob) {
   const arrayBuffer = await blob.arrayBuffer();
   const decoded = await context().decodeAudioData(arrayBuffer);
   const mono = toMono(decoded);
-  const resampled = resample(mono, decoded.sampleRate, WHISPER_SAMPLE_RATE);
-  return encodeWav(resampled, WHISPER_SAMPLE_RATE);
+  const resampled = resample(mono, decoded.sampleRate, PULSAR_SAMPLE_RATE);
+  return encodeWav(resampled, PULSAR_SAMPLE_RATE);
 }
 
 // orbis-ui/panel/voice-session.ts
@@ -230,7 +230,7 @@ function createVoiceSession(options) {
       if (!blob.size) return fail("no-speech", "Nothing was recorded.");
       let wav;
       try {
-        wav = await toWhisperWav(blob);
+        wav = await toPulsarWav(blob);
       } catch {
         return fail("bad-audio");
       }

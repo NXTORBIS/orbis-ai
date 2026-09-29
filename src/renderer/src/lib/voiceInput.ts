@@ -10,6 +10,22 @@ import type { VoiceErrorCode, VoiceInputConfig, VoiceSession, VoiceState, VoiceT
 import { toPulsarWav } from './audioToWav'
 
 /**
+ * Whether any voice model is installed.
+ *
+ * Answered false when the question cannot be asked at all -- no window API, or a call that failed. A machine that
+ * cannot say is a machine that should be offered the choice, rather than one that records into nothing.
+ */
+async function hasAnyModel(): Promise<boolean> {
+  try {
+    const status = await window.api.pulsarModelsStatus()
+    if (status === null || 'error' in status) return false
+    return status.installed.length > 0
+  } catch {
+    return false
+  }
+}
+
+/**
  * The Orbis voice input service.
  *
  * One microphone for the whole of Orbis. The chat composer, the browser's assistant, the address bar and the search
@@ -139,6 +155,25 @@ class VoiceInputService {
     }
     this.session = session
     this.error = null
+
+    /**
+     * No model, no recording.
+     *
+     * Checked here rather than after the fact. Recording first and failing at the end wastes what somebody said and
+     * tells them so only once they have finished saying it -- and what it used to tell them was to go and find
+     * Settings, which is homework rather than an answer.
+     *
+     * The event is what the window listens for to offer the choice. Nothing is decided here: this layer knows that
+     * no model is installed, and not what should be done about it.
+     */
+    const installed = await hasAnyModel()
+    if (!installed) {
+      this.session = null
+      this.move({ type: 'reset' })
+      window.dispatchEvent(new CustomEvent('orbis:pulsar-needed'))
+      return
+    }
+
     this.move({ type: 'start' })
 
     const format = pickFormat((type) => MediaRecorder.isTypeSupported(type))

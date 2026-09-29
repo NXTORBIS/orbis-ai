@@ -18706,3 +18706,42 @@ html[data-motion='reduced'] .tool-btn.recording {
   color: var(--muted);
 }
 
+/* ---------------------------------------------------------------- Orbis Pulsar: choosing a voice model */
+
+/*
+ * Shown the first time a microphone is pressed with nothing installed. The list is the whole of it: each model says
+ * what it is for, what it costs to download and what it needs to run, so the choice can be made here rather than
+ * researched elsewhere.
+ */
+.pulsar-setup { max-width: 640px; width: min(640px, 92vw); display: flex; flex-direction: column; gap: 14px; }
+
+.pulsar-setup-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.pulsar-setup-head h2 { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; font-size: 16px; color: var(--text); }
+.pulsar-setup-machine { margin: 0; }
+
+.pulsar-setup-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; max-height: 46vh; overflow-y: auto; }
+
+.pulsar-model {
+  width: 100%; text-align: left; display: flex; flex-direction: column; gap: 4px;
+  padding: 12px; border: 1px solid var(--line); border-radius: 12px;
+  background: var(--panel); color: var(--text); cursor: pointer;
+}
+.pulsar-model:hover { border-color: var(--line-strong); }
+.pulsar-model.on { border-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 10%, var(--panel)); }
+.pulsar-model:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+/* Still selectable: "why can't I pick the accurate one" deserves an answer on screen rather than a disabled button. */
+.pulsar-model.tight { opacity: 0.72; }
+
+.pulsar-model-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pulsar-model-facts { font-size: 11.5px; color: var(--faint); font-variant-numeric: tabular-nums; }
+
+.pulsar-tag {
+  font-size: 10.5px; letter-spacing: 0.02em; padding: 2px 7px; border-radius: 999px;
+  background: color-mix(in srgb, var(--cyan) 18%, transparent); color: var(--cyan);
+}
+.pulsar-tag.tight { background: color-mix(in srgb, var(--amber) 18%, transparent); color: var(--amber); }
+
+.pulsar-setup-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.pulsar-setup-progress { display: flex; flex-direction: column; gap: 6px; }
+.pulsar-setup-progress progress { width: 100%; height: 6px; }
+.pulsar-setup-progress p { margin: 0; }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Check, Download, Mic, Trash2, X } from 'lucide-react'
 import type { ExperienceConfig } from '../../../shared/experience'
-import { WHISPER_MODELS, PULSAR_MODEL_INFO } from '../../../shared/pulsarModels'
+import { PULSAR_MODELS, PULSAR_MODEL_INFO } from '../../../shared/pulsarModels'
 import type { PulsarDownloadProgress, PulsarHardwareInfo, PulsarModelId } from '../../../shared/pulsarModels'
 
 const LANGUAGES: [string, string][] = [
@@ -123,7 +123,7 @@ export default function VoiceSettings(): React.JSX.Element {
       )}
 
       <ul className="voice-model-list">
-        {WHISPER_MODELS.map((id) => {
+        {PULSAR_MODELS.map((id) => {
           const info = PULSAR_MODEL_INFO[id]
           const installed = status.installed.includes(id)
           const downloading = status.downloading.includes(id) || busy === id
