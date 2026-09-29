@@ -271,6 +271,9 @@ export const UNITS: UnitDefinition[] = [
   unit({ id: 'ampere', symbol: 'A', name: 'ampere', plural: 'amperes', dimension: { I: 1 }, scale: 1, system: 'SI', prefixable: true, exact: true, aliases: ['amp', 'amps', 'ampere', 'amperes'] }),
   unit({ id: 'mole', symbol: 'mol', name: 'mole', plural: 'moles', dimension: { N: 1 }, scale: 1, system: 'SI', prefixable: true, exact: true }),
   unit({ id: 'candela', symbol: 'cd', name: 'candela', dimension: { J: 1 }, scale: 1, system: 'SI', prefixable: true, exact: true, aliases: ['candelas'] }),
+  // A lumen is a candela steradian. The steradian is dimensionless, so a lumen has the dimension of luminous
+  // intensity -- which is why lm and cd cannot be told apart by dimensional analysis and must not be confused by it.
+  unit({ id: 'lumen', symbol: 'lm', name: 'lumen', plural: 'lumens', dimension: { J: 1 }, scale: 1, system: 'SI', prefixable: true, exact: true }),
 
   // ---- angle
   unit({ id: 'radian', symbol: 'rad', name: 'radian', plural: 'radians', dimension: { A: 1 }, scale: 1, system: 'SI', prefixable: true, exact: true }),

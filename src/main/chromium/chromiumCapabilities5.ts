@@ -175,6 +175,10 @@ export function registerBrowserUiCapabilities(d: BrowserUiDeps): void {
       if (first === null) fail('not-found', `Nothing on the page matches ${selector}.`, true)
       if (first === 'hidden') fail('invalid-params', 'That element has no visible size.', true)
       if (!(await devtoolsTargets()).length) await control.execute({ capability: 'devtools.open', params: {}, source: 'orion' }, { confirm: async () => true })
+      // The panel has to be up before the picker shortcut means anything -- see elementsPanelReady.
+      if (!(await elementsPanelReady(browser))) {
+        return fail('failed', 'Developer tools opened but the Elements panel did not come up, so there was nothing to select an element in.', true)
+      }
       await guard(async () => {
         const { win } = await target()
         await getUi().press(win, 'ctrl+shift+c')
@@ -372,6 +376,50 @@ export function registerBrowserUiCapabilities(d: BrowserUiDeps): void {
   void bool
 }
 
+/**
+ * Finds the selected row of the element tree inside the developer-tools page.
+ *
+ * The tools page keeps its panels in shadow roots, so this walks through them. Shared by the read and by the
+ * readiness wait, so the two cannot drift apart and start looking for different things.
+ */
+const SELECTED_ROW_EXPRESSION = `(() => { const out = []; const walk = (root) => { for (const el of root.querySelectorAll('*')) { if (el.matches && el.matches('li.selected, [aria-selected="true"]') && /^\s*</.test(el.textContent || '')) out.push(el.textContent); if (el.shadowRoot) walk(el.shadowRoot) } }; walk(document); return out[0] ?? null })()`
+
+/**
+ * Waits until the Elements panel has actually rendered its tree.
+ *
+ * Opening developer tools and pressing the picker shortcut in the same breath is a race. The panel takes a moment to
+ * come up, and a picker click that lands before the tree exists selects nothing -- leaving the panel on the <body>
+ * it starts with, which is precisely the wrong answer this capability used to report intermittently. Waiting for a
+ * row to exist is waiting for the thing that has to be there, rather than for a fixed number of milliseconds.
+ */
+async function elementsPanelReady(browser: ChromiumCapabilityDeps['browser'], ms = 6000): Promise<boolean> {
+  const end = Date.now() + ms
+  while (Date.now() < end) {
+    try {
+      const { targetInfos } = await browser.conn.send<{ targetInfos: { targetId: string; url: string }[] }>('Target.getTargets')
+      const tool = targetInfos.find((t) => t.url.startsWith('devtools://'))
+      if (tool !== undefined) {
+        const { sessionId } = await browser.conn.send<{ sessionId: string }>('Target.attachToTarget', { targetId: tool.targetId, flatten: true })
+        try {
+          const r = await browser.conn.send<{ result?: { value?: unknown } }>(
+            'Runtime.evaluate',
+            { expression: SELECTED_ROW_EXPRESSION, returnByValue: true },
+            sessionId
+          )
+          const text = r.result?.value
+          if (typeof text === 'string' && text !== '') return true
+        } finally {
+          await browser.conn.send('Target.detachFromTarget', { sessionId }).catch(() => undefined)
+        }
+      }
+    } catch {
+      // The tools page is still coming up; try again.
+    }
+    await sleep(200)
+  }
+  return false
+}
+
 /** Reads what the Elements panel has selected, from the developer-tools page itself. */
 async function selectedInDevtools(browser: ChromiumCapabilityDeps['browser'], tag: string, ms = 5000): Promise<{ matches: boolean; description: string } | null> {
   const { targetInfos } = await browser.conn.send<{ targetInfos: { targetId: string; url: string }[] }>('Target.getTargets')
@@ -389,8 +437,7 @@ async function selectedInDevtools(browser: ChromiumCapabilityDeps['browser'], ta
       const r = (await browser.conn.send<{ result?: { value?: unknown } }>(
         'Runtime.evaluate',
         {
-          // The tools page keeps its panels in shadow roots, so search through them for the selected row of the element tree.
-          expression: `(() => { const out = []; const walk = (root) => { for (const el of root.querySelectorAll('*')) { if (el.matches && el.matches('li.selected, [aria-selected="true"]') && /^\s*</.test(el.textContent || '')) out.push(el.textContent); if (el.shadowRoot) walk(el.shadowRoot) } }; walk(document); return out[0] ?? null })()`,
+          expression: SELECTED_ROW_EXPRESSION,
           returnByValue: true
         },
         sessionId
