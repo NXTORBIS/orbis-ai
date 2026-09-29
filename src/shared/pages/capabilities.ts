@@ -245,6 +245,16 @@ export const CAPABILITIES: Record<string, CapabilityDefinition> = {
     consent: 'automatic',
     scope: 'none'
   }),
+  'computation.engineering': capability({
+    id: 'computation.engineering',
+    name: 'Engineering workshop',
+    description:
+      'Size beams and columns, solve trusses and pipe networks, work out heat flow through walls and exchangers, tune a control loop, and drive a robot arm.',
+    category: 'computation',
+    risk: 'low',
+    consent: 'automatic',
+    scope: 'none'
+  }),
   'computation.wasm': capability({
     id: 'computation.wasm',
     name: 'Compiled code',
