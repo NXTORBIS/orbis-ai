@@ -15979,6 +15979,34 @@ html[data-motion='reduced'] .tool-btn.recording {
   border-color: var(--cyan);
 }
 
+/* A dropdown in a Page field. Styled to match the text inputs beside it: the global rule sets only the font, which
+   would leave a select wearing the browser's own chrome next to an input wearing ours. */
+.page-field select {
+  padding: 7px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+  outline: none;
+  cursor: pointer;
+}
+
+.page-field select:focus-visible {
+  border-color: var(--cyan);
+}
+
+/* A checkbox is not a text box, so it does not take the text box's padding, border or full width. */
+.page-field input[type='checkbox'] {
+  align-self: flex-start;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border-radius: 4px;
+  accent-color: var(--cyan);
+  cursor: pointer;
+}
+
 .page-arrow {
   margin-bottom: 9px;
   color: var(--faint);

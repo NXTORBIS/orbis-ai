@@ -215,6 +215,16 @@ export const CAPABILITIES: Record<string, CapabilityDefinition> = {
     consent: 'automatic',
     scope: 'none'
   }),
+  'computation.science': capability({
+    id: 'computation.science',
+    name: 'Scientific calculation',
+    description:
+      'Signals and spectra, interpolation and curve fitting, significant figures, physical constants, coordinate frames and constraint checking.',
+    category: 'computation',
+    risk: 'low',
+    consent: 'automatic',
+    scope: 'none'
+  }),
   'computation.wasm': capability({
     id: 'computation.wasm',
     name: 'Compiled code',

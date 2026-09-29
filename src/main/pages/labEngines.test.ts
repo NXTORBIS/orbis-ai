@@ -5,10 +5,11 @@ import { CAPABILITIES } from '../../shared/pages/capabilities.ts'
 import { BadInput } from './engines.ts'
 import { MATH_CAPABILITY, runMathOperation } from './mathEngines.ts'
 import { REASONING_CAPABILITY, runReasoningOperation } from './reasoningEngines.ts'
+import { SCIENCE_CAPABILITY, runScienceOperation } from './scienceEngines.ts'
 import { STUDY_CAPABILITY, runStudyOperation } from './studyEngines.ts'
 
 /**
- * The three newer engine bridges, checked the same way as `engines.ts`.
+ * The newer engine bridges, checked the same way as `engines.ts`.
  *
  * The guard that matters is the one pairing the capability map against the dispatch: an operation with a capability
  * and no case is an operation a Page is allowed to call and that then fails as a bug. Deny-by-default protects
@@ -20,7 +21,8 @@ type Runner = (operation: string, input: Record<string, unknown>) => unknown
 const BRIDGES: { name: string; map: Readonly<Record<string, string>>; run: Runner }[] = [
   { name: 'mathematics', map: MATH_CAPABILITY, run: runMathOperation },
   { name: 'studies', map: STUDY_CAPABILITY, run: runStudyOperation },
-  { name: 'reasoning', map: REASONING_CAPABILITY, run: runReasoningOperation }
+  { name: 'reasoning', map: REASONING_CAPABILITY, run: runReasoningOperation },
+  { name: 'science', map: SCIENCE_CAPABILITY, run: runScienceOperation }
 ]
 
 const run = (runner: Runner, operation: string, input: Record<string, unknown> = {}): Record<string, unknown> =>

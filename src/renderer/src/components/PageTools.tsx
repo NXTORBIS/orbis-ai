@@ -39,6 +39,38 @@ export function readNumbers(text: string): number[] {
     .filter((one) => Number.isFinite(one))
 }
 
+/**
+ * A labelled text box, since the Pages are mostly text boxes.
+ *
+ * Here rather than in each lab file so the three of them cannot drift into three slightly different fields.
+ */
+export function Field({
+  label,
+  value,
+  onChange,
+  placeholder,
+  wide = false,
+  rows = 0
+}: {
+  label: string
+  value: string
+  onChange(next: string): void
+  placeholder?: string
+  wide?: boolean
+  rows?: number
+}): React.JSX.Element {
+  return (
+    <label className={wide ? 'page-field wide' : 'page-field'}>
+      <span>{label}</span>
+      {rows > 0 ? (
+        <textarea value={value} onChange={(e) => onChange(e.target.value)} rows={rows} spellCheck={false} placeholder={placeholder} />
+      ) : (
+        <input value={value} onChange={(e) => onChange(e.target.value)} spellCheck={false} placeholder={placeholder} />
+      )}
+    </label>
+  )
+}
+
 /** The notes an engine returned, shown as themselves. */
 export function Notes({ notes, label = 'What this assumes' }: { notes: readonly string[]; label?: string }): React.JSX.Element | null {
   if (!notes || notes.length === 0) return null

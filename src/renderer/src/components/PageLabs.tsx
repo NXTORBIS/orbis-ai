@@ -1,7 +1,15 @@
 import { useMemo, useState } from 'react'
 import { Download, FileText, GitBranch, Grid3x3, Hash, Layers, MessageCircle, Shapes, Sigma, Sliders, Target, Triangle, Workflow } from 'lucide-react'
 import type { NoticeKind } from '../App'
-import { Notes, Problem, readNumbers, useEngine } from './PageTools'
+import {
+  ConstantsLibraryPage,
+  ConstraintCheckerPage,
+  CoordinateLabPage,
+  CurveFitterPage,
+  SignalLabPage,
+  SignificantFiguresPage
+} from './ScienceLabs'
+import { Field, Notes, Problem, readNumbers, useEngine } from './PageTools'
 
 /**
  * The Pages backed by the mathematics, study, document, interchange and reasoning engines.
@@ -20,34 +28,6 @@ import { Notes, Problem, readNumbers, useEngine } from './PageTools'
  */
 
 type Props = { pageId: string; onNotify(m: string, k?: NoticeKind): void }
-
-/** A labelled text box, since every Page here is mostly text boxes. */
-function Field({
-  label,
-  value,
-  onChange,
-  placeholder,
-  wide = false,
-  rows = 0
-}: {
-  label: string
-  value: string
-  onChange(next: string): void
-  placeholder?: string
-  wide?: boolean
-  rows?: number
-}): React.JSX.Element {
-  return (
-    <label className={wide ? 'page-field wide' : 'page-field'}>
-      <span>{label}</span>
-      {rows > 0 ? (
-        <textarea value={value} onChange={(e) => onChange(e.target.value)} rows={rows} spellCheck={false} placeholder={placeholder} />
-      ) : (
-        <input value={value} onChange={(e) => onChange(e.target.value)} spellCheck={false} placeholder={placeholder} />
-      )}
-    </label>
-  )
-}
 
 /** A list of short strings, as themselves. Used wherever an engine hands back findings rather than a number. */
 function Lines({ title, items }: { title: string; items: readonly string[] }): React.JSX.Element | null {
@@ -803,5 +783,12 @@ export const LAB_PAGES: Readonly<Record<string, (props: Props) => React.JSX.Elem
   'scenario-lab': ScenarioLabPage,
   'explain-it-yourself': ExplainYourselfPage,
   'builder-studio': BuilderStudioPage,
-  project: ProjectPage
+  project: ProjectPage,
+  // The six science Pages live in their own file; they are listed here so the frame still has one map to look in.
+  'signal-lab': SignalLabPage,
+  'curve-fitter': CurveFitterPage,
+  'significant-figures': SignificantFiguresPage,
+  'constants-library': ConstantsLibraryPage,
+  'coordinate-lab': CoordinateLabPage,
+  'constraint-checker': ConstraintCheckerPage
 })

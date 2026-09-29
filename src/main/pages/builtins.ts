@@ -44,7 +44,13 @@ export const BUILT_IN_IDS = {
   scenarioLab: fixedId('orbisscenariolab'),
   explainYourself: fixedId('orbisexplainyourself'),
   builderStudio: fixedId('orbisbuilderstudio'),
-  projectGraph: fixedId('orbisprojectgraph')
+  projectGraph: fixedId('orbisprojectgraph'),
+  signalLab: fixedId('orbissignallab'),
+  curveFitter: fixedId('orbiscurvefitter'),
+  significantFigures: fixedId('orbissignificantfigures'),
+  constantsLibrary: fixedId('orbisconstantslibrary'),
+  coordinateLab: fixedId('orbiscoordinatelab'),
+  constraintChecker: fixedId('orbisconstraintchecker')
 } as const
 
 /**
@@ -719,6 +725,198 @@ export const BUILT_IN_MANIFESTS: readonly Record<string, unknown>[] = [
       'What an artifact carries is a list of typed actions, never code. Opening a document somebody sent you never runs their program.',
       'A connector with waypoints you placed is drawn exactly as placed. Objects a route passes through are reported rather than silently routed around.',
       'A builder that registers no rules of its own is reported as having none rather than treated as always valid.'
+    ],
+    languages: ['en']
+  },
+  {
+    schemaVersion: MANIFEST_SCHEMA_VERSION,
+    pageId: BUILT_IN_IDS.signalLab,
+    slug: 'signal-lab',
+    title: 'Signal Lab',
+    description:
+      'Take a sampled series apart into the frequencies it is made of, smooth it, filter it, and find what repeats in it.',
+    version: '1.0.0',
+    kind: 'tool',
+    categories: ['science.mathematics', 'science.measurement', 'utilities.analysis'],
+    tags: ['fourier', 'spectrum', 'filter', 'signal', 'time-series', 'frequency'],
+    icon: 'activity',
+    owner: 'system',
+    runtimeAtLeast: '1.0.0',
+    capabilities: ['computation.science', 'computation.plot', 'storage.page'],
+    capabilityReasons: {},
+    dependencies: [],
+    search: {
+      summary:
+        'Amplitude and density spectra at any record length, window functions with the trade each one makes, averaged spectra for noise, peak frequencies interpolated between bins, linear-phase filters, smoothing, detrending, autocorrelation and resampling.',
+      keywords: ['fourier', 'fft', 'spectrum', 'frequency', 'filter', 'smooth', 'autocorrelation', 'sampling', 'nyquist', 'aliasing'],
+      intents: ['calculate', 'compare'],
+      aliases: ['Fourier', 'Spectrum Analyser', 'Frequency Analysis']
+    },
+    offline: true,
+    limitations: [
+      'Nothing above half the sampling rate is reported. Content above it was folded onto a lower frequency when the samples were taken, and no transform undoes that.',
+      'A gap in the samples refuses the transform rather than being filled with a zero. A zero is a step change, and a step change has energy at every frequency.',
+      'Zero padding draws the spectrum at finer spacing. It does not help separate two nearby frequencies -- only a longer record does that.'
+    ],
+    languages: ['en']
+  },
+  {
+    schemaVersion: MANIFEST_SCHEMA_VERSION,
+    pageId: BUILT_IN_IDS.curveFitter,
+    slug: 'curve-fitter',
+    title: 'Curve Fitter',
+    description:
+      'Draw a curve through measurements or near them, and find out whether the shape you chose is the wrong one.',
+    version: '1.0.0',
+    kind: 'tool',
+    categories: ['science.mathematics', 'utilities.analysis'],
+    tags: ['fit', 'regression', 'interpolation', 'spline', 'residuals', 'curve'],
+    icon: 'trending-up',
+    owner: 'system',
+    runtimeAtLeast: '1.0.0',
+    capabilities: ['computation.science', 'computation.statistics', 'computation.plot', 'storage.page'],
+    capabilityReasons: {},
+    dependencies: [],
+    search: {
+      summary:
+        'Linear, polynomial, exponential, power, logarithmic, reciprocal and logistic fits; nearest, linear, polynomial, spline and monotone interpolation; residual checks that find curvature, changing spread and serial correlation; and a comparison that ranks without naming a winner.',
+      keywords: ['fit', 'curve', 'regression', 'interpolate', 'spline', 'residual', 'r squared', 'trend', 'exponential', 'power law'],
+      intents: ['calculate', 'compare', 'solve'],
+      aliases: ['Regression', 'Trend Line', 'Interpolation']
+    },
+    offline: true,
+    limitations: [
+      'Interpolation is refused outside the measured range. A fitted curve has a value anywhere, and those values assert the shape continues rather than describe anything measured.',
+      'R squared measures how closely a shape follows the data, never that the shape is right. The residual checks find curvature a high R squared hides.',
+      'A fit through a logarithm minimises proportional rather than absolute error. R squared is computed on the original scale, not the transformed one.'
+    ],
+    languages: ['en']
+  },
+  {
+    schemaVersion: MANIFEST_SCHEMA_VERSION,
+    pageId: BUILT_IN_IDS.significantFigures,
+    slug: 'significant-figures',
+    title: 'Significant Figures',
+    description:
+      'Work out how many digits an answer has earned, carry that through a calculation, and write it down properly.',
+    version: '1.0.0',
+    kind: 'tool',
+    categories: ['science.measurement', 'science.mathematics', 'education.reference'],
+    tags: ['significant-figures', 'rounding', 'precision', 'scientific-notation'],
+    icon: 'hash',
+    owner: 'system',
+    runtimeAtLeast: '1.0.0',
+    capabilities: ['computation.science', 'storage.page'],
+    capabilityReasons: {},
+    dependencies: [],
+    search: {
+      summary:
+        'Counting significant figures from how a number is written, the separate rules for adding and for multiplying, chains rounded once at the end, six rounding modes, scientific and engineering notation, and what a double can actually hold.',
+      keywords: ['significant figures', 'sig fig', 'rounding', 'precision', 'scientific notation', 'engineering notation', 'decimal places'],
+      intents: ['calculate', 'define'],
+      aliases: ['Sig Figs', 'Rounding', 'Precision']
+    },
+    offline: true,
+    limitations: [
+      'Significant figures are notation, not uncertainty. A plus-or-minus is a different and stronger statement, and the Uncertainty Lab is where that lives.',
+      'A number like 1200 does not say how many of its digits are meant. That is reported as ambiguous, with both ways to write it, rather than guessed.',
+      'Adding keeps decimal places and multiplying keeps significant figures. Two different rules, and the one that fits the operation is the one applied.'
+    ],
+    languages: ['en']
+  },
+  {
+    schemaVersion: MANIFEST_SCHEMA_VERSION,
+    pageId: BUILT_IN_IDS.constantsLibrary,
+    slug: 'constants-library',
+    title: 'Constants Library',
+    description:
+      'Physical, agreed and mathematical constants, each saying where its value came from and how much it limits a result.',
+    version: '1.0.0',
+    kind: 'reference',
+    categories: ['science.physics', 'science.reference', 'education.reference'],
+    tags: ['constants', 'codata', 'si', 'physics', 'reference'],
+    icon: 'book',
+    owner: 'system',
+    runtimeAtLeast: '1.0.0',
+    capabilities: ['computation.science', 'storage.page'],
+    capabilityReasons: {},
+    dependencies: [],
+    search: {
+      summary:
+        'The seven constants that define the SI and have no uncertainty, the ones derived exactly from them, the measured ones with their CODATA uncertainties, agreed values like standard gravity, and mathematical constants -- with a comparison that says whether a measurement is consistent with one.',
+      keywords: ['constant', 'speed of light', 'planck', 'avogadro', 'boltzmann', 'gravitational constant', 'codata', 'si units', 'physics'],
+      intents: ['define', 'calculate', 'compare'],
+      aliases: ['Physical Constants', 'CODATA', 'SI Constants']
+    },
+    offline: true,
+    limitations: [
+      'Since 2019 several constants are exact by definition. Their uncertainty is zero and will never improve, because there is nothing left to measure.',
+      'A measured constant limits every result using it. G is known to two parts in a hundred thousand, so a result using it cannot be quoted to more figures than that.',
+      'Some constants are published with more digits than a double holds. The published text is shown beside the number handed out, rather than pretending they match.'
+    ],
+    languages: ['en']
+  },
+  {
+    schemaVersion: MANIFEST_SCHEMA_VERSION,
+    pageId: BUILT_IN_IDS.coordinateLab,
+    slug: 'coordinate-lab',
+    title: 'Coordinate Lab',
+    description:
+      'Convert between coordinate systems, compose rotations, and move points between reference frames without losing track of the convention.',
+    version: '1.0.0',
+    kind: 'tool',
+    categories: ['science.mathematics', 'science.physics', 'utilities.analysis'],
+    tags: ['coordinates', 'spherical', 'rotation', 'quaternion', 'euler', 'reference-frame'],
+    icon: 'compass',
+    owner: 'system',
+    runtimeAtLeast: '1.0.0',
+    capabilities: ['computation.science', 'computation.plot', 'storage.page'],
+    capabilityReasons: {},
+    dependencies: [],
+    search: {
+      summary:
+        'Cartesian, polar, cylindrical and spherical coordinates under either convention; rotations as axis-and-angle, quaternion, matrix or Euler angles; and trees of reference frames with points and directions moved between them.',
+      keywords: ['coordinate', 'polar', 'spherical', 'cylindrical', 'rotation', 'quaternion', 'euler', 'gimbal lock', 'reference frame', 'transform'],
+      intents: ['calculate', 'compare'],
+      aliases: ['Coordinates', 'Rotations', 'Reference Frames']
+    },
+    offline: true,
+    limitations: [
+      'The physics and mathematics conventions swap the meanings of theta and phi. The page asks which you mean, because the wrong default gives clean wrong answers.',
+      'Angles that do not exist are reported missing rather than returned as zero. At the origin there is no direction; on the z axis there is no azimuth.',
+      'At gimbal lock infinitely many Euler triples give the same rotation. The page says so and shows which it picked, rather than presenting one as the answer.'
+    ],
+    languages: ['en']
+  },
+  {
+    schemaVersion: MANIFEST_SCHEMA_VERSION,
+    pageId: BUILT_IN_IDS.constraintChecker,
+    slug: 'constraint-checker',
+    title: 'Constraint Checker',
+    description:
+      'Write down what must be true, check it against the numbers, and find out which rules are impossible before looking for a better value.',
+    version: '1.0.0',
+    kind: 'tool',
+    categories: ['science.mathematics', 'utilities.analysis', 'work.planning'],
+    tags: ['constraints', 'requirements', 'feasibility', 'limits', 'tolerance'],
+    icon: 'check-square',
+    owner: 'system',
+    runtimeAtLeast: '1.0.0',
+    capabilities: ['computation.science', 'computation.arithmetic', 'storage.page'],
+    capabilityReasons: {},
+    dependencies: [],
+    search: {
+      summary:
+        'Ranges, comparisons between expressions, sums, required values and orderings, all checked with units; which rules are exactly at their limit; which rules contradict each other whatever the values; and how far a range can be narrowed from the others.',
+      keywords: ['constraint', 'requirement', 'limit', 'tolerance', 'feasible', 'specification', 'bounds', 'check'],
+      intents: ['compare', 'solve', 'calculate'],
+      aliases: ['Requirements', 'Limits', 'Feasibility']
+    },
+    offline: true,
+    limitations: [
+      'A rule that cannot be checked because a value is missing has not passed. Those are counted separately and never folded in with the satisfied ones.',
+      'Comparing a length against a time is a broken rule rather than a broken design, and the page says which it found.',
+      'Contradictions are found only among ranges. Conflicts inside expressions cannot be found in general, so this says nothing was proved impossible.'
     ],
     languages: ['en']
   },

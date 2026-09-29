@@ -25,6 +25,7 @@ import { BUILT_IN_MANIFESTS } from './builtins.ts'
 import { BadInput, ENGINE_CAPABILITY, runEngineOperation } from './engines.ts'
 import { MATH_CAPABILITY, runMathOperation } from './mathEngines.ts'
 import { REASONING_CAPABILITY, runReasoningOperation } from './reasoningEngines.ts'
+import { SCIENCE_CAPABILITY, runScienceOperation } from './scienceEngines.ts'
 import { STUDY_CAPABILITY, runStudyOperation } from './studyEngines.ts'
 import { audit, type ElementDescription } from '../../shared/pages/accessibility.ts'
 import { check as checkDocument, type PageDocument } from '../../shared/pages/builder.ts'
@@ -134,7 +135,8 @@ const OPERATION_CAPABILITY: Record<string, string> = {
   ...ENGINE_CAPABILITY,
   ...MATH_CAPABILITY,
   ...STUDY_CAPABILITY,
-  ...REASONING_CAPABILITY
+  ...REASONING_CAPABILITY,
+  ...SCIENCE_CAPABILITY
 }
 
 export const KNOWN_OPERATIONS = Object.freeze(Object.keys(OPERATION_CAPABILITY))
@@ -642,6 +644,9 @@ export class PagesService {
     }
     if (Object.prototype.hasOwnProperty.call(REASONING_CAPABILITY, operation)) {
       return runReasoningOperation(operation, input)
+    }
+    if (Object.prototype.hasOwnProperty.call(SCIENCE_CAPABILITY, operation)) {
+      return runScienceOperation(operation, input)
     }
 
     switch (operation) {

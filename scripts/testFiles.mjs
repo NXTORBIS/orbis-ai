@@ -256,5 +256,6 @@ export const TEST_FILES = [
   'src/shared/compute/geometry.test.ts',
   'src/main/pages/engines.test.ts',
   'src/main/pages/labEngines.test.ts',
+  'src/main/pages/scienceEngines.test.ts',
   'src/main/pages/serving.test.ts',
 ]
