@@ -272,20 +272,32 @@ describe('what the model writes is never trusted', () => {
 
 describe('the trial run', () => {
   it('reports an engine refusing the numbers rather than calling it a pass', async () => {
-    // A launch angle of 0 makes the range zero and the flight time zero, which several of these engines refuse.
+    // A launch angle of 0 gives a flight time of zero, which this engine refuses. The point is that the refusal is
+    // what the evidence says -- not that the Page ran, and not an assumption about what the engine does.
     const impossible = goodSpec()
     ;(impossible.inputs as Record<string, unknown>[])[1].initial = 0
     ;(impossible.inputs as Record<string, unknown>[])[1].minimum = 0
-    const { service } = serviceWith([impossible])
+    const { service } = serviceWith([impossible, impossible, impossible])
     const outcome = await service.generate('p1', 'calculate the range of a projectile')
-    const evidence = outcome.compiled === null ? null : service.tryRun(outcome.compiled.document)
-    // Whether the engine refuses it or answers zero is the engine's business. What matters is that whatever it did is
-    // what the evidence says, rather than an assumption.
-    if (evidence !== null && !evidence.results[0].ok) {
-      assert.ok(String(evidence.results[0].message).length > 0)
-    } else {
-      assert.equal(outcome.session.stage, 'ready')
-    }
+
+    // It is not offered, because it does not work. Being built is not the same as working.
+    assert.notEqual(outcome.session.stage, 'ready')
+    assert.equal(outcome.session.failure?.code, 'would-not-run')
+    // And the reason is the engine's own sentence, not a summary of it.
+    const said = (outcome.session.failure?.problems ?? []).map((one) => one.message).join(' ')
+    assert.ok(said.length > 0, 'no reason was kept')
+  })
+
+  it('argues with the model using the engine’s own words, rather than a summary', async () => {
+    const impossible = goodSpec()
+    ;(impossible.inputs as Record<string, unknown>[])[1].initial = 0
+    ;(impossible.inputs as Record<string, unknown>[])[1].minimum = 0
+    const { service, asked } = serviceWith([impossible, goodSpec()])
+    const outcome = await service.generate('p1', 'calculate the range of a projectile')
+    assert.equal(asked.length, 2)
+    // Whatever the engine said about a zero angle is what the second attempt was told.
+    assert.ok(asked[1].user.includes('The last attempt did not work'))
+    assert.equal(outcome.session.stage, 'ready')
   })
 
   it('checks a Page whose work waits for a button, rather than leaving it the one Page nobody checked', async () => {

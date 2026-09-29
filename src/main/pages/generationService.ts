@@ -47,15 +47,30 @@ import {
 } from '../../shared/pages/generation.ts'
 import { makePageId } from '../../shared/pages/identity.ts'
 import { resolve as resolveLadder, type Resolution } from '../../shared/pages/resolution.ts'
-import { specErrors, type SpecProblem } from '../../shared/pages/spec.ts'
 import {
   missingPicks,
   validate,
+  VALIDATION_LIMITS,
   whatToRun,
   type RunEvidence,
   type ValidationResult
 } from '../../shared/pages/validation.ts'
 import { argumentsFor, initialState, type PageDocument } from '../../shared/pages/builder.ts'
+import { checkSpec, type PageSpec, type SpecProblem } from '../../shared/pages/spec.ts'
+import { arrange, shapeFor, shouldWait, type Shape } from '../../shared/pages/shapes.ts'
+import { checkLayout, layout } from '../../shared/pages/layout.ts'
+import {
+  afterRound,
+  constraintFor,
+  fromGates,
+  fromLayout,
+  fromRun,
+  fromSpec,
+  NOTHING_ATTEMPTED,
+  planHealing,
+  type Defect,
+  type Repair
+} from '../../shared/pages/healing.ts'
 import type { PageRegistry } from '../../shared/pages/registry.ts'
 import type { QueryIntent } from '../../shared/pages/search.ts'
 import { catalogueForPrompt, generationOperations, SPEC_SIGNATURES } from './generationCatalogue.ts'
@@ -218,10 +233,12 @@ export class GenerationService {
   }
 
   /** One request to the model, returning the raw object or null. */
-  private async askOnce(request: string, complaint: string | null): Promise<Record<string, unknown> | null> {
+  private async askOnce(request: string, complaint: string | null, guidance = ''): Promise<Record<string, unknown> | null> {
     const keys = await this.o.apiKeys()
     if (keys.length === 0) return null
-    const system = `${PLANNER_INSTRUCTIONS}${catalogueForPrompt()}`
+    // The shape says what kind of Page this is, and deliberately nothing about how it is arranged -- that is decided
+    // afterwards by `arrange`, so it is the same for every Page of the same shape.
+    const system = `${PLANNER_INSTRUCTIONS}${catalogueForPrompt()}${guidance === '' ? '' : `\n\n${guidance}`}`
     const user =
       complaint === null
         ? request
@@ -287,23 +304,31 @@ Write it again, fixing those. Everything else about the format is the same.`
     if (session.stage !== 'planning') return { session, compiled: null, resolution: ladder }
 
     // ---- ask, and argue once
+    // What kind of Page this is. It decides the guidance the model is given and, afterwards, how the Page is
+    // arranged -- which is the part a model is deliberately not asked about, because a model asked for an
+    // arrangement gives the one it felt like and this gives the same one every time.
+    const shape = shapeFor(request)
+
     let complaint: string | null = null
     let lastFailure: Failure | null = null
-    for (let attempt = 0; attempt < 2; attempt++) {
-      // A second attempt starts from `planning` whatever the first one got as far as, so the transitions below are
-      // the same on both. Putting this here rather than at each failure is what stops one of them being forgotten.
-      if (attempt > 0) session = this.restart(session, request, profileId, now)
-      const raw = await this.askOnce(request, complaint)
+    let attempted = NOTHING_ATTEMPTED
+
+    for (;;) {
+      const roundStarted = this.now()
+      // A later round starts from `planning` whatever the last one got as far as, so the transitions below are the
+      // same every time. Putting it here rather than at each failure is what stops one of them being forgotten.
+      if (attempted.rounds > 0) session = this.restart(session, request, profileId, now)
+
+      const raw = await this.askOnce(request, complaint, shape.guidance)
       if (raw === null) {
         return this.stop(session, { code: 'model-failed', message: 'Nothing answered the request to write a Page.', problems: [] })
       }
-      // Every attempt takes the same step, including the second. Skipping it because the answer arrived a second
-      // time leaves the session in `planning` while the rest of the loop expects it to have moved on, and the next
-      // transition is then refused -- which showed up as a Page that was built, checked, run, and still reported as
-      // being written.
       const afterPlan = planned(session, JSON.stringify(raw), this.now())
       if (isSessionError(afterPlan)) return { session, compiled: null, resolution: ladder }
       session = afterPlan
+      // The first ask counts. `HEALING_LIMITS.asks` is how many times a model is asked over a Page's whole life, and
+      // writing it the first time is one of those -- counting only the arguments would quietly allow one more.
+      if (attempted.rounds === 0) attempted = { ...attempted, asks: 1 }
 
       // The model's own way of saying nothing here can do it. Believed, because a Page built from an operation that
       // does not fit is worse than no Page.
@@ -315,39 +340,50 @@ Write it again, fixing those. Everything else about the format is the same.`
         })
       }
 
-      const built = compile(raw, {
-        operations: this.operations(),
-        signatures: SPEC_SIGNATURES,
-        pageId: makePageId(this.o.random()),
-        taken: (await this.o.registry(profileId)).pages.map((one) => one.identity.slug),
-        allowStorage: this.o.allowStorage === true
-      })
-      if (isCompileError(built)) {
-        complaint = built.problems.map((one) => `${one.at}: ${one.message}`).join('\n')
-        lastFailure = { code: 'spec-rejected', message: built.message, problems: built.problems }
+      const attempt = await this.buildOnce(raw, profileId, shape)
+      if (attempt.built === null) {
+        // It did not compile. There is no Page to check anything else against.
+        lastFailure = {
+          code: 'spec-rejected',
+          message: 'This description could not be turned into a Page.',
+          problems: attempt.defects.map((one) => ({ at: one.at, severity: 'error' as const, code: one.code, message: one.message }))
+        }
+        const plan = planHealing(attempt.defects, attempted)
+        if (plan.exhausted) break
+        complaint = plan.repairs.map((one) => one.because).join('\n')
+        attempted = afterRound(attempted, plan.repairs, this.now() - roundStarted)
         continue
       }
 
-      // ---- the gates, before anything is run
+      const built = attempt.built
       const afterCompile = compiledStage(session, built, this.now())
       if (isSessionError(afterCompile)) return { session, compiled: built, resolution: ladder }
       session = afterCompile
 
-      const shape = this.gates(built)
-      if (!shape.passed) {
-        complaint = shape.problems.join('\n')
+      const shapeGates = this.gates(built)
+      const afterGates = validated(session, shapeGates, this.now())
+      if (!shapeGates.passed) {
+        // The session has to finish before another round starts; the machine has no way back from `validating`.
+        session = isSessionError(afterGates) ? session : afterGates
         lastFailure = {
           code: 'gates-failed',
           message: 'The Page that was built did not pass its checks.',
-          problems: shape.problems.map((one) => ({ at: '', severity: 'error' as const, code: 'gate', message: one }))
+          problems: shapeGates.problems.map((one) => ({ at: '', severity: 'error' as const, code: 'gate', message: one }))
         }
-        // The session has already moved to validating, so it has to be finished before another attempt starts.
-        const stopped = validated(session, shape, this.now())
-        session = isSessionError(stopped) ? session : stopped
-        if (attempt === 0) continue
-        return { session, compiled: built, resolution: ladder }
+        const plan = planHealing([...attempt.defects, ...fromGates(shapeGates.problems)], attempted)
+        if (plan.exhausted) break
+        const repaired = this.repair(built, plan.repairs)
+        const toAsk = plan.repairs.filter((one) => !one.deterministic).map((one) => one.because).join('\n')
+        attempted = afterRound(attempted, plan.repairs, this.now() - roundStarted)
+        // A deterministic repair produced a new Page without asking anybody. If it is now fit, nothing more is
+        // needed -- which is the whole point of repairing at the layer that was wrong.
+        if (repaired !== null && toAsk === '') {
+          const again = this.checkBuilt(repaired, attempt.defects)
+          if (again.ready) return { session: this.finish(session, repaired, again.validation), compiled: repaired, resolution: ladder }
+        }
+        complaint = toAsk
+        continue
       }
-      const afterGates = validated(session, shape, this.now())
       if (isSessionError(afterGates)) return { session, compiled: built, resolution: ladder }
       session = afterGates
 
@@ -358,21 +394,44 @@ Write it again, fixing those. Everything else about the format is the same.`
       const afterRun = tried(session, full, this.now())
       session = isSessionError(afterRun) ? session : afterRun
 
-      if (trouble === null && full.passed) return { session, compiled: built, resolution: ladder }
+      if (trouble === null && full.passed && !attempt.defects.some((one) => one.severity === 'error')) {
+        return { session, compiled: built, resolution: ladder }
+      }
 
-      complaint = trouble ?? full.problems.join('\n')
       lastFailure = {
         code: 'would-not-run',
         message: 'The Page was built and its calculations did not answer.',
-        problems: (full.problems.length > 0 ? full.problems : [complaint]).map((one) => ({
+        problems: (full.problems.length > 0 ? full.problems : [trouble ?? 'It did not work.']).map((one) => ({
           at: '',
           severity: 'error' as const,
           code: 'run',
           message: one
         }))
       }
-      if (attempt === 0) continue
-      return { session, compiled: built, resolution: ladder }
+      // What running it actually found, as run defects rather than as gate problems.
+      //
+      // The difference decides where they go. A gate problem is a sentence about the Page as a whole and the
+      // classifier can only give up on it; a run defect carries an engine's own words about one calculation -- "the
+      // angle has to be between 0 and 90", "distance is not something flight returns, it returns range" -- which is
+      // the most specific thing anybody has and is worth asking a model about.
+      const refused = evidence.results
+        .filter((one) => !one.ok)
+        .map((one) => ({ name: one.name, message: one.message ?? 'The calculation refused these numbers.' }))
+      const wrongPicks = missingPicks(built.document, evidence).map((one) => ({
+        name: one.step,
+        message: `"${one.pick}" is not something ${one.step} returns. It returns: ${one.available.join(', ')}.`
+      }))
+      const defects = [
+        ...attempt.defects,
+        ...fromRun([...refused, ...wrongPicks]),
+        // The gates only where the run found nothing, so the same trouble is not counted twice.
+        ...(refused.length === 0 && wrongPicks.length === 0 ? fromGates(full.problems) : [])
+      ]
+      const plan = planHealing(defects, attempted)
+      if (plan.exhausted) break
+      const toAsk = plan.repairs.filter((one) => !one.deterministic).map((one) => one.because).join('\n')
+      complaint = toAsk === '' ? trouble : toAsk
+      attempted = afterRound(attempted, plan.repairs, this.now() - roundStarted)
     }
 
     return {
@@ -380,6 +439,87 @@ Write it again, fixing those. Everything else about the format is the same.`
       compiled: null,
       resolution: ladder
     }
+  }
+
+  /**
+   * One attempt at turning what the model wrote into a Page, with everything that checks its shape.
+   *
+   * The order is the pipeline's, and each step changes what the next one sees: the specification is read, arranged
+   * to its shape, and has its heavy work moved off the typing path -- all before it is compiled, because all of it
+   * changes what would be compiled. The layout is then worked out and checked, which is arithmetic on what is there
+   * and needs nothing to have been rendered.
+   */
+  private async buildOnce(raw: unknown, profileId: string, shape: Shape): Promise<{ built: Compiled | null; defects: Defect[] }> {
+    const read = checkSpec(raw, this.operations(), SPEC_SIGNATURES)
+    if (!read.usable || read.normalised === null) {
+      return { built: null, defects: fromSpec(read.problems.filter((one) => one.severity === 'error')) }
+    }
+
+    const arranged = arrange(read.normalised, shape)
+    const waits = shouldWait(arranged, VALIDATION_LIMITS.perKeystroke)
+    const ready: PageSpec =
+      waits.length === 0
+        ? arranged
+        : { ...arranged, steps: arranged.steps.map((one) => (waits.includes(one.name) ? { ...one, when: 'button' as const } : one)) }
+
+    const built = compile(ready, {
+      operations: this.operations(),
+      signatures: SPEC_SIGNATURES,
+      pageId: makePageId(this.o.random()),
+      taken: (await this.o.registry(profileId)).pages.map((one) => one.identity.slug),
+      allowStorage: this.o.allowStorage === true
+    })
+    if (isCompileError(built)) return { built: null, defects: fromSpec(built.problems) }
+
+    return { built, defects: fromLayout(checkLayout(layout(ready), ready.outputs)) }
+  }
+
+  /**
+   * A deterministic repair performed.
+   *
+   * Only the ones that can be done here without asking anybody. Moving a calculation off the typing path is the one
+   * that fires in practice, because the layout engine prevents its own defects by construction rather than producing
+   * them and fixing them afterwards. Null means nothing could be done here, which is not a failure -- it means the
+   * repair belongs to a layer this does not own.
+   */
+  private repair(built: Compiled, repairs: readonly Repair[]): Compiled | null {
+    const constraints = repairs.map(constraintFor).filter((one): one is NonNullable<typeof one> => one !== null)
+    if (!constraints.some((one) => one.kind === 'defer-computation')) return null
+
+    // One fewer per keystroke than the gate allows, so the repaired Page is inside the limit rather than exactly on
+    // it. A repair that lands on the boundary fails again the moment anything else changes.
+    const waits = shouldWait(built.spec, Math.max(1, VALIDATION_LIMITS.perKeystroke - 1))
+    if (waits.length === 0) return null
+    const next: PageSpec = {
+      ...built.spec,
+      steps: built.spec.steps.map((one) => (waits.includes(one.name) ? { ...one, when: 'button' as const } : one))
+    }
+    const again = compile(next, {
+      operations: this.operations(),
+      signatures: SPEC_SIGNATURES,
+      pageId: built.manifest.pageId,
+      taken: [],
+      allowStorage: this.o.allowStorage === true
+    })
+    return isCompileError(again) ? null : again
+  }
+
+  /** Whether a repaired Page is now fit to offer. */
+  private checkBuilt(built: Compiled, carried: readonly Defect[]): { ready: boolean; validation: ValidationResult } {
+    const evidence = this.tryRun(built.document)
+    const validation = this.gates(built, evidence)
+    const stillWrong = carried.some((one) => one.severity === 'error')
+    return { ready: validation.passed && complaintFrom(built.document, evidence) === null && !stillWrong, validation }
+  }
+
+  /** A session taken to ready, for a Page that was repaired rather than written correctly the first time. */
+  private finish(session: GenerationSession, built: Compiled, validation: ValidationResult): GenerationSession {
+    const afterCompile = compiledStage(session, built, this.now())
+    if (isSessionError(afterCompile)) return session
+    const afterGates = validated(afterCompile, validation, this.now())
+    if (isSessionError(afterGates)) return afterCompile
+    const afterRun = tried(afterGates, validation, this.now())
+    return isSessionError(afterRun) ? afterGates : afterRun
   }
 
   /**
@@ -424,4 +564,4 @@ Write it again, fixing those. Everything else about the format is the same.`
 
 /** The errors from a compile, as sentences somebody can read. */
 export const explainProblems = (problems: readonly SpecProblem[]): string[] =>
-  specErrors(problems).map((one) => (one.at === '' ? one.message : `${one.at}: ${one.message}`))
+  problems.filter((one) => one.severity === 'error').map((one) => (one.at === '' ? one.message : `${one.at}: ${one.message}`))
