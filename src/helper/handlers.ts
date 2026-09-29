@@ -91,6 +91,14 @@ export interface HandlerDeps {
   galaxy?: () => GalaxyDeps | null | undefined
   /** The app's search-box suggestions and local speech to text, for the pages in the browser (search results); when given, those channels exist. */
   appServices?: () => AppServicesDeps | null | undefined
+  /**
+   * Orbis's own Pages, for the Pages tab in search.
+   *
+   * Given by the app, because the register is the app's: it holds the built-in Pages and whatever this profile has
+   * built, and the helper has neither. Absent when Orbis is running as the browser alone, and the tab then finds
+   * nothing -- which is the truth, rather than a tab that is missing for a reason nobody can see.
+   */
+  pages?: () => { search(query: string): Promise<{ title: string; url: string; snippet: string; site: string }[]> } | null | undefined
   /** Saved Orion Search sessions: the app's own store when given, else the helper opens the same database under dataDir. */
   searchSessions?: SearchSessionsDeps['store']
   /** Chats: the app's own store when given, else the helper opens the same folder under dataDir. */
@@ -394,6 +402,20 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
     'search:run': async ([query, vertical], { signal }) => {
       const words = typeof query === 'string' ? query.slice(0, 300) : ''
       const asked = typeof vertical === 'string' ? vertical : 'all'
+      // Orbis's own Pages. Answered by the app when it is there, because only the app knows which Pages this profile
+      // has built; with no app there are no user Pages to know about, and the tab says so rather than being absent.
+      if (asked === 'pages') {
+        const started = Date.now()
+        const results = (await deps.pages?.()?.search(words)) ?? []
+        return {
+          query: words,
+          vertical: 'pages',
+          results,
+          wantsAnswer: false,
+          problem: results.length ? null : 'No Orbis Page does that yet.',
+          tookMs: Date.now() - started
+        }
+      }
       if (isSpecialized(asked as never)) return specialized.search(asked as never, words)
       return runSearch({ query: words, vertical: 'all', fetchFn: doFetch, signal })
     },

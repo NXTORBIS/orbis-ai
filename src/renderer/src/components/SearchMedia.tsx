@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, Copy, Download, ExternalLink, Globe, Link2, 
 import type { SpecializedResult } from '../../../shared/searchProviders'
 import { saidCount, saidDuration } from '../../../shared/searchProviders'
 import type { NoticeKind } from '../App'
+import { isOrbisPage } from '../../../shared/orbisSearch'
 
 /**
  * Looking at what a search found, without leaving the search.
@@ -27,6 +28,9 @@ export function SiteIcon({ url, size = 16 }: { url: string; size?: number }): Re
     }
   })()
 
+  // An Orbis Page is not a website and has no icon to show. Nothing is drawn for it -- not a globe, which would say
+  // it came from somewhere on the web, and not a badge, which would be Orbis marking its own results out.
+  if (isOrbisPage(url)) return <></>
   if (!origin || failed) return <Globe className="osearch-favicon" size={size} aria-hidden="true" />
   return <img className="osearch-favicon" src={`${origin}/favicon.ico`} alt="" width={size} height={size} loading="lazy" onError={() => setFailed(true)} />
 }

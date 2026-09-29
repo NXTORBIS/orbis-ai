@@ -34,7 +34,17 @@ export interface SearxngOptions {
   now?: () => number
 }
 
-const DEFAULT_TIMEOUT = 9_000
+/**
+ * How long to wait for the specialized service.
+ *
+ * Longer than the service's own ceiling for one engine, which is 14 seconds. It used to be nine, which meant any
+ * engine slower than nine seconds was reported as the service being unreachable -- News and Social were dead for
+ * exactly that reason, while the service was answering them perfectly well a few seconds later.
+ *
+ * The two numbers have to stay in this order. A client that gives up before the thing it is asking has finished does
+ * not discover that it is slow; it discovers that it is broken, and says so.
+ */
+const DEFAULT_TIMEOUT = 20_000
 /** After this many refusals in a row the service is treated as down, and asked again only occasionally. */
 const FAILURES_BEFORE_RESTING = 3
 const REST_MS = 60_000

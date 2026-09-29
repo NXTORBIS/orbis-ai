@@ -6,6 +6,7 @@ import {
   PAGE_SEARCH_LIMITS,
   directPage,
   pagesModule,
+  pageResults,
   suggestPages,
   wordsForIntent
 } from './search.ts'
@@ -354,5 +355,53 @@ describe('assumptions', () => {
 
   it('says every suggestion explains itself', () => {
     assert.ok(PAGE_SEARCH_ASSUMPTIONS.some((one) => /says why it was chosen/.test(one)))
+  })
+})
+
+describe('Orbis Pages as ordinary search results', () => {
+  const state = registry(UNITS, SOLVER)
+
+  it('gives a Page the same shape as a web result, and no more', () => {
+    const [first] = pageResults(state, 'unit converter', null)
+    assert.deepEqual(Object.keys(first).sort(), ['site', 'snippet', 'title', 'url'])
+    assert.equal(first.title, 'Unit Converter')
+    assert.equal(first.url, 'orbis://pages/unit-converter')
+  })
+
+  it('shows the address a person reads, the way a website’s is read', () => {
+    // `pages/unit-converter` says where it is as plainly as `en.wikipedia.org` does, and it is the real address
+    // rather than a label for one.
+    assert.equal(pageResults(state, 'unit converter', null)[0].site, 'pages/unit-converter')
+  })
+
+  it('puts an exact title above a Page that merely mentions the words', () => {
+    assert.equal(pageResults(state, 'equation solver', null)[0].title, 'Equation Solver')
+  })
+
+  it('finds a Page by what it does, not only by its name', () => {
+    assert.equal(pageResults(state, 'celsius', null)[0].title, 'Unit Converter')
+    assert.equal(pageResults(state, 'algebra', null)[0].title, 'Equation Solver')
+  })
+
+  it('finds nothing for a query no Page is about', () => {
+    assert.deepEqual(pageResults(state, 'sourdough starter', null), [])
+  })
+
+  it('lists everything for an empty query, the way an empty folder listing does', () => {
+    // The Pages tab is for Pages. Asked for nothing in particular, it shows what there is.
+    assert.equal(pageResults(state, '', null).length, 2)
+  })
+
+  it('ignores words too common to be evidence of anything', () => {
+    assert.deepEqual(pageResults(state, 'the and a', null), [])
+  })
+
+  it('never returns more than it was asked for', () => {
+    assert.equal(pageResults(state, '', null, 1).length, 1)
+  })
+
+  it('carries the summary a Page wrote for itself, as the line under the link', () => {
+    const [first] = pageResults(state, 'unit converter', null)
+    assert.equal(first.snippet, 'Convert between metres, miles, kilograms and hundreds of other units.')
   })
 })

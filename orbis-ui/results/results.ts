@@ -1,4 +1,4 @@
-import { readBang, siteOf, tidyResults, VERTICALS, wantsAnswer } from '../../src/shared/orbisSearch.ts'
+import { isOrbisPage, readBang, siteOf, tidyResults, VERTICALS, wantsAnswer } from '../../src/shared/orbisSearch.ts'
 import type { SearchVertical } from '../../src/shared/orbisSearch.ts'
 import { addSources, addTurn, buildAsk, changesTopic, constraintIn, isFollowUp, newSearchSession, referencedItems, wantsFreshResearch, withConstraint, withTopic } from '../../src/shared/orionSearch.ts'
 import type { OrionSearchSession } from '../../src/shared/orionSearch.ts'
@@ -24,7 +24,7 @@ import type { ComposedPage } from './modules.ts'
  */
 
 const $ = (id: string): HTMLElement => document.getElementById(id) as HTMLElement
-const LABEL: Record<SearchVertical, string> = { orion: 'Orion', all: 'All', images: 'Images', videos: 'Videos', news: 'News', maps: 'Maps', music: 'Music', science: 'Science', files: 'Files', social: 'Social' }
+const LABEL: Record<SearchVertical, string> = { orion: 'Orion', all: 'All', images: 'Images', videos: 'Videos', pages: 'Pages', news: 'News', maps: 'Maps', music: 'Music', science: 'Science', files: 'Files', social: 'Social' }
 const AUTO_MODEL = 'orion/auto'
 
 interface Result {
@@ -272,18 +272,24 @@ function wearIcon(tile: HTMLElement, src: string): void {
 
 function siteLine(href: string, name: string): HTMLElement {
   const site = el('span', 'site')
-  const tile = el('span', 'favicon letter')
   let host = ''
   try {
     host = new URL(href).host.toLowerCase()
   } catch {
     host = ''
   }
-  tile.textContent = (name || host).replace(/^www\./, '').charAt(0).toUpperCase() || '?'
-  const known = host ? iconKnown.get(host) : undefined
-  if (known) wearIcon(tile, known)
-  else if (host) iconTiles.set(host, [...(iconTiles.get(host) ?? []), tile])
-  site.append(tile, el('span', undefined, name))
+  // An Orbis Page carries no icon, and the absence is the honest thing rather than a gap. A Page is not a site: it
+  // has no favicon to fetch, and the letter tile that stands in for one while a site's icon loads would here be a
+  // letter that never becomes anything -- Orbis drawing a badge for itself in its own results.
+  if (!isOrbisPage(href)) {
+    const tile = el('span', 'favicon letter')
+    tile.textContent = (name || host).replace(/^www\./, '').charAt(0).toUpperCase() || '?'
+    const known = host ? iconKnown.get(host) : undefined
+    if (known) wearIcon(tile, known)
+    else if (host) iconTiles.set(host, [...(iconTiles.get(host) ?? []), tile])
+    site.append(tile)
+  }
+  site.append(el('span', undefined, name))
   return site
 }
 
@@ -453,7 +459,8 @@ async function composed(): Promise<void> {
 async function search(): Promise<void> {
   if (!query) return status('Search the web with Orbis. Type in the address bar above.')
   if (vertical === 'orion') return void orion()
-  if (!navigator.onLine) return status(downMessage(null), () => void search())
+  // Pages are on this machine, so being offline is not a reason not to look. Every other vertical asks somebody.
+  if (vertical !== 'pages' && !navigator.onLine) return status(downMessage(null), () => void search())
   status(vertical === 'all' ? 'Searching the web…' : `Searching ${LABEL[vertical].toLowerCase()}…`)
 
   // ALL is composed: the query is understood, and only the sections it earns are built, each from something real.

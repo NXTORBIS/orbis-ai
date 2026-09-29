@@ -110,6 +110,18 @@ import { registerPortableIpc } from './portable/ipc'
 import { PagesStore } from './pages/store'
 import { PagesService } from './pages/service'
 import { registerPagesIpc } from './pages/ipc'
+import { pageResults } from '../shared/pages/search'
+import { createSearchService } from '../search-service/server'
+import type { RunningService } from '../search-service/server'
+
+/**
+ * The Pages tab's way into the register.
+ *
+ * A holder rather than a direct call because `search:run` is registered while the window is being set up and the
+ * Pages service is built later. Null until then, and the tab says the register is not ready rather than reporting
+ * that no Page matched -- which would be a different answer to a different question.
+ */
+let searchOrbisPages: ((query: string) => Promise<{ title: string; url: string; snippet: string; site: string }[]>) | null = null
 import { GeneratedPages } from './pages/generated'
 import { GeneratedStore } from './pages/generatedStore'
 import { OPERATION_CAPABILITIES } from './pages/service'
@@ -923,10 +935,61 @@ ${summaryBlock(summary)}`
    * provider, which asks sources that hold that kind of thing. Neither can break the other: a category that cannot be
    * reached says so and web search carries on.
    */
+  /**
+   * Orbis's own specialized search service, started here.
+   *
+   * It is Orbis's code calling open APIs -- Wikimedia Commons, Nominatim, Crossref, the Internet Archive and the
+   * rest -- and it binds to the loopback interface only. It used to be expected to have been started by somebody,
+   * and nothing started it, so eight tabs in the browser's search page asked a service that was not there and came
+   * back with nothing. A tab that is always empty reads as a feature that does not work, which is what it was.
+   *
+   * Run in this process rather than as a child: it is a plain HTTP listener on loopback, and a child process would
+   * be a second thing to start, wait for, notice the death of, and restart.
+   *
+   * A port that is already taken is not an error. Something is already serving it -- another Orbis, or the service
+   * run by hand -- and asking it is exactly what this would have done anyway.
+   */
+  let searchService: RunningService | null = null
+  if (!process.env.ORBIS_SEARCH_ENDPOINT) {
+    // Started without being waited for: the window should not be held up by a listener binding, and a search that
+    // arrives before it is up is answered by the provider's own "not reached" path rather than by a hang.
+    void createSearchService({ fetchFn: (url, init) => net.fetch(url, init) as Promise<Response> })
+      .listen()
+      .then((running) => {
+        searchService = running
+      })
+      .catch(() => {
+        searchService = null
+      })
+    app.on('before-quit', () => {
+      void searchService?.close()
+    })
+  }
   const specializedSearch = new SearxngProvider({ endpoint: endpointFromEnvironment(), fetchFn: (url, init) => net.fetch(url, init) })
   ipcMain.handle('search:run', async (_e, query: unknown, vertical: unknown) => {
     const words = typeof query === 'string' ? query : ''
     const asked = typeof vertical === 'string' ? vertical : 'all'
+    // Orbis's own Pages, answered from the register. It reaches no network, so it is the one tab that still works
+    // with nothing connected -- and it is answered here rather than by a provider because there is nobody to ask.
+    if (asked === 'pages') {
+      const started = Date.now()
+      // Read through a holder because this handler is registered before the Pages service exists. Null means the
+      // register is not up yet, which is a different thing from there being no Page -- and the tab says so.
+      const results = (await searchOrbisPages?.(words)) ?? []
+      return {
+        query: words,
+        vertical: 'pages',
+        results,
+        wantsAnswer: false,
+        problem:
+          searchOrbisPages === null
+            ? 'Orbis Pages are not ready yet.'
+            : results.length
+              ? null
+              : 'No Orbis Page does that yet. Describe one on the Pages screen and Orbis will build it.',
+        tookMs: Date.now() - started
+      }
+    }
     if (isSpecialized(asked)) return specializedSearch.search(asked, words)
     return runSearch({ query: words, vertical: 'all', fetchFn: (url, init) => net.fetch(url, init) })
   })
@@ -1465,6 +1528,10 @@ if (!app.requestSingleInstanceLock()) {
       engines: {},
       generated: async (profileId) => (generated === null ? [] : generated.forRegistry(profileId))
     })
+    searchOrbisPages = async (words: string) => {
+      const profileId = (await profilesStore.active()).id
+      return pageResults(await pages.state(profileId), words, profileId)
+    }
     generated = new GeneratedPages({
       store: generatedStore,
       registry: (profileId) => pages.state(profileId),
@@ -1627,6 +1694,8 @@ if (!app.requestSingleInstanceLock()) {
           skills: () => (skillsForRuns ? { manager: skillsForRuns } : null),
           galaxy: () => galaxyForChat,
           appServices: () => appServicesForBrowser,
+          // The Pages tab in the browser's own search page, answered from the same register the Pages screen uses.
+          pages: () => (searchOrbisPages === null ? null : { search: searchOrbisPages }),
           searchSessions: () => searchSessionsForBrowser,
           // Orbis has no account and nothing to sign in to. This is the name the person typed into the app, read fresh each
           // time so renaming yourself in the Orbis window renames you in the browser too, with no restart and no second identity.

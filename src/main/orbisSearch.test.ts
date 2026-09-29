@@ -1,6 +1,7 @@
-import { test } from 'node:test'
+import { describe, it, test } from 'node:test'
 import assert from 'node:assert/strict'
-import { BANGS, isOrbisPage, readBang, readSearchPageUrl, searchDestination, searchPageUrl, siteOf, tidyResults, wantsAnswer } from '../shared/orbisSearch.ts'
+import { BANGS, isOrbisPage, isPagesSearch, readBang, readSearchPageUrl, searchDestination, searchPageUrl, siteOf, tidyResults, VERTICALS, wantsAnswer } from '../shared/orbisSearch.ts'
+import { isSpecialized } from '../shared/searchProviders.ts'
 
 test('a search has an address of its own, so it can be a tab, a bookmark and a place in history', () => {
   assert.equal(searchPageUrl('how tall is everest'), 'orbis://search?q=how%20tall%20is%20everest')
@@ -88,4 +89,36 @@ test('a search page holds nothing about who asked, only what was asked', () => {
   const url = searchPageUrl('something private')
   assert.doesNotMatch(url, /id=|uid=|session|token|user/i)
   assert.equal(url.split('?')[1], 'q=something%20private')
+})
+
+describe('the tabs across the top of a search', () => {
+  it('puts Pages straight after Videos', () => {
+    // Where it sits is the whole of what somebody asked for, so it is a fact worth holding rather than a detail of
+    // an array literal that the next edit can shuffle.
+    assert.equal(VERTICALS[VERTICALS.indexOf('videos') + 1], 'pages')
+  })
+
+  it('has every tab exactly once, and Orion and All still lead', () => {
+    assert.equal(new Set(VERTICALS).size, VERTICALS.length)
+    assert.deepEqual(VERTICALS.slice(0, 2), ['orion', 'all'])
+  })
+
+  it('knows Pages is searched on this machine rather than asked of anybody', () => {
+    assert.ok(isPagesSearch('pages'))
+    for (const other of VERTICALS.filter((one) => one !== 'pages')) assert.equal(isPagesSearch(other), false, other)
+  })
+
+  it('does not send Pages to the specialized provider, which has nothing to do with them', () => {
+    assert.equal(isSpecialized('pages'), false)
+  })
+
+  it('gives a Page an address the search page can hold', () => {
+    assert.equal(searchPageUrl('convert units', 'pages'), 'orbis://search?q=convert%20units&in=pages')
+    assert.deepEqual(readSearchPageUrl('orbis://search?q=convert&in=pages'), { query: 'convert', vertical: 'pages', at: null })
+  })
+
+  it('tells a Page address apart from a website, which is what decides the logo', () => {
+    assert.ok(isOrbisPage('orbis://pages/unit-converter'))
+    assert.equal(isOrbisPage('https://en.wikipedia.org/wiki/Hello'), false)
+  })
 })

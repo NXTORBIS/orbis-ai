@@ -63,17 +63,27 @@ function link(href, className) {
 }
 
 
+/**
+ * Ask Orbis whether it is there, and say so in the header.
+ *
+ * There is nothing here about which model Orion uses. There used to be, filling a `<select>` from `models:list` --
+ * and the `<select>` was removed from this page without the code that filled it, so `modelSelect` and `MODEL_KEY`
+ * were read every time and declared nowhere. The `ReferenceError` landed in the catch below, *after* `connected` had
+ * been set true, so every load ended with `connected = false` and a header reading "Orbis is running but did not
+ * answer" on a machine where Orbis was answering perfectly well.
+ *
+ * It was worse than a wrong header: `connected` gates the panel's web search (which reported "Orbis is not running,
+ * so nothing was searched") and its workspace suggestions (which silently returned none). One undeclared variable
+ * made three features look broken and the retry loop repeated it every four seconds for ever.
+ *
+ * So this asks the one question the header actually answers, and nothing else. A panel that wants a model picker can
+ * add one along with the markup to put it in.
+ */
 async function connect() {
   try {
     const ping = await call('helper:ping')
-    const list = await call('models:list')
     connected = true
     setStatus(ping.hasApiKey ? 'ready' : 'no-key')
-    if (!modelSelect.options.length) {
-      for (const m of list.models) modelSelect.add(new Option(m.label, m.id))
-      const saved = localStorage.getItem(MODEL_KEY)
-      modelSelect.value = list.models.some((m) => m.id === saved) ? saved : list.default
-    }
   } catch (err) {
     connected = false
     // The error's own words never reach the header: it is a diagnostic, and the header is not a log.
@@ -112,13 +122,22 @@ window.orbisGoTo = (view) => {
   showTab(VIEWS.includes(wanted) ? wanted : 'home')
 }
 
-function showTab(name) {
+/**
+ * Show one view.
+ *
+ * `landing` is true for the very first call, where the view is whatever the address already named. That one replaces
+ * the address instead of pushing it: pushing would put an entry in front of the page's own arrival, so the first Back
+ * would appear to do nothing.
+ */
+function showTab(name, landing = false) {
   // Every view in the panel, including the rail's own (Tabs, Clipboard, ...), so choosing a tab always hides whichever was in front.
   for (const view of document.querySelectorAll('.view')) view.hidden = view.id !== `view-${name}`
   for (const id of VIEWS) $(`tab-${id}`)?.setAttribute('aria-selected', String(id === name))
-  // Keep the address in step with what is on screen, without adding a history entry
-  // for every tab press: the address describes the page, it is not a trail through it.
-  if (viewFromAddress() !== name) history.replaceState(null, '', `#${name}`)
+  // Keep the address in step with what is on screen, and leave a history entry so Back returns to the view you came
+  // from. It used to `replaceState`, on the reasoning that the address describes the page rather than a trail through
+  // it -- but the comment above promises a view is "a page you can open, link to, bookmark and land on directly", and
+  // a page you cannot go Back from is not one of those. Back left the panel entirely instead.
+  if (viewFromAddress() !== name) history[landing ? 'replaceState' : 'pushState'](null, '', `#${name}`)
   document.dispatchEvent(new CustomEvent('orbis:view', { detail: { name } }))
   if (name === 'block') document.dispatchEvent(new CustomEvent('orbis:blocking-shown'))
   else if (name === 'notes') document.dispatchEvent(new CustomEvent('orbis:notes-shown'))
@@ -294,7 +313,7 @@ $('search-form').addEventListener('submit', async (e) => {
 // Open on whatever the address names, so chrome://orbis#galaxy lands on Galaxy rather than on Ask and a click.
 // With no address, the Command Center: the panel opens on everything Orbis can do rather than on one of them.
 const opening = viewFromAddress()
-showTab(opening ?? 'home')
+showTab(opening ?? 'home', true)
 // And follow the address afterwards: going back, or pasting a different one, moves the view.
 window.addEventListener('hashchange', () => {
   const wanted = viewFromAddress()

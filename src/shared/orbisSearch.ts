@@ -24,14 +24,33 @@ export const SEARCH_PAGE = 'orbis://search'
  * specialized provider, which queries sources that actually hold that kind of thing. The two are separate on purpose:
  * either can be replaced, or be down, without the other noticing.
  */
-export type SearchVertical = 'orion' | 'all' | 'images' | 'videos' | 'news' | 'maps' | 'music' | 'science' | 'files' | 'social'
+export type SearchVertical = 'orion' | 'all' | 'images' | 'videos' | 'pages' | 'news' | 'maps' | 'music' | 'science' | 'files' | 'social'
 // The order the tabs appear in. The expected ones lead, and Orbis's own follow, because a working vertical is not
 // worth losing to a tidier row.
 //
 // There is no Shopping tab. Shopping needs a product catalogue with real prices and ratings, and every general one
 // requires an account and a key; Orbis calls public APIs directly and does not scrape. A tab that could only ever be
 // empty, or filled with invented prices, is worse than no tab -- so until there is a source, there is no tab.
-export const VERTICALS: SearchVertical[] = ['orion', 'all', 'images', 'videos', 'news', 'maps', 'music', 'science', 'files', 'social']
+export const VERTICALS: SearchVertical[] = [
+  'orion',
+  'all',
+  'images',
+  'videos',
+  // Orbis's own Pages. Here rather than at the end because it is one of the tabs most likely to hold the answer --
+  // a converter, a calculator, a lab -- and a tab nobody scrolls to is a tab nobody uses.
+  //
+  // It is the only vertical that reaches no network at all: the Pages are already on this machine.
+  'pages',
+  'news',
+  'maps',
+  'music',
+  'science',
+  'files',
+  'social'
+]
+
+/** Orbis's own Pages, which are searched on this machine rather than asked of anybody. */
+export const isPagesSearch = (vertical: SearchVertical): boolean => vertical === 'pages'
 
 /** Asking Orion, which is its own way of searching rather than something added to the top of the web results. */
 export const isOrionSearch = (vertical: SearchVertical): boolean => vertical === 'orion'

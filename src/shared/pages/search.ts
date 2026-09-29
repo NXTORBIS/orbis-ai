@@ -263,6 +263,60 @@ function prefillFor(intents: readonly string[], query: string): string | null {
   return intents.some((one) => useful.has(one.toLowerCase())) ? query : null
 }
 
+/**
+ * Orbis Pages as ordinary search results.
+ *
+ * Deliberately the same shape as a web result, and drawn the same way, because a Page *is* an ordinary result: it has
+ * an address, a title and a description, and somebody looking for a unit converter does not care whether the thing
+ * that converts units arrived over a network. Giving Pages their own card, badge or logo would be Orbis advertising
+ * itself inside its own results, which is the one thing this whole module was written to avoid.
+ *
+ * This is the Pages tab, so the bar is different from `suggestPages`. That function decides whether a Page is worth
+ * taking space from the web on the All tab, and is deliberately hard to satisfy. Here somebody has asked for Pages,
+ * so everything that matches at all belongs -- and an empty query lists them, the way an empty folder listing does.
+ */
+export function pageResults(
+  registry: PageRegistry,
+  query: string,
+  profileId: string | null,
+  limit = 30
+): { title: string; url: string; snippet: string; site: string }[] {
+  const asked = query.trim().toLowerCase()
+  const words = asked.split(/[^a-z0-9]+/).filter((one) => one.length > 1 && !NOISE.has(one))
+
+  const ranked = listPages(registry, { profileId })
+    .map((page) => {
+      const manifest = page.manifest
+      const title = manifest.title.toLowerCase()
+      const rest = [manifest.description, ...manifest.tags, ...manifest.search.keywords, ...manifest.search.aliases]
+        .join(' ')
+        .toLowerCase()
+      // A title match is worth far more than a mention somewhere in the text. Somebody typing "unit converter" wants
+      // the Page called that, not the nine Pages whose description happens to contain the word "unit".
+      let rank = 0
+      if (asked !== '' && title === asked) rank += 100
+      else if (asked !== '' && title.includes(asked)) rank += 50
+      for (const word of words) {
+        if (title.includes(word)) rank += 10
+        else if (rest.includes(word)) rank += 1
+      }
+      // How often it has been opened breaks a tie and never makes one: a popular Page that does not match stays out.
+      return { page, rank: rank === 0 ? 0 : rank + Math.min(5, page.openCount) / 10 }
+    })
+    .filter((one) => asked === '' || one.rank > 0)
+    .sort((a, b) => b.rank - a.rank || a.page.manifest.title.localeCompare(b.page.manifest.title))
+    .slice(0, limit)
+
+  return ranked.map(({ page }) => ({
+    title: page.manifest.title,
+    url: page.identity.canonicalUrl,
+    snippet: page.manifest.search.summary || page.manifest.description,
+    // The address somebody reads, exactly as one is read for a website. `pages/unit-converter` says where it is as
+    // plainly as `en.wikipedia.org` does, and it is the real address rather than a label for one.
+    site: page.identity.canonicalUrl.replace(/^orbis:\/\//, '')
+  }))
+}
+
 export interface PagesModule {
   /** Whether the module should appear at all. */
   show: boolean

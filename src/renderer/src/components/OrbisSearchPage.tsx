@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowUpRight, FileBox, Image, MapPin, Mic, Music, Newspaper, Search, Sparkles, Square, Telescope, Users, Video } from 'lucide-react'
+import { ArrowUpRight, FileBox, Image, LayoutTemplate, MapPin, Mic, Music, Newspaper, Search, Sparkles, Square, Telescope, Users, Video } from 'lucide-react'
 import { useVoiceInput } from '../hooks/useVoiceInput'
 import MediaViewer, { ShareButton, SiteIcon } from './SearchMedia'
 const OrionSearchMode = lazy(() => import('./OrionSearchMode'))
@@ -27,6 +27,7 @@ const VERTICAL_ICON: Record<SearchVertical, typeof Search> = {
   all: Search,
   images: Image,
   videos: Video,
+  pages: LayoutTemplate,
   news: Newspaper,
   maps: MapPin,
   music: Music,
@@ -40,6 +41,7 @@ const VERTICAL_LABEL: Record<SearchVertical, string> = {
   all: 'All',
   images: 'Images',
   videos: 'Videos',
+  pages: 'Pages',
   news: 'News',
   maps: 'Maps',
   music: 'Music',

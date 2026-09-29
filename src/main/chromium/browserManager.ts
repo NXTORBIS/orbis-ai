@@ -90,6 +90,8 @@ export interface BrowserManagerOptions {
   galaxy?: HandlerDeps['galaxy']
   /** The app's search-box suggestions and local speech to text, offered to the results page. */
   appServices?: HandlerDeps['appServices']
+  /** Orbis's own Pages, for the Pages tab in the browser's search page. */
+  pages?: HandlerDeps['pages']
   /** The app's own saved-research store, so the results page and the Orbis window share one instance. */
   searchSessions?: HandlerDeps['searchSessions']
   conversations?: HandlerDeps['conversations']
@@ -210,6 +212,7 @@ export class BrowserManager {
         skills: this.o.skills,
         galaxy: this.o.galaxy,
         appServices: this.o.appServices,
+        pages: this.o.pages,
         searchSessions: this.o.searchSessions,
         conversations: this.o.conversations,
         sidebar: this.o.sidebar,
