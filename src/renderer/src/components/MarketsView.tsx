@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  CandlestickChart,
   Activity,
   BarChart3,
   ChevronDown,
@@ -44,6 +45,11 @@ import DrawingToolbar, { draftDrawing } from './markets/DrawingToolbar'
 import ComparePanel from './markets/ComparePanel'
 import MarginPanel from './markets/MarginPanel'
 import TriggersPanel from './markets/TriggersPanel'
+import { PatternsPanel } from './markets/PatternsPanel'
+import { PatternLibraryPanel } from './markets/PatternLibraryPanel'
+import { PatternAlertsPanel } from './markets/PatternAlertsPanel'
+import { PatternHistoryPanel } from './markets/PatternHistoryPanel'
+import type { PatternMarker } from './markets/MarketChart'
 import PanelWorkspace from './markets/PanelWorkspace'
 import type { Drawing, DrawingKind } from '../../../shared/markets/drawings'
 import { useCurrency } from './markets/useCurrency'
@@ -73,7 +79,7 @@ import type { NoticeKind } from '../App'
  * screen costs a stream while it is open and nothing once it is closed.
  */
 
-type Tab = 'overview' | 'chart' | 'book' | 'trades' | 'derivatives' | 'compare' | 'margin' | 'triggers'
+type Tab = 'overview' | 'chart' | 'book' | 'trades' | 'derivatives' | 'compare' | 'margin' | 'triggers' | 'patterns'
 type Pane = 'dashboard' | 'watchlists' | 'favourites'
 /**
  * Which of the three screens Markets is showing.
@@ -207,6 +213,16 @@ export default function MarketsView({
   const [mode, setMode] = useState<Mode>('markets')
   const [pane, setPane] = useState<Pane>('dashboard')
   const [tab, setTab] = useState<Tab>('overview')
+  /**
+   * The formations to mark on the chart, and which is picked.
+   *
+   * Held here rather than in either place that uses them, so the chart draws exactly what the patterns panel lists.
+   * Two independent copies would eventually disagree, and a marker on a candle the list does not mention is worse than
+   * no marker at all.
+   */
+  const [patternMarkers, setPatternMarkers] = useState<PatternMarker[]>([])
+  const [patternPicked, setPatternPicked] = useState<string | null>(null)
+  const [patternView, setPatternView] = useState<'found' | 'library' | 'alerts' | 'history'>('found')
   /**
    * Whether Markets shows one market in depth or several panels at once.
    *
@@ -1565,7 +1581,10 @@ export default function MarketsView({
                     // Margin is only a tab where leverage could mean anything. On a spot pair with no positions it
                     // would be a screen of zeroes explaining that nothing can be liquidated.
                     'margin',
-                    'triggers'
+                    'triggers',
+                    // Patterns is a tab on the market rather than a section of its own, because "which market am I
+                    // looking at" already has an owner and a second one would eventually disagree with it.
+                    'patterns'
                   ] as Tab[]
                 ).map((id) => {
                   const unavailable =
@@ -1586,6 +1605,8 @@ export default function MarketsView({
                         <Flame size={13} />
                       ) : id === 'compare' ? (
                         <GitCompareArrows size={13} />
+                      ) : id === 'patterns' ? (
+                        <CandlestickChart size={13} />
                       ) : id === 'margin' ? (
                         <Gauge size={13} />
                       ) : id === 'triggers' ? (
@@ -1775,6 +1796,16 @@ export default function MarketsView({
                             })
                         }}
                         onDrawingPicked={setDrawSelected}
+                        patternMarkers={patternMarkers}
+                        selectedPattern={patternPicked}
+                        onPatternPicked={(key) => {
+                          setPatternPicked(key)
+                          // Clicking a marker opens the formation it belongs to, which is the only reason somebody clicks one.
+                          if (key !== null) {
+                            setPatternView('found')
+                            setTab('patterns')
+                          }
+                        }}
                         onDrawingMoved={(id, index, to) => {
                           const current = drawings.find((one) => one.id === id)
                           if (!current || current.locked) return
@@ -1870,6 +1901,47 @@ export default function MarketsView({
                   experience={experience}
                   onNotify={onNotify}
                 />
+              )}
+
+              {tab === 'patterns' && (
+                <>
+                  <div className="mk-seg">
+                    {(
+                      [
+                        ['found', 'On this market'],
+                        ['library', 'Library'],
+                        ['alerts', 'Alerts'],
+                        ['history', 'History']
+                      ] as const
+                    ).map(([id, label]) => (
+                      <button key={id} type="button" className={patternView === id ? 'on' : ''} onClick={() => setPatternView(id)}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  {patternView === 'found' && (
+                    <PatternsPanel
+                      instrumentId={open.instrument.instrumentId}
+                      symbol={open.instrument.symbol}
+                      interval={interval}
+                      onMarkers={setPatternMarkers}
+                      selected={patternPicked}
+                      onSelect={setPatternPicked}
+                      onGoToTime={() => setTab('chart')}
+                    />
+                  )}
+                  {patternView === 'library' && <PatternLibraryPanel />}
+                  {patternView === 'alerts' && (
+                    <PatternAlertsPanel
+                      instrumentId={open.instrument.instrumentId}
+                      symbol={open.instrument.symbol}
+                      interval={interval}
+                    />
+                  )}
+                  {patternView === 'history' && (
+                    <PatternHistoryPanel instrumentId={open.instrument.instrumentId} symbol={open.instrument.symbol} />
+                  )}
+                </>
               )}
             </>
           )}

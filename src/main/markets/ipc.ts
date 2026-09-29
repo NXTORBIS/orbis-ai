@@ -13,6 +13,50 @@ import {
 } from '../../shared/markets/screener.ts'
 import type { Alert, AlertFiring } from '../../shared/markets/alerts.ts'
 import {
+  ALERT_ASSUMPTIONS,
+  checkRule,
+  digestOf,
+  type PatternAlertRule
+} from '../../shared/markets/patternAlerts.ts'
+import { CONTEXT_ASSUMPTIONS, contextFor, timeframeContext } from '../../shared/markets/patternContext.ts'
+import { DETECT_ASSUMPTIONS, detect, detectAt, explain as explainDetection, matchWord, mostSpecific } from '../../shared/markets/patternDetect.ts'
+import {
+  HISTORY_ASSUMPTIONS,
+  compare as comparePatternStats,
+  conditionOn,
+  describeRun,
+  frequencyOf,
+  measureOutcomes,
+  search as searchPatternHistory,
+  summarise as summarisePatternOutcomes,
+  type AnalysisRun,
+  type HistoryQuery
+} from '../../shared/markets/patternHistory.ts'
+import {
+  GEOMETRY_ASSUMPTIONS,
+  checkSequence,
+  geometryOf,
+  relativeTo,
+  rollingStats
+} from '../../shared/markets/candleGeometry.ts'
+import {
+  PATTERNS,
+  PATTERN_ASSUMPTIONS,
+  PATTERN_LIBRARY_VERSION,
+  ancestorsOf,
+  descendantsOf,
+  filterPatterns,
+  patternById,
+  searchPatterns,
+  TOLERANCES,
+  type DetectionMode,
+  type PatternCategory,
+  type PatternDirection
+} from '../../shared/markets/patterns.ts'
+import { SETTINGS_ASSUMPTIONS, WHAT_STOPS } from '../../shared/markets/patternSettings.ts'
+import { ENGINE_ASSUMPTIONS, PatternEngine, decideAlerts, recordsFor } from './patternEngine.ts'
+
+import {
   ASSUMPTIONS,
   cancel,
   place,
@@ -2002,5 +2046,542 @@ export function registerMarketsIpc(o: MarketsIpcOptions): void {
       result: monteCarlo(returns, { runs: count(raw.runs, 50, 5000, 500), seed: count(raw.seed, 1, 1_000_000, 1) }),
       assumptions: VALIDATION_ASSUMPTIONS
     }
+  })
+
+  // ---------------------------------------------------------------- candlestick patterns
+
+  /**
+   * The pattern detector's one engine instance, per this window.
+   *
+   * One rather than one per market, because the cursors that stop it re-examining a candle it has already looked at are
+   * the whole reason it is cheap, and a fresh engine per request would throw them away on every call.
+   */
+  const patternEngines = new Map<string, PatternEngine>()
+  const patternEngineFor = async (profileId: string): Promise<PatternEngine> => {
+    const settings = (await o.store.patterns(profileId)).settings
+    const held = patternEngines.get(profileId)
+    if (held === undefined) {
+      const made = new PatternEngine(settings)
+      patternEngines.set(profileId, made)
+      return made
+    }
+    // Reconfigured every time, so a setting changed in another window takes effect here rather than on the next restart.
+    held.configure(settings)
+    return held
+  }
+
+  const patternMode = (value: unknown): DetectionMode | undefined =>
+    value === 'standard' || value === 'strict' || value === 'research' ? value : undefined
+
+  /** The library itself. Static, so this is the one pattern channel that needs no market. */
+  handle('markets:patterns', async (id, query, filter) => {
+    void id
+    const text = str(query, 200)
+    const f = (filter && typeof filter === 'object' ? filter : {}) as { category?: string; direction?: string; formationLength?: number }
+    let list = text === '' ? [...PATTERNS] : searchPatterns(text)
+    if (f.category !== undefined || f.direction !== undefined || f.formationLength !== undefined) {
+      const narrowed = new Set(
+        filterPatterns({
+          category: f.category as PatternCategory | undefined,
+          direction: f.direction as PatternDirection | undefined,
+          formationLength: typeof f.formationLength === 'number' ? f.formationLength : undefined
+        }).map((one) => one.id)
+      )
+      list = list.filter((one) => narrowed.has(one.id))
+    }
+    return {
+      libraryVersion: PATTERN_LIBRARY_VERSION,
+      patterns: list.map((one) => ({
+        id: one.id,
+        name: one.name,
+        aliases: one.aliases,
+        category: one.category,
+        direction: one.direction,
+        formationLength: one.formationLength,
+        describe: one.describe,
+        version: one.version,
+        specialises: one.specialises,
+        related: one.related,
+        confirmation: one.confirmation,
+        invalidation: one.invalidation,
+        // The rules as sentences. The functions behind them stay in the main process.
+        rules: one.rules.map((r) => ({ id: r.id, describe: r.describe, required: r.required })),
+        contextRules: one.contextRules.map((r) => ({ id: r.id, describe: r.describe, required: r.required }))
+      })),
+      assumptions: PATTERN_ASSUMPTIONS
+    }
+  })
+
+  /** One pattern in full, with its family. */
+  handle('markets:pattern', async (id, patternId) => {
+    void id
+    const one = patternById(str(patternId, 100))
+    if (!one) return { error: 'not-found', message: 'Orbis has no pattern by that id.' }
+    return {
+      pattern: {
+        id: one.id,
+        name: one.name,
+        aliases: one.aliases,
+        category: one.category,
+        direction: one.direction,
+        formationLength: one.formationLength,
+        describe: one.describe,
+        version: one.version,
+        confirmation: one.confirmation,
+        invalidation: one.invalidation,
+        emphasis: one.emphasis,
+        rules: one.rules.map((r) => ({ id: r.id, describe: r.describe, required: r.required })),
+        contextRules: one.contextRules.map((r) => ({ id: r.id, describe: r.describe, required: r.required }))
+      },
+      broaderThan: descendantsOf(one.id).map((x) => ({ id: x, name: patternById(x)?.name ?? x })),
+      moreSpecificThan: ancestorsOf(one.id).map((x) => ({ id: x, name: patternById(x)?.name ?? x })),
+      related: one.related.map((x) => ({ id: x, name: patternById(x)?.name ?? x })),
+      tolerances: TOLERANCES,
+      assumptions: PATTERN_ASSUMPTIONS
+    }
+  })
+
+  /**
+   * Examine one market now.
+   *
+   * The candles come from the same engine the chart draws from, so a marker cannot end up on a candle the chart does
+   * not have. Nothing is fetched twice: `candlesFor` is the cache the chart already filled.
+   */
+  handle('markets:pattern-detect', async (id, instrumentId, wantedInterval, options) => {
+    const state = await o.store.patterns(id)
+    if (!state.settings.enabled) {
+      return { error: 'disabled', message: 'Candlestick pattern detection is switched off.', assumptions: SETTINGS_ASSUMPTIONS }
+    }
+
+    const wanted = str(instrumentId)
+    const instrument = await o.engine.instrument(wanted)
+    if (!instrument) return { error: 'not-found', message: 'No provider can describe that instrument.' }
+    const chosen = interval(wantedInterval)
+    if (chosen === null) return { error: 'unsupported', message: 'Orbis does not have candles at that interval.' }
+
+    const raw = (options && typeof options === 'object' ? options : {}) as { limit?: number; developing?: boolean }
+    const candles = await o.engine.candlesFor(wanted, chosen, count(raw.limit, 60, 1000, 300))
+    if (candles.length === 0) return { error: 'unavailable', message: 'There is no history for that market.' }
+
+    const others: { interval: string; candles: Candle[] }[] = []
+    if (state.settings.multiTimeframe) {
+      for (const other of state.settings.timeframes.slice(0, 6)) {
+        if (other === chosen) continue
+        const otherInterval = interval(other)
+        if (otherInterval === null) continue
+        const got = await o.engine.candlesFor(wanted, otherInterval, 200)
+        if (got.length > 0) others.push({ interval: other, candles: got })
+      }
+    }
+
+    const engine = await patternEngineFor(id)
+    const result = engine.examine({
+      instrumentId: wanted,
+      exchange: instrument.exchange,
+      symbol: instrument.symbol,
+      interval: chosen,
+      candles,
+      // The last candle of a live market is always still forming. Said rather than assumed, because a historical range
+      // handed to the same engine must not have its final candle treated as incomplete.
+      lastIsDeveloping: raw.developing !== false,
+      otherTimeframes: others,
+      now: Date.now()
+    })
+
+    const shape = (one: (typeof result.found)[number]) => ({
+      detection: one.detection,
+      context: one.context,
+      timeframeAgreement: one.timeframeAgreement,
+      match: matchWord(one.detection.structuralMatch),
+      explain: explainDetection(one.detection)
+    })
+
+    // Recorded here, not only when alerts fire.
+    //
+    // Keeping history in the alert path meant that with alerts off -- which is the default -- nothing was ever
+    // recorded, while the history setting said it was on. Examination is where a detection becomes a fact, so that is
+    // where it is written down. Keyed by the formation, so re-examining the same candle replaces its record rather
+    // than adding a second one.
+    if (state.settings.history) {
+      const records = recordsFor({ examined: result, exchange: instrument.exchange, symbol: instrument.symbol, now: Date.now() }, state.settings)
+      if (records.length > 0) await o.store.addPatternRecords(id, records)
+    }
+
+    return {
+      instrumentId: wanted,
+      symbol: instrument.symbol,
+      exchange: instrument.exchange,
+      interval: chosen,
+      found: result.found.map(shape),
+      developing: result.developing.map(shape),
+      nearMisses: result.nearMisses,
+      examined: result.examined,
+      skipped: result.skipped,
+      describe: result.describe,
+      candleCheck: checkSequence(candles),
+      assumptions: [...DETECT_ASSUMPTIONS, ...(state.settings.context ? CONTEXT_ASSUMPTIONS : [])]
+    }
+  })
+
+  /**
+   * Examine a selection of candles the user made on the chart.
+   *
+   * Answers with every classification the window satisfies rather than picking one. A window that is genuinely
+   * ambiguous -- a doji that is also a high-wave candle -- should say so, because forcing one name onto it would be
+   * making a decision the candles do not support.
+   */
+  handle('markets:pattern-identify', async (id, instrumentId, wantedInterval, fromTime, toTime) => {
+    const state = await o.store.patterns(id)
+    const wanted = str(instrumentId)
+    const chosen = interval(wantedInterval)
+    if (chosen === null) return { error: 'unsupported', message: 'Orbis does not have candles at that interval.' }
+    const candles = await o.engine.candlesFor(wanted, chosen, 1000)
+    if (candles.length === 0) return { error: 'unavailable', message: 'There is no history for that market.' }
+
+    const from = typeof fromTime === 'number' ? fromTime : 0
+    const to = typeof toTime === 'number' ? toTime : Number.MAX_SAFE_INTEGER
+    const last = candles.reduce((best, one, i) => (one.time >= from && one.time <= to ? i : best), -1)
+    if (last === -1) return { error: 'not-found', message: 'None of the candles in the chart fall in that selection.' }
+
+    const result = detectAt(candles, last, {
+      mode: state.settings.mode,
+      includeNearMisses: true,
+      lastIsDeveloping: false
+    })
+
+    const one = candles[last] as Candle
+    return {
+      at: one.time,
+      candle: one,
+      geometry: geometryOf(one),
+      relative: relativeTo(geometryOf(one), rollingStats(candles, last)),
+      // Everything it matches, not the most specific alone: ambiguity is the answer where it exists.
+      classifications: result.detections.map((d) => ({
+        patternId: d.patternId,
+        patternName: d.patternName,
+        structuralMatch: d.structuralMatch,
+        match: matchWord(d.structuralMatch),
+        alsoMatches: d.alsoMatches,
+        explain: explainDetection(d)
+      })),
+      preferred: mostSpecific(result.detections).map((d) => d.patternId),
+      nearMisses: result.nearMisses,
+      describe:
+        result.detections.length === 0
+          ? 'No named pattern matches this candle. That is an answer, not a failure: most candles are not named formations.'
+          : result.detections.length === 1
+            ? `This matches one named formation.`
+            : `This satisfies ${result.detections.length} named definitions at once. All of them are listed rather than one being chosen.`,
+      assumptions: [...GEOMETRY_ASSUMPTIONS, ...DETECT_ASSUMPTIONS]
+    }
+  })
+
+  /** The settings, and what each switch actually stops. */
+  handle('markets:pattern-settings', async (id) => ({
+    settings: (await o.store.patterns(id)).settings,
+    defaults: o.store.defaultPatternSettings(),
+    whatStops: WHAT_STOPS,
+    assumptions: SETTINGS_ASSUMPTIONS
+  }))
+
+  handle('markets:pattern-settings-save', async (id, raw) => {
+    const settings = await o.store.savePatternSettings(id, raw)
+    const engine = patternEngines.get(id)
+    if (engine) {
+      engine.configure(settings)
+      // Off means off: the cursors and cached detections go, so nothing keeps running behind a switch that says it is not.
+      if (!settings.enabled) engine.release()
+    }
+    return { settings, whatStops: WHAT_STOPS }
+  })
+
+  handle('markets:pattern-rules', async (id) => {
+    const state = await o.store.patterns(id)
+    return {
+      rules: state.rules.map((one) => ({ rule: one, problems: checkRule(one) })),
+      mutes: await o.store.patternMutes(id),
+      assumptions: ALERT_ASSUMPTIONS
+    }
+  })
+
+  handle('markets:pattern-rule-save', async (id, raw) => {
+    const rule: PatternAlertRule | null = await o.store.savePatternRule(id, raw)
+    if (!rule) return { error: 'invalid-params', message: 'That rule is missing something it needs in order to ever fire.' }
+    const problems = checkRule(rule)
+    return { rule, problems, rules: (await o.store.patterns(id)).rules }
+  })
+
+  handle('markets:pattern-rule-remove', async (id, ruleId) => {
+    await o.store.removePatternRule(id, str(ruleId, 200))
+    return { rules: (await o.store.patterns(id)).rules }
+  })
+
+  handle('markets:pattern-mutes-save', async (id, raw) => ({ mutes: await o.store.savePatternMutes(id, raw) }))
+
+  /**
+   * Evaluate the alert rules for one market and deliver what should fire.
+   *
+   * Delivery is recorded as confirmed only when the notification actually went out, so a failed notification is stored
+   * as failed rather than as sent.
+   */
+  handle('markets:pattern-evaluate', async (id, instrumentId, wantedInterval) => {
+    const state = await o.store.patterns(id)
+    if (!state.settings.enabled) return { error: 'disabled', message: 'Candlestick pattern detection is switched off.' }
+    if (!state.settings.alerts) return { fired: [], refused: [], describe: 'Pattern alerts are switched off.' }
+
+    const wanted = str(instrumentId)
+    const instrument = await o.engine.instrument(wanted)
+    if (!instrument) return { error: 'not-found', message: 'No provider can describe that instrument.' }
+    const chosen = interval(wantedInterval)
+    if (chosen === null) return { error: 'unsupported', message: 'Orbis does not have candles at that interval.' }
+
+    const candles = await o.engine.candlesFor(wanted, chosen, 300)
+    if (candles.length === 0) return { error: 'unavailable', message: 'There is no history for that market.' }
+
+    const engine = await patternEngineFor(id)
+    const examined = engine.examine({
+      instrumentId: wanted,
+      exchange: instrument.exchange,
+      symbol: instrument.symbol,
+      interval: chosen,
+      candles,
+      lastIsDeveloping: true,
+      now: Date.now()
+    })
+
+    const watchlists = await o.store.watchlists(id)
+    const favourites = await o.store.favourites(id)
+    const decisions = decideAlerts({
+      state,
+      examined,
+      exchange: instrument.exchange,
+      symbol: instrument.symbol,
+      inWatchlist: watchlists.some((list) => list.items.some((item) => item.instrumentId === wanted)),
+      inFavourites: favourites.includes(wanted),
+      now: Date.now()
+    })
+
+    if (decisions.fire.length > 0) await o.store.addPatternFirings(id, decisions.fire.map((one) => one.firing))
+    if (state.settings.history) {
+      const records = recordsFor({ examined, exchange: instrument.exchange, symbol: instrument.symbol, now: Date.now() }, state.settings)
+      if (records.length > 0) await o.store.addPatternRecords(id, records)
+    }
+
+    return {
+      fired: decisions.fire.map((one) => ({
+        firing: one.firing,
+        patternName: one.pattern.detection.patternName,
+        symbol: instrument.symbol,
+        interval: chosen,
+        explain: explainDetection(one.pattern.detection)
+      })),
+      refused: decisions.refused,
+      describe: decisions.describe
+    }
+  })
+
+  handle('markets:pattern-delivered', async (id, key, delivered, note) => {
+    await o.store.markPatternDelivered(id, str(key, 400), delivered === true, str(note, 500))
+    return { firings: await o.store.patternFirings(id) }
+  })
+
+  /** What has been recorded, searchable. */
+  handle('markets:pattern-history', async (id, query) => {
+    const records = await o.store.patternRecords(id)
+    const q = (query && typeof query === 'object' ? query : {}) as HistoryQuery
+    const result = searchPatternHistory(records, q)
+    return {
+      records: result.records.slice(0, 500),
+      total: result.records.length,
+      considered: result.considered,
+      excludedBy: result.excludedBy,
+      describe: result.describe,
+      frequency: frequencyOf(result.records),
+      assumptions: HISTORY_ASSUMPTIONS
+    }
+  })
+
+  handle('markets:pattern-history-clear', async (id, keys) => {
+    const chosen = Array.isArray(keys) ? keys.filter((one): one is string => typeof one === 'string').slice(0, 5000) : undefined
+    const result = await o.store.clearPatternRecords(id, chosen)
+    return { ...result, describe: `${result.removed} record${result.removed === 1 ? '' : 's'} removed. Market data is untouched.` }
+  })
+
+  /**
+   * What happened after past occurrences, measured.
+   *
+   * Every figure here is a measurement of candles that already traded. The sample size travels with it, the
+   * methodology is on the result, and nothing is named as a probability or a rate of success.
+   */
+  handle('markets:pattern-outcomes', async (id, query, options) => {
+    const records = await o.store.patternRecords(id)
+    const q = (query && typeof query === 'object' ? query : {}) as HistoryQuery
+    const raw = (options && typeof options === 'object' ? options : {}) as { forwardCandles?: number; conditionOn?: string }
+    const forward = count(raw.forwardCandles, 1, 200, 12)
+
+    const matched = searchPatternHistory(records, q).records
+    if (matched.length === 0) {
+      return { error: 'no-records', message: 'No recorded occurrences match that query, so there is nothing to measure.', assumptions: HISTORY_ASSUMPTIONS }
+    }
+
+    // Candles are fetched once per market and interval rather than once per occurrence.
+    const byMarket = new Map<string, Candle[]>()
+    for (const one of matched) {
+      const key = `${one.instrumentId}|${one.interval}`
+      if (byMarket.has(key)) continue
+      const chosen = interval(one.interval)
+      if (chosen === null) continue
+      byMarket.set(key, await o.engine.candlesFor(one.instrumentId, chosen, 1000))
+    }
+
+    const set = measureOutcomes(matched, (record) => byMarket.get(`${record.instrumentId}|${record.interval}`), forward)
+    const summary = summarisePatternOutcomes(set)
+    const by = raw.conditionOn
+    const conditioned =
+      by === 'regime' || by === 'volume' || by === 'volatility' || by === 'placement' || by === 'interval' || by === 'dataQuality'
+        ? conditionOn(matched, set, by)
+        : []
+
+    return {
+      occurrences: matched.length,
+      summary,
+      conditioned,
+      unmeasurable: set.unmeasurable,
+      describe: set.describe,
+      assumptions: HISTORY_ASSUMPTIONS
+    }
+  })
+
+  /** Two sets of measurements, side by side, with no winner named. */
+  handle('markets:pattern-compare', async (id, left, right, options) => {
+    const records = await o.store.patternRecords(id)
+    const raw = (options && typeof options === 'object' ? options : {}) as { forwardCandles?: number }
+    const forward = count(raw.forwardCandles, 1, 200, 12)
+
+    const side = async (query: unknown, label: string) => {
+      const matched = searchPatternHistory(records, (query && typeof query === 'object' ? query : {}) as HistoryQuery).records
+      const byMarket = new Map<string, Candle[]>()
+      for (const one of matched) {
+        const key = `${one.instrumentId}|${one.interval}`
+        if (byMarket.has(key)) continue
+        const chosen = interval(one.interval)
+        if (chosen === null) continue
+        byMarket.set(key, await o.engine.candlesFor(one.instrumentId, chosen, 1000))
+      }
+      const set = measureOutcomes(matched, (record) => byMarket.get(`${record.instrumentId}|${record.interval}`), forward)
+      return { label, summary: summarisePatternOutcomes(set) }
+    }
+
+    const a = await side(left, str((left as { label?: string })?.label, 100) || 'the first set')
+    const b = await side(right, str((right as { label?: string })?.label, 100) || 'the second set')
+    return { ...comparePatternStats('selection', a, b), assumptions: HISTORY_ASSUMPTIONS }
+  })
+
+  /**
+   * Scan a stretch of history for a pattern.
+   *
+   * Reports what it examined and what it found, and a run stopped part-way is described as partial with the share
+   * covered. A partial run sitting beside a complete one looking equivalent is the way a scan lies about coverage.
+   */
+  handle('markets:pattern-scan', async (id, instrumentId, wantedInterval, options) => {
+    const state = await o.store.patterns(id)
+    const wanted = str(instrumentId)
+    const instrument = await o.engine.instrument(wanted)
+    if (!instrument) return { error: 'not-found', message: 'No provider can describe that instrument.' }
+    const chosen = interval(wantedInterval)
+    if (chosen === null) return { error: 'unsupported', message: 'Orbis does not have candles at that interval.' }
+
+    const raw = (options && typeof options === 'object' ? options : {}) as { limit?: number; patternIds?: unknown; mode?: unknown }
+    const limit = count(raw.limit, 60, 1000, 1000)
+    const candles = await o.engine.candlesFor(wanted, chosen, limit)
+    if (candles.length === 0) return { error: 'unavailable', message: 'There is no history for that market.' }
+
+    const only = Array.isArray(raw.patternIds) ? raw.patternIds.filter((one): one is string => typeof one === 'string').slice(0, 200) : []
+    const mode = patternMode(raw.mode) ?? state.settings.mode
+    const result = detect(candles, { mode, only, except: state.settings.exceptPatterns, from: 0, to: candles.length - 1 })
+    const kept = mostSpecific(result.detections.filter((one) => one.structuralMatch >= state.settings.minimumMatch))
+
+    const run: AnalysisRun = {
+      runId: randomUUID(),
+      instrumentId: wanted,
+      interval: chosen,
+      from: (candles[0] as Candle).time,
+      to: (candles[candles.length - 1] as Candle).time,
+      patternIds: only,
+      patternVersions: Object.fromEntries(PATTERNS.filter((one) => only.length === 0 || only.includes(one.id)).map((one) => [one.id, one.version])),
+      libraryVersion: PATTERN_LIBRARY_VERSION,
+      mode,
+      forwardCandles: 0,
+      createdAt: Date.now(),
+      status: 'complete',
+      examined: result.examined.candles,
+      total: candles.length,
+      found: kept.length,
+      describe: ''
+    }
+
+    return {
+      run: { ...run, ...describeRun(run) },
+      occurrences: kept.map((one) => ({
+        detection: one,
+        match: matchWord(one.structuralMatch),
+        context: state.settings.context ? contextFor(candles, one) : null
+      })),
+      notes: result.notes,
+      assumptions: [...DETECT_ASSUMPTIONS, ...HISTORY_ASSUMPTIONS]
+    }
+  })
+
+  /** A summary of what fired over a period. Only real firings go in it. */
+  handle('markets:pattern-digest', async (id, period, fromTime, toTime) => {
+    const firings = await o.store.patternFirings(id)
+    const chosen = period === 'quarter-hour' || period === 'hour' || period === 'day' ? period : 'day'
+    const to = typeof toTime === 'number' ? toTime : Date.now()
+    const spans: Record<typeof chosen, number> = { 'quarter-hour': 900_000, hour: 3_600_000, day: 86_400_000 }
+    const from = typeof fromTime === 'number' ? fromTime : to - spans[chosen]
+    return {
+      digest: digestOf(firings, chosen, from, to, new Map(PATTERNS.map((one) => [one.id, { name: one.name, direction: one.direction }]))),
+      assumptions: ALERT_ASSUMPTIONS
+    }
+  })
+
+  /** What the detector is holding, for diagnostics. */
+  handle('markets:pattern-health', async (id) => {
+    const state = await o.store.patterns(id)
+    const engine = patternEngines.get(id)
+    return {
+      enabled: state.settings.enabled,
+      held: engine?.held() ?? { markets: 0, detections: 0 },
+      rules: state.rules.length,
+      records: state.records.length,
+      firings: state.firings.length,
+      mutes: (await o.store.patternMutes(id)).length,
+      libraryVersion: PATTERN_LIBRARY_VERSION,
+      patterns: PATTERNS.length,
+      assumptions: [...ENGINE_ASSUMPTIONS, ...SETTINGS_ASSUMPTIONS]
+    }
+  })
+
+  /**
+   * The other timeframes for one market, each keeping its own reading.
+   *
+   * Separate from `pattern-detect` so a screen can show the relationship without re-running detection, and so the
+   * intervals stay visibly separate rather than collapsing into a single verdict.
+   */
+  handle('markets:pattern-timeframes', async (id, instrumentId, direction) => {
+    const state = await o.store.patterns(id)
+    const wanted = str(instrumentId)
+    const want: PatternDirection = direction === 'bullish' || direction === 'bearish' ? direction : 'neutral'
+    const readings: { interval: string; candles: Candle[] }[] = []
+    for (const other of state.settings.timeframes.slice(0, 6)) {
+      const chosen = interval(other)
+      if (chosen === null) continue
+      const got = await o.engine.candlesFor(wanted, chosen, 200)
+      if (got.length > 0) readings.push({ interval: other, candles: got })
+    }
+    if (readings.length === 0) {
+      return { error: 'unavailable', message: 'None of the chosen timeframes has any history for that market.' }
+    }
+    return { ...timeframeContext(readings, want), assumptions: CONTEXT_ASSUMPTIONS }
   })
 }

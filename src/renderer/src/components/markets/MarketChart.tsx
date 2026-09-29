@@ -51,6 +51,15 @@ const OVERLAYS = new Set<IndicatorKind>(['sma', 'ema', 'wma', 'vwap', 'bollinger
 /** Distinct enough to tell apart, and from the Orbis palette rather than invented per chart. */
 const LINE_COLOURS = ['#3fd8ff', '#ffbe4d', '#c39bff', '#3ee58a', '#ff7b9c', '#ffe066']
 
+/** Where each pattern marker was drawn on the last frame, so a click can find it. */
+interface PatternHit {
+  key: string
+  left: number
+  right: number
+  top: number
+  bottom: number
+}
+
 export interface MarketChartProps {
   candles: Candle[]
   /** For the axis labels. Not used for anything numeric. */
@@ -95,6 +104,43 @@ export interface MarketChartProps {
   onDrawingPicked?(id: string | null): void
   /** An anchor dragged to a new place. */
   onDrawingMoved?(id: string, index: number, to: Anchor): void
+
+  // ---------------------------------------------------------------- candlestick patterns
+
+  /**
+   * Detected formations to mark, addressed by the timestamps of their own candles.
+   *
+   * Times rather than indexes, and emphasis times rather than a range, because the marker has to land on exactly the
+   * candles the detector used. A marker drawn at an index would move to a different candle the moment a backfill
+   * prepended history, and it would still look correct.
+   */
+  patternMarkers?: readonly PatternMarker[]
+  /** How much each marker shows. `off` draws nothing, whatever the list contains. */
+  patternDetail?: 'off' | 'minimal' | 'normal' | 'detailed'
+  /** Which marker is picked, so it can be drawn with its emphasis and its label. */
+  selectedPattern?: string | null
+  /** A marker clicked. Null when the click landed on empty chart. */
+  onPatternPicked?(key: string | null): void
+}
+
+/**
+ * One formation to mark on the chart.
+ *
+ * Deliberately not the detection object: the chart needs the times, a name, a direction and whether it is confirmed,
+ * and giving it the whole detection would let a rendering decision start depending on the evidence.
+ */
+export interface PatternMarker {
+  key: string
+  name: string
+  direction: 'bullish' | 'bearish' | 'neutral'
+  /** Every candle of the formation, oldest first. */
+  candleTimes: readonly number[]
+  /** The candles to emphasise, a subset of the above. */
+  emphasisTimes: readonly number[]
+  /** A developing formation is drawn dashed, because its candle can still become something else. */
+  confirmed: boolean
+  /** 0 to 1. Used only to decide how solid the marker is drawn, never shown as a number here. */
+  match: number
 }
 
 /** The scales of the last frame, so the pointer can be turned back into a time and a price. */
@@ -170,7 +216,11 @@ export default function MarketChart({
   selectedDrawing = null,
   onDrawingPlaced,
   onDrawingPicked,
-  onDrawingMoved
+  onDrawingMoved,
+  patternMarkers,
+  patternDetail = 'normal',
+  selectedPattern,
+  onPatternPicked
 }: MarketChartProps): React.JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const wrapRef = useRef<HTMLDivElement | null>(null)
@@ -188,6 +238,13 @@ export default function MarketChart({
    * one frame ago, which on a live chart is a different price.
    */
   const scales = useRef<Scales | null>(null)
+  /**
+   * Where each pattern marker was drawn on the last frame.
+   *
+   * A ref for the same reason the scales are one: a click has to test against the rectangle the canvas just drew, and
+   * state would put a render between the two.
+   */
+  const patternHitsRef = useRef<PatternHit[]>([])
   /** Anchors placed so far for the drawing being made. Empty when nothing is being drawn. */
   const [placing, setPlacing] = useState<Anchor[]>([])
   /** The anchor being dragged: which drawing, which anchor. */
@@ -281,6 +338,8 @@ export default function MarketChart({
     // the stylesheet actually defines.
     const up = token('--green', '#3ee58a')
     const down = token('--red', '#ff4d6d')
+    // The plate a marker's label sits on, so text over candles stays readable.
+    const paper = token('--panel', '#14151a')
 
     const rows = visible.rows
     if (rows.length === 0) {
@@ -734,6 +793,111 @@ export default function MarketChart({
 
     for (const drawing of drawings) paint(drawing, false)
 
+    // ---------------------------------------------------------------- pattern markers
+    //
+    // Drawn after the drawings and before the placing ghost, so a user's own annotation is never hidden behind one of
+    // these. The candles stay visible: the formation is bracketed and labelled beneath, never covered.
+    patternHitsRef.current = []
+    if (patternDetail !== 'off' && patternMarkers !== undefined && patternMarkers.length > 0) {
+      context.save()
+      for (const marker of patternMarkers) {
+        const times = marker.emphasisTimes.length > 0 ? marker.emphasisTimes : marker.candleTimes
+        if (times.length === 0) continue
+        // Only mark what is actually on screen. A marker for a candle that has scrolled away would be drawn at the edge.
+        const xs = times.map((at) => xForTime(at)).filter((x) => x >= -step && x <= plotWidth + step)
+        if (xs.length === 0) continue
+
+        const left = Math.min(...xs) - step / 2
+        const right = Math.max(...xs) + step / 2
+        const bullish = marker.direction === 'bullish'
+        const colour = marker.direction === 'neutral' ? ink : bullish ? up : down
+        const chosen = marker.key === selectedPattern
+
+        // The candles' own extremes, so the bracket sits outside them rather than across them.
+        let high = -Infinity
+        let low = Infinity
+        for (const at of times) {
+          const candle = visible.rows.find((one) => one.time === at)
+          if (candle === undefined) continue
+          high = Math.max(high, candle.high)
+          low = Math.min(low, candle.low)
+        }
+        if (!Number.isFinite(high) || !Number.isFinite(low)) continue
+
+        const topY = yFor(high)
+        const bottomY = yFor(low)
+        const anchorY = bullish ? bottomY + 10 : topY - 10
+
+        context.globalAlpha = chosen ? 1 : 0.35 + Math.min(0.5, marker.match * 0.5)
+        context.strokeStyle = colour
+        context.fillStyle = colour
+        context.lineWidth = chosen ? 2 : 1.25
+        // Dashed while the formation's last candle is still forming: it is not a fact about the market yet.
+        context.setLineDash(marker.confirmed ? [] : [3, 3])
+
+        // A bracket under a bullish formation and over a bearish one, so direction is legible without relying on colour.
+        const tick = 5
+        context.beginPath()
+        context.moveTo(left, anchorY + (bullish ? -tick : tick))
+        context.lineTo(left, anchorY)
+        context.lineTo(right, anchorY)
+        context.lineTo(right, anchorY + (bullish ? -tick : tick))
+        context.stroke()
+
+        if (patternDetail !== 'minimal') {
+          // A shape as well as the colour, because colour alone is not a signal somebody can always see.
+          const midX = (left + right) / 2
+          const glyphY = anchorY + (bullish ? 9 : -9)
+          context.setLineDash([])
+          context.beginPath()
+          if (bullish) {
+            context.moveTo(midX, glyphY - 4)
+            context.lineTo(midX + 4, glyphY + 3)
+            context.lineTo(midX - 4, glyphY + 3)
+          } else if (marker.direction === 'bearish') {
+            context.moveTo(midX, glyphY + 4)
+            context.lineTo(midX + 4, glyphY - 3)
+            context.lineTo(midX - 4, glyphY - 3)
+          } else {
+            context.moveTo(midX - 4, glyphY)
+            context.lineTo(midX + 4, glyphY)
+            context.lineTo(midX + 4, glyphY + 1.5)
+            context.lineTo(midX - 4, glyphY + 1.5)
+          }
+          context.closePath()
+          context.fill()
+        }
+
+        if (patternDetail === 'detailed' || chosen) {
+          context.setLineDash([])
+          context.font = '11px system-ui, sans-serif'
+          context.textAlign = 'center'
+          context.textBaseline = bullish ? 'top' : 'bottom'
+          const label = marker.confirmed ? marker.name : `${marker.name} forming`
+          const labelY = anchorY + (bullish ? 16 : -16)
+          const width = context.measureText(label).width
+          context.globalAlpha = 0.85
+          context.fillStyle = paper
+          context.fillRect((left + right) / 2 - width / 2 - 3, bullish ? labelY - 1 : labelY - 13, width + 6, 14)
+          context.globalAlpha = 1
+          context.fillStyle = colour
+          context.fillText(label, (left + right) / 2, labelY)
+        }
+
+        // Where it was drawn, so a click can find it. Recorded on the frame that drew it, like the scales are.
+        patternHitsRef.current.push({
+          key: marker.key,
+          left,
+          right,
+          top: Math.min(topY, anchorY) - 20,
+          bottom: Math.max(bottomY, anchorY) + 20
+        })
+      }
+      context.globalAlpha = 1
+      context.setLineDash([])
+      context.restore()
+    }
+
     // The one being placed, including the point under the pointer so it follows the cursor while it is being made.
     if (tool && placing.length > 0) {
       const live: Anchor[] = [...placing]
@@ -989,6 +1153,14 @@ export default function MarketChart({
             }
             return
           }
+          // A pattern marker, if the click landed on one. Tested after the drawings, so a user's own annotation on top
+          // of a marker still wins: theirs is the one they placed.
+          const marker = patternHitsRef.current.find((one) => x >= one.left && x <= one.right && y >= one.top && y <= one.bottom)
+          if (marker !== undefined) {
+            onPatternPicked?.(marker.key)
+            return
+          }
+          if (selectedPattern) onPatternPicked?.(null)
           if (selectedDrawing) onDrawingPicked?.(null)
           drag.current = { x, offset: view.offset }
         }}

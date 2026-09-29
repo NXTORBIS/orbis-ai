@@ -22,6 +22,17 @@ import {
   type Watchlist
 } from '../../shared/markets/workspace.ts'
 import { cleanAlert, type Alert, type AlertFiring } from '../../shared/markets/alerts.ts'
+import type { MuteRule, PatternAlertRule, PatternFiring } from '../../shared/markets/patternAlerts.ts'
+import { prune, type PatternRecord } from '../../shared/markets/patternHistory.ts'
+import {
+  DEFAULT_PATTERN_SETTINGS,
+  PATTERN_LIMITS,
+  cleanPatternMutes,
+  cleanPatternRule,
+  cleanPatternSettings,
+  type PatternSettings,
+  type PatternState
+} from '../../shared/markets/patternSettings.ts'
 import { cleanQuery, type SavedScreen, type ScreenerQuery } from '../../shared/markets/screener.ts'
 import { newAccount, type PaperAccount, type PaperSettings } from '../../shared/markets/paper.ts'
 import { shouldRecord, type EquityPoint } from '../../shared/markets/portfolio.ts'
@@ -1022,6 +1033,143 @@ export class MarketsStore {
    * handful of small files at most, written the same way as `flush`: beside, then renamed over, so an interrupted write
    * leaves the old file rather than half of the new one.
    */
+
+  // ---------------------------------------------------------------- candlestick patterns
+
+  async patterns(profileId: string): Promise<PatternState> {
+    return (await this.read(profileId)).patterns
+  }
+
+  /**
+   * Change the pattern settings.
+   *
+   * Only the keys given are changed, so a screen that knows about one switch cannot reset the others by sending a
+   * partial object. Switching detection off deliberately leaves the rules, the history and the mutes exactly where
+   * they were: it is a switch, not a reset, and somebody turning it off for an afternoon should not lose their rules.
+   */
+  async savePatternSettings(profileId: string, raw: unknown): Promise<PatternSettings> {
+    const current = (await this.read(profileId)).patterns.settings
+    const merged = cleanPatternSettings({ ...current, ...(raw && typeof raw === 'object' ? raw : {}) })
+    await this.change(profileId, (w) => ({ ...w, patterns: { ...w.patterns, settings: merged } }))
+    return merged
+  }
+
+  async savePatternRule(profileId: string, raw: unknown): Promise<PatternAlertRule | null> {
+    const at = this.now()
+    // The id is minted here rather than demanded of the caller: a rule somebody has just typed has no id yet, and
+    // `cleanPatternRule` refuses one without an id so that a corrupt stored record is not given a new identity.
+    const rule = cleanPatternRule({ ...(raw && typeof raw === 'object' ? raw : {}), id: (raw as { id?: string })?.id || randomUUID() }, at)
+    if (!rule) return null
+    await this.change(profileId, (w) => ({
+      ...w,
+      patterns: {
+        ...w.patterns,
+        rules: w.patterns.rules.some((one) => one.id === rule.id)
+          ? w.patterns.rules.map((one) => (one.id === rule.id ? rule : one))
+          : [...w.patterns.rules, rule].slice(-PATTERN_LIMITS.rules)
+      }
+    }))
+    return rule
+  }
+
+  async removePatternRule(profileId: string, ruleId: string): Promise<void> {
+    await this.change(profileId, (w) => ({
+      ...w,
+      patterns: { ...w.patterns, rules: w.patterns.rules.filter((one) => one.id !== ruleId) }
+    }))
+  }
+
+  /**
+   * Add detections to the history.
+   *
+   * Keyed, so the same formation arriving twice -- from a re-examination, a reconnection or a backfill -- replaces its
+   * record rather than adding a second one. Retention is applied on the way in, and the images belonging to removed
+   * records come back so the caller can delete them.
+   */
+  async addPatternRecords(profileId: string, records: readonly PatternRecord[]): Promise<{ stored: number; orphanedSnapshots: string[] }> {
+    if (records.length === 0) return { stored: 0, orphanedSnapshots: [] }
+    const at = this.now()
+    let orphaned: string[] = []
+    await this.change(profileId, (w) => {
+      const byKey = new Map(w.patterns.records.map((one) => [one.key, one]))
+      for (const one of records) byKey.set(one.key, one)
+      const pruned = prune([...byKey.values()], w.patterns.settings.retention, at, PATTERN_LIMITS.history)
+      orphaned = pruned.orphanedSnapshots
+      return { ...w, patterns: { ...w.patterns, records: pruned.kept } }
+    })
+    return { stored: records.length, orphanedSnapshots: orphaned }
+  }
+
+  async patternRecords(profileId: string): Promise<PatternRecord[]> {
+    return (await this.read(profileId)).patterns.records
+  }
+
+  /** Forget recorded detections. Market data is untouched: it belongs to the cache, not to this history. */
+  async clearPatternRecords(profileId: string, keys?: readonly string[]): Promise<{ removed: number; orphanedSnapshots: string[] }> {
+    let removed = 0
+    let orphaned: string[] = []
+    await this.change(profileId, (w) => {
+      const keep = keys === undefined ? [] : w.patterns.records.filter((one) => !keys.includes(one.key))
+      const gone = keys === undefined ? w.patterns.records : w.patterns.records.filter((one) => keys.includes(one.key))
+      removed = gone.length
+      orphaned = gone.map((one) => one.snapshotRef).filter((one): one is string => one !== null)
+      return { ...w, patterns: { ...w.patterns, records: keep } }
+    })
+    return { removed, orphanedSnapshots: orphaned }
+  }
+
+  /**
+   * Record that an alert fired.
+   *
+   * Bounded, and the bound is why the deduplication key is also stored on the record: once a firing scrolls off this
+   * list the same formation could fire again, and the only thing preventing it is that the candle it belongs to is by
+   * then far in the past.
+   */
+  async addPatternFirings(profileId: string, firings: readonly PatternFiring[]): Promise<PatternFiring[]> {
+    if (firings.length === 0) return (await this.read(profileId)).patterns.firings
+    let after: PatternFiring[] = []
+    await this.change(profileId, (w) => {
+      const byKey = new Map(w.patterns.firings.map((one) => [one.key, one]))
+      for (const one of firings) byKey.set(one.key, one)
+      after = [...byKey.values()].sort((a, b) => a.firedAt - b.firedAt).slice(-PATTERN_LIMITS.firings)
+      return { ...w, patterns: { ...w.patterns, firings: after } }
+    })
+    return after
+  }
+
+  /** Mark a firing delivered, or record why it was not. Delivery is never assumed. */
+  async markPatternDelivered(profileId: string, key: string, delivered: boolean, note: string): Promise<void> {
+    await this.change(profileId, (w) => ({
+      ...w,
+      patterns: {
+        ...w.patterns,
+        firings: w.patterns.firings.map((one) => (one.key === key ? { ...one, delivered, deliveryNote: note.slice(0, 500) } : one))
+      }
+    }))
+  }
+
+  async patternFirings(profileId: string): Promise<PatternFiring[]> {
+    return (await this.read(profileId)).patterns.firings
+  }
+
+  async savePatternMutes(profileId: string, raw: unknown): Promise<MuteRule[]> {
+    const at = this.now()
+    // Expired mutes are dropped on the way in as well as on read: a decision that has finished is not state.
+    const mutes = cleanPatternMutes(raw).filter((one) => one.until > at)
+    await this.change(profileId, (w) => ({ ...w, patterns: { ...w.patterns, mutes } }))
+    return mutes
+  }
+
+  async patternMutes(profileId: string): Promise<MuteRule[]> {
+    const at = this.now()
+    return (await this.read(profileId)).patterns.mutes.filter((one) => one.until > at)
+  }
+
+  /** The settings a fresh profile starts with, for a screen that wants to offer a reset. */
+  defaultPatternSettings(): PatternSettings {
+    return { ...DEFAULT_PATTERN_SETTINGS }
+  }
+
   stop(): void {
     if (this.timer) clearTimeout(this.timer)
     this.timer = null

@@ -1,6 +1,7 @@
 import type { Instrument } from './instrument.ts'
 import { ALL_COLUMNS, DEFAULT_COLUMNS, TICKER_FIELDS, type TickerField } from './surfaces.ts'
 import { cleanAlerts, type Alert, type AlertFiring } from './alerts.ts'
+import { EMPTY_PATTERN_STATE, cleanPatternState, type PatternState } from './patternSettings.ts'
 import { cleanQuery, type SavedScreen } from './screener.ts'
 import {
   DEFAULT_SETTINGS,
@@ -189,6 +190,13 @@ export interface MarketsWorkspace {
   triggers: MarketTrigger[]
   /** Leverage and liquidation, off unless somebody turns it on. */
   margin: MarginSettings
+  /**
+   * Candlestick pattern detection: its switches, its alert rules, and what it has found.
+   *
+   * A section of this file rather than a file of its own, so a profile is still one thing to back up, export and
+   * delete. Its history is bounded separately because chart snapshots are the expensive part.
+   */
+  patterns: PatternState
   updatedAt: number
 }
 
@@ -275,6 +283,7 @@ export const EMPTY_WORKSPACE: MarketsWorkspace = {
   panels: defaultLayout(),
   triggers: [],
   margin: DEFAULT_MARGIN,
+  patterns: EMPTY_PATTERN_STATE,
   updatedAt: 0
 }
 
@@ -803,6 +812,7 @@ export function cleanWorkspace(raw: unknown, at = Date.now()): MarketsWorkspace 
       return out
     })(),
     margin: cleanMargin(o.margin),
+    patterns: cleanPatternState(o.patterns, at),
     screens: (() => {
       const out: SavedScreen[] = []
       const seen = new Set<string>()

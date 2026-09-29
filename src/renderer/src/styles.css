@@ -17725,3 +17725,636 @@ html[data-motion='reduced'] .tool-btn.recording {
   color: var(--cyan);
 }
 
+/* ----------------------------------------------------------------- candlestick patterns
+ *
+ * The panels for pattern detection, the library, the alert rules and the history.
+ *
+ * Two rules run through all of it. Direction is never carried by colour alone -- every
+ * bullish or bearish mark also has an icon and a word, because a colour is not something
+ * every reader can use. And the caveats are styled as content rather than as fine print:
+ * a sentence saying a match strength is not a probability has to be as readable as the
+ * number it qualifies, or the number wins.
+ */
+
+.mk-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mk-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.mk-panel-head h3 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.mk-panel-sub {
+  color: var(--faint);
+  font-size: 11.5px;
+}
+
+.mk-panel h4 {
+  margin: 10px 0 2px;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.mk-panel h5 {
+  margin: 8px 0 2px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--muted-strong);
+}
+
+.mk-mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted-strong);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.mk-mini:hover:not(:disabled) {
+  border-color: var(--line-strong);
+  color: var(--text);
+}
+
+.mk-mini:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.mk-mini.mk-danger {
+  color: var(--red);
+}
+
+.mk-link {
+  border: 0;
+  background: transparent;
+  padding: 0 0 0 6px;
+  color: var(--cyan);
+  font-size: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.mk-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.mk-note svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--faint);
+}
+
+/* The closing caveat on every pattern surface. Deliberately not smaller than the body. */
+.mk-pattern-foot {
+  margin-top: 4px;
+  border-color: var(--line-strong);
+}
+
+.mk-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.mk-field > span:first-child {
+  flex: 0 0 auto;
+}
+
+.mk-field input[type="text"],
+.mk-field input:not([type]),
+.mk-field select {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+
+.mk-field input[type="range"] {
+  flex: 1 1 auto;
+  min-width: 90px;
+}
+
+.mk-field output {
+  flex: 0 0 auto;
+  min-width: 3.5ch;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.mk-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted-strong);
+  cursor: pointer;
+}
+
+.mk-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.mk-setting {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.mk-setting:last-child {
+  border-bottom: 0;
+}
+
+.mk-setting-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted-strong);
+}
+
+/* What a switch stops. From the engine's own table, so it cannot drift from the effect. */
+.mk-setting-note {
+  margin: 0;
+  color: var(--faint);
+  font-size: 11px;
+  line-height: 1.5;
+  max-width: 62ch;
+}
+
+.mk-panel fieldset {
+  margin: 0;
+  padding: 4px 0 0;
+  border: 0;
+  border-top: 1px solid var(--line-strong);
+}
+
+.mk-panel fieldset:disabled {
+  opacity: 0.45;
+}
+
+.mk-panel legend {
+  padding: 0 0 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.mk-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.mk-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--faint);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.mk-chip.mk-chip-on {
+  border-color: var(--cyan-dim);
+  background: var(--cyan-fill);
+  color: var(--text);
+}
+
+.mk-chip:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ---- detections */
+
+.mk-pattern-list,
+.mk-pattern-rules,
+.mk-pattern-related,
+.mk-pattern-grid,
+.mk-rule-list,
+.mk-rule-problems,
+.mk-dist-bands {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.mk-pattern-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mk-pattern-row {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.mk-pattern-row.mk-pattern-open {
+  border-color: var(--line-strong);
+}
+
+.mk-pattern-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mk-pattern-head:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.mk-pattern-caret {
+  flex: 0 0 auto;
+  color: var(--faint);
+  transition: transform 140ms ease;
+}
+
+.mk-pattern-caret.mk-open {
+  transform: rotate(90deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mk-pattern-caret {
+    transition: none;
+  }
+}
+
+.mk-pattern-name {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.mk-pattern-match {
+  margin-left: auto;
+  color: var(--faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Direction: an icon, a word and a colour. Never the colour alone. */
+.mk-pattern-dir {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.mk-pattern-dir-bullish {
+  color: var(--green);
+}
+
+.mk-pattern-dir-bearish {
+  color: var(--red);
+}
+
+.mk-pattern-dir-neutral {
+  color: var(--muted);
+}
+
+.mk-pattern-tag {
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--faint);
+  font-size: 10.5px;
+}
+
+.mk-pattern-body {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 4px 12px 12px;
+  border-top: 1px solid var(--line);
+}
+
+.mk-pattern-describe {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.55;
+  max-width: 68ch;
+}
+
+.mk-pattern-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 8px 16px;
+  margin: 0;
+}
+
+.mk-pattern-facts > div {
+  min-width: 0;
+}
+
+.mk-pattern-facts dt {
+  color: var(--faint);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.mk-pattern-facts dd {
+  margin: 2px 0 0;
+  color: var(--muted-strong);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+/* The rules that decided, each with what it measured. */
+.mk-pattern-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mk-pattern-rules li {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.mk-pattern-rules li svg {
+  flex: 0 0 auto;
+  margin-top: 3px;
+  color: var(--green);
+}
+
+.mk-pattern-rules.mk-against li svg {
+  color: var(--red);
+}
+
+.mk-pattern-rules.mk-dim li,
+.mk-pattern-rules.mk-dim li svg {
+  color: var(--faint);
+}
+
+.mk-rule-text {
+  color: var(--muted-strong);
+}
+
+.mk-pattern-misses {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 8px 11px;
+}
+
+.mk-pattern-misses > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.mk-pattern-misses[open] > summary {
+  margin-bottom: 8px;
+}
+
+/* ---- the library */
+
+.mk-pattern-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.mk-pattern-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 7px;
+}
+
+.mk-pattern-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  width: 100%;
+  height: 100%;
+  padding: 10px 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mk-pattern-card:hover {
+  border-color: var(--line-strong);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.mk-pattern-card .mk-pattern-describe {
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.mk-pattern-related {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+
+/* ---- alert rules */
+
+.mk-rule-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mk-rule {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.mk-rule.mk-rule-open {
+  border-color: var(--line-strong);
+}
+
+.mk-rule-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.mk-rule-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mk-rule-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+/* A rule that can never fire. Said loudly, because it sits in the list looking like coverage. */
+.mk-rule-problems {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.mk-rule-problems li {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  color: var(--amber);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+
+.mk-rule-problems li svg {
+  flex: 0 0 auto;
+  margin-top: 3px;
+}
+
+/* ---- distributions */
+
+.mk-dist {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.mk-dist:last-child {
+  border-bottom: 0;
+}
+
+.mk-dist h5 {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+}
+
+.mk-dist-group {
+  padding-left: 10px;
+  border-left: 2px solid var(--line-strong);
+}
+
+.mk-dist-bands {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.mk-dist-bands li {
+  display: grid;
+  grid-template-columns: minmax(9ch, 15ch) 1fr minmax(8ch, auto);
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+}
+
+.mk-dist-label {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mk-dist-bar {
+  height: 7px;
+  min-width: 1px;
+  border-radius: 3px;
+  background: var(--cyan-fill);
+  border: 1px solid var(--cyan-dim);
+}
+
+.mk-dist-count {
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}

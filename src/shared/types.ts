@@ -33,6 +33,12 @@ import type { Contract, FundingPoint, LongShortRatio, OpenInterestPoint } from '
 import type { Drawing } from './markets/drawings'
 import type { Layout as PanelLayout } from './markets/panels'
 import type { MarketTrigger } from './markets/triggers'
+import type { MuteRule, PatternAlertRule, PatternFiring } from './markets/patternAlerts'
+import type { NearMiss, PatternDetection } from './markets/patternDetect'
+import type { PatternContext, TimeframeAgreement, TimeframeContext } from './markets/patternContext'
+import type { AnalysisRun, Comparison, ConditionedSummary, Frequency, HistoryQuery, OutcomeSummary, PatternRecord } from './markets/patternHistory'
+import type { PatternSettings } from './markets/patternSettings'
+import type { CandleFacts, RelativeFacts, SequenceCheck } from './markets/candleGeometry'
 import type { MarginSettings, AccountMargin, PositionMargin } from './markets/margin'
 import type { IndexedSeries, CompareStat, CorrelationCell } from './markets/compare'
 import type { WalkSummary, MonteCarloResult } from './markets/validation'
@@ -803,6 +809,249 @@ export interface NxtorbisApi {
     trigger: Partial<MarketTrigger>
   ): Promise<{ trigger: MarketTrigger; triggers: MarketTrigger[] } | { error: string; message?: string }>
   marketsTriggerRemove(id: string): Promise<{ triggers: MarketTrigger[] } | { error: string; message?: string }>
+  // ---------------------------------------------------------------- candlestick patterns
+
+  /**
+   * The candlestick pattern library.
+   *
+   * The rules come across as sentences, never as functions: the detector runs in the main process and a renderer that
+   * could evaluate a rule would be a second detector that eventually disagrees with the first.
+   */
+  marketsPatterns(
+    query?: string,
+    filter?: { category?: string; direction?: string; formationLength?: number }
+  ): Promise<
+    | {
+        libraryVersion: number
+        patterns: {
+          id: string
+          name: string
+          aliases: string[]
+          category: string
+          direction: string
+          formationLength: number
+          describe: string
+          version: number
+          specialises: string[]
+          related: string[]
+          confirmation: string | null
+          invalidation: string | null
+          rules: { id: string; describe: string; required: boolean }[]
+          contextRules: { id: string; describe: string; required: boolean }[]
+        }[]
+        assumptions: readonly string[]
+      }
+    | { error: string; message?: string }
+  >
+  marketsPattern(patternId: string): Promise<
+    | {
+        pattern: {
+          id: string
+          name: string
+          aliases: string[]
+          category: string
+          direction: string
+          formationLength: number
+          describe: string
+          version: number
+          confirmation: string | null
+          invalidation: string | null
+          emphasis: number[]
+          rules: { id: string; describe: string; required: boolean }[]
+          contextRules: { id: string; describe: string; required: boolean }[]
+        }
+        broaderThan: { id: string; name: string }[]
+        moreSpecificThan: { id: string; name: string }[]
+        related: { id: string; name: string }[]
+        assumptions: readonly string[]
+      }
+    | { error: string; message?: string }
+  >
+  /** Examine one market. `found` is confirmed formations; `developing` can never be confirmed. */
+  marketsPatternDetect(
+    instrumentId: string,
+    interval: string,
+    options?: { limit?: number; developing?: boolean }
+  ): Promise<
+    | {
+        instrumentId: string
+        symbol: string
+        exchange: string
+        interval: string
+        found: {
+          detection: PatternDetection
+          context: PatternContext | null
+          timeframeAgreement: TimeframeAgreement | null
+          match: 'low' | 'moderate' | 'high'
+          explain: string[]
+        }[]
+        developing: {
+          detection: PatternDetection
+          context: PatternContext | null
+          timeframeAgreement: TimeframeAgreement | null
+          match: 'low' | 'moderate' | 'high'
+          explain: string[]
+        }[]
+        nearMisses: NearMiss[]
+        examined: number
+        skipped: string | null
+        describe: string
+        candleCheck: SequenceCheck
+        assumptions: readonly string[]
+      }
+    | { error: string; message?: string }
+  >
+  /** What a candle the user selected actually is. Every classification it satisfies, not one chosen for them. */
+  marketsPatternIdentify(
+    instrumentId: string,
+    interval: string,
+    fromTime: number,
+    toTime: number
+  ): Promise<
+    | {
+        at: number
+        candle: Candle
+        geometry: CandleFacts
+        relative: RelativeFacts
+        classifications: {
+          patternId: string
+          patternName: string
+          structuralMatch: number
+          match: 'low' | 'moderate' | 'high'
+          alsoMatches: string[]
+          explain: string[]
+        }[]
+        preferred: string[]
+        nearMisses: NearMiss[]
+        describe: string
+        assumptions: readonly string[]
+      }
+    | { error: string; message?: string }
+  >
+  /** The switches, and what each one actually stops. */
+  marketsPatternSettings(): Promise<
+    | { settings: PatternSettings; defaults: PatternSettings; whatStops: Record<string, string>; assumptions: readonly string[] }
+    | { error: string; message?: string }
+  >
+  marketsPatternSettingsSave(
+    patch: Partial<PatternSettings>
+  ): Promise<{ settings: PatternSettings; whatStops: Record<string, string> } | { error: string; message?: string }>
+  marketsPatternRules(): Promise<
+    | { rules: { rule: PatternAlertRule; problems: { field: string; describe: string }[] }[]; mutes: MuteRule[]; assumptions: readonly string[] }
+    | { error: string; message?: string }
+  >
+  marketsPatternRuleSave(
+    rule: Partial<PatternAlertRule>
+  ): Promise<
+    { rule: PatternAlertRule; problems: { field: string; describe: string }[]; rules: PatternAlertRule[] } | { error: string; message?: string }
+  >
+  marketsPatternRuleRemove(id: string): Promise<{ rules: PatternAlertRule[] } | { error: string; message?: string }>
+  marketsPatternMutesSave(mutes: MuteRule[]): Promise<{ mutes: MuteRule[] } | { error: string; message?: string }>
+  /** Decide what should fire for one market. Nothing here delivers; `marketsPatternDelivered` records what did. */
+  marketsPatternEvaluate(
+    instrumentId: string,
+    interval: string
+  ): Promise<
+    | {
+        fired: { firing: PatternFiring; patternName: string; symbol: string; interval: string; explain: string[] }[]
+        refused: { ruleId: string; patternId: string; reason: string; describe: string }[]
+        describe: string
+      }
+    | { error: string; message?: string }
+  >
+  marketsPatternDelivered(
+    key: string,
+    delivered: boolean,
+    note: string
+  ): Promise<{ firings: PatternFiring[] } | { error: string; message?: string }>
+  marketsPatternHistory(query?: HistoryQuery): Promise<
+    | {
+        records: PatternRecord[]
+        total: number
+        considered: number
+        excludedBy: { condition: string; count: number }[]
+        describe: string
+        frequency: Frequency
+        assumptions: readonly string[]
+      }
+    | { error: string; message?: string }
+  >
+  marketsPatternHistoryClear(
+    keys?: string[]
+  ): Promise<{ removed: number; orphanedSnapshots: string[]; describe: string } | { error: string; message?: string }>
+  /** Measurements of what price did after past occurrences. Never a probability, always with its sample size. */
+  marketsPatternOutcomes(
+    query?: HistoryQuery,
+    options?: { forwardCandles?: number; conditionOn?: string }
+  ): Promise<
+    | {
+        occurrences: number
+        summary: OutcomeSummary
+        conditioned: ConditionedSummary[]
+        unmeasurable: { key: string; why: string }[]
+        describe: string
+        assumptions: readonly string[]
+      }
+    | { error: string; message?: string }
+  >
+  marketsPatternCompare(
+    left: HistoryQuery & { label?: string },
+    right: HistoryQuery & { label?: string },
+    options?: { forwardCandles?: number }
+  ): Promise<(Comparison & { assumptions: readonly string[] }) | { error: string; message?: string }>
+  marketsPatternScan(
+    instrumentId: string,
+    interval: string,
+    options?: { limit?: number; patternIds?: string[]; mode?: string }
+  ): Promise<
+    | {
+        run: AnalysisRun & { partial: boolean; describe: string }
+        occurrences: { detection: PatternDetection; match: 'low' | 'moderate' | 'high'; context: PatternContext | null }[]
+        notes: string[]
+        assumptions: readonly string[]
+      }
+    | { error: string; message?: string }
+  >
+  marketsPatternDigest(
+    period?: 'quarter-hour' | 'hour' | 'day',
+    from?: number,
+    to?: number
+  ): Promise<
+    | {
+        digest: {
+          period: string
+          from: number
+          to: number
+          total: number
+          byPattern: { patternId: string; count: number }[]
+          byMarket: { instrumentId: string; count: number }[]
+          byDirection: Record<string, number>
+          busiestInterval: string | null
+          describe: string
+        }
+        assumptions: readonly string[]
+      }
+    | { error: string; message?: string }
+  >
+  marketsPatternHealth(): Promise<
+    | {
+        enabled: boolean
+        held: { markets: number; detections: number }
+        rules: number
+        records: number
+        firings: number
+        mutes: number
+        libraryVersion: number
+        patterns: number
+        assumptions: readonly string[]
+      }
+    | { error: string; message?: string }
+  >
+  /** The other intervals, each keeping its own reading. Never merged into one verdict. */
+  marketsPatternTimeframes(
+    instrumentId: string,
+    direction?: 'bullish' | 'bearish' | 'neutral'
+  ): Promise<(TimeframeContext & { assumptions: readonly string[] }) | { error: string; message?: string }>
   /** The simulated margin picture. Every figure comes with the assumptions, because a liquidation price is a model's. */
   marketsMargin(): Promise<
     | {

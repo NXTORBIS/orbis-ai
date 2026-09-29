@@ -169,5 +169,13 @@ test('the boundary is a known size, so the migration can be estimated rather tha
   // work, one for diagnostics, and exactly one for computation. That last one matters: `pages:compute` is the only route
   // from a Page to an engine, so a capability check in front of it is a capability check in front of all of them. A second
   // door would be a second place to forget.
-  assert.ok(code.length <= 392, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
+  //
+  // 392 → 410: candlestick pattern intelligence. Eighteen, and the split is the point rather than the number. Two are
+  // the library, which is compiled in and answers from memory. Two examine — one a market, one a candle the user
+  // picked. Two are the switches. Four are alert rules and muting, and they write rules only: the firing goes out
+  // through the notification path Orbis already has, so there is no second alert engine and no second delivery. Two
+  // separate deciding what should fire from recording whether it was delivered, because a firing is never stored as
+  // delivered until something confirms it. Four are history and the measurements over it, and two of those refuse to
+  // name a winner between two sets. One scans, one digests, one reports health, one reads the other timeframes.
+  assert.ok(code.length <= 410, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
 })
