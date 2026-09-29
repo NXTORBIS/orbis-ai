@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { IpcRendererEvent } from 'electron'
 import type { NxtorbisApi, StreamEvent } from '../shared/types'
 
@@ -31,6 +31,36 @@ const api: NxtorbisApi = {
   accountVerify: (password) => ipcRenderer.invoke('account:verify', password),
   accountChange: (current, next, name) => ipcRenderer.invoke('account:change', current, next, name),
   marketsState: () => ipcRenderer.invoke('markets:state'),
+  // ---- moving a profile between machines
+  /**
+   * The path on disk of a dropped file.
+   *
+   * Electron stopped putting `path` on File objects, so this is the supported way to get it. It reads a path and
+   * never reads the file; opening it is the main process's job, where the size limits and the checks are.
+   */
+  pathForFile: (file: File) => {
+    try {
+      return webUtils.getPathForFile(file)
+    } catch {
+      return ''
+    }
+  },
+  portableChooseDestination: (request) => ipcRenderer.invoke('portable:choose-destination', request),
+  portableChoosePackage: () => ipcRenderer.invoke('portable:choose-package'),
+  portableState: () => ipcRenderer.invoke('portable:state'),
+  portableNeedsPassword: (request) => ipcRenderer.invoke('portable:needs-password', request),
+  portableEstimate: (request) => ipcRenderer.invoke('portable:estimate', request),
+  portableExport: (request) => ipcRenderer.invoke('portable:export', request),
+  portableInspect: (request) => ipcRenderer.invoke('portable:inspect', request),
+  portableImport: (request) => ipcRenderer.invoke('portable:import', request),
+  portableCancel: () => ipcRenderer.invoke('portable:cancel'),
+  portableRecovery: () => ipcRenderer.invoke('portable:recovery'),
+  portableRecoveryClear: () => ipcRenderer.invoke('portable:recovery-clear'),
+  onPortableProgress: (handler) => {
+    const listener = (_event: unknown, progress: unknown): void => handler(progress as never)
+    ipcRenderer.on('portable:progress', listener)
+    return () => ipcRenderer.removeListener('portable:progress', listener)
+  },
   marketsSetEnabled: (enabled) => ipcRenderer.invoke('markets:set-enabled', enabled),
   marketsOpen: (instrumentId) => ipcRenderer.invoke('markets:open', instrumentId),
   marketsClose: (instrumentId) => ipcRenderer.invoke('markets:close', instrumentId),

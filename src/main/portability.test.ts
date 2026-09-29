@@ -35,6 +35,11 @@ const BROWSER_LAYER = new Set([
   // Registering Orbis as a browser and opening the system's chooser. Chromium does exactly this in shell_integration,
   // and by then Orbis is an application Windows already knows about.
   'main/defaultBrowser.ts',
+  // Moving a profile between machines. The exporter, importer, providers and encryption all take their filesystem
+  // as a parameter and touch nothing; this one file fills those parameters in and runs the save/open dialogs. It is
+  // the whole Electron surface of the feature, on purpose, and what it does -- read files, write files, ask where --
+  // is the part Chromium has its own way of doing.
+  'main/portable/ipc.ts',
   'main/imagegen.ts',
   // The app's own library (shortcuts, address-bar memory) for the Orbis window.
   'main/libraryIpc.ts',

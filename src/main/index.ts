@@ -106,6 +106,7 @@ import { MarketsRuntime } from './markets/runtime'
 import { BinanceProvider } from './markets/providers/binance'
 import { BinanceFuturesProvider } from './markets/providers/binanceFutures'
 import { registerMarketsIpc } from './markets/ipc'
+import { registerPortableIpc } from './portable/ipc'
 import { PagesStore } from './pages/store'
 import { PagesService } from './pages/service'
 import { registerPagesIpc } from './pages/ipc'
@@ -1366,6 +1367,15 @@ if (!app.requestSingleInstanceLock()) {
     const marketNewsFeeds = new WidgetFeeds({ fetch: (url, init) => net.fetch(url, init), appVersion: app.getVersion() })
     void markets.start().catch(() => undefined)
     // The window's way in: this is where markets are set up. The strip only reads.
+    // Moving a whole profile to another machine. Registered beside Markets because both need the active profile
+    // and the window, and neither has anything else in common.
+    registerPortableIpc({
+      userData: app.getPath('userData'),
+      profileId: async () => (await profilesStore.active()).id,
+      getWindow: () => mainWindow,
+      appVersion: app.getVersion()
+    })
+
     registerMarketsIpc({
       engine: marketEngine,
       store: marketsStore,

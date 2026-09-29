@@ -177,5 +177,16 @@ test('the boundary is a known size, so the migration can be estimated rather tha
   // separate deciding what should fire from recording whether it was delivered, because a firing is never stored as
   // delivered until something confirms it. Four are history and the measurements over it, and two of those refuse to
   // name a winner between two sets. One scans, one digests, one reports health, one reads the other timeframes.
-  assert.ok(code.length <= 410, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
+  //
+  // 410 → 421: moving a profile to another machine. Eleven, and each is a step a person can stop at. One describes what
+  // exists and what cannot travel. One says whether a selection needs a password, which is a question worth answering
+  // before the password box appears. One estimates the space, before doing the work rather than after running out.
+  // One exports and one imports, and those two are the only ones that touch the profile. One inspects a package
+  // without opening it, which is the whole reason the manifest is unencrypted. One cancels whichever is running. Two
+  // are crash recovery: whether an import was interrupted, and clearing that once the person has been told. Two
+  // run the file dialogs, which is deliberate: the dialog runs in this process so the package is written where the
+  // person pointed rather than wherever a renderer asked for.
+  //
+  // The password crosses on the export and import channels and nothing derived from it comes back on any of them.
+  assert.ok(code.length <= 421, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
 })

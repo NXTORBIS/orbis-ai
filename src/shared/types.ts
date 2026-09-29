@@ -640,6 +640,48 @@ export interface NxtorbisApi {
    * process reads it from the profile store, as everywhere else.
    */
   marketsState(): Promise<MarketsState | { error: string; message?: string }>
+  // ---------------------------------------------------------------- moving a profile between machines
+  /** Everything the transfer screen needs to draw itself: the categories, what cannot travel, and why. */
+  /** Where a dropped file sits on disk, or an empty string when that cannot be established. */
+  pathForFile(file: File): string
+  /** Asks where to save, through the system dialog. Null when the person cancelled. */
+  portableChooseDestination(request: { name: string }): Promise<{ path: string | null }>
+  /** Asks which package to open. Null when the person cancelled. */
+  portableChoosePackage(): Promise<{ path: string | null }>
+  portableState(): Promise<PortableTransferState | { error: string; message?: string }>
+  /** Whether this selection has to be protected by a password, and which parts of it forced that. */
+  portableNeedsPassword(request: { categoryIds: string[] }): Promise<{ required: boolean; because: string[] } | { error: string; message?: string }>
+  /** How much room the export will need, worked out before doing any of it. */
+  portableEstimate(request: { profileName: string; categoryIds: string[]; destination: string }): Promise<PortableEstimate | { error: string; message?: string }>
+  /**
+   * Writes the package.
+   *
+   * The password goes in and nothing derived from it comes back. It is never stored and never appears in any answer.
+   */
+  portableExport(request: {
+    profileName: string
+    categoryIds: string[]
+    purpose: 'transfer' | 'backup' | 'snapshot'
+    password: string | null
+    destination: string
+  }): Promise<PortableExportResult | { error: string; message?: string }>
+  /** Reads a package's manifest without opening it, so a person can see what it holds before typing a password. */
+  portableInspect(request: { path: string }): Promise<PortableInspection | { error: string; message?: string }>
+  /** Brings a package in. Nothing reaches the profile until all of it is ready to. */
+  portableImport(request: {
+    path: string
+    categoryIds: string[]
+    mode: 'replace' | 'merge'
+    password: string | null
+  }): Promise<PortableImportResult | { error: string; message?: string; rolledBack?: boolean | null }>
+  /** Stops whichever of the two is running. */
+  portableCancel(): Promise<{ cancelled: boolean; message: string }>
+  /** Whether an import began and never finished, read on start. */
+  portableRecovery(): Promise<PortableRecovery | { error: string; message?: string }>
+  portableRecoveryClear(): Promise<{ cleared: boolean }>
+  /** Progress while an export or import runs. Pushed rather than polled: either can take a while. */
+  onPortableProgress(handler: (progress: PortableProgress) => void): () => void
+
   /** The master switch. Off releases every market subscription and keeps every saved choice. */
   marketsSetEnabled(enabled: boolean): Promise<MarketsState | { error: string; message?: string }>
 
@@ -1893,4 +1935,83 @@ export interface PageRegistryHealth {
   duplicateSlugs: string[]
   duplicateIds: string[]
   healthy: boolean
+}
+
+// ---------------------------------------------------------------- moving a profile between machines
+
+export interface PortableCategoryView {
+  id: string
+  label: string
+  describe: string
+  portability: string
+  sensitivity: string
+  /** False for anything tied to this machine. Shown and never silently dropped. */
+  canTravel: boolean
+  mergeable: boolean
+  requiresReauthentication: boolean
+  userAction: string | null
+  why: string | null
+}
+
+export interface PortableTransferState {
+  categories: PortableCategoryView[]
+  everything: string[]
+  excluded: { id: string; label: string; why: string }[]
+  protectionNotes: string[]
+  assumptions: string[]
+}
+
+export interface PortableEstimate {
+  contentBytes: number
+  files: number
+  packageBytes: number
+  freeBytes: number | null
+  enoughRoom: boolean | null
+  why: string
+}
+
+export interface PortableProgress {
+  stage: string
+  category: string | null
+  filesDone?: number
+  filesTotal?: number
+  bytesDone?: number
+  bytesTotal?: number
+  message: string
+}
+
+export interface PortableExportResult {
+  destination: string
+  bytes: number
+  manifest: { packageId: string; createdAt: number; profileName: string; categories: { id: string; disposition: string; count: number; note: string }[]; encryption: { encrypted: boolean } }
+  complete: { complete: boolean; missing: string[]; describe: string }
+  addedDependencies: string[]
+  failures: { categoryId: string; message: string }[]
+  notes: string[]
+}
+
+export interface PortableInspection {
+  manifest: PortableExportResult['manifest'] & { createdByVersion: string; profileId: string }
+  summary: { describe: string } & Record<string, unknown>
+  compatibility: { importable: boolean; willRestore: string[]; cannotUse: { id: string; why: string }[]; userActions: { id: string; label: string; action: string }[]; describe: string }
+  encrypted: boolean
+  blocking: string[]
+  notes: string[]
+  sizeBytes: number
+}
+
+export interface PortableImportResult {
+  categories: { categoryId: string; status: string; filesWritten: number; added: number | null; kept: number; notes: string[] }[]
+  actions: { id: string; label: string; action: string }[]
+  actionsAfterImport: { id: string; label: string; action: string }[]
+  filesWritten: number
+  notes: string[]
+}
+
+export interface PortableRecovery {
+  interrupted: boolean
+  startedAt: number | null
+  packageId: string | null
+  paths: { scope: string; path: string }[]
+  why: string
 }

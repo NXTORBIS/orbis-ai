@@ -13,6 +13,7 @@ const ControlSwitches = lazy(() => import('./ControlSwitches'))
 const MotionNote = lazy(() => import('./MotionNote'))
 const VoiceSettings = lazy(() => import('./VoiceSettings'))
 const AccountPasswordSettings = lazy(() => import('./AccountPasswordSettings'))
+const TransferSettings = lazy(() => import('./TransferSettings'))
 const ProfileLockSettings = lazy(() => import('./ProfileLockSettings'))
 const TabLockSettings = lazy(() => import('./TabLockSettings'))
 const MarketsSettings = lazy(() => import('./MarketsSettings'))
@@ -114,6 +115,12 @@ export default function SettingsModal({ settings, onUpdate, onClose }: Props): R
 
           <Suspense fallback={null}>
             <TabLockSettings userName={settings.userName} />
+          </Suspense>
+
+          {/* After the three lock layers, because moving a profile is the thing you do once those are set up, and
+              because the package password is a fourth password and belongs where the others are explained. */}
+          <Suspense fallback={null}>
+            <TransferSettings userName={settings.userName} />
           </Suspense>
 
           <Suspense fallback={null}>
