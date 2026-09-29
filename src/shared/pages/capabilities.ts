@@ -285,6 +285,16 @@ export const CAPABILITIES: Record<string, CapabilityDefinition> = {
     consent: 'automatic',
     scope: 'none'
   }),
+  'computation.modern-physics': capability({
+    id: 'computation.modern-physics',
+    name: 'Heat, light and the very small',
+    description:
+      'Work through gas laws and engine cycles against the limit nothing gets past, follow molecules and their speeds, handle speeds near light, and solve the standard quantum problems — boxes, oscillators, hydrogen and tunnelling.',
+    category: 'computation',
+    risk: 'low',
+    consent: 'automatic',
+    scope: 'none'
+  }),
   'computation.wasm': capability({
     id: 'computation.wasm',
     name: 'Compiled code',
