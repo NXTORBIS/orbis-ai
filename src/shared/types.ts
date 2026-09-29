@@ -699,6 +699,14 @@ export interface NxtorbisApi {
   ): Promise<
     { quotes: { instrumentId: string; quote: QuoteView | null }[]; connection: string } | { error: string; message?: string }
   >
+  /**
+   * Every price as it arrives, rather than on a timer.
+   *
+   * One message per screen refresh, each carrying the newest price for each instrument that moved in that beat.
+   * Nothing worth seeing is dropped: within one refresh the latest price *is* the price, and a screen cannot show
+   * more than it paints.
+   */
+  onMarketsTick(listener: (events: unknown[]) => void): () => void
   marketsCandles(
     instrumentId: string,
     interval: string,

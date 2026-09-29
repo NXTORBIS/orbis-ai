@@ -602,12 +602,22 @@ export function registerMarketsIpc(o: MarketsIpcOptions): void {
    */
   const paperWatch = new Map<string, () => void>()
 
+  /**
+   * The instruments the screen is currently showing prices for.
+   *
+   * Separate from `held`, which is per-panel (a chart, a book, a tape). This one follows whatever list is on screen
+   * and is rewritten every time that list changes, which is what keeps a closed watchlist from streaming for ever.
+   */
+  const listWatch = new Map<string, () => void>()
+
   const releaseAll = (): void => {
     for (const one of held.values()) {
       one.tape?.()
       one.release()
     }
     held.clear()
+    for (const release of listWatch.values()) release()
+    listWatch.clear()
   }
 
   // The account's own subscriptions outlive a page but not the window: when Orbis closes there is nothing left to
@@ -623,6 +633,60 @@ export function registerMarketsIpc(o: MarketsIpcOptions): void {
     if (isMainFrame && !isInPlace) releaseAll()
   })
   window?.on('closed', releaseAll)
+
+  /**
+   * Prices, pushed to the window the moment they arrive.
+   *
+   * The engine has always emitted a `quote` event for every tick off the provider's socket, and nothing carried those
+   * to the screen -- so the Markets screen asked for quotes on a two-second timer against a cache that was allowed to
+   * be a minute old. Two seconds of asking for a number that changes sixty times a second is not live; it is a
+   * slideshow, and the minute-old cache behind it is why prices looked stuck.
+   *
+   * Pushing is what makes it real time. A trade on Binance reaches this listener as it happens, and from here it is
+   * one `send` to the screen.
+   *
+   * ## Why it is batched, and why that is not a compromise
+   *
+   * A busy market produces thousands of ticks a second, and an IPC message per tick would spend more time crossing
+   * the process boundary than drawing anything -- the screen cannot show more than it can paint, and a monitor
+   * repaints 60 to 144 times a second. So ticks are collected and flushed on the next animation-rate beat.
+   *
+   * Nothing is dropped that matters: within a beat, the newest price for an instrument is the price, and the older
+   * ones are values that were true for four milliseconds. What is kept is the *latest* per instrument rather than a
+   * sample, so the number on screen is always the current one rather than one from a fixed moment ago.
+   */
+  const pending = new Map<string, unknown>()
+  let flushTimer: NodeJS.Timeout | null = null
+
+  const flushTicks = (): void => {
+    flushTimer = null
+    if (pending.size === 0) return
+    const target = o.getWindow()
+    if (!target || target.isDestroyed()) {
+      pending.clear()
+      return
+    }
+    const batch = [...pending.values()]
+    pending.clear()
+    target.webContents.send('markets:tick', batch)
+  }
+
+  const stopForwarding = o.engine.on((event) => {
+    if (event.type !== 'quote' && event.type !== 'trade') return
+    const instrumentId = event.instrumentId
+    if (typeof instrumentId !== 'string') return
+    // Keyed by instrument, so a burst collapses to the newest price for each rather than a queue of stale ones.
+    pending.set(`${event.type}:${instrumentId}`, event)
+    // ~16ms: one screen refresh. Sooner than this is work nobody can see.
+    if (flushTimer === null) flushTimer = setTimeout(flushTicks, 16)
+  })
+
+  window?.on('closed', () => {
+    stopForwarding()
+    if (flushTimer !== null) clearTimeout(flushTimer)
+    flushTimer = null
+    pending.clear()
+  })
 
   /**
    * The interval that was asked for, or null when it is not one Orbis names.
@@ -743,6 +807,30 @@ export function registerMarketsIpc(o: MarketsIpcOptions): void {
       const missing = ids.filter((one) => o.engine.quote(one) === null)
       if (missing.length > 0) await o.engine.refresh(missing.slice(0, 50))
     }
+
+    /**
+     * Whatever the screen is showing is subscribed to the provider's socket.
+     *
+     * `watch` was only ever called for a chart, an order book, a tape or an alert -- never for the rows of a
+     * watchlist. So the list on screen was not on the socket at all: every price in it came from a cache that
+     * something else happened to fill, refreshed by whatever asked next. That is why it looked frozen, and it is
+     * why polling harder would not have fixed it -- there was nothing newer to ask for.
+     *
+     * Subscribing here is what makes the tick stream carry these instruments. The list is re-subscribed each time
+     * the screen asks, and anything no longer on it is released, so switching watchlists does not leave the old
+     * one's symbols streaming for ever.
+     */
+    const stillWanted = new Set(ids)
+    for (const [instrumentId, watching] of listWatch) {
+      if (stillWanted.has(instrumentId)) continue
+      watching()
+      listWatch.delete(instrumentId)
+    }
+    for (const instrumentId of ids) {
+      if (listWatch.has(instrumentId)) continue
+      listWatch.set(instrumentId, o.engine.watch(instrumentId, 'watchlist'))
+    }
+
     return {
       quotes: ids.map((one) => ({ instrumentId: one, quote: o.engine.quote(one) })),
       connection: o.runtime.connection()

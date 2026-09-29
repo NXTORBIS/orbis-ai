@@ -66,6 +66,8 @@ const api: NxtorbisApi = {
   marketsClose: (instrumentId) => ipcRenderer.invoke('markets:close', instrumentId),
   marketsDetail: (instrumentId) => ipcRenderer.invoke('markets:detail', instrumentId),
   marketsQuotes: (instrumentIds, refresh) => ipcRenderer.invoke('markets:quotes', instrumentIds, refresh),
+  /** Every price as it arrives, batched to one screen refresh. Live, rather than asked for on a timer. */
+  onMarketsTick: (listener) => subscribe('markets:tick', listener),
   marketsCandles: (instrumentId, interval, limit) => ipcRenderer.invoke('markets:candles', instrumentId, interval, limit),
   marketsBook: (instrumentId, depth) => ipcRenderer.invoke('markets:book', instrumentId, depth),
   marketsBookOpen: (instrumentId, depth) => ipcRenderer.invoke('markets:book-open', instrumentId, depth),

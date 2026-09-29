@@ -413,8 +413,47 @@ export default function MarketsView({
       })
     }
     void tick()
-    const timer = window.setInterval(() => void tick(), 2000)
-    return () => window.clearInterval(timer)
+
+    /**
+     * Prices arrive; they are not asked for.
+     *
+     * Every tick off the provider's socket reaches here as it happens, batched by the main process to one screen
+     * refresh. The timer below is no longer how prices update -- it is a slow safety net for the things a tick
+     * stream does not carry (a market opening, an instrument being added elsewhere, a socket that dropped and came
+     * back), and it runs every thirty seconds instead of every two.
+     */
+    const offTick = window.api.onMarketsTick((events) => {
+      if (!Array.isArray(events) || events.length === 0) return
+      const quotes = new Map<string, QuoteView>()
+      for (const one of events) {
+        const event = one as { type?: string; instrumentId?: string; quote?: QuoteView }
+        if (event.type !== 'quote' || typeof event.instrumentId !== 'string' || !event.quote) continue
+        quotes.set(event.instrumentId, event.quote)
+      }
+      if (quotes.size === 0) return
+      setListQuotes((current) => {
+        // Only the instruments that actually ticked, so a busy market does not redraw rows that did not move.
+        let changed = false
+        const next: typeof current = { ...current }
+        for (const [id, quote] of quotes) {
+          if (next[id] === quote) continue
+          next[id] = quote
+          changed = true
+        }
+        return changed ? next : current
+      })
+      setOpen((current) => {
+        if (!current) return current
+        const fresh = quotes.get(current.instrument.instrumentId)
+        return fresh ? { ...current, quote: fresh } : current
+      })
+    })
+
+    const timer = window.setInterval(() => void tick(), 30_000)
+    return () => {
+      offTick()
+      window.clearInterval(timer)
+    }
   }, [enabled, lists, openId])
 
   // ---------------------------------------------------------------- search
