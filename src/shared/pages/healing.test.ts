@@ -94,6 +94,20 @@ describe('what to do about one defect', () => {
     assert.equal(repair.because, 'The angle has to be between 0 and 90.')
   })
 
+  it('asks the model about anything the specification checker found, listed or not', () => {
+    // Enumerating the codes was a real gap: one unlisted structural complaint made a whole Page unrepairable,
+    // because a defect nothing can fix takes the round with it.
+    for (const code of ['not-an-input', 'bad-kind', 'empty-section', 'duplicate-name', 'something-new-nobody-listed']) {
+      const repair = classify(defect({ code, found: 'spec' }))
+      assert.equal(repair.strategy, 'respecify', code)
+    }
+  })
+
+  it('still fixes a layout defect mechanically even when the checker reported it', () => {
+    // The mechanical table is read first, so a defect that has a deterministic fix keeps it whatever found it.
+    assert.equal(classify(defect({ code: 'columns-too-narrow', found: 'spec' })).strategy, 'relayout')
+  })
+
   it('gives up by name rather than guessing when nothing fits', () => {
     const repair = classify(defect({ code: 'something-nobody-planned-for', found: 'gate' }))
     assert.equal(repair.strategy, 'give-up')
@@ -101,6 +115,13 @@ describe('what to do about one defect', () => {
 
   it('does not find a strategy on Object.prototype', () => {
     for (const code of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) {
+      assert.equal(classify(defect({ code, found: 'gate' })).strategy, 'give-up', code)
+    }
+  })
+
+  it('does not find a meaning on Object.prototype either', () => {
+    for (const code of ['constructor', 'toString', '__proto__']) {
+      // Found by a gate, so the `found === 'spec'` rule does not apply and only the meaning set could let it through.
       assert.equal(classify(defect({ code, found: 'gate' })).strategy, 'give-up', code)
     }
   })

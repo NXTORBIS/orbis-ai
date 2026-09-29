@@ -33,6 +33,7 @@ import {
   type RunState
 } from '../../../shared/pages/builder'
 import { whatToRun } from '../../../shared/pages/validation'
+import type { Rendered } from '../../../shared/pages/visual'
 import type { PageAuditElement, PageCard, PageComputeResult } from '../../../shared/types'
 
 /**
@@ -763,6 +764,81 @@ export function BuilderPanel({
 }
 
 /** One component, rendered as the Page would show it. */
+/**
+ * A rendered Page measured, for `visual.ts` to judge.
+ *
+ * Everything here is asked of the document directly: where each box is, how big it is, how big its content is, what
+ * colour its text is against what is behind it. Nothing is estimated and there is no screenshot -- the browser knows
+ * all of this precisely, and precise beats approximate for every defect worth catching.
+ *
+ * The one thing the DOM cannot say on its own is whether a box that shows an answer *has* one, because an empty
+ * answer and an answer that is empty look identical. `PreviewComponent` writes that down as it renders.
+ */
+export function measure(root: HTMLElement, emphasis: Readonly<Record<string, 'primary' | 'secondary' | 'supporting'>> = {}): Rendered[] {
+  const top = root.getBoundingClientRect()
+  const out: Rendered[] = []
+  for (const element of Array.from(root.querySelectorAll<HTMLElement>('[data-page-component]'))) {
+    const box = element.getBoundingClientRect()
+    const style = window.getComputedStyle(element)
+    const id = element.dataset.pageComponent ?? ''
+    const said = element.dataset.pageValue
+    const field = element.dataset.pageField
+    out.push({
+      id,
+      kind: element.dataset.pageKind ?? '',
+      x: box.left - top.left,
+      y: box.top - top.top,
+      width: box.width,
+      height: box.height,
+      text: (element.textContent ?? '').trim(),
+      contentWidth: element.scrollWidth,
+      contentHeight: element.scrollHeight,
+      // Something with no box at all is not rendered, whatever the style says.
+      visible: box.width > 0 || box.height > 0 || style.display !== 'none',
+      foreground: style.color,
+      background: behind(element),
+      fontPixels: Number.parseFloat(style.fontSize),
+      ...(said === undefined || field === undefined ? {} : { bound: { field, hasValue: said === 'yes' } }),
+      ...(Object.prototype.hasOwnProperty.call(emphasis, id) ? { emphasis: emphasis[id] } : {})
+    })
+  }
+  return out
+}
+
+/**
+ * The colour actually behind an element.
+ *
+ * Walking up until something is not transparent, because almost every element in a Page inherits its background from
+ * an ancestor -- reading the element's own would say `rgba(0, 0, 0, 0)` and make every contrast check meaningless.
+ */
+function behind(element: HTMLElement): string {
+  let current: HTMLElement | null = element
+  for (let i = 0; i < 20 && current !== null; i++) {
+    const colour = window.getComputedStyle(current).backgroundColor
+    if (colour !== '' && colour !== 'transparent' && !/rgba\(\s*0,\s*0,\s*0,\s*0\s*\)/.test(colour)) return colour
+    current = current.parentElement
+  }
+  // Nothing opaque anywhere up the tree. The application's own surface is what is really behind it.
+  return window.getComputedStyle(document.body).backgroundColor || '#000000'
+}
+
+/**
+ * The attributes that make a rendered component findable.
+ *
+ * Every branch of `PreviewComponent` carries these, which is what lets the Page be measured after it renders.
+ * Without them the visual check would have to guess which box on screen is which component, and a visual check that
+ * guesses is one whose findings nobody can act on.
+ *
+ * `data-page-value` is the one that is not about geometry: it says whether a box that exists to show an answer has
+ * one. Nothing else can tell -- an empty answer and an answer that happens to be empty look identical in the DOM.
+ */
+function tag(component: Component, hasValue?: boolean): Record<string, string> {
+  const out: Record<string, string> = { 'data-page-component': component.id, 'data-page-kind': component.kind }
+  if (component.field !== undefined) out['data-page-field'] = component.field
+  if (hasValue !== undefined) out['data-page-value'] = hasValue ? 'yes' : 'no'
+  return out
+}
+
 export function PreviewComponent({
   component,
   document,
@@ -795,7 +871,7 @@ export function PreviewComponent({
     case 'row':
     case 'column':
       return (
-        <section className={component.kind === 'row' ? 'studio-row' : 'studio-group'}>
+        <section className={component.kind === 'row' ? 'studio-row' : 'studio-group'} {...tag(component)}>
           {component.label && <h4 className="studio-h">{component.label}</h4>}
           {(component.children ?? []).map((child) => (
             <PreviewComponent key={child.id} component={child} document={document} state={state} onChange={onChange} onRun={onRun} />
@@ -803,21 +879,29 @@ export function PreviewComponent({
         </section>
       )
     case 'table':
-      return <PreviewTable label={component.label ?? field?.label ?? ''} value={value} />
+      return <PreviewTable label={component.label ?? field?.label ?? ''} value={value} attributes={tag(component, value !== undefined && value !== null)} />
     case 'plot':
-      return <PreviewPlot label={component.label ?? field?.label ?? ''} value={value} />
+      return <PreviewPlot label={component.label ?? field?.label ?? ''} value={value} attributes={tag(component, value !== undefined && value !== null)} />
     case 'heading':
-      return <h4 className="studio-h">{component.text || 'Heading'}</h4>
+      return (
+        <h4 className="studio-h" {...tag(component)}>
+          {component.text || 'Heading'}
+        </h4>
+      )
     case 'paragraph':
-      return <p>{component.text}</p>
+      return <p {...tag(component)}>{component.text}</p>
     case 'note':
-      return <p className="page-note">{component.text}</p>
+      return (
+        <p className="page-note" {...tag(component)}>
+          {component.text}
+        </p>
+      )
     case 'divider':
-      return <hr className="studio-hr" />
+      return <hr className="studio-hr" {...tag(component)} />
     case 'number-input':
     case 'slider':
       return (
-        <label className="page-field">
+        <label className="page-field" {...tag(component)}>
           <span>{component.label || field?.label}</span>
           <input
             type={component.kind === 'slider' ? 'range' : 'number'}
@@ -830,14 +914,14 @@ export function PreviewComponent({
       )
     case 'text-input':
       return (
-        <label className="page-field wide">
+        <label className="page-field wide" {...tag(component)}>
           <span>{component.label || field?.label}</span>
           <input value={typeof value === 'string' ? value : ''} onChange={(e) => onChange(component.field as string, e.target.value)} />
         </label>
       )
     case 'checkbox':
       return (
-        <label className="studio-inline">
+        <label className="studio-inline" {...tag(component)}>
           <input
             type="checkbox"
             checked={value === true}
@@ -848,7 +932,7 @@ export function PreviewComponent({
       )
     case 'choice':
       return (
-        <label className="page-field">
+        <label className="page-field" {...tag(component)}>
           <span>{component.label || field?.label}</span>
           <select value={String(value ?? '')} onChange={(e) => onChange(component.field as string, e.target.value)}>
             {(field?.options ?? []).map((one) => (
@@ -862,7 +946,7 @@ export function PreviewComponent({
     case 'quantity-input': {
       const held = (value ?? {}) as { value?: number; unit?: string }
       return (
-        <label className="page-field">
+        <label className="page-field" {...tag(component)}>
           <span>
             {component.label || field?.label} {field?.unit ? `(${field.unit})` : ''}
           </span>
@@ -879,7 +963,10 @@ export function PreviewComponent({
     case 'value':
     case 'statistic':
       return (
-        <output className={component.kind === 'statistic' ? 'page-answer' : 'page-answer-line'}>
+        <output
+          className={component.kind === 'statistic' ? 'page-answer' : 'page-answer-line'}
+          {...tag(component, value !== undefined && value !== null)}
+        >
           <span className="page-label">{component.label || field?.label}</span>
           <strong>{readable(value)}</strong>
         </output>
@@ -889,6 +976,7 @@ export function PreviewComponent({
         <button
           type="button"
           className="queue-btn small"
+          {...tag(component)}
           disabled={!component.runs}
           onClick={() => component.runs && onRun(component.runs)}
         >
@@ -912,11 +1000,19 @@ export function PreviewComponent({
  * plain object and nothing describes its shape. A result that is not a list of objects says so instead of drawing an
  * empty grid, which would read as a calculation that returned nothing.
  */
-function PreviewTable({ label, value }: { label: string; value: unknown }): React.JSX.Element {
+function PreviewTable({
+  label,
+  value,
+  attributes
+}: {
+  label: string
+  value: unknown
+  attributes?: Record<string, string>
+}): React.JSX.Element {
   const rows = Array.isArray(value) ? value.filter((one) => one !== null && typeof one === 'object') : []
   if (rows.length === 0) {
     return (
-      <output className="page-answer-line">
+      <output className="page-answer-line" {...attributes}>
         <span className="page-label">{label}</span>
         <span className="page-note">{value === undefined ? 'nothing yet' : 'This is not a table.'}</span>
       </output>
@@ -924,7 +1020,7 @@ function PreviewTable({ label, value }: { label: string; value: unknown }): Reac
   }
   const columns = [...new Set(rows.flatMap((one) => Object.keys(one as Record<string, unknown>)))].slice(0, 8)
   return (
-    <figure className="page-block">
+    <figure className="page-block" {...attributes}>
       <figcaption className="page-label">{label}</figcaption>
       <table className="page-table">
         <thead>
@@ -956,7 +1052,15 @@ function PreviewTable({ label, value }: { label: string; value: unknown }): Reac
  * names: engines return `{x, y}`, `{t, value}` and bare pairs, and a chart that silently drew nothing because it was
  * looking for the wrong key is worse than one that says it could not find any points.
  */
-function PreviewPlot({ label, value }: { label: string; value: unknown }): React.JSX.Element {
+function PreviewPlot({
+  label,
+  value,
+  attributes
+}: {
+  label: string
+  value: unknown
+  attributes?: Record<string, string>
+}): React.JSX.Element {
   const points: { x: number; y: number }[] = []
   const list = Array.isArray(value)
     ? value
@@ -977,7 +1081,7 @@ function PreviewPlot({ label, value }: { label: string; value: unknown }): React
   }
   if (points.length < 2) {
     return (
-      <output className="page-answer-line">
+      <output className="page-answer-line" {...attributes}>
         <span className="page-label">{label}</span>
         <span className="page-note">{value === undefined ? 'nothing yet' : 'There are not enough points here to draw.'}</span>
       </output>
@@ -995,7 +1099,7 @@ function PreviewPlot({ label, value }: { label: string; value: unknown }): React
   const at = (one: { x: number; y: number }): string =>
     `${(((one.x - lowX) / spanX) * 300 + 10).toFixed(2)},${(190 - ((one.y - lowY) / spanY) * 170).toFixed(2)}`
   return (
-    <figure className="page-block">
+    <figure className="page-block" {...attributes}>
       <figcaption className="page-label">{label}</figcaption>
       <svg className="page-plot" viewBox="0 0 320 200" role="img" aria-label={`${label}: ${points.length} points`}>
         <polyline points={points.map(at).join(' ')} fill="none" stroke="var(--cyan)" strokeWidth="1.5" />

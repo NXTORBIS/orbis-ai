@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { History, Loader2, Sparkles, Trash2, Wand2 } from 'lucide-react'
 
 import type { NoticeKind } from '../App'
 import type { PageDocument } from '../../../shared/pages/builder'
-import { PreviewComponent, useDocumentRunner } from './PageStudio'
+import { measure, PreviewComponent, useDocumentRunner } from './PageStudio'
+import { examine, type Rendered, type VisualResult } from '../../../shared/pages/visual'
 
 /**
  * Asking Orbis for a Page that does not exist yet.
@@ -191,6 +192,11 @@ function Outcome({
   onDiscard(): void
   onNotify(message: string, kind?: NoticeKind): void
 }): React.JSX.Element {
+  const [rendered, setRendered] = useState<VisualResult | null>(null)
+  const look = useCallback((elements: readonly Rendered[], viewportWidth: number) => {
+    setRendered(examine(elements, viewportWidth))
+  }, [])
+
   if (built.page === null) {
     // Nothing being built is not the same as something going wrong, and the two must not read alike. Being handed a
     // Page that already does the job is the *best* outcome of the ladder -- saying "it did not work" there would
@@ -276,7 +282,33 @@ function Outcome({
         The real thing, running under the Page's own identity, before anybody keeps it. Everything a Page shows comes
         back from an engine through `pages:compute`, so this is not a preview of what it would do -- it is what it does.
       */}
-      <RunDocument pageId={built.page.pageId} document={built.page.document as PageDocument} onNotify={onNotify} pending />
+      <RunDocument
+        pageId={built.page.pageId}
+        document={built.page.document as PageDocument}
+        onNotify={onNotify}
+        pending
+        onRendered={look}
+      />
+
+      {/*
+        What it looked like once it had rendered. Every other check here is about whether the Page *would* work; this
+        is the only one that saw it, and it is the reason a box with no answer in it cannot reach somebody silently.
+      */}
+      {rendered !== null && rendered.problems.length > 0 && (
+        <>
+          <h4 className="studio-h">What it looks like</h4>
+          <ul className="page-list">
+            {rendered.problems.map((one, i) => (
+              <li key={i} className="page-note">
+                {one.message}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {rendered !== null && rendered.problems.length === 0 && (
+        <p className="page-note">Looked at after it rendered: {rendered.examined} things on screen, nothing amiss.</p>
+      )}
     </section>
   )
 }
@@ -463,17 +495,46 @@ export function RunDocument({
   pageId,
   document,
   onNotify,
-  pending = false
+  pending = false,
+  onRendered
 }: {
   pageId: string
   document: PageDocument
   onNotify(message: string, kind?: NoticeKind): void
   /** True while the Page is built and not yet kept, when the register does not know about it. */
   pending?: boolean
+  /**
+   * What the Page actually rendered as, once it has settled.
+   *
+   * Reported rather than judged here: this component renders, and `visual.ts` decides whether what it rendered is
+   * right. Keeping those apart is what lets the judging be tested without a window.
+   */
+  onRendered?(elements: readonly Rendered[], viewportWidth: number): void
 }): React.JSX.Element {
   const { state, running, change, run } = useDocumentRunner(document, pageId, onNotify, pending)
+  const surface = useRef<HTMLDivElement | null>(null)
+
+  /**
+   * Measured after it has settled, not as it renders.
+   *
+   * `running` going false is the signal: while a calculation is in flight the answers are legitimately empty, and
+   * measuring then would report every Page as missing its answers.
+   *
+   * Measured straight from the effect, with no animation frame. An effect already runs after the browser has
+   * painted, so the layout is there to read -- and waiting for a frame made the whole check silently not happen
+   * whenever the window was not in front, because Chromium throttles `requestAnimationFrame` in a background window
+   * to nothing. A check that quietly does not run is worse than no check, because its absence looks like a pass.
+   */
+  useEffect(() => {
+    if (onRendered === undefined || running || surface.current === null) return
+    onRendered(measure(surface.current), surface.current.clientWidth)
+    // `state` is in here because it is what is being measured. Watching only `running` measured the Page once,
+    // before its first answer arrived, and then never again -- so the finding on screen was that the Page had no
+    // answer while the answer was sitting next to it.
+  }, [running, state, document, onRendered])
+
   return (
-    <div className="studio-preview" aria-busy={running}>
+    <div className="studio-preview" aria-busy={running} ref={surface}>
       {document.components.map((component) => (
         <PreviewComponent
           key={component.id}

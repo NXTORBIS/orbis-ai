@@ -58,7 +58,8 @@ import {
 import { argumentsFor, initialState, type PageDocument } from '../../shared/pages/builder.ts'
 import { checkSpec, type PageSpec, type SpecProblem } from '../../shared/pages/spec.ts'
 import { arrange, shapeFor, shouldWait, type Shape } from '../../shared/pages/shapes.ts'
-import { checkLayout, layout } from '../../shared/pages/layout.ts'
+import { checkLayout, describeForAudit, layout } from '../../shared/pages/layout.ts'
+import { audit } from '../../shared/pages/accessibility.ts'
 import {
   afterRound,
   constraintFor,
@@ -471,7 +472,27 @@ Write it again, fixing those. Everything else about the format is the same.`
     })
     if (isCompileError(built)) return { built: null, defects: fromSpec(built.problems) }
 
-    return { built, defects: fromLayout(checkLayout(layout(ready), ready.outputs)) }
+    // Everything that can be checked without rendering: the arrangement, and whether the Page can be used by
+    // somebody who is not looking at it. What is left -- contrast, target size -- needs pixels, and `visual.ts`
+    // checks those after it renders rather than this guessing at them.
+    const arrangement = layout(ready)
+    const reachable = audit(describeForAudit(ready))
+    const stopping = reachable.findings.filter((one) => one.severity === 'blocker')
+    return {
+      built,
+      defects: [
+        ...fromLayout(checkLayout(arrangement, ready.outputs)),
+        ...stopping.map((one) => ({
+          found: 'gate' as const,
+          code: 'accessibility',
+          // The problem and its fix together. The audit never gives one without the other, and a repair that was
+          // told only what is wrong has to guess the rest.
+          message: `${one.problem} ${one.fix}`,
+          at: one.element,
+          severity: 'error' as const
+        }))
+      ]
+    }
   }
 
   /**

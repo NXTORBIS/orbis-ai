@@ -173,7 +173,13 @@ export function classify(defect: Defect): Repair {
     return { strategy: 'defer', engine: 'interaction', defect, deterministic: true, because: defect.message }
   }
 
-  if (MEANING.has(defect.code)) {
+  // Anything the specification checker found is, by definition, about what the model wrote -- and the model is the
+  // only thing that can write it differently. Enumerating the codes instead was a real gap: one unlisted structural
+  // complaint ("each input has to be an object") made a whole Page unrepairable, because a defect nothing could fix
+  // takes the round with it.
+  //
+  // `MEANING` is still read, for the same complaints arriving from somewhere other than the checker.
+  if (defect.found === 'spec' || MEANING.has(defect.code)) {
     return {
       strategy: 'respecify',
       engine: 'planner',

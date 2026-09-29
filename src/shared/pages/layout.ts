@@ -206,6 +206,52 @@ export function layout(parts: {
 }
 
 /**
+ * A Page described as elements, for the accessibility audit.
+ *
+ * What can honestly be said before anything has rendered: what each thing is, what it is called, and whether
+ * somebody can reach it with a keyboard. Contrast and target size are deliberately absent -- they are properties of
+ * pixels, and guessing them here would produce an audit that passes on a Page whose colours nobody has seen.
+ *
+ * Those are checked after the Page renders, by `visual.ts`, which has the numbers. Splitting it this way means
+ * neither half claims to have checked what the other half checks.
+ */
+export function describeForAudit(parts: {
+  inputs: readonly SpecInput[]
+  outputs: readonly SpecOutput[]
+  sections: readonly SpecSection[]
+}): { id: string; role: string; name?: string; keyboardReachable?: boolean }[] {
+  const out: { id: string; role: string; name?: string; keyboardReachable?: boolean }[] = []
+  const roleOf = (input: SpecInput): string => {
+    switch (input.kind) {
+      case 'boolean':
+        return 'checkbox'
+      case 'choice':
+        return 'combobox'
+      case 'text':
+        return 'textbox'
+      default:
+        return input.minimum !== undefined && input.maximum !== undefined ? 'slider' : 'spinbutton'
+    }
+  }
+  for (const section of parts.sections) {
+    out.push({ id: `section:${section.title}`, role: 'group', name: section.title })
+  }
+  for (const input of parts.inputs) {
+    // Every control a Page generates is a native one, so it is reachable by keyboard by construction. Saying so is
+    // not an assumption about the Page; it is a fact about what the compiler can emit.
+    out.push({ id: input.name, role: roleOf(input), name: input.label, keyboardReachable: true })
+  }
+  for (const output of parts.outputs) {
+    out.push({
+      id: output.name,
+      role: output.display === 'table' ? 'table' : output.display === 'plot' ? 'img' : 'status',
+      name: output.label
+    })
+  }
+  return out
+}
+
+/**
  * What is wrong with a layout.
  *
  * Each of these is a defect somebody would notice immediately and nobody is looking for, because a generated Page has

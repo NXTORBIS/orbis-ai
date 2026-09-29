@@ -3,6 +3,7 @@ import { describe, it } from 'node:test'
 
 import {
   checkLayout,
+  describeForAudit,
   columnWidth,
   describeLayout,
   emphasise,
@@ -178,6 +179,57 @@ describe('what is wrong with a layout', () => {
       assert.ok(problem.message.length > 20, problem.code)
       assert.ok(problem.code.length > 0)
     }
+  })
+})
+
+describe('describing a Page for the accessibility audit', () => {
+  const parts = {
+    inputs: [
+      { name: 'speed', kind: 'number' as const, label: 'Launch speed', minimum: 0, maximum: 100 },
+      { name: 'plain', kind: 'number' as const, label: 'A plain number' },
+      { name: 'surface', kind: 'choice' as const, label: 'Surface', options: [{ value: 'a', label: 'A' }] },
+      { name: 'wind', kind: 'boolean' as const, label: 'Windy' },
+      { name: 'note', kind: 'text' as const, label: 'A note' }
+    ],
+    outputs: [output('range'), output('path', 'plot'), output('rows', 'table')],
+    sections: [section('The throw', ['speed']), section('The answer', ['range'])]
+  }
+
+  it('gives every control a role that matches what it is', () => {
+    const described = describeForAudit(parts)
+    const roleOf = (id: string): string | undefined => described.find((one) => one.id === id)?.role
+    assert.equal(roleOf('speed'), 'slider', 'both ends known, so it is draggable')
+    assert.equal(roleOf('plain'), 'spinbutton', 'no ends, so it is a number box')
+    assert.equal(roleOf('surface'), 'combobox')
+    assert.equal(roleOf('wind'), 'checkbox')
+    assert.equal(roleOf('note'), 'textbox')
+    assert.equal(roleOf('path'), 'img')
+    assert.equal(roleOf('rows'), 'table')
+    assert.equal(roleOf('range'), 'status')
+  })
+
+  it('gives every control the label somebody actually reads', () => {
+    for (const one of describeForAudit(parts)) assert.ok((one.name ?? '').length > 0, one.id)
+  })
+
+  it('says every control can be reached by a keyboard, because the compiler can only emit native ones', () => {
+    const described = describeForAudit(parts)
+    for (const input of parts.inputs) {
+      assert.equal(described.find((one) => one.id === input.name)?.keyboardReachable, true, input.name)
+    }
+  })
+
+  it('says nothing about contrast or size, which are properties of pixels nobody has seen yet', () => {
+    // Guessing them here would produce an audit that passes on a Page whose colours nobody has looked at.
+    for (const one of describeForAudit(parts)) {
+      assert.equal('foreground' in one, false, one.id)
+      assert.equal('width' in one, false, one.id)
+    }
+  })
+
+  it('describes the sections too, so a reader knows what groups what', () => {
+    const described = describeForAudit(parts)
+    assert.equal(described.filter((one) => one.role === 'group').length, 2)
   })
 })
 
