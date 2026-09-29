@@ -22,6 +22,7 @@ export type CommandCategory =
   | 'media'
   | 'protection'
   | 'workspace'
+  | 'tools'
   | 'customize'
   | 'settings'
 
@@ -34,6 +35,10 @@ export const CATEGORIES: { id: CommandCategory; label: string; icon: string; blu
   { id: 'media', label: 'Media', icon: 'media', blurb: 'What is playing, and where' },
   { id: 'protection', label: 'Privacy & Protection', icon: 'privacy', blurb: 'What a page is allowed to do' },
   { id: 'workspace', label: 'Workspace', icon: 'workspaces', blurb: 'Sets of tabs, and the things you are keeping' },
+  // Pages and Markets fit none of the others: they are not research, not capture, not a workspace. They are things
+  // that work something out. A category of two is worth having when the alternative is filing them somewhere they
+  // do not belong, which is how a list stops meaning anything.
+  { id: 'tools', label: 'Tools', icon: 'pages', blurb: 'Things that work something out' },
   { id: 'customize', label: 'Customize', icon: 'customize', blurb: 'How Orbis looks and what sits on the toolbar' },
   { id: 'settings', label: 'Settings', icon: 'settings', blurb: 'Every setting, found by name instead of hunted for' }
 ]
@@ -89,10 +94,41 @@ export interface OrbisCapability {
   /** Other words somebody might look for it by. The name itself is always searched. */
   keywords: string[]
   target: Target
+  /**
+   * The Orbis window's own screen for this, when it has one.
+   *
+   * Separate from `target`, which says where the *browser* goes. A capability can be both -- Notes is a screen in the
+   * Orbis window and, for now, a view in the browser panel -- and saying so in one entry is what stops the two halves
+   * keeping separate lists of the same features, which is exactly what they did.
+   *
+   * The value is a `FeatureId`: the app's launcher opens it directly. A capability with no `app` is something only
+   * the browser can do, and the app's launcher does not offer it.
+   */
+  app?: AppFeature
   /** True when a real Chromium toolbar action exists for it, so it can be pinned beside the address bar. */
   pinnable: boolean
   needs: Requirement[]
 }
+
+/**
+ * The screens the Orbis window can open.
+ *
+ * Declared here rather than in the renderer because this is the list both halves read. `Sidebar.tsx` used to hold a
+ * second copy of it, with its own labels and its own order, and the two disagreed about nine features.
+ */
+export type AppFeature =
+  | 'pages'
+  | 'markets'
+  | 'workflows'
+  | 'galaxy'
+  | 'notes'
+  | 'tasks'
+  | 'whiteboard'
+  | 'clipboard'
+  | 'workspaces'
+  | 'secrets'
+  | 'customize'
+  | 'profiles'
 
 /**
  * The capabilities Orbis has.
@@ -120,13 +156,13 @@ export const CAPABILITIES: OrbisCapability[] = [
   { id: 'browserTask', name: 'Do something on this page', category: 'ai', description: 'Give Orbis a task and watch it work in the browser', icon: 'controls', keywords: ['task', 'agent', 'automate', 'click', 'do', 'act'], target: { kind: 'panel', view: 'ask' }, pinnable: false, needs: ['helper', 'key', 'browser'] },
 
   // ---- Automation
-  { id: 'workflows', name: 'Workflows', category: 'automation', description: 'Sequences Orbis runs for you, and what they did', icon: 'workflows', keywords: ['workflow', 'automation', 'automate', 'routine', 'schedule', 'run'], target: { kind: 'panel', view: 'workflows' }, pinnable: true, needs: ['helper'] },
+  { id: 'workflows', name: 'Workflows', category: 'automation', description: 'Sequences Orbis runs for you, and what they did', icon: 'workflows', keywords: ['workflow', 'automation', 'automate', 'routine', 'schedule', 'run'], target: { kind: 'panel', view: 'workflows' }, app: 'workflows', pinnable: true, needs: ['helper'] },
 
   // ---- Research
   { id: 'search', name: 'Search', category: 'research', description: 'Search the web from Orbis', icon: 'search', keywords: ['search', 'find', 'web', 'images', 'videos', 'news'], target: { kind: 'panel', view: 'search' }, pinnable: true, needs: ['helper'] },
-  { id: 'galaxy', name: 'Galaxy', category: 'research', description: 'A map of everything Orbis keeps, and how it connects', icon: 'galaxy', keywords: ['galaxy', 'map', 'graph', 'connections', 'knowledge'], target: { kind: 'panel', view: 'galaxy' }, pinnable: true, needs: ['helper'] },
-  { id: 'notes', name: 'Notes', category: 'research', description: 'Notes kept in Orbis', icon: 'notes', keywords: ['note', 'write', 'jot'], target: { kind: 'panel', view: 'notes' }, pinnable: true, needs: ['helper'] },
-  { id: 'whiteboard', name: 'Whiteboard', category: 'research', description: 'Boards to gather things on', icon: 'whiteboard', keywords: ['whiteboard', 'board', 'canvas', 'draw'], target: { kind: 'view', view: 'whiteboard' }, pinnable: false, needs: ['helper'] },
+  { id: 'galaxy', name: 'Galaxy', category: 'research', description: 'A map of everything Orbis keeps, and how it connects', icon: 'galaxy', keywords: ['galaxy', 'map', 'graph', 'connections', 'knowledge'], target: { kind: 'panel', view: 'galaxy' }, app: 'galaxy', pinnable: true, needs: ['helper'] },
+  { id: 'notes', name: 'Notes', category: 'research', description: 'Notes kept in Orbis', icon: 'notes', keywords: ['note', 'write', 'jot'], target: { kind: 'panel', view: 'notes' }, app: 'notes', pinnable: true, needs: ['helper'] },
+  { id: 'whiteboard', name: 'Whiteboard', category: 'research', description: 'Boards to gather things on', icon: 'whiteboard', keywords: ['whiteboard', 'board', 'canvas', 'draw'], target: { kind: 'view', view: 'whiteboard' }, app: 'whiteboard', pinnable: false, needs: ['helper'] },
   { id: 'sources', name: 'Sources', category: 'research', description: 'The pages behind an answer', icon: 'sources', keywords: ['source', 'citation', 'reference', 'research'], target: { kind: 'view', view: 'sources' }, pinnable: false, needs: ['helper'] },
 
   { id: 'research', name: 'Research', category: 'research', description: 'What Orion has looked into, and what it found', icon: 'research', keywords: ['research', 'investigate', 'study', 'deep'], target: { kind: 'view', view: 'research' }, pinnable: false, needs: ['helper'] },
@@ -148,16 +184,22 @@ export const CAPABILITIES: OrbisCapability[] = [
   { id: 'lockOrbis', name: 'Lock Orbis', category: 'protection', description: 'Puts Orbis away and asks for your account password. Nothing is closed', icon: 'privacy', keywords: ['lock', 'orbis', 'profile', 'away', 'sign out'], target: { kind: 'ask', channel: 'security:lockProfile' }, pinnable: false, needs: ['helper'] },
   { id: 'adblock', name: 'Ad blocking', category: 'protection', description: 'What was blocked here, and the rules behind it', icon: 'adblock', keywords: ['ad', 'advert', 'advertising', 'block', 'blocker', 'ads'], target: { kind: 'panel', view: 'block' }, pinnable: true, needs: ['helper'] },
   { id: 'permissions', name: 'Site permissions', category: 'protection', description: 'What this site is allowed to do', icon: 'privacy', keywords: ['permission', 'camera', 'microphone', 'location', 'notification', 'site'], target: { kind: 'page', url: 'chrome://settings/content' }, pinnable: false, needs: ['browser'] },
-  { id: 'secrets', name: 'Secrets', category: 'protection', description: 'Keys and passwords, behind a master password', icon: 'secrets', keywords: ['secret', 'password', 'key', 'vault', 'credential'], target: { kind: 'panel', view: 'secrets' }, pinnable: true, needs: ['helper'] },
+  { id: 'secrets', name: 'Secrets', category: 'protection', description: 'Keys and passwords, behind a master password', icon: 'secrets', keywords: ['secret', 'password', 'key', 'vault', 'credential'], target: { kind: 'panel', view: 'secrets' }, app: 'secrets', pinnable: true, needs: ['helper'] },
 
   // ---- Workspace
-  { id: 'workspaces', name: 'Workspaces', category: 'workspace', description: 'Sets of tabs kept together and reopened as one', icon: 'workspaces', keywords: ['workspace', 'space', 'session', 'project'], target: { kind: 'view', view: 'workspaces' }, pinnable: false, needs: ['helper'] },
-  { id: 'tasks', name: 'Tasks', category: 'workspace', description: 'Things to do', icon: 'tasks', keywords: ['task', 'todo', 'to-do', 'reminder'], target: { kind: 'panel', view: 'tasks' }, pinnable: true, needs: ['helper'] },
+  { id: 'workspaces', name: 'Workspaces', category: 'workspace', description: 'Sets of tabs kept together and reopened as one', icon: 'workspaces', keywords: ['workspace', 'space', 'session', 'project'], target: { kind: 'view', view: 'workspaces' }, app: 'workspaces', pinnable: false, needs: ['helper'] },
+  { id: 'tasks', name: 'Tasks', category: 'workspace', description: 'Things to do', icon: 'tasks', keywords: ['task', 'todo', 'to-do', 'reminder'], target: { kind: 'panel', view: 'tasks' }, app: 'tasks', pinnable: true, needs: ['helper'] },
   { id: 'reminders', name: 'Reminders', category: 'workspace', description: 'Tasks with a time on them', icon: 'reminders', keywords: ['reminder', 'due', 'alarm', 'later'], target: { kind: 'view', view: 'reminders' }, pinnable: false, needs: ['helper'] },
-  { id: 'clipboard', name: 'Clipboard', category: 'workspace', description: 'What has been copied lately', icon: 'clipboard', keywords: ['clipboard', 'copied', 'paste', 'copy'], target: { kind: 'view', view: 'clipboard' }, pinnable: false, needs: ['helper'] },
+  { id: 'clipboard', name: 'Clipboard', category: 'workspace', description: 'What has been copied lately', icon: 'clipboard', keywords: ['clipboard', 'copied', 'paste', 'copy'], target: { kind: 'view', view: 'clipboard' }, app: 'clipboard', pinnable: false, needs: ['helper'] },
 
   // ---- Customize
-  { id: 'customize', name: 'Customize', category: 'customize', description: 'How the new tab page looks, and what it shows', icon: 'customize', keywords: ['customize', 'customise', 'theme', 'appearance', 'wallpaper', 'widget', 'look'], target: { kind: 'page', url: 'chrome://orbis-newtab/' }, pinnable: false, needs: ['browser'] },
+  { id: 'customize', name: 'Customize', category: 'customize', description: 'How the new tab page looks, and what it shows', icon: 'customize', keywords: ['customize', 'customise', 'theme', 'appearance', 'wallpaper', 'widget', 'look'], target: { kind: 'page', url: 'chrome://orbis-newtab/' }, app: 'customize', pinnable: false, needs: ['browser'] },
+  // Tools. Both of these are Orbis window screens with no browser counterpart, which is why neither was ever in this
+  // list: nothing browser-side needed them, and nothing app-side read this list.
+  { id: 'pages', name: 'Pages', category: 'tools', description: 'Orbis\u2019s own tools, each with its own address', icon: 'pages', keywords: ['page', 'tool', 'calculator', 'converter', 'lab', 'build'], target: { kind: 'panel', view: 'home' }, app: 'pages', pinnable: false, needs: ['helper'] },
+  { id: 'markets', name: 'Markets', category: 'tools', description: 'Live prices, charts and watchlists', icon: 'markets', keywords: ['market', 'price', 'chart', 'crypto', 'ticker', 'watchlist', 'trading'], target: { kind: 'panel', view: 'home' }, app: 'markets', pinnable: false, needs: ['helper'] },
+  { id: 'profiles', name: 'Profiles', category: 'settings', description: 'Separate lives, separate data', icon: 'account', keywords: ['profile', 'account', 'switch', 'person'], target: { kind: 'panel', view: 'account' }, app: 'profiles', pinnable: false, needs: ['helper'] },
+
   { id: 'settings', name: 'Settings', category: 'settings', description: 'Everything there is to change', icon: 'settings', keywords: ['settings', 'preferences', 'options', 'configure', 'setup'], target: { kind: 'page', url: 'chrome://settings/' }, pinnable: false, needs: ['browser'] },
   { id: 'settings.appearance', name: 'Appearance', category: 'settings', description: 'Theme, fonts and how pages are shown', icon: 'customize', keywords: ['appearance', 'browser theme', 'dark mode', 'light mode', 'font', 'font size', 'text size', 'page zoom'], target: { kind: 'page', url: 'chrome://settings/appearance' }, pinnable: false, needs: ['browser'] },
   { id: 'settings.privacy', name: 'Privacy and security', category: 'settings', description: 'Cookies, tracking, safe browsing and clearing what is kept', icon: 'privacy', keywords: ['privacy', 'security', 'cookies', 'tracking', 'clear', 'delete', 'safe browsing', 'https'], target: { kind: 'page', url: 'chrome://settings/privacy' }, pinnable: false, needs: ['browser'] },

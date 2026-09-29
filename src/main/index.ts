@@ -46,8 +46,8 @@ import { classifyAutomationMessage, classifyIntent } from './intent'
 import type { ChatIntent } from './intent'
 import { automationProgress } from '../shared/automation'
 import { runBrowserAgent } from './browserAgent'
-import { WhisperService, LocalVoiceError } from './whisper/service.ts'
-import type { WhisperDownloadProgress } from '../shared/whisperModels.ts'
+import { PulsarService, LocalVoiceError } from './pulsar/service.ts'
+import type { PulsarDownloadProgress } from '../shared/pulsarModels.ts'
 import { openDefaultAppsSettings, readDefaultBrowser, requestDefaultBrowser } from './defaultBrowser'
 import { checkAudio, describeError, isVoiceModel } from '../shared/voiceInput'
 import { completeDraft, generateTitle, generateWorkflowTitle, predictQueries, requestJson, suggestFollowups } from './suggest'
@@ -207,8 +207,8 @@ function latestAutomation(messages: ChatMessage[]): AutomationState | undefined 
   return [...messages].reverse().find((m) => m.role === 'assistant' && m.automation)?.automation
 }
 
-/** Speech to text: one Whisper model manager and runtime for every microphone in Orbis; set up when the app is ready. */
-let whisper: WhisperService | null = null
+/** Speech to text: one Pulsar model manager and runtime for every microphone in Orbis; set up when the app is ready. */
+let Pulsar: PulsarService | null = null
 /** The app's own browsing library: new-tab shortcuts, address-bar memory, reading list, and a copy of Chromium's history, bookmarks and downloads. */
 let browserLibrary: BrowserLibrary | null = null
 /** The Orbis Browser Control Layer: every browser capability, for the window, Orion and automations. */
@@ -457,6 +457,29 @@ function createWindow(): BrowserWindow {
   // The window's real fullscreen state, however it changes (F11, Esc, the OS).
   win.on('enter-full-screen', () => win.webContents.send('window:fullscreen-changed', true))
   win.on('leave-full-screen', () => win.webContents.send('window:fullscreen-changed', false))
+
+  /**
+   * What the window itself is allowed to ask the machine for.
+   *
+   * Only the microphone, and only for Orbis's own page. Everything else is refused -- the window has no business
+   * asking for the camera, the screen, a location or notifications, and refusing by default means a future screen
+   * cannot quietly acquire one of those by asking.
+   *
+   * Without a handler at all, whether `getUserMedia` succeeds is left to Electron's default, which is not something
+   * to leave a feature resting on: speech input is the whole of `Pulsar/`, and it produces nothing if the recorder
+   * never gets a microphone. There is a handler for the Pages host already (`pages/host.ts`, which denies
+   * everything); there was none for the window.
+   *
+   * `setPermissionCheckHandler` matters as much as the request handler: `getUserMedia` consults it synchronously,
+   * and a renderer that is refused there never reaches the request at all.
+   */
+  const allowedForWindow = (permission: string): boolean => permission === 'media' || permission === 'audioCapture'
+  win.webContents.session.setPermissionRequestHandler((contents, permission, callback) => {
+    callback(contents === win.webContents && allowedForWindow(permission))
+  })
+  win.webContents.session.setPermissionCheckHandler((contents, permission) => {
+    return contents === win.webContents && allowedForWindow(permission)
+  })
 
   // Links always open in the system browser, never inside the app window.
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -1101,7 +1124,7 @@ ${summaryBlock(summary)}`
   /**
    * Speech into text, for every microphone in Orbis.
    *
-   * The window records; this sends it to Whisper and sends the words back. A failure comes back as a reason the window
+   * The window records; this sends it to Pulsar and sends the words back. A failure comes back as a reason the window
    * can act on rather than as a string it has to guess at, and neither the audio nor the words are kept or logged.
    */
   // Whether Orbis is the browser Windows opens links with. Windows decides; Orbis asks and reports what it is told.
@@ -1114,7 +1137,7 @@ ${summaryBlock(summary)}`
   let voiceAbort: AbortController | null = null
 
   const transcribeClip = async (audio: Buffer, o: { model?: unknown; language?: unknown }) => {
-    if (!whisper) return { ok: false as const, code: 'runtime-error' as const, message: 'Speech input is not ready yet.' }
+    if (!Pulsar) return { ok: false as const, code: 'runtime-error' as const, message: 'Speech input is not ready yet.' }
     const bad = checkAudio(audio.length)
     if (bad) return { ok: false as const, code: bad, message: describeError(bad) }
 
@@ -1123,10 +1146,10 @@ ${summaryBlock(summary)}`
     voiceAbort = controller
 
     try {
-      const model = isVoiceModel(o.model) ? o.model : whisper.hardware().recommended
+      const model = isVoiceModel(o.model) ? o.model : Pulsar.hardware().recommended
       const language = typeof o.language === 'string' && /^[a-z]{2}$/i.test(o.language) ? o.language.toLowerCase() : null
       // Nothing here reaches the network: this is a local child process, run against a model file already on disk.
-      const text = await whisper.transcribe(audio, model, language, controller.signal)
+      const text = await Pulsar.transcribe(audio, model, language, controller.signal)
       return { ok: true as const, text }
     } catch (err) {
       const code = err instanceof LocalVoiceError ? err.code : 'runtime-error'
@@ -1151,8 +1174,8 @@ ${summaryBlock(summary)}`
     personalizedSuggestions: async () => (await store.getSettings()).personalizedSuggestions !== false,
     transcribe: (audio, options) => transcribeClip(Buffer.from(audio), options),
     cancelTranscription: () => voiceAbort?.abort(),
-    voiceHardware: () => whisper?.hardware() ?? null,
-    voiceModels: async () => (whisper ? await whisper.status() : { installed: [], downloading: [] })
+    voiceHardware: () => Pulsar?.hardware() ?? null,
+    voiceModels: async () => (Pulsar ? await Pulsar.status() : { installed: [], downloading: [] })
   }
 
   ipcMain.handle('voice:cancel', (event) => {
@@ -1162,19 +1185,19 @@ ${summaryBlock(summary)}`
 
   ipcMain.handle('voice:hardware', (event) => {
     if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
-    return whisper?.hardware() ?? null
+    return Pulsar?.hardware() ?? null
   })
 
   ipcMain.handle('voice:models:status', async (event) => {
     if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
-    return whisper ? await whisper.status() : { installed: [], downloading: [] }
+    return Pulsar ? await Pulsar.status() : { installed: [], downloading: [] }
   })
 
   ipcMain.handle('voice:models:download', async (event, id: unknown) => {
     if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
-    if (!whisper || !isVoiceModel(id)) return { ok: false, message: 'Not a recognised model.' }
+    if (!Pulsar || !isVoiceModel(id)) return { ok: false, message: 'Not a recognised model.' }
     try {
-      await whisper.download(id, (progress: WhisperDownloadProgress) => {
+      await Pulsar.download(id, (progress: PulsarDownloadProgress) => {
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('voice:models:progress', progress)
       })
       return { ok: true }
@@ -1185,17 +1208,17 @@ ${summaryBlock(summary)}`
 
   ipcMain.handle('voice:models:cancelDownload', (event, id: unknown) => {
     if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
-    if (whisper && isVoiceModel(id)) whisper.cancelDownload(id)
+    if (Pulsar && isVoiceModel(id)) Pulsar.cancelDownload(id)
   })
 
   ipcMain.handle('voice:models:delete', async (event, id: unknown) => {
     if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
-    if (whisper && isVoiceModel(id)) await whisper.delete(id)
+    if (Pulsar && isVoiceModel(id)) await Pulsar.delete(id)
   })
 
   ipcMain.handle('voice:models:verify', async (event, id: unknown) => {
     if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
-    return whisper && isVoiceModel(id) ? await whisper.verify(id) : false
+    return Pulsar && isVoiceModel(id) ? await Pulsar.verify(id) : false
   })
 }
 
@@ -1278,7 +1301,7 @@ if (!app.requestSingleInstanceLock()) {
 
     // The model files are the app's, shared by every profile the way the whisper.cpp binary itself is; only which
     // model a profile has chosen, and its language and microphone, are kept per profile — in experience settings.
-    whisper = new WhisperService(
+    Pulsar = new PulsarService(
       app.getPath('userData'),
       app.isPackaged ? process.resourcesPath : join(app.getAppPath(), 'resources'),
       (url, init) => net.fetch(url, init)

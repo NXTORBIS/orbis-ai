@@ -24,23 +24,23 @@ function fakeFetch(bytes = FAKE_BYTES): { fetchFn: typeof fetch } {
 }
 
 function withDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
-  const dir = mkdtempSync(join(tmpdir(), 'orbis-whisper-test-'))
+  const dir = mkdtempSync(join(tmpdir(), 'orbis-Pulsar-test-'))
   return fn(dir).finally(() => rmSync(dir, { recursive: true, force: true }))
 }
 
 // The catalog's real sizes are multi-hundred-megabyte; the manager itself does not know or care what the bytes are,
-// so every test below monkey-patches WHISPER_MODEL_INFO's size for 'tiny' to match the small fake file — the manager
+// so every test below monkey-patches PULSAR_MODEL_INFO's size for 'tiny' to match the small fake file — the manager
 // is exercised exactly as it runs against a real model, just with a file small enough for a test to hold in memory.
-import { WHISPER_MODEL_INFO } from '../../shared/whisperModels.ts'
-const realSize = WHISPER_MODEL_INFO.tiny.sizeBytes
-const realUrl = WHISPER_MODEL_INFO.tiny.url
+import { PULSAR_MODEL_INFO } from '../../shared/pulsarModels.ts'
+const realSize = PULSAR_MODEL_INFO.tiny.sizeBytes
+const realUrl = PULSAR_MODEL_INFO.tiny.url
 
 test.beforeEach(() => {
-  WHISPER_MODEL_INFO.tiny.sizeBytes = FAKE_BYTES.length
+  PULSAR_MODEL_INFO.tiny.sizeBytes = FAKE_BYTES.length
 })
 test.after(() => {
-  WHISPER_MODEL_INFO.tiny.sizeBytes = realSize
-  WHISPER_MODEL_INFO.tiny.url = realUrl
+  PULSAR_MODEL_INFO.tiny.sizeBytes = realSize
+  PULSAR_MODEL_INFO.tiny.url = realUrl
 })
 
 test('a model downloads, is recorded installed, and its file really is what was fetched', () =>
@@ -150,12 +150,12 @@ test('a download refused for lack of disk space never touches the network', () =
     const manager = new ModelManager(dir, fetchFn)
     // A model manager can only be asked about space on a real filesystem; this checks the refusal path directly by
     // asking for a size the temp directory's free space cannot possibly hold.
-    const hugeOriginal = WHISPER_MODEL_INFO.tiny.sizeBytes
-    WHISPER_MODEL_INFO.tiny.sizeBytes = Number.MAX_SAFE_INTEGER / 2
+    const hugeOriginal = PULSAR_MODEL_INFO.tiny.sizeBytes
+    PULSAR_MODEL_INFO.tiny.sizeBytes = Number.MAX_SAFE_INTEGER / 2
     try {
       await assert.rejects(manager.download('tiny'), /space/i)
     } finally {
-      WHISPER_MODEL_INFO.tiny.sizeBytes = hugeOriginal
+      PULSAR_MODEL_INFO.tiny.sizeBytes = hugeOriginal
     }
     assert.equal(called, false, 'refused before ever asking the network for anything')
   }))

@@ -119,7 +119,7 @@ export interface ExperienceConfig {
   performance: PerformanceConfig
   accessibility: AccessibilityConfig
   notifications: NotificationsConfig
-  /** Which Whisper model, language and microphone every voice-input button in Orbis uses — one setting for all of them. */
+  /** Which Pulsar model, language and microphone every voice-input button in Orbis uses — one setting for all of them. */
   voice: VoiceInputConfig
   dashboards: Dashboard[]
   /** Which dashboard's widgets are on screen, or null when the widgets below are simply the ones chosen. */

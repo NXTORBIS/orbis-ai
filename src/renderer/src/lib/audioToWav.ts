@@ -1,15 +1,15 @@
 /**
- * Turning whatever the microphone recorded into the one shape Whisper wants: 16 kHz, mono, 16-bit PCM WAV.
+ * Turning whatever the microphone recorded into the one shape Pulsar wants: 16 kHz, mono, 16-bit PCM WAV.
  *
  * Chromium's own decoder does the hard part — it already understands the Opus-in-WebM the recorder produced, so
  * there is no codec of Orbis's own to get subtly wrong. This only downmixes to one channel, resamples the audio to
- * the rate Whisper was trained on, and writes the smallest header that says so.
+ * the rate Pulsar was trained on, and writes the smallest header that says so.
  *
  * Deterministic and lossless in intent: nothing here recognises speech, guesses at silence, or changes the words —
  * it only changes the shape.
  */
 
-const WHISPER_SAMPLE_RATE = 16_000
+const PULSAR_SAMPLE_RATE = 16_000
 
 /** One shared context: opening a new one per recording is wasteful, and browsers cap how many can exist at once. */
 let sharedContext: AudioContext | null = null
@@ -32,8 +32,8 @@ function toMono(buffer: AudioBuffer): Float32Array {
 /**
  * Linear resampling to 16 kHz.
  *
- * Whisper's own preprocessing expects this exact rate; recording at whatever the microphone's native rate happens to
- * be (44.1 kHz and 48 kHz are the common ones) and resampling here means every microphone reaches Whisper the same
+ * Pulsar's own preprocessing expects this exact rate; recording at whatever the microphone's native rate happens to
+ * be (44.1 kHz and 48 kHz are the common ones) and resampling here means every microphone reaches Pulsar the same
  * way, rather than each one working by accident.
  */
 function resample(samples: Float32Array, fromRate: number, toRate: number): Float32Array {
@@ -88,10 +88,10 @@ function encodeWav(samples: Float32Array, sampleRate: number): Uint8Array {
  * Throws only when the browser itself could not decode what was recorded — genuinely bad audio, not something this
  * function invents an opinion about.
  */
-export async function toWhisperWav(blob: Blob): Promise<Uint8Array> {
+export async function toPulsarWav(blob: Blob): Promise<Uint8Array> {
   const arrayBuffer = await blob.arrayBuffer()
   const decoded = await context().decodeAudioData(arrayBuffer)
   const mono = toMono(decoded)
-  const resampled = resample(mono, decoded.sampleRate, WHISPER_SAMPLE_RATE)
-  return encodeWav(resampled, WHISPER_SAMPLE_RATE)
+  const resampled = resample(mono, decoded.sampleRate, PULSAR_SAMPLE_RATE)
+  return encodeWav(resampled, PULSAR_SAMPLE_RATE)
 }

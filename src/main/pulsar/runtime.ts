@@ -4,13 +4,13 @@ import { cpus, freemem, totalmem } from 'node:os'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
-import type { WhisperHardwareInfo } from '../../shared/whisperModels.ts'
+import type { PulsarHardwareInfo } from '../../shared/pulsarModels.ts'
 
 /**
  * Running whisper.cpp itself.
  *
  * Orbis ships the official whisper.cpp CLI binary (MIT-licensed, built by the whisper.cpp project — see
- * resources/whisper/LICENSE-whisper.cpp) rather than compiling it, because compiling it needs a C++ toolchain nobody
+ * resources/pulsar/LICENSE-whisper.cpp) rather than compiling it, because compiling it needs a C++ toolchain nobody
  * running Orbis has any reason to have installed. Everything below is a child process this machine runs on this
  * machine's own audio: nothing here reaches the network.
  *
@@ -20,11 +20,11 @@ import type { WhisperHardwareInfo } from '../../shared/whisperModels.ts'
  * succeeded or not.
  */
 
-export class WhisperRuntimeError extends Error {
+export class PulsarRuntimeError extends Error {
   readonly code: 'binary-missing' | 'model-missing' | 'spawn-failed' | 'crashed' | 'timeout' | 'cancelled' | 'no-output'
-  constructor(code: WhisperRuntimeError['code'], message: string) {
+  constructor(code: PulsarRuntimeError['code'], message: string) {
     super(message)
-    this.name = 'WhisperRuntimeError'
+    this.name = 'PulsarRuntimeError'
     this.code = code
   }
 }
@@ -33,7 +33,7 @@ export interface TranscribeLocalOptions {
   /** A 16 kHz mono 16-bit PCM WAV file, exactly what whisper.cpp asks for. */
   wav: Buffer
   modelPath: string
-  /** ISO-639-1, or null to let Whisper detect it — the same freedom the Groq path used to give. */
+  /** ISO-639-1, or null to let Pulsar detect it — the same freedom the Groq path used to give. */
   language: string | null
   threads?: number
   timeoutMs?: number
@@ -41,7 +41,9 @@ export interface TranscribeLocalOptions {
 }
 
 /** Where the bundled binary lives, packaged or not. */
-export function whisperBinaryDir(resourcesPath: string): string {
+export function pulsarBinaryDir(resourcesPath: string): string {
+  // 'whisper', not 'pulsar': this folder holds whisper.cpp's own binaries, and the name on disk is that project's
+  // rather than Orbis's. Pulsar is what Orbis calls the feature; whisper.cpp is what it runs.
   return join(resourcesPath, 'whisper', 'win-x64')
 }
 
@@ -50,7 +52,7 @@ export function defaultThreads(): number {
   return Math.max(1, cpus().length - 1)
 }
 
-export function readHardware(): Omit<WhisperHardwareInfo, 'hasNvidiaGpu' | 'recommended'> {
+export function readHardware(): Omit<PulsarHardwareInfo, 'hasNvidiaGpu' | 'recommended'> {
   const info = cpus()
   return {
     cpuModel: info[0]?.model.trim() ?? 'Unknown CPU',
@@ -91,7 +93,7 @@ export async function transcribeLocal(binaryDir: string, options: TranscribeLoca
     try {
       text = await readFile(textPath, 'utf8')
     } catch {
-      throw new WhisperRuntimeError('no-output', 'Whisper produced no text.')
+      throw new PulsarRuntimeError('no-output', 'Pulsar produced no text.')
     }
     await rm(textPath, { force: true })
     return text.replace(/\s+/g, ' ').trim()
@@ -102,7 +104,7 @@ export async function transcribeLocal(binaryDir: string, options: TranscribeLoca
 
 function runProcess(binary: string, args: string[], cwd: string, timeoutMs: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
-    if (signal?.aborted) return reject(new WhisperRuntimeError('cancelled', 'Cancelled.'))
+    if (signal?.aborted) return reject(new PulsarRuntimeError('cancelled', 'Cancelled.'))
 
     const child = spawn(binary, args, { cwd, windowsHide: true })
     let stderr = ''
@@ -118,13 +120,13 @@ function runProcess(binary: string, args: string[], cwd: string, timeoutMs: numb
 
     const onAbort = (): void => {
       child.kill()
-      finish(() => reject(new WhisperRuntimeError('cancelled', 'Cancelled.')))
+      finish(() => reject(new PulsarRuntimeError('cancelled', 'Cancelled.')))
     }
     signal?.addEventListener('abort', onAbort)
 
     const timer = setTimeout(() => {
       child.kill()
-      finish(() => reject(new WhisperRuntimeError('timeout', 'Transcribing took too long and was stopped.')))
+      finish(() => reject(new PulsarRuntimeError('timeout', 'Transcribing took too long and was stopped.')))
     }, timeoutMs)
 
     child.stderr?.on('data', (chunk: Buffer) => {
@@ -132,10 +134,10 @@ function runProcess(binary: string, args: string[], cwd: string, timeoutMs: numb
       if (stderr.length > 8_000) stderr = stderr.slice(-8_000)
     })
 
-    child.once('error', (err) => finish(() => reject(new WhisperRuntimeError('spawn-failed', err.message))))
+    child.once('error', (err) => finish(() => reject(new PulsarRuntimeError('spawn-failed', err.message))))
     child.once('exit', (code) => {
       if (code === 0) return finish(resolve)
-      finish(() => reject(new WhisperRuntimeError('crashed', `Whisper exited with code ${code}. ${stderr.slice(-400)}`)))
+      finish(() => reject(new PulsarRuntimeError('crashed', `Pulsar exited with code ${code}. ${stderr.slice(-400)}`)))
     })
   })
 }

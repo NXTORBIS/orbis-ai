@@ -1,7 +1,7 @@
-import { WHISPER_MODEL_INFO, recommendedModel, type WhisperModelId, type WhisperDownloadProgress, type WhisperHardwareInfo } from '../../shared/whisperModels.ts'
+import { PULSAR_MODEL_INFO, recommendedModel, type PulsarModelId, type PulsarDownloadProgress, type PulsarHardwareInfo } from '../../shared/pulsarModels.ts'
 import type { VoiceErrorCode } from '../../shared/voiceInput.ts'
 import { ModelManager, type FetchFn } from './modelManager.ts'
-import { readHardware, transcribeLocal, whisperBinaryDir, WhisperRuntimeError } from './runtime.ts'
+import { readHardware, transcribeLocal, pulsarBinaryDir, PulsarRuntimeError } from './runtime.ts'
 
 /**
  * The Orbis Speech Input Service.
@@ -15,41 +15,41 @@ import { readHardware, transcribeLocal, whisperBinaryDir, WhisperRuntimeError } 
  * in for one.
  */
 
-export class WhisperService {
+export class PulsarService {
   readonly models: ModelManager
   private readonly binaryDir: string
 
   constructor(userDataDir: string, resourcesPath: string, fetchFn: FetchFn) {
     this.models = new ModelManager(userDataDir, fetchFn)
-    this.binaryDir = whisperBinaryDir(resourcesPath)
+    this.binaryDir = pulsarBinaryDir(resourcesPath)
   }
 
-  hardware(): WhisperHardwareInfo {
+  hardware(): PulsarHardwareInfo {
     const base = readHardware()
     // Best-effort only, and never required: a machine this cannot say anything about still gets a CPU model.
     const hasNvidiaGpu = false
     return { ...base, hasNvidiaGpu, recommended: recommendedModel(base.totalRamMb, hasNvidiaGpu) }
   }
 
-  async status(): Promise<{ installed: WhisperModelId[]; downloading: WhisperModelId[] }> {
+  async status(): Promise<{ installed: PulsarModelId[]; downloading: PulsarModelId[] }> {
     const installed = await this.models.installed()
-    const downloading = (Object.keys(WHISPER_MODEL_INFO) as WhisperModelId[]).filter((id) => this.models.isDownloading(id))
+    const downloading = (Object.keys(PULSAR_MODEL_INFO) as PulsarModelId[]).filter((id) => this.models.isDownloading(id))
     return { installed, downloading }
   }
 
-  download(id: WhisperModelId, onProgress?: (progress: WhisperDownloadProgress) => void): Promise<void> {
+  download(id: PulsarModelId, onProgress?: (progress: PulsarDownloadProgress) => void): Promise<void> {
     return this.models.download(id, onProgress)
   }
 
-  cancelDownload(id: WhisperModelId): void {
+  cancelDownload(id: PulsarModelId): void {
     this.models.cancelDownload(id)
   }
 
-  delete(id: WhisperModelId): Promise<void> {
+  delete(id: PulsarModelId): Promise<void> {
     return this.models.delete(id)
   }
 
-  verify(id: WhisperModelId): Promise<boolean> {
+  verify(id: PulsarModelId): Promise<boolean> {
     return this.models.verify(id)
   }
 
@@ -59,8 +59,8 @@ export class WhisperService {
    * `wav` is already 16 kHz mono PCM — the window's own decoder did that conversion, because that is where Chromium
    * can make sense of whatever the microphone actually recorded. This only ever runs the model against it.
    */
-  async transcribe(wav: Buffer, modelId: WhisperModelId, language: string | null, signal?: AbortSignal): Promise<string> {
-    if (!(await this.models.isInstalled(modelId))) throw new LocalVoiceError('model-missing', `${WHISPER_MODEL_INFO[modelId].label} is not installed.`)
+  async transcribe(wav: Buffer, modelId: PulsarModelId, language: string | null, signal?: AbortSignal): Promise<string> {
+    if (!(await this.models.isInstalled(modelId))) throw new LocalVoiceError('model-missing', `${PULSAR_MODEL_INFO[modelId].label} is not installed.`)
 
     try {
       return await transcribeLocal(this.binaryDir, {
@@ -70,7 +70,7 @@ export class WhisperService {
         signal
       })
     } catch (err) {
-      if (err instanceof WhisperRuntimeError) {
+      if (err instanceof PulsarRuntimeError) {
         if (err.code === 'cancelled') throw new LocalVoiceError('cancelled', 'Cancelled.')
         if (err.code === 'timeout') throw new LocalVoiceError('timeout', err.message)
         if (err.code === 'model-missing') throw new LocalVoiceError('model-missing', err.message)

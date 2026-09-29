@@ -1,10 +1,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { isWhisperModelId, recommendedModel, WHISPER_MODEL_INFO, WHISPER_MODELS } from '../shared/whisperModels.ts'
+import { isPulsarModelId, recommendedModel, PULSAR_MODEL_INFO, WHISPER_MODELS } from '../shared/pulsarModels.ts'
 
 test('every model has a real file name, a real mirror URL and a size that is not invented', () => {
   for (const id of WHISPER_MODELS) {
-    const info = WHISPER_MODEL_INFO[id]
+    const info = PULSAR_MODEL_INFO[id]
     assert.equal(info.file, `ggml-${id}.bin`)
     assert.match(info.url, /^https:\/\/huggingface\.co\/ggerganov\/whisper\.cpp\/resolve\/main\/ggml-.+\.bin$/)
     assert.ok(info.sizeBytes > 1_000_000, `${id} should be a real multi-megabyte model, not a placeholder`)
@@ -12,14 +12,14 @@ test('every model has a real file name, a real mirror URL and a size that is not
   }
 })
 
-test('isWhisperModelId only accepts a real model, never a Groq-style name or junk', () => {
-  assert.equal(isWhisperModelId('base'), true)
-  assert.equal(isWhisperModelId('large-v3-turbo'), true)
-  assert.equal(isWhisperModelId('whisper-large-v3-turbo'), false, 'the old Groq model name is not a local one')
-  assert.equal(isWhisperModelId('tiny.en'), false)
-  assert.equal(isWhisperModelId(''), false)
-  assert.equal(isWhisperModelId(null), false)
-  assert.equal(isWhisperModelId(42), false)
+test('isPulsarModelId only accepts a real model, never a Groq-style name or junk', () => {
+  assert.equal(isPulsarModelId('base'), true)
+  assert.equal(isPulsarModelId('large-v3-turbo'), true)
+  assert.equal(isPulsarModelId('Pulsar-large-v3-turbo'), false, 'the old Groq model name is not a local one')
+  assert.equal(isPulsarModelId('tiny.en'), false)
+  assert.equal(isPulsarModelId(''), false)
+  assert.equal(isPulsarModelId(null), false)
+  assert.equal(isPulsarModelId(42), false)
 })
 
 test('a low-memory machine is given a model it can actually run', () => {

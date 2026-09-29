@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Check, Download, Mic, Trash2, X } from 'lucide-react'
 import type { ExperienceConfig } from '../../../shared/experience'
-import { WHISPER_MODELS, WHISPER_MODEL_INFO } from '../../../shared/whisperModels'
-import type { WhisperDownloadProgress, WhisperHardwareInfo, WhisperModelId } from '../../../shared/whisperModels'
+import { WHISPER_MODELS, PULSAR_MODEL_INFO } from '../../../shared/pulsarModels'
+import type { PulsarDownloadProgress, PulsarHardwareInfo, PulsarModelId } from '../../../shared/pulsarModels'
 
 const LANGUAGES: [string, string][] = [
   ['', 'Auto-detect'],
@@ -44,15 +44,15 @@ function sizeOf(bytes: number): string {
  */
 export default function VoiceSettings(): React.JSX.Element {
   const [experience, setExperience] = useState<ExperienceConfig | null>(null)
-  const [hardware, setHardware] = useState<WhisperHardwareInfo | null>(null)
-  const [status, setStatus] = useState<{ installed: WhisperModelId[]; downloading: WhisperModelId[] }>({ installed: [], downloading: [] })
-  const [progress, setProgress] = useState<Record<string, WhisperDownloadProgress>>({})
+  const [hardware, setHardware] = useState<PulsarHardwareInfo | null>(null)
+  const [status, setStatus] = useState<{ installed: PulsarModelId[]; downloading: PulsarModelId[] }>({ installed: [], downloading: [] })
+  const [progress, setProgress] = useState<Record<string, PulsarDownloadProgress>>({})
   const [devices, setDevices] = useState<{ deviceId: string; label: string }[]>([])
-  const [busy, setBusy] = useState<WhisperModelId | null>(null)
+  const [busy, setBusy] = useState<PulsarModelId | null>(null)
   const [message, setMessage] = useState('')
 
   const refresh = useCallback(() => {
-    void window.api.whisperModelsStatus().then(setStatus)
+    void window.api.pulsarModelsStatus().then(setStatus)
   }, [])
 
   useEffect(() => {
@@ -64,7 +64,7 @@ export default function VoiceSettings(): React.JSX.Element {
       .then((list) => setDevices(list.filter((d) => d.kind === 'audioinput').map((d, i) => ({ deviceId: d.deviceId, label: d.label || `Microphone ${i + 1}` }))))
       .catch(() => undefined)
     const offExperience = window.api.onExperienceChanged(setExperience)
-    const offProgress = window.api.onWhisperModelProgress((p) => setProgress((prev) => ({ ...prev, [p.id]: p })))
+    const offProgress = window.api.onPulsarModelProgress((p) => setProgress((prev) => ({ ...prev, [p.id]: p })))
     return () => {
       offExperience()
       offProgress()
@@ -77,17 +77,17 @@ export default function VoiceSettings(): React.JSX.Element {
     setExperience(config)
   }
 
-  const setModel = async (model: WhisperModelId): Promise<void> => {
+  const setModel = async (model: PulsarModelId): Promise<void> => {
     if (!experience) return
-    await save({ ...experience, voice: { ...experience.voice, model } }, `Voice model set to ${WHISPER_MODEL_INFO[model].label}`)
+    await save({ ...experience, voice: { ...experience.voice, model } }, `Voice model set to ${PULSAR_MODEL_INFO[model].label}`)
   }
 
-  const download = async (id: WhisperModelId): Promise<void> => {
+  const download = async (id: PulsarModelId): Promise<void> => {
     setBusy(id)
     setMessage('')
     try {
-      const result = await window.api.downloadWhisperModel(id)
-      setMessage(result.ok ? `${WHISPER_MODEL_INFO[id].label} is ready.` : result.message ?? 'The download failed.')
+      const result = await window.api.downloadPulsarModel(id)
+      setMessage(result.ok ? `${PULSAR_MODEL_INFO[id].label} is ready.` : result.message ?? 'The download failed.')
     } catch (err) {
       setMessage(said(err))
     } finally {
@@ -101,12 +101,12 @@ export default function VoiceSettings(): React.JSX.Element {
     }
   }
 
-  const cancelDownload = async (id: WhisperModelId): Promise<void> => {
-    await window.api.cancelWhisperModelDownload(id)
+  const cancelDownload = async (id: PulsarModelId): Promise<void> => {
+    await window.api.cancelPulsarModelDownload(id)
   }
 
-  const remove = async (id: WhisperModelId): Promise<void> => {
-    await window.api.deleteWhisperModel(id)
+  const remove = async (id: PulsarModelId): Promise<void> => {
+    await window.api.deletePulsarModel(id)
     if (experience?.voice.model === id) await setModel(hardware?.recommended ?? 'base')
     refresh()
   }
@@ -118,13 +118,13 @@ export default function VoiceSettings(): React.JSX.Element {
       {hardware && (
         <p className="skill-meta">
           {hardware.cpuModel} · {hardware.cpuThreads} threads · {(hardware.totalRamMb / 1000).toFixed(1)} GB RAM
-          {hardware.hasNvidiaGpu ? ' · GPU acceleration available' : ''} — recommended: {WHISPER_MODEL_INFO[hardware.recommended].label}
+          {hardware.hasNvidiaGpu ? ' · GPU acceleration available' : ''} — recommended: {PULSAR_MODEL_INFO[hardware.recommended].label}
         </p>
       )}
 
       <ul className="voice-model-list">
         {WHISPER_MODELS.map((id) => {
-          const info = WHISPER_MODEL_INFO[id]
+          const info = PULSAR_MODEL_INFO[id]
           const installed = status.installed.includes(id)
           const downloading = status.downloading.includes(id) || busy === id
           const p = progress[id]
@@ -175,7 +175,7 @@ export default function VoiceSettings(): React.JSX.Element {
 
       {message && <p className="skill-meta">{message}</p>}
       {!status.installed.length && !status.downloading.length && !message && (
-        <p className="skill-meta">Voice input needs one model downloaded once — after that it works completely offline, with no limit and nothing sent anywhere.</p>
+        <p className="skill-meta">Pulsar needs one model downloaded once — after that it works completely offline, with no limit and nothing sent anywhere.</p>
       )}
 
       <div className="voice-settings-row">

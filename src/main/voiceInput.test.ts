@@ -23,9 +23,9 @@ test('every input Orbis actually has a microphone in is a known target, and only
   assert.deepEqual(VOICE_TARGETS, ['chat', 'browser-orion', 'search', 'url-bar'])
 })
 
-test('the default model is a real, locally installable Whisper size — not a Groq model name', () => {
+test('the default model is a real, locally installable Pulsar size — not a Groq model name', () => {
   assert.equal(isVoiceModel(DEFAULT_MODEL), true)
-  assert.notEqual(DEFAULT_MODEL, 'whisper-large-v3-turbo', 'that was the Groq model name; there is no cloud model any more')
+  assert.notEqual(DEFAULT_MODEL, 'Pulsar-large-v3-turbo', 'that was the Groq model name; there is no cloud model any more')
 })
 
 // ---------------------------------------------------------------- the state machine
@@ -111,10 +111,18 @@ test('the recording formats offered are tried in a sensible order, and none is c
 
 // ---------------------------------------------------------------- the words that come back
 
-test('a transcript is tidied of stray whitespace, and Whisper\'s own padding for silence becomes nothing', () => {
+test('a transcript is tidied of stray whitespace, and Pulsar\'s own padding for silence becomes nothing', () => {
   assert.equal(tidyTranscript('  hello   there  '), 'hello there')
-  assert.equal(tidyTranscript('you'), '')
-  assert.equal(tidyTranscript('thank you'), '')
+  // Words somebody could have said are kept, even the ones the model also produces from silence. Deleting a real
+  // "thank you" looks like a broken microphone and leaves nothing to notice.
+  assert.equal(tidyTranscript('you'), 'you')
+  assert.equal(tidyTranscript('thank you'), 'thank you')
+  assert.equal(tidyTranscript('thanks for watching'), 'thanks for watching')
+  // Punctuation on its own is not a word.
+  assert.equal(tidyTranscript('.'), '')
+  assert.equal(tidyTranscript(' , '), '')
+  assert.equal(tidyTranscript('...'), '')
+  assert.equal(tidyTranscript('-'), '')
   assert.equal(tidyTranscript(''), '')
   assert.equal(tidyTranscript(undefined), '')
   assert.equal(tidyTranscript('Create a TypeScript function that sorts an array'), 'Create a TypeScript function that sorts an array')
@@ -123,13 +131,16 @@ test('a transcript is tidied of stray whitespace, and Whisper\'s own padding for
 test('long-recording segments are joined without repeating the words at their seams', () => {
   assert.equal(joinTranscripts(['I want to know how', 'know how quantum entanglement works']), 'I want to know how quantum entanglement works')
   assert.equal(joinTranscripts(['hello', 'world']), 'hello world')
-  assert.equal(joinTranscripts(['', 'you', 'real words here']), 'real words here')
+  // An empty piece and a punctuation-only piece are dropped; a real word is not, even one the model also produces
+  // from silence.
+  assert.equal(joinTranscripts(['', '.', 'real words here']), 'real words here')
+  assert.equal(joinTranscripts(['', 'you', 'real words here']), 'you real words here')
   assert.equal(joinTranscripts([]), '')
 })
 
 // ---------------------------------------------------------------- settings, made safe
 
-test('a fresh configuration is a real installable model with no device forced and Whisper left to detect the language', () => {
+test('a fresh configuration is a real installable model with no device forced and Pulsar left to detect the language', () => {
   const config = defaultVoiceConfig()
   assert.equal(isVoiceModel(config.model), true)
   assert.equal(config.language, null)
@@ -138,7 +149,7 @@ test('a fresh configuration is a real installable model with no device forced an
 
 test('a bad or missing stored configuration falls back to the default rather than breaking voice input', () => {
   assert.deepEqual(normalizeVoiceConfig(null), defaultVoiceConfig())
-  assert.deepEqual(normalizeVoiceConfig({ model: 'whisper-large-v3-turbo' }).model, defaultVoiceConfig().model, 'an old Groq model name is not carried forward')
+  assert.deepEqual(normalizeVoiceConfig({ model: 'Pulsar-large-v3-turbo' }).model, defaultVoiceConfig().model, 'an old Groq model name is not carried forward')
   assert.equal(normalizeVoiceConfig({ language: 'not-a-language-code' }).language, null)
   assert.equal(normalizeVoiceConfig({ language: 'TA' }).language, 'ta')
 })

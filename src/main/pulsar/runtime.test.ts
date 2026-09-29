@@ -5,20 +5,20 @@ import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { platform, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
-import { defaultThreads, readHardware, transcribeLocal, whisperBinaryDir, WhisperRuntimeError } from './runtime.ts'
+import { defaultThreads, readHardware, transcribeLocal, pulsarBinaryDir, PulsarRuntimeError } from './runtime.ts'
 
 const execFileAsync = promisify(execFile)
 
 /**
  * The one test in this file that is not a unit test: it really runs the bundled whisper.cpp binary, against a real
  * downloaded model, against a real recording of speech — because a mock of any of those three would only prove that
- * the mock was consistent with itself, which is exactly the kind of "local Whisper" this project was asked not to
+ * the mock was consistent with itself, which is exactly the kind of "local Pulsar" this project was asked not to
  * build. It is skipped, not failed, where one of those three genuinely cannot be had (no network for the model, or
  * not running on Windows, where the bundled binary and the WAV it is tested against both come from) — a missing
  * ingredient is not the same thing as the runtime being broken.
  */
 
-const CACHE = join(tmpdir(), 'orbis-whisper-e2e')
+const CACHE = join(tmpdir(), 'orbis-Pulsar-e2e')
 const MODEL_PATH = join(CACHE, 'ggml-tiny.bin')
 const WAV_PATH = join(CACHE, 'speech.wav')
 const MODEL_URL = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin'
@@ -78,7 +78,7 @@ test('reads real numbers about the machine it is running on, not placeholders', 
 
 test('a model file that plainly is not one fails loading rather than returning invented words', async () => {
   if (platform() !== 'win32') return
-  const binaryDir = whisperBinaryDir(join(import.meta.dirname, '..', '..', '..', 'resources'))
+  const binaryDir = pulsarBinaryDir(join(import.meta.dirname, '..', '..', '..', 'resources'))
   const fakeModelPath = join(tmpdir(), 'orbis-not-a-real-model.bin')
   await writeFile(fakeModelPath, 'this is not a ggml model')
   const wav = Buffer.alloc(44 + 1600) // A well-formed but silent WAV is enough to reach the model-loading step.
@@ -98,7 +98,7 @@ test('a model file that plainly is not one fails loading rather than returning i
 
   await assert.rejects(
     transcribeLocal(binaryDir, { wav, modelPath: fakeModelPath, language: 'en', timeoutMs: 15_000 }),
-    (err: unknown) => err instanceof WhisperRuntimeError && err.code === 'crashed'
+    (err: unknown) => err instanceof PulsarRuntimeError && err.code === 'crashed'
   )
 })
 
@@ -108,7 +108,7 @@ test('a real recording of real speech is really transcribed, by the actual bundl
   if (!(await ensureSpeechWav())) return t.skip('could not synthesise a speech sample on this machine')
 
   const wav = await readFile(WAV_PATH)
-  const binaryDir = whisperBinaryDir(join(import.meta.dirname, '..', '..', '..', 'resources'))
+  const binaryDir = pulsarBinaryDir(join(import.meta.dirname, '..', '..', '..', 'resources'))
   const text = await transcribeLocal(binaryDir, { wav, modelPath: MODEL_PATH, language: 'en', timeoutMs: 30_000 })
 
   // Nothing here is invented: this is whisper.cpp's own tiny model reading its own audio decode of a real WAV file.
@@ -122,11 +122,11 @@ test('cancelling mid-run actually stops the process, rather than only stopping t
   if (!(await ensureSpeechWav())) return t.skip('could not synthesise a speech sample')
 
   const wav = await readFile(WAV_PATH)
-  const binaryDir = whisperBinaryDir(join(import.meta.dirname, '..', '..', '..', 'resources'))
+  const binaryDir = pulsarBinaryDir(join(import.meta.dirname, '..', '..', '..', 'resources'))
   const controller = new AbortController()
   const run = transcribeLocal(binaryDir, { wav, modelPath: MODEL_PATH, language: 'en', signal: controller.signal, timeoutMs: 30_000 })
   controller.abort()
-  await assert.rejects(run, (err: unknown) => err instanceof WhisperRuntimeError && err.code === 'cancelled')
+  await assert.rejects(run, (err: unknown) => err instanceof PulsarRuntimeError && err.code === 'cancelled')
 })
 
 test('a run given no time at all is stopped as a timeout, not left running', async (t) => {
@@ -135,9 +135,9 @@ test('a run given no time at all is stopped as a timeout, not left running', asy
   if (!(await ensureSpeechWav())) return t.skip('could not synthesise a speech sample')
 
   const wav = await readFile(WAV_PATH)
-  const binaryDir = whisperBinaryDir(join(import.meta.dirname, '..', '..', '..', 'resources'))
+  const binaryDir = pulsarBinaryDir(join(import.meta.dirname, '..', '..', '..', 'resources'))
   await assert.rejects(
     transcribeLocal(binaryDir, { wav, modelPath: MODEL_PATH, language: 'en', timeoutMs: 1 }),
-    (err: unknown) => err instanceof WhisperRuntimeError && err.code === 'timeout'
+    (err: unknown) => err instanceof PulsarRuntimeError && err.code === 'timeout'
   )
 })

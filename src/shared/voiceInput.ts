@@ -14,16 +14,16 @@
 
 // ---------------------------------------------------------------- the model
 
-// Which Whisper model is used, what it costs to run, and its file are all in shared/whisperModels.ts — the one
+// Which Pulsar model is used, what it costs to run, and its file are all in shared/pulsarModels.ts — the one
 // catalog, so a size named here is a size the model manager can actually install.
-import { isWhisperModelId, type WhisperModelId } from './whisperModels.ts'
-export type { WhisperModelId as VoiceModel } from './whisperModels.ts'
-export const isVoiceModel = isWhisperModelId
-type VoiceModel = WhisperModelId
+import { isPulsarModelId, type PulsarModelId } from './pulsarModels.ts'
+export type { PulsarModelId as VoiceModel } from './pulsarModels.ts'
+export const isVoiceModel = isPulsarModelId
+type VoiceModel = PulsarModelId
 
 /**
  * The safe universal default, before hardware has been looked at: small enough to install quickly and run on
- * anything. Once a profile's hardware is known, `recommendedModel()` in shared/whisperModels.ts picks a better one
+ * anything. Once a profile's hardware is known, `recommendedModel()` in shared/pulsarModels.ts picks a better one
  * for it and that becomes the real default — this is only what a fresh config falls back to.
  */
 export const DEFAULT_MODEL = 'base'
@@ -159,7 +159,7 @@ export function describeError(code: VoiceErrorCode): string {
     case 'insufficient-memory':
       return 'Not enough free memory to run the speech model. Choose a smaller one in Settings → Voice input.'
     case 'runtime-error':
-      return 'Whisper could not be run just now.'
+      return 'Pulsar could not be run just now.'
     case 'timeout':
       return 'Transcribing took too long and was stopped.'
     case 'cancelled':
@@ -207,15 +207,22 @@ export function pickFormat(supported: (type: string) => boolean): string | null 
 /**
  * The transcript, tidied only as far as is honest.
  *
- * Whisper sometimes returns its own padding for silence, and leading and trailing space is never wanted. Beyond that
- * nothing is touched: the words somebody said are the words they said, and rewriting them would make voice input a
- * guess rather than a transcription.
+ * Leading and trailing space is never wanted, and a transcript that is nothing but punctuation is what the model
+ * returns for a recording with nothing in it. Beyond those two, nothing is touched: the words somebody said are the
+ * words they said.
+ *
+ * This used to also throw away "you", "thank you" and "thanks for watching", because the model sometimes produces
+ * those from silence. But people say them. Somebody thanking Orbis got an empty box and no reason for it, and there
+ * is no way for them to discover that those particular words are the ones it refuses to hear.
+ *
+ * Between occasionally showing a word that was never said and silently deleting one that was, the second is far
+ * worse: the first is visible and can be deleted, and the second looks like the microphone not working.
  */
 export function tidyTranscript(raw: unknown): string {
   if (typeof raw !== 'string') return ''
   const text = raw.replace(/\s+/g, ' ').trim()
-  // What Whisper returns for a recording with nothing in it.
-  if (/^(?:you|thank you|thanks for watching|\.|,|-)?$/i.test(text)) return ''
+  // Nothing but punctuation is not a word anybody said.
+  if (/^[\s.,!?;:'"’“”-]*$/.test(text)) return ''
   return text
 }
 

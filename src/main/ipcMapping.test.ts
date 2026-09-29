@@ -93,7 +93,7 @@ test('the boundary is a known size, so the migration can be estimated rather tha
   // 156 → 162: saved Orion Search sessions.
   // 162 → 167: Galaxy.
   // 167 → 169: switching kinds of browser action off for Orion.
-  // 169 → 174: local Whisper speech to text — cancelling a transcription, reading this machine's hardware, and
+  // 169 → 174: local Pulsar speech to text — cancelling a transcription, reading this machine's hardware, and
   // managing model files (status, download, cancel a download, delete, verify) — replacing the single Groq call
   // voice:transcribe used to make on its own.
   // 174 → 176: opening Chromium, the browser Orbis now uses (whether it is installed, and open it).

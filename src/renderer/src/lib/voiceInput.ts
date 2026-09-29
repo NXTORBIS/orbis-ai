@@ -7,7 +7,7 @@ import {
   pickFormat
 } from '../../../shared/voiceInput'
 import type { VoiceErrorCode, VoiceInputConfig, VoiceSession, VoiceState, VoiceTarget } from '../../../shared/voiceInput'
-import { toWhisperWav } from './audioToWav'
+import { toPulsarWav } from './audioToWav'
 
 /**
  * The Orbis voice input service.
@@ -229,9 +229,9 @@ class VoiceInputService {
     if (problem) return this.fail(problem, session.sessionId), null
 
     try {
-      // Chromium's own decoder does the format work: whatever codec was recorded in, Whisper is handed the one
+      // Chromium's own decoder does the format work: whatever codec was recorded in, Pulsar is handed the one
       // shape it actually wants — 16 kHz mono PCM — rather than being sent the raw recording to puzzle out.
-      const wav = await toWhisperWav(audio)
+      const wav = await toPulsarWav(audio)
       if (this.abandoned.has(session.sessionId)) return null
       const answer = await window.api.transcribeAudio(wav, { model: this.config.model, language: this.config.language })
       // Abandoned while the service was thinking: the words belong to nothing now.
@@ -244,7 +244,7 @@ class VoiceInputService {
       this.finish()
       return answer.text
     } catch {
-      // Either the browser could not decode the recording, or the channel to Whisper itself failed.
+      // Either the browser could not decode the recording, or the channel to Pulsar itself failed.
       if (this.abandoned.has(session.sessionId)) return null
       this.fail('bad-audio', session.sessionId)
       return null

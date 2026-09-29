@@ -188,8 +188,8 @@ export default function SettingsModal({ settings, onUpdate, onClose }: Props): R
 
           <section className="setting">
             <div className="setting-label">
-              <h3>Voice input</h3>
-              <p>The model every microphone in Orbis uses — the chat composer, the address bar, Orbis Search and Browser Orion alike. Runs entirely on this device once downloaded, with no limit and nothing sent anywhere.</p>
+              <h3>Orbis Pulsar</h3>
+              <p>Speech to text, behind every microphone in Orbis — the chat composer, the address bar, Orbis Search and Browser Orion alike. Runs entirely on this device once downloaded, with no limit and nothing sent anywhere.</p>
             </div>
             <Suspense fallback={null}>
               <VoiceSettings />

@@ -67,7 +67,7 @@ import type {
   TabLockState
 } from './tabLockView'
 import type { PasswordVerdict } from './passwordStrength'
-import type { WhisperModelId, WhisperDownloadProgress, WhisperHardwareInfo } from './whisperModels'
+import type { PulsarModelId, PulsarDownloadProgress, PulsarHardwareInfo } from './pulsarModels'
 import type { AccountRefusal, AccountStatus } from './account.ts'
 import type { SecretDetail, SecretInput, SecretSummary, VaultStatus } from './vault'
 
@@ -1280,7 +1280,7 @@ export interface NxtorbisApi {
   requestDefaultBrowser(): Promise<DefaultBrowserState>
   openDefaultAppsSettings(): Promise<boolean>
   /**
-   * The words in a recording, transcribed entirely on this machine by the local Whisper model already installed.
+   * The words in a recording, transcribed entirely on this machine by the local Pulsar model already installed.
    * Rejects with { code, message } saying why when it cannot: a microphone problem, a model that is not installed,
    * or the runtime failing to run. It never answers with words nobody said, and nothing here reaches the network.
    */
@@ -1291,18 +1291,18 @@ export interface NxtorbisApi {
   ): Promise<{ ok: true; text: string } | { ok: false; code: VoiceErrorCode; message: string }>
   /** Stops whichever transcription is running, if one is. */
   cancelTranscription(): Promise<void>
-  /** What this machine can run Whisper on, and the model size recommended for it. */
-  voiceHardware(): Promise<WhisperHardwareInfo | null>
-  /** Every Whisper model Orbis knows about, and which of them are installed or downloading right now. */
-  whisperModelsStatus(): Promise<{ installed: WhisperModelId[]; downloading: WhisperModelId[] }>
-  /** Downloads one model, reporting progress through onWhisperModelProgress until it resolves. */
-  downloadWhisperModel(id: WhisperModelId): Promise<{ ok: boolean; message?: string }>
-  cancelWhisperModelDownload(id: WhisperModelId): Promise<void>
+  /** What this machine can run Pulsar on, and the model size recommended for it. */
+  voiceHardware(): Promise<PulsarHardwareInfo | null>
+  /** Every Pulsar model Orbis knows about, and which of them are installed or downloading right now. */
+  pulsarModelsStatus(): Promise<{ installed: PulsarModelId[]; downloading: PulsarModelId[] }>
+  /** Downloads one model, reporting progress through onPulsarModelProgress until it resolves. */
+  downloadPulsarModel(id: PulsarModelId): Promise<{ ok: boolean; message?: string }>
+  cancelPulsarModelDownload(id: PulsarModelId): Promise<void>
   /** Removes a model's file from disk. Safe to call on one that was never installed. */
-  deleteWhisperModel(id: WhisperModelId): Promise<void>
+  deletePulsarModel(id: PulsarModelId): Promise<void>
   /** Whether a model's file on disk still matches the checksum it was recorded with when it finished downloading. */
-  verifyWhisperModel(id: WhisperModelId): Promise<boolean>
-  onWhisperModelProgress(listener: (progress: WhisperDownloadProgress) => void): () => void
+  verifyPulsarModel(id: PulsarModelId): Promise<boolean>
+  onPulsarModelProgress(listener: (progress: PulsarDownloadProgress) => void): () => void
   /** Opens a save dialog for a data: image; resolves false when cancelled. */
   saveImage(dataUrl: string, name: string): Promise<boolean>
   /** Re-renders an image with the edit merged into its prompt, keeping the seed. */

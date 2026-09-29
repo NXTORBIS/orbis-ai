@@ -1,19 +1,19 @@
 /**
- * The Whisper models Orbis can use, and which one a machine should start with.
+ * The Pulsar models Orbis can use, and which one a machine should start with.
  *
  * These are OpenAI's Whisper weights, converted to the ggml format whisper.cpp reads, mirrored from the project's own
  * distribution point. Nothing here is invented: every size and every URL is what whisper.cpp itself downloads when
  * asked for that model (see its models/download-ggml-model.sh).
  *
- * Pure — no disk, no network, no process. What actually fetches and runs a model lives in src/main/whisper.
+ * Pure — no disk, no network, no process. What actually fetches and runs a model lives in src/main/Pulsar.
  */
 
-export type WhisperModelId = 'tiny' | 'base' | 'small' | 'medium' | 'large-v3' | 'large-v3-turbo'
+export type PulsarModelId = 'tiny' | 'base' | 'small' | 'medium' | 'large-v3' | 'large-v3-turbo'
 
-export const WHISPER_MODELS: WhisperModelId[] = ['tiny', 'base', 'small', 'medium', 'large-v3', 'large-v3-turbo']
+export const WHISPER_MODELS: PulsarModelId[] = ['tiny', 'base', 'small', 'medium', 'large-v3', 'large-v3-turbo']
 
-export interface WhisperModelInfo {
-  id: WhisperModelId
+export interface PulsarModelInfo {
+  id: PulsarModelId
   label: string
   /** The file whisper.cpp expects, and the name it is asked for at the mirror below. */
   file: string
@@ -27,7 +27,7 @@ export interface WhisperModelInfo {
 
 const HF_MIRROR = 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main'
 
-export const WHISPER_MODEL_INFO: Record<WhisperModelId, WhisperModelInfo> = {
+export const PULSAR_MODEL_INFO: Record<PulsarModelId, PulsarModelInfo> = {
   tiny: { id: 'tiny', label: 'Whisper Tiny', file: 'ggml-tiny.bin', url: `${HF_MIRROR}/ggml-tiny.bin`, sizeBytes: 77_691_713, ramMb: 273, description: 'Fastest, least accurate. For low-memory machines.' },
   base: { id: 'base', label: 'Whisper Base', file: 'ggml-base.bin', url: `${HF_MIRROR}/ggml-base.bin`, sizeBytes: 147_951_465, ramMb: 388, description: 'Quick, and noticeably better than Tiny.' },
   small: { id: 'small', label: 'Whisper Small', file: 'ggml-small.bin', url: `${HF_MIRROR}/ggml-small.bin`, sizeBytes: 487_601_967, ramMb: 852, description: 'A good balance for an ordinary laptop.' },
@@ -36,30 +36,30 @@ export const WHISPER_MODEL_INFO: Record<WhisperModelId, WhisperModelInfo> = {
   'large-v3-turbo': { id: 'large-v3-turbo', label: 'Whisper Large v3 Turbo', file: 'ggml-large-v3-turbo.bin', url: `${HF_MIRROR}/ggml-large-v3-turbo.bin`, sizeBytes: 1_624_555_275, ramMb: 2_000, description: 'Large-v3 accuracy at a fraction of the time. The default on a capable machine.' }
 }
 
-export const isWhisperModelId = (value: unknown): value is WhisperModelId => WHISPER_MODELS.includes(value as WhisperModelId)
+export const isPulsarModelId = (value: unknown): value is PulsarModelId => WHISPER_MODELS.includes(value as PulsarModelId)
 
 // ---------------------------------------------------------------- what the window is told about a download or a machine
 
 /** One tick of a model download, on its way to the window's progress bar. */
-export interface WhisperDownloadProgress {
-  id: WhisperModelId
+export interface PulsarDownloadProgress {
+  id: PulsarModelId
   receivedBytes: number
   totalBytes: number
 }
 
 /** What this machine can tell Orbis about itself, and the model that follows from it. */
-export interface WhisperHardwareInfo {
+export interface PulsarHardwareInfo {
   cpuModel: string
   cpuThreads: number
   totalRamMb: number
   freeRamMb: number
   /** Best-effort only, and never required: CPU inference is the floor whether or not a GPU is found. */
   hasNvidiaGpu: boolean
-  recommended: WhisperModelId
+  recommended: PulsarModelId
 }
 
 /** What a model needs to run at all, with headroom for the rest of Orbis and the OS. */
-function fitsMemory(model: WhisperModelInfo, totalRamMb: number): boolean {
+function fitsMemory(model: PulsarModelInfo, totalRamMb: number): boolean {
   return totalRamMb >= model.ramMb * 2.2
 }
 
@@ -70,10 +70,10 @@ function fitsMemory(model: WhisperModelInfo, totalRamMb: number): boolean {
  * This is deliberately simple. It looks at RAM only — CPU speed changes how *long* transcription takes, not whether it
  * fits at all, and a slow machine is better served by a model that runs slowly than by one that does not run.
  */
-export function recommendedModel(totalRamMb: number, hasGpu: boolean): WhisperModelId {
-  const order: WhisperModelId[] = ['large-v3-turbo', 'medium', 'small', 'base', 'tiny']
+export function recommendedModel(totalRamMb: number, hasGpu: boolean): PulsarModelId {
+  const order: PulsarModelId[] = ['large-v3-turbo', 'medium', 'small', 'base', 'tiny']
   for (const id of order) {
-    const model = WHISPER_MODEL_INFO[id]
+    const model = PULSAR_MODEL_INFO[id]
     // A GPU that can hold the model gives more headroom than CPU-only RAM would; still never assumed available.
     if (hasGpu && fitsMemory(model, totalRamMb + 2_048)) return id
     if (fitsMemory(model, totalRamMb)) return id
