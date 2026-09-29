@@ -40,6 +40,15 @@ export type ArgumentKind = 'number' | 'number?' | 'text' | 'text?' | 'choice' | 
 /** Operation to its arguments. Derived from the bridges, and checked against them by a test. */
 export const GENERATION_CATALOGUE: Readonly<Record<string, Readonly<Record<string, ArgumentKind>>>> = Object.freeze({
   'algebra.logic': { what: 'choice', maxVariables: 'number?' },
+  'air.saturation': { celsius: 'number', formula: 'choice' },
+  'air.standard': { altitude: 'number' },
+  'farm.nutrients': { requirements: 'list' },
+  'quake.arrivals': { distance: 'number', pVelocity: 'number?', sVelocity: 'number?' },
+  'rock.get': { rock: 'text' },
+  'rock.slope': { slopeAngle: 'number', frictionAngle: 'number', depth: 'number', unitWeight: 'number', cohesion: 'number?', waterTableHeight: 'number?', waterUnitWeight: 'number?' },
+  'water.return-period': { returnPeriod: 'number' },
+  'water.well': { pumpingRate: 'number', transmissivity: 'number', storativity: 'number', distance: 'number', time: 'number' },
+  'weather.stability': { lowerTemperature: 'number', upperTemperature: 'number', heightDifference: 'number', saturatedRate: 'number?' },
   'column.buckling': { youngsModulus: 'number', secondMoment: 'number', length: 'number' },
   'control.roots': { coefficients: 'numbers' },
   'control.routh': { coefficients: 'numbers' },

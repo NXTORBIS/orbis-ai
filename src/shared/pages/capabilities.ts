@@ -255,6 +255,16 @@ export const CAPABILITIES: Record<string, CapabilityDefinition> = {
     consent: 'automatic',
     scope: 'none'
   }),
+  'computation.earth': capability({
+    id: 'computation.earth',
+    name: 'Earth, weather and land',
+    description:
+      'Measure distances and areas on the real Earth, work out where the sun is, follow humidity and air quality, trace where rain goes, read earthquakes and rock, and work out what a crop needs.',
+    category: 'computation',
+    risk: 'low',
+    consent: 'automatic',
+    scope: 'none'
+  }),
   'computation.wasm': capability({
     id: 'computation.wasm',
     name: 'Compiled code',
