@@ -5,6 +5,7 @@ import { CAPABILITIES } from '../../shared/pages/capabilities.ts'
 import { BadInput } from './engines.ts'
 import { MATH_CAPABILITY, runMathOperation } from './mathEngines.ts'
 import { REASONING_CAPABILITY, runReasoningOperation } from './reasoningEngines.ts'
+import { PHYSICS_CAPABILITY, runPhysicsOperation } from './physicsEngines.ts'
 import { SCIENCE_CAPABILITY, runScienceOperation } from './scienceEngines.ts'
 import { STUDY_CAPABILITY, runStudyOperation } from './studyEngines.ts'
 
@@ -22,7 +23,8 @@ const BRIDGES: { name: string; map: Readonly<Record<string, string>>; run: Runne
   { name: 'mathematics', map: MATH_CAPABILITY, run: runMathOperation },
   { name: 'studies', map: STUDY_CAPABILITY, run: runStudyOperation },
   { name: 'reasoning', map: REASONING_CAPABILITY, run: runReasoningOperation },
-  { name: 'science', map: SCIENCE_CAPABILITY, run: runScienceOperation }
+  { name: 'science', map: SCIENCE_CAPABILITY, run: runScienceOperation },
+  { name: 'physics', map: PHYSICS_CAPABILITY, run: runPhysicsOperation }
 ]
 
 const run = (runner: Runner, operation: string, input: Record<string, unknown> = {}): Record<string, unknown> =>

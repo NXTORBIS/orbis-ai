@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Activity, Book, CheckSquare, Compass, Hash, TrendingUp } from 'lucide-react'
 import type { NoticeKind } from '../App'
-import { Field, Notes, Problem, readNumbers, useEngine } from './PageTools'
+import { Choice, Field, Notes, Problem, Stats, readNumbers, useEngine } from './PageTools'
 
 /**
  * The Pages backed by the six scientific engines: signals, fitting, precision, constants, frames and constraints.
@@ -23,47 +23,6 @@ type Props = { pageId: string; onNotify(m: string, k?: NoticeKind): void }
 
 const round = (value: number, digits = 6): string =>
   Number.isFinite(value) ? String(Number(value.toPrecision(digits))) : '—'
-
-/** A row of labelled figures. */
-function Stats({ items }: { items: readonly [string, string][] }): React.JSX.Element | null {
-  if (items.length === 0) return null
-  return (
-    <div className="page-stats">
-      {items.map(([label, value]) => (
-        <div className="page-stat" key={label}>
-          <span>{label}</span>
-          <strong>{value}</strong>
-        </div>
-      ))}
-    </div>
-  )
-}
-
-/** A dropdown, for the several places here where the choice itself carries meaning. */
-function Choice({
-  label,
-  value,
-  options,
-  onChange
-}: {
-  label: string
-  value: string
-  options: readonly { value: string; label: string }[]
-  onChange(next: string): void
-}): React.JSX.Element {
-  return (
-    <label className="page-field">
-      <span>{label}</span>
-      <select value={value} onChange={(e) => onChange(e.target.value)}>
-        {options.map((one) => (
-          <option key={one.value} value={one.value}>
-            {one.label}
-          </option>
-        ))}
-      </select>
-    </label>
-  )
-}
 
 // ---------------------------------------------------------------- Signal Lab
 

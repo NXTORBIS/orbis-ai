@@ -225,6 +225,16 @@ export const CAPABILITIES: Record<string, CapabilityDefinition> = {
     consent: 'automatic',
     scope: 'none'
   }),
+  'computation.physics': capability({
+    id: 'computation.physics',
+    name: 'Physics simulation',
+    description:
+      'Run real physical models: motion and projectiles, springs and pendulums, collisions, gravity and orbits, rotation and rolling, and waves.',
+    category: 'computation',
+    risk: 'low',
+    consent: 'automatic',
+    scope: 'none'
+  }),
   'computation.wasm': capability({
     id: 'computation.wasm',
     name: 'Compiled code',

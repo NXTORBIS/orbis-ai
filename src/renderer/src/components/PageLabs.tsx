@@ -9,6 +9,17 @@ import {
   SignalLabPage,
   SignificantFiguresPage
 } from './ScienceLabs'
+import {
+  CollisionLabPage,
+  IntegratorLabPage,
+  MotionLabPage,
+  OrbitLabPage,
+  OscillatorLabPage,
+  PendulumLabPage,
+  ProjectileLabPage,
+  RotationLabPage,
+  WaveLabPage
+} from './PhysicsLabs'
 import { Field, Notes, Problem, readNumbers, useEngine } from './PageTools'
 
 /**
@@ -790,5 +801,16 @@ export const LAB_PAGES: Readonly<Record<string, (props: Props) => React.JSX.Elem
   'significant-figures': SignificantFiguresPage,
   'constants-library': ConstantsLibraryPage,
   'coordinate-lab': CoordinateLabPage,
-  'constraint-checker': ConstraintCheckerPage
+  'constraint-checker': ConstraintCheckerPage,
+  // The nine physics Pages, in their own file for the same reason the science ones are: one file of thirty screens
+  // is a file nobody can find anything in.
+  'motion-lab': MotionLabPage,
+  'projectile-lab': ProjectileLabPage,
+  'oscillator-lab': OscillatorLabPage,
+  'pendulum-lab': PendulumLabPage,
+  'collision-lab': CollisionLabPage,
+  'orbit-lab': OrbitLabPage,
+  'rotation-lab': RotationLabPage,
+  'wave-lab': WaveLabPage,
+  'integrator-lab': IntegratorLabPage
 })

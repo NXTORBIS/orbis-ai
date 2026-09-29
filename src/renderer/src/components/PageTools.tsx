@@ -71,6 +71,47 @@ export function Field({
   )
 }
 
+/** A row of labelled figures. Shared, so the lab files cannot drift into three slightly different ones. */
+export function Stats({ items }: { items: readonly [string, string][] }): React.JSX.Element | null {
+  if (items.length === 0) return null
+  return (
+    <div className="page-stats">
+      {items.map(([label, value]) => (
+        <div className="page-stat" key={label}>
+          <span>{label}</span>
+          <strong>{value}</strong>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/** A dropdown, for the several places here where the choice itself carries meaning. */
+export function Choice({
+  label,
+  value,
+  options,
+  onChange
+}: {
+  label: string
+  value: string
+  options: readonly { value: string; label: string }[]
+  onChange(next: string): void
+}): React.JSX.Element {
+  return (
+    <label className="page-field">
+      <span>{label}</span>
+      <select value={value} onChange={(e) => onChange(e.target.value)}>
+        {options.map((one) => (
+          <option key={one.value} value={one.value}>
+            {one.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  )
+}
+
 /** The notes an engine returned, shown as themselves. */
 export function Notes({ notes, label = 'What this assumes' }: { notes: readonly string[]; label?: string }): React.JSX.Element | null {
   if (!notes || notes.length === 0) return null

@@ -50,7 +50,16 @@ export const BUILT_IN_IDS = {
   significantFigures: fixedId('orbissignificantfigures'),
   constantsLibrary: fixedId('orbisconstantslibrary'),
   coordinateLab: fixedId('orbiscoordinatelab'),
-  constraintChecker: fixedId('orbisconstraintchecker')
+  constraintChecker: fixedId('orbisconstraintchecker'),
+  motionLab: fixedId('orbismotionlab'),
+  projectileLab: fixedId('orbisprojectilelab'),
+  oscillatorLab: fixedId('orbisoscillatorlab'),
+  pendulumLab: fixedId('orbispendulumlab'),
+  collisionLab: fixedId('orbiscollisionlab'),
+  orbitLab: fixedId('orbisorbitlab'),
+  rotationLab: fixedId('orbisrotationlab'),
+  waveLab: fixedId('orbiswavelab'),
+  integratorLab: fixedId('orbisintegratorlab')
 } as const
 
 /**
@@ -917,6 +926,294 @@ export const BUILT_IN_MANIFESTS: readonly Record<string, unknown>[] = [
       'A rule that cannot be checked because a value is missing has not passed. Those are counted separately and never folded in with the satisfied ones.',
       'Comparing a length against a time is a broken rule rather than a broken design, and the page says which it found.',
       'Contradictions are found only among ranges. Conflicts inside expressions cannot be found in general, so this says nothing was proved impossible.'
+    ],
+    languages: ['en']
+  },
+  {
+    schemaVersion: MANIFEST_SCHEMA_VERSION,
+    pageId: BUILT_IN_IDS.motionLab,
+    slug: 'motion-lab',
+    title: 'Motion Lab',
+    description:
+      'Build motion out of phases of acceleration and watch position, velocity and acceleration follow.',
+    version: '1.0.0',
+    kind: 'tool',
+    categories: ['science.physics', 'science.physics.mechanics', 'education.reference'],
+    tags: ['kinematics', 'motion', 'acceleration', 'velocity', 'graphs'],
+    icon: 'move',
+    owner: 'system',
+    runtimeAtLeast: '1.0.0',
+    capabilities: ['computation.physics', 'computation.plot', 'storage.page'],
+    capabilityReasons: {},
+    dependencies: [],
+    search: {
+      summary:
+        'Piecewise constant acceleration solved exactly in each phase, with position, velocity and acceleration graphs, the moment the motion turns round, and distance kept separate from displacement.',
+      keywords: ['motion', 'kinematics', 'velocity', 'acceleration', 'displacement', 'distance', 'velocity time graph'],
+      intents: ['calculate', 'compare'],
+      aliases: ['Kinematics', 'Motion Graphs']
+    },
+    offline: true,
+    limitations: [
+      'Each phase is solved exactly rather than integrated, so nothing drifts. Constant acceleration has a closed form.',
+      'Distance and displacement are reported separately. They are the same number until the motion turns round, and afterwards they are not.',
+      'One dimension only. A two-dimensional trajectory belongs in the Projectile Lab.'
+    ],
+    languages: ['en']
+  },
+  {
+    schemaVersion: MANIFEST_SCHEMA_VERSION,
+    pageId: BUILT_IN_IDS.projectileLab,
+    slug: 'projectile-lab',
+    title: 'Projectile Lab',
+    description:
+      'Launch something and find out how far it goes, with and without the air, and how much difference the air makes.',
+    version: '1.0.0',
+    kind: 'tool',
+    categories: ['science.physics', 'science.physics.mechanics'],
+    tags: ['projectile', 'trajectory', 'range', 'drag', 'ballistics'],
+    icon: 'target',
+    owner: 'system',
+    runtimeAtLeast: '1.0.0',
+    capabilities: ['computation.physics', 'computation.plot', 'storage.page'],
+    capabilityReasons: {},
+    dependencies: [],
+    search: {
+      summary:
+        'The exact no-drag solution with its assumptions, the integrated trajectory with linear or quadratic drag, and a comparison that says whether the difference is the air or the integration.',
+      keywords: ['projectile', 'trajectory', 'range', 'launch angle', 'air resistance', 'drag', 'maximum height', 'time of flight'],
+      intents: ['calculate', 'compare'],
+      aliases: ['Trajectory', 'Ballistics', 'Range Calculator']
+    },
+    offline: true,
+    limitations: [
+      'The projectile formulas solve motion with no air resistance. With drag they are not approximately right; they answer a different question, so no ideal range is quoted beside a dragged path.',
+      'Without drag every projectile follows the same path whatever it weighs. With drag a heavier one goes further, and the page shows both.',
+      'The best launch angle is 45 degrees only from level ground. From a height it is lower, and the page computes it rather than assuming.'
+    ],
+    languages: ['en']
+  },
+  {
+    schemaVersion: MANIFEST_SCHEMA_VERSION,
+    pageId: BUILT_IN_IDS.oscillatorLab,
+    slug: 'oscillator-lab',
+    title: 'Oscillator Lab',
+    description:
+      'A mass on a spring: damped, driven, and pushed toward resonance.',
+    version: '1.0.0',
+    kind: 'tool',
+    categories: ['science.physics', 'science.physics.mechanics'],
+    tags: ['oscillator', 'spring', 'damping', 'resonance', 'shm'],
+    icon: 'activity',
+    owner: 'system',
+    runtimeAtLeast: '1.0.0',
+    capabilities: ['computation.physics', 'computation.plot', 'storage.page'],
+    capabilityReasons: {},
+    dependencies: [],
+    search: {
+      summary:
+        'Simple harmonic motion solved exactly, the four damping regimes classified from the damping ratio, the steady-state response to driving, and a resonance curve with its peak and bandwidth.',
+      keywords: ['oscillator', 'spring', 'simple harmonic motion', 'damping', 'resonance', 'driven', 'quality factor', 'hooke'],
+      intents: ['calculate', 'compare'],
+      aliases: ['Springs', 'Resonance', 'SHM']
+    },
+    offline: true,
+    limitations: [
+      'Resonance is at a frequency below the natural one, and above a damping ratio of 0.707 there is no peak at all. Driving at the natural frequency is the undamped limit, not the general case.',
+      'The driven result is the steady state. There is also a transient at the natural frequency that fades, and the full motion is the two added together.',
+      'Springs are assumed to obey Hookes law at every extension, with no limit and no permanent bending.'
+    ],
+    languages: ['en']
+  },
+  {
+    schemaVersion: MANIFEST_SCHEMA_VERSION,
+    pageId: BUILT_IN_IDS.pendulumLab,
+    slug: 'pendulum-lab',
+    title: 'Pendulum Lab',
+    description:
+      'How long a pendulum really takes, why the textbook formula is wrong at large angles, and what happens with two of them.',
+    version: '1.0.0',
+    kind: 'tool',
+    categories: ['science.physics', 'science.physics.mechanics'],
+    tags: ['pendulum', 'period', 'double-pendulum', 'nonlinear', 'chaos'],
+    icon: 'clock',
+    owner: 'system',
+    runtimeAtLeast: '1.0.0',
+    capabilities: ['computation.physics', 'computation.plot', 'storage.page'],
+    capabilityReasons: {},
+    dependencies: [],
+    search: {
+      summary:
+        'The exact period from an elliptic integral beside the small-angle formula and the error between them, the swing integrated from the nonlinear equation, and two double pendulums started a hair apart.',
+      keywords: ['pendulum', 'period', 'small angle', 'double pendulum', 'chaos', 'sensitive', 'swing', 'oscillation'],
+      intents: ['calculate', 'compare'],
+      aliases: ['Pendulum', 'Double Pendulum']
+    },
+    offline: true,
+    limitations: [
+      'The small-angle period does not depend on amplitude. That independence is what the approximation discarded; the real period is 18% longer at 90 degrees.',
+      'The double pendulum is deterministic and sensitive, which are different things. The same start gives the same trajectory every time; nothing here is random.',
+      'The rod is massless and does not stretch. A real rod with mass swings at a different rate.'
+    ],
+    languages: ['en']
+  },
+  {
+    schemaVersion: MANIFEST_SCHEMA_VERSION,
+    pageId: BUILT_IN_IDS.collisionLab,
+    slug: 'collision-lab',
+    title: 'Collision Lab',
+    description:
+      'Two things meet. See what survives the collision and what does not.',
+    version: '1.0.0',
+    kind: 'tool',
+    categories: ['science.physics', 'science.physics.mechanics'],
+    tags: ['collision', 'momentum', 'energy', 'restitution', 'elastic'],
+    icon: 'zap',
+    owner: 'system',
+    runtimeAtLeast: '1.0.0',
+    capabilities: ['computation.physics', 'computation.plot', 'storage.page'],
+    capabilityReasons: {},
+    dependencies: [],
+    search: {
+      summary:
+        'Head-on and glancing collisions at any restitution, with momentum and kinetic energy audited separately, the centre-of-mass view, and the exact contact time for two moving discs.',
+      keywords: ['collision', 'momentum', 'elastic', 'inelastic', 'restitution', 'energy loss', 'impact', 'conservation'],
+      intents: ['calculate', 'compare'],
+      aliases: ['Impacts', 'Momentum']
+    },
+    offline: true,
+    limitations: [
+      'Momentum is conserved in every collision here. Kinetic energy is conserved only in an elastic one, and the loss below that is heat and deformation rather than an error.',
+      'A restitution above 1 is refused. That would leave the pair with more energy than they arrived with, which needs a spring or a motor rather than a collision.',
+      'Collisions are instantaneous. Nothing models the contact lasting a while, so there is no peak force and no contact duration.'
+    ],
+    languages: ['en']
+  },
+  {
+    schemaVersion: MANIFEST_SCHEMA_VERSION,
+    pageId: BUILT_IN_IDS.orbitLab,
+    slug: 'orbit-lab',
+    title: 'Orbit Lab',
+    description:
+      'Put something in orbit and find out what kind of orbit it is, from the numbers rather than the picture.',
+    version: '1.0.0',
+    kind: 'tool',
+    categories: ['science.physics', 'science.astronomy', 'science.physics.mechanics'],
+    tags: ['orbit', 'gravity', 'kepler', 'eccentricity', 'n-body'],
+    icon: 'orbit',
+    owner: 'system',
+    runtimeAtLeast: '1.0.0',
+    capabilities: ['computation.physics', 'computation.plot', 'storage.page'],
+    capabilityReasons: {},
+    dependencies: [],
+    search: {
+      summary:
+        'Orbital elements from a position and a velocity, classification from the specific energy and eccentricity, the conic drawn exactly, comparison against Keplers third law, and an n-body integration.',
+      keywords: ['orbit', 'gravity', 'kepler', 'eccentricity', 'escape velocity', 'satellite', 'elliptical', 'hyperbolic', 'n-body'],
+      intents: ['calculate', 'compare'],
+      aliases: ['Orbital Mechanics', 'Kepler', 'Gravity']
+    },
+    offline: true,
+    limitations: [
+      'Orbits are classified from the specific energy and eccentricity, never from the shape drawn. Over a short arc a hyperbola and an ellipse look the same.',
+      'This works in a plane. Inclination and the ascending node describe a three-dimensional orientation and are reported as absent rather than as zero.',
+      'Newtonian gravity throughout. No relativity, so nothing here describes a precessing perihelion or anything near a black hole.'
+    ],
+    languages: ['en']
+  },
+  {
+    schemaVersion: MANIFEST_SCHEMA_VERSION,
+    pageId: BUILT_IN_IDS.rotationLab,
+    slug: 'rotation-lab',
+    title: 'Rotation Lab',
+    description:
+      'Moments of inertia, torque, and why a hoop always loses a race to a sphere.',
+    version: '1.0.0',
+    kind: 'tool',
+    categories: ['science.physics', 'science.physics.mechanics'],
+    tags: ['rotation', 'inertia', 'torque', 'rolling', 'angular-momentum'],
+    icon: 'rotate-cw',
+    owner: 'system',
+    runtimeAtLeast: '1.0.0',
+    capabilities: ['computation.physics', 'computation.plot', 'storage.page'],
+    capabilityReasons: {},
+    dependencies: [],
+    search: {
+      summary:
+        'Moments of inertia for nine shapes with the axis each is about, the parallel-axis theorem, composite bodies, torque as a cross product, and a rolling race decided by shape alone.',
+      keywords: ['moment of inertia', 'torque', 'rolling', 'angular momentum', 'parallel axis', 'rotation', 'lever', 'rolling race'],
+      intents: ['calculate', 'compare'],
+      aliases: ['Torque', 'Moment of Inertia', 'Rolling']
+    },
+    offline: true,
+    limitations: [
+      'A moment of inertia is always about a stated axis. The number alone cannot say which, and cannot be recovered afterwards.',
+      'Rolling without slipping needs enough friction. The coefficient required is computed, and below it none of the rolling results apply.',
+      'Rotation is about a fixed axis in a plane. Nothing here handles a tumbling body, where the inertia is a tensor and the axis itself moves.'
+    ],
+    languages: ['en']
+  },
+  {
+    schemaVersion: MANIFEST_SCHEMA_VERSION,
+    pageId: BUILT_IN_IDS.waveLab,
+    slug: 'wave-lab',
+    title: 'Wave Lab',
+    description:
+      'Waves travelling, standing, added together and beating against each other.',
+    version: '1.0.0',
+    kind: 'tool',
+    categories: ['science.physics', 'science.physics.waves'],
+    tags: ['wave', 'standing-wave', 'interference', 'beats', 'superposition'],
+    icon: 'audio-waveform',
+    owner: 'system',
+    runtimeAtLeast: '1.0.0',
+    capabilities: ['computation.physics', 'computation.plot', 'storage.page'],
+    capabilityReasons: {},
+    dependencies: [],
+    search: {
+      summary:
+        'Travelling waves from any two of speed, frequency and wavelength; standing waves with the harmonics each boundary allows; superposition, two-source interference, beats and wave packets.',
+      keywords: ['wave', 'wavelength', 'frequency', 'standing wave', 'harmonic', 'interference', 'beats', 'superposition', 'node'],
+      intents: ['calculate', 'compare'],
+      aliases: ['Waves', 'Interference', 'Harmonics']
+    },
+    offline: true,
+    limitations: [
+      'Give two of speed, frequency and wavelength; the third follows from v = f lambda. All three are refused, because a set that does not satisfy it is not a wave.',
+      'A pipe closed at one end has no even harmonics. Asking for one is refused rather than rounded to a neighbour.',
+      'The beat rate is the difference of the two frequencies, not half of it. The envelope swings at half that, and each swing is heard twice.'
+    ],
+    languages: ['en']
+  },
+  {
+    schemaVersion: MANIFEST_SCHEMA_VERSION,
+    pageId: BUILT_IN_IDS.integratorLab,
+    slug: 'integrator-lab',
+    title: 'Integrator Lab',
+    description:
+      'Four ways to step a simulation forward, and why the most accurate one is not always the best.',
+    version: '1.0.0',
+    kind: 'tool',
+    categories: ['science.physics', 'science.mathematics', 'utilities.analysis'],
+    tags: ['integrator', 'verlet', 'symplectic', 'numerical', 'energy-drift'],
+    icon: 'git-compare',
+    owner: 'system',
+    runtimeAtLeast: '1.0.0',
+    capabilities: ['computation.physics', 'computation.plot', 'storage.page'],
+    capabilityReasons: {},
+    dependencies: [],
+    search: {
+      summary:
+        'Explicit and semi-implicit Euler, velocity Verlet and Runge-Kutta 4 run on the same system, with energy drift measured for each and the stability limit computed from the stiffest spring.',
+      keywords: ['integrator', 'verlet', 'runge kutta', 'euler', 'symplectic', 'energy drift', 'timestep', 'numerical stability'],
+      intents: ['compare', 'calculate'],
+      aliases: ['Numerical Methods', 'Verlet', 'Timestep']
+    },
+    offline: true,
+    limitations: [
+      'Accuracy per step and long-run drift pull in opposite directions. A first-order symplectic method beats a fourth-order one over a long run, because bounded error beats small one-way error.',
+      'Energy drift only means anything when the system conserves energy. With drag or an applied force in it, the change is the physics rather than the method.',
+      'Being closest to Runge-Kutta 4 is not the same as being right. It is the yardstick because it is most accurate over a short run, not because it is exact.'
     ],
     languages: ['en']
   },

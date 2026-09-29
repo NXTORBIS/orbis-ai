@@ -66,6 +66,7 @@ test('the built-in Pages all register, and none of them is refused', async () =>
       'algebra-lab',
       'builder-studio',
       'calculus-lab',
+      'collision-lab',
       'constants-library',
       'constraint-checker',
       'coordinate-lab',
@@ -77,20 +78,28 @@ test('the built-in Pages all register, and none of them is refused', async () =>
       'explain-it-yourself',
       'function-plotter',
       'geometry-lab',
+      'integrator-lab',
       'matrix-lab',
       'measurement-lab',
+      'motion-lab',
       'number-lab',
       'optimiser',
+      'orbit-lab',
+      'oscillator-lab',
       'parameter-study',
+      'pendulum-lab',
       'problem-workspace',
       'project',
+      'projectile-lab',
+      'rotation-lab',
       'scenario-lab',
       'signal-lab',
       'significant-figures',
       'simulation-lab',
       'statistics-lab',
       'uncertainty-lab',
-      'unit-converter'
+      'unit-converter',
+      'wave-lab'
     ])
   })
 })
