@@ -26,7 +26,7 @@ import { KNOWN_OPERATIONS } from './service.ts'
  */
 
 const HERE = dirname(fileURLToPath(import.meta.url))
-const BRIDGES = ['engines', 'mathEngines', 'studyEngines', 'reasoningEngines', 'scienceEngines', 'physicsEngines']
+const BRIDGES = ['engines', 'mathEngines', 'studyEngines', 'reasoningEngines', 'scienceEngines', 'physicsEngines', 'emEngines']
 
 /** Families that are Orbis's own plumbing rather than calculations somebody would want a Page for. */
 const NOT_FOR_PAGES = new Set(['document', 'interchange', 'builder', 'data', 'learning', 'project', 'scenario', 'study', 'workspace'])

@@ -235,6 +235,16 @@ export const CAPABILITIES: Record<string, CapabilityDefinition> = {
     consent: 'automatic',
     scope: 'none'
   }),
+  'computation.electromagnetism': capability({
+    id: 'computation.electromagnetism',
+    name: 'Electricity, light and sound',
+    description:
+      'Solve real circuits, map electric and magnetic fields, trace rays through lenses and mirrors, and work out interference, resonance and loudness.',
+    category: 'computation',
+    risk: 'low',
+    consent: 'automatic',
+    scope: 'none'
+  }),
   'computation.wasm': capability({
     id: 'computation.wasm',
     name: 'Compiled code',
