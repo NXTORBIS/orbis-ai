@@ -300,6 +300,7 @@ export const TEST_FILES = [
   'src/shared/compute/lifeSciences.test.ts',
   'src/main/pages/biologyEngines.test.ts',
   'src/shared/pages/application.test.ts',
+  'src/shared/pages/actions.test.ts',
   'src/main/pages/engines.test.ts',
   'src/main/pages/labEngines.test.ts',
   'src/main/pages/scienceEngines.test.ts',
