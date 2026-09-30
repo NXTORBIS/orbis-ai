@@ -1288,6 +1288,24 @@ export default function MarketsView({
 
                     {(panel === 'movers' || panel === 'overview') && (
                       <>
+                        {/* The same fold as the dashboard's. A section that retracts in one place and not the other
+                            is a section somebody has to remember two rules about. */}
+                        <button
+                          type="button"
+                          className="mk-fold"
+                          aria-expanded={moversOpen}
+                          onClick={() => setMoversOpen(!moversOpen)}
+                        >
+                          <ChevronDown size={13} className={moversOpen ? 'mk-fold-open' : ''} />
+                          Movers
+                          {!moversOpen && (
+                            <small>
+                              {discovery[moverKind].length} {moverKind}
+                            </small>
+                          )}
+                        </button>
+                        {moversOpen && (
+                          <>
                         <div className="mk-seg">
                           {(['gainers', 'losers', 'volume'] as const).map((kind) => (
                             <button
@@ -1308,6 +1326,8 @@ export default function MarketsView({
                               <Row key={row.instrument.instrumentId} row={row} rank={i + 1} />
                             ))}
                           </ul>
+                        )}
+                          </>
                         )}
                       </>
                     )}
@@ -1468,13 +1488,9 @@ export default function MarketsView({
               {discovery === null && discovering && <p className="mk-quiet">Loading markets…</p>}
               {discovery?.available && (
                 <>
-                  <div className="mk-breadth">
-                    <span className="up">▲ {discovery.breadth.advancing}</span>
-                    <span className="down">▼ {discovery.breadth.declining}</span>
-                    <span className="flat">— {discovery.breadth.unchanged}</span>
-                    <small>of {discovery.universeSize.toLocaleString()} markets</small>
-                  </div>
-
+                  {/* The heading folds everything under it: the breadth count, the tabs and the rows. It sits above
+                      the count rather than below it because the count is part of what somebody is folding away --
+                      leaving it behind means the section only half closes. */}
                   <button
                     type="button"
                     className="mk-fold"
@@ -1485,13 +1501,21 @@ export default function MarketsView({
                     Movers
                     {!moversOpen && (
                       <small>
-                        {discovery[moverKind].length} {moverKind}
+                        {discovery.breadth.advancing} up, {discovery.breadth.declining} down of{' '}
+                        {discovery.universeSize.toLocaleString()}
                       </small>
                     )}
                   </button>
 
                   {moversOpen && (
                     <>
+                      <div className="mk-breadth">
+                        <span className="up">▲ {discovery.breadth.advancing}</span>
+                        <span className="down">▼ {discovery.breadth.declining}</span>
+                        <span className="flat">— {discovery.breadth.unchanged}</span>
+                        <small>of {discovery.universeSize.toLocaleString()} markets</small>
+                      </div>
+
                       <div className="mk-seg">
                         {(['gainers', 'losers', 'volume'] as const).map((kind) => (
                           <button

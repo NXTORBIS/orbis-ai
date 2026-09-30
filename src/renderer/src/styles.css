@@ -12447,6 +12447,10 @@ html[data-motion='reduced'] .tool-btn.recording {
 .mk-breadth {
   display: flex;
   align-items: center;
+  /* Wraps rather than clips. In a narrow panel "of 1,948 markets" was being cut off at the right edge, which is
+     the one part of the line that says what the counts are counting. */
+  flex-wrap: wrap;
+  row-gap: 2px;
   gap: 10px;
   padding: 7px 10px;
   border: 1px solid var(--line);
@@ -18936,4 +18940,18 @@ html[data-motion='reduced'] .tool-btn.recording {
   /* The name is what gives way when the panel is narrow. Of the two, the symbol is the one being read. */
   flex: 1 1 0;
   min-width: 0;
+}
+
+/* The row's fixed columns, given room to give way.
+   A price reserving 96px, a change, a star and a turnover figure are a lot of fixed width in a panel somebody has
+   made narrow -- the name had almost nothing left. The price keeps its alignment and stops reserving space it is
+   not using. */
+@media (max-width: 460px) {
+  .mk-price {
+    min-width: 0;
+  }
+
+  .mk-vol {
+    display: none;
+  }
 }
