@@ -7,6 +7,8 @@ import { PagesStore } from './store.ts'
 import { PagesService } from './service.ts'
 import { BUILT_IN_IDS, BUILT_IN_MANIFESTS } from './builtins.ts'
 import { validateManifest, manifestErrors } from '../../shared/pages/manifest.ts'
+import { projectFrom } from './labProject.ts'
+import { Reader } from './engines.ts'
 
 /**
  * The service end to end, with a real store on disk.
@@ -875,4 +877,113 @@ test('an application survives a restart', async () => {
   } finally {
     await rm(dir, { recursive: true, force: true })
   }
+})
+
+// ---------------------------------------------------------------- the Lab
+
+/** A two-node graph: convert a length, then convert the result again. Both nodes call real engine operations. */
+const labRaw = (operation = 'units.convert'): Record<string, unknown> => ({
+  id: 'lab1',
+  name: 'Conversions',
+  pageId: BUILT_IN_IDS.unitConverter,
+  profileId: PROFILE,
+  workspaceId: '',
+  version: 1,
+  engineVersions: {},
+  variables: {},
+  nodes: [
+    {
+      id: 'n1',
+      kind: 'transform',
+      name: 'Metres to feet',
+      operation,
+      configuration: { value: 100, from: 'm', to: 'ft' },
+      inputs: [],
+      outputs: [{ id: 'out', name: 'value', kind: 'number', unit: '', required: true, describe: '' }],
+      status: 'idle',
+      deterministic: true,
+      seed: null
+    }
+  ],
+  edges: []
+})
+
+/** Read the way the channel reads it, so the defaults the reader supplies are part of what is tested. */
+const labProject = (operation?: string): ReturnType<typeof projectFrom> =>
+  projectFrom(new Reader({ project: labRaw(operation) }))
+
+test('a Lab graph runs its nodes through the same engines a Page reaches', async () => {
+  await withService(async (service) => {
+    const project = labProject()
+    const result = await service.runLab(PROFILE, BUILT_IN_IDS.unitConverter, project, {
+      executionId: 'x1'
+    })
+    assert.equal(result.ok, true, JSON.stringify(result).slice(0, 300))
+    if (result.ok) {
+      assert.equal(result.execution.results.length, 1)
+      const one = result.execution.results[0]
+      assert.equal(one.nodeId, 'n1')
+      assert.equal(one.status, 'completed', one.error)
+      // The answer is the engine's, not the Lab's. 100 m is about 328 ft.
+      assert.ok(JSON.stringify(one.outputs).length > 2, JSON.stringify(one.outputs))
+    }
+  })
+})
+
+test('a Lab graph cannot run an operation the Page may not use', async () => {
+  await withService(async (service) => {
+    // The unit converter holds computation.units and nothing else. A node naming a physics operation is refused,
+    // and refused before anything runs rather than half way through.
+    const project = labProject('motion.projectile')
+    const result = await service.runLab(PROFILE, BUILT_IN_IDS.unitConverter, project, {
+      executionId: 'x2'
+    })
+    assert.equal(result.ok, false)
+    if (!result.ok) {
+      assert.equal(result.error, 'not-allowed')
+      assert.match(result.message, /Nothing was started/)
+      assert.ok((result.needs ?? []).length > 0, 'the refusal should name what it would need')
+    }
+  })
+})
+
+test('a Lab graph cannot run an operation that does not exist', async () => {
+  await withService(async (service) => {
+    const project = labProject('vault.read-everything')
+    const result = await service.runLab(PROFILE, BUILT_IN_IDS.unitConverter, project, {
+      executionId: 'x3'
+    })
+    assert.equal(result.ok, false)
+    if (!result.ok) {
+      assert.equal(result.error, 'not-allowed')
+      // Deny by default: an operation nobody has mapped to a capability cannot run here either.
+      assert.match(result.message, /not an operation Orbis Pages have/)
+    }
+  })
+})
+
+test('a Lab graph that is malformed is reported as malformed, not as a permission problem', async () => {
+  await withService(async (service) => {
+    const raw = labRaw()
+    // An edge naming a node that is not there.
+    ;(raw.edges as unknown[]).push({
+      id: 'e1',
+      from: { nodeId: 'n1', portId: 'out' },
+      to: { nodeId: 'nowhere', portId: 'in' }
+    })
+    const project = projectFrom(new Reader({ project: raw }))
+    const result = await service.runLab(PROFILE, BUILT_IN_IDS.unitConverter, project, {
+      executionId: 'x4'
+    })
+    assert.equal(result.ok, false)
+    if (!result.ok) assert.equal(result.error, 'invalid-graph')
+  })
+})
+
+test('a Lab plan says what would run without running it', async () => {
+  await withService(async (service) => {
+    const plan = service.labPlan(labProject()) as Record<string, unknown>
+    assert.equal(plan.ok, true, JSON.stringify(plan).slice(0, 200))
+    assert.deepEqual(plan.order, ['n1'])
+  })
 })

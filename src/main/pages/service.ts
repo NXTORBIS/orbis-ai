@@ -30,6 +30,19 @@ import { BIOLOGY_CAPABILITY, runBiologyOperation } from './biologyEngines.ts'
 import { PLANNING_CAPABILITY, runPlanningOperation } from './planningEngines.ts'
 import { KNOWLEDGE_CAPABILITY, runKnowledgeOperation } from './knowledgeEngines.ts'
 import {
+  assessHealth,
+  assessStaleness,
+  checkGraph as checkLabGraph,
+  isLabError,
+  planExecution,
+  runProject,
+  whatToRerun,
+  type Execution,
+  type LabEvent,
+  type LabNode,
+  type LabProject
+} from '../../shared/pages/lab.ts'
+import {
   checkApplication,
   describeApplication,
   isApplicationError,
@@ -917,6 +930,143 @@ export class PagesService {
     )
     if ('error' in result) return { ok: false, error: result.error, message: result.message }
     return { ok: true, project: result.project }
+  }
+
+  /**
+   * Run a Lab project: a graph of nodes, each calling one engine operation, in dependency order.
+   *
+   * ## Why every operation is authorised before anything runs
+   *
+   * `runProject` evaluates nodes synchronously, and deciding whether a Page may use a capability is asynchronous --
+   * it reads the profile's grants. Checking inside the loop is therefore impossible, and checking nowhere would be a
+   * capability escape: a graph could name `vault.read` and the runtime, which never looks at operation names, would
+   * simply call it.
+   *
+   * So the whole graph is authorised first. Every distinct operation in it is decided once, against the Page's own
+   * grants, before a single node runs. A graph that names something the Page may not use is refused whole, with the
+   * capabilities it would need -- which is also the better experience: a run cannot start and then half-fail on
+   * permissions, leaving some nodes computed and others not.
+   *
+   * ## What this does not do
+   *
+   * It does not compute. Every node's answer comes from the same engine dispatch a Page reaches through
+   * `pages:compute`, so a Lab and a Page asking the same question get the same answer, and a node cannot reach
+   * anything a Page could not.
+   */
+  async runLab(
+    profileId: string,
+    pageId: string,
+    project: LabProject,
+    options: { only?: string[]; force?: boolean; executionId: string }
+  ): Promise<
+    | { ok: true; execution: Execution; events: LabEvent[] }
+    | { ok: false; error: string; message: string; needs?: string[] }
+  > {
+    const page = pageById(await this.state(profileId), pageId)
+    if (!page) return { ok: false, error: 'not-found', message: 'There is no Page with that id.' }
+    if (page.status !== 'available') {
+      return { ok: false, error: 'unavailable', message: page.note || 'That Page is not available.' }
+    }
+
+    // The graph is checked before its operations are, so a malformed graph is reported as malformed rather than as
+    // a permission problem.
+    const structure = checkLabGraph(project)
+    if (!structure.ok) {
+      return {
+        ok: false,
+        error: 'invalid-graph',
+        message: structure.problems
+          .filter((one) => one.blocking)
+          .map((one) => one.describe)
+          .join(' ')
+      }
+    }
+
+    // ---- authorise the whole graph, once per distinct operation
+    const base = await this.decideInput(profileId, page)
+    const wanted = [...new Set(project.nodes.map((one) => one.operation))]
+    const refused: string[] = []
+    const needs = new Set<string>()
+    for (const operation of wanted) {
+      const needed = Object.prototype.hasOwnProperty.call(OPERATION_CAPABILITY, operation)
+        ? OPERATION_CAPABILITY[operation]
+        : undefined
+      // Deny by default. An operation nobody has mapped to a capability cannot run here either.
+      if (needed === undefined) {
+        refused.push(`"${operation}" is not an operation Orbis Pages have`)
+        continue
+      }
+      const decision = decide({ ...base, capabilityId: needed })
+      if (decision.outcome !== 'allow') {
+        refused.push(`"${operation}" needs ${needed}`)
+        needs.add(needed)
+      }
+    }
+    if (refused.length > 0) {
+      return {
+        ok: false,
+        error: 'not-allowed',
+        message: `This project cannot run as it is: ${refused.join('; ')}. Nothing was started.`,
+        needs: [...needs]
+      }
+    }
+
+    const events: LabEvent[] = []
+    const execution = runProject(
+      project,
+      (node: LabNode, inputs: Record<string, unknown>) => {
+        // Every operation reaching here was authorised above. `carryOut` is the same dispatch `pages:compute` uses,
+        // so a node cannot reach anything a Page could not, and the two cannot disagree about an answer.
+        const value = this.carryOut(node.operation, { ...node.configuration, ...inputs })
+        const outputs: Record<string, unknown> = {}
+        if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+          const asRecord = value as Record<string, unknown>
+          // Ports are filled by name from the result. A port the result has nothing for is left absent rather than
+          // filled with undefined, so a missing figure is missing rather than quietly null.
+          for (const port of node.outputs) {
+            if (Object.prototype.hasOwnProperty.call(asRecord, port.id)) outputs[port.id] = asRecord[port.id]
+            else if (Object.prototype.hasOwnProperty.call(asRecord, port.name)) outputs[port.id] = asRecord[port.name]
+          }
+          // A node with one output and nothing matching by name takes the whole result, which is what a node
+          // wrapping a single-answer operation means.
+          if (Object.keys(outputs).length === 0 && node.outputs.length === 1) outputs[node.outputs[0].id] = value
+        } else if (node.outputs.length === 1) {
+          outputs[node.outputs[0].id] = value
+        }
+        return { outputs, calls: 1 }
+      },
+      {
+        executionId: options.executionId,
+        only: options.only,
+        force: options.force,
+        onEvent: (event) => events.push(event)
+      }
+    )
+    if (isLabError(execution)) {
+      return { ok: false, error: execution.error, message: execution.message }
+    }
+    return { ok: true, execution, events }
+  }
+
+  /** What a project would do if it ran: the order, what is skipped, and whether it is heavy enough to confirm. */
+  labPlan(project: LabProject, only?: string[], cached?: string[]): unknown {
+    const plan = planExecution(project, { only, cached, force: false })
+    return isLabError(plan) ? { ok: false, ...plan } : { ok: true, ...plan }
+  }
+
+  /** Which results no longer match the graph that produced them, and what would have to run again. */
+  labStaleness(project: LabProject, results: Parameters<typeof assessStaleness>[1]): unknown {
+    const report = assessStaleness(project, results)
+    return isLabError(report) ? { ok: false, ...report } : { ok: true, ...report }
+  }
+
+  labRerunFrom(project: LabProject, results: Parameters<typeof whatToRerun>[1], nodeId: string): unknown {
+    const list = whatToRerun(project, results, nodeId)
+    return isLabError(list) ? { ok: false, ...list } : { ok: true, nodes: list }
+  }
+
+  labHealth(project: LabProject, results: Parameters<typeof assessHealth>[1]): unknown {
+    return { ok: true, ...assessHealth(project, results) }
   }
 
   /**

@@ -217,5 +217,11 @@ test('the boundary is a known size, so the migration can be estimated rather tha
   // specification back to a model, which could return a different calculation with it. This applies a named edit to
   // the specification that exists and produces a draft, so the version people open is untouched until somebody
   // publishes it.
-  assert.ok(code.length <= 434, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
+  //
+  // 434 → 439: the Lab. Five, for a graph of engine calls: one to run it, one to say what a run would do without
+  // doing it, and three for what has gone stale, what would have to run again, and how the graph is faring. The run
+  // channel is the one that matters -- it authorises every operation in the graph against the Page's grants before
+  // any node runs, because the runtime evaluates synchronously and a permission check inside that loop is
+  // impossible. Nothing here widens what a Page may do: a node reaches the same dispatch pages:compute reaches.
+  assert.ok(code.length <= 439, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
 })

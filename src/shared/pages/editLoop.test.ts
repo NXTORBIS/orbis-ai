@@ -78,7 +78,6 @@ const graphWith = (): ReturnType<typeof startGraph> => {
     spec,
     manifest,
     document,
-    reason: 'First build.',
     now: 1_000
   })
   const live = publish(started, 'v_first')

@@ -1675,6 +1675,43 @@ export interface NxtorbisApi {
   >
   // ---------------------------------------------------------------- several Pages as one application
 
+  // ---------------------------------------------------------------- the Lab
+
+  /**
+   * Run a graph of engine calls in dependency order.
+   *
+   * `needs` lists the capabilities the project would require and the Page does not hold. It comes back with the
+   * refusal so a Page can ask for them rather than guessing why the run did not start.
+   */
+  pagesLabRun(
+    pageId: string,
+    project: Record<string, unknown>,
+    only?: string[],
+    force?: boolean
+  ): Promise<
+    | { ok: true; execution: Record<string, unknown>; events: Record<string, unknown>[] }
+    | { ok: false; error: string; message: string; needs: string[] }
+    | { error: string; message?: string }
+  >
+  pagesLabPlan(
+    project: Record<string, unknown>,
+    only?: string[],
+    cached?: string[]
+  ): Promise<Record<string, unknown> | { error: string; message?: string }>
+  pagesLabStaleness(
+    project: Record<string, unknown>,
+    results: Record<string, unknown>[]
+  ): Promise<Record<string, unknown> | { error: string; message?: string }>
+  pagesLabRerunFrom(
+    project: Record<string, unknown>,
+    results: Record<string, unknown>[],
+    nodeId: string
+  ): Promise<Record<string, unknown> | { error: string; message?: string }>
+  pagesLabHealth(
+    project: Record<string, unknown>,
+    results: Record<string, unknown>[]
+  ): Promise<Record<string, unknown> | { error: string; message?: string }>
+
   pagesApplications(): Promise<
     { applications: PageApplicationSummary[] } | { error: string; message?: string }
   >

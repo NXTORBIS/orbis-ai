@@ -17,6 +17,8 @@ import { versionToText } from '../../shared/pages/identity.ts'
 import { originScope, type Scope } from '../../shared/pages/capabilities.ts'
 import type { PagesService } from './service.ts'
 import type { GeneratedPages } from './generated.ts'
+import { projectFrom, resultsFrom } from './labProject.ts'
+import { Reader as LabReader } from './engines.ts'
 
 /**
  * How the Orbis interface asks about Pages.
@@ -294,6 +296,53 @@ export function registerPagesIpc(o: PagesIpcOptions): void {
   handle('pages:project-delete', async (id, pageId, projectId) => {
     const deleted = await o.service.deleteProject(id, str(projectId, 80))
     return { deleted, projects: await o.service.projects(id, str(pageId, 80)) }
+  })
+
+  // ---------------------------------------------------------------- the Lab
+
+  /**
+   * Run a graph of engine calls in dependency order.
+   *
+   * The project arrives whole and is read into a validated shape before anything looks at it. What it may run is
+   * decided in the service, against the Page's own grants, for the whole graph at once -- so a project naming
+   * something the Page may not use is refused before a single node runs rather than half way through.
+   */
+  handle('pages:lab-run', async (id, pageId, project, only, force) => {
+    const read = new LabReader({ project })
+    const parsed = projectFrom(read)
+    const result = await o.service.runLab(id, str(pageId, 80), parsed, {
+      executionId: `x_${Math.abs(Number(parsed.version) || 1)}_${parsed.nodes.length}`,
+      only: Array.isArray(only) ? only.filter((one): one is string => typeof one === 'string').slice(0, 400) : undefined,
+      force: force === true
+    })
+    if (!result.ok) return { ok: false, error: result.error, message: result.message, needs: result.needs ?? [] }
+    return { ok: true, execution: result.execution, events: result.events }
+  })
+
+  /** What a run would do, without doing it: the order, what is skipped, and whether it is heavy. */
+  handle('pages:lab-plan', async (_id, project, only, cached) => {
+    const read = new LabReader({ project })
+    return o.service.labPlan(
+      projectFrom(read),
+      Array.isArray(only) ? only.filter((one): one is string => typeof one === 'string').slice(0, 400) : undefined,
+      Array.isArray(cached) ? cached.filter((one): one is string => typeof one === 'string').slice(0, 400) : undefined
+    )
+  })
+
+  /** Which results no longer match the graph that produced them, and what would have to run again. */
+  handle('pages:lab-staleness', async (_id, project, results) => {
+    const read = new LabReader({ project, results })
+    return o.service.labStaleness(projectFrom(read), resultsFrom(read))
+  })
+
+  handle('pages:lab-rerun-from', async (_id, project, results, nodeId) => {
+    const read = new LabReader({ project, results })
+    return o.service.labRerunFrom(projectFrom(read), resultsFrom(read), str(nodeId, 80))
+  })
+
+  handle('pages:lab-health', async (_id, project, results) => {
+    const read = new LabReader({ project, results })
+    return o.service.labHealth(projectFrom(read), resultsFrom(read))
   })
 
   // ---------------------------------------------------------------- applications
