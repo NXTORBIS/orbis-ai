@@ -146,3 +146,45 @@ test('the sizes are a fixed set, so surfaces cannot drift apart', () => {
   const values = Object.values(LOGO_SIZES)
   for (let i = 1; i < values.length; i++) assert.ok(values[i] > values[i - 1], 'the sizes are not in order')
 })
+
+// ---------------------------------------------------------------- a second place to look
+
+test('a known asset offers both sources, the versioned one first', () => {
+  const asset = assetFor('BTC')
+  assert.equal(asset.logoUrls.length, 2)
+  assert.equal(asset.logoUrls[0], asset.logoUrl, 'logoUrl is the head of the list')
+  // The CC0 set is versioned, so what it returns today it returns next year. The live service is the fallback.
+  assert.match(asset.logoUrls[0], /cryptocurrency-icons@/)
+  assert.match(asset.logoUrls[1], /coincap/)
+})
+
+test('an asset nobody has named still gets both candidates, because a logo is not a name', () => {
+  // ZZZ has no entry in the registry, so its name stays ZZZ -- and it is still worth asking whether a logo exists.
+  const asset = assetFor('ZZZ')
+  assert.equal(asset.named, false)
+  assert.equal(asset.name, 'ZZZ')
+  assert.equal(asset.logoUrls.length, 2)
+})
+
+test('a symbol that could not be one is asked about nowhere', () => {
+  // Too short, too long, and nothing left after the punctuation is stripped. "B-C" is not in this list on purpose:
+  // it strips to "BC", which is a perfectly ordinary ticker, and refusing it would be wrong.
+  for (const bad of ['', 'A', 'TOOLONGASYMBOL', '---']) {
+    const asset = assetFor(bad)
+    assert.equal(asset.logoUrl, null, bad)
+    assert.deepEqual([...asset.logoUrls], [], bad)
+  }
+})
+
+test('punctuation is stripped rather than treated as a reason to refuse', () => {
+  const asset = assetFor('B-C')
+  assert.equal(asset.symbol, 'BC')
+  assert.equal(asset.logoUrls.length, 2)
+})
+
+test('both candidates are keyed by the same ticker, so one cannot answer for another asset', () => {
+  const asset = assetFor('SOL')
+  for (const url of asset.logoUrls) {
+    assert.match(url, /\bsol\b/, url)
+  }
+})

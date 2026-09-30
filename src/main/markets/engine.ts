@@ -114,6 +114,20 @@ interface Watch {
 }
 
 const DEFAULT_MAX_STREAMED = 200
+
+/**
+ * How many instruments take their price from the trade stream rather than the ticker.
+ *
+ * The ticker stream sends a full quote about once a second. The trade stream sends every trade as it happens, which
+ * on a busy pair is several a second -- so a price taken from trades moves roughly ten times more often, and the
+ * limit stops being the exchange and starts being the network.
+ *
+ * It is capped rather than unbounded because the cost is per instrument: a hundred busy pairs on the trade stream
+ * is a few hundred messages a second to parse for rows nobody is looking at. Sixty covers everything on screen at
+ * once -- a watchlist, the movers, the heatmap tiles -- with room over, and anything past it still updates every
+ * second from the ticker, which is where it was before.
+ */
+const MAX_PRICE_FROM_TRADES = 60
 const DEFAULT_CANDLE_CACHE_MS = 30_000
 /**
  * How many forced closures are kept per contract.
@@ -459,6 +473,47 @@ export class MarketEngine {
     while (held.length > this.tapeSize) held.shift()
     this.tape.set(print.instrumentId, held)
     this.emit({ type: 'trade', instrumentId: print.instrumentId, trade: print })
+    this.priceFromTrade(print)
+  }
+
+  /**
+   * A trade moves the price, not only the tape.
+   *
+   * The ticker stream carries a full quote about once a second; the trade stream carries every trade as it happens.
+   * Until now a trade only reached the tape, so a price on screen sat still between ticker messages while the tape
+   * beside it scrolled -- the same number, visibly stale, next to the trades that had already moved it.
+   *
+   * So a print updates the held quote's last price and the change that follows from it. Only those: the 24-hour
+   * volume, high and low are facts about a window, and a single trade does not know them. They keep whatever the
+   * last ticker message said, and are replaced whole the next time one arrives.
+   *
+   * The price used is the traded price, never a mid-price from the book. A mid-price is not a price anything
+   * changed hands at, and a column headed with the last trade should hold one.
+   */
+  private priceFromTrade(print: TradePrint): void {
+    const held = this.quotes.get(print.instrumentId)
+    if (!held) return
+    if (!Number.isFinite(print.price)) return
+    if (held.last === print.price) return
+    // An older print arriving late must not drag the price backwards.
+    if (print.timestamp < held.timestamp) return
+
+    const previousClose = held.previousClose
+    const change = previousClose === null ? held.change : print.price - previousClose
+    const changePercent =
+      previousClose === null || previousClose === 0
+        ? held.changePercent
+        : ((print.price - previousClose) / previousClose) * 100
+
+    const quote: Quote = { ...held, last: print.price, change, changePercent, timestamp: print.timestamp }
+    this.quotes.set(quote.instrumentId, quote)
+    const parsed = parseInstrumentId(quote.instrumentId)
+    if (parsed === null) return
+    this.emit({
+      type: 'quote',
+      instrumentId: quote.instrumentId,
+      quote: viewOf(quote, parsed.assetType as AssetType, this.now())
+    })
   }
 
   /** Collapses a burst of watch and release calls into one subscription change. */
@@ -492,9 +547,20 @@ export class MarketEngine {
       const ids = byProvider.get(provider.id) ?? []
       const state = this.streams.get(provider.id)
       if (!state) continue
-      // Trades are streamed only for instruments that are also being watched -- a tape with no price feed would be a
-      // subscription for a panel that cannot draw its header.
-      const tradeIds = ids.filter((id) => this.tradeWatches.has(id))
+      /**
+       * Trades for everything on screen, not only for an open tape.
+       *
+       * A tape asked for these before, and nothing else did -- so a price sat still for up to a second while the
+       * trades that had already moved it scrolled past in the panel beside it. Every watched instrument now takes
+       * its price from the trade stream, which is what makes a price move as the market does rather than once a
+       * second.
+       *
+       * An open tape still comes first when the cap bites: a panel showing individual prints cannot be the thing
+       * that loses them.
+       */
+      const withTape = ids.filter((id) => this.tradeWatches.has(id))
+      const withoutTape = ids.filter((id) => !this.tradeWatches.has(id))
+      const tradeIds = [...withTape, ...withoutTape].slice(0, MAX_PRICE_FROM_TRADES)
       // Depth, the same way: only for instruments being watched, because a book with no price feed is a panel that
       // cannot draw its own header.
       const depthIds = ids.filter((id) => this.bookWatches.has(id))

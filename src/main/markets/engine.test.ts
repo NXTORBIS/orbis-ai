@@ -598,24 +598,51 @@ const print = (id: string, over: Partial<TradePrint> = {}): TradePrint => ({
 
 const tick = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0))
 
-test('trades are streamed only for the instruments that asked for them', async () => {
-  // Both pairs want a price; only one has a tape open. Subscribing both to a trade stream would multiply the traffic by
-  // the busiest thing on the exchange to fill a buffer nobody is looking at.
+test('everything watched takes its price from the trade stream', async () => {
+  // This used to be the other way round: trades were streamed only for an open tape, and everything else took its
+  // price from the ticker -- which arrives about once a second. A price that sat still while the trades that had
+  // already moved it scrolled past in the panel beside it is what that looked like.
   const provider = fake({ caps: { trades: true }, trades: async () => [] })
   const { engine } = build(provider)
   engine.watchAll([btc, eth], 'watchlist')
-  engine.watchTrades(btc)
   await tick()
   const last = provider.streamedTrades[provider.streamedTrades.length - 1]
-  assert.deepEqual(last, [btc])
+  assert.deepEqual([...last].sort(), [btc, eth].sort())
 })
 
-test('nothing streams trades when no tape is open', async () => {
+test('an open tape comes first when the cap bites', async () => {
+  // The cap is on how many instruments take their price from trades. A panel showing individual prints cannot be
+  // the thing that loses them, so a tape is ordered ahead of a row that only wants a number.
   const provider = fake({ caps: { trades: true }, trades: async () => [] })
   const { engine } = build(provider)
-  engine.watch(btc, 'ticker')
+  engine.watchAll([btc, eth], 'watchlist')
+  engine.watchTrades(eth)
   await tick()
-  assert.deepEqual(provider.streamedTrades[provider.streamedTrades.length - 1], [])
+  const last = provider.streamedTrades[provider.streamedTrades.length - 1]
+  assert.equal(last[0], eth, 'the instrument with a tape open is first')
+})
+
+test('a trade moves the price, not only the tape', async () => {
+  // The point of streaming trades for everything: a print updates the quote people are reading.
+  const provider = fake({ caps: { trades: true }, trades: async () => [] })
+  const { engine } = build(provider)
+  const seen: number[] = []
+  engine.on((event) => {
+    if (event.type !== 'quote' || event.instrumentId !== btc) return
+    const last = event.quote?.last
+    if (typeof last === 'number') seen.push(last)
+  })
+  engine.watch(btc, 'watchlist')
+  await tick()
+  // A quote first, because a trade updates a price that already exists rather than inventing one.
+  const events = provider.events
+  assert.ok(events !== null, 'the provider should be streaming')
+  events.quote(quote(btc, { last: 100, previousClose: 100 }))
+  events.trade?.({ ...print(btc), price: 105, timestamp: 2_000_000 })
+  await tick()
+  assert.ok(seen.includes(105), `the traded price should reach the quote; saw ${JSON.stringify(seen)}`)
+  // And the change follows from it: 105 against a previous close of 100 is five per cent.
+  assert.ok(seen.includes(100), 'the ticker price should have arrived first')
 })
 
 test('two tapes on one pair are one subscription, and closing one keeps the other', async () => {
@@ -633,7 +660,9 @@ test('two tapes on one pair are one subscription, and closing one keeps the othe
   assert.deepEqual(provider.streamedTrades[opened - 1], [btc])
   second()
   await tick()
-  assert.deepEqual(provider.streamedTrades[provider.streamedTrades.length - 1], [])
+  // The tape is closed, and the instrument is still watched -- so it keeps its trade subscription, because that is
+  // now where its price comes from. What went away is the tape, not the price feed.
+  assert.deepEqual(provider.streamedTrades[provider.streamedTrades.length - 1], [btc])
 })
 
 test('the tape is emptied when the last consumer goes away', async () => {

@@ -86,15 +86,31 @@ export default function AssetLogo({
 }: AssetLogoProps): React.JSX.Element {
   const asset = instrument ? assetOf(instrument) : assetFor(symbol ?? '')
   const pixels = LOGO_SIZES[size]
-  const url = asset.logoUrl
+  const candidates = asset.logoUrls
   const [, redraw] = useState(0)
+
+  /**
+   * The first candidate that has not been ruled out.
+   *
+   * One set does not have every coin. Rather than a blank mark the moment the first place answers 404, the next is
+   * asked -- and only when every place has been asked and none had it does the asset show its own letters. That is
+   * still never a substitute logo: the answer "nobody has this one" is a real answer, and it is the one shown.
+   */
+  const firstUsable = (): string | null => {
+    for (const one of candidates) {
+      if (known.get(one) !== 'missing') return one
+    }
+    return null
+  }
+  const url = firstUsable()
 
   useEffect(() => {
     if (!url) return
     probe(url)
     if (known.get(url) !== 'loading') return
     // Only while it is in flight: a settled entry needs no listener, and a watchlist of forty would otherwise hold
-    // forty subscriptions to something that already has its answer.
+    // forty subscriptions to something that already has its answer. A redraw after one fails is also what moves
+    // this on to the next candidate, because the next render asks `firstUsable` again.
     const listener = (): void => redraw((n) => n + 1)
     waiting.add(listener)
     return () => {

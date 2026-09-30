@@ -33,6 +33,13 @@ export interface AssetIdentity {
   named: boolean
   /** Where a logo can be fetched, or null when there is no point trying. */
   logoUrl: string | null
+  /**
+   * Every place worth asking, in order.
+   *
+   * The interface walks it and stops at the first that answers. `logoUrl` is the head of this list and stays for
+   * the callers that only ever wanted one.
+   */
+  logoUrls: readonly string[]
   logoSource: string | null
   /** Other ways somebody might write it, for matching prose and search. */
   aliases: string[]
@@ -47,6 +54,23 @@ export interface AssetIdentity {
  */
 const LOGO_BASE = 'https://cdn.jsdelivr.net/npm/cryptocurrency-icons@0.18.1/svg/color'
 export const LOGO_SOURCE = 'cryptocurrency-icons (CC0)'
+
+/**
+ * A second place to look, for the coins the first set does not carry.
+ *
+ * `cryptocurrency-icons` holds a few hundred assets, which is most of what anybody watches and nowhere near every
+ * pair an exchange lists. CoinCap publishes icons keyed by the same ticker for a much wider set, so asking it after
+ * the first one answers 404 turns a great many blank marks into real logos.
+ *
+ * It is second rather than first on purpose: the first set is CC0 and versioned, so what it returns today it returns
+ * next year. This one is a live service, and a live service is the right place for a fallback and the wrong place
+ * for the common case.
+ *
+ * What neither of them does is guess. A ticker that neither set has shows the asset's own letters, because a logo
+ * that belongs to a different coin looks entirely normal while being wrong about what you are reading.
+ */
+const LOGO_FALLBACK_BASE = 'https://assets.coincap.io/assets/icons'
+export const LOGO_FALLBACK_SOURCE = 'CoinCap asset icons'
 
 /** The shape a symbol must have for a logo to be worth asking for. */
 const LOGO_SHAPED = /^[A-Z0-9]{2,10}$/
@@ -191,6 +215,13 @@ export function assetFor(base: string, provider = 'crypto'): AssetIdentity {
     named: known !== undefined,
     // Worth asking for only when the symbol could be one. The set answers 404 for the rest and the interface falls back.
     logoUrl: symbol && LOGO_SHAPED.test(symbol) ? `${LOGO_BASE}/${symbol.toLowerCase()}.svg` : null,
+    logoUrls:
+      symbol && LOGO_SHAPED.test(symbol)
+        ? Object.freeze([
+            `${LOGO_BASE}/${symbol.toLowerCase()}.svg`,
+            `${LOGO_FALLBACK_BASE}/${symbol.toLowerCase()}@2x.png`
+          ])
+        : Object.freeze([]),
     logoSource: symbol && LOGO_SHAPED.test(symbol) ? LOGO_SOURCE : null,
     aliases: known?.aliases ?? []
   }
