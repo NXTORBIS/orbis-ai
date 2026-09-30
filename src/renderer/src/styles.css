@@ -18910,6 +18910,14 @@ html[data-motion='reduced'] .tool-btn.recording {
   cursor: pointer;
 }
 
+/* The asset's name is the brightest thing in the row.
+   It was inheriting whatever the list had and coming out darker than the dim pair code beside it -- the hierarchy
+   exactly inverted, with the thing somebody searched for the hardest to read. */
+.mk-results li > button > b {
+  color: var(--text);
+  font-weight: 600;
+}
+
 .mk-results li > button:hover b {
   color: var(--cyan);
 }

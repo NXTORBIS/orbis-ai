@@ -1077,10 +1077,17 @@ export default function MarketsView({
                   <li key={instrument.instrumentId}>
                     <button type="button" onClick={() => void openMarket(instrument.instrumentId)}>
                       <AssetLogo instrument={instrument} size="small" />
-                      {/* The asset's own name leads, because that is what somebody typed. The pair code is what the
-                          exchange calls it, which is worth showing and is not what was being looked for. */}
+                      {/*
+                        The asset's name leads, because that is what somebody typed. The pair follows, dim, because
+                        that is what tells these apart: a search for "bitcoin" returns seven of them, and leading
+                        every row with "Bitcoin" while hiding USDT against USDC would be worse than what it replaced.
+                        The pair is shown the readable way round -- BTC / USDT rather than BTCUSDT -- and is dropped
+                        where the asset has no name of its own, so nothing is printed twice.
+                      */}
                       <b>{assetOf(instrument).name}</b>
-                      <span className="mk-code">{instrument.symbol}</span>
+                      {instrument.name !== assetOf(instrument).name && (
+                        <span className="mk-code">{instrument.name}</span>
+                      )}
                       <span className="mk-venue">{instrument.exchange}</span>
                     </button>
                   </li>
