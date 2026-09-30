@@ -72,8 +72,46 @@ export const LOGO_SOURCE = 'cryptocurrency-icons (CC0)'
 const LOGO_FALLBACK_BASE = 'https://assets.coincap.io/assets/icons'
 export const LOGO_FALLBACK_SOURCE = 'CoinCap asset icons'
 
+/**
+ * Two more places, both exchanges rather than icon sets.
+ *
+ * The general icon sets are packaged periodically, so they are always behind: a coin listed last month is not in them
+ * and will not be for a while. An exchange, by contrast, cannot list a market without having an image to put next to
+ * it, so for anything newly listed these are the only places a logo exists at all. Between them they carry coins the
+ * first two sets had never heard of.
+ *
+ * Asked last, because the icon sets are flat colour artwork at a known size and these are whatever the exchange
+ * uploaded.
+ */
+const LOGO_EXCHANGE_BASES = Object.freeze([
+  (symbol: string) => `https://bin.bnbstatic.com/static/assets/logos/${symbol}.png`,
+  (symbol: string) => `https://static.okx.com/cdn/oksupport/asset/currency/icon/${symbol.toLowerCase()}.png`
+])
+
 /** The shape a symbol must have for a logo to be worth asking for. */
 const LOGO_SHAPED = /^[A-Z0-9]{2,10}$/
+
+/**
+ * What a futures contract's symbol is a contract *on*.
+ *
+ * A perpetual on a cheap coin is quoted in lots, so the contract is called `1000SHIB` or `1000000MOG` -- one contract
+ * is a thousand SHIB. That prefix belongs to the contract, not to the coin: the asset is still Shiba Inu, with Shiba
+ * Inu's logo and Shiba Inu's name. No icon set anywhere will ever carry an entry called `1000SHIB`, so without this
+ * every one of these markets showed bare letters on a grey circle for ever, and there were dozens of them.
+ *
+ * The contract's own symbol is what stays on screen, because `1000SHIB` and `SHIB` are different markets at different
+ * prices and showing both as `SHIB` would be wrong in a worse way. This only decides which asset it is a market in.
+ *
+ * A trailing `2` is the same idea from the other end -- `LUNA2` is the second Luna, and the logo is Luna's.
+ */
+const CONTRACT_MULTIPLIER = /^(?:1000000|100000|10000|1000)(?=[A-Z])/
+
+export function underlyingSymbol(symbol: string): string {
+  const upper = String(symbol ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '')
+  const withoutLots = upper.replace(CONTRACT_MULTIPLIER, '')
+  // Only when what is left is still a plausible ticker: stripping the digits off `1000` itself leaves nothing.
+  return withoutLots.length >= 2 ? withoutLots : upper
+}
 
 /**
  * Names Orbis can stand behind, with how people write them.
@@ -145,7 +183,17 @@ const KNOWN: Record<string, { name: string; aliases?: string[] }> = {
   BONK: { name: 'Bonk', aliases: ['bonk'] },
   DAI: { name: 'Dai', aliases: ['dai'] },
   BUSD: { name: 'Binance USD' },
-  WBTC: { name: 'Wrapped Bitcoin', aliases: ['wrapped bitcoin'] }
+  WBTC: { name: 'Wrapped Bitcoin', aliases: ['wrapped bitcoin'] },
+  // Newly listed, and named here because otherwise the row is a code and nothing else. Every name is the one the
+  // exchange itself publishes for the asset; nothing here is a guess at what a ticker might stand for.
+  NOM: { name: 'Nomina', aliases: ['nomina'] },
+  CBRS: { name: 'Cerebras', aliases: ['cerebras'] },
+  AGPU: { name: 'Axe Compute', aliases: ['axe compute'] },
+  MOG: { name: 'Mog Coin', aliases: ['mog', 'mog coin'] },
+  FLOKI: { name: 'Floki', aliases: ['floki'] },
+  SATS: { name: 'Ordinals SATS', aliases: ['sats'] },
+  RATS: { name: 'Rats', aliases: ['rats'] },
+  LUNC: { name: 'Terra Classic', aliases: ['luna classic', 'terra classic'] }
 }
 
 /**
@@ -205,7 +253,35 @@ export function baseSymbol(symbol: string, currency = ''): string {
 /** The identity of one base asset. Always answers — an unknown asset is an identity with no logo and its own name. */
 export function assetFor(base: string, provider = 'crypto'): AssetIdentity {
   const symbol = String(base ?? '').toUpperCase().replace(/[^A-Z0-9]/g, '')
-  const known = KNOWN[symbol]
+  /**
+   * The coin the contract is on, which is what a logo and a name belong to.
+   *
+   * `1000SHIB` is a contract; Shiba Inu is the coin. The symbol on screen stays the contract's, because the two are
+   * different markets at different prices, but everything about *what it is* comes from the coin.
+   */
+  const asset = underlyingSymbol(symbol)
+  const known = KNOWN[asset] ?? KNOWN[symbol]
+  const shaped = Boolean(asset) && LOGO_SHAPED.test(asset)
+
+  /**
+   * Every place worth asking, in order, for this one asset.
+   *
+   * Asked one at a time and only until one answers, with each failure remembered for the session, so a watchlist of
+   * forty rows is not forty rounds of this list.
+   *
+   * The `B` variant at the end is Binance's convention for a tokenised stock: the market is `CBRS`, the asset in its
+   * registry is `CBRSB`, and the image is only ever filed under the latter. Without it, every tokenised-equity market
+   * showed bare letters -- and those are exactly the newest listings, which no icon set carries either.
+   */
+  const candidates = shaped
+    ? Object.freeze([
+        `${LOGO_BASE}/${asset.toLowerCase()}.svg`,
+        `${LOGO_FALLBACK_BASE}/${asset.toLowerCase()}@2x.png`,
+        ...LOGO_EXCHANGE_BASES.map((at) => at(asset)),
+        ...LOGO_EXCHANGE_BASES.map((at) => at(`${asset}B`))
+      ])
+    : Object.freeze([])
+
   return {
     // The provider is part of it, so a future second provider calling something `SOL` cannot silently inherit
     // Solana's logo.
@@ -214,15 +290,9 @@ export function assetFor(base: string, provider = 'crypto'): AssetIdentity {
     name: known?.name ?? symbol,
     named: known !== undefined,
     // Worth asking for only when the symbol could be one. The set answers 404 for the rest and the interface falls back.
-    logoUrl: symbol && LOGO_SHAPED.test(symbol) ? `${LOGO_BASE}/${symbol.toLowerCase()}.svg` : null,
-    logoUrls:
-      symbol && LOGO_SHAPED.test(symbol)
-        ? Object.freeze([
-            `${LOGO_BASE}/${symbol.toLowerCase()}.svg`,
-            `${LOGO_FALLBACK_BASE}/${symbol.toLowerCase()}@2x.png`
-          ])
-        : Object.freeze([]),
-    logoSource: symbol && LOGO_SHAPED.test(symbol) ? LOGO_SOURCE : null,
+    logoUrl: candidates[0] ?? null,
+    logoUrls: candidates,
+    logoSource: shaped ? LOGO_SOURCE : null,
     aliases: known?.aliases ?? []
   }
 }

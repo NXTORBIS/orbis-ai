@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { aliasesFor, assetFor, assetOf, baseSymbol, describeAsset, LOGO_SIZES, namedSymbols } from './assets.ts'
+import { aliasesFor, assetFor, assetOf, baseSymbol, describeAsset, LOGO_SIZES, namedSymbols, underlyingSymbol } from './assets.ts'
 import type { Instrument } from './instrument.ts'
 
 /**
@@ -149,21 +149,80 @@ test('the sizes are a fixed set, so surfaces cannot drift apart', () => {
 
 // ---------------------------------------------------------------- a second place to look
 
-test('a known asset offers both sources, the versioned one first', () => {
+test('a known asset offers every source, the versioned one first', () => {
   const asset = assetFor('BTC')
-  assert.equal(asset.logoUrls.length, 2)
   assert.equal(asset.logoUrls[0], asset.logoUrl, 'logoUrl is the head of the list')
-  // The CC0 set is versioned, so what it returns today it returns next year. The live service is the fallback.
+  // The CC0 set is versioned, so what it returns today it returns next year, and it is flat artwork at a known size.
+  // The rest are asked only when it has no answer, ending with the exchanges, which carry the newest listings.
   assert.match(asset.logoUrls[0], /cryptocurrency-icons@/)
   assert.match(asset.logoUrls[1], /coincap/)
+  assert.ok(
+    asset.logoUrls.some((one) => one.includes('bnbstatic')),
+    'an exchange is asked, because an icon set cannot carry a coin listed last week'
+  )
+  assert.equal(new Set(asset.logoUrls).size, asset.logoUrls.length, 'no place is asked twice')
 })
 
-test('an asset nobody has named still gets both candidates, because a logo is not a name', () => {
+test('a tokenised stock is asked for under the name its logo is filed under', () => {
+  /**
+   * The exchange's convention: the market is CBRS, the asset in its own registry is CBRSB, and the image exists only
+   * under the second. Every tokenised-equity market showed bare letters until this was asked for, and those are
+   * exactly the newest listings, which no icon set carries either.
+   */
+  const asset = assetFor('CBRS')
+  assert.ok(
+    asset.logoUrls.some((one) => /CBRSB|cbrsb/.test(one)),
+    `the suffixed form must be among the candidates: ${asset.logoUrls.join(' ')}`
+  )
+})
+
+test('an asset nobody has named still gets candidates, because a logo is not a name', () => {
   // ZZZ has no entry in the registry, so its name stays ZZZ -- and it is still worth asking whether a logo exists.
   const asset = assetFor('ZZZ')
   assert.equal(asset.named, false)
   assert.equal(asset.name, 'ZZZ')
-  assert.equal(asset.logoUrls.length, 2)
+  assert.ok(asset.logoUrls.length >= 2)
+  assert.ok(asset.logoUrls.every((one) => one.toLowerCase().includes('zzz')), 'and never somebody else’s')
+})
+
+// ---------------------------------------------------------------- contracts are not coins
+
+test('a lot-sized contract wears its coin’s logo and name, and keeps its own symbol', () => {
+  /**
+   * A perpetual on a cheap coin is quoted in lots, so the contract is called 1000SHIB -- one contract is a thousand
+   * SHIB. That prefix belongs to the contract, not to the coin, and no icon set anywhere carries an entry called
+   * 1000SHIB, so dozens of these markets showed bare letters on a grey circle for ever.
+   *
+   * The symbol on screen stays the contract's, because 1000SHIB and SHIB are different markets at different prices
+   * and showing both as SHIB would be wrong in a worse way.
+   */
+  const contract = assetFor('1000SHIB')
+  assert.equal(contract.symbol, '1000SHIB', 'the contract keeps its own symbol')
+  assert.equal(contract.name, assetFor('SHIB').name, 'and takes the coin’s name')
+  assert.deepEqual([...contract.logoUrls], [...assetFor('SHIB').logoUrls], 'and the coin’s logo')
+})
+
+test('every lot size is understood, and a bare number is not a coin', () => {
+  for (const [contract, coin] of [
+    ['1000PEPE', 'PEPE'],
+    ['1000000MOG', 'MOG'],
+    ['10000SATS', 'SATS'],
+    ['1000BONK', 'BONK']
+  ] as const) {
+    assert.equal(underlyingSymbol(contract), coin, contract)
+  }
+  // Nothing is left after the digits, so there is no coin here and the symbol stands as it is.
+  assert.equal(underlyingSymbol('1000'), '1000')
+  assert.equal(underlyingSymbol('1000000'), '1000000')
+  // A coin whose name genuinely starts with a digit is not a lot size being stripped.
+  assert.equal(underlyingSymbol('0G'), '0G')
+})
+
+test('a coin is never mistaken for a contract on another coin', () => {
+  // SHIB must not be read as a lot of HIB, and the ordinary case must be left completely alone.
+  for (const plain of ['BTC', 'SHIB', 'ETH', 'SOL', 'LUNA']) {
+    assert.equal(underlyingSymbol(plain), plain, plain)
+  }
 })
 
 test('a symbol that could not be one is asked about nowhere', () => {
@@ -179,12 +238,23 @@ test('a symbol that could not be one is asked about nowhere', () => {
 test('punctuation is stripped rather than treated as a reason to refuse', () => {
   const asset = assetFor('B-C')
   assert.equal(asset.symbol, 'BC')
-  assert.equal(asset.logoUrls.length, 2)
+  assert.ok(asset.logoUrls.length >= 2, 'it is asked about like any other ticker')
 })
 
-test('both candidates are keyed by the same ticker, so one cannot answer for another asset', () => {
+test('every candidate is keyed by the same ticker, so one cannot answer for another asset', () => {
+  /**
+   * The rule that matters most about this list: showing the wrong logo is worse than showing none, because the screen
+   * looks entirely normal while being wrong about which coin you are reading. So every address in it has to be built
+   * from this asset's own ticker and nothing else.
+   *
+   * Checked case-insensitively and at the start of the last path segment, because the places asked disagree about
+   * both: one wants `sol.svg`, another `SOL.png`, and the exchanges file a tokenised stock under `SOLB`. All three are
+   * this asset; none of them could be another.
+   */
   const asset = assetFor('SOL')
+  assert.ok(asset.logoUrls.length >= 2)
   for (const url of asset.logoUrls) {
-    assert.match(url, /\bsol\b/, url)
+    const last = url.slice(url.lastIndexOf('/') + 1)
+    assert.match(last, /^sol/i, url)
   }
 })

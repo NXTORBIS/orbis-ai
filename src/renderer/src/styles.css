@@ -19407,3 +19407,23 @@ html[data-motion='reduced'] .tool-btn.recording {
     transform: none !important;
   }
 }
+
+/* ----------------------------------------------------------------------------
+   The mark a coin with no logo wears.
+
+   Its colour comes from its own letters, so a row of coins nothing has
+   catalogued is a row of distinct marks rather than identical grey circles.
+   Some coins genuinely have no logo in existence -- a market listed days ago, a
+   tokenised stock nothing has an image for -- and for those this IS the
+   artwork, so it should look chosen rather than missing.
+
+   One saturation and one lightness for all of them, so they sit at the same
+   weight as the real logos beside them and none of them shouts.
+   ------------------------------------------------------------------------- */
+
+.mk-logo-fallback[style*="--mk-logo-hue"] {
+  --mk-logo-tint: hsl(var(--mk-logo-hue) 58% 52%);
+  border-color: color-mix(in srgb, var(--mk-logo-tint) 55%, transparent);
+  background: color-mix(in srgb, var(--mk-logo-tint) 20%, var(--pill-bg));
+  color: color-mix(in srgb, var(--mk-logo-tint) 72%, var(--text));
+}

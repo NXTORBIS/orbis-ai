@@ -54,14 +54,43 @@ function probe(url: string): void {
   image.src = url
 }
 
-/** A neutral mark with the asset's own letters. Used only when there is no real logo to show. */
+/**
+ * A colour derived from the symbol itself.
+ *
+ * So that a coin with no logo anywhere still gets a mark of its own rather than being one of a row of identical grey
+ * circles. Some coins genuinely have no logo in existence -- a market listed days ago, a tokenised stock nothing has
+ * catalogued -- and for those this *is* the artwork, so it should look chosen rather than missing.
+ *
+ * From the letters, so it is the same colour on every screen, every session and every machine, with no table to keep.
+ * Saturation and lightness are fixed, so every one of these sits at the same weight beside the real logos next to it
+ * and none of them shouts.
+ *
+ * It is never identity on its own: the letters are in the mark and the symbol is in text beside it, because two coins
+ * can land on the same hue and a colour is not a name.
+ */
+function hueOf(symbol: string): number {
+  let hash = 0
+  for (let i = 0; i < symbol.length; i++) {
+    // A rolling hash. The multiplier is odd and not a power of two, so an anagram is a different colour.
+    hash = (hash * 31 + symbol.charCodeAt(i)) % 360_000
+  }
+  return hash % 360
+}
+
+/** A mark with the asset's own letters, in its own colour. Used only when there is no real logo to show. */
 function Initials({ asset, pixels }: { asset: AssetIdentity; pixels: number }): React.JSX.Element {
   // Two letters at most: three in a 14-pixel circle is a smudge.
   const letters = asset.symbol.slice(0, pixels >= LOGO_SIZES.large ? 3 : 2)
+  const hue = hueOf(asset.symbol)
   return (
     <span
       className="mk-logo-fallback"
-      style={{ width: pixels, height: pixels, fontSize: Math.max(7, Math.round(pixels * 0.38)) }}
+      style={{
+        width: pixels,
+        height: pixels,
+        fontSize: Math.max(7, Math.round(pixels * 0.38)),
+        ['--mk-logo-hue' as string]: String(hue)
+      }}
       aria-hidden="true"
     >
       {letters}
