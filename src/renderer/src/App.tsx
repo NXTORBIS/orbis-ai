@@ -23,17 +23,10 @@ import { DEFAULT_SETTINGS_SECTION, type SettingsSectionId } from '../../shared/s
 // Lazy like the rest: the chart and its indicators are a large bundle for a screen most sessions never open.
 const MarketsView = lazy(() => import('./components/MarketsView'))
 const PulsarSetup = lazy(() => import('./components/PulsarSetup'))
-const WorkflowsView = lazy(() => import('./components/WorkflowsView'))
-const GalaxyView = lazy(() => import('./components/GalaxyView'))
-const NotesView = lazy(() => import('./components/NotesView'))
-const TasksView = lazy(() => import('./components/TasksView'))
 const WhiteboardView = lazy(() => import('./components/WhiteboardView'))
 const PagesView = lazy(() => import('./components/PagesView'))
 const ClipboardView = lazy(() => import('./components/ClipboardView'))
 const WorkspacesView = lazy(() => import('./components/WorkspacesView'))
-const SecretsPanel = lazy(() => import('./components/SecretsPanel'))
-const CustomizeView = lazy(() => import('./components/CustomizeView'))
-const ProfilesView = lazy(() => import('./components/ProfilesView'))
 import { ActivityPanel, ShortcutsModal, ToastStack } from './components/Overlays'
 import SettingsModal from './components/SettingsModal'
 import WelcomeExperience from './components/WelcomeExperience'
@@ -857,19 +850,6 @@ export default function App(): React.JSX.Element {
   const newChat = useCallback(() => startChat(false), [startChat])
 
   const closeFeature = useCallback(() => setFeature(null), [])
-  /**
-   * Galaxy offers to ask about something it is showing. Doing so leaves Galaxy and starts a chat with that question,
-   * which is what "ask about this" means: the answer arrives in the chat, not in a corner of the graph.
-   */
-  const askFromFeature = useCallback(
-    (message: string) => {
-      setFeature(null)
-      startChat(false)
-      // After the new chat exists, so the message lands in it rather than in the one being left.
-      setTimeout(() => sendRef.current(message, []), 0)
-    },
-    [startChat]
-  )
 
   const toggleIncognito = useCallback(() => {
     const on = !(activeId ? conversationsRef.current.find((c) => c.id === activeId)?.incognito : draft.incognito)
@@ -1294,7 +1274,6 @@ export default function App(): React.JSX.Element {
           unread={unread}
           onToggleHistory={toggleSidebar}
           sidebarCollapsed={sidebarCollapsed}
-          onQuickPrompts={() => setQuickPromptsOpen((open) => !open)}
           webSearch={webSearch}
           onToggleWebSearch={() => {
             notify(webSearch ? 'Web search off.' : 'Web search on. Replies will use live results.')
@@ -1384,16 +1363,9 @@ export default function App(): React.JSX.Element {
             <Suspense fallback={<div className="feature-loading" role="status">Opening…</div>}>
               {feature === 'pages' && <PagesView onClose={closeFeature} onNotify={notify} />}
               {feature === 'markets' && <MarketsView onClose={closeFeature} onNotify={notify} />}
-              {feature === 'workflows' && <WorkflowsView onClose={closeFeature} onNotify={notify} />}
-              {feature === 'galaxy' && <GalaxyView onClose={closeFeature} onNotify={notify} onAsk={askFromFeature} />}
-              {feature === 'notes' && <NotesView onClose={closeFeature} onNotify={notify} />}
-              {feature === 'tasks' && <TasksView onClose={closeFeature} onNotify={notify} />}
               {feature === 'whiteboard' && <WhiteboardView onClose={closeFeature} onNotify={notify} />}
               {feature === 'clipboard' && <ClipboardView onClose={closeFeature} onNotify={notify} />}
               {feature === 'workspaces' && <WorkspacesView onClose={closeFeature} onNotify={notify} />}
-              {feature === 'secrets' && <SecretsPanel onNotify={notify} />}
-              {feature === 'customize' && <CustomizeView experience={experience} onClose={closeFeature} onNotify={notify} />}
-              {feature === 'profiles' && <ProfilesView onClose={closeFeature} onNotify={notify} />}
             </Suspense>
           )}
         </main>

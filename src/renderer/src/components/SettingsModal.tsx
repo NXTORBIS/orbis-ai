@@ -25,6 +25,10 @@ const ProfileLockSettings = lazy(() => import('./ProfileLockSettings'))
 const TabLockSettings = lazy(() => import('./TabLockSettings'))
 const MarketsSettings = lazy(() => import('./MarketsSettings'))
 const RecallSettings = lazy(() => import('./RecallSettings'))
+// Customize and Profiles were rows in the feature dropdown, which made how Orbis looks and who is using it into two
+// screens you navigated to rather than two settings. They are settings, so they are in Settings.
+const CustomizeView = lazy(() => import('./CustomizeView'))
+const ProfilesView = lazy(() => import('./ProfilesView'))
 
 interface Props {
   settings: Settings
@@ -204,6 +208,12 @@ export default function SettingsModal({ settings, onUpdate, onClose, section }: 
               </section>
             )}
 
+            {active === 'account' && (
+              <Suspense fallback={null}>
+                <ProfilesView embedded />
+              </Suspense>
+            )}
+
             {/* ---------------------------------------------------------------- Security
                 The four layers together, in the order they nest: the account password opens the profile, Profile Lock
                 puts the whole profile away, Tab Lock protects single tabs with their own separate passwords, and the
@@ -334,6 +344,10 @@ export default function SettingsModal({ settings, onUpdate, onClose, section }: 
                   </div>
                   <Segmented value={settings.theme} options={THEME_OPTIONS} onChange={(v) => void onUpdate({ theme: v })} />
                 </section>
+
+                <Suspense fallback={null}>
+                  <CustomizeView embedded />
+                </Suspense>
 
                 <section className="setting row">
                   <div className="setting-label">

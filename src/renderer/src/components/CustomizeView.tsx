@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Bell, Check, ChevronDown, ChevronUp, Copy, Download, FileUp, History, Image, LayoutGrid, Paintbrush, Palette, Plus, RotateCcw, ShieldCheck, Sparkles, Trash2, Undo2, X, Zap } from 'lucide-react'
 import type { AppearanceConfig, ExperienceConfig } from '../../../shared/experience'
 import { defaultConfig, describeConfig, diffConfig, isDefaultConfig } from '../../../shared/experience'
-import type { Experience } from '../lib/experience'
+import { useExperience, type Experience } from '../lib/experience'
 import type { NoticeKind } from '../App'
 import type { WidgetCategory, WidgetInstance, WidgetSize, ZoneName } from '../../../shared/widgets'
 import { MAX_WIDGETS, newWidgetInstance, permissionsOf, placeWidget, searchWidgets, widgetById, widgetsInZone, ZONES } from '../../../shared/widgets'
@@ -66,7 +66,35 @@ const when = (time: number): string => {
  * kept when applied; every part can be put back on its own, and the whole customisation layer can be undone at once
  * without touching tabs, bookmarks, notes, tasks, workflows or settings.
  */
-export default function CustomizeView({ experience, onClose, onNotify }: { experience: Experience; onClose(): void; onNotify(message: string, kind?: NoticeKind): void }): React.JSX.Element {
+/**
+ * How Orbis looks.
+ *
+ * It was a row in the feature dropdown, which made appearance a screen you navigated to rather than a setting. It is a
+ * setting, so it lives in Settings now -- and `embedded` is how: the same component, without the overlay it used to be.
+ * Nothing about what it does changed, only where it is.
+ */
+export default function CustomizeView({
+  experience: given,
+  onClose,
+  onNotify,
+  embedded = false
+}: {
+  experience?: Experience
+  onClose?: () => void
+  onNotify?: (message: string, kind?: NoticeKind) => void
+  embedded?: boolean
+}): React.JSX.Element {
+  // Settings does not hold the experience, so when it is not handed one it reads the same source the window does.
+  const loaded = useExperience()
+  const experience = given ?? loaded
+  /**
+   * Somewhere for a message to go when nothing is listening.
+   *
+   * Embedded in Settings there is no toast stack to reach, and every call site here is a real thing happening -- a
+   * theme applied, an import refused. Making each one optional at the call site would be forty `?.` and one of them
+   * eventually forgotten; one fallback is the same answer said once.
+   */
+  const say = onNotify ?? ((): void => undefined)
   const [category, setCategory] = useState<Category>('appearance')
   const [editingTheme, setEditingTheme] = useState<string | null>(null)
   const [widgetSearch, setWidgetSearch] = useState('')
@@ -129,7 +157,7 @@ export default function CustomizeView({ experience, onClose, onNotify }: { exper
     await experience.save(draft, `Changed ${[...new Set(changes.map((c) => c.path.split('.')[0]))].join(', ')}`)
     savedConfig.current = draft
     await loadHistory()
-    onNotify('Your changes are saved')
+    say('Your changes are saved')
   }
 
   const cancel = (): void => {
@@ -143,7 +171,7 @@ export default function CustomizeView({ experience, onClose, onNotify }: { exper
     setDraft(config)
     experience.preview(null)
     await loadHistory()
-    onNotify(`${label} is back to how Orbis has it`)
+    say(`${label} is back to how Orbis has it`)
   }
 
   const restoreOriginal = async (): Promise<void> => {
@@ -154,7 +182,7 @@ export default function CustomizeView({ experience, onClose, onNotify }: { exper
     setDraft(config)
     experience.preview(null)
     await loadHistory()
-    onNotify(wasDefault ? 'Orbis was already as it comes' : 'Orbis is back to how it comes')
+    say(wasDefault ? 'Orbis was already as it comes' : 'Orbis is back to how it comes')
   }
 
   const exportFile = async (): Promise<void> => {
@@ -164,7 +192,7 @@ export default function CustomizeView({ experience, onClose, onNotify }: { exper
     link.download = 'orbis-personalisation.json'
     link.click()
     URL.revokeObjectURL(link.href)
-    onNotify('Your personalisation is saved to a file')
+    say('Your personalisation is saved to a file')
   }
 
   const importFile = async (file: File): Promise<void> => {
@@ -172,16 +200,16 @@ export default function CustomizeView({ experience, onClose, onNotify }: { exper
     try {
       raw = JSON.parse(await file.text())
     } catch {
-      return onNotify('That file could not be read', 'error')
+      return say('That file could not be read', 'error')
     }
     const checked = await window.api.checkExperienceImport(raw)
-    if (!checked.ok) return onNotify(checked.problems[0] ?? 'That file cannot be used', 'error')
+    if (!checked.ok) return say(checked.problems[0] ?? 'That file cannot be used', 'error')
     const { config } = await window.api.importExperience(raw, 'replace')
     savedConfig.current = config
     setDraft(config)
     experience.preview(null)
     await loadHistory()
-    onNotify(`Brought in: ${checked.summary.slice(0, 3).join(', ')}`)
+    say(`Brought in: ${checked.summary.slice(0, 3).join(', ')}`)
   }
 
   const slider = (label: string, value: number, min: number, max: number, step: number, onChange: (value: number) => void, format: (value: number) => string) => (
@@ -195,7 +223,7 @@ export default function CustomizeView({ experience, onClose, onNotify }: { exper
   // ---- themes ----
   const useTheme = (themeId: string | null): void => change({ ...draft, themeId })
   const addTheme = (theme: StoredTheme): void => {
-    if (draft.themes.length >= MAX_THEMES) return onNotify(`That is as many themes as one Orbis can hold (${MAX_THEMES})`, 'error')
+    if (draft.themes.length >= MAX_THEMES) return say(`That is as many themes as one Orbis can hold (${MAX_THEMES})`, 'error')
     change({ ...draft, themes: [...draft.themes, theme], themeId: theme.id })
     setEditingTheme(theme.id)
   }
@@ -205,15 +233,15 @@ export default function CustomizeView({ experience, onClose, onNotify }: { exper
     change({ ...draft, themes: draft.themes.filter((t) => t.id !== id), themeId: draft.themeId === id ? null : draft.themeId })
 
   const addWallpaper = async (file: File): Promise<void> => {
-    if (!file.type.startsWith('image/')) return onNotify('That file is not a picture', 'error')
-    if (file.size > 6_000_000) return onNotify('That picture is too large — 6 MB is the most Orbis keeps', 'error')
+    if (!file.type.startsWith('image/')) return say('That file is not a picture', 'error')
+    if (file.size > 6_000_000) return say('That picture is too large — 6 MB is the most Orbis keeps', 'error')
     const source = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader()
       reader.onload = () => resolve(String(reader.result))
       reader.onerror = () => reject(new Error('unreadable'))
       reader.readAsDataURL(file)
     }).catch(() => null)
-    if (!source) return onNotify('That picture could not be read', 'error')
+    if (!source) return say('That picture could not be read', 'error')
     const wallpaper = { id: `wall-${Date.now().toString(36)}`, name: file.name.replace(/\.[^.]+$/, '').slice(0, 60) || 'Wallpaper', source, kind: 'image' as const, addedAt: Date.now() }
     change({ ...draft, wallpapers: [...draft.wallpapers, wallpaper], newTab: { ...draft.newTab, wallpaperId: wallpaper.id } })
   }
@@ -226,7 +254,7 @@ export default function CustomizeView({ experience, onClose, onNotify }: { exper
 
   // ---- dashboards ----
   const saveAsDashboard = (): void => {
-    if (draft.dashboards.length >= MAX_DASHBOARDS) return onNotify(`That is as many dashboards as one Orbis can hold (${MAX_DASHBOARDS})`, 'error')
+    if (draft.dashboards.length >= MAX_DASHBOARDS) return say(`That is as many dashboards as one Orbis can hold (${MAX_DASHBOARDS})`, 'error')
     const dashboard = newDashboard(`Dashboard ${draft.dashboards.length + 1}`, draft.widgets)
     change({ ...draft, dashboards: [...draft.dashboards, dashboard], activeDashboardId: dashboard.id })
   }
@@ -246,7 +274,7 @@ export default function CustomizeView({ experience, onClose, onNotify }: { exper
   const setWidgets = (widgets: WidgetInstance[]): void =>
     change({ ...draft, widgets, dashboards: rememberWidgets(draft.dashboards, draft.activeDashboardId, widgets) })
   const addWidget = (widget: string): void => {
-    if (draft.widgets.length >= MAX_WIDGETS) return onNotify(`That is as many widgets as one Orbis can hold (${MAX_WIDGETS})`, 'error')
+    if (draft.widgets.length >= MAX_WIDGETS) return say(`That is as many widgets as one Orbis can hold (${MAX_WIDGETS})`, 'error')
     const instance = newWidgetInstance(widget, 'centre', draft.widgets.filter((w) => w.zone === 'centre').length)
     if (instance) setWidgets([...draft.widgets, instance])
   }
@@ -265,9 +293,14 @@ export default function CustomizeView({ experience, onClose, onNotify }: { exper
   )
 
   return (
-    <div className="view customize-view" role="region" aria-label="Customize Orbis">
+    <div className={embedded ? 'customize-view is-embedded' : 'view customize-view'} role="region" aria-label="Customize Orbis">
+      {/*
+        The header stays even when embedded, because Apply and Cancel live in it -- hiding it would strand a change
+        somebody had made. What goes is the title, which Settings has already said, and the close button, which is the
+        overlay's and not this screen's.
+      */}
       <header className="view-head">
-        <h2>Customize</h2>
+        {!embedded && <h2>Customize</h2>}
         <div className="view-actions">
           {dirty && (
             <>
@@ -282,9 +315,11 @@ export default function CustomizeView({ experience, onClose, onNotify }: { exper
               </button>
             </>
           )}
-          <button type="button" className="icon-btn" aria-label="Close customize" onClick={() => (dirty ? cancel() : undefined, onClose())}>
-            <X size={16} />
-          </button>
+          {!embedded && onClose && (
+            <button type="button" className="icon-btn" aria-label="Close customize" onClick={() => (dirty ? cancel() : undefined, onClose())}>
+              <X size={16} />
+            </button>
+          )}
         </div>
       </header>
 
@@ -312,7 +347,7 @@ export default function CustomizeView({ experience, onClose, onNotify }: { exper
         </nav>
 
         <section className="cz-panel" aria-label={CATEGORIES.find((c) => c.id === category)?.label}>
-          {category === 'notify' && <RulesEditor draft={draft} change={change} say={onNotify} />}
+          {category === 'notify' && <RulesEditor draft={draft} change={change} say={say} />}
 
           {category === 'presets' && (
             <>
@@ -937,7 +972,7 @@ export default function CustomizeView({ experience, onClose, onNotify }: { exper
                           setDraft(config)
                           experience.preview(null)
                           await loadHistory()
-                          onNotify('Went back to how it was')
+                          say('Went back to how it was')
                         })
                       }
                     >

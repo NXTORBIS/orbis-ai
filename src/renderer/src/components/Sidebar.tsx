@@ -9,24 +9,16 @@ import {
   ClipboardList,
   Globe,
   Images,
-  KeyRound,
   Keyboard,
   LayoutGrid,
   LayoutTemplate,
-  ListChecks,
-  NotebookPen,
-  Orbit,
-  Palette,
   Pencil,
   PenTool,
   Pin,
   PinOff,
   Search,
-  Settings,
   SquarePen,
   Trash2,
-  Users,
-  Workflow,
   X } from 'lucide-react'
 import type { Conversation } from '../../../shared/types'
 import type { StreamState } from '../App'
@@ -75,33 +67,21 @@ interface Props {
 }
 
 /** Orbis's own screens, in the order they appear. The id is what App.tsx renders. */
-export type FeatureId =
-  | 'pages'
-  | 'markets'
-  | 'workflows'
-  | 'galaxy'
-  | 'notes'
-  | 'tasks'
-  | 'whiteboard'
-  | 'clipboard'
-  | 'workspaces'
-  | 'secrets'
-  | 'customize'
-  | 'profiles'
+/**
+ * The screens that are still the chat window's.
+ *
+ * Everything that is about pages, tabs or what you browsed has gone to the browser, where it is about something. What
+ * is left either needs a canvas the browser does not have, or is not about browsing at all. Customize and Profiles are
+ * not here because they are settings, and they are in Settings.
+ */
+export type FeatureId = 'pages' | 'markets' | 'whiteboard' | 'clipboard' | 'workspaces'
 
 export const FEATURES: { id: FeatureId; label: string; icon: LucideIcon; hint: string }[] = [
   { id: 'pages', label: 'Pages', icon: LayoutTemplate, hint: "Orbis's own tools, each with its own address" },
   { id: 'markets', label: 'Markets', icon: CandlestickChart, hint: 'Live crypto prices, charts and watchlists' },
-  { id: 'workflows', label: 'Workflows', icon: Workflow, hint: 'Work Orbis does for you' },
-  { id: 'galaxy', label: 'Galaxy', icon: Orbit, hint: 'What you have read, and how it connects' },
-  { id: 'notes', label: 'Notes', icon: NotebookPen, hint: 'Things written down' },
-  { id: 'tasks', label: 'Tasks', icon: ListChecks, hint: 'Things to do, and things due' },
   { id: 'whiteboard', label: 'Whiteboard', icon: PenTool, hint: 'Room to think' },
   { id: 'clipboard', label: 'Clipboard', icon: ClipboardList, hint: 'What you have copied' },
-  { id: 'workspaces', label: 'Workspaces', icon: LayoutGrid, hint: 'Sets of tabs, kept together' },
-  { id: 'secrets', label: 'Secrets', icon: KeyRound, hint: 'The vault, locked until you open it' },
-  { id: 'customize', label: 'Customize', icon: Palette, hint: 'How Orbis looks' },
-  { id: 'profiles', label: 'Profiles', icon: Users, hint: 'Separate lives, separate data' }
+  { id: 'workspaces', label: 'Workspaces', icon: LayoutGrid, hint: 'Sets of tabs, kept together' }
 ]
 
 interface NavItem {
@@ -283,19 +263,13 @@ export default function Sidebar(props: Props): React.JSX.Element {
                       {label}
                     </button>
                   ))}
+                  {/*
+                    Settings is not a row here.
+
+                    It is on the user chip at the foot of this sidebar, which opens it at Account, and on Ctrl+comma.
+                    A third way in, in a list of screens, made a settings dialog look like one more feature.
+                  */}
                   <div className="menu-sep" />
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="menu-item"
-                    onClick={() => {
-                      props.onSettings()
-                      setBrandOpen(false)
-                    }}
-                  >
-                    <Settings size={14} />
-                    Settings
-                  </button>
                   <button
                     type="button"
                     role="menuitem"

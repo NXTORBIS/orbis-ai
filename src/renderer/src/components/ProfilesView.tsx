@@ -8,11 +8,27 @@ import type { NoticeKind } from '../App'
  * Profiles: separate browsing identities. Each keeps its own cookies and logins, its own history, bookmarks and
  * downloads, and its own open pages. Extensions are installed once and follow whichever profile is in use.
  */
-export default function ProfilesView({ onClose, onNotify }: { onClose(): void; onNotify(message: string, kind?: NoticeKind): void }): React.JSX.Element {
+/**
+ * Separate lives, separate data.
+ *
+ * A row in the feature dropdown before, which made "who is using Orbis" a place rather than a setting. It is a setting,
+ * so it sits in Settings under Account, and `embedded` drops the overlay it used to wear.
+ */
+export default function ProfilesView({
+  onClose,
+  onNotify,
+  embedded = false
+}: {
+  onClose?: () => void
+  onNotify?: (message: string, kind?: NoticeKind) => void
+  embedded?: boolean
+}): React.JSX.Element {
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [activeId, setActiveId] = useState<string>(DEFAULT_PROFILE_ID)
   const [name, setName] = useState('')
   const [switching, setSwitching] = useState<string | null>(null)
+  // Embedded in Settings there is no toast stack to reach, so one fallback rather than a `?.` at every call site.
+  const say = onNotify ?? ((): void => undefined)
 
   const load = async (): Promise<void> => {
     const { profiles: list, activeId: current } = await window.api.listProfiles()
@@ -32,9 +48,9 @@ export default function ProfilesView({ onClose, onNotify }: { onClose(): void; o
     try {
       const made = await window.api.createProfile(chosen)
       setName('')
-      onNotify(`“${made.name}” is ready — switch to it when you want to use it`)
+      say(`“${made.name}” is ready — switch to it when you want to use it`)
     } catch (err) {
-      onNotify(err instanceof Error ? err.message : 'That profile could not be made', 'error')
+      say(err instanceof Error ? err.message : 'That profile could not be made', 'error')
     }
   }
 
@@ -43,9 +59,9 @@ export default function ProfilesView({ onClose, onNotify }: { onClose(): void; o
     setSwitching(profile.id)
     try {
       await window.api.switchProfile(profile.id)
-      onNotify(`Now browsing as ${profile.name}`)
+      say(`Now browsing as ${profile.name}`)
     } catch (err) {
-      onNotify(err instanceof Error ? err.message : 'Could not switch profile', 'error')
+      say(err instanceof Error ? err.message : 'Could not switch profile', 'error')
     } finally {
       setSwitching(null)
       void load()
@@ -54,15 +70,16 @@ export default function ProfilesView({ onClose, onNotify }: { onClose(): void; o
 
   const remove = async (profile: Profile): Promise<void> => {
     const result = await window.api.removeProfile(profile.id)
-    if (!result.removed) return onNotify(result.reason ?? 'That profile cannot be deleted', 'error')
-    onNotify(`“${profile.name}” and everything it kept are gone`)
+    if (!result.removed) return say(result.reason ?? 'That profile cannot be deleted', 'error')
+    say(`“${profile.name}” and everything it kept are gone`)
     void load()
   }
 
   return (
-    <div className="view profiles-view" role="region" aria-label="Profiles">
+    <div className={embedded ? 'profiles-view is-embedded' : 'view profiles-view'} role="region" aria-label="Profiles">
+      {/* The header stays: adding a profile lives in it. The title and the close button are the overlay's, not this. */}
       <header className="view-head">
-        <h2>Profiles</h2>
+        {!embedded && <h2>Profiles</h2>}
         <div className="view-actions">
           <label className="spaces-save">
             <UserRound size={13} />
@@ -71,9 +88,11 @@ export default function ProfilesView({ onClose, onNotify }: { onClose(): void; o
           <button type="button" className="queue-btn primary" disabled={!name.trim()} onClick={() => void create()}>
             <Plus size={14} /> Add profile
           </button>
-          <button type="button" className="icon-btn" aria-label="Close profiles" onClick={onClose}>
-            <X size={16} />
-          </button>
+          {!embedded && onClose && (
+            <button type="button" className="icon-btn" aria-label="Close profiles" onClick={onClose}>
+              <X size={16} />
+            </button>
+          )}
         </div>
       </header>
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Bell, Cpu, Globe, Hash, Moon, PanelLeftClose, PanelLeftOpen, Sun } from 'lucide-react'
+import { Bell, Cpu, Globe, Moon, PanelLeftClose, PanelLeftOpen, Sun } from 'lucide-react'
 import { OrbisGlassMark } from './Brand'
 
 interface Props {
@@ -7,7 +7,6 @@ interface Props {
   unread: number
   onToggleHistory(): void
   sidebarCollapsed: boolean
-  onQuickPrompts(): void
   webSearch: boolean
   onToggleWebSearch(): void
   onToggleActivity(): void
@@ -49,9 +48,6 @@ export default function SystemBar(props: Props): React.JSX.Element {
       {props.children}
 
       <div className="system-group">
-        <button className="sys-btn" title="Quick prompts" onClick={props.onQuickPrompts}>
-          <Hash size={15} />
-        </button>
         <button
           className={`sys-btn${props.webSearch ? ' active' : ''}`}
           title={props.webSearch ? 'Web search on — replies use live results' : 'Web search off'}
