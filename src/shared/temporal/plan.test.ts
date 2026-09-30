@@ -470,3 +470,34 @@ test('history is bounded, so it is not a disk leak with a nice name', () => {
   // The newest are kept, which is what anybody looking at it wants.
   assert.equal(held.history[held.history.length - 1].dueAt, NOW + 79)
 })
+
+test('each thing Orbis cannot do is matched to its own answer, not to the one next to it', () => {
+  /**
+   * The list is matched by position, so inserting an entry shifts every answer after it. This is the test that makes
+   * that mistake fail here rather than showing up as somebody being told Orbis has no mail account when they asked
+   * about a calendar.
+   */
+  const cases: readonly [string, RegExp][] = [
+    ['run it while my computer is switched off', /switched off/i],
+    ['run it while my laptop is asleep', /asleep/i],
+    ['send a whatsapp to mum every sunday', /whatsapp|messaging/i],
+    ['email the team every monday', /email/i],
+    ['put it on my calendar every monday', /calendar/i],
+    ['buy 10 bitcoin every friday', /buy, sell or transfer/i]
+  ]
+  for (const [said, expected] of cases) {
+    const found = findUnsupported(said)
+    assert.ok(found, said)
+    assert.match(found.ask, expected, `“${said}” was answered with “${found.ask}”`)
+  }
+})
+
+test('being asleep and being switched off are answered differently', () => {
+  // One of them has an answer and the other does not, so giving both the same reply is wrong either way round.
+  const asleep = findUnsupported('run it while my laptop is asleep')
+  const off = findUnsupported('run it while my computer is switched off')
+  assert.ok(asleep && off)
+  assert.notEqual(asleep.because, off.because)
+  assert.match(asleep.because, /can be woken/)
+  assert.match(off.because, /no Orbis server/)
+})

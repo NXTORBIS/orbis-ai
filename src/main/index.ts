@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, nativeTheme, net, Notification, powerMonitor, shell } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, nativeTheme, net, Notification, powerMonitor, shell, Tray } from 'electron'
 import type { MenuItemConstructorOptions, OpenDialogOptions, TitleBarOverlayOptions, IpcMainInvokeEvent } from 'electron'
 import { existsSync, promises as fs } from 'node:fs'
 import os from 'node:os'
@@ -44,6 +44,8 @@ import { TemporalEngine } from './temporal/engine.ts'
 import { registerTemporalIpc } from './temporal/ipc.ts'
 import { makeRunners } from './temporal/runners.ts'
 import { TemporalStore } from './temporal/store.ts'
+import { earliestWake, shouldStayAlive } from './temporal/wake.ts'
+import { applyWake, clearWake, wakeIsPossible } from './temporal/windowsWake.ts'
 import { FrontTabWatch, shouldReadNow } from './knowledge/recallCapture.ts'
 import { MAX_PAGE_TEXT, pageKey, recallPromptBlock } from '../shared/recall.ts'
 import { closedBrowserState, followChromiumTabs } from './browserState'
@@ -276,6 +278,15 @@ let recall: RecallStore | null = null
 let workflowEngine: WorkflowEngine | null = null
 /** Schedules, once they exist, so a schedule said in chat is kept rather than only talked about. */
 let schedulesForChat: { store: TemporalStore; engine: TemporalEngine; profileId: () => string } | null = null
+/**
+ * Orbis running with no window, for schedules.
+ *
+ * Only set when somebody has asked for it and something is actually scheduled, and always with a tray icon -- Orbis
+ * is never left running invisibly with no way to stop it.
+ */
+let stayingAlive: { tray: Tray | null; because: string } | null = null
+/** Works out again whether to keep running and whether to ask for a wake. Set once the scheduler exists. */
+let reconsiderStaying: (() => Promise<void>) | null = null
 /** Galaxy and the workspaces store, once they exist, so chat can give Orion a project's outline when it is named. */
 let galaxyForChat: GalaxyService | null = null
 /** The secrets vault, once it exists, for the Chromium side panel (which never receives a value). */
@@ -2783,7 +2794,75 @@ if (!app.requestSingleInstanceLock()) {
       getWindow: () => mainWindow,
       send: (channel, ...args) => sendToWindow(channel, ...args)
     })
+    /**
+     * What Orbis should do about being closed, and about a sleeping computer.
+     *
+     * Worked out after every change rather than once at startup, because both answers depend on what is actually
+     * scheduled: deleting the last schedule should let Orbis quit and should stop the machine waking for nothing.
+     */
+    const showTray = (because: string): void => {
+      if (stayingAlive) {
+        stayingAlive.because = because
+        stayingAlive.tray?.setToolTip(because)
+        return
+      }
+      const icon = orbisIcon()
+      const tray = icon ? new Tray(icon) : null
+      tray?.setToolTip(because)
+      tray?.setContextMenu(
+        Menu.buildFromTemplate([
+          { label: because, enabled: false },
+          { type: 'separator' },
+          { label: 'Open Orbis', click: () => void createWindow() },
+          { type: 'separator' },
+          { label: 'Quit Orbis', click: () => app.quit() }
+        ])
+      )
+      stayingAlive = { tray, because }
+    }
+
+    const hideTray = (): void => {
+      stayingAlive?.tray?.destroy()
+      stayingAlive = null
+    }
+
+    reconsiderStaying = async (): Promise<void> => {
+      const settings = await store.getSettings()
+      const jobs = await schedules.all(scheduleProfileId)
+      const answer = shouldStayAlive(jobs, settings.keepSchedulesRunning)
+      const noWindow = BrowserWindow.getAllWindows().length === 0
+
+      if (!answer.stay) {
+        // Was staying for a schedule that has since gone, with no window to go back to: there is nothing left to do.
+        if (noWindow && stayingAlive) {
+          hideTray()
+          app.quit()
+          return
+        }
+        hideTray()
+      } else if (noWindow) showTray(answer.because)
+
+      if (!wakeIsPossible()) return
+      const at = settings.wakeForSchedules ? earliestWake(jobs, Date.now()) : null
+      if (at === null) {
+        // Removed rather than left behind, so a machine never keeps waking for an Orbis with nothing to do.
+        await clearWake()
+        return
+      }
+      /*
+       * The wake starts Orbis, which is the only thing that can carry the schedule out.
+       *
+       * While developing that is the Electron binary with the project as its argument -- the same way this session
+       * started -- so the task works before there is anything packaged.
+       */
+      const args = app.isPackaged ? ['--woken-for-schedule'] : [app.getAppPath(), '--woken-for-schedule']
+      await applyWake(at, process.execPath, args)
+    }
+
+    // Anything that changes what is scheduled changes both answers, so they are worked out again.
+    scheduleEngine.onChanged = () => void reconsiderStaying?.()
     schedulesForChat = { store: schedules, engine: scheduleEngine, profileId: () => scheduleProfileId }
+    void reconsiderStaying()
     scheduleEngine.start()
     app.on('before-quit', () => scheduleEngine.stop())
 
@@ -3090,6 +3169,18 @@ if (!app.requestSingleInstanceLock()) {
 
   app.on('window-all-closed', () => {
     for (const controller of activeRequests.values()) controller.abort()
-    app.quit()
+    /**
+     * Closing the window usually means quitting, and sometimes means only closing the window.
+     *
+     * `reconsiderStaying` decides, and it decides from what is actually scheduled -- so Orbis stays only when
+     * somebody asked it to and there is something for it to stay for, and puts a tray icon up when it does.
+     */
+    if (!reconsiderStaying) {
+      app.quit()
+      return
+    }
+    void reconsiderStaying().then(() => {
+      if (!stayingAlive) app.quit()
+    })
   })
 }

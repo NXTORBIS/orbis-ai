@@ -86,7 +86,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = Object.freeze([
     blurb: 'The browser, what it suggests as you type, and the market strip.',
     icon: 'globe',
     keywords: ['browser', 'default browser', 'suggestions', 'address bar', 'search', 'history', 'launch', 'startup', 'markets', 'ticker', 'strip', 'prices', 'pages you have read', 'reading', 'recall', 'remember pages'],
-    settings: ['searchSuggestions', 'personalizedSuggestions', 'openBrowserOnLaunch']
+    settings: ['searchSuggestions', 'personalizedSuggestions', 'openBrowserOnLaunch', 'keepSchedulesRunning', 'wakeForSchedules']
   },
   {
     id: 'appearance',

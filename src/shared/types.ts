@@ -286,6 +286,22 @@ export interface Settings {
   personalizedSuggestions: boolean
   /** Orbis opens its browser (at the saved size) as soon as it starts, instead of the chat. */
   openBrowserOnLaunch: boolean
+  /**
+   * Orbis keeps running with no window when something is scheduled, instead of quitting.
+   *
+   * Off by default, because a program that carries on after you close it is not what anybody expects. When it is on
+   * there is a tray icon with a way to quit, so it is never running invisibly.
+   */
+  keepSchedulesRunning: boolean
+  /**
+   * Windows may wake this computer for the next thing due.
+   *
+   * Asleep is not off, and a machine that wakes for ninety seconds at eight in the morning is the difference between
+   * a schedule happening and a schedule happening whenever somebody next opens the lid. It cannot wake a computer
+   * that is fully switched off, and wake timers are often off on battery -- both of which Orbis says rather than
+   * implies.
+   */
+  wakeForSchedules: boolean
 }
 
 export type SettingsUpdate = Partial<Omit<Settings, 'hasApiKey'>> & {

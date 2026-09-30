@@ -185,6 +185,7 @@ export const TEST_FILES = [
   'src/shared/temporal/plan.test.ts',
   'src/shared/temporal/phrase.test.ts',
   'src/main/temporal/engine.test.ts',
+  'src/main/temporal/wake.test.ts',
   'src/shared/markets/liveCandle.test.ts',
   'src/main/markets/fx.test.ts',
   'src/main/browserControl/marketCapabilities.test.ts',

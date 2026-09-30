@@ -56,6 +56,15 @@ export class TemporalEngine {
   private readonly inFlight = new Set<string>()
   private stopped = false
 
+  /**
+   * Told whenever what is scheduled may have changed.
+   *
+   * Set by whoever builds the engine. It exists because two things outside the scheduler depend on what is
+   * scheduled -- whether Orbis should stay running with no window, and whether the computer should be woken -- and
+   * both should be answered again the moment a schedule is added, finished or deleted.
+   */
+  onChanged: (() => void) | null = null
+
   private readonly o: EngineOptions
 
   constructor(options: EngineOptions) {
@@ -165,7 +174,10 @@ export class TemporalEngine {
     const state = stateAfter(job, decision)
     if (state === job.state && Object.keys(extra).length === 0) return
     const moved = await this.o.store.setState(profileId, job.jobId, state, extra)
-    if (moved) this.o.onChange?.(moved)
+    if (moved) {
+      this.o.onChange?.(moved)
+      this.onChanged?.()
+    }
   }
 
   private async run(
@@ -234,6 +246,7 @@ export class TemporalEngine {
     const moved = await this.o.store.recordRun(profileId, job.jobId, record, state, finishedAt)
     if (moved) {
       this.o.onChange?.(moved)
+      this.onChanged?.()
       if (decision.lateBy > TICK_MS && ok) {
         // Said out loud, because a reminder arriving four hours late without explanation looks like a broken clock.
         this.o.onNotice?.(moved, `“${moved.name}” ran ${lateText(decision.lateBy)} late — Orbis was not running when it was due.`)

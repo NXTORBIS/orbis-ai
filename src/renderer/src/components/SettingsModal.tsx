@@ -306,6 +306,36 @@ export default function SettingsModal({ settings, onUpdate, onClose, section }: 
                   <Toggle checked={settings.openBrowserOnLaunch} onChange={(v) => void onUpdate({ openBrowserOnLaunch: v })} />
                 </section>
 
+                {/*
+                  The two settings that decide whether a schedule actually happens.
+
+                  Both are off to begin with, and both say what they do not do. Orbis has no server, so a schedule
+                  needs this computer: these narrow that as far as a program on your own machine can, and no further.
+                */}
+                <section className="setting row">
+                  <div className="setting-label">
+                    <h3>Keep schedules running when you close Orbis</h3>
+                    <p>
+                      Orbis stays running with no window while something is scheduled, so closing the window stops the
+                      window rather than the clock. There is a tray icon with a way to quit, and Orbis quits by itself
+                      once nothing is scheduled.
+                    </p>
+                  </div>
+                  <Toggle checked={settings.keepSchedulesRunning} onChange={(v) => void onUpdate({ keepSchedulesRunning: v })} />
+                </section>
+
+                <section className="setting row">
+                  <div className="setting-label">
+                    <h3>Wake this computer for a schedule</h3>
+                    <p>
+                      Windows wakes a sleeping computer for the next thing due, then lets it sleep again. It cannot
+                      wake a computer that is fully switched off, and wake timers are often off while a laptop is on
+                      battery — in either case Orbis does it the next time you open it, and says how late it was.
+                    </p>
+                  </div>
+                  <Toggle checked={settings.wakeForSchedules} onChange={(v) => void onUpdate({ wakeForSchedules: v })} />
+                </section>
+
                 <section className="setting row">
                   <div className="setting-label">
                     <h3>Web search suggestions</h3>

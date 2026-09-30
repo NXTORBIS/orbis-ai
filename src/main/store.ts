@@ -26,7 +26,9 @@ const DEFAULTS: Omit<Settings, 'hasApiKey'> = {
   introVersion: 0,
   searchSuggestions: true,
   personalizedSuggestions: true,
-  openBrowserOnLaunch: false
+  openBrowserOnLaunch: false,
+  keepSchedulesRunning: false,
+  wakeForSchedules: false
 }
 
 const THEMES: Theme[] = ['system', 'light', 'dark']
@@ -84,6 +86,8 @@ export class Store {
     if (typeof update.searchSuggestions === 'boolean') next.searchSuggestions = update.searchSuggestions
     if (typeof update.personalizedSuggestions === 'boolean') next.personalizedSuggestions = update.personalizedSuggestions
     if (typeof update.openBrowserOnLaunch === 'boolean') next.openBrowserOnLaunch = update.openBrowserOnLaunch
+    if (typeof update.keepSchedulesRunning === 'boolean') next.keepSchedulesRunning = update.keepSchedulesRunning
+    if (typeof update.wakeForSchedules === 'boolean') next.wakeForSchedules = update.wakeForSchedules
 
     if (typeof update.apiKey === 'string') {
       const key = update.apiKey.trim()

@@ -125,9 +125,23 @@ export interface Unsupported {
 
 export const UNSUPPORTED: readonly Unsupported[] = Object.freeze([
   {
-    ask: 'Run this while my computer is off, or asleep.',
+    ask: 'Run this while my computer is switched off.',
     because: 'Everything Orbis schedules runs on this computer. There is no Orbis server to run it anywhere else.',
-    instead: 'Orbis can run it the moment the computer wakes up, and say how late it was.'
+    instead: 'Orbis runs it the moment the computer is on again, and says how late it was.'
+  },
+  {
+    ask: 'Run this while my computer is asleep.',
+    /*
+     * Asleep is not off, and this is the one of these that has an answer.
+     *
+     * Kept separate from being switched off for exactly that reason -- answering both with "no" would be wrong, and
+     * answering both with "yes" would be worse.
+     */
+    because:
+      'A sleeping computer can be woken for it, if you switch on "Wake this computer for a schedule" in Settings.' +
+      ' Windows will not honour that while wake timers are off for the power plan, which on a laptop usually means' +
+      ' while it is on battery.',
+    instead: 'With that off, Orbis runs it when the computer next wakes and says how late it was.'
   },
   {
     ask: 'Send a WhatsApp, Slack or Telegram message on a schedule.',
@@ -145,9 +159,12 @@ export const UNSUPPORTED: readonly Unsupported[] = Object.freeze([
     instead: 'Orbis keeps its own schedules, which are separate from your calendar.'
   },
   {
-    ask: 'Keep running after I close Orbis.',
-    because: 'The scheduler lives inside Orbis, so closing it stops the clock.',
-    instead: 'Orbis catches up on what was missed the next time it opens.'
+    ask: 'Keep running after I close the Orbis window.',
+    because:
+      'The scheduler lives inside Orbis, so by default closing the window stops the clock. Switching on "Keep' +
+      ' schedules running when you close Orbis" in Settings leaves it running with no window instead, with a tray' +
+      ' icon and a way to quit.',
+    instead: 'With that off, Orbis catches up on what was missed the next time it opens.'
   },
   {
     ask: 'Run to the second, exactly.',
@@ -178,18 +195,29 @@ export const UNSUPPORTED: readonly Unsupported[] = Object.freeze([
 export function answerAboutOffline(action: TemporalAction): string {
   const need = requirementsOf(action)
   if (!need.needsThisComputer) return 'This can run without your computer being on.'
-  return 'No. This runs on this computer, so it needs Orbis open. If it is not, Orbis will run it when you next open it.'
+  return (
+    'No. This runs on this computer, so it needs Orbis running. Orbis can stay running with no window, and can wake' +
+    ' a sleeping computer, if you switch both on in Settings — but a computer that is switched off cannot be woken,' +
+    ' and Orbis will run it when you next open it and say how late it was.'
+  )
 }
 
 /** Whether a request in somebody's words is one of the things Orbis cannot do. Simple word overlap, deliberately. */
 export function findUnsupported(said: string): Unsupported | null {
   const text = said.toLowerCase()
   const groups: readonly [readonly string[], number][] = [
-    [['whatsapp', 'slack', 'telegram', 'discord', 'text my', 'message my', 'dm '], 1],
-    [['email', 'e-mail', 'mail to', 'send an email'], 2],
-    [['calendar', 'google cal', 'outlook'], 3],
-    [['computer is off', 'laptop is off', 'while im asleep', "while i'm asleep", 'when my pc is off', 'shut down'], 0],
-    [['buy ', 'sell ', 'transfer ', 'invest ', 'order '], 7]
+    [['whatsapp', 'slack', 'telegram', 'discord', 'text my', 'message my', 'dm '], 2],
+    [['email', 'e-mail', 'mail to', 'send an email'], 3],
+    [['calendar', 'google cal', 'outlook'], 4],
+    /*
+     * About the machine, not the person.
+     *
+     * "While I'm asleep" is not on either list, and deliberately: somebody asleep at three in the morning with their
+     * computer on is a schedule Orbis keeps perfectly well, and refusing it would be wrong.
+     */
+    [['computer is off', 'laptop is off', 'pc is off', 'shut down', 'switched off', 'turned off', 'powered off'], 0],
+    [['is asleep', 'while it sleeps', 'sleeping', 'sleep mode', 'lid is closed', 'lid closed'], 1],
+    [['buy ', 'sell ', 'transfer ', 'invest ', 'order '], 8]
   ]
   for (const [words, index] of groups) {
     if (words.some((w) => text.includes(w))) return UNSUPPORTED[index]
