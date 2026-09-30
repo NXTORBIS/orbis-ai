@@ -127,13 +127,20 @@ const HEADLINE = {
 let place = { x: 12, y: 12, size: 30, open: false, up: false }
 
 async function refreshPlacement() {
+  /**
+   * Nothing is asked while a drag is under way.
+   *
+   * Every step of a drag moves the Orb, moving the Orb resizes this window, and a resize lands here -- so this ran
+   * sixty times a second during a drag, each time asking the browser where the Orb was and then throwing the answer
+   * away because a drag was in progress. The position that matters is the one read when the drag ends, and the
+   * browser sends a resize then too.
+   */
+  if (gesture !== null) return
   try {
     const p = await askBrowser('orbis.orb.placement')
     if (p && typeof p.x === 'number') place = { ...place, ...p }
   } catch { /* the browser will ask again on the next resize */ }
-  // While a drag is under way the browser is moving the Orb and this page is following its own pointer, so laying
-  // the answer over the top would fight the drag a frame at a time. The position that matters is read when the
-  // drag ends, and the browser sends a resize then too.
+  // The drag may have started while that was in flight, and laying a stale position over a moving Orb would fight it.
   if (gesture !== null) return
   draw()
 }
@@ -164,22 +171,47 @@ function buildOrb() {
   orb.append(buildOrbBody())
   orb.append(el('span', 'browser-orb-dot'))
 
+  /**
+   * The pointer is followed in **screen** coordinates, never in the page's own.
+   *
+   * This is the fix for a drag that moved a pixel and then sat there shaking.
+   *
+   * The window this page is drawn in is only as big as the Orb, and dragging moves that window. So the page's own
+   * viewport chases the pointer: move the Orb ten pixels right and `clientX` -- which is measured from the left edge
+   * of a viewport that has itself just moved ten pixels right -- reads almost exactly what it read before. The
+   * measured movement collapsed to nothing after the first step, and what was left was rounding noise, which is
+   * precisely what "it jitters and goes nowhere" looks like.
+   *
+   * `screenX` and `screenY` are absolute to the display and do not move when the Orb does, so the difference between
+   * two of them is the distance the pointer actually travelled. Nothing else here changed: it is still movement being
+   * reported rather than a position, and the browser still decides where the Orb may go.
+   */
   orb.addEventListener('pointerdown', (e) => {
     if (e.button !== 0) return
-    gesture = { id: e.pointerId, x: e.clientX, y: e.clientY, lastX: e.clientX, lastY: e.clientY, moved: false }
+    gesture = { id: e.pointerId, x: e.screenX, y: e.screenY, lastX: e.screenX, lastY: e.screenY, moved: false }
     orb.setPointerCapture(e.pointerId)
   })
 
   orb.addEventListener('pointermove', (e) => {
     if (!gesture || e.pointerId !== gesture.id) return
-    if (!gesture.moved && Math.hypot(e.clientX - gesture.x, e.clientY - gesture.y) < DRAG_THRESHOLD) return
+    if (!gesture.moved && Math.hypot(e.screenX - gesture.x, e.screenY - gesture.y) < DRAG_THRESHOLD) return
     if (!gesture.moved) { gesture.moved = true; orb.classList.add('dragging') }
     e.preventDefault()
     // Movement, not a position: the browser places the Orb, and clamps it where it must.
-    const dx = Math.round(e.clientX - gesture.lastX)
-    const dy = Math.round(e.clientY - gesture.lastY)
-    gesture.lastX = e.clientX; gesture.lastY = e.clientY
-    if (dx || dy) chrome.send('orbis.orb.drag', ['orbDrag', dx, dy])
+    const dx = Math.round(e.screenX - gesture.lastX)
+    const dy = Math.round(e.screenY - gesture.lastY)
+    /**
+     * The anchor only advances by what was actually sent.
+     *
+     * Rounding a fractional movement to nothing and then throwing that fraction away loses it, so a slow drag across
+     * the window arrives several pixels short of the pointer. Keeping the remainder means every pixel the pointer
+     * travels is eventually a pixel the Orb travels.
+     */
+    if (dx || dy) {
+      gesture.lastX += dx
+      gesture.lastY += dy
+      chrome.send('orbis.orb.drag', ['orbDrag', dx, dy])
+    }
   })
 
   const end = (e) => {
@@ -391,13 +423,23 @@ let focusPrompt = false
 function draw() {
   const host = layer()
   if (!host) return
-  // The Orb is taken out before the rest is cleared and put back after, so the element survives -- along with any
-  // pointer capture on it. Clearing the layer wholesale is what used to kill a drag on its first movement.
+  /**
+   * The Orb is never taken out of the page, not even for a moment.
+   *
+   * Keeping the same element was not enough. Taking it out and putting it back kept the *object* but not its pointer
+   * capture: removing a captured element from the document releases the capture, by specification. So any status
+   * arriving mid-drag -- and one arrives whenever Orbis is doing anything at all -- silently ended the drag, and the
+   * Orb stopped following the pointer for no reason a person could see.
+   *
+   * So everything except the Orb is cleared, and the panel is put in front of it. The Orb itself is attached once and
+   * stays attached for the life of the page.
+   */
   const orb = drawOrb()
-  orb.remove()
-  host.replaceChildren()
-  if (state.open) host.append(drawPanel())
-  host.append(orb)
+  for (const child of [...host.children]) {
+    if (child !== orb) child.remove()
+  }
+  if (!orb.isConnected) host.append(orb)
+  if (state.open) host.insertBefore(drawPanel(), orb)
   if (state.open && focusPrompt) {
     focusPrompt = false
     host.querySelector('.orb-prompt textarea')?.focus()
