@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, nativeTheme, net, Notification, shell } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, nativeTheme, net, Notification, powerMonitor, shell } from 'electron'
 import type { MenuItemConstructorOptions, OpenDialogOptions, TitleBarOverlayOptions, IpcMainInvokeEvent } from 'electron'
 import { existsSync, promises as fs } from 'node:fs'
 import os from 'node:os'
@@ -39,6 +39,11 @@ import type { WorkspaceGroupWanted, WorkspaceTabWanted } from './browserWorkspac
 import { mirrorChromiumInto } from './browserMirror'
 import { RecallStore } from './knowledge/recall.ts'
 import { registerRecallIpc } from './knowledge/recallIpc.ts'
+import type { DeviceState } from '../shared/temporal/capability.ts'
+import { TemporalEngine } from './temporal/engine.ts'
+import { registerTemporalIpc } from './temporal/ipc.ts'
+import { makeRunners } from './temporal/runners.ts'
+import { TemporalStore } from './temporal/store.ts'
 import { FrontTabWatch, shouldReadNow } from './knowledge/recallCapture.ts'
 import { MAX_PAGE_TEXT, pageKey, recallPromptBlock } from '../shared/recall.ts'
 import { closedBrowserState, followChromiumTabs } from './browserState'
@@ -88,6 +93,7 @@ import type { RecorderCore } from './workflows/recorderCore'
 import { WorkflowEngine } from './workflows/engine'
 import { registerWorkflowIpc } from './workflows/ipc'
 import { askOrion, draftValidatedWorkflow } from './workflows/orion'
+import { looksLikeScheduleRequest, readRequest } from '../shared/temporal/phrase.ts'
 import type { WorkflowIssue } from '../shared/workflows'
 import { NotesStore } from './personal/notes'
 import { TasksStore } from './personal/tasks'
@@ -268,6 +274,8 @@ let memory: MemoryStore | null = null
 let recall: RecallStore | null = null
 /** The workflow engine, once it exists, so chat can schedule workflows in words. */
 let workflowEngine: WorkflowEngine | null = null
+/** Schedules, once they exist, so a schedule said in chat is kept rather than only talked about. */
+let schedulesForChat: { store: TemporalStore; engine: TemporalEngine; profileId: () => string } | null = null
 /** Galaxy and the workspaces store, once they exist, so chat can give Orion a project's outline when it is named. */
 let galaxyForChat: GalaxyService | null = null
 /** The secrets vault, once it exists, for the Chromium side panel (which never receives a value). */
@@ -651,6 +659,60 @@ function registerIpc(): void {
         }
         if (matches.length > 1) return reply(`More than one workflow matches “${scheduling.name}”: ${matches.slice(0, 5).map((w) => `“${w.name}”`).join(', ')}. Say the full name.`)
         // Not one of the person's workflows: carry on as an ordinary message.
+      }
+
+      /**
+       * Anything else said as a schedule: "remind me to stretch every hour", "open news.example every weekday at 8".
+       *
+       * Read strictly, and refused with a reason rather than guessed at -- a schedule that quietly means something
+       * else than what somebody asked for is worse than none, because they find out after the moment has passed.
+       *
+       * This runs after the workflow path above, which keeps the older behaviour exactly as it was: "run Morning
+       * briefing every Friday" still sets that workflow's own schedule.
+       */
+      if (last?.role === 'user' && !request.ask && schedulesForChat && looksLikeScheduleRequest(last.content)) {
+        const reading = readRequest(last.content, Date.now())
+        const reply = (text: string): void => {
+          emit({ type: 'delta', content: text })
+          emit({ type: 'done', model: request.model, truncated: false })
+        }
+        if (!reading.ok) {
+          /*
+           * Only answered when Orbis genuinely cannot do the thing.
+           *
+           * A phrase Orbis simply did not parse falls through to an ordinary reply, because being told "I could not
+           * find a time in that" for a sentence that was never a schedule request is worse than an ordinary answer.
+           */
+          if ('unsupported' in reading && reading.unsupported) {
+            const instead = reading.unsupported.instead ? ` ${reading.unsupported.instead}` : ''
+            return reply(`${reading.unsupported.because}${instead}`)
+          }
+        } else {
+          const kept = await schedulesForChat.store.add(
+            schedulesForChat.profileId(),
+            {
+              name: reading.said.slice(0, 80),
+              said: last.content.slice(0, 400),
+              action: reading.action,
+              schedule: reading.schedule,
+              policies: reading.policies,
+              conditions: reading.conditions
+            },
+            Date.now()
+          )
+          if (!kept.ok) return reply(kept.problems[0] ?? 'Orbis could not keep that schedule.')
+          void schedulesForChat.engine.tick()
+          const next = kept.job.nextRunAt
+          const nextText = next
+            ? new Date(next).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })
+            : null
+          const assumed = reading.assumedTime ? ' You did not say a time, so I chose one -- say a time to change it.' : ''
+          // The limitation is said every time, because it is the one thing that decides whether this was any use.
+          return reply(
+            `Done: ${reading.said}.${nextText ? ` Next: ${nextText}.` : ''}${assumed}` +
+              ' It runs on this computer with Orbis open; if Orbis is closed when it is due, I do it next time you open it and say how late it was.'
+          )
+        }
       }
 
       if (last?.role === 'user' && memory && !request.ask) {
@@ -2563,6 +2625,167 @@ if (!app.requestSingleInstanceLock()) {
       },
       broadcast: (channel, payload) => sendToWindow(channel, payload)
     })
+
+    /**
+     * Schedules: the clock above the engines that already do the work.
+     *
+     * Everything it can do needs this computer awake with Orbis running, because there is no Orbis server. That is
+     * said out loud rather than hidden -- `schedules:capabilities` is the one place any screen asks -- and nothing
+     * here pretends otherwise by, say, queueing something for a machine that is off.
+     */
+    const schedules = new TemporalStore(app.getPath('userData'))
+    app.on('before-quit', () => void schedules.flush())
+
+    const deviceNow = (): DeviceState => ({
+      orbisRunning: true,
+      browserRunning: chromiumBrowser?.isRunning ?? false,
+      networkAvailable: net.isOnline(),
+      /**
+       * Whether the connection is metered is not something Orbis can find out here.
+       *
+       * So "only on wifi" is treated as "only when connected", and the limitation is written down in `UNSUPPORTED`
+       * rather than left as a switch that appears to work and does nothing.
+       */
+      onUnmeteredNetwork: net.isOnline(),
+      onPower: !powerMonitor.onBatteryPower,
+      /*
+       * Electron does not report a charge level, and a made-up number is worse than none: null means "no battery
+       * check is possible", which `conditionsMet` treats as satisfied rather than as a flat battery.
+       */
+      batteryPercent: null,
+      idle: powerMonitor.getSystemIdleTime() > 300,
+      hasModelKey: GROQ_API_KEYS.length > 0
+    })
+
+    const scheduleProfile = async (): Promise<string> => (await profilesStore.active()).id
+    let scheduleProfileId = await scheduleProfile()
+    profilesStore.onChange(() => {
+      void scheduleProfile().then((id) => {
+        scheduleProfileId = id
+      })
+    })
+
+    const controlNow = async (capability: string, params: Record<string, unknown>) => {
+      const result = await browserControl!.control.execute(
+        { capability, params, source: 'user' },
+        { source: 'user', confirm: async () => true }
+      )
+      return result
+    }
+
+    const scheduleEngine = new TemporalEngine({
+      store: schedules,
+      activeProfile: () => scheduleProfileId,
+      device: deviceNow,
+      runners: makeRunners({
+        /*
+         * The same entry point, the same source, the same logging as anything else.
+         *
+         * Being on a schedule grants nothing: whatever is switched off in Settings is just as switched off at three
+         * in the morning, and a locked tab is still a locked tab.
+         */
+        execute: async (capability, params) => {
+          const result = await controlNow(capability, params)
+          return {
+            ok: result.ok,
+            detail: result.ok ? (result.verification?.detail ?? 'Done.') : (result.error?.message ?? 'It did not work.')
+          }
+        },
+        openTabs: async () => {
+          const listed = await controlNow('tabs.list', {})
+          const rows = Array.isArray(listed.data) ? (listed.data as Record<string, unknown>[]) : []
+          return rows
+            .filter((r) => typeof r.url === 'string')
+            .map((r) => ({ tabId: Number(r.id ?? r.tabId ?? -1), url: String(r.url) }))
+            .filter((r) => Number.isFinite(r.tabId) && r.tabId >= 0)
+        },
+        runWorkflow: async (idOrName) => {
+          if (!workflowEngine) return { ok: false, detail: 'Orbis has no workflows at the moment.' }
+          const all = (await workflowEngine.list()).filter((w) => w.status !== 'archived')
+          // By id first, then by name, because a schedule made from a sentence only ever had a name to go on.
+          const found =
+            all.find((w) => w.id === idOrName) ?? all.find((w) => w.name.toLowerCase() === idOrName.toLowerCase())
+          if (!found) return { ok: false, detail: 'There is no workflow called "' + idOrName + '" any more.' }
+          const run = await workflowEngine.run(found.id, { trigger: 'schedule' })
+          /*
+           * Waited for, rather than reported as done the moment it starts.
+           *
+           * The engine records a summary when a run finishes, so this watches for this run's own summary. Without
+           * that wait, a workflow that failed would be written down as a schedule that worked -- which is the one
+           * thing the scheduler must never do.
+           */
+          const deadline = Date.now() + 15 * 60_000
+          while (Date.now() < deadline) {
+            const summary = (await workflowEngine.history(found.id)).find((r) => r.runId === run.runId)
+            if (summary) {
+              return {
+                ok: summary.status === 'completed',
+                detail: summary.error?.message ?? 'Ran "' + found.name + '", ' + summary.stepsRun + ' steps.'
+              }
+            }
+            await new Promise((resolve) => setTimeout(resolve, 2000))
+          }
+          return { ok: false, detail: '"' + found.name + '" was still running after fifteen minutes.' }
+        },
+        ask: async (prompt) => {
+          const answer = await askOrion(
+            { prompt, expects: 'value', context: {} },
+            GROQ_API_KEYS,
+            fetchForOrion,
+            new AbortController().signal
+          )
+          return typeof answer.value === 'string' ? answer.value : JSON.stringify(answer.value ?? '')
+        },
+        workspace: async (idOrName) => {
+          const all = await workspacesStore.list()
+          const found =
+            all.find((w) => w.id === idOrName) ?? all.find((w) => w.name.toLowerCase() === idOrName.toLowerCase())
+          if (!found) return null
+          return {
+            tabs: found.tabs as unknown as Record<string, unknown>[],
+            groups: (found.groups ?? []) as unknown as Record<string, unknown>[]
+          }
+        },
+        openPage: async (pageId) => {
+          if (!mainWindow || mainWindow.isDestroyed()) return { ok: false, detail: 'The Orbis window is not open.' }
+          /*
+           * Resolved first, then handed to the window.
+           *
+           * Pages are hosted in the Orbis window, so opening one means asking the window -- but the Page is looked
+           * up here so that a Page which no longer exists is a plain failure with a reason, rather than a message
+           * sent into the window and reported as a success.
+           */
+          const resolved = await pages.open(scheduleProfileId, pageId)
+          if (!resolved.found) return { ok: false, detail: 'There is no Page at "' + pageId + '" any more.' }
+          sendToWindow('schedules:open-page', resolved.canonicalUrl)
+          return { ok: true, detail: 'Opened "' + resolved.page.manifest.title + '".' }
+        },
+        notify: (title, body) => {
+          // The same quiet hours and category switches as everything else. A schedule is not a reason to interrupt
+          // somebody at three in the morning after they have said not to.
+          const settings = experienceStore?.current().notifications
+          if (settings && !mayNotify(settings, 'workflows')) return
+          if (Notification.isSupported()) new Notification({ title, body, silent: false }).show()
+        }
+      }),
+      onChange: (job) => sendToWindow('schedules:changed', job),
+      onNotice: (job, body) => {
+        const settings = experienceStore?.current().notifications
+        if (settings && !mayNotify(settings, 'workflows')) return
+        if (Notification.isSupported()) new Notification({ title: job.name, body, silent: false }).show()
+      }
+    })
+    registerTemporalIpc({
+      store: schedules,
+      engine: scheduleEngine,
+      activeProfile: () => scheduleProfileId,
+      device: deviceNow,
+      getWindow: () => mainWindow,
+      send: (channel, ...args) => sendToWindow(channel, ...args)
+    })
+    schedulesForChat = { store: schedules, engine: scheduleEngine, profileId: () => scheduleProfileId }
+    scheduleEngine.start()
+    app.on('before-quit', () => scheduleEngine.stop())
 
     /** Orion Search sessions, saved per profile. Never read into or out of Orbis Chat. */
     const searchSessions = new SearchSessionStore(app.getPath('userData'), await stepProfile())

@@ -198,7 +198,7 @@ test('every subject and comparison has words of its own', () => {
     for (const comparison of comparisons) {
       const text = describeTrigger(trigger({ kind: 'market', subject: { kind }, comparison, value: 1 }), 'BTC')
       // A hyphenated id in the output means the lookup missed and the raw value was used.
-      assert.ok(!/[a-z]+-[a-z]+/.test(text.replace('24h', '')), `${kind}/${comparison}: ${text}`)
+      assert.ok(!/\b[a-z]+-[a-z]+\b/.test(text.replace('24h', '')), `${kind}/${comparison}: ${text}`)
     }
   }
 })

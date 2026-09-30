@@ -51,10 +51,13 @@ async function compute(pageId: string, operation: string, input: Record<string, 
 
 export default function PagesView({
   onClose,
-  onNotify
+  onNotify,
+  landOn
 }: {
   onClose(): void
   onNotify(message: string, kind?: NoticeKind): void
+  /** An address to open straight away, for when something other than a click asked for a Page -- a schedule, say. */
+  landOn?: string | null
 }): React.JSX.Element {
   const [screen, setScreen] = useState<Screen>({ kind: 'library' })
   const [pages, setPages] = useState<PageCard[]>([])
@@ -105,6 +108,28 @@ export default function PagesView({
       clearTimeout(timer)
     }
   }, [query])
+
+  const openAddress = useCallback(
+    async (url: string) => {
+      const result = await window.api.pagesOpen(url)
+      if ('error' in result) {
+        onNotify(result.message ?? 'That Page could not be opened', 'error')
+        return
+      }
+      if (!result.found) {
+        onNotify(result.message, 'error')
+        return
+      }
+      setScreen({ kind: 'page', page: result.page })
+      void load()
+    },
+    [load, onNotify]
+  )
+
+  // Asked for by something other than a click. Opened once per address, so a re-render does not reopen it.
+  useEffect(() => {
+    if (landOn) void openAddress(landOn)
+  }, [landOn, openAddress])
 
   const open = useCallback(
     async (page: PageCard) => {

@@ -122,6 +122,33 @@ export function readTime(text: string): TimeOfDay | null {
   return { hour, minute }
 }
 
+/**
+ * Whether a message is somebody asking for a schedule, as opposed to mentioning a time in passing.
+ *
+ * This gate exists because `readRequest` is strict about grammar but knows nothing about intent: "every day I open
+ * news.example and it is slow" has a rule and an action in it, and is plainly not a request to open it every day.
+ * Turning that into a schedule is the kind of mistake somebody finds out about the next morning.
+ *
+ * So a message has to *begin* like a request. Deliberately narrow: a missed request costs one more sentence, and a
+ * wrongly-created schedule costs a surprise.
+ */
+export function looksLikeScheduleRequest(message: string): boolean {
+  const text = message.trim().toLowerCase().replace(/\s+/g, ' ')
+  // A whole paragraph that happens to open with "every day" is prose, not an instruction.
+  if (text.length === 0 || text.length > 200) return false
+  /**
+   * A question is a question, and a sentence about oneself is a remark.
+   *
+   * "Every day I open news.example and it is slow" opens exactly like a request and is not one. Somebody asking for
+   * something says "remind me" or "open news.example"; describing what they do says "I". That one word separates the
+   * two more reliably than anything else short of understanding the sentence.
+   */
+  if (text.includes('?') || /\bi\b/.test(text)) return false
+  return /^(?:please\s+|can you\s+|could you\s+)?(?:remind me\b|remind\b|schedule\b|set (?:up )?a (?:schedule|reminder)\b|every\b|each (?:day|week|month|year|morning|evening|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b|daily\b|hourly\b|weekly\b|monthly\b|open\b|refresh\b|reload\b|run\b|close\b|ask orion\b|in \d|at \d|tomorrow\b|tonight\b|today\b|next (?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b|on (?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b)/.test(
+    text
+  )
+}
+
 export interface Understood {
   ok: true
   action: TemporalAction

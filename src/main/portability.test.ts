@@ -18,7 +18,7 @@ import { join } from 'node:path'
 const ROOT = join(import.meta.dirname, '..')
 
 /** Must never touch Electron: this is the part that moves to Chromium as it is. */
-const PORTABLE = ['shared', 'main/update', 'main/personal', 'main/experience', 'main/workflows', 'main/knowledge', 'helper', 'main/chromium']
+const PORTABLE = ['shared', 'main/update', 'main/personal', 'main/experience', 'main/workflows', 'main/knowledge', 'main/temporal', 'helper', 'main/chromium']
 
 /** Talks to the engine on purpose, and is rewritten against Chromium. Listed so the list itself stays honest. */
 const BROWSER_LAYER = new Set([
@@ -44,6 +44,10 @@ const BROWSER_LAYER = new Set([
   // coerces arguments and delegates. The index itself, the capture rules and every decision about what may be kept
   // are in files with no Electron in them, so the feature travels and this one file is rewritten as Mojo.
   'main/knowledge/recallIpc.ts',
+  // The adapter between schedules and however the application talks to its window. It coerces arguments and
+  // delegates; every decision about time, every policy and every refusal is in files with no Electron in them, so
+  // the scheduler travels and this one file is rewritten as Mojo.
+  'main/temporal/ipc.ts',
   'main/imagegen.ts',
   // The app's own library (shortcuts, address-bar memory) for the Orbis window.
   'main/libraryIpc.ts',

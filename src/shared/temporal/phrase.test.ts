@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { clockText, describeRecurrence, readRequest, readTime } from './phrase.ts'
+import { clockText, describeRecurrence, looksLikeScheduleRequest, readRequest, readTime } from './phrase.ts'
 import { nextOccurrence, type Recurrence } from './recurrence.ts'
 
 type Weekly = Extract<Recurrence, { kind: 'weekly' }>
@@ -378,4 +378,40 @@ test('every reading produces a schedule the scheduler will actually accept', () 
     if (!r.ok) continue
     assert.ok(nextOccurrence(r.schedule, NOW) !== null, `${phrase} has a next occurrence`)
   }
+})
+
+// ---------------------------------------------------------------- telling a request from a remark
+
+test('a message that mentions a time in passing is not a request for a schedule', () => {
+  /**
+   * The gate that keeps the chat path honest. Each of these has a rule and an action somewhere in it, and turning
+   * any of them into a schedule is a surprise somebody discovers the next morning.
+   */
+  for (const remark of [
+    'every day I open news.example and it is slow',
+    'I used to refresh status.example every 30 minutes but I stopped',
+    'why does orbis open news.example every morning',
+    'the meeting is every monday at 9am, is that in my calendar',
+    'thanks, that worked'
+  ]) {
+    assert.equal(looksLikeScheduleRequest(remark), false, remark)
+  }
+})
+
+test('a message that begins like a request is treated as one', () => {
+  for (const request of [
+    'remind me to stretch every hour',
+    'every weekday at 8am open news.example',
+    'please remind me to pay rent every month on the 1st',
+    'open news.example every morning',
+    'in 20 minutes remind me to check the oven',
+    'tomorrow at 9am remind me to call the dentist'
+  ]) {
+    assert.equal(looksLikeScheduleRequest(request), true, request)
+  }
+})
+
+test('a paragraph that happens to start with a rule is prose, not an instruction', () => {
+  const essay = 'every day at 8am ' + 'something happens and then a great deal more happens after that, '.repeat(6)
+  assert.equal(looksLikeScheduleRequest(essay), false)
 })

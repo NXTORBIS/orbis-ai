@@ -27,6 +27,7 @@ const WhiteboardView = lazy(() => import('./components/WhiteboardView'))
 const PagesView = lazy(() => import('./components/PagesView'))
 const ClipboardView = lazy(() => import('./components/ClipboardView'))
 const WorkspacesView = lazy(() => import('./components/WorkspacesView'))
+const SchedulesView = lazy(() => import('./components/SchedulesView'))
 import { ActivityPanel, ShortcutsModal, ToastStack } from './components/Overlays'
 import SettingsModal from './components/SettingsModal'
 import WelcomeExperience from './components/WelcomeExperience'
@@ -303,6 +304,23 @@ export default function App(): React.JSX.Element {
   useEffect(load, [load])
   // Settings changed through the Browser Control Layer show up straight away.
   useEffect(() => window.api.onSettingsChanged(setSettings), [])
+
+  /**
+   * A schedule asked for one of Orbis's own Pages.
+   *
+   * Pages are hosted in this window, so this is where one actually opens. The address arrives already resolved, so
+   * nothing here decides whether the Page exists.
+   */
+  const [scheduledPage, setScheduledPage] = useState<string | null>(null)
+  useEffect(
+    () =>
+      window.api.onScheduleOpenPage((url) => {
+        setScheduledPage(url)
+        setFeature('pages')
+        setImagesOpen(false)
+      }),
+    []
+  )
 
   // "Open browser on launch": checked once, when settings first arrive and the welcome screen is out of the way, so
   // switching the setting on later doesn't pop the browser open mid-session.
@@ -1383,11 +1401,12 @@ export default function App(): React.JSX.Element {
           )}
           {feature && (
             <Suspense fallback={<div className="feature-loading" role="status">Opening…</div>}>
-              {feature === 'pages' && <PagesView onClose={closeFeature} onNotify={notify} />}
+              {feature === 'pages' && <PagesView onClose={closeFeature} onNotify={notify} landOn={scheduledPage} />}
               {feature === 'markets' && <MarketsView onClose={closeFeature} onNotify={notify} />}
               {feature === 'whiteboard' && <WhiteboardView onClose={closeFeature} onNotify={notify} />}
               {feature === 'clipboard' && <ClipboardView onClose={closeFeature} onNotify={notify} />}
               {feature === 'workspaces' && <WorkspacesView onClose={closeFeature} onNotify={notify} />}
+              {feature === 'schedules' && <SchedulesView onClose={closeFeature} onNotify={notify} />}
             </Suspense>
           )}
         </main>

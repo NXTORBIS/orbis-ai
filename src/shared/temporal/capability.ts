@@ -157,6 +157,13 @@ export const UNSUPPORTED: readonly Unsupported[] = Object.freeze([
     instead: 'Orbis records the moment each run actually happened, so nothing is guessed about afterwards.'
   },
   {
+    ask: 'Only run when I am on wifi.',
+    because:
+      'Orbis cannot tell a metered connection from an unmetered one on this computer. It can only tell whether' +
+      ' you are connected at all.',
+    instead: 'Orbis will run it whenever there is a connection.'
+  },
+  {
     ask: 'Buy, sell or transfer anything on a schedule.',
     because: 'Orbis will not move money or place an order, whether asked now or asked for later.',
     instead: 'Orbis can open the page at that moment so you can decide then.'
@@ -182,7 +189,7 @@ export function findUnsupported(said: string): Unsupported | null {
     [['email', 'e-mail', 'mail to', 'send an email'], 2],
     [['calendar', 'google cal', 'outlook'], 3],
     [['computer is off', 'laptop is off', 'while im asleep', "while i'm asleep", 'when my pc is off', 'shut down'], 0],
-    [['buy ', 'sell ', 'transfer ', 'invest ', 'order '], 6]
+    [['buy ', 'sell ', 'transfer ', 'invest ', 'order '], 7]
   ]
   for (const [words, index] of groups) {
     if (words.some((w) => text.includes(w))) return UNSUPPORTED[index]

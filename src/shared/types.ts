@@ -25,6 +25,9 @@ import type { StepRunView } from './stepPlan'
 import type { Feed, Weather } from './widgetData'
 import type { SpecializedOutcome } from './searchProviders'
 import type { VoiceErrorCode, VoiceModel } from './voiceInput'
+import type { DeviceState } from './temporal/capability'
+import type { JobCondition, JobPolicies, TemporalAction, TemporalJob } from './temporal/job'
+import type { Schedule } from './temporal/recurrence'
 import type { LockTrigger, TabLockPolicy } from './tabLock'
 import type { ProfileLockPolicy } from './profileLock'
 import type { SecurityEvent } from './securityEvents'
@@ -598,6 +601,80 @@ export interface NxtorbisApi {
   memorySettings(): Promise<MemorySettings>
   setMemorySettings(next: Partial<MemorySettings>): Promise<MemorySettings>
   onMemoryChanged(listener: () => void): () => void
+
+  // ---------------------------------------------------------------- schedules
+  /** Every schedule in this profile, with its state, what it is next due to do, and what it has done. */
+  listSchedules(): Promise<TemporalJob[]>
+  /** Keeps a new schedule, or refuses it with every reason at once so a form can show them together. */
+  addSchedule(job: {
+    name: string
+    said?: string
+    action: TemporalAction
+    schedule: Schedule
+    policies?: Partial<JobPolicies>
+    conditions?: JobCondition[]
+    startPaused?: boolean
+  }): Promise<{ ok: true; job: TemporalJob } | { ok: false; problems: string[] }>
+  /** Changes part of a schedule, keeping the rest. A patch, never a replacement. */
+  updateSchedule(
+    jobId: string,
+    patch: {
+      name?: string
+      action?: TemporalAction
+      schedule?: Schedule
+      conditions?: JobCondition[]
+      policies?: Partial<JobPolicies>
+    }
+  ): Promise<{ ok: true; job: TemporalJob } | { ok: false; problems: string[] }>
+  /** Off until switched on, or until a moment. */
+  pauseSchedule(jobId: string, until?: number | null): Promise<TemporalJob | null>
+  resumeSchedule(jobId: string): Promise<TemporalJob | null>
+  /** Stops it for good without deleting its history. */
+  cancelSchedule(jobId: string): Promise<TemporalJob | null>
+  removeSchedule(jobId: string): Promise<boolean>
+  /** Leaves out one occurrence without touching the rule. */
+  skipNextRun(jobId: string, dueAt: number): Promise<TemporalJob | null>
+  /** Runs it now, leaving the schedule alone. For seeing what it does before trusting it. */
+  runScheduleNow(jobId: string): Promise<{ ok: boolean; job?: TemporalJob | null; problems?: string[] }>
+  /**
+   * Reads a phrase without saving anything, so what Orbis understood can be shown back first.
+   *
+   * A refusal carries its reason, and something Orbis genuinely cannot do carries what it cannot do and the nearest
+   * thing it can.
+   */
+  readSchedulePhrase(
+    phrase: string,
+    zone?: string
+  ): Promise<
+    | {
+        ok: true
+        action: TemporalAction
+        schedule: Schedule
+        policies: JobPolicies
+        conditions: JobCondition[]
+        said: string
+        assumedTime: boolean
+        preview: { at: number; resolution: 'exact' | 'skipped' | 'ambiguous' }[]
+      }
+    | { ok: false; why: string; unsupported?: { ask: string; because: string; instead: string | null } }
+  >
+  /** What a rule will actually do, so "every month on the 31st" can be checked rather than trusted. */
+  previewSchedule(
+    schedule: Schedule,
+    count?: number
+  ): Promise<{ occurrences: { at: number; resolution: 'exact' | 'skipped' | 'ambiguous' }[]; said: string }>
+  /** What Orbis can and cannot promise about schedules, in one place so every screen says the same thing. */
+  scheduleCapabilities(): Promise<{
+    zone: string
+    device: DeviceState
+    unsupported: { ask: string; because: string; instead: string | null }[]
+    needsThisComputer: boolean
+  }>
+  /** The honest answer to "will this run while my computer is off?". */
+  canRunWithComputerOff(action: TemporalAction): Promise<string>
+  onSchedulesChanged(listener: (job: TemporalJob) => void): () => void
+  /** A schedule asked for one of Orbis's own Pages. The address is already resolved. */
+  onScheduleOpenPage(listener: (url: string) => void): () => void
 
   // ---------------------------------------------------------------- the pages this person has read
   /** What is stored and what the settings are: the one call a screen needs to draw itself. */

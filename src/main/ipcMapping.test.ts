@@ -238,5 +238,9 @@ test('the boundary is a known size, so the migration can be estimated rather tha
   // 450 → 451: returning to the chat from the chat's own side, now that the browser is a separate window rather than
   // a view inside this one. The browser's toolbar could always do it; the sidebar could not, because hiding a window
   // this process owns is not something the renderer can do by collapsing a view.
-  assert.ok(code.length <= 451, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
+  // 452 → 464: schedules. Twelve, and most of them are about not promising anything. Three read a phrase or a rule
+  // without saving it, so what Orbis understood is shown back before a schedule exists; two answer what Orbis cannot
+  // do, in one place, because there is no Orbis server and nothing runs with this computer off. None of them carries
+  // a command: a schedule names something Orbis already does, and gains no permission by being scheduled.
+  assert.ok(code.length <= 464, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
 })

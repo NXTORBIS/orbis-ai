@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import type { SettingsSectionId } from '../../../shared/settingsSections'
 import {
+  CalendarClock,
   CandlestickChart,
   ChevronDown,
   ChevronRight,
@@ -74,14 +75,15 @@ interface Props {
  * is left either needs a canvas the browser does not have, or is not about browsing at all. Customize and Profiles are
  * not here because they are settings, and they are in Settings.
  */
-export type FeatureId = 'pages' | 'markets' | 'whiteboard' | 'clipboard' | 'workspaces'
+export type FeatureId = 'pages' | 'markets' | 'whiteboard' | 'clipboard' | 'workspaces' | 'schedules'
 
 export const FEATURES: { id: FeatureId; label: string; icon: LucideIcon; hint: string }[] = [
   { id: 'pages', label: 'Pages', icon: LayoutTemplate, hint: "Orbis's own tools, each with its own address" },
   { id: 'markets', label: 'Markets', icon: CandlestickChart, hint: 'Live crypto prices, charts and watchlists' },
   { id: 'whiteboard', label: 'Whiteboard', icon: PenTool, hint: 'Room to think' },
   { id: 'clipboard', label: 'Clipboard', icon: ClipboardList, hint: 'What you have copied' },
-  { id: 'workspaces', label: 'Workspaces', icon: LayoutGrid, hint: 'Sets of tabs, kept together' }
+  { id: 'workspaces', label: 'Workspaces', icon: LayoutGrid, hint: 'Sets of tabs, kept together' },
+  { id: 'schedules', label: 'Schedules', icon: CalendarClock, hint: 'Things Orbis does at a time you chose' }
 ]
 
 interface NavItem {

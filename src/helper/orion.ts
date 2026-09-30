@@ -49,7 +49,7 @@ const MAX_ASK = 4000
  * In a browser the picture to look at is the page. So when somebody asks what is shown, Orbis takes the page as an
  * image and gives Orion that, instead of answering from the text and hoping they meant the same thing.
  */
-const LOOKS_VISUAL = /\b(what (is|are) (shown|this|these)|look(s|ing)? like|in (this|the) (image|picture|photo|screenshot|diagram|chart|graph)|read (this|the) (chart|graph|diagram)|describe (this|the) (page|image|screen)|see (this|the)|colou?rs?|layout)\b/i
+const LOOKS_VISUAL = /\b(what (is|are) (shown|this|these)|look(s|ing)? like|in (this|the) (image|picture|photo|screenshot|diagram|chart|graph)|read (this|the) (chart|graph|diagram)|describe (this|the) (page|image|screen)|see (this|the)|colou?rs?|layout)\b/i
 
 /** The page as an image, for a question about how it looks. Null when there is no page or the capture fails. */
 async function pageImage(host: BrowserHost | null | undefined): Promise<string | null> {
