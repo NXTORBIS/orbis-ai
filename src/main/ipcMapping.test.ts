@@ -245,5 +245,6 @@ test('the boundary is a known size, so the migration can be estimated rather tha
   // 464 → 466: what this computer can be woken from, and hibernating it. The first reads and changes nothing; the
   // second is the one action that turns "my computer was off" into something Orbis can do anything about, because a
   // hibernated computer can be woken for a schedule and a switched-off one cannot.
-  assert.ok(code.length <= 466, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
+  // 466 → 467: what is coming, across every schedule at once.
+  assert.ok(code.length <= 467, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
 })

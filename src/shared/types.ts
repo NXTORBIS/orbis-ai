@@ -689,6 +689,10 @@ export interface NxtorbisApi {
   /** The honest answer to "will this run while my computer is off?". */
   canRunWithComputerOff(action: TemporalAction): Promise<string>
   onSchedulesChanged(listener: (job: TemporalJob) => void): () => void
+  /** Everything due in the next few days, across every schedule, oldest first. Bounded. */
+  upcomingSchedules(days?: number): Promise<
+    { jobId: string; name: string; at: number; resolution: 'exact' | 'skipped' | 'ambiguous'; paused: boolean }[]
+  >
   /**
    * What this computer can actually be woken from, read from the computer rather than assumed.
    *

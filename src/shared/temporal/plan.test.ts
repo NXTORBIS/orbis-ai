@@ -3,7 +3,7 @@ import test from 'node:test'
 import type { DeviceState } from './capability.ts'
 import { answerAboutOffline, conditionsMet, readiness, requirementsOf, UNSUPPORTED, findUnsupported } from './capability.ts'
 import { canMove, checkJob, DEFAULT_POLICIES, occurrenceKey, TEMPORAL_FORMAT, withExecution, type ExecutionRecord, type TemporalJob } from './job.ts'
-import { decide, nextWake, stateAfter, TICK_MS } from './plan.ts'
+import { decide, nextWake, stateAfter, TICK_MS, upcomingAcross } from './plan.ts'
 
 /**
  * What the scheduler decides, and what it refuses to claim.
@@ -504,4 +504,62 @@ test('being asleep and being switched off are answered differently', () => {
   assert.notEqual(asleep.because, off.because)
   assert.match(asleep.because, /can be woken/)
   assert.match(off.because, /no Orbis server/)
+})
+
+// ---------------------------------------------------------------- what is coming
+
+test('everything due this week comes back as one list, oldest first', () => {
+  /**
+   * Worked out across every schedule rather than one at a time, because "what is my week like" answered per schedule
+   * gives a list nobody can read.
+   */
+  const daily = job({ jobId: 'a', name: 'Morning news' })
+  const weekly = job({
+    jobId: 'b',
+    name: 'Weekly review',
+    schedule: { recurrence: { kind: 'weekly', weekdays: [5], time: { hour: 17, minute: 0 } }, timeZone: 'UTC' }
+  })
+  const coming = upcomingAcross([daily, weekly], NOW, NOW + 7 * 86_400_000)
+
+  assert.ok(coming.length > 7)
+  for (let i = 1; i < coming.length; i++) assert.ok(coming[i].at >= coming[i - 1].at, 'in order')
+  assert.ok(coming.some((c) => c.jobId === 'a'))
+  assert.ok(coming.some((c) => c.jobId === 'b'))
+})
+
+test('a paused schedule is shown rather than hidden, and marked as paused', () => {
+  // "Why has this stopped happening" is a real question, and a list that silently omits it cannot answer it.
+  const coming = upcomingAcross([job({ state: 'paused' })], NOW, NOW + 3 * 86_400_000)
+  assert.ok(coming.length > 0)
+  assert.equal(coming[0].paused, true)
+})
+
+test('a stopped schedule is not in the list at all', () => {
+  assert.deepEqual(upcomingAcross([job({ state: 'cancelled' })], NOW, NOW + 86_400_000), [])
+})
+
+test('an occurrence somebody skipped is left out', () => {
+  const at = Date.UTC(2026, 5, 16, 8, 0)
+  const coming = upcomingAcross([job({ skipped: [at] })], NOW, NOW + 3 * 86_400_000)
+  assert.ok(!coming.some((c) => c.at === at))
+})
+
+test('the list is bounded, so a one-minute schedule cannot swamp it', () => {
+  const often = job({
+    schedule: { recurrence: { kind: 'interval', everyMinutes: 1, from: NOW }, timeZone: 'UTC' }
+  })
+  const coming = upcomingAcross([often, job({ jobId: 'b' })], NOW, NOW + 7 * 86_400_000, { perJob: 5, total: 8 })
+  assert.ok(coming.length <= 8)
+  // And the cap is per schedule as well as overall, so one noisy schedule does not crowd the others out.
+  assert.ok(coming.some((c) => c.jobId === 'b'), 'the quieter schedule is still represented')
+})
+
+test('a clock change is carried through, so a run that moves can be shown as moving', () => {
+  const newYork = job({
+    schedule: { recurrence: { kind: 'daily', time: { hour: 2, minute: 30 } }, timeZone: 'America/New_York' },
+    createdAt: Date.UTC(2026, 2, 1)
+  })
+  const coming = upcomingAcross([newYork], Date.UTC(2026, 2, 7), Date.UTC(2026, 2, 10))
+  // 2:30am does not exist on 8 March in New York, and that is reported rather than quietly shifted.
+  assert.ok(coming.some((c) => c.resolution === 'skipped'), coming.map((c) => c.resolution).join(','))
 })

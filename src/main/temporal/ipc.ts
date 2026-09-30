@@ -3,6 +3,7 @@ import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
 import { UNSUPPORTED, answerAboutOffline, type DeviceState } from '../../shared/temporal/capability.ts'
 import type { JobCondition, JobPolicies, TemporalAction } from '../../shared/temporal/job.ts'
 import { occurrencesBetween, type Schedule } from '../../shared/temporal/recurrence.ts'
+import { upcomingAcross } from '../../shared/temporal/plan.ts'
 import { describe, readRequest } from '../../shared/temporal/phrase.ts'
 import { deviceZone } from '../../shared/temporal/zone.ts'
 import type { TemporalEngine } from './engine.ts'
@@ -141,6 +142,18 @@ export function registerTemporalIpc(o: TemporalIpcOptions): void {
    * It changes nothing: not a power setting, not a firmware setting. Which settings a computer uses is its owner's
    * business, and a wrong write to a firmware settings area can leave a machine that will not start.
    */
+  /**
+   * Everything due in the next few days, across every schedule.
+   *
+   * One call rather than one per schedule, because the question somebody actually has is "what is my week like", and
+   * answering that a schedule at a time gives a list nobody can read.
+   */
+  handle('schedules:upcoming', async (_e, days) => {
+    const span = Math.min(Math.max(Number(days) || 7, 1), 90)
+    const now = Date.now()
+    return upcomingAcross(await o.store.all(profile()), now, now + span * 86_400_000)
+  })
+
   handle('schedules:power', () => readPower())
 
   /**

@@ -241,3 +241,50 @@ export function nextWake(decisions: readonly Decision[], now: number): number | 
   }
   return soonest
 }
+
+// ---------------------------------------------------------------- what is coming
+
+export interface Upcoming {
+  jobId: string
+  name: string
+  at: number
+  /** What the clocks will do to it, so a run that moves by an hour can be shown as moving rather than as wrong. */
+  resolution: 'exact' | 'skipped' | 'ambiguous'
+  /** Whether this one is currently switched off, so a paused job can be shown greyed rather than hidden. */
+  paused: boolean
+}
+
+/**
+ * Everything that is due between two moments, across every schedule, oldest first.
+ *
+ * Worked out here rather than per job in whatever is drawing it, because the useful question is "what is my week
+ * like", and answering that one schedule at a time gives a list nobody can read. Bounded, because a one-minute
+ * interval over a week is ten thousand moments and nobody asked for that.
+ */
+export function upcomingAcross(
+  jobs: readonly TemporalJob[],
+  from: number,
+  to: number,
+  options: { perJob?: number; total?: number } = {}
+): Upcoming[] {
+  const perJob = options.perJob ?? 20
+  const total = options.total ?? 100
+  const out: Upcoming[] = []
+
+  for (const job of jobs) {
+    // Cancelled schedules are history; a paused one is shown, because "why has this stopped" is a real question.
+    if (job.state === 'cancelled') continue
+    for (const occurrence of occurrencesBetween(job.schedule, from, to, perJob)) {
+      if (job.skipped.includes(occurrence.at)) continue
+      out.push({
+        jobId: job.jobId,
+        name: job.name,
+        at: occurrence.at,
+        resolution: occurrence.resolution,
+        paused: job.state === 'paused'
+      })
+    }
+  }
+
+  return out.sort((a, b) => a.at - b.at).slice(0, total)
+}

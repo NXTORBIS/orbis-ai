@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Ban, BatteryCharging, CalendarClock, Check, Clock, Info, Moon, Pause, Play, Plus, SkipForward, Trash2, Zap } from 'lucide-react'
+import { AlertTriangle, Ban, BatteryCharging, CalendarClock, CalendarDays, Check, Clock, Info, Moon, Pause, Pencil, Play, Plus, SkipForward, Trash2, Zap } from 'lucide-react'
 import type { TemporalJob } from '../../../shared/temporal/job'
 import { describeAction, describeRecurrence } from '../../../shared/temporal/phrase'
 import type { NoticeKind } from '../App'
@@ -32,6 +32,7 @@ interface Capabilities {
 
 type Reading = Awaited<ReturnType<typeof window.api.readSchedulePhrase>>
 type Power = Awaited<ReturnType<typeof window.api.schedulePower>>
+type Coming = Awaited<ReturnType<typeof window.api.upcomingSchedules>>
 
 const EXAMPLES = [
   'remind me to stretch every hour',
@@ -101,9 +102,16 @@ export default function SchedulesView({
   const [power, setPower] = useState<Power | null>(null)
   const [showPower, setShowPower] = useState(false)
   const [hibernating, setHibernating] = useState(false)
+  const [coming, setComing] = useState<Coming>([])
+  const [showComing, setShowComing] = useState(false)
+  /** The schedule being edited, and the sentence being retyped for it. */
+  const [editing, setEditing] = useState<{ jobId: string; name: string; phrase: string } | null>(null)
   const [open, setOpen] = useState<string | null>(null)
 
-  const load = async (): Promise<void> => setJobs(await window.api.listSchedules())
+  const load = async (): Promise<void> => {
+    setJobs(await window.api.listSchedules())
+    setComing(await window.api.upcomingSchedules(7))
+  }
 
   useEffect(() => {
     void load()
@@ -163,6 +171,15 @@ export default function SchedulesView({
           <button
             type="button"
             className="icon-btn"
+            aria-label="What is coming"
+            aria-pressed={showComing}
+            onClick={() => setShowComing((s) => !s)}
+          >
+            <CalendarDays size={15} />
+          </button>
+          <button
+            type="button"
+            className="icon-btn"
             aria-label="Waking this computer"
             aria-pressed={showPower}
             onClick={() => setShowPower((s) => !s)}
@@ -195,6 +212,44 @@ export default function SchedulesView({
           different again depending on settings nobody remembers making. Nothing here changes a setting: where a
           change is needed it is named, and where nothing can change it that is said plainly.
         */}
+        {/*
+          What is actually coming, across every schedule.
+
+          Worth its own list because a rule read back in words is not the same as seeing that two of them land at
+          eight in the morning on Thursday. A run the clocks will move is marked, rather than appearing an hour out.
+        */}
+        {showComing && (
+          <div className="sched-coming">
+            <h3>The next seven days</h3>
+            {coming.length === 0 ? (
+              <p className="view-muted">Nothing is due in the next seven days.</p>
+            ) : (
+              <ol>
+                {coming.map((one) => (
+                  <li key={`${one.jobId}-${one.at}`} className={one.paused ? 'sched-coming-paused' : undefined}>
+                    <span className="sched-coming-when">
+                      {new Date(one.at).toLocaleString(undefined, {
+                        weekday: 'short',
+                        day: 'numeric',
+                        month: 'short',
+                        hour: 'numeric',
+                        minute: '2-digit'
+                      })}
+                    </span>
+                    <span className="sched-coming-name">{one.name}</span>
+                    {one.paused && <span className="sched-coming-tag">paused</span>}
+                    {one.resolution !== 'exact' && (
+                      <span className="sched-coming-tag">
+                        {one.resolution === 'skipped' ? 'clocks go forward' : 'clocks go back'}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
+        )}
+
         {showPower && power && (
           <div className="sched-power">
             <h3>Waking this computer</h3>
@@ -349,6 +404,16 @@ export default function SchedulesView({
                       <Pause size={14} />
                     </button>
                   )}
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    aria-label={`Change ${job.name}`}
+                    onClick={() =>
+                      setEditing(editing?.jobId === job.jobId ? null : { jobId: job.jobId, name: job.name, phrase: job.said })
+                    }
+                  >
+                    <Pencil size={14} />
+                  </button>
                   {job.nextRunAt !== null && (
                     <button
                       type="button"
@@ -363,6 +428,181 @@ export default function SchedulesView({
                     <Trash2 size={14} />
                   </button>
                 </div>
+
+                {editing?.jobId === job.jobId && (
+                  <div className="sched-edit">
+                    <label>
+                      <span className="view-muted">Name</span>
+                      <input
+                        value={editing.name}
+                        maxLength={120}
+                        onChange={(e) => setEditing({ ...editing, name: e.target.value })}
+                        aria-label={`Name for ${job.name}`}
+                      />
+                    </label>
+                    <label>
+                      <span className="view-muted">When, and what</span>
+                      <input
+                        value={editing.phrase}
+                        placeholder={job.said || 'e.g. every weekday at 8am'}
+                        onChange={(e) => setEditing({ ...editing, phrase: e.target.value })}
+                        aria-label={`When ${job.name} happens`}
+                      />
+                    </label>
+
+                    {/*
+                      Two kinds of change, kept apart.
+
+                      A name is just a name. Changing when or what means reading a sentence again, and that is only
+                      applied when it reads cleanly -- otherwise the schedule is left exactly as it was rather than
+                      half-changed into something nobody asked for.
+                    */}
+                    <div className="sched-edit-row">
+                      <button
+                        type="button"
+                        className="queue-btn primary"
+                        onClick={() => {
+                          const phrase = editing.phrase.trim()
+                          const rename = editing.name.trim()
+                          void (async () => {
+                            if (phrase && phrase !== job.said) {
+                              const reread = await window.api.readSchedulePhrase(phrase)
+                              if (!reread.ok) {
+                                onNotify(reread.why, 'error')
+                                return
+                              }
+                              const saved = await window.api.updateSchedule(job.jobId, {
+                                name: rename || reread.said.slice(0, 80),
+                                action: reread.action,
+                                schedule: reread.schedule,
+                                conditions: reread.conditions
+                              })
+                              if (!saved.ok) {
+                                onNotify(saved.problems[0] ?? 'Orbis could not change that.', 'error')
+                                return
+                              }
+                              onNotify(`Changed: ${reread.said}`)
+                            } else if (rename && rename !== job.name) {
+                              const saved = await window.api.updateSchedule(job.jobId, { name: rename })
+                              if (!saved.ok) {
+                                onNotify(saved.problems[0] ?? 'Orbis could not change that.', 'error')
+                                return
+                              }
+                            }
+                            setEditing(null)
+                            await load()
+                          })()
+                        }}
+                      >
+                        <Check size={14} /> Save
+                      </button>
+                      <button type="button" className="queue-btn small" onClick={() => setEditing(null)}>
+                        Cancel
+                      </button>
+                    </div>
+
+                    {/* Snoozing, which is a pause with an end rather than a different idea. */}
+                    <div className="sched-edit-row">
+                      <span className="view-muted">Snooze</span>
+                      {[
+                        ['1 hour', 3_600_000],
+                        ['Until tomorrow', 86_400_000],
+                        ['A week', 7 * 86_400_000]
+                      ].map(([label, ms]) => (
+                        <button
+                          key={String(label)}
+                          type="button"
+                          className="queue-btn small"
+                          onClick={() => {
+                            void window.api.pauseSchedule(job.jobId, Date.now() + Number(ms)).then(() => {
+                              setEditing(null)
+                              onNotify(`“${job.name}” is paused for ${String(label).toLowerCase()}.`)
+                              return load()
+                            })
+                          }}
+                        >
+                          {String(label)}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* What to do about a run that was missed, and about one that fails. */}
+                    <div className="sched-edit-row">
+                      <span className="view-muted">If Orbis was not running</span>
+                      {(
+                        [
+                          ['Run it late', 'runWhenAvailable'],
+                          ['Only if recent', 'withinWindow'],
+                          ['Let it go', 'skip']
+                        ] as const
+                      ).map(([label, value]) => (
+                        <button
+                          key={value}
+                          type="button"
+                          className="queue-btn small"
+                          aria-pressed={job.policies.missed === value}
+                          onClick={() => void window.api.updateSchedule(job.jobId, { policies: { missed: value } }).then(load)}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="sched-edit-row">
+                      <span className="view-muted">If several were missed</span>
+                      {(
+                        [
+                          ['Just the last', 'latestOnly'],
+                          ['All of them', 'all'],
+                          ['None', 'nextOnly']
+                        ] as const
+                      ).map(([label, value]) => (
+                        <button
+                          key={value}
+                          type="button"
+                          className="queue-btn small"
+                          aria-pressed={job.policies.catchUp === value}
+                          onClick={() => void window.api.updateSchedule(job.jobId, { policies: { catchUp: value } }).then(load)}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="sched-edit-row">
+                      <span className="view-muted">If it does not work</span>
+                      {(
+                        [
+                          ['Try 3 times', 3],
+                          ['Try once', 1],
+                          ['Do not retry', 0]
+                        ] as const
+                      ).map(([label, attempts]) => (
+                        <button
+                          key={label}
+                          type="button"
+                          className="queue-btn small"
+                          aria-pressed={
+                            attempts === 0
+                              ? job.policies.retry.kind === 'none'
+                              : job.policies.retry.kind === 'backoff' && job.policies.retry.attempts === attempts
+                          }
+                          onClick={() =>
+                            void window.api
+                              .updateSchedule(job.jobId, {
+                                policies: {
+                                  retry: attempts === 0 ? { kind: 'none' } : { kind: 'backoff', attempts, firstDelayMs: 30_000 }
+                                }
+                              })
+                              .then(load)
+                          }
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {open === job.jobId && (
                   <div className="sched-detail">

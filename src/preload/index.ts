@@ -353,6 +353,7 @@ const api: NxtorbisApi = {
   scheduleCapabilities: () => ipcRenderer.invoke('schedules:capabilities'),
   canRunWithComputerOff: (action) => ipcRenderer.invoke('schedules:can-run-offline', action),
   onSchedulesChanged: (listener) => subscribe('schedules:changed', listener),
+  upcomingSchedules: (days) => ipcRenderer.invoke('schedules:upcoming', days),
   // What this computer can be woken from, and hibernating it so that it can be. Neither changes a setting.
   schedulePower: () => ipcRenderer.invoke('schedules:power'),
   hibernateNow: () => ipcRenderer.invoke('schedules:hibernate'),

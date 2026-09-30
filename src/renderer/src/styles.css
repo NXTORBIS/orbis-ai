@@ -20460,3 +20460,116 @@ html[data-motion='reduced'] .tool-btn.recording {
   flex: 1;
   min-width: 180px;
 }
+
+/* ---- what is coming, and changing a schedule */
+
+.sched-coming {
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.sched-coming h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.sched-coming p {
+  margin: 0;
+}
+
+.sched-coming ol {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  /* Long enough to be useful, short enough not to become the whole screen. */
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.sched-coming li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.sched-coming-when {
+  color: var(--faint);
+  /* Fixed width so the names line up and the list reads as a column rather than a paragraph. */
+  flex: none;
+  min-width: 140px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sched-coming-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sched-coming-paused {
+  opacity: 0.55;
+}
+
+.sched-coming-tag {
+  flex: none;
+  font-size: 10.5px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--glass-border);
+  color: var(--faint);
+}
+
+.sched-edit {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+  margin-top: 6px;
+  border-top: 1px solid var(--glass-border);
+}
+
+.sched-edit label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11.5px;
+}
+
+.sched-edit input {
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  padding: 7px 10px;
+  outline: none;
+}
+
+.sched-edit input:focus-visible {
+  border-color: var(--cyan);
+}
+
+.sched-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 11.5px;
+}
+
+.sched-edit-row > span:first-child {
+  min-width: 150px;
+}
+
+/* The chosen one of a set, so a row of choices reads as a setting rather than as buttons. */
+.sched-edit-row .queue-btn[aria-pressed='true'] {
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
