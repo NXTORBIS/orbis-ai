@@ -123,6 +123,7 @@ export default function MarketStrip({ suppressed = false }: MarketStripProps): R
 
   const enabled = config?.enabled === true
   const showing = enabled && !suppressed
+  const height = config?.height ?? TICKER_HEIGHTS.compact
 
   // ---------------------------------------------------------------- what it draws
 
@@ -217,6 +218,26 @@ export default function MarketStrip({ suppressed = false }: MarketStripProps): R
       watcher.disconnect()
     }
   }, [showing, items.length, copies])
+
+  /**
+   * Telling the rest of the window how much room to leave.
+   *
+   * The strip takes its height rather than covering what is underneath: floating over it put the band straight across
+   * the account chip at the foot of the sidebar, cutting the name and the help button in half. Written as a variable on
+   * the document so one number reaches every part of the layout, and removed entirely when there is no strip, so a
+   * window without one is exactly the window it was before.
+   */
+  useEffect(() => {
+    const root = document.documentElement
+    if (!showing) {
+      root.style.removeProperty('--mstrip-reserved')
+      return
+    }
+    root.style.setProperty('--mstrip-reserved', `${height}px`)
+    return () => {
+      root.style.removeProperty('--mstrip-reserved')
+    }
+  }, [showing, height])
 
   // ---------------------------------------------------------------- the moving part
 
@@ -320,7 +341,6 @@ export default function MarketStrip({ suppressed = false }: MarketStripProps): R
 
   if (!showing) return null
 
-  const height = config?.height ?? TICKER_HEIGHTS.compact
   const sparse = items.length > 0 && items.length < 4
   const state =
     connection === 'connected' || connection === 'live'

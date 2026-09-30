@@ -1409,8 +1409,12 @@ export default function App(): React.JSX.Element {
         your eye while doing something else, and a strip you have to open Markets to see is one you will never look at.
 
         Not during startup or behind a lock: a ticker animating over a lock screen would be both a waste and a leak.
+
+        And not while the browser fills the window, because the browser draws its own band along its own bottom edge --
+        the same strip, from the same setting, a few pixels lower. Two of them stacked would be one too many, and the
+        browser's is the one that belongs to what is on screen.
       */}
-      <MarketStrip suppressed={welcome !== 'closed'} />
+      <MarketStrip suppressed={welcome !== 'closed' || browserShowing} />
 
       <ToastStack toasts={toasts} onDismiss={(id) => setToasts((current) => current.filter((t) => t.id !== id))} />
       <ControlPrompts />

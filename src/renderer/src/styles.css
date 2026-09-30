@@ -346,6 +346,17 @@ select {
 .hud {
   position: fixed;
   inset: 0;
+  /*
+    The market strip takes its height from the window rather than covering it.
+
+    It used to float on top, which put it straight over the account chip at the foot of the sidebar -- the name and the
+    help button were cut in half behind it. Floating was the wrong call: inside Orbis there is no site underneath, but
+    there is Orbis's own interface, and the bottom of the sidebar is a real place with real controls in it.
+
+    The variable is set by the strip itself and is absent when there is no strip, so a window without one is exactly
+    the window it was before.
+  */
+  bottom: var(--mstrip-reserved, 0px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
