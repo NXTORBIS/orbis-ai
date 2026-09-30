@@ -26,7 +26,7 @@ import { KNOWN_OPERATIONS } from './service.ts'
  */
 
 const HERE = dirname(fileURLToPath(import.meta.url))
-const BRIDGES = ['engines', 'mathEngines', 'studyEngines', 'reasoningEngines', 'scienceEngines', 'physicsEngines', 'emEngines', 'engineeringEngines', 'earthEngines', 'humanitiesEngines', 'studioEngines', 'modernPhysicsEngines']
+const BRIDGES = ['engines', 'mathEngines', 'studyEngines', 'reasoningEngines', 'scienceEngines', 'physicsEngines', 'emEngines', 'engineeringEngines', 'earthEngines', 'humanitiesEngines', 'studioEngines', 'modernPhysicsEngines', 'chemistryEngines']
 
 /** Families that are Orbis's own plumbing rather than calculations somebody would want a Page for. */
 const NOT_FOR_PAGES = new Set(['document', 'interchange', 'builder', 'data', 'learning', 'project', 'scenario', 'study', 'workspace'])
@@ -39,6 +39,7 @@ const KIND: Readonly<Record<string, ArgumentKind>> = {
   optionalText: 'text?',
   choice: 'choice',
   numbers: 'numbers',
+  strings: 'strings',
   list: 'list',
   rows: 'list',
   table: 'list',
@@ -48,7 +49,7 @@ const KIND: Readonly<Record<string, ArgumentKind>> = {
   object: 'value'
 }
 
-const READS = /read\.(has|text|number|optionalNumber|numbers|list|flag|choice|integer|bigint|optionalText|value|object|table|rows)\(\s*'([A-Za-z0-9_]+)'/g
+const READS = /read\.(has|text|number|optionalNumber|numbers|strings|list|flag|choice|integer|bigint|optionalText|value|object|table|rows)\(\s*'([A-Za-z0-9_]+)'/g
 const CHOICES = /read\.choice\(\s*'([A-Za-z0-9_]+)'\s*,\s*\[([^\]]*)\]/g
 /** A helper handed the whole reader, or the whole input, reads arguments this cannot see. */
 const HIDES = /\b[A-Za-z_][A-Za-z0-9_]*\(\s*(?:read|input)\s*[,)]/

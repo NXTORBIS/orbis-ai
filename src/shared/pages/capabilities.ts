@@ -295,6 +295,16 @@ export const CAPABILITIES: Record<string, CapabilityDefinition> = {
     consent: 'automatic',
     scope: 'none'
   }),
+  'computation.chemistry': capability({
+    id: 'computation.chemistry',
+    name: 'Chemistry bench',
+    description:
+      'Look up the elements, work out molar masses and balance equations, handle concentration, pH, buffers and titrations, follow energy and rates through a reaction, and size a reactor or a distillation column.',
+    category: 'computation',
+    risk: 'low',
+    consent: 'automatic',
+    scope: 'none'
+  }),
   'computation.wasm': capability({
     id: 'computation.wasm',
     name: 'Compiled code',
