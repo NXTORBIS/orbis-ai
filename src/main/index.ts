@@ -1752,6 +1752,8 @@ if (!app.requestSingleInstanceLock()) {
           // The Pages tab in the browser's own search page, answered from the same register the Pages screen uses.
           pages: () => (searchOrbisPages === null ? null : { search: searchOrbisPages }),
           searchSessions: () => searchSessionsForBrowser,
+          // The reading index the browser's panel searches: the app's own, never a second one opened over the same file.
+          recall: () => recall,
           // Orbis has no account and nothing to sign in to. This is the name the person typed into the app, read fresh each
           // time so renaming yourself in the Orbis window renames you in the browser too, with no restart and no second identity.
           // The Chat button is on the browser's toolbar now, so this is how it gets back here.

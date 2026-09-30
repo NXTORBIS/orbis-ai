@@ -28,7 +28,7 @@ import {
   Trash2,
   Users,
   Workflow,
-  X, History } from 'lucide-react'
+  X } from 'lucide-react'
 import type { Conversation } from '../../../shared/types'
 import type { StreamState } from '../App'
 import { groupConversations } from '../lib/utils'
@@ -89,7 +89,6 @@ export type FeatureId =
   | 'secrets'
   | 'customize'
   | 'profiles'
-  | 'recall'
 
 export const FEATURES: { id: FeatureId; label: string; icon: LucideIcon; hint: string }[] = [
   { id: 'pages', label: 'Pages', icon: LayoutTemplate, hint: "Orbis's own tools, each with its own address" },
@@ -103,8 +102,7 @@ export const FEATURES: { id: FeatureId; label: string; icon: LucideIcon; hint: s
   { id: 'workspaces', label: 'Workspaces', icon: LayoutGrid, hint: 'Sets of tabs, kept together' },
   { id: 'secrets', label: 'Secrets', icon: KeyRound, hint: 'The vault, locked until you open it' },
   { id: 'customize', label: 'Customize', icon: Palette, hint: 'How Orbis looks' },
-  { id: 'profiles', label: 'Profiles', icon: Users, hint: 'Separate lives, separate data' },
-  { id: 'recall', label: 'Pages you have read', icon: History, hint: 'Find something again by what was in it' }
+  { id: 'profiles', label: 'Profiles', icon: Users, hint: 'Separate lives, separate data' }
 ]
 
 interface NavItem {

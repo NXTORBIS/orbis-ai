@@ -24,6 +24,7 @@ const TransferSettings = lazy(() => import('./TransferSettings'))
 const ProfileLockSettings = lazy(() => import('./ProfileLockSettings'))
 const TabLockSettings = lazy(() => import('./TabLockSettings'))
 const MarketsSettings = lazy(() => import('./MarketsSettings'))
+const RecallSettings = lazy(() => import('./RecallSettings'))
 
 interface Props {
   settings: Settings
@@ -310,6 +311,12 @@ export default function SettingsModal({ settings, onUpdate, onClose, section }: 
                   </div>
                   <Toggle checked={settings.personalizedSuggestions} onChange={(v) => void onUpdate({ personalizedSuggestions: v })} />
                 </section>
+
+                {/* Everything in the reading index came from browsing, so the switch for it belongs beside the rest
+                    of the browsing settings. Searching it is the browser panel's job. */}
+                <Suspense fallback={null}>
+                  <RecallSettings />
+                </Suspense>
 
                 <Suspense fallback={null}>
                   <MarketsSettings />

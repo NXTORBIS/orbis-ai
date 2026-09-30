@@ -104,7 +104,7 @@ let searching = null
  */
 // 'home' is the Command Center, and it is where the panel opens: everything Orbis can do, and the way to each of
 // them. The rest are the places it leads to, each still reachable by its own address as before.
-const VIEWS = ['home', 'search', 'block', 'notes', 'tasks', 'workflows', 'galaxy', 'secrets', 'account']
+const VIEWS = ['home', 'search', 'block', 'recall', 'notes', 'tasks', 'workflows', 'galaxy', 'secrets', 'account']
 
 const viewFromAddress = () => {
   // The hash is how a person names a view; ?view= is how the browser does, when a toolbar button opens this page over

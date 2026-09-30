@@ -10,6 +10,7 @@ import { isSpecialized } from '../shared/searchProviders.ts'
 import type { Research } from '../shared/types'
 import { createAdblockHandlers } from './adblock/service.ts'
 import { createPersonalHandlers } from './personal.ts'
+import { createRecallHandlers, type RecallHelperDeps } from './recall.ts'
 import { createSecretsHandlers } from './secrets.ts'
 import { createTabLockHandlers } from './tabLock.ts'
 import type { TabLockDeps } from './tabLock.ts'
@@ -103,6 +104,14 @@ export interface HandlerDeps {
   searchSessions?: SearchSessionsDeps['store']
   /** Chats: the app's own store when given, else the helper opens the same folder under dataDir. */
   conversations?: ConversationsDeps['store']
+  /**
+   * The pages this person has read: the app's own index, never a second one opened here.
+   *
+   * Two processes opening the same SQLite file is how a database gets locked at the worst moment, and the index is
+   * written by the window's own capture. Absent when the browser is running alone, and the panel says so rather than
+   * showing an empty list.
+   */
+  recall?: () => RecallHelperDeps['store'] | null | undefined
   /**
    * Who the person says they are. Orbis has no account and nothing to sign in to; this is the name they typed into the app,
    * and the browser shows it so the same person is named the same way on both sides. Read at call time so a rename in the
@@ -226,6 +235,11 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
     ...createFaviconHandlers({ fetchFn: doFetch }),
     ...createConversationHandlers({ store: deps.conversations, userData: deps.dataDir, profileId: deps.profileId }),
     ...(deps.dataDir ? createPersonalHandlers({ dataDir: deps.dataDir }) : {}),
+    ...createRecallHandlers(() => {
+      // Read at call time, like the other stores here: the window may start after the browser has.
+      const store = deps.recall?.()
+      return store ? { store } : null
+    }),
     ...(deps.secrets ? createSecretsHandlers(deps.secrets) : {}),
     ...(deps.tabLock ? createTabLockHandlers(deps.tabLock) : {}),
     ...(deps.markets ? createMarketsHandlers(deps.markets) : {}),
