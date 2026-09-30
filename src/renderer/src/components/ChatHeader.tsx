@@ -1,18 +1,16 @@
 import { useLayoutEffect, useRef, useState } from 'react'
-import { Ellipsis, HatGlasses, Pencil, Share2, SquarePen, Trash2 } from 'lucide-react'
+import { Ellipsis, HatGlasses, Pencil, Share2, Trash2 } from 'lucide-react'
 import { useDismiss } from '../lib/useDismiss'
 
 interface Props {
   title: string
   hasConversation: boolean
   thinking: boolean
-  userInitial: string
   incognito: boolean
   onToggleIncognito(): void
   onRename(title: string): void
   onShare(): void
   onDelete(): void
-  onOpenSettings(): void
 }
 
 export default function ChatHeader(props: Props): React.JSX.Element {
@@ -104,6 +102,15 @@ export default function ChatHeader(props: Props): React.JSX.Element {
         )}
       </div>
 
+      {/*
+        What is left is what is about *this chat* and nothing else: whether it is incognito, sharing it, and the menu
+        that holds deleting it.
+
+        Gone from here: the rename button, because the same action is in that menu and on a double-click of the title,
+        which made three ways to rename one chat; "Copy as Markdown", because it called the very same handler as the
+        Share button beside it; and the avatar, because the sidebar's own user chip opens the same Settings and now
+        opens it at Account.
+      */}
       <div className="header-side right">
         <button
           className={`icon-btn incognito-btn${props.incognito ? ' active' : ''}`}
@@ -112,9 +119,6 @@ export default function ChatHeader(props: Props): React.JSX.Element {
           onClick={props.onToggleIncognito}
         >
           <HatGlasses size={16} />
-        </button>
-        <button className="icon-btn rename-btn" title="Rename chat" disabled={!props.hasConversation} onClick={startRename}>
-          <SquarePen size={16} />
         </button>
         <button className="share-btn" disabled={!props.hasConversation} onClick={props.onShare}>
           <Share2 size={14} />
@@ -131,17 +135,6 @@ export default function ChatHeader(props: Props): React.JSX.Element {
                 Rename
               </button>
               <button
-                className="menu-item"
-                disabled={!props.hasConversation}
-                onClick={() => {
-                  props.onShare()
-                  setMoreOpen(false)
-                }}
-              >
-                <Share2 size={14} />
-                Copy as Markdown
-              </button>
-              <button
                 className="menu-item danger"
                 disabled={!props.hasConversation}
                 onClick={() => {
@@ -155,9 +148,6 @@ export default function ChatHeader(props: Props): React.JSX.Element {
             </div>
           )}
         </div>
-        <button className="avatar user-avatar" title="Profile and settings" onClick={props.onOpenSettings}>
-          {props.userInitial}
-        </button>
       </div>
     </header>
   )

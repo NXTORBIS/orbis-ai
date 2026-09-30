@@ -1294,8 +1294,6 @@ export default function App(): React.JSX.Element {
           unread={unread}
           onToggleHistory={toggleSidebar}
           sidebarCollapsed={sidebarCollapsed}
-          onNewChat={newChat}
-          onSearch={openSearch}
           onQuickPrompts={() => setQuickPromptsOpen((open) => !open)}
           webSearch={webSearch}
           onToggleWebSearch={() => {
@@ -1309,13 +1307,11 @@ export default function App(): React.JSX.Element {
             title={active?.title ?? 'New chat'}
             hasConversation={Boolean(active)}
             thinking={Boolean(active && streams[active.id])}
-            userInitial={settings?.userName.trim().charAt(0).toUpperCase() || 'U'}
             incognito={current.incognito}
             onToggleIncognito={toggleIncognito}
             onRename={(title) => active && renameConversation(active.id, title)}
             onShare={() => active && shareConversation(active.id)}
             onDelete={() => active && deleteConversation(active.id)}
-            onOpenSettings={() => setSettingsOpen(true)}
           />
         </SystemBar>
       )}

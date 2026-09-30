@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Bell, Cpu, Globe, Hash, Moon, PanelLeftClose, PanelLeftOpen, Plus, Search, Sun } from 'lucide-react'
+import { Bell, Cpu, Globe, Hash, Moon, PanelLeftClose, PanelLeftOpen, Sun } from 'lucide-react'
 import { OrbisGlassMark } from './Brand'
 
 interface Props {
@@ -7,8 +7,6 @@ interface Props {
   unread: number
   onToggleHistory(): void
   sidebarCollapsed: boolean
-  onNewChat(): void
-  onSearch(): void
   onQuickPrompts(): void
   webSearch: boolean
   onToggleWebSearch(): void
@@ -24,6 +22,14 @@ export default function SystemBar(props: Props): React.JSX.Element {
 
   return (
     <div className="system-bar">
+      {/*
+        Only the things that are not already a named row in the sidebar.
+
+        New chat and Search chats were both here as unlabelled icons and there as words; an icon competing with its own
+        label is the worse of the two. What is left does something nothing else does: quick prompts, the web-search
+        switch that changes how the next reply is answered, unread activity, and the light/dark toggle -- which stays
+        because it is a one-press thing people do often, and Settings is the wrong distance for that.
+      */}
       <div className="system-group">
         <button
           className="bar-logo"
@@ -38,17 +44,11 @@ export default function SystemBar(props: Props): React.JSX.Element {
           <Cpu size={13} />
           CORE: <b>{cpu === null ? '--' : `${cpu}%`}</b>
         </span>
-        <button className="sys-btn" title="New chat (Ctrl+Shift+O)" onClick={props.onNewChat}>
-          <Plus size={15} />
-        </button>
       </div>
 
       {props.children}
 
       <div className="system-group">
-        <button className="sys-btn" title="Search chats" onClick={props.onSearch}>
-          <Search size={15} />
-        </button>
         <button className="sys-btn" title="Quick prompts" onClick={props.onQuickPrompts}>
           <Hash size={15} />
         </button>
