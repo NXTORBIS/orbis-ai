@@ -303,6 +303,7 @@ export const TEST_FILES = [
   'src/shared/pages/actions.test.ts',
   'src/shared/pages/reach.test.ts',
   'src/main/pages/planningEngines.test.ts',
+  'src/main/pages/knowledgeEngines.test.ts',
   'src/main/pages/engines.test.ts',
   'src/main/pages/labEngines.test.ts',
   'src/main/pages/scienceEngines.test.ts',

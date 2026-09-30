@@ -73,8 +73,6 @@ const NOT_WIRED_YET: Readonly<Record<string, string>> = Object.freeze({
   actions: 'Actions on a running Page. Needs a channel that checks a request and hands it to the Page host.',
   analyzer: 'Analysis over a supplied dataset, with freshness and cache keys. Needs a bridge operation.',
   changes: 'Structured edits to a Page spec. Needs a channel for natural-language Page editing.',
-  concepts: 'Concept and prerequisite graphs, with layout and cycle detection. Needs a bridge operation.',
-  experiments: 'Hypotheses, runs, repeats and reproduction checks. Needs a bridge operation.',
   generator: 'Deterministic dataset, schedule and identifier generation, checked against what was asked for.',
   lab: 'A node graph with ports, execution order, staleness and checkpoints.',
   projects: 'Project saves, checkpoints, undo history and autosave decisions.',

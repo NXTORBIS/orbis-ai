@@ -255,6 +255,26 @@ export const CAPABILITIES: Record<string, CapabilityDefinition> = {
     consent: 'automatic',
     scope: 'none'
   }),
+  'computation.concepts': capability({
+    id: 'computation.concepts',
+    name: 'Maps of what is known',
+    description:
+      'Build a graph of concepts and how they relate, find prerequisites and cycles, trace paths between ideas and lay it out for drawing. Every claim carries where it came from, so a suggestion and an assertion stay apart.',
+    category: 'computation',
+    risk: 'low',
+    consent: 'automatic',
+    scope: 'none'
+  }),
+  'computation.experiments': capability({
+    id: 'computation.experiments',
+    name: 'Experiments and repeats',
+    description:
+      'Check an experiment design before it runs, hold hypotheses with what would refute them, and compare a repeat against the original. It says when a run cannot be reproduced rather than reporting that it was not.',
+    category: 'computation',
+    risk: 'low',
+    consent: 'automatic',
+    scope: 'none'
+  }),
   'computation.planning': capability({
     id: 'computation.planning',
     name: 'Plans and schedules',

@@ -143,6 +143,20 @@ const settle = <T>(value: T, isError: (one: unknown) => boolean): unknown =>
 
 // ---------------------------------------------------------------- readers
 
+/**
+ * Whether a field was actually given, treating an explicit `null` as absent.
+ *
+ * `read.has` answers "is the key there", and for these engines that is the wrong question. Every one of them uses
+ * `null` to mean "nobody supplied this" -- no deadline, no seed, no stated uncertainty, no rated strength -- so a
+ * Page that reads an object out of this door and sends it back sends those nulls with it. Checking only for the
+ * key's presence then rejects the bridge's own output, which is exactly what happened: a hypothesis came back with
+ * `outcome: null` and was refused for not being text.
+ *
+ * So absent and explicitly-null are the same thing here, and the distinction the engines care about -- null against
+ * a real value -- is preserved either way.
+ */
+const given = (read: Reader, key: string): boolean => read.has(key) && read.raw(key) !== null
+
 function choice<T extends string>(read: Reader, key: string, allowed: readonly T[], fallback?: T): T {
   if (!read.has(key)) {
     if (fallback !== undefined) return fallback
@@ -192,12 +206,12 @@ function taskFrom(row: Record<string, unknown>): Task {
     duration: read.number('duration'),
     state: choice<TaskState>(read, 'state', TASK_STATES, 'not-started'),
     priority: choice(read, 'priority', PRIORITIES, 'medium'),
-    resources: read.has('resources') ? read.strings('resources', PLANNING_LIMITS.resources) : [],
-    goalId: read.has('goalId') ? read.text('goalId', 80) : null,
+    resources: given(read, 'resources') ? read.strings('resources', PLANNING_LIMITS.resources) : [],
+    goalId: given(read, 'goalId') ? read.text('goalId', 80) : null,
     notBefore: optionalDay(read, 'notBefore'),
     notAfter: optionalDay(read, 'notAfter'),
-    fraction: read.has('fraction') ? read.number('fraction') : 0,
-    notes: read.has('notes') ? read.text('notes', 1000) : ''
+    fraction: given(read, 'fraction') ? read.number('fraction') : 0,
+    notes: given(read, 'notes') ? read.text('notes', 1000) : ''
   }
 }
 
@@ -206,9 +220,9 @@ function goalFrom(row: Record<string, unknown>): Goal {
   return {
     id: read.text('id', 80),
     title: read.text('title', 200),
-    parent: read.has('parent') ? read.text('parent', 80) : null,
+    parent: given(read, 'parent') ? read.text('parent', 80) : null,
     deadline: optionalDay(read, 'deadline'),
-    successCriteria: read.has('successCriteria') ? read.strings('successCriteria', 64) : [],
+    successCriteria: given(read, 'successCriteria') ? read.strings('successCriteria', 64) : [],
     priority: choice(read, 'priority', PRIORITIES, 'medium')
   }
 }
@@ -219,7 +233,7 @@ function dependencyFrom(row: Record<string, unknown>): Dependency {
     from: read.text('from', 80),
     to: read.text('to', 80),
     kind: choice<DependencyKind>(read, 'kind', DEPENDENCY_KINDS, 'finish-to-start'),
-    lag: read.has('lag') ? read.number('lag') : 0
+    lag: given(read, 'lag') ? read.number('lag') : 0
   }
 }
 
@@ -229,7 +243,7 @@ function resourceFrom(row: Record<string, unknown>): Resource {
     id: read.text('id', 80),
     name: read.text('name', 200),
     capacity: read.number('capacity'),
-    unavailable: read.has('unavailable') ? read.numbers('unavailable', 2000) : []
+    unavailable: given(read, 'unavailable') ? read.numbers('unavailable', 2000) : []
   }
 }
 
@@ -243,13 +257,12 @@ function planFrom(read: Reader, key = 'plan'): Plan {
   return {
     id: entry.text('id', 80),
     title: entry.text('title', 200),
-    startDay: entry.has('startDay') ? entry.number('startDay') : 0,
-    goals: entry.has('goals') ? entry.list('goals', PLANNING_LIMITS.goals).map(goalFrom) : [],
-    tasks: entry.has('tasks') ? entry.list('tasks', PLANNING_LIMITS.tasks).map(taskFrom) : [],
-    dependencies: entry.has('dependencies')
-      ? entry.list('dependencies', PLANNING_LIMITS.dependencies).map(dependencyFrom)
+    startDay: given(entry, 'startDay') ? entry.number('startDay') : 0,
+    goals: given(entry, 'goals') ? entry.list('goals', PLANNING_LIMITS.goals).map(goalFrom) : [],
+    tasks: given(entry, 'tasks') ? entry.list('tasks', PLANNING_LIMITS.tasks).map(taskFrom) : [],
+    dependencies: given(entry, 'dependencies') ? entry.list('dependencies', PLANNING_LIMITS.dependencies).map(dependencyFrom)
       : [],
-    resources: entry.has('resources') ? entry.list('resources', PLANNING_LIMITS.resources).map(resourceFrom) : []
+    resources: given(entry, 'resources') ? entry.list('resources', PLANNING_LIMITS.resources).map(resourceFrom) : []
   }
 }
 
@@ -285,7 +298,7 @@ function criterionValueFrom(raw: unknown): CriterionValue {
 
 function criterionFrom(row: Record<string, unknown>): Criterion {
   const read = new Reader(row)
-  const rangeRaw = read.has('range') ? read.raw('range') : null
+  const rangeRaw = given(read, 'range') ? read.raw('range') : null
   let range: { low: number; high: number } | null = null
   if (rangeRaw !== null && typeof rangeRaw === 'object' && !Array.isArray(rangeRaw)) {
     const entry = new Reader(rangeRaw as Record<string, unknown>)
@@ -296,13 +309,13 @@ function criterionFrom(row: Record<string, unknown>): Criterion {
     name: read.text('name', 200),
     kind: choice<CriterionKind>(read, 'kind', CRITERION_KINDS, 'number'),
     direction: choice<Direction>(read, 'direction', DIRECTIONS, 'higher-better'),
-    unit: read.has('unit') ? read.text('unit', 40) : '',
-    target: read.has('target') ? read.number('target') : null,
+    unit: given(read, 'unit') ? read.text('unit', 40) : '',
+    target: given(read, 'target') ? read.number('target') : null,
     range,
-    scale: read.has('scale') ? read.strings('scale', 64) : [],
-    weight: read.has('weight') ? read.number('weight') : 1,
-    describe: read.has('describe') ? read.text('describe', 600) : '',
-    source: read.has('source') ? read.text('source', 300) : ''
+    scale: given(read, 'scale') ? read.strings('scale', 64) : [],
+    weight: given(read, 'weight') ? read.number('weight') : 1,
+    describe: given(read, 'describe') ? read.text('describe', 600) : '',
+    source: given(read, 'source') ? read.text('source', 300) : ''
   }
 }
 
@@ -321,8 +334,8 @@ function entityFrom(row: Record<string, unknown>): Entity {
     id: read.text('id', 80),
     name: read.text('name', 200),
     values,
-    describe: read.has('describe') ? read.text('describe', 600) : '',
-    source: read.has('source') ? read.text('source', 300) : ''
+    describe: given(read, 'describe') ? read.text('describe', 600) : '',
+    source: given(read, 'source') ? read.text('source', 300) : ''
   }
 }
 
@@ -334,11 +347,11 @@ function riskFrom(row: Record<string, unknown>): Risk {
     description: read.text('description', 600),
     probability: read.number('probability'),
     impact: read.number('impact'),
-    mitigation: read.has('mitigation') ? read.text('mitigation', 600) : '',
+    mitigation: given(read, 'mitigation') ? read.text('mitigation', 600) : '',
     // Left null rather than defaulted to the unmitigated probability: "no mitigation planned" and "mitigation that
     // changes nothing" are different claims, and only the Page knows which it meant.
-    residualProbability: read.has('residualProbability') ? read.number('residualProbability') : null,
-    source: read.has('source') ? read.text('source', 300) : ''
+    residualProbability: given(read, 'residualProbability') ? read.number('residualProbability') : null,
+    source: given(read, 'source') ? read.text('source', 300) : ''
   }
 }
 
@@ -349,7 +362,7 @@ function comparisonFrom(row: Record<string, unknown>): Comparison {
 
 function filterFrom(row: Record<string, unknown>): Filter {
   const read = new Reader(row)
-  const rawValue = read.has('value') ? read.raw('value') : null
+  const rawValue = given(read, 'value') ? read.raw('value') : null
   let value: number | string | null = null
   if (typeof rawValue === 'number') value = rawValue
   else if (typeof rawValue === 'string') value = rawValue.slice(0, 200)
@@ -357,7 +370,7 @@ function filterFrom(row: Record<string, unknown>): Filter {
     criterionId: read.text('criterionId', 80),
     test: choice(read, 'test', FILTER_TESTS),
     value,
-    values: read.has('values') ? read.strings('values', 200) : []
+    values: given(read, 'values') ? read.strings('values', 200) : []
   }
 }
 
@@ -472,9 +485,9 @@ export function runPlanningOperation(operation: string, input: Record<string, un
     case 'decide.stability':
       return settle(
         stability(optionsOf(read), criteriaOf(read), {
-          samples: read.has('samples') ? read.number('samples') : undefined,
+          samples: given(read, 'samples') ? read.number('samples') : undefined,
           // A seed rather than a clock or a random source, so the same question gives the same sensitivity answer.
-          seed: read.has('seed') ? read.number('seed') : undefined
+          seed: given(read, 'seed') ? read.number('seed') : undefined
         }),
         isCompareError
       )

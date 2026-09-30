@@ -28,6 +28,7 @@ import { ENGINEERING_CAPABILITY, runEngineeringOperation } from './engineeringEn
 import { EARTH_CAPABILITY, runEarthOperation } from './earthEngines.ts'
 import { BIOLOGY_CAPABILITY, runBiologyOperation } from './biologyEngines.ts'
 import { PLANNING_CAPABILITY, runPlanningOperation } from './planningEngines.ts'
+import { KNOWLEDGE_CAPABILITY, runKnowledgeOperation } from './knowledgeEngines.ts'
 import {
   checkApplication,
   describeApplication,
@@ -171,6 +172,7 @@ const OPERATION_CAPABILITY: Record<string, string> = {
   ...EARTH_CAPABILITY,
   ...BIOLOGY_CAPABILITY,
   ...PLANNING_CAPABILITY,
+  ...KNOWLEDGE_CAPABILITY,
   ...HUMANITIES_CAPABILITY,
   ...STUDIO_CAPABILITY,
   ...MODERN_PHYSICS_CAPABILITY,
@@ -733,6 +735,9 @@ export class PagesService {
     }
     if (Object.prototype.hasOwnProperty.call(ENGINEERING_CAPABILITY, operation)) {
       return runEngineeringOperation(operation, input)
+    }
+    if (Object.prototype.hasOwnProperty.call(KNOWLEDGE_CAPABILITY, operation)) {
+      return runKnowledgeOperation(operation, input)
     }
     if (Object.prototype.hasOwnProperty.call(PLANNING_CAPABILITY, operation)) {
       return runPlanningOperation(operation, input)
