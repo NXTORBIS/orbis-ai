@@ -715,9 +715,11 @@ test('every operation returns a new table and leaves the old one alone', () => {
   dropColumn(original, 'age')
   retypeColumn(original, 'age', 'text')
   assert.deepEqual(asGrid(original), before)
-  assert.throws(() => {
-    ;(original as { rows: unknown }).rows = []
-  })
+  // Frozen, asserted as frozen-and-unchanged rather than by a thrown error: without "type": "module" these
+  // files run as CommonJS in sloppy mode, where the write below is silently dropped instead of throwing.
+  assert.ok(Object.isFrozen(original))
+  ;(original as { rows: unknown }).rows = []
+  assert.deepEqual(asGrid(original), before, 'the table was editable in place')
 })
 
 test('numeric access skips what is not a number rather than turning it into one', () => {

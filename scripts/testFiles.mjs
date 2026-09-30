@@ -301,6 +301,7 @@ export const TEST_FILES = [
   'src/main/pages/biologyEngines.test.ts',
   'src/shared/pages/application.test.ts',
   'src/shared/pages/actions.test.ts',
+  'src/shared/pages/reach.test.ts',
   'src/main/pages/engines.test.ts',
   'src/main/pages/labEngines.test.ts',
   'src/main/pages/scienceEngines.test.ts',

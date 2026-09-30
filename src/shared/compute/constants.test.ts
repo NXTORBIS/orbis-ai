@@ -151,9 +151,13 @@ describe('the registry itself', () => {
   it('freezes each entry so a Page cannot edit a constant', () => {
     const one = CONSTANTS[0]
     assert.ok(one !== undefined)
-    assert.throws(() => {
-      ;(one as { value: number }).value = 1
-    })
+    // Frozen, asserted as "frozen and unchanged" rather than "assigning throws": the package has no
+    // "type": "module", so these files transpile to CommonJS and run in sloppy mode, where a write to a frozen
+    // property is silently dropped instead of throwing. A throws() assertion here would be testing the module
+    // format rather than the invariant.
+    assert.ok(Object.isFrozen(one))
+    ;(one as { value: number }).value = 1
+    assert.notEqual(one.value, 1, 'a constant was editable in place')
   })
 })
 
