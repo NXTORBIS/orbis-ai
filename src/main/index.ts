@@ -46,6 +46,7 @@ import { makeRunners } from './temporal/runners.ts'
 import { TemporalStore } from './temporal/store.ts'
 import { earliestWake, shouldStayAlive } from './temporal/wake.ts'
 import { applyWake, clearWake, wakeIsPossible } from './temporal/windowsWake.ts'
+import { hibernateNow } from './temporal/powerRead.ts'
 import { FrontTabWatch, shouldReadNow } from './knowledge/recallCapture.ts'
 import { MAX_PAGE_TEXT, pageKey, recallPromptBlock } from '../shared/recall.ts'
 import { closedBrowserState, followChromiumTabs } from './browserState'
@@ -2814,6 +2815,28 @@ if (!app.requestSingleInstanceLock()) {
           { label: because, enabled: false },
           { type: 'separator' },
           { label: 'Open Orbis', click: () => void createWindow() },
+          /*
+           * Hibernate, offered here because this is the menu somebody sees when Orbis is running for a schedule.
+           *
+           * A hibernated computer can be woken for what is due; a switched-off one cannot, and no software can
+           * change that. So this is the alternative to switching off, not a tidy-up.
+           */
+          {
+            label: 'Hibernate (schedules can still wake it)',
+            click: () => {
+              void hibernateNow().then((result) => {
+                /*
+                 * A notification rather than a message to the window.
+                 *
+                 * This menu only exists when there is no window, so sending the failure there would be sending it
+                 * nowhere -- and "I pressed hibernate and nothing happened" with no reason is the worst outcome.
+                 */
+                if (!result.ok && Notification.isSupported()) {
+                  new Notification({ title: 'Orbis could not hibernate', body: result.detail, silent: false }).show()
+                }
+              })
+            }
+          },
           { type: 'separator' },
           { label: 'Quit Orbis', click: () => app.quit() }
         ])

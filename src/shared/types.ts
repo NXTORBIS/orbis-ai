@@ -689,6 +689,34 @@ export interface NxtorbisApi {
   /** The honest answer to "will this run while my computer is off?". */
   canRunWithComputerOff(action: TemporalAction): Promise<string>
   onSchedulesChanged(listener: (job: TemporalJob) => void): () => void
+  /**
+   * What this computer can actually be woken from, read from the computer rather than assumed.
+   *
+   * Nothing here changes a setting. A finding marked `impossible` is genuinely impossible -- switching a computer
+   * off is the one that is, because Windows is not running to fire any timer.
+   */
+  schedulePower(): Promise<{
+    facts: {
+      canSleep: boolean | null
+      canHibernate: boolean | null
+      hibernateBecause: string | null
+      wakeTimersOnPower: 0 | 1 | 2 | null
+      wakeTimersOnBattery: 0 | 1 | 2 | null
+      taskRegistered: boolean
+      windows: boolean
+    }
+    findings: {
+      state: 'sleep' | 'hibernate' | 'shutdown'
+      title: string
+      standing: 'good' | 'fixable' | 'impossible' | 'unknown'
+      detail: string
+      todo: string | null
+      orbisCanFix: boolean
+    }[]
+    summary: string
+  }>
+  /** Hibernates this computer now, the same way the Start menu does. A hibernated computer can be woken; an off one cannot. */
+  hibernateNow(): Promise<{ ok: boolean; detail: string }>
   /** A schedule asked for one of Orbis's own Pages. The address is already resolved. */
   onScheduleOpenPage(listener: (url: string) => void): () => void
 

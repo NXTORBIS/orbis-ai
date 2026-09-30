@@ -242,5 +242,8 @@ test('the boundary is a known size, so the migration can be estimated rather tha
   // without saving it, so what Orbis understood is shown back before a schedule exists; two answer what Orbis cannot
   // do, in one place, because there is no Orbis server and nothing runs with this computer off. None of them carries
   // a command: a schedule names something Orbis already does, and gains no permission by being scheduled.
-  assert.ok(code.length <= 464, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
+  // 464 → 466: what this computer can be woken from, and hibernating it. The first reads and changes nothing; the
+  // second is the one action that turns "my computer was off" into something Orbis can do anything about, because a
+  // hibernated computer can be woken for a schedule and a switched-off one cannot.
+  assert.ok(code.length <= 466, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
 })

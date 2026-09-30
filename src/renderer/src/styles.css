@@ -20357,3 +20357,106 @@ html[data-motion='reduced'] .tool-btn.recording {
 .sched-stopped .sched-list {
   margin-top: 8px;
 }
+
+/* ---- what this computer can be woken from
+ *
+ * Three rows, one per way of leaving the machine. The colour is the whole point: "fixable" and "impossible" must not
+ * look the same, because one is worth walking to the BIOS for and the other is not.
+ */
+
+.sched-power {
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sched-power h3 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.sched-power > p {
+  margin: 0;
+}
+
+.sched-power ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sched-power li {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 9px;
+  align-items: start;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.sched-power li div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.sched-power strong {
+  font-weight: 600;
+}
+
+.sched-power span {
+  color: var(--faint);
+}
+
+/* What to do about it, when anything can be done. */
+.sched-power em {
+  font-style: normal;
+  color: var(--cyan);
+}
+
+.sched-stand-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 5px;
+  background: var(--faint);
+}
+
+.sched-stand-good .sched-stand-dot {
+  background: var(--green);
+}
+
+.sched-stand-fixable .sched-stand-dot {
+  background: var(--cyan);
+}
+
+/* Not red as in broken: red as in nothing here will change it. */
+.sched-stand-impossible .sched-stand-dot {
+  background: var(--red);
+}
+
+.sched-stand-unknown .sched-stand-dot {
+  background: var(--faint);
+}
+
+.sched-power-do {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 8px;
+  border-top: 1px solid var(--glass-border);
+}
+
+.sched-power-do span {
+  font-size: 11.5px;
+  flex: 1;
+  min-width: 180px;
+}

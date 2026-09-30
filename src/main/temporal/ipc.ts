@@ -6,6 +6,7 @@ import { occurrencesBetween, type Schedule } from '../../shared/temporal/recurre
 import { describe, readRequest } from '../../shared/temporal/phrase.ts'
 import { deviceZone } from '../../shared/temporal/zone.ts'
 import type { TemporalEngine } from './engine.ts'
+import { hibernateNow, readPower } from './powerRead.ts'
 import type { TemporalStore } from './store.ts'
 
 /**
@@ -133,6 +134,23 @@ export function registerTemporalIpc(o: TemporalIpcOptions): void {
   }))
 
   handle('schedules:can-run-offline', (_e, action) => answerAboutOffline(action as TemporalAction))
+
+  /**
+   * What this computer can be woken from, read from the computer itself.
+   *
+   * It changes nothing: not a power setting, not a firmware setting. Which settings a computer uses is its owner's
+   * business, and a wrong write to a firmware settings area can leave a machine that will not start.
+   */
+  handle('schedules:power', () => readPower())
+
+  /**
+   * Hibernates now, because it was asked for.
+   *
+   * The same thing the Start menu's Hibernate does. It is offered here because a hibernated computer can be woken
+   * for a schedule and a switched-off one cannot -- so this is the one action that turns "my computer was off" into
+   * something Orbis can actually do something about.
+   */
+  handle('schedules:hibernate', () => hibernateNow())
 }
 
 /** A schedule in words, for a rule assembled in the editor rather than said in a sentence. */

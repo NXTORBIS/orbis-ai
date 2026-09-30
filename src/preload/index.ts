@@ -353,6 +353,9 @@ const api: NxtorbisApi = {
   scheduleCapabilities: () => ipcRenderer.invoke('schedules:capabilities'),
   canRunWithComputerOff: (action) => ipcRenderer.invoke('schedules:can-run-offline', action),
   onSchedulesChanged: (listener) => subscribe('schedules:changed', listener),
+  // What this computer can be woken from, and hibernating it so that it can be. Neither changes a setting.
+  schedulePower: () => ipcRenderer.invoke('schedules:power'),
+  hibernateNow: () => ipcRenderer.invoke('schedules:hibernate'),
   // A schedule asked for one of Orbis's own Pages, which are hosted in this window.
   onScheduleOpenPage: (listener) => subscribe('schedules:open-page', listener),
   saveSearchSession: (session) => ipcRenderer.invoke('search-sessions:save', session),

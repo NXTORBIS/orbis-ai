@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Ban, CalendarClock, Check, Clock, Info, Pause, Play, Plus, SkipForward, Trash2, Zap } from 'lucide-react'
+import { AlertTriangle, Ban, BatteryCharging, CalendarClock, Check, Clock, Info, Moon, Pause, Play, Plus, SkipForward, Trash2, Zap } from 'lucide-react'
 import type { TemporalJob } from '../../../shared/temporal/job'
 import { describeAction, describeRecurrence } from '../../../shared/temporal/phrase'
 import type { NoticeKind } from '../App'
@@ -31,6 +31,7 @@ interface Capabilities {
 }
 
 type Reading = Awaited<ReturnType<typeof window.api.readSchedulePhrase>>
+type Power = Awaited<ReturnType<typeof window.api.schedulePower>>
 
 const EXAMPLES = [
   'remind me to stretch every hour',
@@ -97,6 +98,9 @@ export default function SchedulesView({
   const [reads, setReads] = useState(false)
   const [caps, setCaps] = useState<Capabilities | null>(null)
   const [showLimits, setShowLimits] = useState(false)
+  const [power, setPower] = useState<Power | null>(null)
+  const [showPower, setShowPower] = useState(false)
+  const [hibernating, setHibernating] = useState(false)
   const [open, setOpen] = useState<string | null>(null)
 
   const load = async (): Promise<void> => setJobs(await window.api.listSchedules())
@@ -104,6 +108,8 @@ export default function SchedulesView({
   useEffect(() => {
     void load()
     void window.api.scheduleCapabilities().then((c) => setCaps(c))
+    // Read once, since power settings and firmware do not change while somebody is looking at this screen.
+    void window.api.schedulePower().then((p) => setPower(p))
     return window.api.onSchedulesChanged(() => void load())
   }, [])
 
@@ -154,6 +160,15 @@ export default function SchedulesView({
           <button type="button" className="icon-btn" aria-label="What Orbis cannot do" onClick={() => setShowLimits((s) => !s)}>
             <Info size={15} />
           </button>
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label="Waking this computer"
+            aria-pressed={showPower}
+            onClick={() => setShowPower((s) => !s)}
+          >
+            <BatteryCharging size={15} />
+          </button>
           <button type="button" className="icon-btn" aria-label="Close schedules" onClick={onClose}>
             <Ban size={15} />
           </button>
@@ -171,6 +186,62 @@ export default function SchedulesView({
             <AlertTriangle size={13} /> These run on this computer, with Orbis open. If it is closed when one is due,
             Orbis does it the next time you open it and says how late it was.
           </p>
+        )}
+
+        {/*
+          What this computer can actually be woken from.
+
+          Read from the machine rather than assumed, because the answer is different for a desktop and a laptop, and
+          different again depending on settings nobody remembers making. Nothing here changes a setting: where a
+          change is needed it is named, and where nothing can change it that is said plainly.
+        */}
+        {showPower && power && (
+          <div className="sched-power">
+            <h3>Waking this computer</h3>
+            <p className="view-muted">{power.summary}</p>
+            <ul>
+              {power.findings.map((finding) => (
+                <li key={finding.state} className={`sched-stand-${finding.standing}`}>
+                  <span className="sched-stand-dot" />
+                  <div>
+                    <strong>{finding.title}</strong>
+                    <span>{finding.detail}</span>
+                    {finding.todo && <em>{finding.todo}</em>}
+                  </div>
+                </li>
+              ))}
+            </ul>
+
+            {/*
+              The one thing on this screen that does something rather than describing something.
+
+              A hibernated computer can be woken for a schedule; a switched-off one cannot, and nothing in software
+              can change that. So this is offered as the alternative to switching off, not as a tidy-up.
+            */}
+            {power.facts.windows && (
+              <div className="sched-power-do">
+                <button
+                  type="button"
+                  className="queue-btn"
+                  disabled={hibernating || power.facts.canHibernate === false}
+                  onClick={() => {
+                    setHibernating(true)
+                    void window.api.hibernateNow().then((result) => {
+                      setHibernating(false)
+                      if (!result.ok) onNotify(result.detail, 'error')
+                    })
+                  }}
+                >
+                  <Moon size={14} /> Hibernate now
+                </button>
+                <span className="view-muted">
+                  {power.facts.canHibernate === false
+                    ? 'Hibernate is switched off on this computer, so Orbis cannot use it.'
+                    : 'Everything stays as it is, no power is used, and a schedule can still wake it.'}
+                </span>
+              </div>
+            )}
+          </div>
         )}
 
         {showLimits && caps && (
