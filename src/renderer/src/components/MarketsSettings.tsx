@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Activity, Plus, RefreshCw, Search, Trash2, TrendingDown, TrendingUp } from 'lucide-react'
 import type { MarketsState } from '../../../main/markets/ipc'
 import type { Instrument } from '../../../shared/markets/instrument'
-import { TICKER_FIELDS, type TickerField } from '../../../shared/markets/workspace'
+import { TICKER_FIELDS, type TickerField, TICKER_SLOTS } from '../../../shared/markets/workspace'
 import ExperienceSettings from './markets/ExperienceSettings'
 
 /**
@@ -119,8 +119,9 @@ export default function MarketsSettings(): React.JSX.Element {
       <div className="setting-label">
         <h3>Markets</h3>
         <p>
-          A market ticker along the bottom of the browser. Crypto prices come from Binance&apos;s public feed and are live;
-          stocks need a provider with a licence, and until one is connected they say so rather than showing a number.
+          A market strip along the bottom of Orbis and along the bottom of the browser. Crypto prices come from
+          Binance&apos;s public feed and are live; stocks need a provider with a licence, and until one is connected they
+          say so rather than showing a number.
         </p>
       </div>
 
@@ -163,7 +164,7 @@ export default function MarketsSettings(): React.JSX.Element {
               disabled={busy || !state}
               onChange={(e) => void save({ enabled: e.target.checked })}
             />
-            <span>Show the market ticker at the bottom of the browser</span>
+            <span>Show the market strip along the bottom</span>
           </label>
         )}
 
@@ -286,6 +287,39 @@ export default function MarketsSettings(): React.JSX.Element {
               )}
             </div>
 
+            {/* ---------------------------------------------------------------- how much of it */}
+            <div className="tl-block">
+              <h4>How much of it</h4>
+              <label className="tl-delay">
+                <span>Markets on the strip</span>
+                <select
+                  value={String(ticker.slots)}
+                  disabled={busy}
+                  onChange={(e) => void save({ slots: Number(e.target.value) })}
+                >
+                  {TICKER_SLOTS.map((count) => (
+                    <option key={count} value={String(count)}>
+                      {count}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="tl-switch">
+                <input
+                  type="checkbox"
+                  checked={ticker.auto}
+                  disabled={busy}
+                  onChange={(e) => void save({ auto: e.target.checked })}
+                />
+                <span>Fill the rest with markets I have opened</span>
+              </label>
+              <p className="pw-note is-quiet">
+                {ticker.auto
+                  ? 'The markets you have opened recently, newest first, topped up from your watchlists until the strip is full. Anything you chose below stays first.'
+                  : 'Only the markets you chose below. Choosing none leaves the strip empty rather than filling it with something you did not ask for.'}
+              </p>
+            </div>
+
             {/* ---------------------------------------------------------------- how it behaves */}
             <div className="tl-block">
               <h4>How it behaves</h4>
@@ -341,8 +375,10 @@ export default function MarketsSettings(): React.JSX.Element {
                 </label>
               ))}
               <p className="pw-note is-quiet">
-                The strip takes {state?.tickerHeight ?? 26} pixels from the bottom of the page rather than covering it, so
-                nothing on a site is hidden behind it.
+                In the browser the strip takes {state?.tickerHeight ?? 26} pixels from the bottom of the page rather than
+                covering it, so nothing on a site is hidden behind it. In Orbis it floats over the bottom instead, because
+                there is no site underneath it there — only Orbis&apos;s own screens. Hover it to reveal its controls,
+                including the one that hides it.
               </p>
             </div>
           </>

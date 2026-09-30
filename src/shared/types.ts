@@ -28,7 +28,7 @@ import type { VoiceErrorCode, VoiceModel } from './voiceInput'
 import type { LockTrigger, TabLockPolicy } from './tabLock'
 import type { ProfileLockPolicy } from './profileLock'
 import type { SecurityEvent } from './securityEvents'
-import type { MarketsState, MarketDetail, DiscoveryAnswer, WatchlistsAnswer, AlertsAnswer, ScreenAnswer, PaperAnswer, StrategiesAnswer, BacktestAnswer, NewsAnswer, CurrencyAnswer, ExperienceAnswer, OnboardingAnswer, DerivativesAnswer, TapeAnswer, BookAnswer} from '../main/markets/ipc'
+import type { MarketsState, MarketDetail, DiscoveryAnswer, WatchlistsAnswer, AlertsAnswer, ScreenAnswer, PaperAnswer, StrategiesAnswer, BacktestAnswer, NewsAnswer, CurrencyAnswer, ExperienceAnswer, OnboardingAnswer, DerivativesAnswer, TapeAnswer, BookAnswer, StripAnswer} from '../main/markets/ipc'
 import type { Contract, FundingPoint, LongShortRatio, OpenInterestPoint } from './markets/derivatives'
 import type { Drawing } from './markets/drawings'
 import type { Layout as PanelLayout } from './markets/panels'
@@ -1233,6 +1233,10 @@ export interface NxtorbisApi {
     compact?: boolean
   }): Promise<CurrencyAnswer | { error: string; message?: string }>
   marketsSetTicker(config: Partial<TickerConfig>): Promise<MarketsState | { error: string; message?: string }>
+  /** The strip along the bottom: what it draws, and the subscription that keeps it moving. */
+  marketsStrip(): Promise<StripAnswer | { error: string; message?: string }>
+  /** The strip's own on/off, reached from the strip's close button and from Settings. */
+  marketsStripEnabled(enabled: boolean): Promise<MarketsState | { error: string; message?: string }>
   marketsSearch(query: string): Promise<{ results: Instrument[] } | { error: string; message?: string }>
   marketsTickerAdd(instrumentId: string): Promise<MarketsState | { error: string; message?: string }>
   marketsTickerRemove(instrumentId: string): Promise<MarketsState | { error: string; message?: string }>

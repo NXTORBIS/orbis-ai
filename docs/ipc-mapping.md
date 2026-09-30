@@ -182,8 +182,9 @@ latter never knew they existed.
 | `markets:state`, `markets:refresh` | What the ticker shows and where the prices came from. Mojo onto the same engine; every answer carries each number's freshness, so nothing is drawn as live that is not |
 | `markets:set-ticker`, `markets:ticker-group`, `markets:set-group`, `markets:remove-group` | The ticker's settings and its groups. Mojo onto the same per-profile store |
 | `markets:search`, `markets:ticker-add`, `markets:ticker-remove` | Finding an instrument and putting it on the ticker. Mojo; the search goes to whichever providers are configured, and an unconfigured one contributes nothing rather than an empty row |
+| `markets:strip`, `markets:strip-enabled` | The market strip along the bottom of the Orbis window: what it draws, and its on/off. Separate from `markets:state` because the strip is on screen on every page and must not re-read the whole of Markets to move a rail, and separate from `markets:quotes` because that one releases every subscription it was not asked for |
 
-The strip itself does not use these: it is a browser page and reads through the helper, whose channels are a separate boundary from the Electron IPC counted here. The window edits, the strip reads.
+There are now two strips, and they read the same answer by different routes: the one along the bottom of the **Orbis window** is a React component and reads `markets:strip` here, while the one along the bottom of the **browser** is a WebUI page and reads through the helper, whose channels are a separate boundary from the Electron IPC counted here. Which markets each shows is decided in one place either way — `src/shared/markets/strip.ts` — so the two cannot drift into showing different coins.
 
 ### Security activity — what Orbis recorded about its own security
 

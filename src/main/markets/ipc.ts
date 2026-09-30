@@ -4,6 +4,7 @@ import type { MarketEngine } from './engine.ts'
 import type { MarketsStore } from './store.ts'
 import type { MarketsRuntime } from './runtime.ts'
 import { TICKER_HEIGHTS, type TickerConfig, type Watchlist } from '../../shared/markets/workspace.ts'
+import type { StripOrigin } from '../../shared/markets/strip.ts'
 import {
   cleanQuery,
   queryNeedsCandles,
@@ -209,6 +210,29 @@ export interface MarketsIpcOptions {
    * permission, and a country answers the question as well as coordinates would.
    */
   detectionSignals?(): DetectionSignals
+}
+
+/**
+ * The market strip, as the strip itself needs it.
+ *
+ * Deliberately not `MarketsState`: the strip is on screen on every page, including pages that have nothing to do with
+ * markets, and handing it the whole of Markets would mean every screen in Orbis re-reading watchlists, alerts, screens
+ * and strategies twice a second to move a rail.
+ */
+export interface StripAnswer {
+  config: {
+    groupName: string
+    speed: number
+    direction: string
+    pauseOnHover: boolean
+    fields: string[]
+    height: number
+    enabled: boolean
+    slots: number
+    auto: boolean
+  }
+  items: { instrument: Instrument; quote: QuoteView | null; origin: StripOrigin }[]
+  connection: string
 }
 
 export interface MarketsState {
@@ -507,6 +531,50 @@ export function registerMarketsIpc(o: MarketsIpcOptions): void {
 
   handle('markets:set-ticker', async (id, config) => {
     await o.store.setTicker(id, config)
+    return state(id)
+  })
+
+  /**
+   * The market strip along the bottom, and its own subscription.
+   *
+   * A channel of its own rather than a corner of `markets:quotes`, because that one *releases* everything it was not
+   * asked for: the strip and a watchlist sharing it would take each other's prices away every time either of them
+   * asked. So the strip keeps its own map, under its own reason, and the two cannot interfere.
+   *
+   * It subscribes what it draws for the same reason the watchlist does -- a price that is not on the socket is a price
+   * from whatever cache something else happened to fill, which is what "frozen" looked like before.
+   */
+  const stripWatch = new Map<string, () => void>()
+  handle('markets:strip', async (id) => {
+    void id
+    const surface = await o.runtime.tickerState()
+    const ids = surface.config.enabled ? surface.items.map((one) => one.instrument.instrumentId) : []
+
+    const stillWanted = new Set(ids)
+    for (const [instrumentId, watching] of stripWatch) {
+      if (stillWanted.has(instrumentId)) continue
+      watching()
+      stripWatch.delete(instrumentId)
+    }
+    for (const instrumentId of ids) {
+      if (stripWatch.has(instrumentId)) continue
+      stripWatch.set(instrumentId, o.engine.watch(instrumentId, 'ticker'))
+    }
+
+    return surface
+  })
+
+  /** Switching the strip on or off. Its own channel because it is one switch, reached from the strip and from Settings. */
+  handle('markets:strip-enabled', async (id, enabled) => {
+    const ticker = await o.store.ticker(id)
+    await o.store.setTicker(id, { ...ticker, enabled: enabled === true })
+    if (enabled !== true) {
+      // Off means off: the subscriptions go with the pixels, rather than streaming for a strip nobody can see.
+      for (const [instrumentId, watching] of stripWatch) {
+        watching()
+        stripWatch.delete(instrumentId)
+      }
+    }
     return state(id)
   })
 

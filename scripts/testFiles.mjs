@@ -180,6 +180,7 @@ export const TEST_FILES = [
   'src/main/browserControl/marketCapabilities.test.ts',
   'src/shared/markets/sessions.test.ts',
   'src/shared/markets/alerts.test.ts',
+  'src/shared/markets/strip.test.ts',
   'src/shared/markets/workspace.test.ts',
   'src/main/markets/engine.test.ts',
   'src/main/markets/store.test.ts',

@@ -11,6 +11,7 @@ import { copyText, newId, titleFromMessage } from './lib/utils'
 import ChatHeader from './components/ChatHeader'
 import ChatView from './components/ChatView'
 import BrowserView from './components/BrowserView'
+import MarketStrip from './components/MarketStrip'
 import ImagesView from './components/ImagesView'
 import { useExperience } from './lib/experience'
 import HudBackground from './components/HudBackground'
@@ -1399,6 +1400,17 @@ export default function App(): React.JSX.Element {
         {/* Outside .stage on purpose: the browser fills everything below the title bar, sidebar included. */}
         {browserOpen && <BrowserView hidden={!browserShowing} />}
       </div>
+
+      {/*
+        The market strip, outside the screen switch on purpose.
+
+        It is a band that belongs to the window rather than to Markets, so it stays put through a conversation, a Page,
+        Notes, Settings and the browser -- which is the whole point of it. A price is something to keep in the corner of
+        your eye while doing something else, and a strip you have to open Markets to see is one you will never look at.
+
+        Not during startup or behind a lock: a ticker animating over a lock screen would be both a waste and a leak.
+      */}
+      <MarketStrip suppressed={welcome !== 'closed'} />
 
       <ToastStack toasts={toasts} onDismiss={(id) => setToasts((current) => current.filter((t) => t.id !== id))} />
       <ControlPrompts />

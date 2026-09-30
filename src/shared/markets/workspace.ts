@@ -87,6 +87,26 @@ export interface TickerConfig {
   size: 'compact' | 'normal' | 'expanded'
   /** Rotating through the groups, and how long each gets. 0 is off. */
   rotateEveryMs: number
+  /**
+   * How many markets are on the rail.
+   *
+   * A count rather than a length in pixels, because the rail loops: it has to hold enough to cover the window twice
+   * over, and "enough" depends on how wide the window is, not on a number somebody chose. What this decides is how
+   * many *distinct* markets appear before the rail repeats itself -- eight is a glance, thirty-two is a board.
+   */
+  slots: number
+  /**
+   * Filling the rail from what somebody actually looks at, rather than from a list they have to build.
+   *
+   * On, the rail is the markets they opened recently, newest first, topped up from the ones their own watchlists and
+   * alerts already name until the slots are full. Their chosen group still comes first, so turning this on adds to
+   * what they picked rather than replacing it -- a rail with two coins on it becomes a full rail, and the two coins
+   * are still the first two.
+   *
+   * Off, the rail is exactly the active group and nothing else, however short that leaves it. An empty group shows an
+   * empty strip, which is the honest answer to "I have not chosen anything yet".
+   */
+  auto: boolean
 }
 
 export const DEFAULT_TICKER: TickerConfig = {
@@ -99,8 +119,19 @@ export const DEFAULT_TICKER: TickerConfig = {
   pauseOnHover: true,
   fields: ['price', 'changePercent'],
   size: 'compact',
-  rotateEveryMs: 0
+  rotateEveryMs: 0,
+  slots: 16,
+  // On, because the alternative for somebody who has just switched the strip on is an empty band.
+  auto: true
 }
+
+/**
+ * The rail lengths somebody can pick.
+ *
+ * Offered as a short list rather than a number box: the useful range is narrow, and every value in it is a different
+ * kind of thing to look at rather than a slightly longer version of the last one.
+ */
+export const TICKER_SLOTS: readonly number[] = Object.freeze([8, 12, 16, 24, 32, 48])
 
 export const TICKER_HEIGHTS: Record<TickerConfig['size'], number> = {
   compact: 26,
@@ -426,7 +457,11 @@ export function cleanTicker(raw: unknown, fallback: TickerConfig = DEFAULT_TICKE
     pauseOnHover: bool(o.pauseOnHover, fallback.pauseOnHover),
     fields: fields.length ? fields : [...fallback.fields],
     size: o.size === 'normal' || o.size === 'expanded' ? o.size : 'compact',
-    rotateEveryMs: clamp(o.rotateEveryMs, 0, 60 * 60_000, fallback.rotateEveryMs)
+    rotateEveryMs: clamp(o.rotateEveryMs, 0, 60 * 60_000, fallback.rotateEveryMs),
+    // Clamped to the range rather than snapped to the offered list: a file that says 10 meant 10, and refusing it
+    // because it is not one of the buttons would lose a choice somebody made.
+    slots: Math.round(clamp(o.slots, 4, 64, fallback.slots)),
+    auto: bool(o.auto, fallback.auto)
   }
 }
 

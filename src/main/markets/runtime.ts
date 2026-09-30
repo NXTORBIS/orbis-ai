@@ -15,6 +15,7 @@ import { summariseLiquidations } from '../../shared/markets/derivatives.ts'
 import { touchOf } from '../../shared/markets/orderbook.ts'
 import { onQuote, valueOf, type PaperFill } from '../../shared/markets/paper.ts'
 import { allWatched, TICKER_HEIGHTS, type MarketsWorkspace } from '../../shared/markets/workspace.ts'
+import { stripSlots, type StripOrigin } from '../../shared/markets/strip.ts'
 import type { Instrument, QuoteView } from '../../shared/markets/instrument.ts'
 
 /**
@@ -394,22 +395,41 @@ export class MarketsRuntime {
       fields: string[]
       height: number
       enabled: boolean
+      slots: number
+      auto: boolean
     }
-    items: { instrument: Instrument; quote: QuoteView | null }[]
+    items: { instrument: Instrument; quote: QuoteView | null; origin: StripOrigin }[]
     connection: string
   }> {
     const profileId = await this.o.profileId()
     const workspace = await this.o.store.read(profileId)
     const ticker = workspace.ticker
     const group = ticker.groups.find((g) => g.id === ticker.activeGroupId) ?? ticker.groups[0]
-    const ids = workspace.enabled ? allWatched({ ...workspace, watchlists: [], alerts: [] }) : []
 
-    const items: { instrument: Instrument; quote: QuoteView | null }[] = []
-    for (const instrumentId of ids) {
-      const instrument = await this.o.engine.instrument(instrumentId)
+    /**
+     * What goes on the rail, decided by the shared rule rather than here.
+     *
+     * The same three lists are handed to the same function that the strip inside the Orbis window uses, so the two
+     * strips cannot drift into showing different coins -- which is the one thing a second copy of a feature reliably
+     * does. Nothing is invented: every id below came from this person's own group, their own recents, or their own
+     * watchlists and alerts.
+     */
+    const slots = workspace.enabled
+      ? stripSlots({
+          chosen: allWatched({ ...workspace, watchlists: [], alerts: [] }),
+          viewed: workspace.recent,
+          watched: allWatched({ ...workspace, ticker: { ...ticker, groups: [] } }),
+          slots: ticker.slots,
+          auto: ticker.auto
+        })
+      : []
+
+    const items: { instrument: Instrument; quote: QuoteView | null; origin: StripOrigin }[] = []
+    for (const slot of slots) {
+      const instrument = await this.o.engine.instrument(slot.instrumentId)
       // An instrument nobody can describe is not drawn: a row with a blank name and no price says nothing and looks broken.
       if (!instrument) continue
-      items.push({ instrument, quote: this.o.engine.quote(instrumentId) })
+      items.push({ instrument, quote: this.o.engine.quote(slot.instrumentId), origin: slot.origin })
     }
     return {
       config: {
@@ -419,7 +439,9 @@ export class MarketsRuntime {
         pauseOnHover: ticker.pauseOnHover,
         fields: ticker.fields,
         height: TICKER_HEIGHTS[ticker.size],
-        enabled: workspace.enabled && ticker.enabled
+        enabled: workspace.enabled && ticker.enabled,
+        slots: ticker.slots,
+        auto: ticker.auto
       },
       items,
       connection: this.connection()

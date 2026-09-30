@@ -18968,3 +18968,442 @@ html[data-motion='reduced'] .tool-btn.recording {
     display: none;
   }
 }
+
+/* ============================================================================
+   The market strip
+   ----------------------------------------------------------------------------
+   A band along the bottom of the window, present on every screen. It floats
+   over the content rather than shortening it, because inside the Orbis window
+   there is no site underneath to be covered -- only Orbis's own screens, which
+   already end in padding. The browser's strip is the opposite and takes its
+   height, because there a page's fixed footer is somebody else's and must not
+   be sat on.
+
+   Its controls are invisible until somebody hovers. The close button in
+   particular: a permanent one on a band meant to be glanced at would be the
+   most prominent thing on it.
+   ========================================================================= */
+
+.mstrip {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.mstrip-bar {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--mstrip-height, 26px);
+  padding: 0 6px 0 10px;
+  background: color-mix(in srgb, var(--bg-mid) 88%, transparent);
+  backdrop-filter: blur(14px);
+  border-top: 1px solid var(--glass-border);
+  overflow: hidden;
+}
+
+/* ---- the moving part ---- */
+
+.mstrip-viewport {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  /* Fading at both ends, so an item is never half-cut against a hard edge. */
+  mask-image: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent);
+}
+
+.mstrip-rail {
+  display: flex;
+  /* Never wraps and never shrinks: the rail is as long as its contents and is moved by transform. */
+  flex: 0 0 auto;
+  white-space: nowrap;
+  will-change: transform;
+}
+
+.mstrip-run {
+  display: flex;
+  flex: 0 0 auto;
+}
+
+.mstrip-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 14px;
+  font-size: 11.5px;
+  color: var(--text);
+  border-right: 1px solid color-mix(in srgb, var(--glass-border) 60%, transparent);
+}
+
+.mstrip-item > b {
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+
+.mstrip-price {
+  color: var(--text);
+}
+
+.mstrip-change {
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.mstrip-change.up {
+  color: var(--green);
+}
+
+.mstrip-change.down {
+  color: var(--red);
+}
+
+.mstrip-change.flat {
+  color: var(--faint);
+}
+
+/* Nothing is labelled live that is not. A delayed or stale price says so on the item. */
+.mstrip-item > small {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--faint);
+}
+
+.mstrip-item.is-stale {
+  opacity: 0.6;
+}
+
+.mstrip-none {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--faint);
+}
+
+.mstrip-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--cyan);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* The same rows, once, not moving: for a screen reader only. */
+.mstrip-static {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  list-style: none;
+}
+
+/* ---- the tools, on hover only ---- */
+
+.mstrip-tools {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  /*
+    Hidden by default, and not with display:none: the buttons keep their box so the rail does not lurch sideways the
+    moment a pointer arrives.
+  */
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.mstrip.is-hovered .mstrip-tools,
+.mstrip.is-tuning .mstrip-tools,
+.mstrip-tools:focus-within {
+  opacity: 1;
+}
+
+.mstrip-hint {
+  font-size: 10px;
+  color: var(--faint);
+}
+
+.mstrip-state {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  padding: 2px 6px;
+  border-radius: 999px;
+}
+
+.mstrip-state.is-live {
+  color: var(--green);
+  background: color-mix(in srgb, var(--green) 14%, transparent);
+}
+
+.mstrip-state.is-delayed {
+  color: #ffbe4d;
+  background: color-mix(in srgb, #ffbe4d 14%, transparent);
+}
+
+.mstrip-state.is-down {
+  color: var(--faint);
+  background: color-mix(in srgb, var(--faint) 14%, transparent);
+}
+
+.mstrip-tool {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+  transition:
+    color 120ms ease,
+    background 120ms ease;
+}
+
+.mstrip-tool:hover,
+.mstrip-tool[aria-pressed="true"],
+.mstrip-tool[aria-expanded="true"] {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+}
+
+.mstrip-tool:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 1px;
+}
+
+/* Closing is the destructive one, so it reads as it on hover and nowhere else. */
+.mstrip-close:hover {
+  color: var(--red);
+  background: color-mix(in srgb, var(--red) 14%, transparent);
+}
+
+/* ---- choosing what is on it ---- */
+
+.mstrip-panel {
+  pointer-events: auto;
+  align-self: flex-end;
+  width: min(360px, calc(100vw - 24px));
+  margin: 0 10px 2px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: min(60vh, 460px);
+  overflow-y: auto;
+  background: color-mix(in srgb, var(--bg-mid) 96%, transparent);
+  backdrop-filter: blur(18px);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5);
+}
+
+.mstrip-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.mstrip-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+
+.mstrip-row-label {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.mstrip-slots {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.mstrip-chip {
+  padding: 3px 9px;
+  font-size: 11px;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+}
+
+.mstrip-chip[aria-pressed="true"] {
+  color: var(--bg-mid);
+  background: var(--cyan);
+  border-color: var(--cyan);
+}
+
+.mstrip-auto {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px;
+  text-align: left;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+}
+
+.mstrip-auto[aria-pressed="true"] {
+  color: var(--text);
+  border-color: var(--cyan-dim);
+  background: var(--cyan-fill);
+}
+
+.mstrip-auto > span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mstrip-auto b {
+  font-size: 12px;
+}
+
+.mstrip-auto small {
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: var(--faint);
+}
+
+.mstrip-add {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  color: var(--faint);
+}
+
+.mstrip-add > input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 7px 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.mstrip-add > input:focus {
+  outline: none;
+}
+
+.mstrip-found,
+.mstrip-chosen {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mstrip-found li > button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+  font-size: 12px;
+  text-align: left;
+}
+
+.mstrip-found li > button:hover {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+/* The name people searched for is the brightest thing on the row; the code tells two rows apart. */
+.mstrip-found li > button > b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.mstrip-code {
+  font-size: 10.5px;
+  color: var(--faint);
+}
+
+.mstrip-searching {
+  margin: 0;
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.mstrip-chosen li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  font-size: 11.5px;
+  color: var(--text);
+  border-radius: 7px;
+}
+
+.mstrip-chosen li:hover {
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+}
+
+.mstrip-chosen li > b {
+  flex: 0 0 auto;
+}
+
+/* Where each one came from, so "why is this on my strip" always has an answer. */
+.mstrip-origin {
+  margin-left: auto;
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--faint);
+}
+
+.mstrip-origin.is-chosen {
+  color: var(--cyan);
+}
+
+@media (max-width: 520px) {
+  /* The state word is the first thing to go: the colour of the change already says whether it is live enough to read. */
+  .mstrip-state {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mstrip-rail {
+    transform: none !important;
+  }
+}

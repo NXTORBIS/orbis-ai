@@ -223,5 +223,11 @@ test('the boundary is a known size, so the migration can be estimated rather tha
   // channel is the one that matters -- it authorises every operation in the graph against the Page's grants before
   // any node runs, because the runtime evaluates synchronously and a permission check inside that loop is
   // impossible. Nothing here widens what a Page may do: a node reaches the same dispatch pages:compute reaches.
-  assert.ok(code.length <= 439, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
+  //
+  // 439 → 441: the market strip along the bottom of the Orbis window. One to read what it draws, one for its on/off.
+  // Neither could reuse an existing channel: `markets:state` returns the whole of Markets, and the strip is on screen
+  // on every page, so moving a rail would mean re-reading watchlists, alerts, screens and strategies twice a second;
+  // and `markets:quotes` releases every subscription it was not handed, so the strip and a watchlist sharing it would
+  // take each other's prices away. Which markets the strip shows is decided in shared code, not here.
+  assert.ok(code.length <= 441, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
 })
