@@ -62,6 +62,21 @@ export function isKnownZone(timeZone: string): boolean {
   }
 }
 
+/**
+ * A zone name as the database spells it, or null if it is not a zone at all.
+ *
+ * `Intl` accepts "europe/berlin" as readily as "Europe/Berlin", which sounds harmless and is not: a schedule said in
+ * words arrives lowercased, and storing the lowercase spelling means the name shown back to somebody is not the name
+ * anybody writes. So the spelling is taken from the database rather than from what was typed.
+ */
+export function canonicalZone(timeZone: string): string | null {
+  try {
+    return new Intl.DateTimeFormat('en-US', { timeZone }).resolvedOptions().timeZone
+  } catch {
+    return null
+  }
+}
+
 /** The zone this computer is in, for schedules that mean "wherever I am". */
 export function deviceZone(): string {
   try {
