@@ -199,7 +199,15 @@ export function primarySections(settings: ExperienceSettings): Section[] {
   const wanted = new Set<Section>(['markets'])
   if (settings.panels.includes('screener')) wanted.add('screener')
   if (settings.panels.includes('alerts')) wanted.add('alerts')
-  if (settings.panels.includes('portfolio')) wanted.add('portfolio')
+  /**
+   * Paper trading is always in the header, whatever somebody said about their experience.
+   *
+   * It used to appear only when the chosen level happened to include it, so somebody who said they had never traded
+   * -- exactly the person a practice account is for -- found it behind a "More" menu, under a name that does not
+   * say what it is. A place to practise without risking anything is not an advanced feature to be earned; it is the
+   * first thing somebody new should be able to find.
+   */
+  wanted.add('portfolio')
   // Backtesting and replay are the advanced half. They come forward for somebody whose chart already has an advanced
   // toolbar, which is the same answer read twice rather than a second rule about who is advanced.
   if (settings.chartAdvancedToolbar) {

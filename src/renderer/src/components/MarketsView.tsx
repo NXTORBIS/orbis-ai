@@ -99,7 +99,9 @@ const SECTION_LOOK: Record<Section, { label: string; icon: typeof LineChart }> =
   markets: { label: 'Markets', icon: LineChart },
   screener: { label: 'Screener', icon: SlidersHorizontal },
   alerts: { label: 'Alerts', icon: BellRing },
-  portfolio: { label: 'Portfolio', icon: Briefcase },
+  // "Portfolio" is what it holds; "Paper trading" is what somebody is looking for when they want to practise. The
+  // panel itself has said SIMULATED at the top all along -- this is so the word is on the way in as well.
+  portfolio: { label: 'Paper trading', icon: Briefcase },
   backtest: { label: 'Strategies', icon: FlaskConical },
   replay: { label: 'Replay', icon: History },
   news: { label: 'News', icon: Newspaper }

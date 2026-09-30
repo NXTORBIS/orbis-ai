@@ -15,6 +15,7 @@ import {
   PRESET_PREVIEW,
   readExperienceRequest,
   resolveExperience,
+  primarySections,
   type ExperienceSettings,
   type MarketsExperienceProfile
 } from './experience.ts'
@@ -401,4 +402,22 @@ test('an ordinary sentence is not read as a request to rearrange somebody’s in
   ]) {
     assert.equal(readExperienceRequest(said), null, `"${said}" was read as a request to change the experience`)
   }
+})
+
+// ---------------------------------------------------------------- a place to practise
+
+test('paper trading is in the header at every experience level', () => {
+  // A practice account is for somebody who has not traded, so it cannot be a thing that only appears once they
+  // have. It used to be conditional, which put it behind a More menu for exactly the person it is for.
+  for (const level of EXPERIENCE_LEVELS) {
+    const { settings } = resolveExperience({ ...DEFAULT_EXPERIENCE, level })
+    assert.ok(
+      primarySections(settings).includes('portfolio'),
+      `${level} should be able to find paper trading without opening a menu`
+    )
+  }
+})
+
+test('markets stays first, so promoting paper trading did not reorder the header', () => {
+  assert.equal(primarySections(DEFAULT_SETTINGS)[0], 'markets')
 })
