@@ -27,6 +27,7 @@ import {
   Zap
 } from 'lucide-react'
 import MarketChart, { compactNumber, type ChartIndicator, type ChartType } from './markets/MarketChart'
+import { withLivePrice } from '../../../shared/markets/liveCandle'
 import ScreenerPanel from './markets/ScreenerPanel'
 import AlertsPanel from './markets/AlertsPanel'
 import PortfolioPanel from './markets/PortfolioPanel'
@@ -268,6 +269,14 @@ export default function MarketsView({
 
   const [open, setOpen] = useState<MarketDetail | null>(null)
   const [candles, setCandles] = useState<Candle[]>([])
+  /**
+   * What the tick handler needs to know, held in refs.
+   *
+   * The handler is subscribed once; reading the open market and the interval from state would mean either a stale
+   * closure or tearing the subscription down and rebuilding it every time either changed.
+   */
+  const openRef = useRef<string | null>(null)
+  const intervalRef = useRef('1m')
   const [interval, setInterval_] = useState('1h')
   const [chartType, setChartType] = useState<ChartType>('candles')
   const [indicators, setIndicators] = useState<ChartIndicator[]>([])
@@ -507,6 +516,23 @@ export default function MarketsView({
         const fresh = quotes.get(current.instrument.instrumentId)
         return fresh ? { ...current, quote: fresh } : current
       })
+
+      /**
+       * The chart follows the price, instead of being a photograph of when the market was opened.
+       *
+       * Candles were fetched once and never touched again, so the header moved with every trade while the last candle
+       * sat exactly where it had been -- and on a one-minute chart it stayed wrong for a minute at a time, then for
+       * ever, because nothing asked for the next candle either.
+       *
+       * A live chart does not re-fetch. The period that has not closed yet is built from the prices arriving, which is
+       * what every trading screen does; the periods that have closed still come from the provider, untouched.
+       */
+      setCandles((current) => {
+        if (current.length === 0 || !openRef.current) return current
+        const fresh = quotes.get(openRef.current)
+        if (!fresh || fresh.last === null || !Number.isFinite(fresh.last)) return current
+        return withLivePrice(current, { price: fresh.last, at: fresh.timestamp }, intervalRef.current)
+      })
     })
 
     const timer = window.setInterval(() => void tick(), 30_000)
@@ -515,6 +541,10 @@ export default function MarketsView({
       window.clearInterval(timer)
     }
   }, [enabled, lists, openId, discovery, moverKind])
+
+  // The refs the tick handler reads, kept level with the state they mirror.
+  openRef.current = openId
+  intervalRef.current = interval
 
   /** Clears the refreshed colour. A real timer, because nothing else would re-render to take it away. */
   useEffect(() => {

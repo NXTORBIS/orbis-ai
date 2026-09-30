@@ -8,7 +8,6 @@ import {
   CircleHelp,
   ClipboardList,
   Globe,
-  HatGlasses,
   Images,
   KeyRound,
   Keyboard,
@@ -177,7 +176,13 @@ export default function Sidebar(props: Props): React.JSX.Element {
 
   const nav: NavItem[] = [
     { label: 'New chat', icon: SquarePen, onClick: props.onNewChat, shortcut: 'Ctrl+Shift+O' },
-    { label: 'Incognito chat', icon: HatGlasses, onClick: props.onIncognito, active: props.incognito, shortcut: 'Ctrl+Shift+N' },
+    /*
+      Incognito is not a place, so it is not a row.
+
+      It is a property of the chat you are about to start, and a permanent entry for it sat beside "New chat" implying
+      two different screens when there is one. Ctrl+Shift+N still starts one, the slash command still does, and a chat
+      that is incognito still says so -- what has gone is the standing invitation.
+    */
     { label: 'Search chats', icon: Search, onClick: props.onSearch },
     { label: 'Images', icon: Images, onClick: props.onImages, active: props.imagesOpen, badge: props.imageCount },
     // Everything that manages browsing lives in the browser's own sidebar now. This is the way to it.

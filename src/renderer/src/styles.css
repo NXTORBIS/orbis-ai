@@ -18970,12 +18970,47 @@ html[data-motion='reduced'] .tool-btn.recording {
    A price reserving 96px, a change, a star and a turnover figure are a lot of fixed width in a panel somebody has
    made narrow -- the name had almost nothing left. The price keeps its alignment and stops reserving space it is
    not using. */
-@media (max-width: 460px) {
+/*
+  The rows measure themselves, not the window.
+
+  This was a `@media (max-width: 460px)`, which asks how wide the *window* is -- and the Markets panel is a narrow
+  column inside a window that is usually wide. So the rule never fired where it was needed: every fixed column kept its
+  width, the name button was squeezed to nothing, the symbol disappeared entirely and the logo was sliced down the
+  middle. A container query asks the only question that matters, which is how much room this list actually has.
+*/
+.mk-rows {
+  container-type: inline-size;
+  container-name: mk-rows;
+}
+
+/* The logo is never what gives way. A sliced circle reads as a broken image, not as a narrow column. */
+.mk-row-name > .mk-logo,
+.mk-row-name > .mk-logo-fallback {
+  flex: 0 0 auto;
+}
+
+/*
+  A floor for the name, so the button cannot be squeezed out of existence.
+  Enough for the logo and a few characters of the symbol -- which is the part being read.
+*/
+.mk-row-name {
+  min-width: 96px;
+}
+
+@container mk-rows (max-width: 560px) {
+  /* Value traded is the first thing to go: it is the least of what a row says and the widest. */
+  .mk-vol {
+    display: none;
+  }
+}
+
+@container mk-rows (max-width: 440px) {
   .mk-price {
     min-width: 0;
   }
 
-  .mk-vol {
+  /* Then the full name, leaving the logo, the symbol, the price and the move. */
+  .mk-row-name > .mk-name {
     display: none;
   }
 }
