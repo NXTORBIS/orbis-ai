@@ -29,7 +29,7 @@ const stateLabel = $('state')
 const peek = $('peek')
 
 /** What Orbis last told us to show. Empty until it does. */
-let config = { groupName: '', speed: 40, direction: 'left', pauseOnHover: true, fields: ['price', 'change'], height: 26, enabled: false, slots: 16, auto: true }
+let config = { groupName: '', speed: 40, direction: 'left', pauseOnHover: true, fields: ['price', 'change'], height: 26, enabled: false, slots: 16, auto: true, stillWhenReducedMotion: false }
 /** instrumentId -> { instrument, quote } */
 let rows = new Map()
 /** instrumentId -> the nodes drawn for it, so an update writes text instead of rebuilding. */
@@ -41,7 +41,19 @@ let paused = false
 let hovering = false
 let lastFrame = 0
 let frame = 0
-let reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+/**
+ * Whether the system asks for less motion. Whether that stops the strip is a setting, not an assumption.
+ *
+ * Everything else obeys the preference without asking, because it exists for people movement makes unwell. A ticker is
+ * the ambiguous one: switching on a scrolling strip and choosing its speed is asking for something that moves, and
+ * obeying the preference there makes the strip look broken rather than considerate. So the person decides, in Orbis,
+ * and both strips read the same answer.
+ */
+let systemReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+let reduced = false
+const settleMotion = () => {
+  reduced = systemReduced && config.stillWhenReducedMotion === true
+}
 
 // ---------------------------------------------------------------- drawing
 
@@ -264,6 +276,7 @@ async function load() {
   try {
     const state = await within(6000, call('markets:ticker', []))
     config = { ...config, ...(state?.config ?? {}) }
+    settleMotion()
     void tellBrowser(config.enabled)
     if (!config.enabled) {
       // Off means off: nothing drawn, nothing subscribed, and no long-poll held open for a band that is not there.
@@ -471,7 +484,8 @@ document.addEventListener('visibilitychange', () => {
 })
 
 window.matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', (event) => {
-  reduced = event.matches
+  systemReduced = event.matches
+  settleMotion()
   strip.classList.toggle('is-static', reduced)
   if (reduced) rail.style.transform = 'translate3d(0,0,0)'
 })

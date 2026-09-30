@@ -107,6 +107,19 @@ export interface TickerConfig {
    * empty strip, which is the honest answer to "I have not chosen anything yet".
    */
   auto: boolean
+  /**
+   * Whether the system's "reduce motion" setting stops the strip scrolling.
+   *
+   * That setting exists for people who are made unwell by movement, so it is honoured by everything else in Orbis
+   * without asking. A ticker is the one place where it is genuinely ambiguous: switching on a strip and choosing a
+   * speed and a direction *is* asking for something that moves, so obeying the system preference there can look like
+   * a strip that is simply broken.
+   *
+   * So it is a choice rather than an assumption, and the choice is offered where the strip is configured. Off -- the
+   * default -- means the strip scrolls because that is what was asked for. On means it holds still and shows the same
+   * prices, which remains a complete strip: nothing is hidden by not moving.
+   */
+  stillWhenReducedMotion: boolean
 }
 
 export const DEFAULT_TICKER: TickerConfig = {
@@ -122,7 +135,9 @@ export const DEFAULT_TICKER: TickerConfig = {
   rotateEveryMs: 0,
   slots: 16,
   // On, because the alternative for somebody who has just switched the strip on is an empty band.
-  auto: true
+  auto: true,
+  // Off: somebody who switched on a scrolling strip and chose its speed asked for it to scroll. The switch is there.
+  stillWhenReducedMotion: false
 }
 
 /**
@@ -461,7 +476,8 @@ export function cleanTicker(raw: unknown, fallback: TickerConfig = DEFAULT_TICKE
     // Clamped to the range rather than snapped to the offered list: a file that says 10 meant 10, and refusing it
     // because it is not one of the buttons would lose a choice somebody made.
     slots: Math.round(clamp(o.slots, 4, 64, fallback.slots)),
-    auto: bool(o.auto, fallback.auto)
+    auto: bool(o.auto, fallback.auto),
+    stillWhenReducedMotion: bool(o.stillWhenReducedMotion, fallback.stillWhenReducedMotion)
   }
 }
 

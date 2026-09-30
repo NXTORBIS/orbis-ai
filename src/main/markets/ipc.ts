@@ -230,6 +230,7 @@ export interface StripAnswer {
     enabled: boolean
     slots: number
     auto: boolean
+    stillWhenReducedMotion: boolean
   }
   items: { instrument: Instrument; quote: QuoteView | null; origin: StripOrigin }[]
   connection: string
@@ -547,7 +548,7 @@ export function registerMarketsIpc(o: MarketsIpcOptions): void {
   const stripWatch = new Map<string, () => void>()
   handle('markets:strip', async (id) => {
     void id
-    const surface = await o.runtime.tickerState()
+    let surface = await o.runtime.tickerState()
     const ids = surface.config.enabled ? surface.items.map((one) => one.instrument.instrumentId) : []
 
     const stillWanted = new Set(ids)
@@ -559,6 +560,23 @@ export function registerMarketsIpc(o: MarketsIpcOptions): void {
     for (const instrumentId of ids) {
       if (stripWatch.has(instrumentId)) continue
       stripWatch.set(instrumentId, o.engine.watch(instrumentId, 'ticker'))
+    }
+
+    /**
+     * Asked for once, for anything the strip is drawing that has never had a price.
+     *
+     * The general priming pass only covers what the watchlists and alerts name, so a market the strip picked up from
+     * recents had nothing to draw and showed a dash until a trade happened to arrive -- which for a quiet market is a
+     * long time, and looks identical to a market Orbis cannot price at all. A dash has to mean "no price exists", not
+     * "nobody has asked yet".
+     *
+     * Bounded, and only ever for the rows actually on the strip.
+     */
+    const unpriced = ids.filter((one) => o.engine.quote(one) === null).slice(0, 50)
+    if (unpriced.length > 0) {
+      await o.engine.refresh(unpriced).catch(() => undefined)
+      // Read again, so the answer carries the prices that were just fetched rather than the dashes that prompted it.
+      surface = await o.runtime.tickerState()
     }
 
     return surface

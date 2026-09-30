@@ -414,6 +414,7 @@ export class MarketsRuntime {
       enabled: boolean
       slots: number
       auto: boolean
+      stillWhenReducedMotion: boolean
     }
     items: { instrument: Instrument; quote: QuoteView | null; origin: StripOrigin }[]
     connection: string
@@ -458,7 +459,8 @@ export class MarketsRuntime {
         height: TICKER_HEIGHTS[ticker.size],
         enabled: workspace.enabled && ticker.enabled,
         slots: ticker.slots,
-        auto: ticker.auto
+        auto: ticker.auto,
+        stillWhenReducedMotion: ticker.stillWhenReducedMotion
       },
       items,
       connection: this.connection()

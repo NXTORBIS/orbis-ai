@@ -355,6 +355,29 @@ export default function MarketsSettings(): React.JSX.Element {
                 />
                 <span>Pause when the pointer is over it</span>
               </label>
+              {/*
+                Offered only when the system preference is actually set, because to anybody else it is a switch about
+                nothing. Everything else in Orbis obeys that preference without asking; a ticker is the one place where
+                obeying it silently makes the feature look broken instead of considerate, so here it is a choice.
+              */}
+              {typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches && (
+                <>
+                  <label className="tl-switch">
+                    <input
+                      type="checkbox"
+                      checked={ticker.stillWhenReducedMotion}
+                      disabled={busy}
+                      onChange={(e) => void save({ stillWhenReducedMotion: e.target.checked })}
+                    />
+                    <span>Hold it still, because this computer reduces motion</span>
+                  </label>
+                  <p className="pw-note is-quiet">
+                    This computer is set to reduce motion. The strip scrolls anyway, because a scrolling strip is what
+                    you switched on. Holding it still shows the same prices without the movement — nothing is hidden by
+                    not moving.
+                  </p>
+                </>
+              )}
 
               <h4>Fields</h4>
               {TICKER_FIELDS.map((field) => (

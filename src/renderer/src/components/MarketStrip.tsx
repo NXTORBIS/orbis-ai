@@ -43,6 +43,7 @@ interface StripConfig {
   enabled: boolean
   slots: number
   auto: boolean
+  stillWhenReducedMotion: boolean
 }
 
 const refused = (value: unknown): value is { error: string; message?: string } =>
@@ -103,6 +104,16 @@ export default function MarketStrip({ suppressed = false }: MarketStripProps): R
 
   const viewport = useRef<HTMLDivElement | null>(null)
   const rail = useRef<HTMLDivElement | null>(null)
+  const run = useRef<HTMLDivElement | null>(null)
+  /**
+   * How many times the items are repeated along the rail.
+   *
+   * Two was not enough. A loop needs one full copy to have gone past the left edge before it can reset, so the rail has
+   * to be wider than the window -- and four coins on a wide screen are not, which meant the strip held perfectly still
+   * and looked broken. So the items repeat as many times as it takes to cover the window and then once more, which is
+   * what lets four coins scroll continuously just as forty do.
+   */
+  const [copies, setCopies] = useState(2)
   const offset = useRef(0)
   const lastFrame = useRef(0)
   const frame = useRef(0)
@@ -177,6 +188,35 @@ export default function MarketStrip({ suppressed = false }: MarketStripProps): R
     })
   }, [showing])
 
+  /** Enough copies to be wider than the window. Re-measured when the items change and when the window resizes. */
+  useEffect(() => {
+    if (!showing) return
+    const measure = (): void => {
+      const one = run.current?.scrollWidth ?? 0
+      const across = viewport.current?.clientWidth ?? 0
+      if (one <= 0 || across <= 0) return
+      // One copy to fill the window, one more to loop into, and never fewer than two.
+      const wanted = Math.max(2, Math.ceil(across / one) + 1)
+      // Bounded, so a single narrow item on a very wide screen cannot ask for hundreds of copies.
+      setCopies((current) => (current === Math.min(wanted, 40) ? current : Math.min(wanted, 40)))
+    }
+    /**
+     * Measured in a frame rather than straight away.
+     *
+     * The rail's width is only true once the logos have taken their boxes and the fonts have settled; measuring in the
+     * same tick as the render read a narrower rail and asked for too few copies, which is how the strip ended up with
+     * two copies that together did not cover the window and so could never loop.
+     */
+    const soon = requestAnimationFrame(measure)
+    const watcher = new ResizeObserver(measure)
+    if (viewport.current) watcher.observe(viewport.current)
+    if (run.current) watcher.observe(run.current)
+    return () => {
+      cancelAnimationFrame(soon)
+      watcher.disconnect()
+    }
+  }, [showing, items.length, copies])
+
   // ---------------------------------------------------------------- the moving part
 
   live.current = {
@@ -200,8 +240,16 @@ export default function MarketStrip({ suppressed = false }: MarketStripProps): R
       frame.current = 0
       return
     }
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      // Motion off means motion off. The same prices, held still.
+    /**
+     * The system's "reduce motion" setting, honoured only if that was asked for.
+     *
+     * Everything else in Orbis obeys it without asking, because it exists for people who are made unwell by movement.
+     * A ticker is the one genuinely ambiguous case: switching on a scrolling strip and choosing its speed and direction
+     * is asking for something that moves, and obeying the preference there makes the strip look broken rather than
+     * considerate. So it is a switch, sitting next to the speed, and it is off by default.
+     */
+    if (config?.stillWhenReducedMotion && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      // Held still, with the same prices. A strip that does not move is still a complete strip.
       if (rail.current) rail.current.style.transform = 'translate3d(0,0,0)'
       return
     }
@@ -216,18 +264,25 @@ export default function MarketStrip({ suppressed = false }: MarketStripProps): R
       const { speed, direction, pauseOnHover, hovering: over, paused: held } = live.current
       if (held || (pauseOnHover && over)) return
 
-      const half = node.scrollWidth / 2
-      // Nothing to loop through yet, or a rail shorter than the window: held still rather than sliding to a gap.
-      if (half <= 1 || half < (viewport.current?.clientWidth ?? 0)) {
+      /**
+       * The wrap distance is one copy of the items, whatever the rail is made of.
+       *
+       * Once the rail has moved exactly one copy's width, the next copy is sitting precisely where that one started, so
+       * resetting to zero there is invisible. Measuring the copy rather than halving the rail is what lets the number of
+       * copies change with the window without the loop developing a jump.
+       */
+      const lap = run.current?.scrollWidth ?? 0
+      if (lap <= 1) {
+        // Nothing measured yet. Held at the start rather than moved by a guess.
         node.style.transform = 'translate3d(0,0,0)'
         return
       }
 
-      // Capped, so a frame the machine skipped does not teleport the rail halfway along itself.
+      // Capped, so a frame the machine skipped does not teleport the rail along itself.
       const seconds = Math.min(0.25, (now - previous) / 1000)
       offset.current += speed * seconds * (direction === 'right' ? -1 : 1)
-      if (offset.current >= half) offset.current -= half
-      if (offset.current < 0) offset.current += half
+      if (offset.current >= lap) offset.current -= lap
+      if (offset.current < 0) offset.current += lap
       node.style.transform = `translate3d(${-offset.current}px,0,0)`
     }
 
@@ -237,7 +292,7 @@ export default function MarketStrip({ suppressed = false }: MarketStripProps): R
       frame.current = 0
       lastFrame.current = 0
     }
-  }, [showing, items.length])
+  }, [showing, items.length, copies, config?.stillWhenReducedMotion])
 
   // ---------------------------------------------------------------- what somebody does to it
 
@@ -249,7 +304,12 @@ export default function MarketStrip({ suppressed = false }: MarketStripProps): R
   }, [])
 
   const change = useCallback(
-    async (patch: { slots?: number; auto?: boolean; size?: 'compact' | 'normal' | 'expanded' }) => {
+    async (patch: {
+      slots?: number
+      auto?: boolean
+      size?: 'compact' | 'normal' | 'expanded'
+      stillWhenReducedMotion?: boolean
+    }) => {
       const answer = await window.api.marketsSetTicker(patch)
       if (refused(answer)) return
       await load()
@@ -291,11 +351,12 @@ export default function MarketStrip({ suppressed = false }: MarketStripProps): R
           ) : (
             <div className="mstrip-rail" ref={rail} aria-hidden="true">
               {/*
-                Twice over, deliberately: the second copy is what the first one loops into. Hidden from a screen reader
-                entirely, because the same items are listed once below for anybody reading rather than glancing.
+                Repeated, deliberately: each copy is what the one before it loops into, and there are as many as it takes
+                to be wider than the window. Hidden from a screen reader entirely, because the same items are listed once
+                below for anybody reading rather than glancing.
               */}
-              {[0, 1].map((copy) => (
-                <div className="mstrip-run" key={copy}>
+              {Array.from({ length: copies }, (_unused, copy) => (
+                <div className="mstrip-run" key={copy} ref={copy === 0 ? run : undefined}>
                   {items.map((row) => (
                     <StripRow key={`${copy}:${row.instrument.instrumentId}`} row={row} />
                   ))}
@@ -399,7 +460,12 @@ function StripSettings({
 }: {
   config: StripConfig | null
   items: StripItem[]
-  onChange: (patch: { slots?: number; auto?: boolean; size?: 'compact' | 'normal' | 'expanded' }) => Promise<void>
+  onChange: (patch: {
+    slots?: number
+    auto?: boolean
+    size?: 'compact' | 'normal' | 'expanded'
+    stillWhenReducedMotion?: boolean
+  }) => Promise<void>
   onReload: () => Promise<void>
   onDone: () => void
 }): React.JSX.Element {
@@ -499,6 +565,27 @@ function StripSettings({
           </small>
         </span>
       </button>
+
+      {/*
+        Offered only when the system preference is actually set, because to anybody else it is a switch about nothing.
+      */}
+      {typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches && (
+        <button
+          type="button"
+          className="mstrip-auto"
+          aria-pressed={config?.stillWhenReducedMotion === true}
+          onClick={() => void onChange({ stillWhenReducedMotion: config?.stillWhenReducedMotion !== true })}
+        >
+          <Pause size={13} />
+          <span>
+            <b>Hold it still</b>
+            <small>
+              This computer is set to reduce motion. The strip scrolls anyway, because a scrolling strip is what you
+              switched on — turn this on to keep the same prices without the movement.
+            </small>
+          </span>
+        </button>
+      )}
 
       <div className="mstrip-add">
         <Plus size={13} />
