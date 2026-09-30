@@ -594,7 +594,16 @@ export function describeAction(a: TemporalAction): string {
 export function describe(action: TemporalAction, schedule: Schedule): string {
   const parts = [cap(describeAction(action)), describeRecurrence(schedule.recurrence)]
   let out = parts.join(', ')
-  if (schedule.timeZone !== deviceZone()) out += ` (${schedule.timeZone.split('/').pop()?.replace(/_/g, ' ')} time)`
+  /**
+   * Compared as the database spells them, because the same place has more than one name.
+   *
+   * A machine in India resolves its own zone as `Asia/Calcutta` while somebody saying "IST" gets `Asia/Kolkata`.
+   * Comparing the strings makes Orbis tag a schedule "(Kolkata time)" on a computer already in that very zone,
+   * which reads as though the time had been converted from somewhere else.
+   */
+  const here = canonicalZone(deviceZone())
+  const there = canonicalZone(schedule.timeZone)
+  if (there !== null && there !== here) out += ` (${schedule.timeZone.split('/').pop()?.replace(/_/g, ' ')} time)`
   if (schedule.maxRuns !== undefined) out += `, ${schedule.maxRuns} time${schedule.maxRuns === 1 ? '' : 's'}`
   if (schedule.endsAt !== undefined) out += ', until it ends'
   return out

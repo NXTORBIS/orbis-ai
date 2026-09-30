@@ -415,3 +415,20 @@ test('a paragraph that happens to start with a rule is prose, not an instruction
   const essay = 'every day at 8am ' + 'something happens and then a great deal more happens after that, '.repeat(6)
   assert.equal(looksLikeScheduleRequest(essay), false)
 })
+
+test('a zone is not called out when it is the same place under another name', () => {
+  /**
+   * A computer in India resolves its own zone as "Asia/Calcutta"; somebody saying "IST" means "Asia/Kolkata". They
+   * are the same place, so tagging the schedule "(Kolkata time)" there reads as though a conversion had happened.
+   */
+  const r = readRequest('remind me to call home every day at 8pm ist', NOW, 'Asia/Calcutta')
+  assert.equal(r.ok, true)
+  if (!r.ok) return
+  assert.ok(!r.said.includes('time)'), r.said)
+
+  // Somewhere genuinely different is still said.
+  const far = readRequest('remind me to join the call every day at 9am new york time', NOW, 'Asia/Calcutta')
+  assert.equal(far.ok, true)
+  if (!far.ok) return
+  assert.match(far.said, /New York time/)
+})
