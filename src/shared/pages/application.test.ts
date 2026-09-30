@@ -22,6 +22,7 @@ import {
   allRoutes,
   applicationAddress,
   applicationErrors,
+  applicationToJson,
   applicationIsPublishable,
   bindState,
   canonicalApplicationAddress,
@@ -39,6 +40,7 @@ import {
   parseApplicationAddress,
   parseRoute,
   removePage,
+  readApplication,
   reorderPages,
   resolveRoute,
   routeToText,
@@ -989,5 +991,111 @@ describe('limits and provenance', () => {
   it('says an older stored version needs migrating', () => {
     assert.equal(needsMigration({ major: 1, minor: 0, patch: 0 }, { major: 2, minor: 0, patch: 0 }), true)
     assert.equal(needsMigration({ major: 2, minor: 0, patch: 0 }, { major: 2, minor: 0, patch: 0 }), false)
+  })
+})
+
+// ---------------------------------------------------------------- storing
+
+describe('storing and reading back', () => {
+  it('round-trips a full application', () => {
+    const before = built()
+    const after = ok(readApplication(applicationToJson(before)), 'round trip')
+    assert.equal(after.applicationId, before.applicationId)
+    assert.equal(after.slug, before.slug)
+    assert.deepEqual(allRoutes(after), allRoutes(before))
+    assert.deepEqual(after.defaultRoute, before.defaultRoute)
+    assert.equal(after.sharedValues.length, before.sharedValues.length)
+    assert.equal(after.flows.length, before.flows.length)
+    assert.equal(after.contracts.length, before.contracts.length)
+    assert.deepEqual([...after.bindings].sort((a, b) => a.value.localeCompare(b.value)).length, before.bindings.length)
+  })
+
+  it('round-trips groups, order and hidden Pages', () => {
+    let app = base()
+    app = ok(addGroup(app, { id: 'sources', label: 'Sources' }), 'group')
+    app = ok(addPage(app, { pageId: PAGE_A, route: '/', label: 'Home', order: 5 }), 'home')
+    app = ok(
+      addPage(app, { pageId: PAGE_B, route: '/papers', label: 'Papers', group: 'sources', visibility: 'hidden' }),
+      'hidden in group'
+    )
+    const after = ok(readApplication(applicationToJson(app)), 'round trip')
+    assert.equal(after.groups.length, 1)
+    assert.equal(after.pages.find((one) => one.pageId === PAGE_B)?.visibility, 'hidden')
+    assert.equal(after.pages.find((one) => one.pageId === PAGE_A)?.order, 5)
+  })
+
+  it('keeps configuration intact', () => {
+    let app = base()
+    app = ok(
+      addPage(app, { pageId: PAGE_A, route: '/', label: 'Home', configuration: { view: 'table', rows: 20 } }),
+      'configured'
+    )
+    const after = ok(readApplication(applicationToJson(app)), 'round trip')
+    assert.deepEqual({ ...after.pages[0].configuration }, { view: 'table', rows: 20 })
+  })
+
+  it('refuses a file whose shared value has an owner outside the application', () => {
+    const json = applicationToJson(built()) as Record<string, unknown>
+    const values = json.sharedValues as Record<string, unknown>[]
+    values[0].owner = makePageId('zzzzzzzzzzzz')
+    const result = readApplication(json)
+    assert.ok(isApplicationError(result))
+  })
+
+  it('refuses a file with a second writer on a shared value', () => {
+    const json = applicationToJson(built()) as Record<string, unknown>
+    const bindings = json.bindings as Record<string, unknown>[]
+    bindings.push({ pageId: PAGE_C, value: 'selectedDataset', direction: 'writes' })
+    const result = readApplication(json)
+    assert.ok(isApplicationError(result))
+    assert.equal(result.error, 'not-permitted')
+  })
+
+  it('refuses a file with a path walk in a route', () => {
+    const json = applicationToJson(built()) as Record<string, unknown>
+    const pages = json.pages as Record<string, unknown>[]
+    pages[1].route = '/data/../secrets'
+    assert.ok(isApplicationError(readApplication(json)))
+  })
+
+  it('refuses a file with two Pages on one route', () => {
+    const json = applicationToJson(built()) as Record<string, unknown>
+    const pages = json.pages as Record<string, unknown>[]
+    pages[1].route = pages[0].route
+    assert.ok(isApplicationError(readApplication(json)))
+  })
+
+  it('refuses a file whose flow names a Page that is not there', () => {
+    const json = applicationToJson(built()) as Record<string, unknown>
+    const flows = json.flows as Record<string, unknown>[]
+    flows[0].to = makePageId('zzzzzzzzzzzz')
+    assert.ok(isApplicationError(readApplication(json)))
+  })
+
+  it('refuses a file with no application id', () => {
+    const json = applicationToJson(built()) as Record<string, unknown>
+    delete json.applicationId
+    assert.ok(isApplicationError(readApplication(json)))
+  })
+
+  it('refuses something that is not an object at all', () => {
+    for (const bad of [null, 42, 'application', []]) {
+      assert.ok(isApplicationError(readApplication(bad)), String(bad))
+    }
+  })
+
+  it('drops an unrecognised entry rather than repairing it', () => {
+    const json = applicationToJson(built()) as Record<string, unknown>
+    ;(json.pages as unknown[]).push('not a page')
+    const after = ok(readApplication(json), 'dropped')
+    assert.equal(after.pages.length, 4)
+  })
+
+  it('reads an older file that has no applications field at all', () => {
+    const json = applicationToJson(base()) as Record<string, unknown>
+    delete json.pages
+    delete json.flows
+    const after = ok(readApplication(json), 'sparse')
+    assert.equal(after.pages.length, 0)
   })
 })

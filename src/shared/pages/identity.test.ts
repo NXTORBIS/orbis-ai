@@ -285,9 +285,13 @@ test('an identity carries what other subsystems should store', () => {
   assert.equal(identity.canonicalUrl, 'orbis://pages/physics-lab')
   assert.equal(identity.profileId, null, 'a Page shipped with Orbis belongs to no profile')
   // Frozen, because an identity that can be edited in place is not an identity.
-  assert.throws(() => {
-    ;(identity as { slug: string }).slug = 'something-else'
-  })
+  //
+  // Asserted as "frozen and unchanged" rather than "assigning throws". The package has no "type": "module", so
+  // these files are transpiled to CommonJS and run in sloppy mode, where writing to a frozen property silently does
+  // nothing instead of throwing -- so a throws() assertion here tests the module format rather than the invariant.
+  assert.ok(Object.isFrozen(identity))
+  ;(identity as { slug: string }).slug = 'something-else'
+  assert.equal(identity.slug, 'physics-lab', 'the slug was editable in place')
 })
 
 test('sameness is a question about the id, not the address', () => {

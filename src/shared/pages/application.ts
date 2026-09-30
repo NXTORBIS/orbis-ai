@@ -1391,3 +1391,175 @@ export const APPLICATION_ASSUMPTIONS: readonly string[] = Object.freeze([
   'Staleness is computed from the declared flows, which is what lets a result say it is based on outdated input instead of presenting old numbers as current.',
   'The description is derived from what the application contains, so it cannot claim a capability that is not there.'
 ])
+
+// ---------------------------------------------------------------- storing and reading back
+
+/** An application as plain JSON, for the store and for an export package. */
+export function applicationToJson(application: PageApplication): Record<string, unknown> {
+  return {
+    schema: 1,
+    applicationId: application.applicationId,
+    slug: application.slug,
+    title: application.title,
+    description: application.description,
+    version: versionToText(application.version),
+    ownerProfile: application.ownerProfile,
+    defaultRoute: routeToText(application.defaultRoute),
+    groups: application.groups.map((one) => ({ ...one })),
+    pages: application.pages.map((one) => ({
+      pageId: one.pageId,
+      route: routeToText(one.route),
+      label: one.label,
+      group: one.group,
+      order: one.order,
+      visibility: one.visibility,
+      configuration: one.configuration
+    })),
+    contracts: application.contracts.map((one) => ({
+      id: one.id,
+      version: one.version,
+      fields: one.fields,
+      optional: [...one.optional],
+      description: one.description
+    })),
+    adapters: application.adapters.map((one) => ({ ...one, loses: [...one.loses] })),
+    sharedValues: application.sharedValues.map((one) => ({ ...one })),
+    bindings: application.bindings.map((one) => ({ ...one })),
+    flows: application.flows.map((one) => ({ ...one }))
+  }
+}
+
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+const asList = (value: unknown): unknown[] => (Array.isArray(value) ? value : [])
+
+/**
+ * An application read back from storage or from a package.
+ *
+ * Rebuilt through the same constructors that built it in the first place, rather than cast into shape. That is the
+ * whole point: a file that has been edited, truncated, or written by an older version cannot produce an application
+ * that breaks an invariant — it either comes back valid or comes back refused, and a refusal says which part was
+ * wrong. Casting a parsed object into the type would accept a second writer on a shared value, a route with `..` in
+ * it, and a flow naming a Page that is not there.
+ *
+ * Anything unrecognised is dropped rather than repaired, matching how every other store here reads.
+ */
+export function readApplication(raw: unknown): PageApplication | ApplicationError {
+  if (!isObject(raw)) return fail('invalid-argument', 'An application has to be an object.')
+  const version = typeof raw.version === 'string' ? parseVersion(raw.version) : null
+
+  let application = emptyApplication({
+    applicationId: String(raw.applicationId ?? ''),
+    slug: String(raw.slug ?? ''),
+    title: String(raw.title ?? ''),
+    ownerProfile: String(raw.ownerProfile ?? ''),
+    description: typeof raw.description === 'string' ? raw.description : '',
+    version: version ?? undefined
+  })
+  if (isApplicationError(application)) return application
+
+  // Groups before Pages, because a Page may name a group.
+  for (const entry of asList(raw.groups)) {
+    if (!isObject(entry)) continue
+    const next = addGroup(application, {
+      id: String(entry.id ?? ''),
+      label: String(entry.label ?? ''),
+      parent: typeof entry.parent === 'string' ? entry.parent : null,
+      order: typeof entry.order === 'number' ? entry.order : undefined,
+      collapsed: entry.collapsed === true
+    })
+    if (isApplicationError(next)) return next
+    application = next
+  }
+
+  for (const entry of asList(raw.pages)) {
+    if (!isObject(entry)) continue
+    const next = addPage(application, {
+      pageId: String(entry.pageId ?? ''),
+      route: typeof entry.route === 'string' ? entry.route : '/',
+      label: String(entry.label ?? ''),
+      group: typeof entry.group === 'string' ? entry.group : null,
+      order: typeof entry.order === 'number' ? entry.order : undefined,
+      visibility: entry.visibility === 'hidden' ? 'hidden' : 'visible',
+      configuration: isObject(entry.configuration) ? entry.configuration : {}
+    })
+    if (isApplicationError(next)) return next
+    application = next
+  }
+
+  for (const entry of asList(raw.contracts)) {
+    if (!isObject(entry)) continue
+    const fields = isObject(entry.fields) ? entry.fields : {}
+    const next = addContract(application, {
+      id: String(entry.id ?? ''),
+      version: typeof entry.version === 'number' ? entry.version : 0,
+      fields: Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, String(value)])),
+      optional: asList(entry.optional).map((one) => String(one)),
+      description: typeof entry.description === 'string' ? entry.description : ''
+    })
+    if (isApplicationError(next)) return next
+    application = next
+  }
+
+  for (const entry of asList(raw.adapters)) {
+    if (!isObject(entry)) continue
+    const next = addAdapter(application, {
+      contract: String(entry.contract ?? ''),
+      fromVersion: typeof entry.fromVersion === 'number' ? entry.fromVersion : 0,
+      toVersion: typeof entry.toVersion === 'number' ? entry.toVersion : 0,
+      description: typeof entry.description === 'string' ? entry.description : '',
+      loses: asList(entry.loses).map((one) => String(one))
+    })
+    if (isApplicationError(next)) return next
+    application = next
+  }
+
+  for (const entry of asList(raw.sharedValues)) {
+    if (!isObject(entry)) continue
+    const next = addSharedValue(application, {
+      name: String(entry.name ?? ''),
+      contract: String(entry.contract ?? ''),
+      owner: String(entry.owner ?? ''),
+      readableByAll: entry.readableByAll !== false,
+      description: typeof entry.description === 'string' ? entry.description : ''
+    })
+    if (isApplicationError(next)) return next
+    application = next
+  }
+
+  // The owner's own write binding is added by `addSharedValue`, so a stored copy of it is not an error.
+  for (const entry of asList(raw.bindings)) {
+    if (!isObject(entry)) continue
+    if (entry.direction !== 'reads' && entry.direction !== 'writes') continue
+    const next = bindState(application, {
+      pageId: String(entry.pageId ?? ''),
+      value: String(entry.value ?? ''),
+      direction: entry.direction
+    })
+    if (isApplicationError(next)) return next
+    application = next
+  }
+
+  for (const entry of asList(raw.flows)) {
+    if (!isObject(entry)) continue
+    const next = addFlow(application, {
+      from: String(entry.from ?? ''),
+      to: String(entry.to ?? ''),
+      contract: String(entry.contract ?? ''),
+      producesVersion: typeof entry.producesVersion === 'number' ? entry.producesVersion : 0,
+      expectsVersion: typeof entry.expectsVersion === 'number' ? entry.expectsVersion : 0
+    })
+    if (isApplicationError(next)) return next
+    application = next
+  }
+
+  // The default route is set last, because it has to name a Page that is already in.
+  if (typeof raw.defaultRoute === 'string' && application.pages.length > 0) {
+    const next = setDefaultRoute(application, raw.defaultRoute)
+    if (isApplicationError(next)) return next
+    application = next
+  }
+
+  return application
+}

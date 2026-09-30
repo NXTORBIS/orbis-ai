@@ -170,6 +170,12 @@ const api: NxtorbisApi = {
   pagesProjectSave: (pageId, projectId, name, state) =>
     ipcRenderer.invoke('pages:project-save', pageId, projectId, name, state),
   pagesProjectDelete: (pageId, projectId) => ipcRenderer.invoke('pages:project-delete', pageId, projectId),
+  pagesApplications: () => ipcRenderer.invoke('pages:applications'),
+  pagesApplication: (applicationId) => ipcRenderer.invoke('pages:application', applicationId),
+  pagesApplicationSave: (application) => ipcRenderer.invoke('pages:application-save', application),
+  pagesApplicationDelete: (applicationId) => ipcRenderer.invoke('pages:application-delete', applicationId),
+  pagesApplicationRoute: (applicationId, route) =>
+    ipcRenderer.invoke('pages:application-route', applicationId, route),
   pagesHealth: () => ipcRenderer.invoke('pages:health'),
   pagesGenerate: (request, intents) => ipcRenderer.invoke('pages:generate', request, intents),
   pagesGenerateKeep: (pageId) => ipcRenderer.invoke('pages:generate-keep', pageId),

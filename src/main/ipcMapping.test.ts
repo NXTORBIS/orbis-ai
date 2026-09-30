@@ -199,5 +199,17 @@ test('the boundary is a known size, so the migration can be estimated rather tha
   //
   // Nothing here grants anything. What a generated Page is allowed to do is computed from the calculations it uses,
   // in the compiler, and travels in its manifest like every other Page's -- there is no channel that could widen it.
-  assert.ok(code.length <= 432, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
+  //
+  // 428 → 433: applications, which are several Pages composed into one thing with routes and shared state. Five, and
+  // again the count is the shape of the feature. One lists them with their navigation and anything wrong with them,
+  // because a caller that has to ask a second question to learn whether the first answer is usable will sometimes
+  // not ask. One reads a single one back, for editing and for export. One saves, and it rebuilds what arrives
+  // through the application module's own constructors rather than trusting it -- so a hand-edited payload is refused
+  // with a reason instead of stored and broken on the next read. One deletes. One answers which Page a route opens,
+  // and it checks that Page is installed in this profile, because an application may name one that has since gone
+  // and handing back its id would give the caller an address that opens nothing.
+  //
+  // None of these widens what anything may do either. An application refers to Pages by id; what each Page is
+  // allowed to do stays in that Page's own manifest, and composing Pages cannot add up to more than the sum.
+  assert.ok(code.length <= 433, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
 })

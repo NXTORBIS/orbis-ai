@@ -3,6 +3,12 @@ import { dirname, join } from 'node:path'
 import { dataDirFor } from '../../shared/profiles.ts'
 import { grantIsLive, type PermissionGrant, type Scope } from '../../shared/pages/capabilities.ts'
 import { isPageId } from '../../shared/pages/identity.ts'
+import {
+  applicationToJson,
+  isApplicationError,
+  readApplication,
+  type PageApplication
+} from '../../shared/pages/application.ts'
 
 /**
  * What a profile has decided and saved about Pages.
@@ -25,6 +31,8 @@ const SCHEMA = 1
 
 /** Caps, so a Page cannot fill the disk through its own project store. */
 export const STORE_LIMITS = Object.freeze({
+  /** Applications a profile may keep. A navigation nobody can hold in mind is the real limit; this is the backstop. */
+  applications: 200,
   projectBytes: 2_000_000,
   projectsPerPage: 50,
   grants: 500,
@@ -50,9 +58,25 @@ interface Saved {
   projects: PageProject[]
   /** Page ids whose most recent update has been looked at and accepted. */
   approved: Record<string, string>
+  /**
+   * Applications, held as the JSON their own module writes.
+   *
+   * Kept as plain JSON rather than as built objects because they are rebuilt through their own constructors on
+   * every read. A file that has been hand-edited cannot produce an application that breaks an invariant -- it is
+   * dropped instead.
+   */
+  applications: Record<string, unknown>[]
 }
 
-const EMPTY: Saved = { schema: SCHEMA, grants: [], favourites: [], usage: {}, projects: [], approved: {} }
+const EMPTY: Saved = {
+  schema: SCHEMA,
+  grants: [],
+  favourites: [],
+  usage: {},
+  projects: [],
+  approved: {},
+  applications: []
+}
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -153,7 +177,11 @@ export function cleanSaved(raw: unknown): Saved {
       if (isPageId(pageId) && typeof version === 'string' && version.length <= 24) approved[pageId] = version
     }
   }
-  return { schema: SCHEMA, grants, favourites, usage, projects, approved }
+  // Rebuilt through their own constructors on the way in, so a tampered entry is dropped rather than trusted.
+  const applications = (Array.isArray(raw.applications) ? raw.applications : [])
+    .filter((one) => !isApplicationError(readApplication(one)))
+    .slice(0, STORE_LIMITS.applications) as Record<string, unknown>[]
+  return { schema: SCHEMA, grants, favourites, usage, projects, approved, applications }
 }
 
 export class PagesStore {
@@ -399,6 +427,60 @@ export class PagesStore {
    * For when a Page is deleted *and* the user asked for its work to go too. Deleting the Page alone never calls this --
    * that is the whole reason it is a separate method.
    */
+  /**
+   * Every application this profile has, rebuilt and validated.
+   *
+   * An entry that no longer reads as a valid application is left out rather than returned broken, which is the rule
+   * the rest of this store follows: a damaged entry is dropped, never repaired into something plausible.
+   */
+  async applications(profileId: string): Promise<PageApplication[]> {
+    const saved = await this.read(profileId)
+    const out: PageApplication[] = []
+    for (const raw of saved.applications) {
+      const application = readApplication(raw)
+      if (!isApplicationError(application)) out.push(application)
+    }
+    return out
+  }
+
+  async application(profileId: string, applicationId: string): Promise<PageApplication | null> {
+    const all = await this.applications(profileId)
+    return all.find((one) => one.applicationId === applicationId) ?? null
+  }
+
+  /**
+   * Save an application, replacing any earlier copy.
+   *
+   * It arrives already built, so it is valid by construction. What is checked here is the profile: an application
+   * is saved into the profile that owns it and nowhere else, because a boundary that depends on the caller passing
+   * the right id is not a boundary.
+   */
+  async saveApplication(profileId: string, application: PageApplication): Promise<boolean> {
+    if (application.ownerProfile !== profileId) return false
+    const saved = await this.read(profileId)
+    const json = applicationToJson(application)
+    const index = saved.applications.findIndex((one) => one.applicationId === application.applicationId)
+    if (index === -1) {
+      if (saved.applications.length >= STORE_LIMITS.applications) return false
+      saved.applications = [...saved.applications, json]
+    } else {
+      saved.applications = saved.applications.map((one, i) => (i === index ? json : one))
+    }
+    this.cache.set(profileId, saved)
+    this.touch(profileId)
+    return true
+  }
+
+  async deleteApplication(profileId: string, applicationId: string): Promise<boolean> {
+    const saved = await this.read(profileId)
+    const left = saved.applications.filter((one) => one.applicationId !== applicationId)
+    if (left.length === saved.applications.length) return false
+    saved.applications = left
+    this.cache.set(profileId, saved)
+    this.touch(profileId)
+    return true
+  }
+
   async forgetPage(profileId: string, pageId: string): Promise<void> {
     const saved = await this.read(profileId)
     saved.projects = saved.projects.filter((one) => one.pageId !== pageId)

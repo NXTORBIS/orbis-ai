@@ -583,7 +583,10 @@ test('every change returns a new register rather than editing the old one', () =
   const archived = archivePage(first.state, first.page.identity.pageId)
   assert.equal(pageById(first.state, first.page.identity.pageId)?.status, 'available', 'the original is untouched')
   assert.equal(pageById(archived, first.page.identity.pageId)?.status, 'archived')
-  assert.throws(() => {
-    ;(first.state as { pages: unknown }).pages = []
-  })
+  // Frozen rather than "assigning throws": without "type": "module" these files run as CommonJS in sloppy mode,
+  // where a write to a frozen property is silently dropped, and a throws() assertion would be testing the module
+  // format instead of the register.
+  assert.ok(Object.isFrozen(first.state))
+  ;(first.state as { pages: unknown }).pages = []
+  assert.equal(first.state.pages.length, 1, 'the register was editable in place')
 })

@@ -512,6 +512,23 @@ export interface SiteShortcut {
   addedAt: number
 }
 
+/**
+ * An application as the library lists it.
+ *
+ * Its problems travel with it rather than being a second question, because a caller that has to ask again to learn
+ * whether the first answer is usable will sometimes not ask.
+ */
+export interface PageApplicationSummary {
+  applicationId: string
+  slug: string
+  title: string
+  description: string
+  pageCount: number
+  navigation: { kind: 'page' | 'group'; id: string; label: string; route: string | null; children: unknown[] }[]
+  describes: string[]
+  problems: { severity: 'error' | 'warning'; kind: string; message: string; subject: string }[]
+}
+
 export interface NxtorbisApi {
   getSettings(): Promise<Settings>
   updateSettings(update: SettingsUpdate): Promise<Settings>
@@ -1656,6 +1673,35 @@ export interface NxtorbisApi {
     | { health: PageRegistryHealth; problems: { slug: string; message: string }[] }
     | { error: string; message?: string }
   >
+  // ---------------------------------------------------------------- several Pages as one application
+
+  pagesApplications(): Promise<
+    { applications: PageApplicationSummary[] } | { error: string; message?: string }
+  >
+  pagesApplication(
+    applicationId: string
+  ): Promise<{ application: Record<string, unknown> | null } | { error: string; message?: string }>
+  pagesApplicationSave(
+    application: Record<string, unknown>
+  ): Promise<
+    | { saved: true; applicationId: string; applications: PageApplicationSummary[] }
+    | { saved: false; error: string; message: string }
+    | { error: string; message?: string }
+  >
+  pagesApplicationDelete(
+    applicationId: string
+  ): Promise<
+    { deleted: boolean; applications: PageApplicationSummary[] } | { error: string; message?: string }
+  >
+  pagesApplicationRoute(
+    applicationId: string,
+    route: string
+  ): Promise<
+    | { ok: true; pageId: string; label: string; params: Record<string, string>; url: string }
+    | { ok: false; error: string; message: string }
+    | { error: string; message?: string }
+  >
+
 
   // ---------------------------------------------------------------- Pages that did not exist yet
 

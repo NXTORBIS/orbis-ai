@@ -27,6 +27,16 @@ import { EM_CAPABILITY, runEmOperation } from './emEngines.ts'
 import { ENGINEERING_CAPABILITY, runEngineeringOperation } from './engineeringEngines.ts'
 import { EARTH_CAPABILITY, runEarthOperation } from './earthEngines.ts'
 import { BIOLOGY_CAPABILITY, runBiologyOperation } from './biologyEngines.ts'
+import {
+  checkApplication,
+  describeApplication,
+  isApplicationError,
+  readApplication,
+  resolveRoute,
+  navigationTree,
+  applicationToJson,
+  applicationErrors
+} from '../../shared/pages/application.ts'
 import { HUMANITIES_CAPABILITY, runHumanitiesOperation } from './humanitiesEngines.ts'
 import { STUDIO_CAPABILITY, runStudioOperation } from './studioEngines.ts'
 import { MODERN_PHYSICS_CAPABILITY, runModernPhysicsOperation } from './modernPhysicsEngines.ts'
@@ -897,6 +907,109 @@ export class PagesService {
     )
     if ('error' in result) return { ok: false, error: result.error, message: result.message }
     return { ok: true, project: result.project }
+  }
+
+  /**
+   * Every application this profile has, with its navigation and anything wrong with it.
+   *
+   * The problems travel with the application rather than being fetched separately, because a caller that has to ask
+   * a second question to find out whether the first answer is usable will sometimes not ask.
+   */
+  async applications(profileId: string): Promise<unknown[]> {
+    const applications = await this.o.store.applications(profileId)
+    return applications.map((one) => ({
+      applicationId: one.applicationId,
+      slug: one.slug,
+      title: one.title,
+      description: one.description,
+      pageCount: one.pages.length,
+      navigation: navigationTree(one),
+      describes: describeApplication(one),
+      problems: checkApplication(one)
+    }))
+  }
+
+  /**
+   * Save an application sent from the renderer.
+   *
+   * The incoming object is rebuilt through the application module's own constructors rather than trusted, so a
+   * malformed or hostile payload is refused with the reason instead of being stored and breaking on the next read.
+   * The owning profile is overwritten with the caller's, so an application cannot be saved into somebody else's.
+   */
+  async applicationSave(
+    profileId: string,
+    raw: unknown
+  ): Promise<{ ok: true; applicationId: string } | { ok: false; error: string; message: string }> {
+    const incoming =
+      typeof raw === 'object' && raw !== null && !Array.isArray(raw)
+        ? { ...(raw as Record<string, unknown>), ownerProfile: profileId }
+        : raw
+    const application = readApplication(incoming)
+    if (isApplicationError(application)) {
+      return { ok: false, error: application.error, message: application.message }
+    }
+    const problems = applicationErrors(checkApplication(application))
+    if (problems.length > 0) {
+      return {
+        ok: false,
+        error: 'validation-error',
+        message: `This application would not work: ${problems.map((one) => one.message).join(' ')}`
+      }
+    }
+    const saved = await this.o.store.saveApplication(profileId, application)
+    if (!saved) {
+      return { ok: false, error: 'storage-error', message: 'That application could not be saved to this profile.' }
+    }
+    return { ok: true, applicationId: application.applicationId }
+  }
+
+  async applicationDelete(profileId: string, applicationId: string): Promise<boolean> {
+    return this.o.store.deleteApplication(profileId, applicationId)
+  }
+
+  /**
+   * What a route inside an application opens.
+   *
+   * The Page has to be one this profile can actually see: an application may name a Page that has since been
+   * deleted or belongs elsewhere, and returning its id anyway would hand the caller an address that opens nothing.
+   */
+  async applicationRoute(
+    profileId: string,
+    applicationId: string,
+    route: string
+  ): Promise<
+    | { ok: true; pageId: string; label: string; params: Record<string, string>; url: string }
+    | { ok: false; error: string; message: string }
+  > {
+    const application = await this.o.store.application(profileId, applicationId)
+    if (application === null) {
+      return { ok: false, error: 'not-found', message: 'There is no application with that id in this profile.' }
+    }
+    const resolved = resolveRoute(application, route)
+    if (isApplicationError(resolved)) {
+      return { ok: false, error: resolved.error, message: resolved.message }
+    }
+    const page = pageById(await this.state(profileId), resolved.pageId)
+    if (!page) {
+      return {
+        ok: false,
+        error: 'not-found',
+        message: `"${resolved.page.label}" is listed in this application, and the Page it names is not installed in this profile.`
+      }
+    }
+    return {
+      ok: true,
+      pageId: resolved.pageId,
+      label: resolved.page.label,
+      params: { ...resolved.params },
+      url: page.identity.canonicalUrl
+    }
+  }
+
+  /** One application as stored, for an export or for the renderer to edit and send back. */
+  async application(profileId: string, applicationId: string): Promise<Record<string, unknown> | null> {
+    const application = await this.o.store.application(profileId, applicationId)
+    return application === null ? null : applicationToJson(application)
   }
 
   async projects(profileId: string, pageId: string): Promise<unknown[]> {

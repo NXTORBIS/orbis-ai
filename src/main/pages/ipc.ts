@@ -296,6 +296,39 @@ export function registerPagesIpc(o: PagesIpcOptions): void {
     return { deleted, projects: await o.service.projects(id, str(pageId, 80)) }
   })
 
+  // ---------------------------------------------------------------- applications
+
+  handle('pages:applications', async (id) => ({ applications: await o.service.applications(id) }))
+
+  handle('pages:application', async (id, applicationId) => ({
+    application: await o.service.application(id, str(applicationId, 80))
+  }))
+
+  /**
+   * Save an application.
+   *
+   * The payload is whatever the renderer sent and is rebuilt through the application module's constructors on the
+   * other side of this call, so nothing here tries to validate its shape -- doing it in two places is how the two
+   * copies drift apart.
+   */
+  handle('pages:application-save', async (id, application) => {
+    const result = await o.service.applicationSave(
+      id,
+      application && typeof application === 'object' ? application : null
+    )
+    if (!result.ok) return { saved: false, error: result.error, message: result.message }
+    return { saved: true, applicationId: result.applicationId, applications: await o.service.applications(id) }
+  })
+
+  handle('pages:application-delete', async (id, applicationId) => {
+    const deleted = await o.service.applicationDelete(id, str(applicationId, 80))
+    return { deleted, applications: await o.service.applications(id) }
+  })
+
+  handle('pages:application-route', async (id, applicationId, route) =>
+    o.service.applicationRoute(id, str(applicationId, 80), str(route, 200))
+  )
+
   // ---------------------------------------------------------------- the rest of the platform
 
   /**
