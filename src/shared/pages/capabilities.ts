@@ -255,6 +255,26 @@ export const CAPABILITIES: Record<string, CapabilityDefinition> = {
     consent: 'automatic',
     scope: 'none'
   }),
+  'computation.planning': capability({
+    id: 'computation.planning',
+    name: 'Plans and schedules',
+    description:
+      'Work out when tasks can happen from what they depend on, find the critical path and the slack, spot resource clashes, and see what a delay would cost. Every date is a day number the Page supplies, so nothing here reads a clock.',
+    category: 'computation',
+    risk: 'low',
+    consent: 'automatic',
+    scope: 'none'
+  }),
+  'computation.deciding': capability({
+    id: 'computation.deciding',
+    name: 'Weighing options',
+    description:
+      'Score options against weighted criteria, see which choices survive a change in the weights, find the ones nothing beats outright, and weigh stated risks. It never names a winner unless the weights that decide one were supplied.',
+    category: 'computation',
+    risk: 'low',
+    consent: 'automatic',
+    scope: 'none'
+  }),
   'computation.biology': capability({
     id: 'computation.biology',
     name: 'Life sciences bench',
