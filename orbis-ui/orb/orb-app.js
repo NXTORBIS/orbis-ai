@@ -49,11 +49,36 @@ function orbisMark(size) {
   img.className = 'orbis-mark'
   img.src = 'orbis-ring.png'
   img.alt = ''
+  // Asked for at the size it is actually drawn, in device pixels. The artwork is 549px wide and was being handed to
+  // a 26px box with no guidance, which is where the softness came from: the browser picks a cheap filter when it is
+  // downscaling that far in one step. Telling it the real box lets it pick the right one.
   img.width = size
   img.height = size
+  img.decoding = 'async'
   img.draggable = false
   img.addEventListener('error', () => img.remove())
   return img
+}
+
+/**
+ * The Orb itself: the mark, and the glass around it.
+ *
+ * The mark is the real artwork and stays that way -- it is a rendered ring with its own shading, and a hand-drawn
+ * approximation of it would be the lookalike nobody notices rather than an improvement. What was missing is
+ * everything around it. A flat disc with a picture centred in it reads as a picture on a circle, so the body is
+ * built from layers that behave like a sphere: a lit face, a rim that catches light from behind, a specular
+ * highlight that sits above the mark, and a shadow under the whole thing.
+ *
+ * All of it is drawn by CSS on elements that are created once and never replaced, so it stays crisp at any zoom and
+ * the animation never restarts.
+ */
+function buildOrbBody() {
+  const body = el('span', 'orb-body')
+  body.append(el('span', 'orb-face'))
+  body.append(el('span', 'orb-rim'))
+  body.append(orbisMark(22))
+  body.append(el('span', 'orb-gloss'))
+  return body
 }
 
 // ---------------------------------------------------------------- state
@@ -106,6 +131,10 @@ async function refreshPlacement() {
     const p = await askBrowser('orbis.orb.placement')
     if (p && typeof p.x === 'number') place = { ...place, ...p }
   } catch { /* the browser will ask again on the next resize */ }
+  // While a drag is under way the browser is moving the Orb and this page is following its own pointer, so laying
+  // the answer over the top would fight the drag a frame at a time. The position that matters is read when the
+  // drag ends, and the browser sends a resize then too.
+  if (gesture !== null) return
   draw()
 }
 
@@ -113,26 +142,34 @@ async function refreshPlacement() {
 
 const layer = () => $('layer')
 
-function drawOrb() {
-  const orb = el('button', `browser-orb${state.working ? ' working' : ''}${state.confirmation ? ' attention' : ''}${state.open ? ' open' : ''}`)
-  orb.type = 'button'
-  orb.style.left = `${place.x}px`
-  orb.style.top = `${place.y}px`
-  orb.style.width = `${place.size || 30}px`
-  orb.style.height = `${place.size || 30}px`
-  orb.setAttribute('aria-label', state.open ? 'Collapse Orbis assistant' : 'Open Orbis assistant')
-  orb.setAttribute('aria-expanded', String(state.open))
-  orb.title = 'Orbis: click to open, drag to move'
-  orb.append(orbisMark(20))
-  if (state.working || state.confirmation) orb.append(el('span', 'browser-orb-dot'))
+/**
+ * The Orb element, built once and kept.
+ *
+ * This is the fix for a drag that stopped after a single pixel. The Orb used to be rebuilt by `draw`, and dragging
+ * it makes the browser resize this window, and a resize calls `draw` -- so the very first movement destroyed the
+ * button that had captured the pointer, taking the capture and the gesture with it. Every later move landed on an
+ * element that no longer existed, and the Orb sat still while the pointer went on moving.
+ *
+ * So the button and everything inside it are created once. `draw` updates its position and its classes and never
+ * replaces it, which also ends the flicker: the artwork is decoded once instead of on every state change, and the
+ * float animation runs continuously instead of restarting from zero each time a step arrives.
+ */
+let orbEl = null
+let gesture = null
 
-  // ---- drag, and telling a drag from a click
-  let gesture = null
+function buildOrb() {
+  const orb = el('button', 'browser-orb')
+  orb.type = 'button'
+  orb.title = 'Orbis: click to open, drag to move'
+  orb.append(buildOrbBody())
+  orb.append(el('span', 'browser-orb-dot'))
+
   orb.addEventListener('pointerdown', (e) => {
     if (e.button !== 0) return
     gesture = { id: e.pointerId, x: e.clientX, y: e.clientY, lastX: e.clientX, lastY: e.clientY, moved: false }
     orb.setPointerCapture(e.pointerId)
   })
+
   orb.addEventListener('pointermove', (e) => {
     if (!gesture || e.pointerId !== gesture.id) return
     if (!gesture.moved && Math.hypot(e.clientX - gesture.x, e.clientY - gesture.y) < DRAG_THRESHOLD) return
@@ -144,6 +181,7 @@ function drawOrb() {
     gesture.lastX = e.clientX; gesture.lastY = e.clientY
     if (dx || dy) chrome.send('orbis.orb.drag', ['orbDrag', dx, dy])
   })
+
   const end = (e) => {
     if (!gesture || (e && e.pointerId !== gesture.id)) return
     const moved = gesture.moved
@@ -157,11 +195,31 @@ function drawOrb() {
   }
   orb.addEventListener('pointerup', end)
   orb.addEventListener('pointercancel', end)
+  orb.addEventListener('lostpointercapture', end)
+
   orb.addEventListener('click', () => {
     if (orb.dataset.justDragged) { delete orb.dataset.justDragged; return }
     toggle()
   })
   return orb
+}
+
+/** The Orb, updated in place. Never a new element, because a gesture may be in progress on this one. */
+function drawOrb() {
+  if (orbEl === null) orbEl = buildOrb()
+  const size = place.size || 30
+  orbEl.style.left = `${place.x}px`
+  orbEl.style.top = `${place.y}px`
+  orbEl.style.width = `${size}px`
+  orbEl.style.height = `${size}px`
+  orbEl.classList.toggle('working', state.working)
+  orbEl.classList.toggle('attention', Boolean(state.confirmation))
+  orbEl.classList.toggle('open', state.open)
+  // The dot is always present and hidden by CSS, so showing it cannot disturb a drag by changing the child list.
+  orbEl.classList.toggle('marked', state.working || Boolean(state.confirmation))
+  orbEl.setAttribute('aria-label', state.open ? 'Collapse Orbis assistant' : 'Open Orbis assistant')
+  orbEl.setAttribute('aria-expanded', String(state.open))
+  return orbEl
 }
 
 function drawPanel() {
@@ -333,9 +391,13 @@ let focusPrompt = false
 function draw() {
   const host = layer()
   if (!host) return
+  // The Orb is taken out before the rest is cleared and put back after, so the element survives -- along with any
+  // pointer capture on it. Clearing the layer wholesale is what used to kill a drag on its first movement.
+  const orb = drawOrb()
+  orb.remove()
   host.replaceChildren()
   if (state.open) host.append(drawPanel())
-  host.append(drawOrb())
+  host.append(orb)
   if (state.open && focusPrompt) {
     focusPrompt = false
     host.querySelector('.orb-prompt textarea')?.focus()
