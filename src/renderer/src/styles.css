@@ -12111,10 +12111,18 @@ html[data-motion='reduced'] .tool-btn.recording {
   font-size: 12.5px;
 }
 
+/* The symbol.
+   `flex: none` with a minimum width was what put the price on top of it: the name button beside it may shrink
+   below its content, and a symbol that refuses to shrink simply overflowed the button and drew over whatever came
+   next. It may now shrink and it clips, so a long pair is cut short instead of landing on the price. */
 .mk-row b,
 .mk-results b {
-  flex: none;
-  min-width: 78px;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 12px;
   letter-spacing: 0.02em;
 }
@@ -12496,6 +12504,8 @@ html[data-motion='reduced'] .tool-btn.recording {
   gap: 7px;
   flex: 1 1 auto;
   min-width: 0;
+  /* Nothing inside may draw outside this button. The price sits immediately after it. */
+  overflow: hidden;
   padding: 0;
   border: 0;
   background: transparent;
@@ -18745,3 +18755,177 @@ html[data-motion='reduced'] .tool-btn.recording {
 .pulsar-setup-progress { display: flex; flex-direction: column; gap: 6px; }
 .pulsar-setup-progress progress { width: 100%; height: 6px; }
 .pulsar-setup-progress p { margin: 0; }
+
+
+/* ---------------------------------------------------------------- Markets: search, refresh and folding */
+
+/* The exchange's code for a pair, beside the asset's own name.
+   Dimmer and lighter than the name on purpose: somebody searching "bitcoin" wants Bitcoin first and BTCUSDT as
+   confirmation, not the other way round. */
+.mk-code {
+  flex: none;
+  color: var(--faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  opacity: 0.75;
+}
+
+/* The search box, folded down to its magnifier until it is wanted. */
+.mk-search {
+  transition: width 0.18s ease;
+}
+
+.mk-search > input {
+  width: 0;
+  min-width: 0;
+  padding-left: 0;
+  padding-right: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: width 0.18s ease, opacity 0.14s ease, padding 0.18s ease;
+}
+
+.mk-search.is-open > input {
+  width: 232px;
+  padding-left: 6px;
+  padding-right: 6px;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.mk-search-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.mk-search-toggle:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* The refresh control.
+   Three states worth telling apart: resting, asking, and just answered. Without the last one a refresh that
+   changed nothing looked exactly like one that never happened. */
+.mk-refresh {
+  transition: color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.mk-refresh.is-working {
+  color: var(--cyan);
+  cursor: progress;
+}
+
+.mk-refresh.is-working svg {
+  animation: mk-spin 0.9s linear infinite;
+}
+
+.mk-refresh.is-fresh {
+  color: var(--green);
+  background: color-mix(in srgb, var(--green) 16%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--green) 40%, transparent);
+}
+
+@keyframes mk-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* A section heading that folds what is under it away. */
+.mk-fold {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  margin: 10px 0 6px;
+  padding: 4px 2px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mk-fold small {
+  color: var(--faint);
+  font-weight: 400;
+}
+
+.mk-fold svg {
+  flex: none;
+  transition: transform 0.18s ease;
+  transform: rotate(-90deg);
+}
+
+.mk-fold svg.mk-fold-open {
+  transform: rotate(0deg);
+}
+
+.mk-fold:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mk-search,
+  .mk-search > input,
+  .mk-refresh,
+  .mk-fold svg {
+    transition: none;
+  }
+
+  .mk-refresh.is-working svg {
+    animation: none;
+  }
+}
+
+/* A search result's parts, spaced.
+   The row is a flex container but the button inside it was not, so the name, the code and the venue ran together
+   as one word. */
+.mk-results li > button {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mk-results li > button:hover b {
+  color: var(--cyan);
+}
+
+/* The symbol gives up its space last.
+   Both it and the name ellipsise when the panel is narrow, and of the two the symbol is the one somebody is
+   reading -- so the name yields first instead of the two shrinking together. */
+.mk-row-name > b {
+  /* Takes the width it needs and does not give it back. It cannot overflow the row any more, because the button
+     around it clips -- which is what makes holding its width safe now and was not before. */
+  flex: 0 0 auto;
+  max-width: 100%;
+}
+
+.mk-row-name > .mk-name {
+  /* The name is what gives way when the panel is narrow. Of the two, the symbol is the one being read. */
+  flex: 1 1 0;
+  min-width: 0;
+}

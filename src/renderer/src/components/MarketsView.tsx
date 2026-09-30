@@ -239,6 +239,18 @@ export default function MarketsView({
   const [discovery, setDiscovery] = useState<DiscoveryAnswer | null>(null)
   const [discovering, setDiscovering] = useState(false)
   const [moverKind, setMoverKind] = useState<'gainers' | 'losers' | 'volume'>('gainers')
+  /** Whether the movers panel is open. Collapsed it is one line, so the heatmap and everything under it come up. */
+  const [moversOpen, setMoversOpen] = useState(true)
+  /** Whether the search box is expanded. Collapsed it is just the magnifier, which is most of the header back. */
+  const [searchOpen, setSearchOpen] = useState(false)
+  /**
+   * When the discovery list last changed, so the refresh control can say so.
+   *
+   * A refresh that finds nothing new looks identical to one that did not happen, which is the thing being fixed --
+   * so this is set every time an answer arrives, and the control lights up for a moment whether or not the numbers
+   * moved. What it reports is "this asked and got an answer", which is what somebody pressing it wants to know.
+   */
+  const [refreshedAt, setRefreshedAt] = useState(0)
 
   const [lists, setLists] = useState<Watchlist[]>([])
   const [listQuotes, setListQuotes] = useState<Record<string, QuoteView | null>>({})
@@ -352,6 +364,8 @@ export default function MarketsView({
     setDiscovering(true)
     try {
       const answer = await window.api.marketsDiscover({ limit: 8, tiles: 40 })
+      // Stamped whether or not anything moved, so the refresh control reports that it asked and got an answer.
+      setRefreshedAt(Date.now())
       if (refused(answer)) {
         setDiscovery(null)
         return
@@ -392,6 +406,18 @@ export default function MarketsView({
     const ids = new Set<string>()
     for (const list of lists) for (const item of list.items) ids.add(item.instrumentId)
     if (openId) ids.add(openId)
+    /**
+     * Whatever the movers panel is showing, so its rows tick like the rest.
+     *
+     * This is the part that was missing. The panel drew prices from one answer fetched when it opened, and nothing
+     * subscribed those markets -- so they sat still next to a watchlist that moved, which is what "updates once a
+     * minute" looked like. The provider streams up to two hundred instruments; eight movers and forty tiles fit
+     * inside that with room to spare.
+     */
+    if (discovery?.available === true) {
+      for (const row of discovery[moverKind]) ids.add(row.instrument.instrumentId)
+      for (const tile of discovery.tiles) ids.add(tile.instrument.instrumentId)
+    }
     // Even with nothing to price, the connection is still worth asking about: an empty screen that claims to be
     // disconnected when the provider is fine is as wrong as the other way round.
     const wanted = [...ids]
@@ -442,6 +468,33 @@ export default function MarketsView({
         }
         return changed ? next : current
       })
+      /**
+       * The movers and the heatmap follow the same ticks.
+       *
+       * They used to be fetched once when the panel opened and then never again until somebody pressed refresh,
+       * which is why the list looked frozen while the watchlist beside it moved. The prices on a row now change as
+       * the exchange sends them; the *ranking* still comes from the periodic answer below, because re-sorting two
+       * thousand markets on every tick would fight the person reading it.
+       */
+      setDiscovery((current) => {
+        if (current === null || current.available !== true) return current
+        let touched = false
+        const freshen = <T extends { instrument: { instrumentId: string }; quote: QuoteView }>(rows: T[]): T[] =>
+          rows.map((row) => {
+            const quote = quotes.get(row.instrument.instrumentId)
+            if (quote === undefined || quote === row.quote) return row
+            touched = true
+            return { ...row, quote }
+          })
+        const next = {
+          ...current,
+          gainers: freshen(current.gainers),
+          losers: freshen(current.losers),
+          volume: freshen(current.volume),
+          tiles: freshen(current.tiles)
+        }
+        return touched ? next : current
+      })
       setOpen((current) => {
         if (!current) return current
         const fresh = quotes.get(current.instrument.instrumentId)
@@ -454,7 +507,22 @@ export default function MarketsView({
       offTick()
       window.clearInterval(timer)
     }
-  }, [enabled, lists, openId])
+  }, [enabled, lists, openId, discovery, moverKind])
+
+  /**
+   * Re-ranking, so the movers stay current without being asked.
+   *
+   * Prices arrive on the stream above; what a stream cannot say is which markets are now the biggest movers, since
+   * that is a question about every market rather than the ones on screen. So the ranking is asked for again on a
+   * timer -- slowly, because re-sorting the list under somebody's cursor is worse than a ranking that is a few
+   * seconds old, and the numbers on each row are live regardless.
+   */
+  useEffect(() => {
+    if (enabled !== true) return
+    if (pane !== 'dashboard') return
+    const timer = window.setInterval(() => void discover(), 20_000)
+    return () => window.clearInterval(timer)
+  }, [enabled, pane, discover])
 
   // ---------------------------------------------------------------- search
 
@@ -968,16 +1036,35 @@ export default function MarketsView({
         </div>
 
         <div className="view-actions">
-          <div className="mk-search">
-            <Search size={14} />
+          <div className={`mk-search${searchOpen || query !== '' ? ' is-open' : ''}`}>
+            <button
+              type="button"
+              className="mk-search-toggle"
+              aria-label={searchOpen ? 'Close search' : 'Search markets'}
+              aria-expanded={searchOpen || query !== ''}
+              title="Search markets"
+              onClick={() => {
+                // Closing clears the query too, so the results list cannot stay open behind a folded box.
+                if (searchOpen) setQuery('')
+                setSearchOpen(!searchOpen)
+              }}
+            >
+              <Search size={14} />
+            </button>
             <input
               value={query}
               placeholder="Search markets — BTC, bitcoin, ETH…"
               maxLength={60}
+              aria-hidden={!(searchOpen || query !== '')}
+              tabIndex={searchOpen || query !== '' ? 0 : -1}
               onChange={(e) => setQuery(e.target.value)}
+              onFocus={() => setSearchOpen(true)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && results[0]) void openMarket(results[0].instrumentId)
-                if (e.key === 'Escape') setQuery('')
+                if (e.key === 'Escape') {
+                  setQuery('')
+                  setSearchOpen(false)
+                }
               }}
             />
             {query.trim().length >= 2 && (
@@ -988,8 +1075,10 @@ export default function MarketsView({
                   <li key={instrument.instrumentId}>
                     <button type="button" onClick={() => void openMarket(instrument.instrumentId)}>
                       <AssetLogo instrument={instrument} size="small" />
-                      <b>{instrument.symbol}</b>
-                      <span className="mk-name">{instrument.name}</span>
+                      {/* The asset's own name leads, because that is what somebody typed. The pair code is what the
+                          exchange calls it, which is worth showing and is not what was being looked for. */}
+                      <b>{assetOf(instrument).name}</b>
+                      <span className="mk-code">{instrument.symbol}</span>
                       <span className="mk-venue">{instrument.exchange}</span>
                     </button>
                   </li>
@@ -997,7 +1086,18 @@ export default function MarketsView({
               </ul>
             )}
           </div>
-          <button type="button" className="icon-btn" aria-label="Refresh" title="Refresh" onClick={() => void discover()}>
+          <button
+            type="button"
+            className={`icon-btn mk-refresh${discovering ? ' is-working' : ''}${
+              // Lit for a few seconds after an answer arrives. A refresh that changed nothing used to look exactly
+              // like one that never happened.
+              !discovering && refreshedAt !== 0 && Date.now() - refreshedAt < 4000 ? ' is-fresh' : ''
+            }`}
+            aria-label="Refresh"
+            title={discovering ? 'Refreshing…' : refreshedAt === 0 ? 'Refresh' : 'Refreshed'}
+            disabled={discovering}
+            onClick={() => void discover()}
+          >
             <RefreshCw size={15} />
           </button>
           <button type="button" className="icon-btn" aria-label="Close markets" onClick={onClose}>
@@ -1366,27 +1466,46 @@ export default function MarketsView({
                     <small>of {discovery.universeSize.toLocaleString()} markets</small>
                   </div>
 
-                  <div className="mk-seg">
-                    {(['gainers', 'losers', 'volume'] as const).map((kind) => (
-                      <button
-                        key={kind}
-                        type="button"
-                        className={moverKind === kind ? 'on' : ''}
-                        onClick={() => setMoverKind(kind)}
-                      >
-                        {kind === 'gainers' ? 'Gainers' : kind === 'losers' ? 'Losers' : 'Volume'}
-                      </button>
-                    ))}
-                  </div>
+                  <button
+                    type="button"
+                    className="mk-fold"
+                    aria-expanded={moversOpen}
+                    onClick={() => setMoversOpen(!moversOpen)}
+                  >
+                    <ChevronDown size={13} className={moversOpen ? 'mk-fold-open' : ''} />
+                    Movers
+                    {!moversOpen && (
+                      <small>
+                        {discovery[moverKind].length} {moverKind}
+                      </small>
+                    )}
+                  </button>
 
-                  {discovery[moverKind].length === 0 ? (
-                    <p className="mk-quiet">No mover data available.</p>
-                  ) : (
-                    <ul className="mk-rows">
-                      {discovery[moverKind].map((row, i) => (
-                        <Row key={row.instrument.instrumentId} row={row} rank={i + 1} />
-                      ))}
-                    </ul>
+                  {moversOpen && (
+                    <>
+                      <div className="mk-seg">
+                        {(['gainers', 'losers', 'volume'] as const).map((kind) => (
+                          <button
+                            key={kind}
+                            type="button"
+                            className={moverKind === kind ? 'on' : ''}
+                            onClick={() => setMoverKind(kind)}
+                          >
+                            {kind === 'gainers' ? 'Gainers' : kind === 'losers' ? 'Losers' : 'Volume'}
+                          </button>
+                        ))}
+                      </div>
+
+                      {discovery[moverKind].length === 0 ? (
+                        <p className="mk-quiet">No mover data available.</p>
+                      ) : (
+                        <ul className="mk-rows">
+                          {discovery[moverKind].map((row, i) => (
+                            <Row key={row.instrument.instrumentId} row={row} rank={i + 1} />
+                          ))}
+                        </ul>
+                      )}
+                    </>
                   )}
 
                   <h4 className="mk-sub">
