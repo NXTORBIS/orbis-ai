@@ -86,7 +86,8 @@ const wayOf = (value: number | null | undefined): string =>
 const ORIGIN_WORDS: Record<StripOrigin, string> = {
   chosen: 'You put this on the strip',
   viewed: 'You opened this recently',
-  watched: 'On one of your watchlists'
+  watched: 'On one of your watchlists',
+  busiest: 'One of the busiest markets, filling a space you have not chosen for'
 }
 
 export interface MarketStripProps {
@@ -560,8 +561,8 @@ function StripSettings({
         <span>
           <b>Fill it for me</b>
           <small>
-            The markets you have opened recently, newest first, topped up from your watchlists until the strip is full.
-            Anything you chose yourself stays first.
+            The markets you have opened recently, newest first, then your watchlists, then the busiest markets to fill
+            what is left. Anything you chose yourself stays first, and anything Orbis filled in says so.
           </small>
         </span>
       </button>
@@ -619,7 +620,13 @@ function StripSettings({
               <b>{assetOf(row.instrument).symbol}</b>
               {/* Where it came from, so "why is this on my strip" always has an answer. */}
               <span className={`mstrip-origin is-${row.origin}`}>
-                {row.origin === 'chosen' ? 'chosen' : row.origin === 'viewed' ? 'opened' : 'watchlist'}
+                {row.origin === 'chosen'
+                  ? 'chosen'
+                  : row.origin === 'viewed'
+                    ? 'opened'
+                    : row.origin === 'watched'
+                      ? 'watchlist'
+                      : 'busiest'}
               </span>
               {row.origin === 'chosen' && (
                 <button

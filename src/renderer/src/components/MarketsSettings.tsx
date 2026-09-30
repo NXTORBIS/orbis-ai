@@ -311,11 +311,11 @@ export default function MarketsSettings(): React.JSX.Element {
                   disabled={busy}
                   onChange={(e) => void save({ auto: e.target.checked })}
                 />
-                <span>Fill the rest with markets I have opened</span>
+                <span>Fill the rest for me</span>
               </label>
               <p className="pw-note is-quiet">
                 {ticker.auto
-                  ? 'The markets you have opened recently, newest first, topped up from your watchlists until the strip is full. Anything you chose below stays first.'
+                  ? 'The markets you have opened recently, newest first, then your watchlists, then the busiest markets for whatever is left. Anything you chose below stays first, and the strip says which ones Orbis filled in.'
                   : 'Only the markets you chose below. Choosing none leaves the strip empty rather than filling it with something you did not ask for.'}
               </p>
             </div>

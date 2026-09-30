@@ -702,3 +702,41 @@ test('one profile’s screens and history are not another’s', async () => {
     await done()
   }
 })
+
+test('changing one strip setting does not erase the markets somebody chose', async () => {
+  /**
+   * The regression that lost real data.
+   *
+   * `cleanTicker` builds `groups` from its input and does not fall back, so a caller sending `{ slots: 48 }` -- which
+   * is exactly what the strip's own settings panel sends when somebody presses a length -- came back with no groups,
+   * and the markets they had put on the strip were gone from the file. The merge belongs in the store, because every
+   * caller sending a partial change would otherwise have to remember this.
+   */
+  const { store, done } = await bench()
+  await store.setTickerGroup('one', {
+    id: 'group-1',
+    name: 'My markets',
+    instrumentIds: ['binance:crypto:binance:solusdt']
+  })
+  await store.setTicker('one', { enabled: true, fields: ['price'] })
+
+  const after = await store.setTicker('one', { slots: 48 })
+  assert.equal(after.slots, 48, 'the change asked for happened')
+  assert.deepEqual(
+    after.groups.map((g) => g.instrumentIds),
+    [['binance:crypto:binance:solusdt']],
+    'and nothing else did'
+  )
+  assert.deepEqual(after.fields, ['price'], 'the fields survive a change that did not mention them')
+  assert.equal(after.enabled, true, 'and so does the switch')
+  await done()
+})
+
+test('a change that does mention the groups is still allowed to empty them', async () => {
+  // Merging must not make it impossible to say "none". An explicit empty list says so; leaving it out does not.
+  const { store, done } = await bench()
+  await store.setTickerGroup('one', { id: 'group-1', name: 'My markets', instrumentIds: ['a:b:c:d'] })
+  const after = await store.setTicker('one', { groups: [] })
+  assert.deepEqual(after.groups, [])
+  await done()
+})

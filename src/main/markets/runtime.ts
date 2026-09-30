@@ -16,7 +16,27 @@ import { touchOf } from '../../shared/markets/orderbook.ts'
 import { onQuote, valueOf, type PaperFill } from '../../shared/markets/paper.ts'
 import { allWatched, TICKER_HEIGHTS, type MarketsWorkspace } from '../../shared/markets/workspace.ts'
 import { stripSlots, type StripOrigin } from '../../shared/markets/strip.ts'
+import { assetOf, baseSymbol } from '../../shared/markets/assets.ts'
+import { movers } from '../../shared/markets/discovery.ts'
+
+/**
+ * The quote currency the strip's suggestions are drawn from.
+ *
+ * One, so the turnover figures being sorted are all in the same money, and this one because it is the deepest crypto
+ * quote on the exchange and the one whose pair names people recognise.
+ */
+const FILL_QUOTE = 'USDT'
+
+/**
+ * Assets never suggested, however much they trade.
+ *
+ * Stablecoins and currencies. They are the most traded things on any exchange and the least worth a place on a ticker:
+ * a strip reporting that a dollar is worth a dollar has spent a slot to say nothing. Somebody who genuinely wants one
+ * can still add it by hand -- this only governs what Orbis volunteers.
+ */
+const QUIET_ASSETS = new Set(['USDT', 'USDC', 'FDUSD', 'TUSD', 'BUSD', 'DAI', 'USD', 'EUR', 'TRY', 'IDR', 'BRL', 'ARS'])
 import type { Instrument, QuoteView } from '../../shared/markets/instrument.ts'
+import { parseInstrumentId } from '../../shared/markets/instrument.ts'
 
 /**
  * Markets, joined up.
@@ -432,14 +452,71 @@ export class MarketsRuntime {
      * does. Nothing is invented: every id below came from this person's own group, their own recents, or their own
      * watchlists and alerts.
      */
-    const slots = workspace.enabled
-      ? stripSlots({
-          chosen: allWatched({ ...workspace, watchlists: [], alerts: [] }),
-          viewed: workspace.recent,
-          watched: allWatched({ ...workspace, ticker: { ...ticker, groups: [] } }),
-          slots: ticker.slots,
-          auto: ticker.auto
+    /**
+     * The busiest markets, for the places nothing else claimed.
+     *
+     * Only when filling is on and only when the person's own markets came up short, because it costs a listing of the
+     * exchange -- cached inside the engine for a minute, so a strip re-reading every twenty seconds is not a download.
+     * A provider that cannot answer contributes nothing, and the rail simply ends where the person's own markets end.
+     *
+     * Ranked by the same function the Discover dashboard ranks by, so the strip's suggestions and the rest of Markets
+     * cannot disagree about which markets are busy.
+     *
+     * Three things had to be got right here, and each was wrong first time in a way the strip showed plainly:
+     *
+     *  - **Money, not units.** Unit volume favours whatever has the smallest unit price, so the fill came back as meme
+     *    coins -- a coin priced at eight decimal places trades billions of units to move very little money.
+     *  - **One quote currency.** Turnover is denominated in the currency the pair is quoted in, so comparing an IDR
+     *    pair's number with a dollar pair's is comparing rupiah with dollars: the fill came back almost entirely in
+     *    rupiah and lira, being roughly sixteen thousand times the number for the same real turnover. Restricting it
+     *    to one quote makes the comparison mean something, and dollar pairs are also the ones whose names people know.
+     *  - **One market per asset.** The same asset trades against several currencies, so without this a rail of twelve
+     *    suggestions held three SHIBs and was worth about four. An asset already on the rail under a market the person
+     *    chose is not suggested again under another.
+     *
+     * Turnover is a fact about the market rather than a judgement about what is worth watching, which is the only kind
+     * of suggestion this should be making.
+     */
+    const ownMarkets = {
+      chosen: allWatched({ ...workspace, watchlists: [], alerts: [] }),
+      viewed: workspace.recent,
+      watched: allWatched({ ...workspace, ticker: { ...ticker, groups: [] } })
+    }
+    let busiest: string[] = []
+    const shortBy =
+      ticker.slots - new Set([...ownMarkets.chosen, ...ownMarkets.viewed, ...ownMarkets.watched]).size
+    if (workspace.enabled && ticker.auto && shortBy > 0 && this.o.engine.universeAvailable()) {
+      const rows = await this.o.engine.universe().catch(() => [])
+      /**
+       * Which assets are already on the rail, by asset rather than by market.
+       *
+       * Read off the ids rather than by looking each instrument up, because the id carries the pair and that is all
+       * this needs. Somebody who chose SOL against dollars should not be offered SOL against lira as though it were a
+       * different market.
+       */
+      const already = new Set(
+        [...ownMarkets.chosen, ...ownMarkets.viewed, ...ownMarkets.watched]
+          .map((id) => parseInstrumentId(id)?.symbol ?? '')
+          .map((pair) => (pair ? baseSymbol(pair.toUpperCase()) : ''))
+          .filter(Boolean)
+      )
+      const perAsset = new Set<string>()
+      // Asked for generously and then narrowed, because the per-asset rule and the already-on-the-rail rule both
+      // remove rows, and asking for exactly as many as are needed would come back short.
+      busiest = movers(rows, 'volume', shortBy * 8 + 40, { quoteCurrency: FILL_QUOTE })
+        .filter((row) => {
+          const symbol = assetOf(row.instrument).symbol
+          // Never a stablecoin or a currency: "watch Tether" is not a suggestion, it is a rounding error with a name.
+          if (!symbol || QUIET_ASSETS.has(symbol) || perAsset.has(symbol) || already.has(symbol)) return false
+          perAsset.add(symbol)
+          return true
         })
+        .map((row) => row.instrument.instrumentId)
+        .slice(0, shortBy)
+    }
+
+    const slots = workspace.enabled
+      ? stripSlots({ ...ownMarkets, busiest, slots: ticker.slots, auto: ticker.auto })
       : []
 
     const items: { instrument: Instrument; quote: QuoteView | null; origin: StripOrigin }[] = []

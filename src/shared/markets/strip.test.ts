@@ -79,3 +79,39 @@ test('a short rail is reported as short, so the strip can say so instead of look
   assert.equal(stripIsSparse(ask({ viewed: ['a', 'b'] })), true)
   assert.equal(stripIsSparse(ask({ viewed: ['a', 'b', 'c', 'd'] })), false)
 })
+
+test('the busiest markets fill the last places, and only the last places', () => {
+  const out = ask({ chosen: ['a'], viewed: ['v'], watched: ['w'], busiest: ['b1', 'b2'], slots: 5 })
+  assert.deepEqual(out, [
+    { instrumentId: 'a', origin: 'chosen' },
+    { instrumentId: 'v', origin: 'viewed' },
+    { instrumentId: 'w', origin: 'watched' },
+    { instrumentId: 'b1', origin: 'busiest' },
+    { instrumentId: 'b2', origin: 'busiest' }
+  ])
+})
+
+test('a filled-in market is never passed off as one somebody chose', () => {
+  // The label is the whole point: it is what stops a suggestion reading as a list somebody built.
+  const out = ask({ busiest: ['b1'], slots: 4 })
+  assert.deepEqual(out, [{ instrumentId: 'b1', origin: 'busiest' }])
+})
+
+test('nothing is filled in when auto is off, however short the rail', () => {
+  assert.deepEqual(ask({ chosen: ['a'], busiest: ['b1', 'b2'], auto: false }), [
+    { instrumentId: 'a', origin: 'chosen' }
+  ])
+})
+
+test('a busy market somebody already watches keeps the origin they gave it', () => {
+  const out = ask({ chosen: ['btc'], busiest: ['btc', 'eth'], slots: 4 })
+  assert.deepEqual(out, [
+    { instrumentId: 'btc', origin: 'chosen' },
+    { instrumentId: 'eth', origin: 'busiest' }
+  ])
+})
+
+test('filling in never pushes the rail past the slots somebody asked for', () => {
+  const many = Array.from({ length: 50 }, (_, i) => `b${i}`)
+  assert.equal(ask({ busiest: many, slots: 6 }).length, 6)
+})

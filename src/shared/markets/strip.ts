@@ -10,9 +10,10 @@
  *
  * What it will not do:
  *
- * **It never invents a market.** Every id it returns came from one of the lists it was given. If those lists are short,
- * the rail is short; nothing is padded with a popular coin nobody asked for, because a strip that quietly added Bitcoin
- * would be telling somebody they watch Bitcoin.
+ * **It never passes off a suggestion as a choice.** Every id it returns came from one of the lists it was given, and
+ * every one carries where it came from. Once somebody has asked for a full rail it will top the last places up from the
+ * busiest markets -- but those are labelled `busiest`, shown as such, and never mixed in with what the person picked,
+ * because a strip that quietly added Bitcoin would be telling somebody they watch Bitcoin.
  *
  * **It never loses a deliberate choice to an automatic one.** The chosen group is always first and always complete, even
  * when it alone overruns the slots. Automatic filling is a top-up, so switching it on cannot reorder or evict anything
@@ -30,6 +31,14 @@ export type StripOrigin =
   | 'viewed'
   /** Named by one of their watchlists or alerts, used to top the rail up to length. */
   | 'watched'
+  /**
+   * Nobody asked for this one; it is filling the last places.
+   *
+   * The busiest markets, and the only entries that did not come from something the person did. They exist because a
+   * rail asked to hold sixteen and given four looks like a strip that lost twelve, and they are labelled so that is
+   * never mistaken for a list somebody built.
+   */
+  | 'busiest'
 
 export interface StripSlot {
   instrumentId: string
@@ -43,6 +52,11 @@ export interface StripRequest {
   viewed: readonly string[]
   /** Markets this person's watchlists and alerts already name. Used only to fill. */
   watched: readonly string[]
+  /**
+   * The busiest markets, most active first. Used last, only with `auto` on, and only to fill places nothing else
+   * claimed. Pass nothing and the rail simply ends where the person's own markets end.
+   */
+  busiest?: readonly string[]
   /** How many distinct markets the rail should hold. */
   slots: number
   /** Whether to fill past the chosen group at all. */
@@ -80,6 +94,8 @@ export function stripSlots(request: StripRequest): StripSlot[] {
 
   take(request.viewed, 'viewed', slots)
   take(request.watched, 'watched', slots)
+  // Last, and labelled. A rail asked to hold sixteen and given four looks like a strip that lost twelve.
+  take(request.busiest ?? [], 'busiest', slots)
   return out
 }
 

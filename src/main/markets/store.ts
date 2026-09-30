@@ -281,8 +281,22 @@ export class MarketsStore {
     return (await this.read(profileId)).ticker
   }
 
+  /**
+   * Changes the strip's settings, treating what it is given as a change rather than as a replacement.
+   *
+   * The merge is the whole point, and it is here rather than in every caller because leaving it to callers lost data.
+   * `cleanTicker` rebuilds `groups` and `fields` from its input and does not take them from the fallback -- so a caller
+   * sending `{ slots: 48 }`, meaning "make the strip longer", got back a configuration with no groups at all, and the
+   * markets somebody had chosen were gone. The strip's own settings panel sends exactly that shape, and it happened.
+   *
+   * Merging first means a partial change can only ever change what it names. A caller that really does want to empty
+   * the groups still can, by sending `groups: []`, which says so.
+   */
   async setTicker(profileId: string, raw: unknown): Promise<TickerConfig> {
-    const next = await this.change(profileId, (w) => ({ ...w, ticker: cleanTicker(raw, w.ticker) }))
+    const next = await this.change(profileId, (w) => {
+      const patch = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {}
+      return { ...w, ticker: cleanTicker({ ...w.ticker, ...patch }, w.ticker) }
+    })
     return next.ticker
   }
 
