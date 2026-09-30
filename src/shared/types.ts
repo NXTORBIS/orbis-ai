@@ -28,6 +28,8 @@ import type { VoiceErrorCode, VoiceModel } from './voiceInput'
 import type { LockTrigger, TabLockPolicy } from './tabLock'
 import type { ProfileLockPolicy } from './profileLock'
 import type { SecurityEvent } from './securityEvents'
+import type { RecallOverview } from '../main/knowledge/recallIpc'
+import type { RecallHit, RecalledPage, RecallSettings } from './recall'
 import type { MarketsState, MarketDetail, DiscoveryAnswer, WatchlistsAnswer, AlertsAnswer, ScreenAnswer, PaperAnswer, StrategiesAnswer, BacktestAnswer, NewsAnswer, CurrencyAnswer, ExperienceAnswer, OnboardingAnswer, DerivativesAnswer, TapeAnswer, BookAnswer, StripAnswer} from '../main/markets/ipc'
 import type { Contract, FundingPoint, LongShortRatio, OpenInterestPoint } from './markets/derivatives'
 import type { Drawing } from './markets/drawings'
@@ -596,7 +598,34 @@ export interface NxtorbisApi {
   memorySettings(): Promise<MemorySettings>
   setMemorySettings(next: Partial<MemorySettings>): Promise<MemorySettings>
   onMemoryChanged(listener: () => void): () => void
-  /** Orion Search sessions saved for the profile in use. */
+
+  // ---------------------------------------------------------------- the pages this person has read
+  /** What is stored and what the settings are: the one call a screen needs to draw itself. */
+  recallOverview(): Promise<RecallOverview | { error: string; message?: string }>
+  /** Changes the settings. Switching it off empties the index, which the interface says before the switch is thrown. */
+  recallSetSettings(next: Partial<RecallSettings>): Promise<RecallOverview | { error: string; message?: string }>
+  /** Searches the text of pages that were read. Only excerpts come back, never whole pages. */
+  recallSearch(
+    query: string,
+    options?: { limit?: number; host?: string; since?: number }
+  ): Promise<{ hits: RecallHit[] } | { error: string; message?: string }>
+  /** The most recently read pages, for browsing rather than searching. */
+  recallRecent(limit?: number, host?: string): Promise<{ hits: RecallHit[] } | { error: string; message?: string }>
+  /** One page in full. The only way the whole text of a page leaves the index. */
+  recallPage(pageId: string): Promise<{ page: RecalledPage | null } | { error: string; message?: string }>
+  recallForget(pageId: string): Promise<{ forgotten: boolean } | { error: string; message?: string }>
+  /** Forgets a site, and optionally never records it again — which is what people mean by "forget this site". */
+  recallForgetSite(
+    host: string,
+    alsoBlock?: boolean
+  ): Promise<({ forgotten: number } & RecallOverview) | { error: string; message?: string }>
+  /** Forgets everything read in a window of time, for "delete the last hour". */
+  recallForgetBetween(
+    from: number,
+    to: number
+  ): Promise<({ forgotten: number } & RecallOverview) | { error: string; message?: string }>
+  recallClear(): Promise<({ forgotten: number } & RecallOverview) | { error: string; message?: string }>
+  onRecallChanged(listener: () => void): () => void  /** Orion Search sessions saved for the profile in use. */
   saveSearchSession(session: OrionSearchSession): Promise<SavedSearchSummary | null>
   listSearchSessions(query?: string): Promise<SavedSearchSummary[]>
   getSearchSession(id: string): Promise<OrionSearchSession | null>

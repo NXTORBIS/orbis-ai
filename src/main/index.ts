@@ -37,6 +37,10 @@ import { SearchWatcher } from './browserSearches'
 import { openWorkspaceScript } from './browserWorkspace'
 import type { WorkspaceGroupWanted, WorkspaceTabWanted } from './browserWorkspace'
 import { mirrorChromiumInto } from './browserMirror'
+import { RecallStore } from './knowledge/recall.ts'
+import { registerRecallIpc } from './knowledge/recallIpc.ts'
+import { FrontTabWatch, shouldReadNow } from './knowledge/recallCapture.ts'
+import { MAX_PAGE_TEXT, pageKey, recallPromptBlock } from '../shared/recall.ts'
 import { closedBrowserState, followChromiumTabs } from './browserState'
 import type { ChromiumControl } from './chromium/service'
 import type { BrowserManagerOptions } from './chromium/browserManager'
@@ -222,6 +226,7 @@ const embeddedBrowser = process.platform === 'win32' && process.env.ORBIS_BROWSE
 let workflowRecorder: RecorderCore | null = null
 /** Memory for the profile in use; created once the profiles are known. */
 let memory: MemoryStore | null = null
+let recall: RecallStore | null = null
 /** The workflow engine, once it exists, so chat can schedule workflows in words. */
 let workflowEngine: WorkflowEngine | null = null
 /** Galaxy and the workspaces store, once they exist, so chat can give Orion a project's outline when it is named. */
@@ -639,6 +644,33 @@ function registerIpc(): void {
         } catch (err) {
           // Memory helps a reply; it is never a reason for one to fail.
           console.error('[memory] could not be read', err)
+        }
+      }
+
+      /**
+       * Passages from pages this person has actually read, when they have asked Orbis to keep them.
+       *
+       * This is the whole point of keeping them: "what was that article about heat pumps" is a question only something
+       * that saw both the reading and the question can answer. A handful of excerpts, found by searching this person's
+       * own index on this computer -- never the pages themselves, and never a request to anything outside.
+       *
+       * Three things this is careful about:
+       *
+       *  - **Only when switched on.** With the feature off there is no index to search and nothing is added.
+       *  - **It is quoted as data.** A web page is written by somebody else and is the least trustworthy text Orion
+       *    handles, so `recallPromptBlock` hands it over as a labelled quotation that must never be obeyed.
+       *  - **It never fails a reply.** Reading the index helps an answer; it is not a reason for there not to be one.
+       */
+      if (last?.role === 'user' && !request.ask && recall) {
+        try {
+          if (recall.settings().enabled) {
+            const block = recallPromptBlock(recall.search(last.content, { limit: 4 }))
+            if (block) systemPrompt = `${systemPrompt}
+
+${block}`
+          }
+        } catch (err) {
+          console.error('[recall] could not be read', err)
         }
       }
 
@@ -1809,6 +1841,57 @@ if (!app.requestSingleInstanceLock()) {
           // bookmarks and downloads is refreshed (at most once every few seconds) whenever those tabs change.
           let mirrored = 0
           const watcher = new SearchWatcher()
+
+          /**
+           * Reads the page in front into the index, when the rules say it counts as read.
+           *
+           * Deliberately reluctant. The browser reports its tabs whenever anything changes, and most of those moments
+           * are not somebody reading: `shouldReadNow` refuses all of them except a tab that is in front, has finished
+           * loading, has stayed there several seconds, and is not already in the index from the last hour. Only once
+           * all of that holds does this cost a round trip into the browser for the text.
+           *
+           * Nothing here decides what may be *kept*: private tabs, blocked sites and sign-in pages are the store's
+           * rules, checked again when the text arrives. This only decides when to bother looking.
+           */
+          const frontTab = new FrontTabWatch()
+          const captureFrontPage = async (running: typeof service): Promise<void> => {
+            if (!recall) return
+            const settings = recall.settings()
+            if (!settings.enabled) {
+              frontTab.reset()
+              return
+            }
+            const tabs = browserControl?.windowControl.state?.tabs ?? []
+            const front = tabs.find((t) => t.active)
+            const now = Date.now()
+            const inFrontSince = frontTab.saw(
+              front && { id: front.id, active: true, url: front.url, title: front.title, loading: front.loading === true, private: front.private === true },
+              now
+            )
+            if (!front) return
+
+            const verdict = shouldReadNow(
+              { id: front.id, active: true, url: front.url, title: front.title, loading: front.loading === true, private: front.private === true },
+              settings,
+              { now, inFrontSince, lastIndexedAt: recall.visitedAt(front.url) }
+            )
+            if (!verdict.read) return
+
+            const read = await running.control.execute(
+              { capability: 'page.read', params: { maxChars: MAX_PAGE_TEXT }, source: 'user' },
+              { confirm: async () => true }
+            )
+            if (!read.ok) return
+            const page = read.data as { url: string; title: string; text: string; loading?: boolean }
+            /**
+             * The address is checked again against the tab it was read from.
+             *
+             * A page that navigated between the decision and the read would otherwise be stored under the old address,
+             * which is the one way this could put the wrong text against a page somebody actually read.
+             */
+            if (pageKey(page.url) !== pageKey(front.url)) return
+            recall.remember({ url: page.url, title: page.title || front.title, text: page.text }, { loading: page.loading === true })
+          }
           const refreshMirror = (): void => {
             // A search made in the browser is remembered like one typed in the Orbis address bar, unless suggestions from what the
             // person searched are off or the tab is private.
@@ -1820,6 +1903,15 @@ if (!app.requestSingleInstanceLock()) {
                 if (settings.personalizedSuggestions !== false) for (const query of searched) library.recordSearch(query)
               })
             }
+            /**
+             * Reading the page in front into the index, if this person asked for that.
+             *
+             * On the same feed as the mirror because it is the same question -- the browser has told us its tabs
+             * changed -- but on its own clock: the mirror is throttled to once every three seconds, and a page has to
+             * have been in front for longer than that before it counts as read at all.
+             */
+            void captureFrontPage(service).catch(() => undefined)
+
             if (!browserLibrary || Date.now() - mirrored < 3000) return
             mirrored = Date.now()
             void mirrorChromiumInto(browserLibrary, service).catch(() => undefined)
@@ -2326,6 +2418,29 @@ if (!app.requestSingleInstanceLock()) {
       return run(memory!, ...args)
     }
     const category = (value: unknown): MemoryCategory | undefined => (['about', 'preference', 'project', 'general'].includes(String(value)) ? (value as MemoryCategory) : undefined)
+    /**
+     * The pages this person has read, per profile, on this computer.
+     *
+     * Off until switched on, and the switch is in settings with the wording beside it. Only the Orbis window may read
+     * it or delete from it; nothing here can switch it on for somebody, which is deliberate.
+     */
+    recall = new RecallStore(app.getPath('userData'), await stepProfile())
+    profilesStore.onChange(() => {
+      void stepProfile().then((id) => recall?.useProfile(id))
+    })
+    app.on('before-quit', () => recall?.close())
+    registerRecallIpc({
+      store: recall,
+      profileId: stepProfile,
+      handle: (channel, run) => {
+        ipcMain.handle(channel, async (event: IpcMainInvokeEvent, ...args: unknown[]) => {
+          if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
+          return run(await stepProfile(), ...args)
+        })
+      },
+      broadcast: (channel, payload) => sendToWindow(channel, payload)
+    })
+
     /** Orion Search sessions, saved per profile. Never read into or out of Orbis Chat. */
     const searchSessions = new SearchSessionStore(app.getPath('userData'), await stepProfile())
     searchSessionsForBrowser = searchSessions

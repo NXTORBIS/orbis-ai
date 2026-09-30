@@ -40,6 +40,10 @@ const BROWSER_LAYER = new Set([
   // the whole Electron surface of the feature, on purpose, and what it does -- read files, write files, ask where --
   // is the part Chromium has its own way of doing.
   'main/portable/ipc.ts',
+  // The adapter between the reading index and however the application talks to its window, and nothing else: it
+  // coerces arguments and delegates. The index itself, the capture rules and every decision about what may be kept
+  // are in files with no Electron in them, so the feature travels and this one file is rewritten as Mojo.
+  'main/knowledge/recallIpc.ts',
   'main/imagegen.ts',
   // The app's own library (shortcuts, address-bar memory) for the Orbis window.
   'main/libraryIpc.ts',

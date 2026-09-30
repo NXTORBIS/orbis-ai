@@ -19438,3 +19438,313 @@ html[data-motion='reduced'] .tool-btn.recording {
   background: color-mix(in srgb, var(--mk-logo-tint) 20%, var(--pill-bg));
   color: color-mix(in srgb, var(--mk-logo-tint) 72%, var(--text));
 }
+
+/* ============================================================================
+   Pages you have read
+   ----------------------------------------------------------------------------
+   The screen that shows what the reading index is holding, and the one place to
+   search it or delete from it. Deleting is never more than one step away --
+   every row, every site, the last hour and all of it -- because a recording
+   feature where forgetting is buried is one nobody should trust.
+   ========================================================================= */
+
+.rc-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+/* ---- the screen before it is switched on ---- */
+
+.rc-off {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 32px 20px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.rc-off h3 {
+  margin: 0;
+  font-size: 19px;
+  color: var(--text);
+}
+
+.rc-off p {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.rc-promises {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+/*
+  The one limit somebody should read before deciding, given the weight it carries: search needs the text, so the text is
+  on the disk in readable form. It is marked out rather than set in the same grey as everything else.
+*/
+.rc-caution {
+  padding: 11px 13px;
+  border: 1px solid color-mix(in srgb, #ffbe4d 34%, transparent);
+  border-left-width: 3px;
+  border-radius: 8px;
+  background: color-mix(in srgb, #ffbe4d 8%, transparent);
+}
+
+.rc-caution b {
+  color: var(--text);
+}
+
+.rc-primary {
+  align-self: flex-start;
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 0;
+  border-radius: 9px;
+  background: var(--cyan);
+  color: var(--bg-mid);
+  cursor: pointer;
+}
+
+.rc-primary:hover {
+  filter: brightness(1.08);
+}
+
+.rc-where {
+  font-size: 12px;
+}
+
+/* ---- searching and browsing ---- */
+
+.rc-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 16px 0;
+}
+
+.rc-search {
+  flex: 1 1 260px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: 9px;
+  color: var(--faint);
+}
+
+.rc-search:focus-within {
+  border-color: var(--cyan-dim);
+}
+
+.rc-search > input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 8px 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.rc-search > input:focus {
+  outline: none;
+}
+
+.rc-holds {
+  margin: 0;
+  padding: 10px 16px 0;
+  font-size: 12px;
+  color: var(--faint);
+}
+
+.rc-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--cyan);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.rc-hosts {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 10px 16px 0;
+}
+
+.rc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  font-size: 11.5px;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+}
+
+.rc-chip:hover {
+  color: var(--text);
+}
+
+.rc-chip.is-on {
+  color: var(--bg-mid);
+  background: var(--cyan);
+  border-color: var(--cyan);
+}
+
+.rc-chip > small {
+  opacity: 0.7;
+}
+
+.rc-quiet {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 8px;
+  font-size: 11.5px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+}
+
+.rc-quiet:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+/* Forgetting reads as what it is, on hover and nowhere else. */
+.rc-quiet.is-danger:hover {
+  color: var(--red);
+  background: color-mix(in srgb, var(--red) 12%, transparent);
+}
+
+/* ---- the results ---- */
+
+.rc-list {
+  list-style: none;
+  margin: 0;
+  padding: 10px 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+}
+
+.rc-list li {
+  padding: 10px 11px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+}
+
+.rc-list li:hover {
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+  border-color: var(--glass-border);
+}
+
+.rc-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  /* The title can be long and the site and time must not be pushed off the end by it. */
+  overflow: hidden;
+}
+
+.rc-row > b {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rc-meta {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.rc-host {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: var(--faint);
+  cursor: pointer;
+}
+
+.rc-host:hover {
+  color: var(--cyan);
+}
+
+.rc-snippet {
+  margin: 5px 0 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--muted);
+  /* Two lines: enough to see why it matched, not enough to turn the list into the page. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/*
+  The row's actions appear on hover, so a list of forty pages is a list rather than a hundred and twenty buttons. They
+  stay visible while one of them has focus, so they are reachable from the keyboard.
+*/
+.rc-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.rc-list li:hover .rc-actions,
+.rc-actions:focus-within {
+  opacity: 1;
+}
+
+.rc-empty {
+  margin: 0;
+  padding: 26px 20px;
+  max-width: 520px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--faint);
+}
+
+@media (max-width: 560px) {
+  .rc-meta {
+    display: none;
+  }
+}

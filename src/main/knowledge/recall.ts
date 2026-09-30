@@ -17,6 +17,14 @@ import { DEFAULT_PROFILE_ID, dataDirFor } from '../../shared/profiles.ts'
 
 type Row = Record<string, unknown>
 
+/**
+ * How many rows a statement touched.
+ *
+ * Node's SQLite reports this as a number or a bigint depending on the size, and every caller here wants a count it can
+ * add up and hand to the interface. A reading index will never have enough rows for the difference to matter.
+ */
+const changed = (result: { changes: number | bigint }): number => Number(result.changes)
+
 /** Bumped when the schema changes in a way a migration has to notice. */
 const RECALL_FORMAT = 1
 
@@ -298,9 +306,9 @@ export class RecallStore {
 
   /** Forgets one page. */
   forget(id: string): boolean {
-    const result = this.open().prepare(`DELETE FROM pages WHERE id = ?`).run(String(id))
-    if (result.changes > 0) this.changed()
-    return result.changes > 0
+    const count = changed(this.open().prepare(`DELETE FROM pages WHERE id = ?`).run(String(id)))
+    if (count > 0) this.changed()
+    return count > 0
   }
 
   /**
@@ -312,7 +320,7 @@ export class RecallStore {
   forgetHost(host: string, alsoBlock = false): number {
     const lower = String(host ?? '').toLowerCase().replace(/^www\./, '')
     if (!lower) return 0
-    const result = this.open().prepare(`DELETE FROM pages WHERE host = ?`).run(lower)
+    const count = changed(this.open().prepare(`DELETE FROM pages WHERE host = ?`).run(lower))
     if (alsoBlock) {
       const settings = this.settings()
       if (!settings.blockedSites.includes(lower)) {
@@ -320,26 +328,26 @@ export class RecallStore {
       }
     }
     this.changed()
-    return result.changes
+    return count
   }
 
   /** Forgets everything read in a window of time, for "delete the last hour". */
   forgetBetween(from: number, to: number): number {
-    const result = this.open()
-      .prepare(`DELETE FROM pages WHERE visited_at >= ? AND visited_at <= ?`)
-      .run(Math.round(from), Math.round(to))
-    if (result.changes > 0) this.changed()
-    return result.changes
+    const count = changed(
+      this.open().prepare(`DELETE FROM pages WHERE visited_at >= ? AND visited_at <= ?`).run(Math.round(from), Math.round(to))
+    )
+    if (count > 0) this.changed()
+    return count
   }
 
   /** Forgets everything. Used by the switch, and by somebody who asks outright. */
   clear(): number {
     const db = this.open()
-    const result = db.prepare(`DELETE FROM pages`).run()
+    const count = changed(db.prepare(`DELETE FROM pages`).run())
     // The index is rebuilt rather than left holding the deleted text, which would defeat the point of clearing.
     db.exec(`INSERT INTO pages_fts(pages_fts) VALUES ('rebuild'); VACUUM;`)
     this.changed()
-    return result.changes
+    return count
   }
 
   /**
@@ -354,18 +362,20 @@ export class RecallStore {
 
     const cutoff = cutoffFor(settings, this.now())
     if (cutoff !== null) {
-      dropped += db.prepare(`DELETE FROM pages WHERE visited_at < ?`).run(cutoff).changes
+      dropped += changed(db.prepare(`DELETE FROM pages WHERE visited_at < ?`).run(cutoff))
     }
 
     const total = Number((db.prepare(`SELECT COUNT(*) AS n FROM pages`).get() as Row).n)
     if (total > settings.maxPages) {
-      dropped += db
-        .prepare(
-          `DELETE FROM pages WHERE id IN (
-             SELECT id FROM pages ORDER BY visited_at ASC LIMIT ?
-           )`
-        )
-        .run(total - settings.maxPages).changes
+      dropped += changed(
+        db
+          .prepare(
+            `DELETE FROM pages WHERE id IN (
+               SELECT id FROM pages ORDER BY visited_at ASC LIMIT ?
+             )`
+          )
+          .run(total - settings.maxPages)
+      )
     }
     return dropped
   }

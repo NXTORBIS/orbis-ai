@@ -229,5 +229,10 @@ test('the boundary is a known size, so the migration can be estimated rather tha
   // on every page, so moving a rail would mean re-reading watchlists, alerts, screens and strategies twice a second;
   // and `markets:quotes` releases every subscription it was not handed, so the strip and a watchlist sharing it would
   // take each other's prices away. Which markets the strip shows is decided in shared code, not here.
-  assert.ok(code.length <= 441, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
+  //
+  // 441 → 450: the pages this person has read. Two for what is stored and its settings, three for finding a page
+  // again, four for deleting -- one page, a site, a window of time, or all of it. The deletion channels are four
+  // rather than one because "forget this site" and "delete the last hour" are different requests and a feature that
+  // records what you read has to answer both of them plainly.
+  assert.ok(code.length <= 450, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
 })

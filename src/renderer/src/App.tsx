@@ -33,6 +33,7 @@ const WorkspacesView = lazy(() => import('./components/WorkspacesView'))
 const SecretsPanel = lazy(() => import('./components/SecretsPanel'))
 const CustomizeView = lazy(() => import('./components/CustomizeView'))
 const ProfilesView = lazy(() => import('./components/ProfilesView'))
+const RecallView = lazy(() => import('./components/RecallView'))
 import { ActivityPanel, ShortcutsModal, ToastStack } from './components/Overlays'
 import SettingsModal from './components/SettingsModal'
 import WelcomeExperience from './components/WelcomeExperience'
@@ -1388,6 +1389,7 @@ export default function App(): React.JSX.Element {
               {feature === 'secrets' && <SecretsPanel onNotify={notify} />}
               {feature === 'customize' && <CustomizeView experience={experience} onClose={closeFeature} onNotify={notify} />}
               {feature === 'profiles' && <ProfilesView onClose={closeFeature} onNotify={notify} />}
+              {feature === 'recall' && <RecallView onClose={closeFeature} onNotify={notify} />}
             </Suspense>
           )}
         </main>

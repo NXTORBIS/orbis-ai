@@ -324,6 +324,19 @@ const api: NxtorbisApi = {
   memorySettings: () => ipcRenderer.invoke('memory:settings'),
   setMemorySettings: (next) => ipcRenderer.invoke('memory:set-settings', next),
   onMemoryChanged: (listener) => subscribe('memory:changed', listener),
+
+  // The pages this person has read, kept on this computer. Nothing here switches the feature on: that is a decision
+  // made in settings with the wording in front of them, and `recall:set-settings` is where it happens.
+  recallOverview: () => ipcRenderer.invoke('recall:overview'),
+  recallSetSettings: (next) => ipcRenderer.invoke('recall:set-settings', next),
+  recallSearch: (query, options) => ipcRenderer.invoke('recall:search', query, options),
+  recallRecent: (limit, host) => ipcRenderer.invoke('recall:recent', limit, host),
+  recallPage: (pageId) => ipcRenderer.invoke('recall:page', pageId),
+  recallForget: (pageId) => ipcRenderer.invoke('recall:forget', pageId),
+  recallForgetSite: (host, alsoBlock) => ipcRenderer.invoke('recall:forget-site', host, alsoBlock),
+  recallForgetBetween: (from, to) => ipcRenderer.invoke('recall:forget-between', from, to),
+  recallClear: () => ipcRenderer.invoke('recall:clear'),
+  onRecallChanged: (listener) => subscribe('recall:changed', listener),
   saveSearchSession: (session) => ipcRenderer.invoke('search-sessions:save', session),
   listSearchSessions: (query) => ipcRenderer.invoke('search-sessions:list', query),
   getSearchSession: (id) => ipcRenderer.invoke('search-sessions:get', id),
