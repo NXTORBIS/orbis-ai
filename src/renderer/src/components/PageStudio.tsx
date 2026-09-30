@@ -1809,6 +1809,9 @@ export const STUDIO_TABS = [
   { id: 'describe' as const, label: 'Describe', icon: Sparkles },
   { id: 'builder' as const, label: 'Build', icon: Wrench },
   { id: 'compose' as const, label: 'Between Pages', icon: Send },
+  // Applications sit beside composition rather than inside it: sending one Page's result to another is a message,
+  // and grouping Pages under one address with routes is a different thing that happens to need the same Pages.
+  { id: 'applications' as const, label: 'Applications', icon: Layers },
   { id: 'package' as const, label: 'Packages', icon: Upload },
   { id: 'diagnostics' as const, label: 'Diagnostics', icon: Stethoscope }
 ]

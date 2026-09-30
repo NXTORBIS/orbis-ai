@@ -719,3 +719,160 @@ test('a built Page is checked before it may run', async () => {
     assert.equal(fine.canRun, true)
   })
 })
+
+// ---------------------------------------------------------------- applications, end to end
+
+/**
+ * The exact path the Applications screen uses: save, list, resolve a route, delete.
+ *
+ * Worth having as one test rather than four, because the screen depends on them fitting together -- it saves what
+ * it built, lists what came back, and opens a Page by resolving a route against it. A test per function would pass
+ * while the sequence was broken.
+ */
+test('an application saves, lists, resolves a route and deletes', async () => {
+  await withService(async (service) => {
+    const home = BUILT_IN_IDS.unitConverter
+    const second = BUILT_IN_IDS.equationSolver
+    const saved = await service.applicationSave(PROFILE, {
+      schema: 1,
+      applicationId: 'app_abcdefabcdefabcd',
+      slug: 'workbench',
+      title: 'Workbench',
+      description: 'Converting and solving in one place.',
+      version: '1.0.0',
+      ownerProfile: 'someone-else',
+      defaultRoute: '/',
+      groups: [],
+      pages: [
+        { pageId: home, route: '/', label: 'Convert', group: null, order: 0, visibility: 'visible', configuration: {} },
+        { pageId: second, route: '/solve', label: 'Solve', group: null, order: 1, visibility: 'visible', configuration: {} }
+      ],
+      contracts: [],
+      adapters: [],
+      sharedValues: [],
+      bindings: [],
+      flows: []
+    })
+    assert.equal(saved.ok, true, JSON.stringify(saved))
+
+    const listed = (await service.applications(PROFILE)) as {
+      applicationId: string
+      title: string
+      pageCount: number
+      navigation: { label: string; route: string | null }[]
+      problems: { severity: string }[]
+    }[]
+    assert.equal(listed.length, 1)
+    assert.equal(listed[0].title, 'Workbench')
+    assert.equal(listed[0].pageCount, 2)
+    assert.equal(listed[0].problems.filter((one) => one.severity === 'error').length, 0)
+    // The navigation is what the screen draws its route buttons from.
+    assert.deepEqual(
+      listed[0].navigation.map((one) => one.route),
+      ['/', '/solve']
+    )
+
+    const opened = await service.applicationRoute(PROFILE, 'app_abcdefabcdefabcd', '/solve')
+    assert.equal(opened.ok, true, JSON.stringify(opened))
+    if (opened.ok) {
+      assert.equal(opened.pageId, second)
+      assert.equal(opened.label, 'Solve')
+      assert.ok(opened.url.startsWith('orbis://pages/'))
+    }
+
+    // The owning profile was overwritten with the caller's, so an application cannot be written into another one.
+    const stored = await service.application(PROFILE, 'app_abcdefabcdefabcd')
+    assert.equal((stored as Record<string, unknown>).ownerProfile, PROFILE)
+
+    const missed = await service.applicationRoute(PROFILE, 'app_abcdefabcdefabcd', '/nowhere')
+    assert.equal(missed.ok, false)
+
+    assert.equal(await service.applicationDelete(PROFILE, 'app_abcdefabcdefabcd'), true)
+    assert.equal((await service.applications(PROFILE)).length, 0)
+    assert.equal(await service.applicationDelete(PROFILE, 'app_abcdefabcdefabcd'), false)
+  })
+})
+
+test('an application that would not work is refused with the reason, not stored', async () => {
+  await withService(async (service) => {
+    const result = await service.applicationSave(PROFILE, {
+      schema: 1,
+      applicationId: 'app_bbbbbbbbbbbbbbbb',
+      slug: 'broken',
+      title: 'Broken',
+      description: '',
+      version: '1.0.0',
+      ownerProfile: '',
+      // Opens at a route no Page answers, which is an error rather than a warning.
+      defaultRoute: '/nowhere',
+      groups: [],
+      pages: [
+        {
+          pageId: BUILT_IN_IDS.unitConverter,
+          route: '/',
+          label: 'Convert',
+          group: null,
+          order: 0,
+          visibility: 'visible',
+          configuration: {}
+        }
+      ],
+      contracts: [],
+      adapters: [],
+      sharedValues: [],
+      bindings: [],
+      flows: []
+    })
+    assert.equal(result.ok, false)
+    if (!result.ok) assert.ok(result.message.length > 10, result.message)
+    assert.equal((await service.applications(PROFILE)).length, 0, 'nothing should have been stored')
+  })
+})
+
+test('an application survives a restart', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'orbis-pages-'))
+  try {
+    const one = new PagesStore(dir)
+    const before = new PagesService({ store: one, profileId: async () => PROFILE, now: () => 1 })
+    before.start()
+    const saved = await before.applicationSave(PROFILE, {
+      schema: 1,
+      applicationId: 'app_cccccccccccccccc',
+      slug: 'kept',
+      title: 'Kept',
+      description: '',
+      version: '1.0.0',
+      ownerProfile: '',
+      defaultRoute: '/',
+      groups: [],
+      pages: [
+        {
+          pageId: BUILT_IN_IDS.unitConverter,
+          route: '/',
+          label: 'Convert',
+          group: null,
+          order: 0,
+          visibility: 'visible',
+          configuration: {}
+        }
+      ],
+      contracts: [],
+      adapters: [],
+      sharedValues: [],
+      bindings: [],
+      flows: []
+    })
+    assert.equal(saved.ok, true)
+    await one.flush()
+
+    const two = new PagesStore(dir)
+    const after = new PagesService({ store: two, profileId: async () => PROFILE, now: () => 2 })
+    after.start()
+    const listed = (await after.applications(PROFILE)) as { title: string; pageCount: number }[]
+    assert.equal(listed.length, 1)
+    assert.equal(listed[0].title, 'Kept')
+    assert.equal(listed[0].pageCount, 1)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})

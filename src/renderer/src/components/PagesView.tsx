@@ -4,6 +4,7 @@ import type { NoticeKind } from '../App'
 import type { PageCard, PageCategoryNode, PageComputeResult, PagePermission, PageSearchHit } from '../../../shared/types'
 import { BuilderPanel, ComposePanel, DiagnosticsPanel, PackagePanel, STUDIO_TABS, type StudioTab } from './PageStudio'
 import { LAB_PAGES } from './PageLabs'
+import { ApplicationsPanel } from './PageApplications'
 import { DescribePanel, GeneratedHistory, RunDocument } from './PageDescribe'
 import type { PageDocument } from '../../../shared/pages/builder'
 import {
@@ -186,6 +187,22 @@ export default function PagesView({
             />
           )}
           {current === 'compose' && <ComposePanel onNotify={onNotify} />}
+          {current === 'applications' && (
+            <ApplicationsPanel
+              pages={pages}
+              onNotify={onNotify}
+              onOpenPage={(pageId) => {
+                const found = pages.find((one) => one.pageId === pageId)
+                // A route can name a Page this profile does not have; the main process refuses that before it gets
+                // here, so anything arriving is openable and a miss means the library has not reloaded yet.
+                if (found === undefined) {
+                  onNotify('That Page is not in this library yet.', 'error')
+                  return
+                }
+                setScreen({ kind: 'page', page: found })
+              }}
+            />
+          )}
           {current === 'package' && <PackagePanel pages={pages} onNotify={onNotify} />}
           {current === 'diagnostics' && <DiagnosticsPanel onNotify={onNotify} />}
         </div>
