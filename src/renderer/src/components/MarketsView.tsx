@@ -246,13 +246,17 @@ export default function MarketsView({
   /** Whether the search box is expanded. Collapsed it is just the magnifier, which is most of the header back. */
   const [searchOpen, setSearchOpen] = useState(false)
   /**
-   * When the discovery list last changed, so the refresh control can say so.
+   * Whether the control should be showing that it just refreshed.
    *
-   * A refresh that finds nothing new looks identical to one that did not happen, which is the thing being fixed --
-   * so this is set every time an answer arrives, and the control lights up for a moment whether or not the numbers
-   * moved. What it reports is "this asked and got an answer", which is what somebody pressing it wants to know.
+   * A flag with a timer that clears it, rather than a timestamp compared against the clock at render. The
+   * timestamp version only looked right by accident: nothing re-rendered at the four-second mark, so the colour
+   * stayed until some unrelated state change happened to remove it.
+   *
+   * It is set only when somebody pressed the button. The list also refreshes itself every twenty seconds, and
+   * lighting up for that would make the colour mean "time passed" rather than "your press did something", which is
+   * the opposite of what it is for.
    */
-  const [refreshedAt, setRefreshedAt] = useState(0)
+  const [justRefreshed, setJustRefreshed] = useState(false)
 
   const [lists, setLists] = useState<Watchlist[]>([])
   const [listQuotes, setListQuotes] = useState<Record<string, QuoteView | null>>({})
@@ -362,12 +366,13 @@ export default function MarketsView({
 
   // ---------------------------------------------------------------- discovery
 
-  const discover = useCallback(async () => {
+  const discover = useCallback(async (byRequest = false) => {
     setDiscovering(true)
     try {
       const answer = await window.api.marketsDiscover({ limit: 8, tiles: 40 })
-      // Stamped whether or not anything moved, so the refresh control reports that it asked and got an answer.
-      setRefreshedAt(Date.now())
+      // Only when somebody asked, and whether or not the numbers moved: what the colour reports is that the press
+      // reached the provider and got an answer back.
+      if (byRequest) setJustRefreshed(true)
       if (refused(answer)) {
         setDiscovery(null)
         return
@@ -510,6 +515,13 @@ export default function MarketsView({
       window.clearInterval(timer)
     }
   }, [enabled, lists, openId, discovery, moverKind])
+
+  /** Clears the refreshed colour. A real timer, because nothing else would re-render to take it away. */
+  useEffect(() => {
+    if (!justRefreshed) return
+    const timer = window.setTimeout(() => setJustRefreshed(false), 2500)
+    return () => window.clearTimeout(timer)
+  }, [justRefreshed])
 
   /**
    * Re-ranking, so the movers stay current without being asked.
@@ -1098,14 +1110,12 @@ export default function MarketsView({
           <button
             type="button"
             className={`icon-btn mk-refresh${discovering ? ' is-working' : ''}${
-              // Lit for a few seconds after an answer arrives. A refresh that changed nothing used to look exactly
-              // like one that never happened.
-              !discovering && refreshedAt !== 0 && Date.now() - refreshedAt < 4000 ? ' is-fresh' : ''
+              !discovering && justRefreshed ? ' is-fresh' : ''
             }`}
             aria-label="Refresh"
-            title={discovering ? 'Refreshing…' : refreshedAt === 0 ? 'Refresh' : 'Refreshed'}
+            title={discovering ? 'Refreshing…' : justRefreshed ? 'Refreshed' : 'Refresh'}
             disabled={discovering}
-            onClick={() => void discover()}
+            onClick={() => void discover(true)}
           >
             <RefreshCw size={15} />
           </button>

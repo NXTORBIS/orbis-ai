@@ -18781,6 +18781,9 @@ html[data-motion='reduced'] .tool-btn.recording {
 }
 
 .mk-search > input {
+  /* `flex: 0 0 0` matters more than the width. The base rule gives this input `flex: 1 1 auto`, so it grows to fill
+     whatever space the bar has and a width of zero does nothing at all -- which is why the bar did not collapse. */
+  flex: 0 0 0;
   width: 0;
   min-width: 0;
   padding-left: 0;
@@ -18788,15 +18791,25 @@ html[data-motion='reduced'] .tool-btn.recording {
   border: 0;
   opacity: 0;
   pointer-events: none;
-  transition: width 0.18s ease, opacity 0.14s ease, padding 0.18s ease;
+  transition: flex-basis 0.18s ease, width 0.18s ease, opacity 0.14s ease, padding 0.18s ease;
 }
 
 .mk-search.is-open > input {
-  width: 232px;
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 140px;
   padding-left: 6px;
   padding-right: 6px;
   opacity: 1;
   pointer-events: auto;
+}
+
+/* Collapsed, the bar is the magnifier and nothing else -- no empty pill sitting in the header. */
+.mk-search:not(.is-open) {
+  gap: 0;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
 }
 
 .mk-search-toggle {
