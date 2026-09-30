@@ -1014,6 +1014,27 @@ ${summaryBlock(summary)}`
     const r = parseRegion(region)
     if (r) embedController.setRegion(r)
   })
+  /**
+   * Back to the chat, asked for from the chat's own side.
+   *
+   * The browser's toolbar has a Chat button and that path already worked. This is the other direction: pressing
+   * Browser in the sidebar while the browser is already in front. Embedded, the renderer could answer that itself by
+   * collapsing its browser view -- as a separate window it cannot, because the window belongs to this process, so
+   * without this there was no way back except through the browser.
+   */
+  ipcMain.handle('chromium:return-to-chat', () => {
+    if (!embeddedBrowser) showBrowserWindow(false)
+    /**
+     * Both halves, from one call.
+     *
+     * Hiding the window without telling the chat left it believing the browser was still in front, so it went on
+     * drawing the browser view over its own interface -- the window came back and the chat was not on it. The Chat
+     * button in the browser has always sent this; a caller on this side has to reach the same state.
+     */
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('chromium:hide')
+    return { ok: true }
+  })
+
   ipcMain.handle('chromium:open', async (_event, input: unknown, options: unknown) => {
     if (!chromiumBrowser) return { ok: false, detail: 'The Orbis browser (Chromium) is not installed on this computer.' }
     const o = (options && typeof options === 'object' ? options : {}) as { newTab?: unknown; more?: unknown }

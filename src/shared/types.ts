@@ -1282,6 +1282,8 @@ export interface NxtorbisApi {
    * when it is not.
    */
   onChromiumRunning(listener: (running: boolean) => void): () => void
+  /** Puts the browser's window away and brings the chat back. The chat's side of the handoff. */
+  chromiumReturnToChat(): Promise<{ ok: boolean }>
   marketsSearch(query: string): Promise<{ results: Instrument[] } | { error: string; message?: string }>
   marketsTickerAdd(instrumentId: string): Promise<MarketsState | { error: string; message?: string }>
   marketsTickerRemove(instrumentId: string): Promise<MarketsState | { error: string; message?: string }>

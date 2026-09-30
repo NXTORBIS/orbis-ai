@@ -410,6 +410,8 @@ const api: NxtorbisApi = {
     return () => ipcRenderer.removeListener('chromium:running', on)
   },
   chromiumOpen: (input: string, options?: { newTab?: boolean; more?: string[] }) => ipcRenderer.invoke('chromium:open', input, options),
+  /** Puts the browser's window away and brings this one back. The chat's side of the handoff. */
+  chromiumReturnToChat: () => ipcRenderer.invoke('chromium:return-to-chat'),
   getBrowserLibrary: () => ipcRenderer.invoke('library:get'),
   getBrowserSidebar: () => ipcRenderer.invoke('browser-sidebar:get'),
   saveBrowserSidebar: (layout) => ipcRenderer.invoke('browser-sidebar:save', layout),

@@ -234,5 +234,9 @@ test('the boundary is a known size, so the migration can be estimated rather tha
   // again, four for deleting -- one page, a site, a window of time, or all of it. The deletion channels are four
   // rather than one because "forget this site" and "delete the last hour" are different requests and a feature that
   // records what you read has to answer both of them plainly.
-  assert.ok(code.length <= 450, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
+  //
+  // 450 → 451: returning to the chat from the chat's own side, now that the browser is a separate window rather than
+  // a view inside this one. The browser's toolbar could always do it; the sidebar could not, because hiding a window
+  // this process owns is not something the renderer can do by collapsing a view.
+  assert.ok(code.length <= 451, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
 })

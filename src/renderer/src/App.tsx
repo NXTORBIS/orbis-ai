@@ -166,7 +166,12 @@ export default function App(): React.JSX.Element {
   /** Sidebar and /browser: show the browser, or go back to the chat when it is already showing. */
   const toggleBrowser = useCallback(() => {
     const { open, hidden } = browserLive.current
-    if (open && !hidden) setBrowserHidden(true)
+    if (open && !hidden) {
+      setBrowserHidden(true)
+      // The browser is its own window now, so hiding it is this process's job and not something the renderer can do
+      // by collapsing a view. Without this there was no way back to the chat except through the browser's own toolbar.
+      void window.api.chromiumReturnToChat()
+    }
     else if (open) {
       setBrowserHidden(false)
       void window.api.chromiumOpen('', { newTab: false })
