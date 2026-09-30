@@ -145,6 +145,13 @@ export default function App(): React.JSX.Element {
   // browser shows the view, "Return to chat" hides it and Chromium keeps running with its tabs.
   const [browserOpen, setBrowserOpen] = useState(false)
   const [browserHidden, setBrowserHidden] = useState(false)
+  /**
+   * Whether the browser is running at all, which is not whether it is in front.
+   *
+   * As its own window it goes on running while the chat is being used -- that is what lets coming back to it keep
+   * every tab. The chat says so while it is true and says nothing when it is not.
+   */
+  const [browserRunning, setBrowserRunning] = useState(false)
   const browserLive = useRef({ open: false, hidden: false })
   browserLive.current = { open: browserOpen, hidden: browserHidden }
   const notifyRef = useRef<(text: string, kind?: NoticeKind) => void>(() => undefined)
@@ -171,6 +178,7 @@ export default function App(): React.JSX.Element {
       setBrowserHidden(false)
     })
     const offHide = window.api.onChromiumHide(() => setBrowserHidden(true))
+    const offRunning = window.api.onChromiumRunning((running) => setBrowserRunning(running))
     const offClosed = window.api.onChromiumClosed(() => {
       setBrowserOpen(false)
       setBrowserHidden(false)
@@ -178,6 +186,7 @@ export default function App(): React.JSX.Element {
     return () => {
       offShow()
       offHide()
+      offRunning()
       offClosed()
     }
   }, [])
@@ -296,8 +305,14 @@ export default function App(): React.JSX.Element {
   useEffect(() => {
     if (launchChecked.current || !settings || welcome === 'open') return
     launchChecked.current = true
-    if (settings.openBrowserOnLaunch) openBrowser()
-  }, [settings, welcome, openBrowser])
+    /**
+     * Only when the browser is not already running.
+     *
+     * With the browser as its own window this setting is answered before any window is made, so by the time this runs
+     * it has already happened. Opening again would take focus back off the browser the person asked to land in.
+     */
+    if (settings.openBrowserOnLaunch && !browserRunning) openBrowser()
+  }, [settings, welcome, openBrowser, browserRunning])
 
   useEffect(() => {
     const media = matchMedia('(prefers-color-scheme: dark)')
@@ -1270,6 +1285,8 @@ export default function App(): React.JSX.Element {
       )}
       {!browserShowing && (
         <SystemBar
+          browserRunning={browserRunning}
+          onShowBrowser={() => openChromium('', { newTab: false })}
           dark={dark}
           unread={unread}
           onToggleHistory={toggleSidebar}

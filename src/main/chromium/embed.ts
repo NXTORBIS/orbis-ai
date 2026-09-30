@@ -212,6 +212,50 @@ export function embedWindow(parent: bigint, child: bigint): Embedded {
   }
 }
 
+/**
+ * The browser as its own window, rather than a panel inside Orbis.
+ *
+ * `embedWindow` above makes Chromium a native child of the Orbis window: no caption, clipped to the parent, moving
+ * when it moves. This is the opposite and does almost nothing -- the window is left exactly as Chromium made it, with
+ * its own frame, its own taskbar button and its own place on screen, and all this offers is the ability to put it away
+ * and bring it back.
+ *
+ * That difference is the whole point of the separate-window model. An embedded browser *is* the Orbis window while it
+ * is showing, so there is no arrangement where you can see both. Two real windows can sit side by side, and going back
+ * to the chat becomes hiding one rather than covering the other.
+ *
+ * Hiding, never closing. A closed browser loses every tab, and "I have finished reading for a moment" is not a request
+ * to throw away what you had open.
+ */
+export interface Standalone {
+  hwnd: bigint
+  /** Puts it away, or brings it back and gives it the keyboard. */
+  setVisible(visible: boolean): void
+  isVisible(): boolean
+  focus(): void
+}
+
+export function standaloneWindow(child: bigint): Standalone {
+  const api = load()
+  if (!api) throw new Error('Window control is not available on this computer.')
+  /**
+   * The styles are not touched.
+   *
+   * `embedWindow` strips the caption and the frame because a child window must not have them. Here they are what makes
+   * it a window somebody can move, resize and find in the taskbar, so the only calls this makes are show, hide and
+   * focus.
+   */
+  return {
+    hwnd: child,
+    setVisible: (visible) => {
+      api.show(child, visible)
+      if (visible) api.focus(child)
+    },
+    isVisible: () => api.isVisible(child),
+    focus: () => api.focus(child)
+  }
+}
+
 /** The HWND of an Electron BrowserWindow from getNativeWindowHandle(). */
 export function hwndFromHandle(buffer: Buffer): bigint {
   return buffer.length >= 8 ? buffer.readBigUInt64LE(0) : BigInt(buffer.readUInt32LE(0))

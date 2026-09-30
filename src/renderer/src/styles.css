@@ -19967,3 +19967,74 @@ html[data-motion='reduced'] .tool-btn.recording {
     box-shadow: inset 0 -2px 0 var(--cyan);
   }
 }
+
+/* ----------------------------------------------------------------------------
+   "Browser running"
+
+   Shown only while it is true. The browser is its own window now, so it can be
+   running with the chat in front -- which is exactly when somebody needs
+   telling, because nothing else on screen would say so. When it is not running
+   this is absent entirely rather than saying "off", which is a status nobody
+   asked for.
+
+   It is a button, not a label: the thing you want on being told the browser is
+   running is to go back to it.
+   ------------------------------------------------------------------------- */
+
+.browser-running {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  border: 1px solid color-mix(in srgb, var(--green) 32%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--green) 10%, transparent);
+  color: var(--green);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.browser-running:hover {
+  background: color-mix(in srgb, var(--green) 18%, transparent);
+}
+
+.browser-running:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 1px;
+}
+
+.browser-running-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  /* A slow pulse: running, rather than a static dot that could be an indicator of anything. */
+  animation: browser-running-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes browser-running-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .browser-running-dot {
+    animation: none;
+  }
+}
+
+@media (max-width: 760px) {
+  /* The dot alone still says it, and the bar has other things to fit. */
+  .browser-running {
+    font-size: 0;
+    gap: 0;
+    padding: 5px;
+  }
+}

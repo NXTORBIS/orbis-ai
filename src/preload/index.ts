@@ -403,6 +403,12 @@ const api: NxtorbisApi = {
     ipcRenderer.on('chromium:closed', listener)
     return () => ipcRenderer.removeListener('chromium:closed', listener)
   },
+  /** Whether the browser is running at all -- which is not the same as whether its window is in front. */
+  onChromiumRunning: (listener: (running: boolean) => void) => {
+    const on = (_e: unknown, running: boolean): void => listener(running === true)
+    ipcRenderer.on('chromium:running', on)
+    return () => ipcRenderer.removeListener('chromium:running', on)
+  },
   chromiumOpen: (input: string, options?: { newTab?: boolean; more?: string[] }) => ipcRenderer.invoke('chromium:open', input, options),
   getBrowserLibrary: () => ipcRenderer.invoke('library:get'),
   getBrowserSidebar: () => ipcRenderer.invoke('browser-sidebar:get'),

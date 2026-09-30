@@ -7,6 +7,10 @@ interface Props {
   unread: number
   onToggleHistory(): void
   sidebarCollapsed: boolean
+  /** True while the browser is running, whether or not its window is in front. */
+  browserRunning: boolean
+  /** Brings the browser's window back. */
+  onShowBrowser(): void
   webSearch: boolean
   onToggleWebSearch(): void
   onToggleActivity(): void
@@ -39,6 +43,19 @@ export default function SystemBar(props: Props): React.JSX.Element {
           <OrbisGlassMark size={26} className="bar-logo-mark" />
           {props.sidebarCollapsed ? <PanelLeftOpen size={18} className="bar-logo-toggle" /> : <PanelLeftClose size={18} className="bar-logo-toggle" />}
         </button>
+        {/*
+          Said only while it is true.
+          
+          The browser is its own window now, so it can be running with the chat in front -- which is exactly when
+          somebody needs telling, because nothing else on screen would show it. When it is not running this says
+          nothing at all rather than "browser: off", which would be a status nobody asked for.
+        */}
+        {props.browserRunning && (
+          <button className="browser-running" title="The Orbis browser is running — click to bring it back" onClick={props.onShowBrowser}>
+            <span className="browser-running-dot" />
+            Browser running
+          </button>
+        )}
         <span className="core-readout" title="System CPU load">
           <Cpu size={13} />
           CORE: <b>{cpu === null ? '--' : `${cpu}%`}</b>

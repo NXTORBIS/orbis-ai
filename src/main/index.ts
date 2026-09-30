@@ -61,6 +61,7 @@ import { fetchFavicon } from './favicon'
 import { setupBrowserControl } from './browserControl/setup'
 import { BrowserManager } from './chromium/browserManager'
 import { EmbedController, parseRegion } from './chromium/embedController'
+import { findBrowserWindow, standaloneWindow, type Standalone } from './chromium/embed'
 import { embedSupported, hwndFromHandle } from './chromium/embed'
 import { readSignals } from './browserControl/captchaCapabilities'
 import { StepRun } from './stepRunner'
@@ -221,7 +222,45 @@ let browserControl: ReturnType<typeof setupBrowserControl> | null = null
 let chromiumBrowser: BrowserManager | null = null
 /** Puts Chromium's window inside the Orbis window (Windows), over the renderer's browser view. */
 const embedController = new EmbedController(() => (mainWindow && !mainWindow.isDestroyed() ? hwndFromHandle(mainWindow.getNativeWindowHandle()) : null))
-const embeddedBrowser = process.platform === 'win32' && process.env.ORBIS_BROWSER_WINDOW !== 'separate' && embedSupported()
+/**
+ * The browser is its own window, not a panel inside this one.
+ *
+ * Embedded, Chromium *is* the Orbis window while it is showing, so there is no arrangement where both are visible and
+ * "go back to the chat" means covering one with the other. As two real windows they can sit side by side, each has its
+ * own taskbar button, and going back is putting one away rather than hiding it behind the other.
+ *
+ * Embedding is kept behind an environment variable rather than deleted: it is the fallback for a machine where the
+ * native window calls are unavailable, and it is how this behaved for a long time.
+ */
+const embeddedBrowser = process.platform === 'win32' && process.env.ORBIS_BROWSER_WINDOW === 'embedded' && embedSupported()
+
+/**
+ * Whether this launch opens straight into the browser, with no chat window shown.
+ *
+ * Read from the saved settings before any window is made, because the decision has to be taken before the chat is
+ * shown rather than after it has already appeared.
+ */
+let startInBrowser = false
+
+/** The browser's own window, while it is running. Null before it starts and after it closes. */
+let browserWindow: Standalone | null = null
+
+/**
+ * Shows the browser and puts the chat away, or the other way round.
+ *
+ * Only ever hides. A closed browser loses every tab, and going back to the chat for a moment is not a request to throw
+ * away what was open. The Orbis window is hidden rather than minimised for the same reason: it comes back exactly as
+ * it was, in one step.
+ */
+function showBrowserWindow(show: boolean): void {
+  if (browserWindow) browserWindow.setVisible(show)
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  if (show) mainWindow.hide()
+  else {
+    mainWindow.show()
+    mainWindow.focus()
+  }
+}
 /** Records workflows from what the user does (only while recording). */
 let workflowRecorder: RecorderCore | null = null
 /** Memory for the profile in use; created once the profiles are known. */
@@ -458,7 +497,16 @@ function createWindow(): BrowserWindow {
     }
   })
 
-  win.once('ready-to-show', () => win.show())
+  /**
+   * Shown when it is ready -- unless this launch is meant to be the browser.
+   *
+   * "Open browser on launch" used to be answered in the renderer, which meant the chat window appeared, drew itself,
+   * and was then covered. As its own window the browser can simply be what opens, and the chat is created but left
+   * hidden until somebody asks for it. It still exists, so returning to it is instant rather than a cold start.
+   */
+  win.once('ready-to-show', () => {
+    if (!startInBrowser) win.show()
+  })
   // The window's real fullscreen state, however it changes (F11, Esc, the OS).
   win.on('enter-full-screen', () => win.webContents.send('window:fullscreen-changed', true))
   win.on('leave-full-screen', () => win.webContents.send('window:fullscreen-changed', false))
@@ -970,10 +1018,19 @@ ${summaryBlock(summary)}`
     if (!chromiumBrowser) return { ok: false, detail: 'The Orbis browser (Chromium) is not installed on this computer.' }
     const o = (options && typeof options === 'object' ? options : {}) as { newTab?: unknown; more?: unknown }
     try {
-      return await chromiumBrowser.open(typeof input === 'string' ? input.slice(0, 2000) : '', {
+      const result = await chromiumBrowser.open(typeof input === 'string' ? input.slice(0, 2000) : '', {
         newTab: o.newTab === false ? false : true,
         more: Array.isArray(o.more) ? o.more.filter((u): u is string => typeof u === 'string').slice(0, 20) : []
       })
+      /**
+       * The browser comes forward and the chat goes away.
+       *
+       * Whatever was typed has already been handed to Chromium above, so this is only about which window is in front.
+       * A moment later than the open, because the window may not exist yet on the very first start -- and if it does
+       * not, nothing here fails: the browser is running either way.
+       */
+      if (result.ok && !embeddedBrowser) setTimeout(() => showBrowserWindow(true), 120)
+      return result
     } catch (err) {
       return { ok: false, detail: `The Orbis browser could not start: ${err instanceof Error ? err.message : String(err)}` }
     }
@@ -1757,7 +1814,17 @@ if (!app.requestSingleInstanceLock()) {
           // Orbis has no account and nothing to sign in to. This is the name the person typed into the app, read fresh each
           // time so renaming yourself in the Orbis window renames you in the browser too, with no restart and no second identity.
           // The Chat button is on the browser's toolbar now, so this is how it gets back here.
+          /**
+           * The Chat button on the browser's own toolbar.
+           *
+           * Puts the browser away and brings the chat back. The browser keeps running with every tab where it was, so
+           * coming back to it is one press and no reload -- which is the whole reason this hides rather than closes.
+           *
+           * The renderer is still told, because embedded mode has no separate window to hide and needs to collapse its
+           * browser view instead.
+           */
           showChat: () => {
+            if (!embeddedBrowser) showBrowserWindow(false)
             if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('chromium:hide')
           },
           identity: async () => {
@@ -1831,12 +1898,45 @@ if (!app.requestSingleInstanceLock()) {
           // the pages. That bubble was appearing over a window the person never asked to see in the first place.
           chromeArgs: embeddedBrowser ? ['--orbis-embedded', '--hide-crash-restore-bubble'] : [],
           onStarted: (pid) => {
-            if (embeddedBrowser) embedController.attach(pid)
+            if (embeddedBrowser) return embedController.attach(pid)
+            /**
+             * Its window, once Chromium has made one.
+             *
+             * Asked for a few times rather than once: the process exists before its window does, and how long that
+             * takes is the machine's business. Failing to find it is not fatal -- the browser still works, it just
+             * cannot be put away from here, which is better than refusing to start.
+             */
+            let tries = 0
+            const look = (): void => {
+              const hwnd = findBrowserWindow(pid)
+              if (hwnd !== null) {
+                try {
+                  browserWindow = standaloneWindow(hwnd)
+                } catch {
+                  browserWindow = null
+                }
+                return
+              }
+              if (++tries < 40) setTimeout(look, 250)
+            }
+            look()
+            /**
+             * The chat is told the browser is running.
+             *
+             * So it can say so, and so it does not open a second one on launch when this one was started for it. It is
+             * the running state being reported, not the window being shown: the browser goes on running while the chat
+             * is in front, which is the whole point of hiding rather than closing.
+             */
+            if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('chromium:running', true)
           },
           onClosed: () => {
+            browserWindow = null
             embedController.detach()
             browserControl?.windowControl.setState(closedBrowserState())
-            if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('chromium:closed')
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('chromium:closed')
+              mainWindow.webContents.send('chromium:running', false)
+            }
           }
         }, (service) => {
           // Whenever the browser starts: the control layer's tab state follows its real tabs, and the app's copy of its history,
@@ -2719,8 +2819,26 @@ if (!app.requestSingleInstanceLock()) {
       updates?.stop()
       if (updatesQuitting) void updates?.getStatus()
     })
+    /**
+     * Whether this launch is the browser's, decided before the window is made.
+     *
+     * Embedded, the browser has no window of its own to open into, so the chat still has to appear -- the setting is
+     * answered in the renderer there, exactly as before.
+     */
+    startInBrowser = !embeddedBrowser && (await store.getSettings()).openBrowserOnLaunch === true
+
     mainWindow = createWindow()
     mainWindow.on('closed', () => (mainWindow = null))
+
+    if (startInBrowser) {
+      /**
+       * Straight into the browser.
+       *
+       * The chat window exists and is hidden rather than not made at all: everything in Orbis expects it to be there,
+       * and returning to the chat is then one press rather than a cold start.
+       */
+      void chromiumBrowser?.open('', { newTab: false }).catch(() => undefined)
+    }
     // Tab Lock's focus and minimise triggers hang off this window, and it did not exist when Tab Lock was set up.
     tabLock.attachWindow()
     profileLock.attachWindow()

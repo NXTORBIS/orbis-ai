@@ -1274,6 +1274,14 @@ export interface NxtorbisApi {
    * and the setting would disagree with the screen until something else happened to re-read it.
    */
   onMarketsStripChanged(listener: () => void): () => void
+  /**
+   * Whether the browser is running at all.
+   *
+   * Not the same as whether its window is in front: as a window of its own it goes on running while the chat is being
+   * used, which is what lets going back to it keep every tab. The chat says so while it is running, and says nothing
+   * when it is not.
+   */
+  onChromiumRunning(listener: (running: boolean) => void): () => void
   marketsSearch(query: string): Promise<{ results: Instrument[] } | { error: string; message?: string }>
   marketsTickerAdd(instrumentId: string): Promise<MarketsState | { error: string; message?: string }>
   marketsTickerRemove(instrumentId: string): Promise<MarketsState | { error: string; message?: string }>
