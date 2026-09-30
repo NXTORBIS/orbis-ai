@@ -75,6 +75,14 @@ import {
 import type { PageRegistry } from '../../shared/pages/registry.ts'
 import type { QueryIntent } from '../../shared/pages/search.ts'
 import { catalogueForPrompt, generationOperations, SPEC_SIGNATURES } from './generationCatalogue.ts'
+import {
+  apply as applyChanges,
+  check as checkChanges,
+  read as readChange,
+  type Change,
+  type ChangeProblem,
+  type ChangeSet
+} from '../../shared/pages/changes.ts'
 
 /**
  * What the model is told.
@@ -440,6 +448,77 @@ Write it again, fixing those. Everything else about the format is the same.`
       compiled: null,
       resolution: ladder
     }
+  }
+
+  /**
+   * A small edit to a Page that already exists, applied without writing it again.
+   *
+   * This is the other half of generation, and the important half for a Page somebody is using. `rebuild` asks a
+   * model for the whole specification again with "change it" appended, which is slow, gives a different Page every
+   * time, and means asking for a bigger chart can quietly change the calculation. Here the request becomes a change
+   * set -- a named, checkable edit to the specification that exists -- and the parts nobody asked about are not
+   * touched, because there is no mechanism on this path that could touch them.
+   *
+   * Only the phrasings `changes.read` recognises come through. Anything it does not recognise returns `null` and
+   * the caller falls back to a rebuild, which is the honest split: a deterministic edit where one is possible, and
+   * a regeneration where the request is really asking for something the Page does not do.
+   *
+   * Nothing here touches the live Page. It produces a compiled candidate; whether that candidate ever becomes the
+   * version people open is the version graph's decision, made after this has succeeded.
+   */
+  async applyChange(
+    profileId: string,
+    spec: PageSpec,
+    request: string
+  ): Promise<
+    | { ok: true; built: Compiled; applied: readonly Change[]; set: ChangeSet }
+    | { ok: false; recognised: boolean; problems: readonly ChangeProblem[]; message: string }
+  > {
+    const set = readChange(request, spec)
+    if (set === null) {
+      return {
+        ok: false,
+        recognised: false,
+        problems: [],
+        message: 'That is not one of the edits this can make directly, so the Page has to be built again.'
+      }
+    }
+
+    // Checked against the Page it would edit before anything is applied. A change naming a field that is not there
+    // is refused now rather than doing nothing quietly, which is the failure somebody finds a week later.
+    const problems = checkChanges(set, spec)
+    if (problems.length > 0) {
+      return { ok: false, recognised: true, problems, message: problems.map((one) => one.message).join(' ') }
+    }
+
+    const applied = applyChanges(spec, set, this.operations(), SPEC_SIGNATURES)
+    if ('problems' in applied) {
+      return {
+        ok: false,
+        recognised: true,
+        problems: applied.problems,
+        message: applied.problems.map((one) => one.message).join(' ')
+      }
+    }
+
+    // Compiled through the same door a generated Page goes through. An edit that would produce a Page the compiler
+    // refuses is refused here, with the live version untouched.
+    const built = compile(applied.spec, {
+      operations: this.operations(),
+      signatures: SPEC_SIGNATURES,
+      pageId: makePageId(this.o.random()),
+      taken: (await this.o.registry(profileId)).pages.map((one) => one.identity.slug),
+      allowStorage: this.o.allowStorage === true
+    })
+    if (isCompileError(built)) {
+      return {
+        ok: false,
+        recognised: true,
+        problems: built.problems.map((one) => ({ at: one.at ?? '', code: one.code ?? 'spec', message: one.message })),
+        message: built.message
+      }
+    }
+    return { ok: true, built, applied: applied.applied, set }
   }
 
   /**

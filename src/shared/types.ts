@@ -1750,6 +1750,27 @@ export interface NxtorbisApi {
     input: Record<string, unknown>
   ): Promise<{ ok: true; value: unknown } | { ok: false; message: string } | { error: string; message?: string }>
   /** A Page built again. Adds a version beside the one in use; it does not replace it. */
+  /**
+   * A named edit to a generated Page, applied without writing the Page again.
+   *
+   * `recognised: false` means the request is not one of the edits that can be made directly -- the caller may fall
+   * back to `pagesGenerateRebuild`. It is not an error, and the two are kept apart so a real failure cannot hide
+   * behind a regeneration.
+   */
+  pagesGenerateEdit(
+    pageId: string,
+    request: string
+  ): Promise<
+    | {
+        recognised: boolean
+        applied: { op: string; target: string; to: unknown; reason: string }[]
+        problems: { at: string; code: string; message: string }[]
+        message: string
+        version: { versionId: string; version: string; reason: string | null; state: string } | null
+        dropped: { name: string; label: string; why: string }[]
+      }
+    | { error: string; message?: string }
+  >
   pagesGenerateRebuild(
     pageId: string,
     change: string

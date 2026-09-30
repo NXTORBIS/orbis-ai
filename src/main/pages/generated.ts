@@ -24,6 +24,7 @@ import type { PageManifest } from '../../shared/pages/manifest.ts'
 import type { PageDocument } from '../../shared/pages/builder.ts'
 import type { GenerationSession } from '../../shared/pages/generation.ts'
 import type { QueryIntent } from '../../shared/pages/search.ts'
+import type { Change, ChangeProblem } from '../../shared/pages/changes.ts'
 import {
   carryValues,
   isVersionError,
@@ -230,6 +231,87 @@ export class GeneratedPages {
     const saved = await this.store.putGraph(profileId, result.graph)
     if (!saved.saved) return { version: null, difference: null, carried: null, message: saved.message, session: outcome.session }
     return { version: result.node, difference: result.difference, carried: result.carried, message: '', session: outcome.session }
+  }
+
+  /**
+   * A small change to a Page, made without writing the Page again.
+   *
+   * The whole point is what it does *not* do. `rebuild` hands the request to a model along with the Page's purpose
+   * and takes whatever comes back, so asking for a different label can return a different calculation and nobody
+   * would look for that. This applies a named edit to the specification that already exists, and the parts nobody
+   * mentioned are not touched because nothing on this path can touch them.
+   *
+   * ## Nothing here can damage the Page somebody is using
+   *
+   * Every step that could fail happens before the version graph is touched: the request is recognised, the change
+   * set is checked against the live specification, applied to a copy, and compiled. Only when all of that has
+   * worked does a new version exist -- and it is created as a **draft**, so the version people open is still the
+   * old one until somebody publishes it. A failed edit leaves the graph exactly as it was.
+   *
+   * ## Not every request is one of these
+   *
+   * When `applyChange` does not recognise the request it says so rather than guessing, and `recognised` comes back
+   * false. The caller decides whether to fall back to a rebuild; that decision is not made here, because "this
+   * needs a model" and "this failed" are different answers and collapsing them would hide real failures behind a
+   * regeneration.
+   */
+  async edit(
+    profileId: string,
+    pageId: string,
+    request: string
+  ): Promise<{
+    version: PageVersionNode | null
+    applied: readonly Change[]
+    problems: readonly ChangeProblem[]
+    /** False when this is not an edit that can be made directly, so the caller may rebuild instead. */
+    recognised: boolean
+    carried: Carried | null
+    message: string
+  }> {
+    const nothing = { version: null, applied: [], problems: [], carried: null }
+    const graph = await this.store.graph(profileId, pageId)
+    if (graph === null) return { ...nothing, recognised: true, message: 'There is no such Page.' }
+    const from = openableNode(graph)
+    if (from === null) return { ...nothing, recognised: true, message: 'That Page has no version in use.' }
+
+    const outcome = await this.service.applyChange(profileId, from.spec, request)
+    if (!outcome.ok) {
+      return {
+        ...nothing,
+        recognised: outcome.recognised,
+        problems: outcome.problems,
+        message: outcome.message
+      }
+    }
+
+    const result = regenerate(
+      graph,
+      from.versionId,
+      {
+        versionId: `v_${this.o.random()}`.slice(0, 40),
+        spec: outcome.built.spec,
+        // The same Page, changed. A new id would break every bookmark, note and workflow that referred to it, and
+        // the slug is kept for the same reason.
+        manifest: { ...outcome.built.manifest, pageId, slug: from.manifest.slug },
+        document: outcome.built.document
+      },
+      request,
+      this.now()
+    )
+    if (isVersionError(result)) {
+      return { ...nothing, recognised: true, message: result.message }
+    }
+
+    const saved = await this.store.putGraph(profileId, result.graph)
+    if (!saved.saved) return { ...nothing, recognised: true, message: saved.message }
+    return {
+      version: result.node,
+      applied: outcome.applied,
+      problems: [],
+      recognised: true,
+      carried: result.carried,
+      message: ''
+    }
   }
 
   async publish(profileId: string, pageId: string, versionId: string): Promise<{ published: boolean; message: string }> {

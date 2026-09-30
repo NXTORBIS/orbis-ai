@@ -489,6 +489,36 @@ export function registerPagesIpc(o: PagesIpcOptions): void {
     )
   })
 
+  /**
+   * A small edit to a generated Page, made without writing it again.
+   *
+   * `recognised: false` is not a failure -- it means the request is not one of the edits that can be made directly,
+   * and the caller may ask for a rebuild instead. Collapsing that into an error would hide real failures behind a
+   * regeneration, so the two come back distinct.
+   */
+  handle('pages:generate-edit', async (id, pageId, request) => {
+    if (!o.generated) return noGenerator
+    const result = await o.generated.edit(id, str(pageId, 80), str(request, 300))
+    return {
+      recognised: result.recognised,
+      applied: result.applied,
+      problems: result.problems,
+      message: result.message,
+      version:
+        result.version === null
+          ? null
+          : {
+              versionId: result.version.versionId,
+              version: versionToText(result.version.version),
+              reason: result.version.reason,
+              // A draft. The Page people open is still the old one until this is published, which is what makes a
+              // failed or unwanted edit harmless.
+              state: result.version.state
+            },
+      dropped: result.carried?.dropped ?? []
+    }
+  })
+
   handle('pages:generate-rebuild', async (id, pageId, change) => {
     if (!o.generated) return noGenerator
     const result = await o.generated.rebuild(id, str(pageId, 80), str(change, 300))

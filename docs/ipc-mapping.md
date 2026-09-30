@@ -222,6 +222,7 @@ what a profile has *decided* is persisted, which is why permissions and projects
 | `pages:generate-keep`, `pages:generate-discard` | Keeping a built Page, or throwing it away. Separate from building on purpose: a model writing a calculator is something somebody should look at before it joins their library |
 | `pages:generate-try` | One calculation for a Page that is built and not yet kept. Its own channel because `pages:compute` resolves the Page in the register and this one is not there yet; narrow by construction, since it answers only for a Page the coordinator is holding and only for a capability that Page's manifest asked for |
 | `pages:generate-rebuild` | A Page built again from what it is and what somebody wants changed. Adds a version beside the one in use and never replaces it |
+| `pages:generate-edit` | A named edit to a generated Page, applied to the specification that exists rather than regenerating it. Produces a draft version, so the Page people open is untouched until it is published; a request it does not recognise comes back as such rather than as a failure |
 | `pages:generate-history` | One Page's versions, what each was asked to be, and which is in use |
 | `pages:generate-publish`, `pages:generate-withdraw` | Choosing which version opens, and taking one out of use. Going back is publishing an older version rather than building it again |
 | `pages:generate-forget` | A generated Page and its whole history deleted |

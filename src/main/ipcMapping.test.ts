@@ -211,5 +211,11 @@ test('the boundary is a known size, so the migration can be estimated rather tha
   //
   // None of these widens what anything may do either. An application refers to Pages by id; what each Page is
   // allowed to do stays in that Page's own manifest, and composing Pages cannot add up to more than the sum.
-  assert.ok(code.length <= 433, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
+  //
+  // 433 → 434: editing a generated Page without writing it again. One channel, and it earns its place by being the
+  // difference between a change and a regeneration: asking for a different label used to hand the whole
+  // specification back to a model, which could return a different calculation with it. This applies a named edit to
+  // the specification that exists and produces a draft, so the version people open is untouched until somebody
+  // publishes it.
+  assert.ok(code.length <= 434, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
 })
