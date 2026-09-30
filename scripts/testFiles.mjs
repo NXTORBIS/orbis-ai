@@ -297,6 +297,8 @@ export const TEST_FILES = [
   'src/main/pages/modernPhysicsEngines.test.ts',
   'src/shared/compute/chemistrySuite.test.ts',
   'src/main/pages/chemistryEngines.test.ts',
+  'src/shared/compute/lifeSciences.test.ts',
+  'src/main/pages/biologyEngines.test.ts',
   'src/main/pages/engines.test.ts',
   'src/main/pages/labEngines.test.ts',
   'src/main/pages/scienceEngines.test.ts',

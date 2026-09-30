@@ -26,6 +26,7 @@ import { BadInput, ENGINE_CAPABILITY, runEngineOperation } from './engines.ts'
 import { EM_CAPABILITY, runEmOperation } from './emEngines.ts'
 import { ENGINEERING_CAPABILITY, runEngineeringOperation } from './engineeringEngines.ts'
 import { EARTH_CAPABILITY, runEarthOperation } from './earthEngines.ts'
+import { BIOLOGY_CAPABILITY, runBiologyOperation } from './biologyEngines.ts'
 import { HUMANITIES_CAPABILITY, runHumanitiesOperation } from './humanitiesEngines.ts'
 import { STUDIO_CAPABILITY, runStudioOperation } from './studioEngines.ts'
 import { MODERN_PHYSICS_CAPABILITY, runModernPhysicsOperation } from './modernPhysicsEngines.ts'
@@ -157,6 +158,7 @@ const OPERATION_CAPABILITY: Record<string, string> = {
   ...EM_CAPABILITY,
   ...ENGINEERING_CAPABILITY,
   ...EARTH_CAPABILITY,
+  ...BIOLOGY_CAPABILITY,
   ...HUMANITIES_CAPABILITY,
   ...STUDIO_CAPABILITY,
   ...MODERN_PHYSICS_CAPABILITY,
@@ -719,6 +721,9 @@ export class PagesService {
     }
     if (Object.prototype.hasOwnProperty.call(ENGINEERING_CAPABILITY, operation)) {
       return runEngineeringOperation(operation, input)
+    }
+    if (Object.prototype.hasOwnProperty.call(BIOLOGY_CAPABILITY, operation)) {
+      return runBiologyOperation(operation, input)
     }
     if (Object.prototype.hasOwnProperty.call(EARTH_CAPABILITY, operation)) {
       return runEarthOperation(operation, input)

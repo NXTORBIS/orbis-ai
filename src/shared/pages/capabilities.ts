@@ -255,6 +255,16 @@ export const CAPABILITIES: Record<string, CapabilityDefinition> = {
     consent: 'automatic',
     scope: 'none'
   }),
+  'computation.biology': capability({
+    id: 'computation.biology',
+    name: 'Life sciences bench',
+    description:
+      'Read DNA and protein sequences, work out inheritance, fit enzyme and binding curves, compute body and clearance reference figures, and project populations and food webs. Reference arithmetic only — nothing here is a clinical judgement.',
+    category: 'computation',
+    risk: 'low',
+    consent: 'automatic',
+    scope: 'none'
+  }),
   'computation.earth': capability({
     id: 'computation.earth',
     name: 'Earth, weather and land',
