@@ -180,6 +180,8 @@ export const TEST_FILES = [
   'src/shared/markets/news.test.ts',
   'src/shared/markets/currency.test.ts',
   'src/shared/markets/assets.test.ts',
+  'src/shared/temporal/zone.test.ts',
+  'src/shared/temporal/recurrence.test.ts',
   'src/shared/markets/liveCandle.test.ts',
   'src/main/markets/fx.test.ts',
   'src/main/browserControl/marketCapabilities.test.ts',
