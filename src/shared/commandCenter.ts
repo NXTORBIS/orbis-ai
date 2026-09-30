@@ -172,6 +172,11 @@ export const CAPABILITIES: OrbisCapability[] = [
   // The pages this person has read, searchable by what was in them. A real view in the panel, unlike several of the
   // rows around it -- `recall` is in the panel's VIEWS, so this one goes somewhere.
   { id: 'recall', name: 'Pages you have read', category: 'capture', description: 'Find a page again by what was in it', icon: 'savedPages', keywords: ['read', 'history', 'again', 'remember', 'find', 'article', 'recall'], target: { kind: 'view', view: 'recall' }, pinnable: false, needs: ['helper'] },
+  /*
+   * Schedules. A `panel` target rather than a `view` one, because the panel's own section is where it lives -- the
+   * rail views are a different set, and pointing at one of those would land on the Command Center instead.
+   */
+  { id: 'schedules', name: 'Schedules', category: 'capture', description: 'Things Orbis does at a time you chose', icon: 'reminders', keywords: ['schedule', 'remind', 'reminder', 'later', 'every', 'daily', 'timer', 'when', 'repeat', 'automation'], target: { kind: 'panel', view: 'schedules' }, pinnable: false, needs: ['helper'] },
   { id: 'savedPages', name: 'Saved pages', category: 'capture', description: 'Pages kept on this computer, readable offline', icon: 'savedPages', keywords: ['saved', 'offline', 'archive', 'keep'], target: { kind: 'view', view: 'savedPages' }, pinnable: false, needs: ['helper'] },
 
   // ---- Media

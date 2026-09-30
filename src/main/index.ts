@@ -1907,6 +1907,28 @@ if (!app.requestSingleInstanceLock()) {
           searchSessions: () => searchSessionsForBrowser,
           // The reading index the browser's panel searches: the app's own, never a second one opened over the same file.
           recall: () => recall,
+          /**
+           * Schedules, for the browser's panel and the Orb.
+           *
+           * The app's own store and scheduler, handed over rather than reopened, because two stores would mean two
+           * answers to "what is scheduled" and the one nobody was looking at would be the wrong one. Read at call
+           * time, since the browser can start before this does.
+           *
+           * Deliberately not everything: nothing here can switch on keeping Orbis running or waking the computer,
+           * because those are decisions somebody makes in Settings with the wording in front of them.
+           */
+          schedules: () =>
+            schedulesForChat
+              ? {
+                  all: () => schedulesForChat!.store.all(schedulesForChat!.profileId()),
+                  add: (job) => schedulesForChat!.store.add(schedulesForChat!.profileId(), job, Date.now()),
+                  pause: (jobId, until) => schedulesForChat!.store.pause(schedulesForChat!.profileId(), jobId, until),
+                  resume: (jobId) => schedulesForChat!.store.resume(schedulesForChat!.profileId(), jobId, Date.now()),
+                  remove: (jobId) => schedulesForChat!.store.remove(schedulesForChat!.profileId(), jobId),
+                  skip: (jobId, dueAt) => schedulesForChat!.store.skipOccurrence(schedulesForChat!.profileId(), jobId, dueAt),
+                  look: () => void schedulesForChat!.engine.tick()
+                }
+              : null,
           // Orbis has no account and nothing to sign in to. This is the name the person typed into the app, read fresh each
           // time so renaming yourself in the Orbis window renames you in the browser too, with no restart and no second identity.
           // The Chat button is on the browser's toolbar now, so this is how it gets back here.

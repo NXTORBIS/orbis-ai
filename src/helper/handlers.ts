@@ -11,6 +11,7 @@ import type { Research } from '../shared/types'
 import { createAdblockHandlers } from './adblock/service.ts'
 import { createPersonalHandlers } from './personal.ts'
 import { createRecallHandlers, type RecallHelperDeps } from './recall.ts'
+import { createScheduleHandlers, type SchedulesHelperDeps } from './schedules.ts'
 import { createSecretsHandlers } from './secrets.ts'
 import { createTabLockHandlers } from './tabLock.ts'
 import type { TabLockDeps } from './tabLock.ts'
@@ -112,6 +113,14 @@ export interface HandlerDeps {
    * showing an empty list.
    */
   recall?: () => RecallHelperDeps['store'] | null | undefined
+  /**
+   * Schedules: the app's own store and scheduler, never a second one.
+   *
+   * Two stores would mean two answers to "what is scheduled", and the one somebody happened not to be looking at
+   * would be the wrong one. Absent when the browser is running alone, and the panel says so rather than showing an
+   * empty list -- an empty list reads as "you have none", which would be a lie.
+   */
+  schedules?: () => SchedulesHelperDeps | null | undefined
   /**
    * Who the person says they are. Orbis has no account and nothing to sign in to; this is the name they typed into the app,
    * and the browser shows it so the same person is named the same way on both sides. Read at call time so a rename in the
@@ -240,6 +249,7 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
       const store = deps.recall?.()
       return store ? { store } : null
     }),
+    ...createScheduleHandlers(() => deps.schedules?.()),
     ...(deps.secrets ? createSecretsHandlers(deps.secrets) : {}),
     ...(deps.tabLock ? createTabLockHandlers(deps.tabLock) : {}),
     ...(deps.markets ? createMarketsHandlers(deps.markets) : {}),
