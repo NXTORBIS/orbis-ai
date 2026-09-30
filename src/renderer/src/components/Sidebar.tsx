@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { LucideIcon } from 'lucide-react'
+import type { SettingsSectionId } from '../../../shared/settingsSections'
 import {
   CandlestickChart,
   ChevronDown,
@@ -56,7 +57,13 @@ interface Props {
   onRename(id: string, title: string): void
   onDelete(id: string): void
   onTogglePin(id: string): void
-  onSettings(): void
+  /**
+   * Opens Settings, optionally at a named section.
+   *
+   * The user chip says 'account', because somebody clicking their own name wants their own name -- which is the thing
+   * that used to drop them at the top of a thirty-one block scroll.
+   */
+  onSettings(section?: SettingsSectionId): void
   onHelp(): void
   /**
    * Opening one of Orbis's own screens: Workflows, Galaxy, Whiteboard and the rest. Each of these existed and could be
@@ -363,7 +370,7 @@ export default function Sidebar(props: Props): React.JSX.Element {
       )}
 
       <div className="sb-foot">
-        <button type="button" className="sb-user" title="Profile and settings" onClick={props.onSettings}>
+        <button type="button" className="sb-user" title="Profile and settings" onClick={() => props.onSettings('account')}>
           <span className="sb-avatar">{initials(props.userName)}</span>
           {!collapsed && (
             <span className="sb-user-text">

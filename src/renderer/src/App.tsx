@@ -17,6 +17,7 @@ import { useExperience } from './lib/experience'
 import HudBackground from './components/HudBackground'
 import Sidebar from './components/Sidebar'
 import type { FeatureId } from './components/Sidebar'
+import { DEFAULT_SETTINGS_SECTION, type SettingsSectionId } from '../../shared/settingsSections'
 // Orbis's own screens. Each was finished and unreachable: nothing imported them, so no amount of looking would have
 // found them. They are loaded lazily because only one is ever open and most sessions open none.
 // Lazy like the rest: the chart and its indicators are a large bundle for a screen most sessions never open.
@@ -132,7 +133,16 @@ export default function App(): React.JSX.Element {
   const [webSearch, setWebSearch] = useState(false)
   const [searchToken, setSearchToken] = useState(0)
   const [activityOpen, setActivityOpen] = useState(false)
-  const [settingsOpen, setSettingsOpen] = useState(false)
+  /**
+   * Which section of Settings is open, or null for closed.
+   *
+   * A section rather than a boolean, so every way in can land somewhere meaningful. All five used to open the same
+   * scroll at the top and leave you to find what you came for.
+   */
+  const [settingsAt, setSettingsAt] = useState<SettingsSectionId | null>(null)
+  const settingsOpen = settingsAt !== null
+  const setSettingsOpen = (open: boolean | SettingsSectionId): void =>
+    setSettingsAt(open === false ? null : open === true ? DEFAULT_SETTINGS_SECTION : open)
   /**
    * Opening the browser.
    *
@@ -1337,7 +1347,7 @@ export default function App(): React.JSX.Element {
           onRename={renameConversation}
           onDelete={deleteConversation}
           onTogglePin={togglePin}
-          onSettings={() => setSettingsOpen(true)}
+          onSettings={(section) => setSettingsAt(section ?? DEFAULT_SETTINGS_SECTION)}
           onHelp={() => setShortcutsOpen(true)}
         />
 
@@ -1420,7 +1430,9 @@ export default function App(): React.JSX.Element {
 
       <ToastStack toasts={toasts} onDismiss={(id) => setToasts((current) => current.filter((t) => t.id !== id))} />
       <ControlPrompts />
-      {settingsOpen && settings && <SettingsModal settings={settings} onUpdate={updateSettings} onClose={() => setSettingsOpen(false)} />}
+      {settingsAt && settings && (
+        <SettingsModal settings={settings} section={settingsAt} onUpdate={updateSettings} onClose={() => setSettingsAt(null)} />
+      )}
       {shortcutsOpen && <ShortcutsModal onClose={() => setShortcutsOpen(false)} />}
       {/*
         Offered the first time a microphone is pressed with no model installed. Raised by the voice service rather

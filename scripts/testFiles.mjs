@@ -80,6 +80,7 @@ export const TEST_FILES = [
   'src/main/skillManager.test.ts',
   'src/main/personal/profileData.test.ts',
   'src/main/knowledge/recall.test.ts',
+  'src/shared/settingsSections.test.ts',
   'src/main/knowledge/recallCapture.test.ts',
   'src/shared/recall.test.ts',
   'src/main/knowledge/memory.test.ts',
