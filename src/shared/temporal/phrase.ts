@@ -503,6 +503,14 @@ function takeAction(text: string): TemporalAction | null {
   m = /\bclose\s+(?:all )?(?:tabs?|the tabs?)(?: (?:for|matching|from) (.+))?$/.exec(t)
   if (m && m[1]?.trim()) return { kind: 'closeTabs', urlMatches: m[1].trim() }
 
+  // A Telegram message, which is how a reminder reaches somebody who is not at this computer.
+  m = /\b(?:telegram|message me on telegram|send me a telegram)(?: me)?(?: saying| that| to)?\s+(.+)$/.exec(t)
+  if (m && m[1].trim()) return { kind: 'telegram', chatId: '', message: sentence(m[1]) }
+
+  // A webhook, which is an address somebody owns. https only; see the check in job.ts.
+  m = /\b(?:post|send)\s+(?:a message |the message )?(?:to\s+)?(https:\/\/\S+)(?:\s+saying\s+(.+))?$/.exec(t)
+  if (m) return { kind: 'webhook', url: m[1], message: m[2]?.trim() ? sentence(m[2]) : 'Orbis schedule' }
+
   m = /\b(?:ask orion|ask|summarise|summarize|find out|look up)\s+(.+)$/.exec(t)
   if (m && m[1].trim()) return { kind: 'orion', prompt: sentence(m[1]) }
 
@@ -587,6 +595,11 @@ export function describeAction(a: TemporalAction): string {
       return `ask Orion: ${a.prompt}`
     case 'notify':
       return `remind you: ${a.message}`
+    case 'webhook':
+      // The address, without the scheme, because that is how somebody recognises their own webhook.
+      return `post to ${a.url.replace(/^https:\/\//, '').slice(0, 60)}`
+    case 'telegram':
+      return `send you a Telegram: ${a.message}`
   }
 }
 

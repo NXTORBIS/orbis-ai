@@ -26,16 +26,25 @@ export interface Requirements {
   needsNetwork: boolean
   /** Whether an Orion model key is needed, which the settings may or may not hold. */
   needsModel: boolean
+  /** Whether a Telegram bot token is needed. Held in the Secrets Vault, never in the schedule. */
+  needsTelegramToken: boolean
 }
 
 export function requirementsOf(action: TemporalAction): Requirements {
   const browser = ['openUrl', 'openWorkspace', 'openPage', 'refreshUrl', 'closeTabs'].includes(action.kind)
   return {
-    needsThisComputer: TARGET_OF[action.kind] === 'local',
+    /*
+     * Everything needs this computer today, including the two marked `external`.
+     *
+     * The target says where an action *could* run; this says where it *does*. They differ for a webhook and a
+     * Telegram message, and conflating them would have Orbis promise something no part of it can deliver.
+     */
+    needsThisComputer: true,
     needsBrowser: browser,
     // A workflow's own steps may or may not need the network; assuming they might is the safe direction.
-    needsNetwork: browser || action.kind === 'orion' || action.kind === 'workflow',
-    needsModel: action.kind === 'orion'
+    needsNetwork: browser || ['orion', 'workflow', 'webhook', 'telegram'].includes(action.kind),
+    needsModel: action.kind === 'orion',
+    needsTelegramToken: action.kind === 'telegram'
   }
 }
 
@@ -52,6 +61,8 @@ export interface DeviceState {
   /** Whether the person has been away from the keyboard. */
   idle: boolean
   hasModelKey: boolean
+  /** Whether a Telegram bot token has been put in the vault. */
+  hasTelegramToken: boolean
 }
 
 export interface Readiness {
@@ -74,6 +85,11 @@ export function readiness(action: TemporalAction, device: DeviceState): Readines
   if (need.needsModel && !device.hasModelKey) {
     reasons.push('Orion has no model key, so it cannot answer.')
     // Somebody has to go and add one. Waiting achieves nothing, so this is a `blocked` job rather than a waiting one.
+    selfResolving = false
+  }
+  if (need.needsTelegramToken && !device.hasTelegramToken) {
+    // Same shape: a missing token is a thing to go and fix, not a thing to wait for.
+    reasons.push('There is no Telegram bot token in the Secrets Vault, so Orbis cannot send the message.')
     selfResolving = false
   }
 
@@ -144,9 +160,18 @@ export const UNSUPPORTED: readonly Unsupported[] = Object.freeze([
     instead: 'With that off, Orbis runs it when the computer next wakes and says how late it was.'
   },
   {
-    ask: 'Send a WhatsApp, Slack or Telegram message on a schedule.',
-    because: 'Orbis has no connection to any messaging service, and no permission to act in your accounts.',
-    instead: 'Orbis can remind you at that moment, and open the conversation ready for you to send it.'
+    ask: 'Send a WhatsApp message on a schedule.',
+    because:
+      'Sending on WhatsApp officially needs a business account and an approved template. Anything else means an' +
+      ' unofficial client, which gets the number banned.',
+    instead: 'Telegram works: a bot token in the Secrets Vault and a chat id, and Orbis can send you a message there.'
+  },
+  {
+    ask: 'Post to Slack or Discord on a schedule.',
+    because: 'Orbis has no connection to either, and no permission to act in your accounts.',
+    instead:
+      'Both let you make an incoming webhook, which is an address you own. Give Orbis that and it can post to it as' +
+      ' an ordinary web request.'
   },
   {
     ask: 'Send an email on a schedule.',
@@ -188,13 +213,29 @@ export const UNSUPPORTED: readonly Unsupported[] = Object.freeze([
 ])
 
 /**
+ * Whether this action is one that *could* run somewhere other than this computer.
+ *
+ * Not whether it does -- nothing does, because there is no Orbis server. This is the difference between "this can
+ * never run off your machine" and "this needs somewhere to run and there is nowhere yet", which are different
+ * answers and deserve different words.
+ */
+export function couldRunElsewhere(action: TemporalAction): boolean {
+  return TARGET_OF[action.kind] === 'external'
+}
+
+/**
  * The honest answer to "can this run while my computer is off?".
  *
  * A single function so that one sentence is used everywhere, rather than each screen writing its own hedge.
  */
 export function answerAboutOffline(action: TemporalAction): string {
-  const need = requirementsOf(action)
-  if (!need.needsThisComputer) return 'This can run without your computer being on.'
+  if (couldRunElsewhere(action)) {
+    return (
+      'Not today. This one is only a web request, so it is the kind of thing that could run somewhere else -- but' +
+      ' there is no Orbis server, so it runs here. Orbis can stay running with no window, and can wake a sleeping' +
+      ' computer, if you switch both on in Settings.'
+    )
+  }
   return (
     'No. This runs on this computer, so it needs Orbis running. Orbis can stay running with no window, and can wake' +
     ' a sleeping computer, if you switch both on in Settings — but a computer that is switched off cannot be woken,' +
@@ -206,9 +247,10 @@ export function answerAboutOffline(action: TemporalAction): string {
 export function findUnsupported(said: string): Unsupported | null {
   const text = said.toLowerCase()
   const groups: readonly [readonly string[], number][] = [
-    [['whatsapp', 'slack', 'telegram', 'discord', 'text my', 'message my', 'dm '], 2],
-    [['email', 'e-mail', 'mail to', 'send an email'], 3],
-    [['calendar', 'google cal', 'outlook'], 4],
+    [['whatsapp'], 2],
+    [['slack', 'discord'], 3],
+    [['email', 'e-mail', 'mail to', 'send an email'], 4],
+    [['calendar', 'google cal', 'outlook'], 5],
     /*
      * About the machine, not the person.
      *
@@ -217,7 +259,7 @@ export function findUnsupported(said: string): Unsupported | null {
      */
     [['computer is off', 'laptop is off', 'pc is off', 'shut down', 'switched off', 'turned off', 'powered off'], 0],
     [['is asleep', 'while it sleeps', 'sleeping', 'sleep mode', 'lid is closed', 'lid closed'], 1],
-    [['buy ', 'sell ', 'transfer ', 'invest ', 'order '], 8]
+    [['buy ', 'sell ', 'transfer ', 'invest ', 'order '], 9]
   ]
   for (const [words, index] of groups) {
     if (words.some((w) => text.includes(w))) return UNSUPPORTED[index]

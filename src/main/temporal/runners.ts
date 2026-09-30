@@ -39,6 +39,10 @@ export interface RunnerDeps {
   workspace: ((idOrName: string) => Promise<{ tabs: Record<string, unknown>[]; groups: Record<string, unknown>[] } | null>) | null
   /** Opens one of Orbis's own Pages. */
   openPage: ((pageId: string) => Promise<{ ok: boolean; detail: string }>) | null
+  /** Posts to an address the person owns. https only, one body shape, no headers. */
+  webhook: ((url: string, message: string) => Promise<{ ok: boolean; detail: string }>) | null
+  /** Sends a Telegram message through the person's own bot, with the token read from the vault at that moment. */
+  telegram: ((chatId: string, message: string) => Promise<{ ok: boolean; detail: string }>) | null
 }
 
 export function makeRunners(d: RunnerDeps): Partial<Record<TemporalAction['kind'], Runner>> {
@@ -113,6 +117,18 @@ export function makeRunners(d: RunnerDeps): Partial<Record<TemporalAction['kind'
        */
       d.notify(job.name, text.slice(0, 240))
       return { ok: true, detail: text.slice(0, 200) }
+    },
+
+    webhook: async (action) => {
+      if (action.kind !== 'webhook') return { ok: false }
+      if (!d.webhook) return { ok: false, detail: 'Orbis cannot send web requests at the moment.' }
+      return d.webhook(action.url, action.message)
+    },
+
+    telegram: async (action) => {
+      if (action.kind !== 'telegram') return { ok: false }
+      if (!d.telegram) return { ok: false, detail: 'Orbis cannot reach Telegram at the moment.' }
+      return d.telegram(action.chatId, action.message)
     },
 
     notify: async (action, job) => {

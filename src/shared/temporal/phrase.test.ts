@@ -289,7 +289,7 @@ test('things Orbis genuinely cannot do are answered about Orbis, not about gramm
   assert.equal(whats.ok, false)
   if (whats.ok) return
   assert.ok('unsupported' in whats)
-  assert.match(whats.why, /no connection to any messaging service/)
+  assert.match(whats.why, /business account/)
 
   const mail = read('email the team every monday at 9am')
   assert.equal(mail.ok, false)

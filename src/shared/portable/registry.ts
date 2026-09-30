@@ -326,6 +326,34 @@ export const CATEGORIES: readonly PortableCategory[] = Object.freeze([
     mergeable: true
   }),
   category({
+    id: 'temporal.schedules',
+    label: 'Schedules',
+    describe: 'Things Orbis does at a time you chose, and what each has done.',
+    /*
+     * Portable, and truthfully so: the file crosses as it is.
+     *
+     * It can, because a schedule is kept as a rule in a named place rather than as a moment -- "every weekday at
+     * 8am, New York time" means the same thing on the destination machine. The one machine-specific field in it, the
+     * next run, is worked out again from the rule on the first pass of the scheduler, so it corrects itself within
+     * half a minute of arriving rather than needing anything done to it on the way.
+     */
+    portability: 'portable',
+    sensitivity: 'personal',
+    storage: ['schedules.json'],
+    scope: 'profile',
+    schemaVersion: 1,
+    /*
+     * A schedule names a workflow, a Page or a workspace, so those come first. It survives the thing it names
+     * disappearing -- the job goes to `blocked` and says what is missing -- but importing in this order means it
+     * usually does not have to.
+     */
+    dependsOn: ['workflows.definitions'],
+    requiresReauthentication: false,
+    userAction: null,
+    why: null,
+    mergeable: true
+  }),
+  category({
     id: 'workflows.runs',
     label: 'Workflow history',
     describe: 'What each workflow has done, and when.',

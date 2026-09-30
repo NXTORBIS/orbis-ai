@@ -27,7 +27,8 @@ const READY: DeviceState = Object.freeze({
   onPower: true,
   batteryPercent: 90,
   idle: false,
-  hasModelKey: true
+  hasModelKey: true,
+  hasTelegramToken: true
 })
 
 const PROFILE = 'default'

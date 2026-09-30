@@ -21,7 +21,8 @@ const READY: DeviceState = Object.freeze({
   onPower: true,
   batteryPercent: 80,
   idle: false,
-  hasModelKey: true
+  hasModelKey: true,
+  hasTelegramToken: true
 })
 
 const NOW = Date.UTC(2026, 5, 15, 12, 0, 0)
@@ -415,7 +416,9 @@ test('a reminder does not need the browser, so a closed browser does not hold it
 test('asking for something Orbis cannot do gets the reason and the nearest real thing', () => {
   const messaging = findUnsupported('send a whatsapp to mum every sunday')
   assert.ok(messaging)
-  assert.match(messaging.because, /no connection to any messaging service/)
+  assert.match(messaging.because, /business account/)
+  // And the alternative is real now: Telegram needs no account of Orbis's own.
+  assert.match(messaging.instead ?? '', /Telegram works/)
   assert.ok(messaging.instead)
 
   const offline = findUnsupported('run this while my computer is off')
@@ -480,7 +483,8 @@ test('each thing Orbis cannot do is matched to its own answer, not to the one ne
   const cases: readonly [string, RegExp][] = [
     ['run it while my computer is switched off', /switched off/i],
     ['run it while my laptop is asleep', /asleep/i],
-    ['send a whatsapp to mum every sunday', /whatsapp|messaging/i],
+    ['send a whatsapp to mum every sunday', /whatsapp/i],
+    ['post to slack every monday', /slack or discord/i],
     ['email the team every monday', /email/i],
     ['put it on my calendar every monday', /calendar/i],
     ['buy 10 bitcoin every friday', /buy, sell or transfer/i]

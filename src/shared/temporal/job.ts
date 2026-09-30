@@ -48,6 +48,27 @@ export type TemporalAction =
   | { kind: 'orion'; prompt: string }
   /** Say something, through the existing notification system. A reminder is this and nothing more. */
   | { kind: 'notify'; message: string }
+  /**
+   * Send a message somewhere of your own choosing, as an ordinary web request.
+   *
+   * This is how a schedule reaches something outside Orbis without Orbis growing an integration: a Slack or Discord
+   * incoming webhook, a home-automation hook, a script on a machine you run. The address is yours and the body is
+   * yours, and Orbis neither knows nor cares what is on the other end.
+   *
+   * Deliberately limited to a POST with a text body to an https address. No headers, no methods, no cookies -- a
+   * schedule is not a way to make arbitrary requests as you.
+   */
+  | { kind: 'webhook'; url: string; message: string }
+  /**
+   * Send yourself a message on Telegram, through your own bot.
+   *
+   * The one messaging service that needs no company account, no review and no server: a bot token and a chat id, and
+   * sending is a single web request. It is here because it is the honest answer to "tell me even when I am not at
+   * this computer" -- a notification needs a screen, and this reaches a phone.
+   *
+   * The token is held in the Secrets Vault, never in the schedule.
+   */
+  | { kind: 'telegram'; chatId: string; message: string }
 
 export const ACTION_KINDS: readonly TemporalAction['kind'][] = Object.freeze([
   'workflow',
@@ -57,7 +78,9 @@ export const ACTION_KINDS: readonly TemporalAction['kind'][] = Object.freeze([
   'refreshUrl',
   'closeTabs',
   'orion',
-  'notify'
+  'notify',
+  'webhook',
+  'telegram'
 ])
 
 // ---------------------------------------------------------------- where it can run
@@ -85,7 +108,15 @@ export const TARGET_OF: Readonly<Record<TemporalAction['kind'], ExecutionTarget>
   // Orion answers through this computer's own request to the model, so the computer must be on.
   orion: 'local',
   // A notification needs somewhere to show it, which is this computer.
-  notify: 'local'
+  notify: 'local',
+  /*
+   * Both of these are a single web request with nothing of this computer in them, so they are the first two things
+   * Orbis schedules that could genuinely run somewhere else. Nothing runs them anywhere else today -- there is no
+   * Orbis server -- but marking them honestly is what lets the capability model tell the truth if that ever changes,
+   * rather than the truth being buried in a comment.
+   */
+  webhook: 'external',
+  telegram: 'external'
 })
 
 // ---------------------------------------------------------------- what to do when it cannot
@@ -306,6 +337,20 @@ export function checkJob(job: TemporalJob): JobProblem[] {
       needsText(a.prompt, 'The question')
       break
     case 'notify':
+      needsText(a.message, 'The message')
+      break
+    case 'webhook':
+      /*
+       * https only, and no plain http.
+       *
+       * What goes to a webhook is whatever somebody put in the message, and sending that across a network in the
+       * clear because a typed address happened to say http is not a choice worth offering.
+       */
+      if (!/^https:\/\/\S+$/i.test(String(a.url))) problems.push('A webhook address must start with https://.')
+      needsText(a.message, 'The message')
+      break
+    case 'telegram':
+      needsText(a.chatId, 'The Telegram chat')
       needsText(a.message, 'The message')
       break
   }

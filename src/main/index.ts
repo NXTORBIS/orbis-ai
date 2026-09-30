@@ -47,6 +47,7 @@ import { TemporalStore } from './temporal/store.ts'
 import { earliestWake, shouldStayAlive } from './temporal/wake.ts'
 import { applyWake, clearWake, wakeIsPossible } from './temporal/windowsWake.ts'
 import { hibernateNow } from './temporal/powerRead.ts'
+import { postWebhook, sendTelegram, TELEGRAM_SECRET } from './temporal/telegram.ts'
 import { FrontTabWatch, shouldReadNow } from './knowledge/recallCapture.ts'
 import { MAX_PAGE_TEXT, pageKey, recallPromptBlock } from '../shared/recall.ts'
 import { closedBrowserState, followChromiumTabs } from './browserState'
@@ -2666,8 +2667,30 @@ if (!app.requestSingleInstanceLock()) {
        */
       batteryPercent: null,
       idle: powerMonitor.getSystemIdleTime() > 300,
-      hasModelKey: GROQ_API_KEYS.length > 0
+      hasModelKey: GROQ_API_KEYS.length > 0,
+      // Read from the vault rather than remembered, so removing the token takes effect on the next pass.
+      hasTelegramToken: telegramToken() !== null
     })
+
+    /**
+      * The Telegram bot token, read at the moment of sending rather than remembered.
+      *
+      * Read rather than held, so removing it from the vault takes effect at once and so no copy of it lives in a
+      * variable for the life of the process. A locked vault is reported as locked, which the scheduler treats as
+      * something waiting to be unlocked rather than a failure to work around.
+      */
+    const telegramToken = (): { token: string } | { token: null; because: 'locked' | 'missing' } => {
+      try {
+        const profileId = scheduleProfileId
+        const found = vault.list(profileId).find((secret) => TELEGRAM_SECRET.test(secret.name))
+        if (!found) return { token: null, because: 'missing' }
+        const full = vault.reveal(profileId, found.id)
+        return full.value.trim() ? { token: full.value.trim() } : { token: null, because: 'missing' }
+      } catch {
+        // `list` and `reveal` both throw when the vault is locked, which is the only expected failure here.
+        return { token: null, because: 'locked' }
+      }
+    }
 
     const scheduleProfile = async (): Promise<string> => (await profilesStore.active()).id
     let scheduleProfileId = await scheduleProfile()
@@ -2758,6 +2781,9 @@ if (!app.requestSingleInstanceLock()) {
             groups: (found.groups ?? []) as unknown as Record<string, unknown>[]
           }
         },
+        webhook: (url, message) => postWebhook((address, init) => net.fetch(address, init), url, message),
+        telegram: (chatId, message) =>
+          sendTelegram({ token: telegramToken, fetch: (url, init) => net.fetch(url, init) }, chatId, message),
         openPage: async (pageId) => {
           if (!mainWindow || mainWindow.isDestroyed()) return { ok: false, detail: 'The Orbis window is not open.' }
           /*
