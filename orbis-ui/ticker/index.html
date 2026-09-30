@@ -54,6 +54,15 @@
           </svg>
         </button>
         <span class="strip-state" id="state" title="Where these prices come from"></span>
+        <!--
+          Hiding the strip. Revealed on hover and at no other time: a permanent close control on a band meant to be
+          glanced at would be the most prominent thing on it.
+        -->
+        <button type="button" class="strip-tool strip-close" id="close" aria-label="Hide the market strip" title="Hide the strip">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
       </div>
     </div>
 

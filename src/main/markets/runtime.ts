@@ -386,6 +386,23 @@ export class MarketsRuntime {
   // ---------------------------------------------------------------- what the strip asks for
 
   /** Everything the strip needs to draw itself: its settings, its instruments, and the last price of each. */
+  /**
+   * Switches the strip off, for the close control on the strip itself.
+   *
+   * One setting, and two strips read it, so this hides both. That is the intent: the band along the bottom of the
+   * browser and the band along the bottom of the Orbis window are the same strip in two places, not two features, and
+   * somebody who closes one has said they do not want it.
+   *
+   * One-way on purpose. Switching it back on is the Orbis window's to do, so a page can never put a band on somebody's
+   * browser -- only take one away.
+   */
+  async hideStrip(): Promise<void> {
+    const profileId = await this.o.profileId()
+    const ticker = await this.o.store.ticker(profileId)
+    if (!ticker.enabled) return
+    await this.o.store.setTicker(profileId, { ...ticker, enabled: false })
+  }
+
   async tickerState(): Promise<{
     config: {
       groupName: string

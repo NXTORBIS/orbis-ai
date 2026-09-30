@@ -8,8 +8,11 @@ import type { Handler } from './server.ts'
  * channels that page uses -- and, deliberately, only those: reading what to show, waiting for the next change, and the
  * three actions the preview offers.
  *
- * Nothing here writes a watchlist, edits an alert or changes a setting. Those belong to the Orbis window, which has the
- * whole Markets interface; a strip that could rewrite the configuration would be a large surface for a small feature.
+ * Nothing here writes a watchlist, edits an alert or changes a setting, with one exception: the strip may switch
+ * *itself off*. That is here because the close control is on the strip -- hiding something has to be possible from the
+ * thing being hidden, or the only way to get rid of a band across the bottom of your browser is to go and find a
+ * setting for it. It is deliberately one-way: a page can turn the strip off and can never turn it on, so this cannot
+ * be used to put a band on somebody's browser, only to take one away.
  */
 
 export interface MarketsHelperDeps {
@@ -23,6 +26,8 @@ export interface MarketsHelperDeps {
   act(what: string, instrumentId: string): Promise<boolean>
   /** Opens the group chooser in the Orbis window, because the groups are edited there. */
   openGroups(): Promise<void>
+  /** Switches the strip off. One-way: there is deliberately no matching way to switch it on from a page. */
+  hideStrip(): Promise<void>
 }
 
 const instrumentId = (value: unknown): string => {
@@ -89,6 +94,17 @@ export function createMarketsHandlers(getDeps: () => MarketsHelperDeps | null | 
 
     'markets:ticker-groups-open': guarded(async () => {
       await need().openGroups()
+      return { ok: true }
+    }),
+
+    /**
+     * The close control on the strip.
+     *
+     * Takes nothing, so there is no argument to get wrong and nothing to authorise beyond the request itself, and it
+     * can only ever mean "off". Switching the strip back on is the Orbis window's to do.
+     */
+    'markets:ticker-off': guarded(async () => {
+      await need().hideStrip()
       return { ok: true }
     })
   }

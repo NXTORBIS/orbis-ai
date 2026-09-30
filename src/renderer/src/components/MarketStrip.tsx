@@ -144,6 +144,14 @@ export default function MarketStrip({ suppressed = false }: MarketStripProps): R
     return () => window.clearInterval(timer)
   }, [showing, load])
 
+  /**
+   * The strip switched off somewhere else.
+   *
+   * One setting, two strips. Closing the band along the bottom of the browser has to reach this one, or the two would
+   * disagree about whether the strip exists until something else happened to re-read the setting.
+   */
+  useEffect(() => window.api.onMarketsStripChanged(() => void load()), [load])
+
   /** Prices, as they happen. Only the rows that ticked are replaced. */
   useEffect(() => {
     if (!showing) return

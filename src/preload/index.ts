@@ -245,6 +245,7 @@ const api: NxtorbisApi = {
   onMarketAlert: (listener) => subscribe('markets:alert', listener),
   onMarketTrigger: (listener) => subscribe('markets:trigger', listener),
   onMarketsOpen: (listener) => subscribe('markets:open', listener),
+  onMarketsStripChanged: (listener) => subscribe('markets:strip-changed', listener),
   onMarketsShow: (listener) => subscribe('markets:show', listener),
   securityLog: () => ipcRenderer.invoke('security:log'),
   clearSecurityLog: () => ipcRenderer.invoke('security:clear-log'),

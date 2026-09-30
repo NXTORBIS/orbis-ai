@@ -455,3 +455,28 @@ body {
     max-width: 260px;
   }
 }
+
+/* ----------------------------------------------------------------------------
+   Hiding the strip, and the rest of its controls, on hover only.
+
+   A permanent close control on a band meant to be glanced at would be the most
+   prominent thing on it. Opacity rather than display, so the rail does not
+   lurch sideways the moment a pointer arrives -- the buttons keep their box the
+   whole time and only stop being drawn.
+   ------------------------------------------------------------------------- */
+
+.strip-tools {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.strip:hover .strip-tools,
+.strip-tools:focus-within {
+  opacity: 1;
+}
+
+/* Closing is the destructive one, so it reads as it on hover and nowhere else. */
+.strip-close:hover {
+  color: var(--danger, #ff4d6d);
+  background: color-mix(in srgb, var(--danger, #ff4d6d) 14%, transparent);
+}

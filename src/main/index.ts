@@ -1768,6 +1768,18 @@ if (!app.requestSingleInstanceLock()) {
                 mainWindow.webContents.send('markets:open', { what: 'ticker-groups', instrumentId: '' })
                 mainWindow.show()
               }
+            },
+            /**
+             * The close control on the strip, from the strip.
+             *
+             * One setting, and there are two strips reading it, so switching it off here switches off the one in the
+             * Orbis window as well. That is the intent: it is the same strip in two places, not two features.
+             */
+            hideStrip: async () => {
+              await markets.hideStrip()
+              if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('markets:strip-changed')
+              }
             }
           }),
           // Locked tabs never appear in a listing with their address, and the security layer follows the browser's own

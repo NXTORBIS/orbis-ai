@@ -1237,6 +1237,14 @@ export interface NxtorbisApi {
   marketsStrip(): Promise<StripAnswer | { error: string; message?: string }>
   /** The strip's own on/off, reached from the strip's close button and from Settings. */
   marketsStripEnabled(enabled: boolean): Promise<MarketsState | { error: string; message?: string }>
+  /**
+   * The strip was switched off somewhere else.
+   *
+   * There are two strips reading one setting, so closing the one along the bottom of the browser has to reach the one
+   * along the bottom of this window. Without this the window's strip would keep moving after the browser's had gone,
+   * and the setting would disagree with the screen until something else happened to re-read it.
+   */
+  onMarketsStripChanged(listener: () => void): () => void
   marketsSearch(query: string): Promise<{ results: Instrument[] } | { error: string; message?: string }>
   marketsTickerAdd(instrumentId: string): Promise<MarketsState | { error: string; message?: string }>
   marketsTickerRemove(instrumentId: string): Promise<MarketsState | { error: string; message?: string }>

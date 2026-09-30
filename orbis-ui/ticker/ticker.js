@@ -29,7 +29,7 @@ const stateLabel = $('state')
 const peek = $('peek')
 
 /** What Orbis last told us to show. Empty until it does. */
-let config = { groupName: '', speed: 40, direction: 'left', pauseOnHover: true, fields: ['price', 'change'], height: 26 }
+let config = { groupName: '', speed: 40, direction: 'left', pauseOnHover: true, fields: ['price', 'change'], height: 26, enabled: false, slots: 16, auto: true }
 /** instrumentId -> { instrument, quote } */
 let rows = new Map()
 /** instrumentId -> the nodes drawn for it, so an update writes text instead of rebuilding. */
@@ -247,10 +247,36 @@ let watching = []
 const within = (ms, work) =>
   Promise.race([work, new Promise((_resolve, reject) => setTimeout(() => reject(new HelperDown('Orbis did not answer.')), ms))])
 
+/**
+ * Telling the browser whether the strip is wanted.
+ *
+ * Only this page can know: it is an Orbis setting, and this page is what can reach Orbis. The browser therefore loads
+ * this page hidden and taking no height, and waits to be told -- so saying so is not optional, it is the only thing
+ * that makes the band appear at all.
+ *
+ * Sent on every read rather than only on a change, because a window opened a moment ago has a fresh view that has never
+ * been told anything, and a strip that appeared in one window and not the next would be worse than one that never
+ * appeared.
+ */
+const tellBrowser = (wanted) => askBrowser('orbis.ticker.shown', wanted === true).catch(() => undefined)
+
 async function load() {
   try {
     const state = await within(6000, call('markets:ticker', []))
     config = { ...config, ...(state?.config ?? {}) }
+    void tellBrowser(config.enabled)
+    if (!config.enabled) {
+      // Off means off: nothing drawn, nothing subscribed, and no long-poll held open for a band that is not there.
+      rows = new Map()
+      rebuild()
+      if (watching.length > 0) {
+        watching = []
+        await call('markets:watch', [[], 'ticker']).catch(() => undefined)
+      }
+      running = false
+      stop()
+      return
+    }
     groupName.textContent = config.groupName || 'Markets'
     rows = new Map(
       (state?.items ?? []).map((item) => [item.instrument.instrumentId, { instrument: item.instrument, quote: item.quote ?? null }])
@@ -340,6 +366,24 @@ pauseButton.addEventListener('click', () => {
   pauseButton.title = paused ? 'Start the ticker' : 'Pause the ticker'
 })
 
+/**
+ * Hiding the strip, from the strip.
+ *
+ * Revealed on hover and at no other time. A permanent close control on a band meant to be glanced at would be the most
+ * prominent thing on it, which is the opposite of what a ticker is for.
+ *
+ * It switches the setting off in Orbis first and only then tells the browser to give the pixels back, in that order: a
+ * strip that vanished and came back on the next window would look like a bug rather than a choice.
+ */
+$('close').addEventListener('click', async () => {
+  await call('markets:ticker-off', []).catch(() => undefined)
+  config = { ...config, enabled: false }
+  running = false
+  stop()
+  await call('markets:watch', [[], 'ticker']).catch(() => undefined)
+  void tellBrowser(false)
+})
+
 groupButton.addEventListener('click', () => {
   // The groups live in Orbis, so changing one is Orbis's to do: this asks for the chooser rather than drawing its own.
   call('markets:ticker-groups-open', []).catch(() => undefined)
@@ -417,7 +461,9 @@ document.addEventListener('visibilitychange', () => {
     running = false
     stop()
     call('markets:watch', [[], 'ticker']).catch(() => undefined)
-  } else if (!running) {
+  } else if (!running && config.enabled) {
+    // Only when the strip is actually wanted. `running` is also false because somebody switched it off, and coming back
+    // to the window is not a reason to undo that.
     running = true
     start()
     void load().then(follow)
@@ -435,5 +481,10 @@ window.addEventListener('resize', measure)
 // Orbis tells the strip when its configuration changes, so a group switched in Settings appears here without a reload.
 globalThis.orbisTickerChanged = () => void load()
 
-start()
-void load().then(follow)
+// The first read is what tells the browser whether to make room at all. `follow` only begins once there is something to
+// follow: a strip that is switched off holds no connection open.
+void load().then(() => {
+  if (!config.enabled) return
+  start()
+  return follow()
+})
