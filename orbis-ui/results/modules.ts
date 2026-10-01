@@ -382,7 +382,15 @@ async function paintIcons(): Promise<void> {
   if (!wanted.length) return
   let icons: Record<string, string | null> = {}
   try {
-    const answer = (await call('favicon:get', [wanted.slice(0, 60)])) as { icons?: Record<string, string | null> }
+    /*
+     * Addresses, not hosts.
+     *
+     * The channel parses each entry with `new URL` and keeps the host, so a bare "en.wikipedia.org" is not a URL,
+     * parses to nothing, and is dropped -- which is why every row kept its stand-in letter and no icon ever arrived.
+     */
+    const answer = (await call('favicon:get', [wanted.slice(0, 60).map((host) => `https://${host}`)])) as {
+      icons?: Record<string, string | null>
+    }
     icons = answer?.icons ?? {}
   } catch {
     // No icons is a page of letters, which is the fallback working rather than a failure worth saying anything about.

@@ -95,6 +95,8 @@ export interface BrowserManagerOptions {
   /** The app's own saved-research store, so the results page and the Orbis window share one instance. */
   searchSessions?: HandlerDeps['searchSessions']
   /** The pages this person has read, for the browser panel that searches them. */
+  /** How Orbis looks, so the browser's pages wear the same theme and preset as the chat. */
+  appearance?: HandlerDeps['appearance']
   recall?: HandlerDeps['recall']
   /** Schedules: the app's own store and scheduler, so the browser's panel shows the same ones the window does. */
   schedules?: HandlerDeps['schedules']
@@ -218,6 +220,7 @@ export class BrowserManager {
         appServices: this.o.appServices,
         pages: this.o.pages,
         searchSessions: this.o.searchSessions,
+        appearance: this.o.appearance,
         recall: this.o.recall,
         schedules: this.o.schedules,
         conversations: this.o.conversations,

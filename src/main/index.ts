@@ -107,6 +107,8 @@ import { WorkspacesStore } from './personal/workspaces'
 import { ProfilesStore } from './personal/profiles'
 import { ExperienceStore } from './experience/store'
 import { mayNotify } from '../shared/rules'
+import { activePreset, appearanceVariables, wantsReducedMotion } from '../shared/experience'
+import { presetBackdrop } from '../shared/presets'
 import { RuleWatcher, workflowReadings } from './ruleWatcher'
 import { AccountFailure, AccountSecurity } from './accountSecurity'
 import { TabLockStore } from './tabLockStore'
@@ -1906,6 +1908,22 @@ if (!app.requestSingleInstanceLock()) {
           pages: () => (searchOrbisPages === null ? null : { search: searchOrbisPages }),
           searchSessions: () => searchSessionsForBrowser,
           // The reading index the browser's panel searches: the app's own, never a second one opened over the same file.
+          /**
+           * How Orbis looks, for the browser's own pages.
+           *
+           * The browser and the chat are two halves of one application, so a theme or a preset chosen in one belongs
+           * in the other. Built by the same shared function the chat uses, so there is one idea of what a preset
+           * means rather than two that drift, and read at call time so a change in Settings reaches an open browser.
+           */
+          appearance: () => {
+            const config = experienceStore?.current()
+            if (!config) return { variables: {}, backdrop: null }
+            const still = wantsReducedMotion(config, nativeTheme.shouldUseDarkColors ? false : false)
+            return {
+              variables: appearanceVariables(config, still),
+              backdrop: presetBackdrop(activePreset(config), still)
+            }
+          },
           recall: () => recall,
           /**
            * Schedules, for the browser's panel and the Orb.

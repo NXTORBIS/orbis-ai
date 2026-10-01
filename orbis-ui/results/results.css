@@ -32,7 +32,19 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .vertical.on { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
 .vertical.orion { color: var(--accent); }
 
-main { max-width: 860px; margin: 0; padding: 26px 28px 80px; }
+/*
+ * The page, centred, and wider than one column of text when the content is not text.
+ *
+ * It was `max-width: 860px; margin: 0`, which pins everything to the left edge: on a wide window that leaves most of
+ * the screen empty black with the results huddled in one corner. 860px is a sensible measure for a column of prose
+ * and nothing like a sensible width for a grid of pictures.
+ *
+ * So text keeps its measure and is centred, and a page that is mostly a grid is allowed the room a grid needs.
+ */
+main { max-width: 860px; margin: 0 auto; padding: 26px 28px 80px; }
+
+/* Images and videos are grids: a grid in an 860px column is three thumbnails and a lot of nothing beside them. */
+main:has(> .images), main.wide { max-width: 1400px; }
 .status { color: var(--muted); }
 .status.problem { padding: 15px 17px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
 .retry { margin-left: 10px; padding: 5px 13px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel2); font-size: 13px; }
@@ -285,7 +297,7 @@ audio.preview { width: 100%; max-width: 360px; height: 32px; margin-top: 6px; }
    section with nothing in it was never drawn at all. The right-hand column exists only when there is a knowledge panel
    to put in it, so the page never reserves space for an absence. */
 
-.mod-page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 34px; }
+.mod-page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 34px; margin-inline: auto; }
 .mod-page.has-side { grid-template-columns: minmax(0, 1fr) 320px; }
 .mod-main { display: flex; flex-direction: column; gap: 28px; min-width: 0; }
 .mod-side { min-width: 0; }

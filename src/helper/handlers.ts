@@ -112,6 +112,16 @@ export interface HandlerDeps {
    * written by the window's own capture. Absent when the browser is running alone, and the panel says so rather than
    * showing an empty list.
    */
+  /**
+   * How Orbis looks: the CSS variables the chat is wearing right now, and the backdrop its preset asked for.
+   *
+   * The browser and the chat are two halves of one application, so a theme or a preset chosen in one belongs in the
+   * other. The map is built by `experienceVariables` in shared code -- the same function the chat uses -- so there is
+   * one idea of what a preset means rather than two that drift.
+   *
+   * Read at call time, so a change in Settings reaches an open browser without a restart.
+   */
+  appearance?: () => Promise<{ variables: Record<string, string>; backdrop: string | null }> | { variables: Record<string, string>; backdrop: string | null } | null | undefined
   recall?: () => RecallHelperDeps['store'] | null | undefined
   /**
    * Schedules: the app's own store and scheduler, never a second one.
@@ -250,6 +260,12 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
       return store ? { store } : null
     }),
     ...createScheduleHandlers(() => deps.schedules?.()),
+    /** How Orbis looks, for the browser's own pages. Nothing here changes anything: it reads what the chat is wearing. */
+    ...(deps.appearance
+      ? {
+          'appearance:get': async () => (await deps.appearance!()) ?? { variables: {}, backdrop: null }
+        }
+      : {}),
     ...(deps.secrets ? createSecretsHandlers(deps.secrets) : {}),
     ...(deps.tabLock ? createTabLockHandlers(deps.tabLock) : {}),
     ...(deps.markets ? createMarketsHandlers(deps.markets) : {}),

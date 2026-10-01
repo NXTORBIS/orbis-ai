@@ -10,6 +10,8 @@
 import { GRADIENTS, MAX_IMAGE_BYTES, MAX_SHORTCUTS, MAX_TILES, clockText, countdownText, normalizeSettings, removeShortcut, saveShortcut, siteUrl } from './newtab-logic.js'
 import * as store from './newtab-store.js'
 import { askBrowser } from './helper.js'
+// The look the person chose in Orbis, worn here too: the browser and the chat are one application.
+import { followAppearance } from './appearance.js'
 import { introWanted, runIntro } from './intro.js'
 import { mountWidgets, widgetsFollowSettings } from './widgets.js'
 import { mountRail } from './rail.js'
@@ -20,6 +22,9 @@ let timer = 0
 
 const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n }
 const favicon = (u) => `chrome://favicon2/?size=32&scaleFactor=2x&pageUrl=${encodeURIComponent(u)}`
+
+// Asked for as early as there is a document, so the page is wearing the right look before anything is read.
+void followAppearance()
 
 function applyWallpaper() {
   const s = state.settings
