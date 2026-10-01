@@ -19,7 +19,7 @@ import {
 import type { OrbCondition, OrbStep, OrbTaskState, Perception } from '../../shared/orbTask.ts'
 import { isFollowUp, needsContext, resolve } from '../../shared/orbReference.ts'
 import { looksLikeScheduleRequest, readRequest } from '../../shared/temporal/phrase.ts'
-import { asEvidence, holdsSecret, isConsequential, redact, refusedProtection } from '../../shared/orbSafety.ts'
+import { asEvidence, holdsSecret, isConsequential, redact, refusedProtection, wallInTheWay } from '../../shared/orbSafety.ts'
 
 /**
  * The Orb's control loop.
@@ -551,6 +551,34 @@ export function createOrbHandlers(deps: OrbDeps): Record<string, Handler> {
         // ---- recover
         const broken = done.find((s) => s.status === 'failed' && !s.optional)
         if (!broken) continue
+        /*
+         * Before deciding how to recover, look at whether there is a door in the way.
+         *
+         * A sign-in wall or a human-verification page does not fail a step in a way that says so -- it replaces the
+         * page, so the element the plan wanted is merely absent. Left to the ordinary recovery that becomes two more
+         * attempts, a re-plan, and finally "I could not find the button": true, useless, and hiding the one thing the
+         * person could have fixed in five seconds.
+         *
+         * Only asked after a failure, and only for the failures a wall would cause. A detector that ran on every page
+         * would be a detector looking for reasons to stop.
+         */
+        const pageish = broken.failure?.kind === 'not-found' || broken.failure?.kind === 'stale' || broken.failure?.kind === 'timeout' || broken.failure?.kind === 'unverified'
+        if (pageish) {
+          task.perception = await eyes.look({ text: true, force: true })
+          const door = wallInTheWay(task.perception.page)
+          if (door) {
+            const finished = task.steps.filter((x) => x.status === 'done').length
+            task.status = 'waiting'
+            task.outcome =
+              door.what === 'captcha'
+                ? `The page is asking to verify that a person is here. ${door.why} Do that in the browser and say "continue" — ${finished} of ${task.steps.length} steps are already done and I will carry on from there.`
+                : `That page wants you signed in. ${door.why} Sign in in the browser and say "continue" — ${finished} of ${task.steps.length} steps are already done and I will carry on from there.`
+            // The run's own ending emits the outcome; this says what kind of stop it is, which the panel shows differently.
+            emit({ type: 'blocked', what: door.what, text: task.outcome })
+            break
+          }
+        }
+
         const recovery = broken.failure?.recovery ?? 'give-up'
         emit({ type: 'recovery', step: broken.name, kind: broken.failure?.kind, decision: recovery, why: broken.failure?.message })
 

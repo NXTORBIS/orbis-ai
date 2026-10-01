@@ -51,6 +51,47 @@ export function refusedProtection(request: string): { what: string; why: string 
   return null
 }
 
+/*
+ * Words a page uses when it has stopped being a page and become a door.
+ *
+ * Deliberately narrow and deliberately paired with a size check below. "Sign in" appears in the corner of most of the
+ * web; a page that is a sign-in wall is short, says it near the top, and has nothing else on it. Matching the phrase
+ * alone would stop the Orb on every site with a header.
+ */
+const WALL_WORDS =
+  /\b(sign in to continue|log ?in to continue|please (sign|log) ?in|you (must|need to) (sign|log) ?in|session (has )?expired|access denied|create an account to continue|verify your (email|identity)|enter your password)\b/i
+const WALL_CHALLENGE = /\b(verify (that )?you are (a )?human|i'?m not a robot|checking your browser|complete the (security )?check|unusual traffic)\b/i
+
+/**
+ * Whether the page in front is a protection rather than the thing that was asked for.
+ *
+ * The reason this exists: a sign-in wall does not fail a step in a way that says "sign in". It replaces the page, so
+ * the element the plan was looking for is simply absent -- and the Orb reads that as "not found", tries twice more,
+ * re-plans, and eventually reports that it could not find a button. Which is true, useless, and leaves the person
+ * with no idea that they could have fixed it in five seconds.
+ *
+ * Judged on the page, not on the request. `refusedProtection` above reads what a person asked for; this reads what
+ * the browser is actually showing, and they answer different questions: one is "did somebody ask Orbis to cheat", the
+ * other is "is there a door here".
+ *
+ * Short pages only. A wall has nothing on it but the wall; an article that happens to mention signing in has an
+ * article on it, and stopping a task over that would be worse than the failure it is meant to explain.
+ */
+export function wallInTheWay(page: { url?: string; title?: string; text?: string } | null): { what: 'sign-in' | 'captcha'; why: string } | null {
+  if (!page) return null
+  const text = String(page.text ?? '')
+  const near = `${page.title ?? ''} ${text.slice(0, 1200)}`
+  const short = text.length < 2500
+
+  if (WALL_CHALLENGE.test(near)) return { what: 'captcha', why: PROTECTED[0].why }
+  if (short && WALL_WORDS.test(near)) return { what: 'sign-in', why: PROTECTED[1].why }
+  // A page whose address is the sign-in page is one, whatever it says on it.
+  if (/\/(login|signin|sign-in|sign_in|auth(orize)?|sso|account\/login)(\/|\?|$)/i.test(String(page.url ?? ''))) {
+    return { what: 'sign-in', why: PROTECTED[1].why }
+  }
+  return null
+}
+
 /** Names that carry something private. Matched on the parameter name, so a value never has to be inspected to be kept. */
 const SECRET_NAME = /pass(word|phrase)?|secret|token|api.?key|private.?key|credential|cookie|session|auth|bearer|otp|pin\b|cvv|card.?number|ssn/i
 
