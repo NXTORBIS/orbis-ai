@@ -10,6 +10,7 @@ import type { PageHandle } from '../pageHandle'
 import { WindowControl } from './window.ts'
 import type { WindowRunResult } from './window.ts'
 import { registerPageCapabilities } from './pageCapabilities.ts'
+import { registerMediaCapabilities } from './mediaCapabilities.ts'
 import { registerAppCapabilities } from './appCapabilities.ts'
 import type { AppCapabilityDeps } from './appCapabilities.ts'
 import { registerUiCapabilities } from './uiCapabilities.ts'
@@ -46,6 +47,9 @@ export function setupBrowserControl(deps: BrowserControlDeps): { control: Browse
   // page and CAPTCHA capabilities replace them the moment the browser is up.
   const noBrowser = (_ctx: Pick<ControlContext, 'target'>): PageHandle => fail('unavailable', 'The Orbis browser is not open yet. Open it first (browser.open).', true)
   registerPageCapabilities(control, noBrowser)
+  // What is playing, and waiting for it to change. The one thing that makes "when this video ends" a real condition
+  // rather than a guess at how long a video is.
+  registerMediaCapabilities(control, { tab: (ctx) => noBrowser(ctx), fail })
   registerCaptchaCapabilities(control, noBrowser)
   registerAppCapabilities({ ...deps, control, windowControl })
   registerUiCapabilities(control, deps.getWindow)

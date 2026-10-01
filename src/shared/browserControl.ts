@@ -13,6 +13,14 @@ export type ControlDomain =
   | 'navigation'
   | 'addressBar'
   | 'page'
+  /*
+   * What is playing on a page: reading it, acting on it, and waiting for it to change.
+   *
+   * Its own domain rather than part of `page`, because it is the one thing on a page with a state that changes by
+   * itself over time -- and because "when this video ends" is a condition, not an action, which is a different kind
+   * of thing from everything else `page` does.
+   */
+  | 'media'
   | 'ui'
   | 'captcha'
   | 'browser'

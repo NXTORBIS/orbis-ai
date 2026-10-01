@@ -1,6 +1,7 @@
-import { BrowserControl } from '../browserControl/registry.ts'
+import { BrowserControl, fail } from '../browserControl/registry.ts'
 import type { BrowserControlOptions } from '../browserControl/registry.ts'
 import { registerPageCapabilities } from '../browserControl/pageCapabilities.ts'
+import { registerMediaCapabilities } from '../browserControl/mediaCapabilities.ts'
 import { registerCaptchaCapabilities } from '../browserControl/captchaCapabilities.ts'
 import type { PageHandle } from '../pageHandle.ts'
 import { CdpBrowser } from './cdpPage.ts'
@@ -108,6 +109,9 @@ export async function startChromiumControl(o: ChromiumControlOptions): Promise<C
   const ui = o.pid !== undefined && BrowserUi.supported() ? new BrowserUi(o.pid) : undefined
   registerBrowserUiCapabilities({ ...deps, activePage: async () => (await pages.getTarget()) as unknown as import('./cdpPage.ts').CdpPage, pid: o.pid, ui })
   registerPageCapabilities(control, pages.resolve)
+  // What is playing, and waiting for it to change. The one thing that makes "when this video ends" a real condition
+  // rather than a guess at how long a video is.
+  registerMediaCapabilities(control, { tab: (ctx) => pages.resolve(ctx), fail })
   registerCaptchaCapabilities(control, pages.resolve)
 
   /**
