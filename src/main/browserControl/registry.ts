@@ -78,6 +78,14 @@ export interface CapabilityDefinition<S = unknown> {
   describe?(params: Record<string, unknown>): string
   /** For "when-consequential" (and extra checks on any capability): decides whether this call runs, needs approval, or is refused. */
   assess?(params: Record<string, unknown>, ctx: ControlContext): Promise<Assessment> | Assessment
+  /**
+   * Whether the browser is already as this call would leave it -- and if so, why, in words.
+   *
+   * Returning a sentence means the call does not run and is reported as having succeeded, with that sentence as the
+   * verification. Returning null means go ahead. This is where "already muted" stops being "mute it again", which on
+   * a toggle means unmuting the tab somebody asked to be quiet.
+   */
+  already?(params: Record<string, unknown>, ctx: ControlContext): Promise<string | null> | string | null
   /** Reads the relevant real state before acting, for verification. */
   observe?(params: Record<string, unknown>, ctx: ControlContext): Promise<S> | S
   run(params: Record<string, unknown>, ctx: ControlContext, before: S): Promise<unknown> | unknown
@@ -519,6 +527,30 @@ export class BrowserControl {
     if (invalid) return error('invalid-params', invalid)
     const unavailable = def.unavailable?.(ctx) ?? null
     if (unavailable) return error('unavailable', unavailable, true)
+
+    /*
+     * Nothing to do is a kind of done, and it is checked before anybody is asked anything.
+     *
+     * Pressing mute on a muted tab unmutes it. Toggles are the obvious case and not the only one: deleting a bookmark
+     * that is not there fails, and a plan told that a step failed starts recovering from a situation that is already
+     * what it wanted. Both are the same mistake -- acting on an assumption about the state instead of reading it.
+     *
+     * Before the confirmation, deliberately. Being asked "delete this bookmark?" about a page that has no bookmark is
+     * a question with no right answer, and the point of asking is that the answer matters.
+     */
+    if (def.already) {
+      let settled: string | null = null
+      try {
+        settled = await def.already(params, ctx)
+      } catch {
+        // A check that cannot answer decides nothing; the call goes ahead and the real work reports for itself.
+        settled = null
+      }
+      if (settled) {
+        this.record('decision', def.id, source, runId, { decision: 'nothing to do', reason: settled })
+        return finish({ ok: true, data: { unchanged: true }, verification: { verified: true, detail: settled }, attempts: 0 })
+      }
+    }
 
     // Decide: the capability's own assessment, then its confirmation policy. The user acting in Orbis isn't asked again.
     let decision: Assessment = { decision: 'run', reason: '' }

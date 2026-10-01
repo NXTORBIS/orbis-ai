@@ -359,14 +359,14 @@ test('the same change asked for twice at once happens once', async () => {
   })
 
   const both = await Promise.all([
-    control.execute({ capability: 'meeting.join', params: {} }, {}),
-    control.execute({ capability: 'meeting.join', params: {} }, {})
+    control.execute({ capability: 'meeting.join', params: {} }, { confirm: approve }),
+    control.execute({ capability: 'meeting.join', params: {} }, { confirm: approve })
   ])
   assert.equal(ran, 1, 'it ran once')
   assert.ok(both.every((r) => r.ok), 'and both callers were told it worked, not that they were too late')
 
   // Once it has finished, asking again is a new request and does happen.
-  await control.execute({ capability: 'meeting.join', params: {} }, {})
+  await control.execute({ capability: 'meeting.join', params: {} }, { confirm: approve })
   assert.equal(ran, 2)
 })
 
@@ -405,10 +405,10 @@ test('different parameters are different calls, and reads are never shared', asy
   })
 
   await Promise.all([
-    control.execute({ capability: 'tabs.open', params: { url: 'https://a' } }, {}),
-    control.execute({ capability: 'tabs.open', params: { url: 'https://b' } }, {}),
-    control.execute({ capability: 'tabs.count', params: {} }, {}),
-    control.execute({ capability: 'tabs.count', params: {} }, {})
+    control.execute({ capability: 'tabs.open', params: { url: 'https://a' } }, { confirm: approve }),
+    control.execute({ capability: 'tabs.open', params: { url: 'https://b' } }, { confirm: approve }),
+    control.execute({ capability: 'tabs.count', params: {} }, { confirm: approve }),
+    control.execute({ capability: 'tabs.count', params: {} }, { confirm: approve })
   ])
   assert.deepEqual(opened.sort(), ['https://a', 'https://b'])
   assert.equal(read, 2, 'both reads happened, because a shared read answers about an earlier moment')
@@ -433,8 +433,67 @@ test('a failed call does not block the retry it is about to be given', async () 
     verify: () => ({ verified: true, detail: 'pressed' })
   })
 
-  const first = await control.execute({ capability: 'page.press', params: {} }, {})
+  const first = await control.execute({ capability: 'page.press', params: {} }, { confirm: approve })
   assert.equal(first.ok, false)
-  const second = await control.execute({ capability: 'page.press', params: {} }, {})
+  const second = await control.execute({ capability: 'page.press', params: {} }, { confirm: approve })
   assert.equal(second.ok, true, 'the fingerprint was cleared when the first one ended')
+})
+
+test('a change the browser has already made is reported as done, not done again', async () => {
+  let wrote = 0
+  let muted = true
+  const control = new BrowserControl()
+  control.register({
+    id: 'tabs.mute',
+    domain: 'tabs',
+    name: 'Mute a tab',
+    description: 'Mutes or unmutes a tab, and says so when it was already that way.',
+    params: { muted: { type: 'boolean', description: 'Mute or unmute.', required: true } },
+    mutates: true,
+    confirmation: 'always',
+    describe: () => 'Mute the tab',
+    already: (p) => (muted === (p.muted === true) ? `That tab was already ${p.muted ? 'muted' : 'unmuted'}.` : null),
+    run: (p) => {
+      wrote += 1
+      muted = p.muted === true
+      return { muted }
+    },
+    verify: () => ({ verified: true, detail: 'done' })
+  })
+
+  const nothing = await control.execute({ capability: 'tabs.mute', params: { muted: true }, source: 'automation' }, { confirm: decline })
+  assert.equal(nothing.ok, true)
+  assert.equal(wrote, 0, 'the browser was not written to')
+  // And nobody was asked. Being asked to approve something that is already true is a question whose answer changes
+  // nothing, which is how people learn to approve without reading -- `decline` above would have refused it.
+  assert.match(nothing.verification?.detail ?? '', /already muted/)
+
+  const real = await control.execute({ capability: 'tabs.mute', params: { muted: false }, source: 'automation' }, { confirm: approve })
+  assert.equal(real.ok, true)
+  assert.equal(wrote, 1, 'a real change still happens')
+})
+
+test('a readiness check that throws decides nothing', async () => {
+  let ran = 0
+  const control = new BrowserControl()
+  control.register({
+    id: 'tabs.pin',
+    domain: 'tabs',
+    name: 'Pin a tab',
+    description: 'Pins a tab; its readiness check is broken on purpose here.',
+    params: {},
+    mutates: true,
+    confirmation: 'none',
+    already: () => {
+      throw new Error('cannot read the tab')
+    },
+    run: () => {
+      ran += 1
+      return {}
+    },
+    verify: () => ({ verified: true, detail: 'pinned' })
+  })
+  const out = await control.execute({ capability: 'tabs.pin', params: {} }, { confirm: approve })
+  assert.equal(out.ok, true)
+  assert.equal(ran, 1, 'the work went ahead and reported for itself')
 })

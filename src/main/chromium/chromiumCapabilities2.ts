@@ -379,6 +379,18 @@ export function registerMoreChromiumCapabilities(d: ChromiumCapabilityDeps & { s
     mutates: true,
     confirmation: 'when-consequential',
     describe: (p) => `${p.enabled ? 'Enable' : 'Disable'} the extension ${String(p.id)}`,
+    /*
+     * An extension that is already off is not disabled again, and nobody is asked about it.
+     *
+     * This one is confirmed when consequential, which is the real reason to check first: being asked to approve
+     * turning off something that is already off is a question whose answer changes nothing, and questions like that
+     * are how people learn to approve without reading.
+     */
+    already: async (p) => {
+      const found = (await extensionRows()).find((x) => x.id === String(p.id))
+      if (!found) return null
+      return found.enabled === (p.enabled === true) ? `${found.name} was already ${found.enabled ? 'on' : 'off'}.` : null
+    },
     run: async (p) => void (await call(`chrome.management.setEnabled(${json(notSelf(p.id))}, ${p.enabled === true})`)),
     verify: async (_d, p) => {
       const e = await until(() => extensionRows().then((all) => all.find((x) => x.id === String(p.id))), (x) => x?.enabled === (p.enabled === true))

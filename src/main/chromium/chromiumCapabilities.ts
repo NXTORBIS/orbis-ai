@@ -182,6 +182,11 @@ export function registerChromiumCapabilities(d: ChromiumCapabilityDeps): void {
     params: { tabId: str('The tab id.', true) },
     mutates: true,
     confirmation: 'none',
+    already: async (p) => {
+      const tab = await tabFor(p.tabId)
+      // Switching to the tab you are on is a step that should say so rather than one that appears to have done work.
+      return tab.active ? 'That tab was already the one in front.' : null
+    },
     run: async (p) => {
       const tab = await tabFor(p.tabId)
       await call(`chrome.tabs.update(${Number(tab.id)}, { active: true }).then((t) => chrome.windows.update(t.windowId, { focused: true }))`)
@@ -223,6 +228,10 @@ export function registerChromiumCapabilities(d: ChromiumCapabilityDeps): void {
     params: { tabId: TAB_ID, pinned: bool('Pin (true) or unpin (false).', true) },
     mutates: true,
     confirmation: 'none',
+    already: async (p) => {
+      const tab = await tabFor(p.tabId)
+      return tab.pinned === (p.pinned === true) ? `That tab was already ${p.pinned ? 'pinned' : 'unpinned'}.` : null
+    },
     run: async (p) => {
       const tab = await tabFor(p.tabId)
       await call(`chrome.tabs.update(${Number(tab.id)}, { pinned: ${p.pinned === true} })`)
@@ -243,6 +252,17 @@ export function registerChromiumCapabilities(d: ChromiumCapabilityDeps): void {
     params: { tabId: TAB_ID, muted: bool('Mute (true) or unmute (false).', true) },
     mutates: true,
     confirmation: 'none',
+    /*
+     * Read first, so a tab that is already quiet is left quiet.
+     *
+     * Not because writing it twice would break anything here -- this sets a value rather than flipping one -- but
+     * because "the tab was already muted" is the true answer and "I muted the tab" is not. A plan that cannot tell the
+     * two apart is a plan that cannot notice it was wrong about the state.
+     */
+    already: async (p) => {
+      const tab = await tabFor(p.tabId)
+      return tab.muted === (p.muted === true) ? `That tab was already ${p.muted ? 'muted' : 'unmuted'}.` : null
+    },
     run: async (p) => {
       const tab = await tabFor(p.tabId)
       await call(`chrome.tabs.update(${Number(tab.id)}, { muted: ${p.muted === true} })`)
