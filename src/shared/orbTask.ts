@@ -522,8 +522,24 @@ export function runnable(steps: OrbStep[], capabilities: CapabilityDescriptor[],
   const mutates = (step: OrbStep): boolean => capabilities.find((c) => c.id === step.capability)?.mutates !== false
   const first = able[0]
   if (mutates(first)) return [first]
-  return able.filter((s) => !mutates(s))
+  /*
+   * Reads go together, but not all of them at once.
+   *
+   * "Check these two hundred pages" is a reasonable thing to ask and an unreasonable thing to do in one breath: two
+   * hundred simultaneous reads is a browser running out of renderers, a website being hammered, and a failure that
+   * looks like the websites' fault. The cap is what turns a large task into a steady one -- the rest are still ready
+   * and are picked up on the next turn of the loop, so nothing is dropped and nothing is left waiting on a person.
+   */
+  return able.filter((s) => !mutates(s)).slice(0, MAX_AT_ONCE)
 }
+
+/**
+ * How many reads may be in flight together.
+ *
+ * Chosen to be smaller than the number of pages a browser is comfortable rendering at once rather than as large as
+ * possible: the limit that matters is the one the websites and the browser notice, not the one Orbis can schedule.
+ */
+export const MAX_AT_ONCE = 6
 
 /**
  * The most times a group may be asked to repeat.

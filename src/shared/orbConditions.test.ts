@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { fillIn, judge, ready, runnable, settleConditions, stuck, valueAt } from './orbTask.ts'
+import { fillIn, judge, MAX_AT_ONCE, ready, runnable, settleConditions, stuck, valueAt } from './orbTask.ts'
 import type { OrbCondition, OrbStep } from './orbTask.ts'
 import type { CapabilityDescriptor } from './browserControl.ts'
 
@@ -180,4 +180,21 @@ test('a name nothing saved is left as written, not turned into the word undefine
 test('references are filled in through objects and arrays', () => {
   const out = fillIn({ url: '{{page.url}}', ids: ['{{tab}}', 'fixed'], deep: { n: '{{count}}' } }, { page: { url: 'https://x' }, tab: '9', count: 2 })
   assert.deepEqual(out, { url: 'https://x', ids: ['9', 'fixed'], deep: { n: 2 } })
+})
+
+test('reads go together, but only so many at once', () => {
+  /*
+   * "Check these two hundred pages" must not become two hundred simultaneous reads. The rest are still ready and get
+   * picked up on the next turn, so nothing is dropped -- it is paced, not truncated.
+   */
+  const many = Array.from({ length: 30 }, (_, i) => step({ id: `r${i}`, capability: 'page.read' }))
+  const registry = caps({ 'page.read': false })
+  const go = runnable(many, registry, {})
+  assert.equal(go.length, MAX_AT_ONCE)
+  assert.ok(MAX_AT_ONCE < 30)
+})
+
+test('anything that changes the browser still goes alone', () => {
+  const steps = [step({ id: 'a', capability: 'tabs.close' }), step({ id: 'b', capability: 'tabs.close' })]
+  assert.deepEqual(runnable(steps, caps({ 'tabs.close': true }), {}).map((s) => s.id), ['a'])
 })

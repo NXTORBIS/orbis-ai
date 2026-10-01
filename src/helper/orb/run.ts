@@ -57,6 +57,9 @@ export interface OrbDeps {
 const NEWLINE = String.fromCharCode(10)
 const MAX_STEPS = 24
 
+/** The longest a single request may keep the browser busy before it is stopped and said so. */
+const MAX_TASK_MS = 20 * 60_000
+
 /** JSON out of an answer that may be fenced or wrapped in prose. Nothing rather than a guess. */
 function jsonFrom(answer: string): unknown {
   const fenced = /```(?:json)?\s*([\s\S]*?)```/i.exec(answer)?.[1]
@@ -441,8 +444,24 @@ export function createOrbHandlers(deps: OrbDeps): Record<string, Handler> {
       task.status = 'running'
       emit({ type: 'plan', steps: task.steps.map((s) => ({ id: s.id, name: s.name, capability: s.capability, needs: s.needs })) })
 
+      /*
+       * A task may take a long time and may not take for ever.
+       *
+       * Waiting for a video to end, a download to finish or a page to load is minutes, legitimately -- so there is no
+       * honest short limit. But a plan that has stopped making progress for reasons nobody will notice is a browser
+       * doing something unattended, and the person who asked has long since looked away. Measured from here, not
+       * per step, because it is the whole task's running away that matters.
+       */
+      const deadline = Date.now() + MAX_TASK_MS
+
       while (task.status === 'running') {
         if (signal.aborted) { task.status = 'stopped'; break }
+        if (Date.now() > deadline) {
+          task.status = 'failed'
+          task.outcome = `This took longer than ${Math.round(MAX_TASK_MS / 60000)} minutes, so I stopped. ${task.steps.filter((x) => x.status === 'done').length} of ${task.steps.length} steps were finished.`
+          emit({ type: 'outcome', status: 'failed', text: task.outcome })
+          break
+        }
 
         /*
          * The branches that did not happen are written down before anything is chosen to run.
