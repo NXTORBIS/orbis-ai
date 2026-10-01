@@ -39,6 +39,7 @@ export const TEST_FILES = [
   'src/main/favicon.test.ts',
   'src/shared/browserControl.test.ts',
   'src/main/browserControl/browserControl.test.ts',
+  'src/main/browserControl/deepQuery.test.ts',
   'src/main/browserControl/runner.test.ts',
   'src/main/workflows/workflows.test.ts',
   'src/main/workflows/compile.test.ts',

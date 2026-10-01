@@ -102,15 +102,44 @@ export const DESCRIBE = `const orbisDescribe = (el) => {
   return { tag, type, role, label, name: el.getAttribute('name') || undefined, autocomplete: el.getAttribute('autocomplete') || undefined, href: tag === 'a' && el.href ? el.href : undefined, inForm: !!form, searchForm, submits, editable, value: value || undefined, checked: type === 'checkbox' || type === 'radio' ? !!el.checked : undefined };
 };`
 
+/**
+ * Looks for elements through shadow roots as well as in the ordinary document.
+ *
+ * `document.querySelectorAll` stops at a shadow boundary, and whole sites keep every control a person uses on the
+ * other side of one -- YouTube's player, Chromium's own settings pages, most design systems built this decade. Against
+ * those, every locator here was looking at an almost empty page: a button that is plainly on the screen was reported
+ * as not existing, which is the most confusing failure Orbis can produce, because the person can see it.
+ *
+ * Bounded, because this is the one operation on a page whose cost is the size of the page. The caps are high enough
+ * that no real page reaches them and low enough that a pathological one cannot hang a tab.
+ */
+export const DEEP = `const orbisDeep = (selector, from) => {
+  const out = [];
+  let roots = [from || document], seen = 0;
+  for (let depth = 0; depth < 8 && roots.length; depth++) {
+    const next = [];
+    for (const root of roots) {
+      if (!root || !root.querySelectorAll) continue;
+      for (const el of root.querySelectorAll(selector)) { out.push(el); if (out.length > 4000) return out }
+      // Only elements that actually host a shadow root are descended into; the rest of the walk is not repeated.
+      for (const el of root.querySelectorAll('*')) { if (++seen > 60000) break; if (el.shadowRoot) next.push(el.shadowRoot) }
+    }
+    roots = next;
+  }
+  return out;
+};
+const orbisDeepOne = (selector) => orbisDeep(selector)[0] || null;`
+
 /** Numbers the visible interactive elements (on-screen first) and returns what the page shows. */
 export const SNAPSHOT_SCRIPT = `(() => {
   ${DESCRIBE}
+  ${DEEP}
   const clean = (s, n) => String(s || '').replace(/\\s+/g, ' ').trim().slice(0, n);
-  document.querySelectorAll('[data-orbis-ref]').forEach((el) => el.removeAttribute('data-orbis-ref'));
+  orbisDeep('[data-orbis-ref]').forEach((el) => el.removeAttribute('data-orbis-ref'));
   const selector = 'a[href], button, input:not([type="hidden"]), textarea, select, summary, canvas, [role="button"], [role="link"], [role="textbox"], [role="searchbox"], [role="combobox"], [role="checkbox"], [role="radio"], [role="tab"], [role="menuitem"], [role="option"], [role="switch"], [contenteditable="true"]';
   const vh = innerHeight, vw = innerWidth;
   const found = [];
-  for (const el of document.querySelectorAll(selector)) {
+  for (const el of orbisDeep(selector)) {
     if (el.disabled || el.closest('[aria-hidden="true"], [inert]')) continue;
     const r = el.getBoundingClientRect();
     if (r.width < 2 || r.height < 2) continue;
@@ -132,21 +161,35 @@ export const SNAPSHOT_SCRIPT = `(() => {
 
 export const targetScript = (ref: number): string => `(() => {
   ${DESCRIBE}
-  const el = document.querySelector('[data-orbis-ref="${ref}"]');
+  ${DEEP}
+  const el = orbisDeepOne('[data-orbis-ref="${ref}"]');
   if (!el) return null;
   el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
   // New-window links would open outside the tab Orbis is working in.
   if (el.tagName === 'A' && el.target && el.target !== '_self') el.target = '_self';
   const r = el.getBoundingClientRect();
   const x = r.left + r.width / 2, y = r.top + r.height / 2;
-  const hit = document.elementFromPoint(x, y);
+  /*
+   * What is actually at that point, following shadow boundaries down.
+   *
+   * \`document.elementFromPoint\` answers with the shadow *host*, not what is inside it -- so a button inside a shadow
+   * root was reported as covered by something else, when the something else was the element it lives in. The check is
+   * for "is there something on top of this", and a parent is not on top of its own child.
+   */
+  let hit = document.elementFromPoint(x, y), guard = 0;
+  while (hit && hit.shadowRoot && guard++ < 8) {
+    const inner = hit.shadowRoot.elementFromPoint ? hit.shadowRoot.elementFromPoint(x, y) : null;
+    if (!inner || inner === hit) break;
+    hit = inner;
+  }
   const described = orbisDescribe(el);
   if (el.tagName === 'CANVAS' && !described.label) described.label = 'canvas';
   return Object.assign(described, { x, y, left: r.left, top: r.top, width: r.width, height: r.height, covered: !hit || !(hit === el || el.contains(hit) || hit.contains(el)) });
 })()`
 
 export const focusScript = (ref: number): string => `(() => {
-  const el = document.querySelector('[data-orbis-ref="${ref}"]');
+  ${DEEP}
+  const el = orbisDeepOne('[data-orbis-ref="${ref}"]');
   if (!el) return false;
   el.focus();
   if (typeof el.select === 'function') el.select();
@@ -156,7 +199,8 @@ export const focusScript = (ref: number): string => `(() => {
 
 /** Makes sure a field holds \`text\`, using the native value setter so frameworks like React see the change. */
 export const fillScript = (ref: number, text: string): string => `(() => {
-  const el = document.querySelector('[data-orbis-ref="${ref}"]');
+  ${DEEP}
+  const el = orbisDeepOne('[data-orbis-ref="${ref}"]');
   const text = ${JSON.stringify(text)};
   if (!el) return false;
   if (el.isContentEditable) {
@@ -179,7 +223,8 @@ export const ACTIVE_SCRIPT = `(() => {
 })()`
 
 export const selectScript = (ref: number, option: string): string => `(() => {
-  const el = document.querySelector('[data-orbis-ref="${ref}"]');
+  ${DEEP}
+  const el = orbisDeepOne('[data-orbis-ref="${ref}"]');
   if (!el || el.tagName !== 'SELECT') return 'that element is not a dropdown';
   const want = ${JSON.stringify(option.toLowerCase())};
   const options = [...el.options];
@@ -242,7 +287,8 @@ export const PLAY_SCRIPT = `(() => {
 
 /** The structure of one element, or of the page's main game or board area, for understanding its state. */
 export const inspectScript = (ref: number | null): string => `(() => {
-  let el = ${ref === null ? 'null' : `document.querySelector('[data-orbis-ref="${ref}"]')`};
+  ${DEEP}
+  let el = ${ref === null ? 'null' : `orbisDeepOne('[data-orbis-ref="${ref}"]')`};
   if (!el) {
     const candidates = [...document.querySelectorAll('canvas, [id*="game" i], [class*="game" i], [id*="board" i], [class*="board" i], [class*="grid" i], [class*="tile" i], [class*="puzzle" i], main, pre')];
     let best = null, area = 0;
@@ -260,6 +306,7 @@ export const inspectScript = (ref: number | null): string => `(() => {
  * Tries each identification method that was given; returns the reference, or why nothing matched.
  */
 export const locateScript = (locator: Locator): string => `(() => {
+  ${DEEP}
   const loc = ${JSON.stringify(locator)};
   const norm = (s) => String(s || '').replace(/\\s+/g, ' ').trim().toLowerCase();
   const visible = (el) => { const r = el.getBoundingClientRect(); if (r.width < 1 || r.height < 1) return false; const st = getComputedStyle(el); return st.visibility !== 'hidden' && st.display !== 'none'; };
@@ -290,12 +337,13 @@ export const locateScript = (locator: Locator): string => `(() => {
   const matchText = (have, want) => loc.exact ? norm(have) === norm(want) : norm(have).includes(norm(want));
   let found = [], method = '';
   try {
-    if (loc.ref) { const el = document.querySelector('[data-orbis-ref="' + loc.ref + '"]'); if (el) { found = [el]; method = 'ref'; } }
-    if (!found.length && loc.selector) { found = [...document.querySelectorAll(loc.selector)]; method = 'selector'; }
+    if (loc.ref) { const el = orbisDeepOne('[data-orbis-ref="' + loc.ref + '"]'); if (el) { found = [el]; method = 'ref'; } }
+    if (!found.length && loc.selector) { found = orbisDeep(loc.selector); method = 'selector'; }
     if (!found.length && loc.xpath) { const r = document.evaluate(loc.xpath, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null); for (let i = 0; i < r.snapshotLength; i++) if (r.snapshotItem(i).nodeType === 1) found.push(r.snapshotItem(i)); method = 'xpath'; }
   } catch (e) { return { error: 'Invalid selector: ' + e.message }; }
   if (!found.length && (loc.role || loc.name || loc.text || loc.label || loc.placeholder)) {
-    const all = [...document.querySelectorAll('body *')].filter((el) => !el.closest('[aria-hidden="true"]') && visible(el));
+    // Every element, shadow roots included: a control described in words is exactly the kind that lives inside one.
+    const all = orbisDeep('*').filter((el) => !el.closest('[aria-hidden="true"]') && visible(el));
     found = all.filter((el) => {
       if (loc.role && implicitRole(el) !== norm(loc.role)) return false;
       if (loc.name && !matchText(accessibleName(el), loc.name)) return false;
