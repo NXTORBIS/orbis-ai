@@ -360,7 +360,23 @@ export const locateScript = (locator: Locator): string => `(() => {
   }
   const visibleFirst = [...found.filter(visible), ...found.filter((el) => !visible(el))];
   const el = visibleFirst[loc.index || 0];
-  if (!el) return { error: 'No element matches ' + JSON.stringify(loc) + '.', count: 0 };
+  if (!el) {
+    /*
+     * When nothing matches, say whether the page has frames on it.
+     *
+     * A script runs in one document, and an iframe is a different one -- so a control inside an embedded player, a
+     * payment form or a meeting's pre-join panel is not merely hard to find here, it is somewhere else entirely. The
+     * bare answer "no element matches" is true of this document and sends the Orb off re-planning against a page that
+     * does not contain the thing it is looking for. Naming the frames turns that into something diagnosable, and it is
+     * the honest shape of the limit until frames are reached properly.
+     */
+    const frames = document.querySelectorAll('iframe, frame').length;
+    return {
+      error: 'No element matches ' + JSON.stringify(loc) + '.' + (frames ? ' This page has ' + frames + ' frame' + (frames === 1 ? '' : 's') + ' on it, and a control inside a frame is in a different document that this cannot reach.' : ''),
+      count: 0,
+      frames
+    };
+  }
   let ref = el.getAttribute('data-orbis-ref');
   if (!ref) { ref = String(100000 + Math.floor(Math.random() * 900000)); el.setAttribute('data-orbis-ref', ref); }
   return { ref: Number(ref), method, count: found.length };
