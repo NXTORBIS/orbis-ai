@@ -18,6 +18,7 @@ export const TEST_FILES = [
   'src/helper/adblock/dnr.test.ts',
   'src/main/chromium/chromiumControl.test.ts',
   'src/main/chromium/capabilityCatalogue.test.ts',
+  'src/main/chromium/capabilityPhrasing.test.ts',
   'src/main/chromium/chromiumCapabilities.test.ts',
   'src/main/chromium/chromiumCapabilities2.test.ts',
   'src/main/chromium/surfaceCapabilities.test.ts',

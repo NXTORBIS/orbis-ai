@@ -62,6 +62,15 @@ export const SURFACES: readonly Surface[] = [
   { id: 'orbis-panel', what: 'The Orbis panel', url: 'chrome://orbis/', words: ['orbis panel', 'side panel', 'the panel', 'orbis sidebar'] }
 ]
 
+/**
+ * Every word anybody calls one of these pages, so searching for "passwords" finds the capability that opens them.
+ *
+ * The ids themselves are deliberately not in here. `new-tab` spelled out is "new tab", which appears in "open a new
+ * tab" -- a request about a tab, not about the browser's own pages, and the one it was briefly winning. An id is for
+ * naming a destination once it has been chosen; the words below are for finding it.
+ */
+export const SURFACE_WORDS: readonly string[] = [...new Set(SURFACES.flatMap((s) => s.words))]
+
 const str = (description: string, required = false): ParamSpec => ({ type: 'string', description, required })
 const bool = (description: string, required = false): ParamSpec => ({ type: 'boolean', description, required })
 
@@ -142,6 +151,14 @@ export function registerSurfaceCapabilities(d: SurfaceDeps): void {
     description:
       "Every page the browser itself owns and what each is for: settings, privacy, clearing browsing data, site permissions, history, downloads, bookmarks, the reading list, extensions, passwords, profiles, appearance, startup, the search engine, languages, accessibility, performance, about. Read this to find out which name surface.open takes.",
     params: {},
+    /*
+     * The words for everything it lists, taken from the table rather than written out again.
+     *
+     * A capability covering two dozen destinations cannot have their names in its own name, and a planner searching
+     * for "passwords" has to be able to find the thing that knows about passwords. Derived, so a surface added to the
+     * table is findable the same day.
+     */
+    keywords: SURFACE_WORDS,
     mutates: false,
     confirmation: 'none',
     run: () => SURFACES.map((s) => ({ name: s.id, what: s.what, address: s.url, alsoCalled: s.words }))
@@ -157,6 +174,7 @@ export function registerSurfaceCapabilities(d: SurfaceDeps): void {
       name: str(`Which page: ${names}. Common words work too ("preferences", "notifications", "favourites").`, true),
       newTab: bool('Open in a new tab, leaving the current page where it is (default true).')
     },
+    keywords: SURFACE_WORDS,
     mutates: true,
     /*
      * Opening a page is not a consequential act.

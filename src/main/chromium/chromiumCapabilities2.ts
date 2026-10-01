@@ -470,12 +470,21 @@ export function registerMoreChromiumCapabilities(d: ChromiumCapabilityDeps & { s
   // ---------------------------------------------------------------- download controls Chromium has and Electron Orbis did not
 
   const dl = (id: string): Promise<Record<string, unknown> | undefined> => call<Record<string, unknown>[]>(`chrome.downloads.search({ id: ${Number(id)} })`).then((r) => r[0])
-  const downloadAction = (id: string, name: string, description: string, script: (n: number) => string, state: (x: Record<string, unknown> | undefined) => boolean, detail: string): void =>
+  const downloadAction = (
+    id: string,
+    name: string,
+    description: string,
+    script: (n: number) => string,
+    state: (x: Record<string, unknown> | undefined) => boolean,
+    detail: string,
+    keywords: readonly string[] = []
+  ): void =>
     control.register({
       id,
       domain: 'downloads',
       name,
       description,
+      keywords,
       params: { id: str('Download id.', true) },
       mutates: true,
       confirmation: 'none',
@@ -489,8 +498,8 @@ export function registerMoreChromiumCapabilities(d: ChromiumCapabilityDeps & { s
         return { verified: state(x), detail }
       }
     })
-  downloadAction('downloads.pause', 'Pause a download', 'Pauses a download that is still running, so downloads.resume can continue it later from where it stopped.', (n) => `chrome.downloads.pause(${n})`, (x) => x?.paused === true, 'The download is paused.')
-  downloadAction('downloads.resume', 'Resume a download', 'Resumes a paused or interrupted download from where it stopped, rather than starting it again.', (n) => `chrome.downloads.resume(${n})`, (x) => x?.paused === false, 'The download is running again.')
-  downloadAction('downloads.cancel', 'Cancel a download', 'Cancels a running or paused download and discards what arrived. To take a finished one out of the list, use downloads.remove.', (n) => `chrome.downloads.cancel(${n})`, (x) => x?.state === 'interrupted' && x?.error === 'USER_CANCELED', 'The download was cancelled.')
+  downloadAction('downloads.pause', 'Pause a download', 'Pauses a download that is still running, so downloads.resume can continue it later from where it stopped.', (n) => `chrome.downloads.pause(${n})`, (x) => x?.paused === true, 'The download is paused.', ['hold', 'stop'])
+  downloadAction('downloads.resume', 'Resume a download', 'Resumes a paused or interrupted download from where it stopped, rather than starting it again.', (n) => `chrome.downloads.resume(${n})`, (x) => x?.paused === false, 'The download is running again.', ['retry', 'failed', 'interrupted', 'continue', 'restart', 'try again'])
+  downloadAction('downloads.cancel', 'Cancel a download', 'Cancels a running or paused download and discards what arrived. To take a finished one out of the list, use downloads.remove.', (n) => `chrome.downloads.cancel(${n})`, (x) => x?.state === 'interrupted' && x?.error === 'USER_CANCELED', 'The download was cancelled.', ['abort', 'stop', 'give up'])
   downloadAction('downloads.showInFolder', 'Show a download in its folder', 'Opens the folder that holds the downloaded file.', (n) => `chrome.downloads.show(${n})`, () => true, 'The folder was opened by the browser.')
 }

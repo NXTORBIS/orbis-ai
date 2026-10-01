@@ -60,6 +60,15 @@ export interface CapabilityDefinition<S = unknown> {
   name: string
   description: string
   params: Record<string, ParamSpec>
+  /**
+   * The other words people use for this, for finding it.
+   *
+   * Not synonyms of its own name -- the words for the *things it covers*. One capability that opens twenty of the
+   * browser's pages is never going to have "downloads" or "passwords" in its name, and a planner looking for those
+   * words has to be able to find it. This is the field for that, so the alternative is not a list of phrases
+   * somewhere else deciding what a request means.
+   */
+  keywords?: readonly string[]
   mutates: boolean
   confirmation: ConfirmationPolicy
   requires?: ControlRequirement[]
@@ -151,6 +160,21 @@ export type LockedTabCheck = (
  * Nothing here polls or keeps scanning: state is read on demand, window state arrives when it changes, and the log is
  * written in batches only while there is something to write.
  */
+/**
+ * Words that appear in every request and tell nothing apart.
+ *
+ * Left in, the grammar of a sentence outweighed its subject: "go to settings" scored the word "go" against the verb of
+ * navigation.go and never offered the capability that opens settings at all.
+ */
+const FILLER = new Set([
+  'the', 'and', 'for', 'that', 'this', 'with', 'from', 'into', 'about', 'please', 'can', 'could', 'would', 'should',
+  'you', 'your', 'me', 'my', 'mine', 'our', 'his', 'her', 'their', 'its', 'it', 'they', 'them',
+  'do', 'does', 'did', 'done', 'have', 'has', 'had', 'are', 'was', 'were', 'been', 'being',
+  'then', 'than', 'now', 'just', 'also', 'any', 'all', 'some', 'every', 'here', 'there', 'where', 'when',
+  'how', 'what', 'which', 'who', 'why', 'much', 'many', 'very', 'really', 'tell', 'let', 'make', 'get',
+  'want', 'need', 'like', 'use', 'try', 'put', 'take', 'give', 'say', 'said', 'will', 'shall', 'may', 'might'
+])
+
 export class BrowserControl {
   private readonly capabilities = new Map<string, CapabilityDefinition>()
   private readonly stateReaders = new Map<string, () => unknown>()
@@ -260,10 +284,23 @@ export class BrowserControl {
    * word here, because nobody asks for "tabs.create" by typing "tabs".
    */
   list(filter: { domain?: string; query?: string; availableOnly?: boolean } = {}, source: ControlSource = 'user'): CapabilityDescriptor[] {
-    const words = (filter.query ?? '').toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 1)
+    // Words that are in every sentence and tell nothing apart. Scored, they made the grammar of a request outweigh its subject.
+    const asked = (filter.query ?? '').toLowerCase()
+    const words = asked
+      .split(/[^a-z0-9]+/)
+      .filter((w) => w.length > 1 && !FILLER.has(w))
     const same = (a: string, b: string): boolean => a === b || a === `${b}s` || `${a}s` === b
 
-    const scoreOf = (def: { id: string; name: string; description: string; domain: string }): number => {
+    /*
+     * A question is usually a request to be told, not to be acted upon.
+     *
+     * "What tabs do I have open" contains the word "open", and the capability called "Open a tab" matches it
+     * beautifully -- which is how asking what is open came to rank opening something first. The shape of the sentence
+     * carries the answer, so it is read rather than ignored.
+     */
+    const asking = /^(what|which|how many|how much|is |are |does |do i|did i|show me|list|tell me)\b/.test(asked.trim())
+
+    const scoreOf = (def: { id: string; name: string; description: string; domain: string; keywords?: readonly string[]; mutates: boolean }): number => {
       if (!words.length) return 1
       const id = def.id.toLowerCase()
       const parts = id.split(/[._-]/)
@@ -271,19 +308,64 @@ export class BrowserControl {
       const name = def.name.toLowerCase()
       const nameWords = name.split(/[^a-z0-9]+/)
       const description = def.description.toLowerCase()
+      const declared = (def.keywords ?? []).map((k) => k.toLowerCase())
+      const keywords = declared.filter((k) => !k.includes(' '))
+      const phrases = declared.filter((k) => k.includes(' '))
 
-      let score = 0
+      let place = 0
+      let matched = 0
       for (const word of words) {
+        let hit = 0
         // What it is: the domain it belongs to, or the verb in its own id.
-        if (same(domain, word) || parts.some((part) => same(part, word))) score += 8
-        else if (id.includes(word)) score += 4
+        if (same(domain, word) || parts.some((part) => same(part, word))) hit += 8
+        else if (id.includes(word)) hit += 4
         // What it is called.
-        if (nameWords.some((part) => same(part, word))) score += 3
-        else if (name.includes(word)) score += 2
-        // What it merely mentions. Worth something, and worth much less than the two above.
-        if (description.includes(word)) score += 1
+        if (nameWords.some((part) => same(part, word))) hit += 3
+        else if (name.includes(word)) hit += 2
+        /*
+         * The words for the things it covers, which its name cannot hold all of.
+         *
+         * A keyword of several words has to appear as those words. Split into its parts, "new tab page" matched the
+         * word "tab", and the capability that opens the browser's own pages outranked the one that opens a tab for the
+         * request "open a new tab" -- a keyword meant to help find a destination was instead claiming a verb.
+         */
+        if (keywords.includes(word)) hit += 3
+        // What it merely mentions. Worth something, and worth much less than the rest.
+        if (description.includes(word)) hit += 1
+        if (hit > 0) matched += 1
+        place += hit
       }
-      return score
+      /*
+       * A multi-word keyword is matched against the request as written, once.
+       *
+       * Once, because "clear browsing data" appearing in a request is one thing somebody said, not three -- counting
+       * it three times would let a capability with long keywords outrank one that answers the whole sentence.
+       */
+      for (const phrase of phrases) {
+        if (asked.includes(phrase)) {
+          matched += 1
+          place += 4
+          break
+        }
+      }
+
+      if (!matched) return 0
+
+      /*
+       * How many of the words it accounts for comes first; where they matched only breaks that tie.
+       *
+       * The other way round, one strong match on a single word beat a capability that answered the whole request --
+       * "go to settings" found the capability whose verb is "go" and never offered the one that opens settings at all.
+       * Covering more of what somebody said is the better guess about what they meant, every time.
+       */
+      /*
+       * A question prefers being told over being done, by more than one covered word is worth.
+       *
+       * "What tabs do I have open" covers "tabs" and "open", and the capability called "Open a tab" covers both of
+       * them beautifully -- so coverage alone ranked opening something above answering the question. The shape of the
+       * sentence has to outweigh that, because it is the better evidence of the two about what was wanted.
+       */
+      return matched * 100 + place + (asking && !def.mutates ? 120 : 0)
     }
 
     const scored = [...this.capabilities.values()]
