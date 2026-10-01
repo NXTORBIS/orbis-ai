@@ -169,6 +169,20 @@ async function planSteps(
      */
     '- To do something repeatedly, give the steps that repeat the same "group" name and put "repeat": <times> on the first of them. Do not write the same steps out more than once.',
     '- To wait for something rather than guessing how long it takes, use a waiting capability (media.waitFor for a video, page.waitFor for an element or a page, downloads.waitFor for a download). Never plan a fixed delay when one of those can answer.',
+    /*
+     * Which of two things a request about the browser is about.
+     *
+     * The failure this prevents is specific and was the most embarrassing one available: somebody says "open browser
+     * settings", and a planner holding a search capability and a browser full of web pages writes a web search for the
+     * words "browser settings". It is a reasonable sentence and a completely wrong act, and nothing in a list of
+     * capabilities distinguishes the two -- the distinction is in the request, so it is said here.
+     *
+     * Stated as priority rather than as a list of phrases, because the phrasings are endless and the ordering is not:
+     * if something the browser itself owns does the job, nothing else should be reached for.
+     */
+    '- Parts of the browser itself -- settings, privacy, history, downloads, bookmarks, extensions, permissions, passwords, profiles -- are opened with the capability for them (surface.open), not by searching the web and not by typing their name into the address bar. "Open settings" opens settings; "search for settings" searches the web; "find a page explaining settings" searches the web.',
+    '- Prefer the most direct capability that does the job. Never search the web for something the browser can answer: what was visited is in history, what was saved is in bookmarks, what was downloaded is in downloads, what is open is in the tab list.',
+    '- Say which stretch of time by name ("today", "last-hour", "yesterday", "everything"), never by computing a timestamp. You do not know what time it is.',
     '- If the request needs no browser action at all, return an empty array.',
     '',
     'Reply with only a JSON array of {"id","name","capability","params","needs","saveAs","group","repeat"}.'

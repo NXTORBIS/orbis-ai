@@ -28,6 +28,14 @@ export type ControlDomain =
   | 'zoom'
   | 'find'
   | 'settings'
+  /*
+   * The browser's own pages -- settings, history, downloads, bookmarks, extensions.
+   *
+   * Separate from `settings`, which is Orbis's own settings, and separate from `page`, which is a web page. These are
+   * neither: they belong to the browser, they are not reachable at an http address, and keeping them their own domain
+   * is what lets somebody switch Orbis's access to the browser's innards off without switching off browsing.
+   */
+  | 'surface'
   | 'downloads'
   | 'history'
   | 'bookmarks'

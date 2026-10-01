@@ -175,7 +175,7 @@ export function registerMoreChromiumCapabilities(d: ChromiumCapabilityDeps & { s
     id: 'groups.addTab',
     domain: 'groups',
     name: 'Add a tab to a group',
-    description: 'Moves a tab into an existing tab group.',
+    description: 'Moves a tab into an existing tab group. This changes which group it belongs to, not which window it is in.',
     params: { groupId: str('The group id.', true), tabId: TAB_ID },
     mutates: true,
     confirmation: 'none',
@@ -195,7 +195,7 @@ export function registerMoreChromiumCapabilities(d: ChromiumCapabilityDeps & { s
     id: 'groups.removeTab',
     domain: 'groups',
     name: 'Remove a tab from its group',
-    description: 'Takes a tab out of its tab group.',
+    description: 'Takes a tab out of its tab group, leaving the tab open and the group itself in place.',
     params: { tabId: TAB_ID },
     mutates: true,
     confirmation: 'none',
@@ -335,7 +335,7 @@ export function registerMoreChromiumCapabilities(d: ChromiumCapabilityDeps & { s
     id: 'devtools.viewSource',
     domain: 'devtools',
     name: 'View page source',
-    description: "Opens the page's source in a new tab.",
+    description: 'Opens a page\'s own HTML source in a new tab, as view-source: does. The page itself is not changed.',
     params: { tabId: TAB_ID },
     mutates: true,
     confirmation: 'none',
@@ -390,7 +390,7 @@ export function registerMoreChromiumCapabilities(d: ChromiumCapabilityDeps & { s
     id: 'extensions.remove',
     domain: 'extensions',
     name: 'Remove an extension',
-    description: 'Uninstalls an extension and its data.',
+    description: 'Uninstalls an extension and its stored data, which cannot be undone from here. To turn one off without removing it, use extensions.setEnabled.',
     params: { id: str('Extension id.', true) },
     mutates: true,
     confirmation: 'always',
@@ -436,7 +436,7 @@ export function registerMoreChromiumCapabilities(d: ChromiumCapabilityDeps & { s
     id: 'bookmarks.readingListAdd',
     domain: 'bookmarks',
     name: 'Save to the reading list',
-    description: 'Adds a page to the reading list.',
+    description: 'Adds a page to the browser\'s reading list, to read later. This is separate from bookmarks.',
     params: { url: str('The page address.', true), title: str('Its title.') },
     mutates: true,
     confirmation: 'none',
@@ -456,7 +456,7 @@ export function registerMoreChromiumCapabilities(d: ChromiumCapabilityDeps & { s
     id: 'bookmarks.readingListRemove',
     domain: 'bookmarks',
     name: 'Remove from the reading list',
-    description: 'Removes a page from the reading list.',
+    description: 'Removes a page from the browser\'s reading list, leaving any bookmark for it alone.',
     params: { url: str('The page address.', true) },
     mutates: true,
     confirmation: 'none',
@@ -489,8 +489,8 @@ export function registerMoreChromiumCapabilities(d: ChromiumCapabilityDeps & { s
         return { verified: state(x), detail }
       }
     })
-  downloadAction('downloads.pause', 'Pause a download', 'Pauses a running download.', (n) => `chrome.downloads.pause(${n})`, (x) => x?.paused === true, 'The download is paused.')
-  downloadAction('downloads.resume', 'Resume a download', 'Resumes a paused download.', (n) => `chrome.downloads.resume(${n})`, (x) => x?.paused === false, 'The download is running again.')
-  downloadAction('downloads.cancel', 'Cancel a download', 'Cancels a running or paused download.', (n) => `chrome.downloads.cancel(${n})`, (x) => x?.state === 'interrupted' && x?.error === 'USER_CANCELED', 'The download was cancelled.')
+  downloadAction('downloads.pause', 'Pause a download', 'Pauses a download that is still running, so downloads.resume can continue it later from where it stopped.', (n) => `chrome.downloads.pause(${n})`, (x) => x?.paused === true, 'The download is paused.')
+  downloadAction('downloads.resume', 'Resume a download', 'Resumes a paused or interrupted download from where it stopped, rather than starting it again.', (n) => `chrome.downloads.resume(${n})`, (x) => x?.paused === false, 'The download is running again.')
+  downloadAction('downloads.cancel', 'Cancel a download', 'Cancels a running or paused download and discards what arrived. To take a finished one out of the list, use downloads.remove.', (n) => `chrome.downloads.cancel(${n})`, (x) => x?.state === 'interrupted' && x?.error === 'USER_CANCELED', 'The download was cancelled.')
   downloadAction('downloads.showInFolder', 'Show a download in its folder', 'Opens the folder that holds the downloaded file.', (n) => `chrome.downloads.show(${n})`, () => true, 'The folder was opened by the browser.')
 }

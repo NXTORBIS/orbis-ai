@@ -22,26 +22,37 @@ export interface BrowserUiDeps extends ChromiumCapabilityDeps {
   ui?: BrowserUi
 }
 
-export const SHORTCUTS: Record<string, { keys: string; description: string }> = {
-  'new-tab': { keys: 'ctrl+t', description: 'Open a new tab' },
-  'new-window': { keys: 'ctrl+n', description: 'Open a new window' },
-  'reload': { keys: 'ctrl+r', description: 'Reload the tab' },
-  'hard-reload': { keys: 'ctrl+shift+r', description: 'Reload ignoring the cache' },
-  'find': { keys: 'ctrl+f', description: 'Open find in page' },
-  'bookmarks-bar': { keys: 'ctrl+shift+b', description: 'Show or hide the bookmarks bar' },
-  'bookmark-page': { keys: 'ctrl+d', description: 'Bookmark this page' },
-  'history': { keys: 'ctrl+h', description: 'Open History' },
-  'downloads': { keys: 'ctrl+j', description: 'Open Downloads' },
-  'zoom-in': { keys: 'ctrl+plus', description: 'Zoom in' },
-  'zoom-out': { keys: 'ctrl+minus', description: 'Zoom out' },
-  'zoom-reset': { keys: 'ctrl+0', description: 'Reset zoom' },
-  'print': { keys: 'ctrl+p', description: 'Print' },
-  'view-source': { keys: 'ctrl+u', description: 'View the page source' },
-  'fullscreen': { keys: 'f11', description: 'Toggle full screen' },
-  'close-tab': { keys: 'ctrl+w', description: 'Close the tab' },
-  'reopen-tab': { keys: 'ctrl+shift+t', description: 'Reopen the last closed tab' },
-  'next-tab': { keys: 'ctrl+tab', description: 'Next tab' },
-  'previous-tab': { keys: 'ctrl+shift+tab', description: 'Previous tab' }
+/**
+ * What changes in the browser when a shortcut is pressed, where Orbis can see it.
+ *
+ * `shows` means a tab appears, `hides` means one goes, `moves` means the active tab becomes a different one, `zooms`
+ * means the page's zoom changes, and `unseen` means the effect happens somewhere Orbis cannot read -- a find bar, the
+ * bookmarks bar, full screen. The distinction is the whole point: a keystroke always "succeeds", so without knowing
+ * what to look for afterwards this capability could only ever report that a key was sent, which is not what anybody
+ * asked it to do.
+ */
+export type ShortcutEffect = 'shows' | 'hides' | 'moves' | 'zooms' | 'unseen'
+
+export const SHORTCUTS: Record<string, { keys: string; description: string; effect: ShortcutEffect }> = {
+  'new-tab': { keys: 'ctrl+t', description: 'Open a new tab', effect: 'shows' },
+  'new-window': { keys: 'ctrl+n', description: 'Open a new window', effect: 'shows' },
+  'reload': { keys: 'ctrl+r', description: 'Reload the tab', effect: 'unseen' },
+  'hard-reload': { keys: 'ctrl+shift+r', description: 'Reload ignoring the cache', effect: 'unseen' },
+  'find': { keys: 'ctrl+f', description: 'Open find in page', effect: 'unseen' },
+  'bookmarks-bar': { keys: 'ctrl+shift+b', description: 'Show or hide the bookmarks bar', effect: 'unseen' },
+  'bookmark-page': { keys: 'ctrl+d', description: 'Bookmark this page', effect: 'unseen' },
+  'history': { keys: 'ctrl+h', description: 'Open History', effect: 'shows' },
+  'downloads': { keys: 'ctrl+j', description: 'Open Downloads', effect: 'shows' },
+  'zoom-in': { keys: 'ctrl+plus', description: 'Zoom in', effect: 'zooms' },
+  'zoom-out': { keys: 'ctrl+minus', description: 'Zoom out', effect: 'zooms' },
+  'zoom-reset': { keys: 'ctrl+0', description: 'Reset zoom', effect: 'zooms' },
+  'print': { keys: 'ctrl+p', description: 'Print', effect: 'unseen' },
+  'view-source': { keys: 'ctrl+u', description: 'View the page source', effect: 'shows' },
+  'fullscreen': { keys: 'f11', description: 'Toggle full screen', effect: 'unseen' },
+  'close-tab': { keys: 'ctrl+w', description: 'Close the tab', effect: 'hides' },
+  'reopen-tab': { keys: 'ctrl+shift+t', description: 'Reopen the last closed tab', effect: 'shows' },
+  'next-tab': { keys: 'ctrl+tab', description: 'Next tab', effect: 'moves' },
+  'previous-tab': { keys: 'ctrl+shift+tab', description: 'Previous tab', effect: 'moves' }
 }
 
 export function registerBrowserUiCapabilities(d: BrowserUiDeps): void {
@@ -59,6 +70,16 @@ export function registerBrowserUiCapabilities(d: BrowserUiDeps): void {
     if (d.ui || d.pid !== undefined) return null
     return 'Orbis did not start this browser, so it cannot tell which window is its own.'
   }
+
+  /*
+   * The two things about the browser that can be read before and after a keystroke.
+   *
+   * Through the extension, because that is where the browser's own tab model lives -- not an Orbis-side copy of it,
+   * which would answer this question with whatever Orbis last believed rather than with what is true.
+   */
+  const tabsNow = (): Promise<{ id: string; active: boolean }[]> =>
+    d.bridge.run<{ id: string; active: boolean }[]>("chrome.tabs.query({}).then((all) => all.map((t) => ({ id: String(t.id), active: !!t.active })))")
+  const zoomNow = (): Promise<number> => d.bridge.run<number>('chrome.tabs.query({ active: true, lastFocusedWindow: true }).then(([t]) => chrome.tabs.getZoom(t.id))')
 
   /** Turns the window layer's failures into the control layer's typed errors. */
   const guard = async <T>(work: () => Promise<T>): Promise<T> => {
@@ -131,7 +152,7 @@ export function registerBrowserUiCapabilities(d: BrowserUiDeps): void {
     id: 'devtools.close',
     domain: 'devtools',
     name: 'Close developer tools',
-    description: "Closes Chromium's developer tools.",
+    description: 'Closes Chromium\'s developer tools for a tab, leaving the page itself as it is.',
     params: {},
     mutates: true,
     ...common,
@@ -363,14 +384,56 @@ export function registerBrowserUiCapabilities(d: BrowserUiDeps): void {
     id: 'browser.shortcut',
     domain: 'browser',
     name: 'Press a browser shortcut',
-    description: `Presses one of the browser's own shortcuts in its window: ${Object.keys(SHORTCUTS).join(', ')}.`,
-    params: { name: { type: 'string', description: 'The shortcut name.', required: true, enum: Object.keys(SHORTCUTS) } as ParamSpec },
+    description: `Presses one of the browser's own keyboard shortcuts in its window (${Object.keys(SHORTCUTS).join(', ')}). This is the last resort, for parts of the browser's own chrome that nothing else reaches -- the find bar, the bookmarks bar, full screen, the print dialog. Anything with its own capability is done by that capability instead, because a keystroke's effect mostly cannot be checked afterwards: a tab is tabs.create, a window window.create, settings and history and downloads are surface.open, zoom is zoom.set, bookmarking is bookmarks.add, finding is find.text.`,
+    params: { name: { type: 'string', description: `Which shortcut: ${Object.keys(SHORTCUTS).join(', ')}.`, required: true, enum: Object.keys(SHORTCUTS) } as ParamSpec },
     mutates: true,
     ...common,
+    /*
+     * What the browser looked like before the key was pressed.
+     *
+     * Taken here rather than inside `run` so it is read before the keystroke rather than after it, which is the
+     * difference between a comparison and a coincidence.
+     */
+    observe: async () => {
+      const rows = await tabsNow()
+      const zoom = await zoomNow().catch(() => null)
+      return { tabs: rows.length, active: rows.find((t) => t.active)?.id ?? '', zoom }
+    },
     run: async (p) => {
       const s = SHORTCUTS[String(p.name)] ?? fail('invalid-params', `Unknown shortcut. Use one of: ${Object.keys(SHORTCUTS).join(', ')}.`)
       await guard(async () => getUi().press((await target()).win, s.keys))
-      return { pressed: s.keys, name: String(p.name) }
+      return { pressed: s.keys, name: String(p.name), effect: s.effect }
+    },
+    /**
+     * Checked against what the shortcut was declared to change -- and honest when that is nothing Orbis can see.
+     *
+     * A pressed key is not an outcome. `ctrl+t` either produced a tab or it did not, and that is answerable; `ctrl+f`
+     * opened a find bar that lives in the browser's own chrome, where there is nothing to read. For those the answer
+     * says so in as many words instead of reporting a success it did not establish, because a false "done" on the
+     * browser's own interface is the kind of lie that is only discovered by the person looking at the screen.
+     */
+    verify: async (data, _p, _ctx, before) => {
+      const { effect, name } = data as { effect: ShortcutEffect; name: string }
+      const was = (before ?? { tabs: 0, active: '', zoom: null }) as { tabs: number; active: string; zoom: number | null }
+      if (effect === 'unseen') {
+        return { verified: false, detail: `The ${name} shortcut was pressed in the browser's window. Its effect is in the browser's own interface, where Orbis cannot read it back.` }
+      }
+      const end = Date.now() + 3000
+      while (Date.now() < end) {
+        const rows = await tabsNow().catch(() => null)
+        const now = { tabs: rows?.length ?? was.tabs, active: rows?.find((t) => t.active)?.id ?? was.active }
+        if (effect === 'shows' && now.tabs > was.tabs) return { verified: true, detail: `A tab appeared (${was.tabs} → ${now.tabs}).` }
+        if (effect === 'hides' && now.tabs < was.tabs) return { verified: true, detail: `A tab closed (${was.tabs} → ${now.tabs}).` }
+        if (effect === 'moves' && now.active !== was.active && now.active) return { verified: true, detail: `The active tab is now ${now.active}.` }
+        if (effect === 'zooms') {
+          const zoom = await zoomNow().catch(() => null)
+          if (zoom !== null && was.zoom !== null && Math.abs(zoom - was.zoom) > 0.001) return { verified: true, detail: `Zoom is now ${Math.round(zoom * 100)}%.` }
+          if (zoom !== null && was.zoom === null) return { verified: true, detail: `Zoom is ${Math.round(zoom * 100)}%.` }
+        }
+        await new Promise((r) => setTimeout(r, 120))
+      }
+      const what = effect === 'shows' ? 'No tab appeared' : effect === 'hides' ? 'No tab closed' : effect === 'moves' ? 'The active tab did not change' : 'The zoom did not change'
+      return { verified: false, detail: `${what} after the ${name} shortcut.` }
     }
   })
   void bool

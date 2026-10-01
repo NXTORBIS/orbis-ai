@@ -1,5 +1,7 @@
 import type { ParamSpec } from '../../shared/browserControl.ts'
 import { BrowserControl, fail } from '../browserControl/registry.ts'
+import { PERIOD_NAMES, readSpan } from '../../shared/timePeriod.ts'
+import type { Span } from '../../shared/timePeriod.ts'
 import type { CdpBrowser, CdpPage } from './cdpPage.ts'
 import type { ExtensionBridge } from './extensionBridge.ts'
 
@@ -27,6 +29,19 @@ const str = (description: string, required = false): ParamSpec => ({ type: 'stri
 const bool = (description: string, required = false): ParamSpec => ({ type: 'boolean', description, required })
 const int = (description: string, required = false, range?: { min?: number; max?: number }): ParamSpec => ({ type: 'integer', description, required, ...range })
 const TAB_ID = str('The tab id from tabs.list (default: the active tab).')
+
+/**
+ * The stretch of time a plan asked for, or a refusal saying which names exist.
+ *
+ * A function rather than a check at each call site, because `fail` is an arrow and TypeScript will not narrow a union
+ * after calling one -- so without this every use of a span needed a cast, and a cast is how a missing period becomes
+ * `undefined` inside a query that then quietly means "from the beginning of time".
+ */
+const spanFor = (p: Record<string, unknown>): Span => {
+  const span = readSpan(p, Date.now())
+  if ('problem' in span) return fail('invalid-params', span.problem)
+  return span
+}
 
 export interface ChromiumTab {
   id: string
@@ -142,7 +157,7 @@ export function registerChromiumCapabilities(d: ChromiumCapabilityDeps): void {
     id: 'tabs.close',
     domain: 'tabs',
     name: 'Close a tab',
-    description: 'Closes a tab.',
+    description: 'Closes one tab. The id comes from tabs.list; with none, the active tab. tabs.reopen brings a closed tab back.',
     params: { tabId: TAB_ID },
     mutates: true,
     confirmation: 'none',
@@ -162,7 +177,7 @@ export function registerChromiumCapabilities(d: ChromiumCapabilityDeps): void {
     id: 'tabs.activate',
     domain: 'tabs',
     name: 'Switch to a tab',
-    description: 'Makes a tab the active one.',
+    description: 'Switches to a tab, bringing it in front and focusing its window. This is what “go to that tab”, “switch to the YouTube tab” and “bring it up” mean.',
     params: { tabId: str('The tab id.', true) },
     mutates: true,
     confirmation: 'none',
@@ -182,7 +197,7 @@ export function registerChromiumCapabilities(d: ChromiumCapabilityDeps): void {
     id: 'tabs.duplicate',
     domain: 'tabs',
     name: 'Duplicate a tab',
-    description: 'Opens a copy of a tab next to it.',
+    description: 'Opens a second copy of a tab beside it, at the same address, leaving the original where it is.',
     params: { tabId: TAB_ID },
     mutates: true,
     confirmation: 'none',
@@ -223,7 +238,7 @@ export function registerChromiumCapabilities(d: ChromiumCapabilityDeps): void {
     id: 'tabs.mute',
     domain: 'tabs',
     name: 'Mute or unmute a tab',
-    description: "Mutes or unmutes one tab's sound.",
+    description: 'Mutes or unmutes one tab\'s sound. The tab keeps playing — only the sound stops, so this does not pause a video.',
     params: { tabId: TAB_ID, muted: bool('Mute (true) or unmute (false).', true) },
     mutates: true,
     confirmation: 'none',
@@ -305,12 +320,12 @@ export function registerChromiumCapabilities(d: ChromiumCapabilityDeps): void {
     }
   })
 
-  const history = (id: 'navigation.back' | 'navigation.forward', name: string, dir: 'goBack' | 'goForward', can: 'canGoBack' | 'canGoForward'): void =>
+  const history = (id: 'navigation.back' | 'navigation.forward', name: string, dir: 'goBack' | 'goForward', can: 'canGoBack' | 'canGoForward', what: string): void =>
     control.register({
       id,
       domain: 'navigation',
       name,
-      description: `${name} in the tab's own history.`,
+      description: what,
       params: { tabId: TAB_ID },
       mutates: true,
       confirmation: 'none',
@@ -326,14 +341,26 @@ export function registerChromiumCapabilities(d: ChromiumCapabilityDeps): void {
         return { verified: changed !== before, detail: `The tab is at ${changed}.` }
       }
     })
-  history('navigation.back', 'Go back', 'goBack', 'canGoBack')
-  history('navigation.forward', 'Go forward', 'goForward', 'canGoForward')
+  history(
+    'navigation.back',
+    'Go back',
+    'goBack',
+    'canGoBack',
+    "Goes back to the previous page in a tab's own history, as the browser's back button does. Fails when there is nothing behind it."
+  )
+  history(
+    'navigation.forward',
+    'Go forward',
+    'goForward',
+    'canGoForward',
+    "Goes forward again after going back, as the browser's forward button does. Fails when nothing was gone back from."
+  )
 
   control.register({
     id: 'navigation.reload',
     domain: 'navigation',
     name: 'Reload',
-    description: 'Reloads a tab.',
+    description: 'Reloads a tab, optionally ignoring the cache (a hard reload), as the browser\'s reload button does.',
     params: { tabId: TAB_ID },
     mutates: true,
     confirmation: 'none',
@@ -354,7 +381,7 @@ export function registerChromiumCapabilities(d: ChromiumCapabilityDeps): void {
     id: 'navigation.stop',
     domain: 'navigation',
     name: 'Stop loading',
-    description: 'Stops a tab that is still loading.',
+    description: 'Stops a tab that is still loading and leaves whatever arrived in place, as the browser\'s stop button does.',
     params: { tabId: TAB_ID },
     mutates: true,
     confirmation: 'none',
@@ -545,22 +572,38 @@ export function registerChromiumCapabilities(d: ChromiumCapabilityDeps): void {
     id: 'history.search',
     domain: 'history',
     name: 'Search history',
-    description: 'History entries (URL, title, time visited), newest first, filtered by text and time range (epoch ms).',
-    params: { query: str('URL or title contains.'), from: int('Visited at or after (epoch ms).'), to: int('Visited at or before (epoch ms).'), limit: int('Default 100.') },
+    description: `History entries (URL, title, time visited), newest first, filtered by text and by a stretch of time -- a name (${PERIOD_NAMES.join(', ')}) or exact epoch milliseconds. This is the right capability for "what did I visit yesterday" and "find the page I was reading about physics": read history, do not search the web.`,
+    params: {
+      query: str('URL or title contains.'),
+      period: str(`Only this stretch: ${PERIOD_NAMES.join(', ')}.`),
+      from: int('Visited at or after (epoch ms).'),
+      to: int('Visited at or before (epoch ms).'),
+      limit: int('Default 100.')
+    },
     mutates: false,
     confirmation: 'none',
-    run: (p) =>
-      call(
-        `chrome.history.search({ text: ${json(String(p.query ?? ''))}, startTime: ${Number(p.from) || 0}, ${p.to ? `endTime: ${Number(p.to)}, ` : ''}maxResults: ${Math.min(5000, Number(p.limit) || 100)} })
+    run: (p) => {
+      /*
+       * A period narrows a read, and its absence does not.
+       *
+       * Unlike deleting, where no stretch of time has to be an error: a search with no range is the whole of history,
+       * which is harmless and is what somebody asking "have I ever been here" means.
+       */
+      const span = p.period === undefined || p.period === null || p.period === '' ? null : spanFor(p)
+      const from = span ? span.from : Number(p.from) || 0
+      const to = span ? span.to : typeof p.to === 'number' ? Number(p.to) : null
+      return call(
+        `chrome.history.search({ text: ${json(String(p.query ?? ''))}, startTime: ${from}, ${to !== null ? `endTime: ${to}, ` : ''}maxResults: ${Math.min(5000, Number(p.limit) || 100)} })
           .then((all) => all.map((h) => ({ url: h.url, title: h.title || '', visitedAt: h.lastVisitTime, visits: h.visitCount })))`
       )
+    }
   })
 
   control.register({
     id: 'history.delete',
     domain: 'history',
     name: 'Delete a history entry',
-    description: 'Removes a page from history.',
+    description: 'Removes one page from browsing history, by its address. For a stretch of time, use history.deleteRange.',
     params: { url: str('The page address.', true) },
     mutates: true,
     confirmation: 'none',
@@ -574,16 +617,35 @@ export function registerChromiumCapabilities(d: ChromiumCapabilityDeps): void {
   control.register({
     id: 'history.deleteRange',
     domain: 'history',
-    name: 'Delete history in a time range',
-    description: 'Removes every history entry visited between two times (epoch ms).',
-    params: { from: int('Start (epoch ms).', true), to: int('End (epoch ms).', true) },
+    name: 'Delete history for a stretch of time',
+    description: `Removes every history entry visited in a named stretch of time -- ${PERIOD_NAMES.join(', ')} -- or between two exact times. This is what "clear today's history", "clear the last hour" and "delete yesterday's history" mean. Cookies, downloads and bookmarks are left alone; browser.clearData is what touches those.`,
+    params: {
+      period: str(`Which stretch: ${PERIOD_NAMES.join(', ')}.`),
+      from: int('Start (epoch ms), instead of a period.'),
+      to: int('End (epoch ms), instead of a period.')
+    },
     mutates: true,
     confirmation: 'always',
-    describe: (p) => `Delete history from ${new Date(Number(p.from)).toLocaleString()} to ${new Date(Number(p.to)).toLocaleString()}`,
-    run: async (p) => void (await call(`chrome.history.deleteRange({ startTime: ${Number(p.from)}, endTime: ${Number(p.to)} })`)),
-    verify: async (_d, p) => {
-      const left = await call<unknown[]>(`chrome.history.search({ text: '', startTime: ${Number(p.from)}, endTime: ${Number(p.to)}, maxResults: 1 })`)
-      return { verified: left.length === 0, detail: left.length ? 'Some entries remain.' : 'That time range is gone from history.' }
+    /*
+     * The confirmation says the stretch back in the person's own words.
+     *
+     * "Delete history from 01/10/2026, 00:00:00 to 01/10/2026, 14:31:07" is a true sentence that nobody can check at a
+     * glance. "Delete today's history (since midnight)" is the thing they asked for, which is what a confirmation is
+     * for -- and if the period was misread, this is where they see it.
+     */
+    describe: (p) => {
+      const span = readSpan(p, Date.now())
+      return 'problem' in span ? 'Delete history' : `Delete history for ${span.what}`
+    },
+    run: async (p) => {
+      const span = spanFor(p)
+      await call(`chrome.history.deleteRange({ startTime: ${span.from}, endTime: ${span.to} })`)
+      return { from: span.from, to: span.to, what: span.what }
+    },
+    verify: async (data) => {
+      const { from, to, what } = data as { from: number; to: number; what: string }
+      const left = await call<unknown[]>(`chrome.history.search({ text: '', startTime: ${from}, endTime: ${to}, maxResults: 1 })`)
+      return { verified: left.length === 0, detail: left.length ? 'Some entries remain.' : `${what} is gone from history.` }
     }
   })
 
@@ -648,7 +710,7 @@ export function registerChromiumCapabilities(d: ChromiumCapabilityDeps): void {
     id: 'bookmarks.remove',
     domain: 'bookmarks',
     name: 'Remove a bookmark',
-    description: 'Removes the bookmark for a page.',
+    description: 'Removes the bookmark for one page, leaving the page itself and the folder it was in alone.',
     params: { url: str('The page address.', true) },
     mutates: true,
     confirmation: 'none',
@@ -665,15 +727,58 @@ export function registerChromiumCapabilities(d: ChromiumCapabilityDeps): void {
     id: 'browser.clearData',
     domain: 'browser',
     name: 'Clear browsing data',
-    description: "Clears cookies, cache and site data (signs you out of websites) through the browser's own clearing.",
-    params: {},
+    description: `Clears cookies, cache and site data (signs you out of websites) through the browser's own clearing, for a named stretch of time (${PERIOD_NAMES.join(', ')}; default everything). Each kind can be left alone: "don't delete my cookies" means cookies false. History, bookmarks and downloads are never touched by this -- history.deleteRange is what clears history.`,
+    params: {
+      period: str(`Which stretch: ${PERIOD_NAMES.join(', ')}. Default: everything.`),
+      cookies: bool('Cookies and site data, which signs you out of websites (default true).'),
+      cache: bool('Cached files (default true).'),
+      storage: bool('Local storage, databases and service workers (default true).')
+    },
     mutates: true,
     confirmation: 'always',
-    describe: () => 'Clear all browsing data (signs you out of websites)',
-    run: async () => void (await call('chrome.browsingData.remove({ since: 0 }, { cache: true, cookies: true, localStorage: true, indexedDB: true, serviceWorkers: true, cacheStorage: true, fileSystems: true, webSQL: true })')),
-    verify: async () => {
+    describe: (p) => {
+      const kinds = [p.cookies !== false && 'cookies', p.cache !== false && 'cache', p.storage !== false && 'site data'].filter(Boolean).join(', ')
+      const span = p.period ? readSpan(p, Date.now()) : null
+      const when = span && !('problem' in span) ? ` for ${span.what}` : ''
+      return `Clear ${kinds || 'nothing'}${when}${p.cookies !== false ? ' (signs you out of websites)' : ''}`
+    },
+    run: async (p) => {
+      /*
+       * No period means everything, because that is what this capability has always done.
+       *
+       * The opposite of history.deleteRange, where a missing period is an error -- and the difference is not an
+       * inconsistency. This one existed before periods did, with "all of it" as its only behaviour; changing a missing
+       * parameter from "everything" to a failure would break every existing caller, and the parameter is additive.
+       */
+      const span: Span = p.period ? spanFor(p) : { from: 0, to: Date.now(), period: 'everything', what: 'all of it' }
+      const cookies = p.cookies !== false
+      const kinds = {
+        cache: p.cache !== false,
+        cookies,
+        localStorage: p.storage !== false,
+        indexedDB: p.storage !== false,
+        serviceWorkers: p.storage !== false,
+        cacheStorage: p.storage !== false,
+        fileSystems: p.storage !== false,
+        webSQL: p.storage !== false
+      }
+      if (!Object.values(kinds).some(Boolean)) fail('invalid-params', 'Nothing was selected to clear.')
+      await call(`chrome.browsingData.remove({ since: ${span.from} }, ${json(kinds)})`)
+      return { cookies, what: span.what, since: span.from }
+    },
+    verify: async (data) => {
+      const { cookies, what } = data as { cookies: boolean; what: string }
+      /*
+       * Cookies are the one kind of this that can be counted afterwards.
+       *
+       * And only when all of them were asked for: clearing the last hour leaves older cookies standing, so a non-zero
+       * count is the correct outcome and treating it as failure would report a success as a failure. When the count
+       * cannot settle the question, this says the browser did it rather than claiming to have checked.
+       */
+      if (!cookies) return { verified: true, detail: `The browser cleared ${what}.` }
       const count = await call<number>('chrome.cookies.getAll({}).then((c) => c.length)')
-      return { verified: count === 0, detail: `${count} cookies remain.` }
+      if (what === 'all of it') return { verified: count === 0, detail: count ? `${count} cookies remain.` : 'No cookies remain.' }
+      return { verified: true, detail: `The browser cleared ${what}; ${count} cookies from outside it remain.` }
     }
   })
 

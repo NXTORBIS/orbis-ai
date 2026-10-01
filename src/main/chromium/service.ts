@@ -14,6 +14,7 @@ import { registerFindInPage, registerSitePermissionCapabilities } from './chromi
 import { registerBrowserToolCapabilities } from './chromiumCapabilities4.ts'
 import { BrowserUi } from './browserUi.ts'
 import { registerBrowserUiCapabilities } from './chromiumCapabilities5.ts'
+import { registerSurfaceCapabilities } from './surfaceCapabilities.ts'
 import { ChromiumPages } from './chromiumPages.ts'
 import { ExtensionBridge } from './extensionBridge.ts'
 
@@ -99,6 +100,9 @@ export async function startChromiumControl(o: ChromiumControlOptions): Promise<C
   registerChromiumCapabilities(deps)
   registerMoreChromiumCapabilities({ ...deps, saveDir: o.saveDir, selfExtensionId: o.extensionId })
   registerSitePermissionCapabilities(deps)
+  // The browser's own pages -- settings, history, downloads, extensions. Without these, "open browser settings" has
+  // nothing to ground against and the only plans available for it are the wrong ones.
+  registerSurfaceCapabilities(deps)
   registerFindInPage({ ...deps, activePage: async () => (await pages.getTarget()) as unknown as import('./cdpPage.ts').CdpPage })
   registerBrowserToolCapabilities({
     ...deps,
