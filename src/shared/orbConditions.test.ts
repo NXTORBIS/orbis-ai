@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { fillIn, judge, MAX_AT_ONCE, ready, runnable, settleConditions, stuck, valueAt } from './orbTask.ts'
+import { fillIn, judge, MAX_AT_ONCE, nextPass, ready, runnable, settleConditions, stuck, valueAt } from './orbTask.ts'
 import type { OrbCondition, OrbStep } from './orbTask.ts'
 import type { CapabilityDescriptor } from './browserControl.ts'
 
@@ -197,4 +197,30 @@ test('reads go together, but only so many at once', () => {
 test('anything that changes the browser still goes alone', () => {
   const steps = [step({ id: 'a', capability: 'tabs.close' }), step({ id: 'b', capability: 'tabs.close' })]
   assert.deepEqual(runnable(steps, caps({ 'tabs.close': true }), {}).map((s) => s.id), ['a'])
+})
+
+test('"until" is a bounded loop whose steps carry a condition', () => {
+  /*
+   * There is no separate "until" in the step model, and there does not need to be: a group that repeats, whose members
+   * only run while something is true, stops the moment it stops being true. What matters is that it stops cleanly --
+   * the pass that finds the condition false must leave a finished task rather than a stuck one.
+   */
+  const group = (status: OrbStep['status'], pass: number): OrbStep[] => [
+    step({ id: 'look', capability: 'media.state', saveAs: 'state', status: 'done', group: 'round', repeat: 5, pass }),
+    step({ id: 'next', capability: 'page.click', status, group: 'round', pass, when: { of: 'state', equals: 'ended' } })
+  ]
+
+  // While the condition holds, the group is complete and another pass is owed.
+  const holding = group('done', 1)
+  const again = nextPass(holding)
+  assert.ok(again, 'a pass is owed')
+  assert.equal(again?.pass, 2)
+
+  // Once it stops holding, the conditional member is skipped -- so the group is not "all done" and no further pass is
+  // owed, which is how the loop ends.
+  const stopping = settleConditions(group('planned', 2), { state: 'playing' })
+  assert.equal(stopping.find((s) => s.id === 'next')?.status, 'skipped')
+  assert.equal(nextPass(stopping), null, 'the loop ended')
+  assert.equal(stuck(stopping, { state: 'playing' }), false, 'and ended finished, not stuck')
+  assert.ok(stopping.every((s) => s.status === 'done' || s.status === 'skipped'), 'which the run reads as done')
 })

@@ -210,6 +210,14 @@ async function planSteps(
     '- To make a step happen only sometimes, give it "when": {"of": "<a saveAs name, optionally with a path>", and one of "is": "present"|"empty"|"true"|"false", "equals": <value>, "contains": "<text>", "atLeast": <number>, "atMost": <number>}. Add "not": true for the opposite. A step whose condition turns out false is skipped, and so is anything that was only there to use its result.',
     '- "Otherwise" is two steps with opposite conditions on the same thing, not a different kind of step.',
     /*
+     * "Until" asked for in the two things that already exist, rather than as a third.
+     *
+     * A group that repeats, whose members only run while something is true, stops the moment it stops being true --
+     * and stops finished rather than stuck. Saying so here is what keeps a planner from inventing a fixed number of
+     * passes for a request that did not have one, or a wait that hopes.
+     */
+    '- "Until" and "while" are a loop with a condition: give the group a "repeat" high enough to cover it and put "when" on its steps. The loop ends on the pass where the condition stops holding. There is no unbounded loop.',
+    /*
      * Which of two things a request about the browser is about.
      *
      * The failure this prevents is specific and was the most embarrassing one available: somebody says "open browser
