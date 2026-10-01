@@ -244,17 +244,55 @@ export class BrowserControl {
   }
 
   /** What Orbis can do right now: every registered capability with its parameters, requirements and availability. */
+  /**
+   * What the browser can do, best match first.
+   *
+   * The ranking is the whole value of this call, and it used to have none worth the name: a word was counted if it
+   * appeared anywhere in the id, name, description or domain, so every capability whose description happened to
+   * mention a tab scored exactly 1, and the tie was broken alphabetically. Asked for "tab", the browser answered
+   * `browser.close`, `captcha.check`, `devtools.open` -- and `tabs.create` was nowhere near the top.
+   *
+   * That is not a cosmetic ordering problem. This list is the menu the Orb plans from, so a bad menu is a bad plan:
+   * asked to open a tab, it reached for a keyboard shortcut, because that is what the top of the list offered.
+   *
+   * So where a word matches decides what it is worth. A capability's domain and the verb in its id are what it *is*;
+   * its name is what it is called; its description is only what it talks about. Singulars and plurals are the same
+   * word here, because nobody asks for "tabs.create" by typing "tabs".
+   */
   list(filter: { domain?: string; query?: string; availableOnly?: boolean } = {}, source: ControlSource = 'user'): CapabilityDescriptor[] {
     const words = (filter.query ?? '').toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 1)
+    const same = (a: string, b: string): boolean => a === b || a === `${b}s` || `${a}s` === b
+
+    const scoreOf = (def: { id: string; name: string; description: string; domain: string }): number => {
+      if (!words.length) return 1
+      const id = def.id.toLowerCase()
+      const parts = id.split(/[._-]/)
+      const domain = def.domain.toLowerCase()
+      const name = def.name.toLowerCase()
+      const nameWords = name.split(/[^a-z0-9]+/)
+      const description = def.description.toLowerCase()
+
+      let score = 0
+      for (const word of words) {
+        // What it is: the domain it belongs to, or the verb in its own id.
+        if (same(domain, word) || parts.some((part) => same(part, word))) score += 8
+        else if (id.includes(word)) score += 4
+        // What it is called.
+        if (nameWords.some((part) => same(part, word))) score += 3
+        else if (name.includes(word)) score += 2
+        // What it merely mentions. Worth something, and worth much less than the two above.
+        if (description.includes(word)) score += 1
+      }
+      return score
+    }
+
     const scored = [...this.capabilities.values()]
       .filter((def) => !filter.domain || def.domain === filter.domain)
-      .map((def) => {
-        const haystack = `${def.id} ${def.name} ${def.description} ${def.domain}`.toLowerCase()
-        const score = words.length ? words.filter((w) => haystack.includes(w)).length : 1
-        return { def, score }
-      })
+      .map((def) => ({ def, score: scoreOf(def) }))
       .filter((x) => x.score > 0)
-      .sort((a, b) => b.score - a.score || a.def.id.localeCompare(b.def.id))
+      // A shorter id breaks a tie: `tabs.create` is more central than `tabs.createFromSelection`.
+      .sort((a, b) => b.score - a.score || a.def.id.length - b.def.id.length || a.def.id.localeCompare(b.def.id))
+
     const out = scored.map((x) => this.descriptor(x.def, { source }))
     return filter.availableOnly ? out.filter((d) => d.available) : out
   }

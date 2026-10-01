@@ -246,3 +246,89 @@ test('a kind of action switched off is refused for Orion and automations, but ne
   control.setSwitchedOff([])
   assert.equal(control.list({}, 'automation').find((c) => c.id === 'tabs.create')!.available, true)
 })
+
+// ---------------------------------------------------------------- finding the right capability
+
+test('a search for a thing puts the capabilities that are about it first', () => {
+  /**
+   * The list this returns is the menu the Orb plans from, so its order decides what the Orb reaches for.
+   *
+   * It used to count a word anywhere in the id, name, description or domain, which gave every capability that merely
+   * mentioned a tab the same score of 1 and let alphabetical order decide. Asked for "tab", the browser answered
+   * `browser.shortcut` before `tabs.create` -- and the Orb, asked to open a tab, sent a keystroke.
+   */
+  const control = new BrowserControl()
+  control.register({
+    id: 'tabs.create',
+    domain: 'tabs',
+    name: 'Open a tab',
+    description: 'Opens a new tab',
+    params: {},
+    mutates: true,
+    confirmation: 'none',
+    run: () => ({ ok: true })
+  })
+  control.register({
+    id: 'browser.shortcut',
+    domain: 'browser',
+    name: 'Press a keyboard shortcut',
+    // Mentions tabs, and is not about them. This is exactly the row that used to win.
+    description: 'Sends a keyboard shortcut to the browser, such as the one that opens a tab or closes a tab',
+    params: {},
+    mutates: true,
+    confirmation: 'none',
+    run: () => ({ ok: true })
+  })
+  control.register({
+    id: 'captcha.check',
+    domain: 'captcha',
+    name: 'Check for human verification',
+    description: 'Looks at the current tab for a verification challenge',
+    params: {},
+    mutates: false,
+    confirmation: 'none',
+    run: () => ({ ok: true })
+  })
+
+  const found = control.list({ query: 'tab' }).map((d) => d.id)
+  assert.equal(found[0], 'tabs.create', `got ${found.join(', ')}`)
+  assert.ok(found.indexOf('tabs.create') < found.indexOf('browser.shortcut'))
+  assert.ok(found.indexOf('tabs.create') < found.indexOf('captcha.check'))
+})
+
+test('a singular finds a plural domain, because nobody types the domain name', () => {
+  const control = new BrowserControl()
+  control.register({
+    id: 'tabs.create',
+    domain: 'tabs',
+    name: 'Open a tab',
+    description: 'Opens one',
+    params: {},
+    mutates: true,
+    confirmation: 'none',
+    run: () => ({ ok: true })
+  })
+  assert.deepEqual(control.list({ query: 'tab' }).map((d) => d.id), ['tabs.create'])
+  assert.deepEqual(control.list({ query: 'tabs' }).map((d) => d.id), ['tabs.create'])
+})
+
+test('a capability that only talks about something still appears, below the ones that do it', () => {
+  // Being last is right; being absent would be wrong, because sometimes the mention is the answer.
+  const control = new BrowserControl()
+  control.register({
+    id: 'downloads.list',
+    domain: 'downloads',
+    name: 'List downloads',
+    description: 'What has been downloaded, and from which tab',
+    params: {},
+    mutates: false,
+    confirmation: 'none',
+    run: () => ({ ok: true })
+  })
+  assert.deepEqual(control.list({ query: 'tab' }).map((d) => d.id), ['downloads.list'])
+})
+
+test('with no query, everything is listed', () => {
+  const { control } = makeControl()
+  assert.ok(control.list({}).length >= 2)
+})
