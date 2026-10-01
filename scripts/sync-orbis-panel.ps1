@@ -12,7 +12,7 @@ New-Item -ItemType Directory -Force $dest | Out-Null
 if (-not (Test-Path (Join-Path $ui 'panel/sidebar.js'))) { throw 'orbis-ui/panel/sidebar.js is not built (node scripts/build-extension.mjs).' }
 foreach ($f in Get-ChildItem (Join-Path $ui 'panel') -File | Where-Object { $_.Extension -ne '.ts' }) { Copy-Item $f.FullName (Join-Path $dest $f.Name) -Force }
 foreach ($f in 'orbis-tokens.css','orbis.css','orbis-components.js') { Copy-Item (Join-Path $ui $f) (Join-Path $dest $f) -Force }
-foreach ($f in 'newtab.js','newtab.css','newtab-logic.js','newtab-store.js','widgets.js','widget-logic.js','rail.js','intro.js','intro.css','orbis-wordmark.png') { Copy-Item (Join-Path $ui "newtab\$f") (Join-Path $dest $f) -Force }
+foreach ($f in 'newtab.js','newtab.css','newtab-logic.js','newtab-store.js','widgets.js','widget-logic.js','rail.js','intro.js','intro.css','backdrop-mount.js','orbis-wordmark.png') { Copy-Item (Join-Path $ui "newtab\$f") (Join-Path $dest $f) -Force }
 Copy-Item (Join-Path $ui 'panel\rail\icons.js') (Join-Path $dest 'orbis-icons.js') -Force
 # The Command Center imports the icon set at the path it really has, so the page and the working copy agree.
 New-Item -ItemType Directory -Force (Join-Path $dest 'rail') | Out-Null

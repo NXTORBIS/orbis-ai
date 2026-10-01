@@ -253,6 +253,23 @@ function drawOrb() {
   orbEl.classList.toggle('open', state.open)
   // The dot is always present and hidden by CSS, so showing it cannot disturb a drag by changing the child list.
   orbEl.classList.toggle('marked', state.working || Boolean(state.confirmation))
+  /*
+   * How far through, drawn as a ring round the Orb while it is collapsed.
+   *
+   * A conic gradient on a pseudo-element: no extra elements to disturb a drag in progress, and nothing animating
+   * when nothing is running. Set as a variable rather than a class so it moves smoothly rather than in steps.
+   */
+  const total = state.steps.length
+  const finished = state.steps.filter((x) => x.status === 'done').length
+  orbEl.style.setProperty('--orb-progress', total ? String(finished / total) : '0')
+  orbEl.classList.toggle('running', state.working && !state.open && total > 0)
+  /*
+   * Waiting for you looks different from working, and must.
+   *
+   * A task that has stopped to ask something is not making progress, and showing it as progress is how somebody
+   * leaves it sitting there. This is the one state that stays loud while the Orb is put away.
+   */
+  orbEl.classList.toggle('attention', Boolean(state.confirmation) && !state.open)
   orbEl.setAttribute('aria-label', state.open ? 'Collapse Orbis assistant' : 'Open Orbis assistant')
   orbEl.setAttribute('aria-expanded', String(state.open))
   return orbEl

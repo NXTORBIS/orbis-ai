@@ -21,6 +21,21 @@ import { call } from './helper.js'
 
 let applied = ''
 
+/**
+ * The starfield, when the look asks for one.
+ *
+ * Loaded only then: a page wearing a flat background has no use for the drawing and should not pay for the module.
+ * It is the same drawing the chat uses -- `shared/backdrop.ts` -- rather than a second one that would drift from it.
+ */
+async function setField(wanted, still) {
+  try {
+    const module = await import('./backdrop-mount.js')
+    module.setBackdrop(wanted, still)
+  } catch {
+    // No starfield is a plain background, which is a look Orbis already has. Nothing is said about it.
+  }
+}
+
 /** Puts the variables on the document, and names the backdrop the preset asked for. */
 function wear(look) {
   const root = document.documentElement
@@ -41,6 +56,14 @@ function wear(look) {
 
   if (look && look.backdrop) root.dataset.backdrop = look.backdrop
   else delete root.dataset.backdrop
+
+  /*
+   * The field the chat draws, drawn here too.
+   *
+   * `field` is the chat's own "visual effects" setting, which is what decides it there -- not a preset. Reduced
+   * motion keeps the stars and stops the drift, because the stars are the look and the drift is the preference.
+   */
+  void setField(look ? look.field !== false : false, Boolean(look && look.still))
 }
 
 /** Reads it, and keeps asking until Orbis answers. */

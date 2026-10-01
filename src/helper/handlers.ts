@@ -121,7 +121,11 @@ export interface HandlerDeps {
    *
    * Read at call time, so a change in Settings reaches an open browser without a restart.
    */
-  appearance?: () => Promise<{ variables: Record<string, string>; backdrop: string | null }> | { variables: Record<string, string>; backdrop: string | null } | null | undefined
+  appearance?: () =>
+    | Promise<{ variables: Record<string, string>; backdrop: string | null; field?: boolean; still?: boolean }>
+    | { variables: Record<string, string>; backdrop: string | null; field?: boolean; still?: boolean }
+    | null
+    | undefined
   recall?: () => RecallHelperDeps['store'] | null | undefined
   /**
    * Schedules: the app's own store and scheduler, never a second one.
@@ -263,7 +267,7 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
     /** How Orbis looks, for the browser's own pages. Nothing here changes anything: it reads what the chat is wearing. */
     ...(deps.appearance
       ? {
-          'appearance:get': async () => (await deps.appearance!()) ?? { variables: {}, backdrop: null }
+          'appearance:get': async () => (await deps.appearance!()) ?? { variables: {}, backdrop: null, field: false, still: false }
         }
       : {}),
     ...(deps.secrets ? createSecretsHandlers(deps.secrets) : {}),

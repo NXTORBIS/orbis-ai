@@ -14,6 +14,8 @@ await build({ ...shared, entryPoints: ['orbis-ui/panel/sidebar.ts'], outfile: 'o
 await build({ ...shared, entryPoints: ['orbis-ui/results/results.ts'], outfile: 'orbis-ui/results/results.js', format: 'iife', platform: 'browser' })
 // The capability registry the Command Center reads. Built from src/shared, so the page and the app share one list.
 await build({ ...shared, minify: false, entryPoints: ['orbis-ui/panel/command-registry.ts'], outfile: 'orbis-ui/panel/command-registry.js', format: 'esm', platform: 'browser' })
+// The starfield, drawn by the same shared code the chat draws it with, so both halves of Orbis look like one thing.
+await build({ ...shared, minify: false, entryPoints: ['orbis-ui/newtab/backdrop-mount.ts'], outfile: 'orbis-ui/newtab/backdrop-mount.js', format: 'esm', platform: 'browser' })
 // The omnibox's prediction UI. Built from src/shared so the merge the page uses is the merge that is tested, and left
 // unminified because it is read in the browser's own devtools as often as it is run.
 await build({ ...shared, minify: false, entryPoints: ['orbis-ui/panel/omnibox-ui.ts'], outfile: 'orbis-ui/panel/omnibox-ui.js', format: 'esm', platform: 'browser', external: ['./omnibox-native.js'] })

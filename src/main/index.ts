@@ -282,6 +282,8 @@ let recall: RecallStore | null = null
 let workflowEngine: WorkflowEngine | null = null
 /** Schedules, once they exist, so a schedule said in chat is kept rather than only talked about. */
 let schedulesForChat: { store: TemporalStore; engine: TemporalEngine; profileId: () => string } | null = null
+/** The two settings the browser's own pages need in order to look like the chat. Nothing else crosses. */
+let settingsForBrowser: { effects: boolean } | null = null
 /**
  * Orbis running with no window, for schedules.
  *
@@ -602,11 +604,17 @@ function createWindow(): BrowserWindow {
 }
 
 function registerIpc(): void {
-  ipcMain.handle('settings:get', () => store.getSettings())
+  ipcMain.handle('settings:get', async () => {
+    const settings = await store.getSettings()
+    // Kept for the browser's own pages, which need it to look like the chat. Only this one field crosses.
+    settingsForBrowser = { effects: settings.effects !== false }
+    return settings
+  })
 
   ipcMain.handle('settings:update', async (_event, update: SettingsUpdate) => {
     const settings = await store.updateSettings(update)
     nativeTheme.themeSource = settings.theme
+    settingsForBrowser = { effects: settings.effects !== false }
     return settings
   })
 
@@ -1921,7 +1929,14 @@ if (!app.requestSingleInstanceLock()) {
             const still = wantsReducedMotion(config, nativeTheme.shouldUseDarkColors ? false : false)
             return {
               variables: appearanceVariables(config, still),
-              backdrop: presetBackdrop(activePreset(config), still)
+              backdrop: presetBackdrop(activePreset(config), still),
+              /*
+               * Whether the drifting starfield is on, which is the `effects` setting and not a preset.
+               * The chat draws it from exactly this, so sending anything else would give the browser a different
+               * answer to the same question.
+               */
+              field: settingsForBrowser?.effects !== false,
+              still
             }
           },
           recall: () => recall,

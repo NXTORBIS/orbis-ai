@@ -181,6 +181,54 @@ body { font: 400 13px/1.45 var(--font-sans); color: var(--text); }
 
 .browser-orb.marked .browser-orb-dot { opacity: 1; transform: scale(1); }
 
+/*
+ * How far through, on the Orb itself.
+ *
+ * Collapsed, the Orb showed one dot: working, or not. How far through was invisible until the panel was opened, so
+ * the only way to follow a long task was to leave the panel open -- which is the opposite of being able to put it
+ * away. A ring says it without taking any more room than the Orb already has.
+ *
+ * Drawn on a pseudo-element with a conic gradient and a mask, so there is no extra child to disturb a drag, and it
+ * costs nothing at all when nothing is running.
+ */
+.browser-orb.running::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  background: conic-gradient(
+    var(--accent) calc(var(--orb-progress, 0) * 360deg),
+    color-mix(in srgb, var(--accent) 16%, transparent) 0
+  );
+  /* A ring rather than a disc: the Orb has to stay the thing you can see. */
+  mask: radial-gradient(circle, transparent 0 calc(50% - 2px), #000 calc(50% - 2px));
+  -webkit-mask: radial-gradient(circle, transparent 0 calc(50% - 2px), #000 calc(50% - 2px));
+  transition: background 0.3s ease;
+  pointer-events: none;
+}
+
+/* Waiting for you: not progress, and not quiet. The one state that stays loud while the Orb is put away. */
+.browser-orb.attention::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 2px solid var(--amber);
+  animation: orb-attention 1.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes orb-attention {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* Nothing pulses when the system has been asked for less movement; the ring itself still says how far through. */
+@media (prefers-reduced-motion: reduce) {
+  .browser-orb.attention::after { animation: none; }
+  .browser-orb.running::after { transition: none; }
+}
+
 .browser-orb.attention .browser-orb-dot {
   background: var(--amber);
   box-shadow: 0 0 8px var(--amber);
