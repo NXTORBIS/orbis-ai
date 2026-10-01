@@ -71,7 +71,14 @@ export interface PageHandle {
   isLoading(): boolean
 
   /** Runs a script in the page and gives back what it evaluated to. How Orion reads and inspects a page. */
-  executeJavaScript(code: string, userGesture?: boolean): Promise<unknown>
+  /**
+   * Runs a script in the page.
+   *
+   * `timeoutMs` is for the few scripts that are meant to take a long time -- waiting for a video to end is minutes,
+   * not milliseconds. Without it every long wait was cut off at the default and reported as the browser failing to
+   * answer, which reads as a broken browser rather than as a limit nobody chose.
+   */
+  executeJavaScript(code: string, userGesture?: boolean, timeoutMs?: number): Promise<unknown>
   /** A picture of the page, for when Orion has to look rather than read. */
   capturePage(): Promise<PageImage>
 

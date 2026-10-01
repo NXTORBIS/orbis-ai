@@ -344,23 +344,27 @@ export function createOrbHandlers(deps: OrbDeps): Record<string, Handler> {
 
         const go = runnable(task.steps, task.perception.capabilities)
         if (!go.length) {
-          if (task.steps.every((s) => s.status === 'done' || s.status === 'skipped')) { task.status = 'done'; break }
           /*
-         * A finished group with passes left goes round again before anything else is decided.
-         *
-         * Here, at the top of the loop, so a repeat is indistinguishable from the first pass to everything below it:
-         * the same readiness, the same verification, the same recovery. A loop that ran through a different path
-         * would be a second engine wearing the first one's name.
-         */
-        const again = nextPass(task.steps)
-        if (again) {
-          task.steps = again.steps
-          emit({ type: 'status', message: `Round ${again.pass} of ${task.steps.find((x) => x.group === again.group)?.repeat ?? '?'}` })
-          emit({ type: 'pass', group: again.group, pass: again.pass })
-          continue
-        }
+           * A finished group with passes left goes round again, and that is asked first.
+           *
+           * Before "everything is done, so the task is done" -- which is the whole point. Asked after it, a group
+           * that had just completed its first pass was declared finished and the loop never ran: a plan that said
+           * twice did it once, and reported success for it. The question "is there another pass owed" has to come
+           * before the question "is there anything left to do", because the answer to the first changes the second.
+           *
+           * It goes round at the top of the same loop everything else runs in, so a repeat is indistinguishable from
+           * a first pass to every line below: the same readiness, the same verification, the same recovery.
+           */
+          const again = nextPass(task.steps)
+          if (again) {
+            task.steps = again.steps
+            emit({ type: 'status', message: `Round ${again.pass} of ${task.steps.find((x) => x.group === again.group)?.repeat ?? '?'}` })
+            emit({ type: 'pass', group: again.group, pass: again.pass })
+            continue
+          }
 
-        if (stuck(task.steps)) { task.status = 'failed'; break }
+          if (task.steps.every((s) => s.status === 'done' || s.status === 'skipped')) { task.status = 'done'; break }
+          if (stuck(task.steps)) { task.status = 'failed'; break }
           break
         }
 

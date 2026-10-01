@@ -214,14 +214,19 @@ export class CdpPage implements PageHandle {
     return this.loading
   }
 
-  async executeJavaScript(code: string, userGesture = false): Promise<unknown> {
-    const result = await this.send<{ result?: { value?: unknown }; exceptionDetails?: { text: string; exception?: { description?: string } } }>('Runtime.evaluate', {
-      expression: code,
-      awaitPromise: true,
-      returnByValue: true,
-      userGesture,
-      allowUnsafeEvalBlockedByCSP: true
-    })
+  async executeJavaScript(code: string, userGesture = false, timeoutMs?: number): Promise<unknown> {
+    const result = await this.send<{ result?: { value?: unknown }; exceptionDetails?: { text: string; exception?: { description?: string } } }>(
+      'Runtime.evaluate',
+      {
+        expression: code,
+        awaitPromise: true,
+        returnByValue: true,
+        userGesture,
+        allowUnsafeEvalBlockedByCSP: true
+      },
+      // Only when the caller says so; everything else keeps the default, which is right for a script that is not a wait.
+      timeoutMs
+    )
     if (result.exceptionDetails) throw new Error(result.exceptionDetails.exception?.description ?? result.exceptionDetails.text)
     return result.result?.value
   }

@@ -414,7 +414,13 @@ export async function pageState(wc: PageHandle): Promise<string> {
 }
 
 export function exec<T>(wc: PageHandle, code: string, ms = 8000): Promise<T> {
-  return withTimeout(wc.executeJavaScript(code, true) as Promise<T>, ms)
+  /*
+   * The page's own limit is told what this one needs.
+   *
+   * A little more than the wrapper's, so whichever gives way first it is this timeout rather than a layer underneath
+   * reporting that the browser never answered -- which is true and useless.
+   */
+  return withTimeout(wc.executeJavaScript(code, true, ms + 2000) as Promise<T>, ms)
 }
 
 /** A key pressed in the page as real keyboard input; never acts as a browser shortcut. */
