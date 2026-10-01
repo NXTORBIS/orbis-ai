@@ -6,15 +6,17 @@ import { createEyes, describeCapabilities, describeWorld } from './perceive.ts'
 import {
   MAX_REPEATS,
   MAX_REPLANS,
+  fillIn,
   nextPass,
   describeOutcome,
   groundPlan,
   newTask,
   runnable,
   settle,
+  settleConditions,
   stuck
 } from '../../shared/orbTask.ts'
-import type { OrbStep, OrbTaskState, Perception } from '../../shared/orbTask.ts'
+import type { OrbCondition, OrbStep, OrbTaskState, Perception } from '../../shared/orbTask.ts'
 import { isFollowUp, needsContext, resolve } from '../../shared/orbReference.ts'
 import { looksLikeScheduleRequest, readRequest } from '../../shared/temporal/phrase.ts'
 import { asEvidence, holdsSecret, isConsequential, redact, refusedProtection } from '../../shared/orbSafety.ts'
@@ -74,6 +76,30 @@ function jsonFrom(answer: string): unknown {
 }
 
 /** Steps as a planner returned them, made into the shape the loop runs. Anything malformed is dropped, not repaired. */
+/**
+ * A condition from the plan, reduced to the few shapes it is allowed to have.
+ *
+ * Anything else is dropped rather than approximated, and a dropped condition means the step simply runs -- which is
+ * the safe direction for a read and is why `groundPlan` is what stops a mutating step being planned on a guess. The
+ * point of the narrow shape is that a condition can never be anything a page could turn into an instruction: there is
+ * no expression here to evaluate, only a name and a comparison.
+ */
+function readCondition(raw: unknown): OrbCondition | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+  const o = raw as Record<string, unknown>
+  const of = typeof o.of === 'string' ? o.of.trim().slice(0, 80) : ''
+  if (!of || !/^[A-Za-z0-9_.]+$/.test(of)) return null
+
+  const when: OrbCondition = { of }
+  if (o.is === 'present' || o.is === 'empty' || o.is === 'true' || o.is === 'false') when.is = o.is
+  else if (typeof o.equals === 'string' || typeof o.equals === 'number' || typeof o.equals === 'boolean') when.equals = o.equals
+  else if (typeof o.contains === 'string') when.contains = o.contains.slice(0, 200)
+  else if (Number.isFinite(Number(o.atLeast))) when.atLeast = Number(o.atLeast)
+  else if (Number.isFinite(Number(o.atMost))) when.atMost = Number(o.atMost)
+  if (o.not === true) when.not = true
+  return when
+}
+
 function readSteps(raw: unknown): OrbStep[] {
   const out: OrbStep[] = []
   for (const [i, item] of (Array.isArray(raw) ? raw : []).entries()) {
@@ -100,6 +126,7 @@ function readSteps(raw: unknown): OrbStep[] {
       ...(Number.isFinite(Number(o.repeat)) && Number(o.repeat) > 1
         ? { repeat: Math.min(Math.trunc(Number(o.repeat)), MAX_REPEATS), pass: 1 }
         : {}),
+      ...(readCondition(o.when) ? { when: readCondition(o.when) as OrbCondition } : {}),
       status: 'planned',
       tries: 0
     })
@@ -170,6 +197,16 @@ async function planSteps(
     '- To do something repeatedly, give the steps that repeat the same "group" name and put "repeat": <times> on the first of them. Do not write the same steps out more than once.',
     '- To wait for something rather than guessing how long it takes, use a waiting capability (media.waitFor for a video, page.waitFor for an element or a page, downloads.waitFor for a download). Never plan a fixed delay when one of those can answer.',
     /*
+     * How to make part of a plan depend on what the browser turns out to say.
+     *
+     * Said here because it is not guessable, and because without it the planner has only two bad options for "close
+     * it if it is a duplicate": decide now, before anything has been looked at, or hand the question back to the
+     * person who already answered it once.
+     */
+    "- To use what an earlier step found, put \"saveAs\" on it and write {{thatName}} in a later step's parameters. Use a path for part of it: {{page.title}}, {{tabs.0.url}}.",
+    '- To make a step happen only sometimes, give it "when": {"of": "<a saveAs name, optionally with a path>", and one of "is": "present"|"empty"|"true"|"false", "equals": <value>, "contains": "<text>", "atLeast": <number>, "atMost": <number>}. Add "not": true for the opposite. A step whose condition turns out false is skipped, and so is anything that was only there to use its result.',
+    '- "Otherwise" is two steps with opposite conditions on the same thing, not a different kind of step.',
+    /*
      * Which of two things a request about the browser is about.
      *
      * The failure this prevents is specific and was the most embarrassing one available: somebody says "open browser
@@ -185,7 +222,7 @@ async function planSteps(
     '- Say which stretch of time by name ("today", "last-hour", "yesterday", "everything"), never by computing a timestamp. You do not know what time it is.',
     '- If the request needs no browser action at all, return an empty array.',
     '',
-    'Reply with only a JSON array of {"id","name","capability","params","needs","saveAs","group","repeat"}.'
+    'Reply with only a JSON array of {"id","name","capability","params","needs","saveAs","group","repeat","when"}.'
   ]
     .filter(Boolean)
     .join(NEWLINE)
@@ -407,7 +444,16 @@ export function createOrbHandlers(deps: OrbDeps): Record<string, Handler> {
       while (task.status === 'running') {
         if (signal.aborted) { task.status = 'stopped'; break }
 
-        const go = runnable(task.steps, task.perception.capabilities)
+        /*
+         * The branches that did not happen are written down before anything is chosen to run.
+         *
+         * Here rather than inside `runnable`, because skipping is a change to the plan and `runnable` only reports on
+         * one. A step whose condition came out false becomes a visible "skipped" with a reason, which is an answer --
+         * rather than a step that quietly never ran, which a person reading the run cannot tell from a bug.
+         */
+        task.steps = settleConditions(task.steps, task.variables)
+
+        const go = runnable(task.steps, task.perception.capabilities, task.variables)
         if (!go.length) {
           /*
            * A finished group with passes left goes round again, and that is asked first.
@@ -429,7 +475,7 @@ export function createOrbHandlers(deps: OrbDeps): Record<string, Handler> {
           }
 
           if (task.steps.every((s) => s.status === 'done' || s.status === 'skipped')) { task.status = 'done'; break }
-          if (stuck(task.steps)) { task.status = 'failed'; break }
+          if (stuck(task.steps, task.variables)) { task.status = 'failed'; break }
           break
         }
 
@@ -438,7 +484,14 @@ export function createOrbHandlers(deps: OrbDeps): Record<string, Handler> {
           go.map((s) =>
             // What the registry says about this capability, now, rather than an assumption about its name.
             act(
-              { ...s, status: 'running' },
+              /*
+               * Filled in now, not at planning time.
+               *
+               * A plan is written before the browser has been asked anything, so a step that needs the previous
+               * step's answer could only ever have guessed it. `{{tabs}}` becomes the list that step actually
+               * returned, at the moment this one runs.
+               */
+              { ...s, status: 'running', params: fillIn(s.params, task.variables) },
               emit,
               signal,
               task.perception?.capabilities.find((c) => c.id === s.capability)?.mutates !== false

@@ -120,6 +120,7 @@ export const TEST_FILES = [
   'src/shared/contextEngine.test.ts',
   'src/shared/orbReference.test.ts',
   'src/shared/orbSafety.test.ts',
+  'src/shared/orbConditions.test.ts',
   'src/shared/orbTask.test.ts',
   'src/shared/orbisPlatform.test.ts',
   'src/shared/searchCompare.test.ts',

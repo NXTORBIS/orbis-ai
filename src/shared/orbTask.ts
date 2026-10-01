@@ -127,6 +127,18 @@ export interface OrbStep {
   repeat?: number
   /** Which time round this is, counting from 1. Kept so a person can be told, and so a loop cannot run forever. */
   pass?: number
+  /**
+   * Whether this step happens at all, decided from what an earlier step found.
+   *
+   * "If the meeting has started, join it; otherwise wait." "Close it if it is a duplicate." "If there is a PDF,
+   * summarise it." All of those are one plan whose middle depends on something only the browser can answer, and
+   * without this they are three plans a person has to choose between before anything has been looked at.
+   *
+   * A condition is read, never executed: it names a saved result and says what about it has to be true. Nothing here
+   * evaluates a string of code, because the thing writing these conditions is a language model reading web pages, and
+   * a page that can get an expression evaluated is a page that can do anything.
+   */
+  when?: OrbCondition
   status: 'planned' | 'blocked' | 'running' | 'done' | 'failed' | 'skipped'
   /** What the browser reported. Present once it has run. */
   result?: {
@@ -143,6 +155,132 @@ export interface OrbStep {
 }
 
 /** What the browser actually looked like when the Orb last looked. Never a guess, and never kept past its usefulness. */
+/**
+ * A question about something an earlier step found, in a form that can only ever be a question.
+ *
+ * `of` names a saved result, optionally with a dotted path into it -- `playing.state`, `tabs.0.url`. The rest is how
+ * that value is compared, and exactly one comparison applies: whichever is given. `not` flips the answer, which is how
+ * "otherwise" is said without a second kind of step.
+ */
+export interface OrbCondition {
+  /** The saveAs name of an earlier step, optionally with a dotted path into its result. */
+  of: string
+  /** Present and not empty; absent or empty; truthy; falsy. */
+  is?: 'present' | 'empty' | 'true' | 'false'
+  /** Equal to this, compared as text so "3" and 3 are the same answer. */
+  equals?: string | number | boolean
+  /** Contains this, for text and for lists. */
+  contains?: string
+  /** At least this many, for a number or the length of a list or text. */
+  atLeast?: number
+  /** At most this many. */
+  atMost?: number
+  /** Flips the answer. */
+  not?: boolean
+}
+
+/** The value a condition is about, from the saved results, or undefined when nothing has saved it. */
+export function valueAt(variables: Record<string, unknown>, path: string): unknown {
+  const parts = String(path ?? '')
+    .split('.')
+    .filter(Boolean)
+  let at: unknown = variables
+  for (const part of parts) {
+    if (at === null || at === undefined) return undefined
+    if (Array.isArray(at)) {
+      const index = Number(part)
+      at = Number.isInteger(index) ? at[index] : undefined
+      continue
+    }
+    if (typeof at !== 'object') return undefined
+    at = (at as Record<string, unknown>)[part]
+  }
+  return at
+}
+
+/** The names a plan may put in a parameter to mean "whatever that step found": {{tabs}}, {{page.title}}. */
+export const REFERENCE = /\{\{\s*([A-Za-z0-9_.]+)\s*\}\}/g
+
+/**
+ * Fills a step's parameters in from what earlier steps saved.
+ *
+ * `saveAs` has always named a result; until now nothing could read one, so a plan whose second step needed the first
+ * step's answer had to guess it at planning time -- before the browser had been asked. This is the other end of that:
+ * `{{tabs}}` in a parameter becomes the list the earlier step actually returned.
+ *
+ * A whole-string reference keeps the value's own type, so `{{count}}` arrives as the number 4 rather than the text
+ * "4"; a reference inside a longer string is substituted as text, which is what somebody writing "Notes on {{title}}"
+ * meant. A name nothing has saved is left exactly as written, so it shows up in the failure as the unfilled reference
+ * it is instead of silently becoming the word "undefined".
+ */
+export function fillIn<T>(value: T, variables: Record<string, unknown>, depth = 0): T {
+  if (depth > 6 || value === null || value === undefined) return value
+  if (typeof value === 'string') {
+    const whole = value.match(/^\{\{\s*([A-Za-z0-9_.]+)\s*\}\}$/)
+    if (whole) {
+      const found = valueAt(variables, whole[1])
+      return (found === undefined ? value : found) as unknown as T
+    }
+    return value.replace(REFERENCE, (all, path: string) => {
+      const found = valueAt(variables, path)
+      if (found === undefined) return all
+      return typeof found === 'object' ? JSON.stringify(found) : String(found)
+    }) as unknown as T
+  }
+  if (Array.isArray(value)) return value.map((v) => fillIn(v, variables, depth + 1)) as unknown as T
+  if (typeof value === 'object') {
+    const out: Record<string, unknown> = {}
+    for (const [key, v] of Object.entries(value as Record<string, unknown>)) out[key] = fillIn(v, variables, depth + 1)
+    return out as unknown as T
+  }
+  return value
+}
+
+const size = (value: unknown): number | null => {
+  if (typeof value === 'number') return value
+  if (typeof value === 'string' || Array.isArray(value)) return value.length
+  return null
+}
+
+/**
+ * Whether a condition holds, or cannot be answered yet.
+ *
+ * Three answers, not two, and the third is the important one. A condition about a step that has not run has no
+ * answer -- treating that as false would quietly skip the branch that was supposed to happen, and treating it as true
+ * would run it on nothing. `'unknown'` makes the step wait, which is what somebody who wrote "if the download
+ * finished" meant for the moment before it has.
+ */
+export function judge(condition: OrbCondition | undefined, variables: Record<string, unknown>): true | false | 'unknown' {
+  if (!condition || !condition.of) return true
+  const root = String(condition.of).split('.').filter(Boolean)[0]
+  if (!root || !Object.prototype.hasOwnProperty.call(variables, root)) return 'unknown'
+
+  const value = valueAt(variables, condition.of)
+  const flip = (answer: boolean): boolean => (condition.not ? !answer : answer)
+
+  if (condition.is === 'present') return flip(value !== undefined && value !== null && value !== '' && !(Array.isArray(value) && value.length === 0))
+  if (condition.is === 'empty') return flip(value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0))
+  if (condition.is === 'true') return flip(Boolean(value))
+  if (condition.is === 'false') return flip(!value)
+  // Compared as text, because a model writes "3" where the browser answered 3 and both mean three.
+  if (condition.equals !== undefined) return flip(String(value).toLowerCase() === String(condition.equals).toLowerCase())
+  if (condition.contains !== undefined) {
+    const needle = String(condition.contains).toLowerCase()
+    if (Array.isArray(value)) return flip(value.some((v) => String(v).toLowerCase().includes(needle)))
+    return flip(String(value ?? '').toLowerCase().includes(needle))
+  }
+  if (condition.atLeast !== undefined) {
+    const n = size(value)
+    return n === null ? 'unknown' : flip(n >= condition.atLeast)
+  }
+  if (condition.atMost !== undefined) {
+    const n = size(value)
+    return n === null ? 'unknown' : flip(n <= condition.atMost)
+  }
+  // A condition naming something with no comparison asks whether it is there at all.
+  return flip(value !== undefined && value !== null)
+}
+
 export interface Perception {
   at: number
   /** What the browser can do right now, from the registry itself. */
@@ -280,9 +418,96 @@ export function settle(
   return { ...step, status: 'failed', result, tries, failure: { kind, message, recovery } }
 }
 
-/** A step is ready when everything it needs is done. Anything else waits, and a task of them all waiting is stuck. */
-export const ready = (step: OrbStep, steps: OrbStep[]): boolean =>
-  step.status === 'planned' && step.needs.every((id) => steps.find((s) => s.id === id)?.status === 'done')
+/**
+ * A step is ready when everything it needs is done and its condition holds.
+ *
+ * A step whose condition cannot be answered yet is not ready and not skipped: it waits. A step whose condition is
+ * false is not ready either, and `settleConditions` is what turns that into a skip -- readiness only reports, it does
+ * not decide anybody's fate.
+ */
+export const ready = (step: OrbStep, steps: OrbStep[], variables: Record<string, unknown> = {}): boolean =>
+  step.status === 'planned' &&
+  step.needs.every((id) => {
+    const need = steps.find((s) => s.id === id)?.status
+    /*
+     * A skipped step counts as settled, not as missing.
+     *
+     * "If it is a duplicate, close it, then tell me what is left" -- the telling has to happen whether or not the
+     * closing did. Requiring `done` would leave everything after an untaken branch waiting for a step that is never
+     * going to run, which reads as the task hanging.
+     */
+    return need === 'done' || need === 'skipped'
+  }) &&
+  judge(step.when, variables) === true
+
+/**
+ * Marks the steps whose conditions have turned out false, and everything that only existed for them.
+ *
+ * Called before anything is chosen to run. A false condition is a decision, so it is written into the plan as a skip
+ * rather than left as an absence -- a person reading the run sees "skipped: it was not a duplicate", which is an
+ * answer, instead of a step that silently never happened.
+ *
+ * The cascade is the other half of `if`. A step that needed a skipped step is a step whose reason for existing did not
+ * occur; running it anyway would act on a result nobody produced. Repeated until nothing changes, because a chain can
+ * be any length.
+ */
+export function settleConditions(steps: OrbStep[], variables: Record<string, unknown>): OrbStep[] {
+  /** Which step promised to save each name, so a condition can be traced to the step that would answer it. */
+  const saver = new Map(steps.filter((s) => s.saveAs).map((s) => [String(s.saveAs), s]))
+
+  let out = steps.map((step) => step)
+  for (let pass = 0; pass < steps.length + 2; pass++) {
+    const gone = new Set(out.filter((s) => s.status === 'skipped' || s.status === 'failed').map((s) => s.id))
+
+    const next = out.map((step) => {
+      if (step.status !== 'planned') return step
+      const answer = judge(step.when, variables)
+      if (answer === false) return { ...step, status: 'skipped' as const, failure: undefined }
+
+      /*
+       * A condition nobody is left to answer is false, not unanswered.
+       *
+       * This is the case that would otherwise hang the task. "If it is a duplicate, close it" is asked of a result
+       * that an earlier step was going to save -- and when that earlier step was itself skipped, or failed, the
+       * answer is never coming. Left as unanswered the step waits for ever and the run reads as frozen; read as
+       * false, the branch simply did not happen, which is the truth.
+       */
+      if (answer === 'unknown' && step.when) {
+        const root = String(step.when.of).split('.').filter(Boolean)[0]
+        const who = root ? saver.get(root) : undefined
+        if (!who || gone.has(who.id)) return { ...step, status: 'skipped' as const }
+      }
+
+      /*
+       * And a step that reads a skipped step's result is skipped with it.
+       *
+       * Not every dependent: one that merely comes after an untaken branch should still run, which is why `ready`
+       * counts a skip as settled. Only the ones whose parameters actually mention the name that was never saved --
+       * those would act on nothing.
+       */
+      const reads = new Set<string>()
+      const walk = (value: unknown, depth = 0): void => {
+        if (depth > 5 || value === null || value === undefined) return
+        if (typeof value === 'string') {
+          for (const m of value.matchAll(REFERENCE)) reads.add(m[1].split('.')[0])
+          return
+        }
+        if (Array.isArray(value)) return void value.forEach((v) => walk(v, depth + 1))
+        if (typeof value === 'object') return void Object.values(value as Record<string, unknown>).forEach((v) => walk(v, depth + 1))
+      }
+      walk(step.params)
+      for (const name of reads) {
+        const who = saver.get(name)
+        if (who && gone.has(who.id)) return { ...step, status: 'skipped' as const }
+      }
+      return step
+    })
+
+    if (next.every((s, i) => s.status === out[i].status)) return next
+    out = next
+  }
+  return out
+}
 
 /**
  * The steps that may run now, together.
@@ -291,8 +516,8 @@ export const ready = (step: OrbStep, steps: OrbStep[]): boolean =>
  * commands mutating the same browser at once is how a plan ends up acting on a page that the other one just navigated
  * away from, and the whole point of this file is not doing that.
  */
-export function runnable(steps: OrbStep[], capabilities: CapabilityDescriptor[]): OrbStep[] {
-  const able = steps.filter((s) => ready(s, steps))
+export function runnable(steps: OrbStep[], capabilities: CapabilityDescriptor[], variables: Record<string, unknown> = {}): OrbStep[] {
+  const able = steps.filter((s) => ready(s, steps, variables))
   if (!able.length) return []
   const mutates = (step: OrbStep): boolean => capabilities.find((c) => c.id === step.capability)?.mutates !== false
   const first = able[0]
@@ -347,8 +572,17 @@ export function nextPass(steps: OrbStep[]): { steps: OrbStep[]; group: string; p
 }
 
 /** True when nothing can run and nothing is running: the plan cannot get any further by itself. */
-export const stuck = (steps: OrbStep[]): boolean =>
-  steps.some((s) => s.status === 'planned') && !steps.some((s) => s.status === 'running') && steps.every((s) => s.status !== 'planned' || !ready(s, steps))
+export const stuck = (steps: OrbStep[], variables: Record<string, unknown> = {}): boolean =>
+  steps.some((s) => s.status === 'planned') &&
+  !steps.some((s) => s.status === 'running') &&
+  /*
+   * An unanswered condition counts as unready, not as an exception.
+   *
+   * A step waiting on a question is only waiting while something is still running to answer it -- and the two clauses
+   * above already say nothing is. `settleConditions` turns the unanswerable ones into skips before it gets here, so
+   * what is left at this point genuinely cannot proceed.
+   */
+  steps.every((s) => s.status !== 'planned' || !ready(s, steps, variables))
 
 /**
  * Checks a plan against the browser as it actually is.
