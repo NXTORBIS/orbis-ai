@@ -270,25 +270,35 @@ function wearIcon(tile: HTMLElement, src: string): void {
   tile.replaceChildren(img)
 }
 
-function siteLine(href: string, name: string): HTMLElement {
-  const site = el('span', 'site')
+/**
+ * A site's own icon, or its first letter until the icon arrives.
+ *
+ * Pulled out of `siteLine` so the Sources list can wear the same icons the results do -- they are the same sites, and
+ * a row of numbered boxes says nothing about where a citation goes while a row of icons says it at a glance.
+ *
+ * Null for an Orbis Page, and the absence is the honest thing rather than a gap: a Page is not a site, has no icon to
+ * fetch, and the letter that stands in while one loads would here be a letter that never becomes anything.
+ */
+function faviconTile(href: string, name: string): HTMLElement | null {
+  if (isOrbisPage(href)) return null
   let host = ''
   try {
     host = new URL(href).host.toLowerCase()
   } catch {
     host = ''
   }
-  // An Orbis Page carries no icon, and the absence is the honest thing rather than a gap. A Page is not a site: it
-  // has no favicon to fetch, and the letter tile that stands in for one while a site's icon loads would here be a
-  // letter that never becomes anything -- Orbis drawing a badge for itself in its own results.
-  if (!isOrbisPage(href)) {
-    const tile = el('span', 'favicon letter')
-    tile.textContent = (name || host).replace(/^www\./, '').charAt(0).toUpperCase() || '?'
-    const known = host ? iconKnown.get(host) : undefined
-    if (known) wearIcon(tile, known)
-    else if (host) iconTiles.set(host, [...(iconTiles.get(host) ?? []), tile])
-    site.append(tile)
-  }
+  const tile = el('span', 'favicon letter')
+  tile.textContent = (name || host).replace(/^www\./, '').charAt(0).toUpperCase() || '?'
+  const known = host ? iconKnown.get(host) : undefined
+  if (known) wearIcon(tile, known)
+  else if (host) iconTiles.set(host, [...(iconTiles.get(host) ?? []), tile])
+  return tile
+}
+
+function siteLine(href: string, name: string): HTMLElement {
+  const site = el('span', 'site')
+  const tile = faviconTile(href, name)
+  if (tile) site.append(tile)
   site.append(el('span', undefined, name))
   return site
 }
@@ -1100,10 +1110,18 @@ function drawOrion(): void {
       const a = el('a', 'source')
       a.id = `src${i + 1}`
       a.href = href
-      a.title = source.snippet
-      const st = el('span', 'st')
-      st.append(el('b', undefined, source.title), el('small', undefined, source.site))
-      a.append(el('span', 'n', String(i + 1)), st)
+      // The whole row on hover: the title, the site, and what the citation was about.
+      a.title = `${source.title} — ${source.site}${source.snippet ? `\n\n${source.snippet}` : ''}`
+      /*
+       * Icon, title, number. In that order and that importance.
+       *
+       * It used to lead with a large numbered box, which is the least useful thing on the row: the number matters
+       * when following a citation from the text, and the rest of the time it is a box of nothing. The site's own icon
+       * says where the link goes before a word is read, so it goes first and the number shrinks to a quiet marker.
+       */
+      const tile = faviconTile(href, source.site)
+      if (tile) a.append(tile)
+      a.append(el('span', 'srct', source.title), el('span', 'n', String(i + 1)))
       li.append(a)
       ol.append(li)
     })

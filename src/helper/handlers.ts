@@ -382,11 +382,21 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
     ...(deps.dataDir
       ? createMemoryHandlers({ userData: deps.dataDir, profileId: () => deps.profileId })
       : {}),
-    // The comparison tray: search results pinned side by side, and compared from what their pages say. It needs
-    // somewhere to keep the pins and a way to ask Orion; without either it does not exist, rather than half existing.
-    ...(deps.dataDir && deps.apiKeys.length
+    /*
+     * The comparison tray: search results pinned side by side, and compared from what their pages say.
+     *
+     * Gated on somewhere to keep the pins, and nothing else. It used to also require a model key, which had a
+     * consequence worth spelling out: with no key the channels simply did not exist, so the pin button on every
+     * result was offered, pressed, and answered with "Orbis could not change the tray just now" -- a control that
+     * looks live and is not, which is the one thing this codebase tries hardest never to ship.
+     *
+     * Pinning, unpinning and listing need no model at all. Only the comparison does, and it says so itself when
+     * asked without one.
+     */
+    ...(deps.dataDir
       ? createTrayHandlers({
           store: () => trayStore(deps.dataDir!),
+          hasModel: () => deps.apiKeys.length > 0,
           fetchFn: doFetch as unknown as typeof fetch,
           ask: async (prompt, signal) => {
             let text = ''

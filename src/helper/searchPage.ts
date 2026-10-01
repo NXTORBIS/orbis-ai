@@ -247,6 +247,34 @@ async function proposeRelatedSearches(query: string, ask: SearchPageDeps['ask'],
 }
 
 /**
+ * Whether the results themselves say this is a real subject.
+ *
+ * A bare name -- "lakshya sen" -- is only a guess to the intent reader, and deliberately so: capitalised words are
+ * not evidence, and drawing a panel from a guess is how a panel comes to look authoritative about nothing. So the
+ * evidence is asked for elsewhere. A reference work having an article whose title is the query is exactly that
+ * evidence, and it is the reason the side of the page is empty for a person everyone has heard of.
+ *
+ * Deliberately narrow. It wants a reference site, and it wants that article to be about the query rather than merely
+ * to mention it: every word of the query has to be in the title. "the weather" matches nothing; "lakshya sen"
+ * matches the article about him. Even then the panel is only drawn if grounded facts survive the check above.
+ */
+function referenceMatches(query: string, results: NormalizedResult[]): boolean {
+  const words = query
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]+/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length > 1)
+  // One word is too thin: "physics" has a Wikipedia article and is not a subject anybody wants a panel about.
+  if (words.length < 2 || words.length > 6) return false
+
+  return results.slice(0, 6).some((r) => {
+    if (!/wikipedia\.org|britannica\.com|imdb\.com|\.gov\b|\.edu\b/i.test(r.url)) return false
+    const title = (r.title ?? '').toLowerCase()
+    return words.every((w) => title.includes(w))
+  })
+}
+
+/**
  * The knowledge panel, built from one page that was read (§9, §10, §11).
  *
  * A reference page is chosen from the results, fetched, and the facts are pulled from its text and checked against it.
@@ -279,15 +307,33 @@ async function buildPanel(query: string, u: Understanding, results: NormalizedRe
   const parsed = jsonFrom(said)
   if (!parsed || typeof parsed !== 'object') return null
 
-  // Facts are kept only when the page really says them, exactly as the tray checks its cells.
-  const haystack = text.toLowerCase()
+  /*
+   * Facts are kept only when the page really says them -- but "says" compares the words, not the spacing.
+   *
+   * A straight `includes` on the raw text threw away nearly everything true: a page that reads
+   * "16 August 2001 (age 25)" with a non-breaking space does say the date, and "1.79 m" is the same fact as
+   * "1.79 m" written with a thin space. Those near misses are why the panel was almost never drawn.
+   *
+   * So both sides are flattened the same way -- lowercased, every run of anything that is not a letter or a digit
+   * collapsed to one space -- and the check is still a substring of the real page text. Nothing is accepted that the
+   * page does not contain; the comparison simply stops being defeated by punctuation.
+   */
+  const flatten = (value: string): string =>
+    value
+      .toLowerCase()
+      .replace(/[\u00a0\u2007\u202f\u2009]/g, ' ')
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim()
+  const haystack = flatten(text)
+  const says = (value: string): boolean => {
+    const flat = flatten(value)
+    return flat.length > 0 && haystack.includes(flat)
+  }
+
   const o = parsed as Record<string, unknown>
-  const facts = (Array.isArray(o.facts) ? o.facts : []).filter((f) => {
-    const value = String((f as Record<string, unknown>)?.value ?? '').trim().toLowerCase()
-    return value.length > 0 && haystack.includes(value)
-  })
+  const facts = (Array.isArray(o.facts) ? o.facts : []).filter((f) => says(String((f as Record<string, unknown>)?.value ?? '')))
   const about = String(o.about ?? '')
-  const aboutWords = about.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 3)
+  const aboutWords = flatten(about).split(' ').filter((w) => w.length > 3)
   const aboutGrounded = aboutWords.length > 0 && aboutWords.filter((w) => haystack.includes(w)).length / aboutWords.length >= 0.75
 
   return buildKnowledge(
@@ -501,7 +547,9 @@ export function createSearchPageHandlers(deps: SearchPageDeps): Record<string, H
 
       // ---- the parts that need reading and asking. Each guarded so one failure is one section.
       const [knowledge, questions, related, relatedSearches, comparison] = await Promise.all([
-        wanted.has('knowledge') ? buildPanel(searched, u, results, deps, signal).catch(() => null) : Promise.resolve(null),
+        wanted.has('knowledge') || referenceMatches(searched, results)
+          ? buildPanel(searched, u, results, deps, signal).catch(() => null)
+          : Promise.resolve(null),
         wanted.has('peopleAlsoAsk') ? proposeQuestions(searched, results, deps.ask, signal).catch(() => []) : Promise.resolve([]),
         wanted.has('peopleAlsoSearchFor') ? proposeRelated(searched, results, deps.ask, signal).catch(() => []) : Promise.resolve([]),
         wanted.has('relatedSearches') ? proposeRelatedSearches(searched, deps.ask, signal).catch(() => []) : Promise.resolve([]),

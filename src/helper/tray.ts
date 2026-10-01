@@ -27,6 +27,8 @@ export interface TrayDeps {
   store(): TrayStore | null | undefined
   /** One question to Orion, answered in full. The same chat the rest of Orbis uses; this does not pick a model. */
   ask(prompt: string, signal: AbortSignal): Promise<string>
+  /** Whether Orion can be asked at all. Only the comparison needs it; pinning does not. */
+  hasModel(): boolean
   fetchFn: typeof fetch
 }
 
@@ -196,6 +198,19 @@ export function createTrayHandlers(deps: TrayDeps): Record<string, Handler> {
      * and returns only what the pages were found to support.
      */
     'tray:compare': async (_args, { emit, signal }): Promise<{ comparison: Comparison; summary: string }> => {
+      /*
+       * The one part that needs a model.
+       *
+       * Reading the pinned pages and working out what they can be compared on is the whole job here, and there is no
+       * doing it without Orion. Said plainly, at the moment somebody asks, rather than by the feature quietly not
+       * existing -- which is what used to happen, and it took the pin button down with it.
+       */
+      if (!deps.hasModel()) {
+        throw new HelperError(
+          'unavailable',
+          'Comparing pinned pages needs Orion, and there is no model key set. Pinning still works.'
+        )
+      }
       const it = store()
       let items = await it.all()
       if (!items.length) throw new HelperError('bad-request', 'Nothing is pinned yet.')

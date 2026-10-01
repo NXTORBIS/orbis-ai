@@ -60,6 +60,9 @@
   --pill-bg: rgba(255,255,255,0.06);
   --pill-bg-strong: rgba(255,255,255,0.11);
   --pill-border: rgba(255,255,255,0.12);
+  --bg-center: #0e1013;
+  --bg-mid: #060708;
+  --bg-edge: #000000;
 }
 @media (prefers-color-scheme: light) { :root:not([data-theme='dark']) {
   --bg: #d9dfe8;
@@ -92,6 +95,9 @@
   --pill-bg: rgba(40,90,170,0.06);
   --pill-bg-strong: rgba(40,90,170,0.11);
   --pill-border: rgba(60,100,170,0.16);
+  --bg-center: #e8ecf1;
+  --bg-mid: #d9dfe8;
+  --bg-edge: #cad2dd;
 } }
 :root[data-theme='light'] {
   --bg: #d9dfe8;
@@ -124,4 +130,7 @@
   --pill-bg: rgba(40,90,170,0.06);
   --pill-bg-strong: rgba(40,90,170,0.11);
   --pill-border: rgba(60,100,170,0.16);
+  --bg-center: #e8ecf1;
+  --bg-mid: #d9dfe8;
+  --bg-edge: #cad2dd;
 }

@@ -1,9 +1,48 @@
 :root { --panel: var(--surface); --panel2: var(--input-bg); --line: var(--border); color-scheme: dark light; }
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
-body { display: grid; place-items: center; background: radial-gradient(1200px 600px at 50% 30%, var(--surface), var(--bg)); color: var(--text); font: 15px/1.5 var(--font-sans); }
-main { width: min(680px, 92vw); display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: -6vh; }
-.logo { filter: drop-shadow(0 0 28px rgba(63, 216, 255, 0.25)); }
+/*
+ * The same background the chat draws.
+ *
+ * It was a different gradient in different colours, which made the two halves of one product look like two products
+ * -- and meant a change to how Orbis looks reached one of them. Same three colours, same shape, from the same tokens,
+ * so an appearance change now shows up in both.
+ *
+ * `--preset-background` is honoured for the same reason: a preset that repaints the chat should repaint this too.
+ */
+body {
+  display: grid;
+  place-items: center;
+  background: var(
+    --preset-background,
+    radial-gradient(ellipse 80% 70% at 50% 45%, var(--bg-center) 0%, var(--bg-mid) 55%, var(--bg-edge) 100%)
+  );
+  color: var(--text);
+  font: 15px/1.5 var(--font-sans);
+}
+/*
+ * The column, sitting slightly above centre.
+ *
+ * `-6vh` was enough of a lift when the mark was 120px wide; with a smaller mark the whole column reads as too high,
+ * so the lift comes down with it and the group sits where the eye expects it.
+ */
+main { width: min(680px, 92vw); display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: -3vh; }
+
+/*
+ * The mark.
+ *
+ * Smaller than it was: at 120px it was the loudest thing on an otherwise quiet page, and this page is for typing an
+ * address rather than for looking at a logo. The glow comes down with it -- a 28px shadow around a 76px mark is a
+ * halo wider than the mark itself.
+ *
+ * Sized in CSS rather than only by the `width` attribute so it scales with a narrow window instead of overflowing.
+ */
+.logo {
+  width: clamp(56px, 7vw, 76px);
+  height: auto;
+  margin-bottom: 2px;
+  filter: drop-shadow(0 0 16px rgba(63, 216, 255, 0.18));
+}
 /* The greeting, as the Electron browser set it: Orbitron at 700, filled with a gradient from the brightest text
    colour to the muted one. It is the one place Orbis speaks in its display face rather than its reading face. */
 h1 { margin: 6px 0 0; padding: 0 32px; font-family: var(--font-display); font-size: clamp(28px, 2.2vw, 40px); font-weight: 700;

@@ -4,7 +4,18 @@ export const MAX_SHORTCUTS = 24
 export const MAX_TILES = 10
 export const MAX_IMAGE_BYTES = 2_000_000
 export const GRADIENTS = [
-  { id: 'orbis', name: 'Orbis night', css: 'radial-gradient(1200px 600px at 50% 30%, #101622, #0b0e14)' },
+  /*
+   * The Orbis background is the one the chat draws, not a copy of it in different colours.
+   *
+   * It used to be three hardcoded hexes, applied as an inline style -- which beat the stylesheet, ignored the theme,
+   * and meant a light theme or an appearance preset reached the chat and stopped at the new tab. Written in the
+   * shared tokens it follows both, and `--preset-background` lets a preset repaint this the way it repaints the chat.
+   */
+  {
+    id: 'orbis',
+    name: 'Orbis',
+    css: 'var(--preset-background, radial-gradient(ellipse 80% 70% at 50% 45%, var(--bg-center) 0%, var(--bg-mid) 55%, var(--bg-edge) 100%))'
+  },
   { id: 'aurora', name: 'Aurora', css: 'linear-gradient(135deg, #0b0e14 0%, #0f2a3a 55%, #12394a 100%)' },
   { id: 'dusk', name: 'Dusk', css: 'linear-gradient(160deg, #0b0e14 0%, #22163a 60%, #3a1d4a 100%)' },
   { id: 'forest', name: 'Forest', css: 'linear-gradient(150deg, #0b0e14 0%, #0f2a1f 100%)' }

@@ -103,13 +103,35 @@ audio.preview { width: 100%; max-width: 360px; height: 32px; margin-top: 6px; }
 .searched { margin: 9px 0 0; color: var(--muted); font-size: 12px; }
 .sources { margin-top: 24px; }
 .sources h4, .earlier h4 { margin: 0 0 9px; font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
-.sources ol { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; }
-.source { display: flex; align-items: center; gap: 9px; padding: 9px 11px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; text-decoration: none; min-width: 0; }
-.source:hover, .source.flash { border-color: var(--accent); background: var(--panel2); }
-.source .n { flex: none; width: 20px; height: 20px; display: grid; place-items: center; border-radius: 6px; background: var(--panel2); color: var(--accent); font-size: 11px; font-weight: 700; }
-.source .st { display: flex; flex-direction: column; min-width: 0; }
-.source b { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.source small { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/*
+ * Sources: small, quiet, and wearing their own icons.
+ *
+ * They were wide cards with a loud numbered box and two lines of text each, which made a list of twelve of them the
+ * heaviest thing on the page -- heavier than the answer they support. They are references: they should be readable
+ * at a glance and otherwise stay out of the way.
+ */
+.sources ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.source {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 100%;
+  padding: 5px 10px 5px 7px;
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  text-decoration: none;
+  min-width: 0;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.source:hover, .source.flash { border-color: var(--accent); background: var(--panel); }
+.source .favicon { flex: none; width: 15px; height: 15px; font-size: 9px; }
+.source .favicon img { width: 15px; height: 15px; }
+/* The title carries the row; it is cut rather than allowed to make one chip as wide as the page. */
+.source .srct { font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+/* The number matters when following a citation and at no other time, so it is the quietest thing here. */
+.source .n { flex: none; color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+.source:hover .n, .source.flash .n { color: var(--accent); }
 .followups { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
 .followups .chip { color: var(--text); text-align: left; }
 .follow { position: sticky; bottom: 12px; margin-top: 24px; display: flex; gap: 8px; align-items: flex-end; padding: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); }

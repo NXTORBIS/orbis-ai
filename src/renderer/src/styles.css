@@ -8264,11 +8264,40 @@ html[data-motion='reduced'] *::after {
 
 .cz-body {
   display: grid;
-  grid-template-columns: 220px 1fr;
+  /*
+   * Both columns may shrink.
+   *
+   * `220px 1fr` cannot: the first column refuses to give anything up and the second's minimum is its content, so a
+   * narrow window pushes the whole page sideways and the person has to scroll horizontally to reach a switch. Both
+   * tracks are given a minimum of zero, which is what lets the grid actually be narrow.
+   */
+  grid-template-columns: minmax(0, 220px) minmax(0, 1fr);
   flex: 1;
   min-height: 0;
   gap: 16px;
   padding: 4px 28px 24px;
+  /* Measured for the rules below, because this sits in a panel that is narrow inside a window that is not. */
+  container-type: inline-size;
+  container-name: cz;
+}
+
+/*
+ * Narrow: the list of sections goes above the section.
+ *
+ * A container query rather than a media query, deliberately: the window can be very wide while this panel is not,
+ * and a media query would measure the wrong thing and never fire.
+ */
+@container cz (max-width: 620px) {
+  .cz-body {
+    grid-template-columns: minmax(0, 1fr);
+    padding-inline: 16px;
+  }
+
+  .cz-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
 }
 
 .cz-nav {
@@ -8303,7 +8332,11 @@ html[data-motion='reduced'] *::after {
   flex-direction: column;
   gap: 6px;
   min-height: 0;
+  /* Zero minimum, or the panel is as wide as its widest row and the page scrolls sideways to reach it. */
+  min-width: 0;
   overflow-y: auto;
+  /* Sideways scrolling inside a settings page is never the right answer; the rows below wrap instead. */
+  overflow-x: hidden;
   padding: 16px 18px;
   border-radius: 14px;
   border: 1px solid var(--glass-border);
@@ -8334,6 +8367,14 @@ html[data-motion='reduced'] *::after {
   align-items: center;
   justify-content: space-between;
   gap: 14px;
+  /*
+   * Wraps rather than overflowing.
+   *
+   * A long label beside a control with a minimum width has no way to fit on one line, and without this the row simply
+   * grows past the panel -- which is where the sideways scrolling came from. Wrapping puts the control underneath
+   * instead, which is readable at any width.
+   */
+  flex-wrap: wrap;
   padding: 8px 2px;
   border-bottom: 1px solid var(--line-strong);
   font-size: 13px;
@@ -8348,6 +8389,22 @@ html[data-motion='reduced'] *::after {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  /* Takes the space that is left and gives it up when there is none, rather than forcing the row wider. */
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+/* The explanation under a label wraps; it is a sentence, not a value. */
+.cz-row > span small {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Everything on the right of a row: never wider than the row, never forcing it open. */
+.cz-row > *:not(span) {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .cz-row small {
@@ -8355,7 +8412,9 @@ html[data-motion='reduced'] *::after {
 }
 
 .cz-row input[type='range'] {
-  flex: 1;
+  /* A slider is happy at any width; a fixed minimum on it is what stops the row fitting. */
+  flex: 1 1 140px;
+  min-width: 0;
   max-width: 220px;
   accent-color: var(--cyan);
 }
@@ -8368,13 +8427,23 @@ html[data-motion='reduced'] *::after {
 
 .cz-row select {
   height: 30px;
-  min-width: 190px;
+  /*
+   * A preferred width rather than a floor.
+   *
+   * `min-width: 190px` is a promise the layout cannot always keep: in a narrow panel it is the single thing that
+   * makes a row wider than the space there is. It asks for 190px and settles for less.
+   */
+  flex: 0 1 190px;
+  min-width: 0;
+  max-width: 100%;
   padding: 0 8px;
   border-radius: 8px;
   border: 1px solid var(--pill-border);
   background: var(--pill-bg);
   color: var(--text);
   font: 12px var(--font);
+  /* The chosen value is cut with an ellipsis rather than pushing the control open. */
+  text-overflow: ellipsis;
 }
 
 .cz-accents {
@@ -8685,13 +8754,17 @@ html[data-motion='reduced'] *::after {
   border-radius: 12px;
   border: 1px solid var(--line-strong);
   background: var(--pill-bg-strong);
+  min-width: 0;
 }
 
 .cz-widget-top {
   display: flex;
   align-items: center;
   gap: 8px;
+  /* A widget's name, its size and its buttons do not fit on one line in a narrow panel, so they stop trying to. */
+  flex-wrap: wrap;
   font-size: 13px;
+  min-width: 0;
 }
 
 .cz-widget-top b {
@@ -8706,6 +8779,8 @@ html[data-motion='reduced'] *::after {
 .cz-widget-settings select,
 .cz-widget-settings input[type='text'],
 .cz-widget-settings input[type='number'] {
+  min-width: 0;
+  max-width: 100%;
   padding: 4px 6px;
   border-radius: 8px;
   border: 1px solid var(--line-strong);
@@ -8717,6 +8792,16 @@ html[data-motion='reduced'] *::after {
 
 .cz-widget-settings {
   margin-top: 4px;
+  min-width: 0;
+}
+
+/* A widget's own settings are rows too, and wrap the same way rather than reaching past the panel. */
+.cz-widget-settings label {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
 }
 
 .cz-search {
@@ -11698,7 +11783,13 @@ html[data-motion='reduced'] .tool-btn.recording {
    "what would Orbis look like" rather than a row of names. */
 .cz-presets {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  /*
+   * `min()` rather than a flat 168px.
+   *
+   * With a flat minimum, a panel narrower than 168px still lays out a 168px column and the cards hang over the edge.
+   * Taking the smaller of the two means the card is never wider than what it has.
+   */
+  grid-template-columns: repeat(auto-fill, minmax(min(168px, 100%), 1fr));
   gap: 10px;
   margin: 12px 0 18px;
 }
@@ -11745,6 +11836,10 @@ html[data-motion='reduced'] .tool-btn.recording {
   padding: 8px 10px 2px;
   font-size: 13px;
   font-weight: 600;
+  /* A long preset name is cut, not allowed to stretch its card past the others. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .cz-preset-why {
   display: block;

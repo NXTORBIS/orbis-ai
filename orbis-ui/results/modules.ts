@@ -508,8 +508,17 @@ function askNode(questions: AskedQuestion[], results: NormalizedResult[]): HTMLE
         .then((answered: AskedQuestion) => {
           body.replaceChildren()
           if (!answered?.answer) {
-            // Not a hedge and not an invention: nothing supported an answer, so that is what it says.
-            body.append(el('p', 'mod-none', NO_ANSWER))
+            /*
+             * Nothing supported an answer, so the question goes.
+             *
+             * It used to say so and stay, which reads as a section of questions Orbis cannot answer -- and after two
+             * or three of those the whole section is worth less than the space it takes. A question with no answer
+             * behind it was never worth offering, so it is taken out, and when the last one goes the section goes
+             * with it rather than leaving a heading over nothing.
+             */
+            const holder = item.parentElement
+            item.remove()
+            if (holder && holder.childElementCount === 0) box.remove()
             return
           }
           body.append(el('p', undefined, answered.answer.text))

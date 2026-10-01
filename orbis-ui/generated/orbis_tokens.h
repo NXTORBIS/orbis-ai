@@ -38,6 +38,9 @@ constexpr uint32_t kMutedStrong = 0xFFC6CAD2;
 constexpr uint32_t kPillBg = 0x0FFFFFFF;
 constexpr uint32_t kPillBgStrong = 0x1CFFFFFF;
 constexpr uint32_t kPillBorder = 0x1FFFFFFF;
+constexpr uint32_t kBgCenter = 0xFF0E1013;
+constexpr uint32_t kBgMid = 0xFF060708;
+constexpr uint32_t kBgEdge = 0xFF000000;
 }  // namespace dark
 
 namespace light {
@@ -70,6 +73,9 @@ constexpr uint32_t kMutedStrong = 0xFF33465E;
 constexpr uint32_t kPillBg = 0x0F285AAA;
 constexpr uint32_t kPillBgStrong = 0x1C285AAA;
 constexpr uint32_t kPillBorder = 0x293C64AA;
+constexpr uint32_t kBgCenter = 0xFFE8ECF1;
+constexpr uint32_t kBgMid = 0xFFD9DFE8;
+constexpr uint32_t kBgEdge = 0xFFCAD2DD;
 }  // namespace light
 
 // Sizes in DIPs.
