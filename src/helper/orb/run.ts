@@ -16,6 +16,7 @@ import {
 } from '../../shared/orbTask.ts'
 import type { OrbStep, OrbTaskState, Perception } from '../../shared/orbTask.ts'
 import { isFollowUp, needsContext, resolve } from '../../shared/orbReference.ts'
+import { looksLikeScheduleRequest, readRequest } from '../../shared/temporal/phrase.ts'
 import { asEvidence, holdsSecret, isConsequential, redact, refusedProtection } from '../../shared/orbSafety.ts'
 
 /**
@@ -249,6 +250,56 @@ export function createOrbHandlers(deps: OrbDeps): Record<string, Handler> {
     'orb:ask': async ([raw], { emit, signal }): Promise<{ task: OrbTaskState; answer: string }> => {
       const request = typeof raw === 'string' ? raw.trim().slice(0, 4000) : ''
       if (!request) throw new HelperError('bad-request', 'Ask Orbis something.')
+
+      /*
+       * "Tomorrow at nine" is not a browser task, it is a time.
+       *
+       * Asked before anything is perceived or planned, because planning it would be planning to do it now -- which
+       * is precisely what somebody who said tomorrow did not ask for. The Orb hands it to the scheduler Orbis
+       * already has; it does not keep a clock of its own.
+       *
+       * The same strict reader the chat uses, behind the same gate: a message has to begin like a request and carry
+       * no "I" and no question mark, because "every day I open this and it is slow" parses perfectly and is not a
+       * request to open it every day.
+       */
+      if (deps.has('schedules:add') && looksLikeScheduleRequest(request)) {
+        const reading = readRequest(request, Date.now())
+        if (reading.ok) {
+          const task = newTask(`t${Date.now().toString(36)}`, request)
+          emit({ type: 'status', message: 'Setting that up for later…' })
+          const kept = (await deps
+            .channel('schedules:add', [{ phrase: request }], { emit, signal })
+            .catch(() => null)) as { ok?: boolean; said?: string; problems?: string[]; why?: string } | null
+
+          if (kept && kept.ok) {
+            task.status = 'done'
+            task.outcome = `Scheduled: ${kept.said ?? reading.said}`
+            emit({ type: 'outcome', status: 'done', text: task.outcome })
+            /*
+             * Said with what it cannot do, every time.
+             *
+             * A schedule somebody believes will run with their computer off is one they find out about after the
+             * moment has gone, which is not recoverable. It is one sentence and it belongs here.
+             */
+            return {
+              task,
+              answer: `${task.outcome}. It runs on this computer with Orbis open; if Orbis is closed when it is due, I do it next time you open it and say how late it was.`
+            }
+          }
+
+          const why = (kept && (kept.problems?.[0] ?? kept.why)) ?? 'Orbis could not keep that schedule.'
+          task.status = 'failed'
+          task.outcome = why
+          emit({ type: 'outcome', status: 'failed', text: why })
+          return { task, answer: why }
+        }
+        /*
+         * A phrase that could not be read falls through to the ordinary path.
+         *
+         * Being told "I could not find a time in that" for a sentence that was never about a time is worse than an
+         * ordinary answer, and some of them are real browser tasks that merely open like a schedule.
+         */
+      }
 
       // ---- a protection is not an obstacle. Refused in words, before anything is perceived or planned.
       const refused = refusedProtection(request)
