@@ -332,3 +332,109 @@ test('with no query, everything is listed', () => {
   const { control } = makeControl()
   assert.ok(control.list({}).length >= 2)
 })
+
+test('the same change asked for twice at once happens once', async () => {
+  /*
+   * An event arriving as the click that caused it arrives. Two tabs is an annoyance; two meetings joined is being in a
+   * call twice, and a second deletion fails and is reported as a failure of something that in fact succeeded.
+   */
+  let ran = 0
+  const control = new BrowserControl()
+  let joined = false
+  control.register({
+    id: 'meeting.join',
+    domain: 'page',
+    name: 'Join the meeting',
+    description: 'Joins a meeting once, however many times it is asked for.',
+    params: {},
+    mutates: true,
+    confirmation: 'none',
+    run: async () => {
+      ran += 1
+      await new Promise((r) => setTimeout(r, 30))
+      joined = true
+      return { ran }
+    },
+    verify: () => ({ verified: joined, detail: 'in the call' })
+  })
+
+  const both = await Promise.all([
+    control.execute({ capability: 'meeting.join', params: {} }, {}),
+    control.execute({ capability: 'meeting.join', params: {} }, {})
+  ])
+  assert.equal(ran, 1, 'it ran once')
+  assert.ok(both.every((r) => r.ok), 'and both callers were told it worked, not that they were too late')
+
+  // Once it has finished, asking again is a new request and does happen.
+  await control.execute({ capability: 'meeting.join', params: {} }, {})
+  assert.equal(ran, 2)
+})
+
+test('different parameters are different calls, and reads are never shared', async () => {
+  let opened: string[] = []
+  let read = 0
+  const control = new BrowserControl()
+  control.register({
+    id: 'tabs.open',
+    domain: 'tabs',
+    name: 'Open a tab',
+    description: 'Opens a tab at an address, which is a different act for a different address.',
+    params: { url: { type: 'string', description: 'Where.' } },
+    mutates: true,
+    confirmation: 'none',
+    run: async (p) => {
+      await new Promise((r) => setTimeout(r, 20))
+      opened.push(String(p.url))
+      return { url: p.url }
+    },
+    verify: (d) => ({ verified: opened.includes(String((d as { url: string }).url)), detail: 'open' })
+  })
+  control.register({
+    id: 'tabs.count',
+    domain: 'tabs',
+    name: 'Count tabs',
+    description: 'How many tabs there are, which two callers may each want to know for themselves.',
+    params: {},
+    mutates: false,
+    confirmation: 'none',
+    run: async () => {
+      read += 1
+      await new Promise((r) => setTimeout(r, 20))
+      return { count: opened.length }
+    }
+  })
+
+  await Promise.all([
+    control.execute({ capability: 'tabs.open', params: { url: 'https://a' } }, {}),
+    control.execute({ capability: 'tabs.open', params: { url: 'https://b' } }, {}),
+    control.execute({ capability: 'tabs.count', params: {} }, {}),
+    control.execute({ capability: 'tabs.count', params: {} }, {})
+  ])
+  assert.deepEqual(opened.sort(), ['https://a', 'https://b'])
+  assert.equal(read, 2, 'both reads happened, because a shared read answers about an earlier moment')
+})
+
+test('a failed call does not block the retry it is about to be given', async () => {
+  let tries = 0
+  const control = new BrowserControl()
+  control.register({
+    id: 'page.press',
+    domain: 'page',
+    name: 'Press',
+    description: 'Fails the first time, which is what a retry exists for.',
+    params: {},
+    mutates: true,
+    confirmation: 'none',
+    run: () => {
+      tries += 1
+      if (tries === 1) fail('failed', 'not this time', true)
+      return { tries }
+    },
+    verify: () => ({ verified: true, detail: 'pressed' })
+  })
+
+  const first = await control.execute({ capability: 'page.press', params: {} }, {})
+  assert.equal(first.ok, false)
+  const second = await control.execute({ capability: 'page.press', params: {} }, {})
+  assert.equal(second.ok, true, 'the fingerprint was cleared when the first one ended')
+})

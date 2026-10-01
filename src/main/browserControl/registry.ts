@@ -419,7 +419,43 @@ export class BrowserControl {
    * Observe → decide → act → verify. Never reports success for an action that was only sent: a mutating capability
    * either verifies against real state or its run confirmed the change itself.
    */
+  /**
+   * Runs one capability -- and runs it once, however many times it is asked for while it is still running.
+   *
+   * Not a theoretical race. An event arrives at the same moment as the click that caused it; a retry overlaps the
+   * attempt it was retrying; a panel and a plan both act on one thing. And the consequences are not symmetrical: two
+   * tabs is an annoyance, two meetings joined is being in a call twice, and a second deletion fails and is reported as
+   * a failure of something that in fact succeeded.
+   *
+   * The second caller is handed the first call's answer rather than an error, because it asked for something to be
+   * true and that is being made true. Reads are not shared: two reads are two reads, and joining them would mean the
+   * later one answering about an earlier moment.
+   */
   async execute(command: BrowserCommand, context: Omit<ControlContext, 'control' | 'source'> & { source?: ControlSource; runId?: string }): Promise<CommandResult> {
+    const def = this.capabilities.get(command.capability)
+    if (!def?.mutates) return this.perform(command, context)
+
+    const fingerprint = `${def.id}:${JSON.stringify(command.params ?? {})}:${JSON.stringify(command.target ?? context.target ?? null)}`
+    const already = this.inFlight.get(fingerprint)
+    if (already) {
+      this.record('decision', def.id, command.source ?? context.source ?? 'user', context.runId, { decision: 'joined', reason: 'the same call is already running' })
+      return already
+    }
+
+    const running = this.perform(command, context)
+    this.inFlight.set(fingerprint, running)
+    try {
+      return await running
+    } finally {
+      // Cleared whichever way it ended, so a failed call does not block the retry it is about to be given.
+      this.inFlight.delete(fingerprint)
+    }
+  }
+
+  /** One identical mutating call at a time, by capability, parameters and target. */
+  private readonly inFlight = new Map<string, Promise<CommandResult>>()
+
+  private async perform(command: BrowserCommand, context: Omit<ControlContext, 'control' | 'source'> & { source?: ControlSource; runId?: string }): Promise<CommandResult> {
     const started = this.now()
     const source = command.source ?? context.source ?? 'user'
     const ctx: ControlContext = { ...context, source, target: command.target ?? context.target, reason: command.reason ?? context.reason, control: this }
