@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  MAX_REPEATS,
   MAX_TRIES,
   classifyFailure,
   decideRecovery,
@@ -8,6 +9,7 @@ import {
   groundPlan,
   needsConfirming,
   newTask,
+  nextPass,
   ready,
   runnable,
   settle,
@@ -195,4 +197,124 @@ test('a task where everything was confirmed says so, and says it was confirmed',
 
 test('a task with no steps does not claim to have done anything', () => {
   assert.equal(describeOutcome(newTask('t', 'x')), 'Nothing was done.')
+})
+
+// ---------------------------------------------------------------- going round again
+
+const done = (one: OrbStep): OrbStep => ({ ...one, status: 'done', tries: 1, result: { ok: true, attempts: 1 } })
+
+test('a finished group with passes left goes round again, and its steps start clean', () => {
+  /**
+   * "Watch the next five Shorts" is one plan run five times, not five plans. The steps are reset rather than
+   * rebuilt -- and what they did last time is dropped on purpose, because a result from the previous Short is not
+   * evidence about this one. Leaving it would make a loop look like it had already verified a thing it has not done.
+   */
+  const steps = [
+    done(step('a', 'media.waitFor', { group: 'watch', repeat: 3, pass: 1 })),
+    done(step('b', 'page.scroll', { group: 'watch', pass: 1 }))
+  ]
+  const again = nextPass(steps)
+  assert.ok(again)
+  assert.equal(again.pass, 2)
+  assert.equal(again.group, 'watch')
+  assert.ok(again.steps.every((s) => s.status === 'planned'))
+  assert.ok(again.steps.every((s) => s.pass === 2))
+  assert.ok(again.steps.every((s) => s.tries === 0 && s.result === undefined))
+})
+
+test('a group stops exactly when it has been round the number of times asked', () => {
+  const atLast = [
+    done(step('a', 'media.waitFor', { group: 'watch', repeat: 3, pass: 3 })),
+    done(step('b', 'page.scroll', { group: 'watch', pass: 3 }))
+  ]
+  assert.equal(nextPass(atLast), null, 'three of three is finished')
+})
+
+test('a group with a failed step does not go round again', () => {
+  /**
+   * Repeating over a failure turns one problem into fifty. A pass that did not finish is a task to report on, not a
+   * reason to try the same thing again four more times.
+   */
+  const broken = [
+    done(step('a', 'media.waitFor', { group: 'watch', repeat: 5, pass: 1 })),
+    { ...step('b', 'page.scroll', { group: 'watch', pass: 1 }), status: 'failed' as const }
+  ]
+  assert.equal(nextPass(broken), null)
+})
+
+test('a group still part-way through does not go round again', () => {
+  const midway = [
+    done(step('a', 'media.waitFor', { group: 'watch', repeat: 5, pass: 1 })),
+    step('b', 'page.scroll', { group: 'watch', pass: 1 })
+  ]
+  assert.equal(nextPass(midway), null)
+})
+
+test('steps outside the group are left exactly as they are', () => {
+  // The thing that opened YouTube is not part of watching it, and repeating it would open a second tab each time.
+  const steps = [
+    done(step('open', 'tabs.create')),
+    done(step('a', 'media.waitFor', { group: 'watch', repeat: 2, pass: 1 }))
+  ]
+  const again = nextPass(steps)
+  assert.ok(again)
+  assert.equal(again.steps.find((s) => s.id === 'open')?.status, 'done')
+  assert.equal(again.steps.find((s) => s.id === 'a')?.status, 'planned')
+})
+
+test('a plan with no group never loops', () => {
+  assert.equal(nextPass([done(step('a', 'tabs.create')), done(step('b', 'page.click'))]), null)
+})
+
+test('a repeat beyond the limit is held to it, rather than refused', () => {
+  /**
+   * The cap is not a judgement about what somebody might want; it is the line past which a mistake in a plan stops
+   * being a long task and becomes a browser doing something thousands of times unattended.
+   */
+  const steps = [done(step('a', 'page.scroll', { group: 'g', repeat: MAX_REPEATS, pass: MAX_REPEATS }))]
+  assert.equal(nextPass(steps), null)
+
+  const huge = [done(step('a', 'page.scroll', { group: 'g', repeat: 9999, pass: MAX_REPEATS }))]
+  assert.equal(nextPass(huge), null, 'held at the cap however large the number asked for')
+})
+
+test('two groups each keep their own count', () => {
+  const steps = [
+    done(step('a', 'media.waitFor', { group: 'watch', repeat: 2, pass: 1 })),
+    done(step('b', 'page.extract', { group: 'collect', repeat: 3, pass: 2 }))
+  ]
+  const first = nextPass(steps)
+  assert.ok(first)
+  // Whichever comes first, only its own members move.
+  const moved = first.steps.filter((s) => s.status === 'planned').map((s) => s.group)
+  assert.equal(new Set(moved).size, 1)
+})
+
+test('a step that only reads is done when it returned, not when a change is proved', () => {
+  /**
+   * The control layer attaches a verification to anything that changes the browser and omits one from anything that
+   * only looks -- there is no "after" to check when nothing happened. Reading that absence as "the browser did not
+   * confirm it" made every reading step fail, and took every task containing one down with it.
+   */
+  const read = settle(step('r', 'page.read'), { ok: true, data: { title: 'Example' }, attempts: 1 }, false)
+  assert.equal(read.status, 'done')
+  assert.equal(read.failure, undefined)
+})
+
+test('a step that changes something still has to be confirmed', () => {
+  // The guarantee that matters, unchanged: a claim about the world needs the world to agree.
+  const unproven = settle(step('c', 'tabs.create'), {
+    ok: true,
+    verification: { verified: false, detail: 'No new tab appeared.' },
+    attempts: 1
+  })
+  assert.equal(unproven.status, 'failed')
+  assert.equal(unproven.failure?.kind, 'unverified')
+
+  const proven = settle(step('c', 'tabs.create'), {
+    ok: true,
+    verification: { verified: true, detail: 'Tab 7 opened.' },
+    attempts: 1
+  })
+  assert.equal(proven.status, 'done')
 })

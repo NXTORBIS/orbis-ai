@@ -110,6 +110,23 @@ export interface OrbStep {
   saveAs?: string
   /** True when the step failing should not fail the task. */
   optional?: boolean
+  /**
+   * A name shared by the steps that repeat together.
+   *
+   * "Watch the next five Shorts" is not five plans. It is one plan -- wait for this one to end, move on, check the
+   * next one arrived -- run five times. Naming the steps that belong together is what lets them be run again
+   * without the plan being written out five times, and without a second engine to run loops in.
+   */
+  group?: string
+  /**
+   * How many times the group runs in total. Only read from the first step of a group.
+   *
+   * Bounded on purpose. A loop with no end is a task that can never finish, never be cleaned up and never be
+   * honestly reported on, so a plan says how many times or it does not loop.
+   */
+  repeat?: number
+  /** Which time round this is, counting from 1. Kept so a person can be told, and so a loop cannot run forever. */
+  pass?: number
   status: 'planned' | 'blocked' | 'running' | 'done' | 'failed' | 'skipped'
   /** What the browser reported. Present once it has run. */
   result?: {
@@ -223,9 +240,36 @@ export function decideRecovery(kind: FailureKind, tries: number, recoverable: bo
  * that returned ok with no verification is left failed as `unverified`: the control layer checks its own work, and a
  * capability that did not check is not a capability that can be reported as having worked.
  */
-export function settle(step: OrbStep, result: NonNullable<OrbStep['result']>): OrbStep {
+export function settle(
+  step: OrbStep,
+  result: NonNullable<OrbStep['result']>,
+  /**
+   * Whether this capability changes the browser.
+   *
+   * It decides what an absent verification means, and the two meanings are opposite: for something that changes the
+   * world it means nothing proved it happened, and for something that only looks there was never anything to prove.
+   * Unknown defaults to true, which is the safe direction -- a capability nobody could identify is treated as though
+   * it might have changed something.
+   */
+  mutates = true
+): OrbStep {
   const tries = step.tries + 1
   if (result.ok && result.verification?.verified === true) {
+    return { ...step, status: 'done', result, tries, failure: undefined }
+  }
+  /*
+   * A read is done when it returned.
+   *
+   * The control layer attaches a verification to anything that changes the browser and deliberately omits one from
+   * anything that only looks -- there is no "after" to check when nothing happened. This used to be read as "the
+   * browser did not confirm it", so every step that read a page or listed the tabs failed, and any task with a
+   * reading step in it failed with it. Asking a read to prove a change is asking it to prove something it never
+   * claimed.
+   *
+   * The guarantee that matters is untouched: a step that changes anything still needs the browser to say so, and
+   * `verified: false` is still a failure.
+   */
+  if (result.ok && result.verification === undefined && !mutates) {
     return { ...step, status: 'done', result, tries, failure: undefined }
   }
   const kind: FailureKind = result.ok ? 'unverified' : classifyFailure(result.error)
@@ -254,6 +298,52 @@ export function runnable(steps: OrbStep[], capabilities: CapabilityDescriptor[])
   const first = able[0]
   if (mutates(first)) return [first]
   return able.filter((s) => !mutates(s))
+}
+
+/**
+ * The most times a group may be asked to repeat.
+ *
+ * Not a judgement about what somebody might want -- it is the line past which a mistake in a plan stops being a long
+ * task and becomes a browser doing something thousands of times unattended.
+ */
+export const MAX_REPEATS = 50
+
+/**
+ * Sends a finished group round again, when it has passes left.
+ *
+ * Returns the steps unchanged when nothing is owed, so the caller can treat "no loop" and "loop finished" the same.
+ * A group only goes round when every one of its steps is done: a failed step is a failed task, and repeating over a
+ * failure would turn one problem into fifty.
+ */
+export function nextPass(steps: OrbStep[]): { steps: OrbStep[]; group: string; pass: number } | null {
+  const groups = [...new Set(steps.map((s) => s.group).filter((g): g is string => Boolean(g)))]
+  for (const group of groups) {
+    const members = steps.filter((s) => s.group === group)
+    if (!members.length || !members.every((s) => s.status === 'done')) continue
+
+    const total = Math.min(members[0].repeat ?? 1, MAX_REPEATS)
+    const done = members[0].pass ?? 1
+    if (done >= total) continue
+
+    const pass = done + 1
+    return {
+      group,
+      pass,
+      /*
+       * The steps are reset, not rebuilt.
+       *
+       * What they did last time round is deliberately dropped -- a result from the previous Short is not evidence
+       * about this one, and leaving it there is how a loop comes to look like it verified something it has not done
+       * yet.
+       */
+      steps: steps.map((s) =>
+        s.group === group
+          ? { ...s, status: 'planned' as const, pass, tries: 0, result: undefined, failure: undefined }
+          : s
+      )
+    }
+  }
+  return null
 }
 
 /** True when nothing can run and nothing is running: the plan cannot get any further by itself. */

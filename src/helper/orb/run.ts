@@ -4,7 +4,9 @@ import type { PanelControl } from '../browserControl.ts'
 import { PendingApprovals } from '../browser/host.ts'
 import { createEyes, describeCapabilities, describeWorld } from './perceive.ts'
 import {
+  MAX_REPEATS,
   MAX_REPLANS,
+  nextPass,
   describeOutcome,
   groundPlan,
   newTask,
@@ -86,6 +88,17 @@ function readSteps(raw: unknown): OrbStep[] {
       needs: Array.isArray(o.needs) ? o.needs.filter((n): n is string => typeof n === 'string').slice(0, 8) : [],
       ...(typeof o.saveAs === 'string' && o.saveAs ? { saveAs: o.saveAs.slice(0, 40) } : {}),
       ...(o.optional === true ? { optional: true } : {}),
+      /*
+       * A loop, when the plan asked for one.
+       *
+       * Both are read from the plan rather than inferred: steps that belong together say so by sharing a group, and
+       * how many times they go round is a number, not a guess. Clamped, because a plan asking for a thousand passes
+       * is a mistake rather than a request.
+       */
+      ...(typeof o.group === 'string' && o.group ? { group: o.group.slice(0, 40) } : {}),
+      ...(Number.isFinite(Number(o.repeat)) && Number(o.repeat) > 1
+        ? { repeat: Math.min(Math.trunc(Number(o.repeat)), MAX_REPEATS), pass: 1 }
+        : {}),
       status: 'planned',
       tries: 0
     })
@@ -146,9 +159,18 @@ async function planSteps(
     '- Do not repeat anything listed above as already done.',
     '- "needs" lists the ids of steps that must finish first. Steps with no needs may run in any order.',
     '- "saveAs" names a result later steps can use.',
+    /*
+     * How to ask for something to happen repeatedly, and how to wait for something to happen at all.
+     *
+     * Both are said here because neither is guessable from a list of capabilities: a planner that has never been
+     * told a loop exists writes the same three steps out five times, and one that has not been told to wait reaches
+     * for a pause and hopes.
+     */
+    '- To do something repeatedly, give the steps that repeat the same "group" name and put "repeat": <times> on the first of them. Do not write the same steps out more than once.',
+    '- To wait for something rather than guessing how long it takes, use a waiting capability (media.waitFor for a video, page.waitFor for an element or a page, downloads.waitFor for a download). Never plan a fixed delay when one of those can answer.',
     '- If the request needs no browser action at all, return an empty array.',
     '',
-    'Reply with only a JSON array of {"id","name","capability","params","needs","saveAs"}.'
+    'Reply with only a JSON array of {"id","name","capability","params","needs","saveAs","group","repeat"}.'
   ]
     .filter(Boolean)
     .join(NEWLINE)
@@ -167,7 +189,18 @@ export function createOrbHandlers(deps: OrbDeps): Record<string, Handler> {
   let lastAnswer = ''
 
   /** Runs one step against the real browser, and settles it from what the browser reported. */
-  async function act(step: OrbStep, emit: (event: unknown) => void, signal: AbortSignal): Promise<OrbStep> {
+  async function act(
+    step: OrbStep,
+    emit: (event: unknown) => void,
+    signal: AbortSignal,
+    /*
+     * Whether this capability changes anything, from the live registry.
+     *
+     * Settling needs it: an absent verification means "nothing proved this happened" for something that changes the
+     * browser, and "there was never anything to prove" for something that only looks.
+     */
+    mutates = true
+  ): Promise<OrbStep> {
     const control = deps.control()
     if (!control) return settle(step, { ok: false, error: { code: 'unavailable', message: 'The browser is not ready.', recoverable: false }, attempts: 0 })
 
@@ -200,7 +233,7 @@ export function createOrbHandlers(deps: OrbDeps): Record<string, Handler> {
         verification: outcome.verification,
         attempts: outcome.attempts ?? 1
       }
-      return settle(step, result as never)
+      return settle(step, result as never, mutates)
     } catch (error) {
       return settle(step, { ok: false, error: { code: 'failed', message: (error as Error)?.message ?? 'That did not work.', recoverable: true }, attempts: 1 })
     }
@@ -312,12 +345,37 @@ export function createOrbHandlers(deps: OrbDeps): Record<string, Handler> {
         const go = runnable(task.steps, task.perception.capabilities)
         if (!go.length) {
           if (task.steps.every((s) => s.status === 'done' || s.status === 'skipped')) { task.status = 'done'; break }
-          if (stuck(task.steps)) { task.status = 'failed'; break }
+          /*
+         * A finished group with passes left goes round again before anything else is decided.
+         *
+         * Here, at the top of the loop, so a repeat is indistinguishable from the first pass to everything below it:
+         * the same readiness, the same verification, the same recovery. A loop that ran through a different path
+         * would be a second engine wearing the first one's name.
+         */
+        const again = nextPass(task.steps)
+        if (again) {
+          task.steps = again.steps
+          emit({ type: 'status', message: `Round ${again.pass} of ${task.steps.find((x) => x.group === again.group)?.repeat ?? '?'}` })
+          emit({ type: 'pass', group: again.group, pass: again.pass })
+          continue
+        }
+
+        if (stuck(task.steps)) { task.status = 'failed'; break }
           break
         }
 
         // Reads can go together; anything that changes the browser goes alone. runnable() decides which.
-        const done = await Promise.all(go.map((s) => act({ ...s, status: 'running' }, emit, signal)))
+        const done = await Promise.all(
+          go.map((s) =>
+            // What the registry says about this capability, now, rather than an assumption about its name.
+            act(
+              { ...s, status: 'running' },
+              emit,
+              signal,
+              task.perception?.capabilities.find((c) => c.id === s.capability)?.mutates !== false
+            )
+          )
+        )
         for (const finished of done) {
           const at = task.steps.findIndex((s) => s.id === finished.id)
           task.steps[at] = finished
