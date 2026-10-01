@@ -715,10 +715,19 @@ test('every operation returns a new table and leaves the old one alone', () => {
   dropColumn(original, 'age')
   retypeColumn(original, 'age', 'text')
   assert.deepEqual(asGrid(original), before)
-  // Frozen, asserted as frozen-and-unchanged rather than by a thrown error: without "type": "module" these
-  // files run as CommonJS in sloppy mode, where the write below is silently dropped instead of throwing.
+  /*
+   * Frozen and unchanged, which is the invariant, with the write itself allowed to throw or not.
+   *
+   * It used to assume the write would be silently dropped, on the grounds that these files ran as CommonJS in sloppy
+   * mode. They now run as modules, where the same write throws -- so the test failed on an object that was correctly
+   * frozen. Either behaviour is the engine's business; what matters is that the value did not change.
+   */
   assert.ok(Object.isFrozen(original))
-  ;(original as { rows: unknown }).rows = []
+  try {
+    ;(original as { rows: unknown }).rows = []
+  } catch {
+    // Strict mode refuses the write outright, which is the invariant holding more loudly.
+  }
   assert.deepEqual(asGrid(original), before, 'the table was editable in place')
 })
 

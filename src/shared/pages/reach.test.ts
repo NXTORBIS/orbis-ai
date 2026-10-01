@@ -171,8 +171,12 @@ describe('every Pages module is reachable from the application, or says why not'
 
 describe('immutability guards actually fire', () => {
   it('finds no frozen-write guard written as a thrown error', () => {
-    // Such a write is dropped rather than thrown here, so the guard either passes vacuously or -- as happened --
-    // fails while looking like a real defect in the code under test.
+    /*
+     * Whether such a write throws depends on the module mode, not on the code under test.
+     *
+     * So a guard written as `assert.throws` passes vacuously in one mode and fails in the other while looking like a
+     * real defect -- which is exactly what happened when these files stopped being CommonJS.
+     */
     const tests = gitFiles('src/**/*.test.ts')
     const offenders: string[] = []
     for (const path of tests) {
@@ -192,20 +196,22 @@ describe('immutability guards actually fire', () => {
     )
   })
 
-  it('confirms the sloppy-mode behaviour this guard exists for', () => {
-    // If this starts throwing, the package gained "type": "module" and the reasoning above needs revisiting.
+  it('holds whether or not a frozen write throws in this module mode', () => {
+    /*
+     * This used to assert that the write did *not* throw, and it was right at the time: the files ran as CommonJS in
+     * sloppy mode. They now run as modules, so the same write throws -- and the guard failed, saying the module mode
+     * had changed, while three real tests failed on objects that were correctly frozen.
+     *
+     * The invariant was never about throwing. It is that the value does not change, which is true in both modes. So
+     * that is what is asserted, and the guard above stands either way: `assert.throws` around a frozen write is still
+     * the wrong shape, because it passes or fails on the engine's mode rather than on the code under test.
+     */
     const frozen = Object.freeze({ a: 1 })
-    let threw = false
     try {
       ;(frozen as { a: number }).a = 2
     } catch {
-      threw = true
+      // Strict mode refuses it outright. Sloppy mode drops it. Both leave the value alone, which is the point.
     }
-    assert.equal(
-      threw,
-      false,
-      'writes to frozen objects now throw here, so the module mode changed and this guard should be relaxed'
-    )
-    assert.equal(frozen.a, 1, 'the write was dropped, which is what makes the isFrozen assertion the right one')
+    assert.equal(frozen.a, 1, 'a frozen value changed, which is what every isFrozen assertion here relies on')
   })
 })

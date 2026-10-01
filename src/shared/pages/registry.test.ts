@@ -583,10 +583,17 @@ test('every change returns a new register rather than editing the old one', () =
   const archived = archivePage(first.state, first.page.identity.pageId)
   assert.equal(pageById(first.state, first.page.identity.pageId)?.status, 'available', 'the original is untouched')
   assert.equal(pageById(archived, first.page.identity.pageId)?.status, 'archived')
-  // Frozen rather than "assigning throws": without "type": "module" these files run as CommonJS in sloppy mode,
-  // where a write to a frozen property is silently dropped, and a throws() assertion would be testing the module
-  // format instead of the register.
+  /*
+   * Frozen and unchanged, with the write allowed to throw or not.
+   *
+   * It used to assume the write would be silently dropped, because these files ran as CommonJS in sloppy mode. They
+   * now run as modules, where the same write throws -- so the test failed on a register that was correctly frozen.
+   */
   assert.ok(Object.isFrozen(first.state))
-  ;(first.state as { pages: unknown }).pages = []
+  try {
+    ;(first.state as { pages: unknown }).pages = []
+  } catch {
+    // Strict mode refuses the write outright, which is the invariant holding more loudly.
+  }
   assert.equal(first.state.pages.length, 1, 'the register was editable in place')
 })
