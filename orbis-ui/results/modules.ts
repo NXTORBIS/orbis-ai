@@ -326,6 +326,75 @@ function knowledgeNode(entity: KnowledgeEntity): HTMLElement {
   return box
 }
 
+/*
+ * Every row wears its own site's icon.
+ *
+ * This page used to show one only when the search provider happened to supply a `favicon` field, and most do not --
+ * so a page of results was a wall of plain blue links with nothing to tell one site from another at a glance.
+ *
+ * The helper asks each site for its own icon, once per host, the same way the older results page does. Until one
+ * arrives -- and for a site that has none -- the tile carries the site's first letter, so a row is never a hole and
+ * nothing moves when the real icon lands.
+ */
+const iconKnown = new Map<string, string | null>()
+const iconTiles = new Map<string, HTMLElement[]>()
+let iconsAsked = false
+
+function hostOf(href: string): string {
+  try {
+    return new URL(href).host.toLowerCase()
+  } catch {
+    return ''
+  }
+}
+
+function wearIcon(tile: HTMLElement, src: string): void {
+  const img = el('img') as HTMLImageElement
+  img.src = src
+  img.alt = ''
+  img.width = 16
+  img.height = 16
+  img.loading = 'lazy'
+  // A broken icon falls back to the letter rather than leaving a gap where an icon was promised.
+  img.addEventListener('error', () => {
+    tile.classList.add('letter')
+    tile.textContent = tile.dataset.letter ?? '?'
+  })
+  tile.classList.remove('letter')
+  tile.replaceChildren(img)
+}
+
+function siteIcon(href: string, name: string): HTMLElement {
+  const host = hostOf(href)
+  const tile = el('span', 'mod-favicon letter')
+  const letter = (name || host).replace(/^www\./, '').charAt(0).toUpperCase() || '?'
+  tile.dataset.letter = letter
+  tile.textContent = letter
+  const known = host ? iconKnown.get(host) : undefined
+  if (known) wearIcon(tile, known)
+  else if (host) iconTiles.set(host, [...(iconTiles.get(host) ?? []), tile])
+  return tile
+}
+
+/** Asks for every host on the page in one call and puts each icon in place as it arrives. */
+async function paintIcons(): Promise<void> {
+  const wanted = [...iconTiles.keys()].filter((host) => !iconKnown.has(host))
+  if (!wanted.length) return
+  let icons: Record<string, string | null> = {}
+  try {
+    const answer = (await call('favicon:get', [wanted.slice(0, 60)])) as { icons?: Record<string, string | null> }
+    icons = answer?.icons ?? {}
+  } catch {
+    // No icons is a page of letters, which is the fallback working rather than a failure worth saying anything about.
+    return
+  }
+  for (const [host, src] of Object.entries(icons)) {
+    iconKnown.set(host, src)
+    if (!src) continue
+    for (const tile of iconTiles.get(host) ?? []) wearIcon(tile, src)
+  }
+}
+
 /** Ordinary web results, with the site's identity rather than a number (§52, §53). */
 function webNode(results: NormalizedResult[]): HTMLElement {
   const list = el('ol', 'mod-web')
@@ -334,16 +403,14 @@ function webNode(results: NormalizedResult[]): HTMLElement {
     if (!href) continue
     const li = el('li')
     const site = el('div', 'mod-site')
+    // The provider's own icon when it gave one; otherwise the site is asked for its own.
     const icon = safe(result.favicon ?? '')
     if (icon) {
-      const img = el('img')
-      img.src = icon
-      img.alt = ''
-      img.width = 16
-      img.height = 16
-      img.loading = 'lazy'
-      img.addEventListener('error', () => img.remove())
-      site.append(img)
+      const tile = el('span', 'mod-favicon')
+      wearIcon(tile, icon)
+      site.append(tile)
+    } else {
+      site.append(siteIcon(href, result.domain))
     }
     site.append(el('span', undefined, result.domain))
     const link = el('a', 'mod-title')
@@ -675,6 +742,15 @@ export function renderComposedPage(
 
   const problems = unavailableNode(page.unavailable, actions.onRetry)
   if (problems) main.append(problems)
+
+  /*
+   * Ask for the icons once the page exists.
+   *
+   * After the rows are built, so one call covers every host on the page rather than one call per row; and not awaited,
+   * because a page of results should not wait on a row of 16-pixel pictures.
+   */
+  iconsAsked = true
+  void paintIcons()
 
   root.append(main)
   // The panel only exists when there is something in it, so the page does not reserve a column for an absence.

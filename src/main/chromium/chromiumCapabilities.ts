@@ -25,7 +25,7 @@ async function until<T>(read: () => T | Promise<T>, ok: (value: T) => boolean, m
 
 const str = (description: string, required = false): ParamSpec => ({ type: 'string', description, required })
 const bool = (description: string, required = false): ParamSpec => ({ type: 'boolean', description, required })
-const int = (description: string, required = false): ParamSpec => ({ type: 'integer', description, required })
+const int = (description: string, required = false, range?: { min?: number; max?: number }): ParamSpec => ({ type: 'integer', description, required, ...range })
 const TAB_ID = str('The tab id from tabs.list (default: the active tab).')
 
 export interface ChromiumTab {
@@ -118,7 +118,7 @@ export function registerChromiumCapabilities(d: ChromiumCapabilityDeps): void {
     domain: 'tabs',
     name: 'Open a tab',
     description: 'Opens a new tab: blank, or at an address; in the foreground or background, pinned, at a position.',
-    params: { url: str('Address (default: a blank tab).'), active: bool('Switch to it (default true).'), pinned: bool('Pinned.'), index: int('Position (0 = first).') },
+    params: { url: str('Address (default: a blank tab).'), active: bool('Switch to it (default true).'), pinned: bool('Pinned.'), index: int('Position (0 = first).', false, { min: 0 }) },
     mutates: true,
     confirmation: 'none',
     run: async (p) => {
@@ -244,7 +244,7 @@ export function registerChromiumCapabilities(d: ChromiumCapabilityDeps): void {
     domain: 'tabs',
     name: 'Move a tab',
     description: 'Moves a tab to a position in the tab strip (0 = first).',
-    params: { tabId: TAB_ID, index: int('The new position.', true) },
+    params: { tabId: TAB_ID, index: int('The new position.', true, { min: 0 }) },
     mutates: true,
     confirmation: 'none',
     run: async (p) => {

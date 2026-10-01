@@ -540,3 +540,19 @@ audio.preview { width: 100%; max-width: 360px; height: 32px; margin-top: 6px; }
   .imgtile:hover .imgtile-frame { transform: none; }
   .imgchips-row { scroll-behavior: auto; }
 }
+
+/* The site's own icon on a result row, with its first letter standing in until the icon arrives. */
+.mod-favicon {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--muted);
+  overflow: hidden;
+}
+.mod-favicon.letter { background: var(--panel2); }
+.mod-favicon img { width: 16px; height: 16px; display: block; }

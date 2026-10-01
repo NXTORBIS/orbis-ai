@@ -64,6 +64,17 @@ export interface ParamSpec {
   enum?: string[]
   /** Never logged or shown in run status (typed text that may be private, clipboard contents). */
   sensitive?: boolean
+  /**
+   * The range a number may be in.
+   *
+   * Part of what the parameter *is*, not a detail of how it is used, which is why it belongs here rather than in each
+   * capability's own `run`. Without it a plan can pass `index: -1` to "open a tab": a perfectly valid integer that
+   * Chromium then refuses at the last moment with "Value must be at least 0", wrapped in a TypeError, after the
+   * action has already been attempted. Declared here it is refused before anything is sent, in words that say what
+   * to do instead.
+   */
+  min?: number
+  max?: number
 }
 
 /** What must be true, or who must act, for a capability to run. */
@@ -406,6 +417,11 @@ export function validateParams(spec: Record<string, ParamSpec>, params: Record<s
       (p.type === 'object' && typeof value === 'object' && !Array.isArray(value))
     if (!ok) return `"${name}" must be ${p.type === 'integer' ? 'a whole number' : `a ${p.type}`}.`
     if (p.enum && !p.enum.includes(String(value))) return `"${name}" must be one of: ${p.enum.join(', ')}.`
+    // Checked here rather than left to the browser, which refuses the same value far less helpfully and far later.
+    if (typeof value === 'number') {
+      if (p.min !== undefined && value < p.min) return `"${name}" must be at least ${p.min}.`
+      if (p.max !== undefined && value > p.max) return `"${name}" must be at most ${p.max}.`
+    }
   }
   for (const name of Object.keys(params)) if (!(name in spec)) return `Unknown parameter "${name}". Expected: ${Object.keys(spec).join(', ') || 'none'}.`
   return null

@@ -106,8 +106,21 @@ async function planSteps(
   perception: Perception,
   deps: OrbDeps,
   signal: AbortSignal,
-  note?: string
+  note?: string,
+  /**
+   * What has already been done, and worked.
+   *
+   * Without this a second attempt plans the whole task again from the beginning, and every part that had already
+   * succeeded is done a second time. Asked to open YouTube and read its title, a re-plan opened YouTube again --
+   * three tabs, from three attempts, because each one was planned as though nothing had happened yet.
+   *
+   * Those steps are kept either way; the planner simply was not told about them. For opening a tab that is three
+   * tabs and an annoyance. For anything that sends, buys or deletes it is the same mistake with a real cost, which
+   * is why it is fixed here rather than guarded against one capability at a time.
+   */
+  done?: readonly OrbStep[]
 ): Promise<{ steps: OrbStep[]; refused: { step: OrbStep; why: string }[]; said: string }> {
+  const already = (done ?? []).filter((s) => s.status === 'done')
   const prompt = [
     'You are planning actions for a web browser. Use only the capabilities listed; there are no others.',
     '',
@@ -118,11 +131,19 @@ async function planSteps(
     describeWorld(perception),
     '',
     note ? `This is a second attempt. What went wrong before: ${note}` : '',
+    already.length
+      ? [
+          'These parts are already done and confirmed. Do not do them again:',
+          ...already.map((s) => `- ${s.name} (${s.capability})`),
+          'Plan only what is still left to do.'
+        ].join(NEWLINE)
+      : '',
     `The person asked: ${request}`,
     '',
     'Give the shortest sequence of capability calls that does what they asked. Rules:',
     '- Use only capability ids from the list above, exactly as written.',
     '- Use only parameters that capability declares.',
+    '- Do not repeat anything listed above as already done.',
     '- "needs" lists the ids of steps that must finish first. Steps with no needs may run in any order.',
     '- "saveAs" names a result later steps can use.',
     '- If the request needs no browser action at all, return an empty array.',
@@ -348,10 +369,10 @@ export function createOrbHandlers(deps: OrbDeps): Record<string, Handler> {
           task.replans += 1
           emit({ type: 'status', message: 'That way did not work. Finding another…' })
           task.perception = await eyes.look({ text: wantsText, force: true })
-          const again = await planSteps(request, task.perception, deps, signal, broken.failure?.message)
-          if (!again.steps.length) { task.status = 'failed'; break }
-          // What was already confirmed stays confirmed; the rest is replaced by the new way round.
+          // What was already confirmed stays confirmed, and the planner is told so, or it plans it all again.
           const kept = task.steps.filter((s) => s.status === 'done')
+          const again = await planSteps(request, task.perception, deps, signal, broken.failure?.message, kept)
+          if (!again.steps.length) { task.status = 'failed'; break }
           task.steps = [...kept, ...again.steps.map((s) => ({ ...s, id: `r${task.replans}-${s.id}`, needs: [] }))]
           continue
         }

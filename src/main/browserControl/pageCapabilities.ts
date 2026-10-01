@@ -15,6 +15,26 @@ const LOCATOR: ParamSpec = {
 }
 const TAB: Record<string, ParamSpec> = {}
 
+/**
+ * Whether a locator actually says which element it means.
+ *
+ * `{}` is an object, and an object is truthy, so an empty locator used to be taken for a real one: every lookup found
+ * nothing, and `page.waitFor` sat out its full fifteen seconds waiting for an element that was never described. From
+ * the outside that reads as a slow page rather than as a question with nothing in it, so it was tried again, twice.
+ *
+ * An empty locator is not a locator. Saying so turns a quarter-minute of waiting into an immediate answer that names
+ * what is missing.
+ */
+function describesAnElement(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  return Object.entries(value as Record<string, unknown>).some(([key, v]) => {
+    // `exact` and `index` only narrow a match; neither finds one on its own.
+    if (key === 'exact' || key === 'index') return false
+    if (typeof v === 'string') return v.trim().length > 0
+    return v !== undefined && v !== null
+  })
+}
+
 /** Finds the page a capability acts on: the command's target, or the active tab. Electron and Chromium each provide their own. */
 export type PageResolver = (ctx: Pick<ControlContext, 'target'>) => PageHandle
 
@@ -563,7 +583,11 @@ export function registerPageCapabilities(control: BrowserControl, resolve: PageR
         const checks: boolean[] = []
         if (p.loaded) checks.push(!wc.isLoading())
         if (p.urlMatches) checks.push(urlRe ? urlRe.test(wc.getURL()) : wc.getURL().includes(String(p.urlMatches)))
-        if (p.locator) {
+        if (p.locator !== undefined && p.locator !== null) {
+          // Refused rather than waited on: an empty locator can never match, so waiting for it is waiting for nothing.
+          if (!describesAnElement(p.locator)) {
+            fail('invalid-params', 'The locator does not say which element to wait for. Give a selector, role, name, text or ref — or leave it out and wait for loading instead.')
+          }
           const found = await page.exec<{ ref?: number }>(asPageHandle(wc), page.locateScript(p.locator as Locator), 4000).catch((): { ref?: number } => ({}))
           checks.push(gone ? !found.ref : Boolean(found.ref))
         }

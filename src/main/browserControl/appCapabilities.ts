@@ -32,7 +32,7 @@ export interface AppCapabilityDeps {
 
 const str = (description: string, required = false, extra: Partial<ParamSpec> = {}): ParamSpec => ({ type: 'string', description, required, ...extra })
 const bool = (description: string, required = false): ParamSpec => ({ type: 'boolean', description, required })
-const int = (description: string, required = false): ParamSpec => ({ type: 'integer', description, required })
+const int = (description: string, required = false, range?: { min?: number; max?: number }): ParamSpec => ({ type: 'integer', description, required, ...range })
 
 /** Settings the control layer may change, and how each is checked. The API key is never settable this way. */
 const SETTINGS: Record<string, { type: 'boolean' | 'string'; values?: string[]; description: string }> = {

@@ -272,9 +272,13 @@ const within = (ms, work) =>
  */
 const tellBrowser = (wanted) => askBrowser('orbis.ticker.shown', wanted === true).catch(() => undefined)
 
+/** Whether Orbis has ever answered. Not the same as the strip being wanted, and the retry above needs the difference. */
+let answered = false
+
 async function load() {
   try {
     const state = await within(6000, call('markets:ticker', []))
+    answered = true
     config = { ...config, ...(state?.config ?? {}) }
     settleMotion()
     void tellBrowser(config.enabled)
@@ -495,9 +499,28 @@ window.addEventListener('resize', measure)
 // Orbis tells the strip when its configuration changes, so a group switched in Settings appears here without a reload.
 globalThis.orbisTickerChanged = () => void load()
 
-// The first read is what tells the browser whether to make room at all. `follow` only begins once there is something to
-// follow: a strip that is switched off holds no connection open.
-void load().then(() => {
+/**
+ * The first read, kept trying until Orbis answers.
+ *
+ * This page is created with the browser window, which is earlier than the helper it has to ask -- so the very first
+ * read nearly always failed. It was a single attempt: on failure it showed a quiet "Orbis is not running" state and
+ * stopped. Nothing retried, and nothing else can tell the browser to make room, so the strip simply never appeared
+ * no matter what the setting said.
+ *
+ * It asks again, with the wait growing, until it gets an answer. The waits are short to begin with because the helper
+ * usually arrives within a second or two of the window, and they stop growing at ten seconds so a browser left open
+ * while Orbis is closed is not asking once a second forever.
+ */
+async function firstRead() {
+  for (let wait = 400; ; wait = Math.min(wait * 1.6, 10_000)) {
+    await load()
+    // `load` sets this when the read succeeded, whatever the setting turned out to be.
+    if (answered) return
+    await new Promise((resolve) => setTimeout(resolve, wait))
+  }
+}
+
+void firstRead().then(() => {
   if (!config.enabled) return
   start()
   return follow()

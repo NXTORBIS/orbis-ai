@@ -11,7 +11,7 @@ export interface BrowserExtrasDeps {
 
 const str = (description: string, required = false): ParamSpec => ({ type: 'string', description, required })
 const bool = (description: string): ParamSpec => ({ type: 'boolean', description, required: false })
-const int = (description: string, required = false): ParamSpec => ({ type: 'integer', description, required })
+const int = (description: string, required = false, range?: { min?: number; max?: number }): ParamSpec => ({ type: 'integer', description, required, ...range })
 const json = (value: unknown): string => JSON.stringify(value)
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
