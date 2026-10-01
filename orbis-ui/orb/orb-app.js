@@ -94,6 +94,10 @@ const state = {
   /** 'idle' | 'reading' | 'thinking' | 'streaming' | 'done' | 'error' | 'cancelled' */
   phase: 'idle',
   status: '',
+  /** What was asked, shown above the steps so a list of actions has a question over it. */
+  request: '',
+  /** Which step's detail is open, if any. One at a time: this is a panel, not a report. */
+  openStep: null,
   steps: [],
   automation: null,
   confirmation: null,
@@ -254,6 +258,13 @@ function drawOrb() {
   return orbEl
 }
 
+/** One labelled line of a step's detail. */
+function line(label, value) {
+  const row = el('div', 'orb-step-line')
+  row.append(el('span', 'orb-step-label', label), el('span', 'orb-step-value', value))
+  return row
+}
+
 function drawPanel() {
   const panel = el('section', 'browser-orb-panel')
   panel.setAttribute('aria-label', 'Orbis browser assistant')
@@ -348,14 +359,85 @@ function drawPanel() {
     body.append(box)
   }
 
-  if (state.steps.length) {
-    const ol = el('ol', 'orb-steps')
-    for (const s of state.steps.slice(-6)) {
-      const li = el('li', s.status || 'done')
-      li.append(el('span', '', s.text || ''))
-      ol.append(li)
+  /*
+   * The task, and every step of it.
+   *
+   * This is the part of the Orb that has to be true. A step is drawn from what the control loop actually reported --
+   * `done` only once the browser confirmed it -- so a tick here means the browser agrees, and nothing is marked
+   * finished because a command was sent.
+   *
+   * Completed steps stay, and steps not reached yet are shown too. Somebody watching should be able to see where they
+   * are in something, which a list that only shows the last few cannot tell them.
+   */
+  if (state.request || state.steps.length) {
+    const run = el('section', 'orb-run')
+    run.setAttribute('aria-label', 'What Orbis is doing')
+
+    if (state.request) run.append(el('p', 'orb-run-ask', state.request))
+
+    if (state.steps.length) {
+      const done = state.steps.filter((x) => x.status === 'done').length
+      const head = el('div', 'orb-run-count')
+      head.append(el('span', '', `${done} of ${state.steps.length} done`))
+      if (state.working) head.append(el('span', 'orb-run-now', state.status || ''))
+      run.append(head)
+
+      const ol = el('ol', 'orb-steps')
+      for (const step of state.steps) {
+        const status = step.status || 'planned'
+        const li = el('li', `orb-step ${status}`)
+
+        const row = el('button', 'orb-step-row')
+        row.type = 'button'
+        /*
+         * The mark is the state, and the four states are four different things: confirmed, happening, not reached,
+         * and did not work. A spinner on everything would say none of them.
+         */
+        const MARK = { done: '✓', running: '●', failed: '✕', planned: '○', waiting: '⏸' }
+        row.append(el('span', 'orb-step-mark', MARK[status] || '○'))
+        row.append(el('span', 'orb-step-name', step.text || step.name || ''))
+        const detail = step.capability || (step.result && step.result.verification && step.result.verification.detail) || ''
+        if (detail) row.append(el('span', 'orb-step-more', state.openStep === step.id ? '−' : '+'))
+        row.addEventListener('click', () => {
+          state.openStep = state.openStep === step.id ? null : step.id
+          draw()
+        })
+        li.append(row)
+
+        /*
+         * What a step actually did, when somebody asks.
+         *
+         * The capability it used, what it was given, and how the browser confirmed it -- which is the reason to
+         * believe the tick. Never the reasoning behind the plan: that is not execution metadata.
+         */
+        if (state.openStep === step.id) {
+          const box = el('div', 'orb-step-detail')
+          if (step.capability) box.append(line('Action', step.capability))
+          if (step.params && typeof step.params === 'object') {
+            const shown = Object.entries(step.params)
+              .filter(([, v]) => v !== undefined && v !== null && v !== '')
+              .slice(0, 4)
+              .map(([k, v]) => `${k}: ${String(v).slice(0, 80)}`)
+              .join('  ·  ')
+            if (shown) box.append(line('With', shown))
+          }
+          const verified = step.result && step.result.verification
+          if (verified && verified.detail) box.append(line(verified.verified ? 'Confirmed' : 'Not confirmed', verified.detail))
+          const failed = step.failure || (step.result && step.result.error)
+          if (failed && failed.message) box.append(line('Why not', failed.message))
+          if (step.tries > 1) box.append(line('Tries', String(step.tries)))
+          li.append(box)
+        }
+
+        ol.append(li)
+      }
+      run.append(ol)
+    } else if (state.working) {
+      // Before a plan exists there is still something happening, and saying so beats an empty box.
+      run.append(el('p', 'orb-run-now', state.status || 'Working out what to do…'))
     }
-    body.append(ol)
+
+    body.append(run)
   }
 
   if (state.image) {
@@ -386,8 +468,8 @@ function drawPanel() {
   if (state.error) body.append(el('p', 'orb-summary', state.error))
 
   if (state.working) {
-    const acts = el('div', 'orb-actions')
-    const stop = el('button', 'queue-btn danger', 'Stop'); stop.type = 'button'
+    const acts = el('div', 'orb-actions orb-stop-row')
+    const stop = el('button', 'orb-stop', 'Stop'); stop.type = 'button'
     stop.addEventListener('click', () => {
       controller?.abort()
       // Stopping the stream would leave the browser mid-task; the task itself is told to stop.
@@ -506,6 +588,9 @@ async function submit() {
   const text = draft.trim()
   if (!text || controller) return
   draft = ''
+  // What was asked, kept above the steps: a list of actions with no question over it is a list of actions.
+  state.request = text
+  state.openStep = null
   state.steps = []
   state.automation = null
   state.confirmation = null
@@ -552,7 +637,7 @@ async function submit() {
           setPhase('streaming')
         } else if (event.type === 'plan' && Array.isArray(event.steps)) {
           // The plan, before anything runs: what Orbis worked out it would have to do.
-          state.steps = event.steps.map((s) => ({ id: s.id, text: s.name, status: 'planned' }))
+          state.steps = event.steps.map((s) => ({ ...s, id: s.id, text: s.name, status: 'planned' }))
           setPhase('streaming', `${event.steps.length} step${event.steps.length === 1 ? '' : 's'} planned`)
         } else if (event.type === 'context' && event.because) {
           setPhase('streaming', `Using ${event.because}`)

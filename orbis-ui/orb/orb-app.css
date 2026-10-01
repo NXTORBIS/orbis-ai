@@ -204,6 +204,13 @@ body { font: 400 13px/1.45 var(--font-sans); color: var(--text); }
   animation: orb-panel-out 0.14s ease-in forwards;
 }
 
+/*
+ * The header, which must fit whatever width the browser gave the panel.
+ *
+ * The browser sizes the Orb's view to the room it has, so the panel can be narrower than its own contents would
+ * like. Without a zero minimum the mark, the word and the two buttons simply refuse to fit and the row is clipped --
+ * which is how "Orbis Ready" ends up reading "rbis Ready".
+ */
 .orb-panel-head {
   display: flex;
   align-items: center;
@@ -211,7 +218,22 @@ body { font: 400 13px/1.45 var(--font-sans); color: var(--text); }
   padding: 8px 6px 8px 12px;
   border-bottom: 1px solid var(--line-strong);
   font-size: 13px;
+  min-width: 0;
 }
+
+/* The word is the first thing worth losing when there is no room; the status and the buttons are not. */
+.orb-panel-head > b {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.orb-panel-head > .b-icon { flex: none; }
+
+/* Nothing inside the panel may be wider than the panel. */
+.browser-orb-panel > * { min-width: 0; max-width: 100%; }
 
 .orb-panel-state {
   flex: 1;
@@ -329,33 +351,172 @@ body { font: 400 13px/1.45 var(--font-sans); color: var(--text); }
   gap: 6px;
 }
 
-.orb-steps {
+/* ---------------------------------------------------------------- what Orbis is doing
+ *
+ * The execution surface. This is the part of the Orb that has to read as true at a glance: what was asked, how far
+ * through it is, which step is happening now, and what each step actually did.
+ *
+ * The marks carry the meaning and the colour only reinforces it, so the four states are still four states to somebody
+ * who cannot tell the colours apart.
+ */
+
+.orb-run {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* The question, above its own answer. Quiet, because it is context rather than news. */
+.orb-run-ask {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+  /* Two lines at most: a long request is context, not the content of the panel. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.orb-run-count {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* What is happening right now, in the words the loop itself used. */
+.orb-run-now {
+  color: var(--accent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.orb-steps {
+  list-style: none;
   margin: 0;
   padding: 0;
-  list-style: none;
-  color: var(--muted-strong);
-  font-size: 12px;
-}
-
-.orb-steps li {
   display: flex;
-  align-items: flex-start;
-  gap: 6px;
+  flex-direction: column;
+  gap: 1px;
+  /* Long tasks scroll inside the panel rather than growing it past the window. */
+  max-height: 210px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
-.orb-steps svg {
-  flex-shrink: 0;
-  margin-top: 2px;
+.orb-step {
+  border-radius: 8px;
+}
+
+.orb-step-row {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 6px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 12.5px;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 8px;
+}
+
+.orb-step-row:hover {
+  background: var(--hover);
+}
+
+.orb-step-mark {
+  font-size: 11px;
+  line-height: 1.55;
+  text-align: center;
+  color: var(--faint);
+}
+
+.orb-step-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.orb-step-more {
+  color: var(--faint);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* Confirmed by the browser. The one state that is allowed to look finished. */
+.orb-step.done .orb-step-mark { color: var(--green); }
+.orb-step.done .orb-step-name { color: var(--muted); }
+
+/* Happening now: the only thing on the list that moves. */
+.orb-step.running .orb-step-mark {
   color: var(--accent);
+  animation: orb-step-pulse 1.1s ease-in-out infinite;
 }
 
-.orb-steps li.blocked svg,
-.orb-steps li.declined svg {
-  color: var(--amber);
+.orb-step.running .orb-step-name { color: var(--text); }
+
+.orb-step.failed .orb-step-mark { color: var(--red); }
+.orb-step.failed .orb-step-name { color: var(--text); }
+
+.orb-step.waiting .orb-step-mark { color: var(--amber); }
+
+/* Not reached yet. Present, so the shape of the task is visible, and clearly not done. */
+.orb-step.planned .orb-step-name { color: var(--faint); }
+
+@keyframes orb-step-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
 }
+
+/* What a step actually did. Execution facts, never the reasoning behind the plan. */
+.orb-step-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 2px 0 6px 30px;
+  padding: 7px 9px;
+  border-left: 2px solid var(--line);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.orb-step-line {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.orb-step-label { color: var(--faint); }
+.orb-step-value { color: var(--muted); overflow-wrap: anywhere; }
+
+/* Stop: always reachable while anything is running, and never mistakable for a send button. */
+.orb-stop-row { justify-content: flex-start; }
+
+.orb-stop {
+  padding: 5px 14px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--red) 45%, transparent);
+  background: color-mix(in srgb, var(--red) 12%, transparent);
+  color: var(--danger);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.orb-stop:hover { background: color-mix(in srgb, var(--red) 20%, transparent); }
 
 .orb-summary {
   margin: 0;
