@@ -87,6 +87,31 @@ function jsonFrom(answer: string): unknown {
  * point of the narrow shape is that a condition can never be anything a page could turn into an instruction: there is
  * no expression here to evaluate, only a name and a comparison.
  */
+/**
+ * The shape of a saved result, for telling a planner what it may reach into.
+ *
+ * Shapes and never contents. A planner needs to know that `newWindow` holds an `id`, so it can write `{{newWindow.id}}`
+ * instead of `{{newWindow}}`; it does not need the page text that another step saved, and putting that in a prompt
+ * would send a page's contents to a model on every re-plan.
+ */
+function shapeOf(value: unknown, depth = 0): string {
+  if (value === null || value === undefined) return 'nothing'
+  if (typeof value === 'string') return 'text'
+  if (typeof value === 'number') return 'a number'
+  if (typeof value === 'boolean') return 'true or false'
+  if (Array.isArray(value)) {
+    if (!value.length) return 'an empty list'
+    return `a list of ${value.length}, each ${depth > 1 ? 'an item' : shapeOf(value[0], depth + 1)}`
+  }
+  if (typeof value === 'object') {
+    const keys = Object.keys(value as Record<string, unknown>).slice(0, 8)
+    if (!keys.length) return 'an empty object'
+    if (depth > 1) return `an object (${keys.join(', ')})`
+    return `an object with ${keys.map((k) => `${k} (${shapeOf((value as Record<string, unknown>)[k], depth + 1)})`).join(', ')}`
+  }
+  return 'something'
+}
+
 function readCondition(raw: unknown): OrbCondition | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
   const o = raw as Record<string, unknown>
@@ -178,7 +203,15 @@ async function planSteps(
     already.length
       ? [
           'These parts are already done and confirmed. Do not do them again:',
-          ...already.map((s) => `- ${s.name} (${s.capability})`),
+          /*
+           * What each finished step actually saved, by shape.
+           *
+           * Without this the planner knows a name and not what is behind it, so it writes {{newWindow}} where the
+           * saved value is {id, tabs, focused} and the call is refused for passing an object where a number was
+           * wanted. Keys, never values: a key list is what lets the next step reach into the thing, and the values
+           * could be somebody's page text.
+           */
+          ...already.map((s) => `- ${s.name} (${s.capability})${s.saveAs ? ` → saved as ${s.saveAs}: ${shapeOf(s.result?.data)}` : ''}`),
           'Plan only what is still left to do.'
         ].join(NEWLINE)
       : '',

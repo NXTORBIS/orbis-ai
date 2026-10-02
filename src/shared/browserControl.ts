@@ -416,6 +416,24 @@ export interface ControlConfirmRequest {
 // ---------------------------------------------------------------- helpers (pure)
 
 /** Checks params against a capability's spec; returns a message for the first problem, or null. */
+/**
+ * What a value is, briefly, for an error somebody has to act on.
+ *
+ * Shapes rather than contents: an object's keys say what it is and its values might be somebody's page text. The
+ * point is to let the next attempt reach into what it already has, and a list of keys is exactly what that needs.
+ */
+function describeValue(value: unknown): string {
+  if (typeof value === 'string') return `the text "${value.slice(0, 40)}${value.length > 40 ? '…' : ''}"`
+  if (typeof value === 'number') return `the number ${value}`
+  if (typeof value === 'boolean') return `${value}`
+  if (Array.isArray(value)) return `a list of ${value.length}`
+  if (value && typeof value === 'object') {
+    const keys = Object.keys(value as Record<string, unknown>).slice(0, 6)
+    return keys.length ? `an object with ${keys.join(', ')}` : 'an empty object'
+  }
+  return 'nothing'
+}
+
 export function validateParams(spec: Record<string, ParamSpec>, params: Record<string, unknown>): string | null {
   for (const [name, p] of Object.entries(spec)) {
     const value = params[name]
@@ -431,7 +449,15 @@ export function validateParams(spec: Record<string, ParamSpec>, params: Record<s
       (p.type === 'boolean' && typeof value === 'boolean') ||
       (p.type === 'array' && Array.isArray(value)) ||
       (p.type === 'object' && typeof value === 'object' && !Array.isArray(value))
-    if (!ok) return `"${name}" must be ${p.type === 'integer' ? 'a whole number' : `a ${p.type}`}.`
+    /*
+     * Says what arrived, not only what was wanted.
+     *
+     * `"id" must be a whole number` is true and unusable: the thing that has to act on it is a planner that will be
+     * asked to try again, and it cannot tell from that whether it sent text, an object, or the whole of an earlier
+     * step's result. Shown what it actually sent, the next attempt is a correction rather than another guess -- which
+     * is exactly how a plan that saved {id, tabs} and passed the lot comes to pass the id instead.
+     */
+    if (!ok) return `"${name}" must be ${p.type === 'integer' ? 'a whole number' : `a ${p.type}`}, and ${describeValue(value)} was given.`
     if (p.enum && !p.enum.includes(String(value))) return `"${name}" must be one of: ${p.enum.join(', ')}.`
     // Checked here rather than left to the browser, which refuses the same value far less helpfully and far later.
     if (typeof value === 'number') {

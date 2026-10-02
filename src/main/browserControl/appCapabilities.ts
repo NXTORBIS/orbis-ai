@@ -315,10 +315,34 @@ export function registerAppCapabilities(d: AppCapabilityDeps): void {
     name: 'Check a condition',
     description:
       'Evaluates a condition against real state now. { check: elementExists|elementMissing (locator, tabId?), textContains|textMissing (text, locator?, tabId?), urlMatches (pattern, tabId?), pageLoaded (tabId?), downloadCompleted (id? | match?), tabExists (tabId? | url? | title?), windowExists (id? | title?), extensionExists (id? | name?, enabled?), settingEquals (key, value), capabilityAvailable (id), compare (left, op, right) } or { all: [...] } / { any: [...] } / { not: ... }.',
-    params: { condition: { type: 'object', description: 'The condition.', required: true } },
+    params: {
+      condition: {
+        type: 'object',
+        /*
+         * Says the required key by name, because the description above lists the kinds and not the shape.
+         *
+         * A planner reading "elementExists (locator, tabId?)" wrote { locator: ... } with no "check" at all, and the
+         * call failed with 'Unknown condition check "undefined"' -- an honest message about a mistake that the
+         * parameter never warned against. The one thing every condition must have belongs where it cannot be missed.
+         */
+        description: 'The condition, as an object whose "check" names one of the kinds above, plus that kind’s own values. For example { "check": "elementExists", "locator": { "text": "Next" } } or { "check": "urlMatches", "pattern": "youtube" }. Combine with { "all": [...] }, { "any": [...] } or { "not": ... }.',
+        required: true
+      }
+    },
     mutates: false,
     confirmation: 'none',
-    run: async (p, ctx) => ({ value: await evaluate(p.condition as Condition, ctx) })
+    run: async (p, ctx) => {
+      const condition = p.condition as Record<string, unknown>
+      // Refused before it is evaluated, so the complaint names the missing key rather than reporting it as unknown.
+      const shaped = condition && typeof condition === 'object' && ('check' in condition || 'all' in condition || 'any' in condition || 'not' in condition)
+      if (!shaped) {
+        fail(
+          'invalid-params',
+          `The condition needs a "check" naming what to test (or "all", "any" or "not"). It had ${Object.keys(condition ?? {}).join(', ') || 'nothing'}.`
+        )
+      }
+      return { value: await evaluate(p.condition as Condition, ctx) }
+    }
   })
 
   /** Reads one of Chromium's own lists through the capability that provides it (downloads, windows, extensions). */

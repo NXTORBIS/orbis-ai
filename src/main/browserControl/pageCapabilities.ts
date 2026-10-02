@@ -597,7 +597,26 @@ export function registerPageCapabilities(control: BrowserControl, resolve: PageR
         }
         if (!checks.length) fail('invalid-params', 'Say what to wait for: locator, text, urlMatches or loaded.')
         if (checks.every(Boolean)) return { met: true, url: wc.getURL() }
-        if (Date.now() > deadline) fail('timeout', `Waited ${Math.round((Number(p.timeoutMs) || 15_000) / 1000)}s: the page never showed what was expected.`, true)
+        if (Date.now() > deadline) {
+          /*
+           * A wait that ran out says whether the page has frames on it.
+           *
+           * A script runs in one document, and an iframe is a different one -- so a control inside an embedded
+           * player, a payment form or a meeting's pre-join panel is not slow to appear, it is somewhere this cannot
+           * look. "The page never showed what was expected" is true of this document and sends the Orb off waiting
+           * again, or re-planning against a page that does not contain the thing.
+           *
+           * Only asked once the wait has failed, so an ordinary wait costs nothing.
+           */
+          const frames = await page
+            .exec<number>(asPageHandle(wc), "document.querySelectorAll('iframe, frame').length", 2000)
+            .catch(() => 0)
+          const seconds = Math.round((Number(p.timeoutMs) || 15_000) / 1000)
+          const inFrame = frames
+            ? ` This page has ${frames} frame${frames === 1 ? '' : 's'} on it, and anything inside a frame is in a different document that this cannot reach.`
+            : ''
+          fail('timeout', `Waited ${seconds}s: the page never showed what was expected.${inFrame}`, true)
+        }
         await page.sleep(delay)
       }
     }
