@@ -40,6 +40,7 @@ export const TEST_FILES = [
   'src/shared/browserControl.test.ts',
   'src/main/browserControl/browserControl.test.ts',
   'src/main/browserControl/deepQuery.test.ts',
+  'src/main/browserControl/feedCapabilities.test.ts',
   'src/main/browserControl/runner.test.ts',
   'src/main/workflows/workflows.test.ts',
   'src/main/workflows/compile.test.ts',

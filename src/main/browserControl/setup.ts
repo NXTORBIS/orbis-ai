@@ -15,6 +15,7 @@ import { registerAppCapabilities } from './appCapabilities.ts'
 import type { AppCapabilityDeps } from './appCapabilities.ts'
 import { registerUiCapabilities } from './uiCapabilities.ts'
 import { registerCaptchaCapabilities } from './captchaCapabilities.ts'
+import { registerFeedCapabilities } from './feedCapabilities.ts'
 
 export type BrowserControlDeps = Omit<AppCapabilityDeps, 'control' | 'windowControl'>
 
@@ -51,6 +52,7 @@ export function setupBrowserControl(deps: BrowserControlDeps): { control: Browse
   // rather than a guess at how long a video is.
   registerMediaCapabilities(control, { tab: (ctx) => noBrowser(ctx), fail })
   registerCaptchaCapabilities(control, noBrowser)
+  registerFeedCapabilities(control, { tab: (ctx) => noBrowser(ctx) })
   registerAppCapabilities({ ...deps, control, windowControl })
   registerUiCapabilities(control, deps.getWindow)
 

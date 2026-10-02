@@ -251,6 +251,14 @@ async function planSteps(
      */
     '- "Until" and "while" are a loop with a condition: give the group a "repeat" high enough to cover it and put "when" on its steps. The loop ends on the pass where the condition stops holding. There is no unbounded loop.',
     /*
+     * Why this is said rather than left to be discovered.
+     *
+     * The Shorts run failed here: the plan was right -- wait until this one ends, then go to the next, three times --
+     * and the second step waited fifteen seconds for a "next" button. There is no next button on a feed of short
+     * videos, and given a list of capabilities containing a click, a model looks for something to click.
+     */
+    '- A feed of items shown one at a time (short videos, reels, stories) has no "next" button. Use feed.next to move to the next one; do not look for a button and do not plan a scroll by hand.',
+    /*
      * Which of two things a request about the browser is about.
      *
      * The failure this prevents is specific and was the most embarrassing one available: somebody says "open browser

@@ -15,6 +15,7 @@ import { registerBrowserToolCapabilities } from './chromiumCapabilities4.ts'
 import { BrowserUi } from './browserUi.ts'
 import { registerBrowserUiCapabilities } from './chromiumCapabilities5.ts'
 import { registerSurfaceCapabilities } from './surfaceCapabilities.ts'
+import { registerFeedCapabilities } from '../browserControl/feedCapabilities.ts'
 import { ChromiumPages } from './chromiumPages.ts'
 import { ExtensionBridge } from './extensionBridge.ts'
 
@@ -117,6 +118,9 @@ export async function startChromiumControl(o: ChromiumControlOptions): Promise<C
   // rather than a guess at how long a video is.
   registerMediaCapabilities(control, { tab: (ctx) => pages.resolve(ctx), fail })
   registerCaptchaCapabilities(control, pages.resolve)
+  // Moving to the next item in a feed: found missing by the Shorts run, where the plan was right and there was no
+  // capability for the one thing a feed actually needs.
+  registerFeedCapabilities(control, { tab: (ctx) => pages.resolve(ctx) })
 
   /**
    * Tab Lock follows the browser by the browser's own events.
