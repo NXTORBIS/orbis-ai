@@ -19,7 +19,7 @@ import { FORMATS, type FormatId } from '../compute/interchange.ts'
  * is in it; the plain words are the ones it is told to use.
  */
 
-export type ArtifactKindId = 'table' | 'document'
+export type ArtifactKindId = 'table' | 'document' | 'plot' | 'diagram'
 
 export interface ArtifactKind {
   id: ArtifactKindId
@@ -58,6 +58,27 @@ export const ARTIFACT_KINDS: Readonly<Record<ArtifactKindId, ArtifactKind>> = Ob
     writes: Object.freeze(['markdown', 'html', 'pdf', 'docx', 'pptx', 'text'] as const),
     stores: 'markdown',
     reads: Object.freeze(['markdown', 'html', 'text', 'docx', 'pdf'] as const),
+    orionMayName: true
+  }),
+  plot: Object.freeze({
+    id: 'plot',
+    name: 'Chart',
+    describe: 'Numbers drawn against numbers -- lines, bars, points or areas -- with real axes. Made from a table, never written.',
+    builtFrom: 'Plot in src/shared/compute/plot.ts',
+    writes: Object.freeze(['svg', 'png'] as const),
+    stores: 'svg',
+    reads: Object.freeze([] as const),
+    // A chart is made from a table's own numbers. A model may not invent one.
+    orionMayName: false
+  }),
+  diagram: Object.freeze({
+    id: 'diagram',
+    name: 'Diagram',
+    describe: 'Boxes and arrows: a flowchart, a process, a decision tree. Editable structure, laid out by Orbis.',
+    builtFrom: 'Artifact in src/shared/pages/builders.ts',
+    writes: Object.freeze(['svg', 'png'] as const),
+    stores: 'svg',
+    reads: Object.freeze([] as const),
     orionMayName: true
   })
 })

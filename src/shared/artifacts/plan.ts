@@ -39,7 +39,18 @@ export interface TableProposal {
   rows: string[][]
 }
 
-export type Proposal = { intent: CreationIntent; table: TableProposal; markdown?: undefined } | { intent: CreationIntent; markdown: string; table?: undefined }
+export interface DiagramProposal {
+  nodes: { id: string; label: string; shape: 'step' | 'decision' | 'start' | 'end' }[]
+  edges: { from: string; to: string; label: string }[]
+}
+
+export type Proposal =
+  | { intent: CreationIntent; table: TableProposal; markdown?: undefined; diagram?: undefined }
+  | { intent: CreationIntent; markdown: string; table?: undefined; diagram?: undefined }
+  | { intent: CreationIntent; diagram: DiagramProposal; table?: undefined; markdown?: undefined }
+
+const SHAPES = ['step', 'decision', 'start', 'end'] as const
+const DIAGRAM = Object.freeze({ nodes: 120, edges: 300, label: 80, id: 40 })
 
 export interface Problem {
   severity: 'error' | 'warning'
@@ -76,8 +87,9 @@ export function readProposal(raw: unknown): { proposal: Proposal | null; problem
   const r = raw as Record<string, unknown>
 
   const kind = str(r.kind, 40).toLowerCase()
-  if (!isArtifactKindId(kind)) {
-    error(`"kind" has to be one of: ${Object.keys(ARTIFACT_KINDS).join(', ')}. It was "${kind || 'missing'}".`)
+  const nameable = Object.keys(ARTIFACT_KINDS).filter((one) => ARTIFACT_KINDS[one as ArtifactKindId].orionMayName)
+  if (!isArtifactKindId(kind) || !ARTIFACT_KINDS[kind].orionMayName) {
+    error(`"kind" has to be one of: ${nameable.join(', ')}. It was "${kind || 'missing'}".${kind === 'plot' ? ' A chart is made from a table’s own numbers, not written: propose the table.' : ''}`)
     return { proposal: null, problems }
   }
 
@@ -149,6 +161,59 @@ export function readProposal(raw: unknown): { proposal: Proposal | null; problem
     if (typeof r.markdown === 'string' && r.markdown.trim() !== '') warn('"markdown" was given for a table and is ignored.')
 
     return { proposal: buildable(problems) ? { intent, table: { columns, rows } } : null, problems }
+  }
+
+  if (kind === 'diagram') {
+    if (!Array.isArray(r.nodes) || r.nodes.length === 0) {
+      error('A diagram needs "nodes": a list of {id, label, shape?}, at least one.')
+      return { proposal: null, problems }
+    }
+    if (r.nodes.length > DIAGRAM.nodes) error(`A diagram may have at most ${DIAGRAM.nodes} nodes; this has ${r.nodes.length}.`)
+    const ids = new Set<string>()
+    const nodes: DiagramProposal['nodes'] = []
+    r.nodes.slice(0, DIAGRAM.nodes).forEach((one, i) => {
+      const node = (typeof one === 'object' && one !== null ? one : {}) as Record<string, unknown>
+      const id = str(node.id, DIAGRAM.id).replace(/[^A-Za-z0-9_-]/g, '_')
+      const label = str(node.label, DIAGRAM.label)
+      if (id === '') {
+        error(`nodes[${i}] has no id.`)
+        return
+      }
+      if (ids.has(id)) {
+        error(`Two nodes have the id "${id}".`)
+        return
+      }
+      if (label === '') {
+        error(`nodes[${i}] ("${id}") has no label.`)
+        return
+      }
+      const shape = str(node.shape, 20).toLowerCase()
+      if (shape !== '' && !(SHAPES as readonly string[]).includes(shape)) {
+        error(`nodes[${i}] ("${id}") has shape "${shape}", which is not one of: ${SHAPES.join(', ')}.`)
+        return
+      }
+      ids.add(id)
+      nodes.push({ id, label, shape: shape === '' ? 'step' : (shape as DiagramProposal['nodes'][number]['shape']) })
+    })
+    const edges: DiagramProposal['edges'] = []
+    if (r.edges !== undefined) {
+      if (!Array.isArray(r.edges)) error('"edges" has to be a list of {from, to, label?}.')
+      else {
+        if (r.edges.length > DIAGRAM.edges) error(`A diagram may have at most ${DIAGRAM.edges} edges; this has ${r.edges.length}.`)
+        r.edges.slice(0, DIAGRAM.edges).forEach((one, i) => {
+          const edge = (typeof one === 'object' && one !== null ? one : {}) as Record<string, unknown>
+          const from = str(edge.from, DIAGRAM.id).replace(/[^A-Za-z0-9_-]/g, '_')
+          const to = str(edge.to, DIAGRAM.id).replace(/[^A-Za-z0-9_-]/g, '_')
+          if (!ids.has(from) || !ids.has(to)) {
+            error(`edges[${i}] joins "${from || '?'}" to "${to || '?'}", and ${!ids.has(from) ? `"${from || '?'}"` : `"${to || '?'}"`} is not a node.`)
+            return
+          }
+          edges.push({ from, to, label: str(edge.label, DIAGRAM.label) })
+        })
+      }
+    }
+    if (typeof r.markdown === 'string' && r.markdown.trim() !== '') warn('"markdown" was given for a diagram and is ignored.')
+    return { proposal: buildable(problems) ? { intent, diagram: { nodes, edges } } : null, problems }
   }
 
   const markdown = typeof r.markdown === 'string' ? r.markdown : ''

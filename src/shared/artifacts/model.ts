@@ -1,6 +1,8 @@
 import type { Table } from '../compute/data.ts'
 import type { StructuredDocument } from '../compute/document.ts'
 import type { FormatId, LossReport, VerifyResult } from '../compute/interchange.ts'
+import type { Plot } from '../compute/plot.ts'
+import type { Artifact as Diagram } from '../pages/builders.ts'
 import type { ArtifactKindId } from './kinds.ts'
 
 /**
@@ -24,7 +26,13 @@ import type { ArtifactKindId } from './kinds.ts'
  * the only thing that lets anybody check.
  */
 
-export type ArtifactBody = { kind: 'table'; table: Table } | { kind: 'document'; document: StructuredDocument }
+export type ArtifactBody =
+  | { kind: 'table'; table: Table }
+  | { kind: 'document'; document: StructuredDocument }
+  /** A chart: the plot engine's own model, with its axes already decided. */
+  | { kind: 'plot'; plot: Plot }
+  /** Boxes and arrows: the builders' own editable artifact, never a picture. */
+  | { kind: 'diagram'; diagram: Diagram }
 
 const ID_PATTERN = /^artifact_[0-9a-f]{32}$/
 const VERSION_PATTERN = /^v[0-9a-f]{32}$/

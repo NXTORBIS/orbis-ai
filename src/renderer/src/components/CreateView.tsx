@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { AlertTriangle, ArrowLeft, BarChart3, Check, Copy, FilePlus2, FolderOpen, History, Loader2, Pencil, Save, Search, Sparkles, Table2, FileText, Trash2, X } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, BarChart3, Check, Copy, FilePlus2, FolderOpen, History, LineChart, Loader2, Pencil, Save, Search, Sparkles, Table2, FileText, Trash2, Workflow, X } from 'lucide-react'
 import type { NoticeKind } from '../lib/notices'
 import './create.css'
 
@@ -15,7 +15,10 @@ import './create.css'
  * Everything here goes through one channel and one operation map. The screen decides nothing; it asks and shows.
  */
 
+/** What can be pasted in. A chart comes from a table and a diagram from Orion, so neither is a paste kind. */
 type Kind = 'table' | 'document'
+/** Every kind a kept artifact can be. */
+type RecordKind = Kind | 'plot' | 'diagram'
 
 interface Check {
   what: string
@@ -50,7 +53,7 @@ interface Record_ {
   versions: Version_[]
   reason: string
   derivedFrom: { artifactId: string; versionId: string; title: string } | null
-  kind: Kind
+  kind: RecordKind
   title: string
   format: string
   bytes: number
@@ -88,7 +91,38 @@ interface Opened {
   record: Record_
   preview: string
   truncated: boolean
+  /** A table's columns, so a chart can be asked for by name. Empty for anything that is not a table. */
+  columns: { id: string; name: string; type: string }[]
   formats: { format: string; name: string; extension: string; limitations: readonly string[] }[]
+}
+
+const CHART_KINDS = ['line', 'bar', 'scatter', 'area', 'step'] as const
+
+/** What a record's shape means, in the words of its kind. */
+const shapeText = (kind: string, shape: { rows: number; columns: number }): string => {
+  switch (kind) {
+    case 'table':
+      return `${shape.rows} rows × ${shape.columns} columns`
+    case 'plot':
+      return `${shape.rows} points in ${shape.columns} series`
+    case 'diagram':
+      return `${shape.rows} boxes, ${shape.columns} arrows`
+    default:
+      return `${shape.rows} blocks`
+  }
+}
+
+const iconFor = (kind: string): React.JSX.Element => {
+  switch (kind) {
+    case 'table':
+      return <Table2 size={14} />
+    case 'plot':
+      return <LineChart size={14} />
+    case 'diagram':
+      return <Workflow size={14} />
+    default:
+      return <FileText size={14} />
+  }
 }
 
 interface Saved {
@@ -245,6 +279,39 @@ export default function CreateView({ onClose, onNotify }: { onClose: () => void;
 
   const [importing, setImporting] = useState(false)
   const [analysing, setAnalysing] = useState(false)
+  const [chartX, setChartX] = useState('')
+  const [chartY, setChartY] = useState<string[]>([])
+  const [chartKind, setChartKind] = useState<(typeof CHART_KINDS)[number]>('line')
+  const [charting, setCharting] = useState(false)
+
+  // When a table is opened, the first column is the x axis and the first numeric column after it is drawn.
+  useEffect(() => {
+    if (!opened || opened.record.kind !== 'table' || opened.columns.length === 0) return
+    const numeric = opened.columns.filter((one) => one.type === 'number' || one.type === 'integer' || one.type === 'quantity')
+    const x = opened.columns[0]
+    setChartX(x.id)
+    const y = numeric.find((one) => one.id !== x.id) ?? opened.columns.find((one) => one.id !== x.id)
+    setChartY(y ? [y.id] : [])
+  }, [opened])
+
+  const chart = async (): Promise<void> => {
+    if (!opened || charting || chartY.length === 0) return
+    setCharting(true)
+    setSaveFailure(null)
+    try {
+      const result = await window.api.creationRun({ operation: 'artifact.chart', artifactId: opened.record.artifactId, x: chartX, y: chartY, kind: chartKind })
+      if (!result.ok) {
+        setSaveFailure(failureOf(result))
+        return
+      }
+      const made = result.value as { record: Record_ }
+      onNotify(`Drew "${made.record.title}" and checked the kept copy.`, 'info')
+      await refresh()
+      await open(made.record.artifactId)
+    } finally {
+      setCharting(false)
+    }
+  }
   const [query, setQuery] = useState('')
   const [hits, setHits] = useState<Hit[] | null>(null)
   const [renaming, setRenaming] = useState<string | null>(null)
@@ -496,10 +563,10 @@ export default function CreateView({ onClose, onNotify }: { onClose: () => void;
               {library.map((one) => (
                 <li key={one.artifactId} className={opened?.record.artifactId === one.artifactId ? 'selected' : ''}>
                   <button type="button" className="create-row" onClick={() => void open(one.artifactId)}>
-                    {one.kind === 'table' ? <Table2 size={14} /> : <FileText size={14} />}
+                    {iconFor(one.kind)}
                     <span className="create-row-title">{one.title}</span>
                     <span className="create-row-meta">
-                      {one.kind === 'table' ? `${one.shape.rows} rows × ${one.shape.columns} columns` : `${one.shape.rows} blocks`} · {sizeOf(one.bytes)}
+                      {shapeText(one.kind, one.shape)} · {sizeOf(one.bytes)}
                       {one.verified.ok ? '' : ' · not verified'}
                     </span>
                   </button>
@@ -553,7 +620,7 @@ export default function CreateView({ onClose, onNotify }: { onClose: () => void;
                   <li key={one.versionId}>
                     <History size={13} />
                     <span>
-                      <strong>Version {one.version}</strong> · {when(one.createdAt)} · {one.shape.columns > 0 ? `${one.shape.rows} rows × ${one.shape.columns} columns` : `${one.shape.rows} blocks`} · {sizeOf(one.bytes)}
+                      <strong>Version {one.version}</strong> · {when(one.createdAt)} · {shapeText(opened.record.kind, one.shape)} · {sizeOf(one.bytes)}
                       {one.reason ? ` · ${one.reason}` : ''}
                     </span>
                     <button type="button" className="queue-btn small ghost" disabled={busy !== null} onClick={() => void act('restore', { operation: 'artifact.restore', artifactId: opened.record.artifactId, versionId: one.versionId }, (r) => `Version ${one.version} is current again, as version ${r.version}.`)}>
@@ -566,17 +633,73 @@ export default function CreateView({ onClose, onNotify }: { onClose: () => void;
             )}
             <Checks verified={opened.record.verified} />
             <Losses loss={opened.record.loss} />
-            <pre className="create-preview">
-              {opened.preview}
-              {opened.truncated ? '\n…' : ''}
-            </pre>
+            {(opened.record.kind === 'plot' || opened.record.kind === 'diagram') && !opened.truncated ? (
+              <img className="create-drawing" alt={`${opened.record.title}, drawn`} src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(opened.preview)}`} />
+            ) : (
+              <pre className="create-preview">
+                {opened.preview}
+                {opened.truncated ? '\n…' : ''}
+              </pre>
+            )}
             {opened.record.kind === 'table' && (
-              <div className="create-save">
-                <button type="button" className="queue-btn small" disabled={analysing} onClick={() => void analyse()} title="Counts, statistics, quality and relationships, computed by Orbis and kept as a document">
-                  {analysing ? <Loader2 size={13} className="spin" /> : <BarChart3 size={13} />}
-                  Analyse this table
-                </button>
-              </div>
+              <>
+                <div className="create-save">
+                  <button type="button" className="queue-btn small" disabled={analysing} onClick={() => void analyse()} title="Counts, statistics, quality and relationships, computed by Orbis and kept as a document">
+                    {analysing ? <Loader2 size={13} className="spin" /> : <BarChart3 size={13} />}
+                    Analyse this table
+                  </button>
+                </div>
+                {opened.columns.length >= 2 && (
+                  <form
+                    className="create-chart"
+                    aria-label="Draw a chart from this table"
+                    onSubmit={(event) => {
+                      event.preventDefault()
+                      void chart()
+                    }}
+                  >
+                    <label className="create-field">
+                      <span>Across</span>
+                      <select value={chartX} onChange={(event) => setChartX(event.target.value)}>
+                        {opened.columns.map((one) => (
+                          <option key={one.id} value={one.id}>
+                            {one.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <fieldset className="create-field create-chart-y">
+                      <legend>Draw</legend>
+                      {opened.columns
+                        .filter((one) => one.id !== chartX)
+                        .map((one) => (
+                          <label key={one.id} className="create-chip">
+                            <input
+                              type="checkbox"
+                              checked={chartY.includes(one.id)}
+                              onChange={(event) => setChartY(event.target.checked ? [...chartY, one.id] : chartY.filter((id) => id !== one.id))}
+                            />
+                            {one.name}
+                          </label>
+                        ))}
+                    </fieldset>
+                    <label className="create-field">
+                      <span>As</span>
+                      <select value={chartKind} onChange={(event) => setChartKind(event.target.value as (typeof CHART_KINDS)[number])}>
+                        {CHART_KINDS.map((one) => (
+                          <option key={one} value={one}>
+                            {one}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <button type="submit" className="queue-btn small" disabled={charting || chartY.length === 0} title="A chart drawn by Orbis from these columns, kept as a drawing that remembers this table">
+                      {charting ? <Loader2 size={13} className="spin" /> : <LineChart size={13} />}
+                      Draw a chart
+                    </button>
+                  </form>
+                )}
+              </>
             )}
             <div className="create-save">
               <span>Save as</span>

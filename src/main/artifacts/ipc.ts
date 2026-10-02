@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, type BrowserWindow as BrowserWindowType, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, type BrowserWindow as BrowserWindowType, type IpcMainInvokeEvent, type NativeImage } from 'electron'
 import { randomBytes } from 'node:crypto'
 import { rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -123,6 +123,86 @@ export const renderPdfWith =
       const buffer = await Promise.race([printed, timeout])
       return new Uint8Array(buffer)
     } finally {
+      if (!win.isDestroyed()) win.destroy()
+      await rm(path, { force: true }).catch(() => undefined)
+    }
+  }
+
+/**
+ * An SVG drawn to PNG, by a window that renders off screen.
+ *
+ * The same shape as the print window: JavaScript off, its own in-memory session, a policy that forbids every fetch,
+ * destroyed as soon as the pixels are back.
+ *
+ * Off-screen rendering rather than a capture of a hidden window, because a hidden window has no frame to capture:
+ * `capturePage` on one fails with "UnknownVizError" unless something else happens to have made it paint, which is
+ * the kind of thing that works on the day it is tried and not on the day it matters. An off-screen window paints to
+ * a bitmap whether or not anything is visible, at one pixel per unit on every screen.
+ *
+ * Frames are taken only after the page has loaded, so the picture is the drawing and not the blank page before it,
+ * and an empty frame is not an answer: the window is nudged to paint again until a real one arrives.
+ */
+export const renderPngWith =
+  () =>
+  async (svg: string, width: number, height: number): Promise<Uint8Array> => {
+    const token = randomBytes(8).toString('hex')
+    const path = join(app.getPath('temp'), `orbis-draw-${token}.html`)
+    const html = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'"><style>html,body{margin:0;padding:0;background:#fff;overflow:hidden}svg{display:block}</style></head><body>${svg}</body></html>`
+    await writeFile(path, html, { encoding: 'utf8', mode: 0o600 })
+    const win = new BrowserWindow({
+      show: false,
+      width,
+      height,
+      useContentSize: true,
+      webPreferences: {
+        sandbox: true,
+        contextIsolation: true,
+        nodeIntegration: false,
+        nodeIntegrationInSubFrames: false,
+        javascript: false,
+        webSecurity: true,
+        spellcheck: false,
+        devTools: false,
+        webviewTag: false,
+        enableWebSQL: false,
+        backgroundThrottling: false,
+        offscreen: true,
+        partition: `draw-${token}`
+      }
+    })
+    let nudge: ReturnType<typeof setInterval> | null = null
+    let giveUp: ReturnType<typeof setTimeout> | null = null
+    try {
+      win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+      win.webContents.on('will-navigate', (event) => event.preventDefault())
+      let loaded = false
+      const frame = new Promise<NativeImage>((resolve) => {
+        win.webContents.on('paint', (_event, _dirty, image) => {
+          if (loaded && !image.isEmpty()) resolve(image)
+        })
+      })
+      await win.loadFile(path)
+      loaded = true
+      nudge = setInterval(() => {
+        if (!win.isDestroyed()) win.webContents.invalidate()
+      }, 120)
+      const timeout = new Promise<never>((_, reject) => {
+        giveUp = setTimeout(() => reject(new Error('Drawing took longer than a minute and was stopped.')), PRINT_TIMEOUT_MS)
+      })
+      const image = await Promise.race([frame, timeout])
+      // The frame is the window's, which can be a pixel or two larger than its content. Cropping from the corner is
+      // exact; scaling is only for a frame that came back smaller than asked, which would otherwise be a wrong size.
+      const size = image.getSize()
+      const fitted =
+        size.width === width && size.height === height
+          ? image
+          : size.width >= width && size.height >= height
+            ? image.crop({ x: 0, y: 0, width, height })
+            : image.resize({ width, height, quality: 'best' })
+      return new Uint8Array(fitted.toPNG())
+    } finally {
+      if (nudge) clearInterval(nudge)
+      if (giveUp) clearTimeout(giveUp)
       if (!win.isDestroyed()) win.destroy()
       await rm(path, { force: true }).catch(() => undefined)
     }

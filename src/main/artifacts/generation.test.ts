@@ -66,6 +66,33 @@ test('a document proposal is parsed by the same parser pasted Markdown goes thro
   assert.ok(out.notes.some((one) => /written by a model/.test(one)))
 })
 
+test('a diagram proposal becomes an editable, laid-out diagram', async () => {
+  const { generation } = withAnswers([
+    {
+      kind: 'diagram',
+      title: 'Login flow',
+      nodes: [{ id: 'start', label: 'Open the page', shape: 'start' }, { id: 'ok', label: 'Password right?', shape: 'decision' }, { id: 'in', label: 'Signed in', shape: 'end' }],
+      edges: [{ from: 'start', to: 'ok' }, { from: 'ok', to: 'in', label: 'yes' }, { from: 'ok', to: 'start', label: 'no' }]
+    }
+  ])
+  const out = await generation.generate('a flowchart of logging in')
+  assert.ok(out.body && out.body.kind === 'diagram')
+  if (!out.body || out.body.kind !== 'diagram') throw new Error('no diagram')
+  assert.equal(out.body.diagram.objects.length, 3)
+  assert.equal(out.body.diagram.connectors.length, 3)
+  assert.ok(out.body.diagram.objects[1].box.x > out.body.diagram.objects[0].box.x, 'laid out left to right')
+  assert.ok(out.notes.some((one) => /laid out|worked out by Orbis/.test(one)))
+})
+
+test('a chart cannot be written by a model, and the refusal says where charts come from', async () => {
+  const { generation } = withAnswers([{ kind: 'plot', title: 'x' }, { kind: 'plot', title: 'x' }])
+  const out = await generation.generate('a chart')
+  assert.equal(out.body, null)
+  assert.ok(out.problems.some((one) => /made from a table/.test(one.message)))
+  assert.equal(instructions().includes('"plot"'), false)
+  assert.ok(instructions().includes('"diagram"'))
+})
+
 test('a bad answer is argued with once, and the complaint names the real fault', async () => {
   const { generation, asked } = withAnswers([
     { kind: 'table', title: 'T', columns: [{ name: 'Amount', type: 'money' }] },

@@ -1,6 +1,7 @@
 import { buildTable, isDataError } from '../../shared/compute/data.ts'
 import { emptyDocument, fromMarkdown, isDocumentError } from '../../shared/compute/document.ts'
-import { describeKinds } from '../../shared/artifacts/kinds.ts'
+import { ARTIFACT_KINDS, describeKinds, type ArtifactKindId } from '../../shared/artifacts/kinds.ts'
+import { flowToArtifact } from '../../shared/artifacts/diagram.ts'
 import type { ArtifactBody } from '../../shared/artifacts/model.ts'
 import { buildable, PLAN_LIMITS, readProposal, type CreationIntent, type Problem } from '../../shared/artifacts/plan.ts'
 import { modelsFor, PROVIDERS, refusalKind } from '../../shared/providers.ts'
@@ -52,7 +53,9 @@ const MAX_TOKENS = 6000
 
 /** What the model is told. Built each time from the kinds table, so it never names a kind Orbis cannot make. */
 export function instructions(): string {
+  // Only the kinds a model may name. A chart is made from a table's numbers, so it is not offered as a thing to write.
   const kinds = describeKinds()
+    .filter((kind) => ARTIFACT_KINDS[kind.id as ArtifactKindId].orionMayName)
     .map((kind) => `- "${kind.id}": ${kind.describe} Formats: ${kind.writes.map((one) => one.format).join(', ')}.`)
     .join('\n')
   return `You turn a person's request into one thing Orbis will make. Answer with ONE JSON object and nothing else.
@@ -68,11 +71,13 @@ The object:
   "format": optional, one of that kind's formats,
   "columns": for a table only -- a list of {"name", "type", "unit"}; type is one of text, number, integer, boolean, date, category, quantity; unit only for a quantity,
   "rows": for a table only -- optional example rows, each a list of cell values in column order,
-  "markdown": for a document only -- the whole document, written as Markdown with headings, paragraphs, lists and tables
+  "markdown": for a document only -- the whole document, written as Markdown with headings, paragraphs, lists and tables,
+  "nodes": for a diagram only -- a list of {"id", "label", "shape"}; shape is one of step, decision, start, end,
+  "edges": for a diagram only -- a list of {"from", "to", "label"} joining node ids; label the branches of a decision ("yes", "no")
 }
 
 Rules:
-- Choose "table" for anything that is rows and columns: a tracker, a log, a register, a schedule, a list of records. Choose "document" for prose: a report, a letter, a plan, notes, a guide.
+- Choose "table" for anything that is rows and columns: a tracker, a log, a register, a schedule, a list of records. Choose "document" for prose: a report, a letter, a plan, notes, a guide. Choose "diagram" for a flow, a process, steps with decisions, an org chart: boxes and arrows. Never give positions; Orbis lays a diagram out.
 - Never invent real-world figures, statistics, prices, names of real people, or sources. If the person wants a real figure that you do not have, write a clearly marked placeholder such as "(fill in)" rather than a number.
 - For a table, leave "rows" empty unless the person asked for examples or sample data. Example rows must be obviously illustrative.
 - Write dates as YYYY-MM-DD.
@@ -152,6 +157,14 @@ Answer again, fixing those. Everything else about the format is the same.`
       const notes = ['The columns were chosen by a model from your request.']
       if (proposal.table.rows.length > 0) notes.push('The rows are examples written by a model. They are not records of anything real.')
       return { body: { kind: 'table', table }, notes }
+    }
+    if (proposal.diagram) {
+      const diagram = flowToArtifact({ title: proposal.intent.title, nodes: proposal.diagram.nodes, edges: proposal.diagram.edges })
+      if (diagram.objects.length === 0) return { error: 'The diagram came back with no boxes.' }
+      return {
+        body: { kind: 'diagram', diagram },
+        notes: ['The boxes and arrows were chosen by a model from your request; where they sit was worked out by Orbis.']
+      }
     }
     const parsed = fromMarkdown(proposal.markdown, 'b')
     if (isDocumentError(parsed)) return { error: `The document could not be read: ${parsed.message}` }

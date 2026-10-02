@@ -61,7 +61,7 @@ export const INTERCHANGE_LIMITS: Readonly<
 
 // ---------------------------------------------------------------- format registry
 
-export type FormatId = 'csv' | 'tsv' | 'json' | 'ndjson' | 'xml' | 'markdown' | 'html' | 'text' | 'pdf' | 'xlsx' | 'docx' | 'pptx' | 'binary'
+export type FormatId = 'csv' | 'tsv' | 'json' | 'ndjson' | 'xml' | 'markdown' | 'html' | 'text' | 'pdf' | 'xlsx' | 'docx' | 'pptx' | 'svg' | 'png' | 'binary'
 
 export interface FormatCapability {
   id: FormatId
@@ -235,6 +235,28 @@ export const FORMATS: Readonly<Record<FormatId, FormatCapability>> = Object.free
       'The full text of each section is kept in the speaker notes, so nothing is lost to the slide.',
       'Orbis does not read decks back yet.'
     ]
+  },
+  svg: {
+    id: 'svg',
+    name: 'SVG drawing',
+    extensions: ['.svg'],
+    mediaTypes: ['image/svg+xml'],
+    canImport: false,
+    canExport: true,
+    streaming: false,
+    carries: { units: false, types: false, metadata: false, formatting: true, provenance: false, hierarchy: false },
+    limitations: ['A vector drawing: it scales without blurring and opens in a browser or a drawing program. The numbers behind it are in the artifact, not in the file.']
+  },
+  png: {
+    id: 'png',
+    name: 'PNG image',
+    extensions: ['.png'],
+    mediaTypes: ['image/png'],
+    canImport: false,
+    canExport: true,
+    streaming: false,
+    carries: { units: false, types: false, metadata: false, formatting: true, provenance: false, hierarchy: false },
+    limitations: ['A picture at one size. For something that scales, save the SVG.']
   },
   text: {
     id: 'text',
@@ -1387,8 +1409,8 @@ export function exportTable(table: Table, request: ExportRequest): ExportResult 
     return fail('UNSUPPORTED_FORMAT', 'encode', `Orbis reads ${capability.name} but does not write it.`, 'Export as CSV, JSON, Markdown or plain text.')
   }
 
-  if (request.format === 'xlsx') {
-    return fail('UNSUPPORTED_FORMAT', 'encode', 'A workbook is bytes, not text, and is written by the artifact service.', 'Ask the artifact service to export as xlsx.')
+  if (request.format === 'xlsx' || request.format === 'svg' || request.format === 'png') {
+    return fail('UNSUPPORTED_FORMAT', 'encode', `A table is not written as ${request.format} here; a workbook is bytes made by the artifact service, and a drawing is made from a chart.`, 'Ask the artifact service, or make a chart from the table first.')
   }
 
   const hasUnits = table.columns.some((one) => one.unit !== null)
@@ -1503,8 +1525,8 @@ export function exportDocument(document: StructuredDocument, format: FormatId): 
   if (format === 'pdf') {
     return fail('UNSUPPORTED_FORMAT', 'encode', 'PDF is printed from the HTML, not written as text.', 'Ask the artifact service to export as PDF.')
   }
-  if (format === 'docx' || format === 'pptx') {
-    return fail('UNSUPPORTED_FORMAT', 'encode', `A ${format === 'docx' ? 'Word document' : 'PowerPoint deck'} is bytes, not text, and is written by the artifact service.`, `Ask the artifact service to export as ${format}.`)
+  if (format === 'docx' || format === 'pptx' || format === 'svg' || format === 'png') {
+    return fail('UNSUPPORTED_FORMAT', 'encode', `A document is not written as ${format} here; that is bytes made by the artifact service.`, `Ask the artifact service to export as ${format}.`)
   }
   const loss = lossFor(format, { formatting: true, metadata: true, hierarchy: true })
   if (isInterchangeError(loss)) return loss

@@ -36,6 +36,10 @@ import { ArtifactStore, CONTENT_PREFIX, SOURCE_FILE } from './store.ts'
 import { toDelimited } from '../../shared/compute/data.ts'
 import { toText } from '../../shared/compute/documentHtml.ts'
 import { analyseTable, analysisDocument } from '../../shared/artifacts/analysis.ts'
+import { diagramToSvg, plotToSvg, verifySvgFile } from '../../shared/artifacts/svg.ts'
+import { asNumber, formatDate, type Column } from '../../shared/compute/data.ts'
+import { buildPlot, isPlotError, seriesFromPoints, type Series, type SeriesKind } from '../../shared/compute/plot.ts'
+import { decodePng } from '../chromium/png.ts'
 
 /**
  * The one door for making, keeping and exporting artifacts.
@@ -80,8 +84,11 @@ const OPERATIONS: Readonly<Record<string, string>> = Object.freeze({
   'artifact.versions': 'Every version of an artifact: the current one and the ones before it.',
   'artifact.rename': 'Give an artifact a new name. Not a new version: the name is not the content.',
   'artifact.duplicate': 'A copy of an artifact as a new artifact that remembers where it came from.',
-  'artifact.search': 'Find artifacts by words in their name, notes or content.'
+  'artifact.search': 'Find artifacts by words in their name, notes or content.',
+  'artifact.chart': 'A chart from the columns of a table, kept as a drawing that remembers the table it came from.'
 })
+
+const SERIES_KINDS: readonly SeriesKind[] = Object.freeze(['line', 'bar', 'scatter', 'area', 'step'])
 
 export const ARTIFACT_OPERATIONS = Object.freeze(Object.keys(OPERATIONS))
 
@@ -111,6 +118,8 @@ export interface ArtifactServiceOptions {
    * rather than offering a button that fails.
    */
   renderPdf?(html: string): Promise<Uint8Array>
+  /** An SVG drawn to PNG bytes at a size, by the same kind of hidden window. Optional for the same reason. */
+  renderPng?(svg: string, width: number, height: number): Promise<Uint8Array>
   /**
    * Orion, for making something from a sentence.
    *
@@ -136,11 +145,48 @@ interface Rendered {
   notes: string[]
   /** For a deck: how many slides were written, so the read-back can count them. */
   count?: number
+  /** For a picture: the size it was drawn at, so the read-back can check the image is that size. */
+  size?: { width: number; height: number }
 }
 
 const str = (value: unknown, max: number): string => (typeof value === 'string' ? value.slice(0, max) : '')
 const encode = (text: string): Uint8Array => new TextEncoder().encode(text)
 const decode = (bytes: Uint8Array): string => new TextDecoder().decode(bytes)
+
+/** The size an SVG declares on its root, for drawing it to pixels at the size it was made. */
+const svgSize = (svg: string): { width: number; height: number } => {
+  const width = Number(/<svg[^>]*\swidth="(\d+)"/.exec(svg)?.[1] ?? 880)
+  const height = Number(/<svg[^>]*\sheight="(\d+)"/.exec(svg)?.[1] ?? 520)
+  return { width: Math.min(4000, Math.max(16, width)), height: Math.min(4000, Math.max(16, height)) }
+}
+
+/** A PNG file read back: size, hash, the signature, and that it decodes to the size it was drawn at. */
+const verifyPngFile = (expected: { bytes: number; hash: string; width: number; height: number }, readBack: Uint8Array): VerifyResult => {
+  const checks: VerifyResult['checks'] = [
+    { what: 'written', passed: readBack.length === expected.bytes, describe: `The file on disk is ${readBack.length.toLocaleString('en')} bytes; ${expected.bytes.toLocaleString('en')} were written.` },
+    { what: 'checksum', passed: hashOf(readBack) === expected.hash, describe: 'The hash of the file on disk matches the one recorded when it was written.' }
+  ]
+  const signed = readBack.length > 8 && readBack[0] === 0x89 && readBack[1] === 0x50 && readBack[2] === 0x4e && readBack[3] === 0x47
+  checks.push({ what: 'png', passed: signed, describe: signed ? 'The file begins the way every PNG does.' : 'The file does not begin as a PNG does.' })
+  let decoded: { width: number; height: number; bgra: Buffer } | null = null
+  try {
+    decoded = signed ? decodePng(Buffer.from(readBack)) : null
+  } catch {
+    decoded = null
+  }
+  const sized = decoded !== null && decoded.width === expected.width && decoded.height === expected.height
+  checks.push({ what: 'size', passed: sized, describe: decoded ? `The image is ${decoded.width}×${decoded.height}; ${expected.width}×${expected.height} was drawn.` : 'The image could not be decoded.' })
+  // A picture where every pixel is the same colour is a blank page, whatever its size says: the drawing never arrived.
+  let drawn = false
+  if (decoded) {
+    const pixels = decoded.bgra
+    for (let i = 4; i + 3 < pixels.length && !drawn; i += 4) {
+      drawn = pixels[i] !== pixels[0] || pixels[i + 1] !== pixels[1] || pixels[i + 2] !== pixels[2] || pixels[i + 3] !== pixels[3]
+    }
+  }
+  checks.push({ what: 'drawn', passed: drawn, describe: drawn ? 'The image has a drawing in it, not one flat colour.' : 'The image is one flat colour: nothing was drawn.' })
+  return { ok: checks.every((one) => one.passed), checks, reimported: decoded ? { rows: decoded.height, columns: decoded.width } : null, differences: [] }
+}
 
 export class ArtifactService {
   private readonly o: ArtifactServiceOptions
@@ -210,6 +256,8 @@ export class ArtifactService {
           return await this.duplicate(profileId, operation, req, fail)
         case 'artifact.search':
           return { ok: true, operation, value: await this.search(profileId, str(req.query, 200)) }
+        case 'artifact.chart':
+          return await this.chart(profileId, operation, req, fail)
         default:
           return fail('unknown-operation', `Orbis has no artifact operation called "${operation}".`)
       }
@@ -224,7 +272,9 @@ export class ArtifactService {
   }
 
   private canProduce(format: FormatId): boolean {
-    return format !== 'pdf' || typeof this.o.renderPdf === 'function'
+    if (format === 'pdf') return typeof this.o.renderPdf === 'function'
+    if (format === 'png') return typeof this.o.renderPng === 'function'
+    return true
   }
 
   /** The formats a kind can leave as, here and now, for the chooser. */
@@ -243,6 +293,10 @@ export class ArtifactService {
       const table: Table = { ...parsed.table, source }
       return { kind: 'table', table }
     }
+    // A drawing is never pasted: a chart comes from a table's numbers and a diagram from a description. Falling through
+    // to the document reader here would quietly keep the pasted text as a document called a chart.
+    if (kind === 'plot') return { error: 'bad-input', message: 'A chart is drawn from a table. Open or paste the table, then choose the columns to draw.' }
+    if (kind === 'diagram') return { error: 'bad-input', message: 'A diagram is made by describing it to Orion, not pasted.' }
     const parsed = fromMarkdown(text, 'b')
     if (isDocumentError(parsed)) return { error: 'parse', message: parsed.message }
     const document: StructuredDocument = emptyDocument('document', title)
@@ -252,6 +306,21 @@ export class ArtifactService {
   }
 
   private async render(body: ArtifactBody, format: FormatId, title = ''): Promise<Rendered | { error: string; message: string }> {
+    if (body.kind === 'plot' || body.kind === 'diagram') {
+      const made = body.kind === 'plot' ? plotToSvg(body.plot) : diagramToSvg(body.diagram)
+      const loss = lossFor(format, { formatting: true })
+      if (isInterchangeError(loss)) return { error: 'encode', message: loss.message }
+      if (format === 'svg') {
+        return { bytes: encode(made.svg), text: made.svg, scan: made.svg, format, hash: hashOf(encode(made.svg)), loss, notes: made.notes }
+      }
+      if (format === 'png') {
+        if (!this.o.renderPng) return { error: 'unavailable', message: 'Drawing to PNG is not available in this copy of Orbis.' }
+        const size = svgSize(made.svg)
+        const bytes = await this.o.renderPng(made.svg, size.width, size.height)
+        return { bytes, text: null, scan: made.svg, format, hash: hashOf(bytes), loss, notes: made.notes, size }
+      }
+      return { error: 'encode', message: `A ${ARTIFACT_KINDS[body.kind].name.toLowerCase()} is not written as ${format}.` }
+    }
     if (body.kind === 'table' && format === 'xlsx') {
       const loss = lossFor('xlsx', { units: body.table.columns.some((one) => one.unit !== null), types: true, metadata: body.table.source !== '', hierarchy: false })
       if (isInterchangeError(loss)) return { error: 'encode', message: loss.message }
@@ -295,6 +364,8 @@ export class ArtifactService {
   private async verify(body: ArtifactBody, rendered: Rendered, readBack: Uint8Array): Promise<VerifyResult> {
     const shape = { bytes: rendered.bytes.length, hash: rendered.hash }
     if (rendered.format === 'pdf') return verifyPdfFile(shape, readBack)
+    if (rendered.format === 'svg') return verifySvgFile(shape, readBack)
+    if (rendered.format === 'png') return verifyPngFile({ ...shape, width: rendered.size?.width ?? 0, height: rendered.size?.height ?? 0 }, readBack)
     if (rendered.format === 'xlsx' && body.kind === 'table') return verifyXlsx(body.table, shape, readBack)
     if (rendered.format === 'docx' && body.kind === 'document') return verifyDocx(shape, readBack)
     if (rendered.format === 'pptx' && body.kind === 'document') return verifyPptx({ ...shape, slides: rendered.count ?? 0 }, readBack)
@@ -307,13 +378,114 @@ export class ArtifactService {
       loss: rendered.loss,
       notes: rendered.notes
     }
-    return body.kind === 'table' ? verifyTableFile(body.table, expected, readBack) : verifyDocumentFile(body.document.blocks.length, expected, readBack)
+    if (body.kind === 'table') return verifyTableFile(body.table, expected, readBack)
+    if (body.kind === 'document') return verifyDocumentFile(body.document.blocks.length, expected, readBack)
+    // A drawing stored as svg: the generic checks above already covered it, but every kind must say what it verified.
+    return verifySvgFile({ bytes: rendered.bytes.length, hash: rendered.hash }, readBack)
   }
 
   private shapeOf(body: ArtifactBody): { rows: number; columns: number } {
-    return body.kind === 'table'
-      ? { rows: body.table.rows.length, columns: body.table.columns.length }
-      : { rows: body.document.blocks.length, columns: 0 }
+    switch (body.kind) {
+      case 'table':
+        return { rows: body.table.rows.length, columns: body.table.columns.length }
+      case 'document':
+        return { rows: body.document.blocks.length, columns: 0 }
+      case 'plot':
+        return { rows: body.plot.series.reduce((n, one) => n + one.segments.reduce((m, s) => m + s.points.length, 0), 0), columns: body.plot.series.length }
+      case 'diagram':
+        return { rows: body.diagram.objects.length, columns: body.diagram.connectors.length }
+    }
+  }
+
+  // ---------------------------------------------------------------- chart
+
+  /**
+   * A chart from a table's columns.
+   *
+   * The numbers are the table's own and the axes are the plot engine's. A column of dates or categories on the x
+   * axis is drawn in row order with its own values as the tick labels, because the engine's axes are numeric and a
+   * date in milliseconds is not something a person reads. Every row where a value could not be read is left out and
+   * counted.
+   */
+  private async chart(
+    profileId: string,
+    operation: string,
+    req: Record<string, unknown>,
+    fail: (error: string, message: string, detail?: unknown) => ArtifactResult
+  ): Promise<ArtifactResult> {
+    const record = await this.existing(profileId, req, fail)
+    if ('ok' in record) return record
+    if (record.kind !== 'table') return fail('bad-input', 'A chart is made from a table.')
+    const body = await this.bodyOf(profileId, record)
+    if (!body || body.kind !== 'table') return fail('not-found', 'The artifact is listed but its source is missing.')
+    const table = body.table
+
+    const find = (name: string): { column: Column; index: number } | null => {
+      const index = table.columns.findIndex((one) => one.id === name || one.name.toLowerCase() === name.toLowerCase())
+      return index < 0 ? null : { column: table.columns[index], index }
+    }
+    const xName = str(req.x, 120)
+    const x = find(xName)
+    if (!x) return fail('bad-input', `There is no column called "${xName}". The columns are: ${table.columns.map((one) => one.name).join(', ')}.`)
+    const yNames = (Array.isArray(req.y) ? req.y : [req.y]).filter((one): one is string => typeof one === 'string').slice(0, 8)
+    const ys = yNames.map((name) => ({ name, found: find(name) }))
+    const missing = ys.filter((one) => one.found === null).map((one) => one.name)
+    if (ys.length === 0 || missing.length > 0) {
+      return fail('bad-input', ys.length === 0 ? 'Choose at least one column to draw.' : `There is no column called ${missing.map((one) => `"${one}"`).join(', ')}.`)
+    }
+    const kind = str(req.kind, 20).toLowerCase()
+    const seriesKind: SeriesKind = (SERIES_KINDS as readonly string[]).includes(kind) ? (kind as SeriesKind) : 'line'
+
+    // X: numeric columns are drawn as numbers; dates and categories in row order, with the values as tick labels.
+    const numericX = x.column.type === 'number' || x.column.type === 'integer' || x.column.type === 'quantity'
+    const xValues = table.rows.map((row, i) => (numericX ? asNumber(row.cells[x.index] ?? null) : i))
+    const notes: string[] = []
+    const series: Series[] = []
+    for (const y of ys) {
+      const found = y.found!
+      const points: { x: number; y: number }[] = []
+      let skipped = 0
+      table.rows.forEach((row, i) => {
+        const xv = xValues[i]
+        const yv = asNumber(row.cells[found.index] ?? null)
+        if (xv === null || yv === null) skipped += 1
+        else points.push({ x: xv, y: yv })
+      })
+      if (points.length === 0) return fail('bad-input', `"${found.column.name}" has no values that can be read as numbers.`)
+      if (skipped > 0) notes.push(`"${found.column.name}": ${skipped} row${skipped === 1 ? '' : 's'} left out because the value could not be read as a number.`)
+      series.push(seriesFromPoints(found.column.id, found.column.name, points, { kind: seriesKind, unit: found.column.unit, provenance: record.source.startsWith('file:') ? 'imported' : 'unknown' }))
+    }
+
+    const title = `${ys.map((one) => one.found!.column.name).join(', ')} by ${x.column.name}`
+    const made = buildPlot('chart', series, { title, x: { label: x.column.name, unit: numericX ? x.column.unit : null }, y: { label: ys.length === 1 ? ys[0].found!.column.name : '', unit: ys.length === 1 ? ys[0].found!.column.unit : null } })
+    if (isPlotError(made)) return fail('bad-input', made.message)
+
+    let plot = made
+    if (!numericX) {
+      // Row order on the axis, labelled by what is in the column. Every k-th label when there are too many to read.
+      const every = Math.max(1, Math.ceil(table.rows.length / 12))
+      const ticks = table.rows.map((row, i) => {
+        const cell = row.cells[x.index] ?? null
+        const label = x.column.type === 'date' && typeof cell === 'number' ? formatDate(cell) : String(cell ?? '')
+        return { value: i, label: i % every === 0 ? label : '', major: i % every === 0 }
+      })
+      plot = { ...made, x: { ...made.x, ticks, label: x.column.name } }
+      notes.push(`"${x.column.name}" is drawn in row order, with its values as the labels.`)
+    }
+
+    return this.keep(
+      profileId,
+      operation,
+      { kind: 'plot', plot },
+      {
+        title,
+        source: `"${record.title}" (its numbers)`,
+        notes: [`Drawn from the table "${record.title}" (version ${record.version}): ${ys.map((one) => one.found!.column.name).join(', ')} against ${x.column.name}.`, ...notes],
+        acceptSecrets: true,
+        derivedFrom: { artifactId: record.artifactId, versionId: record.versionId, title: record.title }
+      },
+      fail
+    )
   }
 
   // ---------------------------------------------------------------- create
@@ -640,6 +812,12 @@ export class ArtifactService {
     if (!record) return fail('not-found', 'There is no artifact with that id.')
     const bytes = await this.o.store.readFile(profileId, artifactId, record.file)
     const text = bytes ? decode(bytes) : ''
+    // A table's columns, so a chart can be asked for by name without the renderer parsing the stored copy.
+    let columns: { id: string; name: string; type: string }[] = []
+    if (record.kind === 'table') {
+      const body = await this.bodyOf(profileId, record)
+      if (body && body.kind === 'table') columns = body.table.columns.map((one) => ({ id: one.id, name: one.name, type: one.type }))
+    }
     return {
       ok: true,
       operation,
@@ -648,6 +826,7 @@ export class ArtifactService {
         ref: refOf(record),
         preview: text.slice(0, LIMITS.preview),
         truncated: text.length > LIMITS.preview,
+        columns,
         // Every format this kind can be exported as here, with what each one drops, so the chooser can say so up front.
         formats: this.formatsFor(record.kind)
       }

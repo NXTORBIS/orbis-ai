@@ -50,7 +50,7 @@ test('a good table proposal becomes columns and example rows, and the rows are l
 test('a format the kind cannot be written in is refused with the ones it can', () => {
   const out = readProposal({ kind: 'document', title: 'x', format: 'csv', markdown: '# x' })
   assert.equal(out.proposal, null)
-  assert.match(errors(out.problems)[0], /cannot be written as "csv"\. Choose one of: markdown, html, pdf, text/)
+  assert.match(errors(out.problems)[0], /cannot be written as "csv"\. Choose one of: markdown, html, pdf, docx, pptx, text/)
 })
 
 test('a document needs its markdown and nothing else', () => {
@@ -58,6 +58,40 @@ test('a document needs its markdown and nothing else', () => {
   const out = readProposal({ kind: 'document', title: 'Notes', markdown: '# Notes\n\nText.', columns: [] })
   assert.ok(out.proposal && 'markdown' in out.proposal)
   assert.ok(out.problems.some((one) => /"columns" were given for a document/.test(one.message)))
+})
+
+test('a chart is not something Orion writes: the proposal is refused and points at the table', () => {
+  const out = readProposal({ kind: 'plot', title: 'Energy' })
+  assert.equal(out.proposal, null)
+  assert.ok(errors(out.problems).some((one) => /made from a table.s own numbers, not written: propose the table/.test(one)))
+})
+
+test('a diagram proposal is read node by node, and a dangling or malformed edge is a named fault', () => {
+  const bad = readProposal({
+    kind: 'diagram',
+    title: 'Flow',
+    nodes: [{ id: 'a', label: 'Start', shape: 'start' }, { id: 'a', label: 'Again', shape: 'step' }, { label: 'no id' }, { id: 'd', label: 'Odd', shape: 'cloud' }],
+    edges: [{ from: 'a', to: 'zzz' }, 'x']
+  })
+  assert.equal(bad.proposal, null)
+  const said = errors(bad.problems).join(' | ')
+  assert.match(said, /Two nodes have the id "a"/)
+  assert.match(said, /nodes\[2\] has no id/)
+  assert.match(said, /shape "cloud"/)
+  assert.match(said, /edges\[0\] joins "a" to "zzz"/)
+  assert.match(said, /edges\[1\] joins "\?" to "\?"/)
+
+  const good = readProposal({
+    kind: 'diagram',
+    title: 'Flow',
+    nodes: [{ id: 'a', label: 'Start', shape: 'start' }, { id: 'b', label: 'Ok?', shape: 'decision' }, { id: 'c', label: 'Done', shape: 'end' }],
+    edges: [{ from: 'a', to: 'b' }, { from: 'b', to: 'c', label: 'yes' }, { from: 'b', to: 'a', label: 'no' }]
+  })
+  assert.ok(good.proposal?.diagram, errors(good.problems).join(' | '))
+  assert.equal(good.proposal?.diagram?.nodes.length, 3)
+  assert.equal(good.proposal?.diagram?.edges.length, 3)
+  assert.equal(good.proposal?.diagram?.edges[0].label, '')
+  assert.equal(good.proposal?.intent.format, 'svg')
 })
 
 test('a missing title is an error, and the default format is the kind first format', () => {

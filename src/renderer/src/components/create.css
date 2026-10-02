@@ -361,6 +361,77 @@
   color: var(--muted);
 }
 
+/* A chart or a diagram, shown as the picture it is. White paper, because the drawing is made for paper. */
+.create-drawing {
+  display: block;
+  width: 100%;
+  max-height: 420px;
+  object-fit: contain;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid var(--pill-border);
+}
+
+.create-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--pill-bg);
+  border: 1px solid var(--pill-border);
+}
+
+.create-chart select {
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg-mid);
+  border: 1px solid var(--pill-border);
+  border-radius: 8px;
+  padding: 6px 8px;
+  outline: none;
+}
+
+.create-chart select:focus {
+  border-color: var(--cyan);
+}
+
+.create-chart-y {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.create-chart-y legend {
+  padding: 0;
+  margin-bottom: 5px;
+}
+
+.create-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text);
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--pill-border);
+  background: var(--bg-mid);
+  cursor: pointer;
+}
+
+.create-chip input {
+  margin: 0;
+  accent-color: var(--cyan);
+}
+
 .create-failure {
   border: 1px solid var(--red);
   border-radius: 10px;

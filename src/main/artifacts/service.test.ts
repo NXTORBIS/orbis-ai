@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ArtifactService, ARTIFACT_OPERATIONS, type ArtifactResult } from './service.ts'
 import { ArtifactStore } from './store.ts'
+import { encodePng } from '../chromium/png.ts'
 
 /*
  * The service against a real folder and a stand-in for the save dialog. The dialog is the one thing that cannot run
@@ -24,6 +25,8 @@ interface Harness {
   corrupt: boolean
   /** What the stand-in print engine was handed, so a test can see the HTML that would have been printed. */
   printed: string[]
+  /** Makes the stand-in drawing window hand back a blank page, to simulate a drawing that never painted. */
+  blank: boolean
 }
 
 /** A stand-in print engine: a PDF-shaped file with one page per heading, so the page count means something. */
@@ -33,9 +36,20 @@ const fakePdf = (html: string): Uint8Array => {
   return new TextEncoder().encode(`%PDF-1.7\n1 0 obj << /Type /Catalog >> endobj\n2 0 obj << /Type /Pages /Count ${pages} >> endobj\n${objects}\n%%EOF`)
 }
 
-const withService = async (run: (h: Harness) => Promise<void>, options: { pdf?: boolean } = { pdf: true }): Promise<void> => {
+/** A stand-in for the drawing window: a real PNG of the asked-for size, white with one dark line across it. */
+const fakePng = (svg: string, width: number, height: number): Uint8Array => {
+  const bgra = Buffer.alloc(width * height * 4, 0xff)
+  // An SVG with nothing in it draws nothing, which is how a test asks for a blank page.
+  if (/<(path|rect|circle|line|polygon|text)[\s/>]/.test(svg)) {
+    const row = Math.floor(height / 2) * width * 4
+    for (let x = 0; x < width; x++) bgra.writeUInt32LE(0xff000000, row + x * 4)
+  }
+  return new Uint8Array(encodePng({ width, height, bgra }))
+}
+
+const withService = async (run: (h: Harness) => Promise<void>, options: { pdf?: boolean; png?: boolean } = { pdf: true, png: true }): Promise<void> => {
   const dir = await mkdtemp(join(tmpdir(), 'orbis-artifact-service-'))
-  const h: Harness = { service: null as unknown as ArtifactService, dir, nextDestination: null, nextSource: null, corrupt: false, printed: [] }
+  const h: Harness = { service: null as unknown as ArtifactService, dir, nextDestination: null, nextSource: null, corrupt: false, printed: [], blank: false }
   let counter = 0
   h.service = new ArtifactService({
     store: new ArtifactStore({ userData: dir }),
@@ -51,6 +65,7 @@ const withService = async (run: (h: Harness) => Promise<void>, options: { pdf?: 
             return fakePdf(html)
           }
         }),
+    ...(options.png === false ? {} : { renderPng: async (svg: string, width: number, height: number) => fakePng(h.blank ? '' : svg, width, height) }),
     writeFile: async (path, bytes) => {
       await writeFile(path, h.corrupt ? bytes.slice(0, Math.max(1, bytes.length - 3)) : bytes)
     }
@@ -82,7 +97,7 @@ test('the operations are a fixed list and an unknown one is refused by name', ()
 test('what Orbis can create comes from the table', () =>
   withService(async ({ service }) => {
     const kinds = ok<{ id: string }[]>(await service.run('default', { operation: 'artifact.kinds' }))
-    assert.deepEqual(kinds.map((one) => one.id), ['table', 'document'])
+    assert.deepEqual(kinds.map((one) => one.id), ['table', 'document', 'plot', 'diagram'])
   }))
 
 test('a table pasted as CSV is kept, read back from disk, and verified before it is reported', () =>
@@ -366,5 +381,84 @@ test('without a print engine, PDF is simply not offered', () =>
       assert.equal(result.ok, false)
       if (!result.ok) assert.match(result.message, /can be saved as: markdown, html, docx, pptx, text/)
     },
-    { pdf: false }
+    { pdf: false, png: true }
+  ))
+
+const READINGS = 'date,site,mwh,solar\n2026-10-01,HQ,412,96\n2026-10-02,Depot,288,12\n2026-10-03,Warehouse,530,140\n2026-10-04,HQ,415,99\n'
+
+test('a chart is drawn from a table by column name, remembers the table, and saves as SVG and PNG that read back', () =>
+  withService(async (h) => {
+    const table = ok(await h.service.run('default', { operation: 'artifact.create', kind: 'table', title: 'Readings', text: READINGS }))
+    const tableId = (table.record as { artifactId: string }).artifactId
+    const read = ok<{ columns: { id: string; name: string; type: string }[] }>(await h.service.run('default', { operation: 'artifact.read', artifactId: tableId }))
+    assert.deepEqual(read.columns.map((one) => one.name), ['date', 'site', 'mwh', 'solar'])
+
+    const chart = ok(await h.service.run('default', { operation: 'artifact.chart', artifactId: tableId, x: 'date', y: ['mwh', 'solar'], kind: 'bar' }))
+    const record = chart.record as { artifactId: string; kind: string; title: string; format: string; derivedFrom: { artifactId: string } | null; verified: { ok: boolean; checks: { what: string }[] }; shape: { rows: number; columns: number }; notes: string[] }
+    assert.equal(record.kind, 'plot')
+    assert.equal(record.format, 'svg')
+    assert.equal(record.title, 'mwh, solar by date')
+    assert.equal(record.derivedFrom?.artifactId, tableId)
+    assert.equal(record.verified.ok, true)
+    assert.deepEqual(record.verified.checks.map((one) => one.what), ['written', 'checksum', 'svg', 'drawn'])
+    assert.deepEqual(record.shape, { rows: 8, columns: 2 }, 'eight points across two series')
+    assert.ok(record.notes.some((one) => /row order/.test(one)), 'a date axis is drawn in row order and says so')
+
+    const preview = ok<{ preview: string }>(await h.service.run('default', { operation: 'artifact.read', artifactId: record.artifactId }))
+    assert.ok(preview.preview.startsWith('<svg'))
+    assert.ok(preview.preview.includes('2026-10-03'), 'the dates are the tick labels')
+
+    h.nextDestination = join(h.dir, 'chart.svg')
+    const svg = ok<{ path: string; verified: { ok: boolean } }>(await h.service.run('default', { operation: 'artifact.export', artifactId: record.artifactId, format: 'svg' }))
+    assert.equal(svg.verified.ok, true)
+    assert.match(await readFile(svg.path, 'utf8'), /^<svg/)
+
+    h.nextDestination = join(h.dir, 'chart.png')
+    const png = ok<{ path: string; verified: { ok: boolean; checks: { what: string; passed: boolean }[] } }>(await h.service.run('default', { operation: 'artifact.export', artifactId: record.artifactId, format: 'png' }))
+    assert.equal(png.verified.ok, true, JSON.stringify(png.verified.checks))
+    assert.deepEqual(png.verified.checks.map((one) => one.what), ['written', 'checksum', 'png', 'size', 'drawn'])
+    const bytes = await readFile(png.path)
+    assert.equal(bytes[1], 0x50)
+
+    // A picture that came back as one flat colour is a failure with its path, not a saved chart.
+    h.blank = true
+    h.nextDestination = join(h.dir, 'blank.png')
+    const blank = await h.service.run('default', { operation: 'artifact.export', artifactId: record.artifactId, format: 'png' })
+    assert.equal(blank.ok, false)
+    if (!blank.ok) {
+      const detail = blank.detail as { verified?: { checks: { what: string; passed: boolean }[] } } | undefined
+      assert.equal(detail?.verified?.checks.find((one) => one.what === 'drawn')?.passed, false, JSON.stringify(blank))
+    }
+  }))
+
+test('a chart with a numeric x axis uses the numbers, and a bad column or a non-table is refused by name', () =>
+  withService(async (h) => {
+    const table = ok(await h.service.run('default', { operation: 'artifact.create', kind: 'table', title: 'Fit', text: 'x,y,label\n1,2,a\n2,4,b\n3,6.5,c\n4,8,d\n' }))
+    const tableId = (table.record as { artifactId: string }).artifactId
+    const chart = ok(await h.service.run('default', { operation: 'artifact.chart', artifactId: tableId, x: 'x', y: 'y', kind: 'scatter' }))
+    const record = chart.record as { artifactId: string; notes: string[]; shape: { rows: number } }
+    assert.equal(record.notes.some((one) => /row order/.test(one)), false)
+    assert.equal(record.shape.rows, 4)
+
+    const missing = await h.service.run('default', { operation: 'artifact.chart', artifactId: tableId, x: 'x', y: ['nope'] })
+    assert.equal(missing.ok, false)
+    if (!missing.ok) assert.match(missing.message, /no column called "nope"/)
+    const words = await h.service.run('default', { operation: 'artifact.chart', artifactId: tableId, x: 'x', y: ['label'] })
+    assert.equal(words.ok, false)
+    if (!words.ok) assert.match(words.message, /no values that can be read as numbers/)
+    const notTable = await h.service.run('default', { operation: 'artifact.chart', artifactId: record.artifactId, x: 'x', y: ['y'] })
+    assert.equal(notTable.ok, false)
+    if (!notTable.ok) assert.match(notTable.message, /made from a table/)
+  }))
+
+test('a drawing cannot be pasted in, and without a drawing window PNG is simply not offered', () =>
+  withService(
+    async (h) => {
+      const pasted = await h.service.run('default', { operation: 'artifact.create', kind: 'plot', text: '<svg></svg>' })
+      assert.equal(pasted.ok, false)
+      const kinds = ok<{ id: string; writes: { format: string }[] }[]>(await h.service.run('default', { operation: 'artifact.kinds' }))
+      assert.deepEqual(kinds.find((one) => one.id === 'plot')?.writes.map((one) => one.format), ['svg'])
+      assert.deepEqual(kinds.find((one) => one.id === 'diagram')?.writes.map((one) => one.format), ['svg'])
+    },
+    { pdf: true, png: false }
   ))
