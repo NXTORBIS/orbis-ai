@@ -291,7 +291,7 @@ export default function ChatView(props: Props): React.JSX.Element {
     // Measured only for a scroll that is theirs. Measuring also records where the reader was, and after a move
     // nobody made that record is exactly what is needed to put them back -- so it is left as it was.
     const view = theirs ? measure(el) : { scrollTop: el.scrollTop, scrollHeight: el.scrollHeight, clientHeight: el.clientHeight }
-    const outcome = onScrolled(scroll.current, view, showJumpRef.current, theirs)
+    const outcome = onScrolled(scroll.current, view, showJumpRef.current, theirs, (tailRef.current?.offsetHeight ?? 0) > 0)
     scroll.current = outcome.state
     reflect(el)
     if (outcome.showJump !== showJumpRef.current) setShowJump(outcome.showJump)

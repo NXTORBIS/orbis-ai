@@ -311,6 +311,9 @@ export function readChatIntent(raw: unknown, context: ChatIntentContext): ChatAr
     case 'make': {
       const resolved = kind ?? (format ? kindForFormat(format) : null)
       if (!resolved) return null
+      // "Make a spreadsheet from the attached photo": the thing it was to be made from is not there to be read.
+      // Making it anyway would be a table of rows nobody gave, handed over as if it came from their file.
+      if (!target && wantedSource === 'attachment' && context.attachments.length === 0) return null
       // A format the made thing cannot leave in is dropped, not obeyed: "a flowchart as Excel" still makes the
       // flowchart. Code is saved as its own language's file and nothing else: "a script that reads a CSV" names what
       // the script reads, not what it is saved as. Made out of a listed artifact, that artifact is the material and

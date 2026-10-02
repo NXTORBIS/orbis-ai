@@ -95,12 +95,22 @@ const FIGURE_LINE = /^!\[([^\]]*)\]\(artifact:(artifact_[0-9a-f]{32})\)\s*$/
 
 type Piece = { is: 'words'; text: string } | { is: 'figure'; alt: string; artifactId: string }
 
+/**
+ * A picture in a kept document that is not one of Orbis's own figures, as the words it stands for.
+ *
+ * A document can come from a file or from a model, and either can write `![x](https://somewhere/p.png?who=...)`. Shown
+ * as a picture, opening the conversation would ask that address for it -- telling whoever runs it that the document
+ * was looked at, and when. So a card shows such a picture as its description and never goes anywhere to fetch it.
+ */
+const withoutRemotePictures = (markdown: string): string =>
+  markdown.replace(/!\[([^\]]*)\]\((?!artifact:)[^)]*\)/g, (_all, alt: string) => `[picture${alt ? `: ${alt}` : ''}]`).replace(/!\[([^\]]*)\]\[[^\]]*\]/g, (_all, alt: string) => `[picture${alt ? `: ${alt}` : ''}]`)
+
 /** A document's text cut at its figures, so each figure can be shown as the picture it points at. */
 function piecesOf(markdown: string): Piece[] {
   const pieces: Piece[] = []
   let words: string[] = []
   const flush = (): void => {
-    const text = words.join('\n').trim()
+    const text = withoutRemotePictures(words.join('\n')).trim()
     if (text !== '') pieces.push({ is: 'words', text })
     words = []
   }
@@ -122,13 +132,23 @@ function Figure({ artifactId, alt }: { artifactId: string; alt: string }): React
   const [svg, setSvg] = useState<string | null | undefined>(undefined)
   useEffect(() => {
     let live = true
-    void window.api.creationRun({ operation: 'artifact.read', artifactId }).then((result) => {
-      if (!live) return
-      const value = result.ok ? (result.value as Read) : null
-      setSvg(value && !value.truncated && (value.record.kind === 'plot' || value.record.kind === 'diagram') ? value.preview : null)
-    })
+    const read = (): void => {
+      void window.api.creationRun({ operation: 'artifact.read', artifactId }).then((result) => {
+        if (!live) return
+        const value = result.ok ? (result.value as Read) : null
+        setSvg(value && !value.truncated && (value.record.kind === 'plot' || value.record.kind === 'diagram') ? value.preview : null)
+      })
+    }
+    read()
+    // The chart is redrawn ("make it a bar chart") and the document that shows it shows the new drawing.
+    const onChanged = (event: Event): void => {
+      const changed = (event as CustomEvent<ArtifactChangedDetail>).detail?.artifactId
+      if (changed === undefined || changed === artifactId) read()
+    }
+    window.addEventListener(ARTIFACT_CHANGED_EVENT, onChanged)
     return () => {
       live = false
+      window.removeEventListener(ARTIFACT_CHANGED_EVENT, onChanged)
     }
   }, [artifactId])
   if (svg === undefined) return <p className="artifact-card-note">Reading the figure…</p>
@@ -382,10 +402,13 @@ function ArtifactCard({ artifact, onNotify }: { artifact: ChatArtifact; onNotify
             {saved.path}
           </span>
           <div className="artifact-card-actions">
-            <button type="button" className="queue-btn small" onClick={() => void reveal(true)}>
-              <ExternalLink size={13} />
-              Open the file
-            </button>
+            {/* A code file is shown in its folder and no more: opening one can run it, and Orbis never runs code. */}
+            {record.kind !== 'code' && (
+              <button type="button" className="queue-btn small" onClick={() => void reveal(true)}>
+                <ExternalLink size={13} />
+                Open the file
+              </button>
+            )}
             <button type="button" className="queue-btn small" onClick={() => void reveal(false)}>
               <FolderOpen size={13} />
               Show in folder

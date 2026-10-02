@@ -1157,3 +1157,84 @@ test('a document asked for at length is written in parts and kept as one documen
       ]
     }
   ))
+
+test('"Open" never runs code: a code file is shown in its folder, and it is saved under its own name once', () =>
+  withService(async (h) => {
+    const script = ok<{ record: { artifactId: string } }>(await h.service.run('default', { operation: 'artifact.create', kind: 'code', language: 'batch', title: 'setup', text: 'echo hello\r\n' }))
+    const saved = ok<{ path: string }>(await h.service.run('default', { operation: 'artifact.download', artifactId: script.record.artifactId }))
+    assert.match(saved.path, /setup\.bat$/)
+    const open = await h.service.run('default', { operation: 'artifact.reveal', path: saved.path, open: true })
+    assert.equal(open.ok, false)
+    if (!open.ok) assert.match(open.message, /does not open a code file, because opening one can run it/)
+    assert.deepEqual(h.revealed, [], 'nothing was handed to the computer to open')
+    ok(await h.service.run('default', { operation: 'artifact.reveal', path: saved.path }))
+    assert.deepEqual(h.revealed, [{ path: saved.path, open: false }])
+
+    // A table's file is opened as before.
+    const table = ok<{ record: { artifactId: string } }>(await h.service.run('default', { operation: 'artifact.create', kind: 'table', title: 'T', text: 'a,b\n1,2\n' }))
+    const csv = ok<{ path: string }>(await h.service.run('default', { operation: 'artifact.download', artifactId: table.record.artifactId, format: 'csv' }))
+    ok(await h.service.run('default', { operation: 'artifact.reveal', path: csv.path, open: true }))
+    assert.equal(h.revealed.length, 2)
+
+    // "report.py" is saved as report.py.
+    const named = ok<{ record: { artifactId: string } }>(await h.service.run('default', { operation: 'artifact.create', kind: 'code', title: 'report.py', text: 'print(1)\n' }))
+    const py = ok<{ path: string }>(await h.service.run('default', { operation: 'artifact.download', artifactId: named.record.artifactId }))
+    assert.match(py.path, /[\\/]report\.py$/)
+  }))
+
+test('a table written with bars is kept cell for cell, and a second table in the text is said to have been left', () =>
+  withService(async (h) => {
+    const text = '| Item | Range | Site | Sum | Args |\n|---|---|---|---|---|\n| A | $5-$10 | [Example](https://example.com) | 2*3*4 | *args, **kwargs |\n| a \\| b | x | y | z | w |\n\nAnd another:\n\n| p | q |\n|---|---|\n| 1 | 2 |\n'
+    const made = ok<{ record: { artifactId: string; notes: string[] } }>(await h.service.run('default', { operation: 'artifact.create', kind: 'table', title: 'Cells', text }))
+    const read = ok<{ grid: { rows: string[][] }; columns: { name: string }[] }>(await h.service.run('default', { operation: 'artifact.read', artifactId: made.record.artifactId }))
+    assert.deepEqual(read.columns.map((one) => one.name), ['Item', 'Range', 'Site', 'Sum', 'Args'])
+    assert.deepEqual(read.grid.rows, [['A', '$5-$10', '[Example](https://example.com)', '2*3*4', '*args, **kwargs'], ['a | b', 'x', 'y', 'z', 'w']])
+    assert.ok(made.record.notes.some((one) => /The text held 2 tables\. This is the first; the others were not kept\./.test(one)))
+  }))
+
+test('amounts in different units are not added up, and a table too long for a document says so plainly', () =>
+  withService(async (h) => {
+    const mixed = ok<{ record: { artifactId: string } }>(await h.service.run('default', { operation: 'artifact.create', kind: 'table', title: 'Weights', text: 'item,weight\na,200 g\nb,1.5 kg\nc,750 g\n' }))
+    const held = await h.service.contextOf('default', mixed.record.artifactId)
+    assert.ok(held)
+    assert.match(held!.text, /weight: the values are in different units \(.*g.*kg.*\), so Orbis gives no total, smallest or largest for it/)
+    assert.equal(/sum 951\.5/.test(held!.text), false)
+    assert.equal(held!.cut, false)
+
+    const same = ok<{ record: { artifactId: string } }>(await h.service.run('default', { operation: 'artifact.create', kind: 'table', title: 'Lengths', text: 'leg,distance\na,5 km\nb,2 km\n' }))
+    assert.match((await h.service.contextOf('default', same.record.artifactId))!.text, /distance: 2 values, sum 7 km, mean 3\.5 km, smallest 2 km .* largest 5 km/)
+
+    const long = ok<{ record: { artifactId: string } }>(await h.service.run('default', { operation: 'artifact.create', kind: 'table', title: 'Long', text: `a,b,c,d,e\n${Array.from({ length: 3000 }, (_, i) => `row number ${i},some words here,${i},more words to fill,${i * 3}`).join('\n')}\n` }))
+    assert.equal((await h.service.contextOf('default', long.record.artifactId))!.cut, true, 'only the first rows are shown, and that is said')
+    const tooLong = await h.service.run('default', { operation: 'artifact.asDocument', artifactId: long.record.artifactId })
+    assert.equal(tooLong.ok, false)
+    if (!tooLong.ok) {
+      assert.equal(tooLong.error, 'too-large')
+      assert.match(tooLong.message, /"Long" is too long to put into one document: it comes to [\d,]+ characters, and a document holds 200,000\./)
+    }
+  }))
+
+test('a script with a fence in it, and a table with a bar in a cell, both go into a document and come back whole', () =>
+  withService(async (h) => {
+    const script = ok<{ record: { artifactId: string } }>(await h.service.run('default', { operation: 'artifact.create', kind: 'code', language: 'javascript', title: 'md', text: 'const md = `\n```js\nx\n```\n`\n' }))
+    const asDoc = ok<{ record: { verified: { ok: boolean } } }>(await h.service.run('default', { operation: 'artifact.asDocument', artifactId: script.record.artifactId }))
+    assert.equal(asDoc.record.verified.ok, true)
+
+    const pipes = ok<{ record: { artifactId: string } }>(await h.service.run('default', { operation: 'artifact.create', kind: 'table', title: 'Pipes', text: 'command,meaning\n"ls | wc -l",count files\n"*args*",stars kept\n' }))
+    const doc = ok<{ record: { artifactId: string } }>(await h.service.run('default', { operation: 'artifact.asDocument', artifactId: pipes.record.artifactId }))
+    const read = ok<{ preview: string }>(await h.service.run('default', { operation: 'artifact.read', artifactId: doc.record.artifactId }))
+    assert.ok(read.preview.includes('ls \\| wc -l'), read.preview)
+    const back = ok<{ record: { artifactId: string } }>(await h.service.run('default', { operation: 'artifact.extractTable', artifactId: doc.record.artifactId, index: 1 }))
+    const grid = ok<{ grid: { rows: string[][] } }>(await h.service.run('default', { operation: 'artifact.read', artifactId: back.record.artifactId }))
+    assert.deepEqual(grid.grid.rows, [['ls | wc -l', 'count files'], ['*args*', 'stars kept']], 'taken out again, every cell is what it was')
+  }))
+
+test('only something a request made is filed under its conversation: looking at a thing does not move it', () =>
+  withService(async (h) => {
+    const made = ok<{ record: { artifactId: string; conversationId?: string } }>(await h.service.run('default', { operation: 'artifact.create', kind: 'table', title: 'Mine', text: 'a\n1\n' }))
+    const read = ok<{ record: { conversationId?: string } }>(await h.service.run('default', { operation: 'artifact.read', artifactId: made.record.artifactId, conversationId: 'convX' }))
+    assert.equal(read.record.conversationId, undefined)
+    assert.deepEqual(ok<unknown[]>(await h.service.run('default', { operation: 'artifact.list', within: 'convX' })), [])
+    const inChat = ok<{ record: { conversationId?: string } }>(await h.service.run('default', { operation: 'artifact.create', kind: 'table', title: 'Theirs', text: 'a\n1\n', conversationId: 'convX' }))
+    assert.equal(inChat.record.conversationId, 'convX')
+  }))

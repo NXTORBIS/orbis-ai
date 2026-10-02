@@ -1,7 +1,8 @@
 import { ARTIFACT_STATUS, type ChatArtifact, type StreamEvent } from '../../shared/types.ts'
 import { FORMATS, type FormatId } from '../../shared/compute/interchange.ts'
 import { ARTIFACT_KINDS, canWrite, type ArtifactKindId } from '../../shared/artifacts/kinds.ts'
-import { isArtifactId, isConversationId, refOf, type ArtifactRecord } from '../../shared/artifacts/model.ts'
+import { isArtifactId, isConversationId, isVersionId, refOf, type ArtifactRecord, type CardAction } from '../../shared/artifacts/model.ts'
+import { isRuledRow } from '../../shared/compute/document.ts'
 import { documentTextFromReply, titleFromText } from '../../shared/artifacts/naming.ts'
 import { languageById } from '../../shared/artifacts/languages.ts'
 import {
@@ -58,6 +59,12 @@ export interface ArtifactChatTurn {
   history: { role: 'user' | 'assistant'; content: string; artifactIds: string[] }[]
   conversationId?: string
   incognito?: boolean
+  /**
+   * The cards of the reply (or replies) this message is being answered again in place of: Regenerate, Resend, or the
+   * question edited. What those replies made or changed is undone first, so the answer is given again from where
+   * things stood, and not on top of itself.
+   */
+  replaced?: { artifactId: string; versionId: string; version: number; action: CardAction }[]
   signal: AbortSignal
   emit(event: StreamEvent): void
 }
@@ -176,14 +183,78 @@ export class ArtifactChat {
     return out
   }
 
+  // ---------------------------------------------------------------- answering again
+
+  /**
+   * What the replaced replies did, undone.
+   *
+   * "Regenerate" on a reply that sorted a table used to sort the sorted table; on one that deleted a row, delete
+   * another; on one that made a spreadsheet, leave the first in the library with no card and make a second. The
+   * reply being replaced is going away, so what it did goes with it:
+   *
+   *   - something it made is removed -- only if the library says it was made in this conversation;
+   *   - something it changed is put back to the version before the change -- only if nothing has changed it since,
+   *     and as a new version, so even the undoing can be undone.
+   *
+   * Only ids are taken from the window. What each thing is, and whether it is this conversation's, is asked of the
+   * library. Never throws: an answer given again matters more than a tidy history.
+   */
+  async undo(turn: ArtifactChatTurn): Promise<void> {
+    const cards = (turn.replaced ?? []).filter((one) => isArtifactId(one.artifactId) && isVersionId(one.versionId) && Number.isInteger(one.version)).slice(0, 24)
+    const ids = [...new Set(cards.map((one) => one.artifactId))]
+    for (const artifactId of ids) {
+      try {
+        const mine = cards.filter((one) => one.artifactId === artifactId)
+        const read = await this.o.service.run(turn.profileId, { operation: 'artifact.read', artifactId })
+        if (!read.ok) continue
+        const record = (read.value as { record: ArtifactRecord }).record
+        if (mine.some((one) => one.action === 'made' || one.action === 'kept' || one.action === 'drew')) {
+          if (isConversationId(turn.conversationId) && record.conversationId === turn.conversationId) await this.o.service.run(turn.profileId, { operation: 'artifact.remove', artifactId })
+          continue
+        }
+        const changes = mine.filter((one) => one.action === 'changed').sort((a, b) => a.version - b.version)
+        if (changes.length === 0) continue
+        const latest = changes[changes.length - 1]
+        // Changed again since, on the Create screen or by a later reply that is staying: not this reply's to undo.
+        if (record.versionId !== latest.versionId) continue
+        const before = record.versions.find((one) => one.version === changes[0].version - 1)
+        if (before) await this.o.service.run(turn.profileId, { operation: 'artifact.restore', artifactId, versionId: before.versionId })
+      } catch (err) {
+        console.error('[artifacts] what a replaced reply did could not be undone', err)
+      }
+    }
+  }
+
   // ---------------------------------------------------------------- doing it
 
+  /**
+   * The intent carried out, with nothing left behind when it does not finish.
+   *
+   * A request can be several steps -- keep the file, then draw from it; work out the report, then draw its chart --
+   * and a step can be stopped or fail after an earlier one has already kept something. Whatever this request newly
+   * made is then removed, so "stopped" and "that did not work" both mean nothing was made. A change that had already
+   * been kept as a new version stays: the version before it is still there.
+   */
   private async act(intent: ChatArtifactIntent, turn: ArtifactChatTurn): Promise<ArtifactChatOutcome> {
+    const created: string[] = []
+    const outcome = await this.perform(intent, turn, created)
+    if (outcome.handled === 'stopped' || outcome.handled === 'failed') {
+      for (const artifactId of created.reverse()) await this.o.service.run(turn.profileId, { operation: 'artifact.remove', artifactId }).catch(() => undefined)
+    }
+    return outcome
+  }
+
+  private async perform(intent: ChatArtifactIntent, turn: ArtifactChatTurn, created: string[]): Promise<ArtifactChatOutcome> {
     const status = (message: string): void => turn.emit({ type: 'status', message })
     const run = (request: Record<string, unknown>): Promise<ArtifactResult> =>
       this.o.service.run(turn.profileId, { ...request, ...(isConversationId(turn.conversationId) ? { conversationId: turn.conversationId } : {}) }, turn.signal, status)
     const cards: ChatArtifact[] = []
     const said: string[] = []
+    /** Notes that something new was made by this request, and hands it back. */
+    const fresh = <T extends Kept | ArtifactChatOutcome>(value: T): T => {
+      if (!('handled' in value)) created.push(value.record.artifactId)
+      return value
+    }
     const card = (record: ArtifactRecord, action: ChatArtifact['action'], did: string[], format?: FormatId | null): void => {
       cards.push({ ref: refOf(record), action, did: did.slice(0, 8).map((one) => one.slice(0, 400)), ...(format && canWrite(record.kind, format) ? { format } : {}) })
     }
@@ -206,14 +277,22 @@ export class ArtifactChat {
       const wants = kindForFormat(format)
       if (wants === 'document' && record.kind !== 'document') {
         status(ARTIFACT_STATUS.building)
-        const converted = kept(await run({ operation: 'artifact.asDocument', artifactId: record.artifactId }))
-        if (isOutcome(converted)) return converted
+        const converted = fresh(kept(await run({ operation: 'artifact.asDocument', artifactId: record.artifactId })))
+        if (isOutcome(converted)) {
+          // What was asked for is made; only the putting into a document did not work. Said, beside the thing itself.
+          if (converted.handled === 'failed') return { record, format: null, extra: `It could not be put into a document to save as ${formatName(format)}: ${converted.message}` }
+          return converted
+        }
         return { record: converted.record, format, extra: `To save it as ${formatName(format)}, I put it into a document, row for row, with nothing rewritten.` }
       }
       if (wants === 'table' && record.kind === 'document') {
         status(ARTIFACT_STATUS.building)
         const taken = await run({ operation: 'artifact.extractTable', artifactId: record.artifactId, index: 1 })
-        if (taken.ok) return { record: (taken.value as Kept).record, format, extra: `To save it as ${formatName(format)}, I took the first table out of the document.` }
+        if (turn.signal.aborted) return { handled: 'stopped' }
+        if (taken.ok) {
+          created.push((taken.value as Kept).record.artifactId)
+          return { record: (taken.value as Kept).record, format, extra: `To save it as ${formatName(format)}, I took the first table out of the document.` }
+        }
         return { record, format: null, extra: `It cannot be saved as ${formatName(format)}: ${taken.message}` }
       }
       const offered = ARTIFACT_KINDS[record.kind].writes.map((one) => formatName(one)).join(', ')
@@ -232,13 +311,10 @@ export class ArtifactChat {
     /** An attached data file kept as a table, for a chart or a report asked for in the same breath. */
     const tableFromAttachment = async (): Promise<KnownArtifact | ArtifactChatOutcome> => {
       status(ARTIFACT_STATUS.reading)
-      const made = kept(await keepAttachment())
+      const made = fresh(kept(await keepAttachment()))
       if (isOutcome(made)) return made
-      if (made.record.kind !== 'table') {
-        // Kept a moment ago only to be drawn from. It is not a table, so it is not left behind as something nobody asked for.
-        await this.o.service.run(turn.profileId, { operation: 'artifact.remove', artifactId: made.record.artifactId })
-        return { handled: 'failed', message: `"${made.record.title}" did not read as a table, so there are no numbers in it to work from.` }
-      }
+      // Not a table: it was kept a moment ago only to be drawn from, and is taken away again with the failure.
+      if (made.record.kind !== 'table') return { handled: 'failed', message: `"${made.record.title}" did not read as a table, so there are no numbers in it to work from.` }
       card(made.record, 'kept', made.record.notes)
       said.push(`I kept the attached file as **${made.record.title}**: ${describe(made.record)}. Nothing in it was rewritten.`)
       return { handle: 'A0', artifactId: made.record.artifactId, title: made.record.title, kind: 'table', columns: [] }
@@ -258,7 +334,7 @@ export class ArtifactChat {
         if (from?.kind === 'table' && intent.kind === 'document') {
           const source = from
           status(ARTIFACT_STATUS.reading)
-          const analysed = kept(await run({ operation: 'artifact.analyse', artifactId: source.artifactId }))
+          const analysed = fresh(kept(await run({ operation: 'artifact.analyse', artifactId: source.artifactId })))
           if (isOutcome(analysed)) return analysed
           let report = analysed.record
           const did = [`Every figure in it was worked out by Orbis from "${source.title}". None was written by a model.`]
@@ -268,7 +344,9 @@ export class ArtifactChat {
           if (turn.signal.aborted) return { handled: 'stopped' }
           if (chart.ok) {
             const drawn = (chart.value as Kept).record
+            created.push(drawn.artifactId)
             const placed = await run({ operation: 'artifact.place', artifactId: report.artifactId, figureId: drawn.artifactId })
+            if (turn.signal.aborted) return { handled: 'stopped' }
             if (placed.ok) {
               report = (placed.value as Kept).record
               did.push(`It shows the chart "${drawn.title}", drawn from the same table.`)
@@ -288,24 +366,30 @@ export class ArtifactChat {
         // kept as it stands. Asking a model to write it out again would be a chance to change a number for nothing.
         if (!intent.target && intent.kind === 'table' && (intent.source === 'reply' || intent.source === 'message')) {
           const text = intent.source === 'reply' ? documentTextFromReply(previousReply()) : materialIn(turn.message)
-          if (tableTextIn(text) !== text) return this.act({ ...intent, act: 'keep' }, turn)
+          if (tabularIn(text) !== null) return this.perform({ ...intent, act: 'keep' }, turn, created)
         }
 
         status(ARTIFACT_STATUS.writing)
         // Material: another artifact, the reply before, an attached file, or nothing at all.
         let material = ''
-        if (intent.target) material = (await this.o.service.contextOf(turn.profileId, intent.target.artifactId, 12_000))?.text ?? ''
-        else if (intent.source === 'reply') material = previousReply()
+        /** The material is only part of the thing it was taken from: a table past its first rows, a long document. */
+        let partOf: string | null = null
+        if (intent.target) {
+          const held = await this.o.service.contextOf(turn.profileId, intent.target.artifactId, 12_000)
+          material = held?.text ?? ''
+          if (held?.cut) partOf = intent.target.title
+        } else if (intent.source === 'reply') material = previousReply()
         else if (intent.source === 'attachment') material = turn.attachments.map((one) => `File "${one.name}":\n${one.content}`).join('\n\n')
         else if (intent.source === 'message') material = turn.message
-        const made = kept(await run({ operation: 'artifact.generate', request: intent.request, kind: intent.kind, ...(material ? { context: material } : {}) }))
+        const made = fresh(kept(await run({ operation: 'artifact.generate', request: intent.request, kind: intent.kind, ...(material ? { context: material } : {}) })))
         if (isOutcome(made)) return made
         const ready = await inFormat(made.record, intent.format)
         if ('handled' in ready) return ready
         if (ready.record.artifactId !== made.record.artifactId) card(made.record, 'made', made.record.notes)
         card(ready.record, 'made', ready.record.notes, ready.format)
         said.push(`I made **${made.record.title}**: ${describe(made.record)}.`)
-        if (material.length > 14_000) said.push('The material was longer than Orion can be handed at once, so it was made from the first part of it.')
+        if (partOf) said.push(`It was made from the first part of **${partOf}** only: the whole of it is more than Orion can be handed at once. For all of a table, ask for the change itself ("only these columns", "total by month") and Orbis works it out over every row.`)
+        else if (material.length > 14_000) said.push('The material was longer than Orion can be handed at once, so it was made from the first part of it.')
         if (ready.extra) said.push(ready.extra)
         break
       }
@@ -313,36 +397,58 @@ export class ArtifactChat {
       case 'keep': {
         status(ARTIFACT_STATUS.building)
         let result: ArtifactResult
+        /** Orion wrote it out, because what was there could not be read as the thing asked for. Then it is not "kept as it stands". */
+        let written = false
         if (intent.source === 'attachment') {
           result = await keepAttachment()
         } else {
-          const text = intent.source === 'reply' ? documentTextFromReply(previousReply()) : materialIn(turn.message)
-          if (text.trim() === '') return { handled: 'failed', message: intent.source === 'reply' ? 'There is no earlier reply to turn into a file.' : 'There is nothing in the message to make it from.' }
+          const whole = intent.source === 'reply' ? previousReply() : turn.message
+          const text = intent.source === 'reply' ? documentTextFromReply(whole) : materialIn(turn.message)
           const from = intent.source === 'reply' ? 'a chat reply' : 'typed into the chat'
+          if (intent.source === 'reply' && text.trim() === '') return { handled: 'failed', message: 'There is no earlier reply to turn into a file.' }
           if (intent.kind === 'table') {
-            result = await run({ operation: 'artifact.create', kind: 'table', title: titleFromText(text, 'Table'), text: tableTextIn(text), source: from })
-            // The words held no table Orbis could read as one. Orion writes the table out from them, and the card says so.
+            // Read as a table only when it is one: bars and a ruled line, or the same number of separators on every
+            // line. Anything else -- a list, a paragraph with figures in it -- would be "read" into a broken table
+            // and handed over as untouched. Orion writes the table out from that, and the reply says it did.
+            const rows = tabularIn(text)
+            result = rows === null ? { ok: false, operation: 'artifact.create', error: 'parse', message: 'There is no table in it as it stands.' } : await run({ operation: 'artifact.create', kind: 'table', title: titleFromText(text, 'Table'), text: rows, source: from })
             if (!result.ok && result.error === 'parse') {
               status(ARTIFACT_STATUS.writing)
-              result = await run({ operation: 'artifact.generate', request: intent.request, kind: 'table', context: text })
+              written = true
+              result = await run({ operation: 'artifact.generate', request: intent.request, kind: 'table', context: text.trim() === '' ? whole : text })
             }
           } else if (intent.kind === 'code') {
-            const fenced = /^```([A-Za-z0-9+#-]+)[ \t]*\r?\n([\s\S]*?)\r?\n```\s*$/.exec(text.trim())
-            const language = fenced ? languageById(fenced[1]) : null
-            result = language
-              ? await run({ operation: 'artifact.create', kind: 'code', title: `${language.name} from the chat`, language: language.id, text: `${fenced![2]}\n`, source: from })
-              : await run({ operation: 'artifact.create', kind: 'document', title: titleFromText(text, 'Chat reply'), text, source: from })
+            // The code in the reply, wherever in it the code is: a reply is usually a sentence, the code, a sentence.
+            const blocks = [...whole.matchAll(/```([A-Za-z0-9+#-]+)[ \t]*\r?\n([\s\S]*?)\r?\n```/g)].flatMap((one) => {
+              const language = languageById(one[1])
+              return language ? [{ language, source: one[2] }] : []
+            })
+            const named = blocks.filter((one) => new RegExp(`\\b${one.language.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(turn.message))
+            const chosen = blocks.length === 1 ? blocks[0] : named.length === 1 ? named[0] : null
+            if (!chosen) {
+              return {
+                handled: 'failed',
+                message: blocks.length === 0 ? 'There is no code in it that says which language it is, so there is no file to keep. Say the language, or keep it as a document.' : `There are ${blocks.length} pieces of code in it. Say which one to keep, by its language.`
+              }
+            }
+            result = await run({ operation: 'artifact.create', kind: 'code', title: `${chosen.language.name} from the chat`, language: chosen.language.id, text: `${chosen.source}\n`, source: from })
           } else {
+            if (text.trim() === '') return { handled: 'failed', message: 'There is nothing in the message to make it from.' }
             result = await run({ operation: 'artifact.create', kind: 'document', title: titleFromText(text, 'Chat reply'), text, source: from })
           }
         }
-        const made = kept(result)
+        const made = fresh(kept(result))
         if (isOutcome(made)) return made
         const ready = await inFormat(made.record, intent.format)
         if ('handled' in ready) return ready
-        if (ready.record.artifactId !== made.record.artifactId) card(made.record, 'kept', made.record.notes)
-        card(ready.record, 'kept', ready.record.notes, ready.format)
-        said.push(`I kept that as **${made.record.title}**: ${describe(made.record)}. Nothing in it was rewritten.`)
+        const action = written ? 'made' : 'kept'
+        if (ready.record.artifactId !== made.record.artifactId) card(made.record, action, made.record.notes)
+        card(ready.record, action, ready.record.notes, ready.format)
+        said.push(
+          written
+            ? `I made **${made.record.title}**: ${describe(made.record)}. There was no table in it as it stood, so Orion wrote one out from it: check it against the original.`
+            : `I kept that as **${made.record.title}**: ${describe(made.record)}. Nothing in it was rewritten.`
+        )
         if (ready.extra) said.push(ready.extra)
         break
       }
@@ -371,9 +477,20 @@ export class ArtifactChat {
           if ('handled' in table) return table
           target = table
         }
-        if (target.kind === 'plot') return this.redraw(target, intent, turn, run, kept)
+        if (target.kind === 'plot') {
+          // "Put the chart into the report": the chart there already is goes in as it is. Nothing is redrawn.
+          if (intent.into) {
+            status(ARTIFACT_STATUS.building)
+            const placed = kept(await run({ operation: 'artifact.place', artifactId: intent.into.artifactId, figureId: target.artifactId }))
+            if (isOutcome(placed)) return placed
+            card(placed.record, 'changed', placed.record.notes.slice(0, 1))
+            said.push(`**${target.title}** is now a figure in **${placed.record.title}**. The document points at the chart, so a chart redrawn later is the chart it shows.`)
+            break
+          }
+          return this.redraw(target, intent, turn, run, kept)
+        }
         status(ARTIFACT_STATUS.drawing)
-        const drawn = kept(await run({ operation: 'artifact.chart', artifactId: target.artifactId, request: intent.request }))
+        const drawn = fresh(kept(await run({ operation: 'artifact.chart', artifactId: target.artifactId, request: intent.request })))
         if (isOutcome(drawn)) return drawn
         card(drawn.record, 'drew', drawn.record.notes, intent.format)
         said.push(`I drew **${drawn.record.title}** from **${target.title}**. The numbers are the table's own.`)
@@ -465,30 +582,71 @@ function failureSentence(result: Extract<ArtifactResult, { ok: false }>): string
   return result.message
 }
 
-/** The part of a message that is the material, when the request and the material came in one message. */
+const ASKS = /\b(make|create|turn|put|convert|save|export|build|generate|chart|plot|graph|draw|keep|write|give me|i need|i want|can you|could you|please)\b/i
+
+/** Whether a line reads as the request: a few words with one of the things people say when they ask. */
+const reads = (line: string): boolean => {
+  const words = line.trim()
+  return words.length > 0 && words.length <= 300 && words.split(/\s+/).length >= 3 && ASKS.test(words)
+}
+
+/**
+ * The part of a message that is the material, when the request and the material came in one message.
+ *
+ * The request is at one end or the other: "Make a spreadsheet from this:" and then the data, or the data and then
+ * "put this in a spreadsheet". Whichever end reads as the request is left off and the rest is the material. When
+ * neither end does, nothing is returned -- taking the first line off regardless is how a table lost its headings and
+ * gained "make a spreadsheet from this" as its last row.
+ */
 export function materialIn(message: string): string {
-  const text = message.replace(/\r\n/g, '\n')
+  const text = message.replace(/\r\n/g, '\n').trim()
   const lines = text.split('\n')
-  // "Make a spreadsheet from this:" and then the data: everything after the first line is the material.
-  if (lines.length > 1 && lines[0].trim().length <= 200) {
-    const rest = lines.slice(1).join('\n').trim()
-    if (rest !== '') return rest
+  if (lines.length > 1) {
+    if (reads(lines[0])) return lines.slice(1).join('\n').trim()
+    let last = lines.length - 1
+    while (last > 0 && lines[last].trim() === '') last -= 1
+    if (reads(lines[last])) return lines.slice(0, last).join('\n').trim()
+    return ''
   }
   // One line: the material is after the colon, if there is one.
   const colon = text.indexOf(':')
   return colon >= 0 && colon < 200 ? text.slice(colon + 1).trim() : ''
 }
 
+/** Whether a piece of text has a table written with bars and a ruled line under its headings. */
+export function hasRuledTable(text: string): boolean {
+  const lines = text.replace(/\r\n/g, '\n').split('\n')
+  return lines.some((line, i) => i > 0 && lines[i - 1].includes('|') && isRuledRow(line))
+}
+
 /**
- * The table in a piece of text, as text the table reader can read.
+ * The table in a piece of text, as text the table reader can read -- or null when there is no table in it.
  *
- * A Markdown table is handed over from its first row to its last, with the sentences round it left out, because the
- * reader would otherwise take "Here is the table:" for a heading row. Anything else is handed over whole and the
- * reader decides.
+ * Two shapes count. A table written with bars and a ruled line, handed over with the sentences round it left out.
+ * And rows with the same number of commas, tabs or semicolons on every line, on their own or inside one fenced
+ * block. A list, or a paragraph with numbers in it, is neither: read as a table, "Mercury: 4,879 km" becomes two
+ * cells split at the thousands comma.
+ */
+export function tabularIn(text: string): string | null {
+  if (hasRuledTable(text)) return tableTextIn(text)
+  const fences = [...text.matchAll(/```[A-Za-z0-9+#-]*[ \t]*\r?\n([\s\S]*?)\r?\n```/g)]
+  const candidate = (fences.length === 1 ? fences[0][1] : fences.length === 0 ? text : '').replace(/\r\n/g, '\n').trim()
+  const lines = candidate.split('\n').filter((line) => line.trim() !== '')
+  if (lines.length < 2) return null
+  for (const separator of ['\t', ',', ';']) {
+    const count = lines[0].split(separator).length - 1
+    if (count >= 1 && lines.every((line) => line.split(separator).length - 1 === count)) return candidate
+  }
+  return null
+}
+
+/**
+ * A table written with bars, from its first row to its last, with the sentences round it left out, because the
+ * reader would otherwise take "Here is the table:" for a heading row. Text with no such table is handed back whole.
  */
 export function tableTextIn(text: string): string {
   const lines = text.replace(/\r\n/g, '\n').split('\n')
-  const ruled = lines.findIndex((line, i) => i > 0 && /^\s*\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)+\|?\s*$/.test(line) && lines[i - 1].includes('|'))
+  const ruled = lines.findIndex((line, i) => i > 0 && lines[i - 1].includes('|') && isRuledRow(line))
   if (ruled < 0) return text
   let end = ruled + 1
   while (end < lines.length && lines[end].includes('|') && lines[end].trim() !== '') end += 1

@@ -276,3 +276,10 @@ test('a conversation that has just begun is read from its first question, not fo
   assert.deepEqual(opened.action, { kind: 'toBottom', smooth: false })
   assert.equal(opened.state.mode, 'following')
 })
+
+test('while there is still room under the newest turn, a small scroll is not "arriving at the foot"', () => {
+  const reading: ChatScrollState = { ...newChatScrollState(), mode: 'reading', settledAt: 900, conversationId: 'c', shownTurnId: 'u2' }
+  const nudged: Viewport = { scrollTop: 880, scrollHeight: 1500, clientHeight: 600 }
+  assert.equal(onScrolled(reading, nudged, false, true, true).state.mode, 'reading')
+  assert.equal(onScrolled(reading, nudged, false, true, false).state.mode, 'following', 'with no room left, the end of the page is the foot of the answer')
+})

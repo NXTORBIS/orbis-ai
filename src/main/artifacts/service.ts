@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs'
 import { readFile as readFromDisk, writeFile as writeToDisk } from 'node:fs/promises'
 import { join } from 'node:path'
 import { isDataError, parseDelimited, type Table } from '../../shared/compute/data.ts'
-import { DOCUMENT_LIMITS, emptyDocument, fromMarkdown, isDocumentError, text as inline, type StructuredDocument, type TableCell } from '../../shared/compute/document.ts'
+import { DOCUMENT_LIMITS, emptyDocument, fromMarkdown, isDocumentError, isRuledRow, splitRow, text as inline, type StructuredDocument, type TableCell } from '../../shared/compute/document.ts'
 import { toHtml } from '../../shared/compute/documentHtml.ts'
 import {
   FORMATS,
@@ -40,7 +40,7 @@ import { toDelimited } from '../../shared/compute/data.ts'
 import { toText } from '../../shared/compute/documentHtml.ts'
 import { analyseTable, analysisDocument } from '../../shared/artifacts/analysis.ts'
 import { diagramToSvg, PIE_LIMITS, pieProblem, pieToSvg, plotToSvg, verifySvgFile } from '../../shared/artifacts/svg.ts'
-import { asNumber, formatDate, type Column } from '../../shared/compute/data.ts'
+import { asNumber, formatDate, isQuantityCell, type Column } from '../../shared/compute/data.ts'
 import { buildPlot, isPlotError, seriesFromPoints, type Series, type SeriesKind } from '../../shared/compute/plot.ts'
 import { decodePng } from '../chromium/png.ts'
 import { cellOut, joinTables, type JoinKind } from '../../shared/compute/data.ts'
@@ -117,6 +117,20 @@ const OPERATIONS: Readonly<Record<string, string>> = Object.freeze({
 })
 
 const JOIN_KINDS: readonly JoinKind[] = Object.freeze(['inner', 'left', 'full'])
+
+/** The operations that bring a new artifact into being. Only these file what they return under a conversation. */
+const MAKES: ReadonlySet<string> = new Set([
+  'artifact.create',
+  'artifact.generate',
+  'artifact.fromTemplate',
+  'artifact.import',
+  'artifact.analyse',
+  'artifact.chart',
+  'artifact.join',
+  'artifact.extractTable',
+  'artifact.asDocument',
+  'artifact.duplicate'
+])
 
 const SERIES_KINDS: readonly SeriesKind[] = Object.freeze(['line', 'bar', 'scatter', 'area', 'step'])
 
@@ -207,7 +221,26 @@ interface Rendered {
 }
 
 /** A table as Markdown writes it: a line with pipes, and under it a ruled line of dashes and pipes. */
-const MARKDOWN_TABLE = /^[ \t]*\|?[^\n|]*\|[^\n]*\n[ \t]*\|?[ \t]*:?-{2,}:?[ \t]*(\|[ \t]*:?-{2,}:?[ \t]*)+\|?[ \t]*$/m
+/**
+ * The first table written with bars and a ruled line in a piece of text, as comma-separated rows, and how many such
+ * tables the text holds.
+ *
+ * Each cell is taken exactly as it was written. Reading the table through the document reader would treat a cell as
+ * a line of prose -- `$5-$10` as maths, `2*3*4` as italics, a link as its words -- and a spreadsheet made from a
+ * reply would hold values nobody wrote. Here a cell is the characters between two bars and nothing else, and the
+ * rows then go through the same reader as a pasted CSV, which is where types and units are worked out.
+ */
+export function markdownTableIn(text: string): { csv: string; tables: number } | null {
+  const lines = text.replace(/\r\n/g, '\n').split('\n')
+  const ruled: number[] = []
+  for (let i = 1; i < lines.length; i++) if (lines[i - 1].includes('|') && isRuledRow(lines[i])) ruled.push(i)
+  if (ruled.length === 0) return null
+  const at = ruled[0]
+  const rows: string[][] = [splitRow(lines[at - 1])]
+  for (let i = at + 1; i < lines.length && lines[i].includes('|') && lines[i].trim() !== ''; i++) rows.push(splitRow(lines[i]))
+  const quoted = (cell: string): string => `"${cell.replace(/"/g, '""')}"`
+  return { csv: rows.map((row) => row.map(quoted).join(',')).join('\n'), tables: ruled.length }
+}
 
 /** A figure in a document that points at a chart or a diagram kept in Create. */
 const FIGURE_REF = /^artifact:(artifact_[0-9a-f]{32})$/
@@ -266,7 +299,7 @@ const verifyPngFile = (expected: { bytes: number; hash: string; width: number; h
 export class ArtifactService {
   private readonly o: ArtifactServiceOptions
   /** Every file this service wrote outside its own store since it started. The only paths `artifact.reveal` will touch. */
-  private readonly written = new Set<string>()
+  private readonly written = new Map<string, ArtifactKindId>()
 
   constructor(options: ArtifactServiceOptions) {
     this.o = options
@@ -283,6 +316,9 @@ export class ArtifactService {
     const result = await this.dispatch(profileId, request, signal, progress)
     const conversationId = typeof request === 'object' && request !== null ? (request as Record<string, unknown>).conversationId : undefined
     if (!result.ok || !isConversationId(conversationId)) return result
+    // Only something this request made is filed under the conversation. Reading, renaming or saving a thing made
+    // somewhere else does not move it into the chat that happened to look at it.
+    if (!MAKES.has(result.operation)) return result
     const value = result.value as { record?: ArtifactRecord } | null
     const record = value && typeof value === 'object' ? value.record : undefined
     if (!record || !isArtifactId(record.artifactId) || record.conversationId) return result
@@ -335,6 +371,12 @@ export class ArtifactService {
           const path = str(req.path, 1000)
           // Not "any path a renderer names": only a file this service wrote itself, in this run of Orbis.
           if (!this.written.has(path)) return fail('bad-input', 'Orbis can only show a file it saved itself, in this session.')
+          // Opening a file hands it to whatever the computer opens that kind of file with -- and for a script, a batch
+          // file or a program, "open" means "run". Code is kept and never run, so a code file is shown in its folder
+          // and no more. Decided here and not by the button, because the button is not the only thing that can ask.
+          if (req.open === true && this.written.get(path) === 'code') {
+            return fail('bad-input', 'Orbis does not open a code file, because opening one can run it. It is saved: use "Show in folder".')
+          }
           if (!this.o.reveal) return fail('unavailable', 'Showing a file in its folder is not available here.')
           await this.o.reveal(path, req.open === true)
           return { ok: true, operation, value: { path, opened: req.open === true } }
@@ -406,8 +448,13 @@ export class ArtifactService {
    */
   private wordsOf(body: ArtifactBody, rendered: Rendered): string {
     switch (body.kind) {
-      case 'document':
-        return `${rendered.scan}\n${toText(body.document)}`
+      case 'document': {
+        // And once more with the markers taken out. Stars that turned out not to be emphasis stay in the words as
+        // stars, and a key with two of them in the middle is still a key to anybody who can press delete.
+        const words = toText(body.document)
+        // Underscores are left: keys have underscores of their own.
+        return `${rendered.scan}\n${words}\n${words.replace(/\*+|~{2,}|={2,}|`+/g, '')}`
+      }
       case 'diagram':
         return `${rendered.scan}\n${[...body.diagram.objects.map((one) => one.text), ...body.diagram.connectors.map((one) => one.text)].join('\n')}`
       case 'plot':
@@ -441,16 +488,8 @@ export class ArtifactService {
     if (kind === 'table') {
       // A table written the way a chat reply writes one -- pipes and a ruled line under the headings -- is read as
       // that table. Handed to the delimited reader it would come out as one column of lines with pipes in them.
-      if (MARKDOWN_TABLE.test(text)) {
-        const read = fromMarkdown(text, 'b')
-        if (!isDocumentError(read)) {
-          const holder = emptyDocument('document', title)
-          holder.blocks = read.blocks
-          const first = extractTable(holder, 1, source)
-          if (!isDataError(first)) return { kind: 'table', table: first }
-        }
-      }
-      const parsed = parseDelimited(text)
+      const written = markdownTableIn(text)
+      const parsed = parseDelimited(written ? written.csv : text)
       if (isDataError(parsed)) return { error: 'parse', message: parsed.message }
       const table: Table = { ...parsed.table, source }
       return { kind: 'table', table }
@@ -659,6 +698,13 @@ export class ArtifactService {
     } else if (body.kind === 'code') {
       document.blocks.push({ id: id(), sectionId: '', kind: 'code', language: body.code.language, source: body.code.source, showLineNumbers: false })
       notes.push(`The ${languageById(body.code.language)?.name ?? body.code.language} file "${record.title}" (version ${record.version}), character for character.`)
+    }
+
+    // A document is kept as text and read back from it, and there is a most that can be read back at once. Said here,
+    // as the reason it is, rather than left to turn up as "the copy did not match".
+    const length = toMarkdown(document).length
+    if (length > DOCUMENT_LIMITS.textLength) {
+      return fail('too-large', `"${record.title}" is too long to put into one document: it comes to ${length.toLocaleString('en')} characters, and a document holds ${DOCUMENT_LIMITS.textLength.toLocaleString('en')}. Filter it or keep fewer columns first, or save it as a spreadsheet.`)
     }
 
     return this.keep(
@@ -1177,8 +1223,11 @@ export class ArtifactService {
 
     const body = this.bodyFrom(kind, req.text, source, title, str(req.language, 40))
     if ('error' in body) return fail(body.error, body.message)
-    // Code says what Orbis could tell about it, and that it was not run. Nothing else needs a note.
+    // Code says what Orbis could tell about it, and that it was not run. A table taken out of text that held several
+    // says which one it is. Nothing else needs a note.
     const notes = body.kind === 'code' ? [checkSyntax(body.code.language, body.code.source, compileJavaScript).message] : []
+    const tables = body.kind === 'table' ? (markdownTableIn(req.text)?.tables ?? 0) : 0
+    if (tables > 1) notes.push(`The text held ${tables} tables. This is the first; the others were not kept.`)
     return this.keep(profileId, operation, body, { title, source, notes, acceptSecrets }, fail)
   }
 
@@ -1276,16 +1325,19 @@ export class ArtifactService {
    *
    * Not an operation. The window never needs it; it is what the main process hands to Orion.
    */
-  async contextOf(profileId: string, artifactId: string, limit = 6000): Promise<{ title: string; kind: ArtifactKindId; version: number; text: string } | null> {
+  async contextOf(profileId: string, artifactId: string, limit = 6000): Promise<{ title: string; kind: ArtifactKindId; version: number; text: string; cut: boolean } | null> {
     if (!isArtifactId(artifactId)) return null
     const record = await this.o.store.readRecord(profileId, artifactId)
     if (!record) return null
     const body = await this.bodyOf(profileId, record)
     if (!body) return null
     const lines: string[] = []
+    /** Whether something the artifact holds is not in the text: rows past the sample, columns past the thirtieth. */
+    let left = false
     if (body.kind === 'table') {
       const table = body.table
       const shown = table.columns.slice(0, 30)
+      left = table.rows.length > 40 || table.columns.length > shown.length
       lines.push(`A table called "${record.title}" with ${rowsOf(table.rows.length)} and ${table.columns.length} columns: ${shown.map((one) => `${one.name} (${one.type}${one.unit ? `, in ${one.unit.display}` : ''})`).join(', ')}.`)
       if (table.rows.length > 0) lines.push('', 'Worked out by Orbis over ALL the rows. Use these figures as they are; do not add rows up yourself:')
       const rowAs = (at: number): string => shown.map((column, c) => `${column.name}=${cellOut(table.rows[at].cells[c] ?? null, column)}`).join(', ')
@@ -1293,6 +1345,17 @@ export class ArtifactService {
       shown.forEach((column, c) => {
         if (table.rows.length === 0) return
         if (column.type === 'number' || column.type === 'integer' || column.type === 'quantity') {
+          // Amounts in different units are not added up or compared as bare numbers: 1.5 kg is not less than 200 g.
+          const units = new Set<string>()
+          for (const row of table.rows) {
+            const cell = row.cells[c] ?? null
+            if (isQuantityCell(cell)) units.add(cell.unit.display)
+          }
+          if (units.size > 1) {
+            lines.push(`- ${column.name}: the values are in different units (${[...units].slice(0, 6).join(', ')}), so Orbis gives no total, smallest or largest for it. Do not work one out from the rows either; say that the units differ.`)
+            return
+          }
+          const unit = units.size === 1 ? ` ${[...units][0]}` : ''
           let count = 0
           let sum = 0
           let low = Number.POSITIVE_INFINITY
@@ -1308,7 +1371,7 @@ export class ArtifactService {
             if (value > high) [high, highAt] = [value, at]
           })
           if (count === 0) lines.push(`- ${column.name}: no values that are numbers.`)
-          else lines.push(`- ${column.name}: ${count} values, sum ${tidy(sum)}, mean ${tidy(sum / count)}, smallest ${tidy(low)} (row: ${rowAs(lowAt)}), largest ${tidy(high)} (row: ${rowAs(highAt)})${count < table.rows.length ? `, ${table.rows.length - count} empty` : ''}.`)
+          else lines.push(`- ${column.name}: ${count} values, sum ${tidy(sum)}${unit}, mean ${tidy(sum / count)}${unit}, smallest ${tidy(low)}${unit} (row: ${rowAs(lowAt)}), largest ${tidy(high)}${unit} (row: ${rowAs(highAt)})${count < table.rows.length ? `, ${table.rows.length - count} empty` : ''}.`)
         } else if (column.type === 'category' || column.type === 'text' || column.type === 'boolean') {
           const counts = new Map<string, number>()
           for (const row of table.rows) {
@@ -1337,7 +1400,13 @@ export class ArtifactService {
       lines.push(`A chart called "${record.title}": ${body.plot.series.map((one) => one.label).join(', ')} against ${body.plot.x.label || 'the bottom axis'}.`, ...record.notes)
     }
     const text = lines.join('\n')
-    return { title: record.title, kind: record.kind, version: record.version, text: text.length > limit ? `${text.slice(0, limit)}\n[... cut here: ${text.length - limit} more characters are not shown ...]` : text }
+    return {
+      title: record.title,
+      kind: record.kind,
+      version: record.version,
+      text: text.length > limit ? `${text.slice(0, limit)}\n[... cut here: ${text.length - limit} more characters are not shown ...]` : text,
+      cut: left || text.length > limit
+    }
   }
 
   // ---------------------------------------------------------------- analyse
@@ -1671,7 +1740,9 @@ export class ArtifactService {
     if ('error' in rendered) return fail(rendered.error, rendered.message)
 
     const ext = body.kind === 'code' ? extensionForLanguage(body.code.language) : extensionFor(format)
-    const base = safeName(record.title)
+    // A code file called "report.py" is saved as report.py, not report.py.py.
+    const named = body.kind === 'code' && languageById(body.code.language)?.extensions.some((one) => record.title.toLowerCase().endsWith(one)) ? record.title.slice(0, record.title.lastIndexOf('.')) : record.title
+    const base = safeName(named)
     const gate = gateForWrite(`${base}${ext}`, this.wordsOf(body, rendered), acceptSecrets)
     if (!gate.ok) return fail('secrets', gate.message, { findings: gate.findings })
 
@@ -1691,7 +1762,7 @@ export class ArtifactService {
     if (path === null) return fail('cancelled', 'Nothing was written.')
 
     await (this.o.writeFile ?? writeToDisk)(path, rendered.bytes)
-    this.written.add(path)
+    this.written.set(path, body.kind)
     const readBack = await (this.o.readFile ?? (async (p: string) => new Uint8Array(await readFromDisk(p))))(path)
     const verified = await this.verify(body, rendered, readBack)
 

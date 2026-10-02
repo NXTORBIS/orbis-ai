@@ -181,7 +181,7 @@ export interface ScrollOutcome {
  * used only to hand ownership back -- the next event really is theirs. Without this, every move Orbis made would
  * immediately be read as the person having moved, and the decision behind it would be thrown away a frame later.
  */
-export function onScrolled(state: ChatScrollState, v: Viewport, showJumpNow: boolean, theirs = true): ScrollOutcome {
+export function onScrolled(state: ChatScrollState, v: Viewport, showJumpNow: boolean, theirs = true, room = false): ScrollOutcome {
   const distance = distanceFromBottom(v)
   if (!theirs) {
     // Nobody scrolled. The content changed size and the browser put the scroller where it still fits -- a card
@@ -198,7 +198,11 @@ export function onScrolled(state: ChatScrollState, v: Viewport, showJumpNow: boo
 
   // Theirs. Being at the foot of the answer is how somebody says "keep showing me the newest part"; leaving it is how
   // they say they are reading instead.
-  const mode: ScrollMode = distance <= FOLLOW_THRESHOLD ? 'following' : 'reading'
+  //
+  // Unless there is still empty room under the newest turn. Then the end of the page is not the foot of the answer:
+  // it is wherever the room happens to stop, and a nudge of the wheel while reading the first lines would otherwise
+  // count as arriving there.
+  const mode: ScrollMode = distance <= FOLLOW_THRESHOLD && !room ? 'following' : 'reading'
   // The settled position is cleared: the person has moved the scroller, so Orbis no longer knows of a position that
   // would be its own doing.
   return { state: { ...state, mode, settledAt: null }, showJump: jumpVisible(v, showJumpNow) }

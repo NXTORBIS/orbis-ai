@@ -439,6 +439,13 @@ export default function App(): React.JSX.Element {
       const conversationId = conversation.id
       const requestId = newId()
       const assistant: ChatMessage = { id: newId(), role: 'assistant', content: '', model: conversation.model, createdAt: Date.now() }
+      // The replies this answer takes the place of, when it takes the place of any: their cards go with them, so
+      // what those replies made or changed is undone before the question is answered again.
+      const replaced = conversation.messages
+        .slice(history.length)
+        .flatMap((m) => (m.role === 'assistant' ? (m.artifacts ?? []) : []))
+        .filter((one) => one.action !== 'shown')
+        .map((one) => ({ artifactId: one.ref.artifactId, versionId: one.ref.versionId, version: one.ref.version, action: one.action }))
       updateConversation(conversationId, (c) => ({ ...c, messages: [...history, assistant] }))
       commitStreams((s) => ({ ...s, [conversationId]: { requestId, messageId: assistant.id } }))
 
@@ -562,7 +569,9 @@ export default function App(): React.JSX.Element {
         webSearch,
         // So what is made in this chat remembers the chat, and "add a chart to it" can find what "it" is.
         conversationId,
-        incognito: Boolean(conversation.incognito)
+        incognito: Boolean(conversation.incognito),
+        // Regenerate, Resend, or the question edited: the replies being replaced, and what they made or changed.
+        ...(replaced.length ? { replaced } : {})
       }
       window.api.sendChat(request).catch((err: unknown) => {
         finish({ error: err instanceof Error ? err.message : String(err) })
@@ -909,11 +918,12 @@ export default function App(): React.JSX.Element {
 
   const newChat = useCallback(() => startChat(false), [startChat])
 
-  const closeFeature = useCallback(() => {
-    setFeature(null)
-    // Something may have been changed or removed on the screen that just closed: cards in the chat read again.
+  const closeFeature = useCallback(() => setFeature(null), [])
+  // Whichever way a screen was left -- its own back button, the menu, another screen opened over it -- something may
+  // have been changed or removed on it: cards in the chat read again.
+  useEffect(() => {
     artifactChanged()
-  }, [])
+  }, [feature])
 
   const toggleIncognito = useCallback(() => {
     const on = !(activeId ? conversationsRef.current.find((c) => c.id === activeId)?.incognito : draft.incognito)

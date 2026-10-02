@@ -128,31 +128,53 @@ test('an empty request is refused before any model is asked', async () => {
   assert.equal(asked.length, 0)
 })
 
-test('rows written out from the figures the person gave are not called examples', async () => {
+test('rows written out from what the person gave are not called examples, and only when every value in them was given', async () => {
   const { generation } = withAnswers([
-    { kind: 'table', title: 'Sales', columns: ['Month', 'Units', 'Revenue'], rows: [['January 2025', '12', '1200'], ['February 2025', '18', '1,800']] }
+    { kind: 'table', title: 'Sales', columns: ['Month', 'Units', 'Revenue'], rows: [['January', '12', '1200'], ['February', '18', '1,800']] }
   ])
-  const out = await generation.generate('A spreadsheet of sales for January and February 2025. Revenues 1200 and 1800, units 12 and 18.')
+  const out = await generation.generate('A spreadsheet of sales: January revenue 1200 and units 12, February revenue 1800 and units 18.')
   assert.equal(out.body?.kind, 'table')
-  assert.ok(out.notes.some((one) => /Every number in them is one you gave/.test(one)), out.notes.join(' | '))
+  assert.ok(out.notes.some((one) => /Every value in them is in what you gave/.test(one)), out.notes.join(' | '))
   assert.equal(out.notes.some((one) => /example/i.test(one)), false, 'neither the note nor the planner calls the person\'s own figures examples')
+
+  // The numbers were given; the months were filled in by the model. Said exactly, and nothing is called "yours" that is not.
+  const filled = withAnswers([{ kind: 'table', title: 'Sales', columns: ['Month', 'Revenue'], rows: [['January 2025', '1200'], ['February 2025', '1800']] }])
+  const some = await filled.generation.generate('Sales for the first two months of 2025: 1200 and 1800.')
+  assert.ok(some.notes.some((one) => /4 of the 4 numbers in the rows are in what you gave\. Everything else in the rows was written by a model: treat anything you did not give as an example\./.test(one)), some.notes.join(' | '))
+  assert.equal(some.notes.some((one) => /Every value in them/.test(one)), false)
 })
 
-test('figures the person did not give stay labelled as a model\'s, and a mixture says how many are whose', async () => {
-  const mixed = withAnswers([{ kind: 'table', title: 'Sales', columns: ['Month', 'Revenue'], rows: [['January', '1200'], ['February', '9999']] }])
-  const some = await mixed.generation.generate('Sales by month. January was 1200.')
-  assert.ok(some.notes.some((one) => /1 of the 2 numbers in the rows are ones you gave/.test(one)), some.notes.join(' | '))
-  assert.ok(some.notes.some((one) => /example rows? (was|were) written by a model/.test(one)), 'the rest are still examples, and still said to be')
+test('invented rows are never called the person\'s own, however the numbers are dressed or happen to coincide', async () => {
+  // Figures with a sign, a unit or a percent are still figures, and these were not given.
+  const dressed = withAnswers([{ kind: 'table', title: 'Sales', columns: ['Year', 'Revenue', 'Growth'], rows: [['2024', '$1.2M', '12%'], ['2025', '$1.5M', '25%']] }])
+  const out = await dressed.generation.generate('A sales table for 2024 and 2025 with example revenue')
+  assert.equal(out.notes.some((one) => /Every value in them/.test(one)), false, out.notes.join(' | '))
+  assert.ok(out.notes.some((one) => /2 of the 6 numbers in the rows are in what you gave/.test(one)), out.notes.join(' | '))
 
-  assert.deepEqual(figuresGiven([['a', '12'], ['b', 3.5], ['c', '-7'], ['d', 'n/a']], 'twelve is 12, and 3.5, and 7'), { numbers: 3, found: 3 })
-  assert.deepEqual(figuresGiven([['1,200']], 'it was 1200'), { numbers: 1, found: 1 })
-  assert.deepEqual(figuresGiven([['42']], 'nothing numeric here'), { numbers: 1, found: 0 })
-  assert.deepEqual(figuresGiven([['x', 'y']], '1 2 3'), { numbers: 0, found: 0 })
+  // Three invented students in "grade 5": the 5 is in the request, the students are not.
+  const roster = withAnswers([{ kind: 'table', title: 'Roster', columns: ['Student', 'Grade'], rows: [['Alice', '5'], ['Bob', '5'], ['Cara', '5']] }])
+  const made = await roster.generation.generate('Create a class roster spreadsheet for grade 5 with 3 students')
+  assert.equal(made.notes.some((one) => /Every value in them/.test(one)), false, made.notes.join(' | '))
+  assert.ok(made.notes.some((one) => /treat anything you did not give as an example/.test(one)))
 
-  // From material handed over (a reply, an attached file), the same rule: the numbers are checked against it.
+  // Nothing given at all: examples, said twice over as before.
+  const none = withAnswers([{ kind: 'table', title: 'T', columns: ['a', 'b'], rows: [['x', '42']] }])
+  const plain = await none.generation.generate('a table with an example row')
+  assert.ok(plain.notes.some((one) => /examples written by a model/.test(one)))
+  assert.ok(plain.notes.some((one) => /example row was written by a model/.test(one)))
+
+  assert.deepEqual(figuresGiven([['a', '12'], ['b', 3.5], ['c', '-7'], ['d', 'n/a']], 'a b c d: twelve is 12, and 3.5, and 7, or n/a'), { numbers: 3, found: 3, words: 5, wordsFound: 5 })
+  assert.deepEqual(figuresGiven([['1,200']], 'it was 1200'), { numbers: 1, found: 1, words: 0, wordsFound: 0 })
+  assert.deepEqual(figuresGiven([['1200'], ['300']], 'Jan,1200,300'), { numbers: 2, found: 2, words: 0, wordsFound: 0 }, 'a comma between two numbers is not a thousands comma')
+  assert.deepEqual(figuresGiven([['1'], ['2'], ['3']], 'Use these figures: 1,2,3'), { numbers: 3, found: 3, words: 0, wordsFound: 0 })
+  assert.deepEqual(figuresGiven([['3'], ['12'], ['31']], 'Budget from 2024-03-12 to 2024-12-31'), { numbers: 3, found: 0, words: 0, wordsFound: 0 }, 'the parts of a date are not figures somebody gave')
+  assert.deepEqual(figuresGiven([['2026-10-01', 'x']], 'x'), { numbers: 0, found: 0, words: 1, wordsFound: 1 }, 'a date in a cell is not a figure either')
+  assert.deepEqual(figuresGiven([['$1.2M', '12%']], 'nothing numeric here'), { numbers: 2, found: 0, words: 1, wordsFound: 0 })
+
+  // From material handed over (a reply, an attached file), the same rule: checked against the material.
   const fromMaterial = withAnswers([{ kind: 'table', title: 'Moons', columns: ['Planet', 'Moons'], rows: [['Mars', '2'], ['Jupiter', '95']] }])
-  const out = await fromMaterial.generation.generate('Make a table from that', { context: 'Mars has 2 moons and Jupiter has 95.' })
-  assert.ok(out.notes.some((one) => /Every number in them is one you gave/.test(one)))
+  const moons = await fromMaterial.generation.generate('Make a table from that', { context: 'Mars has 2 moons and Jupiter has 95.' })
+  assert.ok(moons.notes.some((one) => /Every value in them is in what you gave/.test(one)))
 })
 
 test('a document is written in parts only when length is asked for, and a number of pages decides how many', () => {

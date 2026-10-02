@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { ChatArtifact, StreamEvent } from '../../shared/types.ts'
-import { ArtifactChat, materialIn, notDrawable, tableTextIn, type ArtifactChatTurn } from './chat.ts'
+import { ArtifactChat, hasRuledTable, materialIn, notDrawable, tableTextIn, tabularIn, type ArtifactChatTurn } from './chat.ts'
 import { ArtifactGeneration, type Asked } from './generation.ts'
 import { ArtifactService } from './service.ts'
 import { ArtifactStore } from './store.ts'
@@ -358,5 +358,186 @@ test('asked for a kind of chart Orbis does not draw, the reply says so and says 
       assert.equal(notDrawable('a bar chart of sales'), null)
       assert.equal(notDrawable('a pie chart of sales'), null, 'a pie is drawn')
       assert.match(notDrawable('a Heat Map of visits') ?? '', /heat map chart yet/)
+    }
+  ))
+
+const titles = async (s: Stage): Promise<string[]> => {
+  const listed = await s.service.run('default', { operation: 'artifact.list' })
+  return listed.ok ? (listed.value as { record: { kind: string; title: string; version: number } }[]).map((one) => `${one.record.kind}:${one.record.title}:v${one.record.version}`).sort() : []
+}
+
+test('the request can come before the data or after it, and the data is the same either way', () => {
+  assert.equal(materialIn('Make a spreadsheet from this:\nname,amount\nrent,1200'), 'name,amount\nrent,1200')
+  assert.equal(materialIn('name,amount\nrent,1200\nfood,300\n\nmake a spreadsheet from this'), 'name,amount\nrent,1200\nfood,300')
+  assert.equal(materialIn('| a | b |\n| --- | --- |\n| 1 | 2 |\n\nput this in a spreadsheet please'), '| a | b |\n| --- | --- |\n| 1 | 2 |')
+  // A heading row that happens to start with a word people ask with is still a heading row.
+  assert.equal(materialIn('make,model,year\nFord,Focus,2019\n\nturn this into a table'), 'make,model,year\nFord,Focus,2019')
+  // Neither end is a request: nothing is guessed at.
+  assert.equal(materialIn('name,amount\nrent,1200'), '')
+  assert.equal(materialIn('Put this in a table: a,b'), 'a,b')
+})
+
+test('a table is read only from text that is one; anything else is not passed off as a table', () => {
+  assert.equal(tabularIn('| Month | Sales |\n|---|---|\n| Jan | 1200 |'), '| Month | Sales |\n|---|---|\n| Jan | 1200 |', 'text that is nothing but the table is still a table')
+  assert.equal(hasRuledTable('| Month | Sales |\n|---|---|\n| Jan | 1200 |'), true)
+  assert.equal(tabularIn('Here it is:\n\n| a | b |\n| --- | --- |\n| 1 | 2 |\n\nDone.'), '| a | b |\n| --- | --- |\n| 1 | 2 |')
+  assert.equal(tabularIn('name,amount\nrent,1200\nfood,300'), 'name,amount\nrent,1200\nfood,300')
+  assert.equal(tabularIn('Here you go:\n```csv\na,b\n1,2\n```'), 'a,b\n1,2', 'rows inside the one fenced block')
+  assert.equal(tabularIn('Here are the planets:\n- Mercury: 4,879 km\n- Venus: 12,104 km\n- Earth: 12,756 km'), null, 'a list with thousands commas is not rows')
+  assert.equal(tabularIn('Tea is a drink. People like it.'), null)
+  assert.equal(tableTextIn('no table here'), 'no table here')
+  const started = Date.now()
+  assert.equal(tabularIn(`a | b\n${' \t'.repeat(100_000)}x`), null)
+  assert.ok(Date.now() - started < 1000, 'a long run of space does not hold everything up')
+})
+
+test('data pasted before the request, a table that is the whole message, and a list that is not a table', () =>
+  stage(
+    [
+      { act: 'keep', source: 'message', kind: 'table', request: 'A spreadsheet from the pasted rows', sure: true },
+      { act: 'make', source: 'message', kind: 'table', request: 'A spreadsheet of sales', sure: true },
+      { act: 'keep', source: 'reply', kind: 'table', format: 'excel', request: 'The planets as a spreadsheet', sure: true },
+      { kind: 'table', title: 'Planets', columns: [{ name: 'Planet', type: 'text' }, { name: 'Diameter (km)', type: 'number' }], rows: [['Mercury', '4879'], ['Venus', '12104'], ['Earth', '12756']] }
+    ],
+    async (s) => {
+      const pasted = await s.say('name,amount\nrent,1200\nfood,300\n\nmake a spreadsheet from this')
+      assert.deepEqual(pasted.outcome, { handled: 'done' })
+      const first = await s.service.run('default', { operation: 'artifact.read', artifactId: pasted.cards[0].ref.artifactId })
+      assert.deepEqual(first.ok && (first.value as { columns: { name: string }[]; grid: { rows: string[][] } }).columns.map((one) => one.name), ['name', 'amount'], 'the heading row is the heading row')
+      assert.deepEqual(first.ok && (first.value as { grid: { rows: string[][] } }).grid.rows, [['rent', '1200'], ['food', '300']], 'and the request is not a row')
+
+      // The model called this "make". The table is the whole of the material, and it is read, not written again.
+      const asked = s.asked.length
+      const whole = await s.say('Make a spreadsheet from this:\n| Month | Sales |\n|---|---|\n| Jan | 1200 |\n| Feb | 1800 |')
+      assert.deepEqual([whole.cards[0].action, whole.outcome.handled], ['kept', 'done'])
+      assert.equal(s.asked.length, asked + 1, 'only the question of what was asked for went to a model')
+      const second = await s.service.run('default', { operation: 'artifact.read', artifactId: whole.cards[0].ref.artifactId })
+      assert.deepEqual(second.ok && (second.value as { grid: { rows: string[][] } }).grid.rows, [['Jan', '1200'], ['Feb', '1800']])
+
+      // A list is not a table. Orion writes one out from it, and the reply says that is what happened.
+      s.history.push({ role: 'assistant', content: 'Here are the planets:\n- Mercury: 4,879 km\n- Venus: 12,104 km\n- Earth: 12,756 km', artifactIds: [] })
+      const list = await s.say('put that in Excel')
+      assert.deepEqual([list.cards[0].action, list.cards[0].ref.title], ['made', 'Planets'])
+      assert.match(list.text, /There was no table in it as it stood, so Orion wrote one out from it: check it against the original\./)
+      assert.equal(/Nothing in it was rewritten/.test(list.text), false)
+    }
+  ))
+
+test('code is found wherever in the reply it is, and when there is more than one piece the reply asks which', () =>
+  stage(
+    [
+      { act: 'keep', source: 'reply', kind: 'code', request: 'Save the script as a Python file', sure: true },
+      { act: 'keep', source: 'reply', kind: 'code', request: 'Save the code', sure: true },
+      { act: 'keep', source: 'reply', kind: 'code', request: 'Save the JavaScript', sure: true }
+    ],
+    async (s) => {
+      s.history.push({ role: 'user', content: 'a script please', artifactIds: [] })
+      s.history.push({ role: 'assistant', content: "Here's the script:\n\n```python\nprint(1)\n```\n\nRun it with `python script.py`.", artifactIds: [] })
+      const one = await s.say('save that as a python file')
+      assert.deepEqual([one.cards[0].ref.kind, one.cards[0].action], ['code', 'kept'])
+      const read = await s.service.run('default', { operation: 'artifact.read', artifactId: one.cards[0].ref.artifactId })
+      assert.equal(read.ok && (read.value as { preview: string }).preview, 'print(1)\n')
+
+      s.history.push({ role: 'assistant', content: 'Two ways:\n\n```python\nprint(1)\n```\n\n```javascript\nconsole.log(1)\n```\n', artifactIds: [] })
+      const two = await s.say('save that code as a file')
+      assert.equal(two.outcome.handled, 'failed')
+      if (two.outcome.handled === 'failed') assert.match(two.outcome.message, /There are 2 pieces of code in it\. Say which one to keep, by its language\./)
+      s.history.push({ role: 'assistant', content: 'Two ways:\n\n```python\nprint(1)\n```\n\n```javascript\nconsole.log(1)\n```\n', artifactIds: [] })
+      const named = await s.say('save that JavaScript as a file')
+      assert.equal(named.cards[0].ref.kind, 'code')
+      const js = await s.service.run('default', { operation: 'artifact.read', artifactId: named.cards[0].ref.artifactId })
+      assert.equal(js.ok && (js.value as { preview: string }).preview, 'console.log(1)\n')
+    }
+  ))
+
+test('a request stopped part-way leaves nothing behind, and "put the chart into the report" places the chart there is', () =>
+  stage(
+    [
+      { act: 'make', kind: 'table', request: 'sales', sure: true },
+      { kind: 'table', title: 'Sales', columns: [{ name: 'Month', type: 'text' }, { name: 'Amount', type: 'number' }], rows: [['Jan', '10'], ['Feb', '14']] },
+      // "write a report about this table", stopped while the chart is being chosen
+      { act: 'make', kind: 'document', target: 'A1', request: 'A report about the table', sure: true },
+      { x: 'Month', y: ['Amount'], kind: 'bar' },
+      // the same again, allowed to finish
+      { act: 'make', kind: 'document', target: 'A1', request: 'A report about the table', sure: true },
+      { x: 'Month', y: ['Amount'], kind: 'bar' },
+      // a second chart, then "put the chart into the report"
+      // By now the conversation holds the report's own chart (A1), the table (A2) and the report (A3).
+      { act: 'chart', target: 'A2', request: 'a line chart', sure: true },
+      { x: 'Month', y: ['Amount'], kind: 'line' },
+      { act: 'chart', target: 'A4', into: 'A3', request: 'put the chart into the report', sure: true }
+    ],
+    async (s) => {
+      await s.say('Make a table of sales: Jan 10, Feb 14')
+      assert.deepEqual(await titles(s), ['table:Sales:v1'])
+
+      const controller = new AbortController()
+      const stopped = await s.say('write a report about this table', {
+        signal: controller.signal,
+        emit: (event) => {
+          // Stop, the moment the report has been worked out and the chart is being chosen.
+          if (event.type === 'status' && /Choosing what to draw/.test(event.message)) controller.abort()
+        }
+      })
+      assert.deepEqual(stopped.outcome, { handled: 'stopped' })
+      assert.deepEqual(await titles(s), ['table:Sales:v1'], 'the report that had already been kept is taken away again')
+
+      const report = await s.say('write a report about this table')
+      assert.deepEqual(report.outcome, { handled: 'done' })
+      const made = (await titles(s)).filter((one) => one.startsWith('document:'))
+      assert.equal(made.length, 1)
+
+      const line = await s.say('draw a line chart of it')
+      assert.equal(line.cards[0].ref.kind, 'plot')
+      const before = (await titles(s)).filter((one) => one.startsWith('plot:')).length
+      const placed = await s.say('put the chart into the report')
+      assert.deepEqual(placed.outcome, { handled: 'done' })
+      assert.deepEqual(placed.cards.map((one) => [one.ref.kind, one.action]), [['document', 'changed']])
+      assert.match(placed.text, /is now a figure in \*\*Analysis of Sales\*\*/)
+      assert.equal((await titles(s)).filter((one) => one.startsWith('plot:')).length, before, 'no chart was redrawn or made')
+    }
+  ))
+
+test('answering again undoes what the first answer did: a change is redone from the version before it, and a thing made is made once', () =>
+  stage(
+    [
+      { act: 'make', kind: 'table', request: 'tasks', sure: true },
+      { kind: 'table', title: 'Tasks', columns: [{ name: 'Task', type: 'text' }, { name: 'Notes', type: 'text' }], rows: [['a', 'x'], ['b', 'y']] },
+      { act: 'change', target: 'A1', request: 'Remove the Notes column', sure: true },
+      { steps: [{ op: 'drop', columns: ['Notes'] }] },
+      // Regenerate: the same message again
+      { act: 'change', target: 'A1', request: 'Remove the Notes column', sure: true },
+      { steps: [{ op: 'drop', columns: ['Notes'] }] },
+      // Regenerate on the reply that made the table
+      { act: 'make', kind: 'table', request: 'tasks', sure: true },
+      { kind: 'table', title: 'Tasks', columns: [{ name: 'Task', type: 'text' }], rows: [['a'], ['b'], ['c']] }
+    ],
+    async (s) => {
+      const made = await s.say('Make a table of tasks with notes')
+      const changed = await s.say('remove the Notes column')
+      assert.equal(changed.cards[0].ref.version, 2)
+
+      // Regenerate that reply: its card goes with it, and the message is answered again.
+      s.history.splice(-2)
+      const replaced = changed.cards.map((one) => ({ artifactId: one.ref.artifactId, versionId: one.ref.versionId, version: one.ref.version, action: one.action }))
+      await s.chat.undo({ profileId: 'default', message: '', attachments: [], history: [], conversationId: 'chat_1', replaced, signal: new AbortController().signal, emit: () => undefined })
+      const again = await s.say('remove the Notes column')
+      assert.deepEqual(again.outcome, { handled: 'done' }, 'the column is there to be removed again')
+      const read = await s.service.run('default', { operation: 'artifact.read', artifactId: made.cards[0].ref.artifactId })
+      assert.deepEqual(read.ok && (read.value as { columns: { name: string }[] }).columns.map((one) => one.name), ['Task'])
+      assert.equal(read.ok && (read.value as { record: { version: number } }).record.version, 4, 'put back as a version, then changed as a version: nothing is lost')
+
+      // Regenerate the reply that made the table: the first one is removed, and there is one table, not two.
+      s.history.splice(0)
+      await s.chat.undo({ profileId: 'default', message: '', attachments: [], history: [], conversationId: 'chat_1', replaced: [{ artifactId: made.cards[0].ref.artifactId, versionId: made.cards[0].ref.versionId, version: 1, action: 'made' }], signal: new AbortController().signal, emit: () => undefined })
+      assert.deepEqual(await titles(s), [])
+      await s.say('Make a table of tasks with notes')
+      assert.deepEqual(await titles(s), ['table:Tasks:v1'])
+
+      // Something made in another conversation is never removed on a window's say-so, and nonsense is ignored.
+      const other = await s.service.run('default', { operation: 'artifact.create', kind: 'table', title: 'Elsewhere', text: 'a,b\n1,2\n', conversationId: 'another_chat' })
+      const otherId = other.ok ? (other.value as { record: { artifactId: string; versionId: string } }).record : null
+      await s.chat.undo({ profileId: 'default', message: '', attachments: [], history: [], conversationId: 'chat_1', replaced: [{ artifactId: otherId!.artifactId, versionId: otherId!.versionId, version: 1, action: 'made' }, { artifactId: '../../etc', versionId: 'x', version: 1, action: 'made' }], signal: new AbortController().signal, emit: () => undefined })
+      assert.ok((await titles(s)).includes('table:Elsewhere:v1'))
     }
   ))

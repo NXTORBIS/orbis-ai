@@ -48,10 +48,21 @@ that was read back and checked before anything said it was kept.
 
 **Download** on a card writes into the Downloads folder (`artifact.download`) under a name that replaces nothing, and
 says "saved" only after the file was read back. **Save as…** is the dialog. **Open the file** and **Show in folder**
-(`artifact.reveal`) work only for a file Orbis itself wrote in this session.
+(`artifact.reveal`) work only for a file Orbis itself wrote in this session -- and a code file is never opened, only
+shown in its folder, because for a script "open" means "run". That is refused in the service, not just left off the
+card. A card never fetches a picture from an address written in a document.
 
-Progress shown while it works is what is really happening (`ARTIFACT_STATUS`), Stop stops it, and a stopped request
-makes nothing.
+Progress shown while it works is what is really happening (`ARTIFACT_STATUS`), Stop stops it, and a request that is
+stopped or fails part-way leaves nothing new behind: whatever it had already made is removed again. (A change that had
+already been kept as a new version stays; the version before it is still there.)
+
+**Answering again.** Regenerate, Resend and editing the question send the cards of the reply being replaced
+(`ChatRequest.replaced`). `ArtifactChat.undo` puts things back first: something that reply made is removed (only if
+the library says it was made in this conversation), and something it changed is restored to the version before the
+change (only if nothing has changed it since). So "sort it" answered again sorts the table once, not twice.
+
+**A picture attached to the message** leaves the whole message to the ordinary reply: Orbis does not read a picture
+into a table or a document, and will not make "a spreadsheet from this photo" out of nothing.
 
 The Orb does not make or change artifacts. It is for the browser; making things belongs to the chat.
 
@@ -84,6 +95,11 @@ Orion decides *what* and writes *words*. Engines do everything that has a right 
 8. **A model's answer is read by a deny-by-default validator**, argued with once when it is wrong, and then the same
    deterministic builders run that pasted text goes through. Every artifact a model had a hand in says so in its notes.
 9. **What a format leaves out is said**, in plain words, before and after saving.
+10. **What is kept is what was written.** The Markdown a document is stored as has to read back as the same document:
+    text that would read back as something else (`*args*` in a table cell) is written with its markers escaped, a bar
+    in a cell is written `\|`, and a code block's fence is longer than any fence inside it.
+11. **A claim about whose data it is is counted, not assumed.** Rows are called "what you gave" only when every number
+    and every word in them is in the request or the material; otherwise the card says how many were.
 
 ## Operations (`creation:run`)
 
@@ -114,6 +130,8 @@ Saving: `artifact.export` (a dialog) · `artifact.download` (the Downloads folde
 | `src/shared/artifacts/` | Pure, no Electron: kinds, the record model, naming, the secret gate, verification, the proposal validator, analysis, table steps, templates, table extraction, languages, the chart and diagram drawing, flowchart layout |
 | `src/main/artifacts/service.ts` | Every operation. Knows nothing about windows or dialogs |
 | `src/main/artifacts/store.ts` | `<profile>/artifacts/<id>/current/` and `versions/<versionId>/`, staged then renamed. A rename refused because the folder is busy is tried again; reads wait for writes |
+| `src/main/artifacts/attaching.ts` | An Excel, Word or PDF file attached to a chat message, read into the rows or words it holds |
+| `src/shared/compute/document.ts` | The Markdown reader and writer every document goes through. Emphasis is read in one pass: a marker is judged by the run it stands in, an ending pairs with the nearest beginning, and a beginning with no ending goes back as the characters it is |
 | `src/main/artifacts/generation.ts` | Asking Orion: make, revise, plan table steps, choose a chart's columns, the quick question the chat asks |
 | `src/main/artifacts/chat.ts` | The chat's side: decide what a message asks for, do it with the service, answer with a sentence and cards |
 | `src/shared/artifacts/chatIntent.ts` | Pure: the check before the model, what the model is told, and the reader of its answer |

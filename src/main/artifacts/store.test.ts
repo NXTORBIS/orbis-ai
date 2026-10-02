@@ -264,3 +264,19 @@ test('a read asked for in the middle of a write sees the old version or the new 
     await rm(dir, { recursive: true, force: true })
   }
 })
+
+test('the queue keeps nothing once the work is done: not what a read handed back, and not an entry for an id that was only asked about', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'orbis-artifacts-'))
+  try {
+    const store = new ArtifactStore({ userData: dir })
+    const id = makeArtifactId('5'.repeat(32))
+    await store.write('default', record(id), [{ name: SOURCE_FILE, bytes: bytes('{}') }, { name: 'content.json', bytes: bytes('x'.repeat(50_000)) }])
+    await store.readFile('default', id, 'content.json')
+    for (let i = 0; i < 200; i++) await store.readRecord('default', makeArtifactId(i.toString(16).padStart(32, '0')))
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    const queues = (store as unknown as { queues: Map<string, Promise<unknown>> }).queues
+    assert.equal(queues.size, 0)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})

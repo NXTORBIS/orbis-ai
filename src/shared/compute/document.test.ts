@@ -16,11 +16,13 @@ import {
   inlineText,
   insertBlock,
   isDocumentError,
+  isRuledRow,
   moveBlock,
   moveSection,
   numbering,
   outlineOf,
   parseInline,
+  splitRow,
   removeBlock,
   replaceAll,
   resolveReferences,
@@ -863,5 +865,136 @@ describe('a marker is emphasis only where it can be', () => {
     if (first.kind !== 'paragraph') return
     assert.equal(inlineText(first.content), 'before bold after x_y')
     assert.deepEqual(first.content.filter((one) => one.kind === 'text' && one.marks.includes('bold')).map((one) => (one as { text: string }).text), ['bold'])
+  })
+})
+
+describe('an ending pairs with the nearest beginning, and programming prose is left alone', () => {
+  const plainText = (source: string): void => {
+    const runs = parseInline(source)
+    assert.equal(inlineText(runs), source, source)
+    assert.ok(runs.every((one) => one.kind !== 'text' || one.marks.length === 0), `${source} has no emphasis in it`)
+  }
+  const styled = (source: string, mark: 'italic' | 'bold'): string[] =>
+    parseInline(source)
+      .filter((one) => one.kind === 'text' && one.marks.includes(mark))
+      .map((one) => (one as { text: string }).text)
+
+  test('stars that are part of the code are stars', () => {
+    plainText('Use *args and **kwargs')
+    plainText('char *s, **argv')
+    plainText('def f(*args, **kwargs):')
+    plainText('2*3*4 is 24, and x**2 is x squared')
+    plainText('a pointer **p and a pointer *q')
+  })
+
+  test('real emphasis after a stray marker is still emphasis, on the right words', () => {
+    assert.deepEqual(styled('2*3 is *not* 5', 'italic'), ['not'])
+    assert.equal(inlineText(parseInline('2*3 is *not* 5')), '2*3 is not 5')
+    assert.deepEqual(styled('x**2 is **not** the same', 'bold'), ['not'])
+    assert.equal(inlineText(parseInline('x**2 is **not** the same')), 'x**2 is not the same')
+    assert.deepEqual(styled('**Warning: do *not* do this', 'italic'), ['not'])
+    assert.equal(inlineText(parseInline('**Warning: do *not* do this')), '**Warning: do not do this')
+    assert.deepEqual(styled('*a *b* c', 'italic'), ['b'])
+    assert.equal(inlineText(parseInline('*a *b* c')), '*a b c')
+  })
+
+  test('a stray marker inside real emphasis keeps the emphasis round it', () => {
+    const runs = parseInline('**bold with a *stray star** after')
+    assert.equal(inlineText(runs), 'bold with a *stray star after')
+    assert.deepEqual(runs.filter((one) => one.kind === 'text' && one.marks.includes('bold')).map((one) => (one as { text: string }).text), ['bold with a *stray star'])
+    assert.equal(runs.some((one) => one.kind === 'text' && one.marks.includes('italic')), false)
+  })
+
+  test('two prices are two prices, and maths between dollar signs is still maths', () => {
+    plainText('It costs $5 to $10 a month')
+    plainText('a total of $12 000. June alone brought $3 000')
+    plainText('between $1,200 and $1,800')
+    const runs = parseInline('the area is $\\pi r^2$ exactly')
+    assert.deepEqual(runs.map((one) => one.kind), ['text', 'math', 'text'])
+  })
+
+  test('many markers of every sort are settled in one pass', () => {
+    const source = Array.from({ length: 3000 }, (_, i) => (i % 3 === 0 ? `*w${i}` : i % 3 === 1 ? `**w${i}` : `w${i}*`)).join(' ')
+    const started = Date.now()
+    const runs = parseInline(source)
+    assert.ok(Date.now() - started < 1500, 'bounded')
+    assert.ok(inlineText(runs).length > 0)
+  })
+})
+
+describe('what is written reads back as what it was', () => {
+  const paragraph = (content: ReturnType<typeof parseInline>): string => {
+    const document = emptyDocument('d', 'T')
+    document.blocks = [{ id: 'p', sectionId: '', kind: 'paragraph', content }]
+    return toMarkdown(document).trim()
+  }
+  const back = (markdown: string): ReturnType<typeof parseInline> => {
+    const read = fromMarkdown(markdown, 'b')
+    if (isDocumentError(read)) throw new Error(read.message)
+    const first = read.blocks[0]
+    if (first.kind !== 'paragraph') throw new Error(first.kind)
+    return first.content
+  }
+
+  test('text that would read back as emphasis is written so that it does not', () => {
+    // A cell or a sentence that really holds stars: not italics, and not to become italics by being saved.
+    for (const words of ['*args* and **kwargs**', 'a_b_ and _c_', 'costs $5$ flat', 'see [this](that) literally', '~~not struck~~ and ==not marked==', 'a \\ backslash and a ` tick']) {
+      const written = paragraph([text(words)])
+      const read = back(written)
+      assert.equal(inlineText(read), words, written)
+      assert.ok(read.every((one) => one.kind === 'text' && one.marks.length === 0), `${written} came back plain`)
+    }
+  })
+
+  test('ordinary text is written with nothing added to it', () => {
+    assert.equal(paragraph([text('The file_name and other_name, 2 * 3 * 4, and *args.')]), 'The file_name and other_name, 2 * 3 * 4, and *args.')
+    assert.equal(paragraph([text('plain '), text('bold', ['bold']), text(' and snake_case')]), 'plain **bold** and snake_case')
+  })
+
+  test('a long run of space inside emphasis is written in no time at all', () => {
+    const started = Date.now()
+    const written = paragraph([text(`a${' \t'.repeat(60_000)}b`, ['bold'])])
+    assert.ok(Date.now() - started < 1500, `took ${Date.now() - started} ms`)
+    assert.ok(written.startsWith('**a'))
+  })
+
+  test('code with a fence inside it is fenced by a longer one, and reads back as one block', () => {
+    const document = emptyDocument('d', 'T')
+    const source = 'const md = `\n```js\nx\n```\n`'
+    document.blocks = [{ id: 'c', sectionId: '', kind: 'code', language: 'javascript', source, showLineNumbers: false }]
+    const written = toMarkdown(document)
+    assert.ok(written.includes('````javascript'), written)
+    const read = fromMarkdown(written, 'b')
+    if (isDocumentError(read)) throw new Error(read.message)
+    assert.equal(read.blocks.length, 1)
+    assert.ok(read.blocks[0].kind === 'code' && read.blocks[0].source === source)
+  })
+
+  test('a table cell holding a bar or a line break stays one cell', () => {
+    const document = emptyDocument('d', 'T')
+    const cell = (value: string) => ({ content: [text(value)], colSpan: 1, rowSpan: 1, header: false, align: 'left' as const })
+    document.blocks = [{ id: 't', sectionId: '', kind: 'table', columns: 2, caption: '', label: '', rows: [[cell('command'), cell('meaning')], [cell('ls | wc -l'), cell('count files')], [cell('a\nb'), cell('two lines')]] }]
+    const written = toMarkdown(document)
+    assert.ok(written.includes('ls \\| wc -l'), written)
+    const read = fromMarkdown(written, 'b')
+    if (isDocumentError(read)) throw new Error(read.message)
+    const table = read.blocks[0]
+    assert.ok(table.kind === 'table')
+    if (table.kind !== 'table') return
+    assert.deepEqual(table.rows.map((row) => row.map((one) => inlineText(one.content))), [['command', 'meaning'], ['ls | wc -l', 'count files'], ['a\nb', 'two lines']])
+  })
+
+  test('a row is split at its bars, an escaped bar is not one, and a ruled line is found without trying every way to share out its spaces', () => {
+    assert.deepEqual(splitRow('| a | b \\| c | d |'), ['a', 'b | c', 'd'])
+    assert.deepEqual(splitRow('a | b'), ['a', 'b'])
+    assert.deepEqual(splitRow('| one<br>two | 3 |'), ['one\ntwo', '3'])
+    assert.equal(isRuledRow('| --- | :---: | ---: |'), true)
+    assert.equal(isRuledRow('---|---'), true)
+    assert.equal(isRuledRow('| a | b |'), false)
+    assert.equal(isRuledRow('just words'), false)
+    const started = Date.now()
+    assert.equal(isRuledRow(`${' '.repeat(200_000)}B,2`), false)
+    assert.equal(isRuledRow(`${' \t'.repeat(100_000)}| x`), false)
+    assert.ok(Date.now() - started < 500, `took ${Date.now() - started} ms`)
   })
 })

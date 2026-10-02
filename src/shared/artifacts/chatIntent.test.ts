@@ -248,3 +248,11 @@ test('with no model to ask, the plainest requests for a document are still reque
   assert.equal(mightBeAboutArtifacts('Draft an agenda for Monday', fresh), true)
   assert.equal(mightBeAboutArtifacts('write a poem about autumn', fresh), false)
 })
+
+test('a thing to be made from an attached file is not made when there is no file to read', () => {
+  const none: ChatIntentContext = { artifacts: [], previousWasArtifact: false, hasReply: false, attachments: [], message: 'make a spreadsheet from the attached photo of my receipt' }
+  assert.equal(readChatIntent({ act: 'make', kind: 'table', source: 'attachment', request: 'a spreadsheet of the receipt', sure: true }, none), null)
+  assert.equal(readChatIntent({ act: 'make', kind: 'table', source: 'attachment', request: 'a spreadsheet', sure: true }, { ...none, attachments: ['receipt.csv'] })?.source, 'attachment')
+  // A reply that was not reached for is different: the thing is still made, from the request alone.
+  assert.equal(readChatIntent({ act: 'make', kind: 'table', source: 'reply', request: 'a tracker', sure: true }, { ...none, hasReply: true, message: 'make me a reading tracker' })?.source, null)
+})

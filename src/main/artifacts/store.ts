@@ -105,7 +105,16 @@ export class ArtifactStore {
   private queued<T>(path: string, work: () => Promise<T>): Promise<T> {
     const previous = this.queues.get(path) ?? Promise.resolve()
     const next = previous.then(work, work)
-    this.queues.set(path, next.catch(() => undefined))
+    // The queue remembers only that the last piece of work has finished -- never what it handed back, which for a
+    // read is the whole file -- and lets go of an artifact as soon as nothing is waiting on it.
+    const tail = next.then(
+      () => undefined,
+      () => undefined
+    )
+    this.queues.set(path, tail)
+    void tail.then(() => {
+      if (this.queues.get(path) === tail) this.queues.delete(path)
+    })
     return next
   }
 

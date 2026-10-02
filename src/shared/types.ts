@@ -397,6 +397,11 @@ export interface ChatRequest {
   ask?: boolean
   /** The conversation this message belongs to, so what is made for it can be found again from it. */
   conversationId?: string
+  /**
+   * The cards of the reply this message is being answered again in place of (Regenerate, Resend, an edited question).
+   * Pointers only. What they made or changed is undone before the answer is given again.
+   */
+  replaced?: { artifactId: string; versionId: string; version: number; action: ChatArtifact['action'] }[]
   /** An incognito chat: the conversation is not saved. What is made in it still is, and the reply says so. */
   incognito?: boolean
 }

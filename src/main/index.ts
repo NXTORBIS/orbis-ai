@@ -906,8 +906,11 @@ ${block}`
          * for the slower of the two and not for both. Never from the address bar and never from the browser's own
          * assistant: those two are for asking and for the page.
          */
+        // A message with a picture attached is left to the ordinary reply. Orbis does not read a picture into a
+        // table or a document, and deciding without it would make "a spreadsheet from this photo" out of nothing.
+        const hasPicture = (last.attachments ?? []).some((one) => one.type === 'image')
         const artifactTurn: ArtifactChatTurn | null =
-          artifactsForChat && !request.ask && !last.browserTask
+          artifactsForChat && !request.ask && !last.browserTask && !hasPicture
             ? {
                 profileId: await artifactsForChat.profileId(),
                 message: last.content,
@@ -922,10 +925,20 @@ ${block}`
                 })),
                 conversationId: request.conversationId,
                 incognito: request.incognito === true,
+                // Pointers the window sent; each is checked against the library before anything is undone.
+                replaced: Array.isArray(request.replaced)
+                  ? request.replaced
+                      .filter((one) => one && typeof one.artifactId === 'string' && typeof one.versionId === 'string' && Number.isInteger(one.version) && ['made', 'changed', 'drew', 'kept'].includes(one.action))
+                      .slice(0, 24)
+                      .map((one) => ({ artifactId: one.artifactId, versionId: one.versionId, version: one.version, action: one.action }))
+                  : [],
                 signal: controller.signal,
                 emit
               }
             : null
+        // Answered again: what the first answer made or changed is put back before anything else is decided, so the
+        // question of what is being asked for is put to things as they stood.
+        if (artifactTurn?.replaced?.length && artifactsForChat) await artifactsForChat.chat.undo(artifactTurn)
         const deciding = artifactTurn && artifactsForChat ? artifactsForChat.chat.decide(artifactTurn).catch(() => null) : Promise.resolve(null)
         // Recognising pictures and browser tasks is an extra: if it fails, the message still gets a normal reply.
         const [detected, wanted] = await Promise.all([

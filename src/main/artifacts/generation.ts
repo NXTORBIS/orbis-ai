@@ -260,31 +260,50 @@ export function tidyPart(markdown: string, heading: string): string {
 /** The planner's own warning about rows a model wrote. Dropped when the rows turn out to be the person's figures. */
 const EXAMPLE_ROWS_WARNING = /example rows? (was|were) written by a model/
 
+/** A number as people write one: thousands in threes with commas, or plain digits, with or without a decimal part. */
+const NUMBER = /\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?/g
+/** A date written out. Its parts are not figures: "2024-03-12" does not mean somebody gave the numbers 3 and 12. */
+const DATE = /\b\d{4}-\d{1,2}-\d{1,2}\b|\b\d{1,2}[/.]\d{1,2}[/.]\d{2,4}\b/g
+
 /**
- * How many of the numbers in a table's rows are in what the person gave.
+ * How much of what is in a table's rows is in what the person gave.
  *
  * "Use these revenues: 1200, 1800, 1500" and a model that writes those into rows has copied, not invented -- and a
  * card that calls the person's own figures "examples, not records of anything real" is wrong about the one thing it
- * exists to be right about. A number is theirs only if it is in their words or their material, digit for digit
- * (thousands separators aside). Anything else stays labelled as a model's.
+ * exists to be right about. But the opposite mistake is worse: calling invented rows "yours". So this counts, and
+ * claims nothing it has not counted:
+ *
+ *   - every run of digits in every cell is a number, whatever is round it: `$1.2M` and `12%` are figures too;
+ *   - a number is theirs only if it is in their words or their material, digit for digit (thousands commas aside,
+ *     and "1,2,3" is three numbers, not one);
+ *   - the parts of a date are not figures, on either side;
+ *   - the words in a cell are theirs only if the cell's words are in what they gave.
  */
-export function figuresGiven(rows: readonly (readonly unknown[])[], given: string): { numbers: number; found: number } {
-  const said = new Set<number>()
-  for (const match of given.matchAll(/\d[\d,]*(?:\.\d+)?/g)) {
-    const value = Number(match[0].replace(/,/g, ''))
-    if (Number.isFinite(value)) said.add(value)
-  }
+export function figuresGiven(rows: readonly (readonly unknown[])[], given: string): { numbers: number; found: number; words: number; wordsFound: number } {
+  const numbersIn = (text: string): number[] => [...text.replace(DATE, ' ').matchAll(NUMBER)].map((one) => Number(one[0].replace(/,/g, ''))).filter((one) => Number.isFinite(one))
+  const said = new Set(numbersIn(given))
+  const givenWords = given.toLowerCase().replace(/\s+/g, ' ')
   let numbers = 0
   let found = 0
+  let words = 0
+  let wordsFound = 0
   for (const row of rows) {
     for (const cell of row) {
       const text = typeof cell === 'number' ? String(cell) : typeof cell === 'string' ? cell.trim() : ''
-      if (!/^-?\d[\d,]*(?:\.\d+)?$/.test(text)) continue
-      numbers += 1
-      if (said.has(Math.abs(Number(text.replace(/,/g, ''))))) found += 1
+      if (text === '') continue
+      for (const value of numbersIn(text)) {
+        numbers += 1
+        if (said.has(value)) found += 1
+      }
+      // What is left when the numbers are taken out: a name, a month, a unit. Theirs only if they wrote it.
+      const rest = text.replace(DATE, ' ').replace(NUMBER, ' ').replace(/\s+/g, ' ').trim().toLowerCase()
+      if (/\p{L}/u.test(rest)) {
+        words += 1
+        if (givenWords.includes(rest)) wordsFound += 1
+      }
     }
   }
-  return { numbers, found }
+  return { numbers, found, words, wordsFound }
 }
 
 /** An outline read from a model's answer: a title and three to ten parts, each with its own heading. */
@@ -650,11 +669,14 @@ Answer again, fixing those. Everything else about the format is the same.`
       // Whose numbers are in the rows: the person's own, written out, or a model's, made up as examples. Decided by
       // looking, not by asking the model: a number counts as theirs only if it is in what they gave.
       const figures = figuresGiven(proposal.table.rows, given)
-      const copied = figures.numbers > 0 && figures.found === figures.numbers
-      if (copied) notes.push('The rows were written out by a model from what you gave. Every number in them is one you gave; check that each is in the right place.')
-      else if (figures.found > 0) notes.push(`${figures.found} of the ${figures.numbers} numbers in the rows are ones you gave. The rest were written by a model: treat them as examples, not records.`)
-      else if (proposal.table.rows.length > 0) notes.push('The rows are examples written by a model. They are not records of anything real.')
-      return { body: { kind: 'table', table }, notes, copied }
+      // Nothing in the rows that the person did not give: every number and every word.
+      const copied = figures.numbers > 0 && figures.found === figures.numbers && figures.wordsFound === figures.words
+      if (copied) notes.push('The rows were written out by a model from what you gave. Every value in them is in what you gave; check that each is in the right place.')
+      else if (figures.found > 0) {
+        notes.push(`${figures.found} of the ${figures.numbers} numbers in the rows are in what you gave. Everything else in the rows was written by a model: treat anything you did not give as an example.`)
+      } else if (proposal.table.rows.length > 0) notes.push('The rows are examples written by a model. They are not records of anything real.')
+      // `counted`: the note above already says exactly whose the rows are, so the blanket "examples" warning goes.
+      return { body: { kind: 'table', table }, notes, copied: copied || figures.found > 0 }
     }
     if (proposal.diagram) {
       const diagram = flowToArtifact({ title: proposal.intent.title, nodes: proposal.diagram.nodes, edges: proposal.diagram.edges })

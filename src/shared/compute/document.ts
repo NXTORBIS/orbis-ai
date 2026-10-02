@@ -613,7 +613,7 @@ export function fromMarkdown(source: string, idPrefix = 'b'): { blocks: Block[];
     }
 
     // A table needs its separator row, which is what distinguishes it from a paragraph full of pipes.
-    if (line.includes('|') && i + 1 < lines.length && /^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(lines[i + 1])) {
+    if (line.includes('|') && i + 1 < lines.length && isRuledRow(lines[i + 1])) {
       const rows: string[][] = []
       const aligns = readAlignments(lines[i + 1])
       rows.push(splitRow(line))
@@ -727,12 +727,45 @@ function captionAfter(lines: readonly string[], from: number): { caption: string
   return { caption: match[1].trim(), next: i + 1 }
 }
 
-const splitRow = (line: string): string[] =>
-  line
-    .replace(/^\s*\|/, '')
-    .replace(/\|\s*$/, '')
-    .split('|')
-    .map((one) => one.trim())
+/**
+ * One row of a Markdown table, as its cells.
+ *
+ * A bar ends a cell unless it is written `\|`, which is how a cell holds one; `<br>` is how a cell holds a line break.
+ * Walked a character at a time rather than split, because "split on every bar" is what turned `ls | wc -l` into two
+ * cells and pushed the rest of the row along by one.
+ */
+export function splitRow(line: string): string[] {
+  const cells: string[] = []
+  let cell = ''
+  const trimmed = line.trim()
+  for (let i = 0; i < trimmed.length; i++) {
+    const ch = trimmed[i]
+    if (ch === '\\' && trimmed[i + 1] === '|') {
+      cell += '|'
+      i += 1
+    } else if (ch === '|') {
+      cells.push(cell)
+      cell = ''
+    } else cell += ch
+  }
+  cells.push(cell)
+  // The bars at the two ends of a row are its edges, not cells.
+  if (trimmed.startsWith('|')) cells.shift()
+  if (trimmed.endsWith('|') && !trimmed.endsWith('\\|')) cells.pop()
+  return cells.map((one) => one.trim().replace(/<br\s*\/?>/gi, '\n'))
+}
+
+/**
+ * Whether a line is the ruled line under a table's headings: `| --- | :---: |`.
+ *
+ * Cell by cell, not with one pattern: a pattern that lets two of its parts match the same spaces is tried every way
+ * the spaces can be shared out, and a line of eighty thousand of them holds the whole application for seconds.
+ */
+export function isRuledRow(line: string): boolean {
+  if (!line.includes('-') || !line.includes('|')) return false
+  const cells = splitRow(line)
+  return cells.length >= 1 && cells.every((one) => /^:?-+:?$/.test(one))
+}
 
 function readAlignments(line: string): ('left' | 'center' | 'right')[] {
   return splitRow(line).map((one) => {
@@ -750,29 +783,42 @@ function readAlignments(line: string): ('left' | 'center' | 'right')[] {
  * Scanned left to right with an explicit mark set rather than by nesting, because the model has no nested spans: a run
  * is text plus the marks that apply to all of it, which is both simpler to reason about and what a diff can compare.
  *
- * A marker is emphasis only where it can be. `file_name` is a word with an underscore in it, `2 * 3` is a sum, and
- * `*` with nothing to end it is an asterisk. Reading any of those as the start of italics does two kinds of damage:
- * the character disappears from the text, and everything after it changes style. It also once let a token slip past
- * the secret gate, because `ghp_Abc...` was stored with its underscore turned into a style. So:
+ * A marker is emphasis only where it can be. `file_name` is a word with an underscore in it, `2 * 3` is a sum,
+ * `*args, **kwargs` is Python, and `*` with nothing to end it is an asterisk. Reading any of those as the start of
+ * italics does two kinds of damage: the character disappears from the text, and everything after it changes style.
+ * It also once let a token slip past the secret gate, because `ghp_Abc...` was stored with its underscore turned into
+ * a style. So:
  *
- *   - a marker opens only when something follows it directly, and only when a matching ending exists further on;
+ *   - markers are judged as the run they stand in: `**kwargs` is a run of two stars after a space, so neither of its
+ *     stars can end anything, and `***both***` is a run of three, so its stars can begin (and later end) two marks;
+ *   - a marker opens only when something follows its run directly, and only when a matching ending exists further on;
  *   - a marker ends only what the same marker opened, and only directly after something;
- *   - `_`, `__`, `~~` and `==` never open or end in the middle of a word;
- *   - anything left open at the end of the text was not emphasis after all, and is read again as the plain character.
+ *   - an ending pairs with the NEAREST beginning: `**Warning: do *not* do this` has "not" in italics and its first two
+ *     stars as stars, because when a second beginning turns up the first one was never a beginning at all;
+ *   - `_`, `__`, `~~` and `==` never open or end in the middle of a word, and a star between a digit and a letter or
+ *     another digit is arithmetic (`2*3`, `x**2`);
+ *   - anything still open at the end of the text was not emphasis after all.
+ *
+ * One pass. A beginning that turns out not to be one is put back where it stood as the characters it is, and the
+ * words after it lose the mark it had given them; nothing is read twice.
  */
 export function parseInline(source: string): Inline[] {
-  const literal = new Set<number>()
-  // A marker that opened and never closed is put back as a character and the text read again. A handful of rounds
-  // settles any real text; past that every marker is taken as the character it is, so the words always survive.
-  for (let round = 0; round < 6; round++) {
-    const read = parseInlineOnce(source, literal, true)
-    if (read.unclosed.length === 0) return bounded(read.runs)
-    for (const at of read.unclosed) literal.add(at)
-  }
-  return bounded(parseInlineOnce(source, literal, false).runs)
+  return bounded(joined(readInline(source)))
 }
 
 const bounded = (runs: Inline[]): Inline[] => (runs.length > DOCUMENT_LIMITS.inlineRuns ? runs.slice(0, DOCUMENT_LIMITS.inlineRuns) : runs)
+
+/** Neighbouring pieces of text with the same marks, as the one piece they are. */
+function joined(runs: Inline[]): Inline[] {
+  const out: Inline[] = []
+  for (const run of runs) {
+    const last = out[out.length - 1]
+    if (run.kind === 'text' && last && last.kind === 'text' && last.marks.length === run.marks.length && last.marks.every((one) => run.marks.includes(one))) {
+      out[out.length - 1] = { ...last, text: last.text + run.text }
+    } else if (run.kind !== 'text' || run.text !== '') out.push(run)
+  }
+  return out
+}
 
 /** The emphasis markers, longest first, and the mark each one means. */
 const DELIMITERS: readonly string[] = Object.freeze(['**', '__', '~~', '==', '*', '_'])
@@ -780,41 +826,87 @@ const MARK_OF: Readonly<Record<string, MarkKind>> = Object.freeze({ '**': 'bold'
 /** Markers that are ordinary characters inside a word: `snake_case`, `a==b`, `~~`. An asterisk is allowed there. */
 const NOT_INSIDE_WORDS: ReadonlySet<string> = new Set(['_', '__', '~~', '=='])
 const WORD_CHARACTER = /[\p{L}\p{N}]/u
+const DIGIT = /\p{N}/u
 
 const isWordCharacter = (ch: string | undefined): boolean => ch !== undefined && WORD_CHARACTER.test(ch)
+const isDigit = (ch: string | undefined): boolean => ch !== undefined && DIGIT.test(ch)
 const isBlank = (ch: string | undefined): boolean => ch === undefined || /\s/.test(ch)
 
-/** Whether a marker at this place could begin emphasis: something follows it, and it is not inside a word. */
-const canOpen = (source: string, delimiter: string, at: number): boolean =>
-  !isBlank(source[at + delimiter.length]) && !(NOT_INSIDE_WORDS.has(delimiter) && isWordCharacter(source[at - 1]))
+/**
+ * Whether a marker at this place could begin emphasis, and whether it could end it.
+ *
+ * Judged by what stands either side of the whole run of that character, not of the one marker: the second star of
+ * `**kwargs` has a star before it, but what matters is the space before the pair.
+ */
+function flanking(source: string, delimiter: string, at: number): { open: boolean; close: boolean } {
+  const ch = delimiter[0]
+  let from = at
+  while (from > 0 && source[from - 1] === ch) from -= 1
+  let to = at + delimiter.length
+  while (to < source.length && source[to] === ch) to += 1
+  const before = source[from - 1]
+  const after = source[to]
+  if (NOT_INSIDE_WORDS.has(delimiter)) {
+    return { open: !isBlank(after) && !isWordCharacter(before), close: !isBlank(before) && !isWordCharacter(after) }
+  }
+  // A star with a digit on one side and a letter or digit on the other is multiplying, or a power.
+  if (isWordCharacter(before) && isWordCharacter(after) && (isDigit(before) || isDigit(after))) return { open: false, close: false }
+  return { open: !isBlank(after), close: !isBlank(before) }
+}
 
-/** Whether a marker at this place could end emphasis: something comes right before it, and it is not inside a word. */
-const canClose = (source: string, delimiter: string, at: number): boolean =>
-  !isBlank(source[at - 1]) && !(NOT_INSIDE_WORDS.has(delimiter) && isWordCharacter(source[at + delimiter.length]))
-
-function parseInlineOnce(source: string, literal: ReadonlySet<number>, emphasis: boolean): { runs: Inline[]; unclosed: number[] } {
+function readInline(source: string): Inline[] {
   const runs: Inline[] = []
   let buffer = ''
   const marks = new Set<MarkKind>()
-  /** Which marker opened each mark that is on, and where: only the same marker ends it. */
-  const opened = new Map<MarkKind, { delimiter: string; at: number }>()
+  /** A beginning: which mark, which marker, where in `runs` its words start, and what it stood under when it was read. */
+  interface Opening {
+    mark: MarkKind
+    delimiter: string
+    from: number
+    under: Opening[]
+    /** Put back as characters: it was never a beginning. */
+    undone: boolean
+  }
+  const opened = new Map<MarkKind, Opening>()
 
   // The last place each marker could end something. A marker with no such place after it cannot be a beginning.
   const lastEnding = new Map<string, number>()
-  if (emphasis) {
-    for (const delimiter of DELIMITERS) {
-      let found = -1
-      for (let j = source.length - delimiter.length; j > 0 && found < 0; j--) {
-        if (source.startsWith(delimiter, j) && canClose(source, delimiter, j)) found = j
-      }
-      lastEnding.set(delimiter, found)
+  for (const delimiter of DELIMITERS) {
+    let found = -1
+    for (let j = source.length - delimiter.length; j > 0 && found < 0; j--) {
+      if (source.startsWith(delimiter, j) && flanking(source, delimiter, j).close) found = j
     }
+    lastEnding.set(delimiter, found)
   }
 
   const flush = (): void => {
     if (buffer === '') return
     runs.push(text(buffer, [...marks]))
     buffer = ''
+  }
+
+  const begin = (mark: MarkKind, delimiter: string): void => {
+    flush()
+    opened.set(mark, { mark, delimiter, from: runs.length, under: [...opened.values()], undone: false })
+    marks.add(mark)
+  }
+
+  /** A beginning that was not one: its words lose the mark, and its marker goes back in as the characters it is. */
+  const demote = (mark: MarkKind): void => {
+    const open = opened.get(mark)
+    if (!open) return
+    flush()
+    for (let k = open.from; k < runs.length; k++) {
+      const run = runs[k]
+      if ((run.kind === 'text' || run.kind === 'link') && run.marks.includes(mark)) runs[k] = { ...run, marks: run.marks.filter((one) => one !== mark) }
+    }
+    // The marker goes back with the marks it really stood under: the ones that were not themselves put back.
+    open.undone = true
+    runs.splice(open.from, 0, text(open.delimiter, open.under.filter((one) => !one.undone).map((one) => one.mark)))
+    opened.delete(mark)
+    marks.delete(mark)
+    // Everything that began after it now starts one run further along.
+    for (const other of opened.values()) if (other.from >= open.from) other.from += 1
   }
 
   let i = 0
@@ -830,7 +922,9 @@ function parseInlineOnce(source: string, literal: ReadonlySet<number>, emphasis:
       continue
     }
 
-    const math = /^\$([^$]+)\$/.exec(rest)
+    // Maths between dollar signs -- but "$5 to $10" is two prices. The opening sign has something right after it,
+    // the closing one has something right before it and no digit after it, which is the rule that tells them apart.
+    const math = /^\$(?!\s)([^$\n]+?)(?<!\s)\$(?!\d)/.exec(rest)
     if (math) {
       flush()
       runs.push({ kind: 'math', source: math[1] })
@@ -868,18 +962,24 @@ function parseInlineOnce(source: string, literal: ReadonlySet<number>, emphasis:
     if (delimiter) {
       const mark = MARK_OF[delimiter]
       const open = opened.get(mark)
-      if (open) {
-        if (open.delimiter === delimiter && canClose(source, delimiter, i)) {
-          flush()
-          marks.delete(mark)
-          opened.delete(mark)
-          i += delimiter.length
-          continue
-        }
-      } else if (emphasis && !literal.has(i) && canOpen(source, delimiter, i) && (lastEnding.get(delimiter) ?? -1) > i) {
+      const can = flanking(source, delimiter, i)
+      const endsLater = (lastEnding.get(delimiter) ?? -1) > i
+      if (open && open.delimiter === delimiter && can.close) {
         flush()
-        marks.add(mark)
-        opened.set(mark, { delimiter, at: i })
+        marks.delete(mark)
+        opened.delete(mark)
+        i += delimiter.length
+        continue
+      }
+      if (open && open.delimiter === delimiter && can.open && endsLater) {
+        // A second beginning: the first was not one. The ending, when it comes, belongs to the nearest.
+        demote(mark)
+        begin(mark, delimiter)
+        i += delimiter.length
+        continue
+      }
+      if (!open && can.open && endsLater) {
+        begin(mark, delimiter)
         i += delimiter.length
         continue
       }
@@ -902,7 +1002,9 @@ function parseInlineOnce(source: string, literal: ReadonlySet<number>, emphasis:
   }
   flush()
 
-  return { runs, unclosed: [...opened.values()].map((one) => one.at) }
+  // Whatever is still open was never closed: the latest first, so each goes back where it stood.
+  for (const mark of [...opened.entries()].sort((a, b) => b[1].from - a[1].from).map(([one]) => one)) demote(mark)
+  return runs
 }
 
 const isInternal = (href: string): boolean => href.startsWith('#')
@@ -926,9 +1028,13 @@ export function toMarkdown(document: StructuredDocument): string {
             .join('\n')
         )
         break
-      case 'code':
-        out.push(`\`\`\`${block.language}\n${block.source}\n\`\`\``)
+      case 'code': {
+        // One backtick longer than the longest run of them in the code, so a fence inside the code does not end it.
+        const longest = Math.max(2, ...(block.source.match(/`+/g) ?? []).map((one) => one.length))
+        const fence = '`'.repeat(longest + 1)
+        out.push(`${fence}${block.language}\n${block.source}\n${fence}`)
         break
+      }
       case 'equation':
         out.push(`$$\n${block.source}\n$$`)
         break
@@ -953,7 +1059,8 @@ export function toMarkdown(document: StructuredDocument): string {
         )
         break
       case 'table': {
-        const rows = block.rows.map((row) => `| ${row.map((cell) => serialiseInline(cell.content)).join(' | ')} |`)
+        // A bar in a cell would be read back as the end of the cell, and a line break as the end of the row.
+        const rows = block.rows.map((row) => `| ${row.map((cell) => serialiseInline(cell.content).replace(/\|/g, '\\|').replace(/\r?\n/g, '<br>')).join(' | ')} |`)
         const separator = `| ${block.rows[0]?.map((cell) => (cell.align === 'center' ? ':---:' : cell.align === 'right' ? '---:' : '---')).join(' | ') ?? ''} |`
         out.push([rows[0], separator, ...rows.slice(1)].filter((one) => one !== undefined).join('\n'))
         if (block.caption !== '') out.push(`*${block.caption}*`)
@@ -978,7 +1085,50 @@ export function toMarkdown(document: StructuredDocument): string {
   return out.join('\n\n')
 }
 
+/**
+ * Runs as Markdown that reads back as the same runs.
+ *
+ * Written plainly first -- `snake_case` and `2 * 3` need nothing done to them, and a file full of backslashes is a
+ * file nobody wants to open. But some text reads back as something else: a cell that holds `*args*`, a sentence that
+ * was typed with its stars escaped. So what was written is read again, and when it does not come back as what it
+ * was, it is written a second time with every marker in the words escaped. Then the stored copy says what the
+ * document says, which is the only thing a stored copy is for.
+ */
 function serialiseInline(runs: readonly Inline[]): string {
+  const plain = writeInline(runs, false)
+  return fingerprint(parseInline(plain)) === fingerprint(runs) ? plain : writeInline(runs, true)
+}
+
+/** What a list of runs says and how, with the space between words left out of the "how". */
+function fingerprint(runs: readonly Inline[]): string {
+  let out = ''
+  let last = ''
+  for (const run of runs) {
+    if (run.kind === 'text' || run.kind === 'link') {
+      const key = `${[...run.marks].sort().join(',')}|${run.kind === 'link' ? run.href : ''}`
+      for (const ch of run.text) {
+        if (ch.trim() === '') {
+          out += ch
+          continue
+        }
+        if (key !== last) {
+          out += `\u0001${key}\u0002`
+          last = key
+        }
+        out += ch
+      }
+    } else {
+      out += `\u0001${JSON.stringify(run)}\u0002`
+      last = ''
+    }
+  }
+  return out
+}
+
+/** The characters that mean something to the reader, written so that they mean only themselves. */
+const escapeMarkers = (value: string): string => value.replace(/[\\*_~=$`[\]]/g, (ch) => `\\${ch}`)
+
+function writeInline(runs: readonly Inline[], escaped: boolean): string {
   return runs
     .map((run) => {
       switch (run.kind) {
@@ -988,9 +1138,12 @@ function serialiseInline(runs: readonly Inline[]): string {
           // of Markdown, this one included. The space is written outside the markers, and a run that is only space
           // gets no markers at all.
           const styled = run.marks.some((one) => one === 'bold' || one === 'italic' || one === 'strike' || one === 'highlight')
-          const lead = styled && !run.marks.includes('code') ? (/^\s+/.exec(run.text)?.[0] ?? '') : ''
-          const trail = styled && !run.marks.includes('code') && lead.length < run.text.length ? (/\s+$/.exec(run.text)?.[0] ?? '') : ''
+          // Trimmed, not matched: a pattern for "space at the end" is tried again from every space in a long run of
+          // them, which is a second of nothing for a page of padding.
+          const lead = styled && !run.marks.includes('code') ? run.text.slice(0, run.text.length - run.text.trimStart().length) : ''
+          const trail = styled && !run.marks.includes('code') && lead.length < run.text.length ? run.text.slice(run.text.trimEnd().length) : ''
           let value = run.text.slice(lead.length, run.text.length - trail.length)
+          if (escaped && !run.marks.includes('code')) value = escapeMarkers(value)
           if (value !== '') {
             if (run.marks.includes('code')) value = `\`${value}\``
             if (run.marks.includes('bold')) value = `**${value}**`
