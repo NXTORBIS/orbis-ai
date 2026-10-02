@@ -1156,16 +1156,22 @@ export function groupsToTable(groups: readonly Group[], byColumns: readonly Colu
   const aggregateNames = groups.length === 0 ? [] : Object.keys(groups[0].values)
   const columns: Column[] = [
     ...byColumns.map((column) => ({ ...column })),
-    ...aggregateNames.map((name, i) => ({
-      id: `aggregate_${i + 1}`,
-      sourceName: name,
-      name,
-      type: 'number' as ColumnType,
-      unit: null,
-      confidence: 'given' as const,
-      reason: 'Worked out by grouping.',
-      categories: []
-    }))
+    ...aggregateNames.map((name, i) => {
+      // The column is what its values are. A sum of megawatt-hours is still megawatt-hours, and the first value of a
+      // text column is text: calling either "number" hands a writer a cell its column says it cannot hold.
+      const sample = groups.map((group) => group.values[name]).find((cell) => cell !== undefined && hasValue(cell))
+      const type: ColumnType = sample === undefined || typeof sample === 'number' ? 'number' : isQuantityCell(sample) ? 'quantity' : typeof sample === 'boolean' ? 'boolean' : 'text'
+      return {
+        id: `aggregate_${i + 1}`,
+        sourceName: name,
+        name,
+        type,
+        unit: sample !== undefined && isQuantityCell(sample) ? sample.unit : null,
+        confidence: 'given' as const,
+        reason: 'Worked out by grouping.',
+        categories: []
+      }
+    })
   ]
   return Object.freeze({
     columns: Object.freeze(columns),

@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { ArtifactService, ARTIFACT_OPERATIONS, type ArtifactResult } from './service.ts'
 import { ArtifactStore } from './store.ts'
 import { encodePng } from '../chromium/png.ts'
+import { ArtifactGeneration, type Asked } from './generation.ts'
 
 /*
  * The service against a real folder and a stand-in for the save dialog. The dialog is the one thing that cannot run
@@ -27,6 +28,8 @@ interface Harness {
   printed: string[]
   /** Makes the stand-in drawing window hand back a blank page, to simulate a drawing that never painted. */
   blank: boolean
+  /** What the stand-in for Orion was asked, when a test gave it answers. */
+  asked: { system: string; user: string }[]
 }
 
 /** A stand-in print engine: a PDF-shaped file with one page per heading, so the page count means something. */
@@ -47,9 +50,9 @@ const fakePng = (svg: string, width: number, height: number): Uint8Array => {
   return new Uint8Array(encodePng({ width, height, bgra }))
 }
 
-const withService = async (run: (h: Harness) => Promise<void>, options: { pdf?: boolean; png?: boolean } = { pdf: true, png: true }): Promise<void> => {
+const withService = async (run: (h: Harness) => Promise<void>, options: { pdf?: boolean; png?: boolean; answers?: (Record<string, unknown> | { failed: string })[] } = { pdf: true, png: true }): Promise<void> => {
   const dir = await mkdtemp(join(tmpdir(), 'orbis-artifact-service-'))
-  const h: Harness = { service: null as unknown as ArtifactService, dir, nextDestination: null, nextSource: null, corrupt: false, printed: [], blank: false }
+  const h: Harness = { service: null as unknown as ArtifactService, dir, nextDestination: null, nextSource: null, corrupt: false, printed: [], blank: false, asked: [] }
   let counter = 0
   h.service = new ArtifactService({
     store: new ArtifactStore({ userData: dir }),
@@ -65,6 +68,22 @@ const withService = async (run: (h: Harness) => Promise<void>, options: { pdf?: 
             return fakePdf(html)
           }
         }),
+    ...(options.answers
+      ? {
+          generation: new ArtifactGeneration({
+            apiKeys: async () => ['k'],
+            fetchFn: async () => {
+              throw new Error('not used')
+            },
+            ask: async (system, user): Promise<Asked> => {
+              h.asked.push({ system, user })
+              const next = options.answers?.shift()
+              if (!next) return { failed: 'the script ran out' }
+              return 'failed' in next ? (next as { failed: string }) : { json: next }
+            }
+          })
+        }
+      : {}),
     ...(options.png === false ? {} : { renderPng: async (svg: string, width: number, height: number) => fakePng(h.blank ? '' : svg, width, height) }),
     writeFile: async (path, bytes) => {
       await writeFile(path, h.corrupt ? bytes.slice(0, Math.max(1, bytes.length - 3)) : bytes)
@@ -462,3 +481,127 @@ test('a drawing cannot be pasted in, and without a drawing window PNG is simply 
     },
     { pdf: true, png: false }
   ))
+
+const SITES = 'site,region,manager\nHQ,North,Asha\nDepot,South,Ben\nLab,East,Chen\n'
+
+test('a table is changed by steps into a new version, with what each step did kept as notes, and the old one still there', () =>
+  withService(async (h) => {
+    const made = ok(await h.service.run('default', { operation: 'artifact.create', kind: 'table', title: 'Readings', text: READINGS }))
+    const id = (made.record as { artifactId: string }).artifactId
+    const changed = ok<{ record: { artifactId: string; version: number; versions: { version: number }[]; reason: string; notes: string[]; shape: { rows: number; columns: number }; verified: { ok: boolean } }; did: string[]; steps: unknown[] }>(
+      await h.service.run('default', {
+        operation: 'artifact.transform',
+        artifactId: id,
+        steps: [
+          { op: 'filter', where: [{ column: 'site', is: 'equals', value: 'HQ' }] },
+          { op: 'compute', name: 'solar share', formula: 'solar / mwh * 100' },
+          { op: 'sort', by: [{ column: 'mwh', descending: true }] }
+        ]
+      })
+    )
+    assert.equal(changed.record.artifactId, id, 'the same table')
+    assert.equal(changed.record.version, 2)
+    assert.equal(changed.record.versions.length, 1, 'version 1 is still there to go back to')
+    assert.deepEqual(changed.record.shape, { rows: 2, columns: 5 })
+    assert.equal(changed.record.verified.ok, true)
+    assert.equal(changed.did.length, 3)
+    assert.equal(changed.did[0], 'Kept 2 of 4 rows where site is "HQ".')
+    assert.match(changed.did[1], /"solar share" = solar \/ mwh \* 100: computed for 2 of 2 rows\./)
+    assert.deepEqual(changed.record.notes, changed.did)
+    assert.equal(changed.steps.length, 3)
+    const read = ok<{ preview: string; columns: { name: string }[] }>(await h.service.run('default', { operation: 'artifact.read', artifactId: id }))
+    assert.deepEqual(read.columns.map((one) => one.name), ['date', 'site', 'mwh', 'solar', 'solar share'])
+    assert.ok(read.preview.includes('415'), 'the larger HQ reading is there')
+    assert.equal(read.preview.includes('Depot'), false, 'and the rows filtered out are not')
+  }))
+
+test('a change kept as a new table leaves the original alone and remembers it; a bad step changes nothing and says which', () =>
+  withService(async (h) => {
+    const made = ok(await h.service.run('default', { operation: 'artifact.create', kind: 'table', title: 'Readings', text: READINGS }))
+    const id = (made.record as { artifactId: string }).artifactId
+    const totals = ok<{ record: { artifactId: string; title: string; version: number; derivedFrom: { artifactId: string } | null; shape: { rows: number; columns: number } } }>(
+      await h.service.run('default', { operation: 'artifact.transform', artifactId: id, as: 'new', title: 'By site', steps: [{ op: 'group', by: ['site'], totals: [{ column: 'mwh', how: 'sum' }] }] })
+    )
+    assert.notEqual(totals.record.artifactId, id)
+    assert.equal(totals.record.title, 'By site')
+    assert.equal(totals.record.derivedFrom?.artifactId, id)
+    assert.deepEqual(totals.record.shape, { rows: 3, columns: 2 })
+
+    const bad = await h.service.run('default', { operation: 'artifact.transform', artifactId: id, steps: [{ op: 'sort', by: ['mwh'] }, { op: 'drop', columns: ['wind'] }] })
+    assert.equal(bad.ok, false)
+    if (!bad.ok) assert.match(bad.message, /^Step 2 \(drop\) did not work: There is no column called "wind"/)
+    const malformed = await h.service.run('default', { operation: 'artifact.transform', artifactId: id, steps: [{ op: 'pivot' }] })
+    assert.equal(malformed.ok, false)
+    if (!malformed.ok) assert.match(malformed.message, /steps\[0\] has "op": "pivot"/)
+    const still = ok<{ record: { version: number; shape: { rows: number } } }>(await h.service.run('default', { operation: 'artifact.read', artifactId: id }))
+    assert.equal(still.record.version, 1, 'neither failure made a version')
+    assert.equal(still.record.shape.rows, 4)
+
+    const none = await h.service.run('default', { operation: 'artifact.transform', artifactId: id, request: 'only HQ' })
+    assert.equal(none.ok, false)
+    if (!none.ok) assert.match(none.message, /Orion is not set up/)
+    const nothing = await h.service.run('default', { operation: 'artifact.transform', artifactId: id })
+    assert.equal(nothing.ok, false)
+  }))
+
+test('a sentence becomes steps: Orion sees the column names and none of the data, and an engine refusal is argued with once', () =>
+  withService(
+    async (h) => {
+      const made = ok(await h.service.run('default', { operation: 'artifact.create', kind: 'table', title: 'Readings', text: READINGS }))
+      const id = (made.record as { artifactId: string }).artifactId
+      const changed = ok<{ record: { version: number; notes: string[]; reason: string; shape: { rows: number } }; did: string[] }>(
+        await h.service.run('default', { operation: 'artifact.transform', artifactId: id, request: 'the two biggest readings' })
+      )
+      assert.equal(h.asked.length, 2, 'the first plan named a column that is not there, so it was asked again')
+      assert.ok(h.asked[0].system.includes('mwh: '), 'the column names were given')
+      assert.equal(h.asked[0].system.includes('412'), false, 'the data was not')
+      assert.equal(h.asked[0].system.includes('Warehouse'), false)
+      assert.match(h.asked[1].user, /Step 1 \(sort\) cannot run: There is no column called "energy"/)
+      assert.equal(changed.record.version, 2)
+      assert.equal(changed.record.shape.rows, 2)
+      assert.equal(changed.record.reason, 'the two biggest readings')
+      assert.match(changed.record.notes[0], /steps were chosen by a model from: "the two biggest readings"\. It was shown the column names, not the data/)
+      assert.equal(changed.did[1], 'Kept the first 2 of 4 rows.')
+
+      // A model that says it cannot is believed: its reason is the answer and nothing is changed.
+      const cannot = await h.service.run('default', { operation: 'artifact.transform', artifactId: id, request: 'translate the site names into French' })
+      assert.equal(cannot.ok, false)
+      if (!cannot.ok) assert.match(cannot.message, /cannot be done with the steps Orbis has: Translating text is not one of the steps\./)
+    },
+    {
+      pdf: true,
+      png: true,
+      answers: [
+        { steps: [{ op: 'sort', by: [{ column: 'energy', descending: true }] }, { op: 'limit', rows: 2 }] },
+        { steps: [{ op: 'sort', by: [{ column: 'mwh', descending: true }] }, { op: 'limit', rows: 2 }] },
+        { steps: [], cannot: 'Translating text is not one of the steps.' }
+      ]
+    }
+  ))
+
+test('two tables are joined on a column into a new table, and the rows that found no partner are counted', () =>
+  withService(async (h) => {
+    const readings = ok(await h.service.run('default', { operation: 'artifact.create', kind: 'table', title: 'Readings', text: READINGS }))
+    const sites = ok(await h.service.run('default', { operation: 'artifact.create', kind: 'table', title: 'Sites', text: SITES }))
+    const left = (readings.record as { artifactId: string }).artifactId
+    const right = (sites.record as { artifactId: string }).artifactId
+    const joined = ok<{ record: { artifactId: string; title: string; notes: string[]; derivedFrom: { artifactId: string } | null; shape: { rows: number; columns: number }; verified: { ok: boolean } } }>(
+      await h.service.run('default', { operation: 'artifact.join', artifactId: left, withArtifactId: right, on: 'site', kind: 'left' })
+    )
+    assert.equal(joined.record.title, 'Readings + Sites')
+    assert.equal(joined.record.derivedFrom?.artifactId, left)
+    assert.equal(joined.record.shape.rows, 4, 'a left join keeps every reading')
+    assert.equal(joined.record.verified.ok, true)
+    assert.match(joined.record.notes[0], /Joined "Readings" \(4 rows\) with "Sites" \(3 rows\) where site = site, keeping every row of "Readings"\./)
+    assert.match(joined.record.notes[1], /3 rows of "Readings" found a partner and 1 did not; 2 rows of "Sites" found a partner and 1 did not\./)
+    const grid = ok<{ grid: { rows: string[][]; total: number } }>(await h.service.run('default', { operation: 'artifact.read', artifactId: joined.record.artifactId })).grid
+    assert.equal(grid.total, 4)
+    assert.equal(grid.rows[0][0], '2026-10-01', 'a date reads as a date, not as a count of milliseconds')
+    assert.ok(grid.rows.some((row) => row.includes('Asha')), 'the joined-in columns are there')
+    assert.ok(grid.rows.some((row) => row.includes('Warehouse') && row[row.length - 1] === ''), 'a row with no partner has empty cells, not invented ones')
+    assert.ok(joined.record.notes.some((one) => /more than once/.test(one) && /HQ/.test(one)), 'HQ appears twice in the readings, and that is said')
+
+    const missing = await h.service.run('default', { operation: 'artifact.join', artifactId: left, withArtifactId: right, on: 'site', withOn: 'location' })
+    assert.equal(missing.ok, false)
+    if (!missing.ok) assert.match(missing.message, /"Sites" has no column called "location"\. Its columns are: site, region, manager\./)
+  }))

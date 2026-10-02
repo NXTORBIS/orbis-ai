@@ -1,4 +1,5 @@
-import { buildTable, isDataError } from '../../shared/compute/data.ts'
+import { buildTable, isDataError, type Column } from '../../shared/compute/data.ts'
+import { readSteps, stepInstructions, type TransformStep } from '../../shared/artifacts/transform.ts'
 import { emptyDocument, fromMarkdown, isDocumentError } from '../../shared/compute/document.ts'
 import { ARTIFACT_KINDS, describeKinds, type ArtifactKindId } from '../../shared/artifacts/kinds.ts'
 import { flowToArtifact } from '../../shared/artifacts/diagram.ts'
@@ -35,6 +36,15 @@ export interface GenerationOptions {
   fetchFn: FetchFn
   /** Replaces the request to the model entirely. For tests, and for a copy of Orbis that answers some other way. */
   ask?(system: string, user: string): Promise<Asked>
+}
+
+export interface StepsOutcome {
+  /** The steps, when the model produced a list that reads and runs. */
+  steps: TransformStep[] | null
+  problems: string[]
+  attempts: { said: string; problems: string[] }[]
+  /** Set when nothing came back at all, with the reason. */
+  failed: string | null
 }
 
 export interface GenerateOutcome {
@@ -138,6 +148,52 @@ Answer again, fixing those. Everything else about the format is the same.`
     }
 
     return { body: null, intent: null, notes: [], problems: lastProblems, attempts, failed: null }
+  }
+
+  /**
+   * A request to change a table, turned into steps.
+   *
+   * The model is given the column names and types and none of the data, and gives back a plan the engine runs. The
+   * plan is read by the same validator a hand-written one goes through, then tried against the real table by
+   * `check` -- so "there is no column called X" from the engine is argued with once, exactly as a malformed step is.
+   */
+  async planSteps(request: string, columns: readonly Pick<Column, 'name' | 'type'>[], check: (steps: TransformStep[]) => string | null): Promise<StepsOutcome> {
+    const asked = request.trim().slice(0, 2000)
+    const attempts: StepsOutcome['attempts'] = []
+    if (asked === '') return { steps: null, problems: ['Say what you want changed.'], attempts, failed: null }
+    const system = stepInstructions(columns)
+    let complaint: string | null = null
+    let lastProblems: string[] = []
+    for (let round = 0; round < 2; round++) {
+      const user =
+        complaint === null
+          ? asked
+          : `${asked}
+
+The last answer did not work. What was wrong:
+${complaint}
+
+Answer again, fixing those. Everything else about the format is the same.`
+      const answer = await (this.o.ask ? this.o.ask(system, user) : this.askJson(system, user))
+      if ('failed' in answer) {
+        attempts.push({ said: '(nothing came back)', problems: [answer.failed] })
+        return { steps: null, problems: [answer.failed], attempts, failed: answer.failed }
+      }
+      // A model that says it cannot is believed, and its reason is the answer: arguing would only produce steps that
+      // do something other than what was asked.
+      const cannot = typeof answer.json.cannot === 'string' ? answer.json.cannot.trim().slice(0, 300) : ''
+      if (cannot !== '' && Array.isArray(answer.json.steps) && answer.json.steps.length === 0) {
+        attempts.push({ said: JSON.stringify(answer.json).slice(0, 300), problems: [cannot] })
+        return { steps: null, problems: [`That cannot be done with the steps Orbis has: ${cannot}`], attempts, failed: null }
+      }
+      const read = readSteps(answer.json)
+      const engine = read.problems.length === 0 ? check(read.steps) : null
+      lastProblems = engine ? [engine] : read.problems
+      attempts.push({ said: JSON.stringify(answer.json).slice(0, 300), problems: lastProblems })
+      if (lastProblems.length === 0) return { steps: read.steps, problems: [], attempts, failed: null }
+      complaint = lastProblems.map((one) => `- ${one}`).join('\n')
+    }
+    return { steps: null, problems: lastProblems, attempts, failed: null }
   }
 
   /** The checked proposal, built with the deterministic code a pasted artifact goes through. */

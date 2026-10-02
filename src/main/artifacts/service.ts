@@ -40,6 +40,8 @@ import { diagramToSvg, plotToSvg, verifySvgFile } from '../../shared/artifacts/s
 import { asNumber, formatDate, type Column } from '../../shared/compute/data.ts'
 import { buildPlot, isPlotError, seriesFromPoints, type Series, type SeriesKind } from '../../shared/compute/plot.ts'
 import { decodePng } from '../chromium/png.ts'
+import { cellOut, joinTables, type JoinKind } from '../../shared/compute/data.ts'
+import { applySteps, formulaName, isTransformFailure, readSteps, type TransformStep } from '../../shared/artifacts/transform.ts'
 
 /**
  * The one door for making, keeping and exporting artifacts.
@@ -65,7 +67,11 @@ const LIMITS = Object.freeze({
   text: 4 * 1024 * 1024,
   title: 120,
   /** Characters of content handed back for a preview. A preview is for looking, not for a second export. */
-  preview: 1024 * 1024
+  preview: 1024 * 1024,
+  /** How much of a table is handed back as a grid to look at. */
+  gridRows: 100,
+  gridColumns: 40,
+  gridCell: 200
 })
 
 /** Every operation this door answers. An operation missing from here cannot run, by construction. */
@@ -85,8 +91,12 @@ const OPERATIONS: Readonly<Record<string, string>> = Object.freeze({
   'artifact.rename': 'Give an artifact a new name. Not a new version: the name is not the content.',
   'artifact.duplicate': 'A copy of an artifact as a new artifact that remembers where it came from.',
   'artifact.search': 'Find artifacts by words in their name, notes or content.',
-  'artifact.chart': 'A chart from the columns of a table, kept as a drawing that remembers the table it came from.'
+  'artifact.chart': 'A chart from the columns of a table, kept as a drawing that remembers the table it came from.',
+  'artifact.transform': 'A table changed by a list of steps -- filter, sort, columns, a computed column, group and total -- or by a sentence Orion turns into those steps.',
+  'artifact.join': 'Two tables joined on a column, with how many rows on each side found a partner.'
 })
+
+const JOIN_KINDS: readonly JoinKind[] = Object.freeze(['inner', 'left', 'full'])
 
 const SERIES_KINDS: readonly SeriesKind[] = Object.freeze(['line', 'bar', 'scatter', 'area', 'step'])
 
@@ -149,6 +159,7 @@ interface Rendered {
   size?: { width: number; height: number }
 }
 
+const rowsOf = (n: number): string => `${n.toLocaleString('en')} ${n === 1 ? 'row' : 'rows'}`
 const str = (value: unknown, max: number): string => (typeof value === 'string' ? value.slice(0, max) : '')
 const encode = (text: string): Uint8Array => new TextEncoder().encode(text)
 const decode = (bytes: Uint8Array): string => new TextDecoder().decode(bytes)
@@ -258,6 +269,10 @@ export class ArtifactService {
           return { ok: true, operation, value: await this.search(profileId, str(req.query, 200)) }
         case 'artifact.chart':
           return await this.chart(profileId, operation, req, fail)
+        case 'artifact.transform':
+          return await this.transform(profileId, operation, req, fail)
+        case 'artifact.join':
+          return await this.join(profileId, operation, req, fail)
         default:
           return fail('unknown-operation', `Orbis has no artifact operation called "${operation}".`)
       }
@@ -395,6 +410,135 @@ export class ArtifactService {
       case 'diagram':
         return { rows: body.diagram.objects.length, columns: body.diagram.connectors.length }
     }
+  }
+
+  // ---------------------------------------------------------------- transform
+
+  /**
+   * A table changed by steps.
+   *
+   * The steps come from the caller, or from a sentence Orion turns into steps -- having been shown the column names
+   * and none of the data. Either way they go through `readSteps` and are run by the table engine; what each step did
+   * is kept with the result as a note, count by count. By default the result is a new version of the same table, so
+   * the one before is still there to go back to; `as: 'new'` keeps it as a separate table that remembers its origin.
+   */
+  private async transform(
+    profileId: string,
+    operation: string,
+    req: Record<string, unknown>,
+    fail: (error: string, message: string, detail?: unknown) => ArtifactResult
+  ): Promise<ArtifactResult> {
+    const record = await this.existing(profileId, req, fail)
+    if ('ok' in record) return record
+    if (record.kind !== 'table') return fail('bad-input', 'Only a table can be changed this way.')
+    const body = await this.bodyOf(profileId, record)
+    if (!body || body.kind !== 'table') return fail('not-found', 'The artifact is listed but its source is missing.')
+    const table = body.table
+
+    let steps: TransformStep[]
+    let planned: string | null = null
+    const sentence = str(req.request, 2000).trim()
+    if (req.steps !== undefined) {
+      const read = readSteps(req.steps)
+      if (read.problems.length > 0) return fail('bad-input', read.problems[0], { problems: read.problems })
+      steps = read.steps
+    } else if (sentence !== '') {
+      if (!this.o.generation) return fail('unavailable', 'Orion is not set up on this computer, so a change has to be given as steps.')
+      const outcome = await this.o.generation.planSteps(sentence, table.columns, (candidate) => {
+        const tried = applySteps(table, candidate)
+        return isTransformFailure(tried) ? `Step ${tried.step} (${tried.op}) cannot run: ${tried.message}` : null
+      })
+      if (!outcome.steps) {
+        return fail(outcome.failed ? 'unavailable' : 'not-made', outcome.failed ?? outcome.problems[0] ?? 'Orion did not give steps that work.', { attempts: outcome.attempts })
+      }
+      steps = outcome.steps
+      planned = sentence
+    } else {
+      return fail('bad-input', 'Say what to change, or give the steps.')
+    }
+
+    const result = applySteps(table, steps)
+    if (isTransformFailure(result)) return fail('bad-input', `Step ${result.step} (${result.op}) did not work: ${result.message}`, { step: result.step })
+
+    const notes = [
+      ...(planned ? [`The steps were chosen by a model from: "${planned.slice(0, 200)}". It was shown the column names, not the data; every number was worked out by Orbis.`] : []),
+      ...result.notes
+    ]
+    const asNew = str(req.as, 10) === 'new'
+    const kept = asNew
+      ? await this.keep(
+          profileId,
+          operation,
+          { kind: 'table', table: { ...result.table, source: `"${record.title}" (changed)` } },
+          {
+            title: str(req.title, LIMITS.title).trim() || `${record.title} (changed)`,
+            source: `"${record.title}" (changed)`,
+            notes,
+            acceptSecrets: req.acceptSecrets === true,
+            derivedFrom: { artifactId: record.artifactId, versionId: record.versionId, title: record.title }
+          },
+          fail
+        )
+      : await this.keep(
+          profileId,
+          operation,
+          { kind: 'table', table: result.table },
+          { title: record.title, source: record.source, notes, acceptSecrets: req.acceptSecrets === true, existing: record, reason: (planned ?? result.notes.join(' ')).slice(0, 300) },
+          fail
+        )
+    if (!kept.ok) return kept
+    return { ...kept, value: { ...(kept.value as Record<string, unknown>), steps, did: result.notes } }
+  }
+
+  /**
+   * Two tables joined on a column.
+   *
+   * Always a new table: a join is the operation most likely to change the size of a table without a word, so the
+   * counts -- how many rows on each side found a partner, which keys repeat -- are kept with the result as notes.
+   */
+  private async join(
+    profileId: string,
+    operation: string,
+    req: Record<string, unknown>,
+    fail: (error: string, message: string, detail?: unknown) => ArtifactResult
+  ): Promise<ArtifactResult> {
+    const left = await this.existing(profileId, req, fail)
+    if ('ok' in left) return left
+    const right = await this.existing(profileId, { artifactId: req.withArtifactId }, fail)
+    if ('ok' in right) return right
+    if (left.kind !== 'table' || right.kind !== 'table') return fail('bad-input', 'Both have to be tables.')
+    const leftBody = await this.bodyOf(profileId, left)
+    const rightBody = await this.bodyOf(profileId, right)
+    if (!leftBody || leftBody.kind !== 'table' || !rightBody || rightBody.kind !== 'table') return fail('not-found', 'One of the tables is listed but its source is missing.')
+
+    const find = (table: Table, name: string): Column | null =>
+      table.columns.find((one) => one.id === name) ?? table.columns.find((one) => one.name.toLowerCase() === name.toLowerCase()) ?? null
+    const on = str(req.on, 120).trim()
+    const withOn = str(req.withOn, 120).trim() || on
+    const leftKey = find(leftBody.table, on)
+    const rightKey = find(rightBody.table, withOn)
+    if (!leftKey) return fail('bad-input', `"${left.title}" has no column called "${on}". Its columns are: ${leftBody.table.columns.map((one) => one.name).join(', ')}.`)
+    if (!rightKey) return fail('bad-input', `"${right.title}" has no column called "${withOn}". Its columns are: ${rightBody.table.columns.map((one) => one.name).join(', ')}.`)
+    const wanted = str(req.kind, 10).toLowerCase()
+    const kind: JoinKind = (JOIN_KINDS as readonly string[]).includes(wanted) ? (wanted as JoinKind) : 'inner'
+
+    const joined = joinTables(leftBody.table, rightBody.table, leftKey.id, rightKey.id, kind)
+    if (isDataError(joined)) return fail('bad-input', joined.message)
+    const title = str(req.title, LIMITS.title).trim() || `${left.title} + ${right.title}`
+    const source = `"${left.title}" joined with "${right.title}"`
+    const notes = [
+      `Joined "${left.title}" (${rowsOf(leftBody.table.rows.length)}) with "${right.title}" (${rowsOf(rightBody.table.rows.length)}) where ${leftKey.name} = ${rightKey.name}, keeping ${kind === 'inner' ? 'only rows with a partner' : kind === 'left' ? `every row of "${left.title}"` : 'every row of both'}.`,
+      `${rowsOf(joined.matchedLeft)} of "${left.title}" found a partner and ${joined.unmatchedLeft.toLocaleString('en')} did not; ${rowsOf(joined.matchedRight)} of "${right.title}" found a partner and ${joined.unmatchedRight.toLocaleString('en')} did not.`,
+      ...(joined.duplicateKeys.length ? [`These values appear more than once on a side, so their rows were multiplied: ${joined.duplicateKeys.slice(0, 12).join(', ')}${joined.duplicateKeys.length > 12 ? ', …' : ''}.`] : []),
+      ...joined.notes
+    ]
+    return this.keep(
+      profileId,
+      operation,
+      { kind: 'table', table: { ...joined.table, source } },
+      { title, source, notes, acceptSecrets: req.acceptSecrets === true, derivedFrom: { artifactId: left.artifactId, versionId: left.versionId, title: left.title } },
+      fail
+    )
   }
 
   // ---------------------------------------------------------------- chart
@@ -813,10 +957,20 @@ export class ArtifactService {
     const bytes = await this.o.store.readFile(profileId, artifactId, record.file)
     const text = bytes ? decode(bytes) : ''
     // A table's columns, so a chart can be asked for by name without the renderer parsing the stored copy.
-    let columns: { id: string; name: string; type: string }[] = []
+    let columns: { id: string; name: string; type: string; formula: string }[] = []
+    // The first rows as a person reads them -- dates as dates, quantities with their unit -- so the screen shows a
+    // table and not the JSON it is kept as. Bounded: a look, not a second copy.
+    let grid: { rows: string[][]; total: number } | null = null
     if (record.kind === 'table') {
       const body = await this.bodyOf(profileId, record)
-      if (body && body.kind === 'table') columns = body.table.columns.map((one) => ({ id: one.id, name: one.name, type: one.type }))
+      if (body && body.kind === 'table') {
+        const table = body.table
+        columns = table.columns.map((one) => ({ id: one.id, name: one.name, type: one.type, formula: formulaName(one.name) }))
+        grid = {
+          rows: table.rows.slice(0, LIMITS.gridRows).map((row) => table.columns.slice(0, LIMITS.gridColumns).map((column, at) => cellOut(row.cells[at] ?? null, column).slice(0, LIMITS.gridCell))),
+          total: table.rows.length
+        }
+      }
     }
     return {
       ok: true,
@@ -827,6 +981,7 @@ export class ArtifactService {
         preview: text.slice(0, LIMITS.preview),
         truncated: text.length > LIMITS.preview,
         columns,
+        grid,
         // Every format this kind can be exported as here, with what each one drops, so the chooser can say so up front.
         formats: this.formatsFor(record.kind)
       }

@@ -492,3 +492,149 @@
       'opened';
   }
 }
+
+/* Changing a table: by a sentence, by hand, or by joining it with another. */
+.create-change {
+  border-radius: 10px;
+  background: var(--pill-bg);
+  border: 1px solid var(--pill-border);
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.create-change > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: var(--text);
+  font-size: 13px;
+  list-style: none;
+}
+
+.create-change > summary::-webkit-details-marker {
+  display: none;
+}
+
+.create-change[open] > summary {
+  margin-bottom: 10px;
+}
+
+.create-change-hand {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0;
+  padding: 10px 0;
+  border-top: 1px solid var(--pill-border);
+  border-bottom: 1px solid var(--pill-border);
+}
+
+.create-change-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.create-change-label {
+  min-width: 108px;
+  color: var(--text);
+}
+
+.create-change input:not([type='checkbox']),
+.create-change select {
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--bg-mid);
+  border: 1px solid var(--pill-border);
+  border-radius: 8px;
+  padding: 6px 8px;
+  outline: none;
+  min-width: 0;
+}
+
+.create-change input:not([type='checkbox']):focus,
+.create-change select:focus {
+  border-color: var(--cyan);
+}
+
+.create-change input:disabled,
+.create-change select:disabled {
+  opacity: 0.5;
+}
+
+.create-change-ask {
+  flex: 1 1 320px;
+}
+
+.create-change-formula {
+  flex: 1 1 220px;
+  font-family: var(--mono) !important;
+}
+
+.create-change-hint {
+  margin: 0;
+  padding-left: 116px;
+  font-size: 11.5px;
+  color: var(--faint);
+}
+
+.create-change-hint code {
+  font-family: var(--mono);
+  color: var(--muted);
+}
+
+/* A table, shown as a table. */
+.create-grid {
+  max-height: 320px;
+  overflow: auto;
+  border-radius: 10px;
+  background: var(--pill-bg);
+  border: 1px solid var(--pill-border);
+}
+
+.create-grid:focus-visible {
+  outline: 1px solid var(--cyan);
+}
+
+.create-grid table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.create-grid th,
+.create-grid td {
+  padding: 6px 10px;
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--pill-border);
+}
+
+.create-grid th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-mid);
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.create-grid .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.create-grid tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.create-grid-more {
+  margin: 0;
+  padding: 8px 10px;
+  font-size: 11.5px;
+  color: var(--faint);
+}
