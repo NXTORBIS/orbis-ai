@@ -1,0 +1,265 @@
+/* A card for something Orbis made, shown in the conversation. Loaded with the chat, not with the Create screen, so it
+   carries its own rules for the table, the drawing and the text. Tokens only: a name that is not in the theme resolves
+   to nothing, silently, so nothing here invents one. */
+
+.artifact-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.artifact-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--pill-bg);
+  border: 1px solid var(--pill-border);
+  font-size: 12.5px;
+  line-height: 1.5;
+  min-width: 0;
+}
+
+.artifact-card.quiet {
+  padding: 8px 12px;
+}
+
+.artifact-card header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.artifact-card header strong {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.artifact-card-icon {
+  flex: none;
+  color: var(--cyan);
+}
+
+.artifact-card-meta {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.artifact-card.quiet .artifact-card-meta {
+  flex: 1;
+  min-width: 160px;
+}
+
+.artifact-card-checked {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--pill-border);
+  color: var(--green);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+/* A chart or a diagram, shown as the picture it is. White paper, because the drawing is made for paper. */
+.artifact-card-drawing {
+  display: block;
+  width: 100%;
+  max-height: 360px;
+  object-fit: contain;
+  border-radius: 10px;
+  background: #fff;
+  border: 1px solid var(--pill-border);
+}
+
+/* A table, shown as a table. */
+.artifact-card-grid {
+  max-height: 300px;
+  overflow: auto;
+  border-radius: 10px;
+  background: var(--bg-mid);
+  border: 1px solid var(--pill-border);
+}
+
+.artifact-card-grid:focus-visible,
+.artifact-card-document:focus-visible,
+.artifact-card-code:focus-visible {
+  outline: 1px solid var(--cyan);
+}
+
+.artifact-card-grid table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.artifact-card-grid th,
+.artifact-card-grid td {
+  padding: 5px 10px;
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--pill-border);
+}
+
+.artifact-card-grid th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-mid);
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.artifact-card-grid .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.artifact-card-more,
+.artifact-card-note {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--faint);
+}
+
+.artifact-card-grid .artifact-card-more,
+.artifact-card-document .artifact-card-more,
+.artifact-card-code .artifact-card-more {
+  padding: 7px 10px;
+}
+
+/* The start of a document, as it reads. */
+.artifact-card-document {
+  max-height: 300px;
+  overflow: auto;
+  padding: 4px 14px;
+  border-radius: 10px;
+  background: var(--bg-mid);
+  border: 1px solid var(--pill-border);
+  font-size: 13px;
+  color: var(--text);
+}
+
+.artifact-card-document .artifact-card-drawing {
+  margin: 8px 0;
+}
+
+/* The start of a code file, exactly as written. */
+.artifact-card-code {
+  max-height: 300px;
+  overflow: auto;
+  border-radius: 10px;
+  background: var(--bg-mid);
+  border: 1px solid var(--pill-border);
+}
+
+.artifact-card-code pre {
+  margin: 0;
+  padding: 10px 12px;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text);
+  white-space: pre;
+}
+
+.artifact-card-did {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.artifact-card-did li::before {
+  content: '— ';
+  color: var(--faint);
+}
+
+.artifact-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.artifact-card-format {
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid var(--pill-border);
+  background: var(--bg-mid);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+
+.artifact-card-format:focus-visible {
+  outline: 1px solid var(--cyan);
+}
+
+.artifact-card-saved {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 9px 11px;
+  border-radius: 10px;
+  border: 1px solid var(--green);
+  font-size: 12px;
+}
+
+.artifact-card-saved p,
+.artifact-card-problem p {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  color: var(--text);
+}
+
+.artifact-card-saved p svg {
+  flex: none;
+  color: var(--green);
+}
+
+.artifact-card-saved code {
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--cyan);
+  word-break: break-all;
+}
+
+.artifact-card-where {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--faint);
+  word-break: break-all;
+}
+
+.artifact-card-problem {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 9px 11px;
+  border-radius: 10px;
+  border: 1px solid var(--red);
+  font-size: 12px;
+}
+
+.artifact-card-problem p svg {
+  flex: none;
+  color: var(--red);
+}

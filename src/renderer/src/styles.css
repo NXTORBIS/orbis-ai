@@ -11780,8 +11780,18 @@ html[data-motion='reduced'] .tool-btn.recording {
 
 /* A question scrolled to sits a little below the top edge rather than jammed against it, so the turn reads as a turn
    and the reply beneath it is visible straight away. */
-.msg-slot {
+.msg-slot > * {
   scroll-margin-top: 16px;
+}
+
+/* Room under the newest turn, so its question can sit at the top with the answer beginning under it. Sized by the
+   chat as the answer grows; nothing when no question has just been asked. The negative margin takes back the gap a
+   flex child is given, so an empty one adds nothing to the page. */
+.messages-tail {
+  flex: none;
+  height: 0;
+  margin-top: -20px;
+  pointer-events: none;
 }
 
 

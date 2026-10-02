@@ -1,5 +1,6 @@
 import { Store } from '../main/store.ts'
 import { currentModelId } from '../shared/models.ts'
+import { readCards } from '../shared/artifacts/model.ts'
 import type { Attachment, ChatMessage, Conversation } from '../shared/types'
 import { HelperError } from './server.ts'
 import type { Handler } from './server.ts'
@@ -59,6 +60,10 @@ function readMessage(value: unknown): ChatMessage {
   if (typeof m.error === 'string') message.error = m.error.slice(0, 2000)
   if (m.feedback === 'up' || m.feedback === 'down') message.feedback = m.feedback
   if (m.browserTask === true) message.browserTask = true
+  // The cards under a reply: pointers to what was made, each checked. Without this a chat saved from the panel would
+  // come back with its sentences and none of the things they were about.
+  const cards = readCards(m.artifacts)
+  if (cards.length > 0) message.artifacts = cards
   if (Array.isArray(m.suggestions)) message.suggestions = m.suggestions.filter((s): s is string => typeof s === 'string').slice(0, 6)
   if (Array.isArray(m.attachments)) {
     message.attachments = m.attachments.slice(0, MAX_ATTACHMENTS).map((a): Attachment => {

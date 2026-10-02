@@ -7,13 +7,31 @@ const NOUN = String.raw`(?:image|images|picture|pic|photo|photograph|drawing|pai
 const LEAD = String.raw`(?:\s+(?:me|us))?(?:\s+(?:an?|the|some|one))?`
 const LINK = String.raw`(?:\s+(?:of|showing|with|depicting|for|about|that shows))?`
 
+/**
+ * Drawn from data or kept as a file, not painted.
+ *
+ * "Draw a bar chart of sales" asks for numbers plotted, and "generate a spreadsheet of my expenses" asks for a file. A
+ * picture generator can only imitate either: it paints something that looks like a chart and means nothing. Those go
+ * to the part of Orbis that makes the real thing, so here they are simply not picture requests.
+ *
+ * Only when the chart is the thing asked for -- at most two describing words before it, and no picture word. "Draw a
+ * dragon reading a chart" and "a picture of a chart" are still pictures.
+ */
+const DATA_DRAWING = String.raw`(?:charts?|graphs?|plots?|histograms?|flow\s?charts?|diagrams?|spreadsheets?)`
+const ASKS_FOR_A_DATA_DRAWING = new RegExp(
+  String.raw`^${POLITE}(?:draw|paint|sketch|illustrate|render|imagine|generate|create|make|design|produce|build|craft)${LEAD}(?:\s+(?!${NOUN}\b)[\w-]+){0,2}?\s+${DATA_DRAWING}\b`,
+  'i'
+)
+/** Things that are written or kept as files: "generate a ..." one of these is never a picture. */
+const WRITTEN = String.raw`summary|list|plan|code|script|email|report|story|essay|text|response|answer|idea|ideas|name|names|title|table|poem|question|questions|outline|description|password|number|json|sql|regex|function|test|tests|spreadsheet|document|doc|file|pdf|csv|excel|word|presentation|slides|deck|invoice|resume|letter|memo|budget|schedule|checklist|template|agenda|itinerary|proposal|contract|readme|program|query|quiz|worksheet`
+
 const PATTERNS: RegExp[] = [
   // Verbs that only make sense for images: "draw a dragon", "paint me a lake".
   new RegExp(String.raw`^${POLITE}(?:draw|paint|sketch|illustrate|render|imagine)${LEAD}(?:\s+${NOUN})?${LINK}\s+(.+)`, 'i'),
   // General verbs need an image noun: "generate an image of…", "make a logo for…".
   new RegExp(String.raw`^${POLITE}(?:generate|create|make|design|produce|build|craft)${LEAD}(?:\s+\w+)?\s+${NOUN}${LINK}\s+(.+)`, 'i'),
   // "generate a cat in space", but not "generate a summary/list/code…".
-  new RegExp(String.raw`^${POLITE}generate${LEAD}\s+(?!(?:\w+\s+)?(?:summary|list|plan|code|script|email|report|story|essay|text|response|answer|idea|ideas|name|names|title|table|poem|question|questions|outline|description|password|number|json|sql|regex|function|test|tests)\b)(.+)`, 'i'),
+  new RegExp(String.raw`^${POLITE}generate${LEAD}\s+(?!(?:\w+\s+)?(?:${WRITTEN})\b)(.+)`, 'i'),
   // Noun-led: "image of a red car", "an image of…".
   new RegExp(String.raw`^${POLITE}(?:an?\s+)?${NOUN}\s+(?:of|showing|depicting)\s+(.+)`, 'i')
 ]
@@ -21,6 +39,7 @@ const PATTERNS: RegExp[] = [
 export function detectImageGenRequest(text: string): string | null {
   const trimmed = text.trim()
   if (trimmed.startsWith('/imagine ')) return trimmed.slice('/imagine '.length).trim() || null
+  if (ASKS_FOR_A_DATA_DRAWING.test(trimmed)) return null
   for (const pattern of PATTERNS) {
     const prompt = trimmed.match(pattern)?.[1]?.replace(/[.!?]+$/, '').trim()
     if (prompt && prompt.length > 1) return prompt

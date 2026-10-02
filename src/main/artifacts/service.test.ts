@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ArtifactService, ARTIFACT_OPERATIONS, type ArtifactResult } from './service.ts'
@@ -30,6 +30,8 @@ interface Harness {
   blank: boolean
   /** What the stand-in for Orion was asked, when a test gave it answers. */
   asked: { system: string; user: string }[]
+  /** What was shown in its folder or opened, in order. */
+  revealed: { path: string; open: boolean }[]
 }
 
 /** A stand-in print engine: a PDF-shaped file with one page per heading, so the page count means something. */
@@ -52,7 +54,8 @@ const fakePng = (svg: string, width: number, height: number): Uint8Array => {
 
 const withService = async (run: (h: Harness) => Promise<void>, options: { pdf?: boolean; png?: boolean; answers?: (Record<string, unknown> | { failed: string })[] } = { pdf: true, png: true }): Promise<void> => {
   const dir = await mkdtemp(join(tmpdir(), 'orbis-artifact-service-'))
-  const h: Harness = { service: null as unknown as ArtifactService, dir, nextDestination: null, nextSource: null, corrupt: false, printed: [], blank: false, asked: [] }
+  await mkdir(join(dir, 'Downloads'))
+  const h: Harness = { service: null as unknown as ArtifactService, dir, nextDestination: null, nextSource: null, corrupt: false, printed: [], blank: false, asked: [], revealed: [] }
   let counter = 0
   h.service = new ArtifactService({
     store: new ArtifactStore({ userData: dir }),
@@ -60,6 +63,11 @@ const withService = async (run: (h: Harness) => Promise<void>, options: { pdf?: 
     random: () => (++counter).toString(16).padStart(32, '0'),
     chooseDestination: async () => h.nextDestination,
     chooseSource: async () => h.nextSource,
+    // The test's own folder stands in for Downloads, so nothing is written anywhere a person would find it.
+    downloadsDir: () => join(dir, 'Downloads'),
+    reveal: async (path: string, open: boolean) => {
+      h.revealed.push({ path, open })
+    },
     ...(options.pdf === false
       ? {}
       : {
@@ -888,4 +896,175 @@ test('a chart put into a document is a figure that follows the chart, and is dra
     const notPicture = await h.service.run('default', { operation: 'artifact.place', artifactId: id, figureId: (table.record as { artifactId: string }).artifactId })
     assert.equal(notPicture.ok, false)
     if (!notPicture.ok) assert.match(notPicture.message, /"Readings" is a table\. A figure is a chart or a diagram\./)
+  }))
+
+test('a download goes to the Downloads folder under a name of its own, is checked, and only such a file can be shown or opened', () =>
+  withService(async (h) => {
+    const made = ok<{ record: { artifactId: string } }>(await h.service.run('default', { operation: 'artifact.create', kind: 'table', title: 'Monthly: expenses?', text: 'date,amount\n2026-10-01,12.5\n' }))
+    const id = made.record.artifactId
+
+    const first = ok<{ path: string; format: string; bytes: number; verified: { ok: boolean } }>(await h.service.run('default', { operation: 'artifact.download', artifactId: id, format: 'xlsx' }))
+    assert.equal(first.path, join(h.dir, 'Downloads', 'Monthly expenses.xlsx'), 'the name is the title made safe, with the format\'s own extension')
+    assert.equal(first.verified.ok, true)
+    assert.equal((await readFile(first.path)).length, first.bytes)
+    assert.equal((await readFile(first.path)).subarray(0, 2).toString('latin1'), 'PK', 'a real workbook, not text with a new name')
+
+    // Never over what is already there.
+    const second = ok<{ path: string }>(await h.service.run('default', { operation: 'artifact.download', artifactId: id, format: 'xlsx' }))
+    assert.equal(second.path, join(h.dir, 'Downloads', 'Monthly expenses (2).xlsx'))
+    const csv = ok<{ path: string }>(await h.service.run('default', { operation: 'artifact.download', artifactId: id, format: 'csv' }))
+    assert.equal((await readFile(csv.path, 'utf8')).trim(), 'date,amount\n2026-10-01,12.5')
+
+    // A format the kind is not written in is refused before anything is written.
+    const wrong = await h.service.run('default', { operation: 'artifact.download', artifactId: id, format: 'pptx' })
+    assert.equal(wrong.ok, false)
+
+    ok(await h.service.run('default', { operation: 'artifact.reveal', path: first.path }))
+    ok(await h.service.run('default', { operation: 'artifact.reveal', path: csv.path, open: true }))
+    assert.deepEqual(h.revealed, [{ path: first.path, open: false }, { path: csv.path, open: true }])
+    // A path the interface made up is not a file Orbis saved, whatever it points at.
+    for (const path of [join(h.dir, 'Downloads'), 'C:\\Windows\\System32\\cmd.exe', first.path + '/../other', '']) {
+      const refused = await h.service.run('default', { operation: 'artifact.reveal', path, open: true })
+      assert.equal(refused.ok, false, path)
+    }
+    assert.equal(h.revealed.length, 2)
+  }))
+
+test('what is made on behalf of a conversation belongs to it, keeps belonging through new versions, and can be listed by it', () =>
+  withService(async (h) => {
+    const a = ok<{ record: { artifactId: string; conversationId?: string } }>(await h.service.run('default', { operation: 'artifact.create', kind: 'table', title: 'A', text: 'x,y\n1,2\n3,4\n', conversationId: 'chat_one' }))
+    assert.equal(a.record.conversationId, 'chat_one')
+    const b = ok<{ record: { artifactId: string } }>(await h.service.run('default', { operation: 'artifact.create', kind: 'document', title: 'B', text: '# B\n', conversationId: 'chat_two' }))
+    const loose = ok<{ record: { artifactId: string; conversationId?: string } }>(await h.service.run('default', { operation: 'artifact.create', kind: 'document', title: 'C', text: '# C\n' }))
+    assert.equal(loose.record.conversationId, undefined)
+
+    // A new version made from a different conversation does not move it.
+    const changed = ok<{ record: { version: number; conversationId?: string } }>(await h.service.run('default', { operation: 'artifact.transform', artifactId: a.record.artifactId, steps: [{ op: 'sort', by: ['y'] }], conversationId: 'chat_two' }))
+    assert.equal(changed.record.version, 2)
+    assert.equal(changed.record.conversationId, 'chat_one')
+    // Something derived in another conversation belongs to the conversation that made it.
+    const chart = ok<{ record: { conversationId?: string } }>(await h.service.run('default', { operation: 'artifact.chart', artifactId: a.record.artifactId, x: 'x', y: ['y'], conversationId: 'chat_two' }))
+    assert.equal(chart.record.conversationId, 'chat_two')
+
+    const inOne = ok<{ record: { title: string } }[]>(await h.service.run('default', { operation: 'artifact.list', within: 'chat_one' }))
+    assert.deepEqual(inOne.map((one) => one.record.title), ['A'])
+    const inTwo = ok<{ record: { artifactId: string } }[]>(await h.service.run('default', { operation: 'artifact.list', within: 'chat_two' }))
+    assert.equal(inTwo.length, 2)
+    assert.ok(inTwo.some((one) => one.record.artifactId === b.record.artifactId))
+    assert.equal(ok<unknown[]>(await h.service.run('default', { operation: 'artifact.list' })).length, 4)
+
+    // An id that is not an id is not kept: it would become part of a record on disk.
+    const odd = ok<{ record: { conversationId?: string } }>(await h.service.run('default', { operation: 'artifact.create', kind: 'document', title: 'D', text: '# D\n', conversationId: '../../etc' }))
+    assert.equal(odd.record.conversationId, undefined)
+  }))
+
+test('a stopped request makes nothing and changes nothing', () =>
+  withService(
+    async (h) => {
+      const stop = new AbortController()
+      stop.abort()
+      const made = await h.service.run('default', { operation: 'artifact.generate', request: 'a budget' }, stop.signal)
+      assert.equal(made.ok, false)
+      if (!made.ok) assert.equal(made.error, 'cancelled')
+      assert.equal(ok<unknown[]>(await h.service.run('default', { operation: 'artifact.list' })).length, 0, 'nothing was kept')
+
+      const doc = ok<{ record: { artifactId: string } }>(await h.service.run('default', { operation: 'artifact.create', kind: 'document', title: 'Plan', text: '# Plan\n' }))
+      const revised = await h.service.run('default', { operation: 'artifact.revise', artifactId: doc.record.artifactId, request: 'longer' }, stop.signal)
+      assert.equal(revised.ok, false)
+      if (!revised.ok) assert.match(revised.message, /Stopped\. Nothing was changed\./)
+      const still = ok<{ record: { version: number } }>(await h.service.run('default', { operation: 'artifact.read', artifactId: doc.record.artifactId }))
+      assert.equal(still.record.version, 1)
+    },
+    { pdf: true, png: true, answers: [{ kind: 'table', title: 'Budget', columns: ['a'] }, { markdown: '# Plan\n\nMore.\n' }] }
+  ))
+
+test('a chart asked for in words is drawn from columns Orion names, having seen no numbers, and a column with none is argued with once', () =>
+  withService(
+    async (h) => {
+      const made = ok<{ record: { artifactId: string } }>(await h.service.run('default', { operation: 'artifact.create', kind: 'table', title: 'Readings', text: READINGS }))
+      const chart = ok<{ record: { kind: string; title: string; shape: { rows: number; columns: number }; verified: { ok: boolean } } }>(
+        await h.service.run('default', { operation: 'artifact.chart', artifactId: made.record.artifactId, request: 'a bar chart of energy by day' })
+      )
+      assert.equal(chart.record.kind, 'plot')
+      assert.equal(chart.record.title, 'mwh by date')
+      assert.equal(chart.record.verified.ok, true)
+      assert.equal(h.asked.length, 2, 'the first plan drew a column of words, so it was asked again')
+      assert.ok(h.asked[0].system.includes('mwh: ') && !h.asked[0].system.includes('412'), 'column names were shown, numbers were not')
+      assert.match(h.asked[1].user, /"site" has no values that can be read as numbers/)
+
+      // A name that is not a column never reaches the engine.
+      const lost = await h.service.run('default', { operation: 'artifact.chart', artifactId: made.record.artifactId, request: 'wind against date' })
+      assert.equal(lost.ok, false)
+      if (!lost.ok) assert.match(lost.message, /"y" names "wind", which is not one of the columns: date, site, mwh, solar\./)
+      const cannot = await h.service.run('default', { operation: 'artifact.chart', artifactId: made.record.artifactId, request: 'a map of the sites' })
+      assert.equal(cannot.ok, false)
+      if (!cannot.ok) assert.match(cannot.message, /cannot be drawn from this table: There is nowhere on a chart for a map\./)
+    },
+    {
+      pdf: true,
+      png: true,
+      answers: [
+        { x: 'date', y: ['site'], kind: 'bar' },
+        { x: 'Date', y: ['mwh'], kind: 'bar' },
+        { x: 'date', y: ['wind'] },
+        { x: 'date', y: ['wind'] },
+        { cannot: 'There is nowhere on a chart for a map.' }
+      ]
+    }
+  ))
+
+test('a table, a chart and a code file each become a document that can leave as PDF or Word, with nothing rewritten', () =>
+  withService(async (h) => {
+    const table = ok<{ record: { artifactId: string } }>(await h.service.run('default', { operation: 'artifact.create', kind: 'table', title: 'Readings', text: READINGS }))
+    const asDoc = ok<{ record: { artifactId: string; kind: string; title: string; derivedFrom: { artifactId: string } | null; notes: string[]; verified: { ok: boolean } } }>(
+      await h.service.run('default', { operation: 'artifact.asDocument', artifactId: table.record.artifactId })
+    )
+    assert.equal(asDoc.record.kind, 'document')
+    assert.equal(asDoc.record.title, 'Readings')
+    assert.equal(asDoc.record.derivedFrom?.artifactId, table.record.artifactId)
+    assert.equal(asDoc.record.verified.ok, true)
+    assert.match(asDoc.record.notes[0], /Every one of the 4 rows of "Readings" \(version 1\) is in the document, as they were/)
+    const read = ok<{ preview: string; tables: { rows: number; columns: number; headings: string[] }[] }>(await h.service.run('default', { operation: 'artifact.read', artifactId: asDoc.record.artifactId }))
+    assert.deepEqual(read.tables.map((one) => [one.rows, one.columns]), [[4, 4]])
+    assert.deepEqual(read.tables[0].headings, ['date', 'site', 'mwh', 'solar'])
+    assert.ok(read.preview.includes('| 2026-10-03 | Warehouse | 530 | 140 |'), 'a date is a date and every value is there')
+
+    const pdf = ok<{ path: string; verified: { ok: boolean } }>(await h.service.run('default', { operation: 'artifact.download', artifactId: asDoc.record.artifactId, format: 'pdf' }))
+    assert.equal(pdf.verified.ok, true)
+    assert.ok(pdf.path.endsWith('Readings.pdf'))
+    assert.ok(h.printed[h.printed.length - 1].includes('Warehouse'))
+
+    const chart = ok<{ record: { artifactId: string } }>(await h.service.run('default', { operation: 'artifact.chart', artifactId: table.record.artifactId, x: 'date', y: ['mwh'], kind: 'bar' }))
+    const chartDoc = ok<{ record: { artifactId: string; shape: { rows: number } } }>(await h.service.run('default', { operation: 'artifact.asDocument', artifactId: chart.record.artifactId }))
+    assert.equal(chartDoc.record.shape.rows, 2, 'a heading and the figure')
+    const word = ok<{ verified: { ok: boolean; checks: { what: string }[] } }>(await h.service.run('default', { operation: 'artifact.download', artifactId: chartDoc.record.artifactId, format: 'docx' }))
+    assert.equal(word.verified.ok, true)
+    assert.ok(word.verified.checks.some((one) => one.what === 'pictures'), 'the Word file holds the chart as a picture')
+
+    const code = ok<{ record: { artifactId: string } }>(await h.service.run('default', { operation: 'artifact.create', kind: 'code', title: 'List files', language: 'python', text: 'import os\nprint(os.listdir("."))\n' }))
+    const codeDoc = ok<{ record: { artifactId: string } }>(await h.service.run('default', { operation: 'artifact.asDocument', artifactId: code.record.artifactId }))
+    const kept = ok<{ preview: string }>(await h.service.run('default', { operation: 'artifact.read', artifactId: codeDoc.record.artifactId })).preview
+    assert.ok(kept.includes('```python') && kept.includes('print(os.listdir("."))'))
+
+    const already = await h.service.run('default', { operation: 'artifact.asDocument', artifactId: asDoc.record.artifactId })
+    assert.equal(already.ok, false)
+    if (!already.ok) assert.match(already.message, /already a document/)
+  }))
+
+test('a key cannot hide behind formatting: an underscore in a word stays one, and bold in the middle of a key does not split it', () =>
+  withService(async (h) => {
+    // The underscore in the key used to be read as the start of italics, which changed the stored text and let it through.
+    const plain = await h.service.run('default', { operation: 'artifact.create', kind: 'document', title: 'Deploy', text: `# Deploy\n\nUse the token ${KEY} to push.\n` })
+    assert.equal(plain.ok, false)
+    if (!plain.ok) assert.equal(plain.error, 'secrets')
+
+    const split = await h.service.run('default', { operation: 'artifact.create', kind: 'document', title: 'Deploy', text: `# Deploy\n\nUse ghp_**${KEY.slice(4, 20)}**${KEY.slice(20)} to push.\n` })
+    assert.equal(split.ok, false, 'the words are read as well as the Markdown')
+    if (!split.ok) assert.equal(split.error, 'secrets')
+
+    // And ordinary words with underscores are kept exactly, with nothing turned into italics.
+    const kept = ok<{ record: { artifactId: string } }>(await h.service.run('default', { operation: 'artifact.create', kind: 'document', title: 'Names', text: 'The file_name and the other_name, and 2 * 3 * 4.\n' }))
+    const read = ok<{ preview: string }>(await h.service.run('default', { operation: 'artifact.read', artifactId: kept.record.artifactId }))
+    assert.equal(read.preview.trim(), 'The file_name and the other_name, and 2 * 3 * 4.')
+    assert.equal(ok<unknown[]>(await h.service.run('default', { operation: 'artifact.list' })).length, 1)
   }))

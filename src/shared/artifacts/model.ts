@@ -1,9 +1,9 @@
 import type { Table } from '../compute/data.ts'
 import type { StructuredDocument } from '../compute/document.ts'
-import type { FormatId, LossReport, VerifyResult } from '../compute/interchange.ts'
+import { formatById, type FormatId, type LossReport, type VerifyResult } from '../compute/interchange.ts'
 import type { Plot } from '../compute/plot.ts'
 import type { Artifact as Diagram } from '../pages/builders.ts'
-import type { ArtifactKindId } from './kinds.ts'
+import { canWrite, isArtifactKindId, type ArtifactKindId } from './kinds.ts'
 
 /**
  * What an artifact is, apart from how it is written out.
@@ -111,6 +111,11 @@ export interface ArtifactRecord {
    * the moment the screen changes.
    */
   notes: string[]
+  /**
+   * The chat this was made in, when it was made in one. A pointer, never a copy of the conversation: it is what lets
+   * "add a chart to it" find the thing "it" is, and what lets a conversation list what was made in it.
+   */
+  conversationId?: string
 }
 
 /** The handle that crosses every boundary: enough to find, name and trust an artifact, and nothing to leak. */
@@ -137,6 +142,56 @@ export const refOf = (record: ArtifactRecord): ArtifactRef => ({
   hash: record.hash,
   verified: record.verified.ok
 })
+
+/**
+ * A pointer that arrived from somewhere not trusted to shape it -- a saved chat, a page. Null unless every part is
+ * what it should be. A pointer is only ever a way to ask the library; nothing on it is believed without asking.
+ */
+export function readRef(value: unknown): ArtifactRef | null {
+  if (typeof value !== 'object' || value === null) return null
+  const r = value as Record<string, unknown>
+  if (!isArtifactId(r.artifactId) || !isVersionId(r.versionId) || !isArtifactKindId(r.kind)) return null
+  if (typeof r.version !== 'number' || !Number.isInteger(r.version) || r.version < 1) return null
+  if (typeof r.title !== 'string' || typeof r.format !== 'string' || formatById(r.format) === null) return null
+  return {
+    artifactId: r.artifactId,
+    versionId: r.versionId,
+    version: r.version,
+    kind: r.kind,
+    title: r.title.slice(0, 300),
+    format: r.format as FormatId,
+    bytes: typeof r.bytes === 'number' && Number.isFinite(r.bytes) && r.bytes >= 0 ? r.bytes : 0,
+    hash: typeof r.hash === 'string' ? r.hash.slice(0, 128) : '',
+    verified: r.verified === true
+  }
+}
+
+/** What a reply did with an artifact, as the card under it shows. */
+export type CardAction = 'made' | 'changed' | 'drew' | 'kept' | 'shown'
+const CARD_ACTIONS: readonly CardAction[] = Object.freeze(['made', 'changed', 'drew', 'kept', 'shown'])
+
+/** The cards on a message, as it is saved: a pointer, what was done, and the format that was asked for. */
+export interface ArtifactCardRef {
+  ref: ArtifactRef
+  action: CardAction
+  did: string[]
+  format?: FormatId
+}
+
+/** The cards on a saved message, with anything that is not a card left out. Never throws: a chat is worth more than its cards. */
+export function readCards(value: unknown): ArtifactCardRef[] {
+  if (!Array.isArray(value)) return []
+  const out: ArtifactCardRef[] = []
+  for (const one of value.slice(0, 12)) {
+    if (typeof one !== 'object' || one === null) continue
+    const c = one as Record<string, unknown>
+    const ref = readRef(c.ref)
+    if (!ref || !CARD_ACTIONS.includes(c.action as CardAction)) continue
+    const did = Array.isArray(c.did) ? c.did.filter((line): line is string => typeof line === 'string').slice(0, 8).map((line) => line.slice(0, 400)) : []
+    out.push({ ref, action: c.action as CardAction, did, ...(typeof c.format === 'string' && canWrite(ref.kind, c.format) ? { format: c.format } : {}) })
+  }
+  return out
+}
 
 /** This version, as it will be listed once something newer replaces it. */
 export const summaryOf = (record: ArtifactRecord): VersionSummary => ({
@@ -205,15 +260,21 @@ export function readRecord(value: unknown): ArtifactRecord | null {
           title: String((derived as Record<string, unknown>).title ?? '')
         }
       : null
+  const { conversationId: _conversation, ...rest } = record
   return {
-    ...record,
+    ...rest,
     versionId,
     version: typeof r.version === 'number' && r.version >= 1 ? Math.floor(r.version) : 1,
     versions: Array.isArray(r.versions) ? (r.versions as unknown[]).filter(isVersionSummary) : [],
     reason: typeof r.reason === 'string' ? r.reason : '',
-    derivedFrom
+    derivedFrom,
+    // Only a plain id is kept. Anything else that turned up in that field is dropped rather than trusted.
+    ...(isConversationId(r.conversationId) ? { conversationId: r.conversationId } : {})
   }
 }
+
+/** A conversation id as Orbis makes them: short, and made of characters that mean nothing to a file system. */
+export const isConversationId = (value: unknown): value is string => typeof value === 'string' && /^[A-Za-z0-9_-]{1,80}$/.test(value)
 
 const isVersionSummary = (value: unknown): value is VersionSummary => {
   if (typeof value !== 'object' || value === null) return false

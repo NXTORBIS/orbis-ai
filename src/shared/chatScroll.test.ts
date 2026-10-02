@@ -10,7 +10,9 @@ import {
   onLayoutChanged,
   onRendered,
   onScrolled,
+  roomUnderTurn,
   settled,
+  TURN_MARGIN,
   type ChatScrollState,
   type Viewport
 } from './chatScroll.ts'
@@ -213,4 +215,22 @@ test('a correction that would change nothing is not made', () => {
 
 test('the distance to the end is never negative, however the browser rounds', () => {
   assert.equal(distanceFromBottom({ scrollTop: 2401, scrollHeight: 3000, clientHeight: 600 }), 0)
+})
+
+test('a question with nothing under it gets enough room to reach the top', () => {
+  // A 600-high view; the question and the reply that has just begun take 150 between them.
+  assert.equal(roomUnderTurn(600, 150), 600 - 150 - TURN_MARGIN)
+})
+
+test('the room under a turn shrinks as the answer grows, and is gone once the answer is a screen long', () => {
+  assert.equal(roomUnderTurn(600, 400), 184)
+  assert.equal(roomUnderTurn(600, 584), 0)
+  assert.equal(roomUnderTurn(600, 5000), 0)
+})
+
+test('the room under a turn is never negative and never a fraction, whatever it is handed', () => {
+  assert.equal(roomUnderTurn(0, 0), 0)
+  assert.equal(roomUnderTurn(600.4, 100.2), 484)
+  assert.equal(roomUnderTurn(Number.NaN, 10), 0)
+  assert.equal(roomUnderTurn(600, Number.POSITIVE_INFINITY), 0)
 })

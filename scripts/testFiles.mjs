@@ -346,6 +346,9 @@ export const TEST_FILES = [
   'src/shared/artifacts/validate.test.ts',
   'src/main/artifacts/store.test.ts',
   'src/main/artifacts/service.test.ts',
+  'src/main/artifacts/chat.test.ts',
+  'src/main/imagegen.test.ts',
+  'src/shared/artifacts/chatIntent.test.ts',
   'src/shared/compute/documentHtml.test.ts',
   'src/shared/artifacts/plan.test.ts',
   'src/main/artifacts/generation.test.ts',
@@ -358,5 +361,4 @@ export const TEST_FILES = [
   'src/shared/artifacts/extract.test.ts',
   'src/shared/artifacts/languages.test.ts',
   'src/main/artifacts/codeCheck.test.ts',
-  'src/main/artifacts/capabilities.test.ts',
 ]

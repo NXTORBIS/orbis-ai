@@ -1,6 +1,8 @@
+import { existsSync } from 'node:fs'
 import { readFile as readFromDisk, writeFile as writeToDisk } from 'node:fs/promises'
+import { join } from 'node:path'
 import { isDataError, parseDelimited, type Table } from '../../shared/compute/data.ts'
-import { emptyDocument, fromMarkdown, isDocumentError, type StructuredDocument } from '../../shared/compute/document.ts'
+import { DOCUMENT_LIMITS, emptyDocument, fromMarkdown, isDocumentError, text as inline, type StructuredDocument, type TableCell } from '../../shared/compute/document.ts'
 import { toHtml } from '../../shared/compute/documentHtml.ts'
 import {
   FORMATS,
@@ -17,6 +19,7 @@ import {
 import { ARTIFACT_KINDS, canWrite, describeKinds, extensionFor, isArtifactKindId, type ArtifactKindId } from '../../shared/artifacts/kinds.ts'
 import {
   isArtifactId,
+  isConversationId,
   isVersionId,
   makeArtifactId,
   makeVersionId,
@@ -26,10 +29,10 @@ import {
   type ArtifactRecord,
   type ExportOutcome
 } from '../../shared/artifacts/model.ts'
-import { safeName } from '../../shared/artifacts/naming.ts'
+import { safeName, unique } from '../../shared/artifacts/naming.ts'
 import { gateForWrite } from '../../shared/artifacts/secrets.ts'
 import { verifyDocumentFile, verifyPdfFile, verifyTableFile } from '../../shared/artifacts/validate.ts'
-import type { ArtifactGeneration } from './generation.ts'
+import { STOPPED, type ArtifactGeneration } from './generation.ts'
 import { importFile } from './importing.ts'
 import { verifyDocx, verifyPptx, verifyXlsx, writeDocx, writePptx, writeXlsx, type Picture } from './office.ts'
 import { ArtifactStore, CONTENT_PREFIX, SOURCE_FILE } from './store.ts'
@@ -107,7 +110,10 @@ const OPERATIONS: Readonly<Record<string, string>> = Object.freeze({
   'artifact.revise': 'A document or a flowchart changed by an instruction, kept as a new version with the one before still there.',
   'artifact.languages': 'The languages a code artifact can be in, and which of them Orbis can check.',
   'artifact.place': 'A chart or a diagram put into a document as a figure, so the document carries the picture when it is saved as PDF, Word, slides or HTML.',
-  'artifact.extractTable': 'A table inside a document taken out as a table of its own, so it can be sorted, totalled and drawn.'
+  'artifact.extractTable': 'A table inside a document taken out as a table of its own, so it can be sorted, totalled and drawn.',
+  'artifact.asDocument': 'A table, a chart, a diagram or a code file put into a new document, so it can leave as PDF, Word or slides. Nothing is rewritten.',
+  'artifact.download': 'Write an artifact into the Downloads folder under a name of its own, then check the file. No dialog: the folder is chosen by Orbis, never by a caller.',
+  'artifact.reveal': 'Show a file this session saved in its folder, or open it. Only a file Orbis itself just wrote.'
 })
 
 const JOIN_KINDS: readonly JoinKind[] = Object.freeze(['inner', 'left', 'full'])
@@ -154,6 +160,13 @@ export interface ArtifactServiceOptions {
   /** Writing and reading the chosen file. Injected so the service can be tested against a folder rather than a dialog. */
   writeFile?(path: string, bytes: Uint8Array): Promise<void>
   readFile?(path: string): Promise<Uint8Array>
+  /**
+   * The folder a download goes to. Asked of the system in the main process, so a download needs no dialog and a
+   * renderer still cannot name a path. Absent, downloading is not offered and saving through the dialog still is.
+   */
+  downloadsDir?(): string
+  /** Shows a file in its folder, or opens it with whatever the system opens it with. */
+  reveal?(path: string, open: boolean): Promise<void>
 }
 
 /** What a render produced: bytes to write, the text to scan for secrets, and what the format could not carry. */
@@ -174,6 +187,9 @@ interface Rendered {
   /** For a Word document or a deck: how many figures were put in as pictures. */
   pictures?: number
 }
+
+/** A table as Markdown writes it: a line with pipes, and under it a ruled line of dashes and pipes. */
+const MARKDOWN_TABLE = /^[ \t]*\|?[^\n|]*\|[^\n]*\n[ \t]*\|?[ \t]*:?-{2,}:?[ \t]*(\|[ \t]*:?-{2,}:?[ \t]*)+\|?[ \t]*$/m
 
 /** A figure in a document that points at a chart or a diagram kept in Create. */
 const FIGURE_REF = /^artifact:(artifact_[0-9a-f]{32})$/
@@ -231,12 +247,33 @@ const verifyPngFile = (expected: { bytes: number; hash: string; width: number; h
 
 export class ArtifactService {
   private readonly o: ArtifactServiceOptions
+  /** Every file this service wrote outside its own store since it started. The only paths `artifact.reveal` will touch. */
+  private readonly written = new Set<string>()
 
   constructor(options: ArtifactServiceOptions) {
     this.o = options
   }
 
-  async run(profileId: string, request: unknown): Promise<ArtifactResult> {
+  /**
+   * One operation, and -- when the request says which chat it came from -- the artifact it made marked with that chat.
+   *
+   * The mark is put on here, in one place, rather than threaded through every operation: whatever an operation keeps,
+   * a new artifact or a new version, comes back as a record, and a record made on behalf of a conversation belongs to
+   * it. An artifact that already belongs to a conversation keeps the one it has.
+   */
+  async run(profileId: string, request: unknown, signal?: AbortSignal): Promise<ArtifactResult> {
+    const result = await this.dispatch(profileId, request, signal)
+    const conversationId = typeof request === 'object' && request !== null ? (request as Record<string, unknown>).conversationId : undefined
+    if (!result.ok || !isConversationId(conversationId)) return result
+    const value = result.value as { record?: ArtifactRecord } | null
+    const record = value && typeof value === 'object' ? value.record : undefined
+    if (!record || !isArtifactId(record.artifactId) || record.conversationId) return result
+    const stamped: ArtifactRecord = { ...record, conversationId }
+    await this.o.store.writeRecord(profileId, stamped)
+    return { ...result, value: { ...(value as Record<string, unknown>), record: stamped } }
+  }
+
+  private async dispatch(profileId: string, request: unknown, signal?: AbortSignal): Promise<ArtifactResult> {
     const req = (typeof request === 'object' && request !== null ? request : {}) as Record<string, unknown>
     const operation = str(req.operation, 60)
     const fail = (error: string, message: string, detail?: unknown): ArtifactResult => ({
@@ -256,12 +293,16 @@ export class ArtifactService {
       switch (operation) {
         case 'artifact.kinds':
           return { ok: true, operation, value: this.kinds() }
-        case 'artifact.list':
-          return { ok: true, operation, value: (await this.o.store.list(profileId)).map((one) => ({ record: one, ref: refOf(one) })) }
+        case 'artifact.list': {
+          // With a conversation named, only what was made in it: that is the list "it" and "the report" are resolved against.
+          const within = isConversationId(req.within) ? req.within : null
+          const all = await this.o.store.list(profileId)
+          return { ok: true, operation, value: (within ? all.filter((one) => one.conversationId === within) : all).map((one) => ({ record: one, ref: refOf(one) })) }
+        }
         case 'artifact.create':
           return await this.create(profileId, operation, req, fail)
         case 'artifact.generate':
-          return await this.generate(profileId, operation, req, fail)
+          return await this.generate(profileId, operation, req, fail, signal)
         case 'artifact.import':
           return await this.import(profileId, operation, req, fail)
         case 'artifact.analyse':
@@ -269,7 +310,17 @@ export class ArtifactService {
         case 'artifact.read':
           return await this.read(profileId, operation, req, fail)
         case 'artifact.export':
-          return await this.export(profileId, operation, req, fail)
+          return await this.export(profileId, operation, req, fail, 'dialog')
+        case 'artifact.download':
+          return await this.export(profileId, operation, req, fail, 'downloads')
+        case 'artifact.reveal': {
+          const path = str(req.path, 1000)
+          // Not "any path a renderer names": only a file this service wrote itself, in this run of Orbis.
+          if (!this.written.has(path)) return fail('bad-input', 'Orbis can only show a file it saved itself, in this session.')
+          if (!this.o.reveal) return fail('unavailable', 'Showing a file in its folder is not available here.')
+          await this.o.reveal(path, req.open === true)
+          return { ok: true, operation, value: { path, opened: req.open === true } }
+        }
         case 'artifact.remove': {
           const artifactId = str(req.artifactId, 60)
           if (!isArtifactId(artifactId)) return fail('bad-input', 'That is not an artifact id.')
@@ -298,9 +349,11 @@ export class ArtifactService {
         case 'artifact.search':
           return { ok: true, operation, value: await this.search(profileId, str(req.query, 200)) }
         case 'artifact.chart':
-          return await this.chart(profileId, operation, req, fail)
+          return await this.chart(profileId, operation, req, fail, signal)
+        case 'artifact.asDocument':
+          return await this.asDocument(profileId, operation, req, fail)
         case 'artifact.transform':
-          return await this.transform(profileId, operation, req, fail)
+          return await this.transform(profileId, operation, req, fail, signal)
         case 'artifact.join':
           return await this.join(profileId, operation, req, fail)
         case 'artifact.templates':
@@ -310,7 +363,7 @@ export class ArtifactService {
         case 'artifact.fromTemplate':
           return await this.fromTemplate(profileId, operation, req, fail)
         case 'artifact.revise':
-          return await this.revise(profileId, operation, req, fail)
+          return await this.revise(profileId, operation, req, fail, signal)
         case 'artifact.extractTable':
           return await this.extract(profileId, operation, req, fail)
         case 'artifact.place':
@@ -319,7 +372,30 @@ export class ArtifactService {
           return fail('unknown-operation', `Orbis has no artifact operation called "${operation}".`)
       }
     } catch (err) {
+      // The person is told it did not work; the reason is written down here, because a fault nobody can read is a
+      // fault nobody can fix.
+      console.error(`[artifacts] ${operation} failed`, err)
       return fail('failed', err instanceof Error && err.message.length < 200 ? err.message : 'That did not work.')
+    }
+  }
+
+  /**
+   * What the secret gate reads: the file as it will be written, and the plain words it was made from.
+   *
+   * Both, because the written form can split what the words hold whole. A key with bold in the middle of it is two
+   * pieces of Markdown and one key; a long label on a flowchart is wrapped onto two lines of a drawing. The gate looks
+   * for keys by their shape, so it has to be shown them in one piece.
+   */
+  private wordsOf(body: ArtifactBody, rendered: Rendered): string {
+    switch (body.kind) {
+      case 'document':
+        return `${rendered.scan}\n${toText(body.document)}`
+      case 'diagram':
+        return `${rendered.scan}\n${[...body.diagram.objects.map((one) => one.text), ...body.diagram.connectors.map((one) => one.text)].join('\n')}`
+      case 'plot':
+        return `${rendered.scan}\n${[body.plot.title, body.plot.x.label, body.plot.y.label, ...body.plot.series.map((one) => one.label)].join('\n')}`
+      default:
+        return rendered.scan
     }
   }
 
@@ -345,6 +421,17 @@ export class ArtifactService {
 
   private bodyFrom(kind: ArtifactKindId, text: string, source: string, title: string, language = ''): ArtifactBody | { error: string; message: string } {
     if (kind === 'table') {
+      // A table written the way a chat reply writes one -- pipes and a ruled line under the headings -- is read as
+      // that table. Handed to the delimited reader it would come out as one column of lines with pipes in them.
+      if (MARKDOWN_TABLE.test(text)) {
+        const read = fromMarkdown(text, 'b')
+        if (!isDocumentError(read)) {
+          const holder = emptyDocument('document', title)
+          holder.blocks = read.blocks
+          const first = extractTable(holder, 1, source)
+          if (!isDataError(first)) return { kind: 'table', table: first }
+        }
+      }
       const parsed = parseDelimited(text)
       if (isDataError(parsed)) return { error: 'parse', message: parsed.message }
       const table: Table = { ...parsed.table, source }
@@ -492,6 +579,77 @@ export class ArtifactService {
       case 'code':
         return { rows: lineCount(body.code.source), columns: 0 }
     }
+  }
+
+  // ---------------------------------------------------------------- anything, as a document
+
+  /**
+   * A table, a chart, a diagram or a code file put into a new document.
+   *
+   * This is how "export the spreadsheet as PDF" and "put the chart in a Word file" are real conversions and not a
+   * file with a different name: a table becomes a document's own table, row for row; a chart or a diagram becomes a
+   * figure that points at it; code becomes a code block. Nothing is summarised, rewritten or left out without a
+   * sentence saying so. The document remembers what it was made from.
+   */
+  private async asDocument(
+    profileId: string,
+    operation: string,
+    req: Record<string, unknown>,
+    fail: (error: string, message: string, detail?: unknown) => ArtifactResult
+  ): Promise<ArtifactResult> {
+    const record = await this.existing(profileId, req, fail)
+    if ('ok' in record) return record
+    if (record.kind === 'document') return fail('bad-input', `"${record.title}" is already a document. It can be saved as PDF, Word or slides as it is.`)
+    const body = await this.bodyOf(profileId, record)
+    if (!body) return fail('not-found', 'The artifact is listed but its source is missing.')
+
+    const title = str(req.title, LIMITS.title).trim() || record.title
+    const source = `"${record.title}" (as a document)`
+    const document = emptyDocument('document', title)
+    document.metadata.source = source
+    const notes: string[] = []
+    let n = 0
+    const id = (): string => `b-${++n}`
+    document.blocks.push({ id: id(), sectionId: '', kind: 'heading', level: 1, content: [inline(title)] })
+
+    if (body.kind === 'table') {
+      const table = body.table
+      const columns = table.columns.slice(0, DOCUMENT_LIMITS.tableColumns)
+      if (columns.length < table.columns.length) notes.push(`The first ${columns.length} of ${table.columns.length} columns are in the document; a document's table holds no more.`)
+      const numeric = (type: string): boolean => type === 'number' || type === 'integer' || type === 'quantity'
+      const cell = (value: string, header: boolean, right: boolean): TableCell => ({ content: [inline(value)], colSpan: 1, rowSpan: 1, header, align: right ? 'right' : 'left' })
+      const heading = columns.map((one) => cell(one.name, true, numeric(one.type)))
+      // A table too long for one of a document's tables is carried on in the next, heading repeated. No row is dropped.
+      const perTable = DOCUMENT_LIMITS.tableRows - 1
+      const parts = Math.max(1, Math.ceil(table.rows.length / perTable))
+      for (let part = 0; part < parts; part++) {
+        const rows = table.rows.slice(part * perTable, (part + 1) * perTable)
+        document.blocks.push({
+          id: id(),
+          sectionId: '',
+          kind: 'table',
+          columns: columns.length,
+          rows: [heading, ...rows.map((row) => columns.map((column, at) => cell(cellOut(row.cells[at] ?? null, column), false, numeric(column.type))))],
+          caption: parts === 1 ? '' : `Rows ${(part * perTable + 1).toLocaleString('en')} to ${(part * perTable + rows.length).toLocaleString('en')}`,
+          label: ''
+        })
+      }
+      notes.push(`Every one of the ${rowsOf(table.rows.length)} of "${record.title}" (version ${record.version}) is in the document, as they were. Nothing was summarised or rewritten.`)
+    } else if (body.kind === 'plot' || body.kind === 'diagram') {
+      document.blocks.push({ id: id(), sectionId: '', kind: 'image', source: `artifact:${record.artifactId}`, alt: record.title.replace(/[\[\]\r\n]+/g, ' ').trim(), caption: record.title.replace(/[*\r\n]+/g, '').trim(), label: '' })
+      notes.push(`The figure is "${record.title}". It follows it: saved as PDF, Word, slides or HTML, the document shows it as it is at that moment.`)
+    } else if (body.kind === 'code') {
+      document.blocks.push({ id: id(), sectionId: '', kind: 'code', language: body.code.language, source: body.code.source, showLineNumbers: false })
+      notes.push(`The ${languageById(body.code.language)?.name ?? body.code.language} file "${record.title}" (version ${record.version}), character for character.`)
+    }
+
+    return this.keep(
+      profileId,
+      operation,
+      { kind: 'document', document },
+      { title, source, notes, acceptSecrets: req.acceptSecrets === true, derivedFrom: { artifactId: record.artifactId, versionId: record.versionId, title: record.title } },
+      fail
+    )
   }
 
   // ---------------------------------------------------------------- figures
@@ -662,7 +820,8 @@ export class ArtifactService {
     profileId: string,
     operation: string,
     req: Record<string, unknown>,
-    fail: (error: string, message: string, detail?: unknown) => ArtifactResult
+    fail: (error: string, message: string, detail?: unknown) => ArtifactResult,
+    signal?: AbortSignal
   ): Promise<ArtifactResult> {
     const record = await this.existing(profileId, req, fail)
     if ('ok' in record) return record
@@ -689,7 +848,9 @@ export class ArtifactService {
       return fail('too-large', `This is ${current.length.toLocaleString('en')} characters, past the ${LIMITS.revise.toLocaleString('en')} Orion can be handed whole. Cutting it would lose the rest without saying so, so it was not sent. It can still be replaced by pasting.`)
     }
 
-    const outcome = await this.o.generation.revise(record.kind, record.title, current, request, body.kind === 'code' ? body.code.language : '')
+    const outcome = await this.o.generation.revise(record.kind, record.title, current, request, body.kind === 'code' ? body.code.language : '', signal)
+    // Stopped while Orion was rewriting it: the version there was is still the current one.
+    if (signal?.aborted || outcome.failed === STOPPED) return fail('cancelled', 'Stopped. Nothing was changed.')
     if (!outcome.body) {
       const errors = outcome.problems.filter((one) => one.severity === 'error').map((one) => one.message)
       return fail(outcome.failed ? 'unavailable' : 'not-made', outcome.failed ?? errors[0] ?? 'Orion did not give back something Orbis could keep.', { attempts: outcome.attempts })
@@ -720,7 +881,8 @@ export class ArtifactService {
     profileId: string,
     operation: string,
     req: Record<string, unknown>,
-    fail: (error: string, message: string, detail?: unknown) => ArtifactResult
+    fail: (error: string, message: string, detail?: unknown) => ArtifactResult,
+    signal?: AbortSignal
   ): Promise<ArtifactResult> {
     const record = await this.existing(profileId, req, fail)
     if ('ok' in record) return record
@@ -741,7 +903,8 @@ export class ArtifactService {
       const outcome = await this.o.generation.planSteps(sentence, table.columns, (candidate) => {
         const tried = applySteps(table, candidate)
         return isTransformFailure(tried) ? `Step ${tried.step} (${tried.op}) cannot run: ${tried.message}` : null
-      })
+      }, signal)
+      if (signal?.aborted || outcome.failed === STOPPED) return fail('cancelled', 'Stopped. Nothing was changed.')
       if (!outcome.steps) {
         return fail(outcome.failed ? 'unavailable' : 'not-made', outcome.failed ?? outcome.problems[0] ?? 'Orion did not give steps that work.', { attempts: outcome.attempts })
       }
@@ -849,7 +1012,8 @@ export class ArtifactService {
     profileId: string,
     operation: string,
     req: Record<string, unknown>,
-    fail: (error: string, message: string, detail?: unknown) => ArtifactResult
+    fail: (error: string, message: string, detail?: unknown) => ArtifactResult,
+    signal?: AbortSignal
   ): Promise<ArtifactResult> {
     const record = await this.existing(profileId, req, fail)
     if ('ok' in record) return record
@@ -857,6 +1021,28 @@ export class ArtifactService {
     const body = await this.bodyOf(profileId, record)
     if (!body || body.kind !== 'table') return fail('not-found', 'The artifact is listed but its source is missing.')
     const table = body.table
+
+    // Asked for in words rather than by column: Orion names the columns, having seen their names and types and none
+    // of the numbers, and the plan is tried against the real table before it is accepted.
+    if (typeof req.x !== 'string' && typeof req.request === 'string') {
+      if (!this.o.generation) return fail('unavailable', 'Orion is not set up on this computer, so the columns to draw have to be chosen by hand.')
+      const outcome = await this.o.generation.planChart(
+        str(req.request, 2000),
+        table.columns,
+        (plan) => {
+          const numbers = (name: string): number => {
+            const at = table.columns.findIndex((one) => one.name === name)
+            return table.rows.filter((row) => asNumber(row.cells[at] ?? null) !== null).length
+          }
+          const empty = plan.y.filter((name) => numbers(name) === 0)
+          return empty.length > 0 ? `${empty.map((one) => `"${one}"`).join(', ')} ${empty.length === 1 ? 'has' : 'have'} no values that can be read as numbers, so there is nothing to draw. Choose columns that hold numbers.` : null
+        },
+        signal
+      )
+      if (signal?.aborted || outcome.failed === STOPPED) return fail('cancelled', 'Stopped. Nothing was drawn.')
+      if (!outcome.plan) return fail(outcome.failed ? 'unavailable' : 'not-made', outcome.failed ?? outcome.problems[0] ?? 'Orion did not choose columns that can be drawn.', { attempts: outcome.attempts })
+      return this.chart(profileId, operation, { ...req, x: outcome.plan.x, y: outcome.plan.y, kind: typeof req.kind === 'string' && req.kind !== '' ? req.kind : outcome.plan.kind, request: undefined }, fail, signal)
+    }
 
     const find = (name: string): { column: Column; index: number } | null => {
       const index = table.columns.findIndex((one) => one.id === name || one.name.toLowerCase() === name.toLowerCase())
@@ -911,6 +1097,15 @@ export class ArtifactService {
       notes.push(`"${x.column.name}" is drawn in row order, with its values as the labels.`)
     }
 
+    // Asked to redraw a chart that is already there ("make it a bar chart"): the result is that chart's next version,
+    // so a document that shows it shows the new drawing, and the old one can be brought back.
+    let replaced: ArtifactRecord | undefined
+    if (typeof req.replace === 'string') {
+      const before = await this.existing(profileId, { artifactId: req.replace }, fail)
+      if ('ok' in before) return before
+      if (before.kind !== 'plot') return fail('bad-input', `"${before.title}" is not a chart, so a chart cannot take its place.`)
+      replaced = before
+    }
     return this.keep(
       profileId,
       operation,
@@ -918,9 +1113,10 @@ export class ArtifactService {
       {
         title,
         source: `"${record.title}" (its numbers)`,
-        notes: [`Drawn from the table "${record.title}" (version ${record.version}): ${ys.map((one) => one.found!.column.name).join(', ')} against ${x.column.name}.`, ...notes],
+        notes: [`Drawn from the table "${record.title}" (version ${record.version}): ${ys.map((one) => one.found!.column.name).join(', ')} against ${x.column.name}, as ${seriesKind === 'bar' ? 'bars' : seriesKind === 'scatter' ? 'points' : seriesKind === 'area' ? 'an area' : seriesKind === 'step' ? 'steps' : 'a line'}.`, ...notes],
         acceptSecrets: true,
-        derivedFrom: { artifactId: record.artifactId, versionId: record.versionId, title: record.title }
+        derivedFrom: { artifactId: record.artifactId, versionId: record.versionId, title: record.title },
+        ...(replaced ? { existing: replaced, reason: `Redrawn: ${title}, as ${seriesKind}.` } : {})
       },
       fail
     )
@@ -966,14 +1162,18 @@ export class ArtifactService {
     profileId: string,
     operation: string,
     req: Record<string, unknown>,
-    fail: (error: string, message: string, detail?: unknown) => ArtifactResult
+    fail: (error: string, message: string, detail?: unknown) => ArtifactResult,
+    signal?: AbortSignal
   ): Promise<ArtifactResult> {
     if (!this.o.generation) return fail('unavailable', 'Orion is not set up on this computer, so there is nothing to write it with.')
     const request = str(req.request, 4000).trim()
     if (request === '') return fail('bad-input', 'Say what you want made.')
     const acceptSecrets = req.acceptSecrets === true
 
-    const outcome = await this.o.generation.generate(request)
+    const wanted = str(req.kind, 20)
+    const outcome = await this.o.generation.generate(request, { context: str(req.context, 20_000), signal, ...(isArtifactKindId(wanted) && ARTIFACT_KINDS[wanted].orionMayName ? { kind: wanted } : {}) })
+    // Stopped while Orion was writing: nothing has been kept yet, and nothing is.
+    if (signal?.aborted || outcome.failed === STOPPED) return fail('cancelled', 'Stopped. Nothing was made.')
     if (!outcome.body || !outcome.intent) {
       const first = outcome.failed ?? outcome.problems.find((p) => p.severity === 'error')?.message ?? 'Orion did not write something Orbis could keep.'
       return fail('not-made', first, { attempts: outcome.attempts, problems: outcome.problems.map((p) => p.message) })
@@ -1004,6 +1204,101 @@ export class ArtifactService {
     const imported = await importFile(name, bytes)
     if ('error' in imported) return fail(imported.error, imported.message)
     return this.keep(profileId, operation, imported.body, { title: imported.title, source: imported.source, notes: imported.notes, acceptSecrets: req.acceptSecrets === true }, fail)
+  }
+
+  /**
+   * A file whose bytes the main process already has -- an attachment on a chat message -- read and kept.
+   *
+   * Not an operation: there is no way to reach this from the window. `artifact.import` asks the person which file
+   * through a dialog; this is for the one case where they have already said, by attaching it, and a second dialog
+   * would be asking twice.
+   */
+  async importBytes(profileId: string, name: string, bytes: Uint8Array, about: { conversationId?: string; acceptSecrets?: boolean } = {}): Promise<ArtifactResult> {
+    const operation = 'artifact.import'
+    const fail = (error: string, message: string, detail?: unknown): ArtifactResult => ({ ok: false, operation, error, message, ...(detail !== undefined ? { detail } : {}) })
+    const imported = await importFile(name.replace(/^.*[\\/]/, '').slice(0, 200), bytes)
+    if ('error' in imported) return fail(imported.error, imported.message)
+    const kept = await this.keep(profileId, operation, imported.body, { title: imported.title, source: imported.source, notes: imported.notes, acceptSecrets: about.acceptSecrets === true }, fail)
+    if (!kept.ok || !isConversationId(about.conversationId)) return kept
+    const record = (kept.value as { record: ArtifactRecord }).record
+    const stamped: ArtifactRecord = { ...record, conversationId: about.conversationId }
+    await this.o.store.writeRecord(profileId, stamped)
+    return { ...kept, value: { ...(kept.value as Record<string, unknown>), record: stamped } }
+  }
+
+  /**
+   * What an artifact holds, as words a model can be handed -- with every figure worked out here first.
+   *
+   * For a question in the chat about something that was made ("what is the highest expense?"). A model shown rows
+   * and asked for a total adds them up in its head and is sometimes wrong, and a model shown the first hundred rows
+   * of a thousand answers about a hundred. So for a table the counts, sums, smallest, largest and mean of every
+   * number column are computed over ALL the rows and written out as facts, the row each extreme sits in is named,
+   * and the sample of rows says how many there are beyond it. Bounded: this goes into a prompt.
+   *
+   * Not an operation. The window never needs it; it is what the main process hands to Orion.
+   */
+  async contextOf(profileId: string, artifactId: string, limit = 6000): Promise<{ title: string; kind: ArtifactKindId; version: number; text: string } | null> {
+    if (!isArtifactId(artifactId)) return null
+    const record = await this.o.store.readRecord(profileId, artifactId)
+    if (!record) return null
+    const body = await this.bodyOf(profileId, record)
+    if (!body) return null
+    const lines: string[] = []
+    if (body.kind === 'table') {
+      const table = body.table
+      const shown = table.columns.slice(0, 30)
+      lines.push(`A table called "${record.title}" with ${rowsOf(table.rows.length)} and ${table.columns.length} columns: ${shown.map((one) => `${one.name} (${one.type}${one.unit ? `, in ${one.unit.display}` : ''})`).join(', ')}.`)
+      if (table.rows.length > 0) lines.push('', 'Worked out by Orbis over ALL the rows. Use these figures as they are; do not add rows up yourself:')
+      const rowAs = (at: number): string => shown.map((column, c) => `${column.name}=${cellOut(table.rows[at].cells[c] ?? null, column)}`).join(', ')
+      const tidy = (value: number): string => String(Number(value.toPrecision(12)))
+      shown.forEach((column, c) => {
+        if (table.rows.length === 0) return
+        if (column.type === 'number' || column.type === 'integer' || column.type === 'quantity') {
+          let count = 0
+          let sum = 0
+          let low = Number.POSITIVE_INFINITY
+          let high = Number.NEGATIVE_INFINITY
+          let lowAt = -1
+          let highAt = -1
+          table.rows.forEach((row, at) => {
+            const value = asNumber(row.cells[c] ?? null)
+            if (value === null) return
+            count += 1
+            sum += value
+            if (value < low) [low, lowAt] = [value, at]
+            if (value > high) [high, highAt] = [value, at]
+          })
+          if (count === 0) lines.push(`- ${column.name}: no values that are numbers.`)
+          else lines.push(`- ${column.name}: ${count} values, sum ${tidy(sum)}, mean ${tidy(sum / count)}, smallest ${tidy(low)} (row: ${rowAs(lowAt)}), largest ${tidy(high)} (row: ${rowAs(highAt)})${count < table.rows.length ? `, ${table.rows.length - count} empty` : ''}.`)
+        } else if (column.type === 'category' || column.type === 'text' || column.type === 'boolean') {
+          const counts = new Map<string, number>()
+          for (const row of table.rows) {
+            const value = cellOut(row.cells[c] ?? null, column)
+            if (value !== '') counts.set(value, (counts.get(value) ?? 0) + 1)
+          }
+          if (counts.size > 0 && counts.size <= Math.max(12, table.rows.length / 2)) {
+            const top = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8)
+            lines.push(`- ${column.name}: ${counts.size} different values; the most frequent: ${top.map(([value, n]) => `${value} (${n})`).join(', ')}.`)
+          }
+        }
+      })
+      const sample = Math.min(table.rows.length, 40)
+      if (sample > 0) {
+        lines.push('', sample < table.rows.length ? `The first ${sample} of ${rowsOf(table.rows.length)} (the rest are NOT shown; say so if the answer would need them):` : `Every row:`)
+        for (let at = 0; at < sample; at++) lines.push(rowAs(at))
+      }
+    } else if (body.kind === 'document') {
+      lines.push(`A document called "${record.title}":`, '', toText(body.document))
+    } else if (body.kind === 'code') {
+      lines.push(`A ${languageById(body.code.language)?.name ?? body.code.language} file called "${record.title}" (${lineCount(body.code.source)} lines). Orbis has not run it:`, '', body.code.source)
+    } else if (body.kind === 'diagram') {
+      const label = new Map(body.diagram.objects.map((one) => [one.id, one.text]))
+      lines.push(`A flowchart called "${record.title}" with ${body.diagram.objects.length} boxes:`, ...body.diagram.objects.map((one) => `- ${one.text} (${one.type})`), 'Arrows:', ...body.diagram.connectors.map((one) => `- ${label.get(one.from) ?? one.from} -> ${label.get(one.to) ?? one.to}${one.text ? ` [${one.text}]` : ''}`))
+    } else {
+      lines.push(`A chart called "${record.title}": ${body.plot.series.map((one) => one.label).join(', ')} against ${body.plot.x.label || 'the bottom axis'}.`, ...record.notes)
+    }
+    const text = lines.join('\n')
+    return { title: record.title, kind: record.kind, version: record.version, text: text.length > limit ? `${text.slice(0, limit)}\n[... cut here: ${text.length - limit} more characters are not shown ...]` : text }
   }
 
   // ---------------------------------------------------------------- analyse
@@ -1186,7 +1481,7 @@ export class ArtifactService {
     if ('error' in rendered) return fail(rendered.error, rendered.message)
 
     const ext = body.kind === 'code' ? extensionForLanguage(body.code.language) : extensionFor(format)
-    const gate = gateForWrite(`${safeName(title)}${ext}`, rendered.scan, acceptSecrets)
+    const gate = gateForWrite(`${safeName(title)}${ext}`, this.wordsOf(body, rendered), acceptSecrets)
     if (!gate.ok) return fail('secrets', gate.message, { findings: gate.findings })
 
     const now = this.o.now()
@@ -1212,7 +1507,9 @@ export class ArtifactService {
       source,
       shape: this.shapeOf(body),
       tags: existing ? existing.tags : [],
-      notes: [...about.notes, ...rendered.notes.filter((one) => !about.notes.includes(one))]
+      notes: [...about.notes, ...rendered.notes.filter((one) => !about.notes.includes(one))],
+      // A new version stays in the conversation the artifact was made in, whoever asked for the change.
+      ...(existing?.conversationId ? { conversationId: existing.conversationId } : {})
     }
 
     await this.o.store.write(profileId, record, [
@@ -1300,11 +1597,19 @@ export class ArtifactService {
 
   // ---------------------------------------------------------------- export
 
+  /**
+   * An artifact written out as a file and checked.
+   *
+   * Two ways to say where. Through the dialog, the person picks the place. To Downloads, Orbis picks it: the folder
+   * the system calls Downloads and a name nothing there already has, which is what "download" means everywhere else
+   * and needs no window. In neither does a path come from the interface.
+   */
   private async export(
     profileId: string,
     operation: string,
     req: Record<string, unknown>,
-    fail: (error: string, message: string, detail?: unknown) => ArtifactResult
+    fail: (error: string, message: string, detail?: unknown) => ArtifactResult,
+    to: 'dialog' | 'downloads'
   ): Promise<ArtifactResult> {
     const artifactId = str(req.artifactId, 60)
     if (!isArtifactId(artifactId)) return fail('bad-input', 'That is not an artifact id.')
@@ -1328,17 +1633,26 @@ export class ArtifactService {
 
     const ext = body.kind === 'code' ? extensionForLanguage(body.code.language) : extensionFor(format)
     const base = safeName(record.title)
-    const gate = gateForWrite(`${base}${ext}`, rendered.scan, acceptSecrets)
+    const gate = gateForWrite(`${base}${ext}`, this.wordsOf(body, rendered), acceptSecrets)
     if (!gate.ok) return fail('secrets', gate.message, { findings: gate.findings })
 
-    const path = await this.o.chooseDestination({
-      title: `Save ${record.title}`,
-      defaultName: `${base}${ext}`,
-      filters: [{ name: body.kind === 'code' ? (languageById(body.code.language)?.name ?? FORMATS[format].name) : FORMATS[format].name, extensions: [ext.slice(1)] }]
-    })
+    let path: string | null
+    if (to === 'downloads') {
+      if (!this.o.downloadsDir) return fail('unavailable', 'Downloading is not available here. It can still be saved with "Save as".')
+      const folder = this.o.downloadsDir()
+      // Never over something that is already there: "Report.pdf", then "Report (2).pdf".
+      path = join(folder, unique(base, ext, (candidate) => existsSync(join(folder, candidate))))
+    } else {
+      path = await this.o.chooseDestination({
+        title: `Save ${record.title}`,
+        defaultName: `${base}${ext}`,
+        filters: [{ name: body.kind === 'code' ? (languageById(body.code.language)?.name ?? FORMATS[format].name) : FORMATS[format].name, extensions: [ext.slice(1)] }]
+      })
+    }
     if (path === null) return fail('cancelled', 'Nothing was written.')
 
     await (this.o.writeFile ?? writeToDisk)(path, rendered.bytes)
+    this.written.add(path)
     const readBack = await (this.o.readFile ?? (async (p: string) => new Uint8Array(await readFromDisk(p))))(path)
     const verified = await this.verify(body, rendered, readBack)
 

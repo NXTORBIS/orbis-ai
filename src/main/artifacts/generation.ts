@@ -49,6 +49,64 @@ export interface StepsOutcome {
   failed: string | null
 }
 
+/** Which of a table's columns to draw, and how. Names, not numbers. */
+export interface ChartPlan {
+  x: string
+  y: string[]
+  kind: 'line' | 'bar' | 'scatter' | 'area' | 'step'
+}
+
+export interface ChartOutcome {
+  plan: ChartPlan | null
+  problems: string[]
+  attempts: { said: string; problems: string[] }[]
+  failed: string | null
+}
+
+const CHART_KINDS = ['line', 'bar', 'scatter', 'area', 'step'] as const
+
+/** What the model is told when it is asked which columns to draw. */
+export function chartInstructions(columns: readonly Pick<Column, 'name' | 'type'>[]): string {
+  return `You choose how to draw ONE chart from a table. Answer with JSON only: {"x": column name, "y": [column names], "kind": one of ${CHART_KINDS.join(', ')}}.
+
+The table's columns (name: type):
+${columns.map((one) => `  ${one.name}: ${one.type}`).join('\n')}
+
+Rules:
+- "x" is what runs along the bottom: a date, a category or a number. "y" is one to four columns that hold numbers.
+- Use only the column names above, written exactly as they are.
+- Choose "bar" to compare categories, "line" for something over time or in order, "scatter" for one number against another, "area" for a total over time, "step" for a level that changes at moments.
+- You are not shown the data and must not write any values. You only choose columns.
+- If no chart can be drawn from these columns (for example none holds numbers), answer {"cannot": "why, in one sentence"}.`
+}
+
+/** A chart plan read from a model's answer: every name has to be a column that is there. */
+export function readChartPlan(raw: unknown, columns: readonly Pick<Column, 'name' | 'type'>[]): { plan: ChartPlan | null; problems: string[] } {
+  const problems: string[] = []
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return { plan: null, problems: ['The answer has to be one JSON object.'] }
+  const r = raw as Record<string, unknown>
+  const named = (value: unknown): string | null => {
+    if (typeof value !== 'string') return null
+    const wanted = value.trim().toLowerCase()
+    return columns.find((one) => one.name.toLowerCase() === wanted)?.name ?? null
+  }
+  const listed = columns.map((one) => one.name).join(', ')
+  const x = named(r.x)
+  if (!x) problems.push(`"x" has to be one of the columns: ${listed}. It was "${typeof r.x === 'string' ? r.x.slice(0, 60) : 'missing'}".`)
+  const wantedY = (Array.isArray(r.y) ? r.y : [r.y]).filter((one) => one !== undefined && one !== null).slice(0, 4)
+  const y: string[] = []
+  for (const one of wantedY) {
+    const found = named(one)
+    if (!found) problems.push(`"y" names "${typeof one === 'string' ? one.slice(0, 60) : '?'}", which is not one of the columns: ${listed}.`)
+    else if (!y.includes(found) && found !== x) y.push(found)
+  }
+  if (wantedY.length === 0) problems.push('"y" has to name at least one column to draw.')
+  else if (y.length === 0 && problems.length === 0) problems.push('"y" has to name a column other than the one along the bottom.')
+  const kind = typeof r.kind === 'string' ? r.kind.trim().toLowerCase() : ''
+  const chosen = (CHART_KINDS as readonly string[]).includes(kind) ? (kind as ChartPlan['kind']) : 'line'
+  return { plan: problems.length === 0 && x ? { x, y, kind: chosen } : null, problems }
+}
+
 export interface GenerateOutcome {
   body: ArtifactBody | null
   intent: CreationIntent | null
@@ -61,7 +119,13 @@ export interface GenerateOutcome {
 }
 
 const REQUEST_TIMEOUT_MS = 90_000
+/** How long the whole walk for a quick question may take, every key and model together. */
+const QUICK_DEADLINE_MS = 7_000
+/** What a request that the person stopped comes back as. One sentence, the same everywhere, so a caller can tell. */
+export const STOPPED = 'Stopped.'
 const MAX_TOKENS = 6000
+/** Characters of the conversation handed over as material. Past this the request itself would not fit. */
+const CONTEXT_LIMIT = 14_000
 
 /** What the model is told when it is handed something that exists and asked to change it. */
 export function reviseInstructions(kind: 'document' | 'diagram' | 'code', language = ''): string {
@@ -117,50 +181,101 @@ Rules:
 - Write the document or the columns completely. Do not describe what you would write; write it.`
 }
 
+/** The planner's own warning about rows a model wrote. Dropped when the rows turn out to be the person's figures. */
+const EXAMPLE_ROWS_WARNING = /example rows? (was|were) written by a model/
+
+/**
+ * How many of the numbers in a table's rows are in what the person gave.
+ *
+ * "Use these revenues: 1200, 1800, 1500" and a model that writes those into rows has copied, not invented -- and a
+ * card that calls the person's own figures "examples, not records of anything real" is wrong about the one thing it
+ * exists to be right about. A number is theirs only if it is in their words or their material, digit for digit
+ * (thousands separators aside). Anything else stays labelled as a model's.
+ */
+export function figuresGiven(rows: readonly (readonly unknown[])[], given: string): { numbers: number; found: number } {
+  const said = new Set<number>()
+  for (const match of given.matchAll(/\d[\d,]*(?:\.\d+)?/g)) {
+    const value = Number(match[0].replace(/,/g, ''))
+    if (Number.isFinite(value)) said.add(value)
+  }
+  let numbers = 0
+  let found = 0
+  for (const row of rows) {
+    for (const cell of row) {
+      const text = typeof cell === 'number' ? String(cell) : typeof cell === 'string' ? cell.trim() : ''
+      if (!/^-?\d[\d,]*(?:\.\d+)?$/.test(text)) continue
+      numbers += 1
+      if (said.has(Math.abs(Number(text.replace(/,/g, ''))))) found += 1
+    }
+  }
+  return { numbers, found }
+}
+
 export class ArtifactGeneration {
   private readonly o: GenerationOptions
   private sequence = 0
+  /** The key that last answered a quick question, per service, so refused keys are not walked past every time. */
+  private readonly goodKey: Record<'groq' | 'mistral', number> = { groq: 0, mistral: 0 }
 
   constructor(options: GenerationOptions) {
     this.o = options
   }
 
-  async generate(request: string): Promise<GenerateOutcome> {
+  /**
+   * `context` is material from the conversation the request leans on -- "make a report from this" -- handed to the
+   * model as material and nothing more. `signal` stops it: a stopped request comes back as `failed: STOPPED`.
+   */
+  async generate(request: string, options: { context?: string; signal?: AbortSignal; kind?: ArtifactKindId } = {}): Promise<GenerateOutcome> {
     const asked = String(request ?? '').trim().slice(0, PLAN_LIMITS.request)
     const attempts: GenerateOutcome['attempts'] = []
     if (asked === '') return { body: null, intent: null, notes: [], problems: [{ severity: 'error', message: 'Say what you want made.' }], attempts, failed: null }
 
+    const material = (options.context ?? '').trim().slice(0, CONTEXT_LIMIT)
+    // When what kind of thing it is has already been settled ("a spreadsheet"), the model is told, and held to it below.
+    const settled = options.kind ? `\n\nIt has to be a ${options.kind}: answer with "kind": "${options.kind}".` : ''
+    const base = material === '' ? `${asked}${settled}` : `${asked}${settled}
+
+Material from the conversation, to make it from. Use what is here; do not add facts or figures that are not, and write each number as it is there: never add a currency sign or a unit to a number that has none.
+<<<
+${material}
+>>>`
     let complaint: string | null = null
     let lastProblems: Problem[] = []
     for (let round = 0; round < 2; round++) {
       const user =
         complaint === null
-          ? asked
-          : `${asked}
+          ? base
+          : `${base}
 
 The last answer did not work. What was wrong:
 ${complaint}
 
 Answer again, fixing those. Everything else about the format is the same.`
-      const answer = await (this.o.ask ? this.o.ask(instructions(), user) : this.askJson(instructions(), user))
+      const answer = await (this.o.ask ? this.o.ask(instructions(), user) : this.askJson(instructions(), user, options.signal))
       if ('failed' in answer) {
         attempts.push({ said: '(nothing came back)', problems: [answer.failed] })
         return { body: null, intent: null, notes: [], problems: [{ severity: 'error', message: answer.failed }], attempts, failed: answer.failed }
       }
 
       const read = readProposal(answer.json)
+      // The kind that was settled on is not the model's to change.
+      if (read.proposal && options.kind && read.proposal.intent.kind !== options.kind) {
+        read.problems.push({ severity: 'error', message: `"kind" has to be "${options.kind}"; it was "${read.proposal.intent.kind}".` })
+        read.proposal = null
+      }
       lastProblems = read.problems
       attempts.push({ said: JSON.stringify(answer.json).slice(0, 300), problems: read.problems.map((p) => `${p.severity}: ${p.message}`) })
 
       if (read.proposal && buildable(read.problems)) {
-        const made = this.materialise(read.proposal, asked)
+        const made = this.materialise(read.proposal, asked, `${asked}\n${material}`)
         if ('error' in made) {
           lastProblems = [...read.problems, { severity: 'error', message: made.error }]
           attempts[attempts.length - 1].problems.push(`error: ${made.error}`)
           complaint = `- ${made.error}`
           continue
         }
-        const warnings = read.problems.filter((p) => p.severity === 'warning').map((p) => p.message)
+        // Rows copied out of what the person gave are not examples, and are not called examples a second time.
+        const warnings = read.problems.filter((p) => p.severity === 'warning' && !(made.copied && EXAMPLE_ROWS_WARNING.test(p.message))).map((p) => p.message)
         return { body: made.body, intent: read.proposal.intent, notes: [...made.notes, ...warnings], problems: read.problems, attempts, failed: null }
       }
 
@@ -180,7 +295,7 @@ Answer again, fixing those. Everything else about the format is the same.`
    * object from an original. The kind and the title are Orbis's, not the model's: it is asked to change the content,
    * and an answer that tries to turn a document into a table is read as a document or refused.
    */
-  async revise(kind: 'document' | 'diagram' | 'code', title: string, current: string, request: string, language = ''): Promise<GenerateOutcome> {
+  async revise(kind: 'document' | 'diagram' | 'code', title: string, current: string, request: string, language = '', signal?: AbortSignal): Promise<GenerateOutcome> {
     const asked = request.trim().slice(0, 2000)
     const attempts: GenerateOutcome['attempts'] = []
     if (asked === '') return { body: null, intent: null, notes: [], problems: [{ severity: 'error', message: 'Say what you want changed.' }], attempts, failed: null }
@@ -203,7 +318,7 @@ The last answer did not work. What was wrong:
 ${complaint}
 
 Answer again, fixing those. Everything else about the format is the same.`
-      const answer = await (this.o.ask ? this.o.ask(system, user) : this.askJson(system, user))
+      const answer = await (this.o.ask ? this.o.ask(system, user) : this.askJson(system, user, signal))
       if ('failed' in answer) {
         attempts.push({ said: '(nothing came back)', problems: [answer.failed] })
         return { body: null, intent: null, notes: [], problems: [{ severity: 'error', message: answer.failed }], attempts, failed: answer.failed }
@@ -235,7 +350,7 @@ Answer again, fixing those. Everything else about the format is the same.`
    * plan is read by the same validator a hand-written one goes through, then tried against the real table by
    * `check` -- so "there is no column called X" from the engine is argued with once, exactly as a malformed step is.
    */
-  async planSteps(request: string, columns: readonly Pick<Column, 'name' | 'type'>[], check: (steps: TransformStep[]) => string | null): Promise<StepsOutcome> {
+  async planSteps(request: string, columns: readonly Pick<Column, 'name' | 'type'>[], check: (steps: TransformStep[]) => string | null, signal?: AbortSignal): Promise<StepsOutcome> {
     const asked = request.trim().slice(0, 2000)
     const attempts: StepsOutcome['attempts'] = []
     if (asked === '') return { steps: null, problems: ['Say what you want changed.'], attempts, failed: null }
@@ -252,7 +367,7 @@ The last answer did not work. What was wrong:
 ${complaint}
 
 Answer again, fixing those. Everything else about the format is the same.`
-      const answer = await (this.o.ask ? this.o.ask(system, user) : this.askJson(system, user))
+      const answer = await (this.o.ask ? this.o.ask(system, user) : this.askJson(system, user, signal))
       if ('failed' in answer) {
         attempts.push({ said: '(nothing came back)', problems: [answer.failed] })
         return { steps: null, problems: [answer.failed], attempts, failed: answer.failed }
@@ -274,8 +389,49 @@ Answer again, fixing those. Everything else about the format is the same.`
     return { steps: null, problems: lastProblems, attempts, failed: null }
   }
 
+  /**
+   * Which columns to draw, from a sentence.
+   *
+   * The model is shown the column names and types and none of the numbers, and names an x column, the columns to draw
+   * and how. `check` is the service trying exactly that against the real table, so a column that is not there or has
+   * no numbers in it is argued with once, like any other fault. Nothing a model says here becomes a number on a chart:
+   * it chooses which of the table's own columns are drawn.
+   */
+  async planChart(request: string, columns: readonly Pick<Column, 'name' | 'type'>[], check: (plan: ChartPlan) => string | null, signal?: AbortSignal): Promise<ChartOutcome> {
+    const asked = request.trim().slice(0, 2000)
+    const attempts: ChartOutcome['attempts'] = []
+    const system = chartInstructions(columns)
+    let complaint: string | null = null
+    let lastProblems: string[] = []
+    for (let round = 0; round < 2; round++) {
+      const base = asked === '' ? 'Draw the chart that shows this table best.' : asked
+      const user = complaint === null ? base : `${base}\n\nThe last answer did not work. What was wrong:\n${complaint}\n\nAnswer again, fixing those. Everything else about the format is the same.`
+      const answer = await (this.o.ask ? this.o.ask(system, user) : this.askJson(system, user, signal, 600))
+      if ('failed' in answer) {
+        attempts.push({ said: '(nothing came back)', problems: [answer.failed] })
+        return { plan: null, problems: [answer.failed], attempts, failed: answer.failed }
+      }
+      const cannot = typeof answer.json.cannot === 'string' ? answer.json.cannot.trim().slice(0, 300) : ''
+      if (cannot !== '' && typeof answer.json.x !== 'string') {
+        attempts.push({ said: JSON.stringify(answer.json).slice(0, 300), problems: [cannot] })
+        return { plan: null, problems: [`That chart cannot be drawn from this table: ${cannot}`], attempts, failed: null }
+      }
+      const read = readChartPlan(answer.json, columns)
+      const engine = read.plan ? check(read.plan) : null
+      lastProblems = engine ? [engine] : read.problems
+      attempts.push({ said: JSON.stringify(answer.json).slice(0, 300), problems: lastProblems })
+      if (read.plan && lastProblems.length === 0) return { plan: read.plan, problems: [], attempts, failed: null }
+      complaint = lastProblems.map((one) => `- ${one}`).join('\n')
+    }
+    return { plan: null, problems: lastProblems, attempts, failed: null }
+  }
+
   /** The checked proposal, built with the deterministic code a pasted artifact goes through. */
-  private materialise(proposal: Exclude<ReturnType<typeof readProposal>['proposal'], null>, asked: string): { body: ArtifactBody; notes: string[] } | { error: string } {
+  private materialise(
+    proposal: Exclude<ReturnType<typeof readProposal>['proposal'], null>,
+    asked: string,
+    given = asked
+  ): { body: ArtifactBody; notes: string[]; copied?: boolean } | { error: string } {
     const source = `Orion, asked for: ${asked.slice(0, 160)}`
     if (proposal.table) {
       const table = buildTable(
@@ -289,8 +445,14 @@ Answer again, fixing those. Everything else about the format is the same.`
       )
       if (isDataError(table)) return { error: `The table could not be built: ${table.message}` }
       const notes = ['The columns were chosen by a model from your request.']
-      if (proposal.table.rows.length > 0) notes.push('The rows are examples written by a model. They are not records of anything real.')
-      return { body: { kind: 'table', table }, notes }
+      // Whose numbers are in the rows: the person's own, written out, or a model's, made up as examples. Decided by
+      // looking, not by asking the model: a number counts as theirs only if it is in what they gave.
+      const figures = figuresGiven(proposal.table.rows, given)
+      const copied = figures.numbers > 0 && figures.found === figures.numbers
+      if (copied) notes.push('The rows were written out by a model from what you gave. Every number in them is one you gave; check that each is in the right place.')
+      else if (figures.found > 0) notes.push(`${figures.found} of the ${figures.numbers} numbers in the rows are ones you gave. The rest were written by a model: treat them as examples, not records.`)
+      else if (proposal.table.rows.length > 0) notes.push('The rows are examples written by a model. They are not records of anything real.')
+      return { body: { kind: 'table', table }, notes, copied }
     }
     if (proposal.diagram) {
       const diagram = flowToArtifact({ title: proposal.intent.title, nodes: proposal.diagram.nodes, edges: proposal.diagram.edges })
@@ -322,13 +484,87 @@ Answer again, fixing those. Everything else about the format is the same.`
   }
 
   /**
+   * One short question with one short JSON answer, quickly: which kind of request is this message?
+   *
+   * Its own walk, not `askJson`. That one starts with the largest model and gives each attempt a minute and a half,
+   * which is right for writing a report and wrong for a question asked before every reply. This one asks the small
+   * models, tells them not to deliberate, and has ONE deadline for the whole walk -- a classification that has not
+   * come back in a few seconds is not coming back in time to be useful, and the reply should not wait on it. The key
+   * that last answered is tried first, so a run of refused keys is paid for once and not on every message.
+   *
+   * `{ failed }` here never reaches a person. The caller treats it as "could not tell" and carries on with an
+   * ordinary reply.
+   */
+  async askQuick(system: string, user: string, signal?: AbortSignal): Promise<Asked> {
+    if (this.o.ask) return this.o.ask(system, user)
+    if (signal?.aborted) return { failed: STOPPED }
+    const groq = await this.o.apiKeys()
+    const mistral = this.o.mistralKeys?.() ?? []
+    const ladder: { provider: 'groq' | 'mistral'; model: string }[] = [
+      ...(groq.length ? [{ provider: 'groq' as const, model: 'openai/gpt-oss-20b' }] : []),
+      ...(mistral.length ? [{ provider: 'mistral' as const, model: 'ministral-8b-2512' }, { provider: 'mistral' as const, model: 'ministral-3b-2512' }] : [])
+    ]
+    if (!ladder.length) return { failed: 'Orion is not set up on this computer.' }
+    const deadline = AbortSignal.timeout(QUICK_DEADLINE_MS)
+    const both = signal ? AbortSignal.any([deadline, signal]) : deadline
+    let last = 'Orion could not be reached.'
+    for (const choice of ladder) {
+      const keys = choice.provider === 'groq' ? groq : mistral
+      const start = this.goodKey[choice.provider] % keys.length
+      // At most four keys per model: past that the deadline is the limit anyway, and a fifth refused key says nothing new.
+      for (let i = 0; i < Math.min(keys.length, 4); i++) {
+        const at = (start + i) % keys.length
+        let res: Response
+        try {
+          res = await this.o.fetchFn(`${PROVIDERS[choice.provider].baseUrl}/chat/completions`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${keys[at]}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model: choice.model,
+              ...(choice.provider === 'groq' ? { max_completion_tokens: 700, reasoning_effort: 'low' } : { max_tokens: 700 }),
+              temperature: 0,
+              response_format: { type: 'json_object' },
+              messages: [
+                { role: 'system', content: system },
+                { role: 'user', content: user }
+              ]
+            }),
+            signal: both
+          })
+        } catch {
+          if (signal?.aborted) return { failed: STOPPED }
+          if (deadline.aborted) return { failed: 'Orion took too long to say what was being asked for.' }
+          continue
+        }
+        if (!res.ok) {
+          last = `Orion could not answer (it returned ${res.status}).`
+          continue
+        }
+        try {
+          const payload = (await res.json()) as { choices?: { message?: { content?: string } }[] }
+          const parsed: unknown = JSON.parse(stripFences(String(payload.choices?.[0]?.message?.content ?? '')))
+          if (parsed && typeof parsed === 'object') {
+            this.goodKey[choice.provider] = at
+            return { json: parsed as Record<string, unknown> }
+          }
+        } catch {
+          // Not JSON: the next key or model may do better, within the same deadline.
+        }
+        last = 'Orion answered, but not with something Orbis could read.'
+      }
+    }
+    return { failed: last }
+  }
+
+  /**
    * One request for one JSON answer, with the real reason when there is none.
    *
    * Walks the provider ladder for ordinary text, best model first, and every key for each; a key that is refused or
    * busy is skipped rather than retried. A model is sent only to its own service, with its own keys -- a Groq key at
    * Mistral's address is not a slow key, it is an authentication failure dressed as unreliability.
    */
-  private async askJson(system: string, user: string): Promise<Asked> {
+  private async askJson(system: string, user: string, signal?: AbortSignal, maxTokens = MAX_TOKENS): Promise<Asked> {
+    if (signal?.aborted) return { failed: STOPPED }
     const groq = await this.o.apiKeys()
     const mistral = this.o.mistralKeys?.() ?? []
     const choices = modelsFor('text', { groq: groq.length > 0, mistral: mistral.length > 0 })
@@ -348,7 +584,7 @@ Answer again, fixing those. Everything else about the format is the same.`
             headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
               model: choice.model,
-              ...(choice.provider === 'groq' ? { max_completion_tokens: MAX_TOKENS } : { max_tokens: MAX_TOKENS }),
+              ...(choice.provider === 'groq' ? { max_completion_tokens: maxTokens } : { max_tokens: maxTokens }),
               temperature: 0.4,
               response_format: { type: 'json_object' },
               messages: [
@@ -356,9 +592,11 @@ Answer again, fixing those. Everything else about the format is the same.`
                 { role: 'user', content: user }
               ]
             }),
-            signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+            signal: signal ? AbortSignal.any([AbortSignal.timeout(REQUEST_TIMEOUT_MS), signal]) : AbortSignal.timeout(REQUEST_TIMEOUT_MS)
           })
         } catch (err) {
+          // Stopped by the person: not a fault of the service, and not something to try the next key or model for.
+          if (signal?.aborted) return { failed: STOPPED }
           last = err instanceof Error && err.name === 'TimeoutError' ? 'Orion took too long to write it.' : 'Orion could not be reached. Check the connection and try again.'
           continue
         }

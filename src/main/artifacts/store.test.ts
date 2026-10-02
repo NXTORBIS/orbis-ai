@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ArtifactStore, RECORD_FILE, SOURCE_FILE } from './store.ts'
@@ -146,3 +146,121 @@ test('writeRecord replaces the record and leaves the files', () =>
     assert.equal((await store.readRecord('default', id))?.title, 'after')
     assert.notEqual(await store.readFile('default', id, 'content.json'), null)
   }))
+
+const busy = (code: string): NodeJS.ErrnoException => Object.assign(new Error(`${code}: operation not permitted, rename`), { code })
+
+test('a folder that is busy for a moment is waited for, and the version is written', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'orbis-artifacts-'))
+  try {
+    let refusals = 3
+    const waited: number[] = []
+    const store = new ArtifactStore({
+      userData: dir,
+      // Something else has the new files open: the first three tries at any rename are refused.
+      rename: async (from, to) => {
+        if (refusals > 0) {
+          refusals -= 1
+          throw busy(refusals % 2 === 0 ? 'EPERM' : 'EBUSY')
+        }
+        await rename(from, to)
+      },
+      wait: async (ms) => {
+        waited.push(ms)
+      }
+    })
+    const id = makeArtifactId('1'.repeat(32))
+    await store.write('default', record(id, 'First'), [{ name: SOURCE_FILE, bytes: bytes('{}') }, { name: 'content.json', bytes: bytes('[]') }])
+    assert.deepEqual(waited, [15, 30, 60], 'it waited a little longer each time, and stopped as soon as the rename went through')
+    assert.equal((await store.readRecord('default', id))?.title, 'First')
+
+    // And the second version, where the old folder is moved away first: the same patience, the same result.
+    refusals = 2
+    await store.write('default', record(id, 'Second', makeVersionId('b'.repeat(32)), 2), [{ name: SOURCE_FILE, bytes: bytes('{}') }, { name: 'content.json', bytes: bytes('[1]') }])
+    assert.equal((await store.readRecord('default', id))?.title, 'Second')
+    assert.equal(new TextDecoder().decode((await store.readVersionFile('default', id, makeVersionId('a'.repeat(32)), 'content.json'))!), '[]', 'the version before is kept')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('a folder that stays busy is reported, and what was there before is still there', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'orbis-artifacts-'))
+  try {
+    let refuse = false
+    let tries = 0
+    const store = new ArtifactStore({
+      userData: dir,
+      rename: async (from, to) => {
+        // Only the new folder arriving is refused; putting the old one back is allowed.
+        if (refuse && from.endsWith('current.staging')) {
+          tries += 1
+          throw busy('EPERM')
+        }
+        await rename(from, to)
+      },
+      wait: async () => undefined
+    })
+    const id = makeArtifactId('2'.repeat(32))
+    await store.write('default', record(id, 'First'), [{ name: SOURCE_FILE, bytes: bytes('{}') }, { name: 'content.json', bytes: bytes('[]') }])
+    refuse = true
+    await assert.rejects(store.write('default', record(id, 'Second', makeVersionId('b'.repeat(32)), 2), [{ name: SOURCE_FILE, bytes: bytes('{}') }, { name: 'content.json', bytes: bytes('[1]') }]), /EPERM/)
+    assert.equal(tries, 8, 'the first try and seven more')
+    assert.equal((await store.readRecord('default', id))?.title, 'First', 'the old version is current again')
+    assert.equal(new TextDecoder().decode((await store.readFile('default', id, 'content.json'))!), '[]')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('a refusal that is not "busy" is not waited for', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'orbis-artifacts-'))
+  try {
+    let waits = 0
+    const store = new ArtifactStore({
+      userData: dir,
+      rename: async () => {
+        throw busy('ENOSPC')
+      },
+      wait: async () => {
+        waits += 1
+      }
+    })
+    await assert.rejects(store.write('default', record(makeArtifactId('3'.repeat(32))), [{ name: SOURCE_FILE, bytes: bytes('{}') }]), /ENOSPC/)
+    assert.equal(waits, 0)
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})
+
+test('a read asked for in the middle of a write sees the old version or the new one, never nothing', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'orbis-artifacts-'))
+  try {
+    let release: () => void = () => undefined
+    const held = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    let hold = false
+    const store = new ArtifactStore({
+      userData: dir,
+      rename: async (from, to) => {
+        await rename(from, to)
+        // Stop in the gap: the old current has moved away and the new one has not arrived.
+        if (hold && to.includes('versions')) await held
+      }
+    })
+    const id = makeArtifactId('4'.repeat(32))
+    await store.write('default', record(id, 'First'), [{ name: SOURCE_FILE, bytes: bytes('{}') }, { name: 'content.json', bytes: bytes('[]') }])
+    hold = true
+    const writing = store.write('default', record(id, 'Second', makeVersionId('b'.repeat(32)), 2), [{ name: SOURCE_FILE, bytes: bytes('{}') }, { name: 'content.json', bytes: bytes('[1]') }])
+    // Asked while the write is stopped in the gap.
+    const reading = Promise.all([store.readRecord('default', id), store.readFile('default', id, 'content.json')])
+    await new Promise((resolve) => setTimeout(resolve, 40))
+    release()
+    await writing
+    const [seen, content] = await reading
+    assert.equal(seen?.title, 'Second', 'the read waited for the write and saw what it wrote')
+    assert.equal(new TextDecoder().decode(content!), '[1]')
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
+})

@@ -17,6 +17,7 @@ import {
   onLayoutChanged,
   onRendered,
   onScrolled,
+  roomUnderTurn,
   settled
 } from '../../../shared/chatScroll'
 
@@ -53,6 +54,15 @@ interface Props {
 const dayKey = (ts: number): string => new Date(ts).toDateString()
 const formatDay = (ts: number): string => new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 
+/**
+ * The message inside a slot, which is the thing that has a place on the page.
+ *
+ * A slot wraps a message only so it can be found by id, and takes no space of its own (`display: contents`). It has
+ * no box: it cannot be scrolled to and its position always reads as zero. Asking the slot where it is was why a new
+ * question was not brought into view and why the reader's place was not held -- both were measuring nothing.
+ */
+const boxOf = (slot: Element | null): HTMLElement | null => (slot?.firstElementChild as HTMLElement | null) ?? null
+
 export default function ChatView(props: Props): React.JSX.Element {
   const { conversation, stream, settings } = props
   const messages = conversation?.messages ?? []
@@ -86,9 +96,10 @@ export default function ChatView(props: Props): React.JSX.Element {
    */
   const anchorOf = useCallback((el: HTMLElement): { id: string | null; anchorTop: number } => {
     const top = el.scrollTop
-    for (const node of Array.from(el.querySelectorAll<HTMLElement>('[data-msg-id]'))) {
-      if (node.offsetTop + node.offsetHeight > top) {
-        return { id: node.dataset.msgId ?? null, anchorTop: node.offsetTop }
+    for (const slot of Array.from(el.querySelectorAll<HTMLElement>('[data-msg-id]'))) {
+      const node = boxOf(slot)
+      if (node && node.offsetTop + node.offsetHeight > top) {
+        return { id: slot.dataset.msgId ?? null, anchorTop: node.offsetTop }
       }
     }
     return { id: null, anchorTop: 0 }
@@ -124,7 +135,7 @@ export default function ChatView(props: Props): React.JSX.Element {
     reflect(el)
     if (action.kind === 'none') return
     if (action.kind === 'toTurn') {
-      el.querySelector(`[data-msg-id="${CSS.escape(action.messageId)}"]`)?.scrollIntoView({ block: 'start' })
+      boxOf(el.querySelector(`[data-msg-id="${CSS.escape(action.messageId)}"]`))?.scrollIntoView({ block: 'start' })
     } else if (action.smooth) {
       el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
     } else {
@@ -141,6 +152,31 @@ export default function ChatView(props: Props): React.JSX.Element {
     setShowJump((shown) => jumpVisible(now, shown))
   }, [measure, reflect])
 
+  /**
+   * The question that was last scrolled to, which is the one given room under it.
+   *
+   * Only a question asked while this view was open. A conversation that has just been opened lands at its end, and
+   * room under its last question would be a screen of nothing to land on.
+   */
+  const tailTurn = useRef<string | null>(null)
+  const tailRef = useRef<HTMLDivElement>(null)
+
+  /** Sizes the room under the newest turn: enough for its question to reach the top, and no more. */
+  const fitTail = useCallback((el: HTMLElement): void => {
+    const tail = tailRef.current
+    const inner = tail?.parentElement
+    if (!tail || !inner) return
+    const question = tailTurn.current ? boxOf(el.querySelector(`[data-msg-id="${CSS.escape(tailTurn.current)}"]`)) : null
+    let room = 0
+    if (question) {
+      // From the top of the question to the end of the content, with the space kept under the last message.
+      const padding = inner.offsetTop + inner.offsetHeight - (tail.offsetTop + tail.offsetHeight)
+      room = roomUnderTurn(el.clientHeight, tail.offsetTop - question.offsetTop + padding)
+    }
+    // Written only when it changes: a write is a layout, and this runs for every piece of a reply.
+    if (tail.offsetHeight !== room) tail.style.height = `${room}px`
+  }, [])
+
   useLayoutEffect(() => {
     const el = scrollRef.current
     if (!el) return
@@ -148,9 +184,13 @@ export default function ChatView(props: Props): React.JSX.Element {
       conversationId: conversation?.id ?? null,
       lastUserId: messages.findLast((m) => m.role === 'user')?.id ?? null
     })
+    if (action.kind === 'toTurn') tailTurn.current = action.messageId
+    else if (state.conversationId !== scroll.current.conversationId) tailTurn.current = null
     scroll.current = state
+    // Before the move, so the move has somewhere to go.
+    fitTail(el)
     perform(el, action)
-  }, [conversation, messages, perform])
+  }, [conversation, messages, perform, fitTail])
 
   /**
    * The page changing shape for reasons that are not new messages: the window resizing, the sidebar opening, an image
@@ -165,13 +205,13 @@ export default function ChatView(props: Props): React.JSX.Element {
     measure(el)
     const observer = new ResizeObserver(() => {
       const before = was.current
+      // The answer grew, or the window changed size: the room under the turn is whatever is still needed.
+      fitTail(el)
       const action = onLayoutChanged(scroll.current)
       if (action.kind === 'none') {
         // Only the same message can be compared with itself. If the one the reader was looking at has gone -- a
         // conversation switched, a message deleted -- there is nothing to hold still and nothing is moved.
-        const node = before.id
-          ? el.querySelector<HTMLElement>(`[data-msg-id="${CSS.escape(before.id)}"]`)
-          : null
+        const node = before.id ? boxOf(el.querySelector(`[data-msg-id="${CSS.escape(before.id)}"]`)) : null
         const next = node
           ? keepAnchored(before, { anchorTop: node.offsetTop }, el.scrollHeight - el.clientHeight)
           : null
@@ -201,7 +241,7 @@ export default function ChatView(props: Props): React.JSX.Element {
       watcher.disconnect()
       observer.disconnect()
     }
-  }, [measure, perform, conversation?.id])
+  }, [measure, perform, fitTail, conversation?.id])
 
   /**
    * A scroll happened. Whose it was is decided by position, then acted on.
@@ -321,6 +361,7 @@ export default function ChatView(props: Props): React.JSX.Element {
               </div>
             </Fragment>
           ))}
+          <div className="messages-tail" ref={tailRef} aria-hidden="true" />
         </div>
       </div>
       <ChatRail messages={messages} scrollRef={scrollRef} userName={settings?.userName ?? 'You'} />

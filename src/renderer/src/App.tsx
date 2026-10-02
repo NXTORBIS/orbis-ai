@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Attachment, ChatMessage, ChatRequest, Conversation, Settings, SettingsUpdate, StreamEvent } from '../../shared/types'
 import { isRefusal } from '../../shared/account'
-import { IMAGE_GEN_STATUS } from '../../shared/types'
+import { IMAGE_GEN_STATUS, isArtifactStatus } from '../../shared/types'
 import { themeBase } from '../../shared/themes'
 import { DEFAULT_MODEL, MODELS, isKnownModel, modelLabel } from '../../shared/models'
 import { AUTO_MODEL } from '../../shared/modelRoute'
@@ -36,6 +36,7 @@ import UrlBar from './components/UrlBar'
 import ControlPrompts from './components/ControlPrompts'
 import { useControlRendered } from './lib/browserControl'
 import { OPEN_URL_EVENT } from './lib/openInBrowser'
+import { OPEN_ARTIFACT_EVENT, artifactChanged, type OpenArtifactDetail } from './lib/artifactEvents'
 import type { OpenUrlDetail } from './lib/openInBrowser'
 import SystemBar from './components/SystemBar'
 import ImageEditor from './components/ImageEditor'
@@ -115,6 +116,8 @@ export default function App(): React.JSX.Element {
   const [feature, setFeature] = useState<FeatureId | null>(null)
   /** What was typed after /create, handed to the Create screen. The token makes the same words asked twice two requests. */
   const [createAsked, setCreateAsked] = useState<{ text: string; token: number } | null>(null)
+  /** Which kept artifact a card in the conversation asked the Create screen to open. The token makes a second press a second request. */
+  const [createOpenAt, setCreateOpenAt] = useState<{ artifactId: string; token: number } | null>(null)
   /** Everything the user has personalised, applied to the window; an untouched Orbis is left exactly as it is. */
   const experience = useExperience()
 
@@ -490,7 +493,8 @@ export default function App(): React.JSX.Element {
           }
           case 'status':
             setStatus(event.message)
-            if (event.message === IMAGE_GEN_STATUS) break
+            // What Orbis is doing right now is progress, not a warning: it is shown beside the reply and not logged.
+            if (event.message === IMAGE_GEN_STATUS || isArtifactStatus(event.message)) break
             if (!COUNTDOWN.test(event.message)) {
               logActivity(event.message, 'warn')
             } else if (!countdownLogged) {
@@ -522,6 +526,18 @@ export default function App(): React.JSX.Element {
           case 'research':
             patchAssistant((m) => ({ ...m, research: event.research }))
             break
+          case 'artifact': {
+            // Only a pointer is kept on the message; the card reads the artifact itself. The same version shown
+            // twice in one reply is one card.
+            const { artifact } = event
+            patchAssistant((m) => ({
+              ...m,
+              artifacts: [...(m.artifacts ?? []).filter((one) => one.ref.versionId !== artifact.ref.versionId || one.action !== artifact.action), artifact].slice(-12)
+            }))
+            // Cards higher up that show the same thing read it again, and say they are no longer the newest.
+            artifactChanged(artifact.ref.artifactId)
+            break
+          }
           case 'done':
             finish()
             void requestSuggestions(conversationId, assistant.id)
@@ -543,7 +559,10 @@ export default function App(): React.JSX.Element {
         requestId,
         model: conversation.model,
         messages: history,
-        webSearch
+        webSearch,
+        // So what is made in this chat remembers the chat, and "add a chart to it" can find what "it" is.
+        conversationId,
+        incognito: Boolean(conversation.incognito)
       }
       window.api.sendChat(request).catch((err: unknown) => {
         finish({ error: err instanceof Error ? err.message : String(err) })
@@ -890,7 +909,11 @@ export default function App(): React.JSX.Element {
 
   const newChat = useCallback(() => startChat(false), [startChat])
 
-  const closeFeature = useCallback(() => setFeature(null), [])
+  const closeFeature = useCallback(() => {
+    setFeature(null)
+    // Something may have been changed or removed on the screen that just closed: cards in the chat read again.
+    artifactChanged()
+  }, [])
 
   const toggleIncognito = useCallback(() => {
     const on = !(activeId ? conversationsRef.current.find((c) => c.id === activeId)?.incognito : draft.incognito)
@@ -1053,6 +1076,19 @@ export default function App(): React.JSX.Element {
     window.addEventListener(OPEN_URL_EVENT, onOpen)
     return () => window.removeEventListener(OPEN_URL_EVENT, onOpen)
   }, [openInBrowser])
+
+  // "Open" on a card in the conversation: the Create screen, with that artifact open on it.
+  useEffect(() => {
+    const onOpen = (e: Event): void => {
+      const artifactId = (e as CustomEvent<OpenArtifactDetail>).detail?.artifactId
+      if (typeof artifactId !== 'string' || artifactId === '') return
+      setImagesOpen(false)
+      setCreateOpenAt({ artifactId, token: Date.now() })
+      setFeature('create')
+    }
+    window.addEventListener(OPEN_ARTIFACT_EVENT, onOpen)
+    return () => window.removeEventListener(OPEN_ARTIFACT_EVENT, onOpen)
+  }, [])
 
   useControlRendered()
 
@@ -1415,7 +1451,7 @@ export default function App(): React.JSX.Element {
               {feature === 'clipboard' && <ClipboardView onClose={closeFeature} onNotify={notify} />}
               {feature === 'workspaces' && <WorkspacesView onClose={closeFeature} onNotify={notify} />}
               {feature === 'schedules' && <SchedulesView onClose={closeFeature} onNotify={notify} />}
-              {feature === 'create' && <CreateView onClose={closeFeature} onNotify={notify} asked={createAsked} />}
+              {feature === 'create' && <CreateView onClose={closeFeature} onNotify={notify} asked={createAsked} openAt={createOpenAt} />}
             </Suspense>
           )}
         </main>

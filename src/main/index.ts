@@ -146,8 +146,8 @@ import { CodeStore } from './pages/codeStore'
 import { ArtifactStore } from './artifacts/store'
 import { ArtifactService } from './artifacts/service'
 import { ArtifactGeneration } from './artifacts/generation'
-import { registerArtifactCapabilities } from './artifacts/capabilities'
-import { chooseDestinationWith, chooseSourceWith, registerArtifactsIpc, renderPdfWith, renderPngWith } from './artifacts/ipc'
+import { ArtifactChat, type ArtifactChatTurn } from './artifacts/chat'
+import { chooseDestinationWith, chooseSourceWith, downloadsDirWith, registerArtifactsIpc, renderPdfWith, renderPngWith, revealWith } from './artifacts/ipc'
 import { GeneratedStore } from './pages/generatedStore'
 import { OPERATION_CAPABILITIES } from './pages/service'
 import { FxRates } from './markets/fx'
@@ -324,6 +324,11 @@ let vaultForPanel: SecretsDeps | null = null
 /** What the Chromium side panel's Workflows tab needs beyond the engine: remembered secrets and Orion drafts. */
 let workflowExtrasForPanel: { store: WorkflowStore; draft(instruction: string, current: Workflow | null): Promise<{ workflow: Workflow; issues: WorkflowIssue[] }> } | null = null
 let workspacesForChat: WorkspacesStore | null = null
+/**
+ * The Creation Engine, once it exists, so that asking for a file in the chat makes one. Null until then, and the chat
+ * treats null as "answer in words", the way it does for memory and schedules.
+ */
+let artifactsForChat: { service: ArtifactService; chat: ArtifactChat; profileId: () => Promise<string> } | null = null
 /** The app's search-box suggestions and local speech to text, lent to the pages in the Orbis browser. */
 let appServicesForBrowser: AppServicesDeps | null = null
 /** The sidebar arrangement store, for the sidebar inside the built-in Orbis pages of the browser. */
@@ -554,7 +559,20 @@ function createWindow(): BrowserWindow {
    * hidden until somebody asks for it. It still exists, so returning to it is instant rather than a cold start.
    */
   win.once('ready-to-show', () => {
-    if (!startInBrowser) win.show()
+    if (startInBrowser) return
+    /*
+     * A development run that must not take the screen. The window is shown, so it draws exactly as it really does,
+     * but it is not brought to the front, is not given the keyboard, and is placed where it covers nothing. This is
+     * for checks that drive the window from outside while somebody is working on the same computer: a window that
+     * appears over their work and takes their typing is a way of controlling their machine, and they did not ask for
+     * it. Never in a packaged Orbis.
+     */
+    if (!app.isPackaged && process.env.ORBIS_QUIET_WINDOW === '1') {
+      win.setPosition(-20000, -20000)
+      win.showInactive()
+      return
+    }
+    win.show()
   })
   // The window's real fullscreen state, however it changes (F11, Esc, the OS).
   win.on('enter-full-screen', () => win.webContents.send('window:fullscreen-changed', true))
@@ -861,14 +879,55 @@ ${block}`
       let plan: Extract<ChatIntent, { kind: 'answer' }> | null = null
       /** A question or command about ad blocking. */
       let blocking: Extract<ChatIntent, { kind: 'adblock' }> | null = null
+      /** What an artifact made in this conversation holds, when the message is a question about it. */
+      let artifactContext: string | null = null
       // Picture requests go to the image generator and browser tasks to the browser agent, however they're worded.
       if (last?.role === 'user' && request.images !== false) {
+        /*
+         * "Create a PDF about climate change", "add a monthly total", "export it as Word": a request for something
+         * Orbis keeps as a file. Decided here, in the chat, beside the picture-and-browser question so the reply waits
+         * for the slower of the two and not for both. Never from the address bar and never from the browser's own
+         * assistant: those two are for asking and for the page.
+         */
+        const artifactTurn: ArtifactChatTurn | null =
+          artifactsForChat && !request.ask && !last.browserTask
+            ? {
+                profileId: await artifactsForChat.profileId(),
+                message: last.content,
+                attachments: (last.attachments ?? []).filter((one) => one.type !== 'image' && typeof one.content === 'string').map((one) => ({ name: String(one.name).slice(0, 200), content: one.content })),
+                history: messages.slice(0, -1).map((one) => ({
+                  role: one.role,
+                  content: typeof one.content === 'string' ? one.content : '',
+                  // Only the id is taken from what the window sent. The library is asked what it really is.
+                  artifactIds: Array.isArray(one.artifacts) ? one.artifacts.map((a) => a?.ref?.artifactId).filter((id): id is string => typeof id === 'string') : []
+                })),
+                conversationId: request.conversationId,
+                incognito: request.incognito === true,
+                signal: controller.signal,
+                emit
+              }
+            : null
+        const deciding = artifactTurn && artifactsForChat ? artifactsForChat.chat.decide(artifactTurn).catch(() => null) : Promise.resolve(null)
         // Recognising pictures and browser tasks is an extra: if it fails, the message still gets a normal reply.
-        const detected = await detectIntent(messages, openPage).catch((err: unknown): ChatIntent | null => {
-          console.error('[chat] intent detection failed', err)
-          const phrase = detectImageGenRequest(last.content)
-          return phrase ? { kind: 'image', prompt: phrase } : null
-        })
+        const [detected, wanted] = await Promise.all([
+          detectIntent(messages, openPage).catch((err: unknown): ChatIntent | null => {
+            console.error('[chat] intent detection failed', err)
+            const phrase = detectImageGenRequest(last.content)
+            return phrase ? { kind: 'image', prompt: phrase } : null
+          }),
+          deciding
+        ])
+        if (wanted === 'stopped' || controller.signal.aborted) return emit({ type: 'aborted' })
+        // Ad blocking is its own subject. A browser task wins only when the message is about the page and names no
+        // artifact; otherwise a request for a file is a request for a file, even one worded like a drawing.
+        const aboutThePage = detected?.kind === 'browse' && wanted && !wanted.target && !wanted.source && /\b(page|site|website|tab|browser|link|url)\b/i.test(last.content)
+        if (wanted && artifactTurn && artifactsForChat && detected?.kind !== 'adblock' && !aboutThePage) {
+          const outcome = await artifactsForChat.chat.carryOut(wanted, artifactTurn)
+          if (outcome.handled === 'stopped' || controller.signal.aborted) return emit({ type: 'aborted' })
+          if (outcome.handled === 'failed') return emit({ type: 'error', message: outcome.message })
+          if (outcome.handled === 'done') return emit({ type: 'done', model: request.model, truncated: false })
+          if (outcome.handled === 'context') artifactContext = outcome.context
+        }
         /**
          * What the browser's floating assistant does with a message.
          *
@@ -885,7 +944,10 @@ ${block}`
             : detected
           : last.browserTask && detected?.kind !== 'browse' && detected?.kind !== 'adblock' && !readsThePage
             ? { kind: 'browse', task: last.content, mode: 'once', resume: false }
-            : detected
+            : // A question about something made here is answered from it, not turned into a picture or a browser task.
+              artifactContext && (detected?.kind === 'image' || detected?.kind === 'browse')
+              ? null
+              : detected
         if (controller.signal.aborted) return emit({ type: 'aborted' })
         if (intent?.kind === 'browse') {
           // "Continue" picks up the conversation's unfinished automation with everything it already processed.
@@ -979,6 +1041,11 @@ ${block}`
         if (!research?.sources.length && earlier && (includePage || plan)) emit({ type: 'research', research: { ...earlier, reused: true } })
         // Kept inside the user message so the sources sit right next to the question they answer.
         if (context) messages = [...previous, { ...last, content: `${context}\n\nQuestion: ${last.content}` }]
+      }
+      // A question about an artifact: what it holds goes in front of the question, figures already worked out.
+      if (artifactContext && last?.role === 'user') {
+        const asked = messages.at(-1)
+        if (asked) messages = [...messages.slice(0, -1), { ...asked, content: `${artifactContext}\n\n${asked.content.includes('Question: ') ? asked.content : `Question: ${asked.content}`}` }]
       }
       // A long conversation: its older part goes to Orion as a short summary rather than being silently left out.
       const compression = request.ask ? null : planCompression(messages)
@@ -1865,6 +1932,11 @@ if (!app.requestSingleInstanceLock()) {
      * this feature reports a file as made or saved until it has been read back from disk and checked.
      */
     const artifactStore = new ArtifactStore({ userData: app.getPath('userData') })
+    const artifactGeneration = new ArtifactGeneration({
+      apiKeys: async () => GROQ_API_KEYS,
+      mistralKeys: () => MISTRAL_API_KEYS,
+      fetchFn: (url, init) => net.fetch(url, init)
+    })
     const artifacts = new ArtifactService({
       store: artifactStore,
       now: () => Date.now(),
@@ -1873,22 +1945,17 @@ if (!app.requestSingleInstanceLock()) {
       chooseSource: chooseSourceWith(() => mainWindow),
       renderPdf: renderPdfWith(),
       renderPng: renderPngWith(),
-      generation: new ArtifactGeneration({
-        apiKeys: async () => GROQ_API_KEYS,
-        mistralKeys: () => MISTRAL_API_KEYS,
-        fetchFn: (url, init) => net.fetch(url, init)
-      })
+      downloadsDir: downloadsDirWith(),
+      reveal: revealWith(),
+      generation: artifactGeneration
     })
     registerArtifactsIpc({
       service: artifacts,
       getWindow: () => mainWindow,
       profileId: async () => (await profilesStore.active()).id
     })
-    // So the Orb can make things too, through the same door, with the same checks.
-    registerArtifactCapabilities(browserControl.control, {
-      service: artifacts,
-      profileId: async () => (await profilesStore.active()).id
-    })
+    // Making things belongs to the chat. The Orb is for the browser, so nothing here is registered with it.
+    artifactsForChat = { service: artifacts, chat: new ArtifactChat({ service: artifacts, generation: artifactGeneration }), profileId: async () => (await profilesStore.active()).id }
     app.on('before-quit', () => {
       void pagesStore.flush()
       void generatedStore.flush()

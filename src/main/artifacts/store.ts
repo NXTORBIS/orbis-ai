@@ -28,6 +28,16 @@ import { isArtifactId, isVersionId, readRecord, type ArtifactRecord } from '../.
  *
  * An artifact written before versions existed has its files directly in its own folder. It is still read, from
  * there, and the first write that touches it moves it into the new shape.
+ *
+ * Two things follow from every step being a rename, and both are about Windows:
+ *
+ *   - **A rename is tried again when the folder is busy.** A file that has just been written is opened by whatever
+ *     watches new files -- a virus scanner, the search index -- and for a moment the folder it is in cannot be
+ *     renamed. That is not a failure of the write; it passes in milliseconds. So a refused rename waits and tries
+ *     again, a few times, before it is reported.
+ *   - **A read waits its turn.** Between the old folder moving away and the new one arriving there is no current
+ *     folder at all. A read that landed in that gap would say the artifact does not exist, and a read that had a
+ *     file open would be what stopped the rename. Reads go through the same queue as writes, so neither happens.
  */
 
 export const RECORD_FILE = 'artifact.json'
@@ -46,7 +56,16 @@ export interface StoredFile {
 
 export interface ArtifactStoreOptions {
   userData: string
+  /** Moves a file or folder. The file system's own, unless a test needs one that refuses. */
+  rename?(from: string, to: string): Promise<void>
+  /** Waits. Real time, unless a test would rather not. */
+  wait?(ms: number): Promise<void>
 }
+
+/** What Windows says when something else has the file open for a moment. Worth waiting for; nothing else is. */
+const BUSY: ReadonlySet<string> = new Set(['EPERM', 'EBUSY', 'EACCES', 'ENOTEMPTY'])
+/** How long to wait before each further try. About two seconds in all: longer than any scanner holds a small file. */
+const RETRY_AFTER_MS: readonly number[] = Object.freeze([15, 30, 60, 120, 240, 480, 960])
 
 export class ArtifactStore {
   private readonly o: ArtifactStoreOptions
@@ -65,6 +84,22 @@ export class ArtifactStore {
   private pathFor(profileId: string, artifactId: string): string {
     if (!isArtifactId(artifactId)) throw new Error('That is not an artifact id.')
     return join(this.rootFor(profileId), artifactId)
+  }
+
+  /** A rename that waits out a folder being busy. Any other refusal, and a busy that does not pass, is thrown. */
+  private async move(from: string, to: string): Promise<void> {
+    const once = this.o.rename ?? rename
+    const wait = this.o.wait ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)))
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await once(from, to)
+        return
+      } catch (err) {
+        const code = (err as NodeJS.ErrnoException | null)?.code ?? ''
+        if (!BUSY.has(code) || attempt >= RETRY_AFTER_MS.length) throw err
+        await wait(RETRY_AFTER_MS[attempt])
+      }
+    }
   }
 
   private queued<T>(path: string, work: () => Promise<T>): Promise<T> {
@@ -125,21 +160,21 @@ export class ArtifactStore {
           await mkdir(join(root, VERSIONS), { recursive: true })
           await rm(kept, { recursive: true, force: true }).catch(() => undefined)
           if (was === current) {
-            await rename(current, kept)
+            await this.move(current, kept)
           } else {
             // The old shape: files in the artifact's own folder. Moved one by one into their version folder.
             await mkdir(kept, { recursive: true })
             for (const name of await readdir(was)) {
-              if (ArtifactStore.allowed(name)) await rename(join(was, name), join(kept, name))
+              if (ArtifactStore.allowed(name)) await this.move(join(was, name), join(kept, name))
             }
           }
         }
       }
       try {
-        await rename(staging, current)
+        await this.move(staging, current)
       } catch (err) {
         // Put the old current back before reporting, so a failed write leaves what was there.
-        if (kept !== null && !(await ArtifactStore.exists(current))) await rename(kept, current).catch(() => undefined)
+        if (kept !== null && !(await ArtifactStore.exists(current))) await this.move(kept, current).catch(() => undefined)
         throw err
       }
       return current
@@ -161,8 +196,8 @@ export class ArtifactStore {
       const current = join(root, CURRENT)
       const previous = join(root, VERSIONS, previousVersionId)
       if (!(await ArtifactStore.exists(join(previous, RECORD_FILE)))) return false
-      await rm(current, { recursive: true, force: true })
-      await rename(previous, current)
+      await rm(current, { recursive: true, force: true, maxRetries: 5, retryDelay: 60 })
+      await this.move(previous, current)
       return true
     })
   }
@@ -181,7 +216,7 @@ export class ArtifactStore {
       await mkdir(dir, { recursive: true })
       const path = join(dir, RECORD_FILE)
       await writeFile(`${path}.tmp`, JSON.stringify(record), { encoding: 'utf8', mode: 0o600 })
-      await rename(`${path}.tmp`, path)
+      await this.move(`${path}.tmp`, path)
     })
   }
 
@@ -189,35 +224,43 @@ export class ArtifactStore {
   async readRecord(profileId: string, artifactId: string): Promise<ArtifactRecord | null> {
     if (!isArtifactId(artifactId)) return null
     const root = this.pathFor(profileId, artifactId)
-    try {
-      const dir = await this.currentDir(root)
-      if (dir === null) return null
-      return readRecord(JSON.parse(await readFile(join(dir, RECORD_FILE), 'utf8')))
-    } catch {
-      return null
-    }
+    return this.queued(root, async () => {
+      try {
+        const dir = await this.currentDir(root)
+        if (dir === null) return null
+        return readRecord(JSON.parse(await readFile(join(dir, RECORD_FILE), 'utf8')))
+      } catch {
+        return null
+      }
+    })
   }
 
   /** One of the current version's files, or null. Only the fixed names can be asked for. */
   async readFile(profileId: string, artifactId: string, name: string): Promise<Uint8Array | null> {
     if (!isArtifactId(artifactId) || !ArtifactStore.allowed(name)) return null
-    try {
-      const dir = await this.currentDir(this.pathFor(profileId, artifactId))
-      if (dir === null) return null
-      return new Uint8Array(await readFile(join(dir, name)))
-    } catch {
-      return null
-    }
+    const root = this.pathFor(profileId, artifactId)
+    return this.queued(root, async () => {
+      try {
+        const dir = await this.currentDir(root)
+        if (dir === null) return null
+        return new Uint8Array(await readFile(join(dir, name)))
+      } catch {
+        return null
+      }
+    })
   }
 
   /** One of an earlier version's files, or null. Both ids are checked before the path is made. */
   async readVersionFile(profileId: string, artifactId: string, versionId: string, name: string): Promise<Uint8Array | null> {
     if (!isArtifactId(artifactId) || !isVersionId(versionId) || !ArtifactStore.allowed(name)) return null
-    try {
-      return new Uint8Array(await readFile(join(this.pathFor(profileId, artifactId), VERSIONS, versionId, name)))
-    } catch {
-      return null
-    }
+    const root = this.pathFor(profileId, artifactId)
+    return this.queued(root, async () => {
+      try {
+        return new Uint8Array(await readFile(join(root, VERSIONS, versionId, name)))
+      } catch {
+        return null
+      }
+    })
   }
 
   /** Every readable record in a profile, newest first. A folder with a damaged record is skipped, not listed. */
@@ -237,7 +280,7 @@ export class ArtifactStore {
     if (!isArtifactId(artifactId)) return false
     const root = this.pathFor(profileId, artifactId)
     return this.queued(root, async () => {
-      await rm(root, { recursive: true, force: true })
+      await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 60 })
       return true
     })
   }

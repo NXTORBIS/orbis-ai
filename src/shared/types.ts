@@ -101,12 +101,44 @@ import type { Board } from './whiteboard'
 import type { Workspace, WorkspaceSummary } from './workspaces'
 import type { Profile } from './profiles'
 import type { ConfigChange, ExperienceConfig, ExperienceExport, ExperienceHealth, ImportCheck } from './experience'
+import type { ArtifactRef } from './artifacts/model'
 import type { PlanLine } from './workflowCompile'
 
 export type Role = 'user' | 'assistant'
 
 /** Status the main process sends while an image renders; the chat swaps in the mini games for it. */
 export const IMAGE_GEN_STATUS = 'Generating image…'
+
+/**
+ * What the chat says while it is making or changing something it keeps as a file. Each one is sent when that step
+ * really starts, never on a timer. Listed here so the window can tell them from a warning and keep them out of the
+ * activity log.
+ */
+export const ARTIFACT_STATUS = Object.freeze({
+  writing: 'Writing it…',
+  changing: 'Working out the change…',
+  drawing: 'Choosing what to draw…',
+  reading: 'Reading the file…',
+  building: 'Building it and checking the copy…'
+})
+
+export const isArtifactStatus = (message: string): boolean => (Object.values(ARTIFACT_STATUS) as string[]).includes(message)
+
+/**
+ * Something Orbis made, changed or drew for this reply, shown in the conversation as a card.
+ *
+ * Only a handle. The card reads the artifact itself, live, when it is shown -- so a conversation saved to disk and
+ * sent back with every message never carries a file's contents, and a card always shows the artifact as it is now.
+ */
+export interface ChatArtifact {
+  ref: ArtifactRef
+  /** What happened to it in this reply. */
+  action: 'made' | 'changed' | 'drew' | 'kept' | 'shown'
+  /** What was done, sentence by sentence, in the engine's own words. */
+  did: string[]
+  /** The file format the person asked for, when they named one: the card's first download. */
+  format?: string
+}
 
 export interface Attachment {
   name: string
@@ -144,6 +176,8 @@ export interface ChatMessage {
   automation?: AutomationState
   /** The web research this reply is based on: the actual pages Orion read, which its [n] citations point to. */
   research?: Research
+  /** What Orbis made, changed or drew for this reply. Handles only; the card reads each one live. */
+  artifacts?: ChatArtifact[]
   createdAt: number
 }
 
@@ -360,6 +394,10 @@ export interface ChatRequest {
   browser?: { url: string; title: string }
   /** Asked from the address bar (Ctrl+Enter): answered in text, with research when needed; never runs the browser or makes images. */
   ask?: boolean
+  /** The conversation this message belongs to, so what is made for it can be found again from it. */
+  conversationId?: string
+  /** An incognito chat: the conversation is not saved. What is made in it still is, and the reply says so. */
+  incognito?: boolean
 }
 
 export type StreamEvent =
@@ -377,6 +415,8 @@ export type StreamEvent =
   | { type: 'automation'; automation: AutomationState }
   /** The sources this reply is based on, sent before the answer streams. */
   | { type: 'research'; research: Research }
+  /** Something was made, changed or drawn for this reply. Sent once it has been kept and its copy checked. */
+  | { type: 'artifact'; artifact: ChatArtifact }
 
 export interface PickedFiles {
   attachments: Attachment[]

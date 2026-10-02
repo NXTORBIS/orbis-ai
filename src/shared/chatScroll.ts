@@ -206,6 +206,25 @@ export function onLayoutChanged(state: ChatScrollState): ScrollAction {
   return state.mode === 'following' ? { kind: 'toBottom', smooth: false } : { kind: 'none' }
 }
 
+/** How far below the top edge a question that was scrolled to sits. The same number the stylesheet uses. */
+export const TURN_MARGIN = 16
+
+/**
+ * How much empty room to leave under the newest turn, so its question can sit at the top of the view.
+ *
+ * A scroller can only go as far as its content. A question that has just been asked is the last thing on the page,
+ * with nothing under it yet, so "put it at the top" is impossible: it lands at the foot of the view and its answer
+ * is written out of sight below it. Room under the turn is what makes the move possible -- exactly as much as lets
+ * the question reach the top, and less as the answer fills it, until the answer is a screen long and none is left.
+ *
+ * `view` is the height of the scroller and `below` is everything from the top of the question to the end of the
+ * content, not counting this room.
+ */
+export function roomUnderTurn(view: number, below: number): number {
+  if (!Number.isFinite(view) || !Number.isFinite(below)) return 0
+  return Math.max(0, Math.round(view - below - TURN_MARGIN))
+}
+
 /**
  * What the reader is looking at: one message, and where it sat.
  *

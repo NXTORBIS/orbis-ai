@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, type BrowserWindow as BrowserWindowType, type IpcMainInvokeEvent, type NativeImage } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, shell, type BrowserWindow as BrowserWindowType, type IpcMainInvokeEvent, type NativeImage } from 'electron'
 import { randomBytes } from 'node:crypto'
 import { rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -207,6 +207,26 @@ export const renderPngWith =
       if (!win.isDestroyed()) win.destroy()
       await rm(path, { force: true }).catch(() => undefined)
     }
+  }
+
+/** The folder the system calls Downloads. Asked here so the service never needs to know what a system is. */
+export const downloadsDirWith = () => (): string => app.getPath('downloads')
+
+/**
+ * A saved file shown in its folder, or opened.
+ *
+ * Opening hands the file to whatever the system opens that kind of file with -- Word for a .docx, a PDF reader for a
+ * .pdf. It is only ever called for a file the service itself has just written, and only when a person pressed "Open".
+ */
+export const revealWith =
+  () =>
+  async (path: string, open: boolean): Promise<void> => {
+    if (!open) {
+      shell.showItemInFolder(path)
+      return
+    }
+    const problem = await shell.openPath(path)
+    if (problem !== '') throw new Error('Nothing on this computer is set to open that kind of file. It is saved; it can be opened from its folder.')
   }
 
 export function registerArtifactsIpc(o: ArtifactsIpcOptions): void {

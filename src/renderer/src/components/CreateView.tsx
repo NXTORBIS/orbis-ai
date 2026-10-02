@@ -245,15 +245,28 @@ interface TemplateEntry {
   group: string
 }
 
+/**
+ * The last request and the last "open this" the screen acted on.
+ *
+ * Kept outside the component because the screen is taken down when it closes and put up again when it opens, while
+ * the application still holds the last thing it was asked. Without this, opening Create a second time would make the
+ * thing typed after `/create` a second time.
+ */
+let lastAskedToken = 0
+let lastOpenAtToken = 0
+
 export default function CreateView({
   onClose,
   onNotify,
-  asked
+  asked,
+  openAt
 }: {
   onClose: () => void
   onNotify(message: string, kind?: NoticeKind): void
   /** A request typed into the chat as `/create ...`. The token changes each time, so the same words asked twice are made twice. */
   asked?: { text: string; token: number } | null
+  /** An artifact a card in the conversation asked to have opened here. */
+  openAt?: { artifactId: string; token: number } | null
 }): React.JSX.Element {
   const [request, setRequest] = useState('')
   const [asking, setAsking] = useState(false)
@@ -333,10 +346,19 @@ export default function CreateView({
   // What was typed after /create in the chat: put it in the box and make it, once per time it was asked.
   const askedToken = asked?.token
   useEffect(() => {
-    if (!asked || asked.text.trim() === '') return
+    if (!asked || asked.text.trim() === '' || asked.token === lastAskedToken) return
+    lastAskedToken = asked.token
     setRequest(asked.text)
     void ask(false, asked.text)
   }, [askedToken]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // "Open" on a card in the conversation: show that artifact, and bring it into view.
+  const openAtToken = openAt?.token
+  useEffect(() => {
+    if (!openAt || openAt.token === lastOpenAtToken) return
+    lastOpenAtToken = openAt.token
+    void open(openAt.artifactId).then(() => requestAnimationFrame(() => document.querySelector('.create-opened')?.scrollIntoView({ block: 'start' })))
+  }, [openAtToken]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const startFromTemplate = async (): Promise<void> => {
     if (starting || templateId === '') return

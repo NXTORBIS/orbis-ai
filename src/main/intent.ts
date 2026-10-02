@@ -60,6 +60,8 @@ const INSTRUCTIONS = [
   'Designing a logo, icon, poster or wallpaper is a picture request even when it is for Orbis itself or another brand.',
   'Browser requests ask Orbis to act on a website: open or go to a site, search on a specific site, click, scroll, fill in, sign up, add to a cart, buy, book or post something,',
   'continue working in the page that is open (for example "click the first result", "scroll down"), repeat work across many items or pages, or play a web game.',
+  'A chart, graph, plot, flowchart, diagram, spreadsheet, table, document, report, slides or any other file is made by another part of Orbis from the data or the words themselves.',
+  'It is never a picture request, however it is worded ("draw a bar chart of sales", "make a flowchart of the login steps", "turn that into a PDF"): route it as text.',
   'Text requests include questions, explanations, advice, code, writing, plans, lists, data tables, questions about images or art, and questions that only need information,',
   'even current information, or questions about how to use a website (for example "how do I draw a dragon?", "what makes a good logo?", "explain black holes", "what is the weather in Tokyo?").',
   'A short follow-up such as "make it darker", "add rain", "change the background", "make it realistic" or "turn it into a poster" edits the most recent generated image',

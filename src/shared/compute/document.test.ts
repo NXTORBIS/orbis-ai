@@ -53,7 +53,8 @@ describe('inline parsing', () => {
   })
 
   test('overlapping marks both apply to the run they cover', () => {
-    const runs = parseInline('**bold *and italic* **')
+    // Well-formed: an ending marker comes directly after the words it ends. `* **` with a space before it is not one.
+    const runs = parseInline('**bold *and italic***')
     const both = runs.find((one) => one.kind === 'text' && one.text.includes('and italic'))
     assert.ok(both && both.kind === 'text')
     assert.ok(both.marks.includes('bold'))
@@ -788,4 +789,79 @@ test('a picture on a line of its own is a figure with its caption, and reads bac
   assert.deepEqual(again.blocks.map((one) => one.kind), ['heading', 'paragraph', 'image', 'paragraph'])
   const back = again.blocks[2]
   assert.ok(back.kind === 'image' && back.caption === 'Energy by site, October' && back.source === figure.source)
+})
+
+describe('a marker is emphasis only where it can be', () => {
+  const plain = (source: string): void => {
+    const runs = parseInline(source)
+    assert.equal(inlineText(runs), source, source)
+    assert.ok(runs.every((one) => one.kind !== 'text' || one.marks.length === 0), `${source} has no emphasis in it`)
+  }
+
+  test('an underscore inside a word is an underscore', () => {
+    plain('the file_name and other_name are snake_case_words')
+    plain('Use the token ghp_A1b2C3d4E5f6G7h8I9j0K1l2M3n4O5p6 to push.')
+    plain('read my_object.some_field and the_other__one')
+    // A name wrapped in double underscores IS bold in Markdown, here as everywhere; a code span is how it is kept.
+    assert.deepEqual(parseInline('call `__init__` first'), [text('call '), text('__init__', ['code']), text(' first')])
+  })
+
+  test('a star with a space after it, or with nothing to end it, is a star', () => {
+    plain('2 * 3 * 4 = 24')
+    plain('5 stars * and one more')
+    plain('*unclosed at the start')
+    plain('ends with a star*')
+    plain('a ** b is a to the power b')
+    plain('if (a==b && c==d) then x~~y')
+    plain('rated 4* by most, 5* by some')
+  })
+
+  test('real emphasis still reads as emphasis, with either marker', () => {
+    assert.deepEqual(parseInline('*one* and _two_ and **three** and __four__'), [
+      text('one', ['italic']),
+      text(' and '),
+      text('two', ['italic']),
+      text(' and '),
+      text('three', ['bold']),
+      text(' and '),
+      text('four', ['bold'])
+    ])
+    assert.deepEqual(parseInline('~~gone~~ and ==marked=='), [text('gone', ['strike']), text(' and '), text('marked', ['highlight'])])
+    const mixed = parseInline('***both***')
+    assert.deepEqual(mixed, [text('both', ['bold', 'italic'])])
+    const inside = parseInline('*the snake_case name*')
+    assert.deepEqual(inside, [text('the snake_case name', ['italic'])], 'an underscore inside italics made with stars is still an underscore')
+  })
+
+  test('one stray marker does not change the style of what follows it', () => {
+    const runs = parseInline('3 * 4 is twelve, and *this* is italic')
+    assert.equal(inlineText(runs), '3 * 4 is twelve, and this is italic')
+    assert.deepEqual(runs.filter((one) => one.kind === 'text' && one.marks.includes('italic')).map((one) => (one as { text: string }).text), ['this'])
+    const stray = parseInline('*opened and never closed, with a `code *star*` after')
+    assert.equal(inlineText(stray), '*opened and never closed, with a code *star* after')
+  })
+
+  test('many stray markers are settled without reading the text over and over', () => {
+    const source = Array.from({ length: 4000 }, (_, i) => `*w${i}`).join(' ')
+    const started = Date.now()
+    const runs = parseInline(source)
+    assert.equal(inlineText(runs), source)
+    assert.ok(Date.now() - started < 2000, 'bounded')
+  })
+
+  test('written back, emphasis goes round the words and never round the space beside them', () => {
+    const document = emptyDocument('d', 'Spaces')
+    document.blocks = [
+      { id: 'p1', sectionId: '', kind: 'paragraph', content: [text('before'), text(' bold ', ['bold']), text('after'), text(' ', ['italic']), text('x_y', ['italic'])] }
+    ]
+    const written = toMarkdown(document)
+    assert.equal(written.trim(), 'before **bold** after *x_y*')
+    const again = fromMarkdown(written, 'b')
+    if (isDocumentError(again)) throw new Error(again.message)
+    const first = again.blocks[0]
+    assert.ok(first.kind === 'paragraph')
+    if (first.kind !== 'paragraph') return
+    assert.equal(inlineText(first.content), 'before bold after x_y')
+    assert.deepEqual(first.content.filter((one) => one.kind === 'text' && one.marks.includes('bold')).map((one) => (one as { text: string }).text), ['bold'])
+  })
 })

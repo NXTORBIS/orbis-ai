@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { ArtifactGeneration, instructions, type Asked } from './generation.ts'
+import { ArtifactGeneration, figuresGiven, instructions, type Asked } from './generation.ts'
 
 /*
  * The model is a stand-in that answers from a script; everything after the answer -- validation, the retry with the
@@ -126,4 +126,31 @@ test('an empty request is refused before any model is asked', async () => {
   const out = await generation.generate('   ')
   assert.equal(out.body, null)
   assert.equal(asked.length, 0)
+})
+
+test('rows written out from the figures the person gave are not called examples', async () => {
+  const { generation } = withAnswers([
+    { kind: 'table', title: 'Sales', columns: ['Month', 'Units', 'Revenue'], rows: [['January 2025', '12', '1200'], ['February 2025', '18', '1,800']] }
+  ])
+  const out = await generation.generate('A spreadsheet of sales for January and February 2025. Revenues 1200 and 1800, units 12 and 18.')
+  assert.equal(out.body?.kind, 'table')
+  assert.ok(out.notes.some((one) => /Every number in them is one you gave/.test(one)), out.notes.join(' | '))
+  assert.equal(out.notes.some((one) => /example/i.test(one)), false, 'neither the note nor the planner calls the person\'s own figures examples')
+})
+
+test('figures the person did not give stay labelled as a model\'s, and a mixture says how many are whose', async () => {
+  const mixed = withAnswers([{ kind: 'table', title: 'Sales', columns: ['Month', 'Revenue'], rows: [['January', '1200'], ['February', '9999']] }])
+  const some = await mixed.generation.generate('Sales by month. January was 1200.')
+  assert.ok(some.notes.some((one) => /1 of the 2 numbers in the rows are ones you gave/.test(one)), some.notes.join(' | '))
+  assert.ok(some.notes.some((one) => /example rows? (was|were) written by a model/.test(one)), 'the rest are still examples, and still said to be')
+
+  assert.deepEqual(figuresGiven([['a', '12'], ['b', 3.5], ['c', '-7'], ['d', 'n/a']], 'twelve is 12, and 3.5, and 7'), { numbers: 3, found: 3 })
+  assert.deepEqual(figuresGiven([['1,200']], 'it was 1200'), { numbers: 1, found: 1 })
+  assert.deepEqual(figuresGiven([['42']], 'nothing numeric here'), { numbers: 1, found: 0 })
+  assert.deepEqual(figuresGiven([['x', 'y']], '1 2 3'), { numbers: 0, found: 0 })
+
+  // From material handed over (a reply, an attached file), the same rule: the numbers are checked against it.
+  const fromMaterial = withAnswers([{ kind: 'table', title: 'Moons', columns: ['Planet', 'Moons'], rows: [['Mars', '2'], ['Jupiter', '95']] }])
+  const out = await fromMaterial.generation.generate('Make a table from that', { context: 'Mars has 2 moons and Jupiter has 95.' })
+  assert.ok(out.notes.some((one) => /Every number in them is one you gave/.test(one)))
 })

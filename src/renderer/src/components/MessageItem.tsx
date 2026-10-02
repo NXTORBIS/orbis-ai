@@ -34,6 +34,7 @@ import { documentTextFromReply, titleFromText } from '../../../shared/artifacts/
 import { useDismiss } from '../lib/useDismiss'
 import type { NoticeKind } from '../App'
 import Markdown from './Markdown'
+import ArtifactCard from './ArtifactCard'
 import ResearchSources from './ResearchSources'
 import { OrbisMark } from './Brand'
 import { ThinkingOrb, ThinkingText } from './Thinking'
@@ -67,7 +68,7 @@ const formatTime = (ts: number): string => new Date(ts).toLocaleTimeString('en-U
 
 function MessageItem(props: Props): React.JSX.Element {
   const { message, streaming, status } = props
-  const browsing = Boolean(message.steps?.length || message.confirmation || message.automation)
+  const browsing = Boolean(message.steps?.length || message.confirmation || message.automation || message.artifacts?.length)
   if (message.role === 'user') return <UserMessage {...props} />
   return streaming && !message.content && !browsing ? <PendingReply status={status} reasoning={message.reasoning} /> : <AssistantMessage {...props} />
 }
@@ -232,6 +233,13 @@ function AssistantMessage(props: Props): React.JSX.Element {
             />
           )}
           {message.content && <Markdown text={message.content} sources={message.research?.sources} />}
+          {message.artifacts && message.artifacts.length > 0 && (
+            <div className="artifact-cards">
+              {message.artifacts.map((one) => (
+                <ArtifactCard key={`${one.ref.artifactId}:${one.ref.versionId}:${one.action}`} artifact={one} onNotify={props.onNotify} />
+              ))}
+            </div>
+          )}
           {message.research && message.research.sources.length > 0 && <ResearchSources research={message.research} content={message.content} streaming={streaming} />}
           {streaming && <span className="stream-caret" />}
           {message.error && <div className="message-error">{message.error}</div>}

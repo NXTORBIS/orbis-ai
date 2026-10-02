@@ -749,11 +749,67 @@ function readAlignments(line: string): ('left' | 'center' | 'right')[] {
  *
  * Scanned left to right with an explicit mark set rather than by nesting, because the model has no nested spans: a run
  * is text plus the marks that apply to all of it, which is both simpler to reason about and what a diff can compare.
+ *
+ * A marker is emphasis only where it can be. `file_name` is a word with an underscore in it, `2 * 3` is a sum, and
+ * `*` with nothing to end it is an asterisk. Reading any of those as the start of italics does two kinds of damage:
+ * the character disappears from the text, and everything after it changes style. It also once let a token slip past
+ * the secret gate, because `ghp_Abc...` was stored with its underscore turned into a style. So:
+ *
+ *   - a marker opens only when something follows it directly, and only when a matching ending exists further on;
+ *   - a marker ends only what the same marker opened, and only directly after something;
+ *   - `_`, `__`, `~~` and `==` never open or end in the middle of a word;
+ *   - anything left open at the end of the text was not emphasis after all, and is read again as the plain character.
  */
 export function parseInline(source: string): Inline[] {
+  const literal = new Set<number>()
+  // A marker that opened and never closed is put back as a character and the text read again. A handful of rounds
+  // settles any real text; past that every marker is taken as the character it is, so the words always survive.
+  for (let round = 0; round < 6; round++) {
+    const read = parseInlineOnce(source, literal, true)
+    if (read.unclosed.length === 0) return bounded(read.runs)
+    for (const at of read.unclosed) literal.add(at)
+  }
+  return bounded(parseInlineOnce(source, literal, false).runs)
+}
+
+const bounded = (runs: Inline[]): Inline[] => (runs.length > DOCUMENT_LIMITS.inlineRuns ? runs.slice(0, DOCUMENT_LIMITS.inlineRuns) : runs)
+
+/** The emphasis markers, longest first, and the mark each one means. */
+const DELIMITERS: readonly string[] = Object.freeze(['**', '__', '~~', '==', '*', '_'])
+const MARK_OF: Readonly<Record<string, MarkKind>> = Object.freeze({ '**': 'bold', __: 'bold', '~~': 'strike', '==': 'highlight', '*': 'italic', _: 'italic' })
+/** Markers that are ordinary characters inside a word: `snake_case`, `a==b`, `~~`. An asterisk is allowed there. */
+const NOT_INSIDE_WORDS: ReadonlySet<string> = new Set(['_', '__', '~~', '=='])
+const WORD_CHARACTER = /[\p{L}\p{N}]/u
+
+const isWordCharacter = (ch: string | undefined): boolean => ch !== undefined && WORD_CHARACTER.test(ch)
+const isBlank = (ch: string | undefined): boolean => ch === undefined || /\s/.test(ch)
+
+/** Whether a marker at this place could begin emphasis: something follows it, and it is not inside a word. */
+const canOpen = (source: string, delimiter: string, at: number): boolean =>
+  !isBlank(source[at + delimiter.length]) && !(NOT_INSIDE_WORDS.has(delimiter) && isWordCharacter(source[at - 1]))
+
+/** Whether a marker at this place could end emphasis: something comes right before it, and it is not inside a word. */
+const canClose = (source: string, delimiter: string, at: number): boolean =>
+  !isBlank(source[at - 1]) && !(NOT_INSIDE_WORDS.has(delimiter) && isWordCharacter(source[at + delimiter.length]))
+
+function parseInlineOnce(source: string, literal: ReadonlySet<number>, emphasis: boolean): { runs: Inline[]; unclosed: number[] } {
   const runs: Inline[] = []
   let buffer = ''
   const marks = new Set<MarkKind>()
+  /** Which marker opened each mark that is on, and where: only the same marker ends it. */
+  const opened = new Map<MarkKind, { delimiter: string; at: number }>()
+
+  // The last place each marker could end something. A marker with no such place after it cannot be a beginning.
+  const lastEnding = new Map<string, number>()
+  if (emphasis) {
+    for (const delimiter of DELIMITERS) {
+      let found = -1
+      for (let j = source.length - delimiter.length; j > 0 && found < 0; j--) {
+        if (source.startsWith(delimiter, j) && canClose(source, delimiter, j)) found = j
+      }
+      lastEnding.set(delimiter, found)
+    }
+  }
 
   const flush = (): void => {
     if (buffer === '') return
@@ -808,30 +864,32 @@ export function parseInline(source: string): Inline[] {
       continue
     }
 
-    if (rest.startsWith('**') || rest.startsWith('__')) {
-      flush()
-      toggle(marks, 'bold')
-      i += 2
-      continue
-    }
-    if (rest.startsWith('~~')) {
-      flush()
-      toggle(marks, 'strike')
-      i += 2
-      continue
-    }
-    if (rest.startsWith('==')) {
-      flush()
-      toggle(marks, 'highlight')
-      i += 2
-      continue
-    }
-    if (rest[0] === '*' || rest[0] === '_') {
-      flush()
-      toggle(marks, 'italic')
+    const delimiter = DELIMITERS.find((one) => rest.startsWith(one))
+    if (delimiter) {
+      const mark = MARK_OF[delimiter]
+      const open = opened.get(mark)
+      if (open) {
+        if (open.delimiter === delimiter && canClose(source, delimiter, i)) {
+          flush()
+          marks.delete(mark)
+          opened.delete(mark)
+          i += delimiter.length
+          continue
+        }
+      } else if (emphasis && !literal.has(i) && canOpen(source, delimiter, i) && (lastEnding.get(delimiter) ?? -1) > i) {
+        flush()
+        marks.add(mark)
+        opened.set(mark, { delimiter, at: i })
+        i += delimiter.length
+        continue
+      }
+      // Not a beginning and not an ending: the character itself. One at a time, so the second star of a `**` that
+      // was not bold is still looked at on its own.
+      buffer += rest[0]
       i += 1
       continue
     }
+
     if (rest[0] === '\\' && rest.length > 1) {
       // An escape puts the next character in literally, which is how a document contains an asterisk.
       buffer += rest[1]
@@ -844,13 +902,7 @@ export function parseInline(source: string): Inline[] {
   }
   flush()
 
-  if (runs.length > DOCUMENT_LIMITS.inlineRuns) return runs.slice(0, DOCUMENT_LIMITS.inlineRuns)
-  return runs
-}
-
-const toggle = (marks: Set<MarkKind>, mark: MarkKind): void => {
-  if (marks.has(mark)) marks.delete(mark)
-  else marks.add(mark)
+  return { runs, unclosed: [...opened.values()].map((one) => one.at) }
 }
 
 const isInternal = (href: string): boolean => href.startsWith('#')
@@ -932,13 +984,21 @@ function serialiseInline(runs: readonly Inline[]): string {
       switch (run.kind) {
         case 'text':
         case 'link': {
-          let value = run.text
-          if (run.marks.includes('code')) value = `\`${value}\``
-          if (run.marks.includes('bold')) value = `**${value}**`
-          if (run.marks.includes('italic')) value = `*${value}*`
-          if (run.marks.includes('strike')) value = `~~${value}~~`
-          if (run.marks.includes('highlight')) value = `==${value}==`
-          return run.kind === 'link' ? `[${value}](${run.href})` : value
+          // Emphasis goes round the words, never round the space beside them: `**bold **` is not bold to any reader
+          // of Markdown, this one included. The space is written outside the markers, and a run that is only space
+          // gets no markers at all.
+          const styled = run.marks.some((one) => one === 'bold' || one === 'italic' || one === 'strike' || one === 'highlight')
+          const lead = styled && !run.marks.includes('code') ? (/^\s+/.exec(run.text)?.[0] ?? '') : ''
+          const trail = styled && !run.marks.includes('code') && lead.length < run.text.length ? (/\s+$/.exec(run.text)?.[0] ?? '') : ''
+          let value = run.text.slice(lead.length, run.text.length - trail.length)
+          if (value !== '') {
+            if (run.marks.includes('code')) value = `\`${value}\``
+            if (run.marks.includes('bold')) value = `**${value}**`
+            if (run.marks.includes('italic')) value = `*${value}*`
+            if (run.marks.includes('strike')) value = `~~${value}~~`
+            if (run.marks.includes('highlight')) value = `==${value}==`
+          }
+          return run.kind === 'link' ? `${lead}[${value}](${run.href})${trail}` : `${lead}${value}${trail}`
         }
         case 'math':
           return `$${run.source}$`

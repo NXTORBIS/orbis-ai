@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { isArtifactId, isArtifactRecord, isVersionId, makeArtifactId, makeVersionId, readRecord, refOf, summaryOf, type ArtifactRecord } from './model.ts'
+import { isArtifactId, isArtifactRecord, isVersionId, makeArtifactId, makeVersionId, readCards, readRecord, readRef, refOf, summaryOf, type ArtifactRecord } from './model.ts'
 
 const HEX = 'a'.repeat(32)
 
@@ -76,4 +76,27 @@ test('a ref carries the handle and nothing that could be content, and a summary 
   assert.equal(summary.version, 3)
   assert.equal(summary.reason, 'changed')
   assert.equal(summary.createdAt, 9)
+})
+
+test('the cards on a saved message are kept only in the shape a card has', () => {
+  const ref = refOf(record())
+  const cards = readCards([
+    { ref, action: 'made', did: ['One.', 2, 'Two.'], format: 'xlsx' },
+    { ref, action: 'made', did: [], format: 'pdf' },
+    { ref: { ...ref, artifactId: '../../etc' }, action: 'made', did: [] },
+    { ref, action: 'deleted', did: [] },
+    { ref: { ...ref, kind: 'spreadsheet' }, action: 'made', did: [] },
+    'nonsense',
+    null
+  ])
+  assert.equal(cards.length, 2)
+  assert.deepEqual(cards[0].did, ['One.', 'Two.'])
+  assert.equal(cards[0].format, 'xlsx')
+  assert.equal(cards[1].format, undefined, 'a table is not saved as PDF, so the format is not kept')
+  assert.deepEqual(Object.keys(cards[0].ref).sort(), Object.keys(ref).sort())
+  assert.deepEqual(readCards('no'), [])
+  assert.deepEqual(readCards(undefined), [])
+  assert.equal(readRef({ ...ref, version: 0 }), null)
+  assert.equal(readRef({ ...ref, format: 'exe' }), null)
+  assert.equal(readCards(Array.from({ length: 40 }, () => ({ ref, action: 'shown', did: [] }))).length, 12)
 })
