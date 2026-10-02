@@ -299,11 +299,53 @@ export class BrowserManager {
         readSettings: () => service.bridge.run("chrome.storage.local.get('orbis.adblock.settings').then((r) => r['orbis.adblock.settings'] ?? null)")
       })
       await injector.start()
+
+      /*
+       * The browser is not ready until it is protected.
+       *
+       * Measured: from the moment Chromium answers to the moment an advertising host is actually refused is about two
+       * seconds, and nothing was waiting for it. The browser was handed back, a page was opened, and for that second
+       * or so it fetched exactly what it was about to start blocking -- on every launch, warm profile or cold, because
+       * the wait is the extension starting rather than anything being cached.
+       *
+       * So this asks the extension which rulesets are live, and does not return until one of them is. Not a delay
+       * added for safety: the work was already happening, and this is Orbis stopping pretending it had finished.
+       *
+       * Bounded, and failure is not fatal. A browser that will not start because its blocker is slow is worse than a
+       * browser that starts unprotected and says so -- but the default has to be the other way round.
+       */
+      const protectedAt = await this.waitForProtection(service.bridge)
+      if (protectedAt === null) console.warn('[orbis] the ad blocker did not confirm it was active; the browser is starting anyway')
+
       return { service, helper: server, injector, profileId }
     } catch (err) {
       await server.close()
       throw err
     }
+  }
+
+  /**
+   * Waits until the ad blocker's network rules are actually enforcing, and says how long it took.
+   *
+   * Asked of the extension rather than assumed from the manifest: a ruleset is declared enabled and then has to be
+   * indexed before it bites, and "declared" is not "enforcing". `getEnabledRulesets` answers with the ones Chromium
+   * has finished loading, which is the only honest signal available.
+   *
+   * Returns null if it never confirms. The caller carries on -- a browser that refuses to open because its blocker is
+   * slow would be a worse product than one that opens a moment later.
+   */
+  private async waitForProtection(bridge: { run<T>(expression: string): Promise<T> }, ms = 8000): Promise<number | null> {
+    const started = Date.now()
+    const end = started + ms
+    while (Date.now() < end) {
+      const live = await bridge
+        .run<string[]>('chrome.declarativeNetRequest.getEnabledRulesets()')
+        .catch(() => null)
+      // Any ruleset at all: the first-line one is the point, and it is the first to finish indexing.
+      if (Array.isArray(live) && live.length > 0) return Date.now() - started
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    }
+    return null
   }
 
   /**

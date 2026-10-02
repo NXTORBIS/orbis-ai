@@ -43,6 +43,12 @@
   "declarative_net_request": {
     "rule_resources": [
       {
+        "//": "The first line, and the reason it is first. Chromium indexes a ruleset before any of it bites, and 114,000 rules take seconds on every launch -- so for those seconds the browser was fetching ads it was about to start blocking. A few hundred rules index in milliseconds, and rulesets are indexed independently, so this one is enforcing while the big ones are still being read. It is almost entirely a subset of them: what changes is when, not what.",
+        "id": "first-line",
+        "enabled": true,
+        "path": "adblock/rules/first-line.json"
+      },
+      {
         "id": "ads",
         "enabled": true,
         "path": "adblock/rules/ads.json"

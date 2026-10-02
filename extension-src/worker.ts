@@ -14,7 +14,15 @@ import type { AdBlockCategory, AdBlockSettings } from '../src/shared/types'
  */
 
 const core = new AdBlockCore()
-const RULESET_CATEGORY: Record<string, AdBlockCategory> = { ads: 'ads', 'ads-strict': 'ads', trackers: 'trackers', 'trackers-strict': 'trackers', annoyances: 'annoyances', 'annoyances-strict': 'annoyances' }
+/**
+ * The first line: a few hundred rules that index in milliseconds, so there is no second of unprotected browsing.
+ *
+ * Counted as `ads` for statistics, because that is what it blocks and a person looking at the numbers should not have
+ * to know about an implementation detail of startup timing.
+ */
+const FIRST_LINE = 'first-line'
+
+const RULESET_CATEGORY: Record<string, AdBlockCategory> = { [FIRST_LINE]: 'ads', ads: 'ads', 'ads-strict': 'ads', trackers: 'trackers', 'trackers-strict': 'trackers', annoyances: 'annoyances', 'annoyances-strict': 'annoyances' }
 const SETTINGS_KEY = 'orbis.adblock.settings'
 const PAGES_KEY = 'orbis.adblock.pages'
 const url = (path: string): string => chrome.runtime.getURL(`adblock/${path}`)
@@ -97,6 +105,18 @@ async function applyRulesets(): Promise<void> {
     enable.push(category)
     if (strict) enable.push(`${category}-strict`)
   }
+  /*
+   * The first line stays on whenever anything is being blocked at all.
+   *
+   * It is enabled in the manifest so it is live before this code runs, and this is the call that would otherwise
+   * switch it straight back off -- every ruleset not in `enable` is disabled, and it belongs to no category. Which
+   * would have made the fix for the unprotected window last exactly as long as the worker took to start.
+   *
+   * Off only when the blocker itself is off, or when ads and trackers are both off, because then the person has asked
+   * for these requests to be allowed and a head start on blocking them is not a kindness.
+   */
+  if (enable.includes('ads') || enable.includes('trackers')) enable.push(FIRST_LINE)
+
   const all = Object.keys(RULESET_CATEGORY)
   await chrome.declarativeNetRequest.updateEnabledRulesets({ enableRulesetIds: enable, disableRulesetIds: all.filter((id) => !enable.includes(id)) })
 }
