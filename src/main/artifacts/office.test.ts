@@ -1,0 +1,112 @@
+import { test } from 'node:test'
+import assert from 'node:assert/strict'
+import { isDataError, parseDelimited } from '../../shared/compute/data.ts'
+import { emptyDocument, fromMarkdown, isDocumentError } from '../../shared/compute/document.ts'
+import { hashOf } from '../../shared/compute/interchange.ts'
+import { planSlides, verifyDocx, verifyPptx, verifyXlsx, writeDocx, writePptx, writeXlsx } from './office.ts'
+
+/*
+ * Real files from the real libraries, read back by the real checks. Nothing is stubbed: a workbook is written with
+ * exceljs and re-opened with exceljs; a Word document and a deck are opened as the ZIP packages they are.
+ */
+
+const table = () => {
+  const parsed = parseDelimited('date,site,consumption,ok\n2026-10-01,Head office,412.5,true\n2026-10-02,Depot,288,false\n')
+  if (isDataError(parsed)) throw new Error(parsed.message)
+  return parsed.table
+}
+
+const document = (markdown: string, title = 'Report') => {
+  const parsed = fromMarkdown(markdown, 'b')
+  if (isDocumentError(parsed)) throw new Error(parsed.message)
+  const doc = emptyDocument('d', title)
+  doc.blocks = parsed.blocks
+  return doc
+}
+
+const shapeOf = (bytes: Uint8Array) => ({ bytes: bytes.length, hash: hashOf(bytes) })
+
+test('a workbook keeps numbers as numbers, dates as dates, and reads back with the same shape and headings', async () => {
+  const original = table()
+  const made = await writeXlsx(original, 'Energy')
+  assert.ok(made.bytes.length > 2000, 'a real workbook is not tiny')
+  assert.equal(made.bytes[0], 0x50, 'starts with the ZIP signature')
+  const result = await verifyXlsx(original, shapeOf(made.bytes), made.bytes)
+  assert.equal(result.ok, true, JSON.stringify(result.checks))
+  assert.deepEqual(result.checks.map((one) => one.what), ['written', 'checksum', 'opens', 'round trip'])
+  assert.deepEqual(result.reimported, { rows: 2, columns: 4 })
+})
+
+test('the sheet is named after the artifact, within what Excel allows', async () => {
+  const made = await writeXlsx(table(), 'Site Readings: Q3/2026 [draft]')
+  const workbook = new (await import('exceljs')).default.Workbook()
+  await workbook.xlsx.load(made.bytes as unknown as Parameters<typeof workbook.xlsx.load>[0])
+  assert.equal(workbook.worksheets[0].name, 'Site Readings Q3 2026 draft')
+})
+
+test('a workbook that was tampered with fails the checks that would notice', async () => {
+  const original = table()
+  const made = await writeXlsx(original, 'Energy')
+  const expected = shapeOf(made.bytes)
+  const other = await writeXlsx({ ...original, rows: original.rows.slice(0, 1) }, 'Energy')
+  const result = await verifyXlsx(original, expected, other.bytes)
+  assert.equal(result.ok, false)
+  assert.equal(result.checks.find((one) => one.what === 'round trip')?.passed, false)
+  assert.ok(result.differences.some((one) => /Shape differs/.test(one)))
+})
+
+test('a Word document has real paragraphs and the package parts Word needs', async () => {
+  const doc = document('# Report\n\nA finding with **bold** text.\n\n- one\n- two\n\n| a | b |\n| --- | --- |\n| 1 | 2 |\n\n> quoted\n\n```js\nlet x\n```\n')
+  const made = await writeDocx(doc)
+  const result = verifyDocx(shapeOf(made.bytes), made.bytes)
+  assert.equal(result.ok, true, JSON.stringify(result.checks))
+  assert.deepEqual(result.checks.map((one) => one.what), ['written', 'checksum', 'package', 'paragraphs'])
+  assert.ok((result.reimported?.rows ?? 0) >= 7, `expected at least 7 paragraphs, got ${result.reimported?.rows}`)
+})
+
+test('something that is not a package is refused as such, not just by its hash', () => {
+  const junk = new TextEncoder().encode('<html>not a docx</html>')
+  const result = verifyDocx(shapeOf(junk), junk)
+  assert.equal(result.ok, false)
+  assert.equal(result.checks.find((one) => one.what === 'package')?.passed, false)
+})
+
+test('a deck is planned from the headings, with a table on its own slide and the text kept in the notes', () => {
+  const doc = document('# Energy\n\nIntro sentence.\n\n## Findings\n\n- one\n- two\n- three\n\n## Figures\n\n| Site | MWh |\n| --- | --- |\n| HQ | 412 |\n\n## Method\n\nReadings were taken.\n')
+  const slides = planSlides(doc)
+  assert.deepEqual(slides.map((one) => one.title), ['Energy', 'Findings', 'Table 1', 'Method'])
+  assert.equal(slides[1].bullets.length, 3)
+  assert.ok(slides[2].table)
+  assert.deepEqual(slides[2].table?.rows[0], ['Site', 'MWh'])
+  assert.ok(slides[3].notes.includes('Readings were taken.'))
+})
+
+test('text after a table slide continues its own section, not one named after the document', () => {
+  const doc = document('# Energy\n\n## Figures\n\n| a | b |\n| --- | --- |\n| 1 | 2 |\n\n> The one worth repeating.\n\n## Next\n\nMore.\n', 'Energy')
+  const slides = planSlides(doc)
+  // "Figures" had nothing before its table, so the quote after the table opens "Figures" itself, not "(continued)".
+  assert.deepEqual(slides.map((one) => one.title), ['Table 1', 'Figures', 'Next'])
+  const withText = planSlides(document('## Figures\n\nLead-in.\n\n| a | b |\n| --- | --- |\n| 1 | 2 |\n\nAfter.\n', 'E'))
+  assert.deepEqual(withText.map((one) => one.title), ['Figures', 'Table 1', 'Figures (continued)'])
+})
+
+test('a section with too many points runs on to a continued slide', () => {
+  const doc = document(`# Long\n\n${Array.from({ length: 10 }, (_, i) => `- point ${i + 1}`).join('\n')}\n`)
+  const slides = planSlides(doc)
+  assert.deepEqual(slides.map((one) => one.title), ['Long', 'Long (continued)'])
+  assert.equal(slides[0].bullets.length, 7)
+  assert.equal(slides[1].bullets.length, 3)
+})
+
+test('a deck is written with the slides that were planned plus a title slide, and reads back with that many', async () => {
+  const doc = document('# Energy\n\nIntro.\n\n## Findings\n\n- one\n\n| a | b |\n| --- | --- |\n| 1 | 2 |\n', 'Energy')
+  const made = await writePptx(doc)
+  // Title slide + Energy + Findings + Table 1
+  assert.equal(made.count, 4)
+  const result = verifyPptx({ ...shapeOf(made.bytes), slides: made.count }, made.bytes)
+  assert.equal(result.ok, true, JSON.stringify(result.checks))
+  assert.deepEqual(result.checks.map((one) => one.what), ['written', 'checksum', 'package', 'slides'])
+  assert.equal(result.reimported?.rows, 4)
+  const wrong = verifyPptx({ ...shapeOf(made.bytes), slides: 9 }, made.bytes)
+  assert.equal(wrong.checks.find((one) => one.what === 'slides')?.passed, false)
+})

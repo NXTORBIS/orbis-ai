@@ -45,7 +45,7 @@ export const ARTIFACT_KINDS: Readonly<Record<ArtifactKindId, ArtifactKind>> = Ob
     name: 'Table',
     describe: 'Rows and columns of values, with a type and optionally a unit for each column.',
     builtFrom: 'Table in src/shared/compute/data.ts',
-    writes: Object.freeze(['csv', 'tsv', 'json', 'ndjson', 'markdown', 'text'] as const),
+    writes: Object.freeze(['csv', 'xlsx', 'tsv', 'json', 'ndjson', 'markdown', 'text'] as const),
     stores: 'json',
     reads: Object.freeze(['csv', 'tsv', 'json', 'ndjson'] as const),
     orionMayName: true
@@ -55,7 +55,7 @@ export const ARTIFACT_KINDS: Readonly<Record<ArtifactKindId, ArtifactKind>> = Ob
     name: 'Document',
     describe: 'Headings, paragraphs, lists, tables and figures, with numbering and references.',
     builtFrom: 'StructuredDocument in src/shared/compute/document.ts',
-    writes: Object.freeze(['markdown', 'html', 'pdf', 'text'] as const),
+    writes: Object.freeze(['markdown', 'html', 'pdf', 'docx', 'pptx', 'text'] as const),
     stores: 'markdown',
     reads: Object.freeze(['markdown', 'html'] as const),
     orionMayName: true

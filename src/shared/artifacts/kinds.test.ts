@@ -34,6 +34,10 @@ test('writability is answered by the table, not by the format alone', () => {
   assert.equal(canWrite('table', 'csv'), true)
   assert.equal(canWrite('document', 'csv'), false)
   assert.equal(canWrite('document', 'html'), true)
+  assert.equal(canWrite('document', 'docx'), true)
+  assert.equal(canWrite('document', 'pptx'), true)
+  assert.equal(canWrite('table', 'xlsx'), true)
+  assert.equal(canWrite('table', 'docx'), false)
   // XML is a format the registry knows, and until there is a writer no kind may claim it.
   assert.equal(canWrite('document', 'xml'), false)
   assert.equal(canWrite('table', 'xml'), false)

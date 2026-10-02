@@ -27,7 +27,10 @@ import { safeName } from '../../shared/artifacts/naming.ts'
 import { gateForWrite } from '../../shared/artifacts/secrets.ts'
 import { verifyDocumentFile, verifyPdfFile, verifyTableFile } from '../../shared/artifacts/validate.ts'
 import type { ArtifactGeneration } from './generation.ts'
+import { verifyDocx, verifyPptx, verifyXlsx, writeDocx, writePptx, writeXlsx } from './office.ts'
 import { ArtifactStore, CONTENT_PREFIX, SOURCE_FILE } from './store.ts'
+import { toDelimited } from '../../shared/compute/data.ts'
+import { toText } from '../../shared/compute/documentHtml.ts'
 
 /**
  * The one door for making, keeping and exporting artifacts.
@@ -108,14 +111,16 @@ export interface ArtifactServiceOptions {
 /** What a render produced: bytes to write, the text to scan for secrets, and what the format could not carry. */
 interface Rendered {
   bytes: Uint8Array
-  /** The text form, when there is one. A PDF has none, and its HTML is what gets scanned instead. */
+  /** The text form, when there is one. A PDF or a workbook has none, and the text it was made from is scanned instead. */
   text: string | null
-  /** What the secret gate reads. The text, or for a PDF the HTML it was printed from. */
+  /** What the secret gate reads. The text, or for a binary format the text it was made from. */
   scan: string
   format: FormatId
   hash: string
   loss: LossReport
   notes: string[]
+  /** For a deck: how many slides were written, so the read-back can count them. */
+  count?: number
 }
 
 const str = (value: unknown, max: number): string => (typeof value === 'string' ? value.slice(0, max) : '')
@@ -205,7 +210,20 @@ export class ArtifactService {
     return { kind: 'document', document }
   }
 
-  private async render(body: ArtifactBody, format: FormatId): Promise<Rendered | { error: string; message: string }> {
+  private async render(body: ArtifactBody, format: FormatId, title = ''): Promise<Rendered | { error: string; message: string }> {
+    if (body.kind === 'table' && format === 'xlsx') {
+      const loss = lossFor('xlsx', { units: body.table.columns.some((one) => one.unit !== null), types: true, metadata: body.table.source !== '', hierarchy: false })
+      if (isInterchangeError(loss)) return { error: 'encode', message: loss.message }
+      // The sheet is named after the artifact: a workbook whose one sheet is called "Sheet1" tells nobody anything.
+      const made = await writeXlsx(body.table, title || 'Table')
+      return { bytes: made.bytes, text: null, scan: toDelimited(body.table), format, hash: hashOf(made.bytes), loss, notes: [...made.notes, ...loss.losses.map((one) => one.describe)] }
+    }
+    if (body.kind === 'document' && (format === 'docx' || format === 'pptx')) {
+      const loss = lossFor(format, { formatting: true, metadata: true, hierarchy: true })
+      if (isInterchangeError(loss)) return { error: 'encode', message: loss.message }
+      const made = format === 'docx' ? await writeDocx(body.document) : await writePptx(body.document)
+      return { bytes: made.bytes, text: null, scan: toText(body.document), format, hash: hashOf(made.bytes), loss, notes: [...made.notes, ...loss.losses.map((one) => one.describe)], count: made.count }
+    }
     if (body.kind === 'table') {
       /*
        * JSON always carries the columns.
@@ -233,8 +251,12 @@ export class ArtifactService {
   }
 
   /** The written file, checked against what was meant to be written and against what it came from. */
-  private verify(body: ArtifactBody, rendered: Rendered, readBack: Uint8Array): VerifyResult {
-    if (rendered.format === 'pdf') return verifyPdfFile({ bytes: rendered.bytes.length, hash: rendered.hash }, readBack)
+  private async verify(body: ArtifactBody, rendered: Rendered, readBack: Uint8Array): Promise<VerifyResult> {
+    const shape = { bytes: rendered.bytes.length, hash: rendered.hash }
+    if (rendered.format === 'pdf') return verifyPdfFile(shape, readBack)
+    if (rendered.format === 'xlsx' && body.kind === 'table') return verifyXlsx(body.table, shape, readBack)
+    if (rendered.format === 'docx' && body.kind === 'document') return verifyDocx(shape, readBack)
+    if (rendered.format === 'pptx' && body.kind === 'document') return verifyPptx({ ...shape, slides: rendered.count ?? 0 }, readBack)
     const expected: ExportResult = {
       text: rendered.text ?? '',
       format: rendered.format,
@@ -354,7 +376,7 @@ export class ArtifactService {
 
     const readBack = await this.o.store.readFile(profileId, record.artifactId, file)
     const verified = readBack
-      ? this.verify(body, rendered, readBack)
+      ? await this.verify(body, rendered, readBack)
       : { ok: false, checks: [{ what: 'written', passed: false, describe: 'The stored file could not be read back.' }], reimported: null, differences: [] }
     if (!verified.ok) {
       // Not kept. An artifact whose stored copy does not read back is not an artifact, and a library entry pointing at
@@ -421,7 +443,7 @@ export class ArtifactService {
     const body = JSON.parse(decode(sourceBytes)) as ArtifactBody
     if (body.kind !== record.kind) return fail('failed', 'The artifact is damaged: its source is not the kind its record says.')
 
-    const rendered = await this.render(body, format)
+    const rendered = await this.render(body, format, record.title)
     if ('error' in rendered) return fail(rendered.error, rendered.message)
 
     const ext = extensionFor(format)
@@ -438,7 +460,7 @@ export class ArtifactService {
 
     await (this.o.writeFile ?? writeToDisk)(path, rendered.bytes)
     const readBack = await (this.o.readFile ?? (async (p: string) => new Uint8Array(await readFromDisk(p))))(path)
-    const verified = this.verify(body, rendered, readBack)
+    const verified = await this.verify(body, rendered, readBack)
 
     const outcome: ExportOutcome = { artifactId, format, path, bytes: rendered.bytes.length, hash: rendered.hash, loss: rendered.loss, verified }
     if (!verified.ok) {

@@ -189,7 +189,7 @@ test('reading gives a bounded preview and the formats it can leave as', () =>
       formats: { format: string }[]
     }
     assert.ok(value.preview.length > 0)
-    assert.deepEqual(value.formats.map((one) => one.format), ['csv', 'tsv', 'json', 'ndjson', 'markdown', 'text'])
+    assert.deepEqual(value.formats.map((one) => one.format), ['csv', 'xlsx', 'tsv', 'json', 'ndjson', 'markdown', 'text'])
   }))
 
 test('a document saves as HTML with its paragraphs in it, read back through the HTML importer', () =>
@@ -211,7 +211,7 @@ test('a document saves as PDF through the print engine, from HTML that forbids e
     const made = ok(await h.service.run('default', { operation: 'artifact.create', kind: 'document', title: 'Printed', text: '# One\n\nText.\n\n## Two\n\nMore.\n' }))
     const artifactId = (made.record as { artifactId: string }).artifactId
     const read = ok(await h.service.run('default', { operation: 'artifact.read', artifactId })) as { formats: { format: string }[] }
-    assert.deepEqual(read.formats.map((one) => one.format), ['markdown', 'html', 'pdf', 'text'])
+    assert.deepEqual(read.formats.map((one) => one.format), ['markdown', 'html', 'pdf', 'docx', 'pptx', 'text'])
 
     h.nextDestination = join(h.dir, 'Printed.pdf')
     const out = ok(await h.service.run('default', { operation: 'artifact.export', artifactId, format: 'pdf' })) as {
@@ -227,15 +227,43 @@ test('a document saves as PDF through the print engine, from HTML that forbids e
     assert.equal(bytes.subarray(0, 5).toString('latin1'), '%PDF-')
   }))
 
+test('a table saves as a workbook that re-opens with the same rows, columns and headings', () =>
+  withService(async (h) => {
+    const made = ok(await h.service.run('default', { operation: 'artifact.create', kind: 'table', title: 'Sites', text: 'date,site,mwh\n2026-10-01,HQ,412\n2026-10-02,Depot,288\n' }))
+    h.nextDestination = join(h.dir, 'Sites.xlsx')
+    const out = ok(await h.service.run('default', { operation: 'artifact.export', artifactId: (made.record as { artifactId: string }).artifactId, format: 'xlsx' })) as {
+      verified: { ok: boolean; checks: { what: string; passed: boolean }[]; reimported: { rows: number; columns: number } | null }
+    }
+    assert.equal(out.verified.ok, true, JSON.stringify(out.verified.checks))
+    assert.deepEqual(out.verified.checks.map((one) => one.what), ['written', 'checksum', 'opens', 'round trip'])
+    assert.deepEqual(out.verified.reimported, { rows: 2, columns: 3 })
+    assert.equal((await readFile(h.nextDestination))[0], 0x50)
+  }))
+
+test('a document saves as Word and as a deck, each opened as the package it is', () =>
+  withService(async (h) => {
+    const made = ok(await h.service.run('default', { operation: 'artifact.create', kind: 'document', title: 'Plan', text: '# Plan\n\nIntro.\n\n## Week 1\n\n- read\n- practise\n' }))
+    const artifactId = (made.record as { artifactId: string }).artifactId
+    h.nextDestination = join(h.dir, 'Plan.docx')
+    const word = ok(await h.service.run('default', { operation: 'artifact.export', artifactId, format: 'docx' })) as { verified: { ok: boolean; checks: { what: string }[] } }
+    assert.equal(word.verified.ok, true, JSON.stringify(word.verified.checks))
+    assert.ok(word.verified.checks.some((one) => one.what === 'paragraphs'))
+    h.nextDestination = join(h.dir, 'Plan.pptx')
+    const deck = ok(await h.service.run('default', { operation: 'artifact.export', artifactId, format: 'pptx' })) as { verified: { ok: boolean; checks: { what: string }[]; reimported: { rows: number } | null } }
+    assert.equal(deck.verified.ok, true, JSON.stringify(deck.verified.checks))
+    // Title slide, Plan, Week 1.
+    assert.equal(deck.verified.reimported?.rows, 3)
+  }))
+
 test('without a print engine, PDF is simply not offered', () =>
   withService(
     async (h) => {
       const kinds = ok<{ id: string; writes: { format: string }[] }[]>(await h.service.run('default', { operation: 'artifact.kinds' }))
-      assert.deepEqual(kinds.find((one) => one.id === 'document')?.writes.map((one) => one.format), ['markdown', 'html', 'text'])
+      assert.deepEqual(kinds.find((one) => one.id === 'document')?.writes.map((one) => one.format), ['markdown', 'html', 'docx', 'pptx', 'text'])
       const made = ok(await h.service.run('default', { operation: 'artifact.create', kind: 'document', text: 'x\n' }))
       const result = await h.service.run('default', { operation: 'artifact.export', artifactId: (made.record as { artifactId: string }).artifactId, format: 'pdf' })
       assert.equal(result.ok, false)
-      if (!result.ok) assert.match(result.message, /can be saved as: markdown, html, text/)
+      if (!result.ok) assert.match(result.message, /can be saved as: markdown, html, docx, pptx, text/)
     },
     { pdf: false }
   ))
