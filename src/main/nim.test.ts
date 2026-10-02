@@ -1,6 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { GROQ_BASE_URL, streamChat, testApiKey } from './nim.ts'
+import { GROQ_BASE_URL, requestBodyFor, streamChat, testApiKey, toMessageContent } from './nim.ts'
+import { modelInfo } from '../shared/models.ts'
+import { modelsFor } from '../shared/providers.ts'
 import type { ChatOptions, FetchFn } from './nim.ts'
 import { currentModelId, modelLabel } from '../shared/models.ts'
 import type { ChatMessage, StreamEvent } from '../shared/types'
@@ -417,8 +419,98 @@ test('testApiKey checks every key against the models endpoint', async () => {
     const auth = (init.headers as Record<string, string>).Authorization
     return auth === 'Bearer good' ? json(200, { data: [] }) : json(401, { error: { message: 'Invalid API Key' } })
   }
-  assert.deepEqual(await testApiKey(['good', 'bad'], fetchFn), { ok: true, message: 'Groq accepted 1 of 2 API keys.' })
+  const one = await testApiKey(['good', 'bad'], fetchFn)
+  assert.equal(one.ok, true)
+  // Says how many work, and counts the refused one separately -- a restricted or invalid key does not recover, so it
+  // is worth removing rather than retrying, and a bare "accepted 1 of 2" could not tell anybody that.
+  assert.match(one.message, /Groq: 1 of 2 keys working/)
+  assert.match(one.message, /1 refused outright/)
   assert.equal(urls[0], `${GROQ_BASE_URL}/models`)
-  assert.deepEqual(await testApiKey(['bad'], fetchFn), { ok: false, message: 'Groq accepted 0 of 1 API key.' })
+  assert.equal((await testApiKey(['bad'], fetchFn)).ok, false)
   assert.equal((await testApiKey([], fetchFn)).ok, false)
+})
+
+test('checking keys says which service, and tells a busy key from a dead one', async () => {
+  /*
+   * "Groq accepted 48 of 75" hid the thing worth knowing: 26 of those belonged to restricted organisations, which
+   * never recovers. A busy key and a dead key read identically in a count, and only one is worth keeping.
+   */
+  const answers: Record<string, number> = {
+    'groq-good': 200,
+    'groq-busy': 429,
+    'groq-dead': 400,
+    'mistral-good': 200
+  }
+  const fetchFn = (async (_url: string, init?: { headers?: Record<string, string> }) => {
+    const key = String(init?.headers?.Authorization ?? '').replace('Bearer ', '')
+    return { ok: answers[key] === 200, status: answers[key] ?? 500 } as Response
+  }) as unknown as Parameters<typeof testApiKey>[1]
+
+  const both = await testApiKey(['groq-good', 'groq-busy', 'groq-dead'], fetchFn, ['mistral-good'])
+  assert.equal(both.ok, true)
+  assert.match(both.message, /Groq: 1 of 3 keys working/)
+  assert.match(both.message, /1 busy/)
+  assert.match(both.message, /1 refused outright/)
+  assert.match(both.message, /Mistral: 1 of 1 key working/)
+})
+
+test('with no Mistral key it says Orbis cannot look at an image', async () => {
+  // Rather than letting somebody discover it when a picture is quietly ignored.
+  const fetchFn = (async () => ({ ok: true, status: 200 }) as Response) as unknown as Parameters<typeof testApiKey>[1]
+  const out = await testApiKey(['groq-good'], fetchFn, [])
+  assert.equal(out.ok, true)
+  assert.match(out.message, /cannot look at an image/)
+})
+
+test('no keys at all is said plainly', async () => {
+  const fetchFn = (async () => ({ ok: true, status: 200 }) as Response) as unknown as Parameters<typeof testApiKey>[1]
+  const out = await testApiKey([], fetchFn, [])
+  assert.equal(out.ok, false)
+  assert.match(out.message, /No API key/)
+})
+
+test('an image survives to a model that can see, and is dropped by one that cannot', () => {
+  /*
+   * This is the line that made Orbis look without seeing. The picture was built, encoded and attached, and then
+   * removed here because no Groq model declares vision -- so every visual question was answered from the page's text
+   * while the status said "Looking at the page".
+   */
+  const message = {
+    id: 'm1',
+    createdAt: 0,
+    role: 'user' as const,
+    content: 'What is on this screen?',
+    attachments: [{ name: 'page.png', type: 'image' as const, content: 'AAAA', mimeType: 'image/png' }]
+  }
+
+  const seeing = toMessageContent(message, modelInfo('ministral-8b-2512'))
+  assert.ok(Array.isArray(seeing), 'a model that can see is sent parts, not a string')
+  assert.ok((seeing as Record<string, unknown>[]).some((p) => p.type === 'image_url'), 'the image is actually sent')
+
+  const blind = toMessageContent(message, modelInfo('openai/gpt-oss-120b'))
+  assert.equal(typeof blind, 'string', 'a model that cannot see is sent text')
+  assert.ok(!String(blind).includes('AAAA'), 'and never the image bytes')
+})
+
+test('every model Orbis chooses for a visual job can actually see', () => {
+  // The guard against the whole class of bug above: a vision job pointed at a model with no vision flag is a job that
+  // silently answers from text.
+  for (const job of ['glance', 'look'] as const) {
+    for (const choice of modelsFor(job, { groq: true, mistral: true })) {
+      assert.equal(modelInfo(choice.model).vision, true, `${job} -> ${choice.model} cannot see`)
+    }
+  }
+})
+
+test("Mistral's parameter names replace Groq's, and reasoning_effort is not sent to it", () => {
+  // Groq takes max_completion_tokens and understands reasoning_effort; Mistral takes max_tokens and rejects the other
+  // outright, which fails the whole request rather than being ignored.
+  const forMistral = requestBodyFor('ministral-8b-2512', { max_completion_tokens: 500, reasoning_effort: 'low' })
+  assert.equal(forMistral.max_tokens, 500)
+  assert.equal('max_completion_tokens' in forMistral, false)
+  assert.equal('reasoning_effort' in forMistral, false)
+
+  const forGroq = requestBodyFor('openai/gpt-oss-120b', { max_completion_tokens: 500, reasoning_effort: 'low' })
+  assert.equal(forGroq.max_completion_tokens, 500)
+  assert.equal(forGroq.reasoning_effort, 'low')
 })

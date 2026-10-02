@@ -143,7 +143,16 @@ export interface GenerationServiceOptions {
   /** Whether a generated Page may remember what was typed into it. Orbis's decision, never the model's. */
   allowStorage?: boolean
   /** Asks the model. Replaced in a test; `requestJson` in the application. */
-  ask(system: string, user: string, apiKeys: string[], fetchFn: FetchFn, timeoutMs: number, options: { maxTokens?: number; model?: string }): Promise<Record<string, unknown> | null>
+  ask(
+    system: string,
+    user: string,
+    apiKeys: string[],
+    fetchFn: FetchFn,
+    timeoutMs: number,
+    options: { maxTokens?: number; model?: string; mistralKeys?: string[] }
+  ): Promise<Record<string, unknown> | null>
+  /** Keys for the other service, so a Page's code can be written by the model built for it. Empty is a working state. */
+  mistralKeys?(): string[]
 }
 
 export interface GenerationOutcome {
@@ -257,7 +266,7 @@ The last attempt did not work. What was wrong:
 ${complaint}
 
 Write it again, fixing those. Everything else about the format is the same.`
-    return this.o.ask(system, user, keys, this.o.fetchFn, 60_000, { maxTokens: 4000, model: MODEL })
+    return this.o.ask(system, user, keys, this.o.fetchFn, 60_000, { maxTokens: 4000, model: MODEL, mistralKeys: this.o.mistralKeys?.() ?? [] })
   }
 
   /**

@@ -4,7 +4,7 @@ import { MAX_QUEUED_MESSAGES } from '../lib/messageQueue'
 import { SLASH_COMMANDS } from '../lib/commands'
 import type { ChatQueue, QueuedMessage } from '../lib/messageQueue'
 import type { Attachment } from '../../../shared/types'
-import { MODELS, modelLabel } from '../../../shared/models'
+import { CHAT_MODELS, modelLabel } from '../../../shared/models'
 import { PUSH_TO_TALK_EVENT } from '../../../shared/voiceInput'
 import { useDismiss } from '../lib/useDismiss'
 import { useVoiceInput } from '../hooks/useVoiceInput'
@@ -594,7 +594,7 @@ export default function Composer(props: Props): React.JSX.Element {
               </button>
               {menuOpen && (
                 <div className={`popover glass mode-menu${menuPlacement.down ? ' down' : ''}`} style={{ maxHeight: menuPlacement.maxHeight }} role="menu">
-                  {MODELS.map((m) => {
+                  {CHAT_MODELS.map((m) => {
                     const selected = m.id === model
                     return (
                       <button

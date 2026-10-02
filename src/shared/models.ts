@@ -23,9 +23,39 @@ export const MODELS: ModelInfo[] = [
   { id: 'orion/pro', apiModel: 'qwen/qwen3.8-27b', label: 'ORION Pro', description: 'Quick, well-structured answers', reasoningEffort: false, echoReasoning: false, contextWindow: 131042, inputTokenLimit: 6000, disableReasoning: true },
   { id: 'openai/gpt-oss-safeguard-20b', label: 'ORION Shield', description: 'Safety-focused reasoning', reasoningEffort: false, echoReasoning: false, contextWindow: 131072, inputTokenLimit: 6000 },
   { id: 'allam-2-7b', label: 'ORION Mini', description: 'Lightweight, for short chats (English and Arabic)', reasoningEffort: false, echoReasoning: false, contextWindow: 4096 },
+  /*
+   * Mistral's models, and the only ones here that can look at an image.
+   *
+   * Groq serves nothing on this account that can see -- so before these, a picture was built, encoded, attached, and
+   * then dropped by the one line that checks `vision` before sending. Everything worked and nothing looked.
+   *
+   * Sizes and limits measured against the real service in October 2026. The ones that matter are the request rates,
+   * not the token allowances: `ministral-14b` has more tokens per minute than `8b` and allows one request every two
+   * seconds, which is why the smaller one is what the Orb uses while somebody waits.
+   *
+   * Not offered as a choice in the model picker. These are chosen by the job (shared/providers.ts) -- text stays on
+   * Groq because 120 billion parameters beats 14, and anything with an image comes here because nothing else can.
+   */
+  { id: 'ministral-8b-2512', provider: 'mistral', job: 'vision', label: 'ORION Sight', description: 'Looks at a page or an image', reasoningEffort: false, echoReasoning: false, vision: true, contextWindow: 262144 },
+  { id: 'ministral-3b-2512', provider: 'mistral', job: 'vision', label: 'ORION Sight Quick', description: 'Looks quickly, for repeated glances', reasoningEffort: false, echoReasoning: false, vision: true, contextWindow: 131072 },
+  { id: 'ministral-14b-2512', provider: 'mistral', job: 'vision', label: 'ORION Sight Deep', description: 'Looks carefully, when the question is hard', reasoningEffort: false, echoReasoning: false, vision: true, contextWindow: 262144 },
+  { id: 'codestral-2508', provider: 'mistral', job: 'code', label: 'ORION Build', description: "Writes a Page's code", reasoningEffort: false, echoReasoning: false, contextWindow: 256000 },
   // Not a Groq model: resolved to one of the models above for each message (shared/modelRoute.ts), never sent to Groq.
   { id: 'orion/auto', label: 'ORION Auto', description: 'Picks the right Orion for each message', reasoningEffort: true, echoReasoning: false, contextWindow: 131072, inputTokenLimit: 6000 }
 ]
+
+/** Which service answers a model. Groq unless the model says otherwise, since every model predated the second one. */
+export const providerOf = (id: string): 'groq' | 'mistral' => modelInfo(id).provider ?? 'groq'
+
+/**
+ * The models a person may choose, and the only ones the ordinary fallback chain may reach.
+ *
+ * Everything with a `job` is chosen by Orbis for that job. Two things would go wrong without this list: "ORION Sight"
+ * would sit in the picker beside a model nine times its size, where choosing it is a mistake nobody can see they are
+ * making; and `nim.ts`'s auto-fallback, which walks every model in turn, would send a Mistral model to Groq's address
+ * and report an authentication failure for a question about the weather.
+ */
+export const CHAT_MODELS: ModelInfo[] = MODELS.filter((m) => !m.job)
 
 export const DEFAULT_MODEL = MODELS[0].id
 

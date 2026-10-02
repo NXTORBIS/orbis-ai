@@ -157,6 +157,22 @@ import { Store } from './store'
 declare const __GROQ_API_KEYS__: string[]
 const GROQ_API_KEYS: string[] = typeof __GROQ_API_KEYS__ === 'undefined' ? [] : __GROQ_API_KEYS__
 
+/*
+ * Mistral's keys, the same way, for the jobs Groq cannot do.
+ *
+ * Kept as its own list rather than merged with the one above. A key sent to the wrong service is not a slow key or a
+ * busy key -- it is an authentication failure, and one mixed into a rotation would look like the service being
+ * unreliable rather than like a request sent to the wrong address.
+ *
+ * Empty when nobody has put a key in `.env.local`, and that is a working state: everything that needs Mistral says it
+ * cannot rather than failing (shared/providers.ts, `cannotDo`).
+ */
+declare const __MISTRAL_API_KEYS__: string[]
+const MISTRAL_API_KEYS: string[] = typeof __MISTRAL_API_KEYS__ === 'undefined' ? [] : __MISTRAL_API_KEYS__
+
+/** Which services Orbis can actually reach, for choosing a model by job. */
+export const HAVE_KEYS = { groq: GROQ_API_KEYS.length > 0, mistral: MISTRAL_API_KEYS.length > 0 }
+
 /** What a message asks for beyond a text reply: /imagine, /browse, or a picture or browser task recognised from its meaning. */
 async function detectIntent(messages: ChatMessage[], browser: ChatRequest['browser']): Promise<ChatIntent | null> {
   const text = messages.at(-1)?.content.trim() ?? ''
@@ -618,7 +634,7 @@ function registerIpc(): void {
     return settings
   })
 
-  ipcMain.handle('settings:testKey', () => testApiKey(GROQ_API_KEYS, (url, init) => net.fetch(url, init)))
+  ipcMain.handle('settings:testKey', () => testApiKey(GROQ_API_KEYS, (url, init) => net.fetch(url, init), MISTRAL_API_KEYS))
 
   ipcMain.handle('conversations:list', () => store.listConversations())
   ipcMain.handle('conversations:save', (_event, conversation: Conversation) => store.saveConversation(conversation))
@@ -1759,6 +1775,7 @@ if (!app.requestSingleInstanceLock()) {
       runOperation: (operation, input) => pages.carryOutFor(operation, input),
       allOperations: OPERATION_CAPABILITIES,
       apiKeys: async () => GROQ_API_KEYS,
+      mistralKeys: () => MISTRAL_API_KEYS,
       fetchFn: (url, init) => net.fetch(url, init),
       random: () => crypto.randomUUID().replace(/-/g, ''),
       ask: requestJson,

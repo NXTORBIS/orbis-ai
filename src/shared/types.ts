@@ -312,8 +312,23 @@ export type SettingsUpdate = Partial<Omit<Settings, 'hasApiKey'>> & {
 export interface ModelInfo {
   /** Orbis's id for the model, stored with chats and settings. */
   id: string
-  /** The Groq model to call, when it differs from `id` (a variant of a Groq model with its own settings). */
+  /** The provider's model to call, when it differs from `id` (a variant with its own settings). */
   apiModel?: string
+  /**
+   * Which service answers this model. Absent means Groq, which every model predated the second provider.
+   *
+   * Carried on the model rather than worked out from its name, because a name is a guess: `mistral-small` is
+   * Mistral's and `openai/gpt-oss-120b` is not OpenAI's, it is Groq's.
+   */
+  provider?: 'groq' | 'mistral'
+  /**
+   * Set when Orbis chooses this model for a particular job rather than a person choosing it in the picker.
+   *
+   * The vision and code models are here to do one thing each. Offering them as conversation choices would put "ORION
+   * Sight" in a list beside a 120-billion-parameter model, where picking it would be a mistake nobody could see they
+   * were making -- and letting the ordinary fallback chain reach them would send a Groq request to Mistral's address.
+   */
+  job?: 'vision' | 'code'
   label: string
   description: string
   /** Accepts the top-level `reasoning_effort` parameter. */

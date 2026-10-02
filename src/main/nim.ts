@@ -1,5 +1,6 @@
 import type { ChatMessage, ModelInfo, ReasoningEffort, StreamEvent } from '../shared/types'
-import { MODELS, modelInfo, modelLabel } from '../shared/models.ts'
+import { CHAT_MODELS, modelInfo, modelLabel, providerOf } from '../shared/models.ts'
+import { PROVIDERS } from '../shared/providers.ts'
 import { AUTO_MODEL } from '../shared/modelRoute.ts'
 import { SseParser, ThinkTagSplitter } from './sse.ts'
 
@@ -54,7 +55,7 @@ export async function streamChat(opts: ChatOptions): Promise<void> {
     return opts.emit({ type: 'error', message: 'This copy of Orbis has no Groq API key. Add it to .env.local and rebuild.' })
   }
   // Auto is never a model Groq knows; it is resolved before this point, and is never a fallback.
-  const chain: Attempt[] = [opts.model, ...(opts.autoFallback ? MODELS.map((m) => m.id).filter((id) => id !== opts.model && id !== AUTO_MODEL) : [])].map((model) => ({
+  const chain: Attempt[] = [opts.model, ...(opts.autoFallback ? CHAT_MODELS.map((m) => m.id).filter((id) => id !== opts.model && id !== AUTO_MODEL) : [])].map((model) => ({
     model,
     variant: 'normal'
   }))
@@ -187,14 +188,23 @@ async function streamOnce(
     if (info.disableReasoning) body.reasoning_effort = 'none'
   }
 
-  const res = await opts.fetchFn(`${GROQ_BASE_URL}/chat/completions`, {
+  const sending = requestBodyFor(model, body)
+
+  /*
+   * The address follows the model, not the other way round.
+   *
+   * Hardcoding one base url was fine while there was one service. It stopped being fine the moment a model existed
+   * that Groq does not serve: the request would go to Groq's address with a Mistral model name and come back as an
+   * unknown-model error, which reads as Orbis being broken rather than as a request sent to the wrong place.
+   */
+  const res = await opts.fetchFn(`${PROVIDERS[providerOf(model)].baseUrl}/chat/completions`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
       Accept: 'text/event-stream'
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify(sending),
     signal: opts.signal
   })
 
@@ -363,7 +373,24 @@ function toApiMessages(messages: ChatMessage[], systemPrompt: string, model: str
   return out
 }
 
-function toMessageContent(message: ChatMessage, model: ReturnType<typeof modelInfo>): string | Record<string, unknown>[] {
+/**
+ * The body as the chosen service expects it.
+ *
+ * Every branch above is written in Groq's terms, because Groq came first and because one vocabulary is easier to read
+ * than two interleaved. The difference lives here: Groq takes `max_completion_tokens` and understands
+ * `reasoning_effort`, while Mistral takes `max_tokens` and **rejects** `reasoning_effort` outright -- which fails the
+ * whole request rather than being politely ignored.
+ */
+export function requestBodyFor(model: string, body: Record<string, unknown>): Record<string, unknown> {
+  if (providerOf(model) !== 'mistral') return body
+  const out: Record<string, unknown> = { ...body }
+  if (typeof out.max_completion_tokens === 'number') out.max_tokens = out.max_completion_tokens
+  delete out.max_completion_tokens
+  delete out.reasoning_effort
+  return out
+}
+
+export function toMessageContent(message: ChatMessage, model: ReturnType<typeof modelInfo>): string | Record<string, unknown>[] {
   if (!message.attachments?.length) return message.content
 
   const hasImages = message.attachments.some(a => a.type === 'image')
@@ -467,16 +494,49 @@ function describeError(err: unknown, model: string): string {
 
 
 /** Lists models with each key. 429 still proves a key is valid. */
-export async function testApiKey(apiKeys: string[], fetchFn: FetchFn): Promise<{ ok: boolean; message: string }> {
-  if (apiKeys.length === 0) return { ok: false, message: 'No Groq API key is built into this copy of Orbis.' }
-  let accepted = 0
-  for (const key of apiKeys) {
-    try {
-      const res = await fetchFn(`${GROQ_BASE_URL}/models`, { headers: { Authorization: `Bearer ${key}` } })
-      if (res.ok || res.status === 429) accepted++
-    } catch (err) {
-      return { ok: false, message: `Couldn't reach Groq: ${err instanceof Error ? err.message : String(err)}` }
+/**
+ * Whether the keys work, said per service and per kind of failure.
+ *
+ * "Groq accepted 48 of 75" was the old answer, and it hid the thing worth knowing: 26 of those keys belonged to
+ * organisations that had been restricted, which never recovers, and one was simply wrong. A busy key and a dead key
+ * read identically in a count, and only one of them is worth keeping.
+ *
+ * Both services are asked, because a copy of Orbis with Groq keys and no Mistral key cannot look at anything -- and
+ * somebody checking their keys should be told that rather than discovering it when a picture is quietly ignored.
+ */
+export async function testApiKey(apiKeys: string[], fetchFn: FetchFn, mistralKeys: string[] = []): Promise<{ ok: boolean; message: string }> {
+  const check = async (label: string, base: string, keys: string[]): Promise<string | null> => {
+    if (!keys.length) return null
+    let working = 0
+    let dead = 0
+    let busy = 0
+    for (const key of keys) {
+      try {
+        const res = await fetchFn(`${base}/models`, { headers: { Authorization: `Bearer ${key}` } })
+        if (res.ok) working++
+        else if (res.status === 429) busy++
+        else dead++
+      } catch (err) {
+        return `Couldn't reach ${label}: ${err instanceof Error ? err.message : String(err)}`
+      }
     }
+    const parts = [`${label}: ${working} of ${keys.length} key${keys.length === 1 ? '' : 's'} working`]
+    if (busy) parts.push(`${busy} busy`)
+    // Said separately because it does not recover: a restricted or invalid key is worth removing, not retrying.
+    if (dead) parts.push(`${dead} refused outright (restricted or invalid)`)
+    return parts.join(', ')
   }
-  return { ok: accepted > 0, message: `Groq accepted ${accepted} of ${apiKeys.length} API key${apiKeys.length === 1 ? '' : 's'}.` }
+
+  if (!apiKeys.length && !mistralKeys.length) {
+    return { ok: false, message: 'No API key is built into this copy of Orbis.' }
+  }
+
+  const lines = [await check('Groq', PROVIDERS.groq.baseUrl, apiKeys), await check('Mistral', PROVIDERS.mistral.baseUrl, mistralKeys)].filter(
+    (line): line is string => line !== null
+  )
+  if (!mistralKeys.length) {
+    lines.push('No Mistral key, so Orbis cannot look at an image: nothing on Groq can see.')
+  }
+  const ok = lines.some((line) => /[1-9]\d* of \d+ keys? working/.test(line))
+  return { ok, message: lines.join(String.fromCharCode(10)) }
 }

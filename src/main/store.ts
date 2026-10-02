@@ -3,7 +3,7 @@ import { nullPlatform } from './platform.ts'
 import type { SecretStorePort } from './platform'
 import { join } from 'node:path'
 import type { Conversation, ReasoningEffort, Settings, SettingsUpdate, Theme } from '../shared/types'
-import { DEFAULT_MODEL, MODELS, currentModelId } from '../shared/models.ts'
+import { CHAT_MODELS, DEFAULT_MODEL, currentModelId } from '../shared/models.ts'
 import { DEFAULT_PROFILE_ID, dataDirFor } from '../shared/profiles.ts'
 
 interface StoredSettings extends Omit<Settings, 'hasApiKey'> {
@@ -71,7 +71,7 @@ export class Store {
     const current = await this.loadSettings()
     const next: StoredSettings = { ...current }
 
-    if (update.defaultModel !== undefined && MODELS.some((m) => m.id === update.defaultModel)) next.defaultModel = update.defaultModel
+    if (update.defaultModel !== undefined && CHAT_MODELS.some((m) => m.id === update.defaultModel)) next.defaultModel = update.defaultModel
     if (typeof update.autoFallback === 'boolean') next.autoFallback = update.autoFallback
     if (update.reasoningEffort && EFFORTS.includes(update.reasoningEffort)) next.reasoningEffort = update.reasoningEffort
     if (typeof update.systemPrompt === 'string') next.systemPrompt = update.systemPrompt.slice(0, 8000)

@@ -1,5 +1,6 @@
 import type { FollowupSuggestions } from '../shared/types'
-import { GROQ_BASE_URL } from './nim.ts'
+import { providerOf } from '../shared/models.ts'
+import { PROVIDERS } from '../shared/providers.ts'
 import { MAX_TITLE, shortenTitle, validateTitle, visibleLength } from '../shared/workflowTitle.ts'
 
 type FetchFn = (url: string, init?: RequestInit) => Promise<Response>
@@ -53,7 +54,7 @@ function clean(value: unknown, maxLength: number): string | null {
   return text && text.length <= maxLength ? text : null
 }
 
-/** Asks a fast Groq model for a JSON object, rotating keys on rate limits. Returns null on any failure. */
+/** Asks a fast model for a JSON object, rotating keys on rate limits. Returns null on any failure. */
 export async function requestJson(
   system: string,
   user: string,
@@ -61,20 +62,50 @@ export async function requestJson(
   fetchFn: FetchFn,
   timeoutMs = 15_000,
   /** A larger answer (up to maxTokens) or a stronger model, for structured work such as drafting a workflow. */
-  options: { maxTokens?: number; model?: string } = {}
+  options: {
+    maxTokens?: number
+    model?: string
+    /**
+     * Keys for the other service, needed when `model` is one of its own.
+     *
+     * Separate rather than merged into `apiKeys`, because a Groq key sent to Mistral is not a slow key or a busy
+     * key -- it is an authentication failure, and one mixed into the rotation would look like the service being
+     * unreliable rather than like a key sent to the wrong address.
+     */
+    mistralKeys?: string[]
+  } = {}
 ): Promise<Record<string, unknown> | null> {
   // These helper calls are optional extras; bad input means "no answer", never a crash of the chat request.
   if (!Array.isArray(apiKeys) || typeof fetchFn !== 'function') return null
-  for (const key of apiKeys) {
+
+  const model = options.model ?? 'openai/gpt-oss-20b'
+  const provider = providerOf(model)
+  const keys = provider === 'groq' ? apiKeys : (options.mistralKeys ?? [])
+  if (!keys.length) return null
+
+  for (const key of keys) {
     let res: Response
     try {
-      res = await fetchFn(`${GROQ_BASE_URL}/chat/completions`, {
+      /*
+       * The address follows the model here too.
+       *
+       * This path serves the structured work -- intent, drafts, generated Pages -- and a generated Page's code is
+       * written by Codestral, which is not at Groq's address. A model name is not a service.
+       */
+      res = await fetchFn(`${PROVIDERS[providerOf(model)].baseUrl}/chat/completions`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+        /*
+         * Two parameters differ between the services, and getting either wrong fails the whole request.
+         *
+         * Groq takes `max_completion_tokens` and understands `reasoning_effort`; Mistral takes `max_tokens` and
+         * rejects `reasoning_effort` outright. Both speak the same JSON mode, which is the part that matters here.
+         */
         body: JSON.stringify({
-          model: options.model ?? 'openai/gpt-oss-20b',
-          reasoning_effort: 'low',
-          max_completion_tokens: options.maxTokens ?? 800,
+          model,
+          ...(provider === 'groq'
+            ? { reasoning_effort: 'low', max_completion_tokens: options.maxTokens ?? 800 }
+            : { max_tokens: options.maxTokens ?? 800 }),
           response_format: { type: 'json_object' },
           messages: [
             { role: 'system', content: system },
