@@ -1,5 +1,6 @@
 import { buildable, checkCode, filesFor, MAX_CODE_BYTES, MAX_STYLE_BYTES } from '../../shared/pages/codePage.ts'
 import type { CodeProblem, CodeSpec, PageFile } from '../../shared/pages/codePage.ts'
+import { catalogueForPrompt } from './generationCatalogue.ts'
 
 /**
  * Building a Page out of code.
@@ -11,6 +12,17 @@ import type { CodeProblem, CodeSpec, PageFile } from '../../shared/pages/codePag
  *
  * The same ladder as the other route, for the same reason: ask once, argue once with a specific complaint, then stop.
  * A third attempt with no new information is the same coin flipped again.
+ *
+ * ## The Page computes for itself
+ *
+ * This was briefly got backwards, and the mistake is worth recording because it is the natural one. The instructions
+ * told the model to prefer Orbis's own tested calculations over writing the mathematics -- which is right for the
+ * specification route and wrong here, because it drags this route back under the 236-operation ceiling it exists to
+ * escape. A generated converter duly asked Orbis to perform an *addition*, was refused, and showed nothing.
+ *
+ * So: the Page writes its own logic. `orbis.request` remains available for something genuinely hard that Orbis
+ * already does well, and the catalogue is still supplied so a name that is used is a name that exists -- but it is
+ * the exception, and a Page is expected to work without it.
  *
  * The model never writes a path, never writes a script tag, and never writes the part that says the Page has started.
  * It writes a body, a style and a script; `filesFor` puts them inside a shell that Orbis owns. That is what makes
@@ -49,10 +61,24 @@ The rules, all of which are checked before the Page is built:
 What a Page may do:
 
 - Anything that is drawing, laying out, animating or responding to a person: canvas, SVG, CSS, requestAnimationFrame, pointer and keyboard events, form controls.
-- Ask Orbis to work something out, with: await orbis.request(operation, payload). It returns what the operation returned, and throws if the operation refused. Use it for any real calculation Orbis already has rather than writing the mathematics yourself, because those answers are tested and yours are not.
+- Work out whatever the Page needs in the script itself. That is the point of this kind of Page: the mathematics, the simulation, the drawing, the rules of a game, all of it is yours to write. Do not look for a built-in way to do something you can simply write.
+- There is one exception, and it is rarely the right answer: await orbis.request(operation, payload) asks Orbis to run one of its own tested calculations. Reach for it only for something genuinely hard that is on the list at the end of these instructions -- a physical simulation, a statistical fit, a unit conversion with real units. Never for arithmetic you could write in a line. A name that is not on that list is refused, and a Page that asks for one shows nothing.
 - The elements in "body" exist before "script" runs, so it is safe to look them up at the top.
 
 Write for a dark background. Orbis sets a readable default; style what you need on top of it.`
+
+/**
+ * The instructions, with the list of calculations a Page may actually name.
+ *
+ * Built rather than written out, because the catalogue is the same one the specification route uses and the two must
+ * not drift: a Page told about an operation that does not exist asks for it, is refused, and shows nothing -- which
+ * is exactly what happened to a converter that opened, looked right, and computed nothing.
+ */
+export const codeInstructions = (): string => `${CODE_INSTRUCTIONS}
+
+The calculations Orbis can run, for the rare case one is genuinely wanted. A Page is expected to work without any of
+them, and most should.
+${catalogueForPrompt()}`
 
 export interface CodeGenerationOptions {
   apiKeys(): Promise<string[]>
@@ -167,7 +193,7 @@ ${complaint}
 
 Write it again, fixing those. Everything else about the format is the same.`
 
-    return this.o.ask(CODE_INSTRUCTIONS, user, keys, this.o.fetchFn, 90_000, {
+    return this.o.ask(codeInstructions(), user, keys, this.o.fetchFn, 90_000, {
       maxTokens: 8000,
       model: CODE_MODEL,
       mistralKeys

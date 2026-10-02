@@ -140,7 +140,7 @@ import type { RunningService } from '../search-service/server'
  */
 let searchOrbisPages: ((query: string) => Promise<{ title: string; url: string; snippet: string; site: string }[]>) | null = null
 import { GeneratedPages } from './pages/generated'
-import { PageHost, PAGE_SCHEME_PRIVILEGES } from './pages/host'
+import { PageHost, PAGE_SCHEME_PRIVILEGES, setKnownOperations } from './pages/host'
 import { CodePages } from './pages/codePages'
 import { CodeStore } from './pages/codeStore'
 import { GeneratedStore } from './pages/generatedStore'
@@ -1822,6 +1822,14 @@ if (!app.requestSingleInstanceLock()) {
       grantedFor: async () => []
     })
     pageHost.registerProtocol()
+    /*
+     * What a Page is allowed to ask for.
+     *
+     * Never called until now, so the set was empty and every `orbis.request` was refused as an unknown operation --
+     * which is why a generated converter opened, looked right, and computed nothing. The Page's own code was fine;
+     * there was simply nothing it was permitted to name.
+     */
+    setKnownOperations(Object.keys(OPERATION_CAPABILITIES))
     const codePages = new CodePages({
       host: pageHost,
       store: codeStore,

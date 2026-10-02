@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ArrowLeft, ArrowRight, Check, Equal, FlaskConical, Info, Ruler, Search, ShieldCheck, Star, WifiOff, Wrench, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, Equal, FlaskConical, Info, PenLine, Ruler, Search, ShieldCheck, Star, WifiOff, Wrench, X } from 'lucide-react'
 import type { NoticeKind } from '../App'
 import type { PageCard, PageCategoryNode, PageComputeResult, PagePermission, PageSearchHit } from '../../../shared/types'
 import { BuilderPanel, ComposePanel, DiagnosticsPanel, PackagePanel, STUDIO_TABS, type StudioTab } from './PageStudio'
 import { LAB_PAGES } from './PageLabs'
+import CodePageStudio from './CodePageStudio'
 import { ApplicationsPanel } from './PageApplications'
 import { DescribePanel, GeneratedHistory, RunDocument } from './PageDescribe'
 import type { PageDocument } from '../../../shared/pages/builder'
@@ -28,7 +29,12 @@ import {
  * the same engine answers a Page, a workflow and Orion, so none of them can disagree about what two plus two is.
  */
 
-type Screen = { kind: 'library' } | { kind: 'page'; page: PageCard } | { kind: 'studio'; tab: StudioTab }
+type Screen =
+  | { kind: 'library' }
+  | { kind: 'page'; page: PageCard }
+  | { kind: 'studio'; tab: StudioTab }
+  /** Writing a Page as code: a different route with a different promise, so a different screen. */
+  | { kind: 'write' }
 
 const RISK_LABEL: Record<PagePermission['risk'], string> = {
   low: 'Low',
@@ -249,6 +255,8 @@ export default function PagesView({
     )
   }
 
+  if (screen.kind === 'write') return <CodePageStudio onBack={() => setScreen({ kind: 'library' })} />
+
   return (
     <div className="view pages-view" role="region" aria-label="Orbis Pages">
       <header className="view-head">
@@ -269,6 +277,14 @@ export default function PagesView({
               </button>
             )}
           </label>
+          <button
+            type="button"
+            className="queue-btn small ghost"
+            onClick={() => setScreen({ kind: 'write' })}
+            title="Describe a Page and have Orbis write it"
+          >
+            <PenLine size={13} /> Write one
+          </button>
           <button
             type="button"
             className="queue-btn small ghost"

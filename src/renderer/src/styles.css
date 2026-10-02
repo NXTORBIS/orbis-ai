@@ -20668,3 +20668,109 @@ html[data-motion='reduced'] .tool-btn.recording {
   border-color: var(--cyan);
   color: var(--cyan);
 }
+
+/* ---------------------------------------------------------------- Pages written as code
+ *
+ * The screen for describing a Page and watching it run. Everything here is around the Page rather than in it: the Page
+ * itself is a sandboxed frame the main process places over `.code-page-region`, so that element is deliberately empty
+ * and its only job is to have a size and a position.
+ */
+.code-page-studio {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1;
+  min-height: 0;
+  padding: 16px 20px 20px;
+}
+
+.code-page-ask {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.code-page-input {
+  flex: 1;
+}
+
+.code-page-caveat {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line-strong);
+  background: var(--pill-bg);
+  color: var(--muted-strong);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.code-page-caveat svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.code-page-failure {
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--red);
+  background: color-mix(in srgb, var(--red) 12%, transparent);
+  font-size: 13px;
+}
+
+.code-page-failure p {
+  margin: 0 0 6px;
+}
+
+.code-page-failure ul,
+.code-page-notes,
+.code-page-warnings {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  color: var(--muted-strong);
+}
+
+.code-page-about {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.code-page-purpose {
+  margin: 0;
+  font-size: 14px;
+}
+
+/* A caveat on a Page that works, which is different from a reason it does not. */
+.code-page-warnings {
+  color: var(--amber, var(--muted-strong));
+}
+
+/*
+ * The rectangle the Page is drawn over.
+ *
+ * It takes the remaining height rather than a fixed one, because a Page is a whole interface and the useful thing to
+ * give it is whatever is left. `min-height` keeps it from collapsing to nothing when the notes above are long, which
+ * would hand the frame a region of zero and look exactly like a Page that failed to open.
+ */
+.code-page-view {
+  flex: 1;
+  min-height: 280px;
+  display: flex;
+}
+
+.code-page-view[hidden] {
+  display: none;
+}
+
+.code-page-region {
+  flex: 1;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--bg-mid);
+  overflow: hidden;
+}
