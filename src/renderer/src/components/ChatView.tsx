@@ -18,6 +18,7 @@ import {
   onRendered,
   onScrolled,
   roomUnderTurn,
+  scrollIsTheirs,
   settled
 } from '../../../shared/chatScroll'
 
@@ -182,7 +183,9 @@ export default function ChatView(props: Props): React.JSX.Element {
     if (!el) return
     const { state, action } = onRendered(scroll.current, {
       conversationId: conversation?.id ?? null,
-      lastUserId: messages.findLast((m) => m.role === 'user')?.id ?? null
+      lastUserId: messages.findLast((m) => m.role === 'user')?.id ?? null,
+      // Its first question, with the answer on its way: a conversation that began a moment ago.
+      started: Boolean(stream) && messages.filter((m) => m.role === 'user').length === 1
     })
     if (action.kind === 'toTurn') tailTurn.current = action.messageId
     else if (state.conversationId !== scroll.current.conversationId) tailTurn.current = null
@@ -190,7 +193,7 @@ export default function ChatView(props: Props): React.JSX.Element {
     // Before the move, so the move has somewhere to go.
     fitTail(el)
     perform(el, action)
-  }, [conversation, messages, perform, fitTail])
+  }, [conversation, messages, perform, fitTail, stream])
 
   /**
    * The page changing shape for reasons that are not new messages: the window resizing, the sidebar opening, an image
@@ -249,10 +252,46 @@ export default function ChatView(props: Props): React.JSX.Element {
    * The state is a ref rather than React state so that a wheel turn does not render the conversation. Only the jump
    * button's visibility is state, and only when it actually changes.
    */
+  /**
+   * What the person last did that scrolls, so a scroll event can be told from the page rearranging itself.
+   *
+   * A scroll event does not say who caused it, and position alone cannot say either: the browser moves the scroller
+   * whenever the content above it gets shorter or the end of the page moves by a fraction of a pixel, and with the
+   * newest question held at the top of the view the scroller sits exactly at the end, where every such nudge looks
+   * like somebody arriving at the foot of the page.
+   */
+  const input = useRef({ pressed: false, actedAt: 0, lastTheirsAt: 0 })
+  const acted = useCallback((): void => {
+    input.current.actedAt = performance.now()
+  }, [])
+  const pressedDown = useCallback((): void => {
+    input.current.pressed = true
+    input.current.actedAt = performance.now()
+  }, [])
+  useEffect(() => {
+    // Released anywhere: a scrollbar is let go of wherever the pointer has wandered to.
+    const up = (): void => {
+      input.current.pressed = false
+      input.current.actedAt = performance.now()
+    }
+    window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', up)
+    return () => {
+      window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', up)
+    }
+  }, [])
+
   const onScroll = useCallback((): void => {
     const el = scrollRef.current
     if (!el) return
-    const outcome = onScrolled(scroll.current, measure(el), showJumpRef.current)
+    const now = performance.now()
+    const theirs = scrollIsTheirs(now, input.current)
+    if (theirs) input.current.lastTheirsAt = now
+    // Measured only for a scroll that is theirs. Measuring also records where the reader was, and after a move
+    // nobody made that record is exactly what is needed to put them back -- so it is left as it was.
+    const view = theirs ? measure(el) : { scrollTop: el.scrollTop, scrollHeight: el.scrollHeight, clientHeight: el.clientHeight }
+    const outcome = onScrolled(scroll.current, view, showJumpRef.current, theirs)
     scroll.current = outcome.state
     reflect(el)
     if (outcome.showJump !== showJumpRef.current) setShowJump(outcome.showJump)
@@ -322,7 +361,7 @@ export default function ChatView(props: Props): React.JSX.Element {
 
   return (
     <div className="stage-content">
-      <div className="messages" ref={scrollRef} onScroll={onScroll}>
+      <div className="messages" ref={scrollRef} onScroll={onScroll} onWheel={acted} onTouchMove={acted} onKeyDown={acted} onPointerDown={pressedDown}>
         <div className="messages-inner">
           {props.incognito && (
             <div className="incognito-banner">

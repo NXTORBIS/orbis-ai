@@ -32,14 +32,14 @@ import {
 import { safeName, unique } from '../../shared/artifacts/naming.ts'
 import { gateForWrite } from '../../shared/artifacts/secrets.ts'
 import { verifyDocumentFile, verifyPdfFile, verifyTableFile } from '../../shared/artifacts/validate.ts'
-import { STOPPED, type ArtifactGeneration } from './generation.ts'
+import { longDocumentAsked, STOPPED, type ArtifactGeneration } from './generation.ts'
 import { importFile } from './importing.ts'
 import { verifyDocx, verifyPptx, verifyXlsx, writeDocx, writePptx, writeXlsx, type Picture } from './office.ts'
 import { ArtifactStore, CONTENT_PREFIX, SOURCE_FILE } from './store.ts'
 import { toDelimited } from '../../shared/compute/data.ts'
 import { toText } from '../../shared/compute/documentHtml.ts'
 import { analyseTable, analysisDocument } from '../../shared/artifacts/analysis.ts'
-import { diagramToSvg, plotToSvg, verifySvgFile } from '../../shared/artifacts/svg.ts'
+import { diagramToSvg, PIE_LIMITS, pieProblem, pieToSvg, plotToSvg, verifySvgFile } from '../../shared/artifacts/svg.ts'
 import { asNumber, formatDate, type Column } from '../../shared/compute/data.ts'
 import { buildPlot, isPlotError, seriesFromPoints, type Series, type SeriesKind } from '../../shared/compute/plot.ts'
 import { decodePng } from '../chromium/png.ts'
@@ -119,6 +119,24 @@ const OPERATIONS: Readonly<Record<string, string>> = Object.freeze({
 const JOIN_KINDS: readonly JoinKind[] = Object.freeze(['inner', 'left', 'full'])
 
 const SERIES_KINDS: readonly SeriesKind[] = Object.freeze(['line', 'bar', 'scatter', 'area', 'step'])
+
+/**
+ * The kind of chart a sentence names, when it names exactly one.
+ *
+ * "Make it a pie chart" is not a suggestion. The model that chooses the columns also offers a kind, and left to it a
+ * pie that was asked for can come back as bars with nothing said. So the person's own word decides, and when it
+ * cannot be drawn the reason is given instead.
+ */
+export function chartKindSaid(request: string): 'pie' | SeriesKind | null {
+  const said: ('pie' | SeriesKind)[] = []
+  if (/\bpie\b/i.test(request)) said.push('pie')
+  if (/\b(bars?|bar ?chart|column chart|columns chart)\b/i.test(request)) said.push('bar')
+  if (/\bline (chart|graph|plot)\b|\bas a line\b|\blines\b/i.test(request)) said.push('line')
+  if (/\bscatter/i.test(request)) said.push('scatter')
+  if (/\barea (chart|graph|plot)\b|\bas an area\b/i.test(request)) said.push('area')
+  if (/\bstep (chart|graph|plot)\b|\bas steps\b/i.test(request)) said.push('step')
+  return said.length === 1 ? said[0] : null
+}
 
 export const ARTIFACT_OPERATIONS = Object.freeze(Object.keys(OPERATIONS))
 
@@ -261,8 +279,8 @@ export class ArtifactService {
    * a new artifact or a new version, comes back as a record, and a record made on behalf of a conversation belongs to
    * it. An artifact that already belongs to a conversation keeps the one it has.
    */
-  async run(profileId: string, request: unknown, signal?: AbortSignal): Promise<ArtifactResult> {
-    const result = await this.dispatch(profileId, request, signal)
+  async run(profileId: string, request: unknown, signal?: AbortSignal, progress?: (message: string) => void): Promise<ArtifactResult> {
+    const result = await this.dispatch(profileId, request, signal, progress)
     const conversationId = typeof request === 'object' && request !== null ? (request as Record<string, unknown>).conversationId : undefined
     if (!result.ok || !isConversationId(conversationId)) return result
     const value = result.value as { record?: ArtifactRecord } | null
@@ -273,7 +291,7 @@ export class ArtifactService {
     return { ...result, value: { ...(value as Record<string, unknown>), record: stamped } }
   }
 
-  private async dispatch(profileId: string, request: unknown, signal?: AbortSignal): Promise<ArtifactResult> {
+  private async dispatch(profileId: string, request: unknown, signal?: AbortSignal, progress?: (message: string) => void): Promise<ArtifactResult> {
     const req = (typeof request === 'object' && request !== null ? request : {}) as Record<string, unknown>
     const operation = str(req.operation, 60)
     const fail = (error: string, message: string, detail?: unknown): ArtifactResult => ({
@@ -302,7 +320,7 @@ export class ArtifactService {
         case 'artifact.create':
           return await this.create(profileId, operation, req, fail)
         case 'artifact.generate':
-          return await this.generate(profileId, operation, req, fail, signal)
+          return await this.generate(profileId, operation, req, fail, signal, progress)
         case 'artifact.import':
           return await this.import(profileId, operation, req, fail)
         case 'artifact.analyse':
@@ -464,7 +482,7 @@ export class ArtifactService {
       return { bytes, text: body.code.source, scan: body.code.source, format, hash: hashOf(bytes), loss: { lossy: false, losses: [], carries: FORMATS.code.carries }, notes: [] }
     }
     if (body.kind === 'plot' || body.kind === 'diagram') {
-      const made = body.kind === 'plot' ? plotToSvg(body.plot) : diagramToSvg(body.diagram)
+      const made = body.kind === 'plot' ? (body.as === 'pie' ? pieToSvg(body.plot) : plotToSvg(body.plot)) : diagramToSvg(body.diagram)
       const loss = lossFor(format, { formatting: true })
       if (isInterchangeError(loss)) return { error: 'encode', message: loss.message }
       if (format === 'svg') {
@@ -1041,7 +1059,10 @@ export class ArtifactService {
       )
       if (signal?.aborted || outcome.failed === STOPPED) return fail('cancelled', 'Stopped. Nothing was drawn.')
       if (!outcome.plan) return fail(outcome.failed ? 'unavailable' : 'not-made', outcome.failed ?? outcome.problems[0] ?? 'Orion did not choose columns that can be drawn.', { attempts: outcome.attempts })
-      return this.chart(profileId, operation, { ...req, x: outcome.plan.x, y: outcome.plan.y, kind: typeof req.kind === 'string' && req.kind !== '' ? req.kind : outcome.plan.kind, request: undefined }, fail, signal)
+      // The kind the person named is the kind that is drawn. A model choosing the columns does not get to turn a pie
+      // into bars; if the pie cannot be drawn, the reason is said below instead of something else being drawn quietly.
+      const kind = typeof req.kind === 'string' && req.kind !== '' ? req.kind : (chartKindSaid(str(req.request, 2000)) ?? outcome.plan.kind)
+      return this.chart(profileId, operation, { ...req, x: outcome.plan.x, y: kind === 'pie' ? outcome.plan.y.slice(0, 1) : outcome.plan.y, kind, request: undefined }, fail, signal)
     }
 
     const find = (name: string): { column: Column; index: number } | null => {
@@ -1058,7 +1079,13 @@ export class ArtifactService {
       return fail('bad-input', ys.length === 0 ? 'Choose at least one column to draw.' : `There is no column called ${missing.map((one) => `"${one}"`).join(', ')}.`)
     }
     const kind = str(req.kind, 20).toLowerCase()
-    const seriesKind: SeriesKind = (SERIES_KINDS as readonly string[]).includes(kind) ? (kind as SeriesKind) : 'line'
+    // A pie is one series of bars drawn round a circle: the numbers and the axes are the plot engine's either way.
+    const pie = kind === 'pie'
+    const seriesKind: SeriesKind = pie ? 'bar' : (SERIES_KINDS as readonly string[]).includes(kind) ? (kind as SeriesKind) : 'line'
+    if (pie && ys.length !== 1) return fail('bad-input', 'A pie shows the shares of one column. Choose one column of amounts, or ask for bars to compare several.')
+    if (pie && table.rows.length > PIE_LIMITS.slices) {
+      return fail('bad-input', `A pie with ${table.rows.length} slices cannot be read: ${PIE_LIMITS.slices} is the most. Total the table by a category first, or ask for bars.`)
+    }
 
     // X: numeric columns are drawn as numbers; dates and categories in row order, with the values as tick labels.
     const numericX = x.column.type === 'number' || x.column.type === 'integer' || x.column.type === 'quantity'
@@ -1087,7 +1114,7 @@ export class ArtifactService {
     let plot = made
     if (!numericX) {
       // Row order on the axis, labelled by what is in the column. Every k-th label when there are too many to read.
-      const every = Math.max(1, Math.ceil(table.rows.length / 12))
+      const every = pie ? 1 : Math.max(1, Math.ceil(table.rows.length / 12))
       const ticks = table.rows.map((row, i) => {
         const cell = row.cells[x.index] ?? null
         const label = x.column.type === 'date' && typeof cell === 'number' ? formatDate(cell) : String(cell ?? '')
@@ -1096,6 +1123,12 @@ export class ArtifactService {
       plot = { ...made, x: { ...made.x, ticks, label: x.column.name } }
       notes.push(`"${x.column.name}" is drawn in row order, with its values as the labels.`)
     }
+
+    if (pie) {
+      const problem = pieProblem(plot)
+      if (problem) return fail('bad-input', problem)
+    }
+    const drawnAs = pie ? 'a pie: each slice is its share of the total' : seriesKind === 'bar' ? 'bars' : seriesKind === 'scatter' ? 'points' : seriesKind === 'area' ? 'an area' : seriesKind === 'step' ? 'steps' : 'a line'
 
     // Asked to redraw a chart that is already there ("make it a bar chart"): the result is that chart's next version,
     // so a document that shows it shows the new drawing, and the old one can be brought back.
@@ -1109,14 +1142,14 @@ export class ArtifactService {
     return this.keep(
       profileId,
       operation,
-      { kind: 'plot', plot },
+      pie ? { kind: 'plot', plot, as: 'pie' } : { kind: 'plot', plot },
       {
         title,
         source: `"${record.title}" (its numbers)`,
-        notes: [`Drawn from the table "${record.title}" (version ${record.version}): ${ys.map((one) => one.found!.column.name).join(', ')} against ${x.column.name}, as ${seriesKind === 'bar' ? 'bars' : seriesKind === 'scatter' ? 'points' : seriesKind === 'area' ? 'an area' : seriesKind === 'step' ? 'steps' : 'a line'}.`, ...notes],
+        notes: [`Drawn from the table "${record.title}" (version ${record.version}): ${ys.map((one) => one.found!.column.name).join(', ')} ${pie ? 'by' : 'against'} ${x.column.name}, as ${drawnAs}.`, ...notes],
         acceptSecrets: true,
         derivedFrom: { artifactId: record.artifactId, versionId: record.versionId, title: record.title },
-        ...(replaced ? { existing: replaced, reason: `Redrawn: ${title}, as ${seriesKind}.` } : {})
+        ...(replaced ? { existing: replaced, reason: `Redrawn: ${title}, as ${pie ? 'a pie' : seriesKind}.` } : {})
       },
       fail
     )
@@ -1163,7 +1196,8 @@ export class ArtifactService {
     operation: string,
     req: Record<string, unknown>,
     fail: (error: string, message: string, detail?: unknown) => ArtifactResult,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    progress?: (message: string) => void
   ): Promise<ArtifactResult> {
     if (!this.o.generation) return fail('unavailable', 'Orion is not set up on this computer, so there is nothing to write it with.')
     const request = str(req.request, 4000).trim()
@@ -1171,7 +1205,12 @@ export class ArtifactService {
     const acceptSecrets = req.acceptSecrets === true
 
     const wanted = str(req.kind, 20)
-    const outcome = await this.o.generation.generate(request, { context: str(req.context, 20_000), signal, ...(isArtifactKindId(wanted) && ARTIFACT_KINDS[wanted].orionMayName ? { kind: wanted } : {}) })
+    // A document asked for at length is planned and written a part at a time, because one answer from a model is a
+    // few pages and would be handed over as if it were the whole thing.
+    const long = wanted === 'document' || wanted === '' ? longDocumentAsked(request) : null
+    const outcome = long
+      ? await this.o.generation.generateLong(request, { parts: long.parts, short: long.short, context: str(req.context, 20_000), signal, progress })
+      : await this.o.generation.generate(request, { context: str(req.context, 20_000), signal, ...(isArtifactKindId(wanted) && ARTIFACT_KINDS[wanted].orionMayName ? { kind: wanted } : {}) })
     // Stopped while Orion was writing: nothing has been kept yet, and nothing is.
     if (signal?.aborted || outcome.failed === STOPPED) return fail('cancelled', 'Stopped. Nothing was made.')
     if (!outcome.body || !outcome.intent) {

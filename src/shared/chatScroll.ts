@@ -109,6 +109,14 @@ export interface Turn {
   conversationId: string | null
   /** The newest message from the person, which is what makes a turn new. */
   lastUserId: string | null
+  /**
+   * The conversation has only just begun: this is its first question, and the answer to it is being written now.
+   *
+   * It is a new place, like any conversation that has just been opened -- but there is nothing in it to land at the
+   * end of. Treated as an opened conversation it was followed to the foot, so a first answer longer than the window
+   * was shown from its last line. It is a question that was just asked, and it is treated as one.
+   */
+  started?: boolean
 }
 
 export interface Decision {
@@ -123,6 +131,14 @@ export interface Decision {
  * `none`, and the interesting part is which two cases are not.
  */
 export function onRendered(state: ChatScrollState, turn: Turn, reducedMotion = false): Decision {
+  // A conversation that began a moment ago with this question: the question, and the answer beginning under it.
+  if (turn.conversationId !== state.conversationId && turn.started && turn.lastUserId) {
+    return {
+      state: { mode: 'reading', settledAt: null, conversationId: turn.conversationId, shownTurnId: turn.lastUserId },
+      action: { kind: 'toTurn', messageId: turn.lastUserId }
+    }
+  }
+
   // A different conversation. It lands where opening a chat has always landed: at the end, ready to carry on.
   if (turn.conversationId !== state.conversationId) {
     return {
@@ -165,8 +181,15 @@ export interface ScrollOutcome {
  * used only to hand ownership back -- the next event really is theirs. Without this, every move Orbis made would
  * immediately be read as the person having moved, and the decision behind it would be thrown away a frame later.
  */
-export function onScrolled(state: ChatScrollState, v: Viewport, showJumpNow: boolean): ScrollOutcome {
+export function onScrolled(state: ChatScrollState, v: Viewport, showJumpNow: boolean, theirs = true): ScrollOutcome {
   const distance = distanceFromBottom(v)
+  if (!theirs) {
+    // Nobody scrolled. The content changed size and the browser put the scroller where it still fits -- a card
+    // above folding away, a line of status arriving, a fraction of a pixel of rounding. Read by position alone this
+    // looked like the person moving to the foot of the page, and Orbis began following an answer they were reading
+    // from its top. Where the scroller now is becomes where Orbis left it, and the mode is what it was.
+    return { state: { ...state, settledAt: v.scrollTop }, showJump: jumpVisible(v, showJumpNow) }
+  }
   if (state.settledAt !== null && state.settledAt === v.scrollTop) {
     // The scroller is exactly where Orbis put it, so this event is the echo of Orbis's own move and says nothing about
     // what the person wants. The mode is left as the decision that caused the move set it.
@@ -222,7 +245,25 @@ export const TURN_MARGIN = 16
  */
 export function roomUnderTurn(view: number, below: number): number {
   if (!Number.isFinite(view) || !Number.isFinite(below)) return 0
-  return Math.max(0, Math.round(view - below - TURN_MARGIN))
+  // Rounded up, never down: half a pixel too little and the scroller cannot quite reach where it was put, the
+  // browser moves it back by that half pixel, and a move nobody made has happened.
+  return Math.max(0, Math.ceil(view - below - TURN_MARGIN))
+}
+
+/** How long after a wheel turn, a key or a touch a scroll is still that gesture's doing. */
+export const GESTURE_MS = 700
+/** How close together two scroll events have to be to be the same glide. */
+export const GLIDE_MS = 150
+
+/**
+ * Whether a scroll event is the person's.
+ *
+ * A scroll event does not say who caused it. It is theirs when they are holding the scroller (dragging its bar,
+ * selecting text past its edge), when it follows something they did that scrolls, or when it carries on a glide
+ * that began that way. Anything else is the page rearranging itself.
+ */
+export function scrollIsTheirs(now: number, input: { pressed: boolean; actedAt: number; lastTheirsAt: number }): boolean {
+  return input.pressed || now - input.actedAt < GESTURE_MS || now - input.lastTheirsAt < GLIDE_MS
 }
 
 /**

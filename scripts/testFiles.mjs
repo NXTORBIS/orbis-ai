@@ -347,6 +347,7 @@ export const TEST_FILES = [
   'src/main/artifacts/store.test.ts',
   'src/main/artifacts/service.test.ts',
   'src/main/artifacts/chat.test.ts',
+  'src/main/artifacts/attaching.test.ts',
   'src/main/imagegen.test.ts',
   'src/shared/artifacts/chatIntent.test.ts',
   'src/shared/compute/documentHtml.test.ts',

@@ -165,9 +165,9 @@ export const pointsBack = (message: string): boolean => POINTS_BACK.test(message
 
 const MAKE = /\b(make|create|build|generate|write|draft|produce|prepare|put together|set up|design|draw|plot|graph|chart|turn|convert|export|save|download|put|give me|i need|i want|i'd like|can you|could you)\b/i
 const THING =
-  /\b(spreadsheets?|workbooks?|sheets?|tables?|trackers?|logs?|registers?|budgets?|schedules?|timetables?|planners?|checklists?|templates?|invoices?|documents?|reports?|proposals?|letters?|memos?|resumes?|cv|handbooks?|plans?|minutes|slides?|decks?|presentations?|flow ?charts?|diagrams?|org charts?|decision trees?|charts?|graphs?|plots?|scripts?|files?|datasets?|printable|dashboards?|calculators?|web ?pages?|websites?|tools?|forms?|quiz(zes)?)\b/i
+  /\b(spreadsheets?|workbooks?|sheets?|tables?|trackers?|logs?|registers?|budgets?|schedules?|timetables?|planners?|checklists?|templates?|invoices?|documents?|reports?|proposals?|letters?|memos?|resumes?|cv|handbooks?|guides?|manuals?|white ?papers?|essays?|articles?|newsletters?|agendas?|itinerar(?:y|ies)|polic(?:y|ies)|contracts?|syllabus(?:es)?|curriculums?|plans?|minutes|slides?|decks?|presentations?|flow ?charts?|diagrams?|org charts?|decision trees?|charts?|graphs?|plots?|histograms?|pies?|heat ?maps?|scripts?|files?|datasets?|printable|dashboards?|calculators?|web ?pages?|websites?|tools?|forms?|quiz(zes)?)\b/i
 const FORMAT = /\b(pdf|docx?|xlsx?|csv|tsv|json|markdown|html|pptx?|svg|png|excel|word|powerpoint)\b/i
-const CHANGE = /\b(add|remove|delete|drop|sort|filter|rename|change|update|edit|revise|rewrite|shorten|expand|fix|total|sum|group|only|make it|turn it|export|save|download|convert|bigger|larger|smaller|landscape|bar|line|column)\b/i
+const CHANGE = /\b(add|remove|delete|drop|sort|filter|rename|change|update|edit|revise|rewrite|shorten|expand|fix|total|sum|group|only|make it|turn it|export|save|download|convert|bigger|larger|smaller|landscape|bar|line|column|chart|graph|plot|draw|pie|histogram|visuali[sz]e)\b/i
 const POINTS_AT = /\b(it|this|that|them|those|these|the (table|spreadsheet|sheet|document|doc|chart|graph|report|file|diagram|flowchart|presentation|slides|deck|code|script))\b/i
 const QUESTION_OPENER =
   /^\s*(how (do|can|could|would|should|to)\b|what('s| is| are| does| do)\b|why\b|when\b|where\b|who\b|which\b|explain\b|define\b|describe\b|tell me (about|how|what|why)\b|is (it|there)\b|are there\b|does\b|do (i|you|we)\b|should i\b|difference between\b)/i
@@ -227,7 +227,7 @@ Reply with JSON only:
 The acts:
 - "make": a new thing made FOR the person to keep, fill in, download or send. A tracker, log, budget, timetable, register, template (kind "table"); a report, proposal, letter, plan, resume, notes, a presentation (kind "document"); a flowchart or process diagram (kind "diagram"); a script, a query, a settings file, or a small interactive thing -- a calculator, a form, a web page, a simple dashboard -- written as one web page file the person opens in their browser (kind "code"). When it should be made out of a listed artifact ("make a report from the spreadsheet") give that artifact as "target". When it should be made out of the previous reply, an attached file, or data pasted in this message, say which in "source".
 - "change": one of the listed artifacts altered: add, remove, sort, filter, total, rename a column, shorten, rewrite, add a section, add a step, change a chart's kind.
-- "chart": a chart drawn from a listed table ("add a chart", "graph it", "plot sales by month").
+- "chart": a chart drawn from a listed table ("add a chart", "graph it", "plot sales by month"). When the numbers are in a data file attached to this message and no listed table is meant, give "source": "attachment" and "target": null.
 - "export": a listed artifact wanted in a file format ("export it as PDF", "make it a Word file", "give me the Excel").
 - "keep": the previous reply, an attached file, or data pasted in this message turned into a file as it stands, with nothing rewritten ("turn this into a Word document", "put this table in Excel", "make a spreadsheet from the attached file"). Say which in "source" and what it becomes in "kind".
 - "ask": a question about what is IN a listed artifact ("what is the highest expense?", "summarise the report").
@@ -327,8 +327,12 @@ export function readChatIntent(raw: unknown, context: ChatIntentContext): ChatAr
       if (!target) return null
       return { act, target, into: null, source: null, kind: null, format: null, request }
     case 'chart':
-      if (!target) return null
-      // A chart is drawn from a table, or redrawn from the table an existing chart came from. Nothing else has numbers.
+      // A chart is drawn from a table, or redrawn from the table an existing chart came from, or drawn from a data
+      // file attached to this very message. Nothing else has numbers.
+      if (!target) {
+        if (source !== 'attachment') return null
+        return { act, target: null, into: null, source, kind: null, format: format === 'png' || format === 'svg' ? format : null, request }
+      }
       if (target.kind !== 'table' && target.kind !== 'plot') return null
       return { act, target, into: into && into.kind === 'document' ? into : null, source: null, kind: null, format: format === 'png' || format === 'svg' ? format : null, request }
     case 'export': {
@@ -348,7 +352,8 @@ export const isKind = isArtifactKindId
 // ---------------------------------------------------------------- when no model can be asked
 
 const PLAIN_TABLE = /^\s*(please\s+)?(can you\s+|could you\s+)?(make|create|generate|build|give)\s+(me\s+)?(an?\s+|the\s+)?(\w+\s+){0,3}(spreadsheet|tracker|timetable|budget|workbook|excel (sheet|file)|csv( file)?)\b/i
-const PLAIN_DOCUMENT = /^\s*(please\s+)?(can you\s+|could you\s+)?(make|create|generate|write|draft)\s+(me\s+)?(an?\s+|the\s+)?(\w+\s+){0,3}(pdf|word document|word file|docx|powerpoint|presentation|slide deck|report as|document about)\b/i
+const PLAIN_DOCUMENT =
+  /^\s*(please\s+)?(can you\s+|could you\s+)?(make|create|generate|write|draft|prepare|put together)\s+(me\s+)?(an?\s+|the\s+)?([\w-]+\s+){0,3}(pdf|word document|word file|docx|powerpoint|presentation|slide deck|report|proposal|handbook|manual|white ?paper|business plan|project plan|resume|cv|cover letter|memo|press release|newsletter|syllabus|curriculum|document about)\b/i
 const PLAIN_DIAGRAM = /^\s*(please\s+)?(can you\s+|could you\s+)?(make|create|generate|draw|build)\s+(me\s+)?(an?\s+|the\s+)?(\w+\s+){0,3}(flow ?chart|process diagram|decision tree)\b/i
 
 /**

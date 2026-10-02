@@ -195,6 +195,109 @@ export function plotToSvg(plot: Plot, options: PlotSvgOptions = {}): SvgResult {
   return { svg: parts.join('\n'), notes }
 }
 
+// ---------------------------------------------------------------- pies
+
+/** How many slices a pie may have. Past this the thin ones cannot be told apart, and bars say it better. */
+export const PIE_LIMITS = Object.freeze({ slices: 12 })
+
+/** One slice: what it is called, how much it is, and its share of the whole. */
+interface Slice {
+  label: string
+  value: number
+  share: number
+}
+
+/** The label for a point on the bottom axis: what the table had there, or the number itself. */
+const labelAt = (plot: Plot, x: number): string => {
+  const tick = plot.x.ticks.find((one) => one.value === x && one.label !== '')
+  return tick ? tick.label : String(x)
+}
+
+/**
+ * Why a plot cannot be shown as a pie, or null when it can.
+ *
+ * A pie shows shares of one whole. That is a narrow thing to be able to say, and a pie drawn from numbers that are
+ * not shares of anything -- two columns, a negative amount, forty slivers -- is a picture of nothing. So it is
+ * refused in words rather than drawn.
+ */
+export function pieProblem(plot: Plot): string | null {
+  if (plot.series.length !== 1) return 'A pie shows the shares of one column. Choose one column of amounts, or ask for bars to compare several.'
+  const points = allPoints(plot.series[0])
+  if (points.length === 0) return 'There are no numbers to draw.'
+  if (points.length > PIE_LIMITS.slices) {
+    return `A pie with ${points.length} slices cannot be read: ${PIE_LIMITS.slices} is the most. Total the table by a category first, or ask for bars.`
+  }
+  if (points.some((one) => one.y < 0)) return 'A pie cannot show an amount below zero: a share of a whole is never negative. Ask for bars instead.'
+  if (!points.some((one) => one.y > 0)) return 'Every amount is zero, so there are no shares to draw.'
+  return null
+}
+
+const amount = (value: number): string => (Number.isInteger(value) ? value.toLocaleString('en') : value.toLocaleString('en', { maximumFractionDigits: 2 }))
+
+/**
+ * A plot of one series drawn as a pie: each slice its share of the total, largest to smallest as the table has them,
+ * starting at twelve o'clock and going clockwise. The amounts and the shares are written beside it, because a share
+ * read off a slice by eye is a guess.
+ */
+export function pieToSvg(plot: Plot, options: PlotSvgOptions = {}): SvgResult {
+  const width = Math.max(480, Math.round(options.width ?? 880))
+  const height = Math.max(320, Math.round(options.height ?? 520))
+  const colours = options.colours ?? []
+  const series = plot.series[0]
+  const points = series ? allPoints(series) : []
+  const total = points.reduce((sum, one) => sum + Math.max(0, one.y), 0)
+  const slices: Slice[] = points.map((one) => ({ label: labelAt(plot, one.x), value: one.y, share: total > 0 ? Math.max(0, one.y) / total : 0 }))
+  const unit = series?.unit ? ` ${series.unit.display}` : ''
+
+  const top = plot.title ? 56 : 24
+  const radius = Math.min((height - top - 28) / 2, width * 0.24)
+  const cx = 32 + radius
+  const cy = top + (height - top - 28) / 2
+
+  const parts: string[] = []
+  parts.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeXml(plot.title || 'Pie chart')}">`)
+  parts.push(`<rect width="${width}" height="${height}" fill="${PAPER}"/>`)
+  if (plot.title) parts.push(`<text x="32" y="30" ${FONT} font-size="16" font-weight="600" fill="${INK}">${escapeXml(plot.title)}</text>`)
+
+  let turned = 0
+  slices.forEach((slice, index) => {
+    if (slice.share <= 0) return
+    const colour = colours[index] ?? colourFor(index)
+    if (slice.share >= 0.999999) {
+      // One slice that is the whole: an arc cannot go all the way round, so it is a circle.
+      parts.push(`<circle cx="${round(cx)}" cy="${round(cy)}" r="${round(radius)}" fill="${colour}"/>`)
+      turned += slice.share
+      return
+    }
+    const from = turned * 2 * Math.PI - Math.PI / 2
+    turned += slice.share
+    const to = turned * 2 * Math.PI - Math.PI / 2
+    const x1 = cx + radius * Math.cos(from)
+    const y1 = cy + radius * Math.sin(from)
+    const x2 = cx + radius * Math.cos(to)
+    const y2 = cy + radius * Math.sin(to)
+    parts.push(`<path d="M${round(cx)} ${round(cy)} L${round(x1)} ${round(y1)} A${round(radius)} ${round(radius)} 0 ${slice.share > 0.5 ? 1 : 0} 1 ${round(x2)} ${round(y2)} Z" fill="${colour}" stroke="${PAPER}" stroke-width="1.5"/>`)
+  })
+
+  // The amounts, written out: the colour, what it is, how much, and its share.
+  const legendX = cx + radius + 40
+  const rowHeight = Math.min(28, (height - top - 28) / Math.max(1, slices.length))
+  const legendTop = cy - (rowHeight * slices.length) / 2 + rowHeight / 2
+  const room = Math.max(8, Math.floor((width - legendX - 170) / 7))
+  slices.forEach((slice, index) => {
+    const y = legendTop + index * rowHeight
+    const colour = colours[index] ?? colourFor(index)
+    const label = slice.label.length > room ? `${slice.label.slice(0, Math.max(1, room - 1))}…` : slice.label
+    parts.push(`<rect x="${round(legendX)}" y="${round(y - 7)}" width="14" height="14" rx="2" fill="${colour}"/>`)
+    parts.push(`<text x="${round(legendX + 22)}" y="${round(y + 4)}" ${FONT} font-size="12" fill="${INK}">${escapeXml(label)}</text>`)
+    parts.push(`<text x="${width - 28}" y="${round(y + 4)}" text-anchor="end" ${FONT} font-size="12" fill="${MUTED}">${escapeXml(`${amount(slice.value)}${unit}  ·  ${(slice.share * 100).toFixed(1)}%`)}</text>`)
+  })
+  parts.push(`<text x="32" y="${height - 10}" ${FONT} font-size="11" fill="${MUTED}">${escapeXml(`${series?.label ?? 'Total'}: ${amount(total)}${unit} in all`)}</text>`)
+  parts.push('</svg>')
+
+  return { svg: parts.join('\n'), notes: [...plot.notes, `Each slice is its share of the total, ${amount(total)}${unit}. The shares are worked out by Orbis and add up to 100%.`] }
+}
+
 // ---------------------------------------------------------------- diagrams
 
 /** The point where a line from `from`'s centre towards `to`'s centre leaves `from`'s box. */

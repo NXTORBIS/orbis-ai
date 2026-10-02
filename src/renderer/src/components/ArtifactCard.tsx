@@ -78,7 +78,7 @@ function shapeOf(read: Read): string {
     case 'table':
       return `${count(rows, 'row')} × ${count(columns, 'column')}`
     case 'document':
-      return count(rows, 'part')
+      return count(rows, 'heading and paragraph', 'headings and paragraphs')
     case 'plot':
       return `${count(rows, 'point')} in ${count(columns, 'series', 'series')}`
     case 'diagram':

@@ -14,7 +14,7 @@ that was read back and checked before anything said it was kept.
 | --- | --- | --- | --- |
 | Table | Rows and columns with a type (and a unit) per column | Pasted text, a file (CSV, TSV, JSON, Excel), a sentence, a template, a table taken out of a document, a join | CSV, Excel, TSV, JSON, NDJSON, Markdown, text |
 | Document | Headings, paragraphs, lists, tables, figures | Pasted Markdown, a file (Markdown, HTML, text, Word, PDF), a sentence, a template, a chat reply | Markdown, HTML, PDF, Word, slides, text |
-| Chart | Numbers drawn against numbers | The columns of a table. Never written by a model | SVG, PNG |
+| Chart | Numbers drawn against numbers: lines, bars, points, areas, steps, or a pie of one column's shares | The columns of a table. Never written by a model | SVG, PNG |
 | Diagram | A flowchart: boxes and arrows | A sentence. Orion names the boxes and arrows; Orbis lays them out | SVG, PNG |
 | Code | One source file in a named language | Pasted text, a source file, a sentence, a code block in a chat reply | Its language's own extension |
 
@@ -38,7 +38,9 @@ that was read back and checked before anything said it was kept.
 | "Make a spreadsheet of..." / "I need something to track..." | `artifact.generate`, held to the kind that was asked for |
 | "Sort it", "add a total", "only the ones over 100" | `artifact.transform` from the sentence: a new version |
 | "Make it shorter", "add a step" | `artifact.revise`: a new version |
-| "Chart it", "make the chart a bar chart" | `artifact.chart`; a chart there already is redrawn as its next version |
+| "Chart it", "a pie chart of spend", "make the chart a bar chart" | `artifact.chart`; the kind the person named is the kind drawn, or the reason it cannot be is said; a chart there already is redrawn as its next version |
+| "A detailed report on...", "a 10-page guide to..." | An outline first, then each part written on its own (`generateLong`), with "Written 3 of 8 parts" shown as it happens. A part that fails means nothing is kept |
+| A message with an Excel, Word or PDF file attached | The file is read by the same readers the Create screen uses (`attaching.ts`) and attached as its rows or its words. "Chart the attached file" keeps it as a table first |
 | "Write a report about this table" | `artifact.analyse` (every figure computed) with a chart placed in it |
 | "Export it as PDF", "give me the Excel" | The card's Download writes it; a table asked for as PDF is put into a document first |
 | "Put that in Excel", "turn this into a Word document" | The reply kept as it stands: a table in it is read, not rewritten |
@@ -133,8 +135,9 @@ Said plainly so nobody assumes otherwise:
 - Images, audio and video as kinds. Orbis's existing image generation and image editor are separate from Create.
 - Projects of several code files, running code, websites. One file at a time, never run.
 - Reading PowerPoint decks or handwriting; text recognition in scanned PDFs (a scanned PDF has no text to read).
-- Dashboards, formulas that live in a cell, charts beyond line, bar, scatter, area and step.
+- Dashboards, formulas that live in a cell, charts beyond line, bar, scatter, area, step and pie (asked for a
+  histogram or a heat map, the reply says so and says what was drawn instead).
 - Cloud storage, email, calendar and sharing links. Everything is local files.
 - Orbis Search does not list artifacts; the Create screen's own search does.
-- In the chat: Excel, Word and PDF files and pictures cannot be attached yet (text files can); the check before the
-  model knows English words only; a document is as long as one answer from the model.
+- In the chat: a picture cannot be read into a table or a document; PowerPoint files are not read; the check before
+  the model knows English words only; a long document is at most ten parts.

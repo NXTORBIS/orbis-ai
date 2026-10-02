@@ -29,8 +29,8 @@ import { canWrite, isArtifactKindId, type ArtifactKindId } from './kinds.ts'
 export type ArtifactBody =
   | { kind: 'table'; table: Table }
   | { kind: 'document'; document: StructuredDocument }
-  /** A chart: the plot engine's own model, with its axes already decided. */
-  | { kind: 'plot'; plot: Plot }
+  /** A chart: the plot engine's own model, with its axes already decided. `as: 'pie'` draws its one series as shares of a whole. */
+  | { kind: 'plot'; plot: Plot; as?: 'pie' }
   /** Boxes and arrows: the builders' own editable artifact, never a picture. */
   | { kind: 'diagram'; diagram: Diagram }
   /** One source file: its language and its text, exactly as written. Never run. */

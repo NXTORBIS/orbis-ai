@@ -147,6 +147,8 @@ import { ArtifactStore } from './artifacts/store'
 import { ArtifactService } from './artifacts/service'
 import { ArtifactGeneration } from './artifacts/generation'
 import { ArtifactChat, type ArtifactChatTurn } from './artifacts/chat'
+import { READ_FOR_CHAT, isReadForChat, nameToOpenAs, readForChat } from './artifacts/attaching'
+import { IMPORT_LIMITS } from './artifacts/importing'
 import { chooseDestinationWith, chooseSourceWith, downloadsDirWith, registerArtifactsIpc, renderPdfWith, renderPngWith, revealWith } from './artifacts/ipc'
 import { GeneratedStore } from './pages/generatedStore'
 import { OPERATION_CAPABILITIES } from './pages/service'
@@ -446,10 +448,25 @@ function sampleCpuUsage(): number {
 }
 
 async function readTextFiles(paths: string[]): Promise<PickedFiles> {
-  const picked: PickedFiles = { attachments: [], skipped: [] }
+  const picked: PickedFiles = { attachments: [], skipped: [], notes: [] }
   for (const path of paths.slice(0, 10)) {
     const name = basename(path)
     try {
+      // An Excel, Word or PDF file is read by the same readers the Create screen opens files with, and attached as
+      // the rows or the words it holds. What could not be carried across is said, not left to be discovered.
+      if (isReadForChat(name)) {
+        if ((await fs.stat(path)).size > IMPORT_LIMITS.bytes) {
+          picked.notes?.push(`${name} is larger than the ${IMPORT_LIMITS.bytes / (1024 * 1024)} MB Orbis reads at once, so it was not attached.`)
+          continue
+        }
+        const read = await readForChat(name, new Uint8Array(await fs.readFile(path)), MAX_ATTACHMENT_BYTES)
+        if ('error' in read) picked.notes?.push(`${name} was not attached: ${read.message}`)
+        else {
+          picked.attachments.push({ name, content: read.content, type: 'text', mimeType: read.mimeType })
+          picked.notes?.push(`${name}: ${read.notes.join(' ')}`)
+        }
+        continue
+      }
       if ((await fs.stat(path)).size > MAX_ATTACHMENT_BYTES) {
         picked.skipped.push(name)
         continue
@@ -894,7 +911,9 @@ ${block}`
             ? {
                 profileId: await artifactsForChat.profileId(),
                 message: last.content,
-                attachments: (last.attachments ?? []).filter((one) => one.type !== 'image' && typeof one.content === 'string').map((one) => ({ name: String(one.name).slice(0, 200), content: one.content })),
+                attachments: (last.attachments ?? [])
+                  .filter((one) => one.type !== 'image' && typeof one.content === 'string')
+                  .map((one) => ({ name: String(one.name).slice(0, 200), content: one.content, openAs: nameToOpenAs(String(one.name).slice(0, 200), typeof one.mimeType === 'string' ? one.mimeType : undefined) })),
                 history: messages.slice(0, -1).map((one) => ({
                   role: one.role,
                   content: typeof one.content === 'string' ? one.content : '',
@@ -1121,7 +1140,7 @@ ${summaryBlock(summary)}`
       title: 'Attach files',
       properties: ['openFile', 'multiSelections'],
       filters: [
-        { name: 'Text and code', extensions: TEXT_EXTENSIONS },
+        { name: 'Documents, data and code', extensions: [...TEXT_EXTENSIONS, ...READ_FOR_CHAT.map((one) => one.slice(1))] },
         { name: 'All files', extensions: ['*'] }
       ]
     }

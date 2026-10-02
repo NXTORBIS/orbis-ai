@@ -122,7 +122,8 @@ export const ARTIFACT_STATUS = Object.freeze({
   building: 'Building it and checking the copy…'
 })
 
-export const isArtifactStatus = (message: string): boolean => (Object.values(ARTIFACT_STATUS) as string[]).includes(message)
+export const isArtifactStatus = (message: string): boolean =>
+  (Object.values(ARTIFACT_STATUS) as string[]).includes(message) || message === 'Planning the parts…' || /^Written \d+ of \d+ parts…$/.test(message)
 
 /**
  * Something Orbis made, changed or drew for this reply, shown in the conversation as a card.
@@ -422,6 +423,8 @@ export interface PickedFiles {
   attachments: Attachment[]
   /** Files that were too large or not text. */
   skipped: string[]
+  /** What to tell the person about a file that was read for them or could not be: whole sentences, one per file. */
+  notes?: string[]
 }
 
 export interface ImageEditRequest {

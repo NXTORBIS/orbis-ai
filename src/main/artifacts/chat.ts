@@ -48,8 +48,12 @@ export interface ArtifactChatTurn {
   profileId: string
   /** The message just sent. */
   message: string
-  /** Text files attached to it. Pictures are left out: Orbis does not read them. */
-  attachments: { name: string; content: string }[]
+  /**
+   * Files attached to it, as the text they hold. Pictures are left out: Orbis does not read them. `openAs` is the
+   * name to open one under when it is made into an artifact -- a workbook arrives as rows of text, so it is opened as
+   * rows of text.
+   */
+  attachments: { name: string; content: string; openAs?: string }[]
   /** Everything before it, oldest first, with the artifacts each reply showed. */
   history: { role: 'user' | 'assistant'; content: string; artifactIds: string[] }[]
   conversationId?: string
@@ -79,7 +83,9 @@ function describe(record: ArtifactRecord): string {
     case 'table':
       return rows === 0 ? `a table with ${plural(columns, 'column')} and no rows yet` : `a table with ${plural(rows, 'row')} and ${plural(columns, 'column')}`
     case 'document':
-      return `a document in ${plural(rows, 'part')}`
+      // Headings, paragraphs, lists and tables, counted together. Not "parts": a long document is written in parts,
+      // and that is a different number.
+      return `a document of ${plural(rows, 'heading and paragraph', 'headings and paragraphs')}`
     case 'plot':
       return `a chart of ${plural(rows, 'point')} in ${plural(columns, 'series', 'series')}`
     case 'diagram':
@@ -140,7 +146,11 @@ export class ArtifactChat {
     const answer = await this.o.generation.askQuick(chatIntentInstructions(), chatIntentUser(context, turn.history.map((one) => ({ role: one.role, content: one.content }))), turn.signal)
     if (turn.signal.aborted) return 'stopped'
     // No model could be asked: only the plainest requests are acted on, and everything else is an ordinary reply.
-    return 'failed' in answer ? plainMakeRequest(message) : readChatIntent(answer.json, context)
+    if ('failed' in answer) {
+      console.warn(`[artifacts] the quick question about a chat message could not be asked: ${answer.failed}`)
+      return plainMakeRequest(message)
+    }
+    return readChatIntent(answer.json, context)
   }
 
   /** The artifacts this conversation has, newest last, each read from the library as it is now. */
@@ -169,9 +179,9 @@ export class ArtifactChat {
   // ---------------------------------------------------------------- doing it
 
   private async act(intent: ChatArtifactIntent, turn: ArtifactChatTurn): Promise<ArtifactChatOutcome> {
-    const run = (request: Record<string, unknown>): Promise<ArtifactResult> =>
-      this.o.service.run(turn.profileId, { ...request, ...(isConversationId(turn.conversationId) ? { conversationId: turn.conversationId } : {}) }, turn.signal)
     const status = (message: string): void => turn.emit({ type: 'status', message })
+    const run = (request: Record<string, unknown>): Promise<ArtifactResult> =>
+      this.o.service.run(turn.profileId, { ...request, ...(isConversationId(turn.conversationId) ? { conversationId: turn.conversationId } : {}) }, turn.signal, status)
     const cards: ChatArtifact[] = []
     const said: string[] = []
     const card = (record: ArtifactRecord, action: ChatArtifact['action'], did: string[], format?: FormatId | null): void => {
@@ -212,18 +222,49 @@ export class ArtifactChat {
 
     const previousReply = (): string => [...turn.history].reverse().find((one) => one.role === 'assistant' && one.content.trim() !== '')?.content ?? ''
 
+    /** The attached file the message means -- the one it names, or the first -- kept as an artifact. */
+    const keepAttachment = async (): Promise<ArtifactResult> => {
+      const lower = turn.message.toLowerCase()
+      const file = turn.attachments.find((one) => lower.includes(one.name.toLowerCase())) ?? turn.attachments[0]
+      if (!file) return { ok: false, operation: 'artifact.import', error: 'bad-input', message: 'There is no attached file to make it from.' }
+      return this.o.service.importBytes(turn.profileId, file.openAs ?? file.name, new TextEncoder().encode(file.content), { conversationId: turn.conversationId })
+    }
+    /** An attached data file kept as a table, for a chart or a report asked for in the same breath. */
+    const tableFromAttachment = async (): Promise<KnownArtifact | ArtifactChatOutcome> => {
+      status(ARTIFACT_STATUS.reading)
+      const made = kept(await keepAttachment())
+      if (isOutcome(made)) return made
+      if (made.record.kind !== 'table') {
+        // Kept a moment ago only to be drawn from. It is not a table, so it is not left behind as something nobody asked for.
+        await this.o.service.run(turn.profileId, { operation: 'artifact.remove', artifactId: made.record.artifactId })
+        return { handled: 'failed', message: `"${made.record.title}" did not read as a table, so there are no numbers in it to work from.` }
+      }
+      card(made.record, 'kept', made.record.notes)
+      said.push(`I kept the attached file as **${made.record.title}**: ${describe(made.record)}. Nothing in it was rewritten.`)
+      return { handle: 'A0', artifactId: made.record.artifactId, title: made.record.title, kind: 'table', columns: [] }
+    }
+
     switch (intent.act) {
       case 'make': {
+        // A report asked for about an attached data file: the file is kept as a table first, and the report is made
+        // from the table like any other.
+        let from = intent.target
+        if (!from && intent.kind === 'document' && intent.source === 'attachment' && turn.attachments.some((one) => /\.(csv|tsv)$/i.test(one.openAs ?? one.name))) {
+          const table = await tableFromAttachment()
+          if ('handled' in table) return table
+          from = table
+        }
         // A report made out of a table is computed, not written: every figure in it is the data engine's.
-        if (intent.target?.kind === 'table' && intent.kind === 'document') {
+        if (from?.kind === 'table' && intent.kind === 'document') {
+          const source = from
           status(ARTIFACT_STATUS.reading)
-          const analysed = kept(await run({ operation: 'artifact.analyse', artifactId: intent.target.artifactId }))
+          const analysed = kept(await run({ operation: 'artifact.analyse', artifactId: source.artifactId }))
           if (isOutcome(analysed)) return analysed
           let report = analysed.record
-          const did = [`Every figure in it was worked out by Orbis from "${intent.target.title}". None was written by a model.`]
+          const did = [`Every figure in it was worked out by Orbis from "${source.title}". None was written by a model.`]
           // One chart of the table, when one can be drawn, placed in the report as a figure.
           status(ARTIFACT_STATUS.drawing)
-          const chart = await run({ operation: 'artifact.chart', artifactId: intent.target.artifactId, request: 'Draw the one chart that shows this table best.' })
+          const chart = await run({ operation: 'artifact.chart', artifactId: source.artifactId, request: 'Draw the one chart that shows this table best.' })
           if (turn.signal.aborted) return { handled: 'stopped' }
           if (chart.ok) {
             const drawn = (chart.value as Kept).record
@@ -238,7 +279,7 @@ export class ArtifactChat {
           const ready = await inFormat(report, intent.format)
           if ('handled' in ready) return ready
           card(ready.record, 'made', did, ready.format)
-          said.push(`I made **${ready.record.title}** from **${intent.target.title}**: ${describe(ready.record)}. ${did.join(' ')}`)
+          said.push(`I made **${ready.record.title}** from **${source.title}**: ${describe(ready.record)}. ${did.join(' ')}`)
           if (ready.extra) said.push(ready.extra)
           break
         }
@@ -273,11 +314,7 @@ export class ArtifactChat {
         status(ARTIFACT_STATUS.building)
         let result: ArtifactResult
         if (intent.source === 'attachment') {
-          // The file the message names, or the first one attached.
-          const lower = turn.message.toLowerCase()
-          const file = turn.attachments.find((one) => lower.includes(one.name.toLowerCase())) ?? turn.attachments[0]
-          if (!file) return { handled: 'failed', message: 'There is no attached file to make it from.' }
-          result = await this.o.service.importBytes(turn.profileId, file.name, new TextEncoder().encode(file.content), { conversationId: turn.conversationId })
+          result = await keepAttachment()
         } else {
           const text = intent.source === 'reply' ? documentTextFromReply(previousReply()) : materialIn(turn.message)
           if (text.trim() === '') return { handled: 'failed', message: intent.source === 'reply' ? 'There is no earlier reply to turn into a file.' : 'There is nothing in the message to make it from.' }
@@ -327,13 +364,21 @@ export class ArtifactChat {
       }
 
       case 'chart': {
-        const target = intent.target!
+        // "Chart the attached file": the file is kept as a table first, and the chart is drawn from the table.
+        let target = intent.target
+        if (!target) {
+          const table = await tableFromAttachment()
+          if ('handled' in table) return table
+          target = table
+        }
         if (target.kind === 'plot') return this.redraw(target, intent, turn, run, kept)
         status(ARTIFACT_STATUS.drawing)
         const drawn = kept(await run({ operation: 'artifact.chart', artifactId: target.artifactId, request: intent.request }))
         if (isOutcome(drawn)) return drawn
         card(drawn.record, 'drew', drawn.record.notes, intent.format)
         said.push(`I drew **${drawn.record.title}** from **${target.title}**. The numbers are the table's own.`)
+        const cannot = notDrawable(turn.message)
+        if (cannot) said.push(cannot)
         if (intent.into) {
           status(ARTIFACT_STATUS.building)
           const placed = await run({ operation: 'artifact.place', artifactId: intent.into.artifactId, figureId: drawn.record.artifactId })
@@ -393,10 +438,25 @@ export class ArtifactChat {
     turn.emit({ type: 'status', message: ARTIFACT_STATUS.drawing })
     const drawn = kept(await run({ operation: 'artifact.chart', artifactId: from.artifactId, request: intent.request, replace: chart.artifactId }))
     if ('handled' in drawn) return drawn
-    turn.emit({ type: 'delta', content: `I redrew the chart: it is now **${drawn.record.title}**, version ${drawn.record.version}, and the one before is kept. The numbers are still the table's own.` })
+    const cannot = notDrawable(turn.message)
+    turn.emit({ type: 'delta', content: `I redrew the chart: it is now **${drawn.record.title}**, version ${drawn.record.version}, and the one before is kept. The numbers are still the table's own.${cannot ? `\n\n${cannot}` : ''}` })
     turn.emit({ type: 'artifact', artifact: { ref: refOf(drawn.record), action: 'changed', did: drawn.record.notes.slice(0, 3), ...(intent.format && canWrite('plot', intent.format) ? { format: intent.format } : {}) } })
     return { handled: 'done' }
   }
+}
+
+const NOT_DRAWN = /\b(donut|doughnut|histogram|radar|spider|heat ?map|gantt|tree ?map|sankey|bubble|waterfall|funnel|box ?plot|candlestick|gauge)\b/i
+
+/**
+ * A sentence for when the message asked for a kind of chart Orbis does not draw.
+ *
+ * It draws lines, bars, points, areas, steps and pies. Asked for a histogram, it still draws what it can from the
+ * same numbers -- and says so, because a bar chart handed over in answer to "a histogram" with nothing said looks
+ * like the thing that was asked for and is not.
+ */
+export function notDrawable(message: string): string | null {
+  const asked = NOT_DRAWN.exec(message)?.[1]
+  return asked ? `Orbis does not draw a ${asked.toLowerCase()} chart yet. It draws lines, bars, points, areas, steps and pies, so this is one of those from the same numbers.` : null
 }
 
 /** Why something was not made, in a sentence a person can act on. The model's own mistakes are named, briefly. */

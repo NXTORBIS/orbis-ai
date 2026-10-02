@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { ArtifactService, ARTIFACT_OPERATIONS, type ArtifactResult } from './service.ts'
+import { ArtifactService, ARTIFACT_OPERATIONS, chartKindSaid, type ArtifactResult } from './service.ts'
 import { ArtifactStore } from './store.ts'
 import { encodePng } from '../chromium/png.ts'
 import { ArtifactGeneration, type Asked } from './generation.ts'
@@ -1068,3 +1068,92 @@ test('a key cannot hide behind formatting: an underscore in a word stays one, an
     assert.equal(read.preview.trim(), 'The file_name and the other_name, and 2 * 3 * 4.')
     assert.equal(ok<unknown[]>(await h.service.run('default', { operation: 'artifact.list' })).length, 1)
   }))
+
+const SPEND = 'category,amount,last year\nRent,1200,1100\nFood,450,500\nTravel,150,90\nOther,200,210\n'
+
+test('a pie is drawn from one column of amounts, kept as a chart that says it is a pie, and saved as a file that reads back', () =>
+  withService(async (h) => {
+    const table = ok<{ record: { artifactId: string } }>(await h.service.run('default', { operation: 'artifact.create', kind: 'table', title: 'Spend', text: SPEND }))
+    const tableId = table.record.artifactId
+    const pie = ok<{ record: { artifactId: string; kind: string; title: string; verified: { ok: boolean }; notes: string[] } }>(await h.service.run('default', { operation: 'artifact.chart', artifactId: tableId, x: 'category', y: ['amount'], kind: 'pie' }))
+    assert.equal(pie.record.kind, 'plot')
+    assert.equal(pie.record.verified.ok, true)
+    assert.match(pie.record.notes[0], /amount by category, as a pie: each slice is its share of the total\./)
+    const read = ok<{ preview: string }>(await h.service.run('default', { operation: 'artifact.read', artifactId: pie.record.artifactId }))
+    assert.equal((read.preview.match(/<path /g) ?? []).length, 4, 'four slices')
+    for (const said of ['>Rent</text>', '1,200  ·  60.0%', '450  ·  22.5%', '150  ·  7.5%', '200  ·  10.0%', 'amount: 2,000 in all']) assert.ok(read.preview.includes(said), said)
+
+    const saved = ok<{ path: string; verified: { ok: boolean } }>(await h.service.run('default', { operation: 'artifact.download', artifactId: pie.record.artifactId, format: 'svg' }))
+    assert.equal(saved.verified.ok, true)
+    assert.match(await readFile(saved.path, 'utf8'), /60\.0%/)
+
+    // Two columns are not shares of one whole, and neither is a table too long to read as slices.
+    const two = await h.service.run('default', { operation: 'artifact.chart', artifactId: tableId, x: 'category', y: ['amount', 'last year'], kind: 'pie' })
+    assert.equal(two.ok, false)
+    if (!two.ok) assert.match(two.message, /shares of one column/)
+    const long = ok<{ record: { artifactId: string } }>(await h.service.run('default', { operation: 'artifact.create', kind: 'table', title: 'Long', text: `name,n\n${Array.from({ length: 13 }, (_, i) => `r${i},${i + 1}`).join('\n')}\n` }))
+    const tooMany = await h.service.run('default', { operation: 'artifact.chart', artifactId: long.record.artifactId, x: 'name', y: ['n'], kind: 'pie' })
+    assert.equal(tooMany.ok, false)
+    if (!tooMany.ok) assert.match(tooMany.message, /13 slices cannot be read: 12 is the most\. Total the table by a category first, or ask for bars\./)
+    const negative = ok<{ record: { artifactId: string } }>(await h.service.run('default', { operation: 'artifact.create', kind: 'table', title: 'Net', text: 'name,n\na,5\nb,-2\n' }))
+    const below = await h.service.run('default', { operation: 'artifact.chart', artifactId: negative.record.artifactId, x: 'name', y: ['n'], kind: 'pie' })
+    assert.equal(below.ok, false)
+    if (!below.ok) assert.match(below.message, /below zero/)
+  }))
+
+test('the kind of chart the person named is the kind drawn, whatever the model choosing the columns preferred', () =>
+  withService(
+    async (h) => {
+      const table = ok<{ record: { artifactId: string } }>(await h.service.run('default', { operation: 'artifact.create', kind: 'table', title: 'Spend', text: SPEND }))
+      // The model offers bars and two columns. The person said pie.
+      const pie = ok<{ record: { artifactId: string; notes: string[] } }>(await h.service.run('default', { operation: 'artifact.chart', artifactId: table.record.artifactId, request: 'a pie chart of what I spend' }))
+      assert.match(pie.record.notes[0], /as a pie/)
+      // And redrawn as bars when bars are asked for, as the same chart's next version.
+      const bars = ok<{ record: { artifactId: string; version: number; notes: string[] } }>(await h.service.run('default', { operation: 'artifact.chart', artifactId: table.record.artifactId, request: 'make it a bar chart', replace: pie.record.artifactId }))
+      assert.equal(bars.record.artifactId, pie.record.artifactId)
+      assert.equal(bars.record.version, 2)
+      assert.match(bars.record.notes[0], /as bars/)
+      const read = ok<{ preview: string }>(await h.service.run('default', { operation: 'artifact.read', artifactId: bars.record.artifactId }))
+      assert.equal(read.preview.includes('in all'), false, 'the pie is gone; these are bars on axes')
+
+      assert.equal(chartKindSaid('a pie chart of what I spend'), 'pie')
+      assert.equal(chartKindSaid('make it a bar chart'), 'bar')
+      assert.equal(chartKindSaid('show revenue over time'), null)
+      assert.equal(chartKindSaid('a bar or a pie, whichever is clearer'), null, 'two named is nobody\'s decision')
+    },
+    {
+      pdf: true,
+      png: true,
+      answers: [
+        { x: 'category', y: ['amount', 'last year'], kind: 'bar' },
+        { x: 'category', y: ['amount'], kind: 'line' }
+      ]
+    }
+  ))
+
+test('a document asked for at length is written in parts and kept as one document; a short one is still one answer', () =>
+  withService(
+    async (h) => {
+      const long = ok<{ record: { artifactId: string; kind: string; title: string; notes: string[]; shape: { rows: number } } }>(await h.service.run('default', { operation: 'artifact.generate', request: 'a detailed report on remote work', kind: 'document' }))
+      assert.equal(long.record.kind, 'document')
+      assert.equal(long.record.title, 'Remote work')
+      assert.match(long.record.notes[0], /in 3 parts, from an outline/)
+      const read = ok<{ preview: string }>(await h.service.run('default', { operation: 'artifact.read', artifactId: long.record.artifactId }))
+      assert.match(read.preview, /^# Remote work\n\n## Why\n\n[\s\S]*\n\n## How\n\n[\s\S]*\n\n## Next\n\n/)
+
+      const short = ok<{ record: { notes: string[] } }>(await h.service.run('default', { operation: 'artifact.generate', request: 'a short note about lunch', kind: 'document' }))
+      assert.equal(short.record.notes.some((one) => /parts/.test(one)), false)
+      assert.equal(h.asked.length, 5, 'an outline, three parts, and one answer for the short one')
+    },
+    {
+      pdf: true,
+      png: true,
+      answers: [
+        { title: 'Remote work', purpose: 'p', parts: [{ heading: 'Why', brief: 'a' }, { heading: 'How', brief: 'b' }, { heading: 'Next', brief: 'c' }] },
+        { markdown: 'It matters because people work better when they choose where. '.repeat(3) },
+        { markdown: 'Start with one team and one day a week, then widen it slowly. '.repeat(3) },
+        { markdown: 'Watch for isolation, and for meetings that grow to fill the day. '.repeat(3) },
+        { kind: 'document', title: 'Lunch', markdown: '# Lunch\n\nSoup today.\n' }
+      ]
+    }
+  ))

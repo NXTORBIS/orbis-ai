@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { ChatArtifact, StreamEvent } from '../../shared/types.ts'
-import { ArtifactChat, materialIn, tableTextIn, type ArtifactChatTurn } from './chat.ts'
+import { ArtifactChat, materialIn, notDrawable, tableTextIn, type ArtifactChatTurn } from './chat.ts'
 import { ArtifactGeneration, type Asked } from './generation.ts'
 import { ArtifactService } from './service.ts'
 import { ArtifactStore } from './store.ts'
@@ -304,5 +304,59 @@ test('a table that is already in the reply is read, not written again, whichever
       const read = await s.service.run('default', { operation: 'artifact.read', artifactId: sheet.cards[0].ref.artifactId })
       assert.deepEqual(read.ok && (read.value as { grid: { rows: string[][] } }).grid.rows, [['Pixel 9', '799', '4700'], ['iPhone 16', '799', '3561']])
       assert.match(sheet.text, /Nothing in it was rewritten/)
+    }
+  ))
+
+test('a chart or a report asked for about an attached file: the file is kept as a table first, then drawn or reported from', () =>
+  stage(
+    [
+      { act: 'chart', target: null, source: 'attachment', request: 'A bar chart of sales by month', sure: true },
+      { x: 'month', y: ['sales'], kind: 'bar' },
+      { act: 'make', kind: 'document', source: 'attachment', format: 'pdf', request: 'A report about the attached sales', sure: true },
+      { x: 'month', y: ['sales'], kind: 'line' },
+      { act: 'chart', target: null, source: 'attachment', request: 'chart it', sure: true }
+    ],
+    async (s) => {
+      // A workbook attached to the chat arrives as rows of text under its own name, and is opened as rows of text.
+      const attachments = [{ name: 'sales.xlsx', content: 'month,sales\nJan,100\nFeb,140\nMar,90\n', openAs: 'sales.csv' }]
+      const drawn = await s.say('Chart the attached file as bars', { attachments })
+      assert.deepEqual(drawn.outcome, { handled: 'done' })
+      assert.deepEqual(drawn.cards.map((one) => [one.action, one.ref.kind, one.ref.title]), [['kept', 'table', 'sales'], ['drew', 'plot', drawn.cards[1].ref.title]])
+      assert.match(drawn.text, /I kept the attached file as \*\*sales\*\*: a table with 3 rows and 2 columns\. Nothing in it was rewritten\./)
+      assert.match(drawn.text, /I drew \*\*.+\*\* from \*\*sales\*\*\. The numbers are the table's own\./)
+
+      const report = await s.say('Write a report about the attached file as a PDF', { attachments })
+      assert.deepEqual(report.outcome, { handled: 'done' })
+      const made = report.cards[report.cards.length - 1]
+      assert.deepEqual([made.action, made.ref.kind, made.format], ['made', 'document', 'pdf'])
+      assert.match(report.text, /Every figure in it was worked out by Orbis from "sales"\. None was written by a model\./)
+
+      // A file that is words, not rows: nothing to draw from, said plainly, and nothing left behind in the library.
+      const before = await s.service.run('default', { operation: 'artifact.list' })
+      const words = await s.say('chart the attached file', { attachments: [{ name: 'notes.md', content: '# Notes\n\nNothing to count here.\n' }] })
+      assert.equal(words.outcome.handled, 'failed')
+      if (words.outcome.handled === 'failed') assert.match(words.outcome.message, /did not read as a table/)
+      const after = await s.service.run('default', { operation: 'artifact.list' })
+      const count = (result: typeof before): number => (result.ok ? (result.value as unknown[]).length : -1)
+      assert.equal(count(after), count(before), 'the document kept for a moment was taken away again')
+    }
+  ))
+
+test('asked for a kind of chart Orbis does not draw, the reply says so and says what it drew instead', () =>
+  stage(
+    [
+      { act: 'make', kind: 'table', request: 'ages', sure: true },
+      { kind: 'table', title: 'Ages', columns: [{ name: 'Person', type: 'text' }, { name: 'Age', type: 'number' }], rows: [['a', '31'], ['b', '44'], ['c', '29']] },
+      { act: 'chart', target: 'A1', request: 'A histogram of Age', sure: true },
+      { x: 'Person', y: ['Age'], kind: 'bar' }
+    ],
+    async (s) => {
+      await s.say('Make a table of ages: a 31, b 44, c 29')
+      const drawn = await s.say('Draw a histogram of the ages')
+      assert.deepEqual(drawn.outcome, { handled: 'done' })
+      assert.match(drawn.text, /Orbis does not draw a histogram chart yet\. It draws lines, bars, points, areas, steps and pies, so this is one of those from the same numbers\./)
+      assert.equal(notDrawable('a bar chart of sales'), null)
+      assert.equal(notDrawable('a pie chart of sales'), null, 'a pie is drawn')
+      assert.match(notDrawable('a Heat Map of visits') ?? '', /heat map chart yet/)
     }
   ))

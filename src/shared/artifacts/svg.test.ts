@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { buildPlot, isPlotError, seriesFromPoints } from '../compute/plot.ts'
 import { hashOf } from '../compute/interchange.ts'
 import { flowToArtifact, levelsOf } from './diagram.ts'
-import { diagramToSvg, plotToSvg, verifySvgFile } from './svg.ts'
+import { diagramToSvg, pieProblem, pieToSvg, plotToSvg, verifySvgFile } from './svg.ts'
 
 const plot = (series: Parameters<typeof buildPlot>[1], options: Parameters<typeof buildPlot>[2] = {}) => {
   const made = buildPlot('p', series, options)
@@ -277,4 +277,49 @@ test('every bar sits inside the frame, whether there are two of them or twenty',
   // A range somebody insisted on is left alone.
   const fixed = plot([seriesFromPoints('a', 'A', [{ x: 0, y: 1 }, { x: 1, y: 2 }], { kind: 'bar' })], { x: { range: { low: 0, high: 1 } } })
   assert.deepEqual([fixed.x.range.low, fixed.x.range.high], [0, 1])
+})
+
+const categories = (values: number[], labels: string[]) => {
+  const made = plot([seriesFromPoints('a', 'Spend', values.map((y, x) => ({ x, y })), { kind: 'bar', provenance: 'measured' })], { title: 'Spend by category' })
+  return { ...made, x: { ...made.x, ticks: labels.map((label, value) => ({ value, label, major: true })) } }
+}
+
+test('a pie is one slice per row, each its share of the total, with the amounts and shares written beside it', () => {
+  const { svg, notes } = pieToSvg(categories([50, 30, 20], ['Rent', 'Food', 'Travel']))
+  assert.ok(svg.startsWith('<svg xmlns="http://www.w3.org/2000/svg"'))
+  assert.equal(count(svg, 'path'), 3, 'three slices')
+  assert.ok(svg.includes('>Spend by category</text>'))
+  for (const said of ['>Rent</text>', '>Food</text>', '>Travel</text>', '50  ·  50.0%', '30  ·  30.0%', '20  ·  20.0%', 'Spend: 100 in all']) assert.ok(svg.includes(said), said)
+  assert.ok(notes.some((one) => /Each slice is its share of the total, 100\./.test(one)))
+  // The first slice starts at twelve o'clock and covers half the circle: its arc ends straight below the centre.
+  const first = /<path d="M([\d.]+) ([\d.]+) L([\d.]+) ([\d.]+) A[\d.]+ [\d.]+ 0 (\d) 1 ([\d.]+) ([\d.]+) Z"/.exec(svg)
+  assert.ok(first)
+  const [cx, cy, x1, y1, , x2, y2] = first.slice(1).map(Number)
+  assert.ok(Math.abs(x1 - cx) < 0.01 && y1 < cy, 'starts above the centre')
+  assert.ok(Math.abs(x2 - cx) < 0.01 && y2 > cy, 'and half the whole ends below it')
+})
+
+test('one slice that is the whole is a circle, a zero is listed and not drawn, and shares are of what is there', () => {
+  const whole = pieToSvg(categories([42], ['Everything'])).svg
+  assert.equal(count(whole, 'path'), 0)
+  assert.equal(count(whole, 'circle'), 1)
+  assert.ok(whole.includes('42  ·  100.0%'))
+
+  const withZero = pieToSvg(categories([1, 0, 3], ['a', 'b', 'c'])).svg
+  assert.equal(count(withZero, 'path'), 2)
+  assert.ok(withZero.includes('0  ·  0.0%'))
+  assert.ok(withZero.includes('3  ·  75.0%'))
+  assert.ok(pieToSvg(categories([1.5, 2.25], ['a <b>', 'c & d'])).svg.includes('a &lt;b&gt;'), 'labels are escaped')
+})
+
+test('what is not shares of one whole is refused in words, not drawn', () => {
+  assert.equal(pieProblem(categories([50, 30, 20], ['a', 'b', 'c'])), null)
+  assert.match(pieProblem(categories([5, -1], ['a', 'b'])) ?? '', /below zero/)
+  assert.match(pieProblem(categories([0, 0], ['a', 'b'])) ?? '', /Every amount is zero/)
+  assert.match(pieProblem(categories(Array.from({ length: 13 }, (_, i) => i + 1), Array.from({ length: 13 }, (_, i) => `c${i}`))) ?? '', /13 slices cannot be read: 12 is the most/)
+  const two = plot([
+    seriesFromPoints('a', 'A', [{ x: 0, y: 1 }], { kind: 'bar', provenance: 'measured' }),
+    seriesFromPoints('b', 'B', [{ x: 0, y: 2 }], { kind: 'bar', provenance: 'measured' })
+  ])
+  assert.match(pieProblem(two) ?? '', /shares of one column/)
 })

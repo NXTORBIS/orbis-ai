@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { ArtifactGeneration, figuresGiven, instructions, type Asked } from './generation.ts'
+import { ArtifactGeneration, figuresGiven, instructions, LONG_STATUS, longDocumentAsked, readOutline, tidyPart, type Asked } from './generation.ts'
 
 /*
  * The model is a stand-in that answers from a script; everything after the answer -- validation, the retry with the
@@ -153,4 +153,69 @@ test('figures the person did not give stay labelled as a model\'s, and a mixture
   const fromMaterial = withAnswers([{ kind: 'table', title: 'Moons', columns: ['Planet', 'Moons'], rows: [['Mars', '2'], ['Jupiter', '95']] }])
   const out = await fromMaterial.generation.generate('Make a table from that', { context: 'Mars has 2 moons and Jupiter has 95.' })
   assert.ok(out.notes.some((one) => /Every number in them is one you gave/.test(one)))
+})
+
+test('a document is written in parts only when length is asked for, and a number of pages decides how many', () => {
+  assert.equal(longDocumentAsked('a report on remote work'), null)
+  assert.equal(longDocumentAsked('a one-page summary of the meeting'), null)
+  assert.equal(longDocumentAsked('a 2 page letter'), null)
+  assert.equal(longDocumentAsked('a 500 word essay'), null)
+  assert.equal(longDocumentAsked('a detailed spreadsheet of costs'), null, 'long is about documents')
+  assert.deepEqual(longDocumentAsked('a detailed report on remote work'), { parts: 6, short: null })
+  assert.deepEqual(longDocumentAsked('write an in-depth guide to composting'), { parts: 6, short: null })
+  assert.deepEqual(longDocumentAsked('a 5-page proposal for the client'), { parts: 5, short: null })
+  assert.deepEqual(longDocumentAsked('a 3000 word essay on rivers'), { parts: 8, short: null })
+  assert.deepEqual(longDocumentAsked('a 40 page handbook'), { parts: 10, short: '40 pages' }, 'more than can be written in one go is said')
+  assert.deepEqual(longDocumentAsked('a 10,000 word thesis'), { parts: 10, short: '10,000 words' })
+})
+
+test('an outline is a title and at least three parts with different headings; a part loses its own heading and keeps its place', () => {
+  const good = readOutline({ title: ' Remote work ', purpose: 'p', parts: [{ heading: '## Why', brief: 'b' }, { heading: 'How' }, { heading: 'why' }, { heading: 'What next', brief: 'c' }, 'junk'] })
+  assert.deepEqual(good.outline?.parts.map((one) => one.heading), ['Why', 'How', 'What next'], 'a repeated heading is one part')
+  assert.equal(good.outline?.title, 'Remote work')
+  assert.equal(readOutline({ title: 'T', parts: [{ heading: 'a' }, { heading: 'b' }] }).outline, null)
+  assert.equal(readOutline({ parts: [{ heading: 'a' }, { heading: 'b' }, { heading: 'c' }] }).outline, null)
+  assert.equal(readOutline('no').outline, null)
+  assert.equal(readOutline({ title: 'T', parts: Array.from({ length: 30 }, (_, i) => ({ heading: `h${i}` })) }).outline?.parts.length, 10)
+
+  assert.equal(tidyPart('## Why it matters\n\nBecause.\n\n# Costs\n\nLow.\n\n```\n# not a heading\n```', 'Why it matters'), 'Because.\n\n### Costs\n\nLow.\n\n```\n# not a heading\n```')
+  assert.equal(tidyPart('Plain words.', 'Why'), 'Plain words.')
+})
+
+const OUTLINE = { title: 'Remote work', purpose: 'A report.', parts: [{ heading: 'Why it matters', brief: 'The case.' }, { heading: 'What it costs', brief: 'Money and time.' }, { heading: 'How to start', brief: 'First steps.' }, { heading: 'What to watch', brief: 'Risks.' }] }
+const part = (words: string): Record<string, unknown> => ({ markdown: `${words} `.repeat(12).trim() })
+
+test('a long document is an outline and then each part, assembled in the outline\'s order, with progress that is true', async () => {
+  const { generation, asked } = withAnswers([OUTLINE, part('one'), part('two'), part('three'), part('four')])
+  const said: string[] = []
+  const out = await generation.generateLong('a detailed report on remote work', { parts: 6, progress: (message) => said.push(message) })
+  assert.ok(out.body && out.body.kind === 'document', JSON.stringify(out.problems))
+  if (!out.body || out.body.kind !== 'document') return
+  assert.equal(out.intent?.title, 'Remote work')
+  const headings = out.body.document.blocks.filter((one) => one.kind === 'heading').map((one) => (one as { content: { text: string }[] }).content.map((run) => run.text).join(''))
+  assert.deepEqual(headings, ['Remote work', 'Why it matters', 'What it costs', 'How to start', 'What to watch'])
+  assert.equal(asked.length, 5, 'one request for the outline and one for each part')
+  assert.deepEqual(said, [LONG_STATUS.planning, 'Written 1 of 4 parts…', 'Written 2 of 4 parts…', 'Written 3 of 4 parts…', 'Written 4 of 4 parts…'])
+  assert.match(out.notes[0], /Written by a model in 4 parts, from an outline it made first\./)
+})
+
+test('a part that cannot be written means nothing is kept, and the reply says which part', async () => {
+  // Part two comes back empty twice. The parts after it may already have been asked for; none of it is kept.
+  const { generation } = withAnswers([OUTLINE, part('one'), { markdown: '' }, part('three'), { markdown: '  ' }, part('four')])
+  const out = await generation.generateLong('a detailed report on remote work', { parts: 6 })
+  assert.equal(out.body, null)
+  assert.match(out.problems[0].message, /Part 2 of 4 \("What it costs"\) could not be written: .* Nothing was kept, because a document with a part missing would read as finished\./)
+
+  const noOutline = withAnswers([{ title: 'T', parts: [] }, { nonsense: true }])
+  const none = await noOutline.generation.generateLong('a detailed report', { parts: 6 })
+  assert.equal(none.body, null)
+  assert.match(none.problems[0].message, /did not plan a document/)
+
+  const refused = withAnswers([{ failed: 'Orion is busy right now. Try again in a minute.' }])
+  const busy = await refused.generation.generateLong('a detailed report', { parts: 6 })
+  assert.equal(busy.failed, 'Orion is busy right now. Try again in a minute.')
+
+  const short = withAnswers([OUTLINE, part('one'), part('two'), part('three'), part('four')])
+  const said = await short.generation.generateLong('a 40 page handbook', { parts: 10, short: '40 pages' })
+  assert.ok(said.notes.some((one) => /You asked for 40 pages\. Orbis writes at most 10 parts in one go, so this is shorter than that\./.test(one)))
 })

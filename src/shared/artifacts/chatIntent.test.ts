@@ -225,3 +225,26 @@ test('a thing asked for by what it is for is worth asking about, and "put that i
   assert.equal(mightBeAboutArtifacts('How do I make a pivot table in Excel?', fresh), false)
   assert.equal(mightBeAboutArtifacts('how do I create a chart in Google Sheets', fresh), false)
 })
+
+test('a chart may be drawn from a file attached to the message, and from nothing else that is not a table', () => {
+  const none: ChatIntentContext = { artifacts: [], previousWasArtifact: false, hasReply: false, attachments: ['sales.xlsx'], message: 'chart the attached file' }
+  const fromFile = readChatIntent({ act: 'chart', target: null, source: 'attachment', request: 'a chart', sure: true }, none)
+  assert.deepEqual([fromFile?.act, fromFile?.target, fromFile?.source], ['chart', null, 'attachment'])
+  assert.equal(readChatIntent({ act: 'chart', target: null, source: 'attachment', request: 'a chart', sure: true }, { ...none, attachments: [] }), null, 'no file, no chart')
+  assert.equal(readChatIntent({ act: 'chart', target: null, source: 'reply', request: 'a chart', sure: true }, { ...none, hasReply: true, message: 'chart that' }), null, 'a reply has no columns to draw')
+  assert.ok(chatIntentInstructions().includes('data file attached to this message'))
+})
+
+test('with no model to ask, the plainest requests for a document are still requests, and a guide is worth asking about', () => {
+  for (const message of ['Write a detailed report on good password habits for a small office.', 'Create a proposal for a new recycling scheme', 'Draft a memo about the office move', 'Please put together a business plan for a bakery', 'Write me a cover letter for a nursing job']) {
+    assert.deepEqual([plainMakeRequest(message)?.act, plainMakeRequest(message)?.kind], ['make', 'document'], message)
+  }
+  // Not the plainest: these wait for a model, and without one they are ordinary conversation.
+  for (const message of ['What should a report on password habits cover?', 'Tell me about the report you mentioned', 'How do I write a proposal?', 'I read a report about the economy yesterday', 'write a poem about autumn', 'Write an email to my boss']) {
+    assert.equal(plainMakeRequest(message), null, message)
+  }
+  const fresh = { artifacts: 0, previousWasArtifact: false, attachments: 0 }
+  assert.equal(mightBeAboutArtifacts('Write me a guide to onboarding new staff', fresh), true)
+  assert.equal(mightBeAboutArtifacts('Draft an agenda for Monday', fresh), true)
+  assert.equal(mightBeAboutArtifacts('write a poem about autumn', fresh), false)
+})

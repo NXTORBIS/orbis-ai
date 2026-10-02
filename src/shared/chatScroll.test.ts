@@ -11,6 +11,7 @@ import {
   onRendered,
   onScrolled,
   roomUnderTurn,
+  scrollIsTheirs,
   settled,
   TURN_MARGIN,
   type ChatScrollState,
@@ -230,7 +231,48 @@ test('the room under a turn shrinks as the answer grows, and is gone once the an
 
 test('the room under a turn is never negative and never a fraction, whatever it is handed', () => {
   assert.equal(roomUnderTurn(0, 0), 0)
-  assert.equal(roomUnderTurn(600.4, 100.2), 484)
+  assert.equal(roomUnderTurn(600.4, 100.2), 485, 'rounded up, so the scroller can always reach where it is put')
   assert.equal(roomUnderTurn(Number.NaN, 10), 0)
   assert.equal(roomUnderTurn(600, Number.POSITIVE_INFINITY), 0)
+})
+
+test('a scroll nobody made changes nothing about who is reading and who is following', () => {
+  // The person is reading the top of a new answer, and the scroller is exactly at the end of the page (the room
+  // under the turn puts it there). A card above folds away and the browser moves the scroller to where it still fits.
+  const reading: ChatScrollState = { ...newChatScrollState(), mode: 'reading', settledAt: 1891.2, conversationId: 'c', shownTurnId: 'u2' }
+  const moved: Viewport = { scrollTop: 1360, scrollHeight: 1956, clientHeight: 596 }
+  const byPosition = onScrolled(reading, moved, false)
+  assert.equal(byPosition.state.mode, 'following', 'read by position alone, this looked like the person going to the foot')
+  const known = onScrolled(reading, moved, false, false)
+  assert.equal(known.state.mode, 'reading')
+  assert.equal(known.state.settledAt, 1360, 'and where it now is is where Orbis left it')
+  // Half a pixel of rounding is the same thing, smaller.
+  assert.equal(onScrolled(reading, { scrollTop: 1890.4, scrollHeight: 2487, clientHeight: 596 }, false, false).state.mode, 'reading')
+  // A real scroll to the foot still means "follow", and a real scroll away still means "reading".
+  assert.equal(onScrolled(reading, moved, false, true).state.mode, 'following')
+  assert.equal(onScrolled({ ...reading, mode: 'following' }, { scrollTop: 200, scrollHeight: 3000, clientHeight: 600 }, false, true).state.mode, 'reading')
+  // The way back is still offered or withdrawn from where the scroller really is.
+  assert.equal(onScrolled(reading, { scrollTop: 0, scrollHeight: 3000, clientHeight: 600 }, false, false).showJump, true)
+})
+
+test('a scroll is the person\'s when they are holding the scroller, just did something that scrolls, or it carries on a glide', () => {
+  const quiet = { pressed: false, actedAt: 0, lastTheirsAt: 0 }
+  assert.equal(scrollIsTheirs(10_000, quiet), false)
+  assert.equal(scrollIsTheirs(10_000, { ...quiet, pressed: true }), true)
+  assert.equal(scrollIsTheirs(10_000, { ...quiet, actedAt: 9_500 }), true)
+  assert.equal(scrollIsTheirs(10_000, { ...quiet, actedAt: 9_000 }), false, 'a wheel turn a second ago is over')
+  assert.equal(scrollIsTheirs(10_000, { ...quiet, actedAt: 8_000, lastTheirsAt: 9_900 }), true, 'a glide after the finger lifted is still theirs')
+  assert.equal(scrollIsTheirs(10_000, { ...quiet, lastTheirsAt: 9_700 }), false)
+})
+
+test('a conversation that has just begun is read from its first question, not followed to the foot of the answer', () => {
+  const begun = onRendered(newChatScrollState(), { conversationId: 'c1', lastUserId: 'u1', started: true })
+  assert.deepEqual(begun.action, { kind: 'toTurn', messageId: 'u1' })
+  assert.equal(begun.state.mode, 'reading')
+  // The answer growing does not move the view after that.
+  assert.deepEqual(onRendered(begun.state, { conversationId: 'c1', lastUserId: 'u1', started: true }).action, { kind: 'none' })
+  // An older conversation being opened still lands at its end, however short it is.
+  const opened = onRendered(newChatScrollState(), { conversationId: 'c2', lastUserId: 'u9' })
+  assert.deepEqual(opened.action, { kind: 'toBottom', smooth: false })
+  assert.equal(opened.state.mode, 'following')
 })

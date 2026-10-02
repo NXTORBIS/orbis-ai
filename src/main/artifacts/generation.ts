@@ -53,7 +53,7 @@ export interface StepsOutcome {
 export interface ChartPlan {
   x: string
   y: string[]
-  kind: 'line' | 'bar' | 'scatter' | 'area' | 'step'
+  kind: 'line' | 'bar' | 'scatter' | 'area' | 'step' | 'pie'
 }
 
 export interface ChartOutcome {
@@ -63,7 +63,7 @@ export interface ChartOutcome {
   failed: string | null
 }
 
-const CHART_KINDS = ['line', 'bar', 'scatter', 'area', 'step'] as const
+const CHART_KINDS = ['line', 'bar', 'scatter', 'area', 'step', 'pie'] as const
 
 /** What the model is told when it is asked which columns to draw. */
 export function chartInstructions(columns: readonly Pick<Column, 'name' | 'type'>[]): string {
@@ -76,6 +76,7 @@ Rules:
 - "x" is what runs along the bottom: a date, a category or a number. "y" is one to four columns that hold numbers.
 - Use only the column names above, written exactly as they are.
 - Choose "bar" to compare categories, "line" for something over time or in order, "scatter" for one number against another, "area" for a total over time, "step" for a level that changes at moments.
+- Choose "pie" only when a pie or shares of a whole are asked for: then "x" is the category and "y" is exactly one column of amounts.
 - You are not shown the data and must not write any values. You only choose columns.
 - If no chart can be drawn from these columns (for example none holds numbers), answer {"cannot": "why, in one sentence"}.`
 }
@@ -181,6 +182,81 @@ Rules:
 - Write the document or the columns completely. Do not describe what you would write; write it.`
 }
 
+/** A long document: how many parts it is written in, how long each may be, and how many are written at once. */
+export const LONG_LIMITS = Object.freeze({ minParts: 3, maxParts: 10, partTokens: 2400, together: 3 })
+
+const LONG_WORDS = /\b(detailed|comprehensive|in[- ]depth|thorough|extensive|exhaustive|full[- ]length|long)\b/i
+const LONG_THINGS = /\b(report|document|guide|handbook|manual|proposal|plan|paper|essay|e-?book|white ?paper|study|analysis|review|curriculum|syllabus|policy|strategy|article|tutorial|documentation|thesis)\b/i
+
+/**
+ * Whether a request asks for a document longer than one answer from a model can hold, and in how many parts to
+ * write it.
+ *
+ * One answer is a few pages at most. Asked for "a detailed 10-page report", a single answer comes back as two pages
+ * that say they are a report -- and nothing tells the person it is a fifth of what they asked for. So a long document
+ * is planned as an outline and written a part at a time. This only decides whether to; the words that trigger it are
+ * the ones people use for length, and a number of pages or words when they give one.
+ *
+ * `short` is what was asked for when it is more than can be written in one go, so the note can say so.
+ */
+export function longDocumentAsked(request: string): { parts: number; short: string | null } | null {
+  const clamp = (n: number): number => Math.min(LONG_LIMITS.maxParts, Math.max(LONG_LIMITS.minParts, Math.round(n)))
+  const pages = /\b(\d{1,3})\s*[- ]?\s*pages?\b/i.exec(request)
+  if (pages) {
+    const n = Number(pages[1])
+    if (n >= 3) return { parts: clamp(n), short: n > LONG_LIMITS.maxParts ? `${n} pages` : null }
+    return null
+  }
+  const words = /\b(\d{1,3}(?:,\d{3})+|\d{4,6})\s*[- ]?\s*words?\b/i.exec(request)
+  if (words) {
+    const n = Number(words[1].replace(/,/g, ''))
+    if (n >= 1500) return { parts: clamp(n / 400), short: n / 400 > LONG_LIMITS.maxParts ? `${n.toLocaleString('en')} words` : null }
+    return null
+  }
+  return LONG_WORDS.test(request) && LONG_THINGS.test(request) ? { parts: 6, short: null } : null
+}
+
+export function outlineInstructions(parts: number): string {
+  return `You plan a long document as an outline. Answer with ONE JSON object and nothing else:
+{"title": a short name a person would call the document (at most 12 words),
+ "purpose": one sentence on what it is for,
+ "parts": [{"heading": a short heading, "brief": one or two sentences saying what this part covers}]}
+
+Rules:
+- About ${parts} parts, never fewer than ${LONG_LIMITS.minParts} and never more than ${LONG_LIMITS.maxParts}, in the order they should be read.
+- Together the parts cover the whole request, and no two cover the same ground.
+- Each heading is different from every other.
+- Do not write the document here. Only its outline.`
+}
+
+export function partInstructions(): string {
+  return `You write ONE part of a longer document. Answer with ONE JSON object and nothing else: {"markdown": the text of this part}.
+
+Rules:
+- Write only this part, as Markdown: paragraphs, lists, and a table where a table is the clearest way to say it. Do not write the part's own heading; it is added for you. Any heading inside the part starts with "###".
+- About 300 to 500 words. Write it completely; do not describe what you would write.
+- The other parts are listed. Do not cover what they cover, and do not introduce or conclude the whole document unless this part is the introduction or the conclusion.
+- Never invent real-world figures, statistics, prices, names of real people, or sources. Where a real figure is needed and you do not have it, write "(fill in)".
+- If material is given, use what is in it; do not add facts or figures that are not, and write each number as it is there.
+- Never include a password, an API key or a token, even as an example.`
+}
+
+/** One part of a long document, as written: its heading taken off if the model wrote it anyway, deeper headings kept below the part's own. */
+export function tidyPart(markdown: string, heading: string): string {
+  const lines = markdown.replace(/\r\n/g, '\n').trim().split('\n')
+  const first = /^#{1,6}\s+(.*)$/.exec(lines[0] ?? '')
+  if (first && first[1].trim().replace(/[#*_:.]+/g, '').toLowerCase() === heading.trim().replace(/[#*_:.]+/g, '').toLowerCase()) lines.shift()
+  let fenced = false
+  return lines
+    .map((line) => {
+      if (/^\s*```/.test(line)) fenced = !fenced
+      // A heading as high as the part's own, or higher, would start a new part of the document. It goes one below.
+      return !fenced && /^#{1,2}\s+\S/.test(line) ? line.replace(/^#{1,2}/, '###') : line
+    })
+    .join('\n')
+    .trim()
+}
+
 /** The planner's own warning about rows a model wrote. Dropped when the rows turn out to be the person's figures. */
 const EXAMPLE_ROWS_WARNING = /example rows? (was|were) written by a model/
 
@@ -210,6 +286,32 @@ export function figuresGiven(rows: readonly (readonly unknown[])[], given: strin
   }
   return { numbers, found }
 }
+
+/** An outline read from a model's answer: a title and three to ten parts, each with its own heading. */
+export function readOutline(raw: unknown): { outline: { title: string; purpose: string; parts: { heading: string; brief: string }[] } | null; problems: string[] } {
+  const problems: string[] = []
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return { outline: null, problems: ['The answer has to be one JSON object.'] }
+  const r = raw as Record<string, unknown>
+  const title = typeof r.title === 'string' ? r.title.replace(/\s+/g, ' ').trim().slice(0, 160) : ''
+  if (title === '') problems.push('"title" is missing.')
+  const parts: { heading: string; brief: string }[] = []
+  for (const one of Array.isArray(r.parts) ? r.parts.slice(0, LONG_LIMITS.maxParts) : []) {
+    if (typeof one !== 'object' || one === null) continue
+    const p = one as Record<string, unknown>
+    const heading = typeof p.heading === 'string' ? p.heading.replace(/^#+\s*/, '').replace(/\s+/g, ' ').trim().slice(0, 160) : ''
+    if (heading === '' || parts.some((other) => other.heading.toLowerCase() === heading.toLowerCase())) continue
+    parts.push({ heading, brief: typeof p.brief === 'string' ? p.brief.replace(/\s+/g, ' ').trim().slice(0, 400) : '' })
+  }
+  if (parts.length < LONG_LIMITS.minParts) problems.push(`"parts" has to be a list of at least ${LONG_LIMITS.minParts} parts, each with a different "heading". ${parts.length} could be read.`)
+  if (problems.length > 0) return { outline: null, problems }
+  return { outline: { title, purpose: typeof r.purpose === 'string' ? r.purpose.trim().slice(0, 300) : '', parts }, problems }
+}
+
+/** What is said while a long document is written. Shared with the window, which shows it and does not log it as a fault. */
+export const LONG_STATUS = Object.freeze({
+  planning: 'Planning the parts…',
+  written: (done: number, of: number): string => `Written ${done} of ${of} parts…`
+})
 
 export class ArtifactGeneration {
   private readonly o: GenerationOptions
@@ -285,6 +387,106 @@ Answer again, fixing those. Everything else about the format is the same.`
     }
 
     return { body: null, intent: null, notes: [], problems: lastProblems, attempts, failed: null }
+  }
+
+  /**
+   * A long document, planned as an outline and written a part at a time.
+   *
+   * Three things are different from one answer. The outline comes first and is checked like any other answer. Each
+   * part is its own request, so a part can be as long as a whole short document. And `progress` is told what has
+   * actually happened -- "3 of 8 parts written" is said when three have been -- because a wait of a minute with no
+   * sign of life looks the same as a hang.
+   *
+   * If any part cannot be written, nothing is kept: a report with a hole in the middle that reads as finished is
+   * worse than a sentence saying which part failed.
+   */
+  async generateLong(request: string, options: { parts: number; short?: string | null; context?: string; signal?: AbortSignal; progress?(message: string): void }): Promise<GenerateOutcome> {
+    const asked = String(request ?? '').trim().slice(0, PLAN_LIMITS.request)
+    const attempts: GenerateOutcome['attempts'] = []
+    const none = (message: string, failed: string | null = null): GenerateOutcome => ({ body: null, intent: null, notes: [], problems: [{ severity: 'error', message }], attempts, failed })
+    if (asked === '') return none('Say what you want made.')
+    const material = (options.context ?? '').trim().slice(0, CONTEXT_LIMIT)
+    const ask = (system: string, user: string, tokens: number): Promise<Asked> => (this.o.ask ? this.o.ask(system, user) : this.askJson(system, user, options.signal, tokens))
+
+    // The outline. Argued with once, like every other answer.
+    options.progress?.(LONG_STATUS.planning)
+    let outline: { title: string; purpose: string; parts: { heading: string; brief: string }[] } | null = null
+    let complaint: string | null = null
+    for (let round = 0; round < 2 && outline === null; round++) {
+      const answer = await ask(outlineInstructions(options.parts), complaint === null ? asked : `${asked}\n\nThe last answer did not work. What was wrong:\n${complaint}\n\nAnswer again, fixing that.`, 1200)
+      if ('failed' in answer) {
+        attempts.push({ said: '(nothing came back)', problems: [answer.failed] })
+        return none(answer.failed, answer.failed)
+      }
+      const read = readOutline(answer.json)
+      attempts.push({ said: JSON.stringify(answer.json).slice(0, 300), problems: read.problems })
+      if (read.outline) outline = read.outline
+      else complaint = read.problems.map((one) => `- ${one}`).join('\n')
+    }
+    if (outline === null) return none('Orion did not plan a document Orbis could write: the outline did not come back as parts with headings.')
+    if (options.signal?.aborted) return none(STOPPED, STOPPED)
+
+    const plan = outline
+    const listed = plan.parts.map((one, i) => `${i + 1}. ${one.heading} -- ${one.brief}`).join('\n')
+    const written: string[] = new Array(plan.parts.length).fill('')
+    let done = 0
+    let failure: { part: number; message: string; failed: string | null } | null = null
+    const write = async (at: number): Promise<void> => {
+      const part = plan.parts[at]
+      const user = `The document: "${plan.title}"
+Asked for: ${asked}
+
+All its parts, in order:
+${listed}
+
+Write part ${at + 1}: "${part.heading}". ${part.brief}${material === '' ? '' : `\n\nMaterial to write it from:\n<<<\n${material}\n>>>`}`
+      let problem = ''
+      let failed: string | null = null
+      for (let round = 0; round < 2; round++) {
+        const answer = await ask(partInstructions(), round === 0 ? user : `${user}\n\nThe last answer did not work: ${problem} Answer again with {"markdown": ...}.`, LONG_LIMITS.partTokens)
+        if ('failed' in answer) {
+          failed = answer.failed
+          problem = answer.failed
+          if (answer.failed === STOPPED) break
+          continue
+        }
+        failed = null
+        const text = typeof answer.json.markdown === 'string' ? tidyPart(answer.json.markdown, part.heading) : ''
+        if (text.length >= 40) {
+          written[at] = text
+          done += 1
+          options.progress?.(LONG_STATUS.written(done, plan.parts.length))
+          return
+        }
+        problem = '"markdown" was missing or almost empty.'
+      }
+      attempts.push({ said: `(part ${at + 1})`, problems: [problem] })
+      failure ??= { part: at, message: problem, failed }
+    }
+
+    // A few at a time: fast enough to be worth waiting for, few enough not to be refused for asking too quickly.
+    let next = 0
+    const worker = async (): Promise<void> => {
+      while (next < plan.parts.length && failure === null && !options.signal?.aborted) {
+        const at = next++
+        await write(at)
+      }
+    }
+    await Promise.all(Array.from({ length: Math.min(LONG_LIMITS.together, plan.parts.length) }, () => worker()))
+    if (options.signal?.aborted) return none(STOPPED, STOPPED)
+    const failedPart = failure as { part: number; message: string; failed: string | null } | null
+    if (failedPart !== null) {
+      return none(`Part ${failedPart.part + 1} of ${plan.parts.length} ("${plan.parts[failedPart.part].heading}") could not be written: ${failedPart.message} Nothing was kept, because a document with a part missing would read as finished.`, failedPart.failed)
+    }
+
+    const markdown = `# ${plan.title}\n\n${plan.parts.map((one, i) => `## ${one.heading}\n\n${written[i]}`).join('\n\n')}\n`
+    const read = readProposal({ kind: 'document', title: plan.title, purpose: plan.purpose, markdown })
+    if (!read.proposal || !buildable(read.problems)) return { body: null, intent: null, notes: [], problems: read.problems, attempts, failed: null }
+    const made = this.materialise(read.proposal, asked, `${asked}\n${material}`)
+    if ('error' in made) return none(made.error)
+    const notes = [`Written by a model in ${plan.parts.length} parts, from an outline it made first. Any figure in it was written, not measured or computed by Orbis.`]
+    if (options.short) notes.push(`You asked for ${options.short}. Orbis writes at most ${LONG_LIMITS.maxParts} parts in one go, so this is shorter than that.`)
+    return { body: made.body, intent: read.proposal.intent, notes, problems: read.problems, attempts, failed: null }
   }
 
   /**

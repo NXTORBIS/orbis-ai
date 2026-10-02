@@ -314,6 +314,8 @@ export default function Composer(props: Props): React.JSX.Element {
     const picked = await window.api.pickTextFiles()
     if (picked.attachments.length) setAttachments((current) => [...current, ...picked.attachments].slice(0, 10))
     if (picked.skipped.length) props.onNotify(`Skipped ${picked.skipped.join(', ')}: not a text file or larger than 200 KB.`, 'warn')
+    // An Excel, Word or PDF file was read for the chat: what was read, and what could not be, in Orbis's own words.
+    for (const note of picked.notes ?? []) props.onNotify(note, / was not attached/.test(note) ? 'warn' : 'info')
   }
 
   const attachImages = async (): Promise<void> => {
