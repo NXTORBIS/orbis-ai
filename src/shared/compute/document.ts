@@ -625,7 +625,11 @@ export function fromMarkdown(source: string, idPrefix = 'b'): { blocks: Block[];
           align: aligns[c] ?? 'left'
         }))
       )
-      blocks.push({ id: nextId(), sectionId: '', kind: 'table', columns, rows: cells, caption: '', label: '' })
+      // The caption `toMarkdown` wrote under it, if there is one, comes back as the caption and not as a paragraph --
+      // otherwise a document with a captioned table reads back one block longer than it was written.
+      const captioned = captionAfter(lines, i)
+      blocks.push({ id: nextId(), sectionId: '', kind: 'table', columns, rows: cells, caption: captioned.caption, label: '' })
+      i = captioned.next
       continue
     }
 
@@ -691,6 +695,22 @@ function listItem(line: string): { style: ListStyle; text: string; checked: bool
   const ordered = /^(\s*)(\d+)[.)]\s+(.*)$/.exec(line)
   if (ordered) return { style: 'ordered', text: ordered[3], checked: false, depth: Math.floor(ordered[1].length / 2) }
   return null
+}
+
+/**
+ * The caption `toMarkdown` writes under a table or an image, read back as a caption.
+ *
+ * The writer puts the caption on its own line as `*caption*`. Read as ordinary Markdown that is an italic paragraph,
+ * and a document with three captioned tables comes back three blocks longer than it went out -- which the read-back
+ * check then reports as a copy that does not match. So an italic-only line that directly follows a table or an image
+ * is the caption. That is the one convention the pair agrees on.
+ */
+function captionAfter(lines: readonly string[], from: number): { caption: string; next: number } {
+  let i = from
+  while (i < lines.length && lines[i].trim() === '') i += 1
+  const match = i < lines.length ? /^\*([^*]+)\*\s*$/.exec(lines[i]) : null
+  if (!match) return { caption: '', next: from }
+  return { caption: match[1].trim(), next: i + 1 }
 }
 
 const splitRow = (line: string): string[] =>

@@ -180,7 +180,7 @@ export const FORMATS: Readonly<Record<FormatId, FormatCapability>> = Object.free
     name: 'PDF',
     extensions: ['.pdf'],
     mediaTypes: ['application/pdf'],
-    canImport: false,
+    canImport: true,
     canExport: true,
     streaming: false,
     carries: { units: false, types: false, metadata: true, formatting: true, provenance: false, hierarchy: true },
@@ -188,7 +188,7 @@ export const FORMATS: Readonly<Record<FormatId, FormatCapability>> = Object.free
       "Typeset by Chromium's print engine from the HTML, so it will not match the HTML on screen exactly.",
       'Not editable: a PDF is the layout, fixed. Keep the source to change anything.',
       'Images from the web are shown as their alt text; the print window fetches nothing.',
-      'Orbis does not read PDF back into a document yet.'
+      'Read back as its text only: headings, tables, images and layout are not recovered, and a scanned PDF has no text to read.'
     ]
   },
   xlsx: {
@@ -196,14 +196,14 @@ export const FORMATS: Readonly<Record<FormatId, FormatCapability>> = Object.free
     name: 'Excel workbook',
     extensions: ['.xlsx'],
     mediaTypes: ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
-    canImport: false,
+    canImport: true,
     canExport: true,
     streaming: false,
     carries: { units: false, types: true, metadata: false, formatting: true, provenance: false, hierarchy: false },
     limitations: [
       'Numbers, dates and true/false are real Excel values; a unit is written into the column heading, not kept as a unit.',
       'Written as values, with no formulas. A total you add in Excel is yours.',
-      'Orbis does not read workbooks back yet.'
+      'Read back from its first sheet with rows in it; formulas are read as their last computed values.'
     ]
   },
   docx: {
@@ -211,14 +211,14 @@ export const FORMATS: Readonly<Record<FormatId, FormatCapability>> = Object.free
     name: 'Word document',
     extensions: ['.docx'],
     mediaTypes: ['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
-    canImport: false,
+    canImport: true,
     canExport: true,
     streaming: false,
     carries: { units: false, types: false, metadata: true, formatting: true, provenance: false, hierarchy: true },
     limitations: [
       'Headings, lists and tables are real Word styles, so they can be changed in Word.',
       'Equations are written as their source; images from the web are written as their description.',
-      'Orbis does not read Word documents back yet.'
+      'Read back through Word → HTML: headings, paragraphs, lists and tables come in; page layout, images, footnotes and tracked changes do not.'
     ]
   },
   pptx: {

@@ -147,7 +147,7 @@ import { ArtifactStore } from './artifacts/store'
 import { ArtifactService } from './artifacts/service'
 import { ArtifactGeneration } from './artifacts/generation'
 import { registerArtifactCapabilities } from './artifacts/capabilities'
-import { chooseDestinationWith, registerArtifactsIpc, renderPdfWith } from './artifacts/ipc'
+import { chooseDestinationWith, chooseSourceWith, registerArtifactsIpc, renderPdfWith } from './artifacts/ipc'
 import { GeneratedStore } from './pages/generatedStore'
 import { OPERATION_CAPABILITIES } from './pages/service'
 import { FxRates } from './markets/fx'
@@ -1870,6 +1870,7 @@ if (!app.requestSingleInstanceLock()) {
       now: () => Date.now(),
       random: () => crypto.randomUUID().replace(/-/g, ''),
       chooseDestination: chooseDestinationWith(() => mainWindow),
+      chooseSource: chooseSourceWith(() => mainWindow),
       renderPdf: renderPdfWith(),
       generation: new ArtifactGeneration({
         apiKeys: async () => GROQ_API_KEYS,

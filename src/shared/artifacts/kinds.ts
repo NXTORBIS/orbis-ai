@@ -47,7 +47,7 @@ export const ARTIFACT_KINDS: Readonly<Record<ArtifactKindId, ArtifactKind>> = Ob
     builtFrom: 'Table in src/shared/compute/data.ts',
     writes: Object.freeze(['csv', 'xlsx', 'tsv', 'json', 'ndjson', 'markdown', 'text'] as const),
     stores: 'json',
-    reads: Object.freeze(['csv', 'tsv', 'json', 'ndjson'] as const),
+    reads: Object.freeze(['csv', 'tsv', 'json', 'ndjson', 'xlsx'] as const),
     orionMayName: true
   }),
   document: Object.freeze({
@@ -57,7 +57,7 @@ export const ARTIFACT_KINDS: Readonly<Record<ArtifactKindId, ArtifactKind>> = Ob
     builtFrom: 'StructuredDocument in src/shared/compute/document.ts',
     writes: Object.freeze(['markdown', 'html', 'pdf', 'docx', 'pptx', 'text'] as const),
     stores: 'markdown',
-    reads: Object.freeze(['markdown', 'html'] as const),
+    reads: Object.freeze(['markdown', 'html', 'text', 'docx', 'pdf'] as const),
     orionMayName: true
   })
 })

@@ -350,4 +350,6 @@ export const TEST_FILES = [
   'src/shared/artifacts/plan.test.ts',
   'src/main/artifacts/generation.test.ts',
   'src/main/artifacts/office.test.ts',
+  'src/shared/artifacts/analysis.test.ts',
+  'src/main/artifacts/importing.test.ts',
 ]

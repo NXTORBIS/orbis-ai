@@ -2,6 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, type BrowserWindow as BrowserWindo
 import { randomBytes } from 'node:crypto'
 import { rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { FORMATS } from '../../shared/compute/interchange.ts'
 import type { ArtifactService, DestinationRequest } from './service.ts'
 
 /**
@@ -36,6 +37,31 @@ export const chooseDestinationWith =
     const options = { title: request.title, defaultPath: request.defaultName, filters: request.filters }
     const result = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options)
     return result.canceled || !result.filePath ? null : result.filePath
+  }
+
+/**
+ * Which file to read, asked in the main process.
+ *
+ * The filter lists every extension the format registry says Orbis reads, so the dialog and the reader cannot
+ * disagree about what can be opened.
+ */
+export const chooseSourceWith =
+  (getWindow: () => BrowserWindowType | null) =>
+  async (): Promise<string | null> => {
+    const win = getWindow()
+    const readable = Object.values(FORMATS)
+      .filter((one) => one.canImport)
+      .flatMap((one) => one.extensions.map((ext) => ext.replace(/^\./, '')))
+    const options = {
+      title: 'Open a file',
+      properties: ['openFile' as const],
+      filters: [
+        { name: 'Files Orbis reads', extensions: readable },
+        { name: 'All files', extensions: ['*'] }
+      ]
+    }
+    const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
+    return result.canceled ? null : (result.filePaths[0] ?? null)
   }
 
 /** How long a print may take before it is given up on. A document of a few hundred pages prints in seconds. */

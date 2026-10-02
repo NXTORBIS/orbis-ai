@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { AlertTriangle, ArrowLeft, Check, FilePlus2, Loader2, Save, Sparkles, Table2, FileText, Trash2, X } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, BarChart3, Check, FilePlus2, FolderOpen, Loader2, Save, Sparkles, Table2, FileText, Trash2, X } from 'lucide-react'
 import type { NoticeKind } from '../lib/notices'
 import './create.css'
 
@@ -221,6 +221,47 @@ export default function CreateView({ onClose, onNotify }: { onClose: () => void;
     }
   }
 
+  const [importing, setImporting] = useState(false)
+  const [analysing, setAnalysing] = useState(false)
+
+  const importOne = async (acceptSecrets = false): Promise<void> => {
+    if (importing) return
+    setImporting(true)
+    setAskFailure(null)
+    try {
+      const result = await window.api.creationRun({ operation: 'artifact.import', acceptSecrets })
+      if (!result.ok) {
+        if (result.error !== 'cancelled') setAskFailure(failureOf(result))
+        return
+      }
+      const made = result.value as { record: Record_ }
+      onNotify(`Opened "${made.record.title}" and checked the kept copy.`, 'info')
+      await refresh()
+      await open(made.record.artifactId)
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  const analyse = async (): Promise<void> => {
+    if (!opened || analysing) return
+    setAnalysing(true)
+    setSaveFailure(null)
+    try {
+      const result = await window.api.creationRun({ operation: 'artifact.analyse', artifactId: opened.record.artifactId })
+      if (!result.ok) {
+        setSaveFailure(failureOf(result))
+        return
+      }
+      const made = result.value as { record: Record_; findings: number }
+      onNotify(`Analysed: ${made.findings} findings, kept as "${made.record.title}".`, 'info')
+      await refresh()
+      await open(made.record.artifactId)
+    } finally {
+      setAnalysing(false)
+    }
+  }
+
   const make = async (acceptSecrets = false): Promise<void> => {
     if (working || text.trim() === '') return
     setWorking(true)
@@ -302,6 +343,10 @@ export default function CreateView({ onClose, onNotify }: { onClose: () => void;
             <button type="submit" className="queue-btn primary" disabled={asking || request.trim() === ''}>
               {asking ? <Loader2 size={13} className="spin" /> : <Sparkles size={13} />}
               {asking ? 'Writing…' : 'Make it with Orion'}
+            </button>
+            <button type="button" className="queue-btn" disabled={importing} onClick={() => void importOne()} title="Open a CSV, Excel, Word, PDF, Markdown, JSON or text file">
+              {importing ? <Loader2 size={13} className="spin" /> : <FolderOpen size={13} />}
+              Open a file…
             </button>
           </form>
           {askFailure && <Findings failure={askFailure} onAccept={() => void ask(true)} />}
@@ -386,6 +431,14 @@ export default function CreateView({ onClose, onNotify }: { onClose: () => void;
               {opened.preview}
               {opened.truncated ? '\n…' : ''}
             </pre>
+            {opened.record.kind === 'table' && (
+              <div className="create-save">
+                <button type="button" className="queue-btn small" disabled={analysing} onClick={() => void analyse()} title="Counts, statistics, quality and relationships, computed by Orbis and kept as a document">
+                  {analysing ? <Loader2 size={13} className="spin" /> : <BarChart3 size={13} />}
+                  Analyse this table
+                </button>
+              </div>
+            )}
             <div className="create-save">
               <span>Save as</span>
               {opened.formats.map((one) => (

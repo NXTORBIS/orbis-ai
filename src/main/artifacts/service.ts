@@ -27,10 +27,12 @@ import { safeName } from '../../shared/artifacts/naming.ts'
 import { gateForWrite } from '../../shared/artifacts/secrets.ts'
 import { verifyDocumentFile, verifyPdfFile, verifyTableFile } from '../../shared/artifacts/validate.ts'
 import type { ArtifactGeneration } from './generation.ts'
+import { importFile } from './importing.ts'
 import { verifyDocx, verifyPptx, verifyXlsx, writeDocx, writePptx, writeXlsx } from './office.ts'
 import { ArtifactStore, CONTENT_PREFIX, SOURCE_FILE } from './store.ts'
 import { toDelimited } from '../../shared/compute/data.ts'
 import { toText } from '../../shared/compute/documentHtml.ts'
+import { analyseTable, analysisDocument } from '../../shared/artifacts/analysis.ts'
 
 /**
  * The one door for making, keeping and exporting artifacts.
@@ -64,6 +66,8 @@ const OPERATIONS: Readonly<Record<string, string>> = Object.freeze({
   'artifact.kinds': 'What Orbis can create, and in which formats.',
   'artifact.create': 'Make an artifact from text, keep it, and check the kept copy.',
   'artifact.generate': 'Make an artifact from a sentence: Orion decides what and writes it, Orbis builds, keeps and checks it.',
+  'artifact.import': 'Read a file the person chooses into a table or a document, keep it, and check the kept copy.',
+  'artifact.analyse': 'Analyse a table with the data engines and keep the write-up as a document. Every figure is computed.',
   'artifact.list': 'Every artifact in this profile.',
   'artifact.read': 'One artifact, with a bounded preview of its content.',
   'artifact.export': 'Write an artifact to a file the person chooses, then check the file.',
@@ -89,6 +93,8 @@ export interface ArtifactServiceOptions {
   random(): string
   /** Where to write. Runs a dialog in the main process; null when the person cancelled. */
   chooseDestination(request: DestinationRequest): Promise<string | null>
+  /** Which file to read. Runs a dialog in the main process; null when the person cancelled. */
+  chooseSource?(): Promise<string | null>
   /**
    * A page of HTML printed to PDF bytes, by a print engine that lives outside this file.
    *
@@ -160,6 +166,10 @@ export class ArtifactService {
           return await this.create(profileId, operation, req, fail)
         case 'artifact.generate':
           return await this.generate(profileId, operation, req, fail)
+        case 'artifact.import':
+          return await this.import(profileId, operation, req, fail)
+        case 'artifact.analyse':
+          return await this.analyse(profileId, operation, req, fail)
         case 'artifact.read':
           return await this.read(profileId, operation, req, fail)
         case 'artifact.export':
@@ -326,6 +336,68 @@ export class ArtifactService {
       return fail('not-made', first, { attempts: outcome.attempts, problems: outcome.problems.map((p) => p.message) })
     }
     return this.keep(profileId, operation, outcome.body, { title: outcome.intent.title, source: `Orion, asked for: ${request.slice(0, 160)}`, notes: outcome.notes, acceptSecrets }, fail)
+  }
+
+  // ---------------------------------------------------------------- import
+
+  /** A file the person chose, read into a table or a document and kept with what was lost said. */
+  private async import(
+    profileId: string,
+    operation: string,
+    req: Record<string, unknown>,
+    fail: (error: string, message: string, detail?: unknown) => ArtifactResult
+  ): Promise<ArtifactResult> {
+    if (!this.o.chooseSource) return fail('unavailable', 'Opening a file is not available here.')
+    const path = await this.o.chooseSource()
+    if (path === null) return fail('cancelled', 'Nothing was opened.')
+    const read = this.o.readFile ?? (async (p: string) => new Uint8Array(await readFromDisk(p)))
+    let bytes: Uint8Array
+    try {
+      bytes = await read(path)
+    } catch {
+      return fail('file', 'That file could not be read.')
+    }
+    const name = path.replace(/^.*[\\/]/, '')
+    const imported = await importFile(name, bytes)
+    if ('error' in imported) return fail(imported.error, imported.message)
+    return this.keep(profileId, operation, imported.body, { title: imported.title, source: imported.source, notes: imported.notes, acceptSecrets: req.acceptSecrets === true }, fail)
+  }
+
+  // ---------------------------------------------------------------- analyse
+
+  /** A table analysed by the data engines, and the write-up kept as a document whose every figure was computed. */
+  private async analyse(
+    profileId: string,
+    operation: string,
+    req: Record<string, unknown>,
+    fail: (error: string, message: string, detail?: unknown) => ArtifactResult
+  ): Promise<ArtifactResult> {
+    const artifactId = str(req.artifactId, 60)
+    if (!isArtifactId(artifactId)) return fail('bad-input', 'That is not an artifact id.')
+    const record = await this.o.store.readRecord(profileId, artifactId)
+    if (!record) return fail('not-found', 'There is no artifact with that id.')
+    if (record.kind !== 'table') return fail('bad-input', 'Only a table can be analysed this way.')
+    const sourceBytes = await this.o.store.readFile(profileId, artifactId, SOURCE_FILE)
+    if (!sourceBytes) return fail('not-found', 'The artifact is listed but its source is missing.')
+    const body = JSON.parse(decode(sourceBytes)) as ArtifactBody
+    if (body.kind !== 'table') return fail('failed', 'The artifact is damaged: its source is not the kind its record says.')
+
+    const analysis = analyseTable(body.table)
+    const document = analysisDocument(analysis, record.title)
+    const kept = await this.keep(
+      profileId,
+      operation,
+      { kind: 'document', document },
+      {
+        title: document.metadata.title,
+        source: document.metadata.source,
+        notes: [`Every figure was computed by Orbis from "${record.title}" (${record.artifactId}). Nothing in it was written by a model.`],
+        acceptSecrets: req.acceptSecrets === true
+      },
+      fail
+    )
+    if (!kept.ok) return kept
+    return { ok: true, operation, value: { ...(kept.value as Record<string, unknown>), headlines: analysis.headlines, findings: analysis.findings.length, from: artifactId } }
   }
 
   // ---------------------------------------------------------------- keep

@@ -18,6 +18,8 @@ interface Harness {
   dir: string
   /** What the next save dialog answers. Null is "cancelled". */
   nextDestination: string | null
+  /** What the next open dialog answers. Null is "cancelled". */
+  nextSource: string | null
   /** Replaces what is written at a path, to simulate a disk that lied. */
   corrupt: boolean
   /** What the stand-in print engine was handed, so a test can see the HTML that would have been printed. */
@@ -33,13 +35,14 @@ const fakePdf = (html: string): Uint8Array => {
 
 const withService = async (run: (h: Harness) => Promise<void>, options: { pdf?: boolean } = { pdf: true }): Promise<void> => {
   const dir = await mkdtemp(join(tmpdir(), 'orbis-artifact-service-'))
-  const h: Harness = { service: null as unknown as ArtifactService, dir, nextDestination: null, corrupt: false, printed: [] }
+  const h: Harness = { service: null as unknown as ArtifactService, dir, nextDestination: null, nextSource: null, corrupt: false, printed: [] }
   let counter = 0
   h.service = new ArtifactService({
     store: new ArtifactStore({ userData: dir }),
     now: () => 1000,
     random: () => (++counter).toString(16).padStart(32, '0'),
     chooseDestination: async () => h.nextDestination,
+    chooseSource: async () => h.nextSource,
     ...(options.pdf === false
       ? {}
       : {
@@ -253,6 +256,40 @@ test('a document saves as Word and as a deck, each opened as the package it is',
     assert.equal(deck.verified.ok, true, JSON.stringify(deck.verified.checks))
     // Title slide, Plan, Week 1.
     assert.equal(deck.verified.reimported?.rows, 3)
+  }))
+
+test('a file the person chose is read, kept with what the reader said, and can then be analysed into a computed report', () =>
+  withService(async (h) => {
+    const path = join(h.dir, 'readings.csv')
+    await writeFile(path, 'date,site,mwh,solar\n2026-10-01,HQ,412,96\n2026-10-02,Depot,288,12\n2026-10-03,Warehouse,530,140\n2026-10-04,HQ,415,99\n')
+    h.nextSource = path
+    const imported = ok(await h.service.run('default', { operation: 'artifact.import' }))
+    const record = imported.record as { artifactId: string; title: string; kind: string; source: string; notes: string[]; shape: { rows: number; columns: number } }
+    assert.equal(record.kind, 'table')
+    assert.equal(record.title, 'readings')
+    assert.equal(record.source, 'file: readings.csv')
+    assert.deepEqual(record.shape, { rows: 4, columns: 4 })
+    assert.ok(record.notes.length > 0, 'the parser decisions are kept as notes')
+
+    const analysed = ok(await h.service.run('default', { operation: 'artifact.analyse', artifactId: record.artifactId }))
+    const report = analysed.record as { kind: string; title: string; notes: string[]; verified: { ok: boolean } }
+    assert.equal(report.kind, 'document')
+    assert.equal(report.title, 'Analysis of readings')
+    assert.equal(report.verified.ok, true)
+    assert.ok(report.notes.some((one) => /computed by Orbis/.test(one)))
+    assert.ok((analysed.findings as number) >= 4)
+    assert.equal(analysed.from, record.artifactId)
+    // Only a table can be analysed.
+    const wrong = await h.service.run('default', { operation: 'artifact.analyse', artifactId: (analysed.record as { artifactId: string }).artifactId })
+    assert.equal(wrong.ok, false)
+  }))
+
+test('a cancelled open dialog opens nothing and says so', () =>
+  withService(async (h) => {
+    h.nextSource = null
+    const result = await h.service.run('default', { operation: 'artifact.import' })
+    assert.equal(result.ok, false)
+    if (!result.ok) assert.equal(result.error, 'cancelled')
   }))
 
 test('without a print engine, PDF is simply not offered', () =>
