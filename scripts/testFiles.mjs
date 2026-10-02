@@ -355,4 +355,5 @@ export const TEST_FILES = [
   'src/shared/artifacts/svg.test.ts',
   'src/shared/artifacts/transform.test.ts',
   'src/shared/artifacts/templates.test.ts',
+  'src/shared/artifacts/extract.test.ts',
 ]

@@ -30,6 +30,7 @@ import { IMAGE_GEN_STATUS } from '../../../shared/types'
 import ImageGenPlaceholder from './ImageGenPlaceholder'
 import { modelLabel } from '../../../shared/models'
 import { copyText, formatDuration } from '../lib/utils'
+import { documentTextFromReply, titleFromText } from '../../../shared/artifacts/naming'
 import { useDismiss } from '../lib/useDismiss'
 import type { NoticeKind } from '../App'
 import Markdown from './Markdown'
@@ -155,7 +156,7 @@ function UserMessage({ message, userName, canEdit, onEdit, onResend, onNotify }:
                 <Upload size={14} />
               </button>
             )}
-            {message.content && <MoreMenu getText={() => message.content} onNotify={onNotify} alignRight />}
+            {message.content && <MoreMenu getText={() => message.content} getMarkdown={() => message.content} onNotify={onNotify} alignRight />}
           </div>
         )}
       </div>
@@ -262,7 +263,7 @@ function AssistantMessage(props: Props): React.JSX.Element {
                 <Upload size={14} />
               </button>
             )}
-            {message.content && <MoreMenu getText={plainText} onNotify={props.onNotify} />}
+            {message.content && <MoreMenu getText={plainText} getMarkdown={() => message.content} onNotify={props.onNotify} />}
             {message.model && <span className="model-tag">{modelLabel(message.model)}</span>}
           </div>
         )}
@@ -282,7 +283,19 @@ function AssistantMessage(props: Props): React.JSX.Element {
 }
 
 /** "More" menu shared by user and assistant messages: read aloud and copy as plain text. */
-function MoreMenu({ getText, onNotify, alignRight = false }: { getText(): string; onNotify(text: string, kind?: NoticeKind): void; alignRight?: boolean }): React.JSX.Element {
+function MoreMenu({
+  getText,
+  getMarkdown,
+  onNotify,
+  alignRight = false
+}: {
+  /** The message as plain words, for reading aloud and copying. */
+  getText(): string
+  /** The message as it was written, Markdown and all, which is what a kept document is made from. */
+  getMarkdown(): string
+  onNotify(text: string, kind?: NoticeKind): void
+  alignRight?: boolean
+}): React.JSX.Element {
   const [open, setOpen] = useState(false)
   const [speaking, setSpeaking] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
@@ -325,6 +338,21 @@ function MoreMenu({ getText, onNotify, alignRight = false }: { getText(): string
           >
             <Type size={14} />
             Copy as plain text
+          </button>
+          <button
+            className="menu-item"
+            title="Kept in Create as a document: versions, and save as Word, PDF or slides"
+            onClick={() => {
+              setOpen(false)
+              const text = documentTextFromReply(getMarkdown())
+              void window.api.creationRun({ operation: 'artifact.create', kind: 'document', title: titleFromText(text, 'Chat reply'), text, source: 'a chat reply' }).then((result) => {
+                if (result.ok) onNotify(`Kept "${(result.value as { record: { title: string } }).record.title}" in Create, read back and checked. Type /create to open it.`, 'info')
+                else onNotify(result.message, 'warn')
+              })
+            }}
+          >
+            <FileText size={14} />
+            Keep as a document
           </button>
         </div>
       )}

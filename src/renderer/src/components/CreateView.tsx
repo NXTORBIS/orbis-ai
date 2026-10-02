@@ -96,6 +96,8 @@ interface Opened {
   columns: { id: string; name: string; type: string; formula: string }[]
   /** The first rows of a table as text, to show as a table. Null for anything that is not one. */
   grid: { rows: string[][]; total: number } | null
+  /** The tables inside a document, so each can be taken out as a table of its own. */
+  tables: { index: number; caption: string; rows: number; columns: number; headings: string[] }[]
   formats: { format: string; name: string; extension: string; limitations: readonly string[] }[]
 }
 
@@ -793,6 +795,24 @@ export default function CreateView({
                 {opened.preview}
                 {opened.truncated ? '\n…' : ''}
               </pre>
+            )}
+            {opened.record.kind === 'document' && opened.tables.length > 0 && (
+              <div className="create-save" aria-label="Tables in this document">
+                <span>Take a table out</span>
+                {opened.tables.map((one) => (
+                  <button
+                    key={one.index}
+                    type="button"
+                    className="queue-btn small"
+                    disabled={busy !== null}
+                    title={`Kept as a table of its own, so it can be sorted, totalled and drawn. Headings: ${one.headings.join(', ')}`}
+                    onClick={() => void act(`extract-${one.index}`, { operation: 'artifact.extractTable', artifactId: opened.record.artifactId, index: one.index }, (r) => `Took out "${r.title}" as a table of its own.`)}
+                  >
+                    <Table2 size={13} />
+                    {one.caption || `Table ${one.index}`} ({one.rows} rows × {one.columns} columns)
+                  </button>
+                ))}
+              </div>
             )}
             {(opened.record.kind === 'document' || opened.record.kind === 'diagram') && (
               <form

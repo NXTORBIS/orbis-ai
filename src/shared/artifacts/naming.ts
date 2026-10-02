@@ -49,3 +49,39 @@ export function unique(base: string, ext: string, exists: (candidate: string) =>
   }
   throw new Error(`Could not find a free name for "${base}${ext}" after ${limit} tries.`)
 }
+
+/** A name for something kept from a piece of text: its first heading, or its first few words. */
+export function titleFromText(text: string, fallback = 'Document'): string {
+  const lines = text.split(/\r?\n/).map((one) => one.trim())
+  const heading = lines.find((one) => /^#{1,6}\s+\S/.test(one))
+  const first = heading ? heading.replace(/^#{1,6}\s+/, '') : (lines.find((one) => one !== '') ?? '')
+  const plain = first
+    .replace(/[*_`~>#]/g, '')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (plain === '') return fallback
+  const words = plain.split(' ')
+  const short = words.slice(0, 9).join(' ')
+  return (words.length > 9 ? `${short}…` : short).slice(0, 80)
+}
+
+/**
+ * The document in a chat reply.
+ *
+ * A model asked for "a document, as Markdown" often answers with the whole thing inside one fenced block. Kept as it
+ * stands that is a document with a single code block in it, which is not what anybody meant. When the reply is exactly
+ * one fence marked as Markdown (or unmarked) and nothing else, the document is what is inside. Anything else -- prose
+ * with code in it, two fences, a fence of some other language -- is kept exactly as it was written.
+ */
+export function documentTextFromReply(reply: string): string {
+  const text = reply.trim()
+  const fenced = /^```(markdown|md)?[ \t]*\r?\n([\s\S]*?)\r?\n```$/i.exec(text)
+  if (!fenced) return reply
+  const inside = fenced[2]
+  // A fence inside the fence means the outer one was not simply wrapping a document.
+  if (/^```/m.test(inside)) return reply
+  // An unmarked fence is only unwrapped when what is inside reads as a document: a heading or a table.
+  if (!fenced[1] && !/^#{1,6}\s+\S/m.test(inside) && !/^\|.*\|\s*$/m.test(inside)) return reply
+  return inside
+}

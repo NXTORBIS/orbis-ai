@@ -43,6 +43,7 @@ import { decodePng } from '../chromium/png.ts'
 import { cellOut, joinTables, type JoinKind } from '../../shared/compute/data.ts'
 import { applySteps, formulaName, isTransformFailure, readSteps, type TransformStep } from '../../shared/artifacts/transform.ts'
 import { listTemplates, templateById } from '../../shared/artifacts/templates.ts'
+import { extractTable, tablesIn, type DocumentTable } from '../../shared/artifacts/extract.ts'
 import { buildTable } from '../../shared/compute/data.ts'
 import { toMarkdown } from '../../shared/compute/document.ts'
 
@@ -101,7 +102,8 @@ const OPERATIONS: Readonly<Record<string, string>> = Object.freeze({
   'artifact.join': 'Two tables joined on a column, with how many rows on each side found a partner.',
   'artifact.templates': 'The starting points Orbis has: tables with their columns chosen, documents with their headings written.',
   'artifact.fromTemplate': 'A new table or document started from one of those. Structure only; no row and no sentence in it is data.',
-  'artifact.revise': 'A document or a flowchart changed by an instruction, kept as a new version with the one before still there.'
+  'artifact.revise': 'A document or a flowchart changed by an instruction, kept as a new version with the one before still there.',
+  'artifact.extractTable': 'A table inside a document taken out as a table of its own, so it can be sorted, totalled and drawn.'
 })
 
 const JOIN_KINDS: readonly JoinKind[] = Object.freeze(['inner', 'left', 'full'])
@@ -287,6 +289,8 @@ export class ArtifactService {
           return await this.fromTemplate(profileId, operation, req, fail)
         case 'artifact.revise':
           return await this.revise(profileId, operation, req, fail)
+        case 'artifact.extractTable':
+          return await this.extract(profileId, operation, req, fail)
         default:
           return fail('unknown-operation', `Orbis has no artifact operation called "${operation}".`)
       }
@@ -424,6 +428,44 @@ export class ArtifactService {
       case 'diagram':
         return { rows: body.diagram.objects.length, columns: body.diagram.connectors.length }
     }
+  }
+
+  // ---------------------------------------------------------------- a table out of a document
+
+  /** One of a document's tables kept as a table of its own, which remembers the document it came from. */
+  private async extract(
+    profileId: string,
+    operation: string,
+    req: Record<string, unknown>,
+    fail: (error: string, message: string, detail?: unknown) => ArtifactResult
+  ): Promise<ArtifactResult> {
+    const record = await this.existing(profileId, req, fail)
+    if ('ok' in record) return record
+    if (record.kind !== 'document') return fail('bad-input', 'A table is taken out of a document.')
+    const body = await this.bodyOf(profileId, record)
+    if (!body || body.kind !== 'document') return fail('not-found', 'The artifact is listed but its source is missing.')
+    const index = typeof req.index === 'number' ? req.index : 1
+    const source = `"${record.title}" (table ${index})`
+    const table = extractTable(body.document, index, source)
+    if (isDataError(table)) return fail('bad-input', table.message)
+    const described = tablesIn(body.document)[index - 1]
+    const title = str(req.title, LIMITS.title).trim() || described?.caption.slice(0, LIMITS.title) || `${record.title} — table ${index}`
+    return this.keep(
+      profileId,
+      operation,
+      { kind: 'table', table },
+      {
+        title,
+        source,
+        notes: [
+          `Taken from table ${index} of "${record.title}" (version ${record.version}): ${rowsOf(table.rows.length)}, ${table.columns.length} columns.`,
+          'What each column holds (a number, a date, a category) was worked out from its values. Nothing was filled in: a blank in the document is a blank here.'
+        ],
+        acceptSecrets: req.acceptSecrets === true,
+        derivedFrom: { artifactId: record.artifactId, versionId: record.versionId, title: record.title }
+      },
+      fail
+    )
   }
 
   // ---------------------------------------------------------------- templates and revision
@@ -1057,6 +1099,12 @@ export class ArtifactService {
     // The first rows as a person reads them -- dates as dates, quantities with their unit -- so the screen shows a
     // table and not the JSON it is kept as. Bounded: a look, not a second copy.
     let grid: { rows: string[][]; total: number } | null = null
+    // The tables a document holds, so each can be offered to be taken out.
+    let tables: DocumentTable[] = []
+    if (record.kind === 'document') {
+      const body = await this.bodyOf(profileId, record)
+      if (body && body.kind === 'document') tables = tablesIn(body.document).slice(0, 40)
+    }
     if (record.kind === 'table') {
       const body = await this.bodyOf(profileId, record)
       if (body && body.kind === 'table') {
@@ -1078,6 +1126,7 @@ export class ArtifactService {
         truncated: text.length > LIMITS.preview,
         columns,
         grid,
+        tables,
         // Every format this kind can be exported as here, with what each one drops, so the chooser can say so up front.
         formats: this.formatsFor(record.kind)
       }

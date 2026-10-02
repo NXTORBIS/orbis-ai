@@ -263,7 +263,7 @@ export default function Composer(props: Props): React.JSX.Element {
     const command = SLASH_COMMANDS.find((c) => c.name === commandName)
     if (!command) return
     setCommandsOpen(false)
-    if (command.args && !args.trim()) {
+    if (command.args && !command.argsOptional && !args.trim()) {
       setText(`/${command.name} `)
       requestAnimationFrame(() => textareaRef.current?.focus())
       return

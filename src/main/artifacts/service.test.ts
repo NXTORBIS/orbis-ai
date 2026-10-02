@@ -721,3 +721,31 @@ test('without Orion, revising says so and nothing is changed', () =>
     assert.equal(result.ok, false)
     if (!result.ok) assert.match(result.message, /Orion is not set up on this computer.*It can still be replaced by pasting/)
   }))
+
+test('a table inside a document is taken out as a table that remembers the document, and can then be changed like any other', () =>
+  withService(async (h) => {
+    const report = '# Energy\n\nWords.\n\n| Site | Used | Solar |\n| --- | --- | --- |\n| HQ | 412 | 96 |\n| Depot | 288 | 12 |\n| Warehouse | 530 | |\n\n*Readings by site*\n'
+    const made = ok(await h.service.run('default', { operation: 'artifact.create', kind: 'document', title: 'Energy report', text: report }))
+    const id = (made.record as { artifactId: string }).artifactId
+    const read = ok<{ tables: { index: number; caption: string; rows: number; columns: number; headings: string[] }[] }>(await h.service.run('default', { operation: 'artifact.read', artifactId: id }))
+    assert.deepEqual(read.tables, [{ index: 1, caption: 'Readings by site', rows: 3, columns: 3, headings: ['Site', 'Used', 'Solar'] }])
+
+    const taken = ok<{ record: { artifactId: string; kind: string; title: string; derivedFrom: { artifactId: string } | null; notes: string[]; shape: { rows: number; columns: number }; verified: { ok: boolean } } }>(
+      await h.service.run('default', { operation: 'artifact.extractTable', artifactId: id, index: 1 })
+    )
+    assert.equal(taken.record.kind, 'table')
+    assert.equal(taken.record.title, 'Readings by site', 'named by its caption')
+    assert.equal(taken.record.derivedFrom?.artifactId, id)
+    assert.deepEqual(taken.record.shape, { rows: 3, columns: 3 })
+    assert.equal(taken.record.verified.ok, true)
+    assert.match(taken.record.notes[0], /Taken from table 1 of "Energy report" \(version 1\): 3 rows, 3 columns\./)
+
+    const totalled = ok<{ did: string[] }>(await h.service.run('default', { operation: 'artifact.transform', artifactId: taken.record.artifactId, steps: [{ op: 'compute', name: 'share', formula: 'solar / used' }] }))
+    assert.match(totalled.did[0], /computed for 2 of 3 rows; 1 row left empty because an input had no number/)
+
+    const none = await h.service.run('default', { operation: 'artifact.extractTable', artifactId: id, index: 2 })
+    assert.equal(none.ok, false)
+    if (!none.ok) assert.match(none.message, /has 1 table; there is no table 2/)
+    const wrong = await h.service.run('default', { operation: 'artifact.extractTable', artifactId: taken.record.artifactId })
+    assert.equal(wrong.ok, false)
+  }))
