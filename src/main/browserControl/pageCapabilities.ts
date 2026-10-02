@@ -25,14 +25,65 @@ const TAB: Record<string, ParamSpec> = {}
  * An empty locator is not a locator. Saying so turns a quarter-minute of waiting into an immediate answer that names
  * what is missing.
  */
+/** The ways an element can be named. Anything else in a locator is a word nobody here understands. */
+const LOCATOR_KEYS = ['ref', 'selector', 'xpath', 'role', 'name', 'text', 'label', 'placeholder'] as const
+
+/**
+ * The names a model reaches for that mean one of the above.
+ *
+ * Found by watching it happen: a plan wrote `{ "css": ".red-card" }`, which is a reasonable thing to call a CSS
+ * selector and is not what this layer calls it. Unrecognised, it described nothing -- so the step waited fifteen
+ * seconds for an element it had never actually asked for, and the failure said the page never showed what was
+ * expected. Accepting the synonym is cheaper for everyone than being right about the spelling.
+ */
+const LOCATOR_SYNONYMS: Record<string, (typeof LOCATOR_KEYS)[number]> = {
+  css: 'selector',
+  cssSelector: 'selector',
+  query: 'selector',
+  querySelector: 'selector',
+  path: 'xpath',
+  accessibleName: 'name',
+  ariaLabel: 'label',
+  content: 'text',
+  textContent: 'text',
+  innerText: 'text'
+}
+
+/** A locator with the synonyms folded into the real names, so the rest of this file only knows one vocabulary. */
+function asLocator(value: unknown): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  const out: Record<string, unknown> = {}
+  for (const [key, v] of Object.entries(value as Record<string, unknown>)) {
+    out[LOCATOR_SYNONYMS[key] ?? key] = v
+  }
+  return out
+}
+
+/** Which keys in a locator mean nothing here, for a complaint that names them. */
+function unknownLocatorKeys(value: unknown): string[] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return []
+  const known = new Set<string>([...LOCATOR_KEYS, 'exact', 'index'])
+  return Object.keys(asLocator(value)).filter((key) => !known.has(key))
+}
+
 function describesAnElement(value: unknown): boolean {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
-  return Object.entries(value as Record<string, unknown>).some(([key, v]) => {
+  return Object.entries(asLocator(value)).some(([key, v]) => {
     // `exact` and `index` only narrow a match; neither finds one on its own.
     if (key === 'exact' || key === 'index') return false
+    if (!(LOCATOR_KEYS as readonly string[]).includes(key)) return false
     if (typeof v === 'string') return v.trim().length > 0
     return v !== undefined && v !== null
   })
+}
+
+/** The complaint for a locator that cannot find anything, naming what was wrong with it. */
+function whyNotALocator(value: unknown): string {
+  const unknown = unknownLocatorKeys(value)
+  if (unknown.length) {
+    return `A locator has no "${unknown.join('", "')}". Use one of: ${LOCATOR_KEYS.join(', ')}.`
+  }
+  return 'The locator does not say which element to find. Give a selector, role, name, text or ref.'
 }
 
 /** Finds the page a capability acts on: the command's target, or the active tab. Electron and Chromium each provide their own. */
@@ -52,7 +103,16 @@ const hostOf = (url: string): string => {
 }
 
 async function located(wc: PageHandle, locator: unknown): Promise<{ ref: number; method: string; count: number; target: page.TargetInfo }> {
-  const found = await page.locate(asPageHandle(wc), (locator ?? {}) as Locator)
+  /*
+   * Refused here, before the page is searched, when the locator cannot name anything.
+   *
+   * Every capability that acts on an element comes through this one function, so this is the place that gets it right
+   * once. A locator whose only key is a word this layer does not know -- `css` for a selector, say -- used to be
+   * searched for anyway, matched nothing, and came back as "no element matches", which is a true statement about a
+   * question nobody asked. Now it says which word was wrong and which words work, which a re-plan can act on.
+   */
+  if (!describesAnElement(locator)) fail('invalid-params', whyNotALocator(locator))
+  const found = await page.locate(asPageHandle(wc), asLocator(locator) as Locator)
   if ('error' in found) fail('not-found', found.error, true)
   return found as { ref: number; method: string; count: number; target: page.TargetInfo }
 }
@@ -586,9 +646,9 @@ export function registerPageCapabilities(control: BrowserControl, resolve: PageR
         if (p.locator !== undefined && p.locator !== null) {
           // Refused rather than waited on: an empty locator can never match, so waiting for it is waiting for nothing.
           if (!describesAnElement(p.locator)) {
-            fail('invalid-params', 'The locator does not say which element to wait for. Give a selector, role, name, text or ref — or leave it out and wait for loading instead.')
+            fail('invalid-params', `${whyNotALocator(p.locator)} Or leave it out and wait for loading instead.`)
           }
-          const found = await page.exec<{ ref?: number }>(asPageHandle(wc), page.locateScript(p.locator as Locator), 4000).catch((): { ref?: number } => ({}))
+          const found = await page.exec<{ ref?: number }>(asPageHandle(wc), page.locateScript(asLocator(p.locator) as Locator), 4000).catch((): { ref?: number } => ({}))
           checks.push(gone ? !found.ref : Boolean(found.ref))
         }
         if (typeof p.text === 'string') {

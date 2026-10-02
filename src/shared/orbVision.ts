@@ -31,8 +31,20 @@ export interface SeenElement {
   inView?: boolean
 }
 
-/** The failures a picture could plausibly answer. Anything else is not a looking problem. */
-const WORTH_LOOKING: ReadonlySet<string> = new Set(['not-found'])
+/**
+ * The failures a picture could plausibly answer.
+ *
+ * `not-found` is the obvious one. `timeout` is here because of how plans are actually written: asked to click
+ * something described in words, a planner waits for it first and then clicks it -- so the failure that arrives is a
+ * wait that ran out, not a search that found nothing. Without it the eyes never opened, on a page whose four cards
+ * were distinguishable only by looking.
+ *
+ * It stays narrow because of the second gate rather than this list: a timeout on `media.waitFor` has no locator words
+ * in it, so `describeWanted` returns null and nothing is looked at. What justifies a picture is a *description*
+ * nothing structural could match -- the failure kind only says the browser did not manage it.
+ */
+export const WORTH_LOOKING_KINDS: ReadonlySet<string> = new Set(['not-found', 'timeout'])
+const WORTH_LOOKING = WORTH_LOOKING_KINDS
 
 /**
  * The words in a locator that describe something rather than name it exactly.
@@ -40,18 +52,44 @@ const WORTH_LOOKING: ReadonlySet<string> = new Set(['not-found'])
  * A selector, an xpath or a ref is an exact address; if one of those failed, the page is not as the plan thought and
  * the answer is to look again at its structure, not at its pixels. Words are the case where a picture can help.
  */
-export function describeWanted(params: Record<string, unknown> | undefined): string | null {
+export function describeWanted(params: Record<string, unknown> | undefined, _why = '', stepName = ''): string | null {
   const locator = (params?.locator ?? params) as Record<string, unknown> | undefined
   if (!locator || typeof locator !== 'object') return null
-  if (locator.ref !== undefined || locator.selector !== undefined || locator.xpath !== undefined) return null
+
+  /*
+   * A `ref` is knowledge. A selector or an xpath, in a plan, is a guess.
+   *
+   * This was the hard call, and watching it run settled it. A ref comes from a snapshot the browser produced, so a
+   * ref that stopped working means the page moved on -- and a picture of it says nothing about that. But a planner
+   * never sees a page's HTML: it is given roles, names and text, so every CSS selector and every xpath it writes is
+   * invented. `.card:has(.circle)` was a reasonable guess about a page that has no such class, and treating it as an
+   * address meant the one case eyes exist for -- a thing identifiable only by sight -- was the case they sat out.
+   *
+   * So only a ref closes the door.
+   */
+  if (locator.ref !== undefined) return null
 
   const words = [locator.name, locator.text, locator.label, locator.placeholder]
     .filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
     .map((v) => v.trim())
-  if (!words.length) return null
 
-  const role = typeof locator.role === 'string' && locator.role ? `${locator.role} ` : ''
-  return `${role}${[...new Set(words)].join(' / ')}`.slice(0, 160)
+  if (words.length) {
+    const role = typeof locator.role === 'string' && locator.role ? `${locator.role} ` : ''
+    return `${role}${[...new Set(words)].join(' / ')}`.slice(0, 160)
+  }
+
+  /*
+   * With no words in the locator, what the step is called is the description.
+   *
+   * A plan that reached only for a selector still says in words what the step is for -- "click the card with the
+   * circle" -- because the planner writes that name for a person to read. It is the only description of the thing
+   * left, and discarding it meant looking at a page with nothing to look for.
+   */
+  const named = stepName
+    .trim()
+    .replace(/^(click|press|tap|select|choose|find|locate|open|wait for|wait until)\s+(on\s+)?(the\s+)?/i, '')
+    .trim()
+  return named.length > 2 ? named.slice(0, 160) : null
 }
 
 /**
@@ -60,8 +98,8 @@ export function describeWanted(params: Record<string, unknown> | undefined): str
  * Both halves have to hold: the browser could not find it, *and* what was being looked for was described in words.
  * Either alone is a different problem with a different answer.
  */
-export function wantsEyes(kind: string, params: Record<string, unknown> | undefined): boolean {
-  return WORTH_LOOKING.has(kind) && describeWanted(params) !== null
+export function wantsEyes(kind: string, params: Record<string, unknown> | undefined, why = '', stepName = ''): boolean {
+  return WORTH_LOOKING.has(kind) && describeWanted(params, why, stepName) !== null
 }
 
 const NEWLINE = String.fromCharCode(10)

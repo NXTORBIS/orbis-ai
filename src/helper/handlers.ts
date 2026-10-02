@@ -1,5 +1,6 @@
 import type { ChatMessage, ReasoningEffort, StreamEvent } from '../shared/types'
 import { currentModelId, DEFAULT_MODEL, MODELS } from '../shared/models.ts'
+import { modelFor } from '../shared/providers.ts'
 import { resolveModel } from '../shared/modelRoute.ts'
 import { streamChat } from '../main/nim.ts'
 import { generateWithContinuation } from '../main/longGeneration.ts'
@@ -64,6 +65,15 @@ import type { Handler } from './server.ts'
 export interface HandlerDeps {
   /** The person's own Groq keys, given to the helper when it starts and never sent back to the panel. */
   apiKeys: string[]
+  /**
+   * Keys for the other service, used when the chosen model is one of theirs -- which is every model that can see.
+   *
+   * It began as a count, on the reasoning that the helper only needed to know whether anything could see. That was
+   * wrong in the way that matters: the helper runs its own chat requests, so it needs the key to make one. A count
+   * reached Mistral's address carrying a Groq key, was refused, and the Orb reported "nothing came back from looking
+   * at the page" -- true, and silent about why.
+   */
+  mistralKeys?: string[]
   /** Overridable so tests never reach the network. */
   fetchFn?: typeof fetch
   version?: string
@@ -365,18 +375,27 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
             if (!channel) throw new HelperError('unavailable', `This Orbis has no ${name}.`)
             return Promise.resolve(channel(args, ctx as never))
           },
+          /** Which model can look at a page, from what this copy of Orbis actually has keys for. */
+          eyes: () => modelFor('glance', { groq: deps.apiKeys.length > 0, mistral: (deps.mistralKeys ?? []).length > 0 }),
           ask: async (prompt, signal, options) => {
             let text = ''
             await handlers['chat:send'](
               [
                 {
                   webSearch: false,
+                  /*
+                   * A picture needs a model that can see, and it has to be named.
+                   *
+                   * Left to the ordinary choice this went to Groq, where nothing on this account has eyes -- and the
+                   * image was dropped on the way out rather than refused, so the answer came back confidently built
+                   * from the page's text. Naming the model is what makes looking actually look.
+                   */
+                  ...(options?.model ? { model: options.model } : {}),
                   messages: [
                     {
                       role: 'user',
                       content: prompt,
-                      // A picture only when something needs to be looked at; Auto Mode picks the model that can.
-                      ...(options?.image ? { attachments: [{ name: 'page.png', type: 'image', content: options.image }] } : {})
+                      ...(options?.image ? { attachments: [{ name: 'page.png', type: 'image', content: options.image, mimeType: 'image/png' }] } : {})
                     }
                   ]
                 }
@@ -510,7 +529,7 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
      */
     'chat:send': async ([request], { emit, signal }) => {
       const req = (request ?? {}) as { model?: unknown; messages?: unknown; systemPrompt?: unknown; reasoningEffort?: unknown; webSearch?: unknown }
-      if (deps.apiKeys.length === 0) throw new HelperError('no-key', 'The helper has no Groq API key.')
+      if (deps.apiKeys.length === 0 && (deps.mistralKeys ?? []).length === 0) throw new HelperError('no-key', 'The helper has no API key.')
       const messages = readMessages(req.messages)
       const last = messages[messages.length - 1]
       if (last.role !== 'user') throw new HelperError('bad-request', 'The last message must be from the person.')
@@ -550,6 +569,8 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
         runSegment: (segmentMessages, segmentEmit) =>
           streamChat({
             apiKeys: deps.apiKeys,
+            // Routed by the model, exactly as the address is: a key belongs to one service, not to "the API".
+            mistralKeys: deps.mistralKeys ?? [],
             model: route.model,
             messages: segmentMessages,
             systemPrompt,

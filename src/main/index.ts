@@ -995,6 +995,8 @@ ${summaryBlock(summary)}`
         runSegment: (segmentMessages, segmentEmit) =>
           streamChat({
             apiKeys: GROQ_API_KEYS,
+            // The other service's keys, used when the chosen model is one of theirs — which is every model that can see.
+            mistralKeys: MISTRAL_API_KEYS,
             model: request.model,
             messages: segmentMessages,
             systemPrompt,
@@ -1918,6 +1920,8 @@ if (!app.requestSingleInstanceLock()) {
           dataDir: join(app.getPath('userData'), 'chromium'),
           profileId: async () => (await profilesStore.active()).id,
           apiKeys: () => GROQ_API_KEYS,
+          // The keys for the models that can see; the helper runs its own requests and needs them, not a count.
+          mistralKeys: () => MISTRAL_API_KEYS,
           adblockBundledDir: app.isPackaged ? join(process.resourcesPath, 'adblock') : join(app.getAppPath(), 'resources', 'adblock'),
           adblockListsDir: join(app.getPath('userData'), 'adblock'),
           personalDir: () => app.getPath('userData'),

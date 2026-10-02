@@ -12,6 +12,16 @@ export type FetchFn = (url: string, init: RequestInit) => Promise<Response>
 export interface ChatOptions {
   /** Keys from the user's own GroqCloud account, tried in order when Groq rejects one. */
   apiKeys: string[]
+  /**
+   * Keys for Mistral, used when the chosen model is one of theirs.
+   *
+   * Its own list, because a Groq key sent to Mistral is not a slow key or a busy key -- it is an authentication
+   * failure. Mixed into one rotation it would look like the service being unreliable, and that is exactly how this
+   * went wrong: the address was routed by provider and the key was not, so every vision request carried a Groq key
+   * to Mistral, was refused, and came back as an empty answer. The Orb then said "nothing came back from looking at
+   * the page", which was true and told nobody why.
+   */
+  mistralKeys?: string[]
   model: string
   messages: ChatMessage[]
   /** Complete system prompt; omitted from the request when empty. */
@@ -51,7 +61,7 @@ interface Attempt {
 }
 
 export async function streamChat(opts: ChatOptions): Promise<void> {
-  if (opts.apiKeys.length === 0) {
+  if ((providerOf(opts.model) === 'mistral' ? (opts.mistralKeys ?? []).length : opts.apiKeys.length) === 0) {
     return opts.emit({ type: 'error', message: 'This copy of Orbis has no Groq API key. Add it to .env.local and rebuild.' })
   }
   // Auto is never a model Groq knows; it is resolved before this point, and is never a fallback.
@@ -126,9 +136,11 @@ async function withKeyRotation(
   attempt: (apiKey: string) => Promise<StreamResult>,
   skipPreferred = false
 ): Promise<StreamResult> {
-  const usable = opts.apiKeys.filter((key) => !unusableKeys.has(key))
-  // If every key has been refused before, ask Groq again rather than giving up without trying.
-  const keys = usable.length > 0 ? usable : opts.apiKeys
+  // The keys of whichever service serves this model. A key is not a credential for "the API"; it is for one service.
+  const forThisModel = providerOf(opts.model) === 'mistral' ? (opts.mistralKeys ?? []) : opts.apiKeys
+  const usable = forThisModel.filter((key) => !unusableKeys.has(key))
+  // If every key has been refused before, ask again rather than giving up without trying.
+  const keys = usable.length > 0 ? usable : forThisModel
   const preferred = preferredKey === null ? -1 : keys.indexOf(preferredKey)
   const start = preferred === -1 ? 0 : (preferred + (skipPreferred ? 1 : 0)) % keys.length
   for (let k = 0; ; k++) {
@@ -410,10 +422,22 @@ export function toMessageContent(message: ChatMessage, model: ReturnType<typeof 
 
   for (const a of message.attachments) {
     if (a.type === 'image') {
+      /*
+       * The content may already be a complete data url, and prefixing it again produces nonsense.
+       *
+       * Both of Orbis's own vision paths hand over what `page.screenshot` returned, which is
+       * `data:image/png;base64,...` in full. Prefixed a second time it became
+       * `data:image/png;base64,data:image/png;base64,...` -- a url no service can decode. Mistral answered 200 with
+       * no content at all, so the Orb reported "nothing came back from looking at the page": a true sentence about a
+       * malformed request, and the reason its eyes appeared not to work.
+       *
+       * Fixed here rather than at each call site, because a screenshot arriving as a data url is the normal case and
+       * every future caller would have had to remember to undress it first.
+       */
       parts.push({
         type: 'image_url',
         image_url: {
-          url: `data:${a.mimeType || 'image/jpeg'};base64,${a.content}`
+          url: a.content.startsWith('data:') ? a.content : `data:${a.mimeType || 'image/jpeg'};base64,${a.content}`
         }
       })
     } else {

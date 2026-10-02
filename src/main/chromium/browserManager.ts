@@ -70,6 +70,8 @@ export interface BrowserManagerOptions {
   profileId(): string | Promise<string>
   /** The person's own Groq keys, read when the helper starts. */
   apiKeys(): string[]
+  /** The other service's keys, for the models that can see. The helper makes its own requests, so it needs them. */
+  mistralKeys?(): string[]
   /** Where the ad blocker's bundled catalog lives, and where downloaded filter lists are kept. */
   adblockBundledDir: string
   adblockListsDir: string
@@ -210,6 +212,7 @@ export class BrowserManager {
       allowedOrigins: [`chrome-extension://${ORBIS_EXTENSION_ID}`, ...ORBIS_BUILTIN_ORIGINS],
       handlers: createHandlers({
         apiKeys: this.o.apiKeys(),
+        mistralKeys: this.o.mistralKeys?.() ?? [],
         dataDir: this.o.personalDir(profileId),
         secrets: this.o.secrets,
         tabLock: this.o.tabLockHelper,

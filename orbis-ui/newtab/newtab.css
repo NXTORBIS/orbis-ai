@@ -160,5 +160,13 @@ canvas.hud-particles {
   pointer-events: none;
 }
 
-/* Everything the page draws sits above it. */
-main, .rail, .topright { position: relative; z-index: 1; }
+/*
+ * Everything the page draws sits above it -- without changing where anything sits.
+ *
+ * This line used to name `.rail` and `.topright` as well, and both are `position: fixed`. Written later in the file
+ * with the same specificity, `position: relative` won: the rail left the left edge and the buttons left the corner,
+ * and both fell into normal flow down the middle of the page, through the logo. They did not need naming at all --
+ * they are already positioned and already carry a z-index above the canvas. Only `main` is static, so only `main`
+ * needs anything here.
+ */
+main { position: relative; z-index: 1; }

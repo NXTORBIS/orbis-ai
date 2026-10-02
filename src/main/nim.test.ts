@@ -514,3 +514,29 @@ test("Mistral's parameter names replace Groq's, and reasoning_effort is not sent
   assert.equal(forGroq.max_completion_tokens, 500)
   assert.equal(forGroq.reasoning_effort, 'low')
 })
+
+test('a screenshot that is already a data url is not prefixed twice', () => {
+  /*
+   * Both of Orbis's vision paths hand over what page.screenshot returned, which is a complete data url. Prefixed
+   * again it became data:image/png;base64,data:image/png;base64,... -- which no service can decode, and Mistral
+   * answered 200 with no content, so the Orb said "nothing came back from looking at the page". The whole of its
+   * eyes appearing not to work was this one line.
+   */
+  const asUrl = {
+    id: 'm1',
+    createdAt: 0,
+    role: 'user' as const,
+    content: 'what is this',
+    attachments: [{ name: 'page.png', type: 'image' as const, content: 'data:image/png;base64,AAAA', mimeType: 'image/png' }]
+  }
+  const parts = toMessageContent(asUrl, modelInfo('ministral-8b-2512')) as Record<string, unknown>[]
+  const image = parts.find((p) => p.type === 'image_url') as { image_url: { url: string } }
+  assert.equal(image.image_url.url, 'data:image/png;base64,AAAA')
+  assert.ok(!image.image_url.url.includes('base64,data:'), 'the prefix is not doubled')
+
+  // Bare base64 still gets dressed, since that is what a file picker produces.
+  const bare = { ...asUrl, attachments: [{ name: 'p.png', type: 'image' as const, content: 'AAAA', mimeType: 'image/png' }] }
+  const bareParts = toMessageContent(bare, modelInfo('ministral-8b-2512')) as Record<string, unknown>[]
+  const bareImage = bareParts.find((p) => p.type === 'image_url') as { image_url: { url: string } }
+  assert.equal(bareImage.image_url.url, 'data:image/png;base64,AAAA')
+})

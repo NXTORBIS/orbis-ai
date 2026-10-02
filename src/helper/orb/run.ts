@@ -19,6 +19,8 @@ import {
 import type { OrbCondition, OrbStep, OrbTaskState, Perception } from '../../shared/orbTask.ts'
 import { isFollowUp, needsContext, resolve } from '../../shared/orbReference.ts'
 import { looksLikeScheduleRequest, readRequest } from '../../shared/temporal/phrase.ts'
+import { describeWanted, readChoice, visionQuestion, wantsEyes, WORTH_LOOKING_KINDS } from '../../shared/orbVision.ts'
+import type { SeenElement } from '../../shared/orbVision.ts'
 import { asEvidence, holdsSecret, isConsequential, redact, refusedProtection, wallInTheWay } from '../../shared/orbSafety.ts'
 
 /**
@@ -47,11 +49,25 @@ import { asEvidence, holdsSecret, isConsequential, redact, refusedProtection, wa
 export interface OrbDeps {
   control(): PanelControl | null | undefined
   /** One question to Orion, answered in full. Auto Mode chooses the model; this never names one. */
-  ask(prompt: string, signal: AbortSignal, options?: { image?: string }): Promise<string>
+  /**
+   * One question to Orion, answered in full.
+   *
+   * `image` is a data url for the few questions a picture answers, and `model` names the one that can see it: the
+   * ordinary choice goes to a model with no eyes, which drops the picture and answers from text instead.
+   */
+  ask(prompt: string, signal: AbortSignal, options?: { image?: string; model?: string }): Promise<string>
   /** The existing channels, so the Orb coordinates Orbis rather than reimplementing it. */
   channel(name: string, args: unknown[], ctx: { emit(event: unknown): void; signal: AbortSignal }): Promise<unknown>
   /** Which channels exist right now, so the Orb offers only what this Orbis actually has. */
   has(name: string): boolean
+  /**
+   * The model that can look at a page, or null when none is set up.
+   *
+   * Asked rather than assumed, because the answer depends on which keys this copy of Orbis was built with -- and
+   * "no model can see" has to be sayable out loud. Attaching a picture to a model without eyes gets it dropped on
+   * the way out and answered from the page's text, which is a confident wrong answer.
+   */
+  eyes?(): { model: string } | null
 }
 
 const NEWLINE = String.fromCharCode(10)
@@ -292,6 +308,71 @@ export function createOrbHandlers(deps: OrbDeps): Record<string, Handler> {
   let lastOrder: string[] = []
   let lastAnswer = ''
 
+  /**
+   * Looks at the page and picks which numbered element was meant, or null.
+   *
+   * Null for every reason there is -- no browser, no picture, no model that can see, nothing on the page, a model
+   * that answered "none" or answered with a number the page never offered. Null means the ordinary recovery carries
+   * on, which is the right outcome for all of them: looking is an extra chance, never a requirement.
+   *
+   * Nothing from the model reaches the browser except a number that the page itself produced.
+   */
+  async function lookForIt(step: OrbStep, page: Perception['page'], emit: (event: unknown) => void, signal: AbortSignal): Promise<number | null> {
+    const wanted = describeWanted(step.params, step.failure?.message ?? '', step.name)
+    if (!wanted) return null
+
+    const choice = deps.eyes?.() ?? null
+    if (!choice) {
+      /*
+       * Said once, plainly, rather than looking and quietly not looking.
+       *
+       * Without a Mistral key there is no model on this account that can see an image -- Groq serves none. Attaching
+       * the picture anyway gets it dropped on the way out and answered from the page's text, which is the failure
+       * this whole path exists to end.
+       */
+      emit({ type: 'status', message: 'I could look at the page, but no model that can see images is set up.' })
+      return null
+    }
+
+    emit({ type: 'status', message: `Looking at the page for ${wanted}…` })
+
+    const shot = await eyes.see()
+    if (!shot) return null
+
+    const snapshot = (await deps
+      .control()
+      ?.execute({ capability: 'page.snapshot', params: {}, source: 'user' }, { confirm: async () => false })
+      .catch(() => null)) ?? null
+    const elements = (snapshot?.ok ? ((snapshot.data as { elements?: SeenElement[] })?.elements ?? []) : []) as SeenElement[]
+    if (!elements.length) return null
+
+    const said = await deps
+      .ask(visionQuestion(wanted, elements, page ?? undefined), signal, { image: shot, model: choice.model })
+      .catch((err) => ` ${err instanceof Error ? err.message : String(err)}`)
+
+    /*
+     * What came back is said, not summarised away.
+     *
+     * "Nothing came back from looking at the page" was the message for every failure here, and it is the least useful
+     * sentence available: it reads the same whether the model refused, answered in prose, or was never reached at
+     * all. Each of those needs a different fix, and the only way to tell them apart is to repeat what it said.
+     */
+    if (said.startsWith(' ')) {
+      emit({ type: 'status', message: `Looking at the page failed: ${said.slice(1, 120)}` })
+      return null
+    }
+
+    const read = readChoice(said, elements)
+    if ('why' in read) {
+      const quoted = said.trim() ? ` It said: "${said.trim().slice(0, 90)}"` : ' It said nothing at all.'
+      emit({ type: 'status', message: `${read.why}${quoted}` })
+      return null
+    }
+    const picked = elements.find((e) => e.ref === read.ref)
+    emit({ type: 'status', message: `On the page that is ${picked?.label ? `"${picked.label}"` : `number ${read.ref}`}.` })
+    return read.ref
+  }
+
   /** Runs one step against the real browser, and settles it from what the browser reported. */
   async function act(
     step: OrbStep,
@@ -503,6 +584,14 @@ export function createOrbHandlers(deps: OrbDeps): Record<string, Handler> {
        */
       const deadline = Date.now() + MAX_TASK_MS
 
+      /*
+       * Which steps have already been looked at, so a picture is taken once per step and not once per attempt.
+       *
+       * Looking twice at the same failure asks the same model the same question about the same screen and gets the
+       * same answer, slowly. If the first look did not settle it, the ordinary recovery is the better next move.
+       */
+      const looked = new Set<string>()
+
       while (task.status === 'running') {
         if (signal.aborted) { task.status = 'stopped'; break }
         if (Date.now() > deadline) {
@@ -625,6 +714,54 @@ export function createOrbHandlers(deps: OrbDeps): Record<string, Handler> {
             // The run's own ending emits the outcome; this says what kind of stop it is, which the panel shows differently.
             emit({ type: 'blocked', what: door.what, text: task.outcome })
             break
+          }
+        }
+
+        /*
+         * Looking at the page, for the one failure a picture can answer.
+         *
+         * "The thumbnail of the latest interview", "the red button", "the chart on the right" -- a page's structure
+         * holds none of that. Every one of those may be a link with an image inside it whose accessible name is
+         * somebody's video title, and no amount of reading the tree says which picture is of an interview.
+         *
+         * Three rules keep it a fallback rather than a habit, and they are all in `wantsEyes`: only after reading has
+         * failed to find the thing, only when what was wanted was described in words rather than addressed exactly,
+         * and only once per step. A screenshot costs a capture, a round trip and a model; reading the page costs none
+         * of those and answers almost everything.
+         *
+         * The answer is grounded, never obeyed. The model picks from the page's own numbered elements and a number
+         * the page did not offer is refused -- so nothing here can produce a place on the screen to click, which a
+         * model's idea of where something is would be.
+         */
+        /*
+         * Why looking was or was not tried, said out loud.
+         *
+         * Twice during this work the eyes silently did not open and the run looked identical to one where they had
+         * opened and found nothing. A decision nobody can see is a decision nobody can debug -- and the person
+         * watching deserves to know whether Orbis considered looking at the page.
+         */
+        if (WORTH_LOOKING_KINDS.has(broken.failure?.kind ?? '') && !looked.has(broken.id)) {
+          const words = describeWanted(broken.params, broken.failure?.message ?? '', broken.name)
+          if (!words) {
+            emit({
+              type: 'status',
+              message: `Not worth looking at the page for this: ${JSON.stringify(redact(broken.params)).slice(0, 90)} does not describe something by sight.`
+            })
+          }
+        }
+
+        if (wantsEyes(broken.failure?.kind ?? '', broken.params, broken.failure?.message ?? '', broken.name) && !looked.has(broken.id)) {
+          looked.add(broken.id)
+          const chosen = await lookForIt(broken, task.perception?.page ?? null, emit, signal)
+          if (chosen !== null) {
+            task.steps[task.steps.findIndex((s) => s.id === broken.id)] = {
+              ...broken,
+              status: 'planned',
+              // The ref replaces the words: an exact address for the element that was actually on the screen.
+              params: { ...broken.params, locator: { ref: chosen } },
+              failure: undefined
+            }
+            continue
           }
         }
 

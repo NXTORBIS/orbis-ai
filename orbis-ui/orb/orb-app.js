@@ -128,7 +128,7 @@ const HEADLINE = {
 // The browser owns the position. After every resize of this window -- which is what happens when the browser moves or
 // resizes the Orb -- the page asks where the Orb now is and draws it there.
 
-let place = { x: 12, y: 12, size: 30, open: false, up: false }
+let place = { x: 12, y: 12, size: 48, open: false, up: false }
 
 async function refreshPlacement() {
   /**
@@ -243,7 +243,7 @@ function buildOrb() {
 /** The Orb, updated in place. Never a new element, because a gesture may be in progress on this one. */
 function drawOrb() {
   if (orbEl === null) orbEl = buildOrb()
-  const size = place.size || 30
+  const size = place.size || 48
   orbEl.style.left = `${place.x}px`
   orbEl.style.top = `${place.y}px`
   orbEl.style.width = `${size}px`
@@ -286,7 +286,7 @@ function drawPanel() {
   const panel = el('section', 'browser-orb-panel')
   panel.setAttribute('aria-label', 'Orbis browser assistant')
   // The browser has already made room on whichever side had it; the panel fills that room.
-  const orbBottom = place.y + (place.size || 30)
+  const orbBottom = place.y + (place.size || 48)
   if (place.up) { panel.style.bottom = `${(layer().clientHeight - place.y) + 8}px` } else { panel.style.top = `${orbBottom + 8}px` }
   panel.style.left = '12px'
   panel.style.right = '12px'
