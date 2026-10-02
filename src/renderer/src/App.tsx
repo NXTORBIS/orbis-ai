@@ -25,6 +25,7 @@ const MarketsView = lazy(() => import('./components/MarketsView'))
 const PulsarSetup = lazy(() => import('./components/PulsarSetup'))
 const WhiteboardView = lazy(() => import('./components/WhiteboardView'))
 const PagesView = lazy(() => import('./components/PagesView'))
+const CreateView = lazy(() => import('./components/CreateView'))
 const ClipboardView = lazy(() => import('./components/ClipboardView'))
 const WorkspacesView = lazy(() => import('./components/WorkspacesView'))
 const SchedulesView = lazy(() => import('./components/SchedulesView'))
@@ -1407,6 +1408,7 @@ export default function App(): React.JSX.Element {
               {feature === 'clipboard' && <ClipboardView onClose={closeFeature} onNotify={notify} />}
               {feature === 'workspaces' && <WorkspacesView onClose={closeFeature} onNotify={notify} />}
               {feature === 'schedules' && <SchedulesView onClose={closeFeature} onNotify={notify} />}
+              {feature === 'create' && <CreateView onClose={closeFeature} onNotify={notify} />}
             </Suspense>
           )}
         </main>

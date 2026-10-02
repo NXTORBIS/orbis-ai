@@ -201,6 +201,7 @@ const api: NxtorbisApi = {
   pagesCodeClose: (pageId) => ipcRenderer.invoke('pages:code-close', pageId),
   // One-way: sent four times a second from a ResizeObserver, and a reply would be a round trip nobody reads.
   pagesCodeRegion: (area) => ipcRenderer.send('pages:code-region', area),
+  creationRun: (request) => ipcRenderer.invoke('creation:run', request),
   pagesExport: (pageId, entries, acceptSecrets) =>
     ipcRenderer.invoke('pages:export', pageId, entries, acceptSecrets),
   pagesInspectPackage: (raw, packedBytes) => ipcRenderer.invoke('pages:inspect-package', raw, packedBytes),

@@ -1,0 +1,318 @@
+/* The Create screen. Co-located, the way welcome.css and games.css are. Tokens only: a name that is not in the theme
+   resolves to nothing, silently, so nothing here invents one. */
+
+.create-body {
+  display: grid;
+  grid-template-columns: minmax(320px, 1fr) minmax(260px, 0.8fr);
+  grid-template-areas:
+    'make library'
+    'opened opened';
+  gap: 18px;
+  padding: 18px 22px 28px;
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.create-make {
+  grid-area: make;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.create-library {
+  grid-area: library;
+  min-width: 0;
+}
+
+.create-opened {
+  grid-area: opened;
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.create-library h3,
+.create-opened h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.create-opened header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.create-kinds {
+  display: flex;
+  gap: 6px;
+}
+
+.create-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--pill-border);
+  background: var(--pill-bg);
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.create-kind:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.create-kind.active {
+  border-color: var(--cyan);
+  color: var(--cyan);
+  background: var(--cyan-fill);
+}
+
+.create-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.create-field input,
+.create-field textarea {
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--pill-bg);
+  border: 1px solid var(--pill-border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  outline: none;
+}
+
+.create-field input:focus,
+.create-field textarea:focus {
+  border-color: var(--cyan);
+}
+
+.create-text textarea {
+  min-height: 180px;
+  resize: vertical;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre;
+}
+
+.create-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.create-hint {
+  font-size: 12px;
+  color: var(--faint);
+}
+
+.create-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.create-list li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 10px;
+}
+
+.create-list li.selected {
+  background: var(--hover);
+}
+
+.create-row {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas:
+    'icon title'
+    'icon meta';
+  column-gap: 8px;
+  align-items: center;
+  text-align: left;
+  padding: 7px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.create-row:hover {
+  background: var(--hover);
+}
+
+.create-row > svg {
+  grid-area: icon;
+  color: var(--cyan);
+}
+
+.create-row-title {
+  grid-area: title;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.create-row-meta {
+  grid-area: meta;
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.create-checks,
+.create-losses {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.create-checks li,
+.create-losses li {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  color: var(--muted);
+}
+
+.create-checks li svg,
+.create-losses li svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.create-checks li.passed svg {
+  color: var(--green);
+}
+
+.create-checks li.failed svg {
+  color: var(--red);
+}
+
+.create-checks li.difference svg,
+.create-losses li svg {
+  color: var(--amber);
+}
+
+.create-checks strong {
+  color: var(--text);
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.create-preview {
+  margin: 0;
+  max-height: 240px;
+  overflow: auto;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--pill-bg);
+  border: 1px solid var(--pill-border);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text);
+  white-space: pre;
+}
+
+.create-save {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.create-failure {
+  border: 1px solid var(--red);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.create-failure p {
+  margin: 0;
+}
+
+.create-failure ul {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+}
+
+.create-saved {
+  border: 1px solid var(--green);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.create-saved p {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  color: var(--text);
+}
+
+.create-saved p svg {
+  color: var(--green);
+}
+
+.create-saved code {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--cyan);
+  word-break: break-all;
+}
+
+@media (max-width: 860px) {
+  .create-body {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      'make'
+      'library'
+      'opened';
+  }
+}

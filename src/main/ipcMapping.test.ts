@@ -247,5 +247,8 @@ test('the boundary is a known size, so the migration can be estimated rather tha
   // hibernated computer can be woken for a schedule and a switched-off one cannot.
   // 466 → 467: what is coming, across every schedule at once.
   // 467 → 472: Pages written as code -- build, open, health, close, and where on screen they go.
-  assert.ok(code.length <= 472, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
+  // 472 → 473: making things. One door for every artifact operation -- what can be made, make it, list, read, save
+  // it where you choose, remove -- the way `pages:compute` is one door for every calculation. One channel means one
+  // place the sender is checked and one place an operation is refused; the save dialog runs on this side of it.
+  assert.ok(code.length <= 473, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
 })

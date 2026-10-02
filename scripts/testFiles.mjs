@@ -339,4 +339,11 @@ export const TEST_FILES = [
   'src/main/pages/scienceEngines.test.ts',
   'src/main/pages/physicsEngines.test.ts',
   'src/main/pages/serving.test.ts',
+  'src/shared/artifacts/kinds.test.ts',
+  'src/shared/artifacts/model.test.ts',
+  'src/shared/artifacts/naming.test.ts',
+  'src/shared/artifacts/secrets.test.ts',
+  'src/shared/artifacts/validate.test.ts',
+  'src/main/artifacts/store.test.ts',
+  'src/main/artifacts/service.test.ts',
 ]

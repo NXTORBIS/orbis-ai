@@ -24,7 +24,7 @@
  * produces a file that looks complete and is not.
  */
 
-import { isDataError, parseDelimited, toDelimited, type DataError, type Table } from './data.ts'
+import { formatDate, isDataError, parseDelimited, toDelimited, type Column, type DataError, type Table } from './data.ts'
 import { fromHtml, fromMarkdown, isDocumentError, toMarkdown, type Block, type StructuredDocument } from './document.ts'
 
 export interface InterchangeError {
@@ -1341,7 +1341,7 @@ export function exportTable(table: Table, request: ExportRequest): ExportResult 
       const rows = table.rows.map((row) => {
         const record: Record<string, unknown> = {}
         table.columns.forEach((column, i) => {
-          Object.defineProperty(record, column.name, { value: row.cells[i], enumerable: true, writable: true, configurable: true })
+          Object.defineProperty(record, column.name, { value: cellValue(row.cells[i], column), enumerable: true, writable: true, configurable: true })
         })
         return record
       })
@@ -1362,7 +1362,7 @@ export function exportTable(table: Table, request: ExportRequest): ExportResult 
         .map((row) => {
           const record: Record<string, unknown> = {}
           table.columns.forEach((column, i) => {
-            Object.defineProperty(record, column.name, { value: row.cells[i], enumerable: true, writable: true, configurable: true })
+            Object.defineProperty(record, column.name, { value: cellValue(row.cells[i], column), enumerable: true, writable: true, configurable: true })
           })
           return JSON.stringify(record)
         })
@@ -1372,7 +1372,7 @@ export function exportTable(table: Table, request: ExportRequest): ExportResult 
     case 'markdown': {
       const header = `| ${table.columns.map((one) => one.name + (one.unit ? ` (${one.unit.display})` : '')).join(' | ')} |`
       const separator = `| ${table.columns.map(() => '---').join(' | ')} |`
-      const rows = table.rows.map((row) => `| ${row.cells.map((cell) => cellText(cell)).join(' | ')} |`)
+      const rows = table.rows.map((row) => `| ${row.cells.map((cell, i) => cellText(cellValue(cell, table.columns[i]))).join(' | ')} |`)
       body = [header, separator, ...rows].join('\n')
       // Markdown has no unit column, so the unit is folded into the header. It reads correctly and does not round-trip.
       if (hasUnits) notes.push('Units were written into the column headings. They will read correctly but will not come back as units on re-import.')
@@ -1380,7 +1380,7 @@ export function exportTable(table: Table, request: ExportRequest): ExportResult 
     }
 
     case 'text':
-      body = table.rows.map((row) => row.cells.map((cell) => cellText(cell)).join('\t')).join('\n')
+      body = table.rows.map((row) => row.cells.map((cell, i) => cellText(cellValue(cell, table.columns[i]))).join('\t')).join('\n')
       break
 
     default:
@@ -1398,6 +1398,16 @@ export function exportTable(table: Table, request: ExportRequest): ExportResult 
     notes: [...notes, ...loss.losses.map((one) => one.describe)]
   }
 }
+
+/**
+ * A cell as the value it leaves in, knowing its column.
+ *
+ * A date is held as a number so it sorts; written out as that number it is a value nobody typed. `toDelimited` goes
+ * through `cellOut` for the same reason; this is the structured-format half of it, so JSON carries `"2026-10-01"` and
+ * not `1790812800000`.
+ */
+const cellValue = (cell: unknown, column: Column): unknown =>
+  column.type === 'date' && typeof cell === 'number' && Number.isFinite(cell) ? formatDate(cell) : cell
 
 const cellText = (cell: unknown): string => {
   if (cell === null || cell === undefined) return ''

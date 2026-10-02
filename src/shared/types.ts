@@ -2066,6 +2066,18 @@ export interface NxtorbisApi {
   pagesCodeRegion(area: { x: number; y: number; width: number; height: number; visible: boolean }): void
 
   /**
+   * Every artifact operation, through one door.
+   *
+   * The operation is named in the request (`artifact.kinds`, `artifact.create`, `artifact.list`, `artifact.read`,
+   * `artifact.export`, `artifact.remove`) and the answer is an envelope: read `ok` before anything inside. Content
+   * never comes back whole -- a record and a bounded preview do -- and a save goes to a file chosen in a dialog that
+   * runs in the main process, read back and checked before it is reported.
+   */
+  creationRun(request: Record<string, unknown>): Promise<
+    { ok: true; operation: string; value: unknown } | { ok: false; operation: string; error: string; message: string; detail?: unknown }
+  >
+
+  /**
    * A Page packed up as a file.
    *
    * Refused when the scan finds something that looks like a credential. `acceptSecrets` is only ever true because

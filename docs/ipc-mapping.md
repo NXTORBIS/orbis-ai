@@ -248,6 +248,12 @@ what a profile has *decided* is persisted, which is why permissions and projects
 | `pages:code-health` | How an open code Page is doing: whether its code ran, what it has asked for, any faults. In Chromium this is the same sandbox record, read over Mojo |
 | `pages:code-close` | Closes an open code Page. Not a fault: nothing about the Page's health is recorded |
 | `pages:code-region` | Where in the window a code Page is shown, measured by the renderer and sent on every move. One-way, as the browser's own embed region is |
+
+## Creation
+
+| Channel | What it does, and what it becomes |
+|---|---|
+| `creation:run` | Every artifact operation through one door: what Orbis can create, make one from text, list them, read one with a bounded preview, save one to a file the person chooses, remove one. The operation is named inside the request and looked up in a frozen map, the way `pages:compute` does it; the save dialog runs in the main process so a path never arrives from the renderer. Nothing is reported as made or saved until the file has been read back and checked. In Chromium this is a Mojo interface onto the same service, with `SelectFileDialog` for the destination |
 | `pages:health` | The register checked against itself, for diagnostics: duplicate addresses, duplicate ids, aliases pointing at nothing |
 | `pages:export` | A Page packed up as a file, scanned for anything that looks like a credential and refused if one is found. Becomes Mojo onto the same packer; the file dialog is already browser UI |
 | `pages:inspect-package` | A package described so somebody can decide about it. Nothing is installed and nothing is granted by this call, which is why it is separate from anything that writes |
@@ -302,6 +308,7 @@ library's reading list, saved pages, pictures of pages and download bookkeeping.
 | Security activity | 2 | Unchanged |
 | Markets | 9 | Unchanged; the providers are HTTP and WebSocket either way |
 | Orbis Pages | 37 | A WebUI host plus Mojo onto the same service; `pages:compute` is the narrow interface a Page's renderer gets, and the Page frames themselves are `WebContents` with a `URLLoaderFactory` for their own origin |
+| Creation (artifacts made from text, kept, verified and saved) | 1 | Mojo onto the same service; the save dialog becomes `SelectFileDialog` |
 | Control layer | 12 | Unchanged; the browser side is Chromium's capabilities |
 | Library (Orbis's own memory of searches, shortcuts and picks, plus a copy of Chromium's lists) | 8 | Small |
 | Opening the Orbis browser, window fullscreen | 4 | Small |

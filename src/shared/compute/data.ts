@@ -86,6 +86,29 @@ export function asText(cell: Cell): string {
   return String(cell)
 }
 
+/**
+ * A date, written back as a date.
+ *
+ * Dates are held as milliseconds since the epoch so they sort and subtract. Written out, that number is a value nobody
+ * typed and nobody can read: `2026-10-01` has to leave as `2026-10-01`. A date with no time of day leaves as the date
+ * alone; one that had a time leaves in the full ISO form, in UTC, which is how `readDate` read it.
+ */
+export function formatDate(ms: number): string {
+  const iso = new Date(ms).toISOString()
+  return iso.endsWith('T00:00:00.000Z') ? iso.slice(0, 10) : iso
+}
+
+/**
+ * A cell as text for writing out, knowing which column it is in.
+ *
+ * `asText` on its own cannot tell a date from a count, because both are numbers in a cell. The column can. This is the
+ * only way a date leaves a table as a date, and every writer goes through it.
+ */
+export function cellOut(cell: Cell, column: Pick<Column, 'type'>): string {
+  if (column.type === 'date' && typeof cell === 'number' && Number.isFinite(cell)) return formatDate(cell)
+  return asText(cell)
+}
+
 // ---------------------------------------------------------------- columns
 
 export type ColumnType = 'text' | 'number' | 'integer' | 'boolean' | 'date' | 'category' | 'quantity'
@@ -695,7 +718,7 @@ export function toDelimited(table: Table, delimiter = ','): string {
   }
   const lines = [table.columns.map((column) => escape(column.name)).join(delimiter)]
   for (const row of table.rows) {
-    lines.push(table.columns.map((_, c) => escape(asText(row.cells[c] ?? MISSING))).join(delimiter))
+    lines.push(table.columns.map((column, c) => escape(cellOut(row.cells[c] ?? MISSING, column))).join(delimiter))
   }
   return lines.join('\n')
 }

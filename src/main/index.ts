@@ -143,6 +143,9 @@ import { GeneratedPages } from './pages/generated'
 import { PageHost, PAGE_SCHEME_PRIVILEGES, setKnownOperations } from './pages/host'
 import { CodePages } from './pages/codePages'
 import { CodeStore } from './pages/codeStore'
+import { ArtifactStore } from './artifacts/store'
+import { ArtifactService } from './artifacts/service'
+import { chooseDestinationWith, registerArtifactsIpc } from './artifacts/ipc'
 import { GeneratedStore } from './pages/generatedStore'
 import { OPERATION_CAPABILITIES } from './pages/service'
 import { FxRates } from './markets/fx'
@@ -1850,6 +1853,26 @@ if (!app.requestSingleInstanceLock()) {
     profilesStore.onChange(() => {
       pages.profileChanged()
       generated?.profileChanged()
+    })
+
+    /*
+     * Things made from a request and kept as files.
+     *
+     * One store under the profile, one service with one operation map, one channel. The save dialog is the only
+     * Electron piece and it is built here and handed in, so the service can be tested against a folder. Nothing in
+     * this feature reports a file as made or saved until it has been read back from disk and checked.
+     */
+    const artifactStore = new ArtifactStore({ userData: app.getPath('userData') })
+    const artifacts = new ArtifactService({
+      store: artifactStore,
+      now: () => Date.now(),
+      random: () => crypto.randomUUID().replace(/-/g, ''),
+      chooseDestination: chooseDestinationWith(() => mainWindow)
+    })
+    registerArtifactsIpc({
+      service: artifacts,
+      getWindow: () => mainWindow,
+      profileId: async () => (await profilesStore.active()).id
     })
     app.on('before-quit', () => {
       void pagesStore.flush()

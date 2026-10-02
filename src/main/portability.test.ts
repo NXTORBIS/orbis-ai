@@ -18,11 +18,15 @@ import { join } from 'node:path'
 const ROOT = join(import.meta.dirname, '..')
 
 /** Must never touch Electron: this is the part that moves to Chromium as it is. */
-const PORTABLE = ['shared', 'main/update', 'main/personal', 'main/experience', 'main/workflows', 'main/knowledge', 'main/temporal', 'helper', 'main/chromium']
+const PORTABLE = ['shared', 'main/update', 'main/personal', 'main/experience', 'main/workflows', 'main/knowledge', 'main/temporal', 'helper', 'main/chromium', 'main/artifacts']
 
 /** Talks to the engine on purpose, and is rewritten against Chromium. Listed so the list itself stays honest. */
 const BROWSER_LAYER = new Set([
   'main/browserAgent.ts',
+  // The one Electron file of the Creation Engine: the channel, the sender check, and the save dialog, handed into the
+  // service as a function. The service and the store know nothing about windows, so this file is rewritten as Mojo
+  // and SelectFileDialog and nothing else moves.
+  'main/artifacts/ipc.ts',
   'main/browserControl/appCapabilities.ts',
   'main/browserControl/page.ts',
   'main/browserControl/pageCapabilities.ts',
