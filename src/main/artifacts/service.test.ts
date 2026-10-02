@@ -94,7 +94,7 @@ test('a table pasted as CSV is kept, read back from disk, and verified before it
     assert.deepEqual(record.shape, { rows: 2, columns: 2 })
     assert.equal(record.format, 'json')
     // It is really on disk, under the profile, in the file the record names -- columns and all, not a bare array.
-    const stored = JSON.parse(await readFile(join(dir, 'artifacts', record.artifactId, 'content.json'), 'utf8')) as { columns: { name: string; type: string }[]; rows: unknown[] }
+    const stored = JSON.parse(await readFile(join(dir, 'artifacts', record.artifactId, 'current', 'content.json'), 'utf8')) as { columns: { name: string; type: string }[]; rows: unknown[] }
     assert.deepEqual(stored.columns.map((one) => `${one.name}:${one.type}`), ['name:text', 'age:integer'])
     assert.equal(stored.rows.length, 2)
     const listed = ok<{ ref: { artifactId: string } }[]>(await service.run('default', { operation: 'artifact.list' }))
@@ -107,7 +107,7 @@ test('a table with no rows keeps its columns, which are the whole artifact', () 
     const record = value.record as { artifactId: string; bytes: number; shape: { rows: number; columns: number } }
     assert.deepEqual(record.shape, { rows: 0, columns: 3 })
     assert.ok(record.bytes > 20, `a header-only table is not two bytes (got ${record.bytes})`)
-    const stored = JSON.parse(await readFile(join(dir, 'artifacts', record.artifactId, 'content.json'), 'utf8')) as { columns: { name: string }[] }
+    const stored = JSON.parse(await readFile(join(dir, 'artifacts', record.artifactId, 'current', 'content.json'), 'utf8')) as { columns: { name: string }[] }
     assert.deepEqual(stored.columns.map((one) => one.name), ['date', 'category', 'amount'])
   }))
 
@@ -290,6 +290,70 @@ test('a cancelled open dialog opens nothing and says so', () =>
     const result = await h.service.run('default', { operation: 'artifact.import' })
     assert.equal(result.ok, false)
     if (!result.ok) assert.equal(result.error, 'cancelled')
+  }))
+
+test('replacing an artifact makes a new version, keeps the old one, and restoring brings it back as a newer one', () =>
+  withService(async (h) => {
+    const made = ok(await h.service.run('default', { operation: 'artifact.create', kind: 'table', title: 'Readings', text: 'a,b\n1,2\n' }))
+    const v1 = made.record as { artifactId: string; versionId: string; version: number }
+    assert.equal(v1.version, 1)
+
+    const updated = ok(await h.service.run('default', { operation: 'artifact.update', artifactId: v1.artifactId, text: 'a,b\n1,2\n3,4\n', reason: 'added a row' }))
+    const v2 = updated.record as { artifactId: string; versionId: string; version: number; versions: { versionId: string; version: number }[]; reason: string; shape: { rows: number }; createdAt: number; updatedAt: number }
+    assert.equal(v2.artifactId, v1.artifactId)
+    assert.equal(v2.version, 2)
+    assert.equal(v2.reason, 'added a row')
+    assert.equal(v2.shape.rows, 2)
+    assert.deepEqual(v2.versions.map((one) => one.version), [1])
+    assert.equal(v2.versions[0].versionId, v1.versionId)
+
+    const versions = ok<{ current: { version: number }; versions: { version: number }[] }>(await h.service.run('default', { operation: 'artifact.versions', artifactId: v1.artifactId }))
+    assert.equal(versions.current.version, 2)
+    assert.equal(versions.versions.length, 1)
+    // The library lists one artifact, not two.
+    assert.equal(ok<unknown[]>(await h.service.run('default', { operation: 'artifact.list' })).length, 1)
+
+    const restored = ok(await h.service.run('default', { operation: 'artifact.restore', artifactId: v1.artifactId, versionId: v1.versionId }))
+    const v3 = restored.record as { version: number; shape: { rows: number }; reason: string; versions: { version: number }[]; notes: string[] }
+    assert.equal(v3.version, 3)
+    assert.equal(v3.shape.rows, 1, 'version 3 has version 1 content')
+    assert.match(v3.reason, /Restored version 1/)
+    assert.deepEqual(v3.versions.map((one) => one.version), [1, 2])
+    assert.ok(v3.notes.some((one) => /Restored from version 1/.test(one)))
+
+    const nope = await h.service.run('default', { operation: 'artifact.restore', artifactId: v1.artifactId, versionId: 'v' + 'f'.repeat(32) })
+    assert.equal(nope.ok, false)
+  }))
+
+test('a rename is not a version, and a duplicate is a new artifact that remembers its origin', () =>
+  withService(async (h) => {
+    const made = ok(await h.service.run('default', { operation: 'artifact.create', kind: 'document', title: 'Draft', text: '# Draft\n\nText.\n' }))
+    const id = (made.record as { artifactId: string; versionId: string }).artifactId
+    const renamed = ok(await h.service.run('default', { operation: 'artifact.rename', artifactId: id, title: 'Final' }))
+    assert.equal((renamed.record as { title: string; version: number }).title, 'Final')
+    assert.equal((renamed.record as { version: number }).version, 1)
+    const copy = ok(await h.service.run('default', { operation: 'artifact.duplicate', artifactId: id }))
+    const c = copy.record as { artifactId: string; title: string; derivedFrom: { artifactId: string; title: string } | null; version: number }
+    assert.notEqual(c.artifactId, id)
+    assert.equal(c.title, 'Copy of Final')
+    assert.equal(c.derivedFrom?.artifactId, id)
+    assert.equal(c.derivedFrom?.title, 'Final')
+    assert.equal(c.version, 1)
+    assert.equal((copy.record as { source: string }).source, '"Final" (copied)')
+    assert.equal(ok<unknown[]>(await h.service.run('default', { operation: 'artifact.list' })).length, 2)
+  }))
+
+test('search finds by name, by notes and by content, and says which', () =>
+  withService(async (h) => {
+    await h.service.run('default', { operation: 'artifact.create', kind: 'document', title: 'Energy report', text: '# Energy\n\nThe warehouse result is worth repeating.\n' })
+    await h.service.run('default', { operation: 'artifact.create', kind: 'table', title: 'Sites', text: 'site,mwh\nWarehouse,530\nDepot,288\n' })
+    const byTitle = ok<{ where: string; record: { title: string } }[]>(await h.service.run('default', { operation: 'artifact.search', query: 'energy' }))
+    assert.deepEqual(byTitle.map((one) => [one.record.title, one.where]), [['Energy report', 'title']])
+    const byContent = ok<{ where: string; record: { title: string }; excerpt: string }[]>(await h.service.run('default', { operation: 'artifact.search', query: 'warehouse' }))
+    assert.deepEqual(byContent.map((one) => one.record.title).sort(), ['Energy report', 'Sites'])
+    assert.ok(byContent.every((one) => one.where === 'content' && /warehouse/i.test(one.excerpt)))
+    assert.deepEqual(ok<unknown[]>(await h.service.run('default', { operation: 'artifact.search', query: 'nothing here' })), [])
+    assert.deepEqual(ok<unknown[]>(await h.service.run('default', { operation: 'artifact.search', query: '' })), [])
   }))
 
 test('without a print engine, PDF is simply not offered', () =>

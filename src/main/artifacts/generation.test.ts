@@ -28,8 +28,8 @@ test('the instructions name every kind from the table and nothing else', () => {
   const text = instructions()
   assert.ok(text.includes('"table"'))
   assert.ok(text.includes('"document"'))
-  assert.ok(text.includes('csv, tsv, json, ndjson'))
-  assert.ok(text.includes('markdown, html, pdf, text'))
+  assert.ok(text.includes('csv, xlsx, tsv, json, ndjson, markdown, text'))
+  assert.ok(text.includes('markdown, html, pdf, docx, pptx, text'))
   assert.equal(text.includes('spreadsheet'), false)
 })
 

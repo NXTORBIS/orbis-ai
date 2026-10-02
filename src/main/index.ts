@@ -3194,13 +3194,14 @@ if (!app.requestSingleInstanceLock()) {
       userData: app.getPath('userData'),
       profileId: await stepProfile(),
       collect: async () => {
-        const [notes, tasks, skillViews, flows, spaces, boards] = await Promise.all([
+        const [notes, tasks, skillViews, flows, spaces, boards, made] = await Promise.all([
           notesStore.all(),
           tasksStore.snapshot(),
           skills.list(),
           workflows.list(),
           workspacesStore.list(),
-          whiteboardStore.list()
+          whiteboardStore.list(),
+          artifactStore.list((await profilesStore.active()).id)
         ])
         return {
           memories: memory ? memory.list().map((m) => ({ id: m.id, text: m.text, category: m.category, createdAt: m.createdAt, updatedAt: m.updatedAt, archived: m.archived })) : [],
@@ -3211,7 +3212,8 @@ if (!app.requestSingleInstanceLock()) {
           workflows: flows.map((w) => ({ id: w.id, name: w.name, createdAt: w.createdAt, updatedAt: w.updatedAt, calls: callsIn(w.steps), archived: w.status === 'archived' })),
           workspaces: spaces.map((w) => ({ id: w.id, name: w.name, createdAt: w.createdAt, updatedAt: w.updatedAt, tabs: w.tabs.map((t) => ({ url: t.url, title: t.title })), ...(w.project ? { project: w.project } : {}) })),
           whiteboards: boards.map((b) => ({ id: b.id, name: b.name, createdAt: b.createdAt, updatedAt: b.updatedAt })),
-          bookmarks: (browserLibrary!?.snapshot().bookmarks ?? []).map((b) => ({ url: b.url, title: b.title, addedAt: b.addedAt }))
+          bookmarks: (browserLibrary!?.snapshot().bookmarks ?? []).map((b) => ({ url: b.url, title: b.title, addedAt: b.addedAt })),
+          artifacts: made.map((a) => ({ id: a.artifactId, title: a.title, kind: a.kind, version: a.version, createdAt: a.createdAt, updatedAt: a.updatedAt, derivedFrom: a.derivedFrom?.artifactId ?? null }))
         }
       }
     })

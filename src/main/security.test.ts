@@ -59,6 +59,7 @@ test('a Galaxy selection sent to Orion carries only what was selected, as data',
       workspaces: [],
       whiteboards: [],
       bookmarks: [],
+      artifacts: [],
       links: []
     },
     1

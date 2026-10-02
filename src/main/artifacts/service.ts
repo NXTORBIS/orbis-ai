@@ -17,8 +17,11 @@ import {
 import { ARTIFACT_KINDS, canWrite, describeKinds, extensionFor, isArtifactKindId, type ArtifactKindId } from '../../shared/artifacts/kinds.ts'
 import {
   isArtifactId,
+  isVersionId,
   makeArtifactId,
+  makeVersionId,
   refOf,
+  summaryOf,
   type ArtifactBody,
   type ArtifactRecord,
   type ExportOutcome
@@ -71,7 +74,13 @@ const OPERATIONS: Readonly<Record<string, string>> = Object.freeze({
   'artifact.list': 'Every artifact in this profile.',
   'artifact.read': 'One artifact, with a bounded preview of its content.',
   'artifact.export': 'Write an artifact to a file the person chooses, then check the file.',
-  'artifact.remove': 'Remove an artifact and its files.'
+  'artifact.remove': 'Remove an artifact and its files, every version with it.',
+  'artifact.update': 'Replace an artifact with new text as a new version. The old version is kept.',
+  'artifact.restore': 'Make an earlier version current again, as a new version. Nothing is deleted.',
+  'artifact.versions': 'Every version of an artifact: the current one and the ones before it.',
+  'artifact.rename': 'Give an artifact a new name. Not a new version: the name is not the content.',
+  'artifact.duplicate': 'A copy of an artifact as a new artifact that remembers where it came from.',
+  'artifact.search': 'Find artifacts by words in their name, notes or content.'
 })
 
 export const ARTIFACT_OPERATIONS = Object.freeze(Object.keys(OPERATIONS))
@@ -179,6 +188,28 @@ export class ArtifactService {
           if (!isArtifactId(artifactId)) return fail('bad-input', 'That is not an artifact id.')
           return { ok: true, operation, value: { removed: await this.o.store.remove(profileId, artifactId) } }
         }
+        case 'artifact.update':
+          return await this.update(profileId, operation, req, fail)
+        case 'artifact.restore':
+          return await this.restore(profileId, operation, req, fail)
+        case 'artifact.versions': {
+          const record = await this.existing(profileId, req, fail)
+          if ('ok' in record) return record
+          return { ok: true, operation, value: { current: summaryOf(record), versions: record.versions, derivedFrom: record.derivedFrom } }
+        }
+        case 'artifact.rename': {
+          const record = await this.existing(profileId, req, fail)
+          if ('ok' in record) return record
+          const title = str(req.title, LIMITS.title).trim()
+          if (title === '') return fail('bad-input', 'A name is needed.')
+          const renamed: ArtifactRecord = { ...record, title, updatedAt: this.o.now() }
+          await this.o.store.writeRecord(profileId, renamed)
+          return { ok: true, operation, value: { record: renamed, ref: refOf(renamed) } }
+        }
+        case 'artifact.duplicate':
+          return await this.duplicate(profileId, operation, req, fail)
+        case 'artifact.search':
+          return { ok: true, operation, value: await this.search(profileId, str(req.query, 200)) }
         default:
           return fail('unknown-operation', `Orbis has no artifact operation called "${operation}".`)
       }
@@ -400,20 +431,146 @@ export class ArtifactService {
     return { ok: true, operation, value: { ...(kept.value as Record<string, unknown>), headlines: analysis.headlines, findings: analysis.findings.length, from: artifactId } }
   }
 
+  // ---------------------------------------------------------------- existing
+
+  /** The record an operation names, or the refusal to hand back. */
+  private async existing(profileId: string, req: Record<string, unknown>, fail: (error: string, message: string) => ArtifactResult): Promise<ArtifactRecord | ArtifactResult> {
+    const artifactId = str(req.artifactId, 60)
+    if (!isArtifactId(artifactId)) return fail('bad-input', 'That is not an artifact id.')
+    const record = await this.o.store.readRecord(profileId, artifactId)
+    return record ?? fail('not-found', 'There is no artifact with that id.')
+  }
+
+  /** An artifact's body, from the source of its current version. */
+  private async bodyOf(profileId: string, record: ArtifactRecord): Promise<ArtifactBody | null> {
+    const sourceBytes = await this.o.store.readFile(profileId, record.artifactId, SOURCE_FILE)
+    if (!sourceBytes) return null
+    const body = JSON.parse(decode(sourceBytes)) as ArtifactBody
+    return body.kind === record.kind ? body : null
+  }
+
+  // ---------------------------------------------------------------- update, restore, duplicate
+
+  /** New text for an existing artifact, kept as its next version. The version before it stays, files and all. */
+  private async update(
+    profileId: string,
+    operation: string,
+    req: Record<string, unknown>,
+    fail: (error: string, message: string, detail?: unknown) => ArtifactResult
+  ): Promise<ArtifactResult> {
+    const record = await this.existing(profileId, req, fail)
+    if ('ok' in record) return record
+    if (typeof req.text !== 'string' || req.text.trim() === '') return fail('bad-input', 'There is no text to replace it with.')
+    if (req.text.length > LIMITS.text) return fail('too-large', `That is ${req.text.length.toLocaleString('en')} characters, past the ${LIMITS.text.toLocaleString('en')} one artifact can be made from at once.`)
+    const body = this.bodyFrom(record.kind, req.text, 'pasted', record.title)
+    if ('error' in body) return fail(body.error, body.message)
+    return this.keep(profileId, operation, body, { title: record.title, source: 'pasted', notes: [], acceptSecrets: req.acceptSecrets === true, existing: record, reason: str(req.reason, 300) || 'Replaced with new text.' }, fail)
+  }
+
+  /** An earlier version made current again -- as a new version, so the history only grows. */
+  private async restore(
+    profileId: string,
+    operation: string,
+    req: Record<string, unknown>,
+    fail: (error: string, message: string, detail?: unknown) => ArtifactResult
+  ): Promise<ArtifactResult> {
+    const record = await this.existing(profileId, req, fail)
+    if ('ok' in record) return record
+    const versionId = str(req.versionId, 60)
+    const wanted = record.versions.find((one) => one.versionId === versionId)
+    if (!isVersionId(versionId) || !wanted) return fail('not-found', 'There is no such earlier version of this artifact.')
+    const sourceBytes = await this.o.store.readVersionFile(profileId, record.artifactId, versionId, SOURCE_FILE)
+    if (!sourceBytes) return fail('not-found', `Version ${wanted.version} is listed but its files are missing.`)
+    const body = JSON.parse(decode(sourceBytes)) as ArtifactBody
+    if (body.kind !== record.kind) return fail('failed', 'That version is not the kind this artifact is.')
+    return this.keep(
+      profileId,
+      operation,
+      body,
+      { title: record.title, source: record.source, notes: [`Restored from version ${wanted.version}.`], acceptSecrets: req.acceptSecrets === true, existing: record, reason: `Restored version ${wanted.version}.` },
+      fail
+    )
+  }
+
+  /** A new artifact with the same content, which remembers where it came from. */
+  private async duplicate(
+    profileId: string,
+    operation: string,
+    req: Record<string, unknown>,
+    fail: (error: string, message: string, detail?: unknown) => ArtifactResult
+  ): Promise<ArtifactResult> {
+    const record = await this.existing(profileId, req, fail)
+    if ('ok' in record) return record
+    const body = await this.bodyOf(profileId, record)
+    if (!body) return fail('not-found', 'The artifact is listed but its source is missing.')
+    return this.keep(
+      profileId,
+      operation,
+      body,
+      {
+        title: `Copy of ${record.title}`.slice(0, LIMITS.title),
+        source: `"${record.title}" (copied)`,
+        notes: [...record.notes, `A copy of "${record.title}", version ${record.version}.`],
+        acceptSecrets: true,
+        derivedFrom: { artifactId: record.artifactId, versionId: record.versionId, title: record.title }
+      },
+      fail
+    )
+  }
+
+  // ---------------------------------------------------------------- search
+
+  /** Artifacts whose name, notes, source or content hold every word asked for, with where the words were found. */
+  private async search(profileId: string, query: string): Promise<{ record: ArtifactRecord; ref: ReturnType<typeof refOf>; where: 'title' | 'notes' | 'content'; excerpt: string }[]> {
+    const words = query.toLowerCase().split(/\s+/).filter((one) => one !== '')
+    if (words.length === 0) return []
+    const out: { record: ArtifactRecord; ref: ReturnType<typeof refOf>; where: 'title' | 'notes' | 'content'; excerpt: string }[] = []
+    const records = (await this.o.store.list(profileId)).slice(0, 500)
+    for (const record of records) {
+      const title = record.title.toLowerCase()
+      const about = `${record.source} ${record.notes.join(' ')} ${record.kind}`.toLowerCase()
+      if (words.every((one) => title.includes(one))) {
+        out.push({ record, ref: refOf(record), where: 'title', excerpt: record.title })
+        continue
+      }
+      if (words.every((one) => title.includes(one) || about.includes(one))) {
+        out.push({ record, ref: refOf(record), where: 'notes', excerpt: record.notes.find((n) => words.some((w) => n.toLowerCase().includes(w))) ?? record.source })
+        continue
+      }
+      const bytes = await this.o.store.readFile(profileId, record.artifactId, record.file)
+      if (!bytes) continue
+      const text = decode(bytes.subarray(0, LIMITS.preview))
+      const lower = text.toLowerCase()
+      if (!words.every((one) => lower.includes(one))) continue
+      const at = lower.indexOf(words[0])
+      const excerpt = text.slice(Math.max(0, at - 70), Math.min(text.length, at + words[0].length + 90)).replace(/\s+/g, ' ').trim()
+      out.push({ record, ref: refOf(record), where: 'content', excerpt: `…${excerpt}…` })
+      if (out.length >= 50) break
+    }
+    return out
+  }
+
   // ---------------------------------------------------------------- keep
 
-  /** A body kept under the profile, read back, and checked. The one path every made thing goes down. */
+  /**
+   * A body kept under the profile, read back, and checked. The one path every made thing goes down.
+   *
+   * With `existing`, it is the next version of that artifact: the record before it becomes an entry in the history
+   * and its files stay where the store moved them. Without, it is a new artifact. Either way nothing is reported as
+   * kept until the stored copy has been read back and checked -- and a new version that fails that check is thrown
+   * away and the version before it made current again, so an artifact is never left pointing at a copy that lies.
+   */
   private async keep(
     profileId: string,
     operation: string,
     body: ArtifactBody,
-    about: { title: string; source: string; notes: string[]; acceptSecrets: boolean },
+    about: { title: string; source: string; notes: string[]; acceptSecrets: boolean; existing?: ArtifactRecord; reason?: string; derivedFrom?: ArtifactRecord['derivedFrom'] },
     fail: (error: string, message: string, detail?: unknown) => ArtifactResult
   ): Promise<ArtifactResult> {
-    const { title, source, acceptSecrets } = about
+    const { title, source, acceptSecrets, existing } = about
     const kind = body.kind
     const format = ARTIFACT_KINDS[kind].stores
-    const rendered = await this.render(body, format)
+    const rendered = await this.render(body, format, title)
     if ('error' in rendered) return fail(rendered.error, rendered.message)
 
     const ext = extensionFor(format)
@@ -423,10 +580,15 @@ export class ArtifactService {
     const now = this.o.now()
     const file = `${CONTENT_PREFIX}${ext}`
     const record: ArtifactRecord = {
-      artifactId: makeArtifactId(this.o.random()),
+      artifactId: existing ? existing.artifactId : makeArtifactId(this.o.random()),
+      versionId: makeVersionId(this.o.random()),
+      version: existing ? existing.version + 1 : 1,
+      versions: existing ? [...existing.versions, summaryOf(existing)] : [],
+      reason: about.reason ?? '',
+      derivedFrom: about.derivedFrom ?? existing?.derivedFrom ?? null,
       kind,
       title,
-      createdAt: now,
+      createdAt: existing ? existing.createdAt : now,
       updatedAt: now,
       format,
       file,
@@ -437,7 +599,7 @@ export class ArtifactService {
       verified: { ok: false, checks: [], reimported: null, differences: ['Not yet read back.'] },
       source,
       shape: this.shapeOf(body),
-      tags: [],
+      tags: existing ? existing.tags : [],
       notes: [...about.notes, ...rendered.notes.filter((one) => !about.notes.includes(one))]
     }
 
@@ -451,9 +613,11 @@ export class ArtifactService {
       ? await this.verify(body, rendered, readBack)
       : { ok: false, checks: [{ what: 'written', passed: false, describe: 'The stored file could not be read back.' }], reimported: null, differences: [] }
     if (!verified.ok) {
-      // Not kept. An artifact whose stored copy does not read back is not an artifact, and a library entry pointing at
-      // it would be a lie that lasts.
-      await this.o.store.remove(profileId, record.artifactId)
+      // Not kept. A copy that does not read back is not an artifact. A new artifact is removed; a new version is
+      // thrown away and the version before it put back, because that one was fine and a library entry pointing at
+      // a copy that lies would be a lie that lasts.
+      if (existing) await this.o.store.discardCurrent(profileId, record.artifactId, existing.versionId)
+      else await this.o.store.remove(profileId, record.artifactId)
       return fail('verify', `It was written and read back, and the copy did not match: ${verified.checks.filter((one) => !one.passed).map((one) => one.describe).join(' ')}`, { verified })
     }
 

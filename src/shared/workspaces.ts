@@ -30,7 +30,7 @@ export interface ProjectInfo {
 }
 
 export const MAX_PROJECT_ITEMS = 500
-const PROJECT_REF = /^(memory|search|note|task|skill|workflow|whiteboard|bookmark|page|site):[^\s]{1,2100}$/
+const PROJECT_REF = /^(memory|search|note|task|skill|workflow|whiteboard|bookmark|page|site|artifact):[^\s]{1,2100}$/
 
 export interface Workspace {
   id: string

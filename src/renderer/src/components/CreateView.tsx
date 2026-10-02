@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { AlertTriangle, ArrowLeft, BarChart3, Check, FilePlus2, FolderOpen, Loader2, Save, Sparkles, Table2, FileText, Trash2, X } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, BarChart3, Check, Copy, FilePlus2, FolderOpen, History, Loader2, Pencil, Save, Search, Sparkles, Table2, FileText, Trash2, X } from 'lucide-react'
 import type { NoticeKind } from '../lib/notices'
 import './create.css'
 
@@ -34,8 +34,22 @@ interface Loss {
   losses: { what: string; describe: string }[]
 }
 
+interface Version_ {
+  versionId: string
+  version: number
+  createdAt: number
+  reason: string
+  bytes: number
+  shape: { rows: number; columns: number }
+}
+
 interface Record_ {
   artifactId: string
+  versionId: string
+  version: number
+  versions: Version_[]
+  reason: string
+  derivedFrom: { artifactId: string; versionId: string; title: string } | null
   kind: Kind
   title: string
   format: string
@@ -47,6 +61,14 @@ interface Record_ {
   shape: { rows: number; columns: number }
   notes: string[]
 }
+
+interface Hit {
+  record: Record_
+  where: 'title' | 'notes' | 'content'
+  excerpt: string
+}
+
+const when = (ms: number): string => new Date(ms).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 
 interface Finding {
   entry: string
@@ -223,6 +245,46 @@ export default function CreateView({ onClose, onNotify }: { onClose: () => void;
 
   const [importing, setImporting] = useState(false)
   const [analysing, setAnalysing] = useState(false)
+  const [query, setQuery] = useState('')
+  const [hits, setHits] = useState<Hit[] | null>(null)
+  const [renaming, setRenaming] = useState<string | null>(null)
+  const [busy, setBusy] = useState<string | null>(null)
+
+  // Search as you type, a quarter-second after the last key. An empty box is the plain library again.
+  useEffect(() => {
+    const words = query.trim()
+    if (words === '') {
+      setHits(null)
+      return
+    }
+    const timer = window.setTimeout(() => {
+      void window.api.creationRun({ operation: 'artifact.search', query: words }).then((result) => {
+        if (result.ok) setHits(result.value as Hit[])
+      })
+    }, 250)
+    return () => window.clearTimeout(timer)
+  }, [query])
+
+  /** One of the operations that produce a record and then open it: restore, duplicate, update, rename. */
+  const act = async (label: string, request: Record<string, unknown>, said: (record: Record_) => string): Promise<void> => {
+    if (busy) return
+    setBusy(label)
+    setSaveFailure(null)
+    try {
+      const result = await window.api.creationRun(request)
+      if (!result.ok) {
+        setSaveFailure(failureOf(result))
+        return
+      }
+      const made = result.value as { record: Record_ }
+      onNotify(said(made.record), 'info')
+      setQuery('')
+      await refresh()
+      await open(made.record.artifactId)
+    } finally {
+      setBusy(null)
+    }
+  }
 
   const importOne = async (acceptSecrets = false): Promise<void> => {
     if (importing) return
@@ -386,6 +448,18 @@ export default function CreateView({ onClose, onNotify }: { onClose: () => void;
               {working ? <Loader2 size={13} className="spin" /> : <FilePlus2 size={13} />}
               {working ? 'Making…' : 'Make it'}
             </button>
+            {/* The same text can replace what is open, as its next version. The version before stays. */}
+            {opened && opened.record.kind === kind && (
+              <button
+                type="button"
+                className="queue-btn"
+                disabled={busy !== null || text.trim() === ''}
+                onClick={() => void act('update', { operation: 'artifact.update', artifactId: opened.record.artifactId, text, reason: 'Replaced with new text.' }, (r) => `"${r.title}" is now version ${r.version}; version ${r.version - 1} is kept.`)}
+                title="Keeps the current version and makes this the next one"
+              >
+                <History size={13} /> Replace “{opened.record.title}” with this
+              </button>
+            )}
             <span className="create-hint">Orbis keeps it, reads the copy back, and shows what it checked.</span>
           </div>
           {failure && <Findings failure={failure} onAccept={() => void make(true)} />}
@@ -393,7 +467,29 @@ export default function CreateView({ onClose, onNotify }: { onClose: () => void;
 
         <section className="create-library" aria-label="What you have made">
           <h3>Made so far</h3>
-          {library.length === 0 ? (
+          <label className="pages-search create-search">
+            <Search size={14} />
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Find by name, notes or what is in it" aria-label="Find an artifact" />
+          </label>
+          {hits !== null ? (
+            hits.length === 0 ? (
+              <p className="view-empty">Nothing has “{query.trim()}” in its name, notes or content.</p>
+            ) : (
+              <ul className="create-list">
+                {hits.map((hit) => (
+                  <li key={hit.record.artifactId} className={opened?.record.artifactId === hit.record.artifactId ? 'selected' : ''}>
+                    <button type="button" className="create-row" onClick={() => void open(hit.record.artifactId)}>
+                      {hit.record.kind === 'table' ? <Table2 size={14} /> : <FileText size={14} />}
+                      <span className="create-row-title">{hit.record.title}</span>
+                      <span className="create-row-meta">
+                        {hit.where === 'title' ? 'in the name' : hit.where === 'notes' ? 'in the notes' : 'in the content'}: {hit.excerpt}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )
+          ) : library.length === 0 ? (
             <p className="view-empty">Nothing yet. Make a table or a document and it appears here.</p>
           ) : (
             <ul className="create-list">
@@ -419,12 +515,55 @@ export default function CreateView({ onClose, onNotify }: { onClose: () => void;
         {opened && (
           <section className="create-opened" aria-label={opened.record.title}>
             <header>
-              <h3>{opened.record.title}</h3>
+              {renaming !== null ? (
+                <form
+                  className="create-rename"
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    const title = renaming.trim()
+                    setRenaming(null)
+                    if (title !== '' && title !== opened.record.title) void act('rename', { operation: 'artifact.rename', artifactId: opened.record.artifactId, title }, (r) => `Renamed to "${r.title}".`)
+                  }}
+                >
+                  <input value={renaming} onChange={(e) => setRenaming(e.target.value)} maxLength={120} autoFocus aria-label="New name" onKeyDown={(e) => e.key === 'Escape' && setRenaming(null)} />
+                  <button type="submit" className="queue-btn small">
+                    Rename
+                  </button>
+                </form>
+              ) : (
+                <h3>{opened.record.title}</h3>
+              )}
               <span className="create-row-meta">
-                Kept as {opened.record.format} · {sizeOf(opened.record.bytes)} · from {opened.record.source}
+                version {opened.record.version} · kept as {opened.record.format} · {sizeOf(opened.record.bytes)} · from {opened.record.source}
+              </span>
+              <span className="create-opened-actions">
+                <button type="button" className="icon-btn" aria-label="Rename" title="Rename" disabled={busy !== null} onClick={() => setRenaming(opened.record.title)}>
+                  <Pencil size={13} />
+                </button>
+                <button type="button" className="icon-btn" aria-label="Duplicate" title="Make a copy that remembers where it came from" disabled={busy !== null} onClick={() => void act('duplicate', { operation: 'artifact.duplicate', artifactId: opened.record.artifactId }, (r) => `Made "${r.title}".`)}>
+                  <Copy size={13} />
+                </button>
               </span>
             </header>
             <Notes notes={opened.record.notes ?? []} />
+            {/* Every earlier version, oldest first. Restoring one makes it current again as a newer version; nothing is removed. */}
+            {opened.record.versions.length > 0 && (
+              <ul className="create-history" aria-label="Earlier versions">
+                {opened.record.versions.map((one) => (
+                  <li key={one.versionId}>
+                    <History size={13} />
+                    <span>
+                      <strong>Version {one.version}</strong> · {when(one.createdAt)} · {one.shape.columns > 0 ? `${one.shape.rows} rows × ${one.shape.columns} columns` : `${one.shape.rows} blocks`} · {sizeOf(one.bytes)}
+                      {one.reason ? ` · ${one.reason}` : ''}
+                    </span>
+                    <button type="button" className="queue-btn small ghost" disabled={busy !== null} onClick={() => void act('restore', { operation: 'artifact.restore', artifactId: opened.record.artifactId, versionId: one.versionId }, (r) => `Version ${one.version} is current again, as version ${r.version}.`)}>
+                      Restore
+                    </button>
+                  </li>
+                ))}
+                {opened.record.reason && <li className="create-history-now"><span>Version {opened.record.version} (current) · {opened.record.reason}</span></li>}
+              </ul>
+            )}
             <Checks verified={opened.record.verified} />
             <Losses loss={opened.record.loss} />
             <pre className="create-preview">

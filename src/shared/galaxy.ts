@@ -30,11 +30,12 @@ export function isGalaxyPage(url: string): boolean {
   return trimmed === GALAXY_PAGE || trimmed.startsWith(`${GALAXY_PAGE}?`) || trimmed.startsWith(`${GALAXY_PAGE}/`)
 }
 
-export type GalaxyNodeType = 'project' | 'memory' | 'search' | 'page' | 'site' | 'note' | 'task' | 'skill' | 'workflow' | 'workspace' | 'whiteboard' | 'bookmark'
+export type GalaxyNodeType = 'project' | 'memory' | 'search' | 'page' | 'site' | 'note' | 'task' | 'skill' | 'workflow' | 'workspace' | 'whiteboard' | 'bookmark' | 'artifact'
 
-export const GALAXY_TYPES: GalaxyNodeType[] = ['project', 'search', 'page', 'site', 'note', 'task', 'memory', 'skill', 'workflow', 'workspace', 'whiteboard', 'bookmark']
+export const GALAXY_TYPES: GalaxyNodeType[] = ['project', 'search', 'page', 'site', 'note', 'task', 'memory', 'skill', 'workflow', 'workspace', 'whiteboard', 'bookmark', 'artifact']
 
 export const GALAXY_TYPE_LABELS: Record<GalaxyNodeType, string> = {
+  artifact: 'Made',
   project: 'Project',
   memory: 'Memory',
   search: 'Research',
@@ -51,6 +52,7 @@ export const GALAXY_TYPE_LABELS: Record<GalaxyNodeType, string> = {
 
 /** The colour each kind of thing is drawn in, wherever it is shown. */
 export const GALAXY_TYPE_COLORS: Record<GalaxyNodeType, string> = {
+  artifact: '#7fe7b8',
   project: '#ffd24d',
   search: '#3fd8ff',
   page: '#a2a6ae',
@@ -65,9 +67,10 @@ export const GALAXY_TYPE_COLORS: Record<GalaxyNodeType, string> = {
   bookmark: '#8fe3ff'
 }
 
-export type GalaxyRelation = 'used_source' | 'saved_from' | 'links_to' | 'on_site' | 'made_on' | 'calls' | 'contains' | 'bookmarked' | 'part_of' | 'connected'
+export type GalaxyRelation = 'used_source' | 'saved_from' | 'links_to' | 'on_site' | 'made_on' | 'calls' | 'contains' | 'bookmarked' | 'part_of' | 'connected' | 'derived_from'
 
 export const GALAXY_RELATION_LABELS: Record<GalaxyRelation, string> = {
+  derived_from: 'was made from',
   used_source: 'used as a source',
   saved_from: 'saved from',
   links_to: 'links to',
@@ -132,6 +135,8 @@ export interface GalaxySources {
   workspaces: { id: string; name: string; createdAt: number; updatedAt: number; tabs: { url: string; title: string }[]; project?: { goal: string; items: { ref: string; addedAt: number }[] } }[]
   whiteboards: { id: string; name: string; createdAt: number; updatedAt: number }[]
   bookmarks: { url: string; title: string; addedAt: number }[]
+  /** Things Orbis made and kept: documents and tables, each with the artifact it was copied from when it was. */
+  artifacts: { id: string; title: string; kind: string; version: number; createdAt: number; updatedAt: number; derivedFrom: string | null }[]
   links: UserLink[]
 }
 
@@ -261,6 +266,13 @@ export function buildGalaxy(sources: GalaxySources, now = Date.now()): GalaxyGra
 
   for (const b of sources.whiteboards) {
     node({ id: `whiteboard:${b.id}`, type: 'whiteboard', label: b.name, detail: day(b.updatedAt), createdAt: b.createdAt, updatedAt: b.updatedAt })
+  }
+
+  // Things Orbis made. A copy points at what it was copied from, when that still exists.
+  const madeIds = new Set((sources.artifacts ?? []).map((a) => a.id))
+  for (const a of sources.artifacts ?? []) {
+    const id = node({ id: `artifact:${a.id}`, type: 'artifact', label: a.title, detail: `${a.kind}, version ${a.version}, ${day(a.updatedAt)}`, createdAt: a.createdAt, updatedAt: a.updatedAt })
+    if (a.derivedFrom && madeIds.has(a.derivedFrom)) edge(id, `artifact:${a.derivedFrom}`, 'derived_from', 'Made as a copy of it.')
   }
 
   for (const b of sources.bookmarks) {

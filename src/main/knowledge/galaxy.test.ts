@@ -4,7 +4,7 @@ import { buildGalaxy, checkUserLink, describeNode, GALAXY_PAGE, GALAXY_TYPE_COLO
 import { PANELS } from '../../shared/browserSidebar.ts'
 import type { GalaxySources } from '../../shared/galaxy.ts'
 
-const empty = (): GalaxySources => ({ memories: [], searches: [], notes: [], tasks: [], skills: [], workflows: [], workspaces: [], whiteboards: [], bookmarks: [], links: [] })
+const empty = (): GalaxySources => ({ memories: [], searches: [], notes: [], tasks: [], skills: [], workflows: [], workspaces: [], whiteboards: [], bookmarks: [], artifacts: [], links: [] })
 
 const sample = (): GalaxySources => ({
   ...empty(),
