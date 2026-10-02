@@ -83,6 +83,8 @@ export class PageHost {
   /** Which page id owns which `WebContents`, so a message's sender proves its identity. */
   private readonly owner = new WeakMap<WebContents, string>()
   private listening = false
+  /** The region of the window Pages are shown in, as the renderer last measured it. */
+  private area: { x: number; y: number; width: number; height: number } | null = null
 
   constructor(options: PageHostOptions) {
     this.o = options
@@ -127,6 +129,25 @@ export class PageHost {
         headers: headersFor(hosted.sandbox.content.header, mediaTypeFor(path))
       })
     })
+  }
+
+  /**
+   * Where in the window a Page is shown, as the window itself measures it.
+   *
+   * The renderer owns the layout, so it is the only thing that knows where the Page area actually is -- and it moves
+   * when a sidebar opens, when the window resizes, when the zoom changes. Kept here and applied to every open Page,
+   * so a Page opened later lands in the right place without the renderer having to say it again.
+   */
+  place(area: { x: number; y: number; width: number; height: number } | null): void {
+    this.area = area
+    for (const hosted of this.open.values()) {
+      if (area === null || area.width < 1 || area.height < 1) {
+        // Zero-sized rather than hidden: a Page that is not on screen should stop painting, and a view with no area does.
+        hosted.view.setBounds({ x: 0, y: 0, width: 0, height: 0 })
+        continue
+      }
+      hosted.view.setBounds({ x: Math.round(area.x), y: Math.round(area.y), width: Math.round(area.width), height: Math.round(area.height) })
+    }
   }
 
   /** The one channel Pages talk on, listened to once. */
@@ -264,6 +285,15 @@ export class PageHost {
     this.listen()
 
     window.contentView.addChildView(view)
+    /*
+     * Somewhere to be, before anything is loaded.
+     *
+     * A child view added without bounds is zero by zero: the Page loads, runs, and is invisible -- which looks exactly
+     * like a Page that failed. The window's own size is the honest default until the part of the window that shows
+     * Pages measures itself and says where it is (`place`).
+     */
+    const whole = window.getContentBounds()
+    view.setBounds(this.area ?? { x: 0, y: 0, width: whole.width, height: whole.height })
     await contents.loadURL(`${originForPage(pageId)}/index.html`)
 
     // A Page that never says it is ready is a Page whose code failed before it ran, and it is stopped rather than left
@@ -338,10 +368,19 @@ export class PageHost {
     if (!hosted.view.webContents.isDestroyed()) hosted.view.webContents.close()
   }
 
-  /** A Page closed and forgotten. */
-  close(pageId: string): void {
-    this.stop(pageId, 'crashed', 'This Page was closed.')
+  /**
+   * A Page closed and forgotten.
+   *
+   * Without recording a fault, which it used to: closing went through `stop` as a crash, so a Page somebody shut on
+   * purpose appeared in its own health as having fallen over. The record is read when deciding whether a Page is
+   * trustworthy, and a person's decision is not evidence about the Page.
+   */
+  close(pageId: string): boolean {
+    const hosted = this.open.get(pageId)
+    if (!hosted) return false
+    if (!hosted.view.webContents.isDestroyed()) hosted.view.webContents.close()
     this.open.delete(pageId)
+    return true
   }
 
   health(pageId: string): ReturnType<typeof sandboxHealth> | null {

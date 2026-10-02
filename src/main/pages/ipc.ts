@@ -36,6 +36,19 @@ export interface PagesIpcOptions {
   profileId(): Promise<string>
   getWindow(): BrowserWindow | null
   /**
+   * Pages written as code, which are built, written to disk and run in the sandbox.
+   *
+   * Optional for the same reason as `generated`: a copy of Orbis with no model for it has nothing to offer, and the
+   * channels say so rather than vanishing. A channel that exists only sometimes is one the interface has to guess at.
+   */
+  code?: {
+    build(request: string): Promise<unknown>
+    open(window: BrowserWindow, pageId: string): Promise<unknown>
+    close(pageId: string): boolean
+    health(pageId: string): unknown
+    place(area: { x: number; y: number; width: number; height: number } | null): void
+  }
+  /**
    * Building Pages that do not exist yet.
    *
    * Optional, and absent is a working state rather than a broken one: a build with no model configured has nothing to
@@ -520,6 +533,58 @@ export function registerPagesIpc(o: PagesIpcOptions): void {
   handle('pages:generate-discard', async (_id, pageId) => {
     if (!o.generated) return noGenerator
     return { discarded: o.generated.discard(str(pageId, 80)) }
+  })
+
+  /*
+   * ---------------------------------------------------------------- Pages written as code
+   *
+   * A different kind of Page, and deliberately a different set of channels: these build files and run them in the
+   * sandbox, where the specification route builds a document the window renders itself. Keeping them apart is what
+   * stops "open a Page" meaning two things.
+   */
+
+  handle('pages:code-build', async (_id, request) => {
+    if (!o.code) return { ok: false, reason: 'no-code-route', message: 'This copy of Orbis has no model for writing a Page as code.' }
+    return o.code.build(str(request, 400))
+  })
+
+  handle('pages:code-open', async (_id, pageId) => {
+    if (!o.code) return { ok: false, reason: 'no-code-route', message: 'This copy of Orbis has no model for writing a Page as code.' }
+    const window = o.getWindow()
+    if (!window) return { ok: false, reason: 'no-window', message: 'There is no Orbis window to show it in.' }
+    return o.code.open(window, str(pageId, 80))
+  })
+
+  /**
+   * How an open code Page is doing: whether its code ran, what it has asked Orbis for, and any faults.
+   *
+   * Its own channel because the answer changes after the open returns -- a Page is "starting" at the moment it is
+   * handed back, and whether it actually ran is known a second later. Without this the only way to tell a working
+   * Page from one whose code failed was to wait and see whether it was still there.
+   */
+  handle('pages:code-health', async (_id, pageId) => {
+    if (!o.code) return null
+    return o.code.health(str(pageId, 80))
+  })
+
+  handle('pages:code-close', async (_id, pageId) => {
+    if (!o.code) return { ok: false }
+    return { ok: o.code.close(str(pageId, 80)) }
+  })
+
+  /**
+   * Where in the window a Page is shown, measured by the part of the window that shows it.
+   *
+   * Sent on every move and resize, which is often, so it answers nothing: a channel that replies is a round trip the
+   * renderer waits for, and this one is called from a ResizeObserver.
+   */
+  ipcMain.on('pages:code-region', (event, area: unknown) => {
+    // The same sender check the invoke channels make: only the Orbis window may say where a Page goes.
+    if (!o.code || event.sender !== o.getWindow()?.webContents) return
+    const a = (area ?? {}) as Record<string, unknown>
+    const number = (value: unknown): number => (typeof value === 'number' && Number.isFinite(value) ? value : 0)
+    const visible = a.visible !== false && number(a.width) > 0 && number(a.height) > 0
+    o.code.place(visible ? { x: number(a.x), y: number(a.y), width: number(a.width), height: number(a.height) } : null)
   })
 
   /**

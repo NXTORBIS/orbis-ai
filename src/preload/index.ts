@@ -194,6 +194,13 @@ const api: NxtorbisApi = {
   pagesGenerateForget: (pageId) => ipcRenderer.invoke('pages:generate-forget', pageId),
   pagesGenerateSessions: () => ipcRenderer.invoke('pages:generate-sessions'),
   pagesGenerateDocument: (pageId) => ipcRenderer.invoke('pages:generate-document', pageId),
+  // A Page written as code: built, opened in the sandbox, closed, and told where on screen it goes.
+  pagesCodeBuild: (request) => ipcRenderer.invoke('pages:code-build', request),
+  pagesCodeOpen: (pageId) => ipcRenderer.invoke('pages:code-open', pageId),
+  pagesCodeHealth: (pageId) => ipcRenderer.invoke('pages:code-health', pageId),
+  pagesCodeClose: (pageId) => ipcRenderer.invoke('pages:code-close', pageId),
+  // One-way: sent four times a second from a ResizeObserver, and a reply would be a round trip nobody reads.
+  pagesCodeRegion: (area) => ipcRenderer.send('pages:code-region', area),
   pagesExport: (pageId, entries, acceptSecrets) =>
     ipcRenderer.invoke('pages:export', pageId, entries, acceptSecrets),
   pagesInspectPackage: (raw, packedBytes) => ipcRenderer.invoke('pages:inspect-package', raw, packedBytes),

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, nativeTheme, net, Notification, powerMonitor, shell, Tray } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, nativeTheme, net, Notification, powerMonitor, protocol, shell, Tray } from 'electron'
 import type { MenuItemConstructorOptions, OpenDialogOptions, TitleBarOverlayOptions, IpcMainInvokeEvent } from 'electron'
 import { existsSync, promises as fs } from 'node:fs'
 import os from 'node:os'
@@ -140,6 +140,9 @@ import type { RunningService } from '../search-service/server'
  */
 let searchOrbisPages: ((query: string) => Promise<{ title: string; url: string; snippet: string; site: string }[]>) | null = null
 import { GeneratedPages } from './pages/generated'
+import { PageHost, PAGE_SCHEME_PRIVILEGES } from './pages/host'
+import { CodePages } from './pages/codePages'
+import { CodeStore } from './pages/codeStore'
 import { GeneratedStore } from './pages/generatedStore'
 import { OPERATION_CAPABILITIES } from './pages/service'
 import { FxRates } from './markets/fx'
@@ -1460,6 +1463,17 @@ let updatesQuitting = false
  */
 const UPDATE_ENDPOINT = 'https://updates.nxtorbis.ai/manifest'
 
+/*
+ * The scheme a Page is served from, declared before anything starts.
+ *
+ * Electron will only accept this before app-ready, and until it was called `orbis-page://` was not a standard scheme
+ * at all: not a secure context, and `script-src 'self'` matching nothing, so a Page loaded, its script was refused,
+ * and the Page sat in "starting" for ever while the identical code served over http ran perfectly. The privileges
+ * themselves have existed since the host was written; nothing had ever registered them, because nothing had ever
+ * constructed the host.
+ */
+protocol.registerSchemesAsPrivileged([PAGE_SCHEME_PRIVILEGES])
+
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
@@ -1786,11 +1800,44 @@ if (!app.requestSingleInstanceLock()) {
       allowStorage: true
     })
     pages.start()
+
+    /*
+     * Pages written as code, and the host that runs them.
+     *
+     * The host has existed since Pages did and nothing ever constructed it -- `rootFor` was declared and unsupplied,
+     * so the whole sandbox sat there unreachable while Pages were rendered by the window instead. This is what it was
+     * written for: a Page that is real files needs somewhere to be served from and a frame to be served into.
+     *
+     * Everything it is given here is already true of Pages: the same profile, the same service, the same permission
+     * decisions. Nothing about the sandbox is relaxed for code -- that is the point of using this host rather than
+     * inventing a second one.
+     */
+    const codeStore = new CodeStore({ userData: app.getPath('userData'), profileId: async () => (await profilesStore.active()).id })
+    const pageHost = new PageHost({
+      service: pages,
+      profileId: async () => (await profilesStore.active()).id,
+      rootFor: (pageId) => codeStore.rootFor(pageId),
+      // What a code Page may reach. Generated code is never trusted, whoever wrote it, so it gets the plain grant set.
+      trustFor: async () => 'generated',
+      grantedFor: async () => []
+    })
+    pageHost.registerProtocol()
+    const codePages = new CodePages({
+      host: pageHost,
+      store: codeStore,
+      apiKeys: async () => GROQ_API_KEYS,
+      mistralKeys: () => MISTRAL_API_KEYS,
+      fetchFn: (url, init) => net.fetch(url, init),
+      ask: requestJson,
+      random: () => crypto.randomUUID().replace(/-/g, '')
+    })
+
     registerPagesIpc({
       service: pages,
       getWindow: () => mainWindow,
       profileId: async () => (await profilesStore.active()).id,
-      generated
+      generated,
+      code: codePages
     })
     profilesStore.onChange(() => {
       pages.profileChanged()

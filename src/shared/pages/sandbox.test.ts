@@ -178,8 +178,18 @@ describe('the content security policy', () => {
   })
 
   it('keeps workers inside the Page’s own origin, so they inherit this policy', () => {
+    /*
+     * Written as `'self'` rather than as the origin spelled out, and that is not cosmetic.
+     *
+     * It was the full origin, which reads as obviously correct and is why this took finding: for an http origin it
+     * works, and for a custom scheme Chromium does not match a document against its own origin written as a host
+     * source. `script-src orbis-page://page_abc` matched nothing -- the Page's HTML loaded, its script was refused,
+     * and the Page sat in "starting" for ever with no error anywhere.
+     */
     const policy = contentPolicyFor({ granted: [], selfOrigin: SELF })
-    assert.deepEqual([...policy.directives['worker-src']], [SELF])
+    assert.deepEqual([...policy.directives['worker-src']], ["'self'"])
+    assert.deepEqual([...policy.directives['script-src']], ["'self'"])
+    assert.deepEqual([...policy.directives['style-src']], ["'self'"])
   })
 
   it('refuses to let the Page be framed, frame anything, or submit a form', () => {

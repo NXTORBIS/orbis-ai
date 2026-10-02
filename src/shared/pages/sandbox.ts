@@ -210,7 +210,20 @@ function cspSourceFor(scope: OriginScope): string {
  */
 export function contentPolicyFor(input: ContentPolicyInput): ContentPolicy {
   const granted = new Set(input.granted)
-  const self = input.selfOrigin
+  /*
+   * The Page's own origin, written as `'self'` rather than spelled out.
+   *
+   * It was the origin in full -- `orbis-page://page_abc...` -- which reads as the obviously correct thing and is why
+   * this took finding. For an http origin it works. For a custom scheme Chromium does not match a document against
+   * its own origin written as a host source, so `script-src orbis-page://page_abc` matched nothing: the Page's HTML
+   * loaded, its script was refused, and the Page sat in "starting" for ever with no error anywhere. `'self'` is the
+   * keyword that means exactly this and matches under every scheme.
+   *
+   * `selfOrigin` is still taken and still validated, because a caller that cannot say what the Page's origin is has
+   * not thought about what it is building.
+   */
+  const self = "'self'"
+  void input.selfOrigin
   const notes: string[] = []
 
   const connect: string[] = []

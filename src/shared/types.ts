@@ -2039,6 +2039,31 @@ export interface NxtorbisApi {
   >
   /** The document a generated Page opens as. */
   pagesGenerateDocument(pageId: string): Promise<{ document: unknown } | { error: string; message?: string }>
+  /**
+   * Builds a Page out of code for a request.
+   *
+   * A different kind of Page from the generated ones above, and said so on purpose: that route builds a calculator
+   * out of engines Orbis tested, and this one builds a web page a model wrote. Both are honest; only one of them is
+   * about correctness.
+   */
+  pagesCodeBuild(request: string): Promise<{
+    ok: boolean
+    pageId?: string
+    title?: string
+    purpose?: string
+    notes?: readonly string[]
+    problems?: string[]
+    attempts?: { said: string; problems: string[] }[]
+    reason?: string
+    message?: string
+  }>
+  /** Opens a built code Page. `health` says whether its code actually ran, which is a different fact from it opening. */
+  pagesCodeOpen(pageId: string): Promise<{ ok: boolean; error?: string; message?: string; health?: unknown }>
+  /** How an open code Page is doing. The answer changes after the open returns, which is why it is asked separately. */
+  pagesCodeHealth(pageId: string): Promise<unknown>
+  pagesCodeClose(pageId: string): Promise<{ ok: boolean }>
+  /** Where on screen a code Page is shown. One-way: it is sent on every move and nothing waits for it. */
+  pagesCodeRegion(area: { x: number; y: number; width: number; height: number; visible: boolean }): void
 
   /**
    * A Page packed up as a file.

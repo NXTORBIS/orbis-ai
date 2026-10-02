@@ -243,6 +243,11 @@ what a profile has *decided* is persisted, which is why permissions and projects
 | `pages:generate-forget` | A generated Page and its whole history deleted |
 | `pages:generate-sessions` | What has been built recently and what happened to it, including the attempts that failed |
 | `pages:generate-document` | The document a generated Page opens as. Read-only, and scoped to the profile that built it. In Chromium this is what the Page's own renderer is served |
+| `pages:code-build` | Builds a Page out of code for a request: a model writes the body, style and script, Orbis wraps them in a shell it owns and writes three fixed files. In Chromium this is a Mojo call to the Pages service |
+| `pages:code-open` | Opens a built code Page in its sandboxed frame. In Chromium the frame is a WebContents with the same content policy, so this becomes a request to show it |
+| `pages:code-health` | How an open code Page is doing: whether its code ran, what it has asked for, any faults. In Chromium this is the same sandbox record, read over Mojo |
+| `pages:code-close` | Closes an open code Page. Not a fault: nothing about the Page's health is recorded |
+| `pages:code-region` | Where in the window a code Page is shown, measured by the renderer and sent on every move. One-way, as the browser's own embed region is |
 | `pages:health` | The register checked against itself, for diagnostics: duplicate addresses, duplicate ids, aliases pointing at nothing |
 | `pages:export` | A Page packed up as a file, scanned for anything that looks like a credential and refused if one is found. Becomes Mojo onto the same packer; the file dialog is already browser UI |
 | `pages:inspect-package` | A package described so somebody can decide about it. Nothing is installed and nothing is granted by this call, which is why it is separate from anything that writes |
