@@ -255,3 +255,26 @@ test('a long flow runs down the page, and its loop back goes along the side with
   assert.equal(short.objects[1].box.y, short.objects[0].box.y)
   assert.ok(short.objects[1].box.x > short.objects[0].box.x)
 })
+
+test('every bar sits inside the frame, whether there are two of them or twenty', () => {
+  for (const n of [1, 2, 6, 20]) {
+    const a = seriesFromPoints('a', 'A', Array.from({ length: n }, (_, i) => ({ x: i, y: 100 + i * 7 })), { kind: 'bar' })
+    const b = seriesFromPoints('b', 'B', Array.from({ length: n }, (_, i) => ({ x: i, y: 40 + i })), { kind: 'bar' })
+    const made = plot([a, b])
+    assert.ok(made.x.range.low < 0 && made.x.range.high > n - 1, `${n}: the axis runs past the first and last bar`)
+    const { svg } = plotToSvg(made)
+    const frame = /<rect x="([\d.]+)" y="[\d.]+" width="([\d.]+)" height="[\d.]+" fill="none" stroke="#c9ced8"/.exec(svg)
+    assert.ok(frame, `${n}: there is a frame`)
+    const left = Number(frame![1])
+    const right = left + Number(frame![2])
+    const bars = [...svg.matchAll(/<rect x="([-\d.]+)" y="[-\d.]+" width="([\d.]+)" height="[\d.]+" fill="#[0-9a-fA-F]+" fill-opacity="0\.9"\/>/g)].map((m) => ({ x: Number(m[1]), w: Number(m[2]) }))
+    assert.equal(bars.length, n * 2, `${n}: two bars for each x`)
+    for (const bar of bars) {
+      assert.ok(bar.x >= left - 0.5, `${n}: a bar starts at ${bar.x}, left of the frame at ${left}`)
+      assert.ok(bar.x + bar.w <= right + 0.5, `${n}: a bar ends at ${bar.x + bar.w}, right of the frame at ${right}`)
+    }
+  }
+  // A range somebody insisted on is left alone.
+  const fixed = plot([seriesFromPoints('a', 'A', [{ x: 0, y: 1 }, { x: 1, y: 2 }], { kind: 'bar' })], { x: { range: { low: 0, high: 1 } } })
+  assert.deepEqual([fixed.x.range.low, fixed.x.range.high], [0, 1])
+})

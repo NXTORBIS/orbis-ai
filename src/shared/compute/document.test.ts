@@ -770,3 +770,22 @@ test('a numbered list is written counting up at each depth, and reads back as th
   const items = (blocks: typeof parsed.blocks): number => blocks.reduce((n, one) => n + (one.kind === 'list' ? one.items.length : 0), 0)
   assert.equal(items(again.blocks), 5)
 })
+
+test('a picture on a line of its own is a figure with its caption, and reads back as the same blocks it was written with', () => {
+  const parsed = fromMarkdown('# Report\n\nWords before.\n![Energy by site](artifact:artifact_0123456789abcdef0123456789abcdef)\n\n*Energy by site, October*\n\nWords after, with an ![inline](https://example.com/x.png) picture that stays in its sentence.\n', 'b')
+  if (isDocumentError(parsed)) throw new Error(parsed.message)
+  assert.deepEqual(parsed.blocks.map((one) => one.kind), ['heading', 'paragraph', 'image', 'paragraph'])
+  const figure = parsed.blocks[2]
+  if (figure.kind !== 'image') throw new Error('not a figure')
+  assert.equal(figure.source, 'artifact:artifact_0123456789abcdef0123456789abcdef')
+  assert.equal(figure.alt, 'Energy by site')
+  assert.equal(figure.caption, 'Energy by site, October')
+
+  const document = emptyDocument('d', 'Report')
+  document.blocks = parsed.blocks
+  const again = fromMarkdown(toMarkdown(document), 'b')
+  if (isDocumentError(again)) throw new Error(again.message)
+  assert.deepEqual(again.blocks.map((one) => one.kind), ['heading', 'paragraph', 'image', 'paragraph'])
+  const back = again.blocks[2]
+  assert.ok(back.kind === 'image' && back.caption === 'Energy by site, October' && back.source === figure.source)
+})

@@ -31,7 +31,7 @@ import { gateForWrite } from '../../shared/artifacts/secrets.ts'
 import { verifyDocumentFile, verifyPdfFile, verifyTableFile } from '../../shared/artifacts/validate.ts'
 import type { ArtifactGeneration } from './generation.ts'
 import { importFile } from './importing.ts'
-import { verifyDocx, verifyPptx, verifyXlsx, writeDocx, writePptx, writeXlsx } from './office.ts'
+import { verifyDocx, verifyPptx, verifyXlsx, writeDocx, writePptx, writeXlsx, type Picture } from './office.ts'
 import { ArtifactStore, CONTENT_PREFIX, SOURCE_FILE } from './store.ts'
 import { toDelimited } from '../../shared/compute/data.ts'
 import { toText } from '../../shared/compute/documentHtml.ts'
@@ -106,6 +106,7 @@ const OPERATIONS: Readonly<Record<string, string>> = Object.freeze({
   'artifact.fromTemplate': 'A new table or document started from one of those. Structure only; no row and no sentence in it is data.',
   'artifact.revise': 'A document or a flowchart changed by an instruction, kept as a new version with the one before still there.',
   'artifact.languages': 'The languages a code artifact can be in, and which of them Orbis can check.',
+  'artifact.place': 'A chart or a diagram put into a document as a figure, so the document carries the picture when it is saved as PDF, Word, slides or HTML.',
   'artifact.extractTable': 'A table inside a document taken out as a table of its own, so it can be sorted, totalled and drawn.'
 })
 
@@ -170,7 +171,12 @@ interface Rendered {
   count?: number
   /** For a picture: the size it was drawn at, so the read-back can check the image is that size. */
   size?: { width: number; height: number }
+  /** For a Word document or a deck: how many figures were put in as pictures. */
+  pictures?: number
 }
+
+/** A figure in a document that points at a chart or a diagram kept in Create. */
+const FIGURE_REF = /^artifact:(artifact_[0-9a-f]{32})$/
 
 const rowsOf = (n: number): string => `${n.toLocaleString('en')} ${n === 1 ? 'row' : 'rows'}`
 const str = (value: unknown, max: number): string => (typeof value === 'string' ? value.slice(0, max) : '')
@@ -307,6 +313,8 @@ export class ArtifactService {
           return await this.revise(profileId, operation, req, fail)
         case 'artifact.extractTable':
           return await this.extract(profileId, operation, req, fail)
+        case 'artifact.place':
+          return await this.place(profileId, operation, req, fail)
         default:
           return fail('unknown-operation', `Orbis has no artifact operation called "${operation}".`)
       }
@@ -362,7 +370,7 @@ export class ArtifactService {
     return { kind: 'document', document }
   }
 
-  private async render(body: ArtifactBody, format: FormatId, title = ''): Promise<Rendered | { error: string; message: string }> {
+  private async render(body: ArtifactBody, format: FormatId, title = '', profileId: string | null = null): Promise<Rendered | { error: string; message: string }> {
     if (body.kind === 'code') {
       if (format !== 'code') return { error: 'encode', message: `Code is saved as the ${languageById(body.code.language)?.name ?? 'source'} file it is, not as ${format}.` }
       const bytes = encode(body.code.source)
@@ -393,8 +401,20 @@ export class ArtifactService {
     if (body.kind === 'document' && (format === 'docx' || format === 'pptx')) {
       const loss = lossFor(format, { formatting: true, metadata: true, hierarchy: true })
       if (isInterchangeError(loss)) return { error: 'encode', message: loss.message }
-      const made = format === 'docx' ? await writeDocx(body.document) : await writePptx(body.document)
-      return { bytes: made.bytes, text: null, scan: toText(body.document), format, hash: hashOf(made.bytes), loss, notes: [...made.notes, ...loss.losses.map((one) => one.describe)], count: made.count }
+      // Word and slides hold pixels, so each figure is drawn once at its own size and handed over.
+      const figures = await this.figuresOf(profileId, body.document)
+      const pictures = new Map<string, Picture>()
+      const notes = [...figures.notes]
+      if (figures.drawings.size > 0 && !this.o.renderPng) {
+        notes.push('The figures are written as their descriptions: drawing them as pictures is not available in this copy of Orbis.')
+      } else {
+        for (const [blockId, drawing] of figures.drawings) {
+          const size = svgSize(drawing.svg)
+          pictures.set(blockId, { png: await this.o.renderPng!(drawing.svg, size.width, size.height), ...size })
+        }
+      }
+      const made = format === 'docx' ? await writeDocx(body.document, pictures) : await writePptx(body.document, pictures)
+      return { bytes: made.bytes, text: null, scan: toText(body.document), format, hash: hashOf(made.bytes), loss, notes: [...notes, ...made.notes, ...loss.losses.map((one) => one.describe)], count: made.count, pictures: made.pictures ?? 0 }
     }
     if (body.kind === 'table') {
       /*
@@ -412,14 +432,26 @@ export class ArtifactService {
       if (!this.o.renderPdf) return { error: 'unavailable', message: 'PDF printing is not available in this copy of Orbis.' }
       const loss = lossFor('pdf', { formatting: true, metadata: true, hierarchy: true })
       if (isInterchangeError(loss)) return { error: 'encode', message: loss.message }
-      // The print window fetches nothing, so the HTML it is handed says so in its own policy.
-      const made = toHtml(body.document, { forPrint: true })
+      // The print window fetches nothing, so the HTML it is handed says so in its own policy -- and the figures are
+      // inside it as drawings, not addresses.
+      const figures = await this.figuresOf(profileId, body.document)
+      const made = toHtml(figures.shown, { forPrint: true })
       const bytes = await this.o.renderPdf(made.html)
-      return { bytes, text: null, scan: made.html, format, hash: hashOf(bytes), loss, notes: [...made.notes, ...loss.losses.map((one) => one.describe)] }
+      // The secret gate reads the words, not the drawings: a chart inlined as base64 is long, opaque, and not text.
+      return { bytes, text: null, scan: toText(body.document), format, hash: hashOf(bytes), loss, notes: [...figures.notes, ...made.notes, ...loss.losses.map((one) => one.describe)] }
+    }
+    if (format === 'html') {
+      const figures = await this.figuresOf(profileId, body.document)
+      const result = exportDocument(figures.shown, format)
+      if (isInterchangeError(result)) return { error: 'encode', message: result.message }
+      return { bytes: encode(result.text), text: result.text, scan: toText(body.document), format, hash: result.hash, loss: result.loss, notes: [...figures.notes, ...result.notes] }
     }
     const result = exportDocument(body.document, format)
     if (isInterchangeError(result)) return { error: 'encode', message: result.message }
-    return { bytes: encode(result.text), text: result.text, scan: result.text, format, hash: result.hash, loss: result.loss, notes: result.notes }
+    // Markdown and plain text hold words. A figure is its description there, and the note says so.
+    const pointing = body.document.blocks.filter((one) => one.kind === 'image' && FIGURE_REF.test(one.source)).length
+    const figureNote = pointing > 0 && format !== ARTIFACT_KINDS.document.stores ? [`${pointing} figure${pointing === 1 ? ' is' : 's are'} written as ${pointing === 1 ? 'its' : 'their'} description: this format holds words, not pictures. Save as PDF, Word, slides or HTML to have ${pointing === 1 ? 'it' : 'them'} drawn in.`] : []
+    return { bytes: encode(result.text), text: result.text, scan: result.text, format, hash: result.hash, loss: result.loss, notes: [...figureNote, ...result.notes] }
   }
 
   /** The written file, checked against what was meant to be written and against what it came from. */
@@ -430,8 +462,8 @@ export class ArtifactService {
     if (rendered.format === 'code') return verifySourceFile({ ...shape, text: rendered.text ?? '' }, readBack)
     if (rendered.format === 'png') return verifyPngFile({ ...shape, width: rendered.size?.width ?? 0, height: rendered.size?.height ?? 0 }, readBack)
     if (rendered.format === 'xlsx' && body.kind === 'table') return verifyXlsx(body.table, shape, readBack)
-    if (rendered.format === 'docx' && body.kind === 'document') return verifyDocx(shape, readBack)
-    if (rendered.format === 'pptx' && body.kind === 'document') return verifyPptx({ ...shape, slides: rendered.count ?? 0 }, readBack)
+    if (rendered.format === 'docx' && body.kind === 'document') return verifyDocx({ ...shape, pictures: rendered.pictures ?? 0 }, readBack)
+    if (rendered.format === 'pptx' && body.kind === 'document') return verifyPptx({ ...shape, slides: rendered.count ?? 0, pictures: rendered.pictures ?? 0 }, readBack)
     const expected: ExportResult = {
       text: rendered.text ?? '',
       format: rendered.format,
@@ -460,6 +492,94 @@ export class ArtifactService {
       case 'code':
         return { rows: lineCount(body.code.source), columns: 0 }
     }
+  }
+
+  // ---------------------------------------------------------------- figures
+
+  /**
+   * The figures in a document that point at a chart or a diagram, looked up.
+   *
+   * A figure is a reference, not a copy: the document says which artifact it shows and the drawing is read from that
+   * artifact when the document is written out. So a chart redrawn after its table changed is the chart the report
+   * shows the next time it is saved, and a figure whose artifact has gone is written as its description with a note
+   * saying so -- never as a blank and never as the last picture anybody happened to have.
+   *
+   * `shown` is the document with each such figure's address replaced by the drawing itself, which is what a format
+   * that can hold a drawing is given. `drawings` is the same by block, for the formats that need pixels.
+   */
+  private async figuresOf(profileId: string | null, document: StructuredDocument): Promise<{ shown: StructuredDocument; drawings: Map<string, { svg: string; title: string }>; notes: string[] }> {
+    const drawings = new Map<string, { svg: string; title: string }>()
+    const notes: string[] = []
+    if (profileId === null) return { shown: document, drawings, notes }
+    let missing = 0
+    const blocks: StructuredDocument['blocks'] = []
+    for (const block of document.blocks) {
+      const ref = block.kind === 'image' ? FIGURE_REF.exec(block.source) : null
+      if (block.kind !== 'image' || !ref) {
+        blocks.push(block)
+        continue
+      }
+      const record = await this.o.store.readRecord(profileId, ref[1])
+      const bytes = record && (record.kind === 'plot' || record.kind === 'diagram') ? await this.o.store.readFile(profileId, record.artifactId, record.file) : null
+      const svg = bytes ? decode(bytes) : ''
+      if (!record || !svg.startsWith('<svg')) {
+        missing += 1
+        blocks.push(block)
+        continue
+      }
+      drawings.set(block.id, { svg, title: record.title })
+      blocks.push({ ...block, source: `data:image/svg+xml;base64,${Buffer.from(svg, 'utf8').toString('base64')}` })
+      notes.push(`The figure "${block.caption || block.alt || record.title}" is "${record.title}" as it is now (version ${record.version}).`)
+    }
+    if (missing > 0) notes.push(`${missing} figure${missing === 1 ? ' points' : 's point'} at something that is no longer in Create, so ${missing === 1 ? 'its description is' : 'their descriptions are'} written instead.`)
+    return { shown: { ...document, blocks }, drawings, notes }
+  }
+
+  /** A chart or a diagram put into a document as a figure, at the end, as a new version of the document. */
+  private async place(
+    profileId: string,
+    operation: string,
+    req: Record<string, unknown>,
+    fail: (error: string, message: string, detail?: unknown) => ArtifactResult
+  ): Promise<ArtifactResult> {
+    const record = await this.existing(profileId, req, fail)
+    if ('ok' in record) return record
+    if (record.kind !== 'document') return fail('bad-input', 'A figure is put into a document.')
+    const picture = await this.existing(profileId, { artifactId: req.figureId }, fail)
+    if ('ok' in picture) return picture
+    if (picture.kind !== 'plot' && picture.kind !== 'diagram') return fail('bad-input', `"${picture.title}" is a ${ARTIFACT_KINDS[picture.kind].name.toLowerCase()}. A figure is a chart or a diagram.`)
+    const body = await this.bodyOf(profileId, record)
+    if (!body || body.kind !== 'document') return fail('not-found', 'The artifact is listed but its source is missing.')
+    const taken = new Set(body.document.blocks.map((one) => one.id))
+    let id = `figure-${body.document.blocks.filter((one) => one.kind === 'image').length + 1}`
+    for (let n = 2; taken.has(id); n++) id = `figure-${body.document.blocks.length + n}`
+    // A caption is one line of plain words: anything that would read as markup in the stored copy is taken out.
+    const caption = (str(req.caption, 200).trim() || picture.title)
+      .replace(/[*\r\n]+/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+    const alt = picture.title
+      .replace(/[\[\]\r\n]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+    const document: StructuredDocument = {
+      ...body.document,
+      blocks: [...body.document.blocks, { id, sectionId: '', kind: 'image', source: `artifact:${picture.artifactId}`, alt, caption, label: '' }]
+    }
+    return this.keep(
+      profileId,
+      operation,
+      { kind: 'document', document },
+      {
+        title: record.title,
+        source: record.source,
+        notes: [`"${picture.title}" was added as a figure. The figure follows it: saved as PDF, Word, slides or HTML, this document shows "${picture.title}" as it is at that moment.`],
+        acceptSecrets: req.acceptSecrets === true,
+        existing: record,
+        reason: `Added the figure "${picture.title}".`
+      },
+      fail
+    )
   }
 
   // ---------------------------------------------------------------- a table out of a document
@@ -1062,7 +1182,7 @@ export class ArtifactService {
     const { title, source, acceptSecrets, existing } = about
     const kind = body.kind
     const format = ARTIFACT_KINDS[kind].stores
-    const rendered = await this.render(body, format, title)
+    const rendered = await this.render(body, format, title, profileId)
     if ('error' in rendered) return fail(rendered.error, rendered.message)
 
     const ext = body.kind === 'code' ? extensionForLanguage(body.code.language) : extensionFor(format)
@@ -1203,7 +1323,7 @@ export class ArtifactService {
     const body = JSON.parse(decode(sourceBytes)) as ArtifactBody
     if (body.kind !== record.kind) return fail('failed', 'The artifact is damaged: its source is not the kind its record says.')
 
-    const rendered = await this.render(body, format, record.title)
+    const rendered = await this.render(body, format, record.title, profileId)
     if ('error' in rendered) return fail(rendered.error, rendered.message)
 
     const ext = body.kind === 'code' ? extensionForLanguage(body.code.language) : extensionFor(format)

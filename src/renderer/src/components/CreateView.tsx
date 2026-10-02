@@ -319,6 +319,8 @@ export default function CreateView({
   }, [])
   const [templateId, setTemplateId] = useState('')
   const [starting, setStarting] = useState(false)
+  const [figureId, setFigureId] = useState('')
+  const [figureCaption, setFigureCaption] = useState('')
   const [revision, setRevision] = useState('')
   const [revising, setRevising] = useState(false)
 
@@ -822,6 +824,36 @@ export default function CreateView({
                 {opened.preview}
                 {opened.truncated ? '\n…' : ''}
               </pre>
+            )}
+            {opened.record.kind === 'document' && library.some((one) => one.kind === 'plot' || one.kind === 'diagram') && (
+              <form
+                className="create-ask"
+                aria-label="Add a chart or diagram to this document"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  if (figureId === '') return
+                  void act('place', { operation: 'artifact.place', artifactId: opened.record.artifactId, figureId, caption: figureCaption }, () => 'Added as a figure. Saved as PDF, Word, slides or HTML, the document carries the picture.').then(() => {
+                    setFigureId('')
+                    setFigureCaption('')
+                  })
+                }}
+              >
+                <select className="create-template" value={figureId} onChange={(event) => setFigureId(event.target.value)} aria-label="Chart or diagram to add">
+                  <option value="">Add a chart or diagram as a figure…</option>
+                  {library
+                    .filter((one) => one.kind === 'plot' || one.kind === 'diagram')
+                    .map((one) => (
+                      <option key={one.artifactId} value={one.artifactId}>
+                        {one.title} ({one.kind === 'plot' ? 'chart' : 'diagram'})
+                      </option>
+                    ))}
+                </select>
+                <input className="create-revise" value={figureCaption} onChange={(event) => setFigureCaption(event.target.value)} placeholder="Caption (optional)" aria-label="Caption" maxLength={200} />
+                <button type="submit" className="queue-btn small" disabled={busy !== null || figureId === ''} title="The document points at the chart rather than copying it, so a chart redrawn later is the chart the document shows the next time it is saved.">
+                  <LineChart size={13} />
+                  Add figure
+                </button>
+              </form>
             )}
             {opened.record.kind === 'document' && opened.tables.length > 0 && (
               <div className="create-save" aria-label="Tables in this document">

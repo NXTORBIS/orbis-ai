@@ -739,9 +739,25 @@ export function buildPlot(id: string, series: readonly Series[], options: PlotOp
     )
   }
 
+  /*
+   * Bars have width, and a bar is centred on its x. An axis that ran exactly from the first x to the last would put
+   * half of the first bar and half of the last outside the frame, over the axis numbers. So when there are bars and
+   * nobody insisted on a range, the axis runs half a step past each end -- a step being the smallest gap between two
+   * bars -- which is exactly the room a group of bars takes.
+   */
+  const barXs = [...new Set(series.filter((one) => one.kind === 'bar').flatMap((one) => allPoints(one).map((point) => point.x)))].sort((a, b) => a - b)
+  let barRange: Range | null = null
+  if (barXs.length > 0 && options.x?.range === undefined && (options.x?.scale ?? 'linear') === 'linear') {
+    let step = Number.POSITIVE_INFINITY
+    for (let i = 1; i < barXs.length; i++) step = Math.min(step, barXs[i] - barXs[i - 1])
+    if (!Number.isFinite(step) || step <= 0) step = 1
+    const every = points.map((one) => one.x)
+    barRange = { low: Math.min(...every) - step / 2, high: Math.max(...every) + step / 2 }
+  }
+
   const x = axisFor(
     points.map((one) => one.x),
-    options.x
+    barRange ? { ...options.x, range: barRange, pad: 0 } : options.x
   )
   if (isPlotError(x)) return x
   const y = axisFor(

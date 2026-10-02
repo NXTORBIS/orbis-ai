@@ -832,3 +832,60 @@ test('a source file is opened as code, and Orion-written code that does not read
       ]
     }
   ))
+
+test('a chart put into a document is a figure that follows the chart, and is drawn into HTML, PDF, Word and slides', () =>
+  withService(async (h) => {
+    const table = ok(await h.service.run('default', { operation: 'artifact.create', kind: 'table', title: 'Readings', text: READINGS }))
+    const chart = ok<{ record: { artifactId: string; title: string } }>(await h.service.run('default', { operation: 'artifact.chart', artifactId: (table.record as { artifactId: string }).artifactId, x: 'date', y: ['mwh'], kind: 'bar' }))
+    const report = ok<{ record: { artifactId: string } }>(await h.service.run('default', { operation: 'artifact.create', kind: 'document', title: 'Energy report', text: '# Energy report\n\nWhat was used, by day.\n' }))
+    const id = report.record.artifactId
+
+    const placed = ok<{ record: { version: number; reason: string; notes: string[]; shape: { rows: number }; verified: { ok: boolean } } }>(
+      await h.service.run('default', { operation: 'artifact.place', artifactId: id, figureId: chart.record.artifactId, caption: 'Energy used *each* day' })
+    )
+    assert.equal(placed.record.version, 2)
+    assert.equal(placed.record.shape.rows, 3, 'the figure is one more block')
+    assert.equal(placed.record.verified.ok, true, 'and the kept copy reads back with it')
+    assert.equal(placed.record.reason, 'Added the figure "mwh by date".')
+    const kept = ok<{ preview: string }>(await h.service.run('default', { operation: 'artifact.read', artifactId: id })).preview
+    assert.ok(kept.includes(`![mwh by date](artifact:${chart.record.artifactId})`), 'the document says which chart, it does not copy it')
+    assert.ok(kept.includes('*Energy used each day*'), 'a caption is plain words: the stars typed into it are not kept as markup')
+
+    h.nextDestination = join(h.dir, 'report.html')
+    const html = ok<{ path: string; notes: string[]; verified: { ok: boolean } }>(await h.service.run('default', { operation: 'artifact.export', artifactId: id, format: 'html' }))
+    const page = await readFile(html.path, 'utf8')
+    assert.ok(page.includes('<img src="data:image/svg+xml;base64,'), 'the drawing is inside the page')
+    assert.equal(page.includes('artifact:'), false)
+    assert.ok(html.notes.some((one) => /The figure "Energy used each day" is "mwh by date" as it is now \(version 1\)\./.test(one)))
+
+    h.nextDestination = join(h.dir, 'report.pdf')
+    ok(await h.service.run('default', { operation: 'artifact.export', artifactId: id, format: 'pdf' }))
+    assert.ok(h.printed[h.printed.length - 1].includes('data:image/svg+xml;base64,'), 'the print engine was handed the drawing, not an address')
+
+    h.nextDestination = join(h.dir, 'report.docx')
+    const word = ok<{ verified: { ok: boolean; checks: { what: string; describe: string }[] } }>(await h.service.run('default', { operation: 'artifact.export', artifactId: id, format: 'docx' }))
+    assert.equal(word.verified.ok, true)
+    assert.match(word.verified.checks.find((one) => one.what === 'pictures')!.describe, /holds 1 picture; 1 was put in/)
+
+    h.nextDestination = join(h.dir, 'report.pptx')
+    const deck = ok<{ verified: { ok: boolean; checks: { what: string }[] } }>(await h.service.run('default', { operation: 'artifact.export', artifactId: id, format: 'pptx' }))
+    assert.equal(deck.verified.ok, true)
+    assert.ok(deck.verified.checks.some((one) => one.what === 'pictures'))
+
+    h.nextDestination = join(h.dir, 'report.txt')
+    const text = ok<{ path: string; notes: string[] }>(await h.service.run('default', { operation: 'artifact.export', artifactId: id, format: 'text' }))
+    assert.ok(text.notes.some((one) => /1 figure is written as its description: this format holds words, not pictures/.test(one)))
+    assert.ok((await readFile(text.path, 'utf8')).includes('mwh by date'))
+
+    // The chart is removed: the figure is written as its description and the note says why. Nothing is drawn from memory.
+    ok(await h.service.run('default', { operation: 'artifact.remove', artifactId: chart.record.artifactId }))
+    h.nextDestination = join(h.dir, 'after.html')
+    const after = ok<{ path: string; notes: string[] }>(await h.service.run('default', { operation: 'artifact.export', artifactId: id, format: 'html' }))
+    assert.equal((await readFile(after.path, 'utf8')).includes('data:image/svg+xml'), false)
+    assert.ok(after.notes.some((one) => /1 figure points at something that is no longer in Create, so its description is written instead/.test(one)))
+
+    // Only a chart or a diagram is a figure, and only a document takes one.
+    const notPicture = await h.service.run('default', { operation: 'artifact.place', artifactId: id, figureId: (table.record as { artifactId: string }).artifactId })
+    assert.equal(notPicture.ok, false)
+    if (!notPicture.ok) assert.match(notPicture.message, /"Readings" is a table\. A figure is a chart or a diagram\./)
+  }))

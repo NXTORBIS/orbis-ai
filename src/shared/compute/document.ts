@@ -602,6 +602,16 @@ export function fromMarkdown(source: string, idPrefix = 'b'): { blocks: Block[];
       continue
     }
 
+    // A picture on a line of its own is a figure, with the italic line after it as its caption -- the same pair
+    // `toMarkdown` writes, so a document with a figure in it reads back with the blocks it was written with.
+    const figure = FIGURE_LINE.exec(line)
+    if (figure) {
+      const captioned = captionAfter(lines, i + 1)
+      blocks.push({ id: nextId(), sectionId: '', kind: 'image', source: figure[2], alt: figure[1], caption: captioned.caption, label: '' })
+      i = captioned.next
+      continue
+    }
+
     // A table needs its separator row, which is what distinguishes it from a paragraph full of pipes.
     if (line.includes('|') && i + 1 < lines.length && /^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(lines[i + 1])) {
       const rows: string[][] = []
@@ -677,7 +687,11 @@ export function fromMarkdown(source: string, idPrefix = 'b'): { blocks: Block[];
   return { blocks, notes }
 }
 
+/** A whole line that is one picture: `![what it shows](where it is)`. */
+const FIGURE_LINE = /^\s*!\[([^\]]*)\]\(([^)\s]+)\)\s*$/
+
 const startsSomething = (line: string): boolean =>
+  FIGURE_LINE.test(line) ||
   /^(#{1,6})\s/.test(line) ||
   /^(`{3,}|~{3,})/.test(line) ||
   /^>\s?/.test(line) ||

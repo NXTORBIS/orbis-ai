@@ -6,6 +6,7 @@ import {
   Document,
   ExternalHyperlink,
   HeadingLevel,
+  ImageRun,
   LevelFormat,
   Packer,
   Paragraph,
@@ -41,6 +42,25 @@ export interface OfficeResult {
   notes: string[]
   /** Slides for a deck, rows for a workbook, paragraphs for a document. */
   count: number
+  /** How many pictures were put in, so the read-back can count them. */
+  pictures?: number
+}
+
+/** A figure as pixels: what a Word document or a deck can hold. Keyed by the id of the block it stands for. */
+export interface Picture {
+  png: Uint8Array
+  width: number
+  height: number
+}
+
+export type Pictures = ReadonlyMap<string, Picture>
+
+const NO_PICTURES: Pictures = new Map()
+
+/** A size scaled down to fit inside a box, never up, with its proportions kept. */
+const fit = (width: number, height: number, maxWidth: number, maxHeight: number): { width: number; height: number } => {
+  const scale = Math.min(1, maxWidth / Math.max(1, width), maxHeight / Math.max(1, height))
+  return { width: Math.round(width * scale), height: Math.round(height * scale) }
 }
 
 const inflate = (data: Uint8Array): Uint8Array => new Uint8Array(inflateRawSync(data))
@@ -254,7 +274,7 @@ const docxRuns = (runs: readonly Inline[], resolved: Resolved): (TextRun | Exter
 
 const HEADINGS = [HeadingLevel.HEADING_1, HeadingLevel.HEADING_2, HeadingLevel.HEADING_3, HeadingLevel.HEADING_4, HeadingLevel.HEADING_5, HeadingLevel.HEADING_6] as const
 
-const docxBlock = (block: Block, resolved: Resolved): (Paragraph | Table)[] => {
+const docxBlock = (block: Block, resolved: Resolved, pictures: Pictures = NO_PICTURES): (Paragraph | Table)[] => {
   switch (block.kind) {
     case 'paragraph':
       return [new Paragraph({ children: docxRuns(block.content, resolved), spacing: { after: 160 } })]
@@ -315,7 +335,21 @@ const docxBlock = (block: Block, resolved: Resolved): (Paragraph | Table)[] => {
     }
     case 'image': {
       const n = resolved.numbers.get(block.id)
-      // Nothing is fetched. The figure is written as what it is: a numbered place with its description.
+      const picture = pictures.get(block.id)
+      if (picture) {
+        // The page is about six and a half inches wide between its margins; a figure fills it at most.
+        const size = fit(picture.width, picture.height, 600, 760)
+        const caption = n || block.caption ? [new Paragraph({ children: [new TextRun({ text: `${n ? `Figure ${n.number}. ` : ''}${block.caption}`, italics: true, color: '6B7280', size: 20 })], alignment: AlignmentType.CENTER, spacing: { after: 200 } })] : []
+        return [
+          new Paragraph({
+            children: [new ImageRun({ type: 'png', data: Buffer.from(picture.png), transformation: size, altText: { title: block.alt || block.caption || 'Figure', description: block.alt || block.caption || 'Figure', name: block.id } })],
+            alignment: AlignmentType.CENTER,
+            spacing: { after: caption.length ? 80 : 200 }
+          }),
+          ...caption
+        ]
+      }
+      // Nothing is fetched. A figure with no picture to hand is written as what it is: a numbered place with its description.
       return [new Paragraph({ children: [new TextRun({ text: `[${n ? `Figure ${n.number}: ` : ''}${block.alt || block.caption || 'image'}]`, italics: true, color: '6B7280' })], spacing: { after: 160 } })]
     }
     case 'callout':
@@ -339,12 +373,12 @@ const docxBlock = (block: Block, resolved: Resolved): (Paragraph | Table)[] => {
   }
 }
 
-export async function writeDocx(document: StructuredDocument): Promise<OfficeResult> {
+export async function writeDocx(document: StructuredDocument, pictures: Pictures = NO_PICTURES): Promise<OfficeResult> {
   const resolved = resolve(document)
   const children: (Paragraph | Table)[] = []
   const hasTopHeading = document.blocks.some((one) => one.kind === 'heading' && one.level === 1)
   if (document.metadata.title !== '' && !hasTopHeading) children.push(new Paragraph({ heading: HeadingLevel.TITLE, children: [new TextRun(document.metadata.title)] }))
-  for (const block of document.blocks) children.push(...docxBlock(block, resolved))
+  for (const block of document.blocks) children.push(...docxBlock(block, resolved, pictures))
   if (resolved.footnotes.size > 0) {
     children.push(new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun('Notes')] }))
     for (const [noteId, n] of [...resolved.footnotes.entries()].sort((a, b) => a[1] - b[1])) {
@@ -370,14 +404,15 @@ export async function writeDocx(document: StructuredDocument): Promise<OfficeRes
   })
   const buffer = await Packer.toBuffer(made)
   const notes: string[] = []
-  const images = document.blocks.filter((one) => one.kind === 'image').length
+  const drawn = document.blocks.filter((one) => one.kind === 'image' && pictures.has(one.id)).length
+  const images = document.blocks.filter((one) => one.kind === 'image').length - drawn
   if (images > 0) notes.push(`${images} image${images === 1 ? ' is' : 's are'} written as ${images === 1 ? 'its' : 'their'} description; nothing is fetched.`)
   const paragraphs = children.filter((one) => one instanceof Paragraph).length
-  return { bytes: new Uint8Array(buffer), notes, count: paragraphs }
+  return { bytes: new Uint8Array(buffer), notes, count: paragraphs, pictures: drawn }
 }
 
 /** The Word package opened as the ZIP it is, its main part found, and its paragraphs counted. */
-export function verifyDocx(expected: WrittenShape, readBack: Uint8Array): VerifyResult {
+export function verifyDocx(expected: WrittenShape & { pictures?: number }, readBack: Uint8Array): VerifyResult {
   const checks = fileChecks(expected, readBack)
   const parts = partsOf(readBack)
   if (!parts) {
@@ -389,6 +424,7 @@ export function verifyDocx(expected: WrittenShape, readBack: Uint8Array): Verify
   const xml = hasParts ? parts.read('word/document.xml') : null
   const paragraphs = xml ? (xml.match(/<w:p[ >]/g) ?? []).length : 0
   checks.push({ what: 'paragraphs', passed: paragraphs > 0, describe: paragraphs > 0 ? `The document has ${paragraphs} paragraph${paragraphs === 1 ? '' : 's'}.` : 'The document has no paragraphs in it.' })
+  if ((expected.pictures ?? 0) > 0) checks.push(pictureCheck(parts.paths, 'word/media/', expected.pictures ?? 0))
   return { ok: checks.every((one) => one.passed), checks, reimported: paragraphs > 0 ? { rows: paragraphs, columns: 0 } : null, differences: [] }
 }
 
@@ -397,7 +433,15 @@ export function verifyDocx(expected: WrittenShape, readBack: Uint8Array): Verify
 const BULLETS_PER_SLIDE = 7
 const BULLET_CHARS = 220
 
+/** Whether the package holds the pictures that were put in it. */
+const pictureCheck = (paths: readonly string[], folder: string, expected: number): VerifyResult['checks'][number] => {
+  const found = paths.filter((one) => one.startsWith(folder) && /\.png$/i.test(one)).length
+  return { what: 'pictures', passed: found >= expected, describe: `The file holds ${found} picture${found === 1 ? '' : 's'}; ${expected} ${expected === 1 ? 'was' : 'were'} put in.` }
+}
+
 interface SlideDraft {
+  /** The figure this slide shows, when it is a slide for one. */
+  picture?: string
   title: string
   bullets: { text: string; indent: number; mono?: boolean; italic?: boolean }[]
   table: { rows: string[][]; caption: string } | null
@@ -411,7 +455,7 @@ interface SlideDraft {
  * A table gets a slide of its own. Everything a section says goes into the slide's speaker notes in full, so a
  * sentence that was too long for a bullet is not lost -- it is where a presenter would want it.
  */
-export function planSlides(document: StructuredDocument): SlideDraft[] {
+export function planSlides(document: StructuredDocument, pictured: ReadonlySet<string> = new Set()): SlideDraft[] {
   const resolved = resolve(document)
   const slides: SlideDraft[] = []
   let current: SlideDraft | null = null
@@ -475,6 +519,14 @@ export function planSlides(document: StructuredDocument): SlideDraft[] {
       }
       case 'image': {
         const n = resolved.numbers.get(block.id)
+        if (pictured.has(block.id)) {
+          // A figure with a picture gets a slide of its own, like a table: shrunk beside bullets it cannot be read.
+          const slide = open(`${n ? `Figure ${n.number}` : 'Figure'}${block.caption ? `: ${block.caption}` : ''}`)
+          slide.picture = block.id
+          slide.notes.push(block.alt || block.caption || 'Figure')
+          current = null
+          break
+        }
         bullet(`[${n ? `Figure ${n.number}: ` : ''}${block.alt || block.caption || 'image'}]`, 0, { italic: true })
         break
       }
@@ -502,11 +554,13 @@ export function planSlides(document: StructuredDocument): SlideDraft[] {
       paged.push({ title: i === 0 ? slide.title : `${slide.title} (continued)`, bullets: slide.bullets.slice(i, i + BULLETS_PER_SLIDE), table: null, notes: i === 0 ? slide.notes : [] })
     }
   }
-  return paged.filter((one) => one.bullets.length > 0 || one.table !== null)
+  // A slide with nothing on it is not written. A figure's slide has its picture on it, which is not nothing.
+  return paged.filter((one) => one.bullets.length > 0 || one.table !== null || one.picture !== undefined)
 }
 
-export async function writePptx(document: StructuredDocument): Promise<OfficeResult> {
-  const drafts = planSlides(document)
+export async function writePptx(document: StructuredDocument, pictures: Pictures = NO_PICTURES): Promise<OfficeResult> {
+  const drafts = planSlides(document, new Set(pictures.keys()))
+  let drawn = 0
   const pptx = new PptxGenJS()
   pptx.layout = 'LAYOUT_16x9'
   pptx.author = document.metadata.author || 'Orbis'
@@ -526,7 +580,15 @@ export async function writePptx(document: StructuredDocument): Promise<OfficeRes
   for (const draft of drafts) {
     const slide = pptx.addSlide()
     slide.addText(draft.title, { x: 0.5, y: 0.35, w: 9, h: 0.8, fontSize: 26, bold: true, color: '1A1D24', fontFace: 'Segoe UI' })
-    if (draft.table) {
+    const picture = draft.picture ? pictures.get(draft.picture) : undefined
+    if (picture) {
+      // The space under the title is nine inches by 3.9; the picture is fitted inside it and centred.
+      const inches = fit(picture.width, picture.height, 9 * 96, 3.9 * 96)
+      const w = inches.width / 96
+      const h = inches.height / 96
+      slide.addImage({ data: `image/png;base64,${Buffer.from(picture.png).toString('base64')}`, x: 0.5 + (9 - w) / 2, y: 1.3, w, h })
+      drawn += 1
+    } else if (draft.table) {
       const rows = draft.table.rows.map((row, r) => row.map((text) => ({ text, options: r === 0 ? { bold: true, fill: { color: 'F4F5F8' } } : {} })))
       slide.addTable(rows, { x: 0.5, y: 1.3, w: 9, fontSize: 12, fontFace: 'Segoe UI', border: { type: 'solid', pt: 0.5, color: 'C9CED8' }, autoPage: false })
     } else {
@@ -544,11 +606,11 @@ export async function writePptx(document: StructuredDocument): Promise<OfficeRes
 
   const buffer = (await pptx.write({ outputType: 'nodebuffer' })) as Buffer
   const notes = ['Each heading became a slide; the full text of each section is in the speaker notes.']
-  return { bytes: new Uint8Array(buffer), notes, count }
+  return { bytes: new Uint8Array(buffer), notes, count, pictures: drawn }
 }
 
 /** The deck opened as the ZIP it is, and its slides counted against the number that were written. */
-export function verifyPptx(expected: WrittenShape & { slides: number }, readBack: Uint8Array): VerifyResult {
+export function verifyPptx(expected: WrittenShape & { slides: number; pictures?: number }, readBack: Uint8Array): VerifyResult {
   const checks = fileChecks(expected, readBack)
   const parts = partsOf(readBack)
   if (!parts) {
@@ -559,5 +621,6 @@ export function verifyPptx(expected: WrittenShape & { slides: number }, readBack
   checks.push({ what: 'package', passed: hasParts, describe: hasParts ? 'The package has the parts a deck must have.' : 'The package is missing ppt/presentation.xml or its content types.' })
   const slides = parts.paths.filter((one) => /^ppt\/slides\/slide\d+\.xml$/.test(one)).length
   checks.push({ what: 'slides', passed: slides > 0 && slides === expected.slides, describe: `The deck has ${slides} slide${slides === 1 ? '' : 's'}; ${expected.slides} ${expected.slides === 1 ? 'was' : 'were'} written.` })
+  if ((expected.pictures ?? 0) > 0) checks.push(pictureCheck(parts.paths, 'ppt/media/', expected.pictures ?? 0))
   return { ok: checks.every((one) => one.passed), checks, reimported: slides > 0 ? { rows: slides, columns: 0 } : null, differences: [] }
 }

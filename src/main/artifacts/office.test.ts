@@ -110,3 +110,33 @@ test('a deck is written with the slides that were planned plus a title slide, an
   const wrong = verifyPptx({ ...shapeOf(made.bytes), slides: 9 }, made.bytes)
   assert.equal(wrong.checks.find((one) => one.what === 'slides')?.passed, false)
 })
+
+test('a figure with a picture is drawn into Word and gets a slide of its own; one without is written as its description', async () => {
+  const { encodePng } = await import('../chromium/png.ts')
+  const png = new Uint8Array(encodePng({ width: 880, height: 520, bgra: Buffer.alloc(880 * 520 * 4, 0x80) }))
+  const parsed = fromMarkdown('# Energy\n\nWords.\n\n![Chart](artifact:artifact_0123456789abcdef0123456789abcdef)\n\n*Consumption by site*\n\n![Gone](artifact:artifact_ffffffffffffffffffffffffffffffff)\n', 'b')
+  if (isDocumentError(parsed)) throw new Error(parsed.message)
+  const document = emptyDocument('d', 'Energy')
+  document.blocks = parsed.blocks
+  const drawn = document.blocks.find((one) => one.kind === 'image')!
+  const pictures = new Map([[drawn.id, { png, width: 880, height: 520 }]])
+
+  const word = await writeDocx(document, pictures)
+  assert.equal(word.pictures, 1)
+  assert.ok(word.notes.some((one) => /1 image is written as its description/.test(one)), 'the figure with no picture says so')
+  const checkedWord = verifyDocx({ bytes: word.bytes.length, hash: hashOf(word.bytes), pictures: 1 }, word.bytes)
+  assert.equal(checkedWord.ok, true, JSON.stringify(checkedWord.checks))
+  assert.match(checkedWord.checks.find((one) => one.what === 'pictures')!.describe, /holds 1 picture; 1 was put in/)
+  // A file that claims a picture it does not hold is caught.
+  const plain = await writeDocx(document)
+  assert.equal(verifyDocx({ bytes: plain.bytes.length, hash: hashOf(plain.bytes), pictures: 1 }, plain.bytes).ok, false)
+
+  const slides = planSlides(document, new Set([drawn.id]))
+  const figureSlide = slides.find((one) => one.picture === drawn.id)
+  assert.ok(figureSlide, 'the figure has a slide of its own')
+  assert.match(figureSlide!.title, /^Figure 1: Consumption by site$/)
+  const deck = await writePptx(document, pictures)
+  assert.equal(deck.pictures, 1)
+  const checkedDeck = verifyPptx({ bytes: deck.bytes.length, hash: hashOf(deck.bytes), slides: deck.count, pictures: 1 }, deck.bytes)
+  assert.equal(checkedDeck.ok, true, JSON.stringify(checkedDeck.checks))
+})
