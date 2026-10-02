@@ -3,7 +3,8 @@ import assert from 'node:assert/strict'
 import { parseDelimited, isDataError } from '../compute/data.ts'
 import { emptyDocument, fromMarkdown, isDocumentError } from '../compute/document.ts'
 import { exportDocument, exportTable, isInterchangeError } from '../compute/interchange.ts'
-import { verifyDocumentFile, verifyTableFile } from './validate.ts'
+import { pdfPageCount, verifyDocumentFile, verifyPdfFile, verifyTableFile } from './validate.ts'
+import { hashOf } from '../compute/interchange.ts'
 
 const encode = (text: string): Uint8Array => new TextEncoder().encode(text)
 
@@ -61,6 +62,44 @@ test('a date leaves as a date, not as the number it is held as, and still round-
   const result = verifyTableFile(parsed.table, csv, encode(csv.text))
   assert.equal(result.ok, true, JSON.stringify(result.checks))
   assert.deepEqual(result.differences, [])
+})
+
+test('an HTML file reads back as a document, with a different block count reported rather than failed', () => {
+  const parsed = fromMarkdown('# Title\n\nA paragraph.\n\n- one\n- two\n', 'b')
+  if (isDocumentError(parsed)) throw new Error(parsed.message)
+  const document = emptyDocument('d', 'Title')
+  document.blocks = parsed.blocks
+  const rendered = exportDocument(document, 'html')
+  if (isInterchangeError(rendered)) throw new Error(rendered.message)
+  assert.ok(rendered.text.includes('<p id='), 'HTML has the paragraph in it')
+  const result = verifyDocumentFile(document.blocks.length, rendered, encode(rendered.text))
+  assert.equal(result.ok, true, JSON.stringify(result.checks))
+  assert.ok((result.reimported?.rows ?? 0) > 0)
+})
+
+test('plain text export carries the paragraphs, not blank lines', () => {
+  const parsed = fromMarkdown('# Title\n\nA paragraph that must survive.\n', 'b')
+  if (isDocumentError(parsed)) throw new Error(parsed.message)
+  const document = emptyDocument('d', 'Title')
+  document.blocks = parsed.blocks
+  const rendered = exportDocument(document, 'text')
+  if (isInterchangeError(rendered)) throw new Error(rendered.message)
+  assert.ok(rendered.text.includes('A paragraph that must survive.'))
+})
+
+test('a PDF is checked for its header and its pages, not just its hash', () => {
+  const good = new TextEncoder().encode('%PDF-1.7\n1 0 obj << /Type /Catalog >> endobj\n2 0 obj << /Type /Pages /Count 2 >> endobj\n3 0 obj << /Type /Page >> endobj\n4 0 obj << /Type /Page >> endobj\n%%EOF')
+  assert.equal(pdfPageCount(good), 2)
+  const ok = verifyPdfFile({ bytes: good.length, hash: hashOf(good) }, good)
+  assert.equal(ok.ok, true)
+  assert.deepEqual(ok.checks.map((one) => one.what), ['written', 'checksum', 'pdf', 'pages'])
+  assert.equal(ok.reimported?.rows, 2)
+
+  const notPdf = new TextEncoder().encode('<html>not a pdf</html>')
+  const bad = verifyPdfFile({ bytes: notPdf.length, hash: hashOf(notPdf) }, notPdf)
+  assert.equal(bad.ok, false)
+  assert.equal(bad.checks.find((one) => one.what === 'pdf')?.passed, false)
+  assert.equal(bad.checks.find((one) => one.what === 'pages')?.passed, false)
 })
 
 test('a document file reads back with the same number of blocks', () => {

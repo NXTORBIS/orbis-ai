@@ -1,5 +1,5 @@
 import type { Table } from '../compute/data.ts'
-import { fromMarkdown, isDocumentError } from '../compute/document.ts'
+import { fromHtml, fromMarkdown, isDocumentError } from '../compute/document.ts'
 import { hashOf, verifyExport, type ExportResult, type VerifyResult } from '../compute/interchange.ts'
 
 /**
@@ -22,7 +22,13 @@ const formatBytes = (count: number): string => {
   return `${(count / (1024 * 1024)).toFixed(1)} MB`
 }
 
-const fileChecks = (expected: ExportResult, readBack: Uint8Array): VerifyResult['checks'] => [
+/** What was written, as far as the file is concerned: its length and its hash. The text formats carry more. */
+export interface WrittenShape {
+  bytes: number
+  hash: string
+}
+
+const fileChecks = (expected: WrittenShape, readBack: Uint8Array): VerifyResult['checks'] => [
   {
     what: 'written',
     passed: readBack.length === expected.bytes,
@@ -48,24 +54,32 @@ export function verifyTableFile(original: Table, expected: ExportResult, readBac
   }
 }
 
-/** A document's file: size, hash, and that it reads back as a document with the same number of blocks. */
+/**
+ * A document's file: size, hash, and that it reads back as a document.
+ *
+ * Markdown round-trips block for block, so a different count is a failed check. HTML is read back through the
+ * importer's allow-list, which folds some structure (a figure's caption, a footnote section) into other blocks, so
+ * for HTML the check is that it reads back as a document at all, and a different count is reported as a difference
+ * rather than a failure -- the honest description of what was checked.
+ */
 export function verifyDocumentFile(blocks: number, expected: ExportResult, readBack: Uint8Array): VerifyResult {
   const checks = fileChecks(expected, readBack)
   const differences: string[] = []
   let reimported: VerifyResult['reimported'] = null
-  if (expected.format === 'markdown') {
-    const parsed = fromMarkdown(decode(readBack), 'verify')
+  if (expected.format === 'markdown' || expected.format === 'html') {
+    const text = decode(readBack)
+    const parsed = expected.format === 'markdown' ? fromMarkdown(text, 'verify') : fromHtml(text, 'verify')
     if (isDocumentError(parsed)) {
       checks.push({ what: 'round trip', passed: false, describe: `The file could not be read back as a document: ${parsed.message}` })
     } else {
       reimported = { rows: parsed.blocks.length, columns: 0 }
       const same = parsed.blocks.length === blocks
-      checks.push({
-        what: 'round trip',
-        passed: same,
-        describe: `Reading the file back gives ${parsed.blocks.length} blocks; the document had ${blocks}.`
-      })
-      if (!same) differences.push(`Block count differs: ${blocks} became ${parsed.blocks.length}.`)
+      if (expected.format === 'markdown') {
+        checks.push({ what: 'round trip', passed: same, describe: `Reading the file back gives ${parsed.blocks.length} blocks; the document had ${blocks}.` })
+      } else {
+        checks.push({ what: 'round trip', passed: parsed.blocks.length > 0, describe: `Reading the file back through the HTML importer gives ${parsed.blocks.length} blocks; the document had ${blocks}.` })
+      }
+      if (!same) differences.push(`Block count differs: ${blocks} became ${parsed.blocks.length}.${expected.format === 'html' ? ' The HTML importer folds captions and notes into neighbouring blocks, so this is expected for a document with figures or footnotes.' : ''}`)
     }
   } else {
     checks.push({
@@ -75,4 +89,21 @@ export function verifyDocumentFile(blocks: number, expected: ExportResult, readB
     })
   }
   return { ok: checks.every((one) => one.passed), checks, reimported, differences }
+}
+
+/** How many pages a PDF declares. Counted from its own page objects; `/Type /Pages` is the tree and is not a page. */
+export function pdfPageCount(bytes: Uint8Array): number {
+  const text = new TextDecoder('latin1').decode(bytes)
+  const matches = text.match(/\/Type\s*\/Page(?![a-zA-Z])/g)
+  return matches ? matches.length : 0
+}
+
+/** A PDF file: size, hash, that it is a PDF at all, and that it has at least one page. */
+export function verifyPdfFile(expected: WrittenShape, readBack: Uint8Array): VerifyResult {
+  const checks = fileChecks(expected, readBack)
+  const head = new TextDecoder('latin1').decode(readBack.subarray(0, 5))
+  checks.push({ what: 'pdf', passed: head === '%PDF-', describe: head === '%PDF-' ? 'The file begins the way every PDF does.' : 'The file does not begin as a PDF does.' })
+  const pages = pdfPageCount(readBack)
+  checks.push({ what: 'pages', passed: pages > 0, describe: pages > 0 ? `The PDF has ${pages} page${pages === 1 ? '' : 's'}.` : 'The PDF declares no pages.' })
+  return { ok: checks.every((one) => one.passed), checks, reimported: pages > 0 ? { rows: pages, columns: 0 } : null, differences: [] }
 }

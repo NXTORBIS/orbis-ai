@@ -105,10 +105,13 @@ describe('format capabilities', () => {
     assert.equal(FORMATS.json.streaming, false)
   })
 
-  test('a format Orbis reads but does not write says so', () => {
+  test('a format Orbis reads but does not write says so, and the other way round', () => {
     assert.equal(FORMATS.xml.canImport, true)
     assert.equal(FORMATS.xml.canExport, false)
-    assert.equal(FORMATS.html.canExport, false)
+    // HTML goes both ways now that there is a writer; PDF is written by printing and never read back yet.
+    assert.equal(FORMATS.html.canExport, true)
+    assert.equal(FORMATS.pdf.canImport, false)
+    assert.equal(FORMATS.pdf.canExport, true)
   })
 
   test('an unknown format id is null rather than a prototype lookup', () => {

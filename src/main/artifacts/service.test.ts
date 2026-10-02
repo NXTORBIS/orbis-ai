@@ -20,17 +20,34 @@ interface Harness {
   nextDestination: string | null
   /** Replaces what is written at a path, to simulate a disk that lied. */
   corrupt: boolean
+  /** What the stand-in print engine was handed, so a test can see the HTML that would have been printed. */
+  printed: string[]
 }
 
-const withService = async (run: (h: Harness) => Promise<void>): Promise<void> => {
+/** A stand-in print engine: a PDF-shaped file with one page per heading, so the page count means something. */
+const fakePdf = (html: string): Uint8Array => {
+  const pages = Math.max(1, (html.match(/<h[1-6]/g) ?? []).length)
+  const objects = Array.from({ length: pages }, (_, i) => `${i + 3} 0 obj << /Type /Page >> endobj`).join('\n')
+  return new TextEncoder().encode(`%PDF-1.7\n1 0 obj << /Type /Catalog >> endobj\n2 0 obj << /Type /Pages /Count ${pages} >> endobj\n${objects}\n%%EOF`)
+}
+
+const withService = async (run: (h: Harness) => Promise<void>, options: { pdf?: boolean } = { pdf: true }): Promise<void> => {
   const dir = await mkdtemp(join(tmpdir(), 'orbis-artifact-service-'))
-  const h: Harness = { service: null as unknown as ArtifactService, dir, nextDestination: null, corrupt: false }
+  const h: Harness = { service: null as unknown as ArtifactService, dir, nextDestination: null, corrupt: false, printed: [] }
   let counter = 0
   h.service = new ArtifactService({
     store: new ArtifactStore({ userData: dir }),
     now: () => 1000,
     random: () => (++counter).toString(16).padStart(32, '0'),
     chooseDestination: async () => h.nextDestination,
+    ...(options.pdf === false
+      ? {}
+      : {
+          renderPdf: async (html: string) => {
+            h.printed.push(html)
+            return fakePdf(html)
+          }
+        }),
     writeFile: async (path, bytes) => {
       await writeFile(path, h.corrupt ? bytes.slice(0, Math.max(1, bytes.length - 3)) : bytes)
     }
@@ -161,5 +178,53 @@ test('reading gives a bounded preview and the formats it can leave as', () =>
       formats: { format: string }[]
     }
     assert.ok(value.preview.length > 0)
-    assert.deepEqual(value.formats.map((one) => one.format), ['csv', 'tsv', 'json', 'ndjson'])
+    assert.deepEqual(value.formats.map((one) => one.format), ['csv', 'tsv', 'json', 'ndjson', 'markdown', 'text'])
   }))
+
+test('a document saves as HTML with its paragraphs in it, read back through the HTML importer', () =>
+  withService(async (h) => {
+    const made = ok(await h.service.run('default', { operation: 'artifact.create', kind: 'document', title: 'Report', text: '# Report\n\nA finding.\n\n- one\n- two\n' }))
+    h.nextDestination = join(h.dir, 'Report.html')
+    const out = ok(await h.service.run('default', { operation: 'artifact.export', artifactId: (made.record as { artifactId: string }).artifactId, format: 'html' })) as {
+      verified: { ok: boolean; checks: { what: string; passed: boolean }[] }
+    }
+    assert.equal(out.verified.ok, true, JSON.stringify(out.verified.checks))
+    const html = await readFile(h.nextDestination, 'utf8')
+    assert.ok(html.startsWith('<!doctype html>'))
+    assert.ok(html.includes('A finding.'))
+    assert.equal(html.includes('Content-Security-Policy'), false, 'a file a person opens is not given the print policy')
+  }))
+
+test('a document saves as PDF through the print engine, from HTML that forbids every fetch, and the PDF is checked', () =>
+  withService(async (h) => {
+    const made = ok(await h.service.run('default', { operation: 'artifact.create', kind: 'document', title: 'Printed', text: '# One\n\nText.\n\n## Two\n\nMore.\n' }))
+    const artifactId = (made.record as { artifactId: string }).artifactId
+    const read = ok(await h.service.run('default', { operation: 'artifact.read', artifactId })) as { formats: { format: string }[] }
+    assert.deepEqual(read.formats.map((one) => one.format), ['markdown', 'html', 'pdf', 'text'])
+
+    h.nextDestination = join(h.dir, 'Printed.pdf')
+    const out = ok(await h.service.run('default', { operation: 'artifact.export', artifactId, format: 'pdf' })) as {
+      verified: { ok: boolean; checks: { what: string; passed: boolean }[]; reimported: { rows: number } | null }
+      loss: { lossy: boolean }
+    }
+    assert.equal(out.verified.ok, true, JSON.stringify(out.verified.checks))
+    assert.deepEqual(out.verified.checks.map((one) => one.what), ['written', 'checksum', 'pdf', 'pages'])
+    assert.equal(out.verified.reimported?.rows, 2)
+    assert.equal(h.printed.length, 1)
+    assert.ok(h.printed[0].includes("default-src 'none'"), 'the print engine is handed HTML with the no-fetch policy')
+    const bytes = await readFile(h.nextDestination)
+    assert.equal(bytes.subarray(0, 5).toString('latin1'), '%PDF-')
+  }))
+
+test('without a print engine, PDF is simply not offered', () =>
+  withService(
+    async (h) => {
+      const kinds = ok<{ id: string; writes: { format: string }[] }[]>(await h.service.run('default', { operation: 'artifact.kinds' }))
+      assert.deepEqual(kinds.find((one) => one.id === 'document')?.writes.map((one) => one.format), ['markdown', 'html', 'text'])
+      const made = ok(await h.service.run('default', { operation: 'artifact.create', kind: 'document', text: 'x\n' }))
+      const result = await h.service.run('default', { operation: 'artifact.export', artifactId: (made.record as { artifactId: string }).artifactId, format: 'pdf' })
+      assert.equal(result.ok, false)
+      if (!result.ok) assert.match(result.message, /can be saved as: markdown, html, text/)
+    },
+    { pdf: false }
+  ))

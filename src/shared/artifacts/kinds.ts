@@ -9,8 +9,11 @@ import { FORMATS, type FormatId } from '../compute/interchange.ts'
  *
  * The rule for what goes in `writes` is strict on purpose: a format is listed only when there is a writer for it that
  * is tested and whose output is read back and checked. A format Orbis *could* write, or writes badly, is not listed.
- * `exportDocument` produces blank lines for anything but Markdown, so `document` writes Markdown and nothing else
- * until an HTML writer exists -- a listed format that silently empties a document would be worse than an unlisted one.
+ * A listed format that silently emptied a document would be worse than an unlisted one -- which was the case for
+ * every document format but Markdown until `documentHtml.ts` existed.
+ *
+ * PDF is listed for documents, with one condition the service enforces: it needs a print engine, and a copy of
+ * Orbis without one leaves it out of the answer rather than offering a button that fails.
  *
  * Every id and every format name here is a stable, plain word. A model is shown this table and may name only what
  * is in it; the plain words are the ones it is told to use.
@@ -42,7 +45,7 @@ export const ARTIFACT_KINDS: Readonly<Record<ArtifactKindId, ArtifactKind>> = Ob
     name: 'Table',
     describe: 'Rows and columns of values, with a type and optionally a unit for each column.',
     builtFrom: 'Table in src/shared/compute/data.ts',
-    writes: Object.freeze(['csv', 'tsv', 'json', 'ndjson'] as const),
+    writes: Object.freeze(['csv', 'tsv', 'json', 'ndjson', 'markdown', 'text'] as const),
     stores: 'json',
     reads: Object.freeze(['csv', 'tsv', 'json', 'ndjson'] as const),
     orionMayName: true
@@ -52,7 +55,7 @@ export const ARTIFACT_KINDS: Readonly<Record<ArtifactKindId, ArtifactKind>> = Ob
     name: 'Document',
     describe: 'Headings, paragraphs, lists, tables and figures, with numbering and references.',
     builtFrom: 'StructuredDocument in src/shared/compute/document.ts',
-    writes: Object.freeze(['markdown'] as const),
+    writes: Object.freeze(['markdown', 'html', 'pdf', 'text'] as const),
     stores: 'markdown',
     reads: Object.freeze(['markdown', 'html'] as const),
     orionMayName: true

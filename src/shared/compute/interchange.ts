@@ -26,6 +26,7 @@
 
 import { formatDate, isDataError, parseDelimited, toDelimited, type Column, type DataError, type Table } from './data.ts'
 import { fromHtml, fromMarkdown, isDocumentError, toMarkdown, type Block, type StructuredDocument } from './document.ts'
+import { toHtml, toText } from './documentHtml.ts'
 
 export interface InterchangeError {
   error: string
@@ -60,7 +61,7 @@ export const INTERCHANGE_LIMITS: Readonly<
 
 // ---------------------------------------------------------------- format registry
 
-export type FormatId = 'csv' | 'tsv' | 'json' | 'ndjson' | 'xml' | 'markdown' | 'html' | 'text' | 'binary'
+export type FormatId = 'csv' | 'tsv' | 'json' | 'ndjson' | 'xml' | 'markdown' | 'html' | 'text' | 'pdf' | 'binary'
 
 export interface FormatCapability {
   id: FormatId
@@ -165,12 +166,28 @@ export const FORMATS: Readonly<Record<FormatId, FormatCapability>> = Object.free
     extensions: ['.html', '.htm'],
     mediaTypes: ['text/html', 'application/xhtml+xml'],
     canImport: true,
-    canExport: false,
+    canExport: true,
     streaming: false,
     carries: { units: false, types: false, metadata: true, formatting: true, provenance: false, hierarchy: true },
     limitations: [
-      'Orbis reads HTML into its document model but does not write it.',
+      'Equations are written as their source, not typeset.',
       'Scripts, styles and embedded frames are removed on import, along with their contents.'
+    ]
+  },
+  pdf: {
+    id: 'pdf',
+    name: 'PDF',
+    extensions: ['.pdf'],
+    mediaTypes: ['application/pdf'],
+    canImport: false,
+    canExport: true,
+    streaming: false,
+    carries: { units: false, types: false, metadata: true, formatting: true, provenance: false, hierarchy: true },
+    limitations: [
+      "Typeset by Chromium's print engine from the HTML, so it will not match the HTML on screen exactly.",
+      'Not editable: a PDF is the layout, fixed. Keep the source to change anything.',
+      'Images from the web are shown as their alt text; the print window fetches nothing.',
+      'Orbis does not read PDF back into a document yet.'
     ]
   },
   text: {
@@ -1421,16 +1438,42 @@ const cellText = (cell: unknown): string => {
   return String(cell)
 }
 
-/** A document written out. Markdown and plain text only; Orbis reads HTML but does not produce it. */
+/**
+ * A document written out as text: Markdown, HTML or plain text.
+ *
+ * Each format has its own writer and every block kind reaches the page. The earlier plain-text branch returned an
+ * empty string for a paragraph -- a file with the right size and hash and nothing in it -- which is the failure this
+ * function now refuses to have. PDF is bytes printed from the HTML, so it is made by the artifact service, not here.
+ */
 export function exportDocument(document: StructuredDocument, format: FormatId): ExportResult | InterchangeError {
   const capability = formatById(format)
   if (!capability || !capability.canExport) {
-    return fail('UNSUPPORTED_FORMAT', 'encode', `Orbis does not write ${capability?.name ?? format}.`, 'Export as Markdown or plain text.')
+    return fail('UNSUPPORTED_FORMAT', 'encode', `Orbis does not write ${capability?.name ?? format}.`, 'Export as Markdown, HTML or plain text.')
+  }
+  if (format === 'pdf') {
+    return fail('UNSUPPORTED_FORMAT', 'encode', 'PDF is printed from the HTML, not written as text.', 'Ask the artifact service to export as PDF.')
   }
   const loss = lossFor(format, { formatting: true, metadata: true, hierarchy: true })
   if (isInterchangeError(loss)) return loss
 
-  const body = format === 'markdown' ? toMarkdown(document) : document.blocks.map((one) => plainOf(one)).join('\n\n')
+  let body: string
+  const notes: string[] = []
+  switch (format) {
+    case 'markdown':
+      body = toMarkdown(document)
+      break
+    case 'html': {
+      const made = toHtml(document)
+      body = made.html
+      notes.push(...made.notes)
+      break
+    }
+    case 'text':
+      body = toText(document)
+      break
+    default:
+      return fail('UNSUPPORTED_FORMAT', 'encode', `Orbis does not write a document as ${capability.name}.`, 'Export as Markdown, HTML or plain text.')
+  }
   const bytes = new TextEncoder().encode(body)
   return {
     text: body,
@@ -1439,18 +1482,7 @@ export function exportDocument(document: StructuredDocument, format: FormatId): 
     hash: hashOf(bytes),
     rows: document.blocks.length,
     loss,
-    notes: loss.losses.map((one) => one.describe)
-  }
-}
-
-const plainOf = (block: Block): string => {
-  switch (block.kind) {
-    case 'heading':
-      return block.content.map((one) => ('text' in one ? one.text : '')).join('')
-    case 'divider':
-      return '---'
-    default:
-      return block.kind === 'code' ? block.source : block.kind === 'equation' ? block.source : ''
+    notes: [...notes, ...loss.losses.map((one) => one.describe)]
   }
 }
 

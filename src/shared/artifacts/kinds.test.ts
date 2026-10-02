@@ -33,8 +33,10 @@ test('a kind is found by its id and nothing else', () => {
 test('writability is answered by the table, not by the format alone', () => {
   assert.equal(canWrite('table', 'csv'), true)
   assert.equal(canWrite('document', 'csv'), false)
-  // HTML is a format the registry knows, and until there is a writer no kind may claim it.
-  assert.equal(canWrite('document', 'html'), false)
+  assert.equal(canWrite('document', 'html'), true)
+  // XML is a format the registry knows, and until there is a writer no kind may claim it.
+  assert.equal(canWrite('document', 'xml'), false)
+  assert.equal(canWrite('table', 'xml'), false)
   assert.equal(defaultFormatFor('table'), 'csv')
   assert.equal(extensionFor('csv'), '.csv')
 })

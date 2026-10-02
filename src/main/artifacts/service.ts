@@ -1,13 +1,17 @@
 import { readFile as readFromDisk, writeFile as writeToDisk } from 'node:fs/promises'
 import { isDataError, parseDelimited, type Table } from '../../shared/compute/data.ts'
 import { emptyDocument, fromMarkdown, isDocumentError, type StructuredDocument } from '../../shared/compute/document.ts'
+import { toHtml } from '../../shared/compute/documentHtml.ts'
 import {
   FORMATS,
   exportDocument,
   exportTable,
+  hashOf,
   isInterchangeError,
+  lossFor,
   type ExportResult,
   type FormatId,
+  type LossReport,
   type VerifyResult
 } from '../../shared/compute/interchange.ts'
 import { ARTIFACT_KINDS, canWrite, describeKinds, extensionFor, isArtifactKindId, type ArtifactKindId } from '../../shared/artifacts/kinds.ts'
@@ -21,7 +25,7 @@ import {
 } from '../../shared/artifacts/model.ts'
 import { safeName } from '../../shared/artifacts/naming.ts'
 import { gateForWrite } from '../../shared/artifacts/secrets.ts'
-import { verifyDocumentFile, verifyTableFile } from '../../shared/artifacts/validate.ts'
+import { verifyDocumentFile, verifyPdfFile, verifyTableFile } from '../../shared/artifacts/validate.ts'
 import { ArtifactStore, CONTENT_PREFIX, SOURCE_FILE } from './store.ts'
 
 /**
@@ -39,7 +43,8 @@ import { ArtifactStore, CONTENT_PREFIX, SOURCE_FILE } from './store.ts'
  *      a round trip through the parser it came from. A write that fails that check is a failure, with the checks named.
  *
  * The stored copy is the source. An export is rendered from it, never from a previous export, so three exports in three
- * formats are three readings of one thing rather than a copy of a copy.
+ * formats are three readings of one thing rather than a copy of a copy. Everything rendered is bytes by the time it is
+ * written: text formats are encoded, and a PDF is printed from the document's HTML by an engine handed in from outside.
  */
 
 const LIMITS = Object.freeze({
@@ -79,9 +84,29 @@ export interface ArtifactServiceOptions {
   random(): string
   /** Where to write. Runs a dialog in the main process; null when the person cancelled. */
   chooseDestination(request: DestinationRequest): Promise<string | null>
+  /**
+   * A page of HTML printed to PDF bytes, by a print engine that lives outside this file.
+   *
+   * Optional, and absent is a working state: a copy of Orbis with no print engine leaves PDF out of what it offers
+   * rather than offering a button that fails.
+   */
+  renderPdf?(html: string): Promise<Uint8Array>
   /** Writing and reading the chosen file. Injected so the service can be tested against a folder rather than a dialog. */
   writeFile?(path: string, bytes: Uint8Array): Promise<void>
   readFile?(path: string): Promise<Uint8Array>
+}
+
+/** What a render produced: bytes to write, the text to scan for secrets, and what the format could not carry. */
+interface Rendered {
+  bytes: Uint8Array
+  /** The text form, when there is one. A PDF has none, and its HTML is what gets scanned instead. */
+  text: string | null
+  /** What the secret gate reads. The text, or for a PDF the HTML it was printed from. */
+  scan: string
+  format: FormatId
+  hash: string
+  loss: LossReport
+  notes: string[]
 }
 
 const str = (value: unknown, max: number): string => (typeof value === 'string' ? value.slice(0, max) : '')
@@ -114,7 +139,7 @@ export class ArtifactService {
     try {
       switch (operation) {
         case 'artifact.kinds':
-          return { ok: true, operation, value: describeKinds() }
+          return { ok: true, operation, value: this.kinds() }
         case 'artifact.list':
           return { ok: true, operation, value: (await this.o.store.list(profileId)).map((one) => ({ record: one, ref: refOf(one) })) }
         case 'artifact.create':
@@ -136,6 +161,22 @@ export class ArtifactService {
     }
   }
 
+  /** The kinds table, minus any format this copy of Orbis cannot actually produce. */
+  private kinds(): ReturnType<typeof describeKinds> {
+    return describeKinds().map((kind) => ({ ...kind, writes: kind.writes.filter((one) => this.canProduce(one.format)) }))
+  }
+
+  private canProduce(format: FormatId): boolean {
+    return format !== 'pdf' || typeof this.o.renderPdf === 'function'
+  }
+
+  /** The formats a kind can leave as, here and now, for the chooser. */
+  private formatsFor(kind: ArtifactKindId): { format: FormatId; name: string; extension: string; limitations: readonly string[] }[] {
+    return ARTIFACT_KINDS[kind].writes
+      .filter((format) => this.canProduce(format))
+      .map((format) => ({ format, name: FORMATS[format].name, extension: extensionFor(format), limitations: FORMATS[format].limitations }))
+  }
+
   // ---------------------------------------------------------------- the body, from text
 
   private bodyFrom(kind: ArtifactKindId, text: string, source: string, title: string): ArtifactBody | { error: string; message: string } {
@@ -153,16 +194,39 @@ export class ArtifactService {
     return { kind: 'document', document }
   }
 
-  private render(body: ArtifactBody, format: FormatId): ExportResult | { error: string; message: string } {
-    const result = body.kind === 'table' ? exportTable(body.table, { format }) : exportDocument(body.document, format)
+  private async render(body: ArtifactBody, format: FormatId): Promise<Rendered | { error: string; message: string }> {
+    if (body.kind === 'table') {
+      const result = exportTable(body.table, { format })
+      if (isInterchangeError(result)) return { error: 'encode', message: result.message }
+      return { bytes: encode(result.text), text: result.text, scan: result.text, format, hash: result.hash, loss: result.loss, notes: result.notes }
+    }
+    if (format === 'pdf') {
+      if (!this.o.renderPdf) return { error: 'unavailable', message: 'PDF printing is not available in this copy of Orbis.' }
+      const loss = lossFor('pdf', { formatting: true, metadata: true, hierarchy: true })
+      if (isInterchangeError(loss)) return { error: 'encode', message: loss.message }
+      // The print window fetches nothing, so the HTML it is handed says so in its own policy.
+      const made = toHtml(body.document, { forPrint: true })
+      const bytes = await this.o.renderPdf(made.html)
+      return { bytes, text: null, scan: made.html, format, hash: hashOf(bytes), loss, notes: [...made.notes, ...loss.losses.map((one) => one.describe)] }
+    }
+    const result = exportDocument(body.document, format)
     if (isInterchangeError(result)) return { error: 'encode', message: result.message }
-    return result
+    return { bytes: encode(result.text), text: result.text, scan: result.text, format, hash: result.hash, loss: result.loss, notes: result.notes }
   }
 
-  private verify(body: ArtifactBody, expected: ExportResult, readBack: Uint8Array): VerifyResult {
-    return body.kind === 'table'
-      ? verifyTableFile(body.table, expected, readBack)
-      : verifyDocumentFile(body.document.blocks.length, expected, readBack)
+  /** The written file, checked against what was meant to be written and against what it came from. */
+  private verify(body: ArtifactBody, rendered: Rendered, readBack: Uint8Array): VerifyResult {
+    if (rendered.format === 'pdf') return verifyPdfFile({ bytes: rendered.bytes.length, hash: rendered.hash }, readBack)
+    const expected: ExportResult = {
+      text: rendered.text ?? '',
+      format: rendered.format,
+      bytes: rendered.bytes.length,
+      hash: rendered.hash,
+      rows: 0,
+      loss: rendered.loss,
+      notes: rendered.notes
+    }
+    return body.kind === 'table' ? verifyTableFile(body.table, expected, readBack) : verifyDocumentFile(body.document.blocks.length, expected, readBack)
   }
 
   private shapeOf(body: ArtifactBody): { rows: number; columns: number } {
@@ -195,11 +259,11 @@ export class ArtifactService {
     if ('error' in body) return fail(body.error, body.message)
 
     const format = ARTIFACT_KINDS[kind].stores
-    const rendered = this.render(body, format)
+    const rendered = await this.render(body, format)
     if ('error' in rendered) return fail(rendered.error, rendered.message)
 
     const ext = extensionFor(format)
-    const gate = gateForWrite(`${safeName(title)}${ext}`, rendered.text, acceptSecrets)
+    const gate = gateForWrite(`${safeName(title)}${ext}`, rendered.scan, acceptSecrets)
     if (!gate.ok) return fail('secrets', gate.message, { findings: gate.findings })
 
     const now = this.o.now()
@@ -212,7 +276,7 @@ export class ArtifactService {
       updatedAt: now,
       format,
       file,
-      bytes: rendered.bytes,
+      bytes: rendered.bytes.length,
       hash: rendered.hash,
       loss: rendered.loss,
       // Not verified yet. The record is written with this, and replaced only once the read-back has passed.
@@ -224,11 +288,13 @@ export class ArtifactService {
 
     await this.o.store.write(profileId, record, [
       { name: SOURCE_FILE, bytes: encode(JSON.stringify(body)) },
-      { name: file, bytes: encode(rendered.text) }
+      { name: file, bytes: rendered.bytes }
     ])
 
     const readBack = await this.o.store.readFile(profileId, record.artifactId, file)
-    const verified = readBack ? this.verify(body, rendered, readBack) : { ok: false, checks: [{ what: 'written', passed: false, describe: 'The stored file could not be read back.' }], reimported: null, differences: [] }
+    const verified = readBack
+      ? this.verify(body, rendered, readBack)
+      : { ok: false, checks: [{ what: 'written', passed: false, describe: 'The stored file could not be read back.' }], reimported: null, differences: [] }
     if (!verified.ok) {
       // Not kept. An artifact whose stored copy does not read back is not an artifact, and a library entry pointing at
       // it would be a lie that lasts.
@@ -263,13 +329,8 @@ export class ArtifactService {
         ref: refOf(record),
         preview: text.slice(0, LIMITS.preview),
         truncated: text.length > LIMITS.preview,
-        // Every format this kind can be exported as, with what each one drops, so the chooser can say so up front.
-        formats: ARTIFACT_KINDS[record.kind].writes.map((format) => ({
-          format,
-          name: FORMATS[format].name,
-          extension: extensionFor(format),
-          limitations: FORMATS[format].limitations
-        }))
+        // Every format this kind can be exported as here, with what each one drops, so the chooser can say so up front.
+        formats: this.formatsFor(record.kind)
       }
     }
   }
@@ -288,8 +349,9 @@ export class ArtifactService {
     if (!record) return fail('not-found', 'There is no artifact with that id.')
 
     const format = str(req.format, 20) || record.format
-    if (!canWrite(record.kind, format)) {
-      return fail('bad-input', `A ${ARTIFACT_KINDS[record.kind].name.toLowerCase()} cannot be saved as "${format}". It can be saved as: ${ARTIFACT_KINDS[record.kind].writes.join(', ')}.`)
+    if (!canWrite(record.kind, format) || !this.canProduce(format)) {
+      const offered = this.formatsFor(record.kind).map((one) => one.format)
+      return fail('bad-input', `A ${ARTIFACT_KINDS[record.kind].name.toLowerCase()} cannot be saved as "${format}" here. It can be saved as: ${offered.join(', ')}.`)
     }
     const acceptSecrets = req.acceptSecrets === true
 
@@ -298,12 +360,12 @@ export class ArtifactService {
     const body = JSON.parse(decode(sourceBytes)) as ArtifactBody
     if (body.kind !== record.kind) return fail('failed', 'The artifact is damaged: its source is not the kind its record says.')
 
-    const rendered = this.render(body, format)
+    const rendered = await this.render(body, format)
     if ('error' in rendered) return fail(rendered.error, rendered.message)
 
     const ext = extensionFor(format)
     const base = safeName(record.title)
-    const gate = gateForWrite(`${base}${ext}`, rendered.text, acceptSecrets)
+    const gate = gateForWrite(`${base}${ext}`, rendered.scan, acceptSecrets)
     if (!gate.ok) return fail('secrets', gate.message, { findings: gate.findings })
 
     const path = await this.o.chooseDestination({
@@ -313,16 +375,15 @@ export class ArtifactService {
     })
     if (path === null) return fail('cancelled', 'Nothing was written.')
 
-    const bytes = encode(rendered.text)
-    await (this.o.writeFile ?? writeToDisk)(path, bytes)
+    await (this.o.writeFile ?? writeToDisk)(path, rendered.bytes)
     const readBack = await (this.o.readFile ?? (async (p: string) => new Uint8Array(await readFromDisk(p))))(path)
     const verified = this.verify(body, rendered, readBack)
 
-    const outcome: ExportOutcome = { artifactId, format, path, bytes: bytes.length, hash: rendered.hash, loss: rendered.loss, verified }
+    const outcome: ExportOutcome = { artifactId, format, path, bytes: rendered.bytes.length, hash: rendered.hash, loss: rendered.loss, verified }
     if (!verified.ok) {
       // The file exists where the person chose; deleting it from under them would be worse than saying what is wrong.
       return fail('verify', `The file was written but did not read back correctly: ${verified.checks.filter((one) => !one.passed).map((one) => one.describe).join(' ')}`, outcome)
     }
-    return { ok: true, operation, value: outcome }
+    return { ok: true, operation, value: { ...outcome, notes: rendered.notes } }
   }
 }

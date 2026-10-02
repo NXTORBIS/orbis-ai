@@ -145,7 +145,7 @@ import { CodePages } from './pages/codePages'
 import { CodeStore } from './pages/codeStore'
 import { ArtifactStore } from './artifacts/store'
 import { ArtifactService } from './artifacts/service'
-import { chooseDestinationWith, registerArtifactsIpc } from './artifacts/ipc'
+import { chooseDestinationWith, registerArtifactsIpc, renderPdfWith } from './artifacts/ipc'
 import { GeneratedStore } from './pages/generatedStore'
 import { OPERATION_CAPABILITIES } from './pages/service'
 import { FxRates } from './markets/fx'
@@ -1867,7 +1867,8 @@ if (!app.requestSingleInstanceLock()) {
       store: artifactStore,
       now: () => Date.now(),
       random: () => crypto.randomUUID().replace(/-/g, ''),
-      chooseDestination: chooseDestinationWith(() => mainWindow)
+      chooseDestination: chooseDestinationWith(() => mainWindow),
+      renderPdf: renderPdfWith()
     })
     registerArtifactsIpc({
       service: artifacts,
