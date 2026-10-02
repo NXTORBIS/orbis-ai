@@ -20,7 +20,8 @@ const record = (id: string, title = 'T'): ArtifactRecord => ({
   verified: { ok: true, checks: [], reimported: null, differences: [] },
   source: 'test',
   shape: { rows: 0, columns: 0 },
-  tags: []
+  tags: [],
+  notes: []
 })
 
 const bytes = (text: string): Uint8Array => new TextEncoder().encode(text)

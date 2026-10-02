@@ -347,4 +347,6 @@ export const TEST_FILES = [
   'src/main/artifacts/store.test.ts',
   'src/main/artifacts/service.test.ts',
   'src/shared/compute/documentHtml.test.ts',
+  'src/shared/artifacts/plan.test.ts',
+  'src/main/artifacts/generation.test.ts',
 ]

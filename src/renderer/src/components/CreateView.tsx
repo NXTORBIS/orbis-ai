@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { AlertTriangle, ArrowLeft, Check, FilePlus2, Loader2, Save, Table2, FileText, Trash2, X } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, Check, FilePlus2, Loader2, Save, Sparkles, Table2, FileText, Trash2, X } from 'lucide-react'
 import type { NoticeKind } from '../lib/notices'
 import './create.css'
 
@@ -45,6 +45,7 @@ interface Record_ {
   verified: Verified
   source: string
   shape: { rows: number; columns: number }
+  notes: string[]
 }
 
 interface Finding {
@@ -57,6 +58,8 @@ interface Failure {
   error: string
   message: string
   findings?: Finding[]
+  /** What each attempt said and what was wrong with it, when a model was asked. */
+  attempts?: { said: string; problems: string[] }[]
 }
 
 interface Opened {
@@ -82,14 +85,15 @@ const KINDS: { id: Kind; label: string; icon: typeof Table2; hint: string }[] = 
 const sizeOf = (bytes: number): string =>
   bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 
-const failureOf = (result: { ok: false; error: string; message: string; detail?: unknown }): Failure => ({
-  error: result.error,
-  message: result.message,
-  findings:
-    result.detail && typeof result.detail === 'object' && Array.isArray((result.detail as { findings?: unknown }).findings)
-      ? ((result.detail as { findings: Finding[] }).findings ?? [])
-      : undefined
-})
+const failureOf = (result: { ok: false; error: string; message: string; detail?: unknown }): Failure => {
+  const detail = result.detail && typeof result.detail === 'object' ? (result.detail as { findings?: unknown; attempts?: unknown }) : {}
+  return {
+    error: result.error,
+    message: result.message,
+    findings: Array.isArray(detail.findings) ? (detail.findings as Finding[]) : undefined,
+    attempts: Array.isArray(detail.attempts) ? (detail.attempts as { said: string; problems: string[] }[]) : undefined
+  }
+}
 
 function Checks({ verified }: { verified: Verified }): React.JSX.Element {
   return (
@@ -144,11 +148,31 @@ function Findings({ failure, onAccept }: { failure: Failure; onAccept: () => voi
           </button>
         </>
       )}
+      {/* What Orion said each time and what was wrong with it. Specific, because "could not make it" is not. */}
+      {failure.attempts && failure.attempts.length > 0 && (
+        <ul>
+          {failure.attempts.flatMap((attempt, i) => attempt.problems.slice(0, 4).map((one, j) => <li key={`${i}-${j}`}>Attempt {i + 1}: {one}</li>))}
+        </ul>
+      )}
     </section>
   )
 }
 
+function Notes({ notes }: { notes: string[] }): React.JSX.Element | null {
+  if (notes.length === 0) return null
+  return (
+    <ul className="create-notes" aria-label="Where this came from">
+      {notes.map((one, i) => (
+        <li key={i}>{one}</li>
+      ))}
+    </ul>
+  )
+}
+
 export default function CreateView({ onClose, onNotify }: { onClose: () => void; onNotify(message: string, kind?: NoticeKind): void }): React.JSX.Element {
+  const [request, setRequest] = useState('')
+  const [asking, setAsking] = useState(false)
+  const [askFailure, setAskFailure] = useState<Failure | null>(null)
   const [kind, setKind] = useState<Kind>('table')
   const [title, setTitle] = useState('')
   const [text, setText] = useState('')
@@ -175,6 +199,27 @@ export default function CreateView({ onClose, onNotify }: { onClose: () => void;
     const result = await window.api.creationRun({ operation: 'artifact.read', artifactId })
     if (result.ok) setOpened(result.value as Opened)
   }, [])
+
+  const ask = async (acceptSecrets = false): Promise<void> => {
+    const words = request.trim()
+    if (words === '' || asking) return
+    setAsking(true)
+    setAskFailure(null)
+    try {
+      const result = await window.api.creationRun({ operation: 'artifact.generate', request: words, acceptSecrets })
+      if (!result.ok) {
+        setAskFailure(failureOf(result))
+        return
+      }
+      const made = result.value as { record: Record_ }
+      onNotify(`Made "${made.record.title}" and checked the copy.`, 'info')
+      setRequest('')
+      await refresh()
+      await open(made.record.artifactId)
+    } finally {
+      setAsking(false)
+    }
+  }
 
   const make = async (acceptSecrets = false): Promise<void> => {
     if (working || text.trim() === '') return
@@ -235,6 +280,33 @@ export default function CreateView({ onClose, onNotify }: { onClose: () => void;
 
       <div className="create-body">
         <section className="create-make" aria-label="Make something">
+          {/* The sentence first. Orion decides whether it is a table or a document and writes it; the rest is the same path. */}
+          <form
+            className="create-ask"
+            onSubmit={(e) => {
+              e.preventDefault()
+              void ask()
+            }}
+          >
+            <label className="pages-search create-ask-input">
+              <Sparkles size={14} />
+              <input
+                value={request}
+                onChange={(e) => setRequest(e.target.value)}
+                placeholder="Describe what you want — a monthly expense tracker, a study plan, a project proposal"
+                aria-label="Describe what you want made"
+                disabled={asking}
+                maxLength={4000}
+              />
+            </label>
+            <button type="submit" className="queue-btn primary" disabled={asking || request.trim() === ''}>
+              {asking ? <Loader2 size={13} className="spin" /> : <Sparkles size={13} />}
+              {asking ? 'Writing…' : 'Make it with Orion'}
+            </button>
+          </form>
+          {askFailure && <Findings failure={askFailure} onAccept={() => void ask(true)} />}
+          <p className="create-or">or paste it yourself</p>
+
           <div className="create-kinds" role="radiogroup" aria-label="What to make">
             {KINDS.map((one) => (
               <button
@@ -307,6 +379,7 @@ export default function CreateView({ onClose, onNotify }: { onClose: () => void;
                 Kept as {opened.record.format} · {sizeOf(opened.record.bytes)} · from {opened.record.source}
               </span>
             </header>
+            <Notes notes={opened.record.notes ?? []} />
             <Checks verified={opened.record.verified} />
             <Losses loss={opened.record.loss} />
             <pre className="create-preview">

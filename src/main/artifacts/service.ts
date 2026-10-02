@@ -26,6 +26,7 @@ import {
 import { safeName } from '../../shared/artifacts/naming.ts'
 import { gateForWrite } from '../../shared/artifacts/secrets.ts'
 import { verifyDocumentFile, verifyPdfFile, verifyTableFile } from '../../shared/artifacts/validate.ts'
+import type { ArtifactGeneration } from './generation.ts'
 import { ArtifactStore, CONTENT_PREFIX, SOURCE_FILE } from './store.ts'
 
 /**
@@ -59,6 +60,7 @@ const LIMITS = Object.freeze({
 const OPERATIONS: Readonly<Record<string, string>> = Object.freeze({
   'artifact.kinds': 'What Orbis can create, and in which formats.',
   'artifact.create': 'Make an artifact from text, keep it, and check the kept copy.',
+  'artifact.generate': 'Make an artifact from a sentence: Orion decides what and writes it, Orbis builds, keeps and checks it.',
   'artifact.list': 'Every artifact in this profile.',
   'artifact.read': 'One artifact, with a bounded preview of its content.',
   'artifact.export': 'Write an artifact to a file the person chooses, then check the file.',
@@ -91,6 +93,13 @@ export interface ArtifactServiceOptions {
    * rather than offering a button that fails.
    */
   renderPdf?(html: string): Promise<Uint8Array>
+  /**
+   * Orion, for making something from a sentence.
+   *
+   * Optional for the same reason as the print engine: a copy of Orbis with no model configured has nothing to write
+   * with, and the operation says so rather than vanishing.
+   */
+  generation?: ArtifactGeneration
   /** Writing and reading the chosen file. Injected so the service can be tested against a folder rather than a dialog. */
   writeFile?(path: string, bytes: Uint8Array): Promise<void>
   readFile?(path: string): Promise<Uint8Array>
@@ -144,6 +153,8 @@ export class ArtifactService {
           return { ok: true, operation, value: (await this.o.store.list(profileId)).map((one) => ({ record: one, ref: refOf(one) })) }
         case 'artifact.create':
           return await this.create(profileId, operation, req, fail)
+        case 'artifact.generate':
+          return await this.generate(profileId, operation, req, fail)
         case 'artifact.read':
           return await this.read(profileId, operation, req, fail)
         case 'artifact.export':
@@ -196,7 +207,14 @@ export class ArtifactService {
 
   private async render(body: ArtifactBody, format: FormatId): Promise<Rendered | { error: string; message: string }> {
     if (body.kind === 'table') {
-      const result = exportTable(body.table, { format })
+      /*
+       * JSON always carries the columns.
+       *
+       * A table with no rows yet -- a tracker somebody has just asked for -- written as a bare array of objects is
+       * `[]`: two bytes, and the columns, types and units that were the whole point are gone. With the metadata it
+       * is {columns, source, rows}, which is also the only form in which "JSON carries units" is actually true.
+       */
+      const result = exportTable(body.table, { format, includeMetadata: format === 'json' })
       if (isInterchangeError(result)) return { error: 'encode', message: result.message }
       return { bytes: encode(result.text), text: result.text, scan: result.text, format, hash: result.hash, loss: result.loss, notes: result.notes }
     }
@@ -257,7 +275,49 @@ export class ArtifactService {
 
     const body = this.bodyFrom(kind, req.text, source, title)
     if ('error' in body) return fail(body.error, body.message)
+    return this.keep(profileId, operation, body, { title, source, notes: [], acceptSecrets }, fail)
+  }
 
+  // ---------------------------------------------------------------- generate
+
+  /**
+   * Something made from a sentence.
+   *
+   * Orion decides what and writes it; everything from the proposal onwards is the same deterministic path pasted text
+   * takes, with the provenance written into the record. A failure says what the model got wrong, attempt by attempt,
+   * because "could not make it" sends a person guessing and "columns[2] has no name" does not.
+   */
+  private async generate(
+    profileId: string,
+    operation: string,
+    req: Record<string, unknown>,
+    fail: (error: string, message: string, detail?: unknown) => ArtifactResult
+  ): Promise<ArtifactResult> {
+    if (!this.o.generation) return fail('unavailable', 'Orion is not set up on this computer, so there is nothing to write it with.')
+    const request = str(req.request, 4000).trim()
+    if (request === '') return fail('bad-input', 'Say what you want made.')
+    const acceptSecrets = req.acceptSecrets === true
+
+    const outcome = await this.o.generation.generate(request)
+    if (!outcome.body || !outcome.intent) {
+      const first = outcome.failed ?? outcome.problems.find((p) => p.severity === 'error')?.message ?? 'Orion did not write something Orbis could keep.'
+      return fail('not-made', first, { attempts: outcome.attempts, problems: outcome.problems.map((p) => p.message) })
+    }
+    return this.keep(profileId, operation, outcome.body, { title: outcome.intent.title, source: `Orion, asked for: ${request.slice(0, 160)}`, notes: outcome.notes, acceptSecrets }, fail)
+  }
+
+  // ---------------------------------------------------------------- keep
+
+  /** A body kept under the profile, read back, and checked. The one path every made thing goes down. */
+  private async keep(
+    profileId: string,
+    operation: string,
+    body: ArtifactBody,
+    about: { title: string; source: string; notes: string[]; acceptSecrets: boolean },
+    fail: (error: string, message: string, detail?: unknown) => ArtifactResult
+  ): Promise<ArtifactResult> {
+    const { title, source, acceptSecrets } = about
+    const kind = body.kind
     const format = ARTIFACT_KINDS[kind].stores
     const rendered = await this.render(body, format)
     if ('error' in rendered) return fail(rendered.error, rendered.message)
@@ -283,7 +343,8 @@ export class ArtifactService {
       verified: { ok: false, checks: [], reimported: null, differences: ['Not yet read back.'] },
       source,
       shape: this.shapeOf(body),
-      tags: []
+      tags: [],
+      notes: [...about.notes, ...rendered.notes.filter((one) => !about.notes.includes(one))]
     }
 
     await this.o.store.write(profileId, record, [
@@ -304,7 +365,7 @@ export class ArtifactService {
 
     const kept: ArtifactRecord = { ...record, verified }
     await this.o.store.writeRecord(profileId, kept)
-    return { ok: true, operation, value: { record: kept, ref: refOf(kept), notes: rendered.notes } }
+    return { ok: true, operation, value: { record: kept, ref: refOf(kept), notes: kept.notes } }
   }
 
   // ---------------------------------------------------------------- read

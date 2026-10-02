@@ -28,7 +28,8 @@ const record = (): ArtifactRecord => ({
   verified: { ok: true, checks: [], reimported: null, differences: [] },
   source: 'pasted',
   shape: { rows: 1, columns: 1 },
-  tags: []
+  tags: [],
+  notes: []
 })
 
 test('a record read from disk is accepted field by field', () => {

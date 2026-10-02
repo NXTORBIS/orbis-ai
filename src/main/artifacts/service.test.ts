@@ -90,11 +90,22 @@ test('a table pasted as CSV is kept, read back from disk, and verified before it
     assert.ok(record.verified.checks.some((one) => one.what === 'round trip'))
     assert.deepEqual(record.shape, { rows: 2, columns: 2 })
     assert.equal(record.format, 'json')
-    // It is really on disk, under the profile, in the file the record names.
-    const stored = await readFile(join(dir, 'artifacts', record.artifactId, 'content.json'), 'utf8')
-    assert.ok(stored.includes('alice'))
+    // It is really on disk, under the profile, in the file the record names -- columns and all, not a bare array.
+    const stored = JSON.parse(await readFile(join(dir, 'artifacts', record.artifactId, 'content.json'), 'utf8')) as { columns: { name: string; type: string }[]; rows: unknown[] }
+    assert.deepEqual(stored.columns.map((one) => `${one.name}:${one.type}`), ['name:text', 'age:integer'])
+    assert.equal(stored.rows.length, 2)
     const listed = ok<{ ref: { artifactId: string } }[]>(await service.run('default', { operation: 'artifact.list' }))
     assert.equal(listed[0].ref.artifactId, record.artifactId)
+  }))
+
+test('a table with no rows keeps its columns, which are the whole artifact', () =>
+  withService(async ({ service, dir }) => {
+    const value = ok(await service.run('default', { operation: 'artifact.create', kind: 'table', title: 'Empty tracker', text: 'date,category,amount\n' }))
+    const record = value.record as { artifactId: string; bytes: number; shape: { rows: number; columns: number } }
+    assert.deepEqual(record.shape, { rows: 0, columns: 3 })
+    assert.ok(record.bytes > 20, `a header-only table is not two bytes (got ${record.bytes})`)
+    const stored = JSON.parse(await readFile(join(dir, 'artifacts', record.artifactId, 'content.json'), 'utf8')) as { columns: { name: string }[] }
+    assert.deepEqual(stored.columns.map((one) => one.name), ['date', 'category', 'amount'])
   }))
 
 test('a document pasted as Markdown is kept as Markdown', () =>

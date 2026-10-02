@@ -56,6 +56,12 @@ export interface ArtifactRecord {
   /** For a table: how big. For a document: how many blocks. So a list can say without opening anything. */
   shape: { rows: number; columns: number }
   tags: string[]
+  /**
+   * What a person should know about where this came from, in sentences. "The columns were chosen by a model." "The
+   * rows are examples." Kept with the artifact because provenance that lives only in the moment of creation is lost
+   * the moment the screen changes.
+   */
+  notes: string[]
 }
 
 /** The handle that crosses every boundary: enough to find, name and trust an artifact, and nothing to leak. */
@@ -112,6 +118,7 @@ export function isArtifactRecord(value: unknown): value is ArtifactRecord {
     typeof r.source === 'string' &&
     typeof r.shape === 'object' &&
     r.shape !== null &&
-    Array.isArray(r.tags)
+    Array.isArray(r.tags) &&
+    Array.isArray(r.notes)
   )
 }

@@ -48,6 +48,8 @@ export type ControlDomain =
   | 'notes'
   | 'tasks'
   | 'clips'
+  /** Things Orbis made and kept: documents and tables, through the Creation Engine's one door. */
+  | 'artifacts'
   | 'whiteboard'
   | 'workspaces'
   | 'profiles'

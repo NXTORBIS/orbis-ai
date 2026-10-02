@@ -145,6 +145,8 @@ import { CodePages } from './pages/codePages'
 import { CodeStore } from './pages/codeStore'
 import { ArtifactStore } from './artifacts/store'
 import { ArtifactService } from './artifacts/service'
+import { ArtifactGeneration } from './artifacts/generation'
+import { registerArtifactCapabilities } from './artifacts/capabilities'
 import { chooseDestinationWith, registerArtifactsIpc, renderPdfWith } from './artifacts/ipc'
 import { GeneratedStore } from './pages/generatedStore'
 import { OPERATION_CAPABILITIES } from './pages/service'
@@ -1868,11 +1870,21 @@ if (!app.requestSingleInstanceLock()) {
       now: () => Date.now(),
       random: () => crypto.randomUUID().replace(/-/g, ''),
       chooseDestination: chooseDestinationWith(() => mainWindow),
-      renderPdf: renderPdfWith()
+      renderPdf: renderPdfWith(),
+      generation: new ArtifactGeneration({
+        apiKeys: async () => GROQ_API_KEYS,
+        mistralKeys: () => MISTRAL_API_KEYS,
+        fetchFn: (url, init) => net.fetch(url, init)
+      })
     })
     registerArtifactsIpc({
       service: artifacts,
       getWindow: () => mainWindow,
+      profileId: async () => (await profilesStore.active()).id
+    })
+    // So the Orb can make things too, through the same door, with the same checks.
+    registerArtifactCapabilities(browserControl.control, {
+      service: artifacts,
       profileId: async () => (await profilesStore.active()).id
     })
     app.on('before-quit', () => {

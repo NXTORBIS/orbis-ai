@@ -120,8 +120,9 @@ export const FORMATS: Readonly<Record<FormatId, FormatCapability>> = Object.free
     streaming: false,
     carries: { units: true, types: true, metadata: true, formatting: false, provenance: true, hierarchy: true },
     limitations: [
+      'Written as an object with "columns", "source" and "rows", so the column types and units travel with the data.',
       'The whole document has to be held in memory to be read, so a very large file cannot be streamed.',
-      'There is no date type; a date is text or a number, and which one has to be agreed.'
+      'There is no date type; a date is written as YYYY-MM-DD text.'
     ]
   },
   ndjson: {
