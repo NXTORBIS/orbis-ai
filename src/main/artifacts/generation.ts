@@ -61,6 +61,22 @@ export interface GenerateOutcome {
 const REQUEST_TIMEOUT_MS = 90_000
 const MAX_TOKENS = 6000
 
+/** What the model is told when it is handed something that exists and asked to change it. */
+export function reviseInstructions(kind: 'document' | 'diagram'): string {
+  const shape =
+    kind === 'document'
+      ? `{"markdown": the WHOLE revised document, written as Markdown with headings, paragraphs, lists and tables}`
+      : `{"nodes": the WHOLE revised list of {"id", "label", "shape"} (shape is one of step, decision, start, end), "edges": the WHOLE revised list of {"from", "to", "label"} joining node ids}`
+  return `You revise ONE existing ${kind === 'document' ? 'document' : 'flowchart'} that Orbis keeps. Answer with ONE JSON object and nothing else:
+${shape}
+
+Rules:
+- Make the change the person asked for and keep everything else exactly as it is${kind === 'document' ? ', word for word' : ', with the same ids'}.
+- Give back the whole thing. Not a description of the change, and not only the part that changed.
+- Never invent real-world figures, statistics, prices, names of real people, or sources. Where a real figure is wanted and you do not have it, write a clearly marked placeholder such as "(fill in)".
+- Never include a password, an API key or a token, even as an example.${kind === 'diagram' ? '\n- Never give positions; Orbis lays the flowchart out. Label the branches of a decision ("yes", "no").' : ''}`
+}
+
 /** What the model is told. Built each time from the kinds table, so it never names a kind Orbis cannot make. */
 export function instructions(): string {
   // Only the kinds a model may name. A chart is made from a table's numbers, so it is not offered as a thing to write.
@@ -147,6 +163,62 @@ Answer again, fixing those. Everything else about the format is the same.`
       complaint = errors.map((p) => `- ${p.message}`).join('\n')
     }
 
+    return { body: null, intent: null, notes: [], problems: lastProblems, attempts, failed: null }
+  }
+
+  /**
+   * An existing document or flowchart, revised by an instruction.
+   *
+   * The model is handed the whole thing and gives the whole thing back; what comes back goes through the same
+   * validator and the same builders as something made from nothing, so a revision cannot be a different kind of
+   * object from an original. The kind and the title are Orbis's, not the model's: it is asked to change the content,
+   * and an answer that tries to turn a document into a table is read as a document or refused.
+   */
+  async revise(kind: 'document' | 'diagram', title: string, current: string, request: string): Promise<GenerateOutcome> {
+    const asked = request.trim().slice(0, 2000)
+    const attempts: GenerateOutcome['attempts'] = []
+    if (asked === '') return { body: null, intent: null, notes: [], problems: [{ severity: 'error', message: 'Say what you want changed.' }], attempts, failed: null }
+    const system = reviseInstructions(kind)
+    const base = `The ${kind === 'document' ? 'document' : 'flowchart'} as it is now:
+<<<
+${current}
+>>>
+
+The change asked for: ${asked}`
+    let complaint: string | null = null
+    let lastProblems: Problem[] = []
+    for (let round = 0; round < 2; round++) {
+      const user =
+        complaint === null
+          ? base
+          : `${base}
+
+The last answer did not work. What was wrong:
+${complaint}
+
+Answer again, fixing those. Everything else about the format is the same.`
+      const answer = await (this.o.ask ? this.o.ask(system, user) : this.askJson(system, user))
+      if ('failed' in answer) {
+        attempts.push({ said: '(nothing came back)', problems: [answer.failed] })
+        return { body: null, intent: null, notes: [], problems: [{ severity: 'error', message: answer.failed }], attempts, failed: answer.failed }
+      }
+      // Only the content is taken from the answer. What it is and what it is called were decided before the model was asked.
+      const content = kind === 'document' ? { markdown: answer.json.markdown } : { nodes: answer.json.nodes, edges: answer.json.edges }
+      const read = readProposal({ ...content, kind, title, purpose: asked })
+      lastProblems = read.problems
+      attempts.push({ said: JSON.stringify(answer.json).slice(0, 300), problems: read.problems.map((p) => `${p.severity}: ${p.message}`) })
+      if (read.proposal && buildable(read.problems)) {
+        const made = this.materialise(read.proposal, asked)
+        if (!('error' in made)) return { body: made.body, intent: read.proposal.intent, notes: [], problems: read.problems, attempts, failed: null }
+        lastProblems = [...read.problems, { severity: 'error', message: made.error }]
+        attempts[attempts.length - 1].problems.push(`error: ${made.error}`)
+        complaint = `- ${made.error}`
+        continue
+      }
+      const errors = read.problems.filter((p) => p.severity === 'error')
+      if (!errors.length) break
+      complaint = errors.map((p) => `- ${p.message}`).join('\n')
+    }
     return { body: null, intent: null, notes: [], problems: lastProblems, attempts, failed: null }
   }
 

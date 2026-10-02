@@ -756,3 +756,17 @@ describe('the assumptions are stated', () => {
     assert.ok(DOCUMENT_ASSUMPTIONS.some((one) => /never filled in/.test(one)))
   })
 })
+
+test('a numbered list is written counting up at each depth, and reads back as the same list', () => {
+  const parsed = fromMarkdown('1. First\n1. Second\n  1. Inner one\n  1. Inner two\n1. Third\n', 'b')
+  if (isDocumentError(parsed)) throw new Error(parsed.message)
+  const document = emptyDocument('d', 'Numbered')
+  document.blocks = parsed.blocks
+  const written = toMarkdown(document)
+  assert.ok(written.includes('1. First\n2. Second\n  1. Inner one\n  2. Inner two\n3. Third'), written)
+  const again = fromMarkdown(written, 'b')
+  if (isDocumentError(again)) throw new Error(again.message)
+  assert.deepEqual(again.blocks.map((one) => one.kind), parsed.blocks.map((one) => one.kind))
+  const items = (blocks: typeof parsed.blocks): number => blocks.reduce((n, one) => n + (one.kind === 'list' ? one.items.length : 0), 0)
+  assert.equal(items(again.blocks), 5)
+})

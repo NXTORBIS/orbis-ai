@@ -42,6 +42,9 @@ import { buildPlot, isPlotError, seriesFromPoints, type Series, type SeriesKind 
 import { decodePng } from '../chromium/png.ts'
 import { cellOut, joinTables, type JoinKind } from '../../shared/compute/data.ts'
 import { applySteps, formulaName, isTransformFailure, readSteps, type TransformStep } from '../../shared/artifacts/transform.ts'
+import { listTemplates, templateById } from '../../shared/artifacts/templates.ts'
+import { buildTable } from '../../shared/compute/data.ts'
+import { toMarkdown } from '../../shared/compute/document.ts'
 
 /**
  * The one door for making, keeping and exporting artifacts.
@@ -68,6 +71,8 @@ const LIMITS = Object.freeze({
   title: 120,
   /** Characters of content handed back for a preview. A preview is for looking, not for a second export. */
   preview: 1024 * 1024,
+  /** Characters of a document or flowchart handed to Orion whole for a revision. Past this the answer would not fit either. */
+  revise: 12_000,
   /** How much of a table is handed back as a grid to look at. */
   gridRows: 100,
   gridColumns: 40,
@@ -93,7 +98,10 @@ const OPERATIONS: Readonly<Record<string, string>> = Object.freeze({
   'artifact.search': 'Find artifacts by words in their name, notes or content.',
   'artifact.chart': 'A chart from the columns of a table, kept as a drawing that remembers the table it came from.',
   'artifact.transform': 'A table changed by a list of steps -- filter, sort, columns, a computed column, group and total -- or by a sentence Orion turns into those steps.',
-  'artifact.join': 'Two tables joined on a column, with how many rows on each side found a partner.'
+  'artifact.join': 'Two tables joined on a column, with how many rows on each side found a partner.',
+  'artifact.templates': 'The starting points Orbis has: tables with their columns chosen, documents with their headings written.',
+  'artifact.fromTemplate': 'A new table or document started from one of those. Structure only; no row and no sentence in it is data.',
+  'artifact.revise': 'A document or a flowchart changed by an instruction, kept as a new version with the one before still there.'
 })
 
 const JOIN_KINDS: readonly JoinKind[] = Object.freeze(['inner', 'left', 'full'])
@@ -273,6 +281,12 @@ export class ArtifactService {
           return await this.transform(profileId, operation, req, fail)
         case 'artifact.join':
           return await this.join(profileId, operation, req, fail)
+        case 'artifact.templates':
+          return { ok: true, operation, value: listTemplates() }
+        case 'artifact.fromTemplate':
+          return await this.fromTemplate(profileId, operation, req, fail)
+        case 'artifact.revise':
+          return await this.revise(profileId, operation, req, fail)
         default:
           return fail('unknown-operation', `Orbis has no artifact operation called "${operation}".`)
       }
@@ -410,6 +424,88 @@ export class ArtifactService {
       case 'diagram':
         return { rows: body.diagram.objects.length, columns: body.diagram.connectors.length }
     }
+  }
+
+  // ---------------------------------------------------------------- templates and revision
+
+  /** A new artifact started from a template. Nothing in it needs a model, a connection or a key. */
+  private async fromTemplate(
+    profileId: string,
+    operation: string,
+    req: Record<string, unknown>,
+    fail: (error: string, message: string, detail?: unknown) => ArtifactResult
+  ): Promise<ArtifactResult> {
+    const id = str(req.templateId, 60)
+    const template = templateById(id)
+    if (!template) return fail('not-found', `There is no template called "${id || '(nothing)'}".`)
+    const title = str(req.title, LIMITS.title).trim() || template.name
+    const source = `template: ${template.name}`
+    const notes = [`Started from the "${template.name}" template. It is structure only: every row and every "(fill in)" is yours to write.`]
+    if (template.kind === 'table') {
+      const table = buildTable(
+        template.columns.map((one) => one.name),
+        [],
+        { source, types: template.columns.map((one) => one.type), units: template.columns.map((one) => one.unit) }
+      )
+      if (isDataError(table)) return fail('failed', table.message)
+      return this.keep(profileId, operation, { kind: 'table', table }, { title, source, notes, acceptSecrets: false }, fail)
+    }
+    const body = this.bodyFrom('document', template.markdown, source, title)
+    if ('error' in body) return fail(body.error, body.message)
+    return this.keep(profileId, operation, body, { title, source, notes, acceptSecrets: false }, fail)
+  }
+
+  /**
+   * A document or a flowchart changed by an instruction.
+   *
+   * Orion is handed the whole thing and gives the whole thing back, which then goes through the same builders and the
+   * same read-back as anything else. Something too long to hand over whole is refused rather than cut: a model given
+   * the first part of a report rewrites the first part and the rest is gone, and nothing about the result says so.
+   * The version before is kept, and the note says how much there was before and after, so a revision that quietly
+   * dropped half of it is visible at a glance.
+   */
+  private async revise(
+    profileId: string,
+    operation: string,
+    req: Record<string, unknown>,
+    fail: (error: string, message: string, detail?: unknown) => ArtifactResult
+  ): Promise<ArtifactResult> {
+    const record = await this.existing(profileId, req, fail)
+    if ('ok' in record) return record
+    if (record.kind === 'table') return fail('bad-input', 'A table is changed with steps, so that every number is worked out by Orbis: use "Change this table".')
+    if (record.kind === 'plot') return fail('bad-input', 'A chart is drawn from its table. Change the table, then draw the chart again.')
+    if (!this.o.generation) return fail('unavailable', 'Orion is not set up on this computer, so there is nothing to revise it with. It can still be replaced by pasting.')
+    const request = str(req.request, 2000).trim()
+    if (request === '') return fail('bad-input', 'Say what to change.')
+    const body = await this.bodyOf(profileId, record)
+    if (!body || body.kind !== record.kind) return fail('not-found', 'The artifact is listed but its source is missing.')
+
+    const current =
+      body.kind === 'document'
+        ? toMarkdown(body.document)
+        : body.kind === 'diagram'
+          ? JSON.stringify({
+              nodes: body.diagram.objects.map((one) => ({ id: one.id, label: one.text, shape: one.type })),
+              edges: body.diagram.connectors.map((one) => ({ from: one.from, to: one.to, label: one.text }))
+            })
+          : ''
+    if (current.length > LIMITS.revise) {
+      return fail('too-large', `This is ${current.length.toLocaleString('en')} characters, past the ${LIMITS.revise.toLocaleString('en')} Orion can be handed whole. Cutting it would lose the rest without saying so, so it was not sent. It can still be replaced by pasting.`)
+    }
+
+    const outcome = await this.o.generation.revise(record.kind, record.title, current, request)
+    if (!outcome.body) {
+      const errors = outcome.problems.filter((one) => one.severity === 'error').map((one) => one.message)
+      return fail(outcome.failed ? 'unavailable' : 'not-made', outcome.failed ?? errors[0] ?? 'Orion did not give back something Orbis could keep.', { attempts: outcome.attempts })
+    }
+    const before = this.shapeOf(body)
+    const after = this.shapeOf(outcome.body)
+    const counted = (shape: { rows: number; columns: number }): string => (record.kind === 'document' ? `${shape.rows} blocks` : `${shape.rows} boxes and ${shape.columns} arrows`)
+    const notes =
+      record.kind === 'document'
+        ? [`Rewritten by a model from: "${request.slice(0, 200)}". Any figure in it was written, not measured or computed by Orbis.`, `Before: ${counted(before)}. After: ${counted(after)}. The version before is kept.`]
+        : [`Redrawn from: "${request.slice(0, 200)}". The boxes and arrows were chosen by a model; where they sit was worked out by Orbis.`, `Before: ${counted(before)}. After: ${counted(after)}. The version before is kept.`]
+    return this.keep(profileId, operation, outcome.body, { title: record.title, source: record.source, notes, acceptSecrets: req.acceptSecrets === true, existing: record, reason: request.slice(0, 300) }, fail)
   }
 
   // ---------------------------------------------------------------- transform

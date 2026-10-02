@@ -113,6 +113,8 @@ export default function App(): React.JSX.Element {
   const [imagesOpen, setImagesOpen] = useState(false)
   /** Which of Orbis's own screens is open, or null for the chat. Only ever one. */
   const [feature, setFeature] = useState<FeatureId | null>(null)
+  /** What was typed after /create, handed to the Create screen. The token makes the same words asked twice two requests. */
+  const [createAsked, setCreateAsked] = useState<{ text: string; token: number } | null>(null)
   /** Everything the user has personalised, applied to the window; an untouched Orbis is left exactly as it is. */
   const experience = useExperience()
 
@@ -1154,6 +1156,11 @@ export default function App(): React.JSX.Element {
           return toggleIncognito()
         case 'search':
           return openSearch()
+        case 'create':
+          // Opens the Create screen; with words after it, hands them over to be made straight away.
+          setImagesOpen(false)
+          if (args.trim() !== '') setCreateAsked({ text: args.trim(), token: Date.now() })
+          return setFeature('create')
         case 'images':
           return setImagesOpen(true)
         case 'browser':
@@ -1408,7 +1415,7 @@ export default function App(): React.JSX.Element {
               {feature === 'clipboard' && <ClipboardView onClose={closeFeature} onNotify={notify} />}
               {feature === 'workspaces' && <WorkspacesView onClose={closeFeature} onNotify={notify} />}
               {feature === 'schedules' && <SchedulesView onClose={closeFeature} onNotify={notify} />}
-              {feature === 'create' && <CreateView onClose={closeFeature} onNotify={notify} />}
+              {feature === 'create' && <CreateView onClose={closeFeature} onNotify={notify} asked={createAsked} />}
             </Suspense>
           )}
         </main>

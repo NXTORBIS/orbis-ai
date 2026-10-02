@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { AlertTriangle, ArrowLeft, BarChart3, Check, Copy, FilePlus2, FolderOpen, History, LineChart, Loader2, Pencil, Save, Search, Sparkles, Table2, FileText, Trash2, Workflow, X } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, BarChart3, Check, Copy, FilePlus2, FolderOpen, History, LayoutTemplate, LineChart, Loader2, Pencil, Save, Search, Sparkles, Table2, FileText, Trash2, Workflow, X } from 'lucide-react'
 import type { NoticeKind } from '../lib/notices'
 import { CreateChange } from './CreateChange'
 import './create.css'
@@ -228,7 +228,24 @@ function Notes({ notes }: { notes: string[] }): React.JSX.Element | null {
   )
 }
 
-export default function CreateView({ onClose, onNotify }: { onClose: () => void; onNotify(message: string, kind?: NoticeKind): void }): React.JSX.Element {
+interface TemplateEntry {
+  id: string
+  kind: 'table' | 'document'
+  name: string
+  describe: string
+  group: string
+}
+
+export default function CreateView({
+  onClose,
+  onNotify,
+  asked
+}: {
+  onClose: () => void
+  onNotify(message: string, kind?: NoticeKind): void
+  /** A request typed into the chat as `/create ...`. The token changes each time, so the same words asked twice are made twice. */
+  asked?: { text: string; token: number } | null
+}): React.JSX.Element {
   const [request, setRequest] = useState('')
   const [asking, setAsking] = useState(false)
   const [askFailure, setAskFailure] = useState<Failure | null>(null)
@@ -259,8 +276,8 @@ export default function CreateView({ onClose, onNotify }: { onClose: () => void;
     if (result.ok) setOpened(result.value as Opened)
   }, [])
 
-  const ask = async (acceptSecrets = false): Promise<void> => {
-    const words = request.trim()
+  const ask = async (acceptSecrets = false, given?: string): Promise<void> => {
+    const words = (given ?? request).trim()
     if (words === '' || asking) return
     setAsking(true)
     setAskFailure(null)
@@ -282,6 +299,64 @@ export default function CreateView({ onClose, onNotify }: { onClose: () => void;
 
   const [importing, setImporting] = useState(false)
   const [analysing, setAnalysing] = useState(false)
+  const [templates, setTemplates] = useState<TemplateEntry[]>([])
+  const [templateId, setTemplateId] = useState('')
+  const [starting, setStarting] = useState(false)
+  const [revision, setRevision] = useState('')
+  const [revising, setRevising] = useState(false)
+
+  useEffect(() => {
+    void window.api.creationRun({ operation: 'artifact.templates' }).then((result) => {
+      if (result.ok) setTemplates(result.value as TemplateEntry[])
+    })
+  }, [])
+
+  // What was typed after /create in the chat: put it in the box and make it, once per time it was asked.
+  const askedToken = asked?.token
+  useEffect(() => {
+    if (!asked || asked.text.trim() === '') return
+    setRequest(asked.text)
+    void ask(false, asked.text)
+  }, [askedToken]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const startFromTemplate = async (): Promise<void> => {
+    if (starting || templateId === '') return
+    setStarting(true)
+    setAskFailure(null)
+    try {
+      const result = await window.api.creationRun({ operation: 'artifact.fromTemplate', templateId })
+      if (!result.ok) {
+        setAskFailure(failureOf(result))
+        return
+      }
+      const made = result.value as { record: Record_ }
+      onNotify(`Started "${made.record.title}". It is structure only: the rows and the "(fill in)" parts are yours.`, 'info')
+      await refresh()
+      await open(made.record.artifactId)
+    } finally {
+      setStarting(false)
+    }
+  }
+
+  const revise = async (): Promise<void> => {
+    if (!opened || revising || revision.trim() === '') return
+    setRevising(true)
+    setSaveFailure(null)
+    try {
+      const result = await window.api.creationRun({ operation: 'artifact.revise', artifactId: opened.record.artifactId, request: revision.trim() })
+      if (!result.ok) {
+        setSaveFailure(failureOf(result))
+        return
+      }
+      const made = result.value as { record: Record_ }
+      onNotify(`Revised "${made.record.title}" as version ${made.record.version}. The one before is kept.`, 'info')
+      setRevision('')
+      await refresh()
+      await open(made.record.artifactId)
+    } finally {
+      setRevising(false)
+    }
+  }
   const [chartX, setChartX] = useState('')
   const [chartY, setChartY] = useState<string[]>([])
   const [chartKind, setChartKind] = useState<(typeof CHART_KINDS)[number]>('line')
@@ -497,6 +572,35 @@ export default function CreateView({ onClose, onNotify }: { onClose: () => void;
             </button>
           </form>
           {askFailure && <Findings failure={askFailure} onAccept={() => void ask(true)} />}
+          {templates.length > 0 && (
+            <form
+              className="create-ask"
+              aria-label="Start from a template"
+              onSubmit={(event) => {
+                event.preventDefault()
+                void startFromTemplate()
+              }}
+            >
+              <select className="create-template" value={templateId} onChange={(event) => setTemplateId(event.target.value)} aria-label="Template">
+                <option value="">Start from a template…</option>
+                {[...new Set(templates.map((one) => one.group))].map((group) => (
+                  <optgroup key={group} label={group}>
+                    {templates
+                      .filter((one) => one.group === group)
+                      .map((one) => (
+                        <option key={one.id} value={one.id}>
+                          {one.name} ({one.kind}) — {one.describe}
+                        </option>
+                      ))}
+                  </optgroup>
+                ))}
+              </select>
+              <button type="submit" className="queue-btn" disabled={starting || templateId === ''} title="A table with its columns chosen, or a document with its headings written. Works with no connection.">
+                {starting ? <Loader2 size={13} className="spin" /> : <LayoutTemplate size={13} />}
+                Start
+              </button>
+            </form>
+          )}
           <p className="create-or">or paste it yourself</p>
 
           <div className="create-kinds" role="radiogroup" aria-label="What to make">
@@ -689,6 +793,29 @@ export default function CreateView({ onClose, onNotify }: { onClose: () => void;
                 {opened.preview}
                 {opened.truncated ? '\n…' : ''}
               </pre>
+            )}
+            {(opened.record.kind === 'document' || opened.record.kind === 'diagram') && (
+              <form
+                className="create-ask"
+                aria-label={`Revise this ${opened.record.kind === 'document' ? 'document' : 'flowchart'}`}
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  void revise()
+                }}
+              >
+                <input
+                  className="create-revise"
+                  value={revision}
+                  onChange={(event) => setRevision(event.target.value)}
+                  placeholder={opened.record.kind === 'document' ? 'Say what to change — e.g. make it shorter, add a section on risks' : 'Say what to change — e.g. add a step to check the email first'}
+                  aria-label="What to change"
+                  maxLength={2000}
+                />
+                <button type="submit" className="queue-btn small" disabled={revising || revision.trim() === ''} title="Orion rewrites it and Orbis keeps the result as a new version. The one before stays.">
+                  {revising ? <Loader2 size={13} className="spin" /> : <Sparkles size={13} />}
+                  {revising ? 'Revising…' : 'Revise with Orion'}
+                </button>
+              </form>
             )}
             {opened.record.kind === 'table' && (
               <>

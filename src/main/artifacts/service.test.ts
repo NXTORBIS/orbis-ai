@@ -605,3 +605,119 @@ test('two tables are joined on a column into a new table, and the rows that foun
     assert.equal(missing.ok, false)
     if (!missing.ok) assert.match(missing.message, /"Sites" has no column called "location"\. Its columns are: site, region, manager\./)
   }))
+
+test('a template starts a table with its typed columns and no rows, or a document with its headings, and needs no model', () =>
+  withService(async (h) => {
+    const listed = ok<{ id: string; kind: string; name: string; group: string }[]>(await h.service.run('default', { operation: 'artifact.templates' }))
+    assert.ok(listed.length >= 15)
+    assert.ok(listed.some((one) => one.id === 'budget' && one.kind === 'table'))
+
+    const budget = ok<{ record: { artifactId: string; title: string; kind: string; source: string; notes: string[]; shape: { rows: number; columns: number }; verified: { ok: boolean } } }>(
+      await h.service.run('default', { operation: 'artifact.fromTemplate', templateId: 'budget' })
+    )
+    assert.equal(budget.record.kind, 'table')
+    assert.equal(budget.record.title, 'Monthly budget')
+    assert.equal(budget.record.source, 'template: Monthly budget')
+    assert.deepEqual(budget.record.shape, { rows: 0, columns: 5 })
+    assert.equal(budget.record.verified.ok, true)
+    assert.match(budget.record.notes[0], /structure only/)
+    const read = ok<{ columns: { name: string; type: string }[]; grid: { total: number } }>(await h.service.run('default', { operation: 'artifact.read', artifactId: budget.record.artifactId }))
+    assert.deepEqual(read.columns.map((one) => `${one.name}:${one.type}`), ['Date:date', 'Category:category', 'Description:text', 'Amount:number', 'Paid by:category'])
+    assert.equal(read.grid.total, 0)
+
+    const notes = ok<{ record: { kind: string; title: string; shape: { rows: number } } }>(await h.service.run('default', { operation: 'artifact.fromTemplate', templateId: 'meeting-notes', title: 'Monday sync' }))
+    assert.equal(notes.record.kind, 'document')
+    assert.equal(notes.record.title, 'Monday sync')
+    assert.ok(notes.record.shape.rows >= 8)
+
+    const none = await h.service.run('default', { operation: 'artifact.fromTemplate', templateId: 'spaceship' })
+    assert.equal(none.ok, false)
+    if (!none.ok) assert.match(none.message, /no template called "spaceship"/)
+  }))
+
+test('a document is revised by an instruction into a new version; the kind and title stay Orbis\'s and the old version is kept', () =>
+  withService(
+    async (h) => {
+      const made = ok(await h.service.run('default', { operation: 'artifact.create', kind: 'document', title: 'Plan', text: '# Plan\n\nShip it.\n\n## Risks\n\n- None yet.\n' }))
+      const id = (made.record as { artifactId: string }).artifactId
+      const revised = ok<{ record: { artifactId: string; title: string; kind: string; version: number; versions: unknown[]; reason: string; notes: string[]; shape: { rows: number } } }>(
+        await h.service.run('default', { operation: 'artifact.revise', artifactId: id, request: 'add a section on what it costs' })
+      )
+      assert.equal(revised.record.artifactId, id)
+      assert.equal(revised.record.kind, 'document', 'an answer that tried to be a table is still read as the document it was asked for')
+      assert.equal(revised.record.title, 'Plan', 'and the title is not the model\'s to change')
+      assert.equal(revised.record.version, 2)
+      assert.equal(revised.record.versions.length, 1)
+      assert.equal(revised.record.reason, 'add a section on what it costs')
+      assert.match(revised.record.notes[0], /Rewritten by a model from: "add a section on what it costs"\. Any figure in it was written, not measured/)
+      assert.match(revised.record.notes[1], /Before: 4 blocks\. After: 6 blocks\. The version before is kept\./)
+      assert.ok(h.asked[0].user.includes('## Risks'), 'the whole document was handed over')
+      assert.ok(h.asked[0].user.endsWith('The change asked for: add a section on what it costs'))
+      const preview = ok<{ preview: string }>(await h.service.run('default', { operation: 'artifact.read', artifactId: id })).preview
+      assert.ok(preview.includes('## Cost') && preview.includes('(fill in)') && preview.includes('- None yet.'))
+
+      // Nothing usable back, twice: no version is made and the attempts say why.
+      const failed = await h.service.run('default', { operation: 'artifact.revise', artifactId: id, request: 'make it rhyme' })
+      assert.equal(failed.ok, false)
+      if (!failed.ok) {
+        assert.equal(failed.error, 'not-made')
+        assert.equal((failed.detail as { attempts: unknown[] }).attempts.length, 2)
+      }
+      const still = ok<{ record: { version: number } }>(await h.service.run('default', { operation: 'artifact.read', artifactId: id }))
+      assert.equal(still.record.version, 2)
+    },
+    {
+      pdf: true,
+      png: true,
+      answers: [
+        { kind: 'table', title: 'Something else', columns: ['a'], markdown: '# Plan\n\nShip it.\n\n## Risks\n\n- None yet.\n\n## Cost\n\n(fill in)\n' },
+        { markdown: '' },
+        { text: 'roses are red' }
+      ]
+    }
+  ))
+
+test('a flowchart is revised the same way, and what cannot be revised says what to do instead', () =>
+  withService(
+    async (h) => {
+      const flow = ok<{ record: { artifactId: string; kind: string; shape: { rows: number; columns: number } } }>(await h.service.run('default', { operation: 'artifact.generate', request: 'a flowchart for signing in' }))
+      assert.equal(flow.record.kind, 'diagram')
+      assert.deepEqual(flow.record.shape, { rows: 2, columns: 1 })
+      const revised = ok<{ record: { version: number; notes: string[]; shape: { rows: number; columns: number } } }>(await h.service.run('default', { operation: 'artifact.revise', artifactId: flow.record.artifactId, request: 'add a check in the middle' }))
+      assert.equal(revised.record.version, 2)
+      assert.deepEqual(revised.record.shape, { rows: 3, columns: 3 })
+      assert.match(revised.record.notes[1], /Before: 2 boxes and 1 arrows\. After: 3 boxes and 3 arrows\./)
+      assert.ok(h.asked[1].user.includes('"label":"Start"'), 'the boxes it has now were handed over')
+
+      const table = ok(await h.service.run('default', { operation: 'artifact.create', kind: 'table', title: 'T', text: 'a,b\n1,2\n' }))
+      const refused = await h.service.run('default', { operation: 'artifact.revise', artifactId: (table.record as { artifactId: string }).artifactId, request: 'double b' })
+      assert.equal(refused.ok, false)
+      if (!refused.ok) assert.match(refused.message, /use "Change this table"/)
+
+      // Too long to hand over whole: refused, not cut.
+      const long = ok(await h.service.run('default', { operation: 'artifact.create', kind: 'document', title: 'Long', text: `# Long\n\n${'A sentence that goes on. '.repeat(700)}\n` }))
+      const tooLong = await h.service.run('default', { operation: 'artifact.revise', artifactId: (long.record as { artifactId: string }).artifactId, request: 'shorten it' })
+      assert.equal(tooLong.ok, false)
+      if (!tooLong.ok) {
+        assert.equal(tooLong.error, 'too-large')
+        assert.match(tooLong.message, /Cutting it would lose the rest without saying so, so it was not sent/)
+      }
+      assert.equal(h.asked.length, 2, 'and Orion was never asked')
+    },
+    {
+      pdf: true,
+      png: true,
+      answers: [
+        { kind: 'diagram', title: 'Sign in', nodes: [{ id: 'a', label: 'Start', shape: 'start' }, { id: 'b', label: 'Done', shape: 'end' }], edges: [{ from: 'a', to: 'b' }] },
+        { nodes: [{ id: 'a', label: 'Start', shape: 'start' }, { id: 'c', label: 'Right?', shape: 'decision' }, { id: 'b', label: 'Done', shape: 'end' }], edges: [{ from: 'a', to: 'c' }, { from: 'c', to: 'b', label: 'yes' }, { from: 'c', to: 'a', label: 'no' }] }
+      ]
+    }
+  ))
+
+test('without Orion, revising says so and nothing is changed', () =>
+  withService(async (h) => {
+    const made = ok(await h.service.run('default', { operation: 'artifact.create', kind: 'document', title: 'Plan', text: '# Plan\n\nShip it.\n' }))
+    const result = await h.service.run('default', { operation: 'artifact.revise', artifactId: (made.record as { artifactId: string }).artifactId, request: 'longer' })
+    assert.equal(result.ok, false)
+    if (!result.ok) assert.match(result.message, /Orion is not set up on this computer.*It can still be replaced by pasting/)
+  }))

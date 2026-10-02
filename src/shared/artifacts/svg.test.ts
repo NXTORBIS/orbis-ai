@@ -227,3 +227,31 @@ test('an SVG file is read back as SVG with something drawn in it', () => {
   assert.equal(bad.ok, false)
   assert.equal(bad.checks.find((one) => one.what === 'svg')?.passed, false)
 })
+
+test('a long flow runs down the page, and its loop back goes along the side without crossing a box', () => {
+  const steps = ['Order placed', 'Payment taken', 'Stock checked', 'Packed', 'Label printed', 'Collected', 'Delivered']
+  const long = flowToArtifact({
+    title: 'Order',
+    nodes: steps.map((label, i) => ({ id: `s${i}`, label, shape: i === 0 ? ('start' as const) : i === steps.length - 1 ? ('end' as const) : ('step' as const) })),
+    edges: [...steps.slice(1).map((_, i) => ({ from: `s${i}`, to: `s${i + 1}`, label: '' })), { from: 's3', to: 's1', label: 'out of stock' }]
+  })
+  const xs = new Set(long.objects.map((one) => one.box.x))
+  assert.equal(xs.size, 1, 'one column')
+  assert.deepEqual(long.objects.map((one) => one.box.y), steps.map((_, i) => i * 96), 'each step under the one before')
+  const loop = long.connectors[long.connectors.length - 1]
+  assert.equal(loop.waypoints.length, 2)
+  const right = Math.max(...long.objects.map((one) => one.box.x + one.box.width))
+  assert.ok(loop.waypoints.every((one) => one.x > right), 'the lane runs beside the column, not through it')
+  assert.equal(loop.waypoints[0].y, long.objects[3].box.y + 28, 'level with the middle of the box it leaves')
+  const { svg } = diagramToSvg(long)
+  const width = Number(/<svg[^>]* width="(\d+)"/.exec(svg)?.[1])
+  const height = Number(/<svg[^>]* height="(\d+)"/.exec(svg)?.[1])
+  assert.ok(height > width, 'taller than it is wide')
+  assert.ok(width < 320, `narrow enough to read at full size (${width})`)
+  assert.ok(svg.includes('>out of stock</text>'))
+
+  // A short flow still runs across.
+  const short = flowToArtifact({ title: 'Short', nodes: [{ id: 'a', label: 'A', shape: 'start' }, { id: 'b', label: 'B', shape: 'end' }], edges: [{ from: 'a', to: 'b', label: '' }] })
+  assert.equal(short.objects[1].box.y, short.objects[0].box.y)
+  assert.ok(short.objects[1].box.x > short.objects[0].box.x)
+})

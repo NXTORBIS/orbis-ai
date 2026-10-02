@@ -870,11 +870,16 @@ export function toMarkdown(document: StructuredDocument): string {
         out.push('---')
         break
       case 'list':
+        // A numbered list counts, separately at each depth, starting again whenever a shallower item comes between.
+        const counters: number[] = []
         out.push(
           block.items
             .map((item) => {
-              const indent = '  '.repeat(Math.max(0, item.depth))
-              if (block.style === 'ordered') return `${indent}1. ${serialiseInline(item.content)}`
+              const depth = Math.max(0, item.depth)
+              const indent = '  '.repeat(depth)
+              counters.length = depth + 1
+              counters[depth] = (counters[depth] ?? 0) + 1
+              if (block.style === 'ordered') return `${indent}${counters[depth]}. ${serialiseInline(item.content)}`
               if (block.style === 'task') return `${indent}- [${item.checked ? 'x' : ' '}] ${serialiseInline(item.content)}`
               return `${indent}- ${serialiseInline(item.content)}`
             })

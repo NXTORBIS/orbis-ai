@@ -1379,12 +1379,18 @@ export function lossFor(format: FormatId, has: Partial<FormatCapability['carries
     provenance: 'Provenance',
     hierarchy: 'Nested structure'
   }
+  // Each loss in the words of what a person would miss, not the name of the field that holds it.
+  const plain: Record<keyof FormatCapability['carries'], (format: string) => string> = {
+    units: (format) => `Units (such as kg or MWh) are not written into a ${format} file: the numbers are there, the units are not.`,
+    types: (format) => `A ${format} file does not say what each column holds (a date, a number, a category), so whatever opens it works that out again.`,
+    metadata: (format) => `Its name and where it came from are kept by Orbis; they are not written inside a ${format} file.`,
+    formatting: (format) => `Bold, headings and other formatting are not written into a ${format} file.`,
+    provenance: (format) => `Where each part came from is kept by Orbis; it is not written inside a ${format} file.`,
+    hierarchy: (format) => `A ${format} file is flat, so anything nested is written flattened.`
+  }
   for (const key of Object.keys(named) as (keyof FormatCapability['carries'])[]) {
     if (has[key] && !capability.carries[key]) {
-      losses.push({
-        what: named[key],
-        describe: `${named[key]} cannot be represented in ${capability.name} and will not be in the exported file.`
-      })
+      losses.push({ what: named[key], describe: plain[key](capability.name) })
     }
   }
 
