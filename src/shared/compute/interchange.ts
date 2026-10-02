@@ -61,7 +61,7 @@ export const INTERCHANGE_LIMITS: Readonly<
 
 // ---------------------------------------------------------------- format registry
 
-export type FormatId = 'csv' | 'tsv' | 'json' | 'ndjson' | 'xml' | 'markdown' | 'html' | 'text' | 'pdf' | 'xlsx' | 'docx' | 'pptx' | 'svg' | 'png' | 'binary'
+export type FormatId = 'csv' | 'tsv' | 'json' | 'ndjson' | 'xml' | 'markdown' | 'html' | 'text' | 'pdf' | 'xlsx' | 'docx' | 'pptx' | 'svg' | 'png' | 'code' | 'binary'
 
 export interface FormatCapability {
   id: FormatId
@@ -257,6 +257,19 @@ export const FORMATS: Readonly<Record<FormatId, FormatCapability>> = Object.free
     streaming: false,
     carries: { units: false, types: false, metadata: false, formatting: true, provenance: false, hierarchy: false },
     limitations: ['A picture at one size. For something that scales, save the SVG.']
+  },
+  code: {
+    id: 'code',
+    name: 'Source file',
+    // The name of the kept copy only. A saved file gets its language's own extension (see artifacts/languages.ts);
+    // no real extension is listed here, so detecting a format by file name is exactly what it was before this row.
+    extensions: ['.code'],
+    mediaTypes: ['text/plain'],
+    canImport: true,
+    canExport: true,
+    streaming: false,
+    carries: { units: false, types: false, metadata: false, formatting: true, provenance: false, hierarchy: true },
+    limitations: ['Kept exactly as written, character for character. Orbis does not run it.']
   },
   text: {
     id: 'text',
@@ -1415,7 +1428,7 @@ export function exportTable(table: Table, request: ExportRequest): ExportResult 
     return fail('UNSUPPORTED_FORMAT', 'encode', `Orbis reads ${capability.name} but does not write it.`, 'Export as CSV, JSON, Markdown or plain text.')
   }
 
-  if (request.format === 'xlsx' || request.format === 'svg' || request.format === 'png') {
+  if (request.format === 'xlsx' || request.format === 'svg' || request.format === 'png' || request.format === 'code') {
     return fail('UNSUPPORTED_FORMAT', 'encode', `A table is not written as ${request.format} here; a workbook is bytes made by the artifact service, and a drawing is made from a chart.`, 'Ask the artifact service, or make a chart from the table first.')
   }
 
@@ -1531,7 +1544,7 @@ export function exportDocument(document: StructuredDocument, format: FormatId): 
   if (format === 'pdf') {
     return fail('UNSUPPORTED_FORMAT', 'encode', 'PDF is printed from the HTML, not written as text.', 'Ask the artifact service to export as PDF.')
   }
-  if (format === 'docx' || format === 'pptx' || format === 'svg' || format === 'png') {
+  if (format === 'docx' || format === 'pptx' || format === 'svg' || format === 'png' || format === 'code') {
     return fail('UNSUPPORTED_FORMAT', 'encode', `A document is not written as ${format} here; that is bytes made by the artifact service.`, `Ask the artifact service to export as ${format}.`)
   }
   const loss = lossFor(format, { formatting: true, metadata: true, hierarchy: true })

@@ -100,3 +100,20 @@ test('a missing title is an error, and the default format is the kind first form
   const ok = readProposal({ kind: 'table', title: 'T', columns: ['a'] })
   assert.equal(ok.proposal?.intent.format, 'csv')
 })
+
+test('code is one whole file in a language Orbis knows, with no fence around it', () => {
+  const good = readProposal({ kind: 'code', title: 'Rename files', language: 'py', code: 'import os\nprint(os.listdir("."))\n' })
+  assert.deepEqual(errors(good.problems), [])
+  assert.equal(good.proposal?.code?.language, 'python', 'another name for the language is read as the language')
+  assert.equal(good.proposal?.intent.format, 'code')
+
+  const bad = readProposal({ kind: 'code', title: 'X', language: 'klingon', code: '' })
+  const said = errors(bad.problems).join(' | ')
+  assert.equal(bad.proposal, null)
+  assert.match(said, /"language" has to be one of: python, javascript, typescript/)
+  assert.match(said, /Code needs "code": the whole file/)
+
+  const fenced = readProposal({ kind: 'code', title: 'X', language: 'python', code: '```python\nprint(1)\n```' })
+  assert.equal(fenced.proposal, null)
+  assert.ok(errors(fenced.problems).some((one) => /no Markdown fence around it/.test(one)))
+})

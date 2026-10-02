@@ -19,7 +19,7 @@ import { FORMATS, type FormatId } from '../compute/interchange.ts'
  * is in it; the plain words are the ones it is told to use.
  */
 
-export type ArtifactKindId = 'table' | 'document' | 'plot' | 'diagram'
+export type ArtifactKindId = 'table' | 'document' | 'plot' | 'diagram' | 'code'
 
 export interface ArtifactKind {
   id: ArtifactKindId
@@ -79,6 +79,17 @@ export const ARTIFACT_KINDS: Readonly<Record<ArtifactKindId, ArtifactKind>> = Ob
     writes: Object.freeze(['svg', 'png'] as const),
     stores: 'svg',
     reads: Object.freeze([] as const),
+    orionMayName: true
+  }),
+  code: Object.freeze({
+    id: 'code',
+    name: 'Code',
+    describe: 'One source file in a named language -- a script, a query, a page, a settings file -- kept exactly as written. Orbis never runs it.',
+    builtFrom: 'The languages table in src/shared/artifacts/languages.ts',
+    // One format, and the saved file takes its language's own extension.
+    writes: Object.freeze(['code'] as const),
+    stores: 'code',
+    reads: Object.freeze(['code'] as const),
     orionMayName: true
   })
 })

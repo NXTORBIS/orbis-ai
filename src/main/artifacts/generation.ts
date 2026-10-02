@@ -1,5 +1,7 @@
 import { buildTable, isDataError, type Column } from '../../shared/compute/data.ts'
 import { readSteps, stepInstructions, type TransformStep } from '../../shared/artifacts/transform.ts'
+import { checkSyntax, languageById, LANGUAGES } from '../../shared/artifacts/languages.ts'
+import { compileJavaScript } from './codeCheck.ts'
 import { emptyDocument, fromMarkdown, isDocumentError } from '../../shared/compute/document.ts'
 import { ARTIFACT_KINDS, describeKinds, type ArtifactKindId } from '../../shared/artifacts/kinds.ts'
 import { flowToArtifact } from '../../shared/artifacts/diagram.ts'
@@ -62,16 +64,18 @@ const REQUEST_TIMEOUT_MS = 90_000
 const MAX_TOKENS = 6000
 
 /** What the model is told when it is handed something that exists and asked to change it. */
-export function reviseInstructions(kind: 'document' | 'diagram'): string {
+export function reviseInstructions(kind: 'document' | 'diagram' | 'code', language = ''): string {
   const shape =
-    kind === 'document'
+    kind === 'code'
+      ? `{"code": the WHOLE revised ${language} file as text, with no Markdown fence around it}`
+      : kind === 'document'
       ? `{"markdown": the WHOLE revised document, written as Markdown with headings, paragraphs, lists and tables}`
       : `{"nodes": the WHOLE revised list of {"id", "label", "shape"} (shape is one of step, decision, start, end), "edges": the WHOLE revised list of {"from", "to", "label"} joining node ids}`
-  return `You revise ONE existing ${kind === 'document' ? 'document' : 'flowchart'} that Orbis keeps. Answer with ONE JSON object and nothing else:
+  return `You revise ONE existing ${kind === 'document' ? 'document' : kind === 'code' ? `${language} file` : 'flowchart'} that Orbis keeps. Answer with ONE JSON object and nothing else:
 ${shape}
 
 Rules:
-- Make the change the person asked for and keep everything else exactly as it is${kind === 'document' ? ', word for word' : ', with the same ids'}.
+- Make the change the person asked for and keep everything else exactly as it is${kind === 'diagram' ? ', with the same ids' : ', character for character'}.${kind === 'code' ? ' Orbis keeps the file and never runs it, so do not say it was tested.' : ''}
 - Give back the whole thing. Not a description of the change, and not only the part that changed.
 - Never invent real-world figures, statistics, prices, names of real people, or sources. Where a real figure is wanted and you do not have it, write a clearly marked placeholder such as "(fill in)".
 - Never include a password, an API key or a token, even as an example.${kind === 'diagram' ? '\n- Never give positions; Orbis lays the flowchart out. Label the branches of a decision ("yes", "no").' : ''}`
@@ -99,11 +103,13 @@ The object:
   "rows": for a table only -- optional example rows, each a list of cell values in column order,
   "markdown": for a document only -- the whole document, written as Markdown with headings, paragraphs, lists and tables,
   "nodes": for a diagram only -- a list of {"id", "label", "shape"}; shape is one of step, decision, start, end,
-  "edges": for a diagram only -- a list of {"from", "to", "label"} joining node ids; label the branches of a decision ("yes", "no")
+  "edges": for a diagram only -- a list of {"from", "to", "label"} joining node ids; label the branches of a decision ("yes", "no"),
+  "language": for code only -- one of: ${LANGUAGES.map((one) => one.id).join(', ')},
+  "code": for code only -- the whole file as text, with no Markdown fence around it
 }
 
 Rules:
-- Choose "table" for anything that is rows and columns: a tracker, a log, a register, a schedule, a list of records. Choose "document" for prose: a report, a letter, a plan, notes, a guide. Choose "diagram" for a flow, a process, steps with decisions, an org chart: boxes and arrows. Never give positions; Orbis lays a diagram out.
+- Choose "table" for anything that is rows and columns: a tracker, a log, a register, a schedule, a list of records. Choose "document" for prose: a report, a letter, a plan, notes, a guide. Choose "diagram" for a flow, a process, steps with decisions, an org chart: boxes and arrows. Never give positions; Orbis lays a diagram out. Choose "code" when the person asks for a script, a program, a query, a web page's source or a settings file: one complete file in one language. Orbis keeps code and never runs it, so do not say it was tested.
 - Never invent real-world figures, statistics, prices, names of real people, or sources. If the person wants a real figure that you do not have, write a clearly marked placeholder such as "(fill in)" rather than a number.
 - For a table, leave "rows" empty unless the person asked for examples or sample data. Example rows must be obviously illustrative.
 - Write dates as YYYY-MM-DD.
@@ -174,12 +180,12 @@ Answer again, fixing those. Everything else about the format is the same.`
    * object from an original. The kind and the title are Orbis's, not the model's: it is asked to change the content,
    * and an answer that tries to turn a document into a table is read as a document or refused.
    */
-  async revise(kind: 'document' | 'diagram', title: string, current: string, request: string): Promise<GenerateOutcome> {
+  async revise(kind: 'document' | 'diagram' | 'code', title: string, current: string, request: string, language = ''): Promise<GenerateOutcome> {
     const asked = request.trim().slice(0, 2000)
     const attempts: GenerateOutcome['attempts'] = []
     if (asked === '') return { body: null, intent: null, notes: [], problems: [{ severity: 'error', message: 'Say what you want changed.' }], attempts, failed: null }
-    const system = reviseInstructions(kind)
-    const base = `The ${kind === 'document' ? 'document' : 'flowchart'} as it is now:
+    const system = reviseInstructions(kind, languageById(language)?.name ?? language)
+    const base = `The ${kind === 'document' ? 'document' : kind === 'code' ? 'file' : 'flowchart'} as it is now:
 <<<
 ${current}
 >>>
@@ -203,13 +209,13 @@ Answer again, fixing those. Everything else about the format is the same.`
         return { body: null, intent: null, notes: [], problems: [{ severity: 'error', message: answer.failed }], attempts, failed: answer.failed }
       }
       // Only the content is taken from the answer. What it is and what it is called were decided before the model was asked.
-      const content = kind === 'document' ? { markdown: answer.json.markdown } : { nodes: answer.json.nodes, edges: answer.json.edges }
+      const content = kind === 'document' ? { markdown: answer.json.markdown } : kind === 'code' ? { language, code: answer.json.code } : { nodes: answer.json.nodes, edges: answer.json.edges }
       const read = readProposal({ ...content, kind, title, purpose: asked })
       lastProblems = read.problems
       attempts.push({ said: JSON.stringify(answer.json).slice(0, 300), problems: read.problems.map((p) => `${p.severity}: ${p.message}`) })
       if (read.proposal && buildable(read.problems)) {
         const made = this.materialise(read.proposal, asked)
-        if (!('error' in made)) return { body: made.body, intent: read.proposal.intent, notes: [], problems: read.problems, attempts, failed: null }
+        if (!('error' in made)) return { body: made.body, intent: read.proposal.intent, notes: made.notes, problems: read.problems, attempts, failed: null }
         lastProblems = [...read.problems, { severity: 'error', message: made.error }]
         attempts[attempts.length - 1].problems.push(`error: ${made.error}`)
         complaint = `- ${made.error}`
@@ -292,6 +298,15 @@ Answer again, fixing those. Everything else about the format is the same.`
       return {
         body: { kind: 'diagram', diagram },
         notes: ['The boxes and arrows were chosen by a model from your request; where they sit was worked out by Orbis.']
+      }
+    }
+    if (proposal.code) {
+      // Where the language has a reader, a file that does not read is sent back once, like any other fault.
+      const syntax = checkSyntax(proposal.code.language, proposal.code.source, compileJavaScript)
+      if (syntax.checked && !syntax.wellFormed) return { error: syntax.message }
+      return {
+        body: { kind: 'code', code: { language: proposal.code.language, source: proposal.code.source } },
+        notes: ['Written by a model from your request. Orbis has not run it and cannot say that it works: read it before you run it.', syntax.message]
       }
     }
     const parsed = fromMarkdown(proposal.markdown, 'b')

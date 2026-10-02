@@ -1,3 +1,4 @@
+import { CODE_LIMITS, LANGUAGES, languageById } from './languages.ts'
 import type { ColumnType } from '../compute/data.ts'
 import type { FormatId } from '../compute/interchange.ts'
 import { ARTIFACT_KINDS, canWrite, defaultFormatFor, isArtifactKindId, type ArtifactKindId } from './kinds.ts'
@@ -44,10 +45,17 @@ export interface DiagramProposal {
   edges: { from: string; to: string; label: string }[]
 }
 
+export interface CodeProposal {
+  /** A language id from the languages table. */
+  language: string
+  source: string
+}
+
 export type Proposal =
-  | { intent: CreationIntent; table: TableProposal; markdown?: undefined; diagram?: undefined }
-  | { intent: CreationIntent; markdown: string; table?: undefined; diagram?: undefined }
-  | { intent: CreationIntent; diagram: DiagramProposal; table?: undefined; markdown?: undefined }
+  | { intent: CreationIntent; table: TableProposal; markdown?: undefined; diagram?: undefined; code?: undefined }
+  | { intent: CreationIntent; markdown: string; table?: undefined; diagram?: undefined; code?: undefined }
+  | { intent: CreationIntent; diagram: DiagramProposal; table?: undefined; markdown?: undefined; code?: undefined }
+  | { intent: CreationIntent; code: CodeProposal; table?: undefined; markdown?: undefined; diagram?: undefined }
 
 const SHAPES = ['step', 'decision', 'start', 'end'] as const
 const DIAGRAM = Object.freeze({ nodes: 120, edges: 300, label: 80, id: 40 })
@@ -214,6 +222,18 @@ export function readProposal(raw: unknown): { proposal: Proposal | null; problem
     }
     if (typeof r.markdown === 'string' && r.markdown.trim() !== '') warn('"markdown" was given for a diagram and is ignored.')
     return { proposal: buildable(problems) ? { intent, diagram: { nodes, edges } } : null, problems }
+  }
+
+  if (kind === 'code') {
+    const named = str(r.language, 40)
+    const language = languageById(named)
+    if (!language) error(`"language" has to be one of: ${LANGUAGES.map((one) => one.id).join(', ')}. It was "${named || 'missing'}".`)
+    const source = typeof r.code === 'string' ? r.code : ''
+    if (source.trim() === '') error('Code needs "code": the whole file, as text.')
+    if (source.length > CODE_LIMITS.characters) error(`The file is ${source.length.toLocaleString('en')} characters, past the ${CODE_LIMITS.characters.toLocaleString('en')} one file may hold.`)
+    if (/^\s*```/.test(source)) error('"code" has to be the file itself, with no Markdown fence around it.')
+    if (typeof r.markdown === 'string' && r.markdown.trim() !== '') warn('"markdown" was given for code and is ignored.')
+    return { proposal: buildable(problems) && language ? { intent, code: { language: language.id, source } } : null, problems }
   }
 
   const markdown = typeof r.markdown === 'string' ? r.markdown : ''

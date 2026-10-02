@@ -1,3 +1,5 @@
+import { checkSyntax, CODE_LIMITS, CODE_ONLY_EXTENSIONS, languageForFile } from '../../shared/artifacts/languages.ts'
+import { compileJavaScript } from './codeCheck.ts'
 import { basename, extname } from 'node:path'
 import ExcelJS from 'exceljs'
 import mammoth from 'mammoth'
@@ -228,6 +230,19 @@ function readText(name: string, bytes: Uint8Array): ImportOutcome {
 // ---------------------------------------------------------------- the door
 
 /** A file's bytes read into a table or a document, with what was lost said. */
+/** A source file, kept character for character. */
+function readSource(name: string, bytes: Uint8Array, language: string): ImportOutcome {
+  if (bytes.includes(0)) return { error: 'parse', message: 'That file has bytes in it that no source file has. It was not opened.' }
+  const source = decode(bytes).replace(/^\uFEFF/, '')
+  if (source.trim() === '') return { error: 'parse', message: 'The file has no text in it.' }
+  if (source.length > CODE_LIMITS.characters) {
+    return { error: 'too-large', message: `That file is ${source.length.toLocaleString('en')} characters, past the ${CODE_LIMITS.characters.toLocaleString('en')} one code artifact holds.` }
+  }
+  const syntax = checkSyntax(language, source, compileJavaScript)
+  const from = `file: ${basename(name)}`
+  return { body: { kind: 'code', code: { language, source } }, title: titleOf(name), source: from, format: 'code', notes: ['Kept exactly as it was in the file. Orbis did not run it.', syntax.message] }
+}
+
 export async function importFile(name: string, bytes: Uint8Array): Promise<ImportOutcome> {
   if (bytes.length === 0) return { error: 'parse', message: 'The file is empty.' }
   if (bytes.length > IMPORT_LIMITS.bytes) {
@@ -240,5 +255,9 @@ export async function importFile(name: string, bytes: Uint8Array): Promise<Impor
   if (ext === '.pptx') return { error: 'unsupported', message: 'Orbis does not read PowerPoint decks yet. It can write them.' }
   if (ext === '.pdf' || decode(bytes.subarray(0, 5)) === '%PDF-') return readPdf(name, bytes)
   if (zip) return { error: 'unsupported', message: 'That is an archive or an Office file Orbis does not read.' }
+  // A source file is kept as the file it is. JSON, HTML and XML keep opening as the table or document they hold,
+  // which is what they were opened as before there was such a thing as a code artifact.
+  const language = languageForFile(name)
+  if (language && CODE_ONLY_EXTENSIONS.includes(ext)) return readSource(name, bytes, language.id)
   return readText(name, bytes)
 }

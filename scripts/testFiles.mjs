@@ -356,4 +356,6 @@ export const TEST_FILES = [
   'src/shared/artifacts/transform.test.ts',
   'src/shared/artifacts/templates.test.ts',
   'src/shared/artifacts/extract.test.ts',
+  'src/shared/artifacts/languages.test.ts',
+  'src/main/artifacts/codeCheck.test.ts',
 ]

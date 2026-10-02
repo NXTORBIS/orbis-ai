@@ -44,6 +44,8 @@ import { cellOut, joinTables, type JoinKind } from '../../shared/compute/data.ts
 import { applySteps, formulaName, isTransformFailure, readSteps, type TransformStep } from '../../shared/artifacts/transform.ts'
 import { listTemplates, templateById } from '../../shared/artifacts/templates.ts'
 import { extractTable, tablesIn, type DocumentTable } from '../../shared/artifacts/extract.ts'
+import { checkSyntax, CODE_LIMITS, extensionForLanguage, languageById, languageForFile, lineCount, LANGUAGES } from '../../shared/artifacts/languages.ts'
+import { compileJavaScript } from './codeCheck.ts'
 import { buildTable } from '../../shared/compute/data.ts'
 import { toMarkdown } from '../../shared/compute/document.ts'
 
@@ -103,6 +105,7 @@ const OPERATIONS: Readonly<Record<string, string>> = Object.freeze({
   'artifact.templates': 'The starting points Orbis has: tables with their columns chosen, documents with their headings written.',
   'artifact.fromTemplate': 'A new table or document started from one of those. Structure only; no row and no sentence in it is data.',
   'artifact.revise': 'A document or a flowchart changed by an instruction, kept as a new version with the one before still there.',
+  'artifact.languages': 'The languages a code artifact can be in, and which of them Orbis can check.',
   'artifact.extractTable': 'A table inside a document taken out as a table of its own, so it can be sorted, totalled and drawn.'
 })
 
@@ -179,6 +182,17 @@ const svgSize = (svg: string): { width: number; height: number } => {
   const width = Number(/<svg[^>]*\swidth="(\d+)"/.exec(svg)?.[1] ?? 880)
   const height = Number(/<svg[^>]*\sheight="(\d+)"/.exec(svg)?.[1] ?? 520)
   return { width: Math.min(4000, Math.max(16, width)), height: Math.min(4000, Math.max(16, height)) }
+}
+
+/** A source file read back: the same size, the same hash, and the same characters. */
+const verifySourceFile = (expected: { bytes: number; hash: string; text: string }, readBack: Uint8Array): VerifyResult => {
+  const same = decode(readBack) === expected.text
+  const checks: VerifyResult['checks'] = [
+    { what: 'written', passed: readBack.length === expected.bytes, describe: `The file on disk is ${readBack.length.toLocaleString('en')} bytes; ${expected.bytes.toLocaleString('en')} were written.` },
+    { what: 'checksum', passed: hashOf(readBack) === expected.hash, describe: 'The hash of the file on disk matches the one recorded when it was written.' },
+    { what: 'same text', passed: same, describe: same ? 'Read back, it is the same text character for character.' : 'Read back, the text is not what was written.' }
+  ]
+  return { ok: checks.every((one) => one.passed), checks, reimported: { rows: lineCount(expected.text), columns: 0 }, differences: [] }
 }
 
 /** A PNG file read back: size, hash, the signature, and that it decodes to the size it was drawn at. */
@@ -285,6 +299,8 @@ export class ArtifactService {
           return await this.join(profileId, operation, req, fail)
         case 'artifact.templates':
           return { ok: true, operation, value: listTemplates() }
+        case 'artifact.languages':
+          return { ok: true, operation, value: LANGUAGES.map((one) => ({ id: one.id, name: one.name, extension: one.extensions[0], checked: one.check !== null })) }
         case 'artifact.fromTemplate':
           return await this.fromTemplate(profileId, operation, req, fail)
         case 'artifact.revise':
@@ -319,7 +335,7 @@ export class ArtifactService {
 
   // ---------------------------------------------------------------- the body, from text
 
-  private bodyFrom(kind: ArtifactKindId, text: string, source: string, title: string): ArtifactBody | { error: string; message: string } {
+  private bodyFrom(kind: ArtifactKindId, text: string, source: string, title: string, language = ''): ArtifactBody | { error: string; message: string } {
     if (kind === 'table') {
       const parsed = parseDelimited(text)
       if (isDataError(parsed)) return { error: 'parse', message: parsed.message }
@@ -330,6 +346,14 @@ export class ArtifactService {
     // to the document reader here would quietly keep the pasted text as a document called a chart.
     if (kind === 'plot') return { error: 'bad-input', message: 'A chart is drawn from a table. Open or paste the table, then choose the columns to draw.' }
     if (kind === 'diagram') return { error: 'bad-input', message: 'A diagram is made by describing it to Orion, not pasted.' }
+    if (kind === 'code') {
+      // Which language: said outright, or read from a title that ends like a file name ("report.py").
+      const found = languageById(language) ?? languageForFile(title)
+      if (!found) return { error: 'bad-input', message: `Say which language it is. Orbis knows: ${LANGUAGES.map((one) => one.name).join(', ')}.` }
+      if (text.trim() === '') return { error: 'bad-input', message: 'There is no code to keep.' }
+      if (text.length > CODE_LIMITS.characters) return { error: 'too-large', message: `That is ${text.length.toLocaleString('en')} characters, past the ${CODE_LIMITS.characters.toLocaleString('en')} one file may hold.` }
+      return { kind: 'code', code: { language: found.id, source: text } }
+    }
     const parsed = fromMarkdown(text, 'b')
     if (isDocumentError(parsed)) return { error: 'parse', message: parsed.message }
     const document: StructuredDocument = emptyDocument('document', title)
@@ -339,6 +363,11 @@ export class ArtifactService {
   }
 
   private async render(body: ArtifactBody, format: FormatId, title = ''): Promise<Rendered | { error: string; message: string }> {
+    if (body.kind === 'code') {
+      if (format !== 'code') return { error: 'encode', message: `Code is saved as the ${languageById(body.code.language)?.name ?? 'source'} file it is, not as ${format}.` }
+      const bytes = encode(body.code.source)
+      return { bytes, text: body.code.source, scan: body.code.source, format, hash: hashOf(bytes), loss: { lossy: false, losses: [], carries: FORMATS.code.carries }, notes: [] }
+    }
     if (body.kind === 'plot' || body.kind === 'diagram') {
       const made = body.kind === 'plot' ? plotToSvg(body.plot) : diagramToSvg(body.diagram)
       const loss = lossFor(format, { formatting: true })
@@ -398,6 +427,7 @@ export class ArtifactService {
     const shape = { bytes: rendered.bytes.length, hash: rendered.hash }
     if (rendered.format === 'pdf') return verifyPdfFile(shape, readBack)
     if (rendered.format === 'svg') return verifySvgFile(shape, readBack)
+    if (rendered.format === 'code') return verifySourceFile({ ...shape, text: rendered.text ?? '' }, readBack)
     if (rendered.format === 'png') return verifyPngFile({ ...shape, width: rendered.size?.width ?? 0, height: rendered.size?.height ?? 0 }, readBack)
     if (rendered.format === 'xlsx' && body.kind === 'table') return verifyXlsx(body.table, shape, readBack)
     if (rendered.format === 'docx' && body.kind === 'document') return verifyDocx(shape, readBack)
@@ -427,6 +457,8 @@ export class ArtifactService {
         return { rows: body.plot.series.reduce((n, one) => n + one.segments.reduce((m, s) => m + s.points.length, 0), 0), columns: body.plot.series.length }
       case 'diagram':
         return { rows: body.diagram.objects.length, columns: body.diagram.connectors.length }
+      case 'code':
+        return { rows: lineCount(body.code.source), columns: 0 }
     }
   }
 
@@ -530,21 +562,25 @@ export class ArtifactService {
               nodes: body.diagram.objects.map((one) => ({ id: one.id, label: one.text, shape: one.type })),
               edges: body.diagram.connectors.map((one) => ({ from: one.from, to: one.to, label: one.text }))
             })
-          : ''
+          : body.kind === 'code'
+            ? body.code.source
+            : ''
     if (current.length > LIMITS.revise) {
       return fail('too-large', `This is ${current.length.toLocaleString('en')} characters, past the ${LIMITS.revise.toLocaleString('en')} Orion can be handed whole. Cutting it would lose the rest without saying so, so it was not sent. It can still be replaced by pasting.`)
     }
 
-    const outcome = await this.o.generation.revise(record.kind, record.title, current, request)
+    const outcome = await this.o.generation.revise(record.kind, record.title, current, request, body.kind === 'code' ? body.code.language : '')
     if (!outcome.body) {
       const errors = outcome.problems.filter((one) => one.severity === 'error').map((one) => one.message)
       return fail(outcome.failed ? 'unavailable' : 'not-made', outcome.failed ?? errors[0] ?? 'Orion did not give back something Orbis could keep.', { attempts: outcome.attempts })
     }
     const before = this.shapeOf(body)
     const after = this.shapeOf(outcome.body)
-    const counted = (shape: { rows: number; columns: number }): string => (record.kind === 'document' ? `${shape.rows} blocks` : `${shape.rows} boxes and ${shape.columns} arrows`)
+    const counted = (shape: { rows: number; columns: number }): string => (record.kind === 'document' ? `${shape.rows} blocks` : record.kind === 'code' ? `${shape.rows} lines` : `${shape.rows} boxes and ${shape.columns} arrows`)
     const notes =
-      record.kind === 'document'
+      record.kind === 'code'
+        ? [`Rewritten by a model from: "${request.slice(0, 200)}". Orbis has not run it and cannot say that it works: read it before you run it.`, ...outcome.notes.slice(1), `Before: ${counted(before)}. After: ${counted(after)}. The version before is kept.`]
+        : record.kind === 'document'
         ? [`Rewritten by a model from: "${request.slice(0, 200)}". Any figure in it was written, not measured or computed by Orbis.`, `Before: ${counted(before)}. After: ${counted(after)}. The version before is kept.`]
         : [`Redrawn from: "${request.slice(0, 200)}". The boxes and arrows were chosen by a model; where they sit was worked out by Orbis.`, `Before: ${counted(before)}. After: ${counted(after)}. The version before is kept.`]
     return this.keep(profileId, operation, outcome.body, { title: record.title, source: record.source, notes, acceptSecrets: req.acceptSecrets === true, existing: record, reason: request.slice(0, 300) }, fail)
@@ -786,13 +822,15 @@ export class ArtifactService {
     if (req.text.length > LIMITS.text) {
       return fail('too-large', `That is ${req.text.length.toLocaleString('en')} characters, past the ${LIMITS.text.toLocaleString('en')} one artifact can be made from at once.`)
     }
-    const title = str(req.title, LIMITS.title).trim() || (kind === 'table' ? 'Table' : 'Document')
+    const title = str(req.title, LIMITS.title).trim() || (kind === 'table' ? 'Table' : kind === 'code' ? 'Code' : 'Document')
     const source = str(req.source, 200) || 'pasted'
     const acceptSecrets = req.acceptSecrets === true
 
-    const body = this.bodyFrom(kind, req.text, source, title)
+    const body = this.bodyFrom(kind, req.text, source, title, str(req.language, 40))
     if ('error' in body) return fail(body.error, body.message)
-    return this.keep(profileId, operation, body, { title, source, notes: [], acceptSecrets }, fail)
+    // Code says what Orbis could tell about it, and that it was not run. Nothing else needs a note.
+    const notes = body.kind === 'code' ? [checkSyntax(body.code.language, body.code.source, compileJavaScript).message] : []
+    return this.keep(profileId, operation, body, { title, source, notes, acceptSecrets }, fail)
   }
 
   // ---------------------------------------------------------------- generate
@@ -1027,7 +1065,7 @@ export class ArtifactService {
     const rendered = await this.render(body, format, title)
     if ('error' in rendered) return fail(rendered.error, rendered.message)
 
-    const ext = extensionFor(format)
+    const ext = body.kind === 'code' ? extensionForLanguage(body.code.language) : extensionFor(format)
     const gate = gateForWrite(`${safeName(title)}${ext}`, rendered.scan, acceptSecrets)
     if (!gate.ok) return fail('secrets', gate.message, { findings: gate.findings })
 
@@ -1105,6 +1143,12 @@ export class ArtifactService {
       const body = await this.bodyOf(profileId, record)
       if (body && body.kind === 'document') tables = tablesIn(body.document).slice(0, 40)
     }
+    // For code: which language, so the screen can name it and the save button can show the right extension.
+    let code: { language: string; name: string; extension: string } | null = null
+    if (record.kind === 'code') {
+      const body = await this.bodyOf(profileId, record)
+      if (body && body.kind === 'code') code = { language: body.code.language, name: languageById(body.code.language)?.name ?? body.code.language, extension: extensionForLanguage(body.code.language) }
+    }
     if (record.kind === 'table') {
       const body = await this.bodyOf(profileId, record)
       if (body && body.kind === 'table') {
@@ -1127,8 +1171,9 @@ export class ArtifactService {
         columns,
         grid,
         tables,
+        code,
         // Every format this kind can be exported as here, with what each one drops, so the chooser can say so up front.
-        formats: this.formatsFor(record.kind)
+        formats: code ? this.formatsFor(record.kind).map((one) => ({ ...one, name: code.name, extension: code.extension })) : this.formatsFor(record.kind)
       }
     }
   }
@@ -1161,7 +1206,7 @@ export class ArtifactService {
     const rendered = await this.render(body, format, record.title)
     if ('error' in rendered) return fail(rendered.error, rendered.message)
 
-    const ext = extensionFor(format)
+    const ext = body.kind === 'code' ? extensionForLanguage(body.code.language) : extensionFor(format)
     const base = safeName(record.title)
     const gate = gateForWrite(`${base}${ext}`, rendered.scan, acceptSecrets)
     if (!gate.ok) return fail('secrets', gate.message, { findings: gate.findings })
@@ -1169,7 +1214,7 @@ export class ArtifactService {
     const path = await this.o.chooseDestination({
       title: `Save ${record.title}`,
       defaultName: `${base}${ext}`,
-      filters: [{ name: FORMATS[format].name, extensions: [ext.slice(1)] }]
+      filters: [{ name: body.kind === 'code' ? (languageById(body.code.language)?.name ?? FORMATS[format].name) : FORMATS[format].name, extensions: [ext.slice(1)] }]
     })
     if (path === null) return fail('cancelled', 'Nothing was written.')
 

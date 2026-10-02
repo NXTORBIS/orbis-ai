@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { AlertTriangle, ArrowLeft, BarChart3, Check, Copy, FilePlus2, FolderOpen, History, LayoutTemplate, LineChart, Loader2, Pencil, Save, Search, Sparkles, Table2, FileText, Trash2, Workflow, X } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, BarChart3, Check, Code2, Copy, FilePlus2, FolderOpen, History, LayoutTemplate, LineChart, Loader2, Pencil, Save, Search, Sparkles, Table2, FileText, Trash2, Workflow, X } from 'lucide-react'
 import type { NoticeKind } from '../lib/notices'
 import { CreateChange } from './CreateChange'
 import './create.css'
@@ -17,7 +17,7 @@ import './create.css'
  */
 
 /** What can be pasted in. A chart comes from a table and a diagram from Orion, so neither is a paste kind. */
-type Kind = 'table' | 'document'
+type Kind = 'table' | 'document' | 'code'
 /** Every kind a kept artifact can be. */
 type RecordKind = Kind | 'plot' | 'diagram'
 
@@ -98,6 +98,8 @@ interface Opened {
   grid: { rows: string[][]; total: number } | null
   /** The tables inside a document, so each can be taken out as a table of its own. */
   tables: { index: number; caption: string; rows: number; columns: number; headings: string[] }[]
+  /** For code: which language it is. Null for anything else. */
+  code: { language: string; name: string; extension: string } | null
   formats: { format: string; name: string; extension: string; limitations: readonly string[] }[]
 }
 
@@ -112,6 +114,8 @@ const shapeText = (kind: string, shape: { rows: number; columns: number }): stri
       return `${shape.rows} points in ${shape.columns} series`
     case 'diagram':
       return `${shape.rows} boxes, ${shape.columns} arrows`
+    case 'code':
+      return `${shape.rows} ${shape.rows === 1 ? 'line' : 'lines'}`
     default:
       return `${shape.rows} blocks`
   }
@@ -125,6 +129,8 @@ const iconFor = (kind: string): React.JSX.Element => {
       return <LineChart size={14} />
     case 'diagram':
       return <Workflow size={14} />
+    case 'code':
+      return <Code2 size={14} />
     default:
       return <FileText size={14} />
   }
@@ -140,7 +146,8 @@ interface Saved {
 
 const KINDS: { id: Kind; label: string; icon: typeof Table2; hint: string }[] = [
   { id: 'table', label: 'Table', icon: Table2, hint: 'Rows and columns, separated by commas or tabs' },
-  { id: 'document', label: 'Document', icon: FileText, hint: 'Headings, paragraphs, lists -- Markdown' }
+  { id: 'document', label: 'Document', icon: FileText, hint: 'Headings, paragraphs, lists -- Markdown' },
+  { id: 'code', label: 'Code', icon: Code2, hint: 'One source file, kept exactly as written. Orbis never runs it.' }
 ]
 
 const sizeOf = (bytes: number): string =>
@@ -302,6 +309,14 @@ export default function CreateView({
   const [importing, setImporting] = useState(false)
   const [analysing, setAnalysing] = useState(false)
   const [templates, setTemplates] = useState<TemplateEntry[]>([])
+  const [languages, setLanguages] = useState<{ id: string; name: string; extension: string; checked: boolean }[]>([])
+  const [language, setLanguage] = useState('python')
+
+  useEffect(() => {
+    void window.api.creationRun({ operation: 'artifact.languages' }).then((result) => {
+      if (result.ok) setLanguages(result.value as { id: string; name: string; extension: string; checked: boolean }[])
+    })
+  }, [])
   const [templateId, setTemplateId] = useState('')
   const [starting, setStarting] = useState(false)
   const [revision, setRevision] = useState('')
@@ -491,7 +506,7 @@ export default function CreateView({
     setWorking(true)
     setFailure(null)
     try {
-      const result = await window.api.creationRun({ operation: 'artifact.create', kind, title, text, source: 'pasted', acceptSecrets })
+      const result = await window.api.creationRun({ operation: 'artifact.create', kind, title, text, source: 'pasted', acceptSecrets, ...(kind === 'code' ? { language } : {}) })
       if (!result.ok) {
         setFailure(failureOf(result))
         return
@@ -622,14 +637,26 @@ export default function CreateView({
           </div>
           <label className="create-field">
             <span>Name</span>
-            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={kind === 'table' ? 'Monthly expenses' : 'Project notes'} maxLength={120} disabled={working} />
+            <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={kind === 'table' ? 'Monthly expenses' : kind === 'code' ? 'Rename photos' : 'Project notes'} maxLength={120} disabled={working} />
           </label>
+          {kind === 'code' && (
+            <label className="create-field">
+              <span>Language</span>
+              <select className="create-template" value={language} onChange={(e) => setLanguage(e.target.value)} disabled={working}>
+                {languages.map((one) => (
+                  <option key={one.id} value={one.id}>
+                    {one.name} ({one.extension}){one.checked ? ' — Orbis can check that it reads' : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <label className="create-field create-text">
-            <span>{kind === 'table' ? 'The table, as text' : 'The document, as Markdown'}</span>
+            <span>{kind === 'table' ? 'The table, as text' : kind === 'code' ? 'The file, exactly as it should be kept' : 'The document, as Markdown'}</span>
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
-              placeholder={kind === 'table' ? 'date,category,amount\n2026-10-01,food,12.50\n2026-10-02,travel,40' : '# Title\n\nA paragraph.\n\n- a list'}
+              placeholder={kind === 'table' ? 'date,category,amount\n2026-10-01,food,12.50\n2026-10-02,travel,40' : kind === 'code' ? 'import os\n\nfor name in os.listdir("."):\n    print(name)' : '# Title\n\nA paragraph.\n\n- a list'}
               spellCheck={false}
               disabled={working}
             />
@@ -725,7 +752,7 @@ export default function CreateView({
                 <h3>{opened.record.title}</h3>
               )}
               <span className="create-row-meta">
-                version {opened.record.version} · kept as {opened.record.format} · {sizeOf(opened.record.bytes)} · from {opened.record.source}
+                version {opened.record.version} · kept as {opened.code ? `${opened.code.name} (${opened.code.extension})` : opened.record.format} · {sizeOf(opened.record.bytes)} · from {opened.record.source}
               </span>
               <span className="create-opened-actions">
                 <button type="button" className="icon-btn" aria-label="Rename" title="Rename" disabled={busy !== null} onClick={() => setRenaming(opened.record.title)}>
@@ -814,10 +841,10 @@ export default function CreateView({
                 ))}
               </div>
             )}
-            {(opened.record.kind === 'document' || opened.record.kind === 'diagram') && (
+            {(opened.record.kind === 'document' || opened.record.kind === 'diagram' || opened.record.kind === 'code') && (
               <form
                 className="create-ask"
-                aria-label={`Revise this ${opened.record.kind === 'document' ? 'document' : 'flowchart'}`}
+                aria-label={`Revise this ${opened.record.kind === 'document' ? 'document' : opened.record.kind === 'code' ? 'file' : 'flowchart'}`}
                 onSubmit={(event) => {
                   event.preventDefault()
                   void revise()
@@ -827,7 +854,7 @@ export default function CreateView({
                   className="create-revise"
                   value={revision}
                   onChange={(event) => setRevision(event.target.value)}
-                  placeholder={opened.record.kind === 'document' ? 'Say what to change — e.g. make it shorter, add a section on risks' : 'Say what to change — e.g. add a step to check the email first'}
+                  placeholder={opened.record.kind === 'document' ? 'Say what to change — e.g. make it shorter, add a section on risks' : opened.record.kind === 'code' ? 'Say what to change — e.g. skip hidden files, add a comment to each function' : 'Say what to change — e.g. add a step to check the email first'}
                   aria-label="What to change"
                   maxLength={2000}
                 />

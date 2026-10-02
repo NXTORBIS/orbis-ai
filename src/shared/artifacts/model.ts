@@ -33,6 +33,8 @@ export type ArtifactBody =
   | { kind: 'plot'; plot: Plot }
   /** Boxes and arrows: the builders' own editable artifact, never a picture. */
   | { kind: 'diagram'; diagram: Diagram }
+  /** One source file: its language and its text, exactly as written. Never run. */
+  | { kind: 'code'; code: { language: string; source: string } }
 
 const ID_PATTERN = /^artifact_[0-9a-f]{32}$/
 const VERSION_PATTERN = /^v[0-9a-f]{32}$/

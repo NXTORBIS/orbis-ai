@@ -39,14 +39,32 @@ function CodeBlock({ node, children, ...rest }: React.ComponentProps<'pre'> & Ex
     })
   }
 
+  // Kept in Create as a file in this language: versions, the right extension when saved, never run.
+  const [kept, setKept] = useState<{ ok: boolean; says: string } | null>(null)
+  const keep = (): void => {
+    if (!language) return
+    void window.api.creationRun({ operation: 'artifact.create', kind: 'code', language, title: `${language} from a chat`, text: hastText(node).replace(/\n$/, '') + '\n', source: 'a chat reply' }).then((result) => {
+      setKept(result.ok ? { ok: true, says: 'Kept in Create' } : { ok: false, says: result.message })
+      setTimeout(() => setKept(null), result.ok ? 2500 : 8000)
+    })
+  }
+
   return (
     <div className="code-block">
       <div className="code-header">
         <span>{language ?? 'code'}</span>
-        <button className="code-copy" onClick={copy}>
-          {copied ? <CheckIcon size={14} /> : <CopyIcon size={14} />}
-          {copied ? 'Copied' : 'Copy'}
-        </button>
+        <span className="code-actions">
+          {language && (
+            <button className="code-copy" onClick={keep} title={kept && !kept.ok ? kept.says : 'Keep this in Create as a file: versions, and the right extension when saved. Orbis never runs it.'}>
+              {kept?.ok ? <CheckIcon size={14} /> : null}
+              {kept ? (kept.ok ? kept.says : 'Not kept') : 'Keep'}
+            </button>
+          )}
+          <button className="code-copy" onClick={copy}>
+            {copied ? <CheckIcon size={14} /> : <CopyIcon size={14} />}
+            {copied ? 'Copied' : 'Copy'}
+          </button>
+        </span>
       </div>
       <pre {...rest}>{children}</pre>
     </div>

@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto'
 import { rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { FORMATS } from '../../shared/compute/interchange.ts'
+import { CODE_ONLY_EXTENSIONS } from '../../shared/artifacts/languages.ts'
 import type { ArtifactService, DestinationRequest } from './service.ts'
 
 /**
@@ -56,7 +57,7 @@ export const chooseSourceWith =
       title: 'Open a file',
       properties: ['openFile' as const],
       filters: [
-        { name: 'Files Orbis reads', extensions: readable },
+        { name: 'Files Orbis reads', extensions: [...readable, ...CODE_ONLY_EXTENSIONS.map((ext) => ext.replace(/^\./, ''))] },
         { name: 'All files', extensions: ['*'] }
       ]
     }

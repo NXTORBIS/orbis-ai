@@ -116,7 +116,7 @@ test('the operations are a fixed list and an unknown one is refused by name', ()
 test('what Orbis can create comes from the table', () =>
   withService(async ({ service }) => {
     const kinds = ok<{ id: string }[]>(await service.run('default', { operation: 'artifact.kinds' }))
-    assert.deepEqual(kinds.map((one) => one.id), ['table', 'document', 'plot', 'diagram'])
+    assert.deepEqual(kinds.map((one) => one.id), ['table', 'document', 'plot', 'diagram', 'code'])
   }))
 
 test('a table pasted as CSV is kept, read back from disk, and verified before it is reported', () =>
@@ -749,3 +749,86 @@ test('a table inside a document is taken out as a table that remembers the docum
     const wrong = await h.service.run('default', { operation: 'artifact.extractTable', artifactId: taken.record.artifactId })
     assert.equal(wrong.ok, false)
   }))
+
+test('code is kept character for character with its language, says what could be checked, and saves with the language\'s extension', () =>
+  withService(async (h) => {
+    const source = 'import os\n\nfor name in os.listdir("."):\n    print(name)\n'
+    const made = ok<{ record: { artifactId: string; kind: string; format: string; notes: string[]; shape: { rows: number; columns: number }; verified: { ok: boolean; checks: { what: string }[] } } }>(
+      await h.service.run('default', { operation: 'artifact.create', kind: 'code', title: 'List files', language: 'python', text: source })
+    )
+    assert.equal(made.record.kind, 'code')
+    assert.equal(made.record.format, 'code')
+    assert.deepEqual(made.record.shape, { rows: 4, columns: 0 })
+    assert.equal(made.record.verified.ok, true)
+    assert.deepEqual(made.record.verified.checks.map((one) => one.what), ['written', 'checksum', 'same text'])
+    assert.match(made.record.notes[0], /no checker for Python, so this was not checked\. It was not run\./)
+
+    const read = ok<{ preview: string; code: { language: string; name: string; extension: string }; formats: { format: string; name: string; extension: string }[] }>(
+      await h.service.run('default', { operation: 'artifact.read', artifactId: made.record.artifactId })
+    )
+    assert.equal(read.preview, source, 'not a character changed')
+    assert.deepEqual(read.code, { language: 'python', name: 'Python', extension: '.py' })
+    assert.deepEqual(read.formats.map((one) => `${one.name} ${one.extension}`), ['Python .py'])
+
+    h.nextDestination = join(h.dir, 'list.py')
+    const saved = ok<{ path: string; verified: { ok: boolean } }>(await h.service.run('default', { operation: 'artifact.export', artifactId: made.record.artifactId }))
+    assert.equal(saved.verified.ok, true)
+    assert.equal(await readFile(saved.path, 'utf8'), source)
+
+    // The language can come from a title that ends like a file name; with neither, it is asked for.
+    const named = ok<{ record: { artifactId: string } }>(await h.service.run('default', { operation: 'artifact.create', kind: 'code', title: 'settings.json', text: '{"a": 1}' }))
+    const settings = ok<{ code: { language: string }; record: { notes: string[] } }>(await h.service.run('default', { operation: 'artifact.read', artifactId: named.record.artifactId }))
+    assert.equal(settings.code.language, 'json')
+    assert.equal(settings.record.notes[0], 'It reads as JSON.')
+    const nameless = await h.service.run('default', { operation: 'artifact.create', kind: 'code', title: 'Something', text: 'x = 1' })
+    assert.equal(nameless.ok, false)
+    if (!nameless.ok) assert.match(nameless.message, /Say which language it is/)
+
+    // A pasted file that does not read is still the person\'s file: it is kept, and the note says what is wrong.
+    const broken = ok<{ record: { notes: string[]; verified: { ok: boolean } } }>(await h.service.run('default', { operation: 'artifact.create', kind: 'code', title: 'Broken', language: 'javascript', text: 'function f( {' }))
+    assert.equal(broken.record.verified.ok, true, 'it was written faithfully')
+    assert.match(broken.record.notes[0], /does not compile as JavaScript/)
+
+    // A key in the code is stopped at the same gate as anywhere else.
+    const leaky = await h.service.run('default', { operation: 'artifact.create', kind: 'code', title: 'Deploy', language: 'shell', text: `export TOKEN=${KEY}\n` })
+    assert.equal(leaky.ok, false)
+    if (!leaky.ok) assert.equal(leaky.error, 'secrets')
+  }))
+
+test('a source file is opened as code, and Orion-written code that does not read is sent back once', () =>
+  withService(
+    async (h) => {
+      const path = join(h.dir, 'totals.sql')
+      await writeFile(path, 'SELECT site, SUM(mwh) FROM readings GROUP BY site;\n')
+      h.nextSource = path
+      const imported = ok<{ record: { kind: string; title: string; source: string; notes: string[]; shape: { rows: number } } }>(await h.service.run('default', { operation: 'artifact.import' }))
+      assert.equal(imported.record.kind, 'code')
+      assert.equal(imported.record.title, 'totals')
+      assert.equal(imported.record.source, 'file: totals.sql')
+      assert.equal(imported.record.shape.rows, 1)
+      assert.match(imported.record.notes[0], /Kept exactly as it was in the file\. Orbis did not run it\./)
+
+      const generated = ok<{ record: { artifactId: string; kind: string; notes: string[] } }>(await h.service.run('default', { operation: 'artifact.generate', request: 'a settings file with a name and a port' }))
+      assert.equal(generated.record.kind, 'code')
+      assert.equal(h.asked.length, 2, 'the first answer did not read as JSON, so it was asked again')
+      assert.match(h.asked[1].user, /It does not read as JSON/)
+      assert.match(generated.record.notes[0], /Written by a model from your request\. Orbis has not run it and cannot say that it works/)
+      assert.equal(generated.record.notes[1], 'It reads as JSON.')
+
+      const revised = ok<{ record: { version: number; notes: string[]; shape: { rows: number } } }>(await h.service.run('default', { operation: 'artifact.revise', artifactId: generated.record.artifactId, request: 'add a debug flag' }))
+      assert.equal(revised.record.version, 2)
+      assert.match(revised.record.notes[0], /Rewritten by a model from: "add a debug flag"\. Orbis has not run it/)
+      assert.equal(revised.record.notes[1], 'It reads as JSON.')
+      assert.match(revised.record.notes[2], /Before: 4 lines\. After: 5 lines\. The version before is kept\./)
+      assert.ok(h.asked[2].system.includes('JSON file'), 'the language was named to the model')
+    },
+    {
+      pdf: true,
+      png: true,
+      answers: [
+        { kind: 'code', title: 'Settings', language: 'json', code: '{\n  "name": "orbis",\n  "port": 8080,\n}' },
+        { kind: 'code', title: 'Settings', language: 'json', code: '{\n  "name": "orbis",\n  "port": 8080\n}' },
+        { code: '{\n  "name": "orbis",\n  "port": 8080,\n  "debug": false\n}' }
+      ]
+    }
+  ))

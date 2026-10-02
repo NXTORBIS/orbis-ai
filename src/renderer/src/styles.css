@@ -4084,6 +4084,12 @@ textarea.hud-input {
   color: #ffffff;
 }
 
+.code-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .code-block pre {
   margin: 0;
   padding: 12px 14px;
