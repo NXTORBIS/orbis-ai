@@ -142,3 +142,36 @@ test('the real Browser Control Layer drives a real Chromium tab', { skip: runRea
     await assert.rejects(() => tab.executeJavaScript('1'), /closed/)
   })
 })
+
+test('a part of a picture can be taken out, and it is the part asked for', () => {
+  // Four quadrants, each a different colour, so a crop that took the wrong pixels would be obvious.
+  const width = 4
+  const height = 4
+  const bgra = Buffer.alloc(width * height * 4)
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const at = (y * width + x) * 4
+      const value = x < 2 ? (y < 2 ? 10 : 20) : y < 2 ? 30 : 40
+      bgra[at] = value
+      bgra[at + 1] = value
+      bgra[at + 2] = value
+      bgra[at + 3] = 255
+    }
+  }
+  const whole = ChromiumImage.fromRaster({ width, height, bgra })
+
+  const bottomRight = whole.crop({ x: 2, y: 2, width: 2, height: 2 })
+  assert.deepEqual(bottomRight.getSize(), { width: 2, height: 2 })
+  assert.equal(bottomRight.toBitmap()[0], 40, 'the bottom-right quadrant, not the top-left')
+
+  const topLeft = whole.crop({ x: 0, y: 0, width: 2, height: 2 })
+  assert.equal(topLeft.toBitmap()[0], 10)
+})
+
+test('a part that runs off the edge is cut to what is really there, not refused and not padded', () => {
+  const bgra = Buffer.alloc(2 * 2 * 4, 7)
+  const whole = ChromiumImage.fromRaster({ width: 2, height: 2, bgra })
+  assert.deepEqual(whole.crop({ x: 1, y: 1, width: 99, height: 99 }).getSize(), { width: 1, height: 1 })
+  assert.deepEqual(whole.crop({ x: -5, y: -5, width: 1, height: 1 }).getSize(), { width: 1, height: 1 })
+  assert.equal(whole.crop({ x: 5, y: 5, width: 1, height: 1 }).isEmpty(), true, 'entirely outside is empty, and says so')
+})

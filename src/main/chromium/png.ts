@@ -178,6 +178,20 @@ export class ChromiumImage implements PageImage {
   getSize(): { width: number; height: number } {
     return { width: this.raster.width, height: this.raster.height }
   }
+  crop(area: { x: number; y: number; width: number; height: number }): PageImage {
+    const { width: w, height: h, bgra } = this.raster
+    const x = Math.max(0, Math.min(w, Math.round(area.x)))
+    const y = Math.max(0, Math.min(h, Math.round(area.y)))
+    const width = Math.max(0, Math.min(w - x, Math.round(area.width)))
+    const height = Math.max(0, Math.min(h - y, Math.round(area.height)))
+    const out = Buffer.alloc(width * height * 4)
+    for (let row = 0; row < height; row++) {
+      // One row at a time: the source rows are not contiguous once a rectangle is taken out of the middle.
+      bgra.copy(out, row * width * 4, ((y + row) * w + x) * 4, ((y + row) * w + x + width) * 4)
+    }
+    return ChromiumImage.fromRaster({ width, height, bgra: out })
+  }
+
   resize(options: { width?: number; height?: number }): PageImage {
     const { width: w, height: h } = this.raster
     const width = options.width ?? (options.height ? (options.height * w) / h : w)

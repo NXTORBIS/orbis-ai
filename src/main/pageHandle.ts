@@ -21,6 +21,14 @@ export interface PageImage {
   isEmpty(): boolean
   getSize(): { width: number; height: number }
   resize(options: { width?: number; height?: number }): PageImage
+  /**
+   * A rectangle of the image, in its own pixels.
+   *
+   * For reading a part of a page closely: the whole viewport scaled down makes small print unreadable, which is
+   * exactly the case a picture is wanted for. The rectangle is clamped to the image, because a crop that runs off the
+   * edge is a request for pixels that do not exist.
+   */
+  crop(area: { x: number; y: number; width: number; height: number }): PageImage
 }
 
 export interface InputEvent {

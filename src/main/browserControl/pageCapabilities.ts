@@ -722,18 +722,47 @@ export function registerPageCapabilities(control: BrowserControl, resolve: PageR
     id: 'page.screenshot',
     name: 'Screenshot the page',
     description: 'Captures what the tab shows, as a PNG data URL (scaled to at most maxWidth), for visual checks when structured state is not enough.',
-    params: { maxWidth: { type: 'integer', description: 'Scale down to this width (default 1280).' } },
+    params: {
+      maxWidth: { type: 'integer', description: 'Scale down to this width (default 1280).' },
+      /*
+       * A part of the page rather than all of it.
+       *
+       * The whole viewport scaled to 1280 makes small print unreadable, which is the case this is for: a table, a
+       * chart's labels, a receipt. Given in the page's own pixels, before any scaling, because that is what a
+       * position read off the page means.
+       */
+      x: { type: 'integer', description: 'Left edge of the part to capture, in page pixels.' },
+      y: { type: 'integer', description: 'Top edge of the part to capture, in page pixels.' },
+      width: { type: 'integer', description: 'Width of the part to capture.' },
+      height: { type: 'integer', description: 'Height of the part to capture.' }
+    },
     mutates: false,
     confirmation: 'none',
+    returns: { dataUrl: { type: 'string', description: 'The image.', required: true }, width: { type: 'integer', description: 'How wide.', required: true }, height: { type: 'integer', description: 'How tall.', required: true } },
     run: async (p, ctx) => {
       const wc = tab(ctx)
       let image = await page.withTimeout(asPageHandle(wc).capturePage(), 8000).catch(() => null)
       // A hidden page (Orbis minimized or covered) isn't composited; the DevTools protocol can still render a frame of it.
       if (!image || image.isEmpty()) image = await page.debuggerScreenshot(asPageHandle(wc)).catch(() => null)
       if (!image || image.isEmpty()) fail('failed', "The page couldn't be captured (it may still be loading).", true)
-      const size = image!.getSize()
+
+      const whole = image!.getSize()
+      // A region is taken before scaling, and clamped to what is really there: a crop that runs off the edge is a
+      // request for pixels that do not exist, and returning the whole page instead would be a different picture.
+      const wants = [p.x, p.y, p.width, p.height].some((one) => typeof one === 'number')
+      let cut = image!
+      if (wants) {
+        const x = Math.max(0, Math.min(whole.width - 1, Math.round(Number(p.x) || 0)))
+        const y = Math.max(0, Math.min(whole.height - 1, Math.round(Number(p.y) || 0)))
+        const w = Math.max(1, Math.min(whole.width - x, Math.round(Number(p.width) || whole.width - x)))
+        const h = Math.max(1, Math.min(whole.height - y, Math.round(Number(p.height) || whole.height - y)))
+        cut = image!.crop({ x, y, width: w, height: h })
+        if (cut.isEmpty()) fail('failed', 'That part of the page is outside what is on screen.', true)
+      }
+
+      const size = cut.getSize()
       const width = Math.min(size.width, Number(p.maxWidth) || 1280)
-      const scaled = width < size.width ? image!.resize({ width }) : image!
+      const scaled = width < size.width ? cut.resize({ width }) : cut
       return { dataUrl: scaled.toDataURL(), width: scaled.getSize().width, height: scaled.getSize().height }
     }
   })
