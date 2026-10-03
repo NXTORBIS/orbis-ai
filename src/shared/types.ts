@@ -2,6 +2,14 @@ import type { SourcePreferences } from './researchSources'
 import type { ResearchChange, ResearchStage } from './researchRun'
 import type { SharedProject } from './portable/share'
 
+/** A file a project keeps, as the window is shown it. The words themselves stay in the main process. */
+export interface ProjectFileView {
+  id: string
+  name: string
+  characters: number
+  addedAt: number
+}
+
 /** A research run as the window sees it: where it has got to, whether it is held, and what it means to do. */
 export interface ResearchRunView {
   id: string
@@ -1718,6 +1726,14 @@ export interface NxtorbisApi {
    * Nothing secret leaves: the export is built out of named fields and every piece of text is checked again on the
    * way out. A project carries how it works, never what it refers to.
    */
+  /**
+   * The files a project keeps, so every conversation in it already has them.
+   *
+   * They are searched like attachments rather than sent whole, so holding six files does not mean sending six files.
+   */
+  projectFiles(projectId: string): Promise<{ ok: boolean; files?: ProjectFileView[]; message?: string }>
+  addProjectFiles(projectId: string): Promise<{ ok: boolean; added?: string[]; refused?: string[]; files?: ProjectFileView[]; message?: string }>
+  removeProjectFile(projectId: string, fileId: string): Promise<{ ok: boolean }>
   exportConversation(id: string): Promise<{ ok: boolean; path?: string; message?: string }>
   exportProject(id: string): Promise<{ ok: boolean; path?: string; message?: string }>
   importProject(): Promise<{ ok: boolean; project?: SharedProject; notes?: string[]; message?: string }>

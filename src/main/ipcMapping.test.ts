@@ -259,5 +259,6 @@ test('the boundary is a known size, so the migration can be estimated rather tha
   // 476 -> 478: what Orbis may do by kind of effect (read, write, delete, send, run, lock), beside the area switches.
   // 478 -> 479: holding a research run, letting it go, and changing what it is doing. One door for all three.
   // 479 -> 481: taking one conversation or project out of Orbis, and bringing a project back in.
-  assert.ok(code.length <= 481, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
+  // 481 -> 482: the files a project keeps.
+  assert.ok(code.length <= 482, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
 })

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { newWorkspace } from '../../../shared/workspaces'
+import ProjectFileList from './ProjectFileList'
 import { CHAT_MODELS, modelLabel } from '../../../shared/models'
 import { AUTO_MODEL } from '../../../shared/modelRoute'
 import { Check, Copy, FolderOpen, Layers, Plus, RefreshCw, Save, Trash2, X } from 'lucide-react'
@@ -187,6 +188,8 @@ export default function WorkspacesView({ onClose, onNotify }: { onClose(): void;
                     ))}
                   </select>
                 </label>
+                {/* The files this project keeps. Searched like attachments, so holding six does not mean sending six. */}
+                <ProjectFileList projectId={workspace.id} onNotify={onNotify} />
                 <div className="setting-row-inline">
                   <button
                     type="button"

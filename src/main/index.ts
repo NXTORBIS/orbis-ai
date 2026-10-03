@@ -118,6 +118,14 @@ import { createNotifications, type Notifications } from './notifications/index'
 import { bus } from './eventBus'
 import { AutomationCheckpoints, describeCheckpoint } from './automationCheckpoint'
 import { ResearchControl } from './researchControl'
+import { MAX_PROJECT_FILES, ProjectFiles } from './projectFiles'
+import { chooseContext, contextFrom } from '../shared/attachmentIndex'
+
+/** How much of a project's own files may travel with one message. The rest is left for the question to reach. */
+const PROJECT_FILE_BUDGET = 24_000
+
+/** The files each project keeps, so every conversation in it already has them. */
+let projectFiles: ProjectFiles | null = null
 import { conversationToMarkdown, projectToShare, readSharedProject, shareFilename } from '../shared/portable/share'
 import type { ResearchChange } from '../shared/researchRun'
 
@@ -1084,6 +1092,29 @@ ${block}`
       }
 
       /*
+       * The files this project keeps.
+       *
+       * A project could refer to a note or a saved page and could not hold a file, so "here is the spec, the data and
+       * the style guide, now answer questions about this work" meant attaching the same three files to every message
+       * by hand -- and forgetting one meant an answer confidently based on two of them.
+       *
+       * They go through the same passage search as attachments, so holding six files does not mean sending six
+       * files: the parts that answer the question are sent, each named, and a file that matched nothing is said.
+       */
+      if (homeProjectId && projectFiles && last?.role === 'user') {
+        try {
+          const held = await projectFiles.forSearch(homeProjectId)
+          if (held.length) {
+            const context = contextFrom(chooseContext(last.content, held, PROJECT_FILE_BUDGET))
+            if (context) systemPrompt = `${systemPrompt}${BREAK}These are the files kept in this project.${BREAK}${context}`
+          }
+        } catch (err) {
+          // A project's files help an answer; they are never a reason for one to fail.
+          console.error('[project files] could not be read', err)
+        }
+      }
+
+      /*
        * The numbers in an attached table, worked out rather than read off by a model.
        *
        * Orbis has a whole deterministic data layer and a question typed in the chat about an attached spreadsheet
@@ -1393,6 +1424,55 @@ ${summaryBlock(summary)}`
    * is built out of named fields and checked again for anything that looks like a key, because a conversation is
    * exactly where somebody once pasted one.
    */
+  /**
+   * The files a project keeps.
+   *
+   * Adding one reads its words through the same reader the chat uses, so a workbook, a document, a PDF and a deck all
+   * work -- and anything with no words in it is refused at the point of adding rather than accepted and then silently
+   * absent from every answer.
+   */
+  ipcMain.handle('project-files:do', async (event, op: unknown, projectId: unknown, arg?: unknown) => {
+    const id = typeof projectId === 'string' ? projectId : ''
+    if (!projectFiles || !id) return { ok: false, message: 'That is not a project.' }
+    if (op === 'list') return { ok: true, files: await projectFiles.list(id) }
+    if (op === 'remove') return { ok: await projectFiles.remove(id, typeof arg === 'string' ? arg : '') }
+    if (op !== 'add') return { ok: false, message: 'Orbis cannot do that with a project’s files.' }
+
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const options = { title: 'Add files to this project', properties: ['openFile' as const, 'multiSelections' as const] }
+    const picked = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
+    if (picked.canceled || !picked.filePaths.length) return { ok: false }
+
+    const added: string[] = []
+    const refused: string[] = []
+    for (const path of picked.filePaths.slice(0, MAX_PROJECT_FILES)) {
+      const name = basename(path)
+      try {
+        const bytes = new Uint8Array(await fs.readFile(path))
+        let text = ''
+        if (isReadForChat(name)) {
+          const read = await readForChat(name, bytes, IMPORT_LIMITS.bytes)
+          if ('error' in read) {
+            refused.push(`${name}: ${read.message}`)
+            continue
+          }
+          text = read.content
+        } else if (bytes.includes(0)) {
+          refused.push(`${name}: it has no words in it that Orbis can read.`)
+          continue
+        } else {
+          text = Buffer.from(bytes).toString('utf8')
+        }
+        const done = await projectFiles.add(id, name, text)
+        if (done.ok) added.push(done.file.name)
+        else refused.push(`${name}: ${done.message}`)
+      } catch {
+        refused.push(`${name}: it could not be read.`)
+      }
+    }
+    return { ok: added.length > 0, added, refused, files: await projectFiles.list(id) }
+  })
+
   ipcMain.handle('share:export', async (event, what: unknown, id: unknown) => {
     const win = BrowserWindow.fromWebContents(event.sender)
     const ask = async (name: string, kind: string, ext: string): Promise<string | null> => {
@@ -2925,6 +3005,7 @@ if (!app.requestSingleInstanceLock()) {
      * a page, redoing it all is worse than not resuming at all.
      */
     automationCheckpoints = new AutomationCheckpoints({ userData: app.getPath('userData'), profileId: () => notifyProfileId })
+    projectFiles = new ProjectFiles({ userData: app.getPath('userData'), profileId: () => notifyProfileId })
     app.on('before-quit', () => void automationCheckpoints?.flush())
 
     notifyProfileId = (await profilesStore.active()).id
