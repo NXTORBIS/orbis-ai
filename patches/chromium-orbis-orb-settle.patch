@@ -1,0 +1,387 @@
+From 3332bc3d792132d03cbb6fc07c1d5882a210026b Mon Sep 17 00:00:00 2001
+From: NXTORBIS TECHNOLOGIES <nxtorbis@gmail.com>
+Date: Sat, 3 Oct 2026 12:22:48 +0530
+Subject: [PATCH] Orbis: the Orb goes to the side when you let it go
+
+The lean towards a nearby edge while dragging was there and the rest of it was not: released, the Orb stayed wherever
+it had been dropped, including the middle of the page. That is not what a magnetic Orb is. Letting go now sends it to
+the nearer side -- left or right, at the height it was dropped at -- gliding over a few frames rather than jumping,
+because a thing that teleports on release reads as a fault and a thing that travels reads as the Orb going home.
+
+Sides rather than corners, because the height is the part of the placement worth keeping. Picking the Orb up again
+cancels the glide: nothing should be pulling at it while it is held.
+---
+ .../ui/views/frame/orbis_orb_web_view.cc      | 200 +++++++++++++++++-
+ .../ui/views/frame/orbis_orb_web_view.h       |  87 +++++++-
+ 2 files changed, 279 insertions(+), 8 deletions(-)
+
+diff --git a/chrome/browser/ui/views/frame/orbis_orb_web_view.cc b/chrome/browser/ui/views/frame/orbis_orb_web_view.cc
+index 6df1308469..91b90145b7 100644
+--- a/chrome/browser/ui/views/frame/orbis_orb_web_view.cc
++++ b/chrome/browser/ui/views/frame/orbis_orb_web_view.cc
+@@ -5,6 +5,10 @@
+ #include "chrome/browser/ui/views/frame/orbis_orb_web_view.h"
+ 
+ #include <algorithm>
++#include <cmath>
++
++#include "chrome/browser/ui/views/frame/orbis_orb_prefs.h"
++#include "components/prefs/pref_service.h"
+ 
+ #include "chrome/browser/profiles/profile.h"
+ #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
+@@ -58,13 +62,195 @@ void OrbisOrbWebView::EnsureLoaded() {
+ }
+ 
+ void OrbisOrbWebView::MoveBy(int dx, int dy) {
++  // Picked up again. Whatever it was gliding towards stops mattering.
++  settle_timer_.Stop();
+   orb_origin_.Offset(dx, dy);
+   placed_ = true;
++  ApplyMagnet(dx, dy);
++  if (parent()) {
++    parent()->InvalidateLayout();
++  }
++}
++
++void OrbisOrbWebView::ApplyMagnet(int dx, int dy) {
++  if (available_.IsEmpty()) {
++    // Nothing has been laid out yet, so there are no edges to lean towards.
++    return;
++  }
++
++  // A fast drag is a person going somewhere, and being tugged on the way would
++  // feel like the Orb catching on things. A slow one is a person placing it,
++  // which is when the help is worth having.
++  const double speed = std::hypot(static_cast<double>(dx),
++                                  static_cast<double>(dy));
++  const double ease = 1.0 / (1.0 + speed / 12.0);
++
++  // How far the Orb could still travel towards each edge before it is against
++  // it. Measured against the same margins the clamp below uses, so "no gap"
++  // here and "as far as it goes" there are the same place.
++  const int low_x = available_.x() + kMargin;
++  const int high_x = available_.right() - kOrbSize - kMargin;
++  const int low_y = available_.y() + kMargin;
++  const int high_y = available_.bottom() - kOrbSize - kMargin;
++
++  // A squared falloff: barely anything at the edge of the range, firm up close,
++  // and continuous throughout. Nothing here ever jumps.
++  auto pull = [&](int gap) {
++    if (gap < 0 || gap >= kMagnetRange) {
++      return 0.0;
++    }
++    const double near = 1.0 - static_cast<double>(gap) / kMagnetRange;
++    return kMagnetStep * near * near * ease;
++  };
++
++  // Only the nearer edge of each axis pulls. Letting both pull at once is what
++  // makes an Orb in a corner jitter between two forces that cancel.
++  const int left_gap = orb_origin_.x() - low_x;
++  const int right_gap = high_x - orb_origin_.x();
++  if (left_gap >= 0 && right_gap >= 0) {
++    magnet_x_ += left_gap <= right_gap ? -pull(left_gap) : pull(right_gap);
++  }
++  const int top_gap = orb_origin_.y() - low_y;
++  const int bottom_gap = high_y - orb_origin_.y();
++  if (top_gap >= 0 && bottom_gap >= 0) {
++    magnet_y_ += top_gap <= bottom_gap ? -pull(top_gap) : pull(bottom_gap);
++  }
++
++  // Whole pixels move the Orb; the remainder waits for the next event.
++  const int step_x = static_cast<int>(std::trunc(magnet_x_));
++  const int step_y = static_cast<int>(std::trunc(magnet_y_));
++  magnet_x_ -= step_x;
++  magnet_y_ -= step_y;
++  orb_origin_.Offset(step_x, step_y);
++}
++
++void OrbisOrbWebView::EndDrag() {
++  // The lean ends with the drag; what is owed of it is dropped rather than
++  // paid out, because the settle below decides where the Orb goes from here.
++  magnet_x_ = 0;
++  magnet_y_ = 0;
++  SettleToEdge();
++}
++
++void OrbisOrbWebView::SettleToEdge() {
++  settle_timer_.Stop();
++  if (available_.IsEmpty()) {
++    Persist();
++    return;
++  }
++
++  const int low_x = available_.x() + kMargin;
++  const int high_x = available_.right() - kOrbSize - kMargin;
++  const int low_y = available_.y() + kMargin;
++  const int high_y = available_.bottom() - kOrbSize - kMargin;
++
++  // The nearer side, at the height it was dropped at. Sides rather than
++  // corners: an Orb that flew to a corner would keep leaving the place a person
++  // had just chosen, and the height is the part of that choice worth keeping.
++  const int x = Clamp(orb_origin_.x(), low_x, high_x);
++  const int y = Clamp(orb_origin_.y(), low_y, high_y);
++  settle_to_ = gfx::Point((x - low_x) <= (high_x - x) ? low_x : high_x, y);
++
++  if (settle_to_ == orb_origin_) {
++    Persist();
++    return;
++  }
++  settle_timer_.Start(FROM_HERE, base::Milliseconds(kSettleFrameMs),
++                      base::BindRepeating(&OrbisOrbWebView::SettleStep,
++                                          base::Unretained(this)));
++}
++
++void OrbisOrbWebView::SettleStep() {
++  // A share of what is left each frame, so it slows as it arrives rather than
++  // stopping dead -- and at least one pixel, so it always arrives.
++  auto step = [](int gap) {
++    if (gap == 0) {
++      return 0;
++    }
++    const int by = gap / 4;
++    if (by != 0) {
++      return by;
++    }
++    return gap > 0 ? 1 : -1;
++  };
++
++  const int dx = settle_to_.x() - orb_origin_.x();
++  const int dy = settle_to_.y() - orb_origin_.y();
++  if (std::abs(dx) <= kSettleSnap && std::abs(dy) <= kSettleSnap) {
++    orb_origin_ = settle_to_;
++    settle_timer_.Stop();
++    if (parent()) {
++      parent()->InvalidateLayout();
++    }
++    Persist();
++    return;
++  }
++
++  orb_origin_.Offset(step(dx), step(dy));
++  placed_ = true;
+   if (parent()) {
+     parent()->InvalidateLayout();
+   }
+ }
+ 
++void OrbisOrbWebView::Persist() {
++  if (available_.IsEmpty() || !browser_) {
++    return;
++  }
++  Profile* profile = browser_->GetProfile();
++  // An off-the-record window is a window that does not remember things.
++  if (!profile || profile->IsOffTheRecord()) {
++    return;
++  }
++  PrefService* prefs = profile->GetPrefs();
++  if (!prefs) {
++    return;
++  }
++
++  const int low_x = available_.x() + kMargin;
++  const int high_x = available_.right() - kOrbSize - kMargin;
++  const int low_y = available_.y() + kMargin;
++  const int high_y = available_.bottom() - kOrbSize - kMargin;
++
++  // Measured from whichever edge is nearer, so a window that reopens a
++  // different size keeps the Orb by the corner it was left at.
++  const bool right = (high_x - orb_origin_.x()) < (orb_origin_.x() - low_x);
++  const bool bottom = (high_y - orb_origin_.y()) < (orb_origin_.y() - low_y);
++  prefs->SetInteger(orbis_orb_prefs::kGapX, right ? high_x - orb_origin_.x()
++                                                  : orb_origin_.x() - low_x);
++  prefs->SetInteger(orbis_orb_prefs::kGapY, bottom ? high_y - orb_origin_.y()
++                                                   : orb_origin_.y() - low_y);
++  prefs->SetBoolean(orbis_orb_prefs::kAnchorRight, right);
++  prefs->SetBoolean(orbis_orb_prefs::kAnchorBottom, bottom);
++  prefs->SetBoolean(orbis_orb_prefs::kPlaced, true);
++}
++
++void OrbisOrbWebView::RestoreWithin(const gfx::Rect& available) {
++  const int low_x = available.x() + kMargin;
++  const int high_x = available.right() - kOrbSize - kMargin;
++  const int low_y = available.y() + kMargin;
++  const int high_y = available.bottom() - kOrbSize - kMargin;
++
++  PrefService* prefs = browser_ && browser_->GetProfile()
++                           ? browser_->GetProfile()->GetPrefs()
++                           : nullptr;
++  if (!prefs || !prefs->GetBoolean(orbis_orb_prefs::kPlaced)) {
++    // Bottom right to begin with, which is where the Orb has always started.
++    orb_origin_ = gfx::Point(high_x, high_y);
++    return;
++  }
++
++  const int gap_x = prefs->GetInteger(orbis_orb_prefs::kGapX);
++  const int gap_y = prefs->GetInteger(orbis_orb_prefs::kGapY);
++  orb_origin_ = gfx::Point(
++      prefs->GetBoolean(orbis_orb_prefs::kAnchorRight) ? high_x - gap_x
++                                                       : low_x + gap_x,
++      prefs->GetBoolean(orbis_orb_prefs::kAnchorBottom) ? high_y - gap_y
++                                                        : low_y + gap_y);
++  // The clamp in BoundsWithin has the last word, so a saved position from a
++  // larger window cannot put the Orb outside a smaller one.
++}
++
+ void OrbisOrbWebView::SetOpen(bool open) {
+   if (open_ == open) {
+     return;
+@@ -84,10 +270,16 @@ gfx::Rect OrbisOrbWebView::BoundsWithin(const gfx::Rect& available) {
+     return gfx::Rect();
+   }
+ 
+-  // Bottom right to begin with, which is where the Orb has always started.
+-  if (!placed_) {
+-    orb_origin_ = gfx::Point(available.right() - kOrbSize - kMargin,
+-                             available.bottom() - kOrbSize - kMargin);
++  // The edges the magnet leans towards are these ones, so it is told about them
++  // here rather than guessing at a window it cannot see.
++  available_ = available;
++
++  // Where the person left it last time, or the bottom right if there is no last
++  // time. Done once: after this the Orb keeps its own position, and a resize
++  // adjusts it through the clamp below rather than by starting over.
++  if (!placed_ && !restored_) {
++    restored_ = true;
++    RestoreWithin(available);
+     placed_ = true;
+   }
+ 
+diff --git a/chrome/browser/ui/views/frame/orbis_orb_web_view.h b/chrome/browser/ui/views/frame/orbis_orb_web_view.h
+index d2bae8b14b..d354d8cf24 100644
+--- a/chrome/browser/ui/views/frame/orbis_orb_web_view.h
++++ b/chrome/browser/ui/views/frame/orbis_orb_web_view.h
+@@ -6,6 +6,7 @@
+ #define CHROME_BROWSER_UI_VIEWS_FRAME_ORBIS_ORB_WEB_VIEW_H_
+ 
+ #include "base/memory/raw_ptr.h"
++#include "base/timer/timer.h"
+ #include "ui/base/metadata/metadata_header_macros.h"
+ #include "ui/gfx/geometry/point.h"
+ #include "ui/gfx/geometry/rect.h"
+@@ -34,10 +35,22 @@ class OrbisOrbWebView : public views::WebView {
+   METADATA_HEADER(OrbisOrbWebView, views::WebView)
+ 
+  public:
+-  // The Orb at rest, as the Electron Orbis browser drew it. The padding is for
+-  // the glow and the float: a shadow outside the view's bounds is clipped away,
+-  // and the Orb is meant to lift off the page rather than sit flat on it.
+-  static constexpr int kOrbSize = 30;
++  // The Orb at rest. The padding is for the glow and the float: a shadow
++  // outside the view's bounds is clipped away, and the Orb is meant to lift off
++  // the page rather than sit flat on it.
++  //
++  // 30 was inherited from the Electron build and was too small for what the Orb
++  // became. The page inside draws a lit sphere -- a face, a rim that brightens
++  // where the light grazes it, a specular highlight, the mark sitting within it
++  // -- and at thirty pixels none of that is visible: it reads as a faint ring in
++  // the corner. It was also below the size a person can comfortably grab, and
++  // the Orb's whole point is that it is picked up and moved.
++  //
++  // 48 is the smallest size at which the sphere reads as a sphere, and it is a
++  // comfortable drag target. It is still small enough to sit over a page without
++  // taking it over, which is the constraint that kept it small in the first
++  // place.
++  static constexpr int kOrbSize = 48;
+   static constexpr int kPad = 12;
+   static constexpr int kMargin = 8;
+   // The panel it opens into, which is what the size changes for.
+@@ -53,11 +66,39 @@ class OrbisOrbWebView : public views::WebView {
+   // Loads chrome://orbis-orb. Called once there is a size to load it into.
+   void EnsureLoaded();
+ 
++  // How near an edge the Orb must come before it begins to lean towards it, and
++  // the most that lean may move it in one step. The pull grows smoothly over
++  // that distance instead of switching on, so the Orb feels drawn to a side
++  // rather than caught by it, and two pixels a step is an assistance a person
++  // can always drag back out of.
++  static constexpr int kMagnetRange = 72;
++  static constexpr double kMagnetStep = 2.0;
++
+   // Moves the Orb by a drag the page reports, in device-independent pixels. The
+   // page reports movement, not position: it does not know where in the window
+   // it is, and it is not the thing that decides.
++  //
++  // While a drag is in progress the Orb also leans towards a nearby edge. That
++  // lean is part of the movement, not something applied afterwards, which is
++  // what makes the Orb end up exactly where it is seen to be when released.
+   void MoveBy(int dx, int dy);
+ 
++  // The drag is over, and the Orb goes to the nearer side.
++  //
++  // This is the part people mean by a magnetic Orb. The lean while dragging is
++  // a hint; the settle is the promise: let go anywhere and the Orb finishes
++  // against the left or the right edge, at the height it was dropped at. It
++  // glides there over a few frames rather than jumping, because a thing that
++  // teleports when released reads as a bug and a thing that travels reads as
++  // the Orb going home.
++  //
++  // Where it lands is written to the profile, so it is still there next launch.
++  void EndDrag();
++
++  // How long the settle takes, and how near is near enough to stop.
++  static constexpr int kSettleFrameMs = 12;
++  static constexpr int kSettleSnap = 2;
++
+   // Opens or closes the panel, which is what changes the view's size.
+   void SetOpen(bool open);
+   bool is_open() const { return open_; }
+@@ -72,6 +113,20 @@ class OrbisOrbWebView : public views::WebView {
+   gfx::Rect orb_in_view() const { return orb_in_view_; }
+   bool opens_up() const { return opens_up_; }
+ 
++  // Where the Orb is in the window, and the area it is allowed to be in.
++  //
++  // `orb_in_view` is the Orb's place inside this view's own box, which barely
++  // changes as the Orb is dragged -- the box moves with it. These are what
++  // actually answer "where is the Orb": the position everything else is
++  // measured from, and the region it is kept inside. The Orb spec asks for a
++  // position that can be read as well as set, and without these there was no
++  // way to read it -- not from the page, and not from a test.
++  gfx::Point orb_origin() const { return orb_origin_; }
++  gfx::Rect available() const { return available_; }
++  // False until the Orb has a position: before the first layout there is
++  // nothing to report, and reporting the default would be reporting a guess.
++  bool is_placed() const { return placed_; }
++
+  private:
+   // The Orb's top left in the contents area's own coordinates. Unclamped: the
+   // clamp belongs in BoundsWithin, where the space to clamp against is known,
+@@ -79,10 +134,34 @@ class OrbisOrbWebView : public views::WebView {
+   // then large again.
+   gfx::Point orb_origin_;
+   gfx::Rect orb_in_view_;
++  // The contents area the last layout ran against. The magnet needs to know
++  // where the edges are, and this is the only place that knows.
++  gfx::Rect available_;
++  // The part of a lean too small to be a whole pixel, carried to the next
++  // event. Without it a gentle pull rounds to zero and is never felt at all.
++  double magnet_x_ = 0;
++  double magnet_y_ = 0;
++  bool restored_ = false;
+   bool opens_up_ = false;
+   bool placed_ = false;
+   bool open_ = false;
+   bool loaded_ = false;
++  // Where the Orb is gliding to once it has been let go, and the timer that
++  // carries it there. A new drag cancels it: the person has picked the Orb up
++  // again, and nothing should be pulling it anywhere while they hold it.
++  gfx::Point settle_to_;
++  base::RepeatingTimer settle_timer_;
++
++  // Leans the Orb towards whichever edge is near, more strongly the nearer it
++  // is and more gently the faster the drag is moving.
++  void ApplyMagnet(int dx, int dy);
++  // Starts the glide to the nearer side, and one frame of it.
++  void SettleToEdge();
++  void SettleStep();
++  // The saved position, placed against the space that exists now.
++  void RestoreWithin(const gfx::Rect& available);
++  // Writes the Orb's position to the profile, as a gap from the nearer edges.
++  void Persist();
+ 
+   raw_ptr<BrowserWindowInterface> browser_;
+ };
+-- 
+2.44.0.windows.1
+

@@ -760,3 +760,59 @@ body { font: 400 13px/1.45 var(--font-sans); color: var(--text); }
 .orb-param input[type='checkbox'] { justify-self: start; }
 
 .orb-cap-note { margin: 0; color: var(--muted); font-size: 11px; }
+
+/*
+ * The microphone in the Orb's prompt, as the Electron Orb had it: quiet beside the box, and unmistakable while it is
+ * listening. Red rather than the accent when recording, because recording is the one state where a person must be
+ * able to tell at a glance that the microphone is open.
+ */
+.orb-mic {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  align-self: flex-end;
+  color: var(--muted);
+  background: var(--pill-bg);
+  border: 1px solid var(--pill-border);
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.orb-mic:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.orb-mic:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.orb-mic:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.orb-mic.recording {
+  color: #fff;
+  background: var(--red, #ff4d6d);
+  border-color: var(--red, #ff4d6d);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .orb-mic.recording {
+    animation: orb-mic-pulse 1.4s ease-in-out infinite;
+  }
+
+  @keyframes orb-mic-pulse {
+    50% {
+      box-shadow: 0 0 0 5px rgb(255 77 109 / 22%);
+    }
+  }
+}
+
+.orb-mic.transcribing {
+  color: var(--accent);
+}

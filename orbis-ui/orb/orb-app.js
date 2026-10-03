@@ -29,6 +29,26 @@ const ORBIS_UNAVAILABLE = 'Orbis is not running yet, so there is nothing to ask.
 
 const DRAG_THRESHOLD = 5
 
+/** The microphone, drawn rather than written, so it is the same mark at any size and needs no font. */
+function micMark() {
+  const NS = 'http://www.w3.org/2000/svg'
+  const svg = document.createElementNS(NS, 'svg')
+  svg.setAttribute('viewBox', '0 0 24 24')
+  svg.setAttribute('width', '14')
+  svg.setAttribute('height', '14')
+  svg.setAttribute('fill', 'none')
+  svg.setAttribute('stroke', 'currentColor')
+  svg.setAttribute('stroke-width', '1.8')
+  svg.setAttribute('stroke-linecap', 'round')
+  svg.setAttribute('aria-hidden', 'true')
+  for (const d of ['M12 3a3 3 0 0 1 3 3v5a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3z', 'M5 11a7 7 0 0 0 14 0', 'M12 18v3']) {
+    const path = document.createElementNS(NS, 'path')
+    path.setAttribute('d', d)
+    svg.append(path)
+  }
+  return svg
+}
+
 const $ = (id) => document.getElementById(id)
 const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n }
 
@@ -509,7 +529,46 @@ function drawPanel() {
   })
   const send = el('button', 'orb-send', '↑'); send.type = 'submit'
   send.setAttribute('aria-label', 'Send to Orbis')
-  form.append(box, send)
+  /*
+   * The microphone, as the Electron Orb had it.
+   *
+   * Drawn only when there really is one to use: `orbisPromptVoice` is the page's own voice module, and it says
+   * whether this window can open a microphone at all. A button that cannot record is not a button.
+   *
+   * What it records goes into the box, not into a task. Speaking is a way of typing; what to do with the words is
+   * still the person's to decide, and they can read them before pressing send.
+   */
+  const voice = window.orbisPromptVoice
+  if (voice && voice.available()) {
+    const mic = el('button', 'orb-mic', '🎙')
+    mic.type = 'button'
+    mic.textContent = ''
+    mic.append(micMark())
+    const label = (state) => {
+      mic.setAttribute('aria-label', state === 'listening' ? 'Stop recording' : state === 'transcribing' ? 'Writing down what you said' : 'Speak instead of typing')
+      mic.title = mic.getAttribute('aria-label')
+      mic.classList.toggle('recording', state === 'listening')
+      mic.classList.toggle('transcribing', state === 'transcribing')
+      mic.disabled = state === 'transcribing'
+    }
+    label(voice.state())
+    mic.addEventListener('click', () => {
+      void voice.toggle((update) => {
+        label(update.state)
+        if (update.state === 'done' && update.text) {
+          // Added to whatever is already typed, because speaking after typing is adding to the sentence.
+          draft = draft ? `${draft.trimEnd()} ${update.text}` : update.text
+          box.value = draft
+          box.focus()
+          box.setSelectionRange(box.value.length, box.value.length)
+        }
+        if (update.state === 'error' && update.error) { state.error = update.error.message; draw() }
+      })
+    })
+    form.append(box, mic, send)
+  } else {
+    form.append(box, send)
+  }
   form.addEventListener('submit', (e) => { e.preventDefault(); void submit() })
 
   panel.append(head, body, form)

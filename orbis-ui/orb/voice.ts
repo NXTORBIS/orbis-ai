@@ -19,6 +19,8 @@ import { createVoiceSession, type VoiceSessionHandle, type VoiceUpdate } from '.
 declare const chrome: { send(message: string, args?: unknown[]): void }
 
 let session: VoiceSessionHandle | null = null
+/** The Orb's own prompt has its own session: two microphones in one page must never share one recorder. */
+let promptSession: VoiceSessionHandle | null = null
 
 /** Tells the browser what was said, so it can put it in the address bar and start finding things. */
 const deliver = (text: string): void => {
@@ -73,10 +75,37 @@ const toggle = async (): Promise<void> => {
   }
 }
 
+/**
+ * Speaking into the Orb's own prompt.
+ *
+ * The same pipeline, aimed at the Orb rather than the address bar, and handed back to whoever asked rather than sent
+ * to the browser. The Orb's panel is plain JavaScript and cannot import a module built from TypeScript, so what it
+ * needs is put on the window: one function to start or stop, one to give up, and one that says whether a microphone
+ * can be used at all -- which is what decides whether the button is drawn.
+ */
+const promptVoice = (onUpdate: (update: VoiceUpdate) => void): VoiceSessionHandle => {
+  if (!promptSession) {
+    promptSession = createVoiceSession({
+      target: 'browser-orion',
+      call: (channel: string, args?: unknown[]) => call(channel, args),
+      onUpdate: (update: VoiceUpdate) => promptListener?.(update)
+    })
+  }
+  promptListener = onUpdate
+  return promptSession
+}
+let promptListener: ((update: VoiceUpdate) => void) | null = null
+
 declare global {
   interface Window {
     orbisToggleVoice?: () => void
     orbisCancelVoice?: () => void
+    orbisPromptVoice?: {
+      available(): boolean
+      state(): string
+      toggle(onUpdate: (update: VoiceUpdate) => void): Promise<void>
+      cancel(): void
+    }
   }
 }
 
@@ -84,4 +113,19 @@ window.orbisToggleVoice = () => void toggle()
 window.orbisCancelVoice = () => {
   session?.cancel()
   show('idle')
+}
+
+window.orbisPromptVoice = {
+  available: () => promptVoice(() => undefined).available(),
+  state: () => promptSession?.state() ?? 'idle',
+  toggle: async (onUpdate) => {
+    const voice = promptVoice(onUpdate)
+    if (!voice.available()) {
+      onUpdate({ state: 'error', target: 'browser-orion', error: { code: 'no-microphone', message: 'This window cannot use the microphone.' } })
+      return
+    }
+    if (voice.state() === 'listening') await voice.stop()
+    else await voice.start()
+  },
+  cancel: () => promptSession?.cancel()
 }

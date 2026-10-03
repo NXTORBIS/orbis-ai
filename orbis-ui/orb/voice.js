@@ -266,6 +266,7 @@ function createVoiceSession(options) {
 
 // orbis-ui/orb/voice.ts
 var session = null;
+var promptSession = null;
 var deliver = (text) => {
   const words = text.trim();
   if (!words) return;
@@ -303,8 +304,34 @@ var toggle = async () => {
     show("error", err instanceof Error ? err.message : "Voice input could not start.");
   }
 };
+var promptVoice = (onUpdate2) => {
+  if (!promptSession) {
+    promptSession = createVoiceSession({
+      target: "browser-orion",
+      call: (channel, args) => call(channel, args),
+      onUpdate: (update) => promptListener?.(update)
+    });
+  }
+  promptListener = onUpdate2;
+  return promptSession;
+};
+var promptListener = null;
 window.orbisToggleVoice = () => void toggle();
 window.orbisCancelVoice = () => {
   session?.cancel();
   show("idle");
+};
+window.orbisPromptVoice = {
+  available: () => promptVoice(() => void 0).available(),
+  state: () => promptSession?.state() ?? "idle",
+  toggle: async (onUpdate2) => {
+    const voice = promptVoice(onUpdate2);
+    if (!voice.available()) {
+      onUpdate2({ state: "error", target: "browser-orion", error: { code: "no-microphone", message: "This window cannot use the microphone." } });
+      return;
+    }
+    if (voice.state() === "listening") await voice.stop();
+    else await voice.start();
+  },
+  cancel: () => promptSession?.cancel()
 };
