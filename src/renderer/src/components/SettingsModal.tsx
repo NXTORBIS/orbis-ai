@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useFocusTrap } from '../lib/useFocusTrap'
 import { Gamepad2, Globe, Info, Lock, Mic, Palette, Search, Sparkles, User, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { DefaultBrowserState, Settings, SettingsUpdate, Theme } from '../../../shared/types'
@@ -67,6 +68,9 @@ const ICONS: Record<string, LucideIcon> = {
 }
 
 export default function SettingsModal({ settings, onUpdate, onClose, section }: Props): React.JSX.Element {
+  // The keyboard stays in the dialog while it is open, and goes back where it was afterwards.
+  const settingsRef = useRef<HTMLDivElement>(null)
+  useFocusTrap(settingsRef, true)
   const [instructions, setInstructions] = useState(settings.systemPrompt)
   const [noticesOpen, setNoticesOpen] = useState(false)
   const [active, setActive] = useState<SettingsSectionId>(() => cleanSectionId(section))
@@ -196,7 +200,7 @@ export default function SettingsModal({ settings, onUpdate, onClose, section }: 
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && close()}>
-      <div className="modal glass st-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <div className="modal glass st-modal" ref={settingsRef} role="dialog" aria-modal="true" aria-labelledby="settings-title">
         <div className="modal-header">
           <h2 id="settings-title">Settings</h2>
           <button className="icon-btn" title="Close" onClick={close}>
@@ -320,6 +324,7 @@ export default function SettingsModal({ settings, onUpdate, onClose, section }: 
                   </div>
                   <textarea
                     className="hud-input"
+                    aria-label="What Orion should know about you"
                     rows={5}
                     maxLength={8000}
                     value={instructions}

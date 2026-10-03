@@ -421,7 +421,7 @@ export function BuilderPanel({
                   {field.type === 'choice' && (
                     <input
                       className="studio-wide"
-                      placeholder="Options, comma separated"
+                      aria-label="Options, comma separated" placeholder="Options, comma separated"
                       value={(field.options ?? []).map((one) => one.value).join(', ')}
                       onChange={(e) =>
                         patchField(at, {
@@ -437,7 +437,7 @@ export function BuilderPanel({
                   {field.type === 'quantity' && (
                     <input
                       className="studio-wide"
-                      placeholder="Unit, like m/s or degC"
+                      aria-label="Unit for this field" placeholder="Unit, like m/s or degC"
                       value={field.unit ?? ''}
                       spellCheck={false}
                       onChange={(e) => patchField(at, { unit: e.target.value })}

@@ -130,7 +130,7 @@ export default function CurrencyPicker({ currency }: { currency: CurrencyState }
             <input
               ref={field}
               value={query}
-              placeholder="Search currencies…"
+              aria-label="Search currencies" placeholder="Search currencies…"
               maxLength={30}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => {

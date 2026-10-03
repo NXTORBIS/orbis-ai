@@ -312,7 +312,7 @@ export default function DrawingToolbar({
             <input
               className="mk-draw-label"
               value={chosen.text ?? ''}
-              placeholder="Label"
+              aria-label="Label for this drawing" placeholder="Label"
               maxLength={80}
               onChange={(event) => void save({ ...chosen, text: event.target.value })}
             />

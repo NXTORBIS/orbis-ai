@@ -252,7 +252,7 @@ export default function MarketsSettings(): React.JSX.Element {
                 <Search size={14} />
                 <input
                   value={query}
-                  placeholder="bitcoin, BTC, ETH…"
+                  aria-label="Search for a market" placeholder="bitcoin, BTC, ETH…"
                   maxLength={60}
                   onChange={(e) => setQuery(e.target.value)}
                 />

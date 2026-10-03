@@ -613,7 +613,7 @@ function StripSettings({
         <input
           type="search"
           value={query}
-          placeholder="Add a market by name or code"
+          aria-label="Add a market by name or code" placeholder="Add a market by name or code"
           onChange={(event) => setQuery(event.target.value)}
         />
       </div>

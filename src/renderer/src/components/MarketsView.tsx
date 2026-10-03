@@ -1097,7 +1097,7 @@ export default function MarketsView({
             </button>
             <input
               value={query}
-              placeholder="Search markets — BTC, bitcoin, ETH…"
+              aria-label="Search markets" placeholder="Search markets — BTC, bitcoin, ETH…"
               maxLength={60}
               aria-hidden={!(searchOpen || query !== '')}
               tabIndex={searchOpen || query !== '' ? 0 : -1}

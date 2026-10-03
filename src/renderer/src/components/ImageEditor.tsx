@@ -440,7 +440,7 @@ export default function ImageEditor({ image, onClose, onSave, onNotify, initialT
                   <input
                     autoFocus
                     value={pin.text}
-                    placeholder="What should change here?"
+                    aria-label="What should change here" placeholder="What should change here?"
                     onChange={(e) => setPins((list) => list.map((p) => (p.id === pin.id ? { ...p, text: e.target.value } : p)))}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
@@ -482,6 +482,7 @@ export default function ImageEditor({ image, onClose, onSave, onNotify, initialT
       >
         <input
           autoFocus
+          aria-label="Describe the edits you want"
           value={instruction}
           disabled={busy === EDITING}
           placeholder={notes.length ? 'Describe edits (your comments are included)' : 'Describe edits'}

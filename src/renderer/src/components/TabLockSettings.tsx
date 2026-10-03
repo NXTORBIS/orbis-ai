@@ -535,7 +535,7 @@ export default function TabLockSettings({ userName }: Props): React.JSX.Element 
               <input
                 value={pattern}
                 maxLength={200}
-                placeholder="*.bank.example"
+                aria-label="Which addresses this rule covers" placeholder="*.bank.example"
                 onChange={(e) => setPattern(e.target.value)}
               />
               <select value={ruleGroup || groups[0]?.id} onChange={(e) => setRuleGroup(e.target.value)}>

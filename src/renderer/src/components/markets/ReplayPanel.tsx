@@ -261,7 +261,7 @@ export default function ReplayPanel({
             <button type="button" className="queue-btn small ghost" onClick={() => step(1)} disabled={view.finished}>
               <ChevronRight size={13} /> Bar
             </button>
-            <button type="button" className="queue-btn small ghost" onClick={() => step(10)} disabled={view.finished}>
+            <button type="button" className="queue-btn small ghost" onClick={() => step(10)} disabled={view.finished} aria-label="Forward ten bars">
               <SkipForward size={13} /> 10
             </button>
             <button type="button" className="queue-btn small ghost" onClick={restart}>

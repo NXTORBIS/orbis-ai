@@ -326,7 +326,7 @@ export default function PortfolioPanel({
           ) : (
             <div className="mk-search">
               <Search size={13} />
-              <input value={query} placeholder="Which market?" maxLength={60} onChange={(e) => setQuery(e.target.value)} />
+              <input value={query} aria-label="Which market this holding is in" placeholder="Which market?" maxLength={60} onChange={(e) => setQuery(e.target.value)} />
               {results.length > 0 && (
                 <ul className="mk-results">
                   {results.slice(0, 8).map((one) => (

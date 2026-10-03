@@ -403,6 +403,7 @@ export const TEST_FILES = [
   'src/shared/attachmentIndex.test.ts',
   'src/shared/artifacts/tableFacts.test.ts',
   'src/shared/portable/share.test.ts',
+  'src/shared/accessibleUi.test.ts',
   'src/main/researchControl.test.ts',
   'src/shared/voiceReply.test.ts',
   'src/shared/notificationRoute.test.ts',

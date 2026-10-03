@@ -412,7 +412,7 @@ export default function BacktestPanel({
             <Search size={13} />
             <input
               value={query}
-              placeholder="New strategy on which market?"
+              aria-label="Which market to test the strategy on" placeholder="New strategy on which market?"
               maxLength={60}
               onChange={(e) => setQuery(e.target.value)}
             />

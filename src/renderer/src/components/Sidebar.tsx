@@ -276,7 +276,7 @@ export default function Sidebar(props: Props): React.JSX.Element {
       {!collapsed && (
         <div className="sb-head">
             <div className="sb-brand-anchor" ref={brandRef}>
-              <button type="button" className="sb-brand" aria-haspopup="menu" aria-expanded={brandOpen} onClick={() => setBrandOpen((o) => !o)}>
+              <button type="button" className="sb-brand" aria-label="Orbis menu" aria-haspopup="menu" aria-expanded={brandOpen} onClick={() => setBrandOpen((o) => !o)}>
                 <OrbisWordmark className="sb-wordmark" />
                 <ChevronDown size={14} />
               </button>
