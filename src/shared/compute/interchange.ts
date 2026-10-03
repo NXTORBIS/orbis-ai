@@ -226,7 +226,7 @@ export const FORMATS: Readonly<Record<FormatId, FormatCapability>> = Object.free
     name: 'PowerPoint deck',
     extensions: ['.pptx'],
     mediaTypes: ['application/vnd.openxmlformats-officedocument.presentationml.presentation'],
-    canImport: false,
+    canImport: true,
     canExport: true,
     streaming: false,
     carries: { units: false, types: false, metadata: true, formatting: true, provenance: false, hierarchy: false },

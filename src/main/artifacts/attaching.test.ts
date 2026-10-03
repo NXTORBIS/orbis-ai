@@ -64,12 +64,13 @@ test('a workbook longer than a message holds is cut at the end of a row, and say
   assert.ok(read.notes.some((one) => one === `It is longer than one message holds: the last ${(400 - kept).toLocaleString('en')} rows are not attached.`), read.notes.join(' | '))
 })
 
-test('only the three file types are read this way; everything else keeps its own name', () => {
+test('only the four file types are read this way; everything else keeps its own name', () => {
   assert.equal(isReadForChat('a.XLSX'), true)
   assert.equal(isReadForChat('a.docx'), true)
   assert.equal(isReadForChat('a.pdf'), true)
   assert.equal(isReadForChat('a.csv'), false)
-  assert.equal(isReadForChat('a.pptx'), false)
+  assert.equal(isReadForChat('a.pptx'), true)
+  assert.equal(isReadForChat('a.key'), false)
   assert.equal(nameToOpenAs('notes.txt', 'text/markdown'), 'notes.txt')
   assert.equal(nameToOpenAs('sales.xlsx', undefined), 'sales.xlsx')
 })

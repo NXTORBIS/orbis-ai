@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { asNumber, isDataError, isInvalid, isMissing, parseDelimited, type Table } from '../compute/data.ts'
+import { asNumber, cellOut, isDataError, isInvalid, isMissing, parseDelimited, type Table } from '../compute/data.ts'
 import { applySteps, formulaName, isTransformFailure, readSteps, stepInstructions, type TransformStep } from './transform.ts'
 
 const READINGS = `date,site,Consumption (MWh),solar
@@ -166,4 +166,56 @@ test('the model is told the columns and how to write them in a formula, and is s
   assert.ok(said.includes('Consumption (MWh) -> consumption_mwh'))
   assert.equal(said.includes('412'), false)
   assert.equal(said.includes('Warehouse'), false)
+})
+
+const people = (): Table => {
+  const parsed = parseDelimited('Name,Age,Joined,Team\nAda,36,2020-01-05,Core\nBo,41,2019-03-01,Core\nCy,29,2022-07-12,Field\n')
+  if (isDataError(parsed)) throw new Error(parsed.message)
+  return parsed.table
+}
+const grid = (table: Table): string[][] => table.rows.map((row) => row.cells.map((cell, at) => cellOut(cell, table.columns[at])))
+
+test('one value is set where the conditions match, or in one row by its number, and what does not fit is refused', () => {
+  const read = readSteps({ steps: [{ op: 'set', column: 'Age', value: '37', where: [{ column: 'Name', is: 'equals', value: 'Ada' }] }, { op: 'set', column: 'Team', value: 'Field', row: 2 }] })
+  assert.deepEqual(read.problems, [])
+  const out = applySteps(people(), read.steps)
+  if (isTransformFailure(out)) throw new Error(out.message)
+  assert.deepEqual(grid(out.table), [['Ada', '37', '2020-01-05', 'Core'], ['Bo', '41', '2019-03-01', 'Field'], ['Cy', '29', '2022-07-12', 'Field']])
+  assert.deepEqual(out.notes, ['Set "Age" to "37" in 1 row (where Name is "Ada").', 'Set "Team" to "Field" in 1 row (row 2).'])
+  assert.equal(typeof out.table.rows[0].cells[1], 'number', 'read as the column holds it: a number, not the text "37"')
+
+  const wrong = applySteps(people(), [{ op: 'set', column: 'Age', value: 'old', match: 'all', where: [], row: 1 }])
+  assert.ok(isTransformFailure(wrong) && /"old" does not fit the "Age" column, which holds whole numbers/.test(wrong.message), JSON.stringify(wrong))
+  const nobody = applySteps(people(), [{ op: 'set', column: 'Age', value: '1', match: 'all', where: [{ column: 'Name', is: 'equals', value: 'Zed' }] }])
+  assert.ok(isTransformFailure(nobody) && /No row matched .* so nothing was changed/.test(nobody.message))
+  const past = applySteps(people(), [{ op: 'remove', match: 'all', where: [], row: 9 }])
+  assert.ok(isTransformFailure(past) && /There is no row 9: the table has 3 rows/.test(past.message))
+  // Emptying a cell is a value too.
+  const emptied = applySteps(people(), [{ op: 'set', column: 'Team', value: '', match: 'all', where: [], row: 1 }])
+  if (isTransformFailure(emptied)) throw new Error(emptied.message)
+  assert.equal(grid(emptied.table)[0][3], '')
+})
+
+test('rows are added with the values given and nothing else, and removed by condition or by number', () => {
+  const read = readSteps({ steps: [{ op: 'add', rows: [{ Name: 'Di', Age: 33, Team: 'Core' }, { name: 'Ed' }] }, { op: 'remove', where: [{ column: 'Team', is: 'equals', value: 'Field' }] }] })
+  assert.deepEqual(read.problems, [])
+  const out = applySteps(people(), read.steps)
+  if (isTransformFailure(out)) throw new Error(out.message)
+  assert.deepEqual(grid(out.table), [['Ada', '36', '2020-01-05', 'Core'], ['Bo', '41', '2019-03-01', 'Core'], ['Di', '33', '', 'Core'], ['Ed', '', '', '']])
+  assert.deepEqual(out.notes, ['Added 2 rows at the end. The table has 5 rows.', 'Removed 1 row (where Team is "Field"). 4 rows left.'])
+  assert.equal(new Set(out.table.rows.map((one) => one.id)).size, 4, 'every row has an id of its own')
+  assert.ok(out.table.nextId > Math.max(...out.table.rows.map((one) => one.id)))
+
+  const bad = applySteps(people(), [{ op: 'add', rows: [{ Name: 'X', Joined: 'yesterday-ish' }] }])
+  assert.ok(isTransformFailure(bad) && /In new row 1, "yesterday-ish" does not fit the "Joined" column, which holds dates/.test(bad.message), JSON.stringify(bad))
+  const unknown = applySteps(people(), [{ op: 'add', rows: [{ Salary: '10' }] }])
+  assert.ok(isTransformFailure(unknown) && /Salary/.test(unknown.message))
+})
+
+test('a change that does not say which rows is refused when it is read', () => {
+  assert.match(readSteps({ steps: [{ op: 'set', column: 'Age', value: '1' }] }).problems[0], /has to say which rows/)
+  assert.match(readSteps({ steps: [{ op: 'remove' }] }).problems[0], /has to say which rows/)
+  assert.match(readSteps({ steps: [{ op: 'set', where: [{ column: 'Name', is: 'equals', value: 'Ada' }] }] }).problems[0], /needs "column"/)
+  assert.match(readSteps({ steps: [{ op: 'add', rows: [] }] }).problems[0], /needs "rows"/)
+  assert.ok(stepInstructions([{ name: 'Age', type: 'integer' }]).includes('Never fill in a value they did not give'))
 })

@@ -19,7 +19,7 @@ import { importFile } from './importing.ts'
  */
 
 /** The file types read this way. Anything else is text and is attached as it is. */
-export const READ_FOR_CHAT: readonly string[] = Object.freeze(['.xlsx', '.docx', '.pdf'])
+export const READ_FOR_CHAT: readonly string[] = Object.freeze(['.xlsx', '.docx', '.pdf', '.pptx'])
 
 export const isReadForChat = (name: string): boolean => READ_FOR_CHAT.includes(extname(name).toLowerCase())
 
@@ -32,7 +32,7 @@ export interface ReadForChat {
   notes: string[]
 }
 
-const WHAT: Readonly<Record<string, string>> = Object.freeze({ '.xlsx': 'Excel workbook', '.docx': 'Word document', '.pdf': 'PDF' })
+const WHAT: Readonly<Record<string, string>> = Object.freeze({ '.xlsx': 'Excel workbook', '.docx': 'Word document', '.pdf': 'PDF', '.pptx': 'PowerPoint deck' })
 
 /** The text cut to a length at the end of a line, and how many lines did not fit. */
 function cutAtLine(text: string, limit: number): { text: string; left: number } {

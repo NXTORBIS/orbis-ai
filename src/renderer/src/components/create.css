@@ -663,3 +663,124 @@
   background: var(--bg-mid);
   color: var(--text);
 }
+
+/* A table edited where it is shown. A cell is a button until it is being typed in. */
+.create-grid-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.create-grid.editable td {
+  padding: 0;
+}
+
+.create-grid.editable td.create-rownum,
+.create-grid.editable th.create-rownum {
+  padding: 6px 8px;
+  width: 1%;
+  text-align: right;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  user-select: none;
+}
+
+.create-grid.editable .create-rowact {
+  width: 1%;
+  padding: 0 4px;
+  text-align: center;
+}
+
+.create-grid.editable .create-rowact .icon-btn {
+  opacity: 0;
+}
+
+.create-grid.editable tr:hover .create-rowact .icon-btn,
+.create-grid.editable tr.gone .create-rowact .icon-btn,
+.create-grid.editable .create-rowact .icon-btn:focus-visible {
+  opacity: 1;
+}
+
+.create-cell {
+  display: block;
+  width: 100%;
+  min-height: 28px;
+  padding: 6px 10px;
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
+  white-space: nowrap;
+  background: none;
+  border: 0;
+  cursor: text;
+}
+
+.create-cell:hover {
+  background: var(--hover);
+}
+
+.create-cell:focus-visible {
+  outline: 1px solid var(--cyan);
+  outline-offset: -1px;
+}
+
+.create-cell-input {
+  display: block;
+  width: 100%;
+  min-width: 80px;
+  min-height: 28px;
+  padding: 5px 9px;
+  font: inherit;
+  color: var(--text);
+  text-align: inherit;
+  background: var(--bg-mid);
+  border: 1px solid var(--cyan);
+  border-radius: 4px;
+  outline: none;
+}
+
+.create-grid.editable td.changed {
+  background: var(--cyan-fill);
+}
+
+.create-grid.editable tr.gone td {
+  color: var(--faint);
+  text-decoration: line-through;
+  padding: 6px 10px;
+}
+
+.create-grid.editable tr.gone td.create-rowact,
+.create-grid.editable tr.gone td.create-rownum {
+  text-decoration: none;
+}
+
+.create-grid.editable tr.fresh td.create-rownum {
+  color: var(--green);
+}
+
+.create-grid-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.create-grid-pages,
+.create-grid-pending {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.create-grid-pending {
+  margin-left: auto;
+  color: var(--text);
+}
+
+.create-grid-hint {
+  margin-left: auto;
+  color: var(--faint);
+}

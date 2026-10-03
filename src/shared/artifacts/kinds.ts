@@ -57,7 +57,7 @@ export const ARTIFACT_KINDS: Readonly<Record<ArtifactKindId, ArtifactKind>> = Ob
     builtFrom: 'StructuredDocument in src/shared/compute/document.ts',
     writes: Object.freeze(['markdown', 'html', 'pdf', 'docx', 'pptx', 'text'] as const),
     stores: 'markdown',
-    reads: Object.freeze(['markdown', 'html', 'text', 'docx', 'pdf'] as const),
+    reads: Object.freeze(['markdown', 'html', 'text', 'docx', 'pdf', 'pptx'] as const),
     orionMayName: true
   }),
   plot: Object.freeze({

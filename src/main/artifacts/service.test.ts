@@ -1238,3 +1238,40 @@ test('only something a request made is filed under its conversation: looking at 
     const inChat = ok<{ record: { conversationId?: string } }>(await h.service.run('default', { operation: 'artifact.create', kind: 'table', title: 'Theirs', text: 'a\n1\n', conversationId: 'convX' }))
     assert.equal(inChat.record.conversationId, 'convX')
   }))
+
+test('a table is edited by hand as one new version, and a stale or ill-fitting edit changes nothing', () =>
+  withService(async (h) => {
+    const made = ok<{ record: { artifactId: string; versionId: string } }>(await h.service.run('default', { operation: 'artifact.create', kind: 'table', title: 'People', text: 'Name,Age,Team\nAda,36,Core\nBo,41,Core\nCy,29,Field\n' }))
+    const id = made.record.artifactId
+    const edited = ok<{ record: { version: number; versionId: string; reason: string }; did: string[] }>(
+      await h.service.run('default', {
+        operation: 'artifact.edit',
+        artifactId: id,
+        versionId: made.record.versionId,
+        set: [{ row: 1, column: 'Age', value: '37' }, { row: 3, column: 'Team', value: 'Core' }],
+        remove: [2],
+        add: [{ Name: 'Di', Age: '33' }]
+      })
+    )
+    assert.equal(edited.record.version, 2)
+    assert.equal(edited.record.reason, 'Edited by hand: 2 cells changed, 1 row removed, 1 row added.')
+    const read = ok<{ grid: { rows: string[][]; total: number; from: number } }>(await h.service.run('default', { operation: 'artifact.read', artifactId: id }))
+    assert.deepEqual(read.grid.rows, [['Ada', '37', 'Core'], ['Cy', '29', 'Core'], ['Di', '33', '']])
+
+    // Edited against the version that was replaced: refused, with nothing changed.
+    const stale = await h.service.run('default', { operation: 'artifact.edit', artifactId: id, versionId: made.record.versionId, set: [{ row: 1, column: 'Age', value: '1' }] })
+    assert.equal(stale.ok, false)
+    if (!stale.ok) assert.equal(stale.error, 'stale')
+    const wrong = await h.service.run('default', { operation: 'artifact.edit', artifactId: id, versionId: edited.record.versionId, set: [{ row: 1, column: 'Age', value: 'old' }] })
+    assert.equal(wrong.ok, false)
+    if (!wrong.ok) assert.match(wrong.message, /"old" does not fit the "Age" column, which holds whole numbers/)
+    const nothing = await h.service.run('default', { operation: 'artifact.edit', artifactId: id, versionId: edited.record.versionId })
+    assert.equal(nothing.ok, false)
+    const still = ok<{ record: { version: number } }>(await h.service.run('default', { operation: 'artifact.read', artifactId: id }))
+    assert.equal(still.record.version, 2)
+
+    // A long table is read a screenful at a time, from wherever is asked.
+    const long = ok<{ record: { artifactId: string } }>(await h.service.run('default', { operation: 'artifact.create', kind: 'table', title: 'Long', text: `n\n${Array.from({ length: 250 }, (_, i) => i + 1).join('\n')}\n` }))
+    const page = ok<{ grid: { rows: string[][]; total: number; from: number } }>(await h.service.run('default', { operation: 'artifact.read', artifactId: long.record.artifactId, from: 200 }))
+    assert.deepEqual([page.grid.from, page.grid.total, page.grid.rows.length, page.grid.rows[0][0], page.grid.rows[49][0]], [200, 250, 50, '201', '250'])
+  }))

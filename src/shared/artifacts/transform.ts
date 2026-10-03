@@ -8,7 +8,9 @@ import {
   groupsToTable,
   invalid,
   isDataError,
+  isInvalid,
   MISSING,
+  readCell,
   renameColumn,
   selectColumns,
   sortTable,
@@ -35,7 +37,7 @@ import { evaluateExpression, FUNCTIONS, isEvaluateError, isParseError, parseExpr
  * earlier step may have made or renamed the column a later one uses.
  */
 
-export const TRANSFORM_LIMITS = Object.freeze({ steps: 12, keys: 6, conditions: 12, columns: 64, totals: 12, name: 80, formula: 400, value: 200 })
+export const TRANSFORM_LIMITS = Object.freeze({ steps: 12, keys: 6, conditions: 12, columns: 64, totals: 12, name: 80, formula: 400, value: 200, cell: 2000, newRows: 200 })
 
 const COMPARISONS: readonly Comparison[] = Object.freeze([
   'equals',
@@ -73,8 +75,14 @@ export type TransformStep =
   | { op: 'compute'; name: string; formula: string }
   | { op: 'group'; by: string[]; totals: { column: string; how: Aggregate; as: string }[] }
   | { op: 'limit'; rows: number }
+  /** One column given a new value, in every row the conditions match -- or in one row, by its number as shown. */
+  | { op: 'set'; column: string; value: string; match: 'all' | 'any'; where: WhereClause[]; row?: number }
+  /** New rows at the end. Each is its values by column name; a column not named is left empty. */
+  | { op: 'add'; rows: Record<string, string>[] }
+  /** Rows taken out: the ones the conditions match, or one by its number as shown. */
+  | { op: 'remove'; match: 'all' | 'any'; where: WhereClause[]; row?: number }
 
-export const TRANSFORM_OPS = Object.freeze(['sort', 'filter', 'keep', 'drop', 'rename', 'compute', 'group', 'limit'] as const)
+export const TRANSFORM_OPS = Object.freeze(['sort', 'filter', 'keep', 'drop', 'rename', 'compute', 'group', 'limit', 'set', 'add', 'remove'] as const)
 
 const text = (value: unknown, max: number): string => (typeof value === 'string' ? value.trim().slice(0, max) : typeof value === 'number' && Number.isFinite(value) ? String(value) : '')
 const list = (value: unknown): unknown[] => (Array.isArray(value) ? value : value === undefined || value === null ? [] : [value])
@@ -222,6 +230,66 @@ export function readSteps(raw: unknown): { steps: TransformStep[]; problems: str
         else steps.push({ op: 'limit', rows })
         return
       }
+      case 'set':
+      case 'remove': {
+        const match = step.match === 'any' ? 'any' : 'all'
+        const row = typeof step.row === 'number' && Number.isInteger(step.row) && step.row >= 1 ? step.row : undefined
+        const where: WhereClause[] = []
+        let bad = false
+        list(step.where)
+          .slice(0, TRANSFORM_LIMITS.conditions)
+          .forEach((clause, j) => {
+            const c = (typeof clause === 'object' && clause !== null ? clause : {}) as Record<string, unknown>
+            const column = text(c.column, TRANSFORM_LIMITS.name)
+            const is = text(c.is, 30).toLowerCase() as Comparison
+            const value = scalar(c.value)
+            const value2 = scalar(c.value2)
+            const values = list(c.values)
+              .map(scalar)
+              .filter((v): v is string | number => typeof v === 'string' || typeof v === 'number')
+            if (column === '' || !COMPARISONS.includes(is)) {
+              problems.push(`${at}.where[${j}] needs a "column" and an "is" that is one of: ${COMPARISONS.join(', ')}.`)
+              bad = true
+              return
+            }
+            if (!['is-empty', 'is-not-empty', 'is-invalid', 'is-one-of'].includes(is) && value === undefined) {
+              problems.push(`${at}.where[${j}] ("${column}" ${is}) has no value to compare with.`)
+              bad = true
+              return
+            }
+            where.push({ column, is, ...(value !== undefined ? { value } : {}), ...(typeof value2 === 'string' || typeof value2 === 'number' ? { value2 } : {}), ...(values.length ? { values } : {}) })
+          })
+        if (bad) return
+        // Which rows has to be said. A change to "every row" by forgetting to say which is the mistake to refuse.
+        if (where.length === 0 && row === undefined) {
+          problems.push(`${at} (${op}) has to say which rows: "where": [{column, is, value}], or "row": the row's number counting from 1.`)
+          return
+        }
+        if (op === 'remove') {
+          steps.push({ op: 'remove', match, where, ...(row !== undefined ? { row } : {}) })
+          return
+        }
+        const column = text(step.column, TRANSFORM_LIMITS.name)
+        const value = typeof step.value === 'string' ? step.value.slice(0, TRANSFORM_LIMITS.cell) : typeof step.value === 'number' && Number.isFinite(step.value) ? String(step.value) : typeof step.value === 'boolean' ? String(step.value) : step.value === null ? '' : undefined
+        if (column === '' || value === undefined) problems.push(`${at} (set) needs "column": the column to change, and "value": what to put there (an empty string empties it).`)
+        else steps.push({ op: 'set', column, value, match, where, ...(row !== undefined ? { row } : {}) })
+        return
+      }
+      case 'add': {
+        const rows: Record<string, string>[] = []
+        for (const one of list(step.rows).slice(0, TRANSFORM_LIMITS.newRows)) {
+          if (typeof one !== 'object' || one === null || Array.isArray(one)) continue
+          const row: Record<string, string> = {}
+          for (const [name, value] of Object.entries(one as Record<string, unknown>).slice(0, TRANSFORM_LIMITS.columns)) {
+            if (typeof value === 'string') row[name.slice(0, TRANSFORM_LIMITS.name)] = value.slice(0, TRANSFORM_LIMITS.cell)
+            else if ((typeof value === 'number' && Number.isFinite(value)) || typeof value === 'boolean') row[name.slice(0, TRANSFORM_LIMITS.name)] = String(value)
+          }
+          if (Object.keys(row).length > 0) rows.push(row)
+        }
+        if (rows.length === 0) problems.push(`${at} (add) needs "rows": a list of rows, each {column name: value}.`)
+        else steps.push({ op: 'add', rows })
+        return
+      }
       default:
         problems.push(`${at} has "op": "${text(step.op, 20) || 'missing'}", which is not one of: ${TRANSFORM_OPS.join(', ')}.`)
     }
@@ -291,6 +359,17 @@ const AGGREGATE_WORDS: Record<Aggregate, string> = {
 }
 
 const plural = (n: number, one: string, many = `${one}s`): string => `${n.toLocaleString('en')} ${n === 1 ? one : many}`
+
+/** What each kind of column holds, in the words a refusal uses. */
+const TYPE_WORDS: Readonly<Record<Column['type'], string>> = Object.freeze({
+  text: 'text',
+  category: 'text',
+  number: 'numbers',
+  integer: 'whole numbers',
+  boolean: 'yes or no',
+  date: 'dates',
+  quantity: 'amounts with a unit'
+})
 
 /** An id no column in the table has yet, made from a name. */
 const freshId = (table: Table, name: string): string => {
@@ -483,6 +562,74 @@ export function applySteps(table: Table, steps: readonly TransformStep[]): Trans
         notes.push(`Grouped ${plural(before, 'row')} by ${by.map((one) => one.name).join(', ')} into ${plural(groups.length, 'group')}, with: ${requests.map((one) => one.as).join(', ')}.`)
         break
       }
+      case 'set':
+      case 'remove': {
+        // Which rows: the one numbered, or the ones the conditions match -- found by the same filter a filter step uses.
+        let ids: Set<number>
+        let which: string
+        if (step.row !== undefined) {
+          const row = current.rows[step.row - 1]
+          if (!row) return stop(`There is no row ${step.row}: the table has ${plural(current.rows.length, 'row')}.`)
+          ids = new Set([row.id])
+          which = `row ${step.row}`
+        } else {
+          const conditions: Condition[] = []
+          const words: string[] = []
+          for (const clause of step.where) {
+            const column = resolve(current, clause.column)
+            if (!column) return stop(noColumn(current, clause.column))
+            conditions.push({ columnId: column.id, comparison: clause.is, value: clause.value, value2: clause.value2, values: clause.values })
+            words.push(describeClause(clause, column))
+          }
+          const matched = filterTable(current, { match: step.match, conditions })
+          if (isDataError(matched)) return stop(matched.message)
+          ids = new Set(matched.rows.map((one) => one.id))
+          which = `where ${words.join(step.match === 'any' ? ' or ' : ' and ')}`
+          // Nothing matched: said, and stopped. "Changed 0 rows" reported as a change is how a typo goes unnoticed.
+          if (ids.size === 0) return stop(`No row matched (${which}), so nothing was changed.`)
+        }
+        if (step.op === 'remove') {
+          const before = current.rows.length
+          current = Object.freeze({ ...current, rows: Object.freeze(current.rows.filter((one) => !ids.has(one.id))) })
+          notes.push(`Removed ${plural(before - current.rows.length, 'row')} (${which}). ${plural(current.rows.length, 'row')} left.`)
+          break
+        }
+        const column = resolve(current, step.column)
+        if (!column) return stop(noColumn(current, step.column))
+        const at = columnIndex(current, column.id)
+        const cell = readCell(step.value, column.type, column.unit)
+        // A value that does not fit the column is refused, not kept as a broken cell: the person is editing, and can be told.
+        if (isInvalid(cell)) return stop(`"${step.value.slice(0, 60)}" does not fit the "${column.name}" column, which holds ${TYPE_WORDS[column.type]}. ${cell.why}`)
+        let changed = 0
+        const rows = current.rows.map((one) => {
+          if (!ids.has(one.id)) return one
+          changed += 1
+          const cells = [...one.cells]
+          cells[at] = cell
+          return Object.freeze({ ...one, cells: Object.freeze(cells) })
+        })
+        current = Object.freeze({ ...current, rows: Object.freeze(rows) })
+        notes.push(`Set "${column.name}" to ${step.value.trim() === '' ? 'empty' : `"${step.value.slice(0, 80)}"`} in ${plural(changed, 'row')} (${which}).`)
+        break
+      }
+      case 'add': {
+        let nextId = current.nextId
+        const added: Table['rows'][number][] = []
+        for (const [n, given] of step.rows.entries()) {
+          const cells: Cell[] = current.columns.map(() => null)
+          for (const [name, value] of Object.entries(given)) {
+            const column = resolve(current, name)
+            if (!column) return stop(noColumn(current, name))
+            const cell = readCell(value, column.type, column.unit)
+            if (isInvalid(cell)) return stop(`In new row ${n + 1}, "${value.slice(0, 60)}" does not fit the "${column.name}" column, which holds ${TYPE_WORDS[column.type]}. ${cell.why}`)
+            cells[columnIndex(current, column.id)] = cell
+          }
+          added.push(Object.freeze({ id: nextId++, cells: Object.freeze(cells) }))
+        }
+        current = Object.freeze({ ...current, rows: Object.freeze([...current.rows, ...added]), nextId })
+        notes.push(`Added ${plural(added.length, 'row')} at the end. The table has ${plural(current.rows.length, 'row')}.`)
+        break
+      }
       case 'limit': {
         const before = current.rows.length
         if (before > step.rows) {
@@ -525,10 +672,16 @@ ${columns.map((one) => `        ${one.name} -> ${formulaName(one.name)}`).join('
   {"op": "group", "by": [name, ...], "totals": [{"column": name, "how": aggregate, "as": result name}]}
       aggregate is one of: ${AGGREGATES.join(', ')}. After a group the table has only the "by" columns and the totals.
   {"op": "limit", "rows": N}                    keep the first N rows
+  {"op": "set", "column": name, "value": text, "where": [{"column": name, "is": comparison, "value": ...}]}
+      put a new value in one column, in the rows the conditions match ("change February's revenue to 2000").
+      For "the third row", use "row": 3 instead of "where". An empty "value" empties the cell.
+  {"op": "add", "rows": [{column name: value, ...}]}    new rows at the end, with the values the person gave
+  {"op": "remove", "where": [...]}              take out the rows that match; or "row": N for one row by its number
 
 Rules:
 - Use only the column names above, or names an earlier step made.
 - Steps run in order. To get "top 5 by X": sort by X descending, then limit 5.
+- "set", "add" and "remove" carry only values the person gave. Never fill in a value they did not give: leave it out.
 - Do not compute anything yourself and do not include any data values that are not in the request.
 - If the request cannot be done with these steps, answer {"steps": [], "cannot": "why, in one sentence"}.`
 }

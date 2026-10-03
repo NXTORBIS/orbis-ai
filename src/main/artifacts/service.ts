@@ -81,6 +81,8 @@ const LIMITS = Object.freeze({
   revise: 12_000,
   /** How much of a table is handed back as a grid to look at. */
   gridRows: 100,
+  /** Cells changed or rows removed in one hand edit. */
+  edits: 2000,
   gridColumns: 40,
   gridCell: 200
 })
@@ -104,6 +106,7 @@ const OPERATIONS: Readonly<Record<string, string>> = Object.freeze({
   'artifact.search': 'Find artifacts by words in their name, notes or content.',
   'artifact.chart': 'A chart from the columns of a table, kept as a drawing that remembers the table it came from.',
   'artifact.transform': 'A table changed by a list of steps -- filter, sort, columns, a computed column, group and total -- or by a sentence Orion turns into those steps.',
+  'artifact.edit': 'A table edited by hand: cells given new values, rows removed, rows added -- kept as one new version. Refused if the table has changed since it was opened.',
   'artifact.join': 'Two tables joined on a column, with how many rows on each side found a partner.',
   'artifact.templates': 'The starting points Orbis has: tables with their columns chosen, documents with their headings written.',
   'artifact.fromTemplate': 'A new table or document started from one of those. Structure only; no row and no sentence in it is data.',
@@ -414,6 +417,8 @@ export class ArtifactService {
           return await this.asDocument(profileId, operation, req, fail)
         case 'artifact.transform':
           return await this.transform(profileId, operation, req, fail, signal)
+        case 'artifact.edit':
+          return await this.edit(profileId, operation, req, fail)
         case 'artifact.join':
           return await this.join(profileId, operation, req, fail)
         case 'artifact.templates':
@@ -941,6 +946,67 @@ export class ArtifactService {
    * is kept with the result as a note, count by count. By default the result is a new version of the same table, so
    * the one before is still there to go back to; `as: 'new'` keeps it as a separate table that remembers its origin.
    */
+  /**
+   * A table edited by hand on the screen.
+   *
+   * Many small changes -- this cell, that cell, a row gone, a row added -- kept as ONE new version, because a version
+   * per keystroke would bury the history. The rows are named by their number in the version the person was looking
+   * at, so the request says which version that was, and a table that has changed since is refused rather than
+   * edited in the wrong places. Every value goes through the same reader a pasted table does: a word in a column of
+   * numbers is refused and named, not kept as a broken cell.
+   */
+  private async edit(
+    profileId: string,
+    operation: string,
+    req: Record<string, unknown>,
+    fail: (error: string, message: string, detail?: unknown) => ArtifactResult
+  ): Promise<ArtifactResult> {
+    const record = await this.existing(profileId, req, fail)
+    if ('ok' in record) return record
+    if (record.kind !== 'table') return fail('bad-input', 'Only a table is edited cell by cell.')
+    if (str(req.versionId, 60) !== record.versionId) {
+      return fail('stale', `"${record.title}" has been changed since you opened it (it is now version ${record.version}). Open it again and make the changes there.`)
+    }
+    const body = await this.bodyOf(profileId, record)
+    if (!body || body.kind !== 'table') return fail('not-found', 'The artifact is listed but its source is missing.')
+
+    const whole = (value: unknown): number | null => (typeof value === 'number' && Number.isInteger(value) && value >= 1 ? value : null)
+    const sets: TransformStep[] = []
+    for (const one of (Array.isArray(req.set) ? req.set : []).slice(0, LIMITS.edits)) {
+      const e = (typeof one === 'object' && one !== null ? one : {}) as Record<string, unknown>
+      const row = whole(e.row)
+      const column = str(e.column, 120)
+      if (row === null || column === '' || typeof e.value !== 'string') return fail('bad-input', 'Each change needs the row number, the column and the new value.')
+      sets.push({ op: 'set', column, value: e.value.slice(0, 2000), match: 'all', where: [], row })
+    }
+    // Highest first, so taking one row out does not renumber the ones still to go.
+    const removed = [...new Set((Array.isArray(req.remove) ? req.remove : []).map(whole).filter((one): one is number => one !== null))].sort((a, b) => b - a).slice(0, LIMITS.edits)
+    const added: Record<string, string>[] = []
+    for (const one of (Array.isArray(req.add) ? req.add : []).slice(0, 200)) {
+      if (typeof one !== 'object' || one === null || Array.isArray(one)) continue
+      const row: Record<string, string> = {}
+      for (const [name, value] of Object.entries(one as Record<string, unknown>)) if (typeof value === 'string' && value.trim() !== '') row[name.slice(0, 120)] = value.slice(0, 2000)
+      if (Object.keys(row).length > 0) added.push(row)
+    }
+    if (sets.length === 0 && removed.length === 0 && added.length === 0) return fail('bad-input', 'There is nothing to change.')
+
+    const steps: TransformStep[] = [...sets, ...removed.map((row): TransformStep => ({ op: 'remove', match: 'all', where: [], row })), ...(added.length > 0 ? [{ op: 'add', rows: added } as TransformStep] : [])]
+    const result = applySteps(body.table, steps)
+    if (isTransformFailure(result)) return fail('bad-input', result.message, { step: result.step })
+
+    const count = (n: number, one: string, many: string): string | null => (n === 0 ? null : `${n.toLocaleString('en')} ${n === 1 ? one : many}`)
+    const summary = `Edited by hand: ${[count(sets.length, 'cell changed', 'cells changed'), count(removed.length, 'row removed', 'rows removed'), count(added.length, 'row added', 'rows added')].filter(Boolean).join(', ')}.`
+    const kept = await this.keep(
+      profileId,
+      operation,
+      { kind: 'table', table: result.table },
+      { title: record.title, source: record.source, notes: [summary], acceptSecrets: req.acceptSecrets === true, existing: record, reason: summary },
+      fail
+    )
+    if (!kept.ok) return kept
+    return { ...kept, value: { ...(kept.value as Record<string, unknown>), did: [summary] } }
+  }
+
   private async transform(
     profileId: string,
     operation: string,
@@ -981,8 +1047,14 @@ export class ArtifactService {
     const result = applySteps(table, steps)
     if (isTransformFailure(result)) return fail('bad-input', `Step ${result.step} (${result.op}) did not work: ${result.message}`, { step: result.step })
 
+    // A value put into a cell is the one thing in a plan that is not worked out: a model read it out of the sentence.
+    const wrote = steps.some((one) => one.op === 'set' || one.op === 'add')
     const notes = [
-      ...(planned ? [`The steps were chosen by a model from: "${planned.slice(0, 200)}". It was shown the column names, not the data; every number was worked out by Orbis.`] : []),
+      ...(planned
+        ? [
+            `The steps were chosen by a model from: "${planned.slice(0, 200)}". It was shown the column names, not the data; ${wrote ? 'the values put into cells were taken by it from your words, so check them; everything else was worked out by Orbis.' : 'every number was worked out by Orbis.'}`
+          ]
+        : []),
       ...result.notes
     ]
     const asNew = str(req.as, 10) === 'new'
@@ -1661,7 +1733,7 @@ export class ArtifactService {
     let columns: { id: string; name: string; type: string; formula: string }[] = []
     // The first rows as a person reads them -- dates as dates, quantities with their unit -- so the screen shows a
     // table and not the JSON it is kept as. Bounded: a look, not a second copy.
-    let grid: { rows: string[][]; total: number } | null = null
+    let grid: { rows: string[][]; total: number; from: number } | null = null
     // The tables a document holds, so each can be offered to be taken out.
     let tables: DocumentTable[] = []
     if (record.kind === 'document') {
@@ -1679,9 +1751,12 @@ export class ArtifactService {
       if (body && body.kind === 'table') {
         const table = body.table
         columns = table.columns.map((one) => ({ id: one.id, name: one.name, type: one.type, formula: formulaName(one.name) }))
+        // A screenful, starting wherever was asked for, so a long table can be walked through and edited anywhere.
+        const from = Math.min(Math.max(0, Math.floor(typeof req.from === 'number' && Number.isFinite(req.from) ? req.from : 0)), Math.max(0, table.rows.length - 1))
         grid = {
-          rows: table.rows.slice(0, LIMITS.gridRows).map((row) => table.columns.slice(0, LIMITS.gridColumns).map((column, at) => cellOut(row.cells[at] ?? null, column).slice(0, LIMITS.gridCell))),
-          total: table.rows.length
+          rows: table.rows.slice(from, from + LIMITS.gridRows).map((row) => table.columns.slice(0, LIMITS.gridColumns).map((column, at) => cellOut(row.cells[at] ?? null, column).slice(0, LIMITS.gridCell))),
+          total: table.rows.length,
+          from
         }
       }
     }

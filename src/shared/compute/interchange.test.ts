@@ -108,9 +108,9 @@ describe('format capabilities', () => {
   test('a format Orbis reads but does not write says so, and the other way round', () => {
     assert.equal(FORMATS.xml.canImport, true)
     assert.equal(FORMATS.xml.canExport, false)
-    // HTML goes both ways now that there is a writer; a deck is written by the artifact service and not read back yet.
+    // HTML goes both ways now that there is a writer, and so does a deck: written by the artifact service, read by deck.ts.
     assert.equal(FORMATS.html.canExport, true)
-    assert.equal(FORMATS.pptx.canImport, false)
+    assert.equal(FORMATS.pptx.canImport, true)
     assert.equal(FORMATS.pptx.canExport, true)
   })
 

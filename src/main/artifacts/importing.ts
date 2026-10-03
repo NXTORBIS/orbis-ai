@@ -9,6 +9,7 @@ import { emptyDocument, fromHtml, isDocumentError, text, type Block } from '../.
 import { flattenJson, isInterchangeError, stageImport, type FormatId } from '../../shared/compute/interchange.ts'
 import type { ArtifactBody } from '../../shared/artifacts/model.ts'
 import { safeName } from '../../shared/artifacts/naming.ts'
+import { readDeck } from './deck.ts'
 
 /**
  * A file read into something Orbis can keep.
@@ -20,8 +21,8 @@ import { safeName } from '../../shared/artifacts/naming.ts'
  * through the same allow-list importer any HTML goes through, and a PDF's text layer with pdf.js. Nothing is fetched
  * and nothing in an imported file is ever run.
  *
- * What cannot be read is said: a PDF gives its text and not its layout, a workbook gives one sheet, a deck is not
- * read at all. A note is written for each, because a file that imported "fine" with half of it missing is the
+ * What cannot be read is said: a PDF gives its text and not its layout, a workbook gives one sheet, a deck gives its
+ * words and not its pictures (see deck.ts). A note is written for each, because a file that imported "fine" with half of it missing is the
  * failure nobody notices.
  */
 
@@ -252,7 +253,7 @@ export async function importFile(name: string, bytes: Uint8Array): Promise<Impor
   const zip = bytes.length > 4 && bytes[0] === 0x50 && bytes[1] === 0x4b
   if (ext === '.xlsx' && zip) return readWorkbook(name, bytes)
   if (ext === '.docx' && zip) return readWord(name, bytes)
-  if (ext === '.pptx') return { error: 'unsupported', message: 'Orbis does not read PowerPoint decks yet. It can write them.' }
+  if (ext === '.pptx' && zip) return readDeck(name, bytes)
   if (ext === '.pdf' || decode(bytes.subarray(0, 5)) === '%PDF-') return readPdf(name, bytes)
   if (zip) return { error: 'unsupported', message: 'That is an archive or an Office file Orbis does not read.' }
   // A source file is kept as the file it is. JSON, HTML and XML keep opening as the table or document they hold,

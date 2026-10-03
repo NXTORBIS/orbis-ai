@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { isDataError, parseDelimited } from '../../shared/compute/data.ts'
 import { emptyDocument, fromMarkdown, isDocumentError } from '../../shared/compute/document.ts'
 import { importFile } from './importing.ts'
-import { writeDocx, writeXlsx } from './office.ts'
+import { writeDocx, writePptx, writeXlsx } from './office.ts'
 
 const encode = (value: string): Uint8Array => new TextEncoder().encode(value)
 
@@ -110,7 +110,31 @@ test('what cannot be read is refused with a reason, not read wrongly', async () 
   const empty = await importFile('x.csv', new Uint8Array())
   assert.ok('error' in empty)
   const deck = await importFile('x.pptx', encode('PK\u0003\u0004junk'))
-  assert.ok('error' in deck && /does not read PowerPoint/.test(deck.message))
+  assert.ok('error' in deck && /not a PowerPoint file Orbis can read/.test(deck.message))
   const scanned = await importFile('x.pdf', encode('%PDF-1.4\nnothing\n'))
   assert.ok('error' in scanned)
+})
+
+test('a deck comes in as a document: a heading per slide, its bullets, its table, in the order the deck shows them', async () => {
+  const parsed = fromMarkdown('# Launch plan\n\n## Why now\n\n- The market is ready\n- The team is ready\n\n## Numbers\n\n| Month | Units |\n| --- | --- |\n| Jan | 12 |\n| Feb | 18 |\n\n## Next\n\nShip in March.\n', 'b')
+  if (isDocumentError(parsed)) throw new Error(parsed.message)
+  const doc = emptyDocument('d', 'Launch plan')
+  doc.blocks = parsed.blocks
+  const made = await writePptx(doc)
+  const out = await body('Launch plan.pptx', made.bytes)
+  assert.equal(out.body.kind, 'document')
+  assert.equal(out.format, 'pptx')
+  if (out.body.kind !== 'document') return
+  const said = (runs: { text?: string }[]): string => runs.map((r) => r.text ?? '').join('')
+  const headings = out.body.document.blocks.flatMap((one) => (one.kind === 'heading' ? [said(one.content as { text?: string }[])] : []))
+  assert.equal(headings[0], 'Launch plan')
+  // The deck is what Orbis's own writer made of the document: a title slide, a slide per heading, the table on a slide of its own.
+  for (const title of ['Why now', 'Next']) assert.ok(headings.includes(title), `${title} in ${headings.join(' | ')}`)
+  assert.ok(headings.indexOf('Why now') < headings.indexOf('Next'), 'in the order the deck shows them')
+  const bullets = out.body.document.blocks.flatMap((one) => (one.kind === 'list' ? one.items.map((item) => said(item.content as { text?: string }[])) : []))
+  assert.ok(bullets.includes('The market is ready') && bullets.includes('The team is ready'), bullets.join(' | '))
+  const table = out.body.document.blocks.find((one) => one.kind === 'table')
+  assert.ok(table && table.kind === 'table')
+  if (table && table.kind === 'table') assert.deepEqual(table.rows.map((row) => row.map((cell) => said(cell.content as { text?: string }[]))), [['Month', 'Units'], ['Jan', '12'], ['Feb', '18']])
+  assert.ok(out.notes.some((one) => /Read the words of \d+ slides?: titles, text, tables and speaker notes\. Pictures, charts, drawings and where things sat on a slide are not read\./.test(one)), out.notes.join(' | '))
 })

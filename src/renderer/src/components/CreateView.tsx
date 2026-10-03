@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { AlertTriangle, ArrowLeft, BarChart3, Check, Code2, Copy, FilePlus2, FolderOpen, History, LayoutTemplate, LineChart, Loader2, Pencil, Save, Search, Sparkles, Table2, FileText, Trash2, Workflow, X } from 'lucide-react'
 import type { NoticeKind } from '../lib/notices'
 import { CreateChange } from './CreateChange'
+import { CreateGrid } from './CreateGrid'
 import './create.css'
 
 /**
@@ -95,7 +96,7 @@ interface Opened {
   /** A table's columns, so a chart can be asked for by name. Empty for anything that is not a table. */
   columns: { id: string; name: string; type: string; formula: string }[]
   /** The first rows of a table as text, to show as a table. Null for anything that is not one. */
-  grid: { rows: string[][]; total: number } | null
+  grid: { rows: string[][]; total: number; from: number } | null
   /** The tables inside a document, so each can be taken out as a table of its own. */
   tables: { index: number; caption: string; rows: number; columns: number; headings: string[] }[]
   /** For code: which language it is. Null for anything else. */
@@ -291,10 +292,11 @@ export default function CreateView({
     void refresh()
   }, [refresh])
 
-  const open = useCallback(async (artifactId: string) => {
+  const open = useCallback(async (artifactId: string, from = 0) => {
     setSaved(null)
     setSaveFailure(null)
-    const result = await window.api.creationRun({ operation: 'artifact.read', artifactId })
+    // `from`: which row a table's screenful starts at, so a long one can be walked through.
+    const result = await window.api.creationRun({ operation: 'artifact.read', artifactId, from })
     if (result.ok) setOpened(result.value as Opened)
   }, [])
 
@@ -811,36 +813,16 @@ export default function CreateView({
             {(opened.record.kind === 'plot' || opened.record.kind === 'diagram') && !opened.truncated ? (
               <img className="create-drawing" alt={`${opened.record.title}, drawn`} src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(opened.preview)}`} />
             ) : opened.record.kind === 'table' && opened.grid ? (
-              <div className="create-grid" role="region" aria-label={`${opened.record.title}, as a table`} tabIndex={0}>
-                <table>
-                  <thead>
-                    <tr>
-                      {opened.columns.slice(0, opened.grid.rows[0]?.length ?? opened.columns.length).map((one) => (
-                        <th key={one.id} scope="col" className={one.type === 'number' || one.type === 'integer' || one.type === 'quantity' ? 'num' : ''} title={one.type}>
-                          {one.name}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {opened.grid.rows.map((row, i) => (
-                      <tr key={i}>
-                        {row.map((cell, j) => (
-                          <td key={j} className={opened.columns[j] && (opened.columns[j].type === 'number' || opened.columns[j].type === 'integer' || opened.columns[j].type === 'quantity') ? 'num' : ''}>
-                            {cell}
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {opened.grid.total === 0 && <p className="create-grid-more">No rows yet: the columns are the whole table.</p>}
-                {opened.grid.total > opened.grid.rows.length && (
-                  <p className="create-grid-more">
-                    Showing the first {opened.grid.rows.length} of {opened.grid.total.toLocaleString()} rows. Every row is in the saved file.
-                  </p>
-                )}
-              </div>
+              <CreateGrid
+                artifactId={opened.record.artifactId}
+                versionId={opened.record.versionId}
+                title={opened.record.title}
+                columns={opened.columns}
+                grid={opened.grid}
+                pageSize={100}
+                onPage={(from) => void open(opened.record.artifactId, from)}
+                run={change}
+              />
             ) : (
               <pre className="create-preview">
                 {opened.preview}
