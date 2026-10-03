@@ -134,7 +134,7 @@ export function onRendered(state: ChatScrollState, turn: Turn, reducedMotion = f
   // A conversation that began a moment ago with this question: the question, and the answer beginning under it.
   if (turn.conversationId !== state.conversationId && turn.started && turn.lastUserId) {
     return {
-      state: { mode: 'reading', settledAt: null, conversationId: turn.conversationId, shownTurnId: turn.lastUserId },
+      state: { mode: 'following', settledAt: null, conversationId: turn.conversationId, shownTurnId: turn.lastUserId },
       action: { kind: 'toTurn', messageId: turn.lastUserId }
     }
   }
@@ -147,14 +147,22 @@ export function onRendered(state: ChatScrollState, turn: Turn, reducedMotion = f
     }
   }
 
-  // A question that was not there before. Show it, and the beginning of the answer to it.
-  //
-  // `mode` becomes 'reading' rather than 'following': having been put at the top of a new answer, the person is
-  // reading it, and Orbis must not then drag them to the foot of it as it grows. They can still ask to follow it by
-  // scrolling down, which is the only way that mode comes back.
+  /*
+   * A question that was not there before. Put it at the top, and follow the answer written under it.
+   *
+   * Following is what makes this work rather than what spoils it, because of the room kept under the newest turn
+   * (`roomUnderTurn`). While the answer is shorter than the view, the foot of the page *is* "the question at the
+   * top" -- following it moves nothing. As the answer grows the room shrinks, and when there is none left, following
+   * keeps the newest line in sight, which is the whole point of watching an answer being written.
+   *
+   * This was 'reading' once, on the reasoning that somebody put at the top of an answer is reading it. The reasoning
+   * was sound and the result was not: the answer ran off the bottom of the window and stayed there, and the only way
+   * to see any of it was to scroll the whole way by hand, every time. A person who really is reading says so by
+   * scrolling up, and the moment they do, `onScrolled` makes this 'reading' again and leaves them alone.
+   */
   if (turn.lastUserId && turn.lastUserId !== state.shownTurnId) {
     return {
-      state: { ...state, mode: 'reading', shownTurnId: turn.lastUserId },
+      state: { ...state, mode: 'following', shownTurnId: turn.lastUserId },
       action: { kind: 'toTurn', messageId: turn.lastUserId }
     }
   }

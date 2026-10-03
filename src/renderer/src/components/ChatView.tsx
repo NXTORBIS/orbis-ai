@@ -134,7 +134,18 @@ export default function ChatView(props: Props): React.JSX.Element {
 
   const perform = useCallback((el: HTMLElement, action: ScrollAction): void => {
     reflect(el)
-    if (action.kind === 'none') return
+    if (action.kind === 'none') {
+      /*
+       * Nothing moves, and the way back is still decided.
+       *
+       * An answer being written while somebody reads further up grows the page under them without producing a single
+       * scroll event -- they are not scrolling, so nothing fires. Left to events, the button offering the newest line
+       * would never appear, and there would be no way back to an answer that had run off the bottom except to drag
+       * the scroller the whole way.
+       */
+      setShowJump((shown) => jumpVisible(measure(el), shown))
+      return
+    }
     if (action.kind === 'toTurn') {
       boxOf(el.querySelector(`[data-msg-id="${CSS.escape(action.messageId)}"]`))?.scrollIntoView({ block: 'start' })
     } else if (action.smooth) {
