@@ -155,14 +155,27 @@ async function browser(action: string, args: Record<string, unknown>): Promise<v
 async function capabilities(): Promise<SelectionNeed[]> {
   const found = await connection()
   if (!found) return []
+
+  /*
+   * What Orbis can really do, asked rather than assumed.
+   *
+   * Orion, Search and the clipboard used to be taken for granted here and only the other three were probed. That was
+   * wrong in the one way that matters: the helper does not register `orion:ask` at all when Orbis has no API key, so
+   * the palette went on offering Explain, Summarise and Ask, and pressing any of them came back "No such channel" --
+   * which reads, from the outside, as the whole feature doing nothing. Everything is asked for now.
+   */
+  let ping: { hasApiKey?: boolean } | undefined
   try {
-    await call('helper:ping', [])
+    ping = (await call('helper:ping', [])) as { hasApiKey?: boolean }
   } catch {
     helper = null
     return []
   }
-  const can: SelectionNeed[] = ['orion', 'search', 'clipboard']
-  // Each of the rest is claimed only if its own side answers.
+
+  // Copying happens in the page itself, so it needs nothing from Orbis and is the one thing always available.
+  const can: SelectionNeed[] = ['clipboard']
+  // Orion answers only when Orbis has a key for it. Without one there is nothing to ask, and nothing is offered.
+  if (ping?.hasApiKey) can.push('orion')
   await Promise.all([
     call('notes:list', [{ limit: 1 }])
       .then(() => void can.push('notes'))
@@ -171,7 +184,11 @@ async function capabilities(): Promise<SelectionNeed[]> {
       .then(() => void can.push('whiteboard'))
       .catch(() => undefined),
     call('browser:tabs', [])
-      .then(() => void can.push('browser'))
+      .then(() => {
+        // Searching and opening are the browser doing something, so they stand or fall with it.
+        can.push('browser')
+        can.push('search')
+      })
       .catch(() => undefined)
   ])
   return can

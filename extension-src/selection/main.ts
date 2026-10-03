@@ -322,6 +322,17 @@ class SelectionOrb {
       return
     }
 
+    /*
+     * Why the list is short.
+     *
+     * Without a key for Orion there is no explaining, summarising or asking -- only the things the browser itself
+     * does. Saying so is the difference between a palette that looks broken and one that is telling the truth about
+     * what this Orbis can do.
+     */
+    if (!this.can.includes('orion')) {
+      panel.append(note('Orion has no API key in this Orbis, so it cannot explain, summarise or answer. The rest still works.', 'warn'))
+    }
+
     const ask = palette.top.find((one) => one.id === 'ask') ?? palette.more.find((one) => one.id === 'ask')
     if (ask) {
       const box = el('input', 'ask')
