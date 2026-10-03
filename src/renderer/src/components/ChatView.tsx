@@ -7,6 +7,7 @@ import Composer from './Composer'
 import MemoryOffer from './MemoryOffer'
 import OtherAnswers from './OtherAnswers'
 import ResearchRunning from './ResearchRunning'
+import VoiceConversation from './VoiceConversation'
 import ChatRail from './ChatRail'
 import Greeting from './Greeting'
 import MessageItem from './MessageItem'
@@ -358,6 +359,16 @@ export default function ChatView(props: Props): React.JSX.Element {
    */
   const composer = (
     <>
+      {/*
+        * Talking with Orbis rather than dictating to it: it answers out loud and then listens again.
+        * The latest finished answer is what gets read; while one is still being written, nothing is said.
+        */}
+      <VoiceConversation
+        onSay={(text) => props.onSend(text, [])}
+        lastAnswer={[...(props.conversation?.messages ?? [])].reverse().find((m) => m.role === 'assistant')?.content ?? null}
+        answering={Boolean(props.stream)}
+        onNotify={props.onNotify}
+      />
       {/* What research is doing right now, and the controls that can still change it. Nothing when none is running. */}
       <ResearchRunning />
       <OtherAnswers conversation={props.conversation} onUse={props.onUseBranch} onForget={props.onForgetBranch} />

@@ -18699,3 +18699,7 @@ html[data-motion='reduced'] .tool-btn.recording {
 .research-run-plan li { margin: 1px 0; }
 .research-run-prefer { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 6px; }
 .research-run-note { margin: 6px 0 0; }
+
+/* ---------------------------------------------------------------- talking with Orbis */
+.voice-talk { display: flex; align-items: center; gap: 7px; margin: 0 auto 4px; width: min(100%, 760px); padding: 0 12px; }
+.voice-talk-status { color: var(--faint); font-size: 12px; }

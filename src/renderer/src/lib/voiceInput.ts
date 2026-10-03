@@ -52,6 +52,20 @@ type Listener = (status: VoiceStatus) => void
 
 export interface StartOptions {
   target: VoiceTarget
+  /**
+   * Stop by itself once the person has stopped talking.
+   *
+   * For a conversation, where nobody is holding a key down: a turn has to end on its own or it never ends. Off for
+   * push-to-talk, where letting go is what ends it and stopping early would cut somebody off mid-pause.
+   */
+  endOnSilence?: boolean
+  /**
+   * Given the words when the session ends by itself rather than by somebody stopping it.
+   *
+   * Needed only by `endOnSilence`: when the service stops its own recording, the transcript has no caller waiting for
+   * it, and without this it would be worked out and dropped. Called once, with null when there was nothing to say.
+   */
+  onTranscript?(text: string | null): void
   inputId?: string
   profileId?: string
   config?: Partial<VoiceInputConfig>
@@ -226,6 +240,70 @@ class VoiceInputService {
     this.tick = setInterval(() => this.announce(), 250)
     // A microphone somebody forgot about stops itself rather than recording all afternoon.
     this.limit = setTimeout(() => void this.stop(), this.config.maxDurationMs)
+    if (options.endOnSilence) this.listenForSilence(stream, session.sessionId, options.onTranscript)
+  }
+
+
+  /**
+   * Ending a turn when somebody stops talking.
+   *
+   * The loudness of the microphone is measured about twenty times a second, and the turn ends after a short run of
+   * quiet. Two things stop this cutting people off: nothing can end before somebody has actually said something
+   * (otherwise it ends immediately, in the quiet before they start), and the quiet has to last long enough to be the
+   * end of a sentence rather than the pause in the middle of one.
+   *
+   * The threshold is deliberately low. Ending a turn too late costs a second; ending it too early takes somebody's
+   * words away mid-sentence, which is the fault people stop using a feature over.
+   */
+  private listenForSilence(stream: MediaStream, sessionId: string, onTranscript?: (text: string | null) => void): void {
+    let audio: AudioContext
+    try {
+      audio = new AudioContext()
+    } catch {
+      // No way to measure means no silence detection; the overall time limit still ends the turn.
+      return
+    }
+    const analyser = audio.createAnalyser()
+    analyser.fftSize = 1024
+    audio.createMediaStreamSource(stream).connect(analyser)
+    const samples = new Float32Array(analyser.fftSize)
+
+    /** Loudness below which a moment counts as quiet. */
+    const QUIET = 0.012
+    /** How long the quiet has to last to be the end of a sentence rather than a pause in one. */
+    const ENOUGH_QUIET_MS = 1200
+
+    let spokeAtAll = false
+    let quietSince = 0
+    const stopWatching = (): void => {
+      clearInterval(watch)
+      void audio.close().catch(() => undefined)
+    }
+
+    const watch = setInterval(() => {
+      // The session moving on, or being taken down, takes this with it.
+      if (this.session?.sessionId !== sessionId || this.state !== 'listening') return stopWatching()
+      analyser.getFloatTimeDomainData(samples)
+      let sum = 0
+      for (const one of samples) sum += one * one
+      const loudness = Math.sqrt(sum / samples.length)
+
+      if (loudness > QUIET) {
+        spokeAtAll = true
+        quietSince = 0
+        return
+      }
+      // Quiet before anybody has said anything is somebody thinking, not somebody finishing.
+      if (!spokeAtAll) return
+      const now = Date.now()
+      if (!quietSince) quietSince = now
+      else if (now - quietSince >= ENOUGH_QUIET_MS) {
+        stopWatching()
+        // The words go to whoever asked for the turn: nothing else is waiting on this stop, so without this they
+        // would be worked out and dropped.
+        void this.stop().then((text) => onTranscript?.(text))
+      }
+    }, 50)
   }
 
   /**
