@@ -1,6 +1,6 @@
 import { strict as assert } from 'node:assert'
 import { test } from 'node:test'
-import { lastLine, placeOrb, placePanel, selectionBounds, stillVisible, type Rect, type Room } from './selectionPlacement.ts'
+import { lastLine, placeOrb, placePanel, selectionBounds, stillVisible, type Rect, type Room, placeBar, firstLine } from './selectionPlacement.ts'
 
 const room: Room = { width: 1200, height: 800 }
 const size = 18
@@ -107,4 +107,36 @@ test('the last line of a selection is the one the orb goes beside', () => {
     { x: 40, y: 240, width: 120, height: 20 }
   ])
   assert.deepEqual(got, { x: 40, y: 240, width: 120, height: 20 }, 'the short last line, not the long middle one')
+})
+
+test('the contextual bar sits above the selection, aligned with where it starts', () => {
+  const room = { width: 1200, height: 800 }
+  const line = { x: 300, y: 400, width: 160, height: 20 }
+  const at = placeBar(line, { width: 320, height: 34 }, room)
+  assert.equal(at.from, 'above')
+  assert.ok(at.y + 34 <= line.y, 'it does not cover the words it is about')
+  assert.equal(at.x, 300, 'and it starts where they start')
+})
+
+test('with no room above, it goes below rather than under the browser toolbar', () => {
+  const room = { width: 1200, height: 800, inset: { top: 90 } }
+  const at = placeBar({ x: 100, y: 95, width: 200, height: 20 }, { width: 320, height: 34 }, room)
+  assert.equal(at.from, 'below')
+  assert.ok(at.y >= 115)
+})
+
+test('a selection near the right edge keeps the whole bar on screen', () => {
+  const room = { width: 1000, height: 800 }
+  const at = placeBar({ x: 950, y: 400, width: 40, height: 20 }, { width: 320, height: 34 }, room)
+  assert.ok(at.x + 320 <= 1000, `ran off the edge at ${at.x}`)
+})
+
+test('a selection running off the top is anchored to the line you can actually see', () => {
+  const rects = [
+    { x: 100, y: 500, width: 300, height: 20 },
+    { x: 100, y: 460, width: 300, height: 20 },
+    { x: 100, y: 540, width: 120, height: 20 }
+  ]
+  assert.deepEqual(firstLine(rects), { x: 100, y: 460, width: 300, height: 20 })
+  assert.equal(firstLine([]), null)
 })

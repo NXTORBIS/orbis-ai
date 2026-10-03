@@ -393,6 +393,7 @@ export const TEST_FILES = [
   'src/main/artifacts/searching.test.ts',
   'src/main/artifacts/wiring.test.ts',
   'src/shared/tokens.test.ts',
+  'src/shared/selectionShare.test.ts',
   'src/shared/selectionText.test.ts',
   'src/shared/conversationBranch.test.ts',
   'src/shared/projectScope.test.ts',

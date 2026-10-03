@@ -258,3 +258,34 @@ test('the choices offered for rewriting and translating are real and distinct', 
   assert.ok(translateAsk('ta').includes('Tamil'))
   assert.ok(translateAsk('xx').includes('xx'), 'an unknown code is passed through rather than invented')
 })
+
+test('the contextual surface offers understand it, find it, hand it on — in that order', () => {
+  const palette = buildPalette({ reading: readSelection('Artificial intelligence is transforming education.'), available: ['orion', 'search', 'browser', 'clipboard'] })
+  assert.deepEqual(palette.primary.map((one) => one.id), ['ask', 'search', 'share'])
+  assert.deepEqual(palette.primary.map((one) => one.label), ['Ask Orion', 'Search in Orbis', 'Share highlighted'])
+})
+
+test('the three are the same three wherever you are, whatever the text is', () => {
+  for (const text of ['https://example.org/a', 'const x = items.map((i) => i.id)', '2 + 2 = 4', 'A plain sentence about things.']) {
+    const palette = buildPalette({ reading: readSelection(text), available: ['orion', 'search', 'browser', 'clipboard'] })
+    assert.deepEqual(palette.primary.map((one) => one.id), ['ask', 'search', 'share'], text)
+  }
+})
+
+test('one of the three that cannot run here is left out rather than drawn and refused', () => {
+  const noOrion = buildPalette({ reading: readSelection('Some words here.'), available: ['search', 'browser', 'clipboard'] })
+  assert.deepEqual(noOrion.primary.map((one) => one.id), ['search', 'share'])
+  const nothing = buildPalette({ reading: readSelection('Some words here.'), available: [] })
+  assert.deepEqual(nothing.primary, [])
+})
+
+test('a selection that looks like a secret keeps the local three and loses the one that sends', () => {
+  const risky = buildPalette({ reading: readSelection('sk_live_abcdefghij1234567890'), available: ['orion', 'search', 'browser', 'clipboard'] })
+  assert.ok(!risky.primary.some((one) => one.id === 'ask'), 'nothing that leaves the machine is offered')
+  assert.ok(risky.primary.some((one) => one.id === 'share'), 'handing it on yourself is still yours to do')
+})
+
+test('the fuller palette keeps its own ordering, which the three do not disturb', () => {
+  const url = buildPalette({ reading: readSelection('https://example.org/a'), available: ['orion', 'search', 'browser', 'clipboard'] })
+  assert.equal(url.top[0].id, 'open', 'Open still leads for an address')
+})

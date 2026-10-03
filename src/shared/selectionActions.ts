@@ -73,9 +73,9 @@ const action = (one: SelectionAction): SelectionAction => Object.freeze(one)
 export const SELECTION_ACTIONS: readonly SelectionAction[] = Object.freeze([
   action({
     id: 'ask',
-    label: 'Ask',
+    label: 'Ask Orion',
     icon: 'spark',
-    hint: 'Ask Orion anything about the selected text',
+    hint: 'Ask Orion about the selected text',
     kinds: null,
     needs: ['orion'],
     sends: true,
@@ -249,9 +249,9 @@ export const SELECTION_ACTIONS: readonly SelectionAction[] = Object.freeze([
   }),
   action({
     id: 'search',
-    label: 'Search',
+    label: 'Search in Orbis',
     icon: 'search',
-    hint: 'Search for the selected text',
+    hint: 'Search Orbis for the selected text',
     kinds: null,
     needs: ['search', 'browser'],
     sends: false,
@@ -259,6 +259,26 @@ export const SELECTION_ACTIONS: readonly SelectionAction[] = Object.freeze([
     maxWords: 60,
     surface: 'browser',
     rank: 80
+  }),
+  action({
+    /*
+     * Handing it on, with where it came from.
+     *
+     * `sends: false` because nothing leaves this computer: Orbis has no account anywhere, so what this does is put
+     * the quote and its source somewhere the person can hand on themselves. See src/shared/selectionShare.ts for why
+     * the wording never says "shared" when what happened was a copy.
+     */
+    id: 'share',
+    label: 'Share highlighted',
+    icon: 'share',
+    hint: 'Hand on the selected text, with the page it came from',
+    kinds: null,
+    needs: ['clipboard'],
+    sends: false,
+    minWords: 1,
+    maxWords: null,
+    surface: 'toast',
+    rank: 60
   }),
   action({
     id: 'copy',
@@ -301,6 +321,18 @@ export const SELECTION_ACTIONS: readonly SelectionAction[] = Object.freeze([
   })
 ])
 
+/**
+ * The three that lead, when they can.
+ *
+ * Understand it, find it, hand it on -- the three things somebody wants from a piece of text they have just
+ * highlighted, and the three the contextual surface shows before anything else. The rest are a press away under
+ * "More": this is an order, not a shorter list, and nothing was removed to make room.
+ *
+ * One of these missing is one that cannot run here -- no Orion key, no browser -- and it is left out rather than
+ * drawn and refused, which is the rule the whole registry is built on.
+ */
+export const PRIMARY_SELECTION_ACTIONS: readonly string[] = Object.freeze(['ask', 'search', 'share'])
+
 const BY_ID: ReadonlyMap<string, SelectionAction> = new Map(SELECTION_ACTIONS.map((one) => [one.id, one]))
 
 export function selectionAction(id: string): SelectionAction | null {
@@ -341,6 +373,15 @@ export interface PaletteInput {
 }
 
 export interface Palette {
+  /**
+   * The three on the contextual surface: understand it, find it, hand it on.
+   *
+   * Kept apart from `top` on purpose. `top` is ordered for the kind of text -- Open leads for an address, Solve for
+   * an equation -- and that ordering is right for the fuller palette and wrong for a surface that is meant to show
+   * the same three things wherever you are. Mixing them would have made "Open" push "Share highlighted" off the
+   * surface, which is how a predictable control becomes an unpredictable one.
+   */
+  readonly primary: readonly SelectionAction[]
   /** Shown straight away. */
   readonly top: readonly SelectionAction[]
   /** Behind "More". */
@@ -394,8 +435,13 @@ export function buildPalette(input: PaletteInput): Palette {
   scored.sort((a, b) => b.score - a.score || a.one.id.localeCompare(b.one.id))
 
   const ordered = scored.map((s) => s.one)
+  const can = new Set(ordered.map((one) => one.id))
+  // In the stated order, and only the ones that really fit this selection: a surface that shows a button it cannot
+  // run teaches people not to trust it, which is the rule the whole registry is built on.
+  const primary = PRIMARY_SELECTION_ACTIONS.filter((id) => can.has(id)).map((id) => BY_ID.get(id)!)
   const cut = Math.max(1, input.top ?? 4)
   return {
+    primary: Object.freeze(primary),
     top: Object.freeze(ordered.slice(0, cut)),
     more: Object.freeze(ordered.slice(cut)),
     withheld: risky && SELECTION_ACTIONS.some((one) => one.sends && !hidden.has(one.id)) ? reading.risk : null

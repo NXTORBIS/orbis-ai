@@ -84,6 +84,36 @@ function clamp(value: number, low: number, high: number): number {
  * there is room below, above when there is not, and it keeps its left edge near the orb while staying inside the
  * window -- so a selection at the far right gets a panel that slides left rather than one hanging off the screen.
  */
+/**
+ * Where the contextual bar goes for a selection.
+ *
+ * Above the selection and aligned with where it starts, which is where the hand that just finished dragging is not,
+ * and where the eye already is. Below it only when there is no room above -- a bar under the browser's own toolbar is
+ * a bar nobody can press.
+ *
+ * Aligned to the *first* line rather than the bounding box, because a selection running over five paragraphs has a
+ * box whose top is off the screen, and the top of what you can see is the only honest place to put something that
+ * belongs to it.
+ */
+export function placeBar(first: Rect, want: { width: number; height: number }, room: Room): { x: number; y: number; from: 'above' | 'below' } {
+  const edge = edges(room)
+  const gap = 8
+  const above = first.y - want.height - gap
+  const below = first.y + first.height + gap
+  // Above when it fits; below otherwise. There is no third option: left and right of a line of text is the margin,
+  // where a bar reads as belonging to the page rather than to the words.
+  const fitsAbove = above >= edge.top
+  const y = fitsAbove ? above : Math.min(below, room.height - edge.bottom - want.height)
+  const x = Math.max(edge.left, Math.min(first.x, room.width - edge.right - want.width))
+  return { x, y: Math.max(edge.top, y), from: fitsAbove ? 'above' : 'below' }
+}
+
+/** The first line of a selection: the rectangle nearest the top, and leftmost among those. */
+export function firstLine(rects: readonly Rect[]): Rect | null {
+  if (rects.length === 0) return null
+  return [...rects].sort((a, b) => a.y - b.y || a.x - b.x)[0]
+}
+
 export function placePanel(anchor: Rect, selection: Rect, want: { width: number; height: number }, room: Room): Placed {
   const edge = edges(room)
   const gap = 8
