@@ -1,6 +1,8 @@
 import type { Research, ResearchSource } from '../shared/types'
 import { bus } from './eventBus.ts'
 import { normalizeUrl } from '../shared/research.ts'
+import { disagreementNote, disagreements, dropRepeats } from '../shared/researchCheck.ts'
+import { rankSources } from '../shared/researchPlan.ts'
 
 export type FetchFn = (url: string, init?: RequestInit) => Promise<Response>
 export type Recency = Research['recency']
@@ -336,8 +338,45 @@ export async function runResearch(o: ResearchOptions): Promise<Research> {
     .filter((s): s is ResearchSource & { rank: number; index: number } => s !== null)
     .sort((a, b) => a.rank - b.rank || a.index - b.index)
 
-  research.sources = sources.slice(0, MAX_SOURCES).map(({ rank: _rank, index: _index, ...source }, i) => ({ ...source, n: i + 1 }))
+  /*
+   * The same page at two addresses.
+   *
+   * Dropping repeats by web address happens above and only catches the easy case: a syndicated article, a mirror and
+   * an AMP copy are three addresses carrying one page, and reading all three made one source look like three agreeing
+   * ones -- which is exactly the shape that makes a wrong figure look confirmed. The text itself is compared here.
+   * What was dropped is recorded rather than quietly discarded.
+   */
+  const unique = dropRepeats(sources, (one) => (one.read ? one.excerpt : ''))
+
+  /*
+   * Which sources are worth reading first.
+   *
+   * The site named after the thing asked about, documentation, standards bodies, governments and universities go
+   * ahead of the rest. This ordering was written and tested and never actually called, so research had been ranking
+   * on keyword relevance and freshness alone.
+   */
+  const authoritative = rankSources(
+    unique.kept.map((one) => ({ ...one, site: one.domain })),
+    keyWords([o.question, ...queries])
+  )
+
+  research.sources = authoritative.slice(0, MAX_SOURCES).map(({ rank: _rank, index: _index, site: _site, ...source }, i) => ({ ...source, n: i + 1 }))
   research.retrievedAt = Date.now()
+
+  const byUrl = new Map(research.sources.map((one) => [one.url, one.n]))
+  const repeats = unique.repeats.map((one) => ({ url: one.dropped.url, sameAs: byUrl.get(one.sameAs.url) ?? 0 })).filter((one) => one.sameAs > 0)
+  if (repeats.length) research.repeats = repeats
+
+  /*
+   * Where the sources do not agree.
+   *
+   * This used to be a line in the prompt asking the model to notice, which is hoping rather than checking. The
+   * figures the pages state are compared here; which one is right is not decided, because there is no way to know,
+   * and a wrong pick is worse than two numbers and the names of who said each.
+   */
+  const found = disagreements(research.sources.filter((one) => one.read).map((one) => ({ n: one.n, text: one.excerpt })))
+  if (found.length) research.conflicts = found.map((one) => ({ about: one.about, readings: one.readings.map((r) => ({ n: r.n, said: r.said })) }))
+
   if (!research.sources.length) research.problem = "none of the pages found could be read"
   return done(research)
 }
@@ -360,6 +399,15 @@ function done(research: Research): Research {
   return research
 }
 
+/**
+ * What to say about figures the sources do not agree on, or null.
+ *
+ * Built from what Orbis actually compared, so it names the real source numbers. `value` is not carried into the
+ * stored record -- the words the page used are what should be quoted -- so a zero stands in here and is never shown.
+ */
+const conflictLines = (r: Research): string | null =>
+  disagreementNote((r.conflicts ?? []).map((one) => ({ about: one.about, readings: one.readings.map((x) => ({ n: x.n, said: x.said, value: 0 })) })))
+
 const dateLine = (s: ResearchSource): string =>
   s.published ? `published ${s.published}${s.updated ? `, updated ${s.updated}` : ''}` : s.updated ? `updated ${s.updated}` : 'no date shown on the page'
 
@@ -379,6 +427,7 @@ export function researchBrief(r: Research): string {
     'Prefer official, primary and authoritative sources and the most recent dated information that fits the question. Give dates when freshness matters, using only dates a source states.',
     "Don't call something the latest or current unless the sources show it. If the sources don't answer the question, are undated or look outdated, say so plainly.",
     'If sources disagree, point out the disagreement with their dates and numbers instead of silently choosing one.',
+    ...(conflictLines(r) ? [conflictLines(r)!] : []),
     "Don't add a list of sources or links at the end: Orbis shows the sources under your answer."
   ].join('\n')
 }

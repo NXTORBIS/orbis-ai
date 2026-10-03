@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronDown, Globe, PanelTop } from 'lucide-react'
+import { AlertTriangle, ChevronDown, Globe, PanelTop } from 'lucide-react'
 import type { Research, ResearchSource } from '../../../shared/types'
 import { citedNumbers } from '../../../shared/research'
 import { openInOrbisBrowser } from '../lib/openInBrowser'
@@ -49,11 +49,40 @@ export default function ResearchSources({ research, content, streaming }: Props)
           </button>
         )}
       </div>
+      {/*
+        * Where the pages do not agree.
+        *
+        * Shown above the sources rather than buried under them, because when it is there it is usually the most
+        * useful thing on the screen. Orbis found this by comparing the figures the pages state; it has not decided
+        * which is right, and the wording says so.
+        */}
+      {!streaming && (research.conflicts?.length ?? 0) > 0 && (
+        <div className="research-conflict" role="note">
+          <AlertTriangle size={13} aria-hidden="true" />
+          <div>
+            <b>The sources do not agree.</b> Orbis compared what the pages state and has not decided which is right.
+            <ul>
+              {research.conflicts!.map((one) => (
+                <li key={one.about}>
+                  <span className="research-about">{one.about}</span>: {one.readings.map((r) => `[${r.n}] ${r.said}`).join(' · ')}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
       <ol className="research-list">
         {primary.map((source) => (
           <SourceRow key={source.n} source={source} />
         ))}
       </ol>
+      {/* Pages that turned out to be the same page at another address. Said, so "six sources" never means one page six times. */}
+      {!streaming && (research.repeats?.length ?? 0) > 0 && (
+        <p className="research-repeats view-muted">
+          {research.repeats!.length === 1 ? 'One other page' : `${research.repeats!.length} other pages`} carried the same text as{' '}
+          {[...new Set(research.repeats!.map((one) => `[${one.sameAs}]`))].join(', ')} and {research.repeats!.length === 1 ? 'was' : 'were'} not counted again.
+        </p>
+      )}
       {!streaming && citedSources.length > 0 && others.length > 0 && (
         <>
           <button type="button" className="research-more" aria-expanded={showOthers} onClick={() => setShowOthers((v) => !v)}>

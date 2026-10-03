@@ -62,13 +62,13 @@ test('item titles are capped, so a large project cannot become most of what Orio
 
 test('instructions read back from disk are kept, trimmed and capped', () => {
   const read = normalizeWorkspace({ id: 'a', name: 'A', project: { goal: ' a   goal ', instructions: `  Use SI units.  ${'x'.repeat(3000)}`, items: [] } })
-  assert.equal(read.project?.goal, 'a goal')
-  assert.equal(read.project?.instructions.length, 2000)
-  assert.ok(read.project?.instructions.startsWith('Use SI units.'))
+  assert.equal(read!.project?.goal, 'a goal')
+  assert.equal(read!.project?.instructions.length, 2000)
+  assert.ok(read!.project?.instructions.startsWith('Use SI units.'))
 })
 
 test('a project saved before instructions existed reads as having none, not as broken', () => {
   const read = normalizeWorkspace({ id: 'a', name: 'A', project: { goal: 'old', items: [{ ref: 'note:1', addedAt: 1 }] } })
-  assert.equal(read.project?.instructions, '')
-  assert.equal(read.project?.items.length, 1)
+  assert.equal(read!.project?.instructions, '')
+  assert.equal(read!.project?.items.length, 1)
 })

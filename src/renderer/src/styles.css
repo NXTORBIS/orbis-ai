@@ -18603,3 +18603,23 @@ html[data-motion='reduced'] .tool-btn.recording {
 }
 .chat-project-list button:hover { background: var(--bg-hover); }
 .chat-project-list button.on { color: var(--cyan); }
+
+/* ---------------------------------------------------------------- where the sources do not agree */
+/* Above the source list, because when it is there it is usually the most useful thing on the screen. */
+.research-conflict {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-left: 2px solid #ffbe4d;
+  border-radius: 8px;
+  background: var(--panel);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.research-conflict svg { flex: none; margin-top: 2px; color: #ffbe4d; }
+.research-conflict ul { margin: 5px 0 0; padding-left: 16px; }
+.research-conflict li { margin: 2px 0; }
+.research-about { color: var(--faint); }
+.research-repeats { margin: 6px 0 0; font-size: 12px; }

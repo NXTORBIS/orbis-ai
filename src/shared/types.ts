@@ -220,6 +220,16 @@ export interface Research {
   problem?: string
   /** Earlier research this reply drew on, rather than new research. */
   reused?: boolean
+  /**
+   * Pages dropped because their text repeated a source already kept -- a syndicated copy, a mirror, an AMP page.
+   * Recorded rather than silently discarded, so "six sources" never means "the same page six times".
+   */
+  repeats?: { url: string; sameAs: number }[]
+  /**
+   * Where the sources state different figures for the same thing, found by comparing what the pages say.
+   * Reported, never resolved: Orbis has no way to know which is right.
+   */
+  conflicts?: { about: string; readings: { n: number; said: string }[] }[]
 }
 
 /**
