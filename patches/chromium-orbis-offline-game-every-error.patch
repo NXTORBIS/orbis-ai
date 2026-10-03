@@ -1,0 +1,63 @@
+From 518a74b310083f75c122fb7253fd9f0b5488c591 Mon Sep 17 00:00:00 2001
+From: NXTORBIS TECHNOLOGIES <nxtorbis@gmail.com>
+Date: Sat, 3 Oct 2026 17:07:26 +0530
+Subject: [PATCH] Orbis: the game belongs on every error page, not only "No
+ internet"
+
+It was started inside the icon-offline branch, where the dinosaur used to live. The dinosaur only ever appeared when
+the whole connection was down -- but a single site that will not load (a wrong address, a site that is down, a request
+that timed out) is the same wait, and got nothing. Moved out of that branch, still guarded by !isSubFrame so a frame
+inside a page never gets one.
+---
+ components/neterror/resources/neterror.ts | 35 ++++++++++++++---------
+ 1 file changed, 22 insertions(+), 13 deletions(-)
+
+diff --git a/components/neterror/resources/neterror.ts b/components/neterror/resources/neterror.ts
+index cd34f3ed8f..13ede91812 100644
+--- a/components/neterror/resources/neterror.ts
++++ b/components/neterror/resources/neterror.ts
+@@ -302,19 +302,28 @@ function onTemplateDataReceived(newData: TemplateData) {
+       dinoGameInitialized = true;
+     }
+ 
+-    // Orbis: the dinosaur is switched off in this build, which left this page
+-    // with nothing on it but a sentence. This is the same four games the Orbis
+-    // chat shows while it draws a picture, from the same file -- waiting for a
+-    // page and waiting for a picture are the same moment. It goes UNDER the
+-    // error, never over it, and it starts nothing until somebody presses a
+-    // key: a page that failed in a background tab must not begin animating by
+-    // itself.
+-    if (!orbisGameAdded && typeof window.orbisOfflineGame === 'function') {
+-      const wrapper = document.querySelector('.interstitial-wrapper');
+-      if (wrapper instanceof HTMLElement) {
+-        window.orbisOfflineGame(wrapper);
+-        orbisGameAdded = true;
+-      }
++  }
++
++  // Orbis: the dinosaur is switched off in this build, which left this page
++  // with nothing on it but a sentence. This is the same four games the Orbis
++  // chat shows while it draws a picture, from the same file -- waiting for a
++  // page and waiting for a picture are the same moment.
++  //
++  // It is deliberately NOT inside the icon-offline branch above, where the
++  // dinosaur lived. The dinosaur only ever appeared when the whole connection
++  // was down; a single site that will not load -- a wrong address, a site that
++  // is down, a request that timed out -- is the same wait and got nothing.
++  // Every top-level error page gets it.
++  //
++  // It goes UNDER the error, never over it, and it starts nothing until
++  // somebody presses a key: a page that failed in a background tab must not
++  // begin animating by itself. A frame inside a page never gets one.
++  if (!isSubFrame && !orbisGameAdded &&
++      typeof window.orbisOfflineGame === 'function') {
++    const wrapper = document.querySelector('.interstitial-wrapper');
++    if (wrapper instanceof HTMLElement) {
++      window.orbisOfflineGame(wrapper);
++      orbisGameAdded = true;
+     }
+   }
+ }
+-- 
+2.44.0.windows.1
+
