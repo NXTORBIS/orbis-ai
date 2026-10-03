@@ -397,5 +397,6 @@ export const TEST_FILES = [
   'src/main/chromium/tabChanges.test.ts',
   'src/main/browserControl/preview.test.ts',
   'src/main/browserControl/undo.test.ts',
+  'src/shared/siteProfiles.test.ts',
   'src/shared/selectionPlacement.test.ts',
 ]

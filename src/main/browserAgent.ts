@@ -40,6 +40,14 @@ type FetchFn = (url: string, init?: RequestInit) => Promise<Response>
 export type BrowseMode = 'once' | 'loop' | 'game'
 
 export interface BrowserAgentOptions {
+  /**
+   * What Orbis has learned about working on particular sites.
+   *
+   * Optional, and absent is fine: without it the agent simply has no notes, which is what it had before. It holds
+   * counts and dates per site and never a sequence of steps -- a stored script would be wrong the day a site changes
+   * its layout, whereas a stale count is only a stale count.
+   */
+  siteProfiles?: { record(url: string, capability: string, worked: boolean): Promise<void>; noteFor(url: string): Promise<string | null> }
   task: string
   mode: BrowseMode
   /** The chat's selected model, used when it can call tools. */
@@ -1042,6 +1050,7 @@ export async function runBrowserAgent(options: BrowserAgentOptions): Promise<voi
         const params = args.params && typeof args.params === 'object' && !Array.isArray(args.params) ? (args.params as Record<string, unknown>) : {}
         const target = typeof args.tab_id === 'string' && args.tab_id ? { tabId: args.tab_id } : { webContentsId: wc.id }
         const describe = control.describe(capability, 'orion')
+        const onSite = wc.getURL()
         const result = await control.execute(
           { capability, params, target, source: 'orion' },
           {
@@ -1073,6 +1082,14 @@ export async function runBrowserAgent(options: BrowserAgentOptions): Promise<voi
         const summary = result.ok
           ? `OK (${result.attempts} attempt${result.attempts === 1 ? '' : 's'}). ${result.verification ? `Verified: ${result.verification.verified} — ${result.verification.detail}` : ''}\nData: ${data.length > 6000 ? `${data.slice(0, 6000)}… (truncated)` : data}`
           : `Error ${result.error?.code}: ${result.error?.message}${result.error?.recoverable ? ' (may work if retried after reading fresh state)' : ''}`
+        /*
+         * What happened, recorded against the site it happened on.
+         *
+         * Counts only, and only for the kinds of action that say something about a site's compatibility. It is done
+         * after the fact and never waited on: a note about a site is not worth slowing an action down for, and not
+         * worth failing one for either.
+         */
+        void options.siteProfiles?.record(onSite, capability, result.ok === true).catch(() => undefined)
         return capability.startsWith('page.') || capability.startsWith('navigation.') ? after(summary, true) : summary
       }
       default:
@@ -1101,6 +1118,15 @@ export async function runBrowserAgent(options: BrowserAgentOptions): Promise<voi
       .slice(-6)
       .map((m) => `${m.role === 'user' ? 'User' : 'Orbis'}: ${m.content.replace(/!\[[^\]]*\]\(data:[^)]+\)/g, '[image]').slice(0, 1500)}`)
       .join('\n')
+    /*
+     * What Orbis has learned about this site before, if anything.
+     *
+     * Usually nothing, and that is deliberate: a site where things have worked says nothing at all, because a line on
+     * every page is a line the agent has to read on every page. Only the awkward sites speak up, and what they say is
+     * a count of what really happened rather than an instruction.
+     */
+    const siteNote = await options.siteProfiles?.noteFor(wc.getURL()).catch(() => null)
+
     const messages: AgentMessage[] = [
       { role: 'system', content: capabilityCatalog ? `${systemPrompt(mode)}
 
@@ -1108,6 +1134,7 @@ ${capabilityCatalog}` : systemPrompt(mode) },
       {
         role: 'user',
         content: [
+          siteNote ? `What Orbis has seen on this site before, as counts rather than instructions -- use your own judgement: ${siteNote}` : '',
           history ? `Earlier in this chat:\n${history}` : '',
           options.resume
             ? 'This continues an automation that was paused or stopped. Pick up where it left off; never redo processed items. First process every item on the current page that is not listed as processed yet, then move on.'

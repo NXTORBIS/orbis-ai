@@ -112,6 +112,7 @@ import { ProfilesStore } from './personal/profiles'
 import { ExperienceStore } from './experience/store'
 import { createNotifications, type Notifications } from './notifications/index'
 import { bus } from './eventBus'
+import { SiteProfiles } from './siteProfiles'
 import { activePreset, appearanceVariables, wantsReducedMotion } from '../shared/experience'
 import { presetBackdrop } from '../shared/presets'
 import { RuleWatcher, workflowReadings } from './ruleWatcher'
@@ -601,6 +602,8 @@ let notifyProfileId = 'default'
  * knowing means it says the thing -- being told twice is a smaller fault than not being told at all.
  */
 let watchingNow: string | null = null
+/** What Orbis has learned about particular sites. Held here because the agent is started from several places. */
+let siteProfiles: SiteProfiles | null = null
 let ruleWatcher: RuleWatcher | null = null
 
 function isHttpUrl(url: string): boolean {
@@ -1139,6 +1142,7 @@ ${block}`
               fetchFn: (url, init) => net.fetch(url, init),
               signal: controller.signal,
               emit,
+              siteProfiles: siteProfiles ?? undefined,
               // The browser is Chromium: the agent works in Chromium's active tab, and follows the person when they switch tabs.
               getTarget: async () => {
                 if (!chromiumBrowser) throw new Error(NO_BROWSER)
@@ -2716,6 +2720,15 @@ if (!app.requestSingleInstanceLock()) {
      * notification is decided now, in one table, and nothing can be added to it later -- a notification carries the
      * name of an action and the ids of what it is about, never anything that could become a command.
      */
+    /*
+     * What Orbis has learned about working on particular sites.
+     *
+     * Counts and dates per site, from actions that really ran -- never a stored sequence of steps, which would be
+     * wrong the day a site changed its layout. The agent reads it as a note and decides for itself.
+     */
+    siteProfiles = new SiteProfiles({ userData: app.getPath('userData'), profileId: () => notifyProfileId })
+    app.on('before-quit', () => void siteProfiles?.flush())
+
     notifyProfileId = (await profilesStore.active()).id
     // Notifications follow the person: switching profile changes whose history is read and whose is written to.
     profilesStore.onChange(() => void profilesStore.active().then((p) => void (notifyProfileId = p.id)))
@@ -2821,6 +2834,8 @@ if (!app.requestSingleInstanceLock()) {
 
     bus.subscribe({ names: ['captcha.required'] }, (event) => {
       const one = event.detail as { site?: string; tabId?: string }
+      // Which sites ask people to verify themselves is exactly the kind of thing worth remembering about a site.
+      if (one.site) void siteProfiles?.recordChallenge(one.site).catch(() => undefined)
       void notifications?.publish({ type: 'captcha.required', fields: { site: one.site ?? 'A site', ...(one.tabId ? { tabId: one.tabId } : {}) } })
     })
     // Personalisation follows the profile: the widgets on the new tab, what each is set to, the wallpaper and the theme
