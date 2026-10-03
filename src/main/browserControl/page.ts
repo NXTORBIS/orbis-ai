@@ -123,6 +123,17 @@ export const DEEP = `const orbisDeep = (selector, from) => {
       for (const el of root.querySelectorAll(selector)) { out.push(el); if (out.length > 4000) return out }
       // Only elements that actually host a shadow root are descended into; the rest of the walk is not repeated.
       for (const el of root.querySelectorAll('*')) { if (++seen > 60000) break; if (el.shadowRoot) next.push(el.shadowRoot) }
+      /*
+       * Into frames, where the frame is the page's own.
+       *
+       * A control inside a frame is in a different document, and reaching it from outside is only possible when that
+       * document belongs to the same site -- which is the browser's rule, not Orbis's. Touching a cross-origin one
+       * throws, and that throw is the security boundary doing its job, so it is caught and the frame is left alone
+       * rather than reported as a fault.
+       */
+      for (const f of root.querySelectorAll('iframe, frame')) {
+        try { const d = f.contentDocument; if (d && d.documentElement) next.push(d) } catch (e) { /* another site's frame: not ours to look in */ }
+      }
     }
     roots = next;
   }
@@ -167,8 +178,27 @@ export const targetScript = (ref: number): string => `(() => {
   el.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
   // New-window links would open outside the tab Orbis is working in.
   if (el.tagName === 'A' && el.target && el.target !== '_self') el.target = '_self';
+  /*
+   * Where it is on the tab, not where it is in its own document.
+   *
+   * An element inside a frame measures itself from that frame's corner, and a real mouse event is delivered at the
+   * tab's coordinates -- so every frame between it and the top adds its own position, and each of those frames is
+   * scrolled into view on the way, or the one holding it could still be off screen when the click lands.
+   */
+  let ox = 0, oy = 0;
+  { let doc = el.ownerDocument, guard = 0;
+    while (doc && doc.defaultView && doc.defaultView !== window && guard++ < 8) {
+      const owner = doc.defaultView.frameElement;
+      if (!owner) break;
+      owner.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'instant' });
+      const fr = owner.getBoundingClientRect();
+      ox += fr.left; oy += fr.top;
+      doc = owner.ownerDocument;
+    }
+  }
   const r = el.getBoundingClientRect();
-  const x = r.left + r.width / 2, y = r.top + r.height / 2;
+  const localX = r.left + r.width / 2, localY = r.top + r.height / 2;
+  const x = localX + ox, y = localY + oy;
   /*
    * What is actually at that point, following shadow boundaries down.
    *
@@ -176,7 +206,8 @@ export const targetScript = (ref: number): string => `(() => {
    * root was reported as covered by something else, when the something else was the element it lives in. The check is
    * for "is there something on top of this", and a parent is not on top of its own child.
    */
-  let hit = document.elementFromPoint(x, y), guard = 0;
+  // Asked of the element's own document, at its own coordinates: a frame's contents are not laid out in the top one.
+  let hit = (el.ownerDocument || document).elementFromPoint(localX, localY), guard = 0;
   while (hit && hit.shadowRoot && guard++ < 8) {
     const inner = hit.shadowRoot.elementFromPoint ? hit.shadowRoot.elementFromPoint(x, y) : null;
     if (!inner || inner === hit) break;

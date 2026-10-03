@@ -118,11 +118,21 @@ async function located(wc: PageHandle, locator: unknown): Promise<{ ref: number;
 }
 
 /** Arms a one-time check that a real click reaches the element (or something inside it). */
+/*
+ * Listens for the click, so afterwards there is evidence it landed rather than a guess.
+ *
+ * Found through the deep walk, not `document.querySelector`: a plain query cannot see into a shadow root or a frame,
+ * so for anything in one no listener was armed, no evidence was ever recorded, and the click fell through to being
+ * "verified" by the page happening to be busy. The flag is set on the top window from wherever the element lives, so
+ * one place is read afterwards whichever document the element was in.
+ */
 export const armClickScript = (ref: number): string => `(() => {
-  const el = document.querySelector('[data-orbis-ref="${ref}"]');
+  ${page.DEEP}
+  const el = orbisDeepOne('[data-orbis-ref="${ref}"]');
   if (!el) return false;
-  window.__orbisClickSeen = false;
-  const seen = () => { window.__orbisClickSeen = true; };
+  const top = (() => { try { return window.top || window } catch (e) { return window } })();
+  top.__orbisClickSeen = false;
+  const seen = () => { try { top.__orbisClickSeen = true } catch (e) { window.__orbisClickSeen = true } };
   for (const type of ['click', 'mousedown', 'pointerdown', 'contextmenu', 'dblclick']) el.addEventListener(type, seen, { once: true, capture: true });
   return true;
 })()`
@@ -232,14 +242,27 @@ export function registerPageCapabilities(control: BrowserControl, resolve: PageR
       const hidden = (await page.exec<string>(asPageHandle(wc), 'document.visibilityState').catch(() => 'visible')) === 'hidden'
       const scripted = (found.target.covered || hidden) && button === 'left'
       if (hidden && button !== 'left') fail('unavailable', 'The page is hidden (Orbis is minimized or covered), so a right or middle click can’t be delivered. Show Orbis and try again.', true)
-      if (scripted) await page.exec(asPageHandle(wc), `document.querySelector('[data-orbis-ref="${found.ref}"]')?.${count === 2 ? "dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))" : 'click()'}`)
+      // The same deep walk: an element in a shadow root or a frame was simply not found here, so the fallback click
+      // did nothing at all and the action reported success having done nothing.
+      if (scripted)
+        await page.exec(
+          asPageHandle(wc),
+          `(() => { ${page.DEEP} const el = orbisDeepOne('[data-orbis-ref="${found.ref}"]'); if (!el) return false; el.${count === 2 ? "dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))" : 'click()'}; return true })()`
+        )
       else page.mouseClick(asPageHandle(wc), found.target.x, found.target.y, button, count)
       return { element: found.target, method: found.method, delivered: scripted ? 'element click' : 'pointer' }
     },
     verify: async (data, _p, ctx, before) => {
       const wc = tab(ctx)
       await page.sleep(250)
-      const navigated = wc.getURL() !== (before as { url: string }).url || wc.isLoading()
+      /*
+       * What counts as evidence that the click landed.
+       *
+       * The address changing does: a click that navigated plainly reached something. The page merely being busy does
+       * NOT, and used to -- which meant a click on an element nothing could reach was reported as verified whenever
+       * the page happened to be loading at that moment. That is the exact shape of a false success, so it is gone.
+       */
+      const navigated = wc.getURL() !== (before as { url: string }).url
       const seen = navigated || (await page.exec<boolean>(asPageHandle(wc), 'window.__orbisClickSeen === true', 3000).catch(() => false))
       await page.settle(asPageHandle(wc), ctx.signal, true)
       return { verified: seen, detail: seen ? `The click reached ${actionName((data as { element: page.TargetInfo }).element)}${navigated ? ' and the page navigated' : ''}.` : 'The click did not reach the element (something may be covering it, or the page changed).' }
@@ -827,7 +850,7 @@ export function registerPageCapabilities(control: BrowserControl, resolve: PageR
     confirmation: 'none',
     run: async (p, ctx) =>
       page.exec(asPageHandle(tab(ctx)),
-        `(() => { let nodes; try { nodes = [...document.querySelectorAll(${JSON.stringify(p.selector)})]; } catch (e) { return { error: e.message }; }
+        `(() => { ${page.DEEP} let nodes; try { nodes = orbisDeep(${JSON.stringify(p.selector)}); } catch (e) { return { error: e.message }; }
           return { count: nodes.length, elements: nodes.slice(0, ${Math.min(Number(p.limit) || 50, 500)}).map((el) => { const r = el.getBoundingClientRect(); const password = el.type === 'password'; return { tag: el.tagName.toLowerCase(), id: el.id || undefined, text: (el.innerText || '').replace(/\\s+/g, ' ').trim().slice(0, 200), value: password ? undefined : el.value, checked: el.checked, disabled: el.disabled, visible: r.width > 0 && r.height > 0, attributes: Object.fromEntries([...el.attributes].filter((a) => !/^on/i.test(a.name) && a.name !== 'style').slice(0, 20).map((a) => [a.name, a.value.slice(0, 200)])) }; }) }; })()`
       )
   })
