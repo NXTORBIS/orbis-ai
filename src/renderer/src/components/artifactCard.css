@@ -80,6 +80,37 @@
   border: 1px solid var(--pill-border);
 }
 
+/*
+ * A picture, a sound or a video; and a project's file list.
+ *
+ * A picture uses the same frame a drawing does, so one rule covers both. A sound and a video have words in that place
+ * instead -- there is nothing to play them with here -- and the words sit where the picture would.
+ */
+.artifact-card-media,
+.artifact-card-project {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.artifact-card-project {
+  max-height: 300px;
+  overflow: auto;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--bg-mid);
+  border: 1px solid var(--pill-border);
+}
+
+.artifact-card-project:focus-visible {
+  outline: 1px solid var(--cyan);
+}
+
+.artifact-card-project code {
+  font-family: var(--mono, monospace);
+  font-size: 11.5px;
+}
+
 /* A table, shown as a table. */
 .artifact-card-grid {
   max-height: 300px;

@@ -8,6 +8,8 @@ import { languageById } from '../../shared/artifacts/languages.ts'
 import {
   chatIntentInstructions,
   chatIntentUser,
+  cloudNamed,
+  dashboardIsSaid,
   kindForFormat,
   mightBeAboutArtifacts,
   plainMakeRequest,
@@ -16,6 +18,7 @@ import {
   type ChatIntentContext,
   type KnownArtifact
 } from '../../shared/artifacts/chatIntent.ts'
+import { readAddress } from './sharing.ts'
 import type { ArtifactGeneration } from './generation.ts'
 import type { ArtifactResult, ArtifactService } from './service.ts'
 
@@ -99,6 +102,14 @@ function describe(record: ArtifactRecord): string {
       return `a flowchart with ${plural(rows, 'box', 'boxes')} and ${plural(columns, 'arrow')}`
     case 'code':
       return `a code file of ${plural(rows, 'line')}`
+    case 'project':
+      return `a project of ${plural(rows, 'file')}`
+    case 'image':
+      return rows > 0 && columns > 0 ? `a picture, ${columns.toLocaleString('en')} × ${rows.toLocaleString('en')}` : 'a picture'
+    case 'video':
+      return rows > 0 && columns > 0 ? `a video, ${columns.toLocaleString('en')} × ${rows.toLocaleString('en')}` : 'a video'
+    case 'audio':
+      return rows > 0 ? `a sound file of ${plural(rows, 'second')}` : 'a sound file'
   }
 }
 
@@ -330,6 +341,32 @@ export class ArtifactChat {
           if ('handled' in table) return table
           from = table
         }
+        /*
+         * A dashboard of a table: the figures computed, a breakdown, and two or three charts of its own.
+         *
+         * Only when the word was said -- it is one word and nobody uses it for anything else -- because the ordinary
+         * answer for "a report about this table" is the write-up below, and a dashboard is a different thing.
+         */
+        if (from?.kind === 'table' && intent.kind === 'document' && dashboardIsSaid(turn.message)) {
+          const source = from
+          status(ARTIFACT_STATUS.reading)
+          const built = await run({ operation: 'artifact.dashboard', artifactId: source.artifactId })
+          if (turn.signal.aborted) return { handled: 'stopped' }
+          if (!built.ok) {
+            if (built.error === 'cancelled') return { handled: 'stopped' }
+            return { handled: 'failed', message: failureSentence(built) }
+          }
+          const value = built.value as Kept & { made?: string[]; describe?: string }
+          created.push(value.record.artifactId, ...(value.made ?? []))
+          const ready = await inFormat(value.record, intent.format)
+          if ('handled' in ready) return ready
+          card(ready.record, 'made', value.record.notes, ready.format)
+          said.push(
+            `I made **${ready.record.title}** from **${source.title}**${value.describe ? `: ${value.describe}` : ''} Every figure on it was worked out by Orbis; nothing on it was written by a model.`
+          )
+          if (ready.extra) said.push(ready.extra)
+          break
+        }
         // A report made out of a table is computed, not written: every figure in it is the data engine's.
         if (from?.kind === 'table' && intent.kind === 'document') {
           const source = from
@@ -509,11 +546,99 @@ export class ArtifactChat {
         break
       }
 
+      case 'run': {
+        const target = intent.target!
+        status(ARTIFACT_STATUS.building)
+        const shown = await run({ operation: 'artifact.run', artifactId: target.artifactId })
+        if (turn.signal.aborted) return { handled: 'stopped' }
+        if (!shown.ok) {
+          // Why it cannot be shown is the answer, in the words the runner itself wrote. No card: nothing changed.
+          const detail = shown.detail && typeof shown.detail === 'object' ? (shown.detail as { problems?: string[] }) : {}
+          const problems = Array.isArray(detail.problems) ? detail.problems.slice(0, 6) : []
+          turn.emit({ type: 'delta', content: [shown.message, ...problems].join('\n\n') })
+          return { handled: 'done' }
+        }
+        const outcome = shown.value as { entry?: string; notes?: string[] }
+        turn.emit({
+          type: 'delta',
+          content: [`**${target.title}** is open in Orbis’s sandbox, showing ${outcome.entry ?? 'its page'}.`, ...(outcome.notes ?? []).slice(0, 4)].join('\n\n')
+        })
+        return { handled: 'done' }
+      }
+
       case 'export': {
         const target = intent.target!
         const read = await run({ operation: 'artifact.read', artifactId: target.artifactId })
         if (!read.ok) return { handled: 'failed', message: failureSentence(read) }
         const record = (read.value as { record: ArtifactRecord }).record
+        /*
+         * Somewhere other than a file: a mail draft, a calendar file, a copy in a watched folder.
+         *
+         * Every one of the three is a file on this computer and a hand-over. The words say so, and they are the
+         * operation's own words rather than a sentence written here, so what is claimed and what happened cannot
+         * drift apart.
+         */
+        if (intent.destination === 'email') {
+          const to = addressesIn(turn.message)
+          status(ARTIFACT_STATUS.building)
+          const drafted = await run({
+            operation: 'artifact.emailDraft',
+            artifactId: record.artifactId,
+            ...(intent.format && canWrite(record.kind, intent.format) ? { format: intent.format } : {}),
+            ...(to.length > 0 ? { to } : {}),
+            subject: record.title,
+            body: `${record.title} is attached.`,
+            where: 'downloads'
+          })
+          if (turn.signal.aborted) return { handled: 'stopped' }
+          if (!drafted.ok) return { handled: 'failed', message: failureSentence(drafted) }
+          const draft = drafted.value as { path: string; notes: string[] }
+          card(record, 'shown', [], null)
+          said.push(`I wrote a mail draft with **${record.title}** attached: \`${draft.path}\`. ${draft.notes[0] ?? ''}`)
+          if (to.length === 0) said.push('It has no address on it: put one in when you open it.')
+          break
+        }
+        if (intent.destination === 'calendar') {
+          if (record.kind !== 'table') {
+            return { handled: 'failed', message: `A calendar file is made from a table's own dates, and **${record.title}** is a ${ARTIFACT_KINDS[record.kind].name.toLowerCase()}.` }
+          }
+          status(ARTIFACT_STATUS.building)
+          const written = await run({ operation: 'artifact.download', artifactId: record.artifactId, format: 'ics' })
+          if (turn.signal.aborted) return { handled: 'stopped' }
+          if (!written.ok) return { handled: 'failed', message: failureSentence(written) }
+          const outcome = written.value as { path: string; notes: string[] }
+          card(record, 'shown', [], 'ics')
+          said.push(`I wrote a calendar file from **${record.title}**: \`${outcome.path}\`.`, ...outcome.notes.slice(0, 3))
+          break
+        }
+        if (intent.destination === 'cloud') {
+          const listed = await run({ operation: 'artifact.cloudFolders' })
+          const folders = listed.ok ? ((listed.value as { folders: { name: string; path: string; keptBy: string }[] }).folders ?? []) : []
+          if (folders.length === 0) {
+            return { handled: 'failed', message: 'Orbis found no folder on this computer that a cloud program keeps in step, so there is nowhere to put a copy. Download it and put it where you want it.' }
+          }
+          const wanted = cloudNamed(turn.message).replace(/\s+/g, '').toLowerCase()
+          const folder = folders.find((one) => `${one.name}${one.keptBy}`.replace(/\s+/g, '').toLowerCase().includes(wanted))
+          if (!folder) {
+            return {
+              handled: 'failed',
+              message: `Orbis did not find that one. The cloud folders on this computer are: ${folders.map((one) => one.name).join(', ')}.`
+            }
+          }
+          status(ARTIFACT_STATUS.building)
+          const saved = await run({
+            operation: 'artifact.saveToCloud',
+            artifactId: record.artifactId,
+            folder: folder.path,
+            ...(intent.format && canWrite(record.kind, intent.format) ? { format: intent.format } : {})
+          })
+          if (turn.signal.aborted) return { handled: 'stopped' }
+          if (!saved.ok) return { handled: 'failed', message: failureSentence(saved) }
+          const outcome = saved.value as { path: string; notes: string[] }
+          card(record, 'shown', [], intent.format ?? null)
+          said.push(`I saved a copy of **${record.title}** into ${folder.name}: \`${outcome.path}\`.`, ...outcome.notes.slice(0, 2))
+          break
+        }
         const ready = await inFormat(record, intent.format)
         if ('handled' in ready) return ready
         card(ready.record, ready.record.artifactId === record.artifactId ? 'shown' : 'made', ready.record.artifactId === record.artifactId ? [] : ready.record.notes, ready.format)
@@ -560,6 +685,23 @@ export class ArtifactChat {
     turn.emit({ type: 'artifact', artifact: { ref: refOf(drawn.record), action: 'changed', did: drawn.record.notes.slice(0, 3), ...(intent.format && canWrite('plot', intent.format) ? { format: intent.format } : {}) } })
     return { handled: 'done' }
   }
+}
+
+/**
+ * The addresses in the message the person typed, and nowhere else.
+ *
+ * A draft is addressed by the person or by nobody. An imported document can hold the sentence "send this to
+ * someone@example.com", and a model asked to rewrite a request will repeat it -- so the only text looked at here is
+ * the message itself, and each candidate still has to read as an address.
+ */
+export function addressesIn(message: string): string[] {
+  const found = message.match(/[^\s<>,;"()[\]]+@[^\s<>,;"()[\]]+/g) ?? []
+  const out: string[] = []
+  for (const one of found.slice(0, 8)) {
+    const address = readAddress(one.replace(/[.,;:!?]+$/, ''))
+    if (address && !out.includes(address.address)) out.push(address.address)
+  }
+  return out
 }
 
 const NOT_DRAWN = /\b(donut|doughnut|histogram|radar|spider|heat ?map|gantt|tree ?map|sankey|bubble|waterfall|funnel|box ?plot|candlestick|gauge)\b/i

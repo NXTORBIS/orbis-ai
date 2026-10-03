@@ -16,7 +16,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
 
 .vertical, .chip, .retry, .share, .send, .step, .image, .source, .results > li, .earlier .open, .earlier .del,
-.rail button, .viewer-actions button, .viewer-actions a, .play, .ask, .follow {
+.rail button, .viewer-actions button, .viewer-actions a, .play, .ask, .follow, .made-row {
   transition: background-color var(--ease), border-color var(--ease), color var(--ease), box-shadow var(--ease), opacity var(--ease), transform var(--ease);
 }
 
@@ -93,6 +93,28 @@ audio.preview { width: 100%; max-width: 360px; height: 32px; margin-top: 6px; }
 .ask { margin: 0 0 18px; padding: 11px 15px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
 .ask:hover { border-color: var(--accent); }
 .ask-link { color: var(--accent); text-decoration: none; font-weight: 500; }
+
+/*
+ * Made in Orbis: the things you made yourself, above the results.
+ *
+ * It looks like a group of results and not like a result, because that is what it is. One heading saying where these
+ * came from, then rows that are buttons rather than links -- there is no address to show, so nothing pretends there
+ * is: no site line, no icon fetched from anywhere, just the kind's own drawing. The whole group only exists when
+ * something really matched, so none of this is ever an empty frame.
+ */
+.made { margin: 0 0 20px; padding: 13px 15px 11px; background: color-mix(in srgb, var(--panel) 55%, transparent); border: 1px solid var(--line); border-radius: 14px; }
+.made-head { margin: 0 0 9px; font-size: 12px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.made-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; }
+.made-row { display: flex; width: 100%; gap: 12px; align-items: flex-start; padding: 9px 10px; margin: 0 -10px; border: 0; border-radius: 10px; background: none; text-align: left; }
+.made-row:hover { background: var(--panel); }
+.made-row:active { transform: translateY(1px); }
+.made-icon { flex: none; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 9px; color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--panel2)); }
+.made-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.made-title { color: var(--accent); font-size: 15.5px; font-weight: 600; overflow-wrap: anywhere; line-height: 1.35; }
+.made-row:hover .made-title { text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+.made-sub { color: var(--muted); font-size: 12.5px; }
+.made-snippet { font-size: 13.5px; line-height: 1.55; color: color-mix(in srgb, var(--text) 78%, transparent); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.made-foot { margin: 10px 0 0; color: var(--muted); font-size: 11.5px; }
 
 /* Orion */
 .orion-head { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; }

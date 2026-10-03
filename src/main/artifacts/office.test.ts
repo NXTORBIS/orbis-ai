@@ -1,8 +1,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { isDataError, parseDelimited } from '../../shared/compute/data.ts'
+import { isDataError, parseDelimited, type Table as DataTable } from '../../shared/compute/data.ts'
 import { emptyDocument, fromMarkdown, isDocumentError } from '../../shared/compute/document.ts'
 import { hashOf } from '../../shared/compute/interchange.ts'
+import { everyTotal } from '../../shared/artifacts/formula.ts'
+import { applySteps, isTransformFailure } from '../../shared/artifacts/transform.ts'
 import { planSlides, verifyDocx, verifyPptx, verifyXlsx, writeDocx, writePptx, writeXlsx } from './office.ts'
 
 /*
@@ -25,6 +27,21 @@ const document = (markdown: string, title = 'Report') => {
 }
 
 const shapeOf = (bytes: Uint8Array) => ({ bytes: bytes.length, hash: hashOf(bytes) })
+
+/** The same table with a column the engine computed, which is what a live formula is written from. */
+const computedTable = (): DataTable => {
+  const parsed = parseDelimited('site,qty,price\nHead office,2,3.5\nDepot,4,2\n')
+  if (isDataError(parsed)) throw new Error(parsed.message)
+  const changed = applySteps(parsed.table, [{ op: 'compute', name: 'total', formula: 'qty * price' }])
+  if (isTransformFailure(changed)) throw new Error(changed.message)
+  return changed.table
+}
+
+const openSheet = async (bytes: Uint8Array) => {
+  const workbook = new (await import('exceljs')).default.Workbook()
+  await workbook.xlsx.load(bytes as unknown as Parameters<typeof workbook.xlsx.load>[0])
+  return workbook.worksheets[0]
+}
 
 test('a workbook keeps numbers as numbers, dates as dates, and reads back with the same shape and headings', async () => {
   const original = table()
@@ -53,6 +70,71 @@ test('a workbook that was tampered with fails the checks that would notice', asy
   assert.equal(result.ok, false)
   assert.equal(result.checks.find((one) => one.what === 'round trip')?.passed, false)
   assert.ok(result.differences.some((one) => /Shape differs/.test(one)))
+})
+
+test('a table with nothing computed in it is written exactly as it was, whether or not formulas were asked for', async () => {
+  const plain = await writeXlsx(table(), 'Energy')
+  const asked = await writeXlsx(table(), 'Energy', { computed: true })
+  assert.equal(hashOf(asked.bytes), hashOf(plain.bytes), 'the same bytes: there was nothing to write as a formula')
+  assert.equal(asked.formulas, undefined)
+  assert.deepEqual((await verifyXlsx(table(), shapeOf(asked.bytes), asked.bytes)).checks.map((one) => one.what), ['written', 'checksum', 'opens', 'round trip'])
+})
+
+test('a computed column is written as a real Excel formula with its answer cached beside it, and read back as both', async () => {
+  const original = computedTable()
+  const made = await writeXlsx(original, 'Energy', { computed: true })
+  assert.ok(made.formulas, 'the writer says which cells hold a formula')
+  assert.deepEqual(made.formulas!.cells.map((one) => one.address), ['D2', 'D3'])
+  assert.ok(made.notes.some((one) => /real Excel formula/.test(one)), made.notes.join(' | '))
+
+  const sheet = await openSheet(made.bytes)
+  const cell = sheet.getCell('D2').value as { formula: string; result: number }
+  assert.equal(cell.formula, 'IF(COUNT(B2,C2)=2,B2*C2,"")')
+  assert.equal(cell.result, 7, 'the number is in the file, so any viewer shows a figure')
+
+  const result = await verifyXlsx(original, shapeOf(made.bytes), made.bytes, made.formulas)
+  assert.equal(result.ok, true, JSON.stringify(result.checks))
+  assert.deepEqual(result.checks.map((one) => one.what), ['written', 'checksum', 'opens', 'round trip', 'formulas', 'cached values'])
+  assert.deepEqual(result.reimported, { rows: 2, columns: 4 })
+})
+
+test('a totals row is a row of formulas under the table, and the read-back counts the data rows without it', async () => {
+  const original = table()
+  const made = await writeXlsx(original, 'Energy', { totals: everyTotal(original) })
+  assert.ok(made.formulas)
+  assert.equal(made.formulas!.totalsRow, 4)
+  const sheet = await openSheet(made.bytes)
+  assert.equal(sheet.getCell('A4').value, 'Total')
+  assert.deepEqual(sheet.getCell('C4').value, { formula: 'SUM(C2:C3)', result: 700.5 })
+  const result = await verifyXlsx(original, shapeOf(made.bytes), made.bytes, made.formulas)
+  assert.equal(result.ok, true, JSON.stringify(result.checks))
+  assert.deepEqual(result.reimported, { rows: 2, columns: 4 }, 'the totals row is not counted as data')
+})
+
+test('computed columns and a totals row together: the totals sum the formula column and leave themselves out', async () => {
+  const original = computedTable()
+  const made = await writeXlsx(original, 'Energy', { computed: true, totals: [{ column: 'total', how: 'sum' }] })
+  assert.ok(made.formulas)
+  assert.equal(made.formulas!.totalsRow, 4)
+  const sheet = await openSheet(made.bytes)
+  assert.equal((sheet.getCell('D3').value as { formula: string }).formula, 'IF(COUNT(B3,C3)=2,B3*C3,"")')
+  // The range stops at the last row of data: a total that counted itself would double.
+  assert.deepEqual(sheet.getCell('D4').value, { formula: 'SUM(D2:D3)', result: 15 })
+  assert.equal(sheet.getCell('A4').value, 'Total')
+  const result = await verifyXlsx(original, shapeOf(made.bytes), made.bytes, made.formulas)
+  assert.equal(result.ok, true, JSON.stringify(result.checks))
+  assert.deepEqual(result.reimported, { rows: 2, columns: 4 })
+})
+
+test('a workbook whose formulas are missing fails the check for them, however well its counts agree', async () => {
+  const original = computedTable()
+  const withFormulas = await writeXlsx(original, 'Energy', { computed: true })
+  const asValues = await writeXlsx(original, 'Energy')
+  const result = await verifyXlsx(original, shapeOf(asValues.bytes), asValues.bytes, withFormulas.formulas)
+  assert.equal(result.ok, false)
+  assert.equal(result.checks.find((one) => one.what === 'round trip')?.passed, true, 'the shape still agrees, which is the point')
+  assert.equal(result.checks.find((one) => one.what === 'formulas')?.passed, false)
+  assert.ok(result.differences.some((one) => /D2 should hold the formula/.test(one)))
 })
 
 test('a Word document has real paragraphs and the package parts Word needs', async () => {

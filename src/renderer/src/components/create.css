@@ -361,6 +361,46 @@
   color: var(--muted);
 }
 
+/*
+ * One sentence of plain words where a picture or a player would be.
+ *
+ * A sound and a video are kept and checked and never played, and a picture too large to show is said in words rather
+ * than left as an empty frame. The same class carries the reason a project cannot be run.
+ */
+.create-note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--faint);
+}
+
+/* A project: its files as a row of buttons, the chosen one's text under them. */
+.create-project {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.create-project textarea.create-text {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--pill-bg);
+  border: 1px solid var(--pill-border);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre;
+}
+
+.create-project textarea.create-text:focus {
+  border-color: var(--cyan);
+  outline: none;
+}
+
 /* A chart or a diagram, shown as the picture it is. White paper, because the drawing is made for paper. */
 .create-drawing {
   display: block;

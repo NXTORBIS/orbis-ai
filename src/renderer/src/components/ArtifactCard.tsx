@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, BarChart3, Check, Code2, Download, ExternalLink, FileText, FolderOpen, Loader2, Pencil, Table2, Workflow } from 'lucide-react'
+import { AlertTriangle, BarChart3, Check, Code2, Download, ExternalLink, FileText, FolderOpen, FolderTree, Image as ImageIcon, Loader2, Music, Pencil, Table2, Video, Workflow } from 'lucide-react'
 import type { ChatArtifact } from '../../../shared/types'
 import type { NoticeKind } from '../lib/notices'
 import { ARTIFACT_CHANGED_EVENT, openArtifact, type ArtifactChangedDetail } from '../lib/artifactEvents'
@@ -19,7 +19,7 @@ import './artifactCard.css'
  *     the file back and checked it. The name it shows is the name the file really has.
  */
 
-type RecordKind = 'table' | 'document' | 'plot' | 'diagram' | 'code'
+type RecordKind = 'table' | 'document' | 'plot' | 'diagram' | 'code' | 'project' | 'image' | 'audio' | 'video'
 
 interface Read {
   record: {
@@ -37,6 +37,28 @@ interface Read {
   columns: { id: string; name: string; type: string }[]
   grid: { rows: string[][]; total: number } | null
   code: { language: string; name: string; extension: string } | null
+  /** For a picture, a sound or a video: what the file says about itself. Never its bytes. */
+  media: {
+    kind: 'image' | 'audio' | 'video'
+    format: string
+    mediaType: string
+    bytes: number
+    width: number | null
+    height: number | null
+    durationMs: number | null
+    from: string
+    notes: readonly string[]
+  } | null
+  /** For a project: its files, which one it starts at, and whether it can be shown in the sandbox. */
+  project: {
+    files: { path: string; language: string; characters: number }[]
+    entry: string
+    listing: string
+    languages: { name: string; files: number }[]
+    shown: string
+    runnable: boolean
+    cannotRun: string
+  } | null
   formats: { format: string; name: string; extension: string; limitations: readonly string[] }[]
 }
 
@@ -55,8 +77,28 @@ interface Problem {
 
 type State = { is: 'reading' } | { is: 'gone' } | { is: 'unreadable'; message: string } | { is: 'here'; read: Read }
 
-const ICONS: Record<RecordKind, typeof Table2> = { table: Table2, document: FileText, plot: BarChart3, diagram: Workflow, code: Code2 }
-const NAMES: Record<RecordKind, string> = { table: 'Table', document: 'Document', plot: 'Chart', diagram: 'Flowchart', code: 'Code' }
+const ICONS: Record<RecordKind, typeof Table2> = {
+  table: Table2,
+  document: FileText,
+  plot: BarChart3,
+  diagram: Workflow,
+  code: Code2,
+  project: FolderTree,
+  image: ImageIcon,
+  audio: Music,
+  video: Video
+}
+const NAMES: Record<RecordKind, string> = {
+  table: 'Table',
+  document: 'Document',
+  plot: 'Chart',
+  diagram: 'Flowchart',
+  code: 'Code',
+  project: 'Project',
+  image: 'Picture',
+  audio: 'Sound',
+  video: 'Video'
+}
 const DONE: Record<ChatArtifact['action'], string> = { made: 'Made', changed: 'Changed', drew: 'Drawn', kept: 'Kept', shown: 'Ready' }
 
 /** How many rows of a table, and how much of a document, a card shows. A look, not the whole thing. */
@@ -85,10 +127,31 @@ function shapeOf(read: Read): string {
       return `${count(rows, 'box', 'boxes')}, ${count(columns, 'arrow')}`
     case 'code':
       return `${count(rows, 'line')}${read.code ? ` of ${read.code.name}` : ''}`
+    case 'project':
+      return read.project ? read.project.listing : count(rows, 'file')
+    case 'image':
+    case 'video':
+      return rows > 0 && columns > 0 ? `${columns.toLocaleString()} × ${rows.toLocaleString()}` : 'size not known'
+    case 'audio':
+      return rows > 0 ? count(rows, 'second') : 'length not known'
   }
 }
 
 const svgUrl = (svg: string): string => `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
+
+/**
+ * Why there is no picture and no player on the card, in plain words.
+ *
+ * Said rather than left blank, and said as the reason rather than as "unsupported": a sound and a video are kept and
+ * checked and not played, and a picture over half a megabyte would have to be decoded and re-encoded to be shrunk,
+ * which is the one thing these three kinds are built not to do.
+ */
+function mediaWords(kind: 'image' | 'audio' | 'video', facts: Read['media']): string {
+  if (kind === 'audio') return 'Orbis keeps this sound and checks it, and does not play it. Save it to listen to it.'
+  if (kind === 'video') return 'Orbis keeps this video and checks it, and does not play it. Save it to watch it.'
+  const size = facts ? `${(facts.bytes / (1024 * 1024)).toFixed(1)} MB` : 'large'
+  return `This picture is ${size}, too large to show here without changing it. Save it, or open it in a picture program.`
+}
 
 /** A figure line in a kept document: a picture that is itself a kept chart or diagram. */
 const FIGURE_LINE = /^!\[([^\]]*)\]\(artifact:(artifact_[0-9a-f]{32})\)\s*$/
@@ -163,6 +226,55 @@ function Preview({ read }: { read: Read }): React.JSX.Element {
   if (record.kind === 'plot' || record.kind === 'diagram') {
     if (read.truncated) return <p className="artifact-card-note">This drawing is too large to show here. Open it to see it.</p>
     return <img className="artifact-card-drawing" alt={`${record.title}, drawn`} src={svgUrl(read.preview)} />
+  }
+
+  /*
+   * A picture, a sound or a video.
+   *
+   * The preview for a picture is already a `data:` URL made in the main process -- the same way a drawing arrives,
+   * and the same way a picture made in the chat arrives -- so this is one `<img>` and no new channel. A large picture
+   * has no preview, and a sound and a video never do: there is no way to hand a stored file's bytes to this window,
+   * so the card says what the file is rather than showing a player that could not play anything.
+   */
+  if (record.kind === 'image' || record.kind === 'audio' || record.kind === 'video') {
+    const facts = read.media
+    const said = facts ? [...facts.notes].slice(0, 3) : []
+    return (
+      <div className="artifact-card-media">
+        {record.kind === 'image' && read.preview !== '' ? (
+          <img className="artifact-card-drawing" alt={record.title} src={read.preview} />
+        ) : (
+          <p className="artifact-card-note">{mediaWords(record.kind, facts)}</p>
+        )}
+        {said.length > 0 && (
+          <ul className="artifact-card-did" aria-label="What Orbis read from the file">
+            {said.map((one, i) => (
+              <li key={i}>{one}</li>
+            ))}
+          </ul>
+        )}
+      </div>
+    )
+  }
+
+  if (record.kind === 'project' && read.project) {
+    const project = read.project
+    return (
+      <div className="artifact-card-project" role="region" aria-label={`${record.title}, its files`} tabIndex={0}>
+        <ul className="artifact-card-did" aria-label="The files in this project">
+          {project.files.slice(0, 10).map((one) => (
+            <li key={one.path}>
+              <code>{one.path}</code>
+              {one.path === project.entry ? ' — it starts here' : ''}
+            </li>
+          ))}
+        </ul>
+        {project.files.length > 10 && <p className="artifact-card-more">The first 10 of {project.files.length} files. Every one is in the archive.</p>}
+        <p className="artifact-card-note">
+          {project.languages.map((one) => `${one.name} (${one.files})`).join(', ')}. Orbis never runs any of it on your computer.
+        </p>
+      </div>
+    )
   }
 
   if (record.kind === 'table' && read.grid) {
@@ -402,8 +514,13 @@ function ArtifactCard({ artifact, onNotify }: { artifact: ChatArtifact; onNotify
             {saved.path}
           </span>
           <div className="artifact-card-actions">
-            {/* A code file is shown in its folder and no more: opening one can run it, and Orbis never runs code. */}
-            {record.kind !== 'code' && (
+            {/*
+              * A source file and an archive of them are shown in their folder and no more.
+              *
+              * The question is about the file that was saved, not about the artifact, and it is the service that
+              * decides: this only leaves off a button whose answer would be a refusal.
+              */}
+            {saved.format !== 'code' && saved.format !== 'zip' && (
               <button type="button" className="queue-btn small" onClick={() => void reveal(true)}>
                 <ExternalLink size={13} />
                 Open the file

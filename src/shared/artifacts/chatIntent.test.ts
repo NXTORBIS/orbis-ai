@@ -1,6 +1,22 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { chatIntentInstructions, chatIntentUser, formatFromWord, formatIsSaid, formatSaidFor, kindForFormat, mightBeAboutArtifacts, plainMakeRequest, pointsBack, readChatIntent, type ChatIntentContext, type KnownArtifact } from './chatIntent.ts'
+import {
+  chatIntentInstructions,
+  chatIntentUser,
+  cloudNamed,
+  dashboardIsSaid,
+  destinationSaid,
+  formatFromWord,
+  formatIsSaid,
+  formatSaidFor,
+  kindForFormat,
+  mightBeAboutArtifacts,
+  plainMakeRequest,
+  pointsBack,
+  readChatIntent,
+  type ChatIntentContext,
+  type KnownArtifact
+} from './chatIntent.ts'
 
 const TABLE: KnownArtifact = { handle: 'A1', artifactId: 'artifact_' + '1'.repeat(32), title: 'Monthly expenses', kind: 'table', columns: [{ name: 'Date', type: 'date' }, { name: 'Amount', type: 'number' }] }
 const REPORT: KnownArtifact = { handle: 'A2', artifactId: 'artifact_' + '2'.repeat(32), title: 'Q3 report', kind: 'document', columns: [] }
@@ -88,7 +104,7 @@ test('an answer is read deny-by-default: unsure, unknown acts, unlisted handles 
 
 test('a good answer becomes an intent with the real artifact, the real format and a request that stands alone', () => {
   const ctx = context({ artifacts: [TABLE, REPORT, CHART], previousWasArtifact: true, hasReply: true, attachments: ['sales.csv'], message: 'add a totals row' })
-  assert.deepEqual(readChatIntent({ act: 'change', target: 'a1', request: 'Add a row totalling Amount', sure: true }, ctx), { act: 'change', target: TABLE, into: null, source: null, kind: null, format: null, request: 'Add a row totalling Amount' })
+  assert.deepEqual(readChatIntent({ act: 'change', target: 'a1', request: 'Add a row totalling Amount', sure: true }, ctx), { act: 'change', target: TABLE, into: null, source: null, kind: null, format: null, destination: 'file', request: 'Add a row totalling Amount' })
   assert.equal(readChatIntent({ act: 'change', target: 'A1', sure: true }, ctx)?.request, 'add a totals row', 'with no rewrite, the person\'s own words are the request')
 
   // Each answer is read against the message it answers: a format is believed only when that message says it.
@@ -101,7 +117,7 @@ test('a good answer becomes an intent with the real artifact, the real format an
   const fromTable = readChatIntent({ act: 'make', kind: 'document', target: 'A1', format: 'pdf', sure: true }, ctx)
   assert.equal(fromTable?.target, TABLE, 'a report made from the spreadsheet keeps the spreadsheet as its source')
 
-  assert.deepEqual(readChatIntent({ act: 'export', target: 'A2', format: 'word', sure: true }, saying('Give me the report as a Word file')), { act: 'export', target: REPORT, into: null, source: null, kind: null, format: 'docx', request: 'Give me the report as a Word file' })
+  assert.deepEqual(readChatIntent({ act: 'export', target: 'A2', format: 'word', sure: true }, saying('Give me the report as a Word file')), { act: 'export', target: REPORT, into: null, source: null, kind: null, format: 'docx', destination: 'file', request: 'Give me the report as a Word file' })
   const chart = readChatIntent({ act: 'chart', target: 'A1', into: 'A2', sure: true }, ctx)
   assert.deepEqual([chart?.target, chart?.into], [TABLE, REPORT])
   assert.equal(readChatIntent({ act: 'chart', target: 'A1', into: 'A1', sure: true }, ctx)?.into, null, 'a chart goes into a document, not a table')
@@ -255,4 +271,59 @@ test('a thing to be made from an attached file is not made when there is no file
   assert.equal(readChatIntent({ act: 'make', kind: 'table', source: 'attachment', request: 'a spreadsheet', sure: true }, { ...none, attachments: ['receipt.csv'] })?.source, 'attachment')
   // A reply that was not reached for is different: the thing is still made, from the request alone.
   assert.equal(readChatIntent({ act: 'make', kind: 'table', source: 'reply', request: 'a tracker', sure: true }, { ...none, hasReply: true, message: 'make me a reading tracker' })?.source, null)
+})
+
+test('where a copy goes is read out of the message, and a word on its own is never enough', () => {
+  // Each of the three needs a verb and something for the verb to act on.
+  for (const message of ['email this to sam@example.com', 'Mail me the spreadsheet', 'draft an email with the report attached', 'give me it as an email']) {
+    assert.equal(destinationSaid(message), 'email', message)
+  }
+  for (const message of ['put these dates in my calendar', 'add it to my calendar', 'make an ics of this', 'give me a calendar file']) {
+    assert.equal(destinationSaid(message), 'calendar', message)
+  }
+  for (const message of ['save it to OneDrive', 'put it in Dropbox', 'copy that to my Google Drive', 'back it up to iCloud Drive']) {
+    assert.equal(destinationSaid(message), 'cloud', message)
+  }
+  /*
+   * The bar, written down.
+   *
+   * Getting one of these wrong is not a missed request: it is a draft addressed to somebody, or a file dropped into
+   * a folder that uploads it. So a sentence that merely mentions the word asks for nothing.
+   */
+  for (const message of [
+    'how do I email a spreadsheet?',
+    'what does OneDrive cost?',
+    'is Dropbox better than Google Drive?',
+    'write a report about email marketing',
+    'make a table of calendar apps',
+    'my calendar is full this week',
+    'the email I got was about the budget'
+  ]) {
+    assert.equal(destinationSaid(message), 'file', message)
+  }
+  assert.equal(cloudNamed('save it to OneDrive'), 'OneDrive')
+  assert.equal(cloudNamed('save it somewhere'), '')
+})
+
+test('a project is shown running only when the message asks, and never a code file', () => {
+  const project: KnownArtifact = { handle: 'A1', artifactId: 'artifact_' + 'c'.repeat(32), title: 'Little site', kind: 'project', columns: [] }
+  const code: KnownArtifact = { handle: 'A2', artifactId: 'artifact_' + 'd'.repeat(32), title: 'one.js', kind: 'code', columns: [] }
+  const ctx = (message: string, artifacts: KnownArtifact[]): ChatIntentContext => ({ artifacts, previousWasArtifact: true, hasReply: true, attachments: [], message })
+  for (const message of ['run it', 'show me the page working', 'let me see it working', 'open the site']) {
+    assert.equal(readChatIntent({ act: 'run', target: 'A1', sure: true }, ctx(message, [project]))?.act, 'run', message)
+  }
+  // The model said "run" and the message did not ask for it: an ordinary reply.
+  assert.equal(readChatIntent({ act: 'run', target: 'A1', sure: true }, ctx('what does the project do?', [project])), null)
+  // A code file is never run, whatever the model answered or the message said.
+  assert.equal(readChatIntent({ act: 'run', target: 'A2', sure: true }, ctx('run it', [code])), null)
+  assert.equal(readChatIntent({ act: 'run', sure: true }, ctx('run it', [project])), null, 'with nothing named there is nothing to show')
+})
+
+test('a dashboard is a word nobody uses for anything else, and only that word asks for one', () => {
+  for (const message of ['make a dashboard from this table', 'turn this into a dash board', 'give me a dashboard of it']) {
+    assert.equal(dashboardIsSaid(message), true, message)
+  }
+  for (const message of ['write a report about this table', 'summarise the spreadsheet', 'make me a document from it']) {
+    assert.equal(dashboardIsSaid(message), false, message)
+  }
 })

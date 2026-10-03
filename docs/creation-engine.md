@@ -17,6 +17,14 @@ that was read back and checked before anything said it was kept.
 | Chart | Numbers drawn against numbers: lines, bars, points, areas, steps, or a pie of one column's shares | The columns of a table. Never written by a model | SVG, PNG |
 | Diagram | A flowchart: boxes and arrows | A sentence. Orion names the boxes and arrows; Orbis lays them out | SVG, PNG |
 | Code | One source file in a named language | Pasted text, a source file, a sentence, a code block in a chat reply | Its language's own extension |
+| Project | Several named text files kept together, one of them named as the file it starts at | A sentence, a zip you open, its own stored form pasted | A zip archive |
+| Picture | A PNG, JPEG, GIF, WebP or BMP, kept exactly as its file is | A file you open, or a picture made in the chat | The file it is, unchanged |
+| Sound | An MP3, WAV, Ogg, FLAC, M4A or AAC, kept exactly as it is | A file you open | The file it is, unchanged |
+| Video | An MP4, WebM or QuickTime file, kept exactly as it is | A file you open | The file it is, unchanged |
+
+A table also saves as a **calendar file** (`.ics`) from its own column of dates, and as **Excel with live formulas** when
+it has a column Orbis computed. Anything can be attached to a **mail draft** (`.eml`) or copied into a folder a cloud
+program keeps in step.
 
 ## In the chat
 
@@ -43,6 +51,11 @@ that was read back and checked before anything said it was kept.
 | A message with an Excel, Word or PDF file attached | The file is read by the same readers the Create screen uses (`attaching.ts`) and attached as its rows or its words. "Chart the attached file" keeps it as a table first |
 | "Write a report about this table" | `artifact.analyse` (every figure computed) with a chart placed in it |
 | "Export it as PDF", "give me the Excel" | The card's Download writes it; a table asked for as PDF is put into a document first |
+| "Make a dashboard from this table" | `artifact.dashboard`: the figures computed, the breakdown grouped, and two or three charts drawn and placed as figures. It says which columns it could not use and why. Only when the word "dashboard" is said; otherwise a table asked about gets the write-up |
+| "Email me the report", "email this to sam@example.com" | A mail draft file with the artifact attached, written into Downloads and read back. Orbis sends nothing: the addresses come from your own message and nowhere else, and opening and sending it is yours |
+| "Put these dates in my calendar" | A calendar file from the table's own dates, written and read back event by event. Orbis has no calendar connection and will never know whether you added them |
+| "Save it to OneDrive" | A copy into that folder on this computer, read back and checked. The cloud program uploads it; Orbis has no account there |
+| "Run it", "show me the page working" | `artifact.run` on a project: one web page in Orbis's sandbox. Never on a code file, and never on this computer |
 | "Put that in Excel", "turn this into a Word document" | The reply kept as it stands: a table in it is read, not rewritten |
 | "What was the highest month?" | An ordinary reply, with the artifact's contents and Orbis's own sums put in front of the question |
 
@@ -62,7 +75,10 @@ the library says it was made in this conversation), and something it changed is 
 change (only if nothing has changed it since). So "sort it" answered again sorts the table once, not twice.
 
 **A picture attached to the message** leaves the whole message to the ordinary reply: Orbis does not read a picture
-into a table or a document, and will not make "a spreadsheet from this photo" out of nothing.
+into a table or a document, and will not make "a spreadsheet from this photo" out of nothing. **A scanned PDF
+attached** to a message comes back as one sentence saying what it would take -- how many pages, that reading them
+means sending the pictures to Mistral -- and nothing is sent. Attaching a file is not asking for it to be sent
+anywhere, so the yes is given on the Create screen, where the question and the button are in front of you.
 
 The Orb does not make or change artifacts. It is for the browser; making things belongs to the chat.
 
@@ -121,7 +137,18 @@ document)
 Deriving also: `artifact.asDocument` (a table, chart, diagram or code file put into a document, so it can leave as
 PDF, Word or slides)
 
-Saving: `artifact.export` (a dialog) · `artifact.download` (the Downloads folder, no dialog) · `artifact.reveal`
+Deriving also: `artifact.dashboard` (a table → a document of computed figures, a breakdown and two or three charts,
+each a chart of its own that the page points at)
+
+Showing: `artifact.run` (a project that is one web page, in the Pages sandbox. Nothing is run on this computer)
+
+Saving: `artifact.export` (a dialog) · `artifact.download` (the Downloads folder, no dialog) · `artifact.reveal` ·
+`artifact.emailDraft` (a mail draft file with the artifact attached) · `artifact.cloudFolders` (the folders a cloud
+program keeps in step) · `artifact.saveToCloud` (a copy into one of them)
+
+`artifact.read` and `artifact.update` also take a `path`, for one file of a project. `artifact.export` takes
+`liveFormulas` and `totalsRow` for a workbook. `artifact.import` takes `readScanned`, which is the person's yes to
+sending a scanned PDF's page pictures to be read. Thirty-three operations, one channel, one frozen map.
 
 ## Where things live
 
@@ -135,7 +162,14 @@ Saving: `artifact.export` (a dialog) · `artifact.download` (the Downloads folde
 | `src/main/artifacts/generation.ts` | Asking Orion: make, revise, plan table steps, choose a chart's columns, the quick question the chat asks |
 | `src/main/artifacts/chat.ts` | The chat's side: decide what a message asks for, do it with the service, answer with a sentence and cards |
 | `src/shared/artifacts/chatIntent.ts` | Pure: the check before the model, what the model is told, and the reader of its answer |
-| `src/main/artifacts/office.ts` | Excel, Word and slides, written and read back |
+| `src/main/artifacts/office.ts` | Excel, Word and slides, written and read back. A workbook's live formulas |
+| `src/shared/artifacts/formula.ts` | The Excel formula printer and the evaluator that proves each one before it is written |
+| `src/main/artifacts/dashboard.ts` | A table's figures, its breakdown and which charts to draw. (Not `src/shared/dashboards.ts`, which is the browser start page's widget arrangements and is unrelated) |
+| `src/shared/artifacts/media.ts`, `src/main/artifacts/media.ts` | A picture, a sound and a video: every header reader, the words, and the door the engine knocks on |
+| `src/shared/artifacts/project.ts`, `src/main/artifacts/running.ts` | A project's files and paths; splitting one page into the three the sandbox serves, and the zip |
+| `src/main/artifacts/scanned.ts` | A scanned PDF's page pictures, and reading them with the person's yes |
+| `src/shared/artifacts/calendar.ts`, `src/main/artifacts/sharing.ts` | A calendar file; a mail draft and the cloud folders on this computer |
+| `src/main/artifacts/searching.ts` | The "Made in Orbis" group in the browser's search page, from records only |
 | `src/main/artifacts/importing.ts` | Reading files in |
 | `src/main/artifacts/ipc.ts` | The only Electron file: the two dialogs, the print window (PDF) and the drawing window (PNG) |
 | `src/renderer/src/components/CreateView.tsx`, `CreateChange.tsx` | The screen |
@@ -154,17 +188,86 @@ diagram model, and the provider ladder.
 - **PowerPoint decks are read.** Slide order from the deck's own relationships, titles from the title placeholder or
   the first single-line shape, bullets with their depth, tables as tables, speaker notes as quoted text. It says in
   the document that pictures and charts were not read.
+- **A picture, a sound and a video are kinds.** They are the one place where the body is not the artifact: there is
+  nothing to write a JPEG out of, so the stored file *is* the artifact and the record beside it is what is known
+  about it -- the format, the size, the length, where it came from -- read out of the file's own header and never by
+  decoding it. Nothing is re-encoded, resized, converted, played or sent anywhere, and the kind's own words say so.
+  The saved copy is the same bytes under the extension the bytes earned, so a file called `holiday.png` whose bytes
+  are a JPEG is refused with both facts rather than kept under the wrong name. A picture under 512 KB shows on the
+  card as a bounded `data:` URL, exactly as a drawing does; a larger one, and every sound and video, says in words
+  why there is no picture and no player. A picture cannot be pasted, revised by sentence, put into a document, or
+  searched as text.
+- **A project: several named text files kept together.** One of them is named as the file it starts at. Kept as one
+  stored text form so the secret gate still reads every file's own source with its own line numbers, and read back
+  file for file. It saves as a zip whose every entry is inflated and compared character for character. One file is
+  changed by its path as one new version, and the version list says what happened to which file. Every path is
+  refused rather than tidied -- absolute, a drive letter, a backslash, a step up, a hidden file, too deep -- because
+  a repaired path is a file at an address nothing else refers to.
+- **A project that is one web page can be shown, in a sandbox, never on this computer.** `artifact.run` hands three
+  files to the same sandbox the generated Pages use: no network, no files, no Node, no saved passwords, an opaque
+  origin, and no grants. Anything else is refused by name with the reason -- a Python project, a project of several
+  pages, a file that uses `import`, a page that reaches for `fetch` or browser storage or an address outside itself.
+  Orbis cannot interrupt a page that loops for ever once it has started, and says so before it starts. A code file
+  is still never run, and "Open the file" is still refused for code and now for a project too.
+- **A scanned PDF is read, if you say so.** A scan is one photograph per page stored inside the PDF, so Orbis lifts
+  those pictures out as they are and says how many it found. Reading the words means a model: the pictures would go
+  to Mistral, the service whose key is in your settings, so Orbis asks first, names the number of pages, and sends
+  nothing unless you say yes. What comes back is a document with a heading per page and a note at the top saying the
+  words were read from pictures by a model and may be wrong. A page the model could not read says so and is left
+  empty. With nothing set up that can read a picture there is no offer at all, only the plain reason.
+- **A workbook can carry live formulas.** The columns Orbis computed and a row of totals are written as real Excel
+  formulas with the numbers Orbis already worked out cached beside them, and each one is proved against that number
+  before it is written. Anything Excel would answer differently -- `%`, `round` of a negative half, `atan2`'s
+  argument order, `cbrt`, `hypot`, `e` -- is written as numbers with the reason said. The read-back looks for exactly
+  those cells in the file.
+- **A dashboard.** A table turned into a document of computed figures, a breakdown by category, and two or three
+  charts, each a real chart artifact the page points at. Every number on it is the data engine's. It is a document,
+  so there is no grid and nothing side by side, and its figures are of one version and say so: they do not follow
+  the table.
+- **A mail draft, a calendar file, and a folder a cloud program watches.** Orbis sends no mail and uploads nothing.
+  It writes an `.eml` with the artifact attached, for you to open and send yourself; an `.ics` from a table's own
+  column of dates, read back event by event; and a copy into a synced folder on this computer, which that program
+  then uploads. Addresses come from your own message and never from a file's contents. There is no account, no
+  token, no sharing link, and no way for Orbis to know what happened after it handed the file over.
+- **Orbis Search lists what you have made.** A "Made in Orbis" group above the web results, from records only -- a
+  title, what the thing is, when it changed, and one sentence Orbis itself kept about it. Never a slice of an
+  artifact's content, because that slice has not been past the secret gate a second time. It honours the same
+  setting the address bar honours before drawing on anything personal, it is not there when Orbis is not running,
+  and pressing a row brings the window forward with that artifact open on the Create screen.
 
 ## Not built
 
 Said plainly so nobody assumes otherwise:
 
-- Images, audio and video as kinds. Orbis's existing image generation and image editor are separate from Create.
-- Projects of several code files, running code, websites. One file at a time, never run.
-- Handwriting, and text recognition in scanned PDFs (a scanned PDF has no text to read).
-- Dashboards, formulas that live in a cell, charts beyond line, bar, scatter, area, step and pie (asked for a
-  histogram or a heat map, the reply says so and says what was drawn instead).
-- Cloud storage, email, calendar and sharing links. Everything is local files.
-- Orbis Search does not list artifacts; the Create screen's own search does.
-- In the chat: a picture cannot be read into a table or a document; the check before
-  the model knows English words only; a long document is at most ten parts.
+- No thumbnail for a large picture, no player for a sound or a video, no transcoding, no re-encoding, no resizing,
+  no picture as a figure in a document. There is no protocol that serves a stored artifact's bytes to the window, and
+  adding one is a change to rule 3 rather than a detail.
+- Nothing is decoded: no "what is in this picture", no transcription of a sound, no counting a video's frames. A
+  video's size and length come only from what its container declares, and a WebM written as it was recorded usually
+  declares no length -- it says so rather than scanning every cluster.
+- A project of more than one web page, and anything that is not a web page, is not run. Python, shell, SQL and
+  everything else: nothing in Orbis runs them, sandboxed or not. An endless loop cannot be stopped from inside;
+  closing the page is the way out. A project holds text files only, so a picture in one is a broken image.
+- A scan stored as JPEG 2000, a CCITT fax, JBIG2 or raw pixels is counted and named, not read: there is no decoder
+  for any of them. No PDF page is rendered, so a scan drawn from vector content has nothing to lift. A locked PDF is
+  refused. At most twenty pages are read in one go. There is no local text recognition and nothing installed can do
+  it, so reading a scan always means sending the pictures somewhere. Handwriting is the same path with worse
+  accuracy and the same notes.
+- A formula in ONE cell, a formula that reads another row or another sheet, and a computed column that stays live
+  through a group or a join. Above 20,000 rows the computed columns are written as numbers with the reason said. The
+  proof is against Orbis's own model of Excel, not against Excel: everything where the two are known to differ is
+  refused rather than emitted.
+- Charts beyond line, bar, scatter, area, step and pie (asked for a histogram or a heat map, the reply says so and
+  says what was drawn instead). A dashboard has no layout: it is one block after another, and nothing on it follows
+  its table.
+- No cloud account, no OAuth, no token, no upload by Orbis, no sharing link, no reading a mailbox or a calendar, no
+  repeating events, reminders, attendees or time-zone rules in a calendar file, and no Bcc on a draft. Cloud folders
+  are found the Windows way -- environment variables, a drive letter, the user's own folder -- so on macOS and Linux
+  the list is empty and the button is simply not there. Box, pCloud, Nextcloud and MEGA are not covered.
+- A generated picture is not kept as an artifact by itself. Pressing Save on one now writes a real file that is read
+  back and checked, but there is no "keep this picture" that files it in the library, because nobody asked for one.
+- In the chat: a picture cannot be read into a table or a document; the check before the model knows English words
+  only; a long document is at most ten parts.
+- A `.ppt`, a `.mkv`, AVI, AIFF, WMA, HEIC, AVIF, TIFF and ICO are refused by name. A real `.eml` has not been
+  opened in Outlook or Thunderbird, and a real `.ics` has not been imported into a calendar program: both are
+  correct against their specifications and against Orbis's own readers, which is not the same thing.

@@ -4,6 +4,8 @@ import { formatById, type FormatId, type LossReport, type VerifyResult } from '.
 import type { Plot } from '../compute/plot.ts'
 import type { Artifact as Diagram } from '../pages/builders.ts'
 import { canWrite, isArtifactKindId, type ArtifactKindId } from './kinds.ts'
+import type { MediaSource } from './media.ts'
+import type { Project } from './project.ts'
 
 /**
  * What an artifact is, apart from how it is written out.
@@ -35,6 +37,18 @@ export type ArtifactBody =
   | { kind: 'diagram'; diagram: Diagram }
   /** One source file: its language and its text, exactly as written. Never run. */
   | { kind: 'code'; code: { language: string; source: string } }
+  /** Several named text files with one of them named as the file it starts at. Never run on this computer. */
+  | { kind: 'project'; project: Project }
+  /*
+   * A picture, a sound and a video: the one place where the body is NOT the artifact.
+   *
+   * For every other kind the stored content file is written out of the body, and an export is a second reading of the
+   * same thing. There is nothing to write a JPEG out of, so here the content file is the artifact and the body is what
+   * is known about it -- a few hundred bytes of plain text, never the bytes as base64.
+   */
+  | { kind: 'image'; image: MediaSource }
+  | { kind: 'audio'; audio: MediaSource }
+  | { kind: 'video'; video: MediaSource }
 
 const ID_PATTERN = /^artifact_[0-9a-f]{32}$/
 const VERSION_PATTERN = /^v[0-9a-f]{32}$/

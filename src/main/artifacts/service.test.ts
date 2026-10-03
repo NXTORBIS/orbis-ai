@@ -124,7 +124,7 @@ test('the operations are a fixed list and an unknown one is refused by name', ()
 test('what Orbis can create comes from the table', () =>
   withService(async ({ service }) => {
     const kinds = ok<{ id: string }[]>(await service.run('default', { operation: 'artifact.kinds' }))
-    assert.deepEqual(kinds.map((one) => one.id), ['table', 'document', 'plot', 'diagram', 'code'])
+    assert.deepEqual(kinds.map((one) => one.id), ['table', 'document', 'plot', 'diagram', 'code', 'project', 'image', 'audio', 'video'])
   }))
 
 test('a table pasted as CSV is kept, read back from disk, and verified before it is reported', () =>
@@ -234,7 +234,7 @@ test('reading gives a bounded preview and the formats it can leave as', () =>
       formats: { format: string }[]
     }
     assert.ok(value.preview.length > 0)
-    assert.deepEqual(value.formats.map((one) => one.format), ['csv', 'xlsx', 'tsv', 'json', 'ndjson', 'markdown', 'text'])
+    assert.deepEqual(value.formats.map((one) => one.format), ['csv', 'xlsx', 'tsv', 'json', 'ndjson', 'markdown', 'text', 'ics'])
   }))
 
 test('a document saves as HTML with its paragraphs in it, read back through the HTML importer', () =>

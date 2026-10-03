@@ -3,6 +3,7 @@ import { CodeGeneration } from './codeGeneration.ts'
 import type { CodeGenerationOptions } from './codeGeneration.ts'
 import { CodeStore } from './codeStore.ts'
 import type { PageHost } from './host.ts'
+import type { CodeSpec, PageFile } from '../../shared/pages/codePage.ts'
 
 /**
  * Pages written as code, from a sentence to something on the screen.
@@ -81,6 +82,21 @@ export class CodePages {
       // Warnings survive: a Page that works and forgot to say what it approximates is still worth saying so about.
       problems: outcome.problems.map((p) => p.message)
     }
+  }
+
+  /**
+   * A Page whose code Orbis already has: written, remembered, and not opened.
+   *
+   * `build` asks a model for the parts. This takes parts that were already checked by whoever is handing them over
+   * -- a project kept in Create, whose own files went through the same `checkCode` -- and does the rest of what
+   * `build` does: writes the three files and remembers the id, so `open` will accept it. Nothing about the sandbox is
+   * relaxed: the files are served from the same store, under the same policy, with the same grants, which are none.
+   */
+  async adopt(spec: CodeSpec, files: readonly PageFile[]): Promise<string> {
+    const pageId = makePageId(this.o.random())
+    await this.o.store.write(pageId, files)
+    this.built.set(pageId, { title: spec.title, purpose: spec.purpose })
+    return pageId
   }
 
   /**

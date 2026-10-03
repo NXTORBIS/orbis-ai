@@ -121,6 +121,20 @@ export interface HandlerDeps {
    * nothing -- which is the truth, rather than a tab that is missing for a reason nobody can see.
    */
   pages?: () => { search(query: string): Promise<{ title: string; url: string; snippet: string; site: string }[]> } | null | undefined
+  /**
+   * The things this person has made in Orbis: the "Made in Orbis" group in search.
+   *
+   * Given by the app, because the library is the app's. Absent when Orbis is running as the browser alone, and the
+   * group is then simply not on the page -- which is the truth, rather than an empty group reading "you have made
+   * nothing". Records only: no artifact's content ever crosses this.
+   */
+  artifacts?: () =>
+    | {
+        search(query: string): Promise<{ id: string; title: string; kind: string; summary: string; snippet: string }[]>
+        open(artifactId: string): boolean
+      }
+    | null
+    | undefined
   /** Saved Orion Search sessions: the app's own store when given, else the helper opens the same database under dataDir. */
   searchSessions?: SearchSessionsDeps['store']
   /** Chats: the app's own store when given, else the helper opens the same folder under dataDir. */
@@ -353,6 +367,18 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
         }
       : {}),
     ...(deps.showChat ? { 'app:show-chat': () => (deps.showChat!(), { shown: true }) } : {}),
+    ...(deps.artifacts
+      ? {
+          /** What you made that matches. Records only, capped by the app; an empty list means nothing matched. */
+          'artifacts:search': async ([query]: unknown[]) => ({
+            results: (await deps.artifacts!()?.search(typeof query === 'string' ? query.slice(0, 200) : '')) ?? []
+          }),
+          /** Brings Orbis forward with one of them open. One way: nothing but whether it was asked comes back. */
+          'artifacts:open': ([artifactId]: unknown[]) => ({
+            opened: deps.artifacts!()?.open(typeof artifactId === 'string' ? artifactId : '') ?? false
+          })
+        }
+      : {}),
     ...(deps.identity
       ? {
           'identity:get': async () => {

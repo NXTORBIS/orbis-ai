@@ -1,7 +1,7 @@
 import { extname } from 'node:path'
 import { toDelimited } from '../../shared/compute/data.ts'
 import { toMarkdown } from '../../shared/compute/document.ts'
-import { importFile } from './importing.ts'
+import { importFile, type ScannedOffer } from './importing.ts'
 
 /**
  * An Excel, Word or PDF file attached to a chat message.
@@ -43,7 +43,11 @@ function cutAtLine(text: string, limit: number): { text: string; left: number } 
   return { text: kept, left }
 }
 
-export async function readForChat(name: string, bytes: Uint8Array, limit: number): Promise<ReadForChat | { error: string; message: string }> {
+export async function readForChat(
+  name: string,
+  bytes: Uint8Array,
+  limit: number
+): Promise<ReadForChat | { error: string; message: string; scanned?: ScannedOffer }> {
   const what = WHAT[extname(name).toLowerCase()]
   if (!what) return { error: 'unsupported', message: 'That is not a file Orbis reads this way.' }
   // The name says what it is; the first bytes have to agree. A file that is only called a workbook would otherwise
@@ -52,6 +56,13 @@ export async function readForChat(name: string, bytes: Uint8Array, limit: number
   const zipped = bytes.length > 4 && bytes[0] === 0x50 && bytes[1] === 0x4b
   const pdf = bytes.length > 5 && bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46 && bytes[4] === 0x2d
   if (ext === '.pdf' ? !pdf : !zipped) return { error: 'parse', message: `That file is named as a ${what} but does not open as one.` }
+  /*
+   * No consent is given here, deliberately.
+   *
+   * Attaching a file is not asking for its pictures to be sent anywhere. A scanned PDF comes back as the question,
+   * and the question travels out with the refusal so the reply can show it -- in the chat that means one sentence
+   * saying what it would take, not a file read because somebody dragged it in.
+   */
   const read = await importFile(name, bytes)
   if ('error' in read) return read
 

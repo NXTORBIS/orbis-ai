@@ -10,6 +10,12 @@ import { flattenJson, isInterchangeError, stageImport, type FormatId } from '../
 import type { ArtifactBody } from '../../shared/artifacts/model.ts'
 import { safeName } from '../../shared/artifacts/naming.ts'
 import { readDeck } from './deck.ts'
+import { familyOf } from '../../shared/artifacts/media.ts'
+import { importMedia } from './media.ts'
+import { askToSend, isPicturesError, looksScanned, pagePicturesIn, readPictures, type PictureReaderDeps } from './scanned.ts'
+import { isProjectProblem, makeProject, PROJECT_LIMITS, projectListing } from '../../shared/artifacts/project.ts'
+import { isZipError, readDirectory, readEntry } from '../../shared/portable/zip.ts'
+import { inflateRawSync } from 'node:zlib'
 
 /**
  * A file read into something Orbis can keep.
@@ -41,9 +47,35 @@ export interface Imported {
   source: string
   format: FormatId
   notes: string[]
+  /**
+   * The content bytes, for a kind whose bytes cannot be rebuilt from its body.
+   *
+   * A picture, a sound and a video only. Every other reader leaves it out, and the one write then takes the bytes it
+   * renders from the body as it always has.
+   */
+  bytes?: Uint8Array
 }
 
-export type ImportOutcome = Imported | { error: string; message: string }
+/** A PDF that is pictures of pages, and what it would take to read them. The ask is the words to show. */
+export interface ScannedOffer {
+  pages: number
+  to: 'Mistral'
+  ask: string
+}
+
+export type ImportOutcome = Imported | { error: string; message: string; scanned?: ScannedOffer }
+
+/** What a caller may hand in: a way to read a scanned page, and the person's yes for this file. */
+export interface ImportOptions {
+  scanned?: { deps: PictureReaderDeps; consent: unknown }
+  /**
+   * Why nothing here can read a picture, when nothing can.
+   *
+   * Given instead of `scanned`, and it stops the offer being made at all. Asking somebody whether to send pictures
+   * to a service that is not set up would be a question whose yes could only end in a refusal.
+   */
+  cannotRead?: string
+}
 
 const titleOf = (name: string): string => safeName(basename(name, extname(name)), 'Imported')
 
@@ -130,9 +162,16 @@ const titleFrom = (blocks: readonly Block[]): string | null => {
 
 // ---------------------------------------------------------------- PDF
 
-async function readPdf(name: string, bytes: Uint8Array): Promise<ImportOutcome> {
-  // No fonts are loaded from the system, nothing is drawn, and the loading task is destroyed when the text is out.
-  const task = pdfjs.getDocument({ data: bytes, disableFontFace: true, useSystemFonts: false, stopAtErrors: false })
+async function readPdf(name: string, bytes: Uint8Array, options: ImportOptions = {}): Promise<ImportOutcome> {
+  /*
+   * No fonts are loaded from the system, nothing is drawn, and the loading task is destroyed when the text is out.
+   *
+   * It is handed a COPY of the bytes, and that is not caution. pdf.js takes ownership of the array it is given and
+   * detaches its buffer, so after this line the caller's `bytes` would be zero length -- which is exactly what
+   * happened the first time the scanned branch below tried to lift the page pictures out of the same file and was
+   * told it was empty. One extra copy of a file that is at most 50 MB, for a reader that can still look at it.
+   */
+  const task = pdfjs.getDocument({ data: new Uint8Array(bytes), disableFontFace: true, useSystemFonts: false, stopAtErrors: false })
   let pdf: pdfjs.PDFDocumentProxy
   try {
     pdf = await task.promise
@@ -179,7 +218,48 @@ async function readPdf(name: string, bytes: Uint8Array): Promise<ImportOutcome> 
     await task.destroy().catch(() => undefined)
   }
   const kept = paragraphs.filter((one) => one.trim() !== '')
-  if (kept.length === 0) return { error: 'parse', message: 'The PDF has no text layer Orbis could read. A scanned PDF is a picture of text, and Orbis does not read pictures of text yet.' }
+  if (kept.length === 0) {
+    /*
+     * No words in it. Is it a scan?
+     *
+     * A scan is one photograph per page stored inside the PDF, so the pictures are lifted out as they are and
+     * counted against the pages. Reading the words in them means a model, and the pictures would leave this
+     * computer -- so the first answer is the question, with the number of pages and where they would go, and
+     * nothing is sent. The second request carries the person's yes.
+     */
+    const shots = pagePicturesIn(bytes)
+    const scan = isPicturesError(shots) ? null : looksScanned({ pages, characters: chars }, shots.pictures)
+    if (!isPicturesError(shots) && scan?.scanned) {
+      if (!options.scanned) {
+        if (options.cannotRead) {
+          return {
+            error: 'parse',
+            message: `This PDF has no words in it to read -- its ${pages} ${pages === 1 ? 'page is a picture' : 'pages are pictures'}. ${options.cannotRead}`
+          }
+        }
+        const ask = askToSend(shots.pictures.length, 'pages')
+        return { error: 'scanned', message: ask, scanned: { pages: shots.pictures.length, to: 'Mistral', ask } }
+      }
+      const read = await readPictures(shots.pictures, options.scanned.deps, options.scanned.consent)
+      if (!read.ok) {
+        return read.needs === 'consent'
+          ? { error: 'scanned', message: read.ask, scanned: { pages: read.pages, to: 'Mistral', ask: read.ask } }
+          : { error: 'parse', message: read.message }
+      }
+      const scanDocument = emptyDocument('imported', titleOf(name))
+      scanDocument.blocks = read.blocks ?? []
+      scanDocument.metadata.source = `file: ${basename(name)}`
+      return {
+        body: { kind: 'document', document: scanDocument },
+        title: scanDocument.metadata.title,
+        source: scanDocument.metadata.source,
+        format: 'pdf',
+        notes: [...read.notes, shots.note, ...shots.skipped]
+      }
+    }
+    const why = isPicturesError(shots) ? ` ${shots.message}` : shots.skipped.length > 0 ? ` ${shots.skipped.join(' ')}` : scan ? ` ${scan.why}` : ''
+    return { error: 'parse', message: `The PDF has no text layer Orbis could read, and no page picture it could read either.${why}` }
+  }
 
   const document = emptyDocument('imported', titleOf(name))
   let n = 0
@@ -244,7 +324,62 @@ function readSource(name: string, bytes: Uint8Array, language: string): ImportOu
   return { body: { kind: 'code', code: { language, source } }, title: titleOf(name), source: from, format: 'code', notes: ['Kept exactly as it was in the file. Orbis did not run it.', syntax.message] }
 }
 
-export async function importFile(name: string, bytes: Uint8Array): Promise<ImportOutcome> {
+// ---------------------------------------------------------------- an archive of text files
+
+/**
+ * A zip read as a project: every entry's text, with its path.
+ *
+ * A project holds text files and nothing else, so an entry whose bytes are not text is left out and counted rather
+ * than kept as something it is not. Every path goes through `makeProject`, which uses the same check the archive
+ * reader itself used -- so there is one answer to "may this path be a file here" and not two -- and a path it refuses
+ * means the entry is left out with the reason, never repaired.
+ */
+function readArchive(name: string, bytes: Uint8Array): ImportOutcome {
+  const listing = readDirectory(bytes)
+  if (isZipError(listing)) return { error: 'parse', message: `That archive could not be read: ${listing.message}` }
+  const files: { path: string; source: string }[] = []
+  const left: string[] = []
+  let binary = 0
+  let folders = 0
+  for (const entry of listing) {
+    if (entry.path.endsWith('/')) {
+      folders += 1
+      continue
+    }
+    if (files.length >= PROJECT_LIMITS.files) {
+      left.push(`"${entry.path}" was left out: a project holds ${PROJECT_LIMITS.files} files at most.`)
+      continue
+    }
+    const data = readEntry(bytes, entry, (chunk) => new Uint8Array(inflateRawSync(chunk)))
+    if (isZipError(data)) {
+      left.push(`"${entry.path}" could not be read out of the archive: ${data.message}`)
+      continue
+    }
+    if (data.includes(0)) {
+      binary += 1
+      continue
+    }
+    files.push({ path: entry.path, source: decode(data).replace(/^﻿/, '') })
+  }
+  if (files.length === 0) {
+    return {
+      error: 'parse',
+      message: `That archive holds no text files Orbis could read as a project${binary > 0 ? `: ${binary} of its ${listing.length - folders} entries are not text` : ''}. A project holds named text files only.`
+    }
+  }
+  const project = makeProject(files)
+  if (isProjectProblem(project)) return { error: project.error === 'parse' ? 'parse' : 'bad-input', message: project.message }
+  const source = `file: ${basename(name)}`
+  const notes = [
+    `Read from an archive: ${projectListing(project, 40)}. It is taken to start at ${project.entry}.`,
+    'Every file is kept exactly as it was in the archive. Orbis has not run any of it.'
+  ]
+  if (binary > 0) notes.push(`${binary} ${binary === 1 ? 'entry was' : 'entries were'} left out because they are not text. A project holds text files only.`)
+  if (left.length > 0) notes.push(...left.slice(0, 8))
+  return { body: { kind: 'project', project }, title: titleOf(name), source, format: 'zip', notes }
+}
+
+export async function importFile(name: string, bytes: Uint8Array, options: ImportOptions = {}): Promise<ImportOutcome> {
   if (bytes.length === 0) return { error: 'parse', message: 'The file is empty.' }
   if (bytes.length > IMPORT_LIMITS.bytes) {
     return { error: 'too-large', message: `That file is ${(bytes.length / (1024 * 1024)).toFixed(1)} MB, past the ${IMPORT_LIMITS.bytes / (1024 * 1024)} MB Orbis reads at once.` }
@@ -254,8 +389,22 @@ export async function importFile(name: string, bytes: Uint8Array): Promise<Impor
   if (ext === '.xlsx' && zip) return readWorkbook(name, bytes)
   if (ext === '.docx' && zip) return readWord(name, bytes)
   if (ext === '.pptx' && zip) return readDeck(name, bytes)
-  if (ext === '.pdf' || decode(bytes.subarray(0, 5)) === '%PDF-') return readPdf(name, bytes)
-  if (zip) return { error: 'unsupported', message: 'That is an archive or an Office file Orbis does not read.' }
+  if (ext === '.pdf' || decode(bytes.subarray(0, 5)) === '%PDF-') return readPdf(name, bytes, options)
+  if (zip) return readArchive(name, bytes)
+  /*
+   * A picture, a sound or a video, decided by its first bytes and never by its name.
+   *
+   * Gating on the signature rather than the extension is the point: a text file can never fall in here, and a `.png`
+   * that holds a JPEG is refused by the reader with both facts in the sentence rather than kept under the wrong name.
+   * SVG is left out -- it is markup, and Orbis's own drawings are SVG.
+   */
+  const family = familyOf(bytes)
+  if (family !== null && family !== 'svg') {
+    const made = importMedia(name, bytes)
+    if ('error' in made) return { error: made.error, message: made.message }
+    // The format is the kind: one format each, and what the saved file is called comes from the bytes.
+    return { body: made.body, title: made.title, source: made.source, format: made.body.kind, notes: made.notes, bytes: made.bytes }
+  }
   // A source file is kept as the file it is. JSON, HTML and XML keep opening as the table or document they hold,
   // which is what they were opened as before there was such a thing as a code artifact.
   const language = languageForFile(name)

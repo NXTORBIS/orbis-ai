@@ -77,7 +77,18 @@ const PATHS: Record<string, string> = {
   next: 'M9 18l6-6-6-6',
   play: 'M7 4l13 8-13 8z',
   up: 'M12 19V5M5 12l7-7 7 7',
-  stop: 'M6 6h12v12H6z'
+  stop: 'M6 6h12v12H6z',
+  // The kinds of thing Orbis can make, drawn as what they are: a grid, a page, bars, two boxes and an arrow, brackets.
+  table: 'M3 5h18v14H3zM3 10h18M9 10v9M15 10v9',
+  document: 'M6 2h7l5 5v15H6zM13 2v5h5M9 13h6M9 17h5',
+  chart: 'M4 4v16h16M8 16v-4M12 16V8M16 16v-7',
+  diagram: 'M3 4h7v5H3zM14 15h7v5h-7zM6.5 9v5a2 2 0 0 0 2 2H14M11.5 14l2.5 2-2.5 2',
+  code: 'M8 7l-5 5 5 5M16 7l5 5-5 5',
+  // A folder with files in it, a framed picture, a note, and a play triangle in a frame.
+  project: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zM8 12h8M8 15h5',
+  picture: 'M3 5h18v14H3zM7 11a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3M3 16l5-5 4 4 3-3 6 6',
+  sound: 'M9 18V6l10-2v12M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0M19 16a3 3 0 1 1-6 0 3 3 0 0 1 6 0',
+  video: 'M3 6h12v12H3zM15 10l6-3v10l-6-3'
 }
 /** A small drawn icon, made as SVG nodes (never as markup from a string). */
 function icon(name: keyof typeof PATHS, size = 16): SVGSVGElement {
@@ -345,6 +356,120 @@ const footLine = (count: number, tookMs: number, elsewhere: boolean): HTMLElemen
   return foot
 }
 
+// ---------------------------------------------------------------- made in Orbis
+
+/**
+ * The things you made, shown with the results.
+ *
+ * A search in Orbis looks at the web, at Orbis's own Pages -- and now at what you have made in Orbis itself: the
+ * tables, documents, charts, flowcharts and code files the Create screen keeps. They get a group of their own with
+ * their own heading, and never a row in the web list, because they are not web pages: they live on this computer, only
+ * you can see them, and there is no address to go to. So each row is a button, and pressing it asks Orbis to come
+ * forward with that thing open.
+ *
+ * Which is why this is deliberately quiet about failing. The group is an extra on a page of search results, and three
+ * ordinary conditions make it impossible: Orbis is not running (the browser can run on its own), this copy of Orbis
+ * does not have the channel, or nothing you made matches. In every one of them the group is simply not there -- never
+ * an empty box reading "Made in Orbis", which a person would read as "you have made nothing", and never a failure
+ * message about a search that worked.
+ *
+ * Only on the tabs where something local belongs: All and Pages. Images, Videos, News, Maps, Music, Science, Files and
+ * Social each asked somebody for one kind of thing on the web, and your own files are not an answer to that.
+ */
+interface Made {
+  id: string
+  title: string
+  kind: string
+  summary: string
+  snippet?: string
+}
+
+/** The icon each kind wears. `plot` is what the engine calls a chart; the picture is bars either way. */
+const MADE_ICONS: Record<string, keyof typeof PATHS> = {
+  table: 'table',
+  document: 'document',
+  plot: 'chart',
+  diagram: 'diagram',
+  code: 'code',
+  project: 'project',
+  image: 'picture',
+  audio: 'sound',
+  video: 'video'
+}
+
+const isMade = (one: unknown): one is Made => {
+  const row = one as Made | null
+  return !!row && typeof row.id === 'string' && row.id !== '' && typeof row.title === 'string' && row.title !== '' && typeof row.summary === 'string'
+}
+
+let madeAsked: Promise<Made[]> | null = null
+
+/** Asked once per page, whatever draws it. Nothing is said when there is nothing, or when nobody answered. */
+function madeInOrbis(): Promise<Made[]> {
+  madeAsked ??= (async () => {
+    try {
+      const got = await call('artifacts:search', [query])
+      const rows: unknown[] = Array.isArray(got) ? got : Array.isArray((got as { results?: unknown[] } | null)?.results) ? (got as { results: unknown[] }).results : []
+      // The app decides how many are worth showing; this is only a ceiling, so a group can never become a page.
+      return rows.filter(isMade).slice(0, 5)
+    } catch {
+      return []
+    }
+  })()
+  return madeAsked
+}
+
+/** Brings Orbis forward with one of them open. The browser cannot open it itself: the Create screen is in the app. */
+async function openMade(row: Made): Promise<void> {
+  try {
+    await call('artifacts:open', [row.id])
+  } catch (err) {
+    toast(err instanceof HelperDown ? 'Orbis is not running, so it cannot open that.' : 'Orbis could not open that just now.')
+  }
+}
+
+function madeGroup(rows: Made[]): HTMLElement {
+  const section = el('section', 'made')
+  const head = el('h2', 'made-head', 'Made in Orbis')
+  head.id = 'made-head'
+  section.setAttribute('aria-labelledby', head.id)
+  const list = el('ol', 'made-list')
+  for (const row of rows) {
+    const li = el('li')
+    const open = button('made-row', '', () => void openMade(row))
+    const badge = el('span', 'made-icon')
+    badge.append(icon(MADE_ICONS[row.kind] ?? 'document', 18))
+    const text = el('span', 'made-text')
+    text.append(el('b', 'made-title', row.title), el('span', 'made-sub', row.summary))
+    if (row.snippet) text.append(el('span', 'made-snippet', row.snippet))
+    open.append(badge, text)
+    open.setAttribute('aria-label', `Open ${row.title} in Orbis — ${row.summary}`)
+    open.title = 'Open this in Orbis'
+    li.append(open)
+    list.append(li)
+  }
+  section.append(head, list, el('p', 'made-foot', 'Kept on this computer by Orbis. Nothing here was searched for on the web.'))
+  return section
+}
+
+/**
+ * Puts the group at the top of whatever has just been drawn.
+ *
+ * At the top, the way the "Ask Orion about this" card is, because these are the only results on the page that are
+ * already yours. After the page has been drawn, never before: the pictures and the web results are what somebody came
+ * for, and they are not held back while Orbis is asked about anything else.
+ */
+async function placeMade(category: SearchVertical): Promise<void> {
+  if (category !== 'all' && category !== 'pages') return
+  const rows = await madeInOrbis()
+  const body = $('body')
+  // The page may have been redrawn while this was being asked, so the group is only ever added to what is there now.
+  if (!rows.length || body.querySelector('.made')) return
+  body.prepend(madeGroup(rows))
+}
+
+// ---------------------------------------------------------------- the results, as a list
+
 let shown: Result[] = []
 
 function renderResults(results: Result[], outcome: Outcome, category: SearchVertical): void {
@@ -416,6 +541,7 @@ function renderResults(results: Result[], outcome: Outcome, category: SearchVert
   syncPins()
   if (outcome.unavailable?.length) body.append(el('p', 'foot', `${outcome.unavailable.length === 1 ? 'One source' : `${outcome.unavailable.length} sources`} could not be reached: ${outcome.unavailable.join(', ')}.`))
   void paintIcons()
+  void placeMade(category)
 }
 
 /**
@@ -440,7 +566,9 @@ async function composed(): Promise<void> {
     )
     const page = (await waiting.answer) as ComposedPage
     if (!page?.web?.length && !page?.answer && !page?.knowledge) {
-      return status(`Nothing was found for “${query}”.`, () => void search())
+      status(`Nothing was found for “${query}”.`, () => void search())
+      // Nothing on the web does not mean nothing at all: something you made yourself may be exactly what was meant.
+      return void placeMade('all')
     }
     const body = $('body')
     body.replaceChildren()
@@ -453,6 +581,7 @@ async function composed(): Promise<void> {
     })
     body.append(footLine(page.web.length, page.tookMs, true))
     syncPins()
+    void placeMade('all')
   } catch (err) {
     // The composer is the better page, not the only one: if it cannot run, the plain list still can.
     try {
@@ -480,7 +609,11 @@ async function search(): Promise<void> {
   try {
     const outcome = (await waitWithLimit(call('search:run', [query, vertical])).answer) as Outcome
     const results = vertical === 'all' ? (tidyResults((outcome.results ?? []).map((r) => ({ title: r.title, url: r.url, snippet: r.snippet ?? '' })), 12) as Result[]) : (outcome.results ?? [])
-    if (!results.length) return status(outcome.problem || `Nothing was found for “${query}”.`, () => void search())
+    if (!results.length) {
+      status(outcome.problem || `Nothing was found for “${query}”.`, () => void search())
+      // The Pages tab says "No Orbis Page does that yet" when there is none; something you made may still answer it.
+      return void placeMade(vertical)
+    }
     renderResults(results, outcome, vertical)
     if (vertical === 'all' && wantsAnswer(query)) {
       const card = el('section', 'ask')

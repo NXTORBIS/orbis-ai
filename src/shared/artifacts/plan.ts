@@ -2,6 +2,7 @@ import { CODE_LIMITS, LANGUAGES, languageById } from './languages.ts'
 import type { ColumnType } from '../compute/data.ts'
 import type { FormatId } from '../compute/interchange.ts'
 import { ARTIFACT_KINDS, canWrite, defaultFormatFor, isArtifactKindId, type ArtifactKindId } from './kinds.ts'
+import { isProjectProblem, makeProject, PROJECT_LIMITS, type Project } from './project.ts'
 
 /**
  * What Orion proposes to make, checked before anything is made.
@@ -52,10 +53,12 @@ export interface CodeProposal {
 }
 
 export type Proposal =
-  | { intent: CreationIntent; table: TableProposal; markdown?: undefined; diagram?: undefined; code?: undefined }
-  | { intent: CreationIntent; markdown: string; table?: undefined; diagram?: undefined; code?: undefined }
-  | { intent: CreationIntent; diagram: DiagramProposal; table?: undefined; markdown?: undefined; code?: undefined }
-  | { intent: CreationIntent; code: CodeProposal; table?: undefined; markdown?: undefined; diagram?: undefined }
+  | { intent: CreationIntent; table: TableProposal; markdown?: undefined; diagram?: undefined; code?: undefined; project?: undefined }
+  | { intent: CreationIntent; markdown: string; table?: undefined; diagram?: undefined; code?: undefined; project?: undefined }
+  | { intent: CreationIntent; diagram: DiagramProposal; table?: undefined; markdown?: undefined; code?: undefined; project?: undefined }
+  | { intent: CreationIntent; code: CodeProposal; table?: undefined; markdown?: undefined; diagram?: undefined; project?: undefined }
+  /** Several files at once. Already through `makeProject`, so every path in it has been checked, not tidied. */
+  | { intent: CreationIntent; project: Project; table?: undefined; markdown?: undefined; diagram?: undefined; code?: undefined }
 
 const SHAPES = ['step', 'decision', 'start', 'end'] as const
 const DIAGRAM = Object.freeze({ nodes: 120, edges: 300, label: 80, id: 40 })
@@ -222,6 +225,32 @@ export function readProposal(raw: unknown): { proposal: Proposal | null; problem
     }
     if (typeof r.markdown === 'string' && r.markdown.trim() !== '') warn('"markdown" was given for a diagram and is ignored.')
     return { proposal: buildable(problems) ? { intent, diagram: { nodes, edges } } : null, problems }
+  }
+
+  /*
+   * A project: several files at once.
+   *
+   * Nothing here decides whether a path is allowed. `makeProject` does, with the same check the portable-package
+   * reader uses, and its refusal is handed back word for word as the problem the next attempt is shown -- so a model
+   * that wrote `../secrets.env` is told exactly that and nothing is repaired behind its back.
+   */
+  if (kind === 'project') {
+    if (!Array.isArray(r.files) || r.files.length === 0) {
+      error('A project needs "files": a list of {"path", "source"}, at least one. "entry" names the file it starts at.')
+      return { proposal: null, problems }
+    }
+    if (r.files.length > PROJECT_LIMITS.files) error(`A project may hold at most ${PROJECT_LIMITS.files} files; this has ${r.files.length}.`)
+    const given = r.files.slice(0, PROJECT_LIMITS.files).map((one) => {
+      const file = (typeof one === 'object' && one !== null ? one : {}) as Record<string, unknown>
+      return { path: file.path, source: typeof file.source === 'string' ? file.source : file.code }
+    })
+    const made = makeProject(given, str(r.entry, PROJECT_LIMITS.pathLength))
+    if (isProjectProblem(made)) {
+      error(made.message)
+      return { proposal: null, problems }
+    }
+    if (typeof r.markdown === 'string' && r.markdown.trim() !== '') warn('"markdown" was given for a project and is ignored.')
+    return { proposal: buildable(problems) ? { intent, project: made } : null, problems }
   }
 
   if (kind === 'code') {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { AlertTriangle, ArrowLeft, BarChart3, Check, Code2, Copy, FilePlus2, FolderOpen, History, LayoutTemplate, LineChart, Loader2, Pencil, Save, Search, Sparkles, Table2, FileText, Trash2, Workflow, X } from 'lucide-react'
+import { AlertTriangle, ArrowLeft, BarChart3, Check, CalendarPlus, Cloud, Code2, Copy, FilePlus2, FolderOpen, FolderTree, History, Image as ImageIcon, LayoutTemplate, LineChart, Loader2, Mail, Music, Pencil, Play, Save, Search, Sparkles, Table2, FileText, Trash2, Video, Workflow, X } from 'lucide-react'
 import type { NoticeKind } from '../lib/notices'
 import { CreateChange } from './CreateChange'
 import { CreateGrid } from './CreateGrid'
@@ -20,7 +20,7 @@ import './create.css'
 /** What can be pasted in. A chart comes from a table and a diagram from Orion, so neither is a paste kind. */
 type Kind = 'table' | 'document' | 'code'
 /** Every kind a kept artifact can be. */
-type RecordKind = Kind | 'plot' | 'diagram'
+type RecordKind = Kind | 'plot' | 'diagram' | 'project' | 'image' | 'audio' | 'video'
 
 interface Check {
   what: string
@@ -101,6 +101,28 @@ interface Opened {
   tables: { index: number; caption: string; rows: number; columns: number; headings: string[] }[]
   /** For code: which language it is. Null for anything else. */
   code: { language: string; name: string; extension: string } | null
+  /** For a picture, a sound or a video: what the file says about itself. Never its bytes. */
+  media: {
+    kind: 'image' | 'audio' | 'video'
+    format: string
+    mediaType: string
+    bytes: number
+    width: number | null
+    height: number | null
+    durationMs: number | null
+    from: string
+    notes: readonly string[]
+  } | null
+  /** For a project: its files, which one it starts at, and whether it can be shown in the sandbox. */
+  project: {
+    files: { path: string; language: string; characters: number }[]
+    entry: string
+    listing: string
+    languages: { name: string; files: number }[]
+    shown: string
+    runnable: boolean
+    cannotRun: string
+  } | null
   formats: { format: string; name: string; extension: string; limitations: readonly string[] }[]
 }
 
@@ -117,6 +139,14 @@ const shapeText = (kind: string, shape: { rows: number; columns: number }): stri
       return `${shape.rows} boxes, ${shape.columns} arrows`
     case 'code':
       return `${shape.rows} ${shape.rows === 1 ? 'line' : 'lines'}`
+    case 'project':
+      return `${shape.rows} ${shape.rows === 1 ? 'file' : 'files'}`
+    // A picture and a video are as big as they say; a sound is as long as it says. A file that never said says so.
+    case 'image':
+    case 'video':
+      return shape.columns > 0 && shape.rows > 0 ? `${shape.columns} × ${shape.rows}` : 'size not known'
+    case 'audio':
+      return shape.rows > 0 ? `${shape.rows} ${shape.rows === 1 ? 'second' : 'seconds'}` : 'length not known'
     default:
       return `${shape.rows} blocks`
   }
@@ -132,6 +162,14 @@ const iconFor = (kind: string): React.JSX.Element => {
       return <Workflow size={14} />
     case 'code':
       return <Code2 size={14} />
+    case 'project':
+      return <FolderTree size={14} />
+    case 'image':
+      return <ImageIcon size={14} />
+    case 'audio':
+      return <Music size={14} />
+    case 'video':
+      return <Video size={14} />
     default:
       return <FileText size={14} />
   }
@@ -153,6 +191,20 @@ const KINDS: { id: Kind; label: string; icon: typeof Table2; hint: string }[] = 
 
 const sizeOf = (bytes: number): string =>
   bytes < 1024 ? `${bytes} B` : bytes < 1024 * 1024 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+
+/**
+ * Why there is no picture and no player on screen, in plain words.
+ *
+ * A sound and a video are kept and checked and never played: there is no way to hand a stored file's bytes to this
+ * window, and inventing one would be content crossing to the interface. A picture over half a megabyte would have to
+ * be decoded and re-encoded to be shrunk, which is the one thing these three kinds are built not to do.
+ */
+function mediaWords(kind: 'image' | 'audio' | 'video', facts: Opened['media']): string {
+  if (kind === 'audio') return 'Orbis keeps this sound and checks it, and does not play it. Save it to listen to it.'
+  if (kind === 'video') return 'Orbis keeps this video and checks it, and does not play it. Save it to watch it.'
+  const size = facts ? `${(facts.bytes / (1024 * 1024)).toFixed(1)} MB` : 'large'
+  return `This picture is ${size}, too large to show here without changing it. Save it, or open it in a picture program.`
+}
 
 const failureOf = (result: { ok: false; error: string; message: string; detail?: unknown }): Failure => {
   const detail = result.detail && typeof result.detail === 'object' ? (result.detail as { findings?: unknown; attempts?: unknown }) : {}
@@ -292,11 +344,14 @@ export default function CreateView({
     void refresh()
   }, [refresh])
 
-  const open = useCallback(async (artifactId: string, from = 0) => {
+  /** Which file of a project is being looked at. Empty means the one it starts at. */
+  const [filePath, setFilePath] = useState('')
+
+  const open = useCallback(async (artifactId: string, from = 0, path = '') => {
     setSaved(null)
     setSaveFailure(null)
     // `from`: which row a table's screenful starts at, so a long one can be walked through.
-    const result = await window.api.creationRun({ operation: 'artifact.read', artifactId, from })
+    const result = await window.api.creationRun({ operation: 'artifact.read', artifactId, from, ...(path !== '' ? { path } : {}) })
     if (result.ok) setOpened(result.value as Opened)
   }, [])
 
@@ -489,16 +544,37 @@ export default function CreateView({
     return true
   }
 
-  const importOne = async (acceptSecrets = false): Promise<void> => {
+  /**
+   * A scanned PDF Orbis stopped at, and the question it asked.
+   *
+   * Two steps, because reading the pictures of its pages means sending them to a service outside this computer. The
+   * words shown are the ones the reader itself wrote -- not a shorter version of them -- and the yes is sent back as
+   * the answer to that question about that file.
+   */
+  const [scanned, setScanned] = useState<{ pages: number; to: string; ask: string } | null>(null)
+
+  const importOne = async (acceptSecrets = false, readScanned = false): Promise<void> => {
     if (importing) return
     setImporting(true)
     setAskFailure(null)
+    if (!readScanned) setScanned(null)
     try {
-      const result = await window.api.creationRun({ operation: 'artifact.import', acceptSecrets })
+      const result = await window.api.creationRun({
+        operation: 'artifact.import',
+        acceptSecrets,
+        ...(readScanned ? { readScanned: { agreed: true, to: 'Mistral' } } : {})
+      })
       if (!result.ok) {
-        if (result.error !== 'cancelled') setAskFailure(failureOf(result))
+        if (result.error === 'cancelled') return
+        if (result.error === 'scanned') {
+          const detail = (result.detail ?? {}) as { pages?: number; to?: string; ask?: string }
+          setScanned({ pages: detail.pages ?? 0, to: detail.to ?? 'Mistral', ask: detail.ask ?? result.message })
+          return
+        }
+        setAskFailure(failureOf(result))
         return
       }
+      setScanned(null)
       const made = result.value as { record: Record_ }
       onNotify(`Opened "${made.record.title}" and checked the kept copy.`, 'info')
       await refresh()
@@ -548,13 +624,13 @@ export default function CreateView({
     }
   }
 
-  const save = async (format: string, acceptSecrets = false): Promise<void> => {
+  const save = async (format: string, acceptSecrets = false, extra: Record<string, unknown> = {}): Promise<void> => {
     if (!opened || saving) return
     setSaving(format)
     setSaved(null)
     setSaveFailure(null)
     try {
-      const result = await window.api.creationRun({ operation: 'artifact.export', artifactId: opened.record.artifactId, format, acceptSecrets })
+      const result = await window.api.creationRun({ operation: 'artifact.export', artifactId: opened.record.artifactId, format, acceptSecrets, ...extra })
       if (!result.ok) {
         // Cancelling the dialog is not a failure worth a red box.
         if (result.error !== 'cancelled') setSaveFailure(failureOf(result))
@@ -565,6 +641,107 @@ export default function CreateView({
       onNotify(`Saved and checked: ${outcome.path}`, 'info')
     } finally {
       setSaving(null)
+    }
+  }
+
+  // ---------------------------------------------------------------- the four new places something can go
+
+  /** The folders a cloud program keeps in step, looked for once. Empty means there is nowhere, and no button. */
+  const [cloud, setCloud] = useState<{ id: string; name: string; path: string; writable: boolean; keptBy: string }[]>([])
+  useEffect(() => {
+    void window.api.creationRun({ operation: 'artifact.cloudFolders' }).then((result) => {
+      if (result.ok) setCloud((result.value as { folders: typeof cloud }).folders ?? [])
+    })
+  }, [])
+
+  const [emailing, setEmailing] = useState(false)
+  const [emailTo, setEmailTo] = useState('')
+  const [draft, setDraft] = useState<{ path: string; notes: string[] } | null>(null)
+
+  /** A mail draft with this artifact attached. Orbis writes the file; sending it is the person's own act. */
+  const writeDraft = async (format: string): Promise<void> => {
+    if (!opened || emailing) return
+    setEmailing(true)
+    setSaveFailure(null)
+    setDraft(null)
+    try {
+      const result = await window.api.creationRun({
+        operation: 'artifact.emailDraft',
+        artifactId: opened.record.artifactId,
+        format,
+        subject: opened.record.title,
+        body: `${opened.record.title} is attached.`,
+        ...(emailTo.trim() !== '' ? { to: emailTo.split(/[,;]/).map((one) => one.trim()).filter((one) => one !== '') } : {}),
+        where: 'downloads'
+      })
+      if (!result.ok) {
+        if (result.error !== 'cancelled') setSaveFailure(failureOf(result))
+        return
+      }
+      const made = result.value as { path: string; notes: string[] }
+      setDraft(made)
+      onNotify(`The draft was written and checked: ${made.path}`, 'info')
+    } finally {
+      setEmailing(false)
+    }
+  }
+
+  /** A copy into a folder a cloud program watches. The uploading is that program's doing, not Orbis's. */
+  const saveToCloud = async (folder: string, format: string): Promise<void> => {
+    if (!opened || saving) return
+    setSaving(`cloud:${folder}`)
+    setSaved(null)
+    setSaveFailure(null)
+    try {
+      const result = await window.api.creationRun({ operation: 'artifact.saveToCloud', artifactId: opened.record.artifactId, folder, format })
+      if (!result.ok) {
+        setSaveFailure(failureOf(result))
+        return
+      }
+      const outcome = result.value as Saved
+      setSaved(outcome)
+      onNotify(`A copy was saved and checked: ${outcome.path}`, 'info')
+    } finally {
+      setSaving(null)
+    }
+  }
+
+  const [running, setRunning] = useState(false)
+  const [ran, setRan] = useState<{ ok: boolean; message: string; notes: string[] } | null>(null)
+
+  /** A project that is one web page, shown in Orbis's sandbox. Nothing is run on this computer. */
+  const runInSandbox = async (): Promise<void> => {
+    if (!opened || running) return
+    setRunning(true)
+    setRan(null)
+    try {
+      const result = await window.api.creationRun({ operation: 'artifact.run', artifactId: opened.record.artifactId })
+      if (!result.ok) {
+        const detail = (result.detail ?? {}) as { problems?: string[]; notes?: string[] }
+        setRan({ ok: false, message: result.message, notes: [...(detail.problems ?? []), ...(detail.notes ?? [])].slice(0, 6) })
+        return
+      }
+      const outcome = result.value as { entry?: string; notes?: string[] }
+      setRan({ ok: true, message: `It is open in the sandbox, showing ${outcome.entry ?? 'its page'}.`, notes: (outcome.notes ?? []).slice(0, 4) })
+    } finally {
+      setRunning(false)
+    }
+  }
+
+  const [fileText, setFileText] = useState('')
+  const [editingFile, setEditingFile] = useState(false)
+
+  /** One file of a project saved as a new version. The version before it stays, as for every other change. */
+  const saveFile = async (): Promise<void> => {
+    if (!opened || !opened.project || editingFile) return
+    const path = filePath || opened.project.entry
+    setEditingFile(true)
+    setSaveFailure(null)
+    try {
+      const done = await change({ operation: 'artifact.update', artifactId: opened.record.artifactId, path, text: fileText }, (did) => did[0] ?? `Changed ${path}.`)
+      if (done) setFileText('')
+    } finally {
+      setEditingFile(false)
     }
   }
 
@@ -614,6 +791,27 @@ export default function CreateView({
               Open a file…
             </button>
           </form>
+          {/*
+           * A scanned PDF, and the question before anything is sent.
+           *
+           * The words are the reader's own, shown exactly: how many pages, where the pictures would go, that the
+           * words would be a model's reading and may be wrong, and that nothing is sent unless you say yes. The yes
+           * is this button and nothing else.
+           */}
+          {scanned && (
+            <section className="create-failure" aria-label="This PDF is pictures of its pages">
+              <p>{scanned.ask}</p>
+              <div className="create-save">
+                <button type="button" className="queue-btn small primary" disabled={importing} onClick={() => void importOne(false, true)}>
+                  {importing ? <Loader2 size={13} className="spin" /> : <Check size={13} />}
+                  Yes, send {scanned.pages === 1 ? 'the picture' : `all ${scanned.pages} pictures`} to {scanned.to}
+                </button>
+                <button type="button" className="queue-btn small" onClick={() => setScanned(null)}>
+                  No
+                </button>
+              </div>
+            </section>
+          )}
           {askFailure && <Findings failure={askFailure} onAccept={() => void ask(true)} />}
           {templates.length > 0 && (
             <form
@@ -812,6 +1010,79 @@ export default function CreateView({
             <Losses loss={opened.record.loss} />
             {(opened.record.kind === 'plot' || opened.record.kind === 'diagram') && !opened.truncated ? (
               <img className="create-drawing" alt={`${opened.record.title}, drawn`} src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(opened.preview)}`} />
+            ) : opened.record.kind === 'image' && opened.preview !== '' ? (
+              // The preview is already a data: URL, made in the main process. The bytes never cross whole.
+              <img className="create-drawing" alt={opened.record.title} src={opened.preview} />
+            ) : opened.record.kind === 'image' || opened.record.kind === 'audio' || opened.record.kind === 'video' ? (
+              <p className="create-note">{mediaWords(opened.record.kind, opened.media)}</p>
+            ) : opened.record.kind === 'project' && opened.project ? (
+              <div className="create-project">
+                <div className="create-save" aria-label="The files in this project">
+                  {opened.project.files.map((one) => (
+                    <button
+                      key={one.path}
+                      type="button"
+                      className={`queue-btn small${(filePath || opened.project!.entry) === one.path ? ' primary' : ''}`}
+                      onClick={() => {
+                        setFilePath(one.path)
+                        setFileText('')
+                        void open(opened.record.artifactId, 0, one.path)
+                      }}
+                      title={`${one.characters.toLocaleString()} characters${one.path === opened.project!.entry ? ' — the project starts here' : ''}`}
+                    >
+                      {one.path}
+                      {one.path === opened.project!.entry ? ' ★' : ''}
+                    </button>
+                  ))}
+                </div>
+                <textarea
+                  className="create-text"
+                  value={fileText === '' ? opened.project.shown : fileText}
+                  onChange={(event) => setFileText(event.target.value)}
+                  spellCheck={false}
+                  aria-label={`${filePath || opened.project.entry}, its text`}
+                  rows={14}
+                />
+                <div className="create-save">
+                  <button
+                    type="button"
+                    className="queue-btn small"
+                    disabled={editingFile || fileText === '' || fileText === opened.project.shown}
+                    onClick={() => void saveFile()}
+                    title="Kept as a new version. The one before it stays."
+                  >
+                    {editingFile ? <Loader2 size={13} className="spin" /> : <Save size={13} />}
+                    Save {filePath || opened.project.entry}
+                  </button>
+                  {opened.project.runnable ? (
+                    <button
+                      type="button"
+                      className="queue-btn small"
+                      disabled={running}
+                      onClick={() => void runInSandbox()}
+                      title="Shown in Orbis's sandbox: no network, no files, no Node. Nothing is run on this computer."
+                    >
+                      {running ? <Loader2 size={13} className="spin" /> : <Play size={13} />}
+                      Run in the sandbox
+                    </button>
+                  ) : (
+                    // A reason, not a greyed-out button: a button that cannot say why is worse than no button.
+                    <span className="create-note">{opened.project.cannotRun}</span>
+                  )}
+                </div>
+                {ran && (
+                  <section className={ran.ok ? 'create-saved' : 'create-failure'} aria-label="What happened when it ran">
+                    <p>{ran.message}</p>
+                    {ran.notes.length > 0 && (
+                      <ul>
+                        {ran.notes.map((one, i) => (
+                          <li key={i}>{one}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </section>
+                )}
+              </div>
             ) : opened.record.kind === 'table' && opened.grid ? (
               <CreateGrid
                 artifactId={opened.record.artifactId}
@@ -978,11 +1249,94 @@ export default function CreateView({
                   onClick={() => void save(one.format)}
                   title={one.limitations.join(' ')}
                 >
-                  {saving === one.format ? <Loader2 size={13} className="spin" /> : <Save size={13} />}
+                  {saving === one.format ? <Loader2 size={13} className="spin" /> : one.format === 'ics' ? <CalendarPlus size={13} /> : <Save size={13} />}
                   {one.name} ({one.extension})
                 </button>
               ))}
+              {/*
+               * A workbook whose computed columns and totals stay live.
+               *
+               * Offered only for a table that really has a column Orbis computed, because for every other table it
+               * would write the same numbers under a different name. Each formula is proved against the number Orbis
+               * already worked out before it is written, and anything that cannot be written exactly is written as
+               * numbers with the reason said in the notes.
+               */}
+              {opened.record.kind === 'table' && opened.columns.some((one) => one.type === 'number' || one.type === 'integer') && (
+                <button
+                  type="button"
+                  className="queue-btn small"
+                  disabled={saving !== null}
+                  onClick={() => void save('xlsx', false, { liveFormulas: true, totalsRow: true })}
+                  title="The columns Orbis computed and a row of totals are written as real Excel formulas, with the numbers Orbis worked out already in the cells. Anything Excel would answer differently is written as numbers, and the notes say which."
+                >
+                  {saving === 'xlsx' ? <Loader2 size={13} className="spin" /> : <Save size={13} />}
+                  Excel, with live formulas
+                </button>
+              )}
             </div>
+            {/*
+             * A mail draft with this attached.
+             *
+             * Orbis has no mail account and sends nothing: it writes a file that opens as a draft in whatever mail
+             * program this computer has. The sentence under it is the operation's own, not one written here.
+             */}
+            <div className="create-save" aria-label="Email it">
+              <span>Email it</span>
+              <input
+                className="create-revise"
+                value={emailTo}
+                onChange={(event) => setEmailTo(event.target.value)}
+                placeholder="To (optional) — you can also fill it in when the draft opens"
+                aria-label="Who the draft is addressed to"
+                maxLength={400}
+              />
+              <button
+                type="button"
+                className="queue-btn small"
+                disabled={emailing || opened.formats.length === 0}
+                onClick={() => void writeDraft(opened.formats[0]?.format ?? opened.record.format)}
+                title="Writes a draft file with this attached into your Downloads folder, reads it back and checks it. Orbis does not send it."
+              >
+                {emailing ? <Loader2 size={13} className="spin" /> : <Mail size={13} />}
+                Write a draft
+              </button>
+            </div>
+            {draft && (
+              <section className="create-saved" aria-label="The draft">
+                <p>
+                  <Check size={13} /> The draft is at <code>{draft.path}</code>, read back and checked.
+                </p>
+                <Notes notes={draft.notes} />
+              </section>
+            )}
+            {/*
+             * A copy into a folder a cloud program keeps in step.
+             *
+             * Shown only when such a folder was found, so there is never a button that implies an account could be
+             * added. A folder Orbis cannot write into is shown with the reason rather than left out silently.
+             */}
+            {cloud.length > 0 && (
+              <div className="create-save" aria-label="Save a copy to a cloud folder">
+                <span>Save a copy to</span>
+                {cloud.map((one) => (
+                  <button
+                    key={one.path}
+                    type="button"
+                    className="queue-btn small"
+                    disabled={saving !== null || !one.writable}
+                    onClick={() => void saveToCloud(one.path, opened.formats[0]?.format ?? opened.record.format)}
+                    title={
+                      one.writable
+                        ? `${one.keptBy} uploads what appears in that folder. Orbis writes the file there, reads it back and checks it; it does not upload anything and has no account there.`
+                        : `Orbis cannot write into ${one.name}. Check that the folder is not read-only and that ${one.keptBy} is running.`
+                    }
+                  >
+                    {saving === `cloud:${one.path}` ? <Loader2 size={13} className="spin" /> : <Cloud size={13} />}
+                    {one.name}
+                  </button>
+                ))}
+              </div>
+            )}
             {saveFailure && <Findings failure={saveFailure} onAccept={() => void save(saveFailure.findings ? opened.formats[0].format : opened.record.format, true)} />}
             {saved && (
               <section className="create-saved" aria-label="Saved">

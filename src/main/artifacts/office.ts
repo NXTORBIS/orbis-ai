@@ -22,6 +22,7 @@ import { asText, isInvalid, isMissing, isQuantityCell, type Cell, type Column, t
 import { blockText, inlineText, numbering, resolveReferences, type Block, type Inline, type StructuredDocument } from '../../shared/compute/document.ts'
 import { hashOf, type VerifyResult } from '../../shared/compute/interchange.ts'
 import { isZipError, readDirectory, readEntry } from '../../shared/portable/zip.ts'
+import { planFormulas, sameNumber, type FormulaOptions, type XlsxFormulas } from '../../shared/artifacts/formula.ts'
 import type { WrittenShape } from '../../shared/artifacts/validate.ts'
 
 /**
@@ -44,6 +45,8 @@ export interface OfficeResult {
   count: number
   /** How many pictures were put in, so the read-back can count them. */
   pictures?: number
+  /** For a workbook written with live formulas: which cells hold one, so the read-back can look for exactly those. */
+  formulas?: XlsxFormulas
 }
 
 /** A figure as pixels: what a Word document or a deck can hold. Keyed by the id of the block it stands for. */
@@ -114,7 +117,17 @@ const excelValue = (cell: Cell, column: Column): ExcelJS.CellValue => {
   return String(cell)
 }
 
-export async function writeXlsx(table: DataTable, title: string): Promise<OfficeResult> {
+/**
+ * What else a workbook may hold besides its values.
+ *
+ * Both are off unless they are asked for, so a table with nothing computed in it is written exactly as it always was.
+ * `computed` turns the engine's computed columns into real Excel formulas and `totals` adds a row of them underneath;
+ * which cells those are, and whether each one could be written at all, is worked out and proved by
+ * `shared/artifacts/formula.ts`, never here.
+ */
+export type XlsxOptions = Pick<FormulaOptions, 'computed' | 'totals'>
+
+export async function writeXlsx(table: DataTable, title: string, options: XlsxOptions = {}): Promise<OfficeResult> {
   const workbook = new ExcelJS.Workbook()
   workbook.creator = 'Orbis'
   workbook.created = new Date(0)
@@ -138,17 +151,42 @@ export async function writeXlsx(table: DataTable, title: string): Promise<Office
     sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: table.rows.length + 1, column: table.columns.length } }
   }
 
+  // Formulas go in after the values, over the top of the cells they belong in, so a table with nothing computed in it
+  // goes down exactly the path it always did and the cached value in a formula cell is the number that was already
+  // there. Every one of these was proved against the engine's own answer before it got here.
+  const plan = planFormulas(table, { ...options, firstDataRow: 2 })
+  if (plan.totals) {
+    const row = sheet.addRow(table.columns.map((_, i) => (plan.totals && i + 1 === plan.totals.labelColumn ? plan.totals.label : null)))
+    row.font = { bold: true }
+    row.border = { top: { style: 'thin', color: { argb: 'FFC9CED8' } } }
+  }
+  for (const cell of plan.cells) {
+    sheet.getCell(cell.address).value = { formula: cell.formula, result: cell.value }
+  }
+
   const buffer = await workbook.xlsx.writeBuffer()
-  const notes: string[] = []
+  const notes: string[] = [...plan.notes]
   if (table.columns.some((one) => one.unit)) notes.push('Units are written into the column headings; Excel has no unit of its own.')
-  return { bytes: new Uint8Array(buffer as ArrayBuffer), notes, count: table.rows.length }
+  return {
+    bytes: new Uint8Array(buffer as ArrayBuffer),
+    notes,
+    count: table.rows.length,
+    ...(plan.cells.length > 0 ? { formulas: { cells: plan.cells, totalsRow: plan.totals ? plan.totals.row : null } } : {})
+  }
 }
 
-/** The workbook re-opened and compared with the table: sheets, rows, columns and headings. */
-export async function verifyXlsx(table: DataTable, expected: WrittenShape, readBack: Uint8Array): Promise<VerifyResult> {
+/**
+ * The workbook re-opened and compared with the table: sheets, rows, columns and headings.
+ *
+ * `written` is what `writeXlsx` said it put in. Given it, the formulas and the numbers cached beside them are looked
+ * for in the file itself, cell by cell -- because a formula is the one thing in a workbook that can be wrong while
+ * every count still agrees, and a cell nobody read back is a cell nobody checked.
+ */
+export async function verifyXlsx(table: DataTable, expected: WrittenShape, readBack: Uint8Array, written?: XlsxFormulas): Promise<VerifyResult> {
   const checks = fileChecks(expected, readBack)
   const differences: string[] = []
   let reimported: VerifyResult['reimported'] = null
+  const totalsRows = written && written.totalsRow !== null ? 1 : 0
   try {
     const workbook = new ExcelJS.Workbook()
     await workbook.xlsx.load(readBack as unknown as ExcelJS.Buffer)
@@ -157,7 +195,7 @@ export async function verifyXlsx(table: DataTable, expected: WrittenShape, readB
       checks.push({ what: 'opens', passed: false, describe: 'The workbook opened but has no sheet in it.' })
     } else {
       checks.push({ what: 'opens', passed: true, describe: `The workbook opens, with ${workbook.worksheets.length} sheet${workbook.worksheets.length === 1 ? '' : 's'}.` })
-      const rows = Math.max(0, sheet.rowCount - 1)
+      const rows = Math.max(0, sheet.rowCount - 1 - totalsRows)
       const columns = sheet.actualColumnCount
       reimported = { rows, columns }
       const headings = table.columns.map(headingOf)
@@ -167,15 +205,41 @@ export async function verifyXlsx(table: DataTable, expected: WrittenShape, readB
       checks.push({
         what: 'round trip',
         passed: sameShape && sameHeadings,
-        describe: `Reading the workbook back gives ${rows} rows and ${columns} columns; the table had ${table.rows.length} and ${table.columns.length}.`
+        describe: `Reading the workbook back gives ${rows} rows and ${columns} columns${totalsRows ? ', and a row of totals under them' : ''}; the table had ${table.rows.length} and ${table.columns.length}.`
       })
       if (!sameShape) differences.push(`Shape differs: ${table.rows.length}×${table.columns.length} became ${rows}×${columns}.`)
       if (!sameHeadings) differences.push(`The headings read back differ from the table's.`)
+
+      if (written && written.cells.length > 0) {
+        let formulasFound = 0
+        let valuesFound = 0
+        for (const cell of written.cells) {
+          const held = sheet.getCell(cell.address).value as { formula?: string; sharedFormula?: string; result?: unknown } | null
+          const formula = typeof held === 'object' && held !== null ? (held.formula ?? held.sharedFormula) : undefined
+          if (typeof formula === 'string' && formula.replace(/^=/, '') === cell.formula) formulasFound += 1
+          else differences.push(`${cell.address} should hold the formula ${cell.formula}${typeof formula === 'string' ? `, and holds ${formula}` : ', and holds no formula'}.`)
+          const result = typeof held === 'object' && held !== null ? held.result : undefined
+          const same = typeof cell.value === 'number' ? typeof result === 'number' && sameNumber(result, cell.value) : (result ?? '') === ''
+          if (same) valuesFound += 1
+          else differences.push(`${cell.address} should have ${cell.value === '' ? 'nothing' : cell.value} worked out beside its formula, and has ${result === undefined || result === null ? 'nothing' : String(result)}.`)
+        }
+        const total = written.cells.length
+        checks.push({
+          what: 'formulas',
+          passed: formulasFound === total,
+          describe: `${formulasFound} of ${total} cell${total === 1 ? '' : 's'} in the file hold${formulasFound === 1 ? 's' : ''} the formula that was written for ${total === 1 ? 'it' : 'them'}.`
+        })
+        checks.push({
+          what: 'cached values',
+          passed: valuesFound === total,
+          describe: `${valuesFound} of ${total} formula${total === 1 ? '' : 's'} have the number Orbis worked out beside them, so the file shows figures before Excel recalculates.`
+        })
+      }
     }
   } catch (err) {
     checks.push({ what: 'opens', passed: false, describe: `The workbook could not be opened: ${err instanceof Error ? err.message.slice(0, 120) : 'unknown error'}` })
   }
-  return { ok: checks.every((one) => one.passed), checks, reimported, differences }
+  return { ok: checks.every((one) => one.passed), checks, reimported, differences: differences.slice(0, 20) }
 }
 
 // ---------------------------------------------------------------- shared document resolution

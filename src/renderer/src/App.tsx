@@ -36,7 +36,7 @@ import UrlBar from './components/UrlBar'
 import ControlPrompts from './components/ControlPrompts'
 import { useControlRendered } from './lib/browserControl'
 import { OPEN_URL_EVENT } from './lib/openInBrowser'
-import { OPEN_ARTIFACT_EVENT, artifactChanged, type OpenArtifactDetail } from './lib/artifactEvents'
+import { OPEN_ARTIFACT_EVENT, artifactChanged, openArtifact, type OpenArtifactDetail } from './lib/artifactEvents'
 import type { OpenUrlDetail } from './lib/openInBrowser'
 import SystemBar from './components/SystemBar'
 import ImageEditor from './components/ImageEditor'
@@ -1099,6 +1099,9 @@ export default function App(): React.JSX.Element {
     window.addEventListener(OPEN_ARTIFACT_EVENT, onOpen)
     return () => window.removeEventListener(OPEN_ARTIFACT_EVENT, onOpen)
   }, [])
+
+  // The browser's search page asking for one of these: the same route a card's "Open" takes, so one screen switch.
+  useEffect(() => window.api.onOpenArtifact((artifactId) => openArtifact(artifactId)), [])
 
   useControlRendered()
 

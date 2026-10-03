@@ -61,7 +61,28 @@ export const INTERCHANGE_LIMITS: Readonly<
 
 // ---------------------------------------------------------------- format registry
 
-export type FormatId = 'csv' | 'tsv' | 'json' | 'ndjson' | 'xml' | 'markdown' | 'html' | 'text' | 'pdf' | 'xlsx' | 'docx' | 'pptx' | 'svg' | 'png' | 'code' | 'binary'
+export type FormatId =
+  | 'csv'
+  | 'tsv'
+  | 'json'
+  | 'ndjson'
+  | 'xml'
+  | 'markdown'
+  | 'html'
+  | 'text'
+  | 'pdf'
+  | 'xlsx'
+  | 'docx'
+  | 'pptx'
+  | 'svg'
+  | 'png'
+  | 'code'
+  | 'zip'
+  | 'ics'
+  | 'image'
+  | 'audio'
+  | 'video'
+  | 'binary'
 
 export interface FormatCapability {
   id: FormatId
@@ -257,6 +278,87 @@ export const FORMATS: Readonly<Record<FormatId, FormatCapability>> = Object.free
     streaming: false,
     carries: { units: false, types: false, metadata: false, formatting: true, provenance: false, hierarchy: false },
     limitations: ['A picture at one size. For something that scales, save the SVG.']
+  },
+  zip: {
+    id: 'zip',
+    name: 'ZIP archive',
+    extensions: ['.zip'],
+    mediaTypes: ['application/zip'],
+    canImport: true,
+    canExport: true,
+    streaming: false,
+    carries: { units: false, types: false, metadata: false, formatting: false, provenance: false, hierarchy: true },
+    limitations: [
+      'A zip carries the files and the folders in their paths, and nothing else: no permissions and no record of the computer it came from.',
+      'Nothing in it runs by being opened.'
+    ]
+  },
+  ics: {
+    id: 'ics',
+    name: 'Calendar file',
+    extensions: ['.ics'],
+    mediaTypes: ['text/calendar'],
+    // Orbis writes a calendar file and hands it over. It does not read one back in as a table: see calendar.ts.
+    canImport: false,
+    canExport: true,
+    streaming: false,
+    carries: { units: false, types: false, metadata: true, formatting: false, provenance: false, hierarchy: false },
+    limitations: [
+      'One event per row: a date, and a time, an end, a name, a place and notes where the table has them. A table with no column of dates cannot become one.',
+      'A row whose date Orbis cannot read without guessing is left out, and how many were is said.',
+      'A time with no zone happens at that time on the clock of whatever computer opens the file; Orbis writes no time-zone rules.',
+      'Repeating events, reminders, invitations and attendees are not written.'
+    ]
+  },
+  /*
+   * The three media formats.
+   *
+   * Each one is a whole family -- a picture is a PNG, a JPEG, a GIF, a WebP or a BMP -- because what the saved file is
+   * called comes from the bytes (`mediaExtension` in artifacts/media.ts), never from the format row. The extension
+   * listed here is a placeholder that no real file has, exactly as `code`'s is, so detecting a format by file name is
+   * what it was before these rows existed.
+   */
+  image: {
+    id: 'image',
+    name: 'Picture file',
+    extensions: ['.image'],
+    mediaTypes: ['application/octet-stream'],
+    canImport: true,
+    canExport: true,
+    streaming: false,
+    carries: { units: false, types: false, metadata: false, formatting: true, provenance: false, hierarchy: false },
+    limitations: [
+      'Kept exactly as the file was, byte for byte. Orbis does not re-encode a picture, change its size or convert it to another format.',
+      'Orbis reads the size out of the file’s own header and does not decode the picture.'
+    ]
+  },
+  audio: {
+    id: 'audio',
+    name: 'Sound file',
+    extensions: ['.audio'],
+    mediaTypes: ['application/octet-stream'],
+    canImport: true,
+    canExport: true,
+    streaming: false,
+    carries: { units: false, types: false, metadata: false, formatting: true, provenance: false, hierarchy: false },
+    limitations: [
+      'Kept exactly as the file was, byte for byte. Orbis does not play it, convert it or send it anywhere.',
+      'The length is read out of the file’s own header when the file says; otherwise it says it does not know.'
+    ]
+  },
+  video: {
+    id: 'video',
+    name: 'Video file',
+    extensions: ['.video'],
+    mediaTypes: ['application/octet-stream'],
+    canImport: true,
+    canExport: true,
+    streaming: false,
+    carries: { units: false, types: false, metadata: false, formatting: true, provenance: false, hierarchy: false },
+    limitations: [
+      'Kept exactly as the file was, byte for byte. Orbis does not play it, convert it or send it anywhere.',
+      'The size and the length are read out of the file’s own header when the file says; otherwise it says it does not know.'
+    ]
   },
   code: {
     id: 'code',

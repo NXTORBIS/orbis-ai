@@ -1,4 +1,5 @@
 import { FORMATS, type FormatId } from '../compute/interchange.ts'
+import { MEDIA_KIND_WORDS } from './media.ts'
 
 /**
  * What Orbis can create, in one table.
@@ -19,7 +20,7 @@ import { FORMATS, type FormatId } from '../compute/interchange.ts'
  * is in it; the plain words are the ones it is told to use.
  */
 
-export type ArtifactKindId = 'table' | 'document' | 'plot' | 'diagram' | 'code'
+export type ArtifactKindId = 'table' | 'document' | 'plot' | 'diagram' | 'code' | 'project' | 'image' | 'audio' | 'video'
 
 export interface ArtifactKind {
   id: ArtifactKindId
@@ -45,7 +46,7 @@ export const ARTIFACT_KINDS: Readonly<Record<ArtifactKindId, ArtifactKind>> = Ob
     name: 'Table',
     describe: 'Rows and columns of values, with a type and optionally a unit for each column.',
     builtFrom: 'Table in src/shared/compute/data.ts',
-    writes: Object.freeze(['csv', 'xlsx', 'tsv', 'json', 'ndjson', 'markdown', 'text'] as const),
+    writes: Object.freeze(['csv', 'xlsx', 'tsv', 'json', 'ndjson', 'markdown', 'text', 'ics'] as const),
     stores: 'json',
     reads: Object.freeze(['csv', 'tsv', 'json', 'ndjson', 'xlsx'] as const),
     orionMayName: true
@@ -91,6 +92,57 @@ export const ARTIFACT_KINDS: Readonly<Record<ArtifactKindId, ArtifactKind>> = Ob
     stores: 'code',
     reads: Object.freeze(['code'] as const),
     orionMayName: true
+  }),
+  project: Object.freeze({
+    id: 'project',
+    name: 'Project',
+    describe:
+      'Several named text files kept together -- a small website, or a script with its settings -- with one of them named as the file it starts at. Orbis never runs code on your computer; a project that is one web page can be shown in its sandbox.',
+    builtFrom: 'Project in src/shared/artifacts/project.ts',
+    writes: Object.freeze(['json', 'zip'] as const),
+    stores: 'json',
+    reads: Object.freeze(['zip'] as const),
+    orionMayName: true
+  }),
+  /*
+   * A picture, a sound and a video.
+   *
+   * One format each, and it is the file the bytes already are: these three are the only kinds whose content Orbis
+   * cannot write out of anything, so there is nothing to convert them to and nothing to convert them from. The
+   * describing sentence comes from the media reader itself, so "kept exactly as its file is" is written once.
+   *
+   * `orionMayName` is false for all three. There is no "write me a picture artifact from a sentence": the bytes have
+   * to come from a file somebody opened or from the chat's own picture generator.
+   */
+  image: Object.freeze({
+    id: 'image',
+    name: MEDIA_KIND_WORDS.image.name,
+    describe: MEDIA_KIND_WORDS.image.describe,
+    builtFrom: 'The media reader in src/shared/artifacts/media.ts',
+    writes: Object.freeze(['image'] as const),
+    stores: 'image',
+    reads: Object.freeze(['image'] as const),
+    orionMayName: false
+  }),
+  audio: Object.freeze({
+    id: 'audio',
+    name: MEDIA_KIND_WORDS.audio.name,
+    describe: MEDIA_KIND_WORDS.audio.describe,
+    builtFrom: 'The media reader in src/shared/artifacts/media.ts',
+    writes: Object.freeze(['audio'] as const),
+    stores: 'audio',
+    reads: Object.freeze(['audio'] as const),
+    orionMayName: false
+  }),
+  video: Object.freeze({
+    id: 'video',
+    name: MEDIA_KIND_WORDS.video.name,
+    describe: MEDIA_KIND_WORDS.video.describe,
+    builtFrom: 'The media reader in src/shared/artifacts/media.ts',
+    writes: Object.freeze(['video'] as const),
+    stores: 'video',
+    reads: Object.freeze(['video'] as const),
+    orionMayName: false
   })
 })
 

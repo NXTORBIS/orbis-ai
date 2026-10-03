@@ -1485,6 +1485,13 @@ export interface NxtorbisApi {
   onMarketsOpen(listener: (event: { what: string; instrumentId: string }) => void): () => void
   /** Orion, the Orb or a workflow asking for a market to be brought up on screen. */
   onMarketsShow(listener: (event: { instrumentId: string; section?: string }) => void): () => void
+  /**
+   * The browser's search page asking for something you made to be opened on the Create screen.
+   *
+   * `artifacts:show`, not `artifacts:open`: the browser's own channel for asking is already called that, and one
+   * name with two meanings is a bug waiting for whoever reads it next.
+   */
+  onOpenArtifact(listener: (artifactId: string) => void): () => void
   securityLog(): Promise<SecurityEvent[] | AccountRefusal>
   clearSecurityLog(): Promise<{ ok: true } | AccountRefusal>
   profileLockState(): Promise<ProfileLockState | ProfileLockRefusal>

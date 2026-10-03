@@ -18,7 +18,8 @@ import type {
   StreamEvent
 } from '../shared/types'
 import { IMAGE_GEN_STATUS } from '../shared/types'
-import { streamChat, testApiKey } from './nim'
+import { requestBodyFor, streamChat, testApiKey } from './nim'
+import { cannotDo, keyFor, modelFor, PROVIDERS, refusalKind } from '../shared/providers'
 import { generateWithContinuation } from './longGeneration.ts'
 import { buildSystemPrompt } from './prompt'
 import { UpdateManager } from './update/manager'
@@ -150,6 +151,9 @@ import { ArtifactStore } from './artifacts/store'
 import { ArtifactService } from './artifacts/service'
 import { ArtifactGeneration } from './artifacts/generation'
 import { ArtifactChat, type ArtifactChatTurn } from './artifacts/chat'
+import { searchArtifacts } from './artifacts/searching'
+import { isArtifactId, type ArtifactRecord } from '../shared/artifacts/model'
+import { mediaFileName, mediaFromDataUrl, mediaIn, verifyMedia } from './artifacts/media'
 import { READ_FOR_CHAT, isReadForChat, nameToOpenAs, readForChat } from './artifacts/attaching'
 import { IMPORT_LIMITS } from './artifacts/importing'
 import { chooseDestinationWith, chooseSourceWith, downloadsDirWith, registerArtifactsIpc, renderPdfWith, renderPngWith, revealWith } from './artifacts/ipc'
@@ -185,6 +189,62 @@ const MISTRAL_API_KEYS: string[] = typeof __MISTRAL_API_KEYS__ === 'undefined' ?
 
 /** Which services Orbis can actually reach, for choosing a model by job. */
 export const HAVE_KEYS = { groq: GROQ_API_KEYS.length > 0, mistral: MISTRAL_API_KEYS.length > 0 }
+
+/** Which key the next picture goes with. Rotated per request: requests per second is the limit that bites. */
+let sightTurn = 0
+
+/**
+ * One picture and one instruction, answered in words.
+ *
+ * There is no "picture in, words out" call anywhere else in Orbis: the only route to a model that can see is a chat
+ * completion with the picture as an attachment, so that is what this is -- one non-streaming request to Mistral, the
+ * only service with eyes, on the 'look' ladder. A failure comes back as a sentence in the words the rest of Orbis
+ * uses for a service that refused, never as empty words that would read as "the page was blank".
+ *
+ * Used by one thing: reading the pictures of a scanned PDF's pages, and only after the person has said so.
+ */
+async function seePicture(picture: { bytes: Uint8Array; mediaType: string }, instruction: string): Promise<{ words: string } | { failed: string }> {
+  const chosen = modelFor('look', HAVE_KEYS)
+  if (!chosen) return { failed: cannotDo('look', HAVE_KEYS) ?? 'Nothing on this computer can read a picture.' }
+  const key = keyFor(MISTRAL_API_KEYS, sightTurn++)
+  if (!key) return { failed: 'There is no Mistral key set, so nothing can read a picture.' }
+  const url = `data:${picture.mediaType};base64,${Buffer.from(picture.bytes).toString('base64')}`
+  let response: Response
+  try {
+    response = await net.fetch(`${PROVIDERS.mistral.baseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${key}` },
+      body: JSON.stringify(
+        requestBodyFor(chosen.model, {
+          model: chosen.model,
+          max_completion_tokens: 1200,
+          temperature: 0,
+          messages: [{ role: 'user', content: [{ type: 'image_url', image_url: { url } }, { type: 'text', text: instruction }] }]
+        })
+      )
+    })
+  } catch (err) {
+    return { failed: `the picture could not be sent (${err instanceof Error ? err.message.slice(0, 120) : 'no connection'})` }
+  }
+  if (!response.ok) {
+    const body = await response.text().catch(() => '')
+    const kind = refusalKind(response.status, body)
+    return {
+      failed:
+        kind === 'busy'
+          ? 'the service is busy and would not take another picture just now'
+          : kind === 'bad-key'
+            ? 'the Mistral key in your settings was not accepted'
+            : kind === 'not-allowed'
+              ? 'the Mistral key in your settings is not allowed to use the model that reads pictures'
+              : `the service answered with ${response.status}`
+    }
+  }
+  const json = (await response.json().catch(() => null)) as { choices?: { message?: { content?: unknown } }[] } | null
+  const content = json?.choices?.[0]?.message?.content
+  const words = typeof content === 'string' ? content : Array.isArray(content) ? content.map((one) => (typeof one === 'object' && one !== null && 'text' in one ? String((one as { text: unknown }).text) : '')).join('') : ''
+  return words.trim() === '' ? { failed: 'nothing came back' } : { words }
+}
 
 /** What a message asks for beyond a text reply: /imagine, /browse, or a picture or browser task recognised from its meaning. */
 async function detectIntent(messages: ChatMessage[], browser: ChatRequest['browser']): Promise<ChatIntent | null> {
@@ -1434,20 +1494,35 @@ ${summaryBlock(summary)}`
     return { url: image.dataUrl, prompt: nextPrompt, seed: image.seed }
   })
 
+  /**
+   * A picture from the chat saved as a real file, read back, and checked.
+   *
+   * It used to write the bytes and report success without looking, which was the one save in Orbis that did not do
+   * what the Creation Engine's second rule says. Now the picture goes through the engine's own media reader: the type
+   * written into the data URL is not believed, the extension the file gets is the one the BYTES earned -- the chat's
+   * generator re-encodes as JPEG, so a picture that calls itself a PNG is one -- and the saved copy is read back and
+   * compared with what was written before anything says it was saved.
+   */
   ipcMain.handle('image:save', async (event, dataUrl: string, name: string) => {
-    const match = /^data:image\/(png|jpe?g|webp|gif);base64,([A-Za-z0-9+/=]+)$/i.exec(dataUrl)
-    if (!match) return false
-    const ext = match[1].toLowerCase() === 'jpeg' ? 'jpg' : match[1].toLowerCase()
-    const safeName = (String(name).replace(/[<>:"/\\|?*\x00-\x1f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 60) || 'orbis-image')
+    const made = mediaFromDataUrl(dataUrl, { title: name, from: 'made in the chat' })
+    if ('error' in made) return false
+    const fileName = mediaFileName(made.title, made.format)
+    const ext = fileName.slice(fileName.lastIndexOf('.') + 1)
     const options = {
       title: 'Save image',
-      defaultPath: join(app.getPath('downloads'), `${safeName}.${ext}`),
+      defaultPath: join(app.getPath('downloads'), fileName),
       filters: [{ name: 'Image', extensions: [ext] }]
     }
     const win = BrowserWindow.fromWebContents(event.sender)
     const result = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options)
     if (result.canceled || !result.filePath) return false
-    await fs.writeFile(result.filePath, Buffer.from(match[2], 'base64'))
+    await fs.writeFile(result.filePath, made.bytes)
+    const readBack = new Uint8Array(await fs.readFile(result.filePath))
+    const checked = verifyMedia(mediaIn(made.body), readBack)
+    if (!checked.ok) {
+      console.error('[images] the picture was written and did not read back as what was written', checked.differences)
+      return false
+    }
     return true
   })
 
@@ -1989,7 +2064,27 @@ if (!app.requestSingleInstanceLock()) {
       renderPng: renderPngWith(),
       downloadsDir: downloadsDirWith(),
       reveal: revealWith(),
-      generation: artifactGeneration
+      generation: artifactGeneration,
+      // Reading the pictures of a scanned page. Nothing calls it without the person's yes for that file.
+      see: seePicture,
+      cannotSee: () => cannotDo('look', HAVE_KEYS),
+      /*
+       * Showing a project that is one web page.
+       *
+       * The same sandbox the generated Pages run in -- no network, no files, no Node, an opaque origin -- reached
+       * through the one method on `CodePages` that takes code Orbis already has instead of asking a model for it.
+       * Nothing is run on this computer by this or by anything it calls.
+       */
+      sandbox: {
+        place: (spec, files) => codePages.adopt(spec, files),
+        open: async (pageId) => {
+          const window = mainWindow
+          // No window, nothing to show it in. Said rather than thrown, because "it did not open" is the fact.
+          if (!window || window.isDestroyed()) return { ok: false, error: 'no-window', message: 'There is no Orbis window to show the page in.' }
+          return codePages.open(window, pageId)
+        },
+        close: (pageId) => void codePages.close(pageId)
+      }
     })
     registerArtifactsIpc({
       service: artifacts,
@@ -2137,6 +2232,39 @@ if (!app.requestSingleInstanceLock()) {
           appServices: () => appServicesForBrowser,
           // The Pages tab in the browser's own search page, answered from the same register the Pages screen uses.
           pages: () => (searchOrbisPages === null ? null : { search: searchOrbisPages }),
+          /**
+           * The things this person has made, for the "Made in Orbis" group on the browser's search page.
+           *
+           * It asks the library for its records through the one door it already has and ranks those. Nothing opens
+           * an artifact, so no content can leave: a row carries a title, what the thing is, and one sentence Orbis
+           * itself kept about it. It honours the same setting the address bar honours before drawing on anything
+           * personal, and is absent when Orbis is not running -- which is the truth.
+           */
+          artifacts: () =>
+            artifactsForChat === null
+              ? null
+              : {
+                  search: async (query: string) => {
+                    if ((await store.getSettings()).personalizedSuggestions === false) return []
+                    const profileId = await artifactsForChat!.profileId()
+                    const listed = await artifactsForChat!.service.run(profileId, { operation: 'artifact.list' })
+                    if (!listed.ok) return []
+                    const records = (listed.value as { record: ArtifactRecord }[]).map((one) => one.record)
+                    return searchArtifacts(query, { list: () => records })
+                  },
+                  open: (artifactId: string) => {
+                    if (!isArtifactId(artifactId)) return false
+                    const window = mainWindow
+                    if (!window || window.isDestroyed()) return false
+                    // The same handoff the browser's Chat button makes, and then the screen to land on.
+                    if (!embeddedBrowser) showBrowserWindow(false)
+                    window.webContents.send('chromium:hide')
+                    window.webContents.send('artifacts:show', artifactId)
+                    if (window.isMinimized()) window.restore()
+                    window.focus()
+                    return true
+                  }
+                },
           searchSessions: () => searchSessionsForBrowser,
           // The reading index the browser's panel searches: the app's own, never a second one opened over the same file.
           /**

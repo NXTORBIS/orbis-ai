@@ -51,6 +51,45 @@ import { checkSyntax, CODE_LIMITS, extensionForLanguage, languageById, languageF
 import { compileJavaScript } from './codeCheck.ts'
 import { buildTable } from '../../shared/compute/data.ts'
 import { toMarkdown } from '../../shared/compute/document.ts'
+import {
+  isMediaBody,
+  isMediaKindId,
+  mediaExtension,
+  mediaIn,
+  mediaName,
+  verifyMedia,
+  type MediaBody,
+  type MediaSource
+} from '../../shared/artifacts/media.ts'
+import { mediaContext, mediaPreview, mediaRendered } from './media.ts'
+import {
+  compareProjects,
+  describeComparison,
+  isProjectProblem,
+  parseProject,
+  projectLanguages,
+  projectListing,
+  projectSize,
+  serialiseProject,
+  setProjectFile,
+  addProjectFile
+} from '../../shared/artifacts/project.ts'
+import { openInSandbox, runnable, verifyProjectZip, zipProject, type SandboxDeps } from './running.ts'
+import { dashboardDocument, isDashboardRefusal, planDashboard, type DrawnFigure, type UndrawnFigure } from './dashboard.ts'
+import { everyTotal, type XlsxFormulas } from '../../shared/artifacts/formula.ts'
+import type { XlsxOptions } from './office.ts'
+import { calendarHandoverNote, eventsFromTable, isCalendarError, verifyIcsFile, writeIcs, type CalendarEvent } from '../../shared/artifacts/calendar.ts'
+import {
+  buildEmailDraft,
+  cloudFolderAt,
+  cloudFolders,
+  cloudSaveNote,
+  isSharingError,
+  nodeCloudDeps,
+  verifyEmailDraft,
+  type CloudDeps
+} from './sharing.ts'
+import { mediaTypeFor } from '../../shared/artifacts/kinds.ts'
 
 /**
  * The one door for making, keeping and exporting artifacts.
@@ -116,7 +155,14 @@ const OPERATIONS: Readonly<Record<string, string>> = Object.freeze({
   'artifact.extractTable': 'A table inside a document taken out as a table of its own, so it can be sorted, totalled and drawn.',
   'artifact.asDocument': 'A table, a chart, a diagram or a code file put into a new document, so it can leave as PDF, Word or slides. Nothing is rewritten.',
   'artifact.download': 'Write an artifact into the Downloads folder under a name of its own, then check the file. No dialog: the folder is chosen by Orbis, never by a caller.',
-  'artifact.reveal': 'Show a file this session saved in its folder, or open it. Only a file Orbis itself just wrote.'
+  'artifact.reveal': 'Show a file this session saved in its folder, or open it. Only a file Orbis itself just wrote.',
+  'artifact.run': 'Show a project that is one web page in Orbis’s sandbox. Nothing is run on this computer.',
+  'artifact.dashboard':
+    'A table turned into a dashboard: a document of computed figures, a breakdown by category and two or three charts, each a chart of its own. Every number is worked out by Orbis.',
+  'artifact.emailDraft':
+    'Write a mail draft file with this artifact attached, for you to open in your own mail program and send yourself. Orbis sends nothing.',
+  'artifact.cloudFolders': 'The folders on this computer that a cloud program keeps in step. Nothing is signed in to and nothing inside them is read.',
+  'artifact.saveToCloud': 'Save a copy of an artifact into one of those folders. The cloud program uploads it, not Orbis.'
 })
 
 const JOIN_KINDS: readonly JoinKind[] = Object.freeze(['inner', 'left', 'full'])
@@ -132,6 +178,7 @@ const MAKES: ReadonlySet<string> = new Set([
   'artifact.join',
   'artifact.extractTable',
   'artifact.asDocument',
+  'artifact.dashboard',
   'artifact.duplicate'
 ])
 
@@ -202,6 +249,22 @@ export interface ArtifactServiceOptions {
   downloadsDir?(): string
   /** Shows a file in its folder, or opens it with whatever the system opens it with. */
   reveal?(path: string, open: boolean): Promise<void>
+  /**
+   * One picture and one instruction in, a model's words out.
+   *
+   * The only way to read a scanned page, and the pictures leave this computer when it is used -- so nothing calls it
+   * without the person having said yes to that file. Optional and absent is a working state: with nothing that can
+   * look, a scanned PDF says so rather than offering to read it.
+   */
+  see?(picture: { bytes: Uint8Array; mediaType: string }, instruction: string): Promise<{ words: string } | { failed: string }>
+  /** Why nothing here can look at a picture, when nothing can. In the same words the rest of Orbis uses. */
+  cannotSee?(): string | null
+  /** Showing a project that is one web page in the Pages sandbox. Absent, `artifact.run` says so. */
+  sandbox?: SandboxDeps
+  /** Looking for the folders a cloud program keeps in step. Injected so it can be tested without a disk. */
+  cloudDeps?: CloudDeps
+  /** The environment the cloud folders are found from. Injected for the same reason. */
+  env?: Record<string, string | undefined>
 }
 
 /** What a render produced: bytes to write, the text to scan for secrets, and what the format could not carry. */
@@ -221,6 +284,10 @@ interface Rendered {
   size?: { width: number; height: number }
   /** For a Word document or a deck: how many figures were put in as pictures. */
   pictures?: number
+  /** For a workbook written with live formulas: which cells hold one, so the read-back looks for exactly those. */
+  formulas?: XlsxFormulas
+  /** For a calendar file: the events that were written, so the read-back can compare each one. */
+  events?: readonly CalendarEvent[]
 }
 
 /** A table as Markdown writes it: a line with pipes, and under it a ruled line of dashes and pipes. */
@@ -301,8 +368,20 @@ const verifyPngFile = (expected: { bytes: number; hash: string; width: number; h
 
 export class ArtifactService {
   private readonly o: ArtifactServiceOptions
-  /** Every file this service wrote outside its own store since it started. The only paths `artifact.reveal` will touch. */
-  private readonly written = new Map<string, ArtifactKindId>()
+  /**
+   * Every file this service wrote outside its own store since it started. The only paths `artifact.reveal` will touch.
+   *
+   * The format is kept beside the kind because whether a file may be OPENED is a fact about the file, not about the
+   * artifact: a table saved as a calendar file may be opened, and a project saved as a zip may not.
+   */
+  private readonly written = new Map<string, { kind: ArtifactKindId; format: FormatId }>()
+  /**
+   * The scanned PDF the last import stopped at, so saying yes does not ask for the file again.
+   *
+   * One slot, and it holds the bytes of a file the person themselves chose a moment ago. Cleared the moment it is
+   * used or the moment another file is opened, so a yes can never be applied to a file the person was not shown.
+   */
+  private pendingScan: { name: string; bytes: Uint8Array } | null = null
 
   constructor(options: ArtifactServiceOptions) {
     this.o = options
@@ -373,12 +452,23 @@ export class ArtifactService {
         case 'artifact.reveal': {
           const path = str(req.path, 1000)
           // Not "any path a renderer names": only a file this service wrote itself, in this run of Orbis.
-          if (!this.written.has(path)) return fail('bad-input', 'Orbis can only show a file it saved itself, in this session.')
-          // Opening a file hands it to whatever the computer opens that kind of file with -- and for a script, a batch
-          // file or a program, "open" means "run". Code is kept and never run, so a code file is shown in its folder
-          // and no more. Decided here and not by the button, because the button is not the only thing that can ask.
-          if (req.open === true && this.written.get(path) === 'code') {
-            return fail('bad-input', 'Orbis does not open a code file, because opening one can run it. It is saved: use "Show in folder".')
+          const wrote = this.written.get(path)
+          if (!wrote) return fail('bad-input', 'Orbis can only show a file it saved itself, in this session.')
+          /*
+           * Opening a file hands it to whatever the computer opens that kind of file with -- and for a script, a
+           * batch file or a program, "open" means "run". So the question is about the FILE and not about the
+           * artifact: a source file is never opened, and neither is a zip, because a zip of source files is a folder
+           * of scripts the moment somebody unpacks it. A picture, a sound, a video, a calendar file and a mail draft
+           * may be: for them "open" means a viewer, not a run. Decided here and not by the button, because the
+           * button is not the only thing that can ask.
+           */
+          if (req.open === true && (wrote.format === 'code' || wrote.format === 'zip')) {
+            return fail(
+              'bad-input',
+              wrote.format === 'zip'
+                ? 'Orbis does not open an archive of code, because the files in it can be run once they are unpacked. It is saved: use "Show in folder".'
+                : 'Orbis does not open a code file, because opening one can run it. It is saved: use "Show in folder".'
+            )
           }
           if (!this.o.reveal) return fail('unavailable', 'Showing a file in its folder is not available here.')
           await this.o.reveal(path, req.open === true)
@@ -433,6 +523,16 @@ export class ArtifactService {
           return await this.extract(profileId, operation, req, fail)
         case 'artifact.place':
           return await this.place(profileId, operation, req, fail)
+        case 'artifact.run':
+          return await this.runProject(profileId, operation, req, fail)
+        case 'artifact.dashboard':
+          return await this.dashboard(profileId, operation, req, fail, signal)
+        case 'artifact.emailDraft':
+          return await this.emailDraft(profileId, operation, req, fail)
+        case 'artifact.cloudFolders':
+          return { ok: true, operation, value: { folders: await this.cloud() } }
+        case 'artifact.saveToCloud':
+          return await this.export(profileId, operation, req, fail, 'cloud')
         default:
           return fail('unknown-operation', `Orbis has no artifact operation called "${operation}".`)
       }
@@ -464,6 +564,14 @@ export class ArtifactService {
         return `${rendered.scan}\n${[...body.diagram.objects.map((one) => one.text), ...body.diagram.connectors.map((one) => one.text)].join('\n')}`
       case 'plot':
         return `${rendered.scan}\n${[body.plot.title, body.plot.x.label, body.plot.y.label, ...body.plot.series.map((one) => one.label)].join('\n')}`
+      case 'project':
+        /*
+         * Every file as its own path and its own text, not the stored JSON.
+         *
+         * The gate reports the line a finding is on. In the stored form every source is one escaped line, so every
+         * finding in a project would say the same line number and nobody would be able to act on it.
+         */
+        return body.project.files.map((one) => `${one.path}\n${one.source}`).join('\n\n')
       default:
         return rendered.scan
     }
@@ -503,6 +611,16 @@ export class ArtifactService {
     // to the document reader here would quietly keep the pasted text as a document called a chart.
     if (kind === 'plot') return { error: 'bad-input', message: 'A chart is drawn from a table. Open or paste the table, then choose the columns to draw.' }
     if (kind === 'diagram') return { error: 'bad-input', message: 'A diagram is made by describing it to Orion, not pasted.' }
+    // A picture, a sound and a video are their bytes. There is nothing a person could paste that would be one, and
+    // falling through to the document reader would keep the pasted text as a document called a picture.
+    if (isMediaKindId(kind)) {
+      return { error: 'bad-input', message: 'A picture, a sound or a video is opened from a file. It cannot be pasted as text.' }
+    }
+    if (kind === 'project') {
+      const read = parseProject(text)
+      if (isProjectProblem(read)) return { error: read.error === 'parse' ? 'parse' : 'bad-input', message: read.message }
+      return { kind: 'project', project: read }
+    }
     if (kind === 'code') {
       // Which language: said outright, or read from a title that ends like a file name ("report.py").
       const found = languageById(language) ?? languageForFile(title)
@@ -519,7 +637,56 @@ export class ArtifactService {
     return { kind: 'document', document }
   }
 
-  private async render(body: ArtifactBody, format: FormatId, title = '', profileId: string | null = null): Promise<Rendered | { error: string; message: string }> {
+  private async render(
+    body: ArtifactBody,
+    format: FormatId,
+    title = '',
+    profileId: string | null = null,
+    options: { xlsx?: XlsxOptions } = {}
+  ): Promise<Rendered | { error: string; message: string }> {
+    /*
+     * Nothing renders a picture, a sound or a video.
+     *
+     * Their bytes are the artifact rather than something written out of a body, so `keep()` and `export()` use the
+     * stored bytes and never come here. Said as a refusal rather than left to fall through to the document writer,
+     * which would "write" a JPEG as an empty Markdown file.
+     */
+    if (isMediaBody(body)) {
+      return {
+        error: 'encode',
+        message: 'A picture, a sound or a video is the file it is. Orbis saves the same bytes and does not write one out of anything.'
+      }
+    }
+    if (body.kind === 'project') {
+      if (format === 'json') {
+        const written = serialiseProject(body.project)
+        const bytes = encode(written)
+        return {
+          bytes,
+          text: written,
+          // The gate reads `wordsOf`, which gives it every file's own text. This is only what a format scan would see.
+          scan: written,
+          format,
+          hash: hashOf(bytes),
+          loss: { lossy: false, losses: [], carries: FORMATS.json.carries },
+          notes: []
+        }
+      }
+      if (format === 'zip') {
+        const made = zipProject(body.project, 0)
+        if (isProjectProblem(made)) return { error: 'encode', message: made.message }
+        return {
+          bytes: made.bytes,
+          text: null,
+          scan: body.project.files.map((one) => `${one.path}\n${one.source}`).join('\n\n'),
+          format,
+          hash: hashOf(made.bytes),
+          loss: { lossy: false, losses: [], carries: FORMATS.zip.carries },
+          notes: made.notes
+        }
+      }
+      return { error: 'encode', message: `A project is kept as its files and saved as a zip archive, not as ${FORMATS[format]?.name ?? format}.` }
+    }
     if (body.kind === 'code') {
       if (format !== 'code') return { error: 'encode', message: `Code is saved as the ${languageById(body.code.language)?.name ?? 'source'} file it is, not as ${format}.` }
       const bytes = encode(body.code.source)
@@ -544,8 +711,42 @@ export class ArtifactService {
       const loss = lossFor('xlsx', { units: body.table.columns.some((one) => one.unit !== null), types: true, metadata: body.table.source !== '', hierarchy: false })
       if (isInterchangeError(loss)) return { error: 'encode', message: loss.message }
       // The sheet is named after the artifact: a workbook whose one sheet is called "Sheet1" tells nobody anything.
-      const made = await writeXlsx(body.table, title || 'Table')
-      return { bytes: made.bytes, text: null, scan: toDelimited(body.table), format, hash: hashOf(made.bytes), loss, notes: [...made.notes, ...loss.losses.map((one) => one.describe)] }
+      const made = await writeXlsx(body.table, title || 'Table', options.xlsx ?? {})
+      return {
+        bytes: made.bytes,
+        text: null,
+        scan: toDelimited(body.table),
+        format,
+        hash: hashOf(made.bytes),
+        loss,
+        notes: [...made.notes, ...loss.losses.map((one) => one.describe)],
+        ...(made.formulas ? { formulas: made.formulas } : {})
+      }
+    }
+    if (body.kind === 'table' && format === 'ics') {
+      /*
+       * One clock reading for the whole file.
+       *
+       * The stamp on every event and the identifiers they are given both come from it, so asking the clock twice
+       * would make a file whose events disagree about when it was written -- and the read-back compares identifiers.
+       */
+      const now = this.o.now()
+      const built = eventsFromTable(body.table, { now, defaultTitle: title })
+      if (isCalendarError(built)) return { error: 'encode', message: built.message }
+      const file = writeIcs(built.events, { now, name: title })
+      if (isCalendarError(file)) return { error: 'encode', message: file.message }
+      const loss = lossFor('ics', { units: true, types: true })
+      if (isInterchangeError(loss)) return { error: 'encode', message: loss.message }
+      return {
+        bytes: file.bytes,
+        text: file.text,
+        scan: file.text,
+        format,
+        hash: file.hash,
+        loss,
+        notes: [...built.notes, calendarHandoverNote(file.events)],
+        events: built.events
+      }
     }
     if (body.kind === 'document' && (format === 'docx' || format === 'pptx')) {
       const loss = lossFor(format, { formatting: true, metadata: true, hierarchy: true })
@@ -606,11 +807,43 @@ export class ArtifactService {
   /** The written file, checked against what was meant to be written and against what it came from. */
   private async verify(body: ArtifactBody, rendered: Rendered, readBack: Uint8Array): Promise<VerifyResult> {
     const shape = { bytes: rendered.bytes.length, hash: rendered.hash }
+    /*
+     * These three first, above everything.
+     *
+     * The tail of this function falls through to `verifySvgFile` for a kind it does not recognise, which would
+     * "verify" a JPEG as a drawing and pass.
+     */
+    if (isMediaKindId(body.kind)) return verifyMedia(mediaIn(body as MediaBody), readBack)
+    if (body.kind === 'project') {
+      if (rendered.format === 'zip') return verifyProjectZip(body.project, readBack)
+      // Stored as its one text form: it has to read back as the same project, file for file.
+      const again = parseProject(decode(readBack))
+      const differences: string[] = []
+      if (isProjectProblem(again)) differences.push(again.message)
+      else {
+        const comparison = compareProjects(body.project, again)
+        for (const path of comparison.changed) differences.push(`"${path}" does not read back as the text that was written.`)
+        for (const path of comparison.removed) differences.push(`"${path}" is not in the file that was read back.`)
+        for (const path of comparison.added) differences.push(`The file read back holds "${path}", which is not in the project.`)
+        if (comparison.entryMoved) differences.push('The file read back starts at a different file.')
+      }
+      const checks: VerifyResult['checks'] = [
+        { what: 'written', passed: readBack.length === shape.bytes, describe: `The file on disk is ${readBack.length.toLocaleString('en')} bytes; ${shape.bytes.toLocaleString('en')} were written.` },
+        { what: 'checksum', passed: hashOf(readBack) === shape.hash, describe: 'The hash of the file on disk matches the one recorded when it was written.' },
+        {
+          what: 'files',
+          passed: differences.length === 0,
+          describe: differences.length === 0 ? `All ${body.project.files.length} files read back as the text that was written.` : `${differences.length} differences were found between what was written and what was read back.`
+        }
+      ]
+      return { ok: checks.every((one) => one.passed), checks, reimported: { rows: body.project.files.length, columns: 0 }, differences }
+    }
+    if (rendered.format === 'ics') return verifyIcsFile(rendered.events ?? [], readBack, shape)
     if (rendered.format === 'pdf') return verifyPdfFile(shape, readBack)
     if (rendered.format === 'svg') return verifySvgFile(shape, readBack)
     if (rendered.format === 'code') return verifySourceFile({ ...shape, text: rendered.text ?? '' }, readBack)
     if (rendered.format === 'png') return verifyPngFile({ ...shape, width: rendered.size?.width ?? 0, height: rendered.size?.height ?? 0 }, readBack)
-    if (rendered.format === 'xlsx' && body.kind === 'table') return verifyXlsx(body.table, shape, readBack)
+    if (rendered.format === 'xlsx' && body.kind === 'table') return verifyXlsx(body.table, shape, readBack, rendered.formulas)
     if (rendered.format === 'docx' && body.kind === 'document') return verifyDocx({ ...shape, pictures: rendered.pictures ?? 0 }, readBack)
     if (rendered.format === 'pptx' && body.kind === 'document') return verifyPptx({ ...shape, slides: rendered.count ?? 0, pictures: rendered.pictures ?? 0 }, readBack)
     const expected: ExportResult = {
@@ -640,6 +873,16 @@ export class ArtifactService {
         return { rows: body.diagram.objects.length, columns: body.diagram.connectors.length }
       case 'code':
         return { rows: lineCount(body.code.source), columns: 0 }
+      case 'project':
+        return { rows: body.project.files.length, columns: 0 }
+      // A picture and a video are as big as they say; a sound is as long as it says, in whole seconds. A file that
+      // never said is zero, which is what "it does not say" looks like in two numbers.
+      case 'image':
+        return { rows: body.image.height ?? 0, columns: body.image.width ?? 0 }
+      case 'video':
+        return { rows: body.video.height ?? 0, columns: body.video.width ?? 0 }
+      case 'audio':
+        return { rows: Math.round((body.audio.durationMs ?? 0) / 1000), columns: 0 }
     }
   }
 
@@ -662,6 +905,12 @@ export class ArtifactService {
     const record = await this.existing(profileId, req, fail)
     if ('ok' in record) return record
     if (record.kind === 'document') return fail('bad-input', `"${record.title}" is already a document. It can be saved as PDF, Word or slides as it is.`)
+    // A picture as a figure in a document is a real piece of work -- the Word and slide writers take PNGs, but a
+    // figure is a pointer at a chart or a diagram and is read back as SVG text. Not done, and said rather than
+    // producing a document that holds only a heading.
+    if (isMediaKindId(record.kind)) {
+      return fail('bad-input', 'A picture, a sound or a video is not put into a document yet. Save the file itself.')
+    }
     const body = await this.bodyOf(profileId, record)
     if (!body) return fail('not-found', 'The artifact is listed but its source is missing.')
 
@@ -703,6 +952,15 @@ export class ArtifactService {
     } else if (body.kind === 'code') {
       document.blocks.push({ id: id(), sectionId: '', kind: 'code', language: body.code.language, source: body.code.source, showLineNumbers: false })
       notes.push(`The ${languageById(body.code.language)?.name ?? body.code.language} file "${record.title}" (version ${record.version}), character for character.`)
+    } else if (body.kind === 'project') {
+      // A heading per file with its own text under it, the file it starts at first, so the document reads in the
+      // order somebody would read the project.
+      const ordered = [...body.project.files].sort((a, b) => (a.path === body.project.entry ? -1 : b.path === body.project.entry ? 1 : a.path < b.path ? -1 : 1))
+      for (const file of ordered) {
+        document.blocks.push({ id: id(), sectionId: '', kind: 'heading', level: 2, content: [inline(file.path)] })
+        document.blocks.push({ id: id(), sectionId: '', kind: 'code', language: file.language, source: file.source, showLineNumbers: false })
+      }
+      notes.push(`Every one of the ${body.project.files.length} files of "${record.title}" (version ${record.version}), character for character. It starts at ${body.project.entry}.`)
     }
 
     // A document is kept as text and read back from it, and there is a most that can be read back at once. Said here,
@@ -896,6 +1154,8 @@ export class ArtifactService {
     if ('ok' in record) return record
     if (record.kind === 'table') return fail('bad-input', 'A table is changed with steps, so that every number is worked out by Orbis: use "Change this table".')
     if (record.kind === 'plot') return fail('bad-input', 'A chart is drawn from its table. Change the table, then draw the chart again.')
+    if (isMediaKindId(record.kind)) return fail('bad-input', 'A picture, a sound or a video is kept exactly as it is. Orbis does not change one by sentence.')
+    if (record.kind === 'project') return await this.reviseProject(profileId, operation, record, req, fail, signal)
     if (!this.o.generation) return fail('unavailable', 'Orion is not set up on this computer, so there is nothing to revise it with. It can still be replaced by pasting.')
     const request = str(req.request, 2000).trim()
     if (request === '') return fail('bad-input', 'Say what to change.')
@@ -1350,20 +1610,82 @@ export class ArtifactService {
     req: Record<string, unknown>,
     fail: (error: string, message: string, detail?: unknown) => ArtifactResult
   ): Promise<ArtifactResult> {
-    if (!this.o.chooseSource) return fail('unavailable', 'Opening a file is not available here.')
-    const path = await this.o.chooseSource()
-    if (path === null) return fail('cancelled', 'Nothing was opened.')
-    const read = this.o.readFile ?? (async (p: string) => new Uint8Array(await readFromDisk(p)))
+    /*
+     * Saying yes to reading a scanned PDF does not ask for the file again.
+     *
+     * The first answer was the question, and the file the question was about is in `pendingScan`. A second dialog
+     * would be asking the person to find the same file twice, and would let the yes land on a different file.
+     */
+    const again = req.readScanned !== undefined ? this.pendingScan : null
+    this.pendingScan = null
+    let name: string
     let bytes: Uint8Array
-    try {
-      bytes = await read(path)
-    } catch {
-      return fail('file', 'That file could not be read.')
+    if (again) {
+      name = again.name
+      bytes = again.bytes
+    } else {
+      if (!this.o.chooseSource) return fail('unavailable', 'Opening a file is not available here.')
+      const path = await this.o.chooseSource()
+      if (path === null) return fail('cancelled', 'Nothing was opened.')
+      const read = this.o.readFile ?? (async (p: string) => new Uint8Array(await readFromDisk(p)))
+      try {
+        bytes = await read(path)
+      } catch {
+        return fail('file', 'That file could not be read.')
+      }
+      name = path.replace(/^.*[\\/]/, '')
     }
-    const name = path.replace(/^.*[\\/]/, '')
-    const imported = await importFile(name, bytes)
-    if ('error' in imported) return fail(imported.error, imported.message)
-    return this.keep(profileId, operation, imported.body, { title: imported.title, source: imported.source, notes: imported.notes, acceptSecrets: req.acceptSecrets === true }, fail)
+    return this.keepImported(profileId, operation, name, bytes, req, fail)
+  }
+
+  /**
+   * One file's bytes read in and kept -- with the one case that is two steps.
+   *
+   * A scanned PDF has no words to read. Reading the pictures of its pages means sending them to a model, and that is
+   * not something to assume: the first answer is the question, in the words the reader itself wrote, and nothing
+   * leaves this computer. The second request carries the person's yes and the same bytes.
+   */
+  private async keepImported(
+    profileId: string,
+    operation: string,
+    name: string,
+    bytes: Uint8Array,
+    req: Record<string, unknown>,
+    fail: (error: string, message: string, detail?: unknown) => ArtifactResult
+  ): Promise<ArtifactResult> {
+    /*
+     * Whether the pictures of a scanned page could be read at all, decided before the offer is made.
+     *
+     * With nothing that can look -- no key, no model with eyes -- there is no offer: a question whose yes could only
+     * end in a refusal is worse than a plain "it cannot be read, and here is why".
+     */
+    const cannot = this.o.cannotSee?.() ?? (this.o.see ? null : 'Nothing on this computer is set up to read a picture of a page.')
+    const imported = await importFile(
+      name,
+      bytes,
+      cannot !== null ? { cannotRead: cannot } : { scanned: { deps: { see: this.o.see!, cannotSee: null }, consent: req.readScanned } }
+    )
+    if ('error' in imported) {
+      // The pictures of its pages could be read, if the person says so. The exact words come from the reader.
+      if (imported.error === 'scanned' && imported.scanned) {
+        this.pendingScan = { name, bytes }
+        return fail('scanned', imported.message, imported.scanned)
+      }
+      return fail(imported.error, imported.message)
+    }
+    return this.keep(
+      profileId,
+      operation,
+      imported.body,
+      {
+        title: imported.title,
+        source: imported.source,
+        notes: imported.notes,
+        acceptSecrets: req.acceptSecrets === true,
+        ...(imported.bytes ? { bytes: imported.bytes } : {})
+      },
+      fail
+    )
   }
 
   /**
@@ -1373,12 +1695,22 @@ export class ArtifactService {
    * through a dialog; this is for the one case where they have already said, by attaching it, and a second dialog
    * would be asking twice.
    */
-  async importBytes(profileId: string, name: string, bytes: Uint8Array, about: { conversationId?: string; acceptSecrets?: boolean } = {}): Promise<ArtifactResult> {
+  async importBytes(
+    profileId: string,
+    name: string,
+    bytes: Uint8Array,
+    about: { conversationId?: string; acceptSecrets?: boolean; readScanned?: unknown } = {}
+  ): Promise<ArtifactResult> {
     const operation = 'artifact.import'
     const fail = (error: string, message: string, detail?: unknown): ArtifactResult => ({ ok: false, operation, error, message, ...(detail !== undefined ? { detail } : {}) })
-    const imported = await importFile(name.replace(/^.*[\\/]/, '').slice(0, 200), bytes)
-    if ('error' in imported) return fail(imported.error, imported.message)
-    const kept = await this.keep(profileId, operation, imported.body, { title: imported.title, source: imported.source, notes: imported.notes, acceptSecrets: about.acceptSecrets === true }, fail)
+    const kept = await this.keepImported(
+      profileId,
+      operation,
+      name.replace(/^.*[\\/]/, '').slice(0, 200),
+      bytes,
+      { acceptSecrets: about.acceptSecrets === true, ...(about.readScanned !== undefined ? { readScanned: about.readScanned } : {}) },
+      fail
+    )
     if (!kept.ok || !isConversationId(about.conversationId)) return kept
     const record = (kept.value as { record: ArtifactRecord }).record
     const stamped: ArtifactRecord = { ...record, conversationId: about.conversationId }
@@ -1468,6 +1800,17 @@ export class ArtifactService {
     } else if (body.kind === 'diagram') {
       const label = new Map(body.diagram.objects.map((one) => [one.id, one.text]))
       lines.push(`A flowchart called "${record.title}" with ${body.diagram.objects.length} boxes:`, ...body.diagram.objects.map((one) => `- ${one.text} (${one.type})`), 'Arrows:', ...body.diagram.connectors.map((one) => `- ${label.get(one.from) ?? one.from} -> ${label.get(one.to) ?? one.to}${one.text ? ` [${one.text}]` : ''}`))
+    } else if (body.kind === 'project') {
+      const size = projectSize(body.project)
+      left = size.characters > limit
+      lines.push(
+        `A project called "${record.title}": ${projectListing(body.project, 40)}. It starts at ${body.project.entry}. Orbis has not run any of it.`,
+        ''
+      )
+      for (const file of body.project.files) lines.push(`--- ${file.path} ---`, file.source, '')
+    } else if (isMediaBody(body)) {
+      // Metadata only, and it says so: there is nothing else to tell, because nothing looked inside the file.
+      lines.push(mediaContext(mediaIn(body), record.title))
     } else {
       lines.push(`A chart called "${record.title}": ${body.plot.series.map((one) => one.label).join(', ')} against ${body.plot.x.label || 'the bottom axis'}.`, ...record.notes)
     }
@@ -1549,6 +1892,31 @@ export class ArtifactService {
     if ('ok' in record) return record
     if (typeof req.text !== 'string' || req.text.trim() === '') return fail('bad-input', 'There is no text to replace it with.')
     if (req.text.length > LIMITS.text) return fail('too-large', `That is ${req.text.length.toLocaleString('en')} characters, past the ${LIMITS.text.toLocaleString('en')} one artifact can be made from at once.`)
+    /*
+     * One file of a project, by its path: the ordinary way a project is edited.
+     *
+     * Without a path the whole stored form is replaced, as for every other kind. With one, only that file's text
+     * changes and everything else stays exactly as it is -- and it is still one new version, with the one before it
+     * kept, because a change is a version whatever its size.
+     */
+    const path = str(req.path, 200)
+    if (record.kind === 'project' && path !== '') {
+      const held = await this.bodyOf(profileId, record)
+      if (!held || held.kind !== 'project') return fail('not-found', 'The artifact is listed but its source is missing.')
+      const had = held.project.files.some((one) => one.path === path)
+      const next = had ? setProjectFile(held.project, path, req.text) : addProjectFile(held.project, path, req.text)
+      if (isProjectProblem(next)) return fail(next.error === 'parse' ? 'parse' : 'bad-input', next.message)
+      const summary = had ? `Changed ${path}.` : `Added ${path}.`
+      const kept = await this.keep(
+        profileId,
+        operation,
+        { kind: 'project', project: next },
+        { title: record.title, source: record.source, notes: [summary], acceptSecrets: req.acceptSecrets === true, existing: record, reason: str(req.reason, 300) || summary },
+        fail
+      )
+      if (!kept.ok) return kept
+      return { ...kept, value: { ...(kept.value as Record<string, unknown>), did: [summary] } }
+    }
     const body = this.bodyFrom(record.kind, req.text, 'pasted', record.title)
     if ('error' in body) return fail(body.error, body.message)
     return this.keep(profileId, operation, body, { title: record.title, source: 'pasted', notes: [], acceptSecrets: req.acceptSecrets === true, existing: record, reason: str(req.reason, 300) || 'Replaced with new text.' }, fail)
@@ -1570,11 +1938,22 @@ export class ArtifactService {
     if (!sourceBytes) return fail('not-found', `Version ${wanted.version} is listed but its files are missing.`)
     const body = JSON.parse(decode(sourceBytes)) as ArtifactBody
     if (body.kind !== record.kind) return fail('failed', 'That version is not the kind this artifact is.')
+    // A picture, a sound or a video cannot be written out of its body, so the version's own content file comes too.
+    const bytes = isMediaKindId(body.kind) ? await this.o.store.readVersionFile(profileId, record.artifactId, versionId, wanted.file) : null
+    if (isMediaKindId(body.kind) && !bytes) return fail('not-found', `Version ${wanted.version} is listed but its file is missing.`)
     return this.keep(
       profileId,
       operation,
       body,
-      { title: record.title, source: record.source, notes: [`Restored from version ${wanted.version}.`], acceptSecrets: req.acceptSecrets === true, existing: record, reason: `Restored version ${wanted.version}.` },
+      {
+        title: record.title,
+        source: record.source,
+        notes: [`Restored from version ${wanted.version}.`],
+        acceptSecrets: req.acceptSecrets === true,
+        existing: record,
+        reason: `Restored version ${wanted.version}.`,
+        ...(bytes ? { bytes } : {})
+      },
       fail
     )
   }
@@ -1590,11 +1969,14 @@ export class ArtifactService {
     if ('ok' in record) return record
     const body = await this.bodyOf(profileId, record)
     if (!body) return fail('not-found', 'The artifact is listed but its source is missing.')
+    const bytes = isMediaKindId(body.kind) ? await this.o.store.readFile(profileId, record.artifactId, record.file) : null
+    if (isMediaKindId(body.kind) && !bytes) return fail('not-found', 'The artifact is listed but its file is missing.')
     return this.keep(
       profileId,
       operation,
       body,
       {
+        ...(bytes ? { bytes } : {}),
         title: `Copy of ${record.title}`.slice(0, LIMITS.title),
         source: `"${record.title}" (copied)`,
         notes: [...record.notes, `A copy of "${record.title}", version ${record.version}.`],
@@ -1624,6 +2006,9 @@ export class ArtifactService {
         out.push({ record, ref: refOf(record), where: 'notes', excerpt: record.notes.find((n) => words.some((w) => n.toLowerCase().includes(w))) ?? record.source })
         continue
       }
+      // A picture, a sound or a video has no words in it. Read as text its bytes are mojibake, which matches nothing
+      // worth matching and could match anything.
+      if (isMediaKindId(record.kind)) continue
       const bytes = await this.o.store.readFile(profileId, record.artifactId, record.file)
       if (!bytes) continue
       const text = decode(bytes.subarray(0, LIMITS.preview))
@@ -1651,16 +2036,41 @@ export class ArtifactService {
     profileId: string,
     operation: string,
     body: ArtifactBody,
-    about: { title: string; source: string; notes: string[]; acceptSecrets: boolean; existing?: ArtifactRecord; reason?: string; derivedFrom?: ArtifactRecord['derivedFrom'] },
+    about: {
+      title: string
+      source: string
+      notes: string[]
+      acceptSecrets: boolean
+      existing?: ArtifactRecord
+      reason?: string
+      derivedFrom?: ArtifactRecord['derivedFrom']
+      /**
+       * The content bytes, for the kinds whose bytes cannot be written out of the body.
+       *
+       * A picture, a sound and a video only. Every other caller leaves it out, and a media body kept without it is
+       * refused rather than written as nothing.
+       */
+      bytes?: Uint8Array
+    },
     fail: (error: string, message: string, detail?: unknown) => ArtifactResult
   ): Promise<ArtifactResult> {
     const { title, source, acceptSecrets, existing } = about
     const kind = body.kind
     const format = ARTIFACT_KINDS[kind].stores
-    const rendered = await this.render(body, format, title, profileId)
+    const rendered = isMediaKindId(body.kind)
+      ? about.bytes
+        ? mediaRendered(body as MediaBody, about.bytes, title)
+        : { error: 'failed', message: 'A picture, a sound or a video can only be kept together with the bytes of its file.' }
+      : await this.render(body, format, title, profileId)
     if ('error' in rendered) return fail(rendered.error, rendered.message)
 
-    const ext = body.kind === 'code' ? extensionForLanguage(body.code.language) : extensionFor(format)
+    const ext =
+      body.kind === 'code'
+        ? extensionForLanguage(body.code.language)
+        : isMediaKindId(body.kind)
+          ? // The extension the BYTES earned, never the one the format row carries or the one the file arrived under.
+            mediaExtension(mediaIn(body as MediaBody).format)
+          : extensionFor(format)
     const gate = gateForWrite(`${safeName(title)}${ext}`, this.wordsOf(body, rendered), acceptSecrets)
     if (!gate.ok) return fail('secrets', gate.message, { findings: gate.findings })
 
@@ -1728,7 +2138,13 @@ export class ArtifactService {
     const record = await this.o.store.readRecord(profileId, artifactId)
     if (!record) return fail('not-found', 'There is no artifact with that id.')
     const bytes = await this.o.store.readFile(profileId, artifactId, record.file)
-    const text = bytes ? decode(bytes) : ''
+    /*
+     * The bytes as text -- except for a picture, a sound or a video, whose bytes are not text at all.
+     *
+     * Decoded, a JPEG is a megabyte of mojibake, and handing that to the window as "the preview" would be a megabyte
+     * of nonsense over one message. Those three branch below.
+     */
+    const text = isMediaKindId(record.kind) ? '' : bytes ? decode(bytes) : ''
     // A table's columns, so a chart can be asked for by name without the renderer parsing the stored copy.
     let columns: { id: string; name: string; type: string; formula: string }[] = []
     // The first rows as a person reads them -- dates as dates, quantities with their unit -- so the screen shows a
@@ -1745,6 +2161,50 @@ export class ArtifactService {
     if (record.kind === 'code') {
       const body = await this.bodyOf(profileId, record)
       if (body && body.kind === 'code') code = { language: body.code.language, name: languageById(body.code.language)?.name ?? body.code.language, extension: extensionForLanguage(body.code.language) }
+    }
+    /*
+     * A picture, a sound or a video: what the file says about itself, and for a small picture the picture.
+     *
+     * The preview is a `data:` URL, which is how a drawing and a picture made in the chat already reach the screen,
+     * so no new channel and no new element is needed. Over the ceiling there is no preview at all and the card says
+     * why in words -- making a thumbnail means decoding the picture, and re-encoding it would break the one rule
+     * these three kinds are built on.
+     */
+    let media: MediaSource | null = null
+    let preview = ''
+    if (isMediaKindId(record.kind)) {
+      const body = await this.bodyOf(profileId, record)
+      if (body && isMediaKindId(body.kind)) {
+        media = mediaIn(body as MediaBody)
+        preview = mediaPreview(media, bytes ?? new Uint8Array(0))
+      }
+    } else {
+      preview = text.slice(0, LIMITS.preview)
+    }
+    /*
+     * A project: its files listed, and one of them shown.
+     *
+     * Never the stored JSON as the preview -- that is the form, not the content, and a person reading it would be
+     * reading escaped source. The file asked for, or the one it starts at.
+     */
+    let project: { files: { path: string; language: string; characters: number }[]; entry: string; listing: string; languages: { name: string; files: number }[]; shown: string; runnable: boolean; cannotRun: string } | null = null
+    if (record.kind === 'project') {
+      const body = await this.bodyOf(profileId, record)
+      if (body && body.kind === 'project') {
+        const wanted = str(req.path, 200)
+        const file = body.project.files.find((one) => one.path === wanted) ?? body.project.files.find((one) => one.path === body.project.entry) ?? body.project.files[0]
+        const can = runnable(body.project)
+        project = {
+          files: body.project.files.map((one) => ({ path: one.path, language: one.language, characters: one.source.length })),
+          entry: body.project.entry,
+          listing: projectListing(body.project, 40),
+          languages: projectLanguages(body.project),
+          shown: file ? file.source.slice(0, LIMITS.preview) : '',
+          runnable: can.ok,
+          cannotRun: can.ok ? '' : can.reason
+        }
+        preview = project.shown
+      }
     }
     if (record.kind === 'table') {
       const body = await this.bodyOf(profileId, record)
@@ -1766,15 +2226,33 @@ export class ArtifactService {
       value: {
         record,
         ref: refOf(record),
-        preview: text.slice(0, LIMITS.preview),
-        truncated: text.length > LIMITS.preview,
+        preview,
+        truncated: isMediaKindId(record.kind) ? false : text.length > LIMITS.preview,
         columns,
         grid,
         tables,
         code,
+        // Metadata only: the size, the length, the format, where it came from and what was not read.
+        media,
+        project,
         // Every format this kind can be exported as here, with what each one drops, so the chooser can say so up front.
-        formats: code ? this.formatsFor(record.kind).map((one) => ({ ...one, name: code.name, extension: code.extension })) : this.formatsFor(record.kind)
+        formats: code
+          ? this.formatsFor(record.kind).map((one) => ({ ...one, name: code.name, extension: code.extension }))
+          : media
+            ? // A picture is saved as the PNG or the JPEG it is, not as ".image": the chooser says what it really is.
+              this.formatsFor(record.kind).map((one) => ({ ...one, name: mediaName(media!), extension: mediaExtension(media!.format) }))
+            : this.formatsFor(record.kind)
       }
+    }
+  }
+
+  /** The cloud folders found on this computer, or an empty list. Never throws: a missing folder is not a failure. */
+  private async cloud(): Promise<{ id: string; name: string; path: string; writable: boolean; keptBy: string }[]> {
+    try {
+      return await cloudFolders(this.o.env ?? process.env, this.o.cloudDeps ?? nodeCloudDeps())
+    } catch (err) {
+      console.error('[artifacts] the cloud folders could not be looked for', err)
+      return []
     }
   }
 
@@ -1792,7 +2270,7 @@ export class ArtifactService {
     operation: string,
     req: Record<string, unknown>,
     fail: (error: string, message: string, detail?: unknown) => ArtifactResult,
-    to: 'dialog' | 'downloads'
+    to: 'dialog' | 'downloads' | 'cloud'
   ): Promise<ArtifactResult> {
     const artifactId = str(req.artifactId, 60)
     if (!isArtifactId(artifactId)) return fail('bad-input', 'That is not an artifact id.')
@@ -1811,33 +2289,93 @@ export class ArtifactService {
     const body = JSON.parse(decode(sourceBytes)) as ArtifactBody
     if (body.kind !== record.kind) return fail('failed', 'The artifact is damaged: its source is not the kind its record says.')
 
-    const rendered = await this.render(body, format, record.title, profileId)
+    /*
+     * A workbook whose computed columns and totals stay live, when that is what was asked for.
+     *
+     * Only here: a table is stored as JSON, so xlsx never goes through `keep()` and this is the one place the option
+     * can matter. Every formula is proved against the number Orbis already worked out before it is written, and
+     * anything the printer cannot write exactly is written as numbers with the reason said.
+     */
+    const xlsx: XlsxOptions | undefined =
+      format !== 'xlsx' || body.kind !== 'table'
+        ? undefined
+        : {
+            computed: req.liveFormulas === true,
+            ...(req.totalsRow === true ? { totals: everyTotal(body.table) } : {})
+          }
+
+    /*
+     * A picture, a sound or a video is the same bytes going out as came in.
+     *
+     * Nothing is rendered: the stored file IS the artifact, so it is read and handed along. That is also why saving
+     * one can never lose anything, and why the loss report says so.
+     */
+    const rendered = isMediaKindId(body.kind)
+      ? await (async () => {
+          const stored = await this.o.store.readFile(profileId, artifactId, record.file)
+          if (!stored) return { error: 'not-found', message: 'The artifact is listed but its file is missing.' }
+          return mediaRendered(body as MediaBody, stored, record.title)
+        })()
+      : await this.render(body, format, record.title, profileId, { xlsx })
     if ('error' in rendered) return fail(rendered.error, rendered.message)
 
-    const ext = body.kind === 'code' ? extensionForLanguage(body.code.language) : extensionFor(format)
-    // A code file called "report.py" is saved as report.py, not report.py.py.
-    const named = body.kind === 'code' && languageById(body.code.language)?.extensions.some((one) => record.title.toLowerCase().endsWith(one)) ? record.title.slice(0, record.title.lastIndexOf('.')) : record.title
+    const ext =
+      body.kind === 'code'
+        ? extensionForLanguage(body.code.language)
+        : isMediaKindId(body.kind)
+          ? mediaExtension(mediaIn(body as MediaBody).format)
+          : extensionFor(format)
+    /*
+     * A file called "report.py" is saved as report.py, not report.py.py -- and "holiday.png" as holiday.png.
+     *
+     * The same accident twice: the title of something opened from a file usually still ends in the extension the
+     * bytes are about to earn again.
+     */
+    const alreadyNamed =
+      (body.kind === 'code' && (languageById(body.code.language)?.extensions.some((one) => record.title.toLowerCase().endsWith(one)) ?? false)) ||
+      (isMediaKindId(body.kind) && record.title.toLowerCase().endsWith(ext))
+    const named = alreadyNamed && record.title.includes('.') ? record.title.slice(0, record.title.lastIndexOf('.')) : record.title
     const base = safeName(named)
     const gate = gateForWrite(`${base}${ext}`, this.wordsOf(body, rendered), acceptSecrets)
     if (!gate.ok) return fail('secrets', gate.message, { findings: gate.findings })
 
+    const typeName = isMediaKindId(body.kind)
+      ? mediaName(mediaIn(body as MediaBody))
+      : body.kind === 'code'
+        ? (languageById(body.code.language)?.name ?? FORMATS[format].name)
+        : FORMATS[format].name
+
     let path: string | null
+    const extras: string[] = []
     if (to === 'downloads') {
       if (!this.o.downloadsDir) return fail('unavailable', 'Downloading is not available here. It can still be saved with "Save as".')
       const folder = this.o.downloadsDir()
       // Never over something that is already there: "Report.pdf", then "Report (2).pdf".
       path = join(folder, unique(base, ext, (candidate) => existsSync(join(folder, candidate))))
+    } else if (to === 'cloud') {
+      /*
+       * One of the folders a cloud program keeps in step.
+       *
+       * The folder is looked for here and now and the request may only name one of the ones that were found, so a
+       * renderer still cannot name a path -- which is the rule, not a precaution.
+       */
+      const folders = await this.cloud()
+      if (folders.length === 0) return fail('unavailable', 'Orbis found no folder on this computer that a cloud program keeps in step.')
+      const folder = cloudFolderAt(folders, str(req.folder, 400))
+      if (isSharingError(folder)) return fail('bad-input', folder.message)
+      path = join(folder.path, unique(base, ext, (candidate) => existsSync(join(folder.path, candidate))))
+      extras.push(cloudSaveNote(folder, `${base}${ext}`))
     } else {
       path = await this.o.chooseDestination({
         title: `Save ${record.title}`,
         defaultName: `${base}${ext}`,
-        filters: [{ name: body.kind === 'code' ? (languageById(body.code.language)?.name ?? FORMATS[format].name) : FORMATS[format].name, extensions: [ext.slice(1)] }]
+        filters: [{ name: typeName, extensions: [ext.slice(1)] }]
       })
     }
     if (path === null) return fail('cancelled', 'Nothing was written.')
 
     await (this.o.writeFile ?? writeToDisk)(path, rendered.bytes)
-    this.written.set(path, body.kind)
+    this.written.set(path, { kind: body.kind, format })
     const readBack = await (this.o.readFile ?? (async (p: string) => new Uint8Array(await readFromDisk(p))))(path)
     const verified = await this.verify(body, rendered, readBack)
 
@@ -1846,6 +2384,291 @@ export class ArtifactService {
       // The file exists where the person chose; deleting it from under them would be worse than saying what is wrong.
       return fail('verify', `The file was written but did not read back correctly: ${verified.checks.filter((one) => !one.passed).map((one) => one.describe).join(' ')}`, outcome)
     }
-    return { ok: true, operation, value: { ...outcome, notes: rendered.notes } }
+    return { ok: true, operation, value: { ...outcome, notes: [...extras, ...rendered.notes] } }
+  }
+
+  // ---------------------------------------------------------------- a project, shown and changed
+
+  /**
+   * A project that is one web page, shown in the Pages sandbox.
+   *
+   * Not a run on this computer, and the words say so wherever they can be read. Nothing is executed by Orbis: the
+   * three files the page is made of are handed to the sandbox the generated Pages already use, which has no network,
+   * no files, no Node and an opaque origin. Everything else -- Python, a shell script, a project of several pages --
+   * is refused by name, with the reason, because "cannot run this" leaves a person guessing at which part was
+   * objected to.
+   */
+  private async runProject(
+    profileId: string,
+    operation: string,
+    req: Record<string, unknown>,
+    fail: (error: string, message: string, detail?: unknown) => ArtifactResult
+  ): Promise<ArtifactResult> {
+    const record = await this.existing(profileId, req, fail)
+    if ('ok' in record) return record
+    if (record.kind !== 'project') {
+      return fail(
+        'bad-input',
+        record.kind === 'code'
+          ? 'Orbis keeps a code file and never runs it. A project that is one web page can be shown in Orbis’s sandbox.'
+          : 'Only a project that is one web page can be shown in Orbis’s sandbox.'
+      )
+    }
+    if (!this.o.sandbox) return fail('unavailable', 'Showing a page is not available in this copy of Orbis.')
+    const body = await this.bodyOf(profileId, record)
+    if (!body || body.kind !== 'project') return fail('not-found', 'The artifact is listed but its source is missing.')
+    const outcome = await openInSandbox(body.project, this.o.sandbox)
+    if (!outcome.ok) {
+      return fail(outcome.reason === 'not-runnable' ? 'bad-input' : 'failed', outcome.message ?? 'Nothing was run.', {
+        problems: outcome.problems ?? [],
+        notes: outcome.notes ?? []
+      })
+    }
+    return { ok: true, operation, value: outcome }
+  }
+
+  /**
+   * A project changed by an instruction.
+   *
+   * The model is handed every file and has to give every file back, named. Its answer goes through the same
+   * deny-by-default proposal reader a new project goes through, so every path is checked rather than tidied and a
+   * file left out of the answer is a file taken out of the project -- which the comparison then says in words.
+   */
+  private async reviseProject(
+    profileId: string,
+    operation: string,
+    record: ArtifactRecord,
+    req: Record<string, unknown>,
+    fail: (error: string, message: string, detail?: unknown) => ArtifactResult,
+    signal?: AbortSignal
+  ): Promise<ArtifactResult> {
+    if (!this.o.generation) return fail('unavailable', 'Orion is not set up on this computer, so there is nothing to change it with. One file at a time can still be replaced.')
+    const request = str(req.request, 2000).trim()
+    if (request === '') return fail('bad-input', 'Say what to change.')
+    const body = await this.bodyOf(profileId, record)
+    if (!body || body.kind !== 'project') return fail('not-found', 'The artifact is listed but its source is missing.')
+
+    const current = body.project.files.map((one) => `--- ${one.path} ---\n${one.source}`).join('\n\n')
+    if (current.length > LIMITS.revise) {
+      return fail(
+        'too-large',
+        `This project is ${current.length.toLocaleString('en')} characters, past the ${LIMITS.revise.toLocaleString('en')} Orion can be handed whole. Cutting it would lose files without saying so, so it was not sent. One file at a time can still be replaced on the Create screen.`
+      )
+    }
+    const outcome = await this.o.generation.revise('project', record.title, current, request, '', signal)
+    if (signal?.aborted || outcome.failed === STOPPED) return fail('cancelled', 'Stopped. Nothing was changed.')
+    if (!outcome.body || outcome.body.kind !== 'project') {
+      const errors = outcome.problems.filter((one) => one.severity === 'error').map((one) => one.message)
+      return fail(outcome.failed ? 'unavailable' : 'not-made', outcome.failed ?? errors[0] ?? 'Orion did not give back a project Orbis could keep.', { attempts: outcome.attempts })
+    }
+
+    const summary = describeComparison(compareProjects(body.project, outcome.body.project))
+    return this.keep(
+      profileId,
+      operation,
+      outcome.body,
+      {
+        title: record.title,
+        source: record.source,
+        notes: [
+          `Rewritten by a model from: "${request.slice(0, 200)}". Orbis has not run any of it and cannot say that it works: read it before you run it.`,
+          summary
+        ],
+        acceptSecrets: req.acceptSecrets === true,
+        existing: record,
+        reason: request.slice(0, 300)
+      },
+      fail
+    )
+  }
+
+  // ---------------------------------------------------------------- a dashboard
+
+  /**
+   * A table turned into a dashboard: a document of computed figures, a breakdown, and two or three charts.
+   *
+   * Every number on it is the data engine's, as in `artifact.analyse`; the charts are real chart artifacts drawn
+   * from the table's own columns and pointed at as figures, so a chart redrawn later is the chart the page shows.
+   * A chart that could not be drawn leaves a sentence in its place rather than a gap, and the page says in words
+   * that its figures are of one version and do not follow the table.
+   */
+  private async dashboard(
+    profileId: string,
+    operation: string,
+    req: Record<string, unknown>,
+    fail: (error: string, message: string, detail?: unknown) => ArtifactResult,
+    signal?: AbortSignal
+  ): Promise<ArtifactResult> {
+    const record = await this.existing(profileId, req, fail)
+    if ('ok' in record) return record
+    if (record.kind !== 'table') return fail('bad-input', 'A dashboard is made from a table.')
+    const body = await this.bodyOf(profileId, record)
+    if (!body || body.kind !== 'table') return fail('not-found', 'The artifact is listed but its source is missing.')
+
+    const plan = planDashboard(body.table, record.title, record.version)
+    if (isDashboardRefusal(plan)) return fail(plan.error, plan.message)
+
+    const drawn: DrawnFigure[] = []
+    const undrawn: UndrawnFigure[] = []
+    /** What this request made along the way, so a stopped request leaves nothing new behind. */
+    const made: string[] = []
+    const clean = async (): Promise<void> => {
+      for (const artifactId of made.reverse()) await this.o.store.remove(profileId, artifactId).catch(() => undefined)
+    }
+    for (const want of plan.figures) {
+      if (signal?.aborted) {
+        await clean()
+        return fail('cancelled', 'Stopped. Nothing was kept.')
+      }
+      let from: ArtifactRecord = record
+      if (want.steps && want.steps.length > 0) {
+        // The chart needs the table totalled first, so a real table of its own is made, with its own provenance.
+        const grouped = await this.transform(
+          profileId,
+          'artifact.transform',
+          { artifactId: record.artifactId, steps: want.steps, as: 'new', title: `${record.title} — ${want.caption}`.slice(0, LIMITS.title) },
+          fail
+        )
+        if (!grouped.ok) {
+          undrawn.push({ blockId: want.blockId, why: grouped.message })
+          continue
+        }
+        from = (grouped.value as { record: ArtifactRecord }).record
+        made.push(from.artifactId)
+      }
+      const chart = await this.chart(profileId, 'artifact.chart', { artifactId: from.artifactId, x: want.x, y: want.y, kind: want.kind }, fail, signal)
+      if (!chart.ok) {
+        if (chart.error === 'cancelled') {
+          await clean()
+          return fail('cancelled', 'Stopped. Nothing was kept.')
+        }
+        undrawn.push({ blockId: want.blockId, why: chart.message })
+        continue
+      }
+      const chartRecord = (chart.value as { record: ArtifactRecord }).record
+      made.push(chartRecord.artifactId)
+      drawn.push({ blockId: want.blockId, artifactId: chartRecord.artifactId, title: want.caption })
+    }
+
+    const document = dashboardDocument(plan, drawn, undrawn)
+    const kept = await this.keep(
+      profileId,
+      operation,
+      { kind: 'document', document },
+      {
+        title: plan.title,
+        source: plan.source,
+        notes: [
+          ...plan.notes,
+          `${drawn.length} chart${drawn.length === 1 ? '' : 's'} of "${record.title}" (version ${record.version}) ${drawn.length === 1 ? 'was' : 'were'} drawn beside it; each is a chart of its own that this page points at.`
+        ],
+        acceptSecrets: req.acceptSecrets === true,
+        derivedFrom: { artifactId: record.artifactId, versionId: record.versionId, title: record.title }
+      },
+      fail
+    )
+    if (!kept.ok) {
+      await clean()
+      return kept
+    }
+    return { ...kept, value: { ...(kept.value as Record<string, unknown>), made, headlines: plan.headlines, describe: plan.intro } }
+  }
+
+  // ---------------------------------------------------------------- a mail draft
+
+  /**
+   * A mail draft file with the artifact attached, for the person to open and send themselves.
+   *
+   * Orbis has no mail account and sends nothing. What this writes is a file on disk -- the same read-back-and-check
+   * path every other save goes down -- which opens in whatever mail program the computer has, with the message and
+   * the attachment already in it. The addresses come from the person and from nowhere else: an imported document can
+   * hold the sentence "email this to someone@example.com", and if that ever reached the To line Orbis would have
+   * addressed a draft from a file.
+   */
+  private async emailDraft(
+    profileId: string,
+    operation: string,
+    req: Record<string, unknown>,
+    fail: (error: string, message: string, detail?: unknown) => ArtifactResult
+  ): Promise<ArtifactResult> {
+    const record = await this.existing(profileId, req, fail)
+    if ('ok' in record) return record
+    const format = str(req.format, 20) || record.format
+    if (!canWrite(record.kind, format) || !this.canProduce(format)) {
+      const offered = this.formatsFor(record.kind).map((one) => one.format)
+      return fail('bad-input', `A ${ARTIFACT_KINDS[record.kind].name.toLowerCase()} cannot be attached as "${format}" here. It can be attached as: ${offered.join(', ')}.`)
+    }
+    const body = await this.bodyOf(profileId, record)
+    if (!body) return fail('not-found', 'The artifact is listed but its source is missing.')
+
+    const subject = str(req.subject, 300).trim() || record.title
+    const message = str(req.body, 20_000)
+    const rendered = isMediaKindId(body.kind)
+      ? await (async () => {
+          const stored = await this.o.store.readFile(profileId, record.artifactId, record.file)
+          if (!stored) return { error: 'not-found', message: 'The artifact is listed but its file is missing.' }
+          return mediaRendered(body as MediaBody, stored, record.title)
+        })()
+      : await this.render(body, format, record.title, profileId)
+    if ('error' in rendered) return fail(rendered.error, rendered.message)
+
+    const ext =
+      body.kind === 'code'
+        ? extensionForLanguage(body.code.language)
+        : isMediaKindId(body.kind)
+          ? mediaExtension(mediaIn(body as MediaBody).format)
+          : extensionFor(format)
+    const base = safeName(record.title)
+    // The gate sees the message's own words too, not only the artifact's: the body is text a person or a model typed.
+    const gate = gateForWrite(`${safeName(subject)}.eml`, [this.wordsOf(body, rendered), subject, message].join('\n'), req.acceptSecrets === true)
+    if (!gate.ok) return fail('secrets', gate.message, { findings: gate.findings })
+
+    const draft = buildEmailDraft({
+      ...(req.to !== undefined ? { to: req.to as string | readonly string[] } : {}),
+      ...(req.cc !== undefined ? { cc: req.cc as string | readonly string[] } : {}),
+      subject,
+      body: message,
+      attachment: {
+        name: `${base}${ext}`,
+        mediaType: isMediaKindId(body.kind) ? mediaIn(body as MediaBody).mediaType : mediaTypeFor(format),
+        bytes: rendered.bytes
+      },
+      now: this.o.now()
+    })
+    if (isSharingError(draft)) return fail('bad-input', draft.message)
+
+    let path: string | null
+    if (str(req.where, 20) === 'downloads') {
+      if (!this.o.downloadsDir) return fail('unavailable', 'Writing into the Downloads folder is not available here.')
+      const folder = this.o.downloadsDir()
+      path = join(folder, unique(safeName(subject), '.eml', (candidate) => existsSync(join(folder, candidate))))
+    } else {
+      path = await this.o.chooseDestination({ title: `Save the draft of "${subject}"`, defaultName: `${safeName(subject)}.eml`, filters: [{ name: 'Mail draft', extensions: ['eml'] }] })
+    }
+    if (path === null) return fail('cancelled', 'Nothing was written.')
+
+    await (this.o.writeFile ?? writeToDisk)(path, draft.bytes)
+    // Written by Orbis this session. An .eml may be opened: for a draft, "open" means a mail program, not a run.
+    this.written.set(path, { kind: record.kind, format: 'text' })
+    const readBack = await (this.o.readFile ?? (async (p: string) => new Uint8Array(await readFromDisk(p))))(path)
+    const verified = verifyEmailDraft(draft, readBack, rendered.bytes, { bytes: draft.bytes.length, hash: draft.hash })
+    if (!verified.ok) {
+      return fail('verify', `The draft was written but did not read back correctly: ${verified.checks.filter((one) => !one.passed).map((one) => one.describe).join(' ')}`, { path, verified })
+    }
+    return {
+      ok: true,
+      operation,
+      value: {
+        path,
+        bytes: draft.bytes.length,
+        hash: draft.hash,
+        verified,
+        to: draft.to,
+        cc: draft.cc,
+        subject: draft.subject,
+        attachment: draft.attachment,
+        notes: draft.notes
+      }
+    }
   }
 }

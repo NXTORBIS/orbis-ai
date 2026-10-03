@@ -31,10 +31,19 @@ export interface KnownArtifact {
   columns: { name: string; type: string }[]
 }
 
-export type ChatAct = 'make' | 'change' | 'chart' | 'export' | 'keep' | 'ask'
+export type ChatAct = 'make' | 'change' | 'chart' | 'export' | 'keep' | 'ask' | 'run'
 
 /** Where the material for a new thing is, when it is not to be written from nothing. */
 export type ChatSource = 'reply' | 'attachment' | 'message'
+
+/**
+ * Where a saved copy is going.
+ *
+ * Only ever read out of the message itself, never out of a model's answer, and `file` is what everything else means.
+ * The three that are not `file` each end somewhere outside Create -- a mail program, a calendar program, a folder a
+ * cloud program watches -- so a wrong guess would put a person's file somewhere they did not ask for.
+ */
+export type ChatDestination = 'file' | 'email' | 'calendar' | 'cloud'
 
 export interface ChatArtifactIntent {
   act: ChatAct
@@ -44,9 +53,11 @@ export interface ChatArtifactIntent {
   into: KnownArtifact | null
   source: ChatSource | null
   /** What to make or keep, when the request says. A chart is never named here: it is drawn from a table. */
-  kind: 'table' | 'document' | 'diagram' | 'code' | null
+  kind: 'table' | 'document' | 'diagram' | 'code' | 'project' | null
   /** The file format the person named, when they named one. */
   format: FormatId | null
+  /** Where the copy is going, when the message says somewhere other than a file. */
+  destination: ChatDestination
   /** The request, rewritten to stand on its own. */
   request: string
 }
@@ -63,9 +74,9 @@ export interface ChatIntentContext {
   message: string
 }
 
-const ACTS: readonly ChatAct[] = Object.freeze(['make', 'change', 'chart', 'export', 'keep', 'ask'])
+const ACTS: readonly ChatAct[] = Object.freeze(['make', 'change', 'chart', 'export', 'keep', 'ask', 'run'])
 const SOURCES: readonly ChatSource[] = Object.freeze(['reply', 'attachment', 'message'])
-const MAKEABLE = Object.freeze(['table', 'document', 'diagram', 'code'] as const)
+const MAKEABLE = Object.freeze(['table', 'document', 'diagram', 'code', 'project'] as const)
 
 /** The words people use for a format, and the format each one means. */
 const FORMAT_WORDS: Readonly<Record<string, FormatId>> = Object.freeze({
@@ -161,11 +172,56 @@ const POINTS_BACK =
 
 export const pointsBack = (message: string): boolean => POINTS_BACK.test(message)
 
+// ---------------------------------------------------------------- where a copy is going
+
+/**
+ * The three destinations, each recognised only from the message's own words, and each needing a verb.
+ *
+ * The bar is deliberately high, because getting one of these wrong is not a missed request -- it is a draft
+ * addressed to somebody, or a file dropped into a folder that uploads it. "How do I email a spreadsheet?" and "what
+ * does OneDrive cost?" mention the words and ask for nothing, so a word on its own is never enough: the sentence has
+ * to say what to do with what.
+ */
+const EMAIL_SAID =
+  /\b(e-?mail|mail)\s+(it|this|that|these|those|them|me|him|her|the\s+[\w-]+)\b|\b(draft|write|compose|prepare|make|create|give me)\s+(me\s+)?(an?\s+)?(e-?mail|mail)\b|\bas an? e-?mail\b|\battach(?:ed|ing)?\s+(it|this|that)\s+to\s+an?\s+e-?mail\b/i
+// "put these dates in my calendar", "add it to my calendar": a verb, something to act on, and where it goes. The
+// few words in between are allowed because people name the thing ("these dates", "the review dates").
+const CALENDAR_SAID = /\b(add|put|get|stick|save)\s+(?:[\w'-]+\s+){1,4}?(in|on|into|onto|to)\s+(my\s+)?(calendar|diary)\b/i
+const CALENDAR_FILE_SAID = /\b(calendar|diary)\s+file\b|\b(an?|the)\s+ics\b|\bics\s+file\b|\b\.ics\b/i
+const CLOUD_PROGRAMS = /\b(one ?drive|dropbox|google drive|icloud(?: drive)?)\b/i
+const CLOUD_SAID = /\b(save|put|copy|upload|back|stick)\b[^.!?]{0,60}?\b(one ?drive|dropbox|google drive|icloud(?: drive)?)\b/i
+
+/** Whether the message asks for a mail draft. */
+export const emailIsSaid = (message: string): boolean => EMAIL_SAID.test(message)
+/** Whether the message asks for the dates to go on a calendar, or for a calendar file. */
+export const calendarIsSaid = (message: string): boolean => CALENDAR_SAID.test(message) || CALENDAR_FILE_SAID.test(message)
+/** Whether the message asks for a copy in a folder a cloud program keeps in step. */
+export const cloudIsSaid = (message: string): boolean => CLOUD_SAID.test(message)
+/** Which cloud program the message names, in the person's own words. Empty when it names none. */
+export const cloudNamed = (message: string): string => CLOUD_PROGRAMS.exec(message)?.[1] ?? ''
+
+/** Where a saved copy is going, from the message and from nothing else. `file` unless it plainly says otherwise. */
+export function destinationSaid(message: string): ChatDestination {
+  if (emailIsSaid(message)) return 'email'
+  if (calendarIsSaid(message)) return 'calendar'
+  if (cloudIsSaid(message)) return 'cloud'
+  return 'file'
+}
+
+/** Whether the message asks for a dashboard rather than a write-up. One word, and nobody uses it for anything else. */
+export const dashboardIsSaid = (message: string): boolean => /\bdash\s?boards?\b/i.test(message)
+
+/** Whether the message asks for something to be shown running. Only ever acted on for a project. */
+export const runIsSaid = (message: string): boolean =>
+  /\b(run|open|show|preview|try|launch|see)\s+(?:me\s+)?(it|this|that|them|the\s+(project|page|site|website|app))\b|\blet me see it (work|working|run|running)\b|\brun the (project|page|site|website|app)\b/i.test(
+    message
+  )
+
 // ---------------------------------------------------------------- the check before the model is asked
 
 const MAKE = /\b(make|create|build|generate|write|draft|produce|prepare|put together|set up|design|draw|plot|graph|chart|turn|convert|export|save|download|put|give me|i need|i want|i'd like|can you|could you)\b/i
 const THING =
-  /\b(spreadsheets?|workbooks?|sheets?|tables?|trackers?|logs?|registers?|budgets?|schedules?|timetables?|planners?|checklists?|templates?|invoices?|documents?|reports?|proposals?|letters?|memos?|resumes?|cv|handbooks?|guides?|manuals?|white ?papers?|essays?|articles?|newsletters?|agendas?|itinerar(?:y|ies)|polic(?:y|ies)|contracts?|syllabus(?:es)?|curriculums?|plans?|minutes|slides?|decks?|presentations?|flow ?charts?|diagrams?|org charts?|decision trees?|charts?|graphs?|plots?|histograms?|pies?|heat ?maps?|scripts?|files?|datasets?|printable|dashboards?|calculators?|web ?pages?|websites?|tools?|forms?|quiz(zes)?)\b/i
+  /\b(spreadsheets?|workbooks?|sheets?|tables?|trackers?|logs?|registers?|budgets?|schedules?|timetables?|planners?|checklists?|templates?|invoices?|documents?|reports?|proposals?|letters?|memos?|resumes?|cv|handbooks?|guides?|manuals?|white ?papers?|essays?|articles?|newsletters?|agendas?|itinerar(?:y|ies)|polic(?:y|ies)|contracts?|syllabus(?:es)?|curriculums?|plans?|minutes|slides?|decks?|presentations?|flow ?charts?|diagrams?|org charts?|decision trees?|charts?|graphs?|plots?|histograms?|pies?|heat ?maps?|scripts?|files?|datasets?|printable|dashboards?|calculators?|web ?pages?|websites?|tools?|forms?|quiz(zes)?|projects?|pictures?|images?|photos?|videos?|sounds?|recordings?|e-?mails?|calendars?)\b/i
 const FORMAT = /\b(pdf|docx?|xlsx?|csv|tsv|json|markdown|html|pptx?|svg|png|excel|word|powerpoint)\b/i
 const CHANGE = /\b(add|remove|delete|drop|sort|filter|rename|change|update|edit|revise|rewrite|shorten|expand|fix|total|sum|group|only|make it|turn it|export|save|download|convert|bigger|larger|smaller|landscape|bar|line|column|chart|graph|plot|draw|pie|histogram|visuali[sz]e)\b/i
 const POINTS_AT = /\b(it|this|that|them|those|these|the (table|spreadsheet|sheet|document|doc|chart|graph|report|file|diagram|flowchart|presentation|slides|deck|code|script))\b/i
@@ -194,6 +250,8 @@ export function mightBeAboutArtifacts(text: string, context: { artifacts: number
     // With something already made, a short follow-up may be about it: "add a totals row", "what is the biggest?".
     const short = message.length <= 500
     if (short && (context.previousWasArtifact || POINTS_AT.test(sample)) && (CHANGE.test(sample) || POINTS_AT.test(sample) || /\?\s*$/.test(message))) return true
+    // Where it goes, and showing a project: each already needs a verb and an object to be said at all.
+    if (short && (destinationSaid(sample) !== 'file' || runIsSaid(sample))) return true
     return says
   }
   if (!says) return false
@@ -210,25 +268,26 @@ const str = (value: unknown, max: number): string => (typeof value === 'string' 
 
 /** What the model is told. The same every time; the conversation goes in the other message. */
 export function chatIntentInstructions(): string {
-  return `You decide whether the latest message in an Orbis chat asks Orbis to MAKE, CHANGE, DRAW, SAVE or look INTO a thing Orbis keeps as a file -- a table (a spreadsheet), a document, a flowchart, a chart drawn from a table, or one file of code -- or is ordinary conversation.
+  return `You decide whether the latest message in an Orbis chat asks Orbis to MAKE, CHANGE, DRAW, SAVE, RUN or look INTO a thing Orbis keeps as a file -- a table (a spreadsheet), a document, a flowchart, a chart drawn from a table, one file of code, a project of several files, or a picture, a sound or a video somebody opened -- or is ordinary conversation.
 
 Judge what the person wants to receive, not the words they used. If you are not sure, answer "none": a missed request costs the person one more sentence; a file nobody asked for replaces the answer they wanted.
 
 Reply with JSON only:
-{"act": "make" | "change" | "chart" | "export" | "keep" | "ask" | "none",
+{"act": "make" | "change" | "chart" | "export" | "keep" | "ask" | "run" | "none",
  "target": the handle of the listed artifact meant (like "A2"), or null,
  "into": for "chart" only -- the handle of a listed document the chart should be put into, or null,
  "source": "reply" | "attachment" | "message" | null,
- "kind": "table" | "document" | "diagram" | "code" | null,
+ "kind": "table" | "document" | "diagram" | "code" | "project" | null,
  "format": a file format the person named ("pdf", "word", "excel", "powerpoint", "csv", "json", "markdown", "html", "text", "png", "svg"), or null,
  "request": the instruction rewritten so it stands on its own, keeping every detail the person gave and inventing none,
  "sure": true | false}
 
 The acts:
-- "make": a new thing made FOR the person to keep, fill in, download or send. A tracker, log, budget, timetable, register, template (kind "table"); a report, proposal, letter, plan, resume, notes, a presentation (kind "document"); a flowchart or process diagram (kind "diagram"); a script, a query, a settings file, or a small interactive thing -- a calculator, a form, a web page, a simple dashboard -- written as one web page file the person opens in their browser (kind "code"). When it should be made out of a listed artifact ("make a report from the spreadsheet") give that artifact as "target". When it should be made out of the previous reply, an attached file, or data pasted in this message, say which in "source".
+- "make": a new thing made FOR the person to keep, fill in, download or send. A tracker, log, budget, timetable, register, template (kind "table"); a report, proposal, letter, plan, resume, notes, a presentation (kind "document"); a flowchart or process diagram (kind "diagram"); a script, a query, a settings file, or a small interactive thing -- a calculator, a form, a web page -- written as one web page file the person opens in their browser (kind "code"); several named files that belong together, such as a small website of a page, a stylesheet and a script, or a script with its settings file (kind "project"). When it should be made out of a listed artifact ("make a report from the spreadsheet") give that artifact as "target". When it should be made out of the previous reply, an attached file, or data pasted in this message, say which in "source".
 - "change": one of the listed artifacts altered: add, remove, sort, filter, total, rename a column, shorten, rewrite, add a section, add a step, change a chart's kind.
 - "chart": a chart drawn from a listed table ("add a chart", "graph it", "plot sales by month"). When the numbers are in a data file attached to this message and no listed table is meant, give "source": "attachment" and "target": null.
-- "export": a listed artifact wanted in a file format ("export it as PDF", "make it a Word file", "give me the Excel").
+- "export": a listed artifact wanted in a file format, or wanted somewhere other than a file ("export it as PDF", "make it a Word file", "give me the Excel", "email me the report", "put these dates in my calendar", "save it to OneDrive"). Orbis sends no mail and uploads nothing itself: it writes a draft file, or a calendar file, or a copy into a folder the person's own cloud program watches. Whether the message really asked for one of those is decided by Orbis from the words, not by you, so answer "export" and leave the rest alone.
+- "run": a listed PROJECT shown running in Orbis's sandbox ("run it", "show me the page working"). Never for code: Orbis keeps one file and never runs it.
 - "keep": the previous reply, an attached file, or data pasted in this message turned into a file as it stands, with nothing rewritten ("turn this into a Word document", "put this table in Excel", "make a spreadsheet from the attached file"). Say which in "source" and what it becomes in "kind".
 - "ask": a question about what is IN a listed artifact ("what is the highest expense?", "summarise the report").
 - "none": everything else. In particular:
@@ -306,8 +365,20 @@ export function readChatIntent(raw: unknown, context: ChatIntentContext): ChatAr
   if (source === 'attachment' && context.attachments.length === 0) source = null
   const request = str(r.request, 2000) || context.message.trim().slice(0, 2000)
   if (request === '') return null
+  // Never the model's to decide. Read out of the message, which is the only place a person said it.
+  const destination = destinationSaid(context.message)
 
   switch (act) {
+    case 'run': {
+      /*
+       * Showing a project. Only ever a project, and only when the message itself asks for it.
+       *
+       * A code file is still never run -- that is written into nine places in this engine and none of them is
+       * loosened -- so a model answering "run" about one gets an ordinary reply.
+       */
+      if (!target || target.kind !== 'project' || !runIsSaid(context.message)) return null
+      return { act, target, into: null, source: null, kind: null, format: null, destination: 'file', request }
+    }
     case 'make': {
       const resolved = kind ?? (format ? kindForFormat(format) : null)
       if (!resolved) return null
@@ -318,33 +389,44 @@ export function readChatIntent(raw: unknown, context: ChatIntentContext): ChatAr
       // flowchart. Code is saved as its own language's file and nothing else: "a script that reads a CSV" names what
       // the script reads, not what it is saved as. Made out of a listed artifact, that artifact is the material and
       // the reply before it is not.
-      return { act, target, into: null, source: target ? null : source, kind: resolved, format: resolved === 'code' ? null : (format ?? formatSaidFor(context.message, resolved)), request }
+      return { act, target, into: null, source: target ? null : source, kind: resolved, format: resolved === 'code' || resolved === 'project' ? null : (format ?? formatSaidFor(context.message, resolved)), destination: 'file', request }
     }
     case 'keep': {
       if (!source) return null
-      const resolved = (kind && kind !== 'diagram' ? kind : format ? kindForFormat(format) : 'document') ?? 'document'
-      return { act, target: null, into: null, source, kind: resolved, format: resolved === 'code' ? null : (format ?? formatSaidFor(context.message, resolved)), request }
+      const resolved = (kind && kind !== 'diagram' && kind !== 'project' ? kind : format ? kindForFormat(format) : 'document') ?? 'document'
+      return { act, target: null, into: null, source, kind: resolved, format: resolved === 'code' ? null : (format ?? formatSaidFor(context.message, resolved)), destination: 'file', request }
     }
     case 'change':
     case 'ask':
       if (!target) return null
-      return { act, target, into: null, source: null, kind: null, format: null, request }
+      return { act, target, into: null, source: null, kind: null, format: null, destination: 'file', request }
     case 'chart':
       // A chart is drawn from a table, or redrawn from the table an existing chart came from, or drawn from a data
       // file attached to this very message. Nothing else has numbers.
       if (!target) {
         if (source !== 'attachment') return null
-        return { act, target: null, into: null, source, kind: null, format: format === 'png' || format === 'svg' ? format : null, request }
+        return { act, target: null, into: null, source, kind: null, format: format === 'png' || format === 'svg' ? format : null, destination: 'file', request }
       }
       if (target.kind !== 'table' && target.kind !== 'plot') return null
-      return { act, target, into: into && into.kind === 'document' ? into : null, source: null, kind: null, format: format === 'png' || format === 'svg' ? format : null, request }
+      return { act, target, into: into && into.kind === 'document' ? into : null, source: null, kind: null, format: format === 'png' || format === 'svg' ? format : null, destination: 'file', request }
     case 'export': {
       if (!target) return null
+      /*
+       * Somewhere other than a file: a mail draft, a calendar file, a folder a cloud program watches.
+       *
+       * Each needs no format to have been named -- "email me the report" names none -- so a destination is enough on
+       * its own here, where otherwise a format is what makes an export an export. A calendar is a format of its own
+       * and is asked for by name, which is why it is set here rather than guessed from the words.
+       */
+      if (destination !== 'file') {
+        const asked = destination === 'calendar' ? ('ics' as FormatId) : (format ?? formatSaidFor(context.message, target.kind) ?? null)
+        return { act, target, into: null, source: null, kind: null, format: asked, destination, request }
+      }
       // The format the person named, even when the model left it out. One that fits the artifact first; failing
       // that, whichever one the message names, and the chat says plainly what can and cannot be done with it.
       const wanted = format ?? formatSaidFor(context.message, target.kind) ?? (Object.keys(FORMAT_SAID) as FormatId[]).find((one) => formatIsSaid(context.message, one)) ?? null
       if (!wanted) return null
-      return { act, target, into: null, source: null, kind: null, format: wanted, request }
+      return { act, target, into: null, source: null, kind: null, format: wanted, destination: 'file', request }
     }
   }
 }
@@ -371,8 +453,8 @@ export function plainMakeRequest(text: string): ChatArtifactIntent | null {
   if (IN_ANOTHER_PROGRAM.test(message) && !/\bfile\b/i.test(message)) return null
   const word = FORMAT.exec(message)?.[1] ?? null
   const format = formatFromWord(word)
-  if (PLAIN_DIAGRAM.test(message)) return { act: 'make', target: null, into: null, source: null, kind: 'diagram', format: null, request: message }
-  if (PLAIN_TABLE.test(message)) return { act: 'make', target: null, into: null, source: null, kind: 'table', format: format && kindForFormat(format) === 'table' ? format : 'xlsx', request: message }
-  if (PLAIN_DOCUMENT.test(message)) return { act: 'make', target: null, into: null, source: null, kind: 'document', format: format && kindForFormat(format) === 'document' ? format : null, request: message }
+  if (PLAIN_DIAGRAM.test(message)) return { act: 'make', target: null, into: null, source: null, kind: 'diagram', format: null, destination: 'file', request: message }
+  if (PLAIN_TABLE.test(message)) return { act: 'make', target: null, into: null, source: null, kind: 'table', format: format && kindForFormat(format) === 'table' ? format : 'xlsx', destination: 'file', request: message }
+  if (PLAIN_DOCUMENT.test(message)) return { act: 'make', target: null, into: null, source: null, kind: 'document', format: format && kindForFormat(format) === 'document' ? format : null, destination: 'file', request: message }
   return null
 }
