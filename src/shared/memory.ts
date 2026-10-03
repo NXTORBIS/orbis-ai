@@ -37,6 +37,13 @@ export interface MemoryEntry {
   updatedAt: number
   /** The last time it was given to Orion, so the person can see what is actually used. */
   lastUsedAt?: number
+  /**
+   * The project this belongs to, or absent for one about the person.
+   *
+   * A memory kept inside a project is only given to Orion while answering inside that project. That boundary is the
+   * point: setting up one project to work a particular way must not quietly change every other conversation.
+   */
+  projectId?: string
 }
 
 export interface MemorySettings {

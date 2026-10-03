@@ -87,7 +87,10 @@ import { SearchSessionStore } from './knowledge/searchSessions'
 import type { AppServicesDeps } from '../helper/appServices'
 import type { PanelStores } from '../helper/panelStores'
 import { GalaxyService } from './knowledge/galaxyService'
-import { projectsMentioned } from '../shared/workspaces'
+import { projectOfConversation, projectsMentioned } from '../shared/workspaces'
+
+/** A blank line, named because writing one inside a template literal here has broken the file twice. */
+const BREAK = String.fromCharCode(10, 10)
 import type { GalaxyNodeType, GalaxyView } from '../shared/galaxy'
 import type { Workflow, WorkflowStep } from '../shared/workflows'
 import { memoryFromRequest, memoryPromptBlock, parseMemoryCommand } from '../shared/memory'
@@ -839,6 +842,23 @@ function registerIpc(): void {
     activeRequests.set(request.requestId, controller)
     try {
       let systemPrompt = buildSystemPrompt(settings)
+
+      /**
+       * The project this conversation is kept in, worked out once.
+       *
+       * It decides two things further down, and they have to agree: which memories Orion may see, and whether this
+       * project's own instructions are followed. Looking it up twice would let the two drift apart, which is exactly
+       * the bug where a chat obeys a project it is not actually in.
+       */
+      const homeProjectId: string | null = await (async () => {
+        if (!request.conversationId || !workspacesForChat) return null
+        try {
+          return projectOfConversation(request.conversationId, await workspacesForChat.list())?.id ?? null
+        } catch {
+          // A project that cannot be read means no project, never a wrong one.
+          return null
+        }
+      })()
       let messages = request.messages
       const last = messages.at(-1)
 
@@ -968,7 +988,7 @@ function registerIpc(): void {
           }
         }
         try {
-          const block = memoryPromptBlock(memory.relevant(last.content))
+          const block = memoryPromptBlock(memory.relevant(last.content, homeProjectId ?? undefined))
           if (block) systemPrompt = `${systemPrompt}\n\n${block}`
         } catch (err) {
           // Memory helps a reply; it is never a reason for one to fail.
@@ -1010,7 +1030,20 @@ ${block}`
       if (last?.role === 'user' && !request.ask && galaxyForChat && workspacesForChat) {
         try {
           const spaces = await workspacesForChat.list()
-          const named = projectsMentioned(last.content, spaces).slice(0, 2)
+          /*
+           * The project this conversation is *in*, which is different from a project it mentions.
+           *
+           * A conversation kept in a project is about that project on every message, not only the ones that happen to
+           * type its name -- which is what "putting a chat in a project" means to the person who did it, and was the
+           * missing half of projects. Its name is added to the named list so the goal and item titles below still
+           * travel as data; what it adds on top is the person's own instructions, which really are followed, and only
+           * inside this project.
+           */
+          const home = spaces.find((one) => one.id === homeProjectId) ?? null
+          if (home?.project?.instructions) {
+            systemPrompt = `${systemPrompt}${BREAK}How the person has asked you to work inside their project ${JSON.stringify(home.name)}. These are their own words, typed into Orbis, and they apply only while you are answering in this project:${BREAK}${home.project.instructions}`
+          }
+          const named = [...new Set([...(home ? [home.id] : []), ...projectsMentioned(last.content, spaces)])].slice(0, 2)
           if (named.length) {
             const graph = await galaxyForChat.graph()
             const byId = new Map(graph.nodes.map((n) => [n.id, n]))

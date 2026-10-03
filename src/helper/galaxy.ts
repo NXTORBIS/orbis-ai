@@ -97,7 +97,7 @@ export function createGalaxyHandlers(getDeps: () => GalaxyDeps | null | undefine
       } else if (t && typeof t === 'object' && typeof (t as { newName?: unknown }).newName === 'string') {
         const name = (t as { newName: string }).newName.replace(/\s+/g, ' ').trim().slice(0, 60)
         if (!name) throw bad('A project needs a name.')
-        space = newWorkspace({ name, project: { goal: '', items: [] } })
+        space = newWorkspace({ name, project: { goal: '', instructions: '', items: [] } })
       } else throw bad('Choose a project, or give a new one a name.')
       for (const n of nodes) space = withProjectItem(space, n.id)
       const saved = await d.workspaces.save(space)

@@ -114,12 +114,33 @@ export default function WorkspacesView({ onClose, onNotify }: { onClose(): void;
                     onBlur={(e) => e.target.value.trim() !== workspace.project?.goal && void window.api.saveWorkspace({ ...workspace, project: { ...workspace.project!, goal: e.target.value } })}
                   />
                 </label>
+                {/*
+                  * The goal above is something Orion is told about. This is something Orion follows -- and only while
+                  * it is answering inside this project, which is the whole reason it is here and not in Settings.
+                  */}
+                <label>
+                  <span className="view-muted">How Orion should work here</span>
+                  <textarea
+                    defaultValue={workspace.project.instructions}
+                    maxLength={2000}
+                    rows={3}
+                    placeholder={'Use SI units. Show the derivation. Answer in Hindi.'}
+                    aria-label={`How Orion should work in ${workspace.name}`}
+                    onBlur={(e) =>
+                      e.target.value.trim() !== workspace.project?.instructions &&
+                      void window.api
+                        .saveWorkspace({ ...workspace, project: { ...workspace.project!, instructions: e.target.value } })
+                        .then(() => onNotify(e.target.value.trim() ? `Orion will work that way in “${workspace.name}”.` : `Orion will work normally in “${workspace.name}”.`))
+                    }
+                  />
+                  <span className="view-muted small">Followed in this project only. Chats you put in it are answered this way.</span>
+                </label>
                 <p className="view-muted">
                   {workspace.project.items.length} {workspace.project.items.length === 1 ? 'item' : 'items'} in this project · add research, notes, tasks and more from Galaxy
                 </p>
               </div>
             ) : (
-              <button type="button" className="queue-btn small space-make-project" onClick={() => void window.api.saveWorkspace({ ...workspace, project: { goal: '', items: [] } }).then(() => onNotify(`“${workspace.name}” is now a project.`))}>
+              <button type="button" className="queue-btn small space-make-project" onClick={() => void window.api.saveWorkspace({ ...workspace, project: { goal: '', instructions: '', items: [] } }).then(() => onNotify(`“${workspace.name}” is now a project.`))}>
                 Make this a project
               </button>
             )}

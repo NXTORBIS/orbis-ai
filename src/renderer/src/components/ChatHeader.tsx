@@ -1,4 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react'
+import ChatProject from './ChatProject'
+import type { NoticeKind } from '../lib/notices'
 import { Ellipsis, HatGlasses, Pencil, Share2, Trash2 } from 'lucide-react'
 import { useDismiss } from '../lib/useDismiss'
 
@@ -11,6 +13,9 @@ interface Props {
   onRename(title: string): void
   onShare(): void
   onDelete(): void
+  /** The conversation on screen, so it can be put in a project. Null before anything has been said. */
+  conversationId: string | null
+  onNotify(text: string, kind?: NoticeKind): void
 }
 
 export default function ChatHeader(props: Props): React.JSX.Element {
@@ -112,6 +117,8 @@ export default function ChatHeader(props: Props): React.JSX.Element {
         opens it at Account.
       */}
       <div className="header-side right">
+        {/* Which project this chat is kept in -- and therefore whose instructions Orion follows while answering it. */}
+        <ChatProject conversationId={props.conversationId} onNotify={props.onNotify} />
         <button
           className={`icon-btn incognito-btn${props.incognito ? ' active' : ''}`}
           title={props.incognito ? 'Turn off incognito (Ctrl+Shift+N)' : 'Incognito chat (Ctrl+Shift+N)'}

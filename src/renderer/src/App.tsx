@@ -1470,6 +1470,8 @@ export default function App(): React.JSX.Element {
           onToggleTheme={() => void updateSettings({ theme: dark ? 'light' : 'dark' })}
         >
           <ChatHeader
+            conversationId={active?.id ?? null}
+            onNotify={notify}
             title={active?.title ?? 'New chat'}
             hasConversation={Boolean(active)}
             thinking={Boolean(active && streams[active.id])}

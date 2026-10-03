@@ -85,7 +85,8 @@ export class MemoryStore {
         origin TEXT NOT NULL,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL,
-        last_used_at INTEGER
+        last_used_at INTEGER,
+        project_id TEXT
       );
       CREATE INDEX IF NOT EXISTS memories_active ON memories (archived, pinned, updated_at);
       CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(text, content='memories', content_rowid='rowid');
@@ -100,6 +101,18 @@ export class MemoryStore {
         INSERT INTO memories_fts(rowid, text) VALUES (new.rowid, new.text);
       END;
     `)
+    /*
+     * Which project a memory belongs to, added after the table already existed.
+     *
+     * `CREATE TABLE IF NOT EXISTS` leaves an older file exactly as it is, so the column has to be added separately.
+     * Adding one that is already there is an error rather than a no-op, which is why this is wrapped: the failure
+     * means the column exists, which is the state wanted.
+     */
+    try {
+      db.exec('ALTER TABLE memories ADD COLUMN project_id TEXT')
+    } catch {
+      // Already there.
+    }
     db.prepare(`INSERT OR IGNORE INTO meta (key, value) VALUES ('memory_format', ?)`).run(String(MEMORY_FORMAT))
     this.db = db
     return db
@@ -135,7 +148,8 @@ export class MemoryStore {
       origin: (['settings', 'chat', 'suggestion', 'import'].includes(String(row.origin)) ? row.origin : 'settings') as MemoryEntry['origin'],
       createdAt: Number(row.created_at),
       updatedAt: Number(row.updated_at),
-      ...(row.last_used_at === null || row.last_used_at === undefined ? {} : { lastUsedAt: Number(row.last_used_at) })
+      ...(row.last_used_at === null || row.last_used_at === undefined ? {} : { lastUsedAt: Number(row.last_used_at) }),
+      ...(row.project_id ? { projectId: String(row.project_id) } : {})
     }
   }
 
@@ -170,7 +184,7 @@ export class MemoryStore {
    * Keeps something, because the person asked. Refused with a reason when it is secret, too long, a repeat, or when
    * memory is full — Orbis never makes room by forgetting something on its own.
    */
-  add(text: unknown, options: { category?: MemoryCategory; pinned?: boolean; origin?: MemoryEntry['origin'] } = {}): MemoryEntry {
+  add(text: unknown, options: { category?: MemoryCategory; pinned?: boolean; origin?: MemoryEntry['origin']; projectId?: string } = {}): MemoryEntry {
     if (!this.settings().enabled) throw new MemoryRefused('Memory is switched off in Settings.')
     const checked = checkMemory(text)
     if (!checked.ok) throw new MemoryRefused(checked.why)
@@ -183,14 +197,15 @@ export class MemoryStore {
     const now = this.now()
     const id = this.newId()
     const category = options.category && MEMORY_CATEGORIES.includes(options.category) ? options.category : guessCategory(checked.text)
-    db.prepare('INSERT INTO memories (id, text, category, pinned, archived, origin, created_at, updated_at) VALUES (?, ?, ?, ?, 0, ?, ?, ?)').run(
+    db.prepare('INSERT INTO memories (id, text, category, pinned, archived, origin, created_at, updated_at, project_id) VALUES (?, ?, ?, ?, 0, ?, ?, ?, ?)').run(
       id,
       checked.text,
       category,
       options.pinned ? 1 : 0,
       options.origin ?? 'settings',
       now,
-      now
+      now,
+      options.projectId ?? null
     )
     this.changed()
     return this.get(id)!
@@ -246,17 +261,31 @@ export class MemoryStore {
    * What Orion should be given for a message: pinned entries, then the few most relevant, and never archived ones.
    * Each is stamped as used, which is how the person can see what memory actually does.
    */
-  relevant(message: string): MemoryEntry[] {
+  relevant(message: string, projectId?: string): MemoryEntry[] {
     const settings = this.settings()
     if (!settings.enabled || !settings.useInChat) return []
     const db = this.open()
-    const pinned = (db.prepare('SELECT * FROM memories WHERE archived = 0 AND pinned = 1 ORDER BY updated_at DESC LIMIT ?').all(MEMORY_MAX_PINNED_IN_PROMPT) as Row[]).map((row) => this.entry(row))
+    /*
+     * Which memories this message may see.
+     *
+     * A memory with no project is the person, and travels everywhere. A memory kept inside a project is about that
+     * work, and is only given to Orion while answering inside it -- so setting up one project to work a particular
+     * way cannot quietly change the answers in every other conversation. Outside every project, only the memories
+     * that belong to no project are used.
+     */
+    const scope = projectId ? '(m.project_id IS NULL OR m.project_id = ?)' : 'm.project_id IS NULL'
+    const scopeArgs: string[] = projectId ? [projectId] : []
+    const pinned = (
+      db.prepare(`SELECT m.* FROM memories m WHERE m.archived = 0 AND m.pinned = 1 AND ${scope} ORDER BY m.updated_at DESC LIMIT ?`).all(...scopeArgs, MEMORY_MAX_PINNED_IN_PROMPT) as Row[]
+    ).map((row) => this.entry(row))
     const match = ftsQuery(message)
     const found = match
       ? (
           db
-            .prepare('SELECT m.* FROM memories_fts f JOIN memories m ON m.rowid = f.rowid WHERE memories_fts MATCH ? AND m.archived = 0 AND m.pinned = 0 ORDER BY bm25(memories_fts) LIMIT ?')
-            .all(match, MEMORY_MAX_RELEVANT_IN_PROMPT) as Row[]
+            .prepare(
+              `SELECT m.* FROM memories_fts f JOIN memories m ON m.rowid = f.rowid WHERE memories_fts MATCH ? AND m.archived = 0 AND m.pinned = 0 AND ${scope} ORDER BY bm25(memories_fts) LIMIT ?`
+            )
+            .all(match, ...scopeArgs, MEMORY_MAX_RELEVANT_IN_PROMPT) as Row[]
         ).map((row) => this.entry(row))
       : []
     const used = [...pinned, ...found]
