@@ -64,12 +64,19 @@ test('a workbook longer than a message holds is cut at the end of a row, and say
   assert.ok(read.notes.some((one) => one === `It is longer than one message holds: the last ${(400 - kept).toLocaleString('en')} rows are not attached.`), read.notes.join(' | '))
 })
 
-test('only the four file types are read this way; everything else keeps its own name', () => {
+test('the file types Orbis reads properly, and everything else keeping its own name', () => {
   assert.equal(isReadForChat('a.XLSX'), true)
   assert.equal(isReadForChat('a.docx'), true)
   assert.equal(isReadForChat('a.pdf'), true)
-  assert.equal(isReadForChat('a.csv'), false)
   assert.equal(isReadForChat('a.pptx'), true)
+  // Read properly rather than attached raw: a CSV becomes a table with its size stated and its rows cut at a row
+  // boundary, JSON becomes rows instead of nesting, and a zip's contents used not to be seen at all.
+  assert.equal(isReadForChat('a.csv'), true)
+  assert.equal(isReadForChat('a.json'), true)
+  assert.equal(isReadForChat('a.zip'), true)
+  // Plain text is already plain text; reading it this way would gain nothing.
+  assert.equal(isReadForChat('a.txt'), false)
+  assert.equal(isReadForChat('a.md'), false)
   assert.equal(isReadForChat('a.key'), false)
   assert.equal(nameToOpenAs('notes.txt', 'text/markdown'), 'notes.txt')
   assert.equal(nameToOpenAs('sales.xlsx', undefined), 'sales.xlsx')

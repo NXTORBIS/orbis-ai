@@ -2,6 +2,7 @@ import type { ChatMessage, ModelInfo, ReasoningEffort, StreamEvent } from '../sh
 import { CHAT_MODELS, modelInfo, modelLabel, providerOf } from '../shared/models.ts'
 import { PROVIDERS } from '../shared/providers.ts'
 import { AUTO_MODEL } from '../shared/modelRoute.ts'
+import { chooseContext, contextFrom } from '../shared/attachmentIndex.ts'
 import { SseParser, ThinkTagSplitter } from './sse.ts'
 
 // Overridable for local testing or another OpenAI-compatible endpoint.
@@ -402,6 +403,29 @@ export function requestBodyFor(model: string, body: Record<string, unknown>): Re
   return out
 }
 
+/** A single file up to this size is sent whole: searching it could only lose something. */
+const ATTACHMENT_WHOLE_FILE = 24_000
+/** How much of several files' text may travel with one message. Past this, the relevant parts are chosen. */
+const ATTACHMENT_BUDGET = 40_000
+
+/**
+ * The attached files, as the model should be shown them.
+ *
+ * One short file is sent whole, because searching it could only lose something and sending it costs nothing. Several
+ * files, or a long one, are searched instead: flattening them meant the later files were cut to nothing once the
+ * budget ran out, and the model had to find the relevant paragraph itself inside everything else, which is the thing
+ * it is worst at. See src/shared/attachmentIndex.ts for how the passages are chosen, why each carries the name of the
+ * file it came from, and why a file with nothing matching is named rather than silently left out.
+ */
+function attachedText(message: ChatMessage): string {
+  const files = (message.attachments ?? []).filter((a) => a.type !== 'image').map((a) => ({ name: a.name, text: a.content }))
+  if (!files.length) return ''
+  const total = files.reduce((n, one) => n + one.text.length, 0)
+  if (files.length === 1 && total <= ATTACHMENT_WHOLE_FILE) return `<file name="${files[0].name}">\n${files[0].text}\n</file>`
+  // The question is the message itself: what the person actually asked is what the passages are chosen against.
+  return contextFrom(chooseContext(message.content ?? '', files, ATTACHMENT_BUDGET))
+}
+
 export function toMessageContent(message: ChatMessage, model: ReturnType<typeof modelInfo>): string | Record<string, unknown>[] {
   if (!message.attachments?.length) return message.content
 
@@ -410,8 +434,7 @@ export function toMessageContent(message: ChatMessage, model: ReturnType<typeof 
 
   // Without images (or vision), send plain text so text-only models accept it
   if (!hasImages || !supportsVision) {
-    const textParts = message.attachments.filter(a => a.type !== 'image').map(a => `<file name="${a.name}">\n${a.content}\n</file>`)
-    const textContent = textParts.length > 0 ? textParts.join('\n\n') : ''
+    const textContent = attachedText(message)
     if (message.content) {
       return textContent ? `${textContent}\n\n${message.content}` : message.content
     }

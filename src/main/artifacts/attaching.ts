@@ -18,8 +18,15 @@ import { importFile, type ScannedOffer } from './importing.ts'
  * message can hold is cut at the end of a row or a line, with how much was left out.
  */
 
-/** The file types read this way. Anything else is text and is attached as it is. */
-export const READ_FOR_CHAT: readonly string[] = Object.freeze(['.xlsx', '.docx', '.pdf', '.pptx'])
+/**
+ * The file types read this way. Anything else is text and is attached as it is.
+ *
+ * The four office formats were here because they are unreadable as raw bytes. The rest were added because reading
+ * them properly is better than attaching them raw even though raw would "work": a spreadsheet-shaped CSV read as a
+ * table gets its row and column counts stated and its rows cut at a row boundary rather than mid-line; JSON becomes
+ * rows instead of nesting the model has to walk; and a zip's contents were simply never seen at all.
+ */
+export const READ_FOR_CHAT: readonly string[] = Object.freeze(['.xlsx', '.docx', '.pdf', '.pptx', '.csv', '.tsv', '.json', '.ndjson', '.zip'])
 
 export const isReadForChat = (name: string): boolean => READ_FOR_CHAT.includes(extname(name).toLowerCase())
 
@@ -32,7 +39,31 @@ export interface ReadForChat {
   notes: string[]
 }
 
-const WHAT: Readonly<Record<string, string>> = Object.freeze({ '.xlsx': 'Excel workbook', '.docx': 'Word document', '.pdf': 'PDF', '.pptx': 'PowerPoint deck' })
+const WHAT: Readonly<Record<string, string>> = Object.freeze({
+  '.xlsx': 'Excel workbook',
+  '.docx': 'Word document',
+  '.pdf': 'PDF',
+  '.pptx': 'PowerPoint deck',
+  '.csv': 'CSV file',
+  '.tsv': 'TSV file',
+  '.json': 'JSON file',
+  '.ndjson': 'NDJSON file',
+  '.zip': 'zip archive'
+})
+
+/**
+ * Which formats have a first-bytes signature worth checking, and what it is.
+ *
+ * Only the ones that really have one. A CSV is text and has no signature, so demanding one would refuse every real
+ * CSV -- and a check that cannot fail honestly is worse than no check, because it looks like one.
+ */
+const SIGNATURE: Readonly<Record<string, (b: Uint8Array) => boolean>> = Object.freeze({
+  '.xlsx': (b) => b.length > 4 && b[0] === 0x50 && b[1] === 0x4b,
+  '.docx': (b) => b.length > 4 && b[0] === 0x50 && b[1] === 0x4b,
+  '.pptx': (b) => b.length > 4 && b[0] === 0x50 && b[1] === 0x4b,
+  '.zip': (b) => b.length > 4 && b[0] === 0x50 && b[1] === 0x4b,
+  '.pdf': (b) => b.length > 5 && b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46 && b[4] === 0x2d
+})
 
 /** The text cut to a length at the end of a line, and how many lines did not fit. */
 function cutAtLine(text: string, limit: number): { text: string; left: number } {
@@ -53,9 +84,8 @@ export async function readForChat(
   // The name says what it is; the first bytes have to agree. A file that is only called a workbook would otherwise
   // be read as whatever text its bytes happen to spell.
   const ext = extname(name).toLowerCase()
-  const zipped = bytes.length > 4 && bytes[0] === 0x50 && bytes[1] === 0x4b
-  const pdf = bytes.length > 5 && bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 && bytes[3] === 0x46 && bytes[4] === 0x2d
-  if (ext === '.pdf' ? !pdf : !zipped) return { error: 'parse', message: `That file is named as a ${what} but does not open as one.` }
+  const signature = SIGNATURE[ext]
+  if (signature && !signature(bytes)) return { error: 'parse', message: `That file is named as a ${what} but does not open as one.` }
   /*
    * No consent is given here, deliberately.
    *
