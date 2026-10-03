@@ -3,6 +3,7 @@ import { Gamepad2, Globe, Info, Lock, Mic, Palette, Search, Sparkles, User, X } 
 import type { LucideIcon } from 'lucide-react'
 import type { DefaultBrowserState, Settings, SettingsUpdate, Theme } from '../../../shared/types'
 import { MODELS } from '../../../shared/models'
+import ResearchSourceSettings from './ResearchSourceSettings'
 import {
   cleanSectionId,
   findSections,
@@ -354,6 +355,14 @@ export default function SettingsModal({ settings, onUpdate, onClose, section }: 
             {active === 'browsing' && (
               <>
                 <DefaultBrowserSetting />
+
+                {/* Which sources research uses. A preference orders what was found; blocking is the only absolute. */}
+                <section className="setting">
+                  <div className="setting-label">
+                    <h3>Sources research uses</h3>
+                  </div>
+                  <ResearchSourceSettings settings={settings} onChange={(update) => void onUpdate(update)} />
+                </section>
 
                 <section className="setting row">
                   <div className="setting-label">

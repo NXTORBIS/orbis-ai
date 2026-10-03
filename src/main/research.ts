@@ -3,6 +3,7 @@ import { bus } from './eventBus.ts'
 import { normalizeUrl } from '../shared/research.ts'
 import { disagreementNote, disagreements, dropRepeats } from '../shared/researchCheck.ts'
 import { planQueries, rankSources } from '../shared/researchPlan.ts'
+import { allowed, DEFAULT_SOURCE_PREFERENCES, preferenceRank, type SourcePreferences } from '../shared/researchSources.ts'
 
 export type FetchFn = (url: string, init?: RequestInit) => Promise<Response>
 export type Recency = Research['recency']
@@ -241,6 +242,8 @@ export interface ResearchOptions {
   topic?: string
   /** Whether this question leans on what came before it. */
   followUp?: boolean
+  /** Which kinds of source to lean towards, and which sites never to read. */
+  prefer?: SourcePreferences
   recency: Recency
   fetchFn: FetchFn
   signal?: AbortSignal
@@ -284,6 +287,10 @@ export async function runResearch(o: ResearchOptions): Promise<Research> {
   if (asked && queries.length < 3 && !queries.some((q) => same(q) === same(asked))) queries.push(asked)
   const research: Research = { id: crypto.randomUUID(), question: o.question.trim().slice(0, 500), queries, recency: o.recency, retrievedAt: Date.now(), sources: [] }
 
+  const prefs = o.prefer ?? DEFAULT_SOURCE_PREFERENCES
+  /** Pages a blocked site would have supplied. Counted so it can be said rather than silently done. */
+  let blocked = 0
+
   o.onStatus?.(`Searching the web for “${queries[0]}”…`)
   const searches = await Promise.allSettled(queries.map((q) => searchWeb(q, o.recency, o.fetchFn, o.signal)))
   const seen = new Set<string>()
@@ -291,9 +298,16 @@ export async function runResearch(o: ResearchOptions): Promise<Research> {
   const candidates: SearchHit[] = []
   // The results that best match the question are read first, before the per-site limit applies.
   const words = keyWords([o.question, ...queries])
+  /*
+   * How well a page answers comes first; what kind of source it is only breaks the tie.
+   *
+   * That order matters: preferring official sources must not put a documentation page that barely mentions the
+   * subject above the page that actually answers the question. A preference decides between pages that are otherwise
+   * equally good, which is the only honest thing a preference can do.
+   */
   const ranked = interleave(searches.map((s) => (s.status === 'fulfilled' ? s.value : [])))
-    .map((hit, index) => ({ hit, index, score: relevance(hit, words) }))
-    .sort((a, b) => b.score - a.score || a.index - b.index)
+    .map((hit, index) => ({ hit, index, score: relevance(hit, words), prefer: preferenceRank(hit.url, prefs) }))
+    .sort((a, b) => b.score - a.score || a.prefer - b.prefer || a.index - b.index)
     .map((entry) => entry.hit)
   for (const hit of ranked) {
     let host: string
@@ -303,6 +317,12 @@ export async function runResearch(o: ResearchOptions): Promise<Research> {
       continue
     }
     const key = normalizeUrl(hit.url)
+    // A blocked site is not read at all, not even to rank it. The count travels with the research so the answer can
+    // say results were left out rather than silently returning fewer.
+    if (!allowed(hit.url, prefs)) {
+      blocked++
+      continue
+    }
     if (seen.has(key) || SEARCH_ENGINES.test(host) || NOT_A_PAGE.test(hit.url) || (perSite.get(host) ?? 0) >= 2) continue
     seen.add(key)
     perSite.set(host, (perSite.get(host) ?? 0) + 1)
@@ -406,7 +426,8 @@ export async function runResearch(o: ResearchOptions): Promise<Research> {
   const found = disagreements(research.sources.filter((one) => one.read).map((one) => ({ n: one.n, text: one.excerpt })))
   if (found.length) research.conflicts = found.map((one) => ({ about: one.about, readings: one.readings.map((r) => ({ n: r.n, said: r.said })) }))
 
-  if (!research.sources.length) research.problem = "none of the pages found could be read"
+  if (blocked > 0) research.leftOut = blocked
+  if (!research.sources.length) research.problem = blocked > 0 ? `the only pages found were on sites you have blocked (${blocked})` : "none of the pages found could be read"
   return done(research)
 }
 

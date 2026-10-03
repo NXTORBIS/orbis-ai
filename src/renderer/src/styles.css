@@ -18666,3 +18666,18 @@ html[data-motion='reduced'] .tool-btn.recording {
   text-transform: uppercase;
   color: var(--faint);
 }
+
+/* A field with a button beside it, inside a settings panel. */
+.setting-row-inline { display: flex; gap: 6px; margin: 6px 0; }
+.setting-row-inline input { flex: 1; min-width: 0; }
+.blocked-list { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.blocked-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  font-size: 12.5px;
+}

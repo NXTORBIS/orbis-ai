@@ -1,7 +1,9 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { AlertTriangle, ChevronDown, Globe, PanelTop } from 'lucide-react'
 import type { Research, ResearchSource } from '../../../shared/types'
 import { citedNumbers } from '../../../shared/research'
+import { leftOutNote } from '../../../shared/researchSources'
+import { provenanceNote, traceClaims, unsupported } from '../../../shared/researchProvenance'
 import { openInOrbisBrowser } from '../lib/openInBrowser'
 
 interface Props {
@@ -27,6 +29,15 @@ export default function ResearchSources({ research, content, streaming }: Props)
   const cited = citedNumbers(content, research.sources)
   const citedSources = cited.map((n) => research.sources.find((s) => s.n === n)).filter((s): s is ResearchSource => Boolean(s))
   const others = research.sources.filter((s) => !cited.includes(s.n))
+  /*
+   * Where in each source a claim actually came from.
+   *
+   * Worked out from the answer and the sources once the answer has finished, so it costs nothing while it streams.
+   * What it is really for is the other result: a claim whose source does not appear to say it. A number next to a
+   * sentence looks like proof whether or not the page says anything of the kind, and until now nothing checked.
+   */
+  const traced = useMemo(() => (streaming ? [] : traceClaims(content, research.sources)), [streaming, content, research.sources])
+  const shaky = useMemo(() => unsupported(traced), [traced])
   // Earlier research that this reply didn't use isn't shown again.
   if (research.reused && !streaming && !citedSources.length) return null
 
@@ -76,6 +87,29 @@ export default function ResearchSources({ research, content, streaming }: Props)
           <SourceRow key={source.n} source={source} />
         ))}
       </ol>
+      {/*
+        * Claims whose source does not appear to say them.
+        *
+        * The wording is careful: Orbis read part of a page, so not finding something has two explanations, and
+        * claiming the source is wrong would go beyond what was established.
+        */}
+      {!streaming && shaky.length > 0 && (
+        <div className="research-conflict" role="note">
+          <AlertTriangle size={13} aria-hidden="true" />
+          <div>
+            <b>{provenanceNote(traced)}</b>
+            <ul>
+              {shaky.slice(0, 3).map((one) => (
+                <li key={`${one.n}-${one.claim.slice(0, 24)}`}>
+                  <span className="research-about">[{one.n}]</span> {one.claim.length > 140 ? `${one.claim.slice(0, 137)}…` : one.claim}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+      {/* Sites you blocked. Said, so fewer results never looks like a thinner web. */}
+      {!streaming && (research.leftOut ?? 0) > 0 && <p className="research-repeats view-muted">{leftOutNote(research.leftOut!)}</p>}
       {/* Pages that turned out to be the same page at another address. Said, so "six sources" never means one page six times. */}
       {!streaming && (research.repeats?.length ?? 0) > 0 && (
         <p className="research-repeats view-muted">

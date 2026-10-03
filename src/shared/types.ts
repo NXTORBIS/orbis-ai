@@ -1,3 +1,4 @@
+import type { SourcePreferences } from './researchSources'
 import type { EffectPolicy, EffectRule } from './effectPolicy'
 import type { SideEffect } from './browserControl'
 import type { ConversationBranch } from './conversationBranch'
@@ -232,6 +233,8 @@ export interface Research {
    * Reported, never resolved: Orbis has no way to know which is right.
    */
   conflicts?: { about: string; readings: { n: number; said: string }[] }[]
+  /** Pages a site you blocked would have supplied. Said rather than silently dropped. */
+  leftOut?: number
 }
 
 /**
@@ -342,6 +345,13 @@ export interface Settings {
   searchSuggestions: boolean
   /** The address bar suggests from local history, searches, bookmarks and research, and learns from picks. */
   personalizedSuggestions: boolean
+  /**
+   * Which kinds of source research leans towards, and which sites it never reads.
+   *
+   * A preference decides the order among pages that were really found; it can never produce one. Blocking is
+   * absolute, and what it left out is said rather than quietly returning less.
+   */
+  researchSources: SourcePreferences
   /** Orbis opens its browser (at the saved size) as soon as it starts, instead of the chat. */
   openBrowserOnLaunch: boolean
   /**

@@ -3,6 +3,7 @@ import { nullPlatform } from './platform.ts'
 import type { SecretStorePort } from './platform'
 import { join } from 'node:path'
 import { readBranches } from '../shared/conversationBranch'
+import { DEFAULT_SOURCE_PREFERENCES, readSourcePreferences } from '../shared/researchSources'
 import type { Conversation, ReasoningEffort, Settings, SettingsUpdate, Theme } from '../shared/types'
 import { CHAT_MODELS, DEFAULT_MODEL, currentModelId } from '../shared/models.ts'
 import { DEFAULT_PROFILE_ID, dataDirFor } from '../shared/profiles.ts'
@@ -26,6 +27,7 @@ const DEFAULTS: Omit<Settings, 'hasApiKey'> = {
   welcomeCompleted: false,
   introVersion: 0,
   searchSuggestions: true,
+  researchSources: DEFAULT_SOURCE_PREFERENCES,
   personalizedSuggestions: true,
   openBrowserOnLaunch: false,
   keepSchedulesRunning: false,
@@ -65,7 +67,9 @@ export class Store {
 
   async getSettings(): Promise<Settings> {
     const { apiKey, apiKeyEncrypted: _, ...rest } = await this.loadSettings()
-    return { ...rest, hasApiKey: Boolean(apiKey) }
+    // Checked on the way out as well as in, so a file edited by hand or written by an older version still produces a
+    // setting research can use rather than one it has to guess about.
+    return { ...rest, researchSources: readSourcePreferences(rest.researchSources), hasApiKey: Boolean(apiKey) }
   }
 
   async updateSettings(update: SettingsUpdate): Promise<Settings> {
@@ -85,6 +89,8 @@ export class Store {
     if (typeof update.introVersion === 'number' && Number.isFinite(update.introVersion))
       next.introVersion = Math.max(0, Math.floor(update.introVersion))
     if (typeof update.searchSuggestions === 'boolean') next.searchSuggestions = update.searchSuggestions
+    // Read through the checker rather than taken as given: a damaged setting must not widen what research reads.
+    if (update.researchSources !== undefined) next.researchSources = readSourcePreferences(update.researchSources)
     if (typeof update.personalizedSuggestions === 'boolean') next.personalizedSuggestions = update.personalizedSuggestions
     if (typeof update.openBrowserOnLaunch === 'boolean') next.openBrowserOnLaunch = update.openBrowserOnLaunch
     if (typeof update.keepSchedulesRunning === 'boolean') next.keepSchedulesRunning = update.keepSchedulesRunning

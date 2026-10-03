@@ -1239,6 +1239,8 @@ ${block}`
           research = await runResearch({
             question: last.content,
             queries,
+            // Which kinds of source to lean towards, and which sites never to read.
+            prefer: settings.researchSources,
             recency: plan?.research?.recency ?? 'any',
             fetchFn: (url, init) => net.fetch(url, init),
             signal: controller.signal,
