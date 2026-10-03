@@ -21,7 +21,7 @@ import {
   SquarePen,
   Trash2,
   X,
-  FilePlus2 } from 'lucide-react'
+  FilePlus2, Archive, ArchiveRestore } from 'lucide-react'
 import type { Conversation } from '../../../shared/types'
 import type { StreamState } from '../App'
 import { groupConversations } from '../lib/utils'
@@ -49,6 +49,8 @@ interface Props {
   onSelect(id: string): void
   onRename(id: string, title: string): void
   onDelete(id: string): void
+  /** Out of the list, still there. The alternative to deleting a chat you may want back. */
+  onArchive(id: string, archived: boolean): void
   onTogglePin(id: string): void
   /**
    * Opens Settings, optionally at a named section.
@@ -143,14 +145,17 @@ export default function Sidebar(props: Props): React.JSX.Element {
     if (props.searchToken && searching) searchRef.current?.focus()
   }, [props.searchToken, searching])
 
-  const { pinned, groups } = useMemo(() => {
+  const { pinned, groups, archived } = useMemo(() => {
     const q = query.trim().toLowerCase()
     const sorted = [...conversations].sort((a, b) => b.updatedAt - a.updatedAt)
     // Image messages are skipped: scanning their base64 would be slow and never match.
     const matches = q
       ? sorted.filter((c) => c.title.toLowerCase().includes(q) || c.messages.some((m) => !m.content.includes('data:image/') && m.content.toLowerCase().includes(q)))
       : sorted
-    return { pinned: matches.filter((c) => c.pinned), groups: groupConversations(matches.filter((c) => !c.pinned)) }
+    // Archived chats are out of the way, not gone: they keep their own section and are still searchable from it.
+    const archived = matches.filter((c) => c.archived)
+    const live = matches.filter((c) => !c.archived)
+    return { pinned: live.filter((c) => c.pinned), groups: groupConversations(live.filter((c) => !c.pinned)), archived }
   }, [conversations, query])
 
   const closeSearch = (): void => {
@@ -231,6 +236,15 @@ export default function Sidebar(props: Props): React.JSX.Element {
           </button>
           <button type="button" className="sb-row-action" aria-label={`Rename ${c.title}`} title="Rename" onClick={() => setEditingId(c.id)}>
             <Pencil size={14} />
+          </button>
+          <button
+            type="button"
+            className="sb-row-action"
+            aria-label={`${c.archived ? 'Bring back' : 'Archive'} ${c.title}`}
+            title={c.archived ? 'Bring back' : 'Archive'}
+            onClick={() => props.onArchive(c.id, !c.archived)}
+          >
+            {c.archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
           </button>
           <button type="button" className="sb-row-action danger" aria-label={`Delete ${c.title}`} title="Delete" onClick={() => setConfirmId(c.id)}>
             <Trash2 size={14} />
@@ -347,6 +361,7 @@ export default function Sidebar(props: Props): React.JSX.Element {
               <p className="sb-empty">{query.trim() ? 'No matching chats' : pinned.length ? 'Everything here is pinned' : 'Your chats will appear here'}</p>
             )
           )}
+          {archived.length > 0 && section('archived', 'Archived', archived.map(row))}
         </div>
       )}
 

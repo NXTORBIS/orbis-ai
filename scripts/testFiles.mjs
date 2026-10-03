@@ -391,6 +391,8 @@ export const TEST_FILES = [
   'src/main/artifacts/wiring.test.ts',
   'src/shared/tokens.test.ts',
   'src/shared/selectionText.test.ts',
+  'src/shared/conversationBranch.test.ts',
+  'src/shared/notificationRoute.test.ts',
   'src/shared/notifications.test.ts',
   'src/main/notifications/manager.test.ts',
   'src/main/chromium/pageLoading.test.ts',

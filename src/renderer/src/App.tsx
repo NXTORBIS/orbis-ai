@@ -18,6 +18,8 @@ import HudBackground from './components/HudBackground'
 import Sidebar from './components/Sidebar'
 import type { FeatureId } from './components/Sidebar'
 import { DEFAULT_SETTINGS_SECTION, type SettingsSectionId } from '../../shared/settingsSections'
+import { destinationFor } from '../../shared/notificationRoute'
+import { dropBranch, parkTail, switchToBranch } from '../../shared/conversationBranch'
 // Orbis's own screens. Each was finished and unreachable: nothing imported them, so no amount of looking would have
 // found them. They are loaded lazily because only one is ever open and most sessions open none.
 // Lazy like the rest: the chart and its indicators are a large bundle for a screen most sessions never open.
@@ -184,6 +186,49 @@ export default function App(): React.JSX.Element {
       void window.api.chromiumOpen('', { newTab: false })
     } else openChromium('')
   }, [openChromium])
+  /**
+   * Pressing a notification.
+   *
+   * Orbis brings the window forward and then has to arrive somewhere. Until now it arrived nowhere: the message
+   * saying which notification had been pressed had no listener at all, so the window came up on whatever screen
+   * happened to be open and the button looked like it had worked.
+   *
+   * Where each one goes is decided in one table, from the event name and the ids, so nothing a notification says can
+   * steer the window; and an event with no real screen behind it says so rather than pretending.
+   */
+  useEffect(() => {
+    return window.api.onNotificationOpen((what) => {
+      const where = destinationFor(what.event, what.subject)
+      switch (where.kind) {
+        case 'feature':
+          setImagesOpen(false)
+          setSettingsAt(null)
+          setFeature(where.id as FeatureId)
+          if (where.id === 'create' && where.focus) setCreateOpenAt({ artifactId: where.focus, token: Date.now() })
+          return
+        case 'settings':
+          setSettingsAt(where.section)
+          return
+        case 'chat':
+          setImagesOpen(false)
+          setSettingsAt(null)
+          setFeature(null)
+          if (where.conversationId) setActiveId(where.conversationId)
+          return
+        case 'browser':
+          setSettingsAt(null)
+          openBrowser()
+          return
+        case 'activity':
+          setActivityOpen(true)
+          return
+        default:
+          // Nothing to go to. Saying so is the point: the alternative is a window that comes forward and lies.
+          notifyRef.current('That has already finished; there is nothing left to open.', 'info')
+      }
+    })
+  }, [openBrowser])
+
   useEffect(() => {
     const offShow = window.api.onChromiumShow(() => {
       setBrowserOpen(true)
@@ -769,6 +814,12 @@ export default function App(): React.JSX.Element {
     if (stream) void window.api.abortChat(stream.requestId)
   }, [])
 
+  /**
+   * Asking for a different answer.
+   *
+   * The answer being replaced is parked rather than dropped, so a worse second try is one press away from the first
+   * one again. Nothing here throws anything away.
+   */
   const regenerate = useCallback(
     (conversationId: string, messageId: string) => {
       const conversation = conversationsRef.current.find((c) => c.id === conversationId)
@@ -776,9 +827,11 @@ export default function App(): React.JSX.Element {
       const index = conversation.messages.findIndex((m) => m.id === messageId)
       const history = conversation.messages.slice(0, index)
       if (index < 1 || history[history.length - 1].role !== 'user') return
+      const parked = parkTail(conversation, index, Date.now(), newId())
+      updateConversation(conversationId, (c) => ({ ...c, messages: parked.messages, branches: parked.branches, updatedAt: Date.now() }))
       startGeneration(conversation, history)
     },
-    [startGeneration]
+    [startGeneration, updateConversation]
   )
 
   const editMessage = useCallback(
@@ -789,7 +842,10 @@ export default function App(): React.JSX.Element {
       const index = conversation.messages.findIndex((m) => m.id === messageId)
       if (index < 0) return
       const history = [...conversation.messages.slice(0, index), { ...conversation.messages[index], content, createdAt: Date.now() }]
-      updateConversation(conversationId, (c) => ({ ...c, messages: history, updatedAt: Date.now() }))
+      // What followed the message being changed is parked, not deleted: the old wording and everything it led to can
+      // be returned to. This used to cut the conversation at this point and lose the rest for good.
+      const parked = parkTail(conversation, index, Date.now(), newId())
+      updateConversation(conversationId, (c) => ({ ...c, messages: history, branches: parked.branches, updatedAt: Date.now() }))
       startGeneration(conversation, history)
     },
     [startGeneration, updateConversation]
@@ -805,6 +861,38 @@ export default function App(): React.JSX.Element {
       startGeneration(conversation, conversation.messages.slice(0, index + 1))
     },
     [startGeneration, updateConversation]
+  )
+
+  /** Goes back to an answer that was moved away from, parking the one being left in its place. */
+  const useBranch = useCallback(
+    (conversationId: string, branchId: string) => {
+      const conversation = conversationsRef.current.find((c) => c.id === conversationId)
+      if (!conversation || streamsRef.current[conversationId]) return
+      const moved = switchToBranch(conversation, branchId, Date.now(), newId())
+      updateConversation(conversationId, (c) => ({ ...c, messages: moved.messages, branches: moved.branches, updatedAt: Date.now() }))
+      persist(conversationId)
+    },
+    [persist, updateConversation]
+  )
+
+  /** Throws one away on purpose. The only move here that loses anything, and it is only ever asked for. */
+  const forgetBranch = useCallback(
+    (conversationId: string, branchId: string) => {
+      const conversation = conversationsRef.current.find((c) => c.id === conversationId)
+      if (!conversation) return
+      updateConversation(conversationId, (c) => ({ ...c, branches: dropBranch(conversation, branchId).branches }))
+      persist(conversationId)
+    },
+    [persist, updateConversation]
+  )
+
+  /** Out of the list, still there. Archiving is the alternative to deleting something you may want back. */
+  const archiveConversation = useCallback(
+    (conversationId: string, archived: boolean) => {
+      updateConversation(conversationId, (c) => ({ ...c, archived, updatedAt: Date.now() }))
+      persist(conversationId)
+    },
+    [persist, updateConversation]
   )
 
   const setFeedback = useCallback(
@@ -1396,6 +1484,7 @@ export default function App(): React.JSX.Element {
 
       <div className="hud-body">
         <Sidebar
+          onArchive={archiveConversation}
           collapsed={sidebarCollapsed}
           conversations={savedConversations}
           activeId={activeId}
@@ -1453,6 +1542,8 @@ export default function App(): React.JSX.Element {
             onImprovePrompt={improvePrompt}
             onNewChat={newChat}
             onSearch={openSearch}
+            onUseBranch={(branchId) => active && useBranch(active.id, branchId)}
+            onForgetBranch={(branchId) => active && forgetBranch(active.id, branchId)}
           />
           {imagesOpen && (
             <ImagesView images={galleryImages} onClose={() => setImagesOpen(false)} onOpenChat={selectChat} onEdit={editGalleryImage} onNotify={notify} />

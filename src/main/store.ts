@@ -2,6 +2,7 @@ import { promises as fs } from 'node:fs'
 import { nullPlatform } from './platform.ts'
 import type { SecretStorePort } from './platform'
 import { join } from 'node:path'
+import { readBranches } from '../shared/conversationBranch'
 import type { Conversation, ReasoningEffort, Settings, SettingsUpdate, Theme } from '../shared/types'
 import { CHAT_MODELS, DEFAULT_MODEL, currentModelId } from '../shared/models.ts'
 import { DEFAULT_PROFILE_ID, dataDirFor } from '../shared/profiles.ts'
@@ -129,11 +130,13 @@ export class Store {
     const conversations = await Promise.all(
       files
         .filter((f) => f.endsWith('.json'))
-        .map(async (f) => {
+        .map(async (f): Promise<Conversation | null> => {
           try {
             const c = JSON.parse(await fs.readFile(join(this.conversationsDir, f), 'utf8')) as Conversation
             // Older chats may point at a model Groq retired (moved to its replacement) or that can't chat.
-            return { ...c, model: currentModelId(c.model) }
+            // Parked answers are checked on the way in: a damaged one is dropped rather than loaded as something the
+            // conversation could be switched to and then found to be empty.
+            return { ...c, model: currentModelId(c.model), branches: readBranches(c.branches) }
           } catch {
             return null
           }

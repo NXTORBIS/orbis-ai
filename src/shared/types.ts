@@ -1,3 +1,4 @@
+import type { ConversationBranch } from './conversationBranch'
 import type { SkillEdits, SkillMatch, SkillPreview, SkillSettings, SkillView } from './skills'
 import type { MemoryCategory, MemoryEntry, MemorySettings } from './memory'
 import type { OrionSearchSession } from './orionSearch'
@@ -284,7 +285,16 @@ export interface Conversation {
   incognito?: boolean
   /** Shown in the sidebar's Pinned section. */
   pinned?: boolean
+  /** Out of the main list, still there. Kept rather than deleted, so nothing is lost to tidying up. */
+  archived?: boolean
   messages: ChatMessage[]
+  /**
+   * Answers this conversation has had and moved away from.
+   *
+   * Editing a message or asking for a different answer parks what was there rather than destroying it. See
+   * src/shared/conversationBranch.ts -- the rules, and why `messages` stayed a flat list.
+   */
+  branches?: ConversationBranch[]
   createdAt: number
   updatedAt: number
 }

@@ -5,6 +5,7 @@ import type { NoticeKind, StreamState } from '../App'
 import type { ChatQueue } from '../lib/messageQueue'
 import Composer from './Composer'
 import MemoryOffer from './MemoryOffer'
+import OtherAnswers from './OtherAnswers'
 import ChatRail from './ChatRail'
 import Greeting from './Greeting'
 import MessageItem from './MessageItem'
@@ -49,6 +50,9 @@ interface Props {
   onImprovePrompt(text: string): Promise<string | null>
   onNewChat?(): void
   onSearch?(): void
+  /** Going back to an answer this conversation moved away from, and throwing one away. */
+  onUseBranch(branchId: string): void
+  onForgetBranch(branchId: string): void
 }
 
 const dayKey = (ts: number): string => new Date(ts).toDateString()
@@ -353,6 +357,7 @@ export default function ChatView(props: Props): React.JSX.Element {
    */
   const composer = (
     <>
+      <OtherAnswers conversation={props.conversation} onUse={props.onUseBranch} onForget={props.onForgetBranch} />
       <MemoryOffer message={lastUserMessage} onNotify={props.onNotify} />
       <Composer
       streaming={Boolean(stream)}
