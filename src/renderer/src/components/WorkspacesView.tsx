@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { CHAT_MODELS, modelLabel } from '../../../shared/models'
+import { AUTO_MODEL } from '../../../shared/modelRoute'
 import { Check, Copy, FolderOpen, Layers, Plus, RefreshCw, Save, Trash2, X } from 'lucide-react'
 import type { Workspace, WorkspaceSummary } from '../../../shared/workspaces'
 import { WORKSPACE_COLORS } from '../../../shared/workspaces'
@@ -135,12 +137,42 @@ export default function WorkspacesView({ onClose, onNotify }: { onClose(): void;
                   />
                   <span className="view-muted small">Followed in this project only. Chats you put in it are answered this way.</span>
                 </label>
+                <label>
+                  <span className="view-muted">How answers should come out</span>
+                  <input
+                    defaultValue={workspace.project.outputFormat}
+                    maxLength={400}
+                    placeholder="A table. Bullet points, no preamble. Code only."
+                    aria-label={`How answers should come out in ${workspace.name}`}
+                    onBlur={(e) =>
+                      e.target.value.trim() !== workspace.project?.outputFormat &&
+                      void window.api.saveWorkspace({ ...workspace, project: { ...workspace.project!, outputFormat: e.target.value } })
+                    }
+                  />
+                </label>
+                {/* The model this project answers with. Empty means whatever the person is using, which is the default. */}
+                <label>
+                  <span className="view-muted">Answer with</span>
+                  <select
+                    defaultValue={workspace.project.model}
+                    aria-label={`Model used in ${workspace.name}`}
+                    onChange={(e) => void window.api.saveWorkspace({ ...workspace, project: { ...workspace.project!, model: e.target.value } })}
+                  >
+                    <option value="">Whatever I am using</option>
+                    <option value={AUTO_MODEL}>{modelLabel(AUTO_MODEL)}</option>
+                    {CHAT_MODELS.filter((one) => one.id !== AUTO_MODEL).map((one) => (
+                      <option key={one.id} value={one.id}>
+                        {one.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <p className="view-muted">
                   {workspace.project.items.length} {workspace.project.items.length === 1 ? 'item' : 'items'} in this project · add research, notes, tasks and more from Galaxy
                 </p>
               </div>
             ) : (
-              <button type="button" className="queue-btn small space-make-project" onClick={() => void window.api.saveWorkspace({ ...workspace, project: { goal: '', instructions: '', items: [] } }).then(() => onNotify(`“${workspace.name}” is now a project.`))}>
+              <button type="button" className="queue-btn small space-make-project" onClick={() => void window.api.saveWorkspace({ ...workspace, project: { goal: '', instructions: '', model: '', outputFormat: '', items: [] } }).then(() => onNotify(`“${workspace.name}” is now a project.`))}>
                 Make this a project
               </button>
             )}

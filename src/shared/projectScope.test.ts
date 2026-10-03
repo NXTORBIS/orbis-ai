@@ -12,7 +12,7 @@ import { conversationRef, newWorkspace, normalizeWorkspace, projectBriefing, pro
 
 const project = (name: string, patch: Partial<NonNullable<Workspace['project']>> = {}): Workspace => ({
   ...newWorkspace({ id: name, name }),
-  project: { goal: '', instructions: '', items: [], ...patch }
+  project: { goal: '', instructions: '', model: '', outputFormat: '', items: [], ...patch }
 })
 
 test('a project can hold a conversation, which it could not before', () => {
@@ -38,24 +38,24 @@ test('taking a chat out of a project really takes it out', () => {
 })
 
 test('a project with nothing to say says nothing', () => {
-  assert.equal(projectBriefing({ goal: '', instructions: '', items: [] }, 'Empty'), null)
+  assert.equal(projectBriefing({ goal: '', instructions: '', model: '', outputFormat: '', items: [] }, 'Empty'), null)
 })
 
 test('what a project is for is given as information, and marked as information', () => {
-  const said = projectBriefing({ goal: 'compare three laptops', instructions: '', items: [] }, 'Laptops', ['A review', 'A price list'])
+  const said = projectBriefing({ goal: 'compare three laptops', instructions: '', model: '', outputFormat: '', items: [] }, 'Laptops', ['A review', 'A price list'])
   assert.ok(said?.includes('compare three laptops'))
   assert.ok(said?.includes('rather than instructions'), said ?? '')
 })
 
 test('how to work in it is given as instructions, because the person typed them', () => {
-  const said = projectBriefing({ goal: '', instructions: 'Use SI units.', items: [] }, 'Physics')
+  const said = projectBriefing({ goal: '', instructions: 'Use SI units.', model: '', outputFormat: '', items: [] }, 'Physics')
   assert.ok(said?.includes('Use SI units.'))
   assert.ok(said?.includes('asked for by the person themselves'), said ?? '')
 })
 
 test('item titles are capped, so a large project cannot become most of what Orion is told', () => {
   const titles = Array.from({ length: 90 }, (_, i) => `thing ${i}`)
-  const said = projectBriefing({ goal: 'x', instructions: '', items: [] }, 'Big', titles)!
+  const said = projectBriefing({ goal: 'x', instructions: '', model: '', outputFormat: '', items: [] }, 'Big', titles)!
   assert.ok(said.includes('thing 39'))
   assert.ok(!said.includes('thing 40'), 'the list stops at forty')
 })
@@ -71,4 +71,19 @@ test('a project saved before instructions existed reads as having none, not as b
   const read = normalizeWorkspace({ id: 'a', name: 'A', project: { goal: 'old', items: [{ ref: 'note:1', addedAt: 1 }] } })
   assert.equal(read!.project?.instructions, '')
   assert.equal(read!.project?.items.length, 1)
+})
+
+test('a project may answer with its own model, and an empty one means no opinion', () => {
+  const read = normalizeWorkspace({ id: 'a', name: 'A', project: { goal: '', instructions: '', model: ' openai/gpt-oss-120b ', outputFormat: '  a table  ', items: [] } })
+  assert.equal(read!.project?.model, 'openai/gpt-oss-120b')
+  assert.equal(read!.project?.outputFormat, 'a table')
+  const none = normalizeWorkspace({ id: 'b', name: 'B', project: { goal: '', items: [] } })
+  assert.equal(none!.project?.model, '')
+  assert.equal(none!.project?.outputFormat, '')
+})
+
+test('how answers should come out is given as an instruction, because the person typed it', () => {
+  const said = projectBriefing({ goal: '', instructions: '', model: '', outputFormat: 'Bullet points, no preamble.', items: [] }, 'Notes')!
+  assert.ok(said.includes('Bullet points, no preamble.'))
+  assert.ok(said.includes('asked for by the person themselves'), said)
 })

@@ -18,9 +18,9 @@ test('a workspace becomes a project by having a goal and items, and keeps only v
 
 test('a message is about a project only when it names it whole', () => {
   const list = [
-    { id: 'p1', name: 'Orbis', project: { goal: '', instructions: '', items: [] } },
-    { id: 'p2', name: 'Kitchen renovation', project: { goal: '', instructions: '', items: [] } },
-    { id: 'p3', name: 'Art', project: { goal: '', instructions: '', items: [] } },
+    { id: 'p1', name: 'Orbis', project: { goal: '', instructions: '', model: '', outputFormat: '', items: [] } },
+    { id: 'p2', name: 'Kitchen renovation', project: { goal: '', instructions: '', model: '', outputFormat: '', items: [] } },
+    { id: 'p3', name: 'Art', project: { goal: '', instructions: '', model: '', outputFormat: '', items: [] } },
     { id: 'w1', name: 'Reading', project: undefined }
   ]
   assert.deepEqual(projectsMentioned('Continue my Orbis project', list), ['p1'])

@@ -35,6 +35,21 @@ export interface ProjectInfo {
    * a search result says can become one of these -- a person types them, in Orbis, into this project.
    */
   instructions: string
+  /**
+   * The Orion model to answer with inside this project, or empty for whatever the person is using.
+   *
+   * A project set up for writing and a project set up for debugging want different models, and choosing one by hand
+   * on every message is the kind of thing nobody keeps doing. Empty is the default and means Orbis decides as it
+   * always has; it is never set on the person's behalf.
+   */
+  model: string
+  /**
+   * How answers should come out in this project: "always a table", "bullet points, no preamble", "code only".
+   *
+   * Separate from `instructions` because it is the one instruction people change most and want to see on its own,
+   * and because an empty one has to mean "no opinion" rather than an empty rule nobody wrote.
+   */
+  outputFormat: string
   items: { ref: string; addedAt: number }[]
 }
 
@@ -133,13 +148,17 @@ function normalizeProject(raw: Partial<ProjectInfo>): ProjectInfo {
     // Kept to 2000 characters. Long enough for the handful of rules somebody actually has; short enough that it
     // cannot quietly become most of what Orion is told on every message in the project.
     instructions: (typeof raw.instructions === 'string' ? raw.instructions : '').replace(/[ 	]+/g, ' ').trim().slice(0, 2000),
+    // A model is an id from the model table or nothing. Nothing is checked here because this file knows no models;
+    // the chat path checks it is real before using it, and falls back to the person's own choice if it is not.
+    model: (typeof raw.model === 'string' ? raw.model : '').trim().slice(0, 120),
+    outputFormat: (typeof raw.outputFormat === 'string' ? raw.outputFormat : '').replace(/[ 	]+/g, ' ').trim().slice(0, 400),
     items
   }
 }
 
 /** A project with one more thing in it. Adding something already there changes nothing. */
 export function withProjectItem(workspace: Workspace, ref: string, at = now()): Workspace {
-  const project = workspace.project ?? { goal: '', instructions: '', items: [] }
+  const project = workspace.project ?? { goal: '', instructions: '', model: '', outputFormat: '', items: [] }
   if (!PROJECT_REF.test(ref) || project.items.some((i) => i.ref === ref)) return { ...workspace, project }
   return { ...workspace, project: { ...project, items: [...project.items, { ref, addedAt: at }].slice(0, MAX_PROJECT_ITEMS) } }
 }
@@ -263,6 +282,9 @@ export function projectBriefing(project: ProjectInfo, name: string, itemTitles: 
   }
   if (project.instructions) {
     parts.push(`How to work in this project, asked for by the person themselves:${LINE}${project.instructions}`)
+  }
+  if (project.outputFormat) {
+    parts.push(`How answers should come out in this project, asked for by the person themselves:${LINE}${project.outputFormat}`)
   }
   return parts.length ? parts.join(LINE + LINE) : null
 }

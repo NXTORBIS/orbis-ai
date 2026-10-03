@@ -80,6 +80,7 @@ import { readSignals } from './browserControl/captchaCapabilities'
 import { StepRun } from './stepRunner'
 import { SkillManager } from './skillManager'
 import { resolveModel } from '../shared/modelRoute'
+import { isKnownModel } from '../shared/models'
 import { planCompression, summarise, summaryBlock } from './compress'
 import { parseSchedule, scheduleRequest } from '../shared/schedulePhrase'
 import { MemoryFull, MemoryRefused, MemoryStore } from './knowledge/memory'
@@ -813,9 +814,35 @@ function registerIpc(): void {
 
   ipcMain.handle('chat:send', async (event, incoming: ChatRequest) => {
     const sender = event.sender
+    /**
+     * The project this conversation is kept in, worked out once, before anything else.
+     *
+     * It decides three things, and they have to agree: which model answers, which memories Orion may see, and whether
+     * the project's own instructions are followed. Looking it up more than once would let them drift apart, which is
+     * exactly the bug where a chat obeys a project it is not actually in.
+     */
+    const home = await (async () => {
+      if (!incoming.conversationId || !workspacesForChat) return null
+      try {
+        return projectOfConversation(incoming.conversationId, await workspacesForChat.list())
+      } catch {
+        // A project that cannot be read means no project, never a wrong one.
+        return null
+      }
+    })()
+    const homeProjectId: string | null = home?.id ?? null
+
+    /*
+     * A project may answer with a model of its own.
+     *
+     * Only one the model table really has: a project naming a model that has since been retired falls back to what
+     * the person was already using, rather than failing the message. A project that names nothing changes nothing.
+     */
+    const projectModel = home?.project?.model && isKnownModel(home.project.model) ? home.project.model : null
+
     // ORION Auto becomes a real model for this one message; a model the person picked is used exactly as picked.
     const lastIncoming = incoming.messages.at(-1)
-    const route = resolveModel(incoming.model, {
+    const route = resolveModel(projectModel ?? incoming.model, {
       text: lastIncoming?.content ?? '',
       attachmentChars: (lastIncoming?.attachments ?? []).reduce((n, a) => n + (typeof a.content === 'string' ? a.content.length : 0), 0),
       turns: incoming.messages.length
@@ -843,22 +870,6 @@ function registerIpc(): void {
     try {
       let systemPrompt = buildSystemPrompt(settings)
 
-      /**
-       * The project this conversation is kept in, worked out once.
-       *
-       * It decides two things further down, and they have to agree: which memories Orion may see, and whether this
-       * project's own instructions are followed. Looking it up twice would let the two drift apart, which is exactly
-       * the bug where a chat obeys a project it is not actually in.
-       */
-      const homeProjectId: string | null = await (async () => {
-        if (!request.conversationId || !workspacesForChat) return null
-        try {
-          return projectOfConversation(request.conversationId, await workspacesForChat.list())?.id ?? null
-        } catch {
-          // A project that cannot be read means no project, never a wrong one.
-          return null
-        }
-      })()
       let messages = request.messages
       const last = messages.at(-1)
 
@@ -1039,7 +1050,6 @@ ${block}`
            * travel as data; what it adds on top is the person's own instructions, which really are followed, and only
            * inside this project.
            */
-          const home = spaces.find((one) => one.id === homeProjectId) ?? null
           if (home?.project?.instructions) {
             systemPrompt = `${systemPrompt}${BREAK}How the person has asked you to work inside their project ${JSON.stringify(home.name)}. These are their own words, typed into Orbis, and they apply only while you are answering in this project:${BREAK}${home.project.instructions}`
           }

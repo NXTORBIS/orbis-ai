@@ -124,13 +124,25 @@ export default function App(): React.JSX.Element {
   const experience = useExperience()
 
   /**
-   * Opens one of Orbis's own panels — from a widget, say. These live in the browser's sidebar now, so the browser is
-   * asked to open the panel of that name through the same control layer Orion uses.
+   * Opens one of Orbis's own panels -- from a widget, say. These live in the browser's sidebar now.
+   *
+   * This used to ask for a capability called `sidebar.open`, which does not exist and never has: the call was
+   * refused, the refusal was swallowed by a catch, and the button did nothing at all. It goes through `surface.open`
+   * now, which is the real capability for the browser's own pages, at the panel's own address with the view as the
+   * place within it -- so the panel opens where it was asked to open, and a failure is said rather than swallowed.
    */
-  const openOrbisView = useCallback((name: string): void => {
-    setImagesOpen(false)
-    void window.api.executeControl({ capability: 'sidebar.open', params: { panel: name }, target: {}, source: 'user' }).catch(() => undefined)
-  }, [])
+  const openOrbisView = useCallback(
+    (name: string): void => {
+      setImagesOpen(false)
+      void window.api
+        .executeControl({ capability: 'surface.open', params: { name: 'orbis panel', at: `#${name}` }, target: {}, source: 'user' })
+        .then((result) => {
+          if (!result.ok) notifyRef.current(result.error?.message ?? 'That could not be opened.', 'error')
+        })
+        .catch(() => notifyRef.current('That could not be opened.', 'error'))
+    },
+    []
+  )
   const [webSearch, setWebSearch] = useState(false)
   const [searchToken, setSearchToken] = useState(0)
   const [activityOpen, setActivityOpen] = useState(false)
