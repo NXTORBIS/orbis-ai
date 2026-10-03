@@ -49,6 +49,9 @@ export interface ControlContext {
   control: BrowserControl
 }
 
+/** How far back an undo can reach. A way back from the last few things, not a history of everything. */
+const UNDO_LIMIT = 30
+
 export interface Assessment {
   decision: 'run' | 'confirm' | 'block'
   reason: string
@@ -91,6 +94,33 @@ export interface CapabilityDefinition<S = unknown> {
   run(params: Record<string, unknown>, ctx: ControlContext, before: S): Promise<unknown> | unknown
   /** Checks real state after acting. Without it, a mutating capability's run must verify on its own. */
   verify?(data: unknown, params: Record<string, unknown>, ctx: ControlContext, before: S): Promise<{ verified: boolean; detail: string }> | { verified: boolean; detail: string }
+  /**
+   * How to put this back, as the action that would do it.
+   *
+   * It returns another capability and its parameters rather than undoing anything itself, so an undo goes through
+   * exactly the same door as everything else: the same permission check, the same confirmation policy, the same
+   * verification against real state, the same line in the log. An undo that took a private shortcut would be the one
+   * operation in Orbis nobody could see.
+   *
+   * Absent means this cannot be undone, and that is the default. Nothing is assumed reversible: cleared history is
+   * gone, a sent message is sent, and a notification saying otherwise would be a lie about the person's own data.
+   * Returning null at call time means this particular call cannot be reversed even though the kind usually can.
+   */
+  undo?(record: { data: unknown; params: Record<string, unknown>; before: S }): { capability: string; params: Record<string, unknown> } | null
+}
+
+/** One thing Orbis did that can be put back, newest first. */
+export interface UndoEntry {
+  id: string
+  at: number
+  capability: string
+  /** What it did, in the same words the approval prompt and the log used. */
+  what: string
+  /** The action that reverses it. */
+  inverse: { capability: string; params: Record<string, unknown> }
+  source: ControlSource
+  runId?: string
+  undone: boolean
 }
 
 export type LogPhase = 'observation' | 'decision' | 'command' | 'execution' | 'result' | 'verification' | 'error' | 'recovery'
@@ -445,6 +475,70 @@ export class BrowserControl {
     }
   }
 
+  /*
+   * The journal of what can be put back.
+   *
+   * Only successes, only things that really changed something, and only where the capability itself said how to
+   * reverse that particular call. Bounded, because this is a way back from the last few things rather than a history
+   * of everything Orbis has ever done.
+   */
+  private readonly undoable: UndoEntry[] = []
+
+  private remember(def: CapabilityDefinition<unknown>, record: { data: unknown; params: Record<string, unknown>; before: unknown }, source: ControlSource, runId?: string): void {
+    if (!def.mutates || !def.undo) return
+    let inverse: { capability: string; params: Record<string, unknown> } | null = null
+    try {
+      inverse = def.undo(record as { data: unknown; params: Record<string, unknown>; before: never })
+    } catch {
+      // A capability that cannot work out how to reverse itself has not failed; it simply cannot be undone.
+      inverse = null
+    }
+    if (!inverse) return
+    this.undoable.unshift({
+      id: `u${this.now()}${this.undoable.length}`,
+      at: this.now(),
+      capability: def.id,
+      what: (() => {
+        try {
+          return def.describe?.(record.params) ?? def.name
+        } catch {
+          return def.name
+        }
+      })(),
+      inverse,
+      source,
+      ...(runId ? { runId } : {}),
+      undone: false
+    })
+    this.undoable.splice(UNDO_LIMIT)
+  }
+
+  /** What could be put back, newest first. Nothing here has happened; it is a list of offers. */
+  undoHistory(): readonly UndoEntry[] {
+    return this.undoable.filter((one) => !one.undone)
+  }
+
+  /**
+   * Puts back the last thing that can be put back.
+   *
+   * The inverse runs through `execute`, so it is checked, confirmed and verified exactly like any other action -- an
+   * undo that failed its own verification is reported as failed rather than crossed off. `id` undoes one particular
+   * action instead of the newest.
+   */
+  async undoLast(options: { id?: string; source?: ControlSource; confirm?: ControlContext['confirm'] } = {}): Promise<{ ok: boolean; what: string; message: string }> {
+    const entry = options.id ? this.undoable.find((one) => one.id === options.id && !one.undone) : this.undoable.find((one) => !one.undone)
+    if (!entry) return { ok: false, what: '', message: 'There is nothing Orbis can put back.' }
+
+    const result = (await this.execute(
+      { capability: entry.inverse.capability, params: entry.inverse.params, source: options.source ?? 'user' },
+      { source: options.source ?? 'user', confirm: options.confirm ?? (async () => true) }
+    )) as { ok: boolean; error?: { message: string }; verification?: { detail: string } }
+
+    if (!result.ok) return { ok: false, what: entry.what, message: result.error?.message ?? 'That could not be put back.' }
+    entry.undone = true
+    return { ok: true, what: entry.what, message: result.verification?.detail ?? 'Put back.' }
+  }
+
   describe(id: string, source: ControlSource = 'user'): CapabilityDescriptor | null {
     const def = this.capabilities.get(id)
     return def ? this.descriptor(def, { source }) : null
@@ -665,8 +759,10 @@ export class BrowserControl {
             last = { code: 'verification-failed', message: verification.detail, recoverable: true }
             continue
           }
+          this.remember(def, { data, params: attemptParams, before }, source, runId)
           return finish({ ok: true, data, verification, attempts: attempt })
         }
+        this.remember(def, { data, params: attemptParams, before }, source, runId)
         return finish({ ok: true, data, verification: def.mutates ? { verified: true, detail: 'Confirmed by the action itself.' } : undefined, attempts: attempt })
       } catch (err) {
         if (ctx.signal?.aborted) return error('aborted', 'Stopped.', false, attempt)

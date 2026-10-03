@@ -137,6 +137,8 @@ export function registerChromiumCapabilities(d: ChromiumCapabilityDeps): void {
     params: { url: str('Address (default: a blank tab).'), active: bool('Switch to it (default true).'), pinned: bool('Pinned.'), index: int('Position (0 = first).', false, { min: 0 }) },
     mutates: true,
     confirmation: 'none',
+    // Which tab, in the words an approval prompt, the log and the list of things that can be put back all use.
+    describe: (p) => (p.url ? `Open ${String(p.url)} in a new tab` : 'Open a blank tab'),
     run: async (p) => {
       const raw = typeof p.url === 'string' ? p.url.trim() : ''
       const url = raw ? webUrl(raw) : null
@@ -151,6 +153,11 @@ export function registerChromiumCapabilities(d: ChromiumCapabilityDeps): void {
       const { tabId } = data as { tabId: string }
       const tab = await until(() => tabRows().then((r) => r.find((t) => t.id === tabId)), Boolean)
       return { verified: Boolean(tab), detail: tab ? `Tab ${tabId} is open.` : 'The tab did not appear.' }
+    },
+    // Opening a tab is put back by closing that tab, and only that one.
+    undo: ({ data }) => {
+      const { tabId } = data as { tabId: string }
+      return tabId ? { capability: 'tabs.close', params: { tabId } } : null
     }
   })
 
@@ -232,6 +239,12 @@ export function registerChromiumCapabilities(d: ChromiumCapabilityDeps): void {
       const tab = await tabFor(p.tabId)
       return tab.pinned === (p.pinned === true) ? `That tab was already ${p.pinned ? 'pinned' : 'unpinned'}.` : null
     },
+    // What it was before, read before the change so putting it back is a fact rather than the opposite of what was asked.
+    observe: async (p) => (await tabFor(p.tabId)).pinned === true,
+    undo: ({ data, before }) => {
+      const { tabId } = data as { tabId: string }
+      return tabId ? { capability: 'tabs.pin', params: { tabId, pinned: before === true } } : null
+    },
     run: async (p) => {
       const tab = await tabFor(p.tabId)
       await call(`chrome.tabs.update(${Number(tab.id)}, { pinned: ${p.pinned === true} })`)
@@ -262,6 +275,11 @@ export function registerChromiumCapabilities(d: ChromiumCapabilityDeps): void {
     already: async (p) => {
       const tab = await tabFor(p.tabId)
       return tab.muted === (p.muted === true) ? `That tab was already ${p.muted ? 'muted' : 'unmuted'}.` : null
+    },
+    observe: async (p) => (await tabFor(p.tabId)).muted === true,
+    undo: ({ data, before }) => {
+      const { tabId } = data as { tabId: string }
+      return tabId ? { capability: 'tabs.mute', params: { tabId, muted: before === true } } : null
     },
     run: async (p) => {
       const tab = await tabFor(p.tabId)
@@ -714,6 +732,7 @@ export function registerChromiumCapabilities(d: ChromiumCapabilityDeps): void {
     name: 'Bookmark a page',
     description: 'Adds a bookmark to the bookmarks bar (skipped when the page is already bookmarked).',
     params: { url: str('The page address.', true), title: str('Its title.') },
+    describe: (p) => `Bookmark ${String(p.title || p.url)}`,
     mutates: true,
     confirmation: 'none',
     run: async (p) => {
@@ -728,6 +747,16 @@ export function registerChromiumCapabilities(d: ChromiumCapabilityDeps): void {
       const { url } = data as { url: string }
       const found = await call<unknown[]>(`chrome.bookmarks.search({ url: ${json(url)} })`)
       return { verified: found.length > 0, detail: found.length ? 'Bookmarked.' : 'Not bookmarked.' }
+    },
+    /*
+     * Only when this call is the one that added it.
+     *
+     * Bookmarking a page that was already bookmarked changes nothing, and "undoing" that would delete a bookmark the
+     * person made themselves, possibly years ago. `added` is 0 in that case and nothing is offered.
+     */
+    undo: ({ data }) => {
+      const { added, url } = data as { added: number; url: string }
+      return added > 0 && url ? { capability: 'bookmarks.remove', params: { url } } : null
     }
   })
 

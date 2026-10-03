@@ -162,6 +162,12 @@ const CONTROL_TOOLS = [
     []
   ),
   fn(
+    'undo_last',
+    'Puts back the last thing Orbis changed in the browser, or lists what can be put back. Use when the user says to undo, revert or take something back. Only things Orbis itself did and that can genuinely be reversed are listed — cleared history and anything sent are gone, and this will say so rather than pretend.',
+    { list_only: { type: 'boolean', description: 'True to list what could be put back without putting anything back.' }, id: { type: 'string', description: 'Put back one particular entry from the list instead of the newest.' } },
+    []
+  ),
+  fn(
     'preview_capability',
     'What a capability would do, without doing it: the words for the action, whether it is available, whether it changes anything, and whether the user would be asked first. Use this before anything consequential — deleting, buying, sending, signing in, changing a setting — so the person can be shown what is about to happen. It runs nothing.',
     { capability: { type: 'string' }, params: { type: 'object', description: 'The capability parameters.' }, tab_id: { type: 'string', description: 'An Orbis tab id, to ask about another tab.' } },
@@ -998,6 +1004,22 @@ export async function runBrowserAgent(options: BrowserAgentOptions): Promise<voi
        * Every answer comes from the same places the real run reads, so a preview cannot describe an action the run
        * would not take. Nothing is executed and nothing is locked.
        */
+      /*
+       * Putting something back.
+       *
+       * The inverse goes through the ordinary door, so it is checked, confirmed and verified like anything else. If
+       * there is nothing reversible, that is said plainly rather than dressed up.
+       */
+      case 'undo_last': {
+        const control = options.control
+        if (!control) return 'Error: the Orbis Browser Control Layer is not available.'
+        const list = control.undoHistory().map((one) => ({ id: one.id, what: one.what, at: one.at }))
+        if (args.list_only === true) return JSON.stringify({ canBePutBack: list })
+        if (list.length === 0) return JSON.stringify({ ok: false, message: 'There is nothing Orbis can put back. Anything it did either cannot be reversed or has already been put back.' })
+        const done = await control.undoLast({ source: 'orion', id: typeof args.id === 'string' ? args.id : undefined })
+        return JSON.stringify(done)
+      }
+
       case 'preview_capability': {
         const control = options.control
         if (!control) return 'Error: the Orbis Browser Control Layer is not available.'
