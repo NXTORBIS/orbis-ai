@@ -387,6 +387,64 @@ export class BrowserControl {
     return filter.availableOnly ? out.filter((d) => d.available) : out
   }
 
+  /**
+   * What would happen, without anything happening.
+   *
+   * For showing somebody a plan before it runs. Every answer comes from the same places the real execution reads --
+   * the capability's own `describe`, its own `assess`, its confirmation policy, whether it is switched off, whether
+   * it is available at all -- so a preview cannot describe an action the execution would not take. Nothing is run:
+   * `run` is never called, nothing is locked, and nothing is written to the log as having happened.
+   *
+   * It is deliberately honest about what it cannot know. An assessment that needs to look at the page is given the
+   * same context the real run would have, and if it refuses to answer without acting, that is reported as "cannot be
+   * told in advance" rather than guessed.
+   */
+  async preview(
+    request: { capability: string; params?: Record<string, unknown>; target?: ControlTarget; source?: ControlSource },
+    ctx: Partial<ControlContext> = {}
+  ): Promise<{ capability: string; what: string; available: boolean; mutates: boolean; willAsk: boolean; why: string; problem?: string }> {
+    const source = request.source ?? 'orion'
+    const def = this.capabilities.get(request.capability)
+    if (!def) return { capability: request.capability, what: request.capability, available: false, mutates: false, willAsk: false, why: '', problem: 'There is no such capability.' }
+
+    const params = request.params ?? {}
+    const descriptor = this.descriptor(def, { source })
+    const what = (() => {
+      try {
+        return def.describe?.(params) ?? def.name
+      } catch {
+        return def.name
+      }
+    })()
+    if (!descriptor.available) {
+      return { capability: def.id, what, available: false, mutates: def.mutates, willAsk: false, why: '', problem: descriptor.unavailableReason ?? 'It is not available right now.' }
+    }
+
+    let decision: Assessment = { decision: 'run', reason: '' }
+    let problem: string | undefined
+    if (def.assess) {
+      try {
+        decision = await def.assess(params, { ...ctx, source, target: request.target } as ControlContext)
+      } catch (err) {
+        // Something that cannot judge itself without acting is reported as such, never assumed safe.
+        problem = `Whether this needs asking cannot be told in advance: ${err instanceof Error ? err.message : String(err)}`
+      }
+    }
+    if (decision.decision === 'block') {
+      return { capability: def.id, what, available: false, mutates: def.mutates, willAsk: false, why: decision.reason, problem: decision.reason || 'It would be refused.' }
+    }
+    const willAsk = source !== 'user' && (def.confirmation === 'always' || decision.decision === 'confirm' || (ctx.flagged === true && def.mutates))
+    return {
+      capability: def.id,
+      what,
+      available: true,
+      mutates: def.mutates,
+      willAsk,
+      why: decision.reason || (def.confirmation === 'always' ? 'This kind always asks first.' : ''),
+      ...(problem ? { problem } : {})
+    }
+  }
+
   describe(id: string, source: ControlSource = 'user'): CapabilityDescriptor | null {
     const def = this.capabilities.get(id)
     return def ? this.descriptor(def, { source }) : null

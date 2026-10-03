@@ -395,5 +395,6 @@ export const TEST_FILES = [
   'src/main/notifications/manager.test.ts',
   'src/main/chromium/pageLoading.test.ts',
   'src/main/chromium/tabChanges.test.ts',
+  'src/main/browserControl/preview.test.ts',
   'src/shared/selectionPlacement.test.ts',
 ]

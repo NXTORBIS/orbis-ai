@@ -161,6 +161,12 @@ const CONTROL_TOOLS = [
     []
   ),
   fn(
+    'preview_capability',
+    'What a capability would do, without doing it: the words for the action, whether it is available, whether it changes anything, and whether the user would be asked first. Use this before anything consequential — deleting, buying, sending, signing in, changing a setting — so the person can be shown what is about to happen. It runs nothing.',
+    { capability: { type: 'string' }, params: { type: 'object', description: 'The capability parameters.' }, tab_id: { type: 'string', description: 'An Orbis tab id, to ask about another tab.' } },
+    ['capability']
+  ),
+  fn(
     'use_capability',
     'Run an Orbis capability by its id with the parameters find_capabilities listed. Page capabilities act on the tab you are working in unless tab_id names another tab. The result says whether it really worked and how that was verified; consequential ones ask the user first.',
     {
@@ -983,6 +989,27 @@ export async function runBrowserAgent(options: BrowserAgentOptions): Promise<voi
           })
           .join('\n')
       }
+      /*
+       * What something would do, without doing it.
+       *
+       * Every answer comes from the same places the real run reads, so a preview cannot describe an action the run
+       * would not take. Nothing is executed and nothing is locked.
+       */
+      case 'preview_capability': {
+        const control = options.control
+        if (!control) return 'Error: the Orbis Browser Control Layer is not available.'
+        const preview = await control.preview(
+          {
+            capability: String(args.capability ?? ''),
+            params: args.params && typeof args.params === 'object' && !Array.isArray(args.params) ? (args.params as Record<string, unknown>) : {},
+            target: typeof args.tab_id === 'string' && args.tab_id ? { tabId: args.tab_id } : { webContentsId: wc.id },
+            source: 'orion'
+          },
+          { flagged }
+        )
+        return JSON.stringify(preview)
+      }
+
       case 'use_capability': {
         const control = options.control
         if (!control) return 'Error: the Orbis Browser Control Layer is not available.'
