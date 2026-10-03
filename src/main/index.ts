@@ -2148,6 +2148,16 @@ if (!app.requestSingleInstanceLock()) {
       }
     })
     registerArtifactsIpc({
+      /*
+       * A file Orbis made, said only when nobody was watching it being made.
+       *
+       * Creating one from the chat means sitting in front of the thing that is making it; a notification for that is
+       * telling somebody what is already on their screen. Away from Orbis, it is exactly what they wanted to know.
+       */
+      onMade: (what) => {
+        if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused() && !mainWindow.isMinimized()) return
+        void notifications?.publish({ type: 'artifact.created', fields: { filename: what.name, kind: what.kind, ...(what.path ? { path: what.path } : {}) } })
+      },
       service: artifacts,
       getWindow: () => mainWindow,
       profileId: async () => (await profilesStore.active()).id
@@ -2811,6 +2821,18 @@ if (!app.requestSingleInstanceLock()) {
       }
     })
     updates.on('changed', (status) => mainWindow?.webContents.send('update:changed', status))
+    /*
+     * An update that is ready, said once.
+     *
+     * Only `ready-to-install`: an update being available, downloading or verifying is Orbis's business, and the one
+     * moment that is the person's is when it is waiting for them to restart. The version is the deduplication key, so
+     * a state that is reported several times -- and it is, on every progress change -- still says this once, and the
+     * next version says it again.
+     */
+    updates.on('changed', (status) => {
+      if (status.state !== 'ready-to-install') return
+      void notifications?.publish({ type: 'update.ready', fields: { version: status.available?.version ?? '' } })
+    })
     void updates.start().catch((err: unknown) => console.error('[updates] failed to start', err))
     /** Points the app at a profile's own data. The browser follows the profile through its own data folder (see BrowserManager). */
     const useProfile = async (profile: Profile): Promise<Profile> => {

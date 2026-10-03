@@ -23,6 +23,13 @@ export interface ArtifactsIpcOptions {
   service: ArtifactService
   profileId(): Promise<string>
   getWindow(): BrowserWindowType | null
+  /**
+   * Told when a file has really been written.
+   *
+   * After the operation succeeded, never before: the service writes, reads back and checks, and only then does this
+   * run. A notification saying a report is ready before the report exists is worse than no notification.
+   */
+  onMade?(what: { name: string; kind: string; path?: string }): void
 }
 
 /**
@@ -233,7 +240,18 @@ export function registerArtifactsIpc(o: ArtifactsIpcOptions): void {
   ipcMain.handle('creation:run', async (event: IpcMainInvokeEvent, request: unknown) => {
     if (event.sender !== o.getWindow()?.webContents) throw new Error('Not allowed.')
     try {
-      return await o.service.run(await o.profileId(), request)
+      const result = await o.service.run(await o.profileId(), request)
+      /*
+       * Something was made, and it is really there.
+       *
+       * Only creation: listing, reading and searching are not events anybody wants telling about. The name comes from
+       * what the service actually wrote, so a notification can never carry a name for a file that was not made.
+       */
+      if (result.ok && typeof result.operation === 'string' && /^artifact\.(create|generate|import)$/.test(result.operation)) {
+        const made = (result.value ?? {}) as { record?: { title?: string; kind?: string }; path?: string }
+        if (made.record?.title) o.onMade?.({ name: made.record.title, kind: made.record.kind ?? 'File', ...(made.path ? { path: made.path } : {}) })
+      }
+      return result
     } catch (err) {
       // A code and a sentence. Never a stack, and never a path.
       return {
