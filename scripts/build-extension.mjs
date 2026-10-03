@@ -10,6 +10,13 @@ await build({ ...shared, entryPoints: ['extension-src/content.ts'], outfile: 'ex
 // The response-pruning layer. Runs in the PAGE's world (see the manifest), which is the only place it can see the
 // globals and the JSON.parse that the page itself uses -- an isolated content script cannot.
 await build({ ...shared, entryPoints: ['extension-src/prune-main.ts'], outfile: 'extension/adblock-prune.js', format: 'iife', platform: 'browser' })
+// The selection orb: the small Orbis orb that appears when you select text on a page, and the palette it opens.
+// Two halves that must not be one. `selection.js` runs in the page's isolated world and only draws; it can reach
+// nothing. `selection-worker.js` runs in the extension's worker, is the only side that holds the helper's address and
+// this run's secret, and is where every action actually happens. A page can send the worker a message and the worker
+// decides for itself whether to honour it -- which is the whole security model, so these must stay separate files.
+await build({ ...shared, entryPoints: ['extension-src/selection/main.ts'], outfile: 'extension/selection.js', format: 'iife', platform: 'browser' })
+await build({ ...shared, entryPoints: ['extension-src/selection/worker.ts'], outfile: 'extension/selection-worker.js', format: 'esm', platform: 'browser' })
 await build({ ...shared, entryPoints: ['orbis-ui/panel/sidebar.ts'], outfile: 'orbis-ui/panel/sidebar.js', format: 'iife', platform: 'browser' })
 await build({ ...shared, entryPoints: ['orbis-ui/results/results.ts'], outfile: 'orbis-ui/results/results.js', format: 'iife', platform: 'browser' })
 // The capability registry the Command Center reads. Built from src/shared, so the page and the app share one list.

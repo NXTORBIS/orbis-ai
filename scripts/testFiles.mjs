@@ -390,4 +390,6 @@ export const TEST_FILES = [
   'src/main/artifacts/searching.test.ts',
   'src/main/artifacts/wiring.test.ts',
   'src/shared/tokens.test.ts',
+  'src/shared/selectionText.test.ts',
+  'src/shared/selectionPlacement.test.ts',
 ]

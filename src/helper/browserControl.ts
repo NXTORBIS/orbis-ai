@@ -61,6 +61,14 @@ export function createBrowserControlHandlers(get: () => PanelControl | null | un
     'page-read': (a) => ['page.read', { maxChars: Number.isInteger(a.maxChars) && (a.maxChars as number) > 0 && (a.maxChars as number) <= 100_000 ? (a.maxChars as number) : 12_000 }],
     'zoom-get': () => ['zoom.get', {}],
     open: (a) => ['tabs.create', { url: address(a.url), active: true }],
+    /*
+     * Orbis Search, for some words.
+     *
+     * Through the surface table rather than by building an address, because a tab may only be opened at a web page --
+     * `chrome://orbis-search` is the browser's own, and this is how the browser opens its own. The words go in the
+     * fragment, which is where the results page reads them from.
+     */
+    search: (a) => ['surface.open', { name: 'orbis-search', at: `#q=${encodeURIComponent(text(a.query, 'The search', 300))}`, newTab: true }],
     zoom: (a) => {
       if (a.action === 'in' || a.action === 'out' || a.action === 'reset') return ['zoom.set', { action: a.action }]
       return typeof a.factor === 'number' && a.factor >= 0.25 && a.factor <= 5 ? ['zoom.set', { factor: a.factor }] : bad('The zoom is not valid.')

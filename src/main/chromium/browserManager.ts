@@ -301,6 +301,25 @@ export class BrowserManager {
       })
       if (service.process.pid) this.o.onStarted?.(service.process.pid)
       bridge = service.bridge
+
+      /*
+       * The extension is told how to reach the helper.
+       *
+       * The selection orb -- the one that appears when you select text on a page -- draws itself in the page but can
+       * do nothing there; everything it offers is run by the extension's worker, which has to be able to call Orbis.
+       * The built-in pages get the port and this run's secret from the browser itself (chrome.send('orbis.getHelper'),
+       * answered only for them). An extension cannot ask that, so the app hands it over here, down the debugging pipe
+       * it already holds.
+       *
+       * Session storage, deliberately: it lives in memory, it is cleared when the browser closes, and no page and no
+       * other extension can read it. The token never touches disk and never appears in an address.
+       *
+       * Not fatal if it fails. The browser works without the orb; the orb says Orbis is not running, which is true.
+       */
+      await service.bridge
+        .run(`chrome.storage.session.set({ 'orbis.helper': { port: ${port}, token: ${JSON.stringify(token)} } }).then(() => true)`)
+        .catch(() => console.warn('[orbis] the selection orb could not be told how to reach Orbis; it will say Orbis is not running'))
+
       // The ad blocker's page scripts run before each page's own, from here (see adblockInjector.ts).
       const injector = new AdblockInjector({
         browser: service.browser,

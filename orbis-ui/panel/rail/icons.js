@@ -96,7 +96,12 @@ const P = {
   globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18z"/>',
   game: '<rect x="2" y="7" width="20" height="11" rx="4"/><path d="M7 11v3M5.5 12.5h3M15.5 12h.01M18 14h.01"/>',
   quote: '<path d="M9 7H6a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h1v1a3 3 0 0 1-3 3"/><path d="M19 7h-3a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h1v1a3 3 0 0 1-3 3"/>',
-  spark: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M18 17l.9 2.1L21 20l-2.1.9L18 23l-.9-2.1L15 20l2.1-.9z"/>'
+  spark: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M18 17l.9 2.1L21 20l-2.1.9L18 23l-.9-2.1L15 20l2.1-.9z"/>',
+  // The four the selection palette names. Without them every one of those actions would have worn a plain circle.
+  book: '<path d="M4 5a2 2 0 0 1 2-2h13v18H6a2 2 0 0 1-2-2z"/><path d="M8 7h7M8 11h7"/>',
+  lines: '<path d="M4 6h16M4 11h16M4 16h10"/>',
+  code: '<path d="m9 8-5 4 5 4M15 8l5 4-5 4"/>',
+  bug: '<path d="M8 7a4 4 0 0 1 8 0"/><rect x="7" y="7" width="10" height="12" rx="5"/><path d="M3 11h4M17 11h4M3.5 17h3.5M17 17h3.5M5 6l2 2M19 6l-2 2"/>'
 }
 
 const NS = 'http://www.w3.org/2000/svg'

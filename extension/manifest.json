@@ -94,6 +94,18 @@
       "match_about_blank": true
     },
     {
+      "//": "The selection orb. Runs in the isolated world so a page can neither see it nor reach it, and in every frame so a selection inside an iframe gets one too. document_idle: nothing here is needed before the page has drawn.",
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "selection.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": true
+    },
+    {
       "matches": [
         "*://*.youtube.com/*",
         "*://*.youtube-nocookie.com/*",

@@ -60,6 +60,13 @@ export const SURFACES: readonly Surface[] = [
   { id: 'extension-shortcuts', what: 'Extension keyboard shortcuts', url: 'chrome://extensions/shortcuts', words: ['extension shortcuts', 'extension keyboard shortcuts'] },
   { id: 'new-tab', what: 'The Orbis new tab page', url: 'chrome://orbis-newtab/', words: ['new tab page', 'home page', 'start page', 'orbis home'] },
   { id: 'orbis-panel', what: 'The Orbis panel', url: 'chrome://orbis/', words: ['orbis panel', 'side panel', 'the panel', 'orbis sidebar'] },
+  /*
+   * Orbis Search.
+   *
+   * The browser could open its own start page and its own panel and not its own results page, which meant anything
+   * wanting to search had to type into the address bar and hope. The query goes in the fragment: `#q=<words>`.
+   */
+  { id: 'orbis-search', what: 'Orbis Search', url: 'chrome://orbis-search/', words: ['orbis search', 'search results', 'results page', 'search page'] },
   { id: 'widgets', what: 'The widget gallery on the start page', url: 'chrome://orbis-newtab/#widgets', words: ['widgets', 'widget gallery', 'add a widget', 'browse widgets', 'widget store'] }
 ]
 

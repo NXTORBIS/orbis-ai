@@ -328,7 +328,7 @@ test('chat:send continues a long answer past one call’s output limit on its ow
 test('chat:send refuses a missing key and a malformed conversation with words the panel can show', () =>
   withServer(createHandlers({ apiKeys: [] }), async (port) => {
     const noKey = await call(port, { headers: authed, body: rpc('chat:send', [{ messages: [{ role: 'user', content: 'hi' }] }]) })
-    assert.deepEqual(noKey.lines, [{ error: { code: 'no-key', message: 'The helper has no Groq API key.' } }])
+    assert.deepEqual(noKey.lines, [{ error: { code: 'no-key', message: 'The helper has no API key.' } }])
   }).then(() =>
     withServer(createHandlers({ apiKeys: ['k'], fetchFn: (async () => sse(piece('x', 'stop'))) as typeof fetch }), async (port) => {
       for (const messages of [[], 'nope', [{ role: 'system', content: 'x' }], [{ role: 'user', content: 5 }], [{ role: 'assistant', content: 'last is not the person' }]]) {

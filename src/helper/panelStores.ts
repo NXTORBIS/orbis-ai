@@ -238,6 +238,21 @@ export function createPanelStoreHandlers(get: () => PanelStores | null | undefin
       await boards().add(wanted, [{ kind: 'note', at: { x: 40, y: 40 }, text, width: 260, height: 120 }])
       return true
     },
+    /**
+     * Adds a piece of text somebody selected on a page, as a note, with where it came from underneath it.
+     *
+     * Separate from add-page because the two are different things: that one adds the page, this one adds the words.
+     * The source line is part of the note rather than hidden metadata, so a board full of quotes still says where
+     * each of them was read -- months later, that line is usually the point.
+     */
+    'whiteboard:add-text': async ([board, words, from]) => {
+      const wanted = id(board, 'The board')
+      const body = name(words, 'The text', 4000)
+      const source = from === undefined || from === null ? '' : name(from, 'The source', 300)
+      const whole = source === '' ? body : `${body}\n\n— ${source}`
+      await boards().add(wanted, [{ kind: 'note', at: { x: 40, y: 40 }, text: whole, width: 300, height: 180 }])
+      return true
+    },
 
     // ---------------------------------------------------------------- workspaces
     'workspaces:list': async () => {
