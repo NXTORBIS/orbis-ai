@@ -17,6 +17,7 @@ import { registerBrowserUiCapabilities } from './chromiumCapabilities5.ts'
 import { registerSurfaceCapabilities } from './surfaceCapabilities.ts'
 import { registerFeedCapabilities } from '../browserControl/feedCapabilities.ts'
 import { ChromiumPages } from './chromiumPages.ts'
+import { bus } from '../eventBus.ts'
 import { ExtensionBridge } from './extensionBridge.ts'
 
 /**
@@ -94,7 +95,28 @@ export async function startChromiumControl(o: ChromiumControlOptions): Promise<C
 
   const bridge = new ExtensionBridge(browser, o.extensionId)
   const pages = new ChromiumPages(browser, bridge)
+
+  /*
+   * What the browser does, announced on Orbis's one bus.
+   *
+   * The names were declared and nothing had ever published them, so everything that wanted to know when a tab opened
+   * or a download finished had to go and ask. These are the real thing: the tab events come from comparing successive
+   * readings of Chromium's own tab list, and the download events are Chromium's own state as it changes -- not a
+   * folder being watched, because a half-written file is also a file and only the browser knows which it is.
+   */
+  pages.onChanges((changes) => {
+    for (const change of changes) {
+      bus.publish(change.name, { tabId: change.tabId, url: change.url, title: change.title, windowId: change.windowId }, { source: 'chromium' })
+    }
+  })
   await pages.start()
+  void bridge
+    .watchDownloads((one) => {
+      const done = one.state === 'complete'
+      bus.publish(done ? 'download.completed' : 'download.failed', { id: one.id, filename: one.filename, path: one.path, bytes: one.bytes, reason: one.error }, { source: 'chromium' })
+    })
+    // A browser whose downloads cannot be watched still works; it simply says nothing about them.
+    .catch(() => undefined)
 
   const control = o.control ?? new BrowserControl(o.controlOptions)
   const deps = { control, browser, bridge, redactTabs: o.tabLock?.redactTabs }

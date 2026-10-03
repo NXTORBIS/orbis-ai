@@ -7,6 +7,17 @@ import { CdpError } from './cdp.ts'
  * declares in its manifest; nothing here re-implements a browser system. The bridge only evaluates a script inside the
  * extension and hands the answer back. Attaching to the worker also keeps it from being put to sleep while Orbis works.
  */
+/** One download, as Chromium reports it when it stops being in progress. */
+export interface DownloadChange {
+  id: string
+  /** Chromium's own word for it: `complete` or `interrupted`. Nothing here decides which. */
+  state: string
+  filename: string
+  path: string
+  bytes: number
+  error: string
+}
+
 export class ExtensionBridge {
   private sessionId: string | undefined
   private readonly browser: CdpBrowser
@@ -42,6 +53,8 @@ export class ExtensionBridge {
 
   private readonly listeners = new Set<() => void>()
   private watching = false
+  private readonly downloadListeners = new Set<(one: DownloadChange) => void>()
+  private watchingDownloads = false
 
   /**
    * Calls `listener` whenever the browser's tabs or windows change (opened, closed, moved, switched, navigated), so the
@@ -68,6 +81,63 @@ export class ExtensionBridge {
       })()`)
     }
     return () => void this.listeners.delete(listener)
+  }
+
+  /**
+   * Calls `listener` when a download finishes, fails or is cancelled.
+   *
+   * Chromium's own download state, reported by the extension as it changes -- not a folder being watched and not a
+   * guess from a file appearing. A file on disk is not a finished download: a half-written one is also a file, and
+   * Chromium is the only thing that knows which it is.
+   */
+  async watchDownloads(listener: (one: DownloadChange) => void): Promise<() => void> {
+    this.downloadListeners.add(listener)
+    if (!this.watchingDownloads) {
+      this.watchingDownloads = true
+      this.browser.conn.on('event', (event: { method: string; params: { name?: string; payload?: string } }) => {
+        if (event.method !== 'Runtime.bindingCalled' || event.params.name !== 'orbisDownloadChanged') return
+        let one: DownloadChange
+        try {
+          one = JSON.parse(event.params.payload ?? '{}') as DownloadChange
+        } catch {
+          return
+        }
+        if (!one.id || !one.state) return
+        for (const l of this.downloadListeners) l(one)
+      })
+      await this.run('1')
+      await this.browser.conn.send('Runtime.addBinding', { name: 'orbisDownloadChanged' }, this.sessionId)
+      await this.run(`(() => {
+        if (globalThis.__orbisDownloadWatch) return true
+        globalThis.__orbisDownloadWatch = true
+        /*
+         * Only the end of a download is reported. Progress is not an event anybody wants told about, and reporting
+         * every byte would be a message a second for a large file.
+         */
+        const say = (item) => globalThis.orbisDownloadChanged(JSON.stringify({
+          id: String(item.id),
+          state: item.state,
+          /*
+           * The name on its own, from a Windows or a POSIX path.
+           *
+           * The separator is written as a character code rather than typed. This whole script lives inside a
+           * template literal and is parsed again inside the extension, so a backslash here has to survive two rounds
+           * of escaping -- and it did not: one round left an unterminated string, which stopped the listener being
+           * installed at all and silently cost every download event. A character code survives both.
+           */
+          filename: (() => { const whole = String(item.filename || ''); const cut = Math.max(whole.lastIndexOf('/'), whole.lastIndexOf(String.fromCharCode(92))); return cut >= 0 ? whole.slice(cut + 1) : whole })(),
+          path: String(item.filename || ''),
+          bytes: item.bytesReceived || 0,
+          error: item.error || ''
+        }))
+        chrome.downloads.onChanged.addListener((delta) => {
+          if (!delta.state || delta.state.current === 'in_progress') return
+          chrome.downloads.search({ id: delta.id }).then((found) => { if (found[0]) say(found[0]) }).catch(() => undefined)
+        })
+        return true
+      })()`)
+    }
+    return () => void this.downloadListeners.delete(listener)
   }
 
   /** Runs an expression in the extension (it may `await` and use `chrome.*`) and returns its JSON-able value. */

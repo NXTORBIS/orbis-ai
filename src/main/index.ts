@@ -111,6 +111,7 @@ import { WorkspacesStore } from './personal/workspaces'
 import { ProfilesStore } from './personal/profiles'
 import { ExperienceStore } from './experience/store'
 import { createNotifications, type Notifications } from './notifications/index'
+import { bus } from './eventBus'
 import { activePreset, appearanceVariables, wantsReducedMotion } from '../shared/experience'
 import { presetBackdrop } from '../shared/presets'
 import { RuleWatcher, workflowReadings } from './ruleWatcher'
@@ -2738,6 +2739,22 @@ if (!app.requestSingleInstanceLock()) {
         }
       },
       onChange: () => sendToWindow('notifications:changed')
+    })
+
+    /*
+     * Downloads, from the browser's own account of them.
+     *
+     * The template for these existed and nothing published the event, so a download finishing while somebody was in
+     * another application said nothing. It is Chromium's own state -- `complete` or `interrupted` -- rather than a
+     * file appearing on disk, because a half-written download is also a file and only the browser knows the
+     * difference. The path travels with it so "Open" and "Show in folder" have something real to open.
+     */
+    bus.subscribe({ names: ['download.completed', 'download.failed'] }, (event) => {
+      const one = event.detail as { filename?: string; path?: string; reason?: string }
+      void notifications?.publish({
+        type: event.name === 'download.completed' ? 'download.completed' : 'download.failed',
+        fields: { filename: one.filename ?? 'A file', ...(one.path ? { path: one.path } : {}), ...(one.reason ? { reason: one.reason } : {}) }
+      })
     })
     // Personalisation follows the profile: the widgets on the new tab, what each is set to, the wallpaper and the theme
     // all belong to whoever is using Orbis, and switching profile swaps all of it rather than sharing it.
