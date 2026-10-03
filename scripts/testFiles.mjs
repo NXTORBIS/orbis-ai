@@ -398,6 +398,8 @@ export const TEST_FILES = [
   'src/shared/projectScope.test.ts',
   'src/shared/researchCheck.test.ts',
   'src/shared/researchSources.test.ts',
+  'src/shared/researchRun.test.ts',
+  'src/main/researchControl.test.ts',
   'src/shared/voiceReply.test.ts',
   'src/shared/notificationRoute.test.ts',
   'src/shared/notifications.test.ts',

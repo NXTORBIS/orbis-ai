@@ -6,6 +6,7 @@ import type { ChatQueue } from '../lib/messageQueue'
 import Composer from './Composer'
 import MemoryOffer from './MemoryOffer'
 import OtherAnswers from './OtherAnswers'
+import ResearchRunning from './ResearchRunning'
 import ChatRail from './ChatRail'
 import Greeting from './Greeting'
 import MessageItem from './MessageItem'
@@ -357,6 +358,8 @@ export default function ChatView(props: Props): React.JSX.Element {
    */
   const composer = (
     <>
+      {/* What research is doing right now, and the controls that can still change it. Nothing when none is running. */}
+      <ResearchRunning />
       <OtherAnswers conversation={props.conversation} onUse={props.onUseBranch} onForget={props.onForgetBranch} />
       <MemoryOffer message={lastUserMessage} onNotify={props.onNotify} />
       <Composer

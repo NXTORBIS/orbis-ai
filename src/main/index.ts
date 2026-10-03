@@ -117,6 +117,11 @@ import { ExperienceStore } from './experience/store'
 import { createNotifications, type Notifications } from './notifications/index'
 import { bus } from './eventBus'
 import { AutomationCheckpoints, describeCheckpoint } from './automationCheckpoint'
+import { ResearchControl } from './researchControl'
+import type { ResearchChange } from '../shared/researchRun'
+
+/** Research runs that are going now, so the window can hold one, let it go, or change what it is doing. */
+const researchControl = new ResearchControl()
 import { SiteProfiles } from './siteProfiles'
 import { activePreset, appearanceVariables, wantsReducedMotion } from '../shared/experience'
 import { presetBackdrop } from '../shared/presets'
@@ -1236,16 +1241,40 @@ ${block}`
         const queries = plan?.research?.queries ?? (request.webSearch ? [last.content.trim().slice(0, 200)] : null)
         let research: Research | undefined
         if (queries) {
-          research = await runResearch({
+          /*
+           * The run can be held and changed while it goes.
+           *
+           * Research used to be one awaited call, so the only control was to stop it -- and stopping threw away every
+           * page it had already read. The gate is what research waits at between stages; the window pauses, resumes
+           * and steers through the controller, and what a change can still reach is decided by the stage it arrives
+           * at rather than by hope.
+           */
+          const runId = request.requestId
+          const gate = researchControl.begin({
+            id: runId,
             question: last.content,
-            queries,
-            // Which kinds of source to lean towards, and which sites never to read.
-            prefer: settings.researchSources,
-            recency: plan?.research?.recency ?? 'any',
-            fetchFn: (url, init) => net.fetch(url, init),
-            signal: controller.signal,
-            onStatus: (message) => emit({ type: 'status', message })
+            showPlanFirst: settings.showResearchPlan === true,
+            notify: (view, note) => {
+              // To the window that asked, not broadcast: a run belongs to the conversation it was started from.
+              if (!sender.isDestroyed()) sender.send('research:run', view, note)
+              if (note) emit({ type: 'status', message: note })
+            }
           })
+          try {
+            research = await runResearch({
+              question: last.content,
+              queries,
+              // Which kinds of source to lean towards, and which sites never to read.
+              prefer: settings.researchSources,
+              recency: plan?.research?.recency ?? 'any',
+              gate,
+              fetchFn: (url, init) => net.fetch(url, init),
+              signal: controller.signal,
+              onStatus: (message) => emit({ type: 'status', message })
+            })
+          } finally {
+            researchControl.end(runId)
+          }
           if (controller.signal.aborted) return emit({ type: 'aborted' })
           if (research.sources.length) emit({ type: 'research', research })
           else emit({ type: 'status', message: `Couldn't get current sources: ${research.problem ?? 'nothing usable was found'}. Answering without them.` })
@@ -1327,6 +1356,21 @@ ${summaryBlock(summary)}`
    * with the browser in front of them: a page has almost certainly moved on since, and anything older than a few
    * hours is not offered at all. Nothing here resumes anything by itself.
    */
+  /**
+   * Holding a research run, letting it go, and changing what it is doing.
+   *
+   * One door for all three. What a change can reach depends on the stage the run has got to, which is decided where
+   * it can be tested rather than here, and what it managed to change is reported back to the window either way.
+   */
+  ipcMain.handle('research:control', (_event, op: unknown, id: unknown, change: unknown) => {
+    const runId = typeof id === 'string' ? id : ''
+    if (op === 'list') return researchControl.list()
+    if (op === 'pause') return researchControl.pause(runId)
+    if (op === 'resume') return researchControl.resume(runId)
+    if (op === 'change') return researchControl.change(runId, (change ?? {}) as ResearchChange)
+    return false
+  })
+
   ipcMain.handle('automation:unfinished', async () => {
     const runs = (await automationCheckpoints?.list()) ?? []
     return runs.map((one) => ({ id: one.state.id, conversationId: one.conversationId, said: describeCheckpoint(one, Date.now()), state: one.state }))

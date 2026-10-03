@@ -4,6 +4,7 @@ import { normalizeUrl } from '../shared/research.ts'
 import { disagreementNote, disagreements, dropRepeats } from '../shared/researchCheck.ts'
 import { planQueries, rankSources } from '../shared/researchPlan.ts'
 import { allowed, DEFAULT_SOURCE_PREFERENCES, preferenceRank, type SourcePreferences } from '../shared/researchSources.ts'
+import { makePlan, type ResearchPlan, type ResearchStage } from '../shared/researchRun.ts'
 
 export type FetchFn = (url: string, init?: RequestInit) => Promise<Response>
 export type Recency = Research['recency']
@@ -244,6 +245,14 @@ export interface ResearchOptions {
   followUp?: boolean
   /** Which kinds of source to lean towards, and which sites never to read. */
   prefer?: SourcePreferences
+  /**
+   * Called at each point the run could be held or changed, with where it has got to and the plan as it stands.
+   *
+   * Research waits for whatever this returns, which is what makes holding a run real rather than a label: a gate that
+   * does not resolve is a run that is paused. What comes back replaces the plan, so steering is simply a gate that
+   * returns a different plan. Absent means research runs straight through, which is what it always did.
+   */
+  gate?(stage: ResearchStage, plan: ResearchPlan): Promise<ResearchPlan> | ResearchPlan
   recency: Recency
   fetchFn: FetchFn
   signal?: AbortSignal
@@ -287,12 +296,36 @@ export async function runResearch(o: ResearchOptions): Promise<Research> {
   if (asked && queries.length < 3 && !queries.some((q) => same(q) === same(asked))) queries.push(asked)
   const research: Research = { id: crypto.randomUUID(), question: o.question.trim().slice(0, 500), queries, recency: o.recency, retrievedAt: Date.now(), sources: [] }
 
-  const prefs = o.prefer ?? DEFAULT_SOURCE_PREFERENCES
   /** Pages a blocked site would have supplied. Counted so it can be said rather than silently done. */
   let blocked = 0
 
-  o.onStatus?.(`Searching the web for “${queries[0]}”…`)
-  const searches = await Promise.allSettled(queries.map((q) => searchWeb(q, o.recency, o.fetchFn, o.signal)))
+  /*
+   * The plan, which can be held at or changed at each point below.
+   *
+   * It is a value that travels through the stages rather than settings read once at the top, because that is what
+   * makes steering mean anything: a change arriving while pages are being read has something to change.
+   */
+  let plan = makePlan({ queries, recency: o.recency, prefer: o.prefer ?? DEFAULT_SOURCE_PREFERENCES })
+  const hold = async (stage: ResearchStage): Promise<void> => {
+    if (!o.gate) return
+    plan = makePlan(await o.gate(stage, plan))
+  }
+
+  // Before anything is searched: the one point where the searches themselves can still be changed.
+  await hold('planning')
+  if (o.signal?.aborted) {
+    research.problem = 'it was stopped'
+    return done(research)
+  }
+  research.queries = [...plan.queries]
+  let prefs = plan.prefer
+
+  o.onStatus?.(`Searching the web for “${plan.queries[0] ?? asked}”…`)
+  const searches = await Promise.allSettled(plan.queries.map((q) => searchWeb(q, plan.recency, o.fetchFn, o.signal)))
+
+  // Everything found is found; which of it is preferred, and which sites are not read at all, are still open.
+  await hold('searching')
+  prefs = plan.prefer
   const seen = new Set<string>()
   const perSite = new Map<string, number>()
   const candidates: SearchHit[] = []
@@ -334,6 +367,10 @@ export async function runResearch(o: ResearchOptions): Promise<Research> {
     return done(research)
   }
 
+  // The last point a change can reach anything: it decides the order of what is still to be read.
+  await hold('reading')
+  prefs = plan.prefer
+
   o.onStatus?.(`Reading ${candidates.length} sources…`)
   const terms = [o.question, ...queries]
   const now = o.now ?? Date.now()
@@ -350,7 +387,7 @@ export async function runResearch(o: ResearchOptions): Promise<Research> {
     })
   )
 
-  const windowDays = RECENCY_DAYS[o.recency]
+  const windowDays = RECENCY_DAYS[plan.recency]
   const finalUrls = new Set<string>()
   const sources = pages
     .map(({ hit, url, page }, index): (ResearchSource & { rank: number; index: number }) | null => {
@@ -367,7 +404,7 @@ export async function runResearch(o: ResearchOptions): Promise<Research> {
       const dated = page?.updated ?? page?.published
       const age = dated ? (now - Date.parse(dated)) / DAY_MS : undefined
       // Pages that could be read come first; with a freshness window, dated pages inside it lead and older ones trail.
-      const freshness = windowDays === undefined || o.recency === 'year' ? 0 : age === undefined ? 0.5 : age <= windowDays ? 0 : 1
+      const freshness = windowDays === undefined || plan.recency === 'year' ? 0 : age === undefined ? 0.5 : age <= windowDays ? 0 : 1
       return {
         n: 0,
         title: page?.title || hit.title,

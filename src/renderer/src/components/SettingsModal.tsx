@@ -356,6 +356,14 @@ export default function SettingsModal({ settings, onUpdate, onClose, section }: 
               <>
                 <DefaultBrowserSetting />
 
+                <section className="setting row">
+                  <div className="setting-label">
+                    <h3>Show the research plan first</h3>
+                    <p>Research says what it is about to search for and waits, so you can change it. Off, it starts straight away.</p>
+                  </div>
+                  <Toggle checked={settings.showResearchPlan} onChange={(v) => void onUpdate({ showResearchPlan: v })} />
+                </section>
+
                 {/* Which sources research uses. A preference orders what was found; blocking is the only absolute. */}
                 <section className="setting">
                   <div className="setting-label">

@@ -1,4 +1,14 @@
 import type { SourcePreferences } from './researchSources'
+import type { ResearchChange, ResearchStage } from './researchRun'
+
+/** A research run as the window sees it: where it has got to, whether it is held, and what it means to do. */
+export interface ResearchRunView {
+  id: string
+  stage: ResearchStage
+  paused: boolean
+  plan: string[]
+  question: string
+}
 import type { EffectPolicy, EffectRule } from './effectPolicy'
 import type { SideEffect } from './browserControl'
 import type { ConversationBranch } from './conversationBranch'
@@ -352,6 +362,13 @@ export interface Settings {
    * absolute, and what it left out is said rather than quietly returning less.
    */
   researchSources: SourcePreferences
+  /**
+   * Research shows what it is about to search for and waits, instead of starting straight away.
+   *
+   * Off by default: research that stops for permission on every question is research nobody uses. On, it is the one
+   * point where the searches themselves can still be changed.
+   */
+  showResearchPlan: boolean
   /** Orbis opens its browser (at the saved size) as soon as it starts, instead of the chat. */
   openBrowserOnLaunch: boolean
   /**
@@ -1693,6 +1710,12 @@ export interface NxtorbisApi {
    * Each says where it got to, in words. Nothing here is a promise that carrying on will work -- the page has almost
    * certainly moved on -- and anything more than a few hours old is not offered at all.
    */
+  /** Research runs going right now, and holding, letting go of, or changing one. */
+  researchRuns(): Promise<ResearchRunView[]>
+  pauseResearch(id: string): Promise<boolean>
+  resumeResearch(id: string): Promise<boolean>
+  steerResearch(id: string, change: ResearchChange): Promise<boolean>
+  onResearchRun(listener: (view: ResearchRunView, note: string | null) => void): () => void
   unfinishedAutomations(): Promise<{ id: string; conversationId: string; said: string; state: AutomationState }[]>
   /** Forgets one, because it was carried on with or because it was not wanted. */
   forgetAutomation(id: string): Promise<void>

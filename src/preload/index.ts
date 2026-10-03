@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { IpcRendererEvent } from 'electron'
-import type { NxtorbisApi, StreamEvent } from '../shared/types'
+import type { NxtorbisApi, ResearchRunView, StreamEvent } from '../shared/types'
 
 const api: NxtorbisApi = {
   getSettings: () => ipcRenderer.invoke('settings:get'),
@@ -434,6 +434,18 @@ const api: NxtorbisApi = {
   answerBrowserConfirmation: (requestId, confirmationId, approved) => ipcRenderer.invoke('chat:browser-confirm', requestId, confirmationId, approved),
   controlAutomation: (requestId, action) => ipcRenderer.invoke('automation:control', requestId, action),
   steerAutomation: (requestId, text) => ipcRenderer.invoke('automation:steer', requestId, text),
+  researchRuns: () => ipcRenderer.invoke('research:control', 'list'),
+  pauseResearch: (id) => ipcRenderer.invoke('research:control', 'pause', id),
+  resumeResearch: (id) => ipcRenderer.invoke('research:control', 'resume', id),
+  steerResearch: (id, change) => ipcRenderer.invoke('research:control', 'change', id, change),
+  // Two values rather than one, so the note travels beside the run it is about.
+  onResearchRun: (listener) => {
+    const handler = (_event: IpcRendererEvent, view: ResearchRunView, note: string | null): void => listener(view, note)
+    ipcRenderer.on('research:run', handler)
+    return () => {
+      ipcRenderer.removeListener('research:run', handler)
+    }
+  },
   unfinishedAutomations: () => ipcRenderer.invoke('automation:unfinished'),
   forgetAutomation: (id) => ipcRenderer.invoke('automation:forget', id),
   classifyAutomationMessage: (text, objective) => ipcRenderer.invoke('automation:classify', text, objective),

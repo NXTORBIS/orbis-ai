@@ -28,6 +28,7 @@ const DEFAULTS: Omit<Settings, 'hasApiKey'> = {
   introVersion: 0,
   searchSuggestions: true,
   researchSources: DEFAULT_SOURCE_PREFERENCES,
+  showResearchPlan: false,
   personalizedSuggestions: true,
   openBrowserOnLaunch: false,
   keepSchedulesRunning: false,
@@ -91,6 +92,7 @@ export class Store {
     if (typeof update.searchSuggestions === 'boolean') next.searchSuggestions = update.searchSuggestions
     // Read through the checker rather than taken as given: a damaged setting must not widen what research reads.
     if (update.researchSources !== undefined) next.researchSources = readSourcePreferences(update.researchSources)
+    if (typeof update.showResearchPlan === 'boolean') next.showResearchPlan = update.showResearchPlan
     if (typeof update.personalizedSuggestions === 'boolean') next.personalizedSuggestions = update.personalizedSuggestions
     if (typeof update.openBrowserOnLaunch === 'boolean') next.openBrowserOnLaunch = update.openBrowserOnLaunch
     if (typeof update.keepSchedulesRunning === 'boolean') next.keepSchedulesRunning = update.keepSchedulesRunning
