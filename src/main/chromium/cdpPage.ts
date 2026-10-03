@@ -63,6 +63,14 @@ interface TargetInfo {
   openerId?: string
 }
 
+/**
+ * Lifecycle names that mean the page is up.
+ *
+ * Any one of them is enough. Which a given page reaches depends on the page -- one that keeps a connection open never
+ * reaches networkIdle -- so waiting for a particular one is waiting for ever on some perfectly ordinary sites.
+ */
+const LOADED_ENOUGH = new Set(['load', 'DOMContentLoaded', 'networkIdle', 'networkAlmostIdle', 'InteractiveTime', 'firstMeaningfulPaint'])
+
 /** One real Chromium tab. */
 export class CdpPage implements PageHandle {
   readonly id: number
@@ -71,6 +79,16 @@ export class CdpPage implements PageHandle {
   private url = ''
   private title = ''
   private loading = false
+  /**
+   * The page's own top frame, learned from the first navigation it reports.
+   *
+   * Everything about loading is judged against this one. Without it a sub-frame -- an advert, an embedded video, a
+   * tracker the blocker is about to refuse -- can say it has started loading and leave the whole tab looking busy
+   * for as long as it takes that frame to give up, which for a blocked one is never.
+   */
+  private mainFrameId = ''
+  /** The poll that asks the page whether it has finished, for the loads nothing announces. */
+  private readyWatch: NodeJS.Timeout | null = null
   private destroyed = false
   private history = { entries: [] as { id: number; url?: string; title?: string }[], index: -1 }
   /** Input events are sent one after another, in the order they were given, without the caller having to wait. */
@@ -125,21 +143,96 @@ export class CdpPage implements PageHandle {
     return this.conn.send<T>(method, params, this.sessionId, timeoutMs)
   }
 
+  /**
+   * Done loading, whichever way the tab chose to say so.
+   *
+   * The address and title are read back from the browser's own history entry before anyone waiting is told, so what
+   * they read next is what the tab really shows.
+   */
+  private settled(): void {
+    this.stopWatching()
+    this.loading = false
+    void this.refreshHistory().then(() => this.flushLoadWaiters())
+  }
+
+  private stopWatching(): void {
+    if (this.readyWatch) clearTimeout(this.readyWatch)
+    this.readyWatch = null
+  }
+
+  /**
+   * Asks the page whether it has finished, rather than waiting to be told.
+   *
+   * Measured in this build of Chromium: a tab being reloaded sends `frameStartedLoading` and then, for the *first*
+   * reload, one lifecycle event -- and for every reload after that, nothing at all. `InteractiveTime` is reported
+   * once in a page's life, `frameStoppedLoading` and `loadEventFired` never arrived at all. So there is no event that
+   * can be relied on to say a page is up, and a tab that waited for one stayed "loading" for ever: every wait on it
+   * timed out, and reloading a page reported failure after twenty seconds on a page that had reloaded perfectly.
+   *
+   * `document.readyState` is always there and always true, so this asks it. Only while a load is actually in flight,
+   * four times a second, and it stops the moment the page says `complete` -- or when the tab is gone, or after long
+   * enough that a page which is genuinely still loading is genuinely still loading and saying so is correct.
+   */
+  private watchReady(): void {
+    if (this.readyWatch || this.destroyed) return
+    const started = Date.now()
+    const look = async (): Promise<void> => {
+      this.readyWatch = null
+      if (this.destroyed || !this.loading) return
+      const state = await this.executeJavaScript('document.readyState').catch(() => null)
+      if (state === 'complete') return this.settled()
+      // Past this, a page that still says it is loading is loading, and the honest answer is to say so.
+      if (Date.now() - started > 45_000) return
+      this.readyWatch = setTimeout(() => void look(), 250)
+    }
+    this.readyWatch = setTimeout(() => void look(), 200)
+  }
+
   /** Browser events for this tab. */
   handle(event: CdpEvent): void {
     for (const listener of this.eventListeners) listener(event)
-    const p = event.params
+    const p = event.params as { frameId?: string; name?: string; frame?: { id?: string; parentId?: string } } | undefined
+    /*
+     * Whether this event is about the tab itself rather than something embedded in it.
+     *
+     * Before the top frame is known, an event with no frame at all is taken as the tab's: that is how the top frame
+     * becomes known in the first place.
+     */
+    const ours = (id: string | undefined): boolean => this.mainFrameId === '' || id === undefined || id === this.mainFrameId
+
     switch (event.method) {
+      case 'Page.frameStartedNavigating':
       case 'Page.frameStartedLoading':
+        if (!ours(p?.frameId)) break
+        if (this.mainFrameId === '' && p?.frameId) this.mainFrameId = p.frameId
         this.loading = true
+        this.watchReady()
         break
       case 'Page.frameStoppedLoading':
-        this.loading = false
-        // The page's address and title are read back from the browser's own history entry before anyone waiting on the
-        // load is told it finished, so what they read next is what the tab really shows.
-        void this.refreshHistory().then(() => this.flushLoadWaiters())
+      case 'Page.loadEventFired':
+        if (!ours(p?.frameId)) break
+        this.settled()
+        break
+      /*
+       * The one that actually arrives.
+       *
+       * This build of Chromium sends no `frameStoppedLoading` and no `loadEventFired` for a reload -- measured, not
+       * assumed: the only completion signal a reloading tab emits is a lifecycle event. Nothing was listening for
+       * those, so a reloaded tab stayed "loading" for ever, every wait for it timed out, and reloading a page
+       * reported failure after twenty seconds on a page that had reloaded perfectly well.
+       *
+       * Several names are accepted because which of them a page reaches depends on the page: one that never goes
+       * quiet never reaches networkIdle, and one with no script may not report InteractiveTime. Any of them means
+       * the page is up and usable, which is what everything waiting on this wants to know.
+       */
+      case 'Page.lifecycleEvent':
+        if (!ours(p?.frameId)) break
+        if (p?.name && LOADED_ENOUGH.has(p.name)) this.settled()
         break
       case 'Page.frameNavigated':
+        if (p?.frame && !p.frame.parentId && p.frame.id) this.mainFrameId = p.frame.id
+        void this.refreshHistory()
+        break
       case 'Page.navigatedWithinDocument':
         void this.refreshHistory()
         break
@@ -165,6 +258,7 @@ export class CdpPage implements PageHandle {
   markGone(): void {
     if (this.destroyed) return
     this.destroyed = true
+    this.stopWatching()
     this.loading = false
     this.flushLoadWaiters()
     this.onGone(this)

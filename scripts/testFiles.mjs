@@ -393,5 +393,6 @@ export const TEST_FILES = [
   'src/shared/selectionText.test.ts',
   'src/shared/notifications.test.ts',
   'src/main/notifications/manager.test.ts',
+  'src/main/chromium/pageLoading.test.ts',
   'src/shared/selectionPlacement.test.ts',
 ]
