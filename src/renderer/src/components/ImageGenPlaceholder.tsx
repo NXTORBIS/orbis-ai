@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { GAMES, drawDotGrid } from '../lib/imageGames'
-import type { Game, GameId, GameKey, Palette, PointerKind } from '../lib/imageGames'
+import { GAMES, drawDotGrid } from '../../../shared/imageGames'
+import type { Game, GameId, GameKey, Palette, PointerKind } from '../../../shared/imageGames'
 
 const PHRASES = ['Creating image', 'Sketching it out', 'Making the first draft', 'Adding the final details']
 

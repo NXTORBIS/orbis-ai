@@ -19,7 +19,7 @@
     "typecheck": "npm run typecheck:node && npm run typecheck:web && npm run typecheck:ui",
     "sign:drm": "python -m castlabs_evs.vmp sign-pkg dist/win-unpacked",
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/runTests.mjs",
-    "stage:browser": "node --experimental-strip-types src/helper/adblock/cli.ts && node scripts/build-extension.mjs && node scripts/stage-orbis-extension.mjs && node scripts/stage-chromium.mjs",
+    "stage:browser": "node --experimental-strip-types src/helper/adblock/cli.ts && node scripts/build-extension.mjs && node scripts/stage-orbis-extension.mjs && node scripts/stage-neterror.mjs && node scripts/stage-chromium.mjs",
     "dist": "npm run typecheck && npm run stage:browser && npm run notices && npm run build && electron-builder --win",
     "notices": "node scripts/generate-notices.mjs",
     "typecheck:ui": "tsc --noEmit -p tsconfig.orbis-ui.json"

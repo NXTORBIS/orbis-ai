@@ -1,0 +1,159 @@
+/*
+ * The game under the error.
+ *
+ * It sits below whatever Chromium has already said about why the page did not load, and it is sized so the reason
+ * stays on screen with it: a game that pushed "this site cannot be reached" off the top would be a game that stopped
+ * somebody fixing their connection.
+ *
+ * Its own colours, because this page is Chromium's and wears Chromium's light and dark rules rather than Orbis's
+ * tokens. The three it needs are declared here and picked up by the game through the same names Orbis uses, so the
+ * board looks like the one in the chat without this file having to know how that one is drawn.
+ */
+
+.orbis-offline {
+  --accent: #3fd8ff;
+  --text: #1a1a1a;
+  --muted: #6c7a86;
+  --red: #d93025;
+  --bg-mid: #ffffff;
+
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: 420px;
+  /* Lined up with the error's own text column, not centred in the window: the two belong to each other. */
+  margin: 28px 0 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  .orbis-offline {
+    --text: #e8eaed;
+    --muted: #9aa0a6;
+    --bg-mid: #202124;
+  }
+}
+
+.orbis-offline-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  width: 100%;
+}
+
+.orbis-offline .orbis-offline-title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.orbis-offline-games {
+  display: flex;
+  gap: 4px;
+}
+
+/*
+ * The picker.
+ *
+ * Every property is stated, including the ones that look like defaults, and every rule names its parent. This page is
+ * Chromium's, and Chromium's own interstitial stylesheet draws every button as a filled primary action --
+ * `.interstitial-wrapper button { background: ... }`, which is a class AND an element, so a plain `.orbis-offline-game`
+ * loses to it and the four quiet choices came out as four solid pills with unreadable labels. The extra class is what
+ * wins; the `float: none` undoes the same rule set trying to push each one to the right.
+ */
+.orbis-offline .orbis-offline-game {
+  float: none;
+  margin: 0;
+  padding: 3px 10px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 20px;
+  text-transform: none;
+  letter-spacing: normal;
+  color: var(--muted);
+  background: none;
+  background-color: transparent;
+  background-image: none;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.orbis-offline .orbis-offline-game:hover {
+  color: var(--text);
+}
+
+.orbis-offline .orbis-offline-game.on {
+  color: var(--accent);
+  background-color: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: var(--accent);
+}
+
+.orbis-offline .orbis-offline-game:hover:not(.on) {
+  background-color: color-mix(in srgb, var(--muted) 12%, transparent);
+}
+
+.orbis-offline .orbis-offline-game:focus-visible,
+.orbis-offline .orbis-offline-canvas:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.orbis-offline .orbis-offline-score {
+  margin: 0 0 0 4px;
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * The board.
+ *
+ * Square, and never taller than the room left under the message. A game that grew until the reason scrolled away
+ * would be the one thing this must not do.
+ */
+.orbis-offline-board {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: min(100%, 320px);
+  height: min(42vh, 320px);
+}
+
+.orbis-offline-canvas {
+  display: block;
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--muted) 8%, transparent);
+  touch-action: none;
+  cursor: pointer;
+}
+
+.orbis-offline-hint {
+  position: absolute;
+  bottom: 10px;
+  margin: 0;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--bg-mid) 86%, transparent);
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+.orbis-offline-hint[hidden] {
+  display: none;
+}
+
+/* On a short window the game gives way: the reason the page failed matters more than something to do while it fails. */
+@media (max-height: 520px) {
+  .orbis-offline {
+    display: none;
+  }
+}

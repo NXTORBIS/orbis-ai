@@ -1,0 +1,76 @@
+From c194b5e02db75edbbd45b3cc57a427ff705f7ff2 Mon Sep 17 00:00:00 2001
+From: NXTORBIS TECHNOLOGIES <nxtorbis@gmail.com>
+Date: Sat, 3 Oct 2026 13:57:30 +0530
+Subject: [PATCH] Orbis: a game on the error page
+
+The dinosaur is switched off in this build (DINO_GAME_DISABLED), which left a page that will not load with nothing on
+it but a sentence. The Orbis game is started where the dinosaur used to be, from the icon-offline branch, by a single
+function the bundled orbis_offline.js puts on the window. The error itself is untouched and stays above it.
+---
+ components/neterror/resources/neterror.html |  3 +++
+ components/neterror/resources/neterror.ts   | 28 +++++++++++++++++++++
+ 2 files changed, 31 insertions(+)
+
+diff --git a/components/neterror/resources/neterror.html b/components/neterror/resources/neterror.html
+index ead5b8a13d..3d4fc2b747 100644
+--- a/components/neterror/resources/neterror.html
++++ b/components/neterror/resources/neterror.html
+@@ -10,6 +10,9 @@
+   <link rel="stylesheet" href="../../../components/security_interstitials/core/common/resources/interstitial_core.css">
+   <link rel="stylesheet" href="../../../components/security_interstitials/core/common/resources/interstitial_common.css">
+   <link rel="stylesheet" href="neterror.css">
++  <!-- Orbis: something to do while a page will not load. Both are flattened into this file at build time. -->
++  <link rel="stylesheet" href="orbis_offline.css">
++  <script src="orbis_offline.js"></script>
+ <if expr="not optimize_webui">
+   <script src="%ROOT_GEN_DIR%/components/neterror/resources/bundled/neterror.rollup.js"></script>
+ </if>
+diff --git a/components/neterror/resources/neterror.ts b/components/neterror/resources/neterror.ts
+index a151aded69..cd34f3ed8f 100644
+--- a/components/neterror/resources/neterror.ts
++++ b/components/neterror/resources/neterror.ts
+@@ -88,6 +88,19 @@ let lastData: TemplateData|null = null;
+ let dinoGameInitialized: boolean = false;
+ const DINO_GAME_DISABLED = true;
+ void Runner;
++// Orbis's own offline game, added once. This page re-renders whenever the
++// details box is toggled, and a second board appearing under the first is
++// exactly the kind of thing nobody notices until it has shipped.
++let orbisGameAdded: boolean = false;
++
++declare global {
++  interface Window {
++    // Set by orbis_offline.js, which this page pulls in. Absent in any build
++    // where that file is not there, which is why every use of it is guarded
++    // rather than assumed.
++    orbisOfflineGame?: (host: HTMLElement) => {destroy(): void};
++  }
++}
+ 
+ function toggleHelpBox() {
+   showingDetails = !showingDetails;
+@@ -288,6 +301,21 @@ function onTemplateDataReceived(newData: TemplateData) {
+       Runner.initializeInstance('.interstitial-wrapper');
+       dinoGameInitialized = true;
+     }
++
++    // Orbis: the dinosaur is switched off in this build, which left this page
++    // with nothing on it but a sentence. This is the same four games the Orbis
++    // chat shows while it draws a picture, from the same file -- waiting for a
++    // page and waiting for a picture are the same moment. It goes UNDER the
++    // error, never over it, and it starts nothing until somebody presses a
++    // key: a page that failed in a background tab must not begin animating by
++    // itself.
++    if (!orbisGameAdded && typeof window.orbisOfflineGame === 'function') {
++      const wrapper = document.querySelector('.interstitial-wrapper');
++      if (wrapper instanceof HTMLElement) {
++        window.orbisOfflineGame(wrapper);
++        orbisGameAdded = true;
++      }
++    }
+   }
+ }
+ 
+-- 
+2.44.0.windows.1
+

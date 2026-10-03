@@ -22,6 +22,10 @@ await build({ ...shared, minify: false, entryPoints: ['orbis-ui/panel/omnibox-ui
 // The Orb's voice entry. The browser's toolbar microphone has no page of its own to record in, so it asks the Orb's
 // page, which uses the one voice pipeline Orbis has. External `./helper.js` for the same reason the omnibox is.
 await build({ ...shared, minify: false, entryPoints: ['orbis-ui/orb/voice.ts'], outfile: 'orbis-ui/orb/voice.js', format: 'esm', platform: 'browser', external: ['./helper.js'] })
+// Something to do while a page will not load: the browser's error page is Chromium's own, so this is bundled as one
+// plain script with no imports left in it, and staged into the error page's own folder by scripts/stage-neterror.mjs.
+// It draws the very same four games the chat draws while it makes a picture, from the very same file.
+await build({ ...shared, minify: false, entryPoints: ['orbis-ui/offline/offline.ts'], outfile: 'orbis-ui/offline/offline.js', format: 'iife', platform: 'browser' })
 // The start page's widgets: the board, the gallery and the studio, built from the same catalogue the app uses
 // (src/shared/widgets.ts), so the browser and Orion can never disagree about what a widget is. It is written out
 // under the name the browser already serves, so nothing in the browser itself has to change to carry it.

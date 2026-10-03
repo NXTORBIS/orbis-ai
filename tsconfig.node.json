@@ -13,5 +13,7 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true
   },
-  "include": ["electron.vite.config.ts", "src/main/**/*", "src/helper/**/*", "src/preload/**/*", "src/shared/**/*"]
+  "include": ["electron.vite.config.ts", "src/main/**/*", "src/helper/**/*", "src/preload/**/*", "src/shared/**/*"],
+  "//": "src/shared/imageGames.ts draws on a canvas: it is shared between the chat and the browser's offline page, both of which are browsers, and no part of the main process can use it. It is checked by tsconfig.web.json and tsconfig.orbis-ui.json instead, which have the DOM.",
+  "exclude": ["src/shared/imageGames.ts"]
 }
