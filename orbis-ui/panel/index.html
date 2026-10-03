@@ -29,6 +29,29 @@
       <div id="account-body" class="acct" aria-live="polite"></div>
     </section>
 
+    <!--
+      Orion, about the page in front of you: a question about it, a short version of it, or something done on it.
+
+      The three AI rows of the Command Center all open this, and so does the Ask Orion button on the toolbar, which
+      asks the browser for the view called "ask". For as long as this section did not exist, all four of those landed
+      on the Command Center instead, which is why that button looked like it did nothing.
+
+      The box stays outside the part that is redrawn, so an answer arriving mid-sentence cannot take the words
+      somebody is typing with it.
+    -->
+    <section id="view-ask" class="view" hidden>
+      <div id="ask-about" class="ask-about" aria-live="polite"></div>
+      <main id="ask-thread" aria-live="polite"></main>
+      <form id="ask-form">
+        <textarea id="ask-input" rows="2" placeholder="Ask about this page…" aria-label="Ask Orion about this page"></textarea>
+        <div class="ask-send-row">
+          <span class="ask-hint">Enter sends. Shift and Enter starts a new line.</span>
+          <button id="ask-stop" type="button" hidden>Stop</button>
+          <button id="ask-send" type="submit" disabled>Ask</button>
+        </div>
+      </form>
+    </section>
+
     <section id="view-search" class="view" hidden>
       <form id="search-form">
         <input id="query" type="search" placeholder="Search the web…" aria-label="Search" autocomplete="off" />

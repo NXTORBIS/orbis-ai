@@ -165,8 +165,28 @@ function capabilityRow(capability) {
  * policy -- the refusal is what appears, not a confirmation.
  */
 function go(capability) {
-  if (capability.target.kind === 'panel') {
-    location.hash = `#${capability.target.view}`
+  /*
+   * A panel view and a rail view are both views of this very page, so both are reached by putting the name in the
+   * address and letting the panel's own routing do the rest.
+   *
+   * A `view` row used not to come in here at all: it fell through to the bottom of this function and was handed to
+   * the browser as `chrome://orbis/#tabs`, which reloaded this page at a name the page did not recognise, so it
+   * landed on the Command Center. Fifteen rows behaved that way, and from the outside the Command Center looked like
+   * it was opening the Command Center.
+   *
+   * Setting a hash that is already the hash fires no `hashchange`, so when the view is already the current address
+   * the panel is asked directly instead -- otherwise choosing Tabs twice would do nothing the second time.
+   */
+  if (capability.target.kind === 'panel' || capability.target.kind === 'view') {
+    const view = capability.target.view
+    if (location.hash.replace(/^#\/?/, '').toLowerCase() === view.toLowerCase()) window.orbisGoTo?.(view)
+    else location.hash = `#${view}`
+    return
+  }
+  if (capability.target.kind === 'app') {
+    // Reached only if something bypasses the row's own disabled state: the Orbis window is the only place this lives,
+    // and the browser has no way to open it there. Saying so beats opening something else and calling it that.
+    say(`${capability.name} is in the Orbis window, not the browser.`)
     return
   }
   if (capability.target.kind === 'do') {

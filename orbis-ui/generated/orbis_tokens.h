@@ -41,6 +41,32 @@ constexpr uint32_t kPillBorder = 0x1FFFFFFF;
 constexpr uint32_t kBgCenter = 0xFF0E1013;
 constexpr uint32_t kBgMid = 0xFF060708;
 constexpr uint32_t kBgEdge = 0xFF000000;
+constexpr uint32_t kGrid = 0x0BFFFFFF;
+constexpr uint32_t kBarBg = 0xA6000000;
+constexpr uint32_t kRailBg = 0x66000000;
+constexpr uint32_t kHoverStrong = 0x1FFFFFFF;
+constexpr uint32_t kAccentDim = 0x8C3FD8FF;
+constexpr uint32_t kAccentGlow = 0x733FD8FF;
+constexpr uint32_t kAccentGlowSoft = 0x2E3FD8FF;
+constexpr uint32_t kDangerBorder = 0x59FF6E8C;
+constexpr uint32_t kAvatarBg = 0xFF0C0D10;
+constexpr uint32_t kAvatarBorder = 0x663FD8FF;
+constexpr uint32_t kUserBubble = 0x1A3FD8FF;
+constexpr uint32_t kUserBubbleBorder = 0x523FD8FF;
+constexpr uint32_t kComposerBorder = 0x143FD8FF;
+constexpr uint32_t kComposerGlow = 0x243FD8FF;
+constexpr uint32_t kComposerGlowStrong = 0x4D3FD8FF;
+constexpr uint32_t kComposerText = 0xFFF2F4F7;
+constexpr uint32_t kComposerPlaceholder = 0x80C8D2DE;
+constexpr uint32_t kComposerIcon = 0xB8C8D4E2;
+constexpr uint32_t kBeamDim = 0x1F3FD8FF;
+constexpr uint32_t kBeamHot = 0xFFDCFCFF;
+constexpr uint32_t kTableHead = 0x0FFFFFFF;
+constexpr uint32_t kTableBorder = 0x1AFFFFFF;
+constexpr uint32_t kCodeInlineBg = 0x12FFFFFF;
+constexpr uint32_t kGreeting = 0xFFF5F6F8;
+constexpr uint32_t kScrollbar = 0x2EFFFFFF;
+constexpr uint32_t kOptionBg = 0xFF111215;
 }  // namespace dark
 
 namespace light {
@@ -76,6 +102,32 @@ constexpr uint32_t kPillBorder = 0x293C64AA;
 constexpr uint32_t kBgCenter = 0xFFE8ECF1;
 constexpr uint32_t kBgMid = 0xFFD9DFE8;
 constexpr uint32_t kBgEdge = 0xFFCAD2DD;
+constexpr uint32_t kGrid = 0x0D285AAA;
+constexpr uint32_t kBarBg = 0xD9E8ECF1;
+constexpr uint32_t kRailBg = 0x99D9DFE8;
+constexpr uint32_t kHoverStrong = 0x1C285AAA;
+constexpr uint32_t kAccentDim = 0x660A7FB3;
+constexpr uint32_t kAccentGlow = 0x330A7FB3;
+constexpr uint32_t kAccentGlowSoft = 0x140A7FB3;
+constexpr uint32_t kDangerBorder = 0x40C52E42;
+constexpr uint32_t kAvatarBg = 0xFFF0F3F7;
+constexpr uint32_t kAvatarBorder = 0x590A7FB3;
+constexpr uint32_t kUserBubble = 0x140A7FB3;
+constexpr uint32_t kUserBubbleBorder = 0x400A7FB3;
+constexpr uint32_t kComposerBorder = 0x260A7FB3;
+constexpr uint32_t kComposerGlow = 0x140A7FB3;
+constexpr uint32_t kComposerGlowStrong = 0x2E0A7FB3;
+constexpr uint32_t kComposerText = 0xFF1A2A40;
+constexpr uint32_t kComposerPlaceholder = 0x661A2A40;
+constexpr uint32_t kComposerIcon = 0xA6354B66;
+constexpr uint32_t kBeamDim = 0x1A0A7FB3;
+constexpr uint32_t kBeamHot = 0xFF0A7FB3;
+constexpr uint32_t kTableHead = 0x143C6EC8;
+constexpr uint32_t kTableBorder = 0x1F3C64AA;
+constexpr uint32_t kCodeInlineBg = 0x0F285AAA;
+constexpr uint32_t kGreeting = 0xFF2A3F57;
+constexpr uint32_t kScrollbar = 0x403C64AA;
+constexpr uint32_t kOptionBg = 0xFFF0F3F7;
 }  // namespace light
 
 // Sizes in DIPs.

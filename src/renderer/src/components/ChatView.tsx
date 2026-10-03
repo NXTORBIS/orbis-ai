@@ -47,7 +47,6 @@ interface Props {
   onFeedback(messageId: string, feedback: 'up' | 'down' | undefined): void
   onNotify(text: string, kind?: NoticeKind): void
   onImprovePrompt(text: string): Promise<string | null>
-  onOpenSettings(): void
   onNewChat?(): void
   onSearch?(): void
 }
@@ -343,6 +342,15 @@ export default function ChatView(props: Props): React.JSX.Element {
   const last = messages.at(-1)
   // Offered after the reply, so it never interrupts: the last thing the person said, if it was about them.
   const lastUserMessage = !stream ? messages.findLast((m) => m.role === 'user')?.content : undefined
+  /*
+   * There is no way into Settings from the chat, and there used to look like one.
+   *
+   * A handler was passed from App through here into the message box below, and the message box declared it and never
+   * called it -- so three files carried a route to Settings that did not exist, and "the chat opens Settings" was
+   * true of the wiring and false of the screen. The real ways in are the user chip at the foot of the sidebar, which
+   * opens Account, "/settings" in the message box, and Ctrl+comma. If the message box ever grows a button for it,
+   * that button is what should ask for one.
+   */
   const composer = (
     <>
       <MemoryOffer message={lastUserMessage} onNotify={props.onNotify} />
@@ -367,7 +375,6 @@ export default function ChatView(props: Props): React.JSX.Element {
       onImprovePrompt={props.onImprovePrompt}
       onNewChat={props.onNewChat}
       onSearch={props.onSearch}
-      onSettings={props.onOpenSettings}
       />
     </>
   )

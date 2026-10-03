@@ -86,11 +86,18 @@
 @media (prefers-reduced-motion: reduce) { .cc * { transition: none !important; animation: none !important; } }
 
 /* ---------------------------------------------------------------- the rail
-   The panel's one navigation. Icons at rest so it takes almost no room; the words arrive when somebody reaches for it,
-   over the content rather than pushing it about, so nothing reflows under the pointer. */
+   The panel's one navigation, and it says what each row is.
 
-.nav { position: relative; z-index: 3; display: flex; flex-direction: column; width: 52px; height: 100%; min-height: 0; padding: var(--space-2) 6px; background: var(--panel); border-right: 1px solid var(--line); transition: width var(--motion-fast) var(--motion-ease); }
-.nav:hover, .nav:focus-within { width: 208px; box-shadow: var(--shadow); }
+   It used to be 52px of icons with the words at opacity 0 until the pointer arrived, which made the only navigation in
+   the panel twelve unlabelled glyphs: Browser, AI, Automation, Research, Capture, Media, Privacy, Workspace, Tools,
+   Customize and Settings, told apart by guessing. Hovering to find out what something is, every time, is not a saving.
+
+   So the words are there at rest and the rail does not change width when you point at it -- nothing to reflow, nothing
+   to wait for. 196px is measured off the longest of them, "Privacy & Protection", so no label is clipped at rest.
+   Icons-only comes back below 480px, where that much rail would leave the list it navigates too narrow to read; that is
+   the one case where there genuinely is not room for both, and there the hover still gives the words. */
+
+.nav { position: relative; z-index: 3; display: flex; flex-direction: column; width: 196px; height: 100%; min-height: 0; padding: var(--space-2) 6px; background: var(--panel); border-right: 1px solid var(--line); transition: width var(--motion-fast) var(--motion-ease); }
 
 .nav-top { display: flex; align-items: center; height: 34px; padding: 0 8px; margin-bottom: var(--space-2); }
 .nav-mark { flex: none; opacity: 0.95; }
@@ -108,13 +115,21 @@
 .nav-item[aria-current='true'] { color: var(--text); background: var(--active); }
 .nav-item[aria-current='true']::before { content: ''; position: absolute; left: 0; top: 9px; bottom: 9px; width: 2px; border-radius: 0 2px 2px 0; background: var(--accent); }
 
-.nav-label { opacity: 0; transition: opacity var(--motion-fast) var(--motion-ease); }
-.nav:hover .nav-label, .nav:focus-within .nav-label { opacity: 1; }
+/* Should a label ever outgrow the rail, it ends in an ellipsis rather than being sliced through a letter, and the
+   button's `title` still carries the whole thing. */
+.nav-label { opacity: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; transition: opacity var(--motion-fast) var(--motion-ease); }
 
 .nav-foot { margin-top: auto; padding: var(--space-2) 10px 0; }
-.nav-state { margin: 0; font-size: var(--text-sm); color: var(--muted); opacity: 0; transition: opacity var(--motion-fast) var(--motion-ease); }
-.nav:hover .nav-state, .nav:focus-within .nav-state { opacity: 1; }
+.nav-state { margin: 0; font-size: var(--text-sm); color: var(--muted); opacity: 1; transition: opacity var(--motion-fast) var(--motion-ease); }
 .nav-state:empty { display: none; }
+
+/* Too narrow for both the words and the list they lead to: icons at rest, and the words on hover as before. */
+@media (max-width: 479px) {
+  .nav { width: 52px; }
+  .nav:hover, .nav:focus-within { width: 208px; box-shadow: var(--shadow); }
+  .nav-label, .nav-state { opacity: 0; }
+  .nav:hover .nav-label, .nav:focus-within .nav-label, .nav:hover .nav-state, .nav:focus-within .nav-state { opacity: 1; }
+}
 
 @media (prefers-reduced-motion: reduce) { .nav, .nav-label, .nav-state { transition: none; } }
 

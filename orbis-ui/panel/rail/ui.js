@@ -78,7 +78,9 @@ export function favicon(url) {
 // ---------------------------------------------------------------- the views
 
 const views = new Map()
-let current = 'ask'
+// Where the panel starts: the Command Center. It said 'ask' for a long time, and there is no view called 'ask' in
+// this panel -- so the very first thing `showView` did with it was look for a tab button that does not exist.
+let current = 'home'
 
 export const isVisible = () => document.visibilityState === 'visible'
 
@@ -91,7 +93,9 @@ export function registerView(id, { title, iconName, draw }) {
   const section = el(
     'section',
     { class: 'view rail-view', id: `view-${id}`, role: 'region', 'aria-label': title, hidden: true },
-    el('header', { class: 'rv-head' }, icon(iconName, 16), el('h2', {}, title), iconButton('close', `Close ${title}`, () => showView('ask'))),
+    // Closing a view goes back to the Command Center, which is where it was opened from. It used to ask for 'ask',
+    // a view this panel does not have, so the close button on every one of these twelve views did nothing.
+    el('header', { class: 'rv-head' }, icon(iconName, 16), el('h2', {}, title), iconButton('close', `Close ${title}`, () => showView('home'))),
     body
   )
   const listeners = { show: [], hide: [] }
@@ -109,7 +113,7 @@ export function registerView(id, { title, iconName, draw }) {
 
 export const hasView = (id) => views.has(id)
 
-/** Shows a rail view, or one of the panel's own tabs (by the name showTab knows, e.g. "ask"). */
+/** Shows a rail view, or one of the panel's own views (by the name showTab knows, e.g. "home" or "notes"). */
 export function showView(id) {
   const previous = current
   if (views.has(id)) {
@@ -117,8 +121,17 @@ export function showView(id) {
     for (const b of document.querySelectorAll('.tabs button')) b.setAttribute('aria-selected', 'false')
     current = id
   } else {
-    // One of the panel's own tabs: panel.js shows it and tells us (orbis:view), which hides the view that was in front.
-    document.getElementById(`tab-${id}`)?.click()
+    /*
+     * One of the panel's own views: panel.js shows it and tells us (orbis:view), which hides the view that was in
+     * front.
+     *
+     * It used to click `#tab-<id>`. That row of tab buttons was taken out of index.html, and panel.js says so in as
+     * many words -- "the row of tabs that repeated it is gone" -- so the click found nothing and leaving a rail view
+     * was impossible. `window.orbisGoTo` is what the browser itself uses to move this page, and it is the one that
+     * is really there.
+     */
+    if (typeof window.orbisGoTo === 'function') window.orbisGoTo(id)
+    else document.getElementById(`tab-${id}`)?.click()
     return
   }
   if (previous !== id) views.get(previous)?.listeners.hide.forEach((fn) => fn())

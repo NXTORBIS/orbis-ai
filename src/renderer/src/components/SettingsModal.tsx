@@ -75,6 +75,7 @@ export default function SettingsModal({ settings, onUpdate, onClose, section }: 
     userTitle: settings.userTitle
   })
   const body = useRef<HTMLDivElement | null>(null)
+  const search = useRef<HTMLInputElement | null>(null)
 
   const saveText = useCallback((): void => {
     const update: SettingsUpdate = {}
@@ -89,17 +90,6 @@ export default function SettingsModal({ settings, onUpdate, onClose, section }: 
     saveText()
     onClose()
   }, [saveText, onClose])
-
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent): void => {
-      if (e.key !== 'Escape') return
-      // Escape clears the search before it closes Settings: the first is far more often what was meant.
-      if (query) setQuery('')
-      else close()
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [query, close])
 
   /** Opening a section starts it at the top, rather than wherever the previous one had been scrolled to. */
   useEffect(() => {
@@ -123,6 +113,68 @@ export default function SettingsModal({ settings, onUpdate, onClose, section }: 
   useEffect(() => {
     if (query.trim() && shown.length > 0 && !shown.some((one) => one.id === active)) setActive(shown[0].id)
   }, [query, shown, active])
+
+  /**
+   * Getting around without the mouse.
+   *
+   * Escape closes, or clears the search first when there is one, because that is far more often what was meant. Up
+   * and down move through the list of sections. The slash key jumps to the search box, so finding a setting by name
+   * never needs the mouse either.
+   *
+   * The check on what is being typed into is the whole difficulty here. Settings is full of boxes — names, custom
+   * instructions, every password panel — and the instructions box is several lines tall. Inside one of those, up and
+   * down have to move the cursor and a slash has to type a slash; a shortcut that steals either would make the boxes
+   * unusable. So the arrows are read everywhere except a box that holds text, with the search box itself the
+   * deliberate exception, because moving through the results while still typing is the point of it. The slash is
+   * read only when nothing at all is being typed into.
+   *
+   * The search box is not given the cursor when Settings opens, for the same reason: if it had the cursor, slash
+   * would simply type a slash and the shortcut would never work.
+   *
+   * And once somebody has tabbed into the section on the right, the arrows go back to being the arrows: they scroll
+   * what is in front of them. Changing the section out from under somebody who is working inside it would be the
+   * shortcut taking something away rather than adding something.
+   */
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent): void => {
+      const target = e.target as HTMLElement | null
+      const inSearch = target === search.current
+      const tag = target?.tagName
+      const typing = !inSearch && (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable === true)
+      const inSection = target !== null && body.current !== null && body.current.contains(target)
+
+      if (e.key === 'Escape') {
+        // Innermost thing first. The licences open on top of Settings, so Escape should put them away and leave
+        // Settings where it was, rather than closing both and losing the section somebody was reading.
+        if (noticesOpen) setNoticesOpen(false)
+        else if (query) setQuery('')
+        else close()
+        return
+      }
+
+      // Nothing else reaches past the licences: moving the section behind them would be a change nobody could see.
+      if (noticesOpen) return
+
+      if (e.key === '/' && !typing && !inSearch && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault()
+        search.current?.focus()
+        search.current?.select()
+        return
+      }
+
+      if ((e.key === 'ArrowDown' || e.key === 'ArrowUp') && !typing && !inSection && shown.length > 0) {
+        e.preventDefault()
+        const at = shown.findIndex((one) => one.id === active)
+        const step = e.key === 'ArrowDown' ? 1 : -1
+        // Stops at either end rather than wrapping round. Eight sections that loop are eight you can lose your
+        // place in: pressing down twice too often puts you back at the top with no sign that anything happened.
+        const next = Math.min(shown.length - 1, Math.max(0, (at < 0 ? 0 : at) + step))
+        setActive(shown[next].id)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [query, close, shown, active, noticesOpen])
 
   const profileField = (key: ProfileKey, label: string, placeholder: string): React.JSX.Element => (
     <label className="field">
@@ -156,10 +208,14 @@ export default function SettingsModal({ settings, onUpdate, onClose, section }: 
             <div className="st-search">
               <Search size={13} />
               <input
+                ref={search}
                 type="search"
                 value={query}
                 placeholder="Search settings"
                 aria-label="Search settings"
+                // Said rather than left to be discovered. The arrows and the slash key work whether anybody reads
+                // this or not, but a shortcut nobody knows about is a shortcut nobody has.
+                title="Press / to search, up and down to move between sections"
                 onChange={(e) => setQuery(e.target.value)}
               />
             </div>

@@ -1257,7 +1257,9 @@ export default function App(): React.JSX.Element {
         toggleIncognito()
       } else if (key === ',') {
         e.preventDefault()
-        setSettingsOpen(true)
+        // Named rather than left to the default, so that whichever section Settings happens to open at first can
+        // change without quietly changing where this shortcut lands.
+        setSettingsAt('account')
       } else if (key === 'b') {
         e.preventDefault()
         toggleSidebar()
@@ -1449,7 +1451,6 @@ export default function App(): React.JSX.Element {
             onFeedback={(messageId, feedback) => active && setFeedback(active.id, messageId, feedback)}
             onNotify={notify}
             onImprovePrompt={improvePrompt}
-            onOpenSettings={() => setSettingsOpen(true)}
             onNewChat={newChat}
             onSearch={openSearch}
           />

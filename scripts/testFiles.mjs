@@ -99,6 +99,7 @@ export const TEST_FILES = [
   'src/main/personal/profileData.test.ts',
   'src/main/knowledge/recall.test.ts',
   'src/shared/settingsSections.test.ts',
+  'src/shared/settingsSearch.test.ts',
   'src/main/knowledge/recallCapture.test.ts',
   'src/shared/recall.test.ts',
   'src/main/knowledge/memory.test.ts',
@@ -131,6 +132,10 @@ export const TEST_FILES = [
   'src/main/workflows/orion.test.ts',
   'src/shared/calculate.test.ts',
   'src/shared/commandCenter.test.ts',
+  'src/shared/commandCenterDestinations.test.ts',
+  // The Ask Orion screen in the browser panel, run against a stand-in for the page. Beside the two above because it
+  // is the other half of the same thing: those check that the rows lead somewhere, this checks what is there.
+  'orbis-ui/panel/askView.test.mjs',
   'src/shared/contextEngine.test.ts',
   'src/shared/orbReference.test.ts',
   'src/shared/orbSafety.test.ts',
@@ -384,4 +389,5 @@ export const TEST_FILES = [
   'src/main/artifacts/sharing.test.ts',
   'src/main/artifacts/searching.test.ts',
   'src/main/artifacts/wiring.test.ts',
+  'src/shared/tokens.test.ts',
 ]

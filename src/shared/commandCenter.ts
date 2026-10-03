@@ -82,6 +82,45 @@ export type Target =
    * that was never built, and one whose channel is missing says so instead of reporting a success nobody performed.
    */
   | { kind: 'ask'; channel: string }
+  /**
+   * A screen the Orbis window has and the browser does not.
+   *
+   * Pages and Markets are the two of these. They used to be written down as `{ kind: 'panel', view: 'home' }`, which
+   * resolved -- 'home' is a real view -- and so passed every check there was, while doing the one thing a row must
+   * never do: clicking "Pages" in the Command Center opened the Command Center. Saying "this one lives in the Orbis
+   * window" is the truth, and the truth is something the interface can tell somebody. There is no helper channel that
+   * opens the Orbis window at a chosen screen, so until there is, the row's job is to say where to look.
+   */
+  | { kind: 'app' }
+
+/**
+ * The views the Orbis panel actually has, which is the list the panel itself navigates by.
+ *
+ * `orbis-ui/panel/panel.js` reads this rather than keeping a second copy, and the first copy is why this list exists.
+ * The panel had its own array of eleven names; the registry had capabilities pointing at fifteen more; and because
+ * nothing compared the two, a row for a view the panel had never heard of looked exactly like a row for one it had.
+ * Clicking "Tabs" put `#tabs` in the address bar, the panel did not recognise it, and it fell back to the Command
+ * Center -- so the Command Center appeared to open the Command Center. Eighteen rows behaved that way.
+ *
+ * Adding a name here is a claim that `orbis-ui/panel/index.html` has a `<section id="view-NAME">` to go with it.
+ * commandCenterDestinations.test.ts reads that file and checks, so the claim cannot be made by mistake.
+ *
+ * 'home' is the Command Center itself. It is a real view, which is why it is here, but no capability may point at it:
+ * a row whose destination is the screen you clicked it on has not taken you anywhere.
+ */
+export const PANEL_VIEWS = ['home', 'ask', 'search', 'block', 'recall', 'schedules', 'notes', 'tasks', 'workflows', 'galaxy', 'secrets', 'account'] as const
+
+/**
+ * The panel's rail views: Tabs, Tab groups, Media, Controls, and the ones that read a store.
+ *
+ * A different set from the one above, and that difference is the whole trap. These are not written into index.html --
+ * `orbis-ui/panel/rail/browser.js` and `rail/stores.js` build them and hand them to `registerView` as the page loads,
+ * so they exist only once that code has run. They were fully built, 900 lines of them, and completely unreachable:
+ * nothing called the one function that reveals them, and the panel's own routing hid them again on every move.
+ *
+ * Same rule as above: a name here is a claim that one of those files registers it, and the test reads the files.
+ */
+export const RAIL_VIEWS = ['tabs', 'tabGroups', 'media', 'controls', 'savedPages', 'screenshots', 'reminders', 'clipboard', 'whiteboard', 'research', 'sources', 'workspaces'] as const
 
 export interface OrbisCapability {
   id: string
@@ -148,12 +187,26 @@ export const CAPABILITIES: OrbisCapability[] = [
   { id: 'downloads', name: 'Downloads', category: 'browser', description: 'Files Orbis has fetched', icon: 'downloads', keywords: ['download', 'file', 'saved'], target: { kind: 'page', url: 'chrome://downloads/' }, pinnable: false, needs: ['browser'] },
   { id: 'extensions', name: 'Extensions', category: 'browser', description: 'What is installed, and whether it is on', icon: 'extensions', keywords: ['extension', 'addon', 'add-on', 'plugin'], target: { kind: 'page', url: 'chrome://extensions/' }, pinnable: false, needs: ['browser'] },
 
-  { id: 'controls', name: 'Browser controls', category: 'browser', description: 'Everything Orbis can be asked to do, and what it has done', icon: 'controls', keywords: ['control', 'command', 'capability', 'action'], target: { kind: 'view', view: 'controls' }, pinnable: false, needs: ['browser', 'helper'] },
+  // The description used to read "Everything Orbis can be asked to do, and what it has done". The view behind it
+  // (rail/browser.js) has three groups -- Navigation, Zoom, and a box to open an address -- and keeps no record of
+  // anything. Half of that sentence was a feature nobody had written, promised on the row that led to it.
+  { id: 'controls', name: 'Browser controls', category: 'browser', description: 'Back, forward, zoom, and opening an address', icon: 'controls', keywords: ['control', 'command', 'capability', 'action'], target: { kind: 'view', view: 'controls' }, pinnable: false, needs: ['browser', 'helper'] },
 
   // ---- AI
+  //
+  // All three open the panel's #ask view, which is one screen that does all three things: a question about the page in
+  // front of you, the short version of it, or something done on it. They are three uses of one request rather than
+  // three systems, because the helper already has the one place that decides which of those a sentence is (`orb:ask`),
+  // and the screen names all three on arrival so whichever row was clicked, that thing is one step away.
+  //
+  // Until that view was written these three were the only rows in the registry whose destination did not exist. They
+  // were drawn as live, clicked, and quietly redrew the Command Center -- and because 'ask' carries a real toolbar
+  // action, the Ask Orion button beside the address bar did exactly the same thing.
   { id: 'ask', name: 'Ask Orion', category: 'ai', description: 'Ask about this page, or about anything', icon: 'orion', keywords: ['orion', 'ai', 'chat', 'ask', 'assistant', 'question'], target: { kind: 'panel', view: 'ask' }, pinnable: true, needs: ['helper', 'key'] },
   { id: 'orbSummarise', name: 'Summarise this page', category: 'ai', description: 'What this page says, in short', icon: 'orion', keywords: ['summary', 'summarise', 'summarize', 'tldr', 'explain'], target: { kind: 'panel', view: 'ask' }, pinnable: false, needs: ['helper', 'key', 'browser', 'page'] },
-  { id: 'browserTask', name: 'Do something on this page', category: 'ai', description: 'Give Orbis a task and watch it work in the browser', icon: 'controls', keywords: ['task', 'agent', 'automate', 'click', 'do', 'act'], target: { kind: 'panel', view: 'ask' }, pinnable: false, needs: ['helper', 'key', 'browser'] },
+  // "watch it work in the browser" was a promise nothing kept while the screen did not exist. It does now, and the
+  // wording says what is actually shown: the steps the Browser Control Layer confirmed, as it confirms them.
+  { id: 'browserTask', name: 'Do something on this page', category: 'ai', description: 'Give Orbis a task and watch every step it takes', icon: 'controls', keywords: ['task', 'agent', 'automate', 'click', 'do', 'act'], target: { kind: 'panel', view: 'ask' }, pinnable: false, needs: ['helper', 'key', 'browser'] },
 
   // ---- Automation
   { id: 'workflows', name: 'Workflows', category: 'automation', description: 'Sequences Orbis runs for you, and what they did', icon: 'workflows', keywords: ['workflow', 'automation', 'automate', 'routine', 'schedule', 'run'], target: { kind: 'panel', view: 'workflows' }, app: 'workflows', pinnable: true, needs: ['helper'] },
@@ -169,9 +222,10 @@ export const CAPABILITIES: OrbisCapability[] = [
 
   // ---- Capture
   { id: 'screenshots', name: 'Screenshots', category: 'capture', description: 'Pictures taken of pages', icon: 'screenshots', keywords: ['screenshot', 'capture', 'picture', 'image', 'snap'], target: { kind: 'view', view: 'screenshots' }, pinnable: false, needs: ['helper'] },
-  // The pages this person has read, searchable by what was in them. A real view in the panel, unlike several of the
-  // rows around it -- `recall` is in the panel's VIEWS, so this one goes somewhere.
-  { id: 'recall', name: 'Pages you have read', category: 'capture', description: 'Find a page again by what was in it', icon: 'savedPages', keywords: ['read', 'history', 'again', 'remember', 'find', 'article', 'recall'], target: { kind: 'view', view: 'recall' }, pinnable: false, needs: ['helper'] },
+  // The pages this person has read, searchable by what was in them. A `panel` target, not a `view` one: this is a
+  // section of index.html, not one of the rail's. It said `view` and worked anyway, because the panel happened to
+  // know the name -- which is exactly the sort of near-miss that makes a wrong kind survive for months.
+  { id: 'recall', name: 'Pages you have read', category: 'capture', description: 'Find a page again by what was in it', icon: 'savedPages', keywords: ['read', 'history', 'again', 'remember', 'find', 'article', 'recall'], target: { kind: 'panel', view: 'recall' }, pinnable: false, needs: ['helper'] },
   /*
    * Schedules. A `panel` target rather than a `view` one, because the panel's own section is where it lives -- the
    * rail views are a different set, and pointing at one of those would land on the Command Center instead.
@@ -202,10 +256,11 @@ export const CAPABILITIES: OrbisCapability[] = [
 
   // ---- Customize
   { id: 'customize', name: 'Customize', category: 'customize', description: 'How the new tab page looks, and what it shows', icon: 'customize', keywords: ['customize', 'customise', 'theme', 'appearance', 'wallpaper', 'widget', 'look'], target: { kind: 'page', url: 'chrome://orbis-newtab/' }, app: 'customize', pinnable: false, needs: ['browser'] },
-  // Tools. Both of these are Orbis window screens with no browser counterpart, which is why neither was ever in this
-  // list: nothing browser-side needed them, and nothing app-side read this list.
-  { id: 'pages', name: 'Pages', category: 'tools', description: 'Orbis\u2019s own tools, each with its own address', icon: 'pages', keywords: ['page', 'tool', 'calculator', 'converter', 'lab', 'build'], target: { kind: 'panel', view: 'home' }, app: 'pages', pinnable: false, needs: ['helper'] },
-  { id: 'markets', name: 'Markets', category: 'tools', description: 'Live prices, charts and watchlists', icon: 'markets', keywords: ['market', 'price', 'chart', 'crypto', 'ticker', 'watchlist', 'trading'], target: { kind: 'panel', view: 'home' }, app: 'markets', pinnable: false, needs: ['helper'] },
+  // Tools. Both of these are Orbis window screens with no browser counterpart, which is why they are `app` targets:
+  // the browser has nowhere to put them. They were both written down as the panel's 'home' view, so choosing Pages in
+  // the Command Center redrew the Command Center.
+  { id: 'pages', name: 'Pages', category: 'tools', description: 'Orbis\u2019s own tools, each with its own address', icon: 'pages', keywords: ['page', 'tool', 'calculator', 'converter', 'lab', 'build'], target: { kind: 'app' }, app: 'pages', pinnable: false, needs: ['helper'] },
+  { id: 'markets', name: 'Markets', category: 'tools', description: 'Live prices, charts and watchlists', icon: 'markets', keywords: ['market', 'price', 'chart', 'crypto', 'ticker', 'watchlist', 'trading'], target: { kind: 'app' }, app: 'markets', pinnable: false, needs: ['helper'] },
   { id: 'profiles', name: 'Profiles', category: 'settings', description: 'Separate lives, separate data', icon: 'account', keywords: ['profile', 'account', 'switch', 'person'], target: { kind: 'panel', view: 'account' }, app: 'profiles', pinnable: false, needs: ['helper'] },
 
   { id: 'settings', name: 'Settings', category: 'settings', description: 'Everything there is to change', icon: 'settings', keywords: ['settings', 'preferences', 'options', 'configure', 'setup'], target: { kind: 'page', url: 'chrome://settings/' }, pinnable: false, needs: ['browser'] },
@@ -218,7 +273,9 @@ export const CAPABILITIES: OrbisCapability[] = [
   { id: 'settings.accessibility', name: 'Accessibility', category: 'settings', description: 'Captions, focus and navigating without a mouse', icon: 'accessibility', keywords: ['accessibility', 'a11y', 'caption', 'captions', 'screen reader', 'contrast', 'keyboard'], target: { kind: 'page', url: 'chrome://settings/accessibility' }, pinnable: false, needs: ['browser'] },
   { id: 'settings.system', name: 'System', category: 'settings', description: 'Startup, hardware acceleration and the proxy', icon: 'system', keywords: ['system', 'startup', 'hardware acceleration', 'gpu', 'proxy', 'background'], target: { kind: 'page', url: 'chrome://settings/system' }, pinnable: false, needs: ['browser'] },
   { id: 'settings.reset', name: 'Reset settings', category: 'settings', description: 'Put every setting back the way it started', icon: 'reset', keywords: ['reset', 'restore', 'defaults', 'factory', 'start over'], target: { kind: 'page', url: 'chrome://settings/reset' }, pinnable: false, needs: ['browser'] },
-  { id: 'account', name: 'Account', category: 'customize', description: 'Who Orbis knows you as', icon: 'account', keywords: ['account', 'profile', 'name', 'identity', 'who'], target: { kind: 'panel', view: 'account' }, pinnable: true, needs: ['helper'] }
+  // Under Settings, beside Profiles, which opens the same screen. It used to sit under Customize -- "How Orbis looks
+  // and what sits on the toolbar" -- where who you are signed in as is not what anybody was looking for.
+  { id: 'account', name: 'Account', category: 'settings', description: 'Who Orbis knows you as', icon: 'account', keywords: ['account', 'profile', 'name', 'identity', 'who'], target: { kind: 'panel', view: 'account' }, pinnable: true, needs: ['helper'] }
 ]
 
 export const capabilityById = (id: string): OrbisCapability | undefined => CAPABILITIES.find((c) => c.id === id)
@@ -234,8 +291,41 @@ export interface Readiness {
   page: boolean
 }
 
+/**
+ * Why a capability has nowhere to go, in the words the interface says. Null when its destination is really there.
+ *
+ * This is the case `unavailableBecause` was missing. It knew about the browser being closed, Orbis not running, Orion
+ * having no key and there being no page -- four things that can be fixed by doing something -- and had no idea of the
+ * fifth: the place this row leads to does not exist. So eighteen rows were drawn as live, were clicked, and quietly
+ * went nowhere. A reason somebody can act on ("The browser is not connected") would have been the wrong answer here:
+ * they would have connected the browser and clicked again.
+ *
+ * Only `panel`, `view` and `app` destinations can be checked from here, because only those are named in this file. A
+ * `page` is a chrome:// address inside a browser this code never sees; a `do` names a handler compiled into that
+ * browser; an `ask` names a helper channel. commandCenterDestinations.test.ts checks the `ask` channels against the
+ * helper's own source, and the test says plainly which kinds it cannot reach.
+ */
+export function destinationMissing(capability: OrbisCapability): string | null {
+  const target = capability.target
+  if (target.kind === 'app') return 'Only in the Orbis window'
+  if (target.kind === 'panel') {
+    // Not an oversight: 'home' is a real view. It is the Command Center, and the Command Center is where these rows
+    // are drawn, so a row pointing at it is a row that goes nowhere while looking like one that goes somewhere.
+    if (target.view === 'home') return 'This is the screen you are on'
+    return (PANEL_VIEWS as readonly string[]).includes(target.view) ? null : 'Orbis has not built this screen yet'
+  }
+  if (target.kind === 'view') {
+    return (RAIL_VIEWS as readonly string[]).includes(target.view) ? null : 'Orbis has not built this screen yet'
+  }
+  return null
+}
+
 /** Why a capability cannot be used, in the words the interface says. Null when it can. */
 export function unavailableBecause(capability: OrbisCapability, ready: Readiness): string | null {
+  // Asked before anything else. Nothing a person can start, connect or set up will make a destination that was never
+  // built appear, so telling them Orbis is not running would send them off to fix the wrong thing.
+  const nowhere = destinationMissing(capability)
+  if (nowhere) return nowhere
   for (const need of capability.needs) {
     if (need === 'browser' && !ready.browser) return 'The browser is not connected'
     if (need === 'helper' && !ready.helper) return 'Orbis is not running'
@@ -315,8 +405,9 @@ export function searchCapabilities(query: string, ready: Readiness, limit = 8): 
 /**
  * The address a capability opens at, or '' for one that has none.
  *
- * A capability that does something rather than going somewhere has no address, and is given none. Returning a
- * plausible-looking one would mean a caller could navigate to it and get a page that does nothing.
+ * A capability that does something rather than going somewhere has no address, and is given none. Nor has one that
+ * lives in the Orbis window, which the browser cannot reach. Returning a plausible-looking one would mean a caller
+ * could navigate to it and get a page that does nothing, which is what `chrome://orbis/#tabs` was.
  */
 export function addressFor(capability: OrbisCapability): string {
   if (capability.target.kind === 'panel' || capability.target.kind === 'view') return `chrome://orbis/#${capability.target.view}`

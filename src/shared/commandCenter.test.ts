@@ -39,11 +39,32 @@ test('only capabilities with a real toolbar action are pinnable', () => {
 // ---------------------------------------------------------------- availability
 
 test('a capability says which thing is missing, not just that it is missing', () => {
-  assert.equal(unavailableBecause(capabilityById('ask')!, all), null)
-  assert.match(unavailableBecause(capabilityById('ask')!, { ...all, helper: false })!, /not running/)
-  assert.match(unavailableBecause(capabilityById('ask')!, { ...all, key: false })!, /no key/)
+  assert.equal(unavailableBecause(capabilityById('workflows')!, all), null)
+  assert.match(unavailableBecause(capabilityById('workflows')!, { ...all, helper: false })!, /not running/)
+  assert.match(unavailableBecause(capabilityById('secrets')!, { ...all, helper: false })!, /not running/)
   assert.match(unavailableBecause(capabilityById('tabs')!, { ...all, browser: false })!, /not connected/)
   assert.match(unavailableBecause(capabilityById('zoom')!, { ...all, page: false })!, /no page/)
+})
+
+test('Orion has no key is still reported as that, and not as something else', () => {
+  // Back on "Ask Orion", where it belongs. For a while this had to be checked on another row: the #ask view that row
+  // opens had never been written, so it reported the missing screen first -- the right answer for that row, and the
+  // wrong test for this. The screen exists now, so the missing key is the first thing in the way again.
+  assert.match(unavailableBecause(capabilityById('ask')!, { ...all, key: false })!, /no key/)
+  assert.match(unavailableBecause(capabilityById('adblock')!, { ...all, helper: false })!, /not running/)
+})
+
+test('the three Orion rows open a screen that is really there', () => {
+  // Ask Orion, Summarise this page and Do something on this page all open the panel's #ask view, and for a long time
+  // the panel had no such view: all three were drawn as live rows and clicking one redrew the Command Center. The
+  // view is a section of orbis-ui/panel/index.html now, which commandCenterDestinations.test.ts checks by reading the
+  // markup. Here the claim is the narrower one: with everything running, none of them has anything in the way.
+  for (const id of ['ask', 'orbSummarise', 'browserTask']) {
+    assert.equal(unavailableBecause(capabilityById(id)!, all), null, `${id} still says it cannot be used`)
+  }
+  // And each of them still names what it needs, rather than being offered whatever the state of the world.
+  assert.match(unavailableBecause(capabilityById('orbSummarise')!, { ...all, page: false })!, /no page/)
+  assert.match(unavailableBecause(capabilityById('browserTask')!, { ...all, browser: false })!, /not connected/)
 })
 
 test('with nothing running, nothing claims to be usable', () => {

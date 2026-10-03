@@ -15,6 +15,8 @@ var CATEGORIES = [
   { id: "customize", label: "Customize", icon: "customize", blurb: "How Orbis looks and what sits on the toolbar" },
   { id: "settings", label: "Settings", icon: "settings", blurb: "Every setting, found by name instead of hunted for" }
 ];
+var PANEL_VIEWS = ["home", "ask", "search", "block", "recall", "schedules", "notes", "tasks", "workflows", "galaxy", "secrets", "account"];
+var RAIL_VIEWS = ["tabs", "tabGroups", "media", "controls", "savedPages", "screenshots", "reminders", "clipboard", "whiteboard", "research", "sources", "workspaces"];
 var CAPABILITIES = [
   // ---- Browser
   { id: "tabs", name: "Tabs", category: "browser", description: "Every open tab, to search, switch or close", icon: "tabs", keywords: ["tab", "switch", "open", "close"], target: { kind: "view", view: "tabs" }, pinnable: false, needs: ["browser", "helper"] },
@@ -26,11 +28,25 @@ var CAPABILITIES = [
   { id: "history", name: "History", category: "browser", description: "Where this profile has been", icon: "history", keywords: ["history", "visited", "recent"], target: { kind: "page", url: "chrome://history/" }, pinnable: false, needs: ["browser"] },
   { id: "downloads", name: "Downloads", category: "browser", description: "Files Orbis has fetched", icon: "downloads", keywords: ["download", "file", "saved"], target: { kind: "page", url: "chrome://downloads/" }, pinnable: false, needs: ["browser"] },
   { id: "extensions", name: "Extensions", category: "browser", description: "What is installed, and whether it is on", icon: "extensions", keywords: ["extension", "addon", "add-on", "plugin"], target: { kind: "page", url: "chrome://extensions/" }, pinnable: false, needs: ["browser"] },
-  { id: "controls", name: "Browser controls", category: "browser", description: "Everything Orbis can be asked to do, and what it has done", icon: "controls", keywords: ["control", "command", "capability", "action"], target: { kind: "view", view: "controls" }, pinnable: false, needs: ["browser", "helper"] },
+  // The description used to read "Everything Orbis can be asked to do, and what it has done". The view behind it
+  // (rail/browser.js) has three groups -- Navigation, Zoom, and a box to open an address -- and keeps no record of
+  // anything. Half of that sentence was a feature nobody had written, promised on the row that led to it.
+  { id: "controls", name: "Browser controls", category: "browser", description: "Back, forward, zoom, and opening an address", icon: "controls", keywords: ["control", "command", "capability", "action"], target: { kind: "view", view: "controls" }, pinnable: false, needs: ["browser", "helper"] },
   // ---- AI
+  //
+  // All three open the panel's #ask view, which is one screen that does all three things: a question about the page in
+  // front of you, the short version of it, or something done on it. They are three uses of one request rather than
+  // three systems, because the helper already has the one place that decides which of those a sentence is (`orb:ask`),
+  // and the screen names all three on arrival so whichever row was clicked, that thing is one step away.
+  //
+  // Until that view was written these three were the only rows in the registry whose destination did not exist. They
+  // were drawn as live, clicked, and quietly redrew the Command Center -- and because 'ask' carries a real toolbar
+  // action, the Ask Orion button beside the address bar did exactly the same thing.
   { id: "ask", name: "Ask Orion", category: "ai", description: "Ask about this page, or about anything", icon: "orion", keywords: ["orion", "ai", "chat", "ask", "assistant", "question"], target: { kind: "panel", view: "ask" }, pinnable: true, needs: ["helper", "key"] },
   { id: "orbSummarise", name: "Summarise this page", category: "ai", description: "What this page says, in short", icon: "orion", keywords: ["summary", "summarise", "summarize", "tldr", "explain"], target: { kind: "panel", view: "ask" }, pinnable: false, needs: ["helper", "key", "browser", "page"] },
-  { id: "browserTask", name: "Do something on this page", category: "ai", description: "Give Orbis a task and watch it work in the browser", icon: "controls", keywords: ["task", "agent", "automate", "click", "do", "act"], target: { kind: "panel", view: "ask" }, pinnable: false, needs: ["helper", "key", "browser"] },
+  // "watch it work in the browser" was a promise nothing kept while the screen did not exist. It does now, and the
+  // wording says what is actually shown: the steps the Browser Control Layer confirmed, as it confirms them.
+  { id: "browserTask", name: "Do something on this page", category: "ai", description: "Give Orbis a task and watch every step it takes", icon: "controls", keywords: ["task", "agent", "automate", "click", "do", "act"], target: { kind: "panel", view: "ask" }, pinnable: false, needs: ["helper", "key", "browser"] },
   // ---- Automation
   { id: "workflows", name: "Workflows", category: "automation", description: "Sequences Orbis runs for you, and what they did", icon: "workflows", keywords: ["workflow", "automation", "automate", "routine", "schedule", "run"], target: { kind: "panel", view: "workflows" }, app: "workflows", pinnable: true, needs: ["helper"] },
   // ---- Research
@@ -42,9 +58,10 @@ var CAPABILITIES = [
   { id: "research", name: "Research", category: "research", description: "What Orion has looked into, and what it found", icon: "research", keywords: ["research", "investigate", "study", "deep"], target: { kind: "view", view: "research" }, pinnable: false, needs: ["helper"] },
   // ---- Capture
   { id: "screenshots", name: "Screenshots", category: "capture", description: "Pictures taken of pages", icon: "screenshots", keywords: ["screenshot", "capture", "picture", "image", "snap"], target: { kind: "view", view: "screenshots" }, pinnable: false, needs: ["helper"] },
-  // The pages this person has read, searchable by what was in them. A real view in the panel, unlike several of the
-  // rows around it -- `recall` is in the panel's VIEWS, so this one goes somewhere.
-  { id: "recall", name: "Pages you have read", category: "capture", description: "Find a page again by what was in it", icon: "savedPages", keywords: ["read", "history", "again", "remember", "find", "article", "recall"], target: { kind: "view", view: "recall" }, pinnable: false, needs: ["helper"] },
+  // The pages this person has read, searchable by what was in them. A `panel` target, not a `view` one: this is a
+  // section of index.html, not one of the rail's. It said `view` and worked anyway, because the panel happened to
+  // know the name -- which is exactly the sort of near-miss that makes a wrong kind survive for months.
+  { id: "recall", name: "Pages you have read", category: "capture", description: "Find a page again by what was in it", icon: "savedPages", keywords: ["read", "history", "again", "remember", "find", "article", "recall"], target: { kind: "panel", view: "recall" }, pinnable: false, needs: ["helper"] },
   /*
    * Schedules. A `panel` target rather than a `view` one, because the panel's own section is where it lives -- the
    * rail views are a different set, and pointing at one of those would land on the Command Center instead.
@@ -71,10 +88,11 @@ var CAPABILITIES = [
   { id: "clipboard", name: "Clipboard", category: "workspace", description: "What has been copied lately", icon: "clipboard", keywords: ["clipboard", "copied", "paste", "copy"], target: { kind: "view", view: "clipboard" }, app: "clipboard", pinnable: false, needs: ["helper"] },
   // ---- Customize
   { id: "customize", name: "Customize", category: "customize", description: "How the new tab page looks, and what it shows", icon: "customize", keywords: ["customize", "customise", "theme", "appearance", "wallpaper", "widget", "look"], target: { kind: "page", url: "chrome://orbis-newtab/" }, app: "customize", pinnable: false, needs: ["browser"] },
-  // Tools. Both of these are Orbis window screens with no browser counterpart, which is why neither was ever in this
-  // list: nothing browser-side needed them, and nothing app-side read this list.
-  { id: "pages", name: "Pages", category: "tools", description: "Orbis\u2019s own tools, each with its own address", icon: "pages", keywords: ["page", "tool", "calculator", "converter", "lab", "build"], target: { kind: "panel", view: "home" }, app: "pages", pinnable: false, needs: ["helper"] },
-  { id: "markets", name: "Markets", category: "tools", description: "Live prices, charts and watchlists", icon: "markets", keywords: ["market", "price", "chart", "crypto", "ticker", "watchlist", "trading"], target: { kind: "panel", view: "home" }, app: "markets", pinnable: false, needs: ["helper"] },
+  // Tools. Both of these are Orbis window screens with no browser counterpart, which is why they are `app` targets:
+  // the browser has nowhere to put them. They were both written down as the panel's 'home' view, so choosing Pages in
+  // the Command Center redrew the Command Center.
+  { id: "pages", name: "Pages", category: "tools", description: "Orbis\u2019s own tools, each with its own address", icon: "pages", keywords: ["page", "tool", "calculator", "converter", "lab", "build"], target: { kind: "app" }, app: "pages", pinnable: false, needs: ["helper"] },
+  { id: "markets", name: "Markets", category: "tools", description: "Live prices, charts and watchlists", icon: "markets", keywords: ["market", "price", "chart", "crypto", "ticker", "watchlist", "trading"], target: { kind: "app" }, app: "markets", pinnable: false, needs: ["helper"] },
   { id: "profiles", name: "Profiles", category: "settings", description: "Separate lives, separate data", icon: "account", keywords: ["profile", "account", "switch", "person"], target: { kind: "panel", view: "account" }, app: "profiles", pinnable: false, needs: ["helper"] },
   { id: "settings", name: "Settings", category: "settings", description: "Everything there is to change", icon: "settings", keywords: ["settings", "preferences", "options", "configure", "setup"], target: { kind: "page", url: "chrome://settings/" }, pinnable: false, needs: ["browser"] },
   { id: "settings.appearance", name: "Appearance", category: "settings", description: "Theme, fonts and how pages are shown", icon: "customize", keywords: ["appearance", "browser theme", "dark mode", "light mode", "font", "font size", "text size", "page zoom"], target: { kind: "page", url: "chrome://settings/appearance" }, pinnable: false, needs: ["browser"] },
@@ -86,11 +104,27 @@ var CAPABILITIES = [
   { id: "settings.accessibility", name: "Accessibility", category: "settings", description: "Captions, focus and navigating without a mouse", icon: "accessibility", keywords: ["accessibility", "a11y", "caption", "captions", "screen reader", "contrast", "keyboard"], target: { kind: "page", url: "chrome://settings/accessibility" }, pinnable: false, needs: ["browser"] },
   { id: "settings.system", name: "System", category: "settings", description: "Startup, hardware acceleration and the proxy", icon: "system", keywords: ["system", "startup", "hardware acceleration", "gpu", "proxy", "background"], target: { kind: "page", url: "chrome://settings/system" }, pinnable: false, needs: ["browser"] },
   { id: "settings.reset", name: "Reset settings", category: "settings", description: "Put every setting back the way it started", icon: "reset", keywords: ["reset", "restore", "defaults", "factory", "start over"], target: { kind: "page", url: "chrome://settings/reset" }, pinnable: false, needs: ["browser"] },
-  { id: "account", name: "Account", category: "customize", description: "Who Orbis knows you as", icon: "account", keywords: ["account", "profile", "name", "identity", "who"], target: { kind: "panel", view: "account" }, pinnable: true, needs: ["helper"] }
+  // Under Settings, beside Profiles, which opens the same screen. It used to sit under Customize -- "How Orbis looks
+  // and what sits on the toolbar" -- where who you are signed in as is not what anybody was looking for.
+  { id: "account", name: "Account", category: "settings", description: "Who Orbis knows you as", icon: "account", keywords: ["account", "profile", "name", "identity", "who"], target: { kind: "panel", view: "account" }, pinnable: true, needs: ["helper"] }
 ];
 var capabilityById = (id) => CAPABILITIES.find((c) => c.id === id);
 var capabilitiesIn = (category) => CAPABILITIES.filter((c) => c.category === category);
+function destinationMissing(capability) {
+  const target = capability.target;
+  if (target.kind === "app") return "Only in the Orbis window";
+  if (target.kind === "panel") {
+    if (target.view === "home") return "This is the screen you are on";
+    return PANEL_VIEWS.includes(target.view) ? null : "Orbis has not built this screen yet";
+  }
+  if (target.kind === "view") {
+    return RAIL_VIEWS.includes(target.view) ? null : "Orbis has not built this screen yet";
+  }
+  return null;
+}
 function unavailableBecause(capability, ready) {
+  const nowhere = destinationMissing(capability);
+  if (nowhere) return nowhere;
   for (const need of capability.needs) {
     if (need === "browser" && !ready.browser) return "The browser is not connected";
     if (need === "helper" && !ready.helper) return "Orbis is not running";
@@ -167,11 +201,14 @@ export {
   CAPABILITIES,
   CATEGORIES,
   MAX_PINS,
+  PANEL_VIEWS,
+  RAIL_VIEWS,
   addPin,
   addressFor,
   canPin,
   capabilitiesIn,
   capabilityById,
+  destinationMissing,
   isAvailable,
   movePin,
   normalizePins,

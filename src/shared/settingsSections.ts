@@ -15,6 +15,8 @@
  * called.
  */
 
+import { rankFindables } from './settingsSearch.ts'
+
 export type SettingsSectionId =
   | 'account'
   | 'security'
@@ -145,57 +147,13 @@ export function cleanSectionId(raw: unknown): SettingsSectionId {
 /**
  * Sections matching what somebody typed, best first.
  *
- * Scored rather than filtered, because the useful answer to "password" is Security first and not merely "the sections
- * containing that word somewhere". A name that starts with the query beats one that merely contains it, and a match on
- * the section's own name beats one on a keyword — so typing "vo" offers Voice before anything that happens to mention
- * a voice.
+ * The matching itself is in `settingsSearch.ts`, over a name, a blurb and a list of keywords -- which is all a section
+ * is, as far as finding one goes. It used to be written out here, which meant the one part of this file that could be
+ * subtly wrong was also the part tangled up with the list it searched. Separating them is what lets the browser's own
+ * panel search the same sections the same way instead of inventing a second idea of what "password" means.
  */
 export function findSections(query: string): SettingsSection[] {
-  const wanted = String(query ?? '').trim().toLowerCase()
-  if (!wanted) return [...SETTINGS_SECTIONS]
-
-  /**
-   * The words typed, as well as the whole phrase.
-   *
-   * Somebody typing "dark mode" means the same thing as somebody typing "dark", and matching only the whole phrase
-   * found nothing for the longer one -- no keyword is literally "dark mode". So the phrase is tried first and scores
-   * highest, and then each word on its own, which is what makes a half-remembered description work at all.
-   */
-  const words = wanted.split(/\s+/).filter((word) => word.length > 1)
-
-  const scored: { section: SettingsSection; score: number }[] = []
-  for (const section of SETTINGS_SECTIONS) {
-    const label = section.label.toLowerCase()
-    let score = 0
-
-    const against = (text: string, whole: number, starts: number, part: number): void => {
-      if (text === wanted) score = Math.max(score, whole)
-      else if (text.startsWith(wanted)) score = Math.max(score, starts)
-      else if (text.includes(wanted)) score = Math.max(score, part)
-      // Then each word of the phrase, worth less than the phrase itself so a precise search still wins.
-      for (const word of words) {
-        if (word === wanted) continue
-        if (text === word) score = Math.max(score, Math.round(whole * 0.7))
-        else if (text.startsWith(word)) score = Math.max(score, Math.round(starts * 0.7))
-        else if (text.includes(word)) score = Math.max(score, Math.round(part * 0.7))
-      }
-    }
-
-    against(label, 100, 80, 60)
-    for (const keyword of section.keywords) against(keyword.toLowerCase(), 50, 40, 20)
-    against(section.blurb.toLowerCase(), 10, 10, 10)
-
-    if (score > 0) scored.push({ section, score })
-  }
-
-  return scored
-    // Ties fall back to the order the sections are declared in, so the list never shuffles between keystrokes.
-    .sort(
-      (a, b) =>
-        b.score - a.score ||
-        SETTINGS_SECTIONS.indexOf(a.section) - SETTINGS_SECTIONS.indexOf(b.section)
-    )
-    .map((one) => one.section)
+  return rankFindables(SETTINGS_SECTIONS, query)
 }
 
 /** Which section a given setting lives in, for opening Settings at the thing somebody asked about. */
