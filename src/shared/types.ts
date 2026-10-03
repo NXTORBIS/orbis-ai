@@ -1,6 +1,7 @@
 import type { SourcePreferences } from './researchSources'
 import type { ResearchChange, ResearchStage } from './researchRun'
 import type { SharedProject } from './portable/share'
+import type { Meeting, MeetingSummary } from './meeting'
 
 /** A file a project keeps, as the window is shown it. The words themselves stay in the main process. */
 export interface ProjectFileView {
@@ -1731,6 +1732,17 @@ export interface NxtorbisApi {
    *
    * They are searched like attachments rather than sent whole, so holding six files does not mean sending six files.
    */
+  /**
+   * Notes Orbis took while somebody talked.
+   *
+   * The words are transcribed in the window by the local model; nothing in the main process records anything. A
+   * summary is Orion's reading of a transcript and is checked against it before it is kept.
+   */
+  meetingNotes(): Promise<{ ok: boolean; notes?: Meeting[] }>
+  meetingNote(id: string): Promise<{ ok: boolean; note?: Meeting | null }>
+  saveMeetingNote(note: Meeting): Promise<{ ok: boolean; message?: string }>
+  removeMeetingNote(id: string): Promise<{ ok: boolean }>
+  summariseMeetingNote(id: string, model?: string): Promise<{ ok: boolean; summary?: MeetingSummary; note?: string; message?: string }>
   projectFiles(projectId: string): Promise<{ ok: boolean; files?: ProjectFileView[]; message?: string }>
   addProjectFiles(projectId: string): Promise<{ ok: boolean; added?: string[]; refused?: string[]; files?: ProjectFileView[]; message?: string }>
   removeProjectFile(projectId: string, fileId: string): Promise<{ ok: boolean }>

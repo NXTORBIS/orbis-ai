@@ -32,6 +32,7 @@ const CreateView = lazy(() => import('./components/CreateView'))
 const ClipboardView = lazy(() => import('./components/ClipboardView'))
 const WorkspacesView = lazy(() => import('./components/WorkspacesView'))
 const SchedulesView = lazy(() => import('./components/SchedulesView'))
+const MeetingView = lazy(() => import('./components/MeetingView'))
 import { ActivityPanel, ShortcutsModal, ToastStack } from './components/Overlays'
 import SettingsModal from './components/SettingsModal'
 import WelcomeExperience from './components/WelcomeExperience'
@@ -1572,6 +1573,7 @@ export default function App(): React.JSX.Element {
               {feature === 'clipboard' && <ClipboardView onClose={closeFeature} onNotify={notify} />}
               {feature === 'workspaces' && <WorkspacesView onClose={closeFeature} onNotify={notify} />}
               {feature === 'schedules' && <SchedulesView onClose={closeFeature} onNotify={notify} />}
+              {feature === 'notes' && <MeetingView onClose={closeFeature} onNotify={notify} />}
               {feature === 'create' && <CreateView onClose={closeFeature} onNotify={notify} asked={createAsked} openAt={createOpenAt} />}
             </Suspense>
           )}

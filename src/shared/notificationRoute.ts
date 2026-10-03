@@ -5,7 +5,7 @@ import type { SettingsSectionId } from './settingsSections.ts'
  * about where things are, and that must stay testable without React anywhere near it. The window's own `FeatureId`
  * is checked against this list by a test, so the two cannot drift apart silently.
  */
-export type WindowFeature = 'create' | 'pages' | 'markets' | 'whiteboard' | 'clipboard' | 'workspaces' | 'schedules'
+export type WindowFeature = 'create' | 'pages' | 'markets' | 'whiteboard' | 'clipboard' | 'workspaces' | 'schedules' | 'notes'
 
 /**
  * Where pressing a notification takes you.

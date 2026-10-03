@@ -283,6 +283,7 @@ None of these ever touched Electron beyond the channel itself. They are a servic
 | --- | --- |
 | `chat:send`, `chat:abort`, `chat:complete`, `chat:title`, `chat:suggest` | Mojo, same service |
 | `automation:classify`, `automation:control`, `automation:steer`, `automation:unfinished`, `automation:forget` | Mojo, same service |
+| `meetings:do` | Notes Orbis took while somebody talked. Mojo, same service |
 | `project-files:do` | The files a project keeps. Mojo, same service |
 | `share:export`, `share:import-project` | Taking one conversation or project out of Orbis, and bringing a project back. Mojo, same service |
 | `research:control` | Holding a research run, letting it go, and changing what it is doing. Mojo, same service |

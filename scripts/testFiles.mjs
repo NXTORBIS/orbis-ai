@@ -407,6 +407,7 @@ export const TEST_FILES = [
   'src/main/researchControl.test.ts',
   'src/shared/voiceReply.test.ts',
   'src/shared/voiceConversation.test.ts',
+  'src/shared/meeting.test.ts',
   'src/shared/notificationRoute.test.ts',
   'src/shared/notifications.test.ts',
   'src/main/notifications/manager.test.ts',

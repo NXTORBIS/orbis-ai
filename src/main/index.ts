@@ -80,7 +80,7 @@ import { readSignals } from './browserControl/captchaCapabilities'
 import { StepRun } from './stepRunner'
 import { SkillManager } from './skillManager'
 import { resolveModel } from '../shared/modelRoute'
-import { isKnownModel } from '../shared/models'
+import { isKnownModel, modelLabel } from '../shared/models'
 import { planCompression, summarise, summaryBlock } from './compress'
 import { parseSchedule, scheduleRequest } from '../shared/schedulePhrase'
 import { MemoryFull, MemoryRefused, MemoryStore } from './knowledge/memory'
@@ -119,6 +119,11 @@ import { bus } from './eventBus'
 import { AutomationCheckpoints, describeCheckpoint } from './automationCheckpoint'
 import { ResearchControl } from './researchControl'
 import { MAX_PROJECT_FILES, ProjectFiles } from './projectFiles'
+import { Meetings } from './meetings'
+import { readSummary, summaryNote, summaryPrompt, type Meeting } from '../shared/meeting'
+
+/** Notes Orbis took while somebody talked. */
+let meetings: Meetings | null = null
 import { chooseContext, contextFrom } from '../shared/attachmentIndex'
 
 /** How much of a project's own files may travel with one message. The rest is left for the question to reach. */
@@ -1431,6 +1436,45 @@ ${summaryBlock(summary)}`
    * work -- and anything with no words in it is refused at the point of adding rather than accepted and then silently
    * absent from every answer.
    */
+  /**
+   * Notes Orbis took while somebody talked.
+   *
+   * One door for all of it. The words come from the window, which is where the microphone is and where the local
+   * model transcribes them; nothing here records anything. The summary is asked of Orion and checked against the
+   * transcript before it is kept, because an invented action item becomes a task nobody agreed to.
+   */
+  ipcMain.handle('meetings:do', async (_event, op: unknown, arg?: unknown, arg2?: unknown) => {
+    if (!meetings) return { ok: false, message: 'Notes are not ready yet.' }
+    if (op === 'list') return { ok: true, notes: await meetings.list() }
+    if (op === 'get') return { ok: true, note: await meetings.get(typeof arg === 'string' ? arg : '') }
+    if (op === 'save') {
+      const note = arg as Meeting
+      if (!note || typeof note !== 'object' || typeof note.id !== 'string') return { ok: false, message: 'That is not a note.' }
+      await meetings.save(note)
+      return { ok: true }
+    }
+    if (op === 'remove') return { ok: await meetings.remove(typeof arg === 'string' ? arg : '') }
+    if (op !== 'summarise') return { ok: false, message: 'Orbis cannot do that with a note.' }
+
+    const note = await meetings.get(typeof arg === 'string' ? arg : '')
+    if (!note) return { ok: false, message: 'That note is no longer here.' }
+    if (!note.parts.length) return { ok: false, message: 'There is nothing in that note to read.' }
+    if (!GROQ_API_KEYS.length) return { ok: false, message: 'Reading a note needs an Orion key. Add one in Settings.' }
+
+    const model = typeof arg2 === 'string' && isKnownModel(arg2) ? arg2 : (await store.getSettings()).defaultModel
+    const answer = await requestJson('You read transcripts and report exactly what is in them. Answer only with JSON.', summaryPrompt(note), GROQ_API_KEYS, (url, init) => net.fetch(url, init), 60_000, {
+      maxTokens: 1200,
+      model
+    })
+    if (!answer) return { ok: false, message: 'Orion could not read that note just now.' }
+
+    // Checked against the transcript before it is kept: an action quoting words nobody said is dropped here, not
+    // shown and left for somebody to notice.
+    const { summary, dropped } = readSummary(answer, note, modelLabel(model), Date.now())
+    await meetings.save({ ...note, summary })
+    return { ok: true, summary, note: summaryNote(summary, dropped) }
+  })
+
   ipcMain.handle('project-files:do', async (event, op: unknown, projectId: unknown, arg?: unknown) => {
     const id = typeof projectId === 'string' ? projectId : ''
     if (!projectFiles || !id) return { ok: false, message: 'That is not a project.' }
@@ -3006,6 +3050,9 @@ if (!app.requestSingleInstanceLock()) {
      */
     automationCheckpoints = new AutomationCheckpoints({ userData: app.getPath('userData'), profileId: () => notifyProfileId })
     projectFiles = new ProjectFiles({ userData: app.getPath('userData'), profileId: () => notifyProfileId })
+    meetings = new Meetings({ userData: app.getPath('userData'), profileId: () => notifyProfileId })
+    // The end of a note is exactly the part that would be lost without this.
+    app.on('before-quit', () => void meetings?.flush())
     app.on('before-quit', () => void automationCheckpoints?.flush())
 
     notifyProfileId = (await profilesStore.active()).id
