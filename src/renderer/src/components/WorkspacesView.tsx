@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { newWorkspace } from '../../../shared/workspaces'
 import { CHAT_MODELS, modelLabel } from '../../../shared/models'
 import { AUTO_MODEL } from '../../../shared/modelRoute'
 import { Check, Copy, FolderOpen, Layers, Plus, RefreshCw, Save, Trash2, X } from 'lucide-react'
@@ -80,6 +81,25 @@ export default function WorkspacesView({ onClose, onNotify }: { onClose(): void;
           </label>
           <button type="button" className="queue-btn primary" onClick={() => void saveCurrent()}>
             <Plus size={14} /> Save open pages
+          </button>
+          {/* A project set up elsewhere. It brings how it works, never what it referred to there. */}
+          <button
+            type="button"
+            className="queue-btn small"
+            onClick={() =>
+              void window.api.importProject().then(async (done) => {
+                if (done.message) return onNotify(done.message, 'error')
+                if (!done.ok || !done.project) return
+                const made = newWorkspace({ name: done.project.name })
+                await window.api.saveWorkspace({
+                  ...made,
+                  project: { goal: done.project.goal, instructions: done.project.instructions, outputFormat: done.project.outputFormat, model: done.project.model, items: [] }
+                })
+                onNotify([`“${done.project.name}” was set up.`, ...(done.notes ?? [])].join(' '))
+              })
+            }
+          >
+            Open a project
           </button>
           <button type="button" className="icon-btn" aria-label="Close workspaces" onClick={onClose}>
             <X size={16} />
@@ -167,6 +187,20 @@ export default function WorkspacesView({ onClose, onNotify }: { onClose(): void;
                     ))}
                   </select>
                 </label>
+                <div className="setting-row-inline">
+                  <button
+                    type="button"
+                    className="queue-btn small"
+                    onClick={() =>
+                      void window.api.exportProject(workspace.id).then((done) => {
+                        if (done.message) onNotify(done.message, 'error')
+                        else if (done.ok) onNotify(`Saved “${workspace.name}”. It carries how the project works, not what it refers to.`)
+                      })
+                    }
+                  >
+                    Export this project
+                  </button>
+                </div>
                 <p className="view-muted">
                   {workspace.project.items.length} {workspace.project.items.length === 1 ? 'item' : 'items'} in this project · add research, notes, tasks and more from Galaxy
                 </p>

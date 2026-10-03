@@ -1,5 +1,6 @@
 import type { SourcePreferences } from './researchSources'
 import type { ResearchChange, ResearchStage } from './researchRun'
+import type { SharedProject } from './portable/share'
 
 /** A research run as the window sees it: where it has got to, whether it is held, and what it means to do. */
 export interface ResearchRunView {
@@ -1711,6 +1712,15 @@ export interface NxtorbisApi {
    * certainly moved on -- and anything more than a few hours old is not offered at all.
    */
   /** Research runs going right now, and holding, letting go of, or changing one. */
+  /**
+   * Taking one conversation, or one project, out of Orbis -- and bringing a project back in.
+   *
+   * Nothing secret leaves: the export is built out of named fields and every piece of text is checked again on the
+   * way out. A project carries how it works, never what it refers to.
+   */
+  exportConversation(id: string): Promise<{ ok: boolean; path?: string; message?: string }>
+  exportProject(id: string): Promise<{ ok: boolean; path?: string; message?: string }>
+  importProject(): Promise<{ ok: boolean; project?: SharedProject; notes?: string[]; message?: string }>
   researchRuns(): Promise<ResearchRunView[]>
   pauseResearch(id: string): Promise<boolean>
   resumeResearch(id: string): Promise<boolean>

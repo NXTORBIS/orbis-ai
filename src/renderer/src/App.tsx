@@ -1500,6 +1500,7 @@ export default function App(): React.JSX.Element {
       <div className="hud-body">
         <Sidebar
           onArchive={archiveConversation}
+          onNotify={notify}
           collapsed={sidebarCollapsed}
           conversations={savedConversations}
           activeId={activeId}

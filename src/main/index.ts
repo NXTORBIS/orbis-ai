@@ -118,6 +118,7 @@ import { createNotifications, type Notifications } from './notifications/index'
 import { bus } from './eventBus'
 import { AutomationCheckpoints, describeCheckpoint } from './automationCheckpoint'
 import { ResearchControl } from './researchControl'
+import { conversationToMarkdown, projectToShare, readSharedProject, shareFilename } from '../shared/portable/share'
 import type { ResearchChange } from '../shared/researchRun'
 
 /** Research runs that are going now, so the window can hold one, let it go, or change what it is doing. */
@@ -1384,6 +1385,60 @@ ${summaryBlock(summary)}`
    * One door for all three. What a change can reach depends on the stage the run has got to, which is decided where
    * it can be tested rather than here, and what it managed to change is reported back to the window either way.
    */
+  /**
+   * Taking one conversation, or one project, out of Orbis -- and bringing a project back in.
+   *
+   * A whole profile could already be exported and a single thing could not, so "send somebody this conversation" and
+   * "set up this project on my other machine" had no answer but copying text out of the window by hand. What leaves
+   * is built out of named fields and checked again for anything that looks like a key, because a conversation is
+   * exactly where somebody once pasted one.
+   */
+  ipcMain.handle('share:export', async (event, what: unknown, id: unknown) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const ask = async (name: string, kind: string, ext: string): Promise<string | null> => {
+      const options = { title: `Export ${kind}`, defaultPath: join(app.getPath('downloads'), name), filters: [{ name: kind, extensions: [ext] }] }
+      const result = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options)
+      return result.canceled || !result.filePath ? null : result.filePath
+    }
+
+    if (what === 'conversation') {
+      const conversation = (await store.listConversations()).find((one) => one.id === id)
+      if (!conversation) return { ok: false, message: 'That conversation is no longer here.' }
+      const path = await ask(shareFilename(conversation.title, 'md'), 'conversation', 'md')
+      if (!path) return { ok: false }
+      await fs.writeFile(path, conversationToMarkdown(conversation, Date.now()), 'utf8')
+      return { ok: true, path }
+    }
+
+    if (what === 'project') {
+      const spaces = (await workspacesForChat?.list()) ?? []
+      const workspace = spaces.find((one) => one.id === id)
+      const shared = workspace ? projectToShare(workspace, Date.now()) : null
+      if (!shared) return { ok: false, message: 'That project is no longer here.' }
+      const path = await ask(shareFilename(shared.name, 'json'), 'project', 'json')
+      if (!path) return { ok: false }
+      await fs.writeFile(path, JSON.stringify(shared, null, 2), 'utf8')
+      return { ok: true, path }
+    }
+    return { ok: false, message: 'Orbis cannot export that.' }
+  })
+
+  ipcMain.handle('share:import-project', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    const options = { title: 'Open a project', filters: [{ name: 'Orbis project', extensions: ['json'] }], properties: ['openFile' as const] }
+    const picked = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
+    if (picked.canceled || !picked.filePaths[0]) return { ok: false }
+    try {
+      // Read as a file off a disk, because that is what it is: that it came from Orbis is a claim it makes.
+      const raw = JSON.parse(await fs.readFile(picked.filePaths[0], 'utf8')) as unknown
+      const read = readSharedProject(raw, (modelId) => isKnownModel(modelId))
+      if ('error' in read) return { ok: false, message: read.error }
+      return { ok: true, project: read.project, notes: read.notes }
+    } catch {
+      return { ok: false, message: 'That file could not be read as a project.' }
+    }
+  })
+
   ipcMain.handle('research:control', (_event, op: unknown, id: unknown, change: unknown) => {
     const runId = typeof id === 'string' ? id : ''
     if (op === 'list') return researchControl.list()

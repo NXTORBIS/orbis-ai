@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import type { SettingsSectionId } from '../../../shared/settingsSections'
+import type { NoticeKind } from '../lib/notices'
 import {
   CalendarClock,
   CandlestickChart,
@@ -21,7 +22,7 @@ import {
   SquarePen,
   Trash2,
   X,
-  FilePlus2, Archive, ArchiveRestore } from 'lucide-react'
+  FilePlus2, Archive, ArchiveRestore, Download } from 'lucide-react'
 import type { Conversation } from '../../../shared/types'
 import type { StreamState } from '../App'
 import { groupConversations } from '../lib/utils'
@@ -51,6 +52,8 @@ interface Props {
   onDelete(id: string): void
   /** Out of the list, still there. The alternative to deleting a chat you may want back. */
   onArchive(id: string, archived: boolean): void
+  /** Saying how an action went. Optional, because the sidebar is used where there is nothing to say it with. */
+  onNotify?(text: string, kind?: NoticeKind): void
   onTogglePin(id: string): void
   /**
    * Opens Settings, optionally at a named section.
@@ -236,6 +239,20 @@ export default function Sidebar(props: Props): React.JSX.Element {
           </button>
           <button type="button" className="sb-row-action" aria-label={`Rename ${c.title}`} title="Rename" onClick={() => setEditingId(c.id)}>
             <Pencil size={14} />
+          </button>
+          <button
+            type="button"
+            className="sb-row-action"
+            aria-label={`Export ${c.title}`}
+            title="Export"
+            onClick={() =>
+              void window.api.exportConversation(c.id).then((done) => {
+                if (done.message) props.onNotify?.(done.message, 'error')
+                else if (done.ok) props.onNotify?.('Saved.')
+              })
+            }
+          >
+            <Download size={14} />
           </button>
           <button
             type="button"
