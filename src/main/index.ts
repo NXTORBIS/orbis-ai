@@ -31,6 +31,9 @@ import type { Platform } from './platform'
 import { answerContext, runResearch } from './research'
 import { adblockCommand } from './adblockChat'
 import { BrowserLibrary } from './browserLibrary'
+import { createWidgetRuntime } from './widgets/runtime'
+import { createWidgetData } from './widgets/data'
+import type { WidgetDataApi, WidgetRuntimeApi } from './widgets/contract'
 import { registerLibraryIpc } from './libraryIpc'
 import { registerBrowserExtras } from './browserCapabilities'
 import { SearchWatcher } from './browserSearches'
@@ -254,6 +257,13 @@ function latestAutomation(messages: ChatMessage[]): AutomationState | undefined 
 let Pulsar: PulsarService | null = null
 /** The app's own browsing library: new-tab shortcuts, address-bar memory, reading list, and a copy of Chromium's history, bookmarks and downloads. */
 let browserLibrary: BrowserLibrary | null = null
+/**
+ * The widgets on the browser's start page.
+ *
+ * Set once the stores they read exist, and read at call time, because the browser is created before them -- a start
+ * page opened in that moment says Orbis is still starting rather than drawing an empty board.
+ */
+let widgetsForBrowser: { runtime: WidgetRuntimeApi; data: WidgetDataApi } | null = null
 /** The Orbis Browser Control Layer: every browser capability, for the window, Orion and automations. */
 let browserControl: ReturnType<typeof setupBrowserControl> | null = null
 /** Orbis's browser: Chromium, started when the browser is first needed. Null only when no Chromium build is installed. */
@@ -2215,6 +2225,8 @@ if (!app.requestSingleInstanceLock()) {
           // surface never sees a credential and never decides anything.
           tabLockHelper: () => tabLock.forHelper,
           // The market strip is a page, and pages reach Orbis through the helper.
+          // The widgets on the start page, read at call time: see widgetsForBrowser.
+          widgets: () => widgetsForBrowser,
           marketsHelper: () => ({
             tickerState: () => markets.tickerState(),
             nextBatch: () => markets.nextBatch(),
@@ -2490,7 +2502,14 @@ if (!app.requestSingleInstanceLock()) {
         .then((profile) => experience.useProfile(profile.id))
         .catch((err: unknown) => console.error('[experience] could not switch profile', err))
     })
-    registerExperienceIpc({ store: experience, control: browserControl.control, getWindow: () => mainWindow, send: sendToWindow })
+    /**
+      * The one place the start page's widgets are changed, over the store that already keeps them.
+      *
+      * Orion's widget capabilities and the browser's start page both go through this, so a widget added by either is
+      * added once, in one place, and read back before anybody is told it is there.
+      */
+    const widgetRuntime = createWidgetRuntime({ store: experience })
+    registerExperienceIpc({ store: experience, control: browserControl.control, widgets: widgetRuntime, getWindow: () => mainWindow, send: sendToWindow })
     app.on('before-quit', () => void experience.flush())
 
     /**
@@ -3419,6 +3438,141 @@ if (!app.requestSingleInstanceLock()) {
       send: sendToWindow,
       readPage: async () => {
         const result = await browserControl!.control.execute({ capability: 'page.read', params: { maxChars: 2000 }, target: {}, source: 'user' }, { confirm: async () => true })
+
+
+    /**
+     * What the widgets on the browser's start page are shown, and what pressing something on one does.
+     *
+     * Every reader here is one of Orbis's own stores, for the profile in use -- no second copy of anything. And
+     * nothing a widget could be handed by mistake: there is deliberately no reader for the vault, for cookies, for
+     * passwords or for another profile, so there is nothing to hand over.
+     */
+    const widgetData = createWidgetData({
+      tasks: () => tasksStore.allTasks(),
+      completeTask: async (id) => {
+        try {
+          await tasksStore.complete(id, true)
+          return true
+        } catch {
+          return false
+        }
+      },
+      notes: () => notesStore.all(),
+      createNote: async () => {
+        try {
+          return (await notesStore.create()).id
+        } catch {
+          return null
+        }
+      },
+      clips: () => clipboardHistory.all(),
+      copyClip: async (id) => {
+        try {
+          await clipboardHistory.copyToClipboard(id)
+          return true
+        } catch {
+          return false
+        }
+      },
+      workspaces: () => workspacesStore.list(),
+      currentWorkspace: () => workspacesStore.current(),
+      openWorkspace: async (id) => {
+        const done = await browserControl!.control
+          .execute({ capability: 'workspaces.open', params: { workspace: id } }, { source: 'user', confirm: async () => true })
+          .catch(() => null)
+        return done?.ok === true
+      },
+      boards: () => whiteboardStore.list(),
+      bookmarks: async () => browserLibrary?.snapshot().bookmarks ?? [],
+      downloads: async () =>
+        (browserLibrary?.snapshot().downloads ?? []).map((one) => ({
+          id: one.id,
+          name: one.filename,
+          state: one.state,
+          received: one.receivedBytes,
+          total: one.totalBytes,
+          at: one.finishedAt ?? one.startedAt
+        })),
+      showDownload: async (id) => {
+        const found = browserLibrary?.snapshot().downloads.find((one) => one.id === id)
+        if (!found?.path) return false
+        shell.showItemInFolder(found.path)
+        return true
+      },
+      history: async () => browserLibrary?.snapshot().history ?? [],
+      tabs: async () => {
+        const read = (await browserControl!.control.snapshot(['browser']).catch(() => null)) as { browser?: unknown } | null
+        const browser = (read?.browser ?? null) as { tabs?: { id?: number; title?: string; url?: string; active?: boolean; groupId?: number }[] } | null
+        const tabs = Array.isArray(browser?.tabs) ? browser.tabs : []
+        return {
+          count: tabs.length,
+          groups: new Set(tabs.map((one) => one.groupId).filter((group): group is number => typeof group === 'number' && group >= 0)).size,
+          items: tabs.map((one) => ({ id: Number(one.id ?? 0), title: String(one.title ?? ''), url: String(one.url ?? ''), active: one.active === true }))
+        }
+      },
+      weather: async (city) => {
+        const got = await widgetFeeds.weather(city)
+        return got.ok ? { ok: true as const, data: got.data, fetchedAt: got.fetchedAt, stale: got.stale } : { ok: false as const, reason: got.reason }
+      },
+      newsFeed: async (url) => {
+        const got = await widgetFeeds.feed(url)
+        return got.ok ? { ok: true as const, data: got.data, fetchedAt: got.fetchedAt, stale: got.stale } : { ok: false as const, reason: got.reason }
+      },
+      /**
+       * One price, from the instruments this profile already follows in Markets.
+       *
+       * Deliberately not a lookup of its own: Markets decides what Orbis follows and from where, and a widget asking
+       * for a symbol nobody follows is told so -- which is the truth, and is something the person can act on.
+       */
+      marketQuote: async (symbol) => {
+        const strip = await markets.tickerState().catch(() => null)
+        const found = strip?.items.find((one) => one.instrument.symbol.toUpperCase() === symbol.toUpperCase())
+        if (!found?.quote || found.quote.last === null) return null
+        return {
+          symbol: found.instrument.symbol.toUpperCase(),
+          name: found.instrument.name || found.instrument.symbol.toUpperCase(),
+          price: found.quote.last,
+          change: found.quote.changePercent ?? 0,
+          currency: found.instrument.currency || '',
+          // Markets keeps no intraday series for the strip, so the card draws no line rather than a made-up one.
+          points: [],
+          asOf: found.quote.timestamp
+        }
+      },
+      online: () => net.isOnline(),
+      openPanel: async (view) => {
+        const done = await browserControl!.control
+          .execute({ capability: 'surface.open', params: { name: 'orbis-panel', at: `#${view}` } }, { source: 'user', confirm: async () => true })
+          .catch(() => null)
+        return done?.ok === true
+      },
+      askOrion: async (text) => {
+        // Handed to the chat, and the window brought forward with it, which is what "ask Orion" means from a page.
+        if (!mainWindow || mainWindow.isDestroyed()) return false
+        mainWindow.webContents.send('chat:ask', text)
+        mainWindow.show()
+        return true
+      },
+      onStoreChange: (listen) => {
+        const stops = [
+          notesStore.onChange(() => listen('notes')),
+          tasksStore.onChange(() => {
+            listen('tasks')
+            listen('reminders')
+          }),
+          clipboardHistory.onChange(() => listen('clipboard')),
+          workspacesStore.onChange(() => listen('workspaces')),
+          whiteboardStore.onChange(() => listen('whiteboard')),
+          browserLibrary?.addListener(() => {
+            listen('bookmarks')
+            listen('downloads')
+            listen('recent')
+          })
+        ].filter((stop): stop is () => void => typeof stop === 'function')
+        return () => stops.forEach((stop) => stop())
+      }
+    })
+    widgetsForBrowser = { runtime: widgetRuntime, data: widgetData }
         const data = (result.data ?? {}) as { url?: string; title?: string; selection?: string }
         if (!result.ok || !data.url) throw new Error('There is no page open to save.')
         return { url: data.url, title: data.title ?? '', ...(data.selection ? { selection: data.selection } : {}) }

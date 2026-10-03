@@ -1,0 +1,1247 @@
+/*
+ * The widgets about time, and the two you type on: clock, world clock, countdown, focus timer, calculator, greeting,
+ * quote and sticky note.
+ *
+ * Every one of them is meant to read as a picture of its subject rather than as a heading over a list, so most of
+ * what is here is drawing: a dial with sixty markings, a ring that drains, a disc riding a day's circle, a sheet of
+ * paper. Nothing states a colour -- the tokens do, and they change with the theme -- and every tint is mixed from
+ * one of them, so a card that looks right over the starfield looks right on a white page too.
+ *
+ * The sizes are the sizes the catalogue lists, and each one shows more rather than the same thing stretched. The
+ * card's own `--wg-pad` is borrowed back by the two widgets that need the whole face (the calculator's keys, the
+ * note's paper), which is why those two are the only ones with a negative margin.
+ */
+
+/* ---------------------------------------------------------------- shared by all of them */
+
+/* Read out, never drawn: what a picture says that its numerals do not. */
+.wg-time-said {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  border: 0;
+  clip-path: inset(50%);
+}
+
+.wg-time-ring {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.wg-time-ring-track {
+  stroke: color-mix(in srgb, var(--text) 11%, transparent);
+}
+
+.wg-time-ring-arc {
+  stroke: var(--accent);
+  transition: stroke-dasharray var(--motion-base, 240ms) var(--motion-ease, ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wg-time-ring-arc {
+    transition: none;
+  }
+}
+
+/* ---------------------------------------------------------------- clock */
+
+.wg-clock {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.wg-clock[data-face='digital'] {
+  justify-content: center;
+}
+
+.wg-clock-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.wg-clock-face {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  line-height: 0.95;
+  letter-spacing: -0.035em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.wg-clock-hm {
+  font-size: 44px;
+}
+
+.wg-clock[data-size='medium'] .wg-clock-hm {
+  font-size: 54px;
+}
+
+.wg-clock[data-size='large'] .wg-clock-hm {
+  font-size: 72px;
+}
+
+.wg-clock-sec,
+.wg-clock-ampm {
+  font-size: 0.34em;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+}
+
+.wg-clock-ampm {
+  color: var(--faint);
+}
+
+.wg-clock-sec:empty,
+.wg-clock-ampm:empty {
+  display: none;
+}
+
+.wg-clock-date {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* How far through the day it is: one hairline, because it is a glance and not a reading. */
+.wg-clock-day {
+  height: 3px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+  overflow: hidden;
+}
+
+.wg-clock-day-run {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 45%, transparent), var(--accent));
+}
+
+.wg-clock-week {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-top: auto;
+}
+
+.wg-clock-weekday {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 5px 0 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+}
+
+.wg-clock-weekletter {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.wg-clock-weeknum {
+  font-size: var(--text-sm);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.wg-clock-weekday[data-today='yes'] {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 34%, transparent);
+}
+
+.wg-clock-weekday[data-today='yes'] .wg-clock-weekletter {
+  color: var(--accent);
+}
+
+.wg-clock-weekday[data-today='yes'] .wg-clock-weeknum {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* ---- the drawn dial */
+
+.wg-clock[data-face='analog'] {
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+}
+
+.wg-clock[data-face='analog'][data-size='large'] {
+  flex-direction: column;
+  gap: 10px;
+}
+
+.wg-clock-dialwrap {
+  display: flex;
+  flex: 1;
+  align-self: stretch;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+}
+
+/*
+ * The dial fills whatever box it is given and stays round by itself: an SVG with a viewBox already centres and
+ * letterboxes its own drawing, so no arithmetic here has to agree with any arithmetic over there.
+ */
+.wg-clock-dial {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: visible;
+}
+
+.wg-clock[data-face='analog'][data-size='medium'] .wg-clock-dialwrap {
+  flex: none;
+  width: 118px;
+  height: 118px;
+}
+
+.wg-clock-well {
+  fill: color-mix(in srgb, var(--text) 4%, transparent);
+}
+
+.wg-clock-rim {
+  stroke: color-mix(in srgb, var(--text) 13%, transparent);
+  stroke-width: 1;
+}
+
+.wg-clock-mark {
+  stroke: color-mix(in srgb, var(--text) 26%, transparent);
+  stroke-width: 0.9;
+  stroke-linecap: round;
+}
+
+.wg-clock-mark-hour {
+  stroke: color-mix(in srgb, var(--text) 66%, transparent);
+  stroke-width: 2.2;
+}
+
+.wg-clock-window {
+  fill: color-mix(in srgb, var(--text) 7%, transparent);
+  stroke: color-mix(in srgb, var(--text) 14%, transparent);
+  stroke-width: 0.6;
+}
+
+.wg-clock-window-text {
+  fill: var(--muted-strong);
+  font-family: var(--font-sans);
+  font-size: 6.6px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.wg-clock-hand,
+.wg-clock-sweeper {
+  transform-box: view-box;
+  transform-origin: 50px 50px;
+  transform: rotate(var(--wg-turn, 0deg));
+}
+
+.wg-clock-hand line {
+  stroke: var(--text);
+  stroke-linecap: round;
+}
+
+.wg-clock-hour line {
+  stroke-width: 5;
+}
+
+.wg-clock-minute line {
+  stroke-width: 3.2;
+}
+
+.wg-clock-second {
+  stroke: var(--accent);
+  stroke-width: 1.1;
+  stroke-linecap: round;
+}
+
+.wg-clock-counter {
+  fill: var(--accent);
+}
+
+.wg-clock-pin {
+  fill: var(--text);
+}
+
+.wg-clock-pin-eye {
+  fill: var(--bg, var(--surface));
+}
+
+/*
+ * The sweep.
+ *
+ * One turn a minute, started with a head start equal to the seconds already gone, so it is in the right place
+ * without ever being told again. Set from the widget only when the person has not asked for less movement, and
+ * wrapped here as well, because the system setting is the one that must win.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .wg-clock-dial[data-sweep='on'] .wg-clock-sweeper {
+    animation: wg-clock-turn 60s linear infinite;
+  }
+
+  @keyframes wg-clock-turn {
+    from {
+      transform: rotate(0deg);
+    }
+
+    to {
+      transform: rotate(360deg);
+    }
+  }
+}
+
+.wg-clock-beside {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+}
+
+.wg-clock-beside .wg-clock-hm {
+  font-family: var(--font-display);
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.wg-clock[data-face='analog'][data-size='large'] .wg-clock-date {
+  text-align: center;
+}
+
+/* ---------------------------------------------------------------- world clock */
+
+.wg-world {
+  display: flex;
+  flex: 1;
+  gap: 10px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.wg-world[data-size='small'],
+.wg-world[data-size='medium'] {
+  align-items: center;
+  justify-content: space-around;
+}
+
+.wg-world[data-size='tall'] {
+  flex-direction: column;
+  gap: 6px;
+}
+
+.wg-world-place {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.wg-world[data-size='tall'] .wg-world-place {
+  flex: none;
+  flex-direction: row;
+  gap: 9px;
+  padding: 2px 0;
+}
+
+.wg-world-dial {
+  display: block;
+  width: 100%;
+  max-width: 84px;
+  aspect-ratio: 1;
+  overflow: visible;
+}
+
+.wg-world[data-size='medium'] .wg-world-dial {
+  max-width: 72px;
+}
+
+.wg-world[data-size='tall'] .wg-world-dial {
+  flex: none;
+  width: 30px;
+}
+
+.wg-world-night {
+  stroke: color-mix(in srgb, var(--text) 13%, transparent);
+}
+
+.wg-world-day {
+  stroke: color-mix(in srgb, var(--accent) 52%, transparent);
+}
+
+.wg-world-marker {
+  fill: var(--accent);
+  stroke: var(--surface);
+  stroke-width: 1.6;
+}
+
+.wg-world-inside {
+  fill: var(--text);
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.wg-world[data-size='medium'] .wg-world-inside {
+  font-size: 23px;
+}
+
+.wg-world-words {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.wg-world[data-size='tall'] .wg-world-words {
+  flex: 1;
+  align-items: flex-start;
+}
+
+.wg-world-label {
+  max-width: 100%;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wg-world-gap {
+  max-width: 100%;
+  font-size: var(--text-xs);
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wg-world-time {
+  flex: none;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------- countdown */
+
+.wg-countdown {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.wg-countdown[data-size='medium'] {
+  flex-direction: row;
+  gap: 14px;
+}
+
+.wg-countdown-dial {
+  position: relative;
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+  aspect-ratio: 1;
+}
+
+.wg-countdown[data-size='medium'] .wg-countdown-dial {
+  flex: none;
+  width: 116px;
+  height: 116px;
+}
+
+.wg-countdown-face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  padding: 18%;
+  text-align: center;
+}
+
+.wg-countdown-big {
+  font-family: var(--font-display);
+  font-size: clamp(22px, 40cqmin, 54px);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.wg-countdown[data-size='medium'] .wg-countdown-big {
+  font-size: 38px;
+}
+
+.wg-countdown-unit {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+  line-height: 1.2;
+}
+
+.wg-countdown-arc {
+  stroke: var(--accent);
+}
+
+.wg-countdown[data-past='yes'] .wg-countdown-arc {
+  stroke: var(--amber);
+}
+
+.wg-countdown[data-past='yes'] .wg-countdown-unit {
+  color: var(--amber);
+}
+
+.wg-countdown-words {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  max-width: 100%;
+  text-align: center;
+}
+
+.wg-countdown[data-size='medium'] .wg-countdown-words {
+  flex: 1;
+  justify-content: center;
+  text-align: left;
+}
+
+.wg-countdown-title {
+  margin: 0;
+  max-width: 100%;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wg-countdown[data-size='medium'] .wg-countdown-title {
+  font-size: var(--text-md);
+  white-space: normal;
+  text-wrap: balance;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.wg-countdown-sub,
+.wg-countdown-when {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wg-countdown-sub:empty {
+  display: none;
+}
+
+/* ---------------------------------------------------------------- focus timer */
+
+.wg-timer {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.wg-timer[data-size='medium'] {
+  flex-direction: row;
+  align-items: center;
+  gap: 14px;
+}
+
+.wg-timer-dial {
+  position: relative;
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+  aspect-ratio: 1;
+}
+
+.wg-timer[data-size='medium'] .wg-timer-dial {
+  flex: none;
+  width: 118px;
+  height: 118px;
+}
+
+.wg-timer-face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 16%;
+  text-align: center;
+}
+
+.wg-timer-left {
+  font-family: var(--font-display);
+  font-size: clamp(20px, 30cqmin, 40px);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.wg-timer[data-size='medium'] .wg-timer-left {
+  font-size: 32px;
+}
+
+.wg-timer-unit {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.wg-timer-arc {
+  stroke: var(--accent);
+}
+
+.wg-timer[data-phase='rest'] .wg-timer-arc {
+  stroke: var(--green);
+}
+
+.wg-timer[data-state='done'] .wg-timer-unit,
+.wg-timer[data-state='paused'] .wg-timer-unit {
+  color: var(--amber);
+}
+
+.wg-timer-side {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.wg-timer[data-size='medium'] .wg-timer-side {
+  flex: 1;
+  justify-content: center;
+}
+
+.wg-timer-phase {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.wg-timer-ends {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.wg-timer-lengths {
+  display: flex;
+  gap: 4px;
+}
+
+.wg-timer-length {
+  min-width: 32px;
+  min-height: 28px;
+  padding: 0 7px;
+  font: inherit;
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  background: var(--pill-bg);
+  border: 1px solid var(--pill-border);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+
+.wg-timer-length:hover {
+  background: var(--pill-bg-strong);
+  color: var(--text);
+}
+
+.wg-timer-length[aria-pressed='true'] {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 44%, transparent);
+  font-weight: 600;
+}
+
+.wg-timer-keys {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.wg-timer-glyph {
+  width: 15px;
+  height: 15px;
+  fill: currentColor;
+}
+
+.wg-timer-stroke {
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+}
+
+.wg-timer-say {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--amber);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wg-timer-say:empty {
+  display: none;
+}
+
+/* ---------------------------------------------------------------- calculator */
+
+/*
+ * The keys take the whole face.
+ *
+ * A small card is 156px across, and four rows of keys big enough to hit plus somewhere to read the sum do not fit
+ * inside the card's usual padding. So the calculator gives the padding back -- `--wg-pad` is the card's own number,
+ * so this follows it rather than guessing at it -- and keeps a thinner one of its own.
+ */
+.wg-calc {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  min-height: 0;
+  margin: calc(var(--wg-pad, 14px) * -1);
+  padding: 5px;
+}
+
+.wg-calc[data-size='medium'] {
+  flex-direction: row;
+  align-items: stretch;
+  gap: 8px;
+  padding: 9px;
+}
+
+.wg-calc[data-size='tall'] {
+  padding: 8px;
+  gap: 8px;
+}
+
+.wg-calc-screen {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 2px;
+  min-width: 0;
+  padding: 0 4px;
+}
+
+.wg-calc[data-size='medium'] .wg-calc-screen {
+  flex: 1;
+  padding: 0 2px 4px;
+}
+
+.wg-calc-typed {
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  font: inherit;
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--text);
+  text-align: right;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.wg-calc[data-size='medium'] .wg-calc-typed,
+.wg-calc[data-size='tall'] .wg-calc-typed {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.wg-calc-typed::placeholder {
+  color: var(--faint);
+}
+
+.wg-calc-answer {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wg-calc[data-wrong='yes'] .wg-calc-answer {
+  font-family: var(--font-sans);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--amber);
+  white-space: normal;
+}
+
+.wg-calc-pad {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-height: 0;
+  /* Five across and four down: the only shape in which twenty keys of a size worth hitting fit a 156px card. */
+  grid-template-areas:
+    'clr k7 k8 k9 div'
+    'opn k4 k5 k6 mul'
+    'cls k1 k2 k3 sub'
+    'pct k0 dot eq add';
+}
+
+/* With room to spare the pad takes the shape a calculator actually has: the functions on top, the digits in a block. */
+.wg-calc[data-size='tall'] .wg-calc-pad {
+  gap: 5px;
+  grid-template-areas:
+    'clr opn cls div'
+    'k7 k8 k9 mul'
+    'k4 k5 k6 sub'
+    'k1 k2 k3 add'
+    'k0 dot pct eq';
+}
+
+.wg-calc[data-size='medium'] .wg-calc-pad {
+  flex: 1.25;
+  gap: 4px;
+}
+
+.wg-calc-key {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 28px;
+  padding: 0;
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  border: 1px solid transparent;
+  border-radius: 9px;
+  cursor: pointer;
+  font-variant-numeric: tabular-nums;
+}
+
+.wg-calc[data-size='small'] .wg-calc-key {
+  font-size: var(--text-xs);
+  border-radius: 7px;
+}
+
+.wg-calc-key:hover {
+  background: color-mix(in srgb, var(--text) 12%, transparent);
+}
+
+/* The four operators and the clear read as what they are without anybody having to be told twice. */
+.wg-calc-key[data-key='div'],
+.wg-calc-key[data-key='mul'],
+.wg-calc-key[data-key='sub'],
+.wg-calc-key[data-key='add'],
+.wg-calc-key[data-key='pct'],
+.wg-calc-key[data-key='opn'],
+.wg-calc-key[data-key='cls'] {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 11%, transparent);
+}
+
+.wg-calc-key[data-key='clr'] {
+  color: var(--amber);
+  background: color-mix(in srgb, var(--amber) 13%, transparent);
+}
+
+.wg-calc-key[data-key='eq'] {
+  color: #05222b;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.wg-calc-key[data-key='eq']:hover {
+  background: color-mix(in srgb, var(--accent) 86%, white);
+}
+
+/* ---------------------------------------------------------------- greeting */
+
+.wg-greet {
+  position: relative;
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.wg-greet-words {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  z-index: 1;
+}
+
+.wg-greet-hello {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(17px, 6.2cqw, 23px);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.025em;
+  color: var(--text);
+  text-wrap: balance;
+}
+
+.wg-greet[data-size='wide'] .wg-greet-hello {
+  font-size: clamp(24px, 4.2cqw, 40px);
+}
+
+.wg-greet-date {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wg-greet-sky {
+  flex: none;
+  width: 128px;
+  height: 100%;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.wg-greet[data-size='wide'] .wg-greet-sky {
+  width: clamp(180px, 34cqw, 420px);
+}
+
+.wg-greet-air {
+  fill: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.wg-greet[data-part='morning'] .wg-greet-air {
+  fill: color-mix(in srgb, var(--amber) 15%, transparent);
+}
+
+.wg-greet[data-part='evening'] .wg-greet-air {
+  fill: color-mix(in srgb, var(--amber) 20%, transparent);
+}
+
+.wg-greet[data-part='night'] .wg-greet-air {
+  fill: color-mix(in srgb, var(--text) 9%, transparent);
+}
+
+.wg-greet-star {
+  fill: color-mix(in srgb, var(--text) 42%, transparent);
+  opacity: 0;
+}
+
+.wg-greet[data-part='night'] .wg-greet-star {
+  opacity: 1;
+}
+
+.wg-greet-track {
+  stroke: color-mix(in srgb, var(--text) 16%, transparent);
+  stroke-width: 1;
+  stroke-dasharray: 3 5;
+  stroke-linecap: round;
+}
+
+.wg-greet-ground {
+  stroke: color-mix(in srgb, var(--text) 26%, transparent);
+  stroke-width: 1.2;
+}
+
+.wg-greet-disc {
+  fill: var(--amber);
+}
+
+.wg-greet-glow {
+  fill: color-mix(in srgb, var(--amber) 28%, transparent);
+}
+
+.wg-greet[data-part='afternoon'] .wg-greet-disc {
+  fill: var(--accent);
+}
+
+.wg-greet[data-part='afternoon'] .wg-greet-glow {
+  fill: color-mix(in srgb, var(--accent) 26%, transparent);
+}
+
+.wg-greet[data-part='night'] .wg-greet-disc {
+  fill: color-mix(in srgb, var(--text) 62%, transparent);
+}
+
+.wg-greet[data-part='night'] .wg-greet-glow {
+  fill: color-mix(in srgb, var(--text) 16%, transparent);
+}
+
+/* ---------------------------------------------------------------- quote */
+
+.wg-quote {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  justify-content: center;
+}
+
+.wg-quote-mark {
+  flex: none;
+  width: 26px;
+  height: 20px;
+  fill: color-mix(in srgb, var(--accent) 42%, transparent);
+}
+
+.wg-quote[data-size='large'] .wg-quote-mark {
+  width: 40px;
+  height: 30px;
+}
+
+.wg-quote-line {
+  margin: 0;
+  min-width: 0;
+}
+
+.wg-quote-words {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.38;
+  letter-spacing: -0.01em;
+  color: var(--text);
+  text-wrap: balance;
+}
+
+.wg-quote[data-size='large'] .wg-quote-words {
+  font-size: clamp(16px, 6.4cqmin, 23px);
+  line-height: 1.34;
+}
+
+.wg-quote[data-size='wide'] .wg-quote-words {
+  font-size: clamp(15px, 2.1cqw, 22px);
+  max-width: 62ch;
+}
+
+.wg-quote-who {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wg-quote-who::before {
+  content: '— ';
+}
+
+.wg-quote-more {
+  align-self: flex-start;
+  min-height: 28px;
+  padding: 3px 11px;
+  font: inherit;
+  font-size: var(--text-xs);
+  color: var(--muted);
+  background: var(--pill-bg);
+  border: 1px solid var(--pill-border);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+
+.wg-quote-more:hover {
+  color: var(--text);
+  background: var(--pill-bg-strong);
+}
+
+/* ---------------------------------------------------------------- sticky note */
+
+/*
+ * A note, not a form field.
+ *
+ * The paper takes the whole card (the padding is given back, as the calculator's keys do) and the writing sits on
+ * it with no box, no border and no outline until the keyboard is actually in it. The corner is turned up, which is
+ * the one drawn thing that says "note" before a single word is read.
+ */
+.wg-notepad {
+  --wg-paper: var(--amber);
+
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  margin: calc(var(--wg-pad, 14px) * -1);
+  padding: 11px 12px 8px;
+  border-radius: inherit;
+  background: linear-gradient(165deg, color-mix(in srgb, var(--wg-paper) 26%, transparent), color-mix(in srgb, var(--wg-paper) 11%, transparent));
+}
+
+.wg-notepad[data-paper='mint'] {
+  --wg-paper: var(--green);
+}
+
+.wg-notepad[data-paper='sky'] {
+  --wg-paper: var(--accent);
+}
+
+.wg-notepad[data-paper='rose'] {
+  --wg-paper: var(--red);
+}
+
+.wg-notepad[data-paper='plain'] {
+  --wg-paper: var(--text);
+  background: linear-gradient(165deg, color-mix(in srgb, var(--text) 9%, transparent), color-mix(in srgb, var(--text) 4%, transparent));
+}
+
+/* The turned-up corner. Drawn from the paper's own tint, so it follows whichever colour was chosen. */
+.wg-notepad::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 22px;
+  height: 22px;
+  pointer-events: none;
+  background: linear-gradient(135deg, transparent 50%, color-mix(in srgb, var(--wg-paper) 30%, transparent) 50%);
+  border-bottom-right-radius: inherit;
+}
+
+.wg-notepad-text {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  font: inherit;
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  color: var(--text);
+  background: none;
+  border: 0;
+  resize: none;
+  overflow: auto;
+  scrollbar-width: thin;
+}
+
+.wg-notepad[data-size='large'] .wg-notepad-text,
+.wg-notepad[data-size='tall'] .wg-notepad-text {
+  font-size: var(--text-md);
+}
+
+.wg-notepad-text::placeholder {
+  color: color-mix(in srgb, var(--text) 42%, transparent);
+}
+
+.wg-notepad-left {
+  flex: none;
+  margin: 2px 0 0;
+  font-size: var(--text-xs);
+  color: var(--faint);
+  text-align: right;
+}
+
+.wg-notepad-left:empty {
+  display: none;
+}

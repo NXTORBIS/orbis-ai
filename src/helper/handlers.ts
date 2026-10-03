@@ -18,6 +18,8 @@ import { createTabLockHandlers } from './tabLock.ts'
 import type { TabLockDeps } from './tabLock.ts'
 import { createMarketsHandlers } from './markets.ts'
 import type { MarketsHelperDeps } from './markets.ts'
+import { createWidgetHandlers } from './widgets.ts'
+import type { WidgetsDeps } from './widgets.ts'
 import type { SecretsDeps } from './secrets.ts'
 import { createWorkflowHandlers } from './workflows.ts'
 import type { WorkflowsDeps } from './workflows.ts'
@@ -99,6 +101,14 @@ export interface HandlerDeps {
    * there is nothing to show rather than being told a price of zero.
    */
   markets?: () => MarketsHelperDeps | null | undefined
+  /**
+   * The widgets on the browser's start page: the board, and what each widget shows.
+   *
+   * The widgets are kept with the rest of what is personal, in the Orbis window's own store, so the start page asks
+   * for them here. Absent when Orbis is not running, and the page then says so plainly rather than drawing an empty
+   * board that looks like an answer.
+   */
+  widgets?: () => WidgetsDeps | null | undefined
   workflows?: () => WorkflowsDeps | null | undefined
   galaxy?: () => GalaxyDeps | null | undefined
   /** The app's search-box suggestions and local speech to text, for the pages in the browser (search results); when given, those channels exist. */
@@ -283,6 +293,7 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
     ...(deps.secrets ? createSecretsHandlers(deps.secrets) : {}),
     ...(deps.tabLock ? createTabLockHandlers(deps.tabLock) : {}),
     ...(deps.markets ? createMarketsHandlers(deps.markets) : {}),
+    ...(deps.widgets ? createWidgetHandlers(deps.widgets) : {}),
     ...(deps.workflows ? createWorkflowHandlers(deps.workflows) : {}),
     ...(deps.galaxy ? createGalaxyHandlers(deps.galaxy) : {}),
     ...(deps.appServices ? createAppServiceHandlers(deps.appServices) : {}),

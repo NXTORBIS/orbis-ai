@@ -1,0 +1,180 @@
+:root { --panel: var(--surface); --panel2: var(--input-bg); --line: var(--border); color-scheme: dark light; }
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+/*
+ * The same background the chat draws.
+ *
+ * It was a different gradient in different colours, which made the two halves of one product look like two products
+ * -- and meant a change to how Orbis looks reached one of them. Same three colours, same shape, from the same tokens,
+ * so an appearance change now shows up in both.
+ *
+ * `--preset-background` is honoured for the same reason: a preset that repaints the chat should repaint this too.
+ */
+body {
+  display: grid;
+  place-items: center;
+  background: var(
+    --preset-background,
+    radial-gradient(ellipse 80% 70% at 50% 45%, var(--bg-center) 0%, var(--bg-mid) 55%, var(--bg-edge) 100%)
+  );
+  color: var(--text);
+  font: 15px/1.5 var(--font-sans);
+}
+/*
+ * The column, sitting slightly above centre.
+ *
+ * `-6vh` was enough of a lift when the mark was 120px wide; with a smaller mark the whole column reads as too high,
+ * so the lift comes down with it and the group sits where the eye expects it.
+ */
+main { width: min(680px, 92vw); display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: -3vh; }
+
+/*
+ * The mark.
+ *
+ * Smaller than it was: at 120px it was the loudest thing on an otherwise quiet page, and this page is for typing an
+ * address rather than for looking at a logo. The glow comes down with it -- a 28px shadow around a 76px mark is a
+ * halo wider than the mark itself.
+ *
+ * Sized in CSS rather than only by the `width` attribute so it scales with a narrow window instead of overflowing.
+ */
+.logo {
+  width: clamp(56px, 7vw, 76px);
+  height: auto;
+  margin-bottom: 2px;
+  filter: drop-shadow(0 0 16px rgba(63, 216, 255, 0.18));
+}
+/* The greeting, as the Electron browser set it: Orbitron at 700, filled with a gradient from the brightest text
+   colour to the muted one. It is the one place Orbis speaks in its display face rather than its reading face. */
+h1 { margin: 6px 0 0; padding: 0 32px; font-family: var(--font-display); font-size: clamp(28px, 2.2vw, 40px); font-weight: 700;
+     letter-spacing: -0.02em; background: linear-gradient(135deg, var(--text) 0%, var(--muted) 100%);
+     -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+.clock { margin: 0 0 14px; color: var(--muted); }
+#search { width: 100%; }
+#q { width: 100%; padding: 14px 20px; font: inherit; font-size: 16px; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 999px; outline: none; transition: border-color 0.15s, background 0.15s; }
+#q::placeholder { color: var(--muted); }
+#q:hover { background: var(--panel2); }
+#q:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(63, 216, 255, 0.18); }
+.sites { display: flex; flex-wrap: nowrap; justify-content: center; gap: 4px; margin-top: 30px; max-width: 100%; overflow: hidden; }
+/* Narrow enough to run out of room, the row wraps rather than hiding the last few. */
+@media (max-width: 900px) { .sites { flex-wrap: wrap; } }
+.site { width: 112px; flex: none; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 14px 8px; border-radius: 12px; color: var(--text); text-decoration: none; font-size: 12px; }
+.site:hover, .site:focus-visible { background: var(--panel); outline: none; }
+.site .ico { width: 48px; height: 48px; display: grid; place-items: center; background: var(--panel2); border-radius: 50%; }
+.site img { width: 26px; height: 26px; }
+.site span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (prefers-reduced-motion: no-preference) { main { animation: rise 0.35s ease-out; } @keyframes rise { from { opacity: 0; transform: translateY(6px); } } }
+.countdown { margin: 0 0 10px; color: var(--accent); font-size: 13px; }
+.countdown:empty, .clock:empty { display: none; }
+.empty { color: var(--muted); margin: 18px 0 0; font-size: 13px; }
+.sites:empty { display: none; }
+.tile { position: relative; display: flex; flex-direction: column; align-items: center; }
+.tile .acts { display: flex; gap: 4px; opacity: 0; height: 22px; }
+.tile:hover .acts, .tile:focus-within .acts { opacity: 1; }
+.mini { font: inherit; font-size: 11px; color: var(--muted); background: transparent; border: 1px solid var(--line); border-radius: 8px; padding: 1px 6px; cursor: pointer; }
+.mini:hover, .mini:focus-visible { color: var(--text); border-color: var(--accent); outline: none; }
+.addtile { background: transparent; border: 0; font: inherit; font-size: 12px; cursor: pointer; }
+.topright { position: fixed; top: 14px; right: 14px; display: flex; gap: 8px; z-index: 2; }
+.gear { font: inherit; font-size: 12px; color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; cursor: pointer; }
+.gear:hover, .gear:focus-visible { color: var(--text); border-color: var(--accent); outline: none; }
+dialog { color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 20px; width: min(420px, 92vw); }
+dialog::backdrop { background: rgba(0, 0, 0, 0.55); }
+dialog h2 { margin: 0 0 12px; font-size: 18px; }
+dialog label { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; font-size: 13px; color: var(--muted); }
+dialog label.chk { flex-direction: row; align-items: center; gap: 8px; }
+dialog input[type="text"], dialog input[type="date"], dialog select { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+dialog input:focus-visible, dialog select:focus-visible, dialog button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+dialog .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+dialog button { font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 7px 16px; cursor: pointer; }
+dialog button.primary { background: var(--accent); color: #05222b; border-color: var(--accent); }
+.err { color: #ff8a8a; font-size: 12px; min-height: 1em; margin: 0; }
+
+@media (prefers-reduced-motion: reduce) { #q { transition: none; } }
+
+/*
+ * Room for the widgets, below the column.
+ *
+ * The column is 680px because a search box wants to be about that wide. A board of widgets is up to six cells across
+ * -- a little over a thousand -- so it is its own centred strip underneath rather than something squeezed into the
+ * column. The page is a scrolling column once there is a board, instead of one screenful pinned to the middle: a
+ * person with twelve widgets has to be able to reach the twelfth.
+ *
+ * Everything else about how a widget looks is in widgets/css/, which is built onto the end of this file.
+ */
+body:has(.wg-host:not(:empty)) {
+  display: block;
+  place-items: initial;
+  overflow-y: auto;
+}
+
+body:has(.wg-host:not(:empty)) main {
+  margin: max(6vh, 48px) auto 0;
+}
+
+.wg-host:empty {
+  display: none;
+}
+
+/* The gallery sits over the whole page, so nothing behind it can be reached while it is open. */
+.wg-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  overflow: hidden auto;
+  background: color-mix(in srgb, var(--bg) 86%, transparent);
+  backdrop-filter: blur(26px);
+}
+
+.wg-layer[hidden] {
+  display: none;
+}
+
+/* While it is open the page beneath does not scroll under it. */
+body.wg-gallery-open {
+  overflow: hidden;
+}
+
+/* ---- the Orbis rail: every feature, down the margin that used to be empty */
+.rail { position: fixed; left: 0; top: 0; bottom: 0; z-index: 3; display: flex; flex-direction: column; justify-content: center; gap: 2px; width: 56px; padding: 8px 6px; overflow: hidden auto; background: color-mix(in srgb, var(--panel) 70%, transparent); border-right: 1px solid var(--line); transition: width 140ms ease; }
+/* Names appear when the rail is wanted, so it reads as icons at rest and as a menu when it is being used. */
+.rail:hover, .rail:focus-within { width: 186px; background: var(--panel); }
+.rail[hidden] { display: none; }
+.rail-item { display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 12px; border-radius: 10px; color: var(--muted); text-decoration: none; white-space: nowrap; }
+.rail-item:hover, .rail-item:focus-visible { color: var(--text); background: var(--panel2); outline: none; }
+.rail-item:focus-visible { box-shadow: 0 0 0 2px var(--accent); }
+.rail-item .ico { flex: none; }
+.rail-label { font-size: 13px; opacity: 0; transition: opacity 120ms ease; }
+.rail:hover .rail-label, .rail:focus-within .rail-label { opacity: 1; }
+/* The page keeps clear of the rail at rest; the rail expands over it rather than pushing it about. */
+body:has(.rail:not([hidden])) main { padding-left: 56px; }
+body:has(.rail:not([hidden])) .wg-host { padding-left: 56px; }
+@media (max-width: 720px) { .rail { position: static; flex-direction: row; width: auto; height: 52px; justify-content: flex-start; border-right: 0; border-bottom: 1px solid var(--line); } .rail .rail-label { display: none; } body:has(.rail:not([hidden])) main { padding-left: 0; } }
+
+/*
+ * The starfield, behind everything.
+ *
+ * The canvas is created by the shared drawing, which has no opinion about where it goes -- that is this page's
+ * business. It must be given a size: a canvas with no layout is zero by zero, and the field draws perfectly into
+ * nothing at all.
+ *
+ * Fixed rather than absolute so it covers the window however the page scrolls, and untouchable, because a backdrop
+ * that swallowed a click would be a background eating the page.
+ */
+canvas.hud-particles {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+}
+
+/*
+ * Everything the page draws sits above it -- without changing where anything sits.
+ *
+ * This line used to name `.rail` and `.topright` as well, and both are `position: fixed`. Written later in the file
+ * with the same specificity, `position: relative` won: the rail left the left edge and the buttons left the corner,
+ * and both fell into normal flow down the middle of the page, through the logo. They did not need naming at all --
+ * they are already positioned and already carry a z-index above the canvas. Only `main` is static, so only `main`
+ * needs anything here.
+ */
+main { position: relative; z-index: 1; }

@@ -22,3 +22,20 @@ await build({ ...shared, minify: false, entryPoints: ['orbis-ui/panel/omnibox-ui
 // The Orb's voice entry. The browser's toolbar microphone has no page of its own to record in, so it asks the Orb's
 // page, which uses the one voice pipeline Orbis has. External `./helper.js` for the same reason the omnibox is.
 await build({ ...shared, minify: false, entryPoints: ['orbis-ui/orb/voice.ts'], outfile: 'orbis-ui/orb/voice.js', format: 'esm', platform: 'browser', external: ['./helper.js'] })
+// The start page's widgets: the board, the gallery and the studio, built from the same catalogue the app uses
+// (src/shared/widgets.ts), so the browser and Orion can never disagree about what a widget is. It is written out
+// under the name the browser already serves, so nothing in the browser itself has to change to carry it.
+await build({ ...shared, minify: false, entryPoints: ['orbis-ui/newtab/widgets/main.ts'], outfile: 'orbis-ui/newtab/widgets.js', format: 'esm', platform: 'browser', external: ['./helper.js', './orbis-icons.js'] })
+// The start page's stylesheet is its own rules followed by the widgets', in a fixed order. One file is served, for
+// the same reason: the browser already knows it by name.
+{
+  const { readFile, writeFile, readdir } = await import('node:fs/promises')
+  const css = join(root, 'orbis-ui/newtab/widgets/css')
+  const ORDER = ['cards.css', 'renderers-time.css', 'renderers-personal.css', 'renderers-live.css', 'board.css', 'gallery.css', 'studio.css']
+  const present = new Set(await readdir(css).catch(() => []))
+  const strays = [...present].filter((name) => name.endsWith('.css') && !ORDER.includes(name))
+  if (strays.length) throw new Error(`orbis-ui/newtab/widgets/css has a stylesheet the build does not know where to put: ${strays.join(', ')}`)
+  const parts = [await readFile(join(root, 'orbis-ui/newtab/newtab.base.css'), 'utf8')]
+  for (const name of ORDER) if (present.has(name)) parts.push(`\n/* ==== widgets/css/${name} ==== */\n`, await readFile(join(css, name), 'utf8'))
+  await writeFile(join(root, 'orbis-ui/newtab/newtab.css'), parts.join(''))
+}

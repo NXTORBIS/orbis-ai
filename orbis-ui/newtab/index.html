@@ -13,7 +13,7 @@
   </head>
   <body>
     <div class="topright">
-      <button id="addWidget" class="gear" type="button" aria-label="Add a widget to this page">+ Widget</button>
+      <button id="openWidgets" class="gear" type="button" aria-label="Widgets on this page">Widgets</button>
       <button id="openSettings" class="gear" type="button" aria-label="Customize this page">Customize</button>
     </div>
     <nav id="rail" class="rail" aria-label="Orbis"></nav>
@@ -26,8 +26,14 @@
       </form>
       <p id="empty" class="empty" hidden>No shortcuts yet. Add the sites you use most.</p>
       <nav id="shortcuts" class="sites" aria-label="Shortcuts"></nav>
-      <div id="widgets" class="widgets" hidden></div>
     </main>
+    <!--
+      The widgets, below the column.
+
+      Outside <main> because the column is 680px wide and a board of widgets is up to six cells -- just over a
+      thousand. It is its own centred strip, and the page scrolls when the board is taller than the window.
+    -->
+    <section id="widgets" class="wg-host" aria-label="Widgets"></section>
 
     <dialog id="shortcutDialog">
       <form id="shortcutForm" method="dialog">
@@ -36,16 +42,6 @@
         <label>Web address<input id="scUrl" type="text" autocomplete="off" spellcheck="false" placeholder="example.com" /></label>
         <p id="scError" class="err" role="alert"></p>
         <div class="row"><button type="button" id="scCancel">Cancel</button><button type="submit" class="primary">Save</button></div>
-      </form>
-    </dialog>
-
-    <dialog id="widgetDialog">
-      <form id="widgetForm" method="dialog">
-        <h2>Add a widget</h2>
-        <p class="hint">Each one shows what Orbis actually holds. Add as many as you like; move, resize or remove them from the card itself.</p>
-        <div id="widgetChoices" class="choices"></div>
-        <p id="widgetError" class="err" role="alert"></p>
-        <div class="row"><button type="button" id="widgetCancel">Close</button></div>
       </form>
     </dialog>
 

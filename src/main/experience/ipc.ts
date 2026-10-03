@@ -6,10 +6,13 @@ import { describeConfig, isDefaultConfig } from '../../shared/experience'
 import type { BrowserControl } from '../browserControl/registry'
 import { fail } from '../browserControl/registry'
 import type { ExperienceStore } from './store'
+import type { WidgetRuntimeApi } from '../widgets/contract.ts'
 
 export interface ExperienceIpcOptions {
   store: ExperienceStore
   control: BrowserControl
+  /** The widgets on the browser's start page, so Orion changes them the same way the page does. */
+  widgets: WidgetRuntimeApi
   getWindow(): BrowserWindow | null
   send(channel: string, ...args: unknown[]): void
 }
@@ -43,7 +46,7 @@ export function registerExperienceIpc(o: ExperienceIpcOptions): void {
   // ---------------------------------------------------------------- capabilities
 
   // The new tab's widgets, so Orion can really add, move, resize and set them rather than only talk about them.
-  registerWidgetCapabilities(o.control, o.store)
+  registerWidgetCapabilities(o.control, o.widgets)
 
   o.control.register({
     id: 'experience.describe',

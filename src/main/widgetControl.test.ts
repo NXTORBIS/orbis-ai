@@ -1,13 +1,22 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync, existsSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { BrowserControl } from './browserControl/registry.ts'
+import { BrowserControl, type CapabilityDefinition } from './browserControl/registry.ts'
 import { registerWidgetCapabilities } from './experience/widgetCapabilities.ts'
 import { ExperienceStore } from './experience/store.ts'
+import { createWidgetRuntime } from './widgets/runtime.ts'
+import type { WidgetRuntimeApi } from './widgets/contract.ts'
 import { DEFAULT_PROFILE_ID } from '../shared/profiles.ts'
-import { widgetsInZone } from '../shared/widgets.ts'
+
+/**
+ * Orion's hands on the widgets.
+ *
+ * Every one of these goes through the same runtime the start page goes through, and the thing being checked here is
+ * never "did the capability answer" but "is the widget really on the start page afterwards". The whole arrangement
+ * exists so that Orion cannot report having added a widget that is not there, and that is what these tests look at.
+ */
 
 const dirs: string[] = []
 const scratch = (): string => {
@@ -17,235 +26,291 @@ const scratch = (): string => {
 }
 process.on('exit', () => dirs.forEach((dir) => rmSync(dir, { recursive: true, force: true })))
 
-async function setUp(): Promise<{ store: ExperienceStore; run: (capability: string, params?: Record<string, unknown>) => Promise<ReturnType<BrowserControl['execute']> extends Promise<infer R> ? R : never>; userData: string }> {
-  const userData = scratch()
-  const store = new ExperienceStore(userData, DEFAULT_PROFILE_ID)
+type Run = (capability: string, params?: Record<string, unknown>) => Promise<Awaited<ReturnType<BrowserControl['execute']>>>
+
+async function setUp(): Promise<{ store: ExperienceStore; runtime: WidgetRuntimeApi; run: Run; control: BrowserControl; opened: { name?: unknown; at?: unknown }[] }> {
+  const store = new ExperienceStore(scratch(), DEFAULT_PROFILE_ID)
   await store.load()
   const control = new BrowserControl({ sink: async () => undefined })
-  registerWidgetCapabilities(control, store)
-  const run = (capability: string, params: Record<string, unknown> = {}) =>
-    control.execute({ capability, params, source: 'user' }, { source: 'user', confirm: async () => true })
-  return { store, run, userData }
+  const runtime = createWidgetRuntime({ store })
+  registerWidgetCapabilities(control, runtime)
+
+  // Opening one of the browser's own pages belongs to the browser. Here it is recorded rather than done.
+  const opened: { name?: unknown; at?: unknown }[] = []
+  control.register({
+    id: 'surface.open',
+    domain: 'surface',
+    name: 'Open one of the browser’s own pages',
+    description: 'Stands in for the real one.',
+    params: { name: { type: 'string', description: 'Which page.', required: true }, at: { type: 'string', description: 'A place within it.' } },
+    mutates: true,
+    confirmation: 'none',
+    run: (p) => {
+      opened.push({ name: p.name, at: p.at })
+      return { opened: true }
+    }
+  } as CapabilityDefinition)
+
+  const run: Run = (capability, params = {}) => control.execute({ capability, params, source: 'user' }, { source: 'user', confirm: async () => true })
+  return { store, runtime, run, control, opened }
 }
 
 const widgets = (store: ExperienceStore) => store.current().widgets
+const onlyId = (store: ExperienceStore) => widgets(store)[0].id
 
-test('a widget Orion adds is really on the new tab, and says so only because it looked', async () => {
+test('a widget Orion adds is really on the start page, and is said to be only because it was looked at', async () => {
   const { store, run } = await setUp()
-  await run('experience.widgetArea', { on: true })
-  const added = await run('experience.addWidget', { widget: 'clock', zone: 'top' })
-
+  const added = await run('experience.addWidget', { widget: 'clock' })
   assert.equal(added.ok, true, JSON.stringify(added.error))
   assert.equal(widgets(store).length, 1, 'the store really holds it')
   assert.equal(widgets(store)[0].widget, 'clock')
-  assert.equal(added.verification?.verified, true)
-  assert.match(added.verification?.detail ?? '', /Clock widget is on the new tab, across the top/)
+  // Nothing was drawing it, and that is said rather than guessed at.
+  assert.equal((added.data as { shownOnStartPage: unknown }).shownOnStartPage, 'no start page is open')
+  assert.equal((added.data as { id?: string }).id, widgets(store)[0].id)
 })
 
-test('it says plainly when a widget was added but the new tab is not showing widgets', async () => {
+test('adding a widget switches the widget area on, so it is never kept and never seen', async () => {
   const { store, run } = await setUp()
-  await run('experience.widgetArea', { on: false })
-  const added = await run('experience.addWidget', { widget: 'clock' })
-
-  assert.equal(added.ok, true)
-  assert.equal(widgets(store).length, 1, 'it really was added')
-  assert.match(added.verification?.detail ?? '', /not showing widgets at the moment, so it is not visible yet/)
-})
-
-test('a widget Orbis does not have is refused, with the nearest ones named', async () => {
-  const { store, run } = await setUp()
-  const result = await run('experience.addWidget', { widget: 'stockmarket' })
-  assert.equal(result.ok, false)
-  assert.equal(result.error?.code, 'not-found')
-  assert.equal(widgets(store).length, 0, 'nothing was added')
-})
-
-test('removing a widget takes away the widget and nothing it showed', async () => {
-  const { store, run } = await setUp()
+  await store.save({ ...store.current(), newTab: { ...store.current().newTab, widgets: false } }, 'off')
   await run('experience.addWidget', { widget: 'tasks' })
-  const before = store.current()
-  const removed = await run('experience.removeWidget', { widget: 'tasks' })
+  assert.equal(store.current().newTab.widgets, true)
+})
 
-  assert.equal(removed.ok, true)
+test('a widget Orbis does not have is refused, and nothing is added', async () => {
+  const { store, run } = await setUp()
+  const nope = await run('experience.addWidget', { widget: 'teapot' })
+  assert.equal(nope.ok, false)
+  assert.match(nope.error?.message ?? '', /no widget called/)
   assert.equal(widgets(store).length, 0)
-  assert.equal(removed.verification?.verified, true)
-  assert.match(removed.verification?.detail ?? '', /Nothing it showed was deleted/)
-  // Everything else about the personalisation is untouched by removing a widget.
-  assert.deepEqual(store.current().appearance, before.appearance)
 })
 
-test('moving a widget puts it where it was asked to go, counted the way a person counts', async () => {
-  const { store, run } = await setUp()
-  for (const widget of ['clock', 'tasks', 'notes']) await run('experience.addWidget', { widget, zone: 'centre' })
-
-  const moved = await run('experience.moveWidget', { widget: 'notes', zone: 'centre', position: 1 })
-  assert.equal(moved.ok, true)
-  assert.equal(widgetsInZone(widgets(store), 'centre')[0].widget, 'notes', 'position 1 means first')
-  assert.match(moved.verification?.detail ?? '', /first/)
-
-  const across = await run('experience.moveWidget', { widget: 'clock', zone: 'top' })
-  assert.equal(across.ok, true)
-  assert.equal(widgetsInZone(widgets(store), 'top').length, 1)
-  assert.equal(widgetsInZone(widgets(store), 'centre').length, 2)
+test('a widget that cannot go on the start page says why', async () => {
+  const { run } = await setUp()
+  const nope = await run('experience.addWidget', { widget: 'games' })
+  assert.equal(nope.ok, false)
+  assert.match(nope.error?.message ?? '', /Orbis window/)
 })
 
-test('a size a widget was not built for is refused rather than quietly ignored', async () => {
-  const { store, run } = await setUp()
-  await run('experience.addWidget', { widget: 'calculator' })
-  const was = widgets(store)[0].size
-
-  const asked = await run('experience.resizeWidget', { widget: 'calculator', size: 'large' })
-  if (asked.ok) {
-    assert.equal(widgets(store)[0].size, 'large')
-    assert.equal(asked.verification?.verified, true)
-  } else {
-    assert.equal(asked.error?.code, 'invalid-params')
-    assert.match(asked.error?.message ?? '', /can be/)
-    assert.equal(widgets(store)[0].size, was, 'it was left exactly as it was')
-  }
+test('a size the widget does not come in is refused by name, with the sizes it does come in', async () => {
+  const { run } = await setUp()
+  const nope = await run('experience.addWidget', { widget: 'clock', size: 'wide' })
+  assert.equal(nope.ok, false)
+  assert.match(nope.error?.message ?? '', /does not come in/)
 })
 
-test('a setting is checked against what the widget accepts, and a bad one changes nothing', async () => {
+test('what is on the start page is listed in order, with what is hidden kept apart', async () => {
   const { store, run } = await setUp()
   await run('experience.addWidget', { widget: 'clock' })
+  await run('experience.addWidget', { widget: 'notepad' })
+  const second = widgets(store)[1].id
+  await run('experience.showWidget', { widget: second, show: false })
 
-  const nonsense = await run('experience.configureWidget', { widget: 'clock', setting: 'colour', value: 'green' })
+  const listed = await run('experience.widgets')
+  const data = listed.data as { count: number; widgets: { name: string; place: string }[]; hidden: { name: string }[]; shownOnStartPage: boolean }
+  assert.equal(data.count, 1)
+  assert.equal(data.widgets[0].name, 'Clock')
+  assert.equal(data.widgets[0].place, '1 of 1')
+  assert.equal(data.hidden[0].name, 'Sticky note')
+  assert.equal(data.shownOnStartPage, true)
+})
+
+test('the catalogue says what each widget reads and whether it needs the internet', async () => {
+  const { run } = await setUp()
+  const listed = await run('experience.widgetCatalogue', { query: 'weather' })
+  const rows = listed.data as { widget: string; reads: string[]; needsInternet: boolean; shows: string[] }[]
+  const weather = rows.find((one) => one.widget === 'weather')
+  assert.ok(weather, 'the weather widget is in the catalogue')
+  assert.equal(weather!.needsInternet, true)
+  assert.ok(weather!.reads.length > 0)
+  assert.ok(weather!.shows.some((one) => /MET Norway/i.test(one)), 'it says where the forecast comes from')
+})
+
+test('nothing in the catalogue offers to read a password, a cookie or another profile', async () => {
+  const { run } = await setUp()
+  const listed = await run('experience.widgetCatalogue')
+  const words = JSON.stringify(listed.data).toLowerCase()
+  for (const forbidden of ['password', 'cookie', 'vault', 'secret', 'token']) assert.equal(words.includes(forbidden), false, forbidden)
+})
+
+test('a widget is moved by a number, by first and last, and by before and after another', async () => {
+  const { store, run } = await setUp()
+  await run('experience.addWidget', { widget: 'clock' })
+  await run('experience.addWidget', { widget: 'notepad' })
+  await run('experience.addWidget', { widget: 'tasks' })
+
+  const moved = await run('experience.moveWidget', { widget: 'tasks', place: 'first' })
+  assert.equal(moved.ok, true, JSON.stringify(moved.error))
+  assert.deepEqual(widgets(store).map((one) => one.widget), ['tasks', 'clock', 'notepad'])
+
+  await run('experience.moveWidget', { widget: 'tasks', place: 'after notepad' })
+  assert.deepEqual(widgets(store).map((one) => one.widget), ['clock', 'notepad', 'tasks'])
+
+  // Given as text, because that is the one shape the control layer checks this parameter against.
+  await run('experience.moveWidget', { widget: 'clock', place: '2' })
+  assert.deepEqual(widgets(store).map((one) => one.widget), ['notepad', 'clock', 'tasks'])
+
+  const nonsense = await run('experience.moveWidget', { widget: 'clock', place: 'sideways' })
   assert.equal(nonsense.ok, false)
-  assert.match(nonsense.error?.message ?? '', /no "colour" setting/)
-
-  const definition = (await run('experience.widgetCatalogue', { query: 'clock' })).data as { widget: string }[]
-  assert.ok(definition.some((d) => d.widget === 'clock'))
-
-  const settings = widgets(store)[0].settings
-  const name = Object.keys(settings)[0]
-  if (name !== undefined) {
-    const before = settings[name]
-    const bad = await run('experience.configureWidget', { widget: 'clock', setting: name, value: { not: 'a value' } })
-    // Either refused, or coerced to something the widget declared — never left holding an object.
-    assert.notEqual(typeof widgets(store)[0].settings[name], 'object')
-    void before
-    void bad
-  }
 })
 
-test('folding a widget away is not removing it, and opening one gives a set-aside widget another go', async () => {
+test('a locked widget will not be moved by Orion either, and says why', async () => {
   const { store, run } = await setUp()
-  await run('experience.addWidget', { widget: 'notes' })
+  await run('experience.addWidget', { widget: 'clock' })
+  await run('experience.addWidget', { widget: 'notepad' })
+  const clock = widgets(store)[0].id
+  await run('experience.lockWidget', { widget: clock, locked: true })
+  const moved = await run('experience.moveWidget', { widget: clock, place: 'last' })
+  assert.equal(moved.ok, false)
+  assert.match(moved.error?.message ?? '', /locked/)
+  assert.deepEqual(widgets(store).map((one) => one.widget), ['clock', 'notepad'])
+})
 
-  const folded = await run('experience.showWidget', { widget: 'notes', shown: false })
-  assert.equal(folded.ok, true)
-  assert.equal(widgets(store).length, 1, 'it is still there')
-  assert.equal(widgets(store)[0].collapsed, true)
+test('a size is changed, and the store really holds the new one', async () => {
+  const { store, run } = await setUp()
+  await run('experience.addWidget', { widget: 'tasks' })
+  const resized = await run('experience.resizeWidget', { widget: 'tasks', size: 'large' })
+  assert.equal(resized.ok, true, JSON.stringify(resized.error))
+  assert.equal(widgets(store)[0].size, 'large')
+})
 
-  // A widget set aside after failing comes back when the user opens it.
-  await store.save({ ...store.current(), widgets: widgets(store).map((w) => ({ ...w, disabled: true })) }, 'set aside')
-  const opened = await run('experience.showWidget', { widget: 'notes', shown: true })
-  assert.equal(opened.ok, true)
+test('a setting is changed, and one the widget does not have is refused by name', async () => {
+  const { store, run } = await setUp()
+  await run('experience.addWidget', { widget: 'weather' })
+  const set = await run('experience.configureWidget', { widget: 'weather', settings: { city: 'Chennai' } })
+  assert.equal(set.ok, true, JSON.stringify(set.error))
+  assert.equal(widgets(store)[0].settings.city, 'Chennai')
+
+  const wrong = await run('experience.configureWidget', { widget: 'weather', settings: { temperature: 'hot' } })
+  assert.equal(wrong.ok, false)
+  assert.match(wrong.error?.message ?? '', /no setting called "temperature"/)
+})
+
+test('a widget is put back to how it comes, keeping where it sits and how big it is', async () => {
+  const { store, run } = await setUp()
+  await run('experience.addWidget', { widget: 'weather', size: 'large' })
+  await run('experience.configureWidget', { widget: 'weather', settings: { city: 'Oslo' } })
+  const reset = await run('experience.resetWidget', { widget: 'weather' })
+  assert.equal(reset.ok, true, JSON.stringify(reset.error))
+  assert.equal(widgets(store)[0].settings.city, '')
+  assert.equal(widgets(store)[0].size, 'large', 'its size was left alone')
+})
+
+test('how a card looks is changed, and a card Orbis does not have is refused', async () => {
+  const { store, run } = await setUp()
+  await run('experience.addWidget', { widget: 'clock' })
+  const looked = await run('experience.widgetLook', { widget: 'clock', card: 'tint', spacing: 'compact' })
+  assert.equal(looked.ok, true, JSON.stringify(looked.error))
+  assert.equal(widgets(store)[0].look.tone, 'tint')
+  assert.equal(widgets(store)[0].look.density, 'compact')
+  assert.equal((await run('experience.widgetLook', { widget: 'clock', card: 'marble' })).ok, false)
+})
+
+test('hiding keeps a widget and everything it is set to; showing brings it back', async () => {
+  const { store, run } = await setUp()
+  await run('experience.addWidget', { widget: 'weather' })
+  await run('experience.configureWidget', { widget: 'weather', settings: { city: 'Oslo' } })
+  await run('experience.showWidget', { widget: 'weather', show: false })
+  assert.equal(widgets(store)[0].hidden, true)
+  assert.equal(widgets(store)[0].settings.city, 'Oslo', 'nothing it was set to was thrown away')
+  await run('experience.showWidget', { widget: 'weather', show: true })
+  assert.equal(widgets(store)[0].hidden, false)
+})
+
+test('a widget that was set aside after failing is started again by showing it', async () => {
+  const { store, run } = await setUp()
+  await run('experience.addWidget', { widget: 'clock' })
+  const id = onlyId(store)
+  await store.save({ ...store.current(), widgets: store.current().widgets.map((one) => ({ ...one, disabled: true })) }, 'set aside')
+  const shown = await run('experience.showWidget', { widget: id, show: true })
+  assert.equal(shown.ok, true, JSON.stringify(shown.error))
   assert.equal(widgets(store)[0].disabled, false)
-  assert.equal(widgets(store)[0].collapsed, false)
 })
 
-test('hiding the widget area keeps every widget', async () => {
+test('a widget is taken off the start page, and the store no longer holds it', async () => {
   const { store, run } = await setUp()
   await run('experience.addWidget', { widget: 'clock' })
-  await run('experience.addWidget', { widget: 'tasks' })
-
-  const off = await run('experience.widgetArea', { on: false })
-  assert.equal(off.ok, true)
-  assert.equal(store.current().newTab.widgets, false)
-  assert.equal(widgets(store).length, 2, 'both are kept')
-  assert.match(off.verification?.detail ?? '', /They are all kept/)
+  const removed = await run('experience.removeWidget', { widget: 'clock' })
+  assert.equal(removed.ok, true, JSON.stringify(removed.error))
+  assert.equal(widgets(store).length, 0)
+  assert.equal((await run('experience.removeWidget', { widget: 'clock' })).ok, false, 'and again is not found')
 })
 
-test('asking about a widget that is not there says so instead of guessing', async () => {
-  const { run } = await setUp()
-  for (const [capability, params] of [
-    ['experience.removeWidget', { widget: 'weather' }],
-    ['experience.moveWidget', { widget: 'weather', zone: 'top' }],
-    ['experience.showWidget', { widget: 'weather', shown: true }]
-  ] as const) {
-    const result = await run(capability, params)
-    assert.equal(result.ok, false, capability)
-    assert.equal(result.error?.code, 'not-found', `${capability}: ${result.error?.message}`)
-  }
-})
-
-test('two of the same widget have to be told apart by id rather than guessed between', async () => {
-  const { run } = await setUp()
-  await run('experience.addWidget', { widget: 'countdown' })
-  const second = await run('experience.addWidget', { widget: 'countdown' })
-  assert.equal(second.ok, true)
-
-  const ambiguous = await run('experience.removeWidget', { widget: 'countdown' })
-  assert.equal(ambiguous.ok, false)
-  assert.match(ambiguous.error?.message ?? '', /There are 2 countdown widgets/)
-
-  const byId = await run('experience.removeWidget', { widget: (second.data as { instanceId: string }).instanceId })
-  assert.equal(byId.ok, true)
-})
-
-test('the catalogue lists only widgets that really exist, and says what each needs', async () => {
-  const { run } = await setUp()
-  const listed = (await run('experience.widgetCatalogue')).data as { widget: string; name: string; needs: string[] }[]
-  assert.ok(listed.length >= 10)
-  assert.ok(listed.every((w) => w.widget && w.name))
-  assert.ok(!listed.some((w) => /coming soon|placeholder|example|demo/i.test(w.name)), 'nothing is listed that is not built')
-  const tasks = listed.find((w) => w.widget === 'tasks')
-  assert.ok((tasks?.needs ?? []).length > 0, 'a widget that reads the user’s things says so')
-})
-
-test('listing says what is really on the page, zone by zone', async () => {
-  const { run } = await setUp()
-  await run('experience.addWidget', { widget: 'clock', zone: 'top' })
-  await run('experience.addWidget', { widget: 'tasks', zone: 'centre' })
-
-  const state = (await run('experience.widgets')).data as { on: boolean; count: number; zones: { zone: string; widgets: { widget: string }[] }[] }
-  assert.equal(state.count, 2)
-  assert.deepEqual(state.zones.map((z) => z.zone).sort(), ['centre', 'top'])
-  assert.equal(state.zones.find((z) => z.zone === 'top')?.widgets[0].widget, 'clock')
-})
-
-// ---------------------------------------------------------------- one profile is not another
-
-test('each profile keeps its own widgets, and switching swaps all of them', async () => {
-  const userData = scratch()
-  const store = new ExperienceStore(userData, DEFAULT_PROFILE_ID)
-  await store.load()
-  const control = new BrowserControl({ sink: async () => undefined })
-  registerWidgetCapabilities(control, store)
-  const run = (capability: string, params: Record<string, unknown> = {}) =>
-    control.execute({ capability, params, source: 'user' }, { source: 'user', confirm: async () => true })
-
+test('two of the same widget are not guessed between: Orion is told to say which', async () => {
+  const { store, run } = await setUp()
   await run('experience.addWidget', { widget: 'clock' })
-  await run('experience.addWidget', { widget: 'tasks' })
-  assert.equal(store.current().widgets.length, 2)
+  await run('experience.addWidget', { widget: 'clock' })
+  const asked = await run('experience.removeWidget', { widget: 'clock' })
+  assert.equal(asked.ok, false)
+  assert.match(asked.error?.message ?? '', /Say which one by its id/)
+  assert.equal(widgets(store).length, 2, 'neither was removed')
 
-  // Another person signs in. They start with their own new tab, not with somebody else's day on it.
-  await store.useProfile('work')
-  assert.equal(store.profile, 'work')
-  assert.equal(store.current().widgets.length, 0, 'no sign of the other profile’s widgets')
-
-  await run('experience.addWidget', { widget: 'countdown' })
-  assert.equal(store.current().widgets.length, 1)
-
-  // Back again: exactly what was left.
-  await store.useProfile(DEFAULT_PROFILE_ID)
-  assert.deepEqual(store.current().widgets.map((w) => w.widget).sort(), ['clock', 'tasks'])
-
-  await store.useProfile('work')
-  assert.deepEqual(store.current().widgets.map((w) => w.widget), ['countdown'])
+  // Named by its own id, it is removed.
+  const removed = await run('experience.removeWidget', { widget: widgets(store)[1].id })
+  assert.equal(removed.ok, true, JSON.stringify(removed.error))
+  assert.equal(widgets(store).length, 1)
 })
 
-test('one profile’s personalisation is written in its own place, not over another’s', async () => {
-  const userData = scratch()
-  const store = new ExperienceStore(userData, DEFAULT_PROFILE_ID)
-  await store.load()
-  await store.save({ ...store.current(), newTab: { ...store.current().newTab, widgets: true } }, 'showed widgets')
-  await store.flush()
-  assert.ok(existsSync(join(userData, 'experience', 'experience.json')), 'the default profile keeps the place it always kept')
+test('one widget can be looked at on its own, with what it can be set to', async () => {
+  const { run } = await setUp()
+  await run('experience.addWidget', { widget: 'worldclock' })
+  const looked = await run('experience.widget', { widget: 'worldclock' })
+  const data = looked.data as { name: string; comesIn: string[]; canBeSet: { name: string }[] }
+  assert.equal(data.name, 'World clock')
+  assert.ok(data.comesIn.length > 0)
+  assert.ok(data.canBeSet.some((one) => one.name === 'zones'))
+})
 
-  await store.useProfile('work')
-  await store.save({ ...store.current(), newTab: { ...store.current().newTab, widgets: true } }, 'showed widgets')
-  await store.flush()
-  assert.ok(existsSync(join(userData, 'profiles', 'work', 'experience', 'experience.json')), 'another profile gets its own')
+test('a ready-made layout is put on the start page, and can be taken back', async () => {
+  const { store, run } = await setUp()
+  await run('experience.addWidget', { widget: 'tabs' })
+  const laid = await run('experience.widgetLayout', { layout: 'minimal' })
+  assert.equal(laid.ok, true, JSON.stringify(laid.error))
+  assert.deepEqual(widgets(store).map((one) => one.widget), ['clock', 'notepad'])
+
+  const back = await run('experience.undoWidgets')
+  assert.equal(back.ok, true, JSON.stringify(back.error))
+  assert.deepEqual(widgets(store).map((one) => one.widget), ['tabs'])
+
+  assert.equal((await run('experience.widgetLayout', { layout: 'gardening' })).ok, false)
+})
+
+test('with nothing to take back, Orion is told so rather than being told it worked', async () => {
+  const { run } = await setUp()
+  const nothing = await run('experience.undoWidgets')
+  assert.equal(nothing.ok, false)
+  assert.match(nothing.error?.message ?? '', /nothing to take back/)
+})
+
+test('the widgets on the start page can be hidden altogether and every one of them is kept', async () => {
+  const { store, run } = await setUp()
+  await run('experience.addWidget', { widget: 'clock' })
+  const off = await run('experience.widgetArea', { show: false })
+  assert.equal(off.ok, true, JSON.stringify(off.error))
+  assert.equal(store.current().newTab.widgets, false)
+  assert.equal(widgets(store).length, 1, 'the widget itself is still there')
+})
+
+test('the gallery is opened through the browser’s own page opener, at one widget when asked', async () => {
+  const { run, opened } = await setUp()
+  const all = await run('experience.openWidgetGallery')
+  assert.equal(all.ok, true, JSON.stringify(all.error))
+  assert.deepEqual(opened[0], { name: 'widgets', at: undefined })
+
+  const one = await run('experience.openWidgetGallery', { widget: 'weather' })
+  assert.equal(one.ok, true, JSON.stringify(one.error))
+  assert.deepEqual(opened[1], { name: 'widgets', at: '#widgets/weather' })
+
+  const nope = await run('experience.openWidgetGallery', { widget: 'teapot' })
+  assert.equal(nope.ok, false)
+  assert.equal(opened.length, 2, 'nothing was opened for a widget Orbis does not have')
+})
+
+test('every widget capability is about the start page and none of them writes anywhere else', async () => {
+  const { control } = await setUp()
+  const ours = control.list({ domain: 'experience' }).filter((one) => one.id.toLowerCase().includes('widget'))
+  assert.ok(ours.length >= 12, `only ${ours.length} widget capabilities`)
+  for (const one of ours) {
+    assert.ok(one.description.length > 20, `${one.id} says too little`)
+    assert.equal(/zone/i.test(one.description), false, `${one.id} still talks about zones`)
+  }
 })

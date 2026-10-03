@@ -1,74 +1,88 @@
 import { fail } from '../browserControl/registry.ts'
 import type { BrowserControl } from '../browserControl/registry.ts'
-import type { ExperienceStore } from './store.ts'
-import type { WidgetInstance, WidgetSize, ZoneName } from '../../shared/widgets.ts'
-import { MAX_WIDGETS, newWidgetInstance, permissionsOf, placeWidget, searchWidgets, widgetById, widgetsInZone, WIDGETS, ZONES } from '../../shared/widgets.ts'
+import type { WidgetRuntimeApi } from '../widgets/contract.ts'
+import { findOnBoard } from '../widgets/runtime.ts'
+import type { WidgetInstance, WidgetSize } from '../../shared/widgets.ts'
+import { isAvailable, permissionsOf, searchWidgets, SIZE_NAMES, TONE_NAMES, widgetById, WIDGETS, WIDGET_SIZES, type WidgetLook } from '../../shared/widgets.ts'
+import { galleryState, WIDGET_PRESETS } from '../../shared/widgetBoard.ts'
+import type { WidgetReply, WidgetRequest } from '../../shared/widgetFeed.ts'
 
 /**
- * Orion's hands on the new tab's widgets.
+ * Orion's hands on the widgets on the browser's start page.
  *
- * Widgets already existed, were already laid out in zones, and were already stored with the rest of the
- * personalisation. What was missing was any way for Orion to change them, which meant "add a clock widget" was a
- * sentence Orion could say and not a thing Orion could do. These capabilities close that, through the control layer
- * everything else goes through — no second widget API, no second store, no second layout model.
+ * Every one of these goes through the same runtime the start page and the gallery go through, so there is one way a
+ * widget is added and one place it is kept, whoever asked. Orion cannot reach the list directly and has no way to
+ * write a widget that the person could not have made themselves.
  *
- * Every one of them that changes something reads the layout back afterwards and says whether the change is really
- * there. That is not ceremony: the whole point of going through the control layer is that "I added the weather
- * widget" is checked against the widget actually being on the page, and a capability that returned success without
- * looking would be exactly the fake progress the rest of Orbis refuses to produce.
+ * And every one that changes something looks afterwards. It reads how things stand, applies one change, reads it
+ * back, and -- when a start page is actually open -- waits for that page to say it has drawn the new arrangement.
+ * So "I added the weather widget" is checked against the weather widget being on the screen. A capability that
+ * reported success without looking would be exactly the fake progress the rest of Orbis refuses to produce.
  */
 
-const ZONE_WORDS: Record<ZoneName, string> = {
-  top: 'across the top',
-  left: 'down the left',
-  centre: 'in the middle',
-  right: 'down the right',
-  bottom: 'across the bottom'
-}
-
-const SIZES: WidgetSize[] = ['small', 'medium', 'large']
-
-/** What a widget instance looks like from outside: what it is, where it is, how big — never another profile's. */
-const describe = (instance: WidgetInstance): Record<string, unknown> => {
-  const definition = widgetById(instance.widget)
-  return {
-    instanceId: instance.id,
-    widget: instance.widget,
-    name: definition?.name ?? instance.widget,
-    zone: instance.zone,
-    where: ZONE_WORDS[instance.zone],
-    order: instance.order,
-    size: instance.size,
-    collapsed: instance.collapsed,
-    // Set aside after repeated failures, which is worth saying rather than quietly showing nothing.
-    setAside: instance.disabled,
-    settings: instance.settings
-  }
-}
-
-export function registerWidgetCapabilities(control: BrowserControl, store: ExperienceStore): void {
+export function registerWidgetCapabilities(control: BrowserControl, runtime: WidgetRuntimeApi): void {
   const common = { domain: 'experience' as const }
-  const widgets = (): WidgetInstance[] => store.current().widgets
-  const shown = (): boolean => store.current().newTab.widgets
 
-  /** Saves a new set of widgets, leaving everything else about the personalisation exactly as it was. */
-  const put = async (next: WidgetInstance[], why: string): Promise<void> => {
-    const config = store.current()
-    await store.save({ ...config, widgets: next }, why)
+  const board = async () => (await runtime.state()).board
+
+  /** What a widget looks like from outside: what it is, where it sits, how big, how it is set. */
+  const describe = (one: WidgetInstance, at: number, of: number): Record<string, unknown> => {
+    const definition = widgetById(one.widget)
+    return {
+      id: one.id,
+      widget: one.widget,
+      name: definition?.name ?? one.widget,
+      place: `${at + 1} of ${of}`,
+      size: one.size,
+      sizeName: SIZE_NAMES[one.size],
+      look: TONE_NAMES[one.look.tone],
+      locked: one.locked,
+      hidden: one.hidden,
+      setAside: one.disabled,
+      settings: one.settings
+    }
   }
 
-  /** The instance a command means: by its own id, or by the widget it is an instance of when there is only one. */
-  const find = (what: unknown): WidgetInstance => {
-    const asked = String(what ?? '').trim()
-    if (!asked) fail('invalid-params', 'Say which widget, by its name or its instance id.')
-    const byInstance = widgets().find((w) => w.id === asked)
-    if (byInstance) return byInstance
-    const matching = widgets().filter((w) => w.widget === asked.toLowerCase() || (widgetById(w.widget)?.name.toLowerCase() === asked.toLowerCase()))
-    if (!matching.length) fail('not-found', `There is no ${asked} widget on the new tab. Read experience.widgets for what is there.`, true)
-    if (matching.length > 1) {
-      fail('invalid-params', `There are ${matching.length} ${asked} widgets. Say which one by its instance id: ${matching.map((w) => w.id).join(', ')}.`)
+  /** The widget a request means, by its own id, by what it is, or by its name. An ambiguous name is refused. */
+  const find = async (asked: unknown): Promise<WidgetInstance> => {
+    const text = String(asked ?? '').trim()
+    if (!text) return fail('invalid-params', 'Say which widget, by its name or its id.')
+    const found = findOnBoard((await board()).instances, text)
+    if ('one' in found) return found.one
+    if ('many' in found) {
+      return fail('invalid-params', `There are ${found.many.length} ${widgetById(found.many[0].widget)?.name ?? text} widgets on the start page. Say which one by its id: ${found.many.map((one) => one.id).join(', ')}.`)
     }
-    return matching[0]
+    return fail('not-found', `There is no ${text} widget on the start page. Read experience.widgets for what is there.`, true)
+  }
+
+  /**
+   * One change, applied and then checked.
+   *
+   * The reply from the runtime is already proof that it was saved and read back. What is added here is the other
+   * half: whether a start page that is open has actually drawn it. With no start page open that is said plainly
+   * rather than guessed at.
+   */
+  const apply = async (request: WidgetRequest, expect?: (one: WidgetInstance | null) => boolean): Promise<Record<string, unknown>> => {
+    const reply: WidgetReply = await runtime.act(request, 'orion')
+    if (!reply.ok) return fail(reply.error === 'not-found' ? 'not-found' : reply.error === 'not-saved' ? 'failed' : 'invalid-params', reply.message, reply.error === 'not-found')
+
+    const after = await runtime.state()
+    if (expect) {
+      const which = reply.id ? after.board.instances.find((one) => one.id === reply.id) ?? null : null
+      if (!expect(which)) return fail('failed', `That was saved and then read back differently, so it has been left alone: ${reply.said}`)
+    }
+
+    const page = runtime.rendered()
+    const onScreen = !page ? 'no start page is open' : await runtime.waitForRender(after.revision, 1500)
+    const shown = typeof onScreen === 'boolean' && onScreen && reply.id ? runtime.rendered()?.shown.includes(reply.id) !== false : onScreen
+    return {
+      done: reply.said,
+      ...(reply.id ? { id: reply.id } : {}),
+      ...(reply.already ? { nothingToDo: true } : {}),
+      widgets: after.board.instances.length,
+      shownOnStartPage: shown,
+      canUndo: after.canUndo
+    }
   }
 
   // ---------------------------------------------------------------- what is there
@@ -76,280 +90,375 @@ export function registerWidgetCapabilities(control: BrowserControl, store: Exper
   control.register({
     ...common,
     id: 'experience.widgets',
-    name: 'List the widgets on the new tab',
-    description: 'What widgets are on the user\'s new tab page, where each one sits, how big it is and what it is set to. Also says whether the widget area is switched on at all.',
+    name: 'List the widgets on the start page',
+    description: 'What widgets are on the browser\'s start page, in order, how big each one is and what it is set to. Also says whether widgets are shown there at all, and which are hidden or were set aside after failing.',
+    keywords: ['widget', 'widgets', 'start page', 'new tab', 'cards', 'dashboard', 'clock', 'weather'],
     params: {},
     mutates: false,
     confirmation: 'none',
-    run: () => ({
-      on: shown(),
-      count: widgets().filter((w) => !w.disabled).length,
-      zones: ZONES.map((zone) => ({ zone, where: ZONE_WORDS[zone], widgets: widgetsInZone(widgets(), zone).map(describe) })).filter((z) => z.widgets.length),
-      setAside: widgets().filter((w) => w.disabled).map(describe)
-    })
+    run: async () => {
+      const state = await runtime.state()
+      const all = state.board.instances
+      const shown = all.filter((one) => !one.hidden && !one.disabled)
+      return {
+        shownOnStartPage: state.board.enabled,
+        count: shown.length,
+        widgets: shown.map((one, at) => describe(one, at, shown.length)),
+        hidden: all.filter((one) => one.hidden).map((one, at) => describe(one, at, all.length)),
+        setAside: all.filter((one) => one.disabled).map((one, at) => describe(one, at, all.length)),
+        favourites: state.board.favourites,
+        savedLayouts: state.layouts.map((one) => ({ id: one.id, name: one.name, widgets: one.widgets })),
+        canUndo: state.canUndo,
+        startPageOpen: runtime.rendered() !== null
+      }
+    }
   })
 
   control.register({
     ...common,
     id: 'experience.widgetCatalogue',
     name: 'List the widgets Orbis has',
-    description: 'Every widget that can be added to the new tab, what it shows, what it needs access to, and which sizes it supports. Only widgets that really work are listed; there is nothing here that is not implemented.',
-    params: { query: { type: 'string', description: 'Narrows the list by name or description.' }, category: { type: 'string', description: 'time, productivity, information, browser, orion or utility.' } },
+    description: 'Every widget that can be put on the start page: what it shows, where that comes from, what it can read, which sizes it comes in, and whether it needs the internet. Widgets that cannot be added say why.',
+    keywords: ['widget', 'widgets', 'available', 'catalogue', 'gallery', 'add', 'what widgets'],
+    params: {
+      query: { type: 'string', description: 'Narrows the list by name, what it does, or what it reads.' },
+      category: { type: 'string', description: 'time, productivity, information, browser, system, fun' }
+    },
     mutates: false,
     confirmation: 'none',
-    run: (p) => {
+    run: async (p) => {
       const category = String(p.category ?? 'all')
       const list = p.query || p.category ? searchWidgets(String(p.query ?? ''), category === 'all' ? 'all' : (category as never)) : WIDGETS
-      return list.map((definition) => ({
-        widget: definition.id,
-        name: definition.name,
-        what: definition.description,
-        category: definition.category,
-        sizes: definition.sizes,
-        // Said plainly, because adding a widget is granting it what it needs.
-        needs: permissionsOf(definition)
-      }))
+      const where = await board()
+      return list.map((definition) => {
+        const state = galleryState(definition, where)
+        return {
+          widget: definition.id,
+          name: definition.name,
+          what: definition.description,
+          category: definition.category,
+          sizes: definition.sizes,
+          defaultSize: definition.defaultSize,
+          settings: definition.settings.map((spec) => ({ name: spec.name, label: spec.label, type: spec.type, ...(spec.choices ? { choices: spec.choices.map((one) => one.value) } : {}) })),
+          shows: definition.sources,
+          // Said plainly, because adding a widget is granting it what it needs.
+          reads: permissionsOf(definition),
+          needsInternet: definition.network,
+          onStartPage: state.count,
+          ...(state.state === 'unavailable' ? { cannotBeAdded: state.reason } : {})
+        }
+      })
     }
   })
 
-  // ---------------------------------------------------------------- changing what is there
+  control.register({
+    ...common,
+    id: 'experience.widget',
+    name: 'Look at one widget on the start page',
+    description: 'Everything about one widget that is on the start page: its size, its place, its settings, its look, and whether it is locked, hidden or was set aside after failing.',
+    keywords: ['widget', 'settings of', 'how is set', 'size of'],
+    params: { widget: { type: 'string', description: 'Which one, by its name, what it is, or its id.', required: true } },
+    mutates: false,
+    confirmation: 'none',
+    run: async (p) => {
+      const one = await find(p.widget)
+      const all = (await board()).instances
+      const definition = widgetById(one.widget)
+      return {
+        ...describe(one, all.indexOf(one), all.length),
+        comesIn: definition?.sizes ?? [],
+        canBeSet: (definition?.settings ?? []).map((spec) => ({ name: spec.name, label: spec.label, type: spec.type, now: one.settings[spec.name], ...(spec.choices ? { choices: spec.choices.map((c) => c.value) } : {}) })),
+        shows: definition?.sources ?? [],
+        reads: definition ? permissionsOf(definition) : []
+      }
+    }
+  })
+
+  // ---------------------------------------------------------------- adding and taking away
 
   control.register({
     ...common,
     id: 'experience.addWidget',
-    name: 'Add a widget to the new tab',
-    description: 'Puts a widget on the user\'s new tab page. The widget must be one Orbis has (read experience.widgetCatalogue). Adding one grants it the access it declares, so it asks first.',
+    name: 'Add a widget to the start page',
+    description: 'Puts a widget on the browser\'s start page. It must be one Orbis has (read experience.widgetCatalogue). Adding one grants it the access it declares, so it is confirmed first unless the person asked for it themselves.',
+    keywords: ['add widget', 'put a clock', 'show the weather', 'new tab', 'start page'],
     params: {
-      widget: { type: 'string', description: 'Which widget, by its id: clock, greeting, worldclock, countdown, timer, weather, news, tasks, notes, bookmarks, recent, downloads, tabs, workspaces, clipboard, whiteboard, quote, games or calculator.', required: true },
-      zone: { type: 'string', description: 'Where it goes.', enum: [...ZONES] },
-      size: { type: 'string', description: 'How big.', enum: SIZES }
+      widget: { type: 'string', description: 'Which widget, by its id in the catalogue.', required: true },
+      size: { type: 'string', description: 'How big.', enum: [...WIDGET_SIZES] },
+      place: { type: 'number', description: 'Where in the order, counted from 1. Left out, it goes last.' },
+      settings: { type: 'object', description: 'What to set it to as it is added, by the setting names in the catalogue.' }
     },
     mutates: true,
-    // Adding a widget gives it whatever it needs — history, downloads, the clipboard — so the user is asked.
     confirmation: 'when-consequential',
-    describe: (p) => `Add the ${widgetById(String(p.widget))?.name ?? p.widget} widget to the new tab`,
+    describe: (p) => `Add the ${widgetById(String(p.widget))?.name ?? p.widget} widget to the start page`,
     assess: (p, ctx) => {
       if (ctx.source === 'user') return { decision: 'run', reason: '' }
-      const definition = widgetById(String(p.widget ?? ''))
+      const definition = widgetById(String(p.widget ?? '').toLowerCase())
       const needs = definition ? permissionsOf(definition) : []
       return needs.length ? { decision: 'confirm', reason: `It reads ${needs.join(' and ')}.` } : { decision: 'run', reason: '' }
     },
     run: async (p) => {
       const widget = String(p.widget ?? '').toLowerCase()
       const definition = widgetById(widget)
-      if (!definition) {
-        const near = searchWidgets(widget).slice(0, 4).map((w) => w.id)
-        fail('not-found', `Orbis has no "${widget}" widget.${near.length ? ` Did you mean ${near.join(', ')}?` : ''} Read experience.widgetCatalogue for the list.`)
-      }
-      const current = widgets()
-      if (current.length >= MAX_WIDGETS) fail('blocked', `The new tab already holds ${MAX_WIDGETS} widgets, which is as many as Orbis keeps.`)
-
-      const zone = (ZONES as readonly string[]).includes(String(p.zone)) ? (p.zone as ZoneName) : 'centre'
-      const instance = newWidgetInstance(widget, zone, current.filter((w) => w.zone === zone).length)
-      if (!instance) fail('failed', `The ${definition!.name} widget could not be made.`)
-      if (p.size && definition!.sizes.includes(p.size as WidgetSize)) instance!.size = p.size as WidgetSize
-
-      await put([...current, instance!], `Added the ${definition!.name} widget`)
-      return { ...describe(instance!), on: shown() }
-    },
-    verify: (data) => {
-      // Read back from the store, not from what was just written: the question is whether it is really there.
-      const id = (data as { instanceId?: string })?.instanceId
-      const there = widgets().find((w) => w.id === id)
-      if (!there) return { verified: false, detail: 'The widget is not on the new tab.' }
-      return {
-        verified: true,
-        detail: shown()
-          ? `The ${widgetById(there.widget)?.name ?? there.widget} widget is on the new tab, ${ZONE_WORDS[there.zone]}.`
-          : // Honest rather than encouraging: it is really there, and the user will not see it until widgets are on.
-            `The widget was added, but the new tab is not showing widgets at the moment, so it is not visible yet.`
-      }
+      if (!definition) return fail('invalid-params', `Orbis has no widget called "${widget.slice(0, 40)}". Read experience.widgetCatalogue for the list.`)
+      if (!isAvailable(definition)) return fail('invalid-params', definition.unavailable ?? `${definition.name} cannot be put on the start page.`)
+      const size = p.size === undefined ? undefined : (String(p.size) as WidgetSize)
+      const at = typeof p.place === 'number' && Number.isFinite(p.place) ? Math.max(0, Math.floor(p.place) - 1) : undefined
+      return apply(
+        { type: 'add', widget, ...(size ? { size } : {}), ...(at === undefined ? {} : { at }), ...(p.settings && typeof p.settings === 'object' ? { settings: p.settings as Record<string, unknown> } : {}) },
+        (one) => one !== null && one.widget === widget
+      )
     }
   })
 
   control.register({
     ...common,
     id: 'experience.removeWidget',
-    name: 'Take a widget off the new tab',
-    description: 'Removes a widget from the new tab. This takes away the widget, never what it shows: removing the tasks widget does not delete any tasks, and removing the notes widget does not delete any notes.',
-    params: { widget: { type: 'string', description: 'Which widget, by name or instance id.', required: true } },
+    name: 'Take a widget off the start page',
+    description: 'Removes one widget from the start page. Its settings go with it; hiding it instead keeps them (experience.showWidget).',
+    keywords: ['remove widget', 'take off', 'delete the clock', 'start page'],
+    params: { widget: { type: 'string', description: 'Which one, by its name, what it is, or its id.', required: true } },
     mutates: true,
-    confirmation: 'none',
-    describe: (p) => `Take the ${p.widget} widget off the new tab`,
+    confirmation: 'when-consequential',
+    describe: (p) => `Take the ${String(p.widget)} widget off the start page`,
     run: async (p) => {
-      const instance = find(p.widget)
-      await put(widgets().filter((w) => w.id !== instance.id), `Removed the ${widgetById(instance.widget)?.name ?? instance.widget} widget`)
-      return { instanceId: instance.id, widget: instance.widget, name: widgetById(instance.widget)?.name ?? instance.widget }
-    },
-    verify: (data) => {
-      const id = (data as { instanceId?: string })?.instanceId
-      const gone = !widgets().some((w) => w.id === id)
-      return { verified: gone, detail: gone ? `The ${(data as { name?: string })?.name} widget is off the new tab. Nothing it showed was deleted.` : 'The widget is still on the new tab.' }
+      const one = await find(p.widget)
+      const result = await apply({ type: 'remove', id: one.id })
+      const still = (await board()).instances.some((other) => other.id === one.id)
+      if (still) return fail('failed', 'That widget is still on the start page, so nothing has been changed.')
+      return result
     }
   })
 
   control.register({
     ...common,
     id: 'experience.moveWidget',
-    name: 'Move a widget',
-    description: 'Moves a widget to another part of the new tab, or to another position within the part it is already in.',
+    name: 'Move a widget on the start page',
+    description: 'Changes where a widget sits in the order on the start page. The order is how the cards are laid out, left to right and top to bottom.',
+    keywords: ['move widget', 'reorder', 'first', 'last', 'before', 'after'],
     params: {
-      widget: { type: 'string', description: 'Which widget, by name or instance id.', required: true },
-      zone: { type: 'string', description: 'Where to move it.', enum: [...ZONES] },
-      position: { type: 'integer', description: 'Where among the others, 1 being first. Left out, it goes last.' }
+      widget: { type: 'string', description: 'Which one, by its name, what it is, or its id.', required: true },
+      place: { type: 'string', description: 'Where to, as text: a number counted from 1 ("2"), or "first", "last", "before <widget>", "after <widget>".', required: true }
     },
     mutates: true,
     confirmation: 'none',
-    describe: (p) => `Move the ${p.widget} widget ${p.zone ? ZONE_WORDS[p.zone as ZoneName] : ''}`.trim(),
+    describe: (p) => `Move the ${String(p.widget)} widget to ${String(p.place)}`,
     run: async (p) => {
-      const instance = find(p.widget)
-      const zone = (ZONES as readonly string[]).includes(String(p.zone)) ? (p.zone as ZoneName) : instance.zone
-      const asked = Number(p.position)
-      // Said as 1, 2, 3 by a person; kept as 0, 1, 2 inside. A position past the end simply means last.
-      const index = Number.isFinite(asked) ? Math.max(0, Math.round(asked) - 1) : widgetsInZone(widgets(), zone).length
-      await put(placeWidget(widgets(), instance.id, zone, index), `Moved the ${widgetById(instance.widget)?.name ?? instance.widget} widget`)
-      return { instanceId: instance.id, zone, wanted: index }
-    },
-    verify: (data) => {
-      const { instanceId, zone } = data as { instanceId: string; zone: ZoneName }
-      const inZone = widgetsInZone(widgets(), zone)
-      const at = inZone.findIndex((w) => w.id === instanceId)
-      if (at === -1) return { verified: false, detail: 'The widget did not end up where it was asked to go.' }
-      return { verified: true, detail: `It is ${ZONE_WORDS[zone]}, ${at === 0 ? 'first' : `number ${at + 1} of ${inZone.length}`}.` }
+      const one = await find(p.widget)
+      const instances = (await board()).instances
+      const shown = instances.filter((other) => !other.hidden && !other.disabled)
+      const asked = String(p.place ?? '').trim().toLowerCase()
+      let to: number
+      if (asked === 'first') to = 0
+      else if (asked === 'last') to = Math.max(0, shown.length - 1)
+      else if (asked.startsWith('before ') || asked.startsWith('after ')) {
+        const [word, ...rest] = asked.split(' ')
+        const other = await find(rest.join(' '))
+        const at = shown.findIndex((item) => item.id === other.id)
+        if (at < 0) return fail('not-found', 'That widget is not on the start page.')
+        to = word === 'before' ? at : at + 1
+      } else {
+        const number = Number(asked)
+        if (!Number.isFinite(number) || number < 1) return fail('invalid-params', 'Say where to move it: a number counted from 1, or "first", "last", "before <widget>" or "after <widget>".')
+        to = Math.floor(number) - 1
+      }
+      return apply({ type: 'move', id: one.id, to })
     }
   })
 
   control.register({
     ...common,
     id: 'experience.resizeWidget',
-    name: 'Resize a widget',
-    description: 'Makes a widget smaller or larger. Each widget supports only the sizes it was built for; asking for one it does not support says so rather than leaving it unchanged and claiming otherwise.',
+    name: 'Change a widget’s size',
+    description: 'Makes one widget on the start page a different size. Only the sizes that widget comes in: read experience.widget or experience.widgetCatalogue.',
+    keywords: ['resize', 'bigger', 'smaller', 'size', 'wide', 'tall'],
     params: {
-      widget: { type: 'string', description: 'Which widget, by name or instance id.', required: true },
-      size: { type: 'string', description: 'How big.', enum: SIZES, required: true }
+      widget: { type: 'string', description: 'Which one, by its name, what it is, or its id.', required: true },
+      size: { type: 'string', description: 'small (one cell), medium (two across), tall (two down), large (two by two), wide (a whole row).', required: true, enum: [...WIDGET_SIZES] }
     },
     mutates: true,
     confirmation: 'none',
-    describe: (p) => `Make the ${p.widget} widget ${p.size}`,
+    describe: (p) => `Make the ${String(p.widget)} widget ${String(p.size)}`,
     run: async (p) => {
-      const instance = find(p.widget)
-      const definition = widgetById(instance.widget)
-      const size = String(p.size) as WidgetSize
-      if (!definition?.sizes.includes(size)) {
-        fail('invalid-params', `The ${definition?.name ?? instance.widget} widget cannot be ${size}. It can be ${(definition?.sizes ?? []).join(' or ')}.`)
-      }
-      await put(widgets().map((w) => (w.id === instance.id ? { ...w, size } : w)), `Resized the ${definition!.name} widget`)
-      return { instanceId: instance.id, size, name: definition!.name }
-    },
-    verify: (data) => {
-      const { instanceId, size, name } = data as { instanceId: string; size: WidgetSize; name: string }
-      const now = widgets().find((w) => w.id === instanceId)
-      return now?.size === size ? { verified: true, detail: `The ${name} widget is ${size}.` } : { verified: false, detail: 'The widget is still the size it was.' }
+      const one = await find(p.widget)
+      const size = String(p.size ?? '') as WidgetSize
+      if (!WIDGET_SIZES.includes(size)) return fail('invalid-params', `A widget can be: ${WIDGET_SIZES.join(', ')}.`)
+      return apply({ type: 'resize', id: one.id, size }, (which) => which === null || which.size === size)
     }
   })
 
-  control.register({
-    ...common,
-    id: 'experience.showWidget',
-    name: 'Fold a widget away, or open it again',
-    description: 'Folds a widget down to its heading so the new tab stays clear, or opens it again. Folding is not removing: the widget stays where it is and keeps its settings.',
-    params: {
-      widget: { type: 'string', description: 'Which widget, by name or instance id.', required: true },
-      shown: { type: 'boolean', description: 'True to open it, false to fold it away.', required: true }
-    },
-    mutates: true,
-    confirmation: 'none',
-    describe: (p) => `${p.shown === false ? 'Fold away' : 'Open'} the ${p.widget} widget`,
-    run: async (p) => {
-      const instance = find(p.widget)
-      const collapsed = p.shown === false
-      const name = widgetById(instance.widget)?.name ?? instance.widget
-      await put(
-        // Opening one that was set aside after failing gives it another go, which is what a person means by it.
-        widgets().map((w) => (w.id === instance.id ? { ...w, collapsed, disabled: collapsed ? w.disabled : false } : w)),
-        `${collapsed ? 'Folded away' : 'Opened'} the ${name} widget`
-      )
-      return { instanceId: instance.id, collapsed, name }
-    },
-    verify: (data) => {
-      const { instanceId, collapsed, name } = data as { instanceId: string; collapsed: boolean; name: string }
-      const now = widgets().find((w) => w.id === instanceId)
-      if (!now || now.collapsed !== collapsed) return { verified: false, detail: 'The widget did not change.' }
-      return { verified: true, detail: `The ${name} widget is ${collapsed ? 'folded away' : 'open'}.` }
-    }
-  })
+  // ---------------------------------------------------------------- how a widget is set up
 
   control.register({
     ...common,
     id: 'experience.configureWidget',
     name: 'Change what a widget is set to',
-    description: 'Changes one of a widget\'s own settings — the clock\'s format, a countdown\'s date, how many bookmarks to show. Only settings the widget declares can be set, and each is checked against what it accepts.',
+    description: 'Changes one widget\'s own settings: the city a weather widget shows, the feeds a news widget reads, the places a world clock keeps. Read experience.widget for the settings it has and what they are now.',
+    keywords: ['set the city', 'change the feed', 'configure', 'settings of a widget', 'symbol'],
     params: {
-      widget: { type: 'string', description: 'Which widget, by name or instance id.', required: true },
-      setting: { type: 'string', description: 'Which setting. Read experience.widgets to see what a widget is set to now.', required: true },
-      value: { type: 'any', description: 'What to set it to.', required: true }
+      widget: { type: 'string', description: 'Which one, by its name, what it is, or its id.', required: true },
+      settings: { type: 'object', description: 'The settings to change, by the names the catalogue gives. Anything else is refused by name.', required: true }
     },
     mutates: true,
     confirmation: 'none',
-    describe: (p) => `Set the ${p.widget} widget's ${p.setting}`,
+    describe: (p) => `Change what the ${String(p.widget)} widget is set to`,
     run: async (p) => {
-      const instance = find(p.widget)
-      const definition = widgetById(instance.widget)
-      const name = String(p.setting ?? '')
-      const spec = definition?.settings.find((s) => s.name === name)
-      if (!spec) {
-        fail('invalid-params', `The ${definition?.name ?? instance.widget} widget has no "${name}" setting. It has ${(definition?.settings ?? []).map((s) => s.name).join(', ') || 'no settings'}.`)
-      }
+      const one = await find(p.widget)
+      if (!p.settings || typeof p.settings !== 'object' || Array.isArray(p.settings)) return fail('invalid-params', 'Say which settings to change, and to what.')
+      return apply({ type: 'configure', id: one.id, settings: p.settings as Record<string, unknown> })
+    }
+  })
 
-      // Checked against what the widget said it accepts, so a bad value is refused rather than stored and broken.
-      let value: string | number | boolean
-      if (spec!.type === 'boolean') value = p.value === true || p.value === 'true'
-      else if (spec!.type === 'number') {
-        const asked = Number(p.value)
-        if (!Number.isFinite(asked)) fail('invalid-params', `${spec!.label} has to be a number.`)
-        value = Math.min(spec!.max ?? Number.MAX_SAFE_INTEGER, Math.max(spec!.min ?? Number.MIN_SAFE_INTEGER, asked))
-      } else if (spec!.type === 'choice') {
-        const asked = String(p.value)
-        const choice = spec!.choices?.find((c) => c.value === asked || c.label.toLowerCase() === asked.toLowerCase())
-        if (!choice) fail('invalid-params', `${spec!.label} can be ${(spec!.choices ?? []).map((c) => c.value).join(' or ')}.`)
-        value = choice!.value
-      } else value = String(p.value).slice(0, 200)
-
-      await put(
-        widgets().map((w) => (w.id === instance.id ? { ...w, settings: { ...w.settings, [name]: value } } : w)),
-        `Changed the ${definition!.name} widget's ${spec!.label.toLowerCase()}`
-      )
-      return { instanceId: instance.id, setting: name, value, label: spec!.label, name: definition!.name }
+  control.register({
+    ...common,
+    id: 'experience.widgetLook',
+    name: 'Change how a widget’s card looks',
+    description: 'The card a widget sits on: glass (the usual), solid, tinted in the accent colour, or no card at all; and comfortable or compact.',
+    keywords: ['glass', 'solid', 'transparent', 'compact', 'look of the card', 'tone'],
+    params: {
+      widget: { type: 'string', description: 'Which one, by its name, what it is, or its id.', required: true },
+      card: { type: 'string', description: 'glass, solid, tint or clear.', enum: ['glass', 'solid', 'tint', 'clear'] },
+      spacing: { type: 'string', description: 'comfortable or compact.', enum: ['comfortable', 'compact'] }
     },
-    verify: (data) => {
-      const { instanceId, setting, value, label, name } = data as { instanceId: string; setting: string; value: unknown; label: string; name: string }
-      const now = widgets().find((w) => w.id === instanceId)
-      return now?.settings[setting] === value
-        ? { verified: true, detail: `The ${name} widget's ${label.toLowerCase()} is ${String(value)}.` }
-        : { verified: false, detail: 'The setting did not change.' }
+    mutates: true,
+    confirmation: 'none',
+    describe: (p) => `Change how the ${String(p.widget)} widget’s card looks`,
+    run: async (p) => {
+      const one = await find(p.widget)
+      const look: Partial<WidgetLook> = {}
+      if (p.card !== undefined) look.tone = String(p.card) as WidgetLook['tone']
+      if (p.spacing !== undefined) look.density = String(p.spacing) === 'compact' ? 'compact' : 'comfortable'
+      if (Object.keys(look).length === 0) return fail('invalid-params', 'Say what to change: the card, or the spacing.')
+      return apply({ type: 'look', id: one.id, look })
+    }
+  })
+
+  control.register({
+    ...common,
+    id: 'experience.resetWidget',
+    name: 'Put a widget back to how it comes',
+    description: 'Its settings and its card back to how the widget arrives. Where it sits and how big it is are left alone.',
+    keywords: ['reset widget', 'default', 'how it comes', 'start again'],
+    params: { widget: { type: 'string', description: 'Which one, by its name, what it is, or its id.', required: true } },
+    mutates: true,
+    confirmation: 'none',
+    describe: (p) => `Put the ${String(p.widget)} widget back to how it comes`,
+    run: async (p) => apply({ type: 'reset', id: (await find(p.widget)).id })
+  })
+
+  // ---------------------------------------------------------------- shown, hidden, locked
+
+  control.register({
+    ...common,
+    id: 'experience.showWidget',
+    name: 'Show or hide one widget',
+    description: 'Hides a widget without taking it off the start page, so everything it is set to is kept; or shows a hidden one again. A widget set aside after failing is started again by this too.',
+    keywords: ['hide widget', 'show widget', 'put it back', 'set aside'],
+    params: {
+      widget: { type: 'string', description: 'Which one, by its name, what it is, or its id.', required: true },
+      show: { type: 'boolean', description: 'True to show it, false to hide it.', required: true }
+    },
+    mutates: true,
+    confirmation: 'none',
+    describe: (p) => `${p.show === false ? 'Hide' : 'Show'} the ${String(p.widget)} widget`,
+    run: async (p) => {
+      const one = await find(p.widget)
+      const show = p.show !== false
+      if (show && one.disabled) return apply({ type: 'revive', id: one.id })
+      return apply({ type: 'hide', id: one.id, hidden: !show }, (which) => which === null || which.hidden === !show)
+    }
+  })
+
+  control.register({
+    ...common,
+    id: 'experience.lockWidget',
+    name: 'Lock or unlock a widget',
+    description: 'A locked widget cannot be moved or resized by dragging it, by the keyboard, or by Orion. Everything else about it still works.',
+    keywords: ['lock', 'unlock', 'pin in place', 'stop it moving'],
+    params: {
+      widget: { type: 'string', description: 'Which one, by its name, what it is, or its id.', required: true },
+      locked: { type: 'boolean', description: 'True to lock it, false to unlock it.', required: true }
+    },
+    mutates: true,
+    confirmation: 'none',
+    describe: (p) => `${p.locked === false ? 'Unlock' : 'Lock'} the ${String(p.widget)} widget`,
+    run: async (p) => {
+      const one = await find(p.widget)
+      const locked = p.locked !== false
+      return apply({ type: 'lock', id: one.id, locked }, (which) => which === null || which.locked === locked)
     }
   })
 
   control.register({
     ...common,
     id: 'experience.widgetArea',
-    name: 'Show or hide the widget area',
-    description: 'Switches the new tab\'s widgets on or off altogether. Switching them off keeps every widget and every setting; it only stops showing them.',
-    params: { on: { type: 'boolean', description: 'True to show widgets on the new tab.', required: true } },
+    name: 'Show or hide the widgets on the start page',
+    description: 'Whether the start page shows widgets at all. Hiding them keeps every one of them and everything they are set to.',
+    keywords: ['widgets off', 'widgets on', 'hide all widgets', 'clean start page'],
+    params: { show: { type: 'boolean', description: 'True to show widgets on the start page, false to hide them all.', required: true } },
     mutates: true,
     confirmation: 'none',
-    describe: (p) => `${p.on === false ? 'Hide' : 'Show'} the new tab's widgets`,
+    describe: (p) => `${p.show === false ? 'Hide' : 'Show'} the widgets on the start page`,
+    run: async (p) => apply({ type: 'enable', on: p.show !== false })
+  })
+
+  // ---------------------------------------------------------------- the whole board
+
+  control.register({
+    ...common,
+    id: 'experience.widgetLayout',
+    name: 'Set the start page out as a ready-made layout',
+    description: `Replaces what is on the start page with one of Orbis's own layouts: ${WIDGET_PRESETS.map((one) => `${one.name} (${one.describe})`).join('; ')}. What was there can be put back with experience.undoWidgets.`,
+    keywords: ['layout', 'preset', 'set up my start page', 'study', 'work', 'research', 'minimal'],
+    params: { layout: { type: 'string', description: 'Which layout, by name.', required: true, enum: WIDGET_PRESETS.map((one) => one.id) } },
+    mutates: true,
+    confirmation: 'when-consequential',
+    describe: (p) => `Set the start page out as the "${String(p.layout)}" layout`,
+    assess: (_p, ctx) => (ctx.source === 'user' ? { decision: 'run', reason: '' } : { decision: 'confirm', reason: 'It replaces every widget that is on the start page now.' }),
     run: async (p) => {
-      const on = p.on !== false
-      const config = store.current()
-      await store.save({ ...config, newTab: { ...config.newTab, widgets: on } }, on ? 'Showed the new tab widgets' : 'Hid the new tab widgets')
-      return { on }
-    },
-    verify: (data) => {
-      const wanted = (data as { on: boolean }).on
-      return shown() === wanted
-        ? { verified: true, detail: wanted ? `The new tab is showing its ${widgets().filter((w) => !w.disabled).length} widgets.` : 'The new tab is not showing widgets. They are all kept.' }
-        : { verified: false, detail: 'The widget area did not change.' }
+      const asked = String(p.layout ?? '').trim().toLowerCase()
+      const preset = WIDGET_PRESETS.find((one) => one.id === asked || one.name.toLowerCase() === asked)
+      if (!preset) return fail('invalid-params', `Orbis has no layout called "${asked.slice(0, 40)}". It has: ${WIDGET_PRESETS.map((one) => one.name).join(', ')}.`)
+      return apply({ type: 'preset', preset: preset.id })
+    }
+  })
+
+  control.register({
+    ...common,
+    id: 'experience.undoWidgets',
+    name: 'Take back the last change to the widgets',
+    description: 'Undoes the last change made to the start page’s widgets in this session, whoever made it. There is one step of history per profile and it is not kept after Orbis closes.',
+    keywords: ['undo', 'put it back', 'that was wrong', 'revert the widgets'],
+    params: {},
+    mutates: true,
+    confirmation: 'none',
+    describe: () => 'Take back the last change to the start page’s widgets',
+    run: async () => apply({ type: 'undo' })
+  })
+
+  control.register({
+    ...common,
+    id: 'experience.openWidgetGallery',
+    name: 'Open the widget gallery on the start page',
+    description: 'Opens the browser\'s start page at the widget gallery, where every widget is shown as the real thing and can be added, or at one widget\'s own page.',
+    keywords: ['widget gallery', 'browse widgets', 'add a widget myself', 'show me the widgets'],
+    params: { widget: { type: 'string', description: 'One widget to open, by its id in the catalogue. Left out, the gallery opens on everything.' } },
+    mutates: true,
+    confirmation: 'none',
+    describe: (p) => (p.widget ? `Open the ${String(p.widget)} widget in the gallery` : 'Open the widget gallery'),
+    run: async (p, ctx) => {
+      const widget = String(p.widget ?? '').trim().toLowerCase()
+      if (widget && !widgetById(widget)) return fail('invalid-params', `Orbis has no widget called "${widget.slice(0, 40)}".`)
+      // Opened through the one capability that sends a tab to a page the browser itself owns.
+      const at = widget ? `#widgets/${widget}` : undefined
+      const opened = await ctx.control.execute(
+        { capability: 'surface.open', params: { name: 'widgets', ...(at ? { at } : {}) } },
+        { source: ctx.source, target: ctx.target, signal: ctx.signal, confirm: ctx.confirm }
+      )
+      if (!opened.ok) {
+        return fail('failed', `The start page could not be opened: ${opened.error?.message ?? 'the browser did not answer'}. Open a new tab and press "Widgets".`)
+      }
+      return { done: widget ? `The gallery is open at ${widgetById(widget)!.name}.` : 'The widget gallery is open.', verified: opened.verification ?? null }
     }
   })
 }

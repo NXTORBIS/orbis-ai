@@ -1,0 +1,251 @@
+/*
+ * A widget's own page, and the studio where one already on the start page is set up.
+ *
+ * Both are the same shape: the widget large on the left, on a piece of the start page's own sky, and everything that
+ * can be decided on the right. The widget is drawn at its true size and the whole picture is shrunk to fit, so what
+ * is on this screen is the thing itself and not a second, flatter drawing of it.
+ *
+ * The controls -- sizes, switches, rows of choices, the little cards that stand for how a widget's card looks -- are
+ * shared by both screens and written once, here.
+ */
+
+/* ---------------------------------------------------------------- the stage both screens stand a widget on */
+
+.wg-stage {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 340px;
+  padding: var(--space-4);
+  background:
+    radial-gradient(ellipse 70% 60% at 50% 22%, color-mix(in srgb, var(--accent) 12%, transparent) 0%, transparent 70%),
+    radial-gradient(ellipse 120% 100% at 50% 40%, var(--bg-center) 0%, var(--bg-mid) 55%, var(--bg-edge) 100%);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+}
+.wg-stage-floor { flex: 1; display: grid; place-items: center; min-height: 0; }
+.wg-stage-shrink { position: relative; }
+.wg-stage-real { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+.wg-stage-note { margin: 0; font-size: var(--text-xs); color: var(--faint); text-align: center; font-variant-numeric: tabular-nums; }
+.wg-stage .wg-note { margin: 0; text-align: center; }
+
+/* ---------------------------------------------------------------- one widget's own page */
+
+.wg-detail, .wg-studio { display: flex; flex-direction: column; gap: var(--space-4); padding-top: var(--space-4); }
+.wg-detail-bar, .wg-studio-bar { position: sticky; top: 0; z-index: 2; padding: 6px 0; background: linear-gradient(to bottom, var(--bg-center) 60%, transparent); }
+.wg-gallery .wg-detail-back, .wg-gallery .wg-studio-back { color: var(--muted-strong); }
+
+.wg-detail-head, .wg-studio-head { display: flex; flex-direction: column; gap: 6px; }
+.wg-detail-title, .wg-studio-title { display: flex; align-items: center; gap: 10px; }
+.wg-detail-title .wg-mark, .wg-studio-title .wg-mark { flex: none; color: var(--accent); }
+.wg-detail-name, .wg-studio-name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(22px, 2.2vw, 30px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+.wg-detail-group { margin: 0; }
+.wg-detail-say { margin: 0; max-width: 62ch; font-size: var(--text-md); line-height: 1.55; color: var(--muted-strong); }
+.wg-studio-where { margin: 0; font-size: var(--text-sm); color: var(--muted); }
+
+.wg-detail-body, .wg-studio-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(300px, 400px);
+  gap: var(--space-5);
+  align-items: start;
+}
+.wg-detail-side, .wg-studio-controls { display: flex; flex-direction: column; gap: var(--space-4); }
+
+.wg-detail-try { display: flex; flex-direction: column; gap: 8px; padding: var(--space-4); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.wg-detail-said { margin: 0; font-size: var(--text-xs); color: var(--faint); }
+.wg-detail-said:empty { display: none; }
+.wg-detail-do { display: flex; flex-wrap: wrap; gap: 10px; }
+.wg-gallery .wg-detail-add { min-height: 40px; padding: 0 20px; font-size: var(--text-md); }
+.wg-gallery .wg-detail-star { min-height: 40px; padding: 0 16px; }
+.wg-detail-no { margin: 0; padding: 12px 14px; font-size: var(--text-sm); color: var(--muted-strong); background: color-mix(in srgb, var(--amber) 12%, var(--surface-2)); border: 1px solid color-mix(in srgb, var(--amber) 34%, transparent); border-radius: var(--radius-md); }
+.wg-detail-mine:empty { display: none; }
+.wg-detail-list { gap: 6px; margin-top: 8px; }
+.wg-detail-list .wg-row { gap: 8px; }
+.wg-gallery .wg-detail-list .wg-row-main { justify-content: flex-start; text-align: left; }
+
+.wg-facts { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: var(--space-4); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.wg-facts dt { margin: 0; }
+.wg-facts dd { margin: 3px 0 0; font-size: var(--text-sm); color: var(--muted-strong); }
+.wg-facts dd p { margin: 0 0 2px; }
+
+.wg-detail-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.wg-detail-tags .wg-label { width: 100%; }
+.wg-gallery .wg-detail-tag { min-height: 28px; padding: 0 11px; color: var(--muted-strong); cursor: pointer; }
+.wg-gallery .wg-detail-tag:hover { color: var(--text); border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
+
+.wg-detail-lost, .wg-studio-lost { min-height: 50vh; display: grid; place-items: center; }
+
+/* ---------------------------------------------------------------- the studio's own parts */
+
+.wg-studio-part { display: flex; flex-direction: column; gap: 10px; padding: var(--space-4); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.wg-studio-part-title { margin: 0; }
+.wg-studio-part .wg-note { margin: -4px 0 0; }
+.wg-studio-look { display: flex; flex-direction: column; gap: var(--space-3); }
+.wg-studio-switches { display: flex; flex-direction: column; gap: var(--space-3); }
+.wg-studio-end { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+.wg-studio-remove { display: flex; flex-direction: column; gap: 8px; }
+.wg-gallery .wg-studio-danger {
+  color: var(--danger);
+  background: var(--danger-bg);
+  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+}
+.wg-gallery .wg-studio-danger:hover:not(:disabled) { color: var(--text); background: color-mix(in srgb, var(--danger) 30%, var(--danger-bg)); }
+
+/* ---------------------------------------------------------------- choosing a size */
+
+.wg-sizes-set { margin: 0; padding: 0; border: 0; }
+.wg-sizes-set > .wg-label { padding: 0; }
+.wg-sizes { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.wg-sizes-input { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.wg-sizes-one {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  min-width: 76px;
+  min-height: 86px;
+  padding: 10px 8px;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+.wg-sizes-one:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.wg-sizes-name { font-size: var(--text-sm); font-weight: 600; color: var(--text); }
+.wg-sizes-cells { font-size: var(--text-xs); color: var(--faint); font-variant-numeric: tabular-nums; }
+.wg-sizes-glyph { display: block; }
+.wg-sizes-off { fill: color-mix(in srgb, var(--text) 13%, transparent); }
+.wg-sizes-on { fill: color-mix(in srgb, var(--accent) 65%, transparent); }
+.wg-sizes-input:checked + .wg-sizes-one {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface-3));
+  border-color: color-mix(in srgb, var(--accent) 60%, transparent);
+}
+.wg-sizes-input:checked + .wg-sizes-one .wg-sizes-on { fill: var(--accent); }
+.wg-sizes-input:focus-visible + .wg-sizes-one { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---------------------------------------------------------------- how a widget's card looks */
+
+.wg-tones { display: flex; flex-wrap: wrap; gap: 8px; }
+.wg-tones-input { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.wg-tones-one {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 10px;
+  background: var(--surface-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+.wg-tones-one:hover { border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.wg-tones-name { font-size: var(--text-xs); color: var(--muted-strong); }
+.wg-tones-input:checked + .wg-tones-one { background: color-mix(in srgb, var(--accent) 12%, var(--surface-3)); border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
+.wg-tones-input:checked + .wg-tones-one .wg-tones-name { color: var(--text); }
+.wg-tones-input:focus-visible + .wg-tones-one { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Each swatch is a tiny card painted the way that choice paints a real one. */
+.wg-tones-swatch { display: block; }
+.wg-tones-card { fill: color-mix(in srgb, var(--glass) 90%, transparent); stroke: var(--glass-border); stroke-width: 1; }
+.wg-tones-line { fill: color-mix(in srgb, var(--text) 42%, transparent); }
+.wg-tones-line-2 { fill: color-mix(in srgb, var(--text) 20%, transparent); }
+.wg-tones-one[data-tone='solid'] .wg-tones-card { fill: var(--surface); stroke: var(--border); }
+.wg-tones-one[data-tone='tint'] .wg-tones-card { fill: color-mix(in srgb, var(--accent) 26%, transparent); stroke: color-mix(in srgb, var(--accent) 55%, transparent); }
+.wg-tones-one[data-tone='clear'] .wg-tones-card { fill: none; stroke: color-mix(in srgb, var(--text) 22%, transparent); stroke-dasharray: 3 3; }
+
+/* ---------------------------------------------------------------- the form a widget's settings come to */
+
+.wg-form { display: flex; flex-direction: column; gap: var(--space-3); }
+.wg-form-row { display: flex; flex-direction: column; gap: 6px; }
+.wg-form-label { font-size: var(--text-sm); font-weight: 500; color: var(--muted-strong); }
+.wg-form-hint { margin: 0; font-size: var(--text-xs); color: var(--faint); }
+.wg-form-hint:empty { display: none; }
+.wg-form-error { margin: 0; font-size: var(--text-xs); color: var(--danger); }
+.wg-form-error:empty { display: none; }
+.wg-form-none { padding: var(--space-3); font-size: var(--text-sm); color: var(--muted); }
+
+.wg-form-input, .wg-form-select {
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 11px;
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--text);
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-control);
+}
+.wg-form-input::placeholder { color: var(--faint); }
+.wg-form-input:hover, .wg-form-select:hover { border-color: color-mix(in srgb, var(--accent) 40%, var(--input-border)); }
+.wg-form-input[aria-invalid='true'] { border-color: var(--danger); }
+
+.wg-form-stepper { display: flex; align-items: center; gap: 6px; }
+.wg-form-number { width: 92px; text-align: center; font-variant-numeric: tabular-nums; }
+.wg-form-number::-webkit-outer-spin-button, .wg-form-number::-webkit-inner-spin-button { appearance: none; margin: 0; }
+.wg-gallery .wg-form-step { font-size: 15px; line-height: 1; }
+
+/* A switch: a real checkbox wearing a track and a knob. */
+.wg-form-row-switch { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 10px; }
+.wg-form-row-switch .wg-form-label { flex: 1; cursor: pointer; }
+.wg-form-row-switch .wg-form-hint { flex-basis: 100%; margin: 0; }
+.wg-form-switch {
+  position: relative;
+  flex: none;
+  appearance: none;
+  width: 42px;
+  height: 24px;
+  margin: 0;
+  background: color-mix(in srgb, var(--text) 16%, transparent);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+}
+.wg-form-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  background: var(--text);
+  border-radius: 50%;
+}
+.wg-form-switch:checked { background: var(--accent-fill); border-color: color-mix(in srgb, var(--accent) 70%, transparent); }
+.wg-form-switch:checked::after { left: 20px; background: var(--accent); }
+
+/* A row of choices laid side by side. */
+.wg-form-seg { display: inline-flex; flex-wrap: wrap; gap: 3px; padding: 3px; background: var(--pill-bg); border: 1px solid var(--pill-border); border-radius: var(--radius-pill); }
+.wg-form-seg-input { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.wg-form-seg-one {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 13px;
+  font-size: var(--text-sm);
+  color: var(--muted-strong);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.wg-form-seg-one:hover { color: var(--text); background: var(--hover); }
+.wg-form-seg-input:checked + .wg-form-seg-one { color: var(--text); background: var(--active); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 45%, transparent); }
+.wg-form-seg-input:focus-visible + .wg-form-seg-one { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---------------------------------------------------------------- one column when there is only room for one */
+
+@media (max-width: 900px) {
+  .wg-detail-body, .wg-studio-body { grid-template-columns: 1fr; }
+  .wg-stage { min-height: 280px; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .wg-sizes-one, .wg-tones-one, .wg-form-input, .wg-form-select, .wg-form-switch { transition: border-color var(--motion-fast) var(--motion-ease), background var(--motion-fast) var(--motion-ease); }
+  .wg-form-switch::after { transition: left var(--motion-fast) var(--motion-ease); }
+}

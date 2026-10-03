@@ -4,8 +4,11 @@
 //
 // Kept from the extension's page (details: docs/newtab-parity.md): search, greeting with name, clock (12h/24h, seconds), countdown,
 // wallpaper (Orbis gradients or a picture kept locally), shortcuts (add/edit/remove), most visited, customization; all per profile.
-// Searching and most-visited tiles come from the browser through the built-in handler. The quote, widgets and timers of the old
-// Electron start page live in the Orbis app's own stores and are not on this page (see the parity doc).
+// Searching and most-visited tiles come from the browser through the built-in handler.
+//
+// The widgets are the other half of this page. They are not kept here: they belong to the person, with everything else
+// personal, in Orbis's own store, and this page asks for them (widgets/main.ts). So the same widgets are there in every
+// window, Orion can change them, and the gallery shows exactly what a widget will look like before it is added.
 
 import { GRADIENTS, MAX_IMAGE_BYTES, MAX_SHORTCUTS, MAX_TILES, clockText, countdownText, normalizeSettings, removeShortcut, saveShortcut, siteUrl } from './newtab-logic.js'
 import * as store from './newtab-store.js'
@@ -13,12 +16,14 @@ import { askBrowser } from './helper.js'
 // The look the person chose in Orbis, worn here too: the browser and the chat are one application.
 import { followAppearance } from './appearance.js'
 import { introWanted, runIntro } from './intro.js'
-import { mountWidgets, widgetsFollowSettings } from './widgets.js'
+import { mountWidgets } from './widgets.js'
 import { mountRail } from './rail.js'
 
 const $ = (id) => document.getElementById(id)
 let state = { settings: normalizeSettings(null), shortcuts: [], top: [], widgets: [], image: '' }
 let timer = 0
+/** The widgets, once they are mounted: the way to open the gallery and to start arranging. */
+let widgets = null
 
 const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n }
 const favicon = (u) => `chrome://favicon2/?size=32&scaleFactor=2x&pageUrl=${encodeURIComponent(u)}`
@@ -207,7 +212,6 @@ $('settingsForm').addEventListener('submit', async (e) => {
   await store.saveSettings(state.settings)
   $('settingsDialog').close()
   render()
-  widgetsFollowSettings(state.settings)
 })
 
 function render() { applyWallpaper(); tick(); schedule(); renderShortcuts(); mountRail($('rail'), state.settings.rail) }
@@ -215,8 +219,14 @@ function render() { applyWallpaper(); tick(); schedule(); renderShortcuts(); mou
 async function load() {
   try { state = { ...state, ...(await store.load()) } } catch { /* storage unavailable: defaults */ }
   render()
-  // The board keeps its own copy from here on; the page hands it what was saved and a way to save it again.
-  mountWidgets({ saved: state.widgets, persist: (w) => { state.widgets = w; return store.saveWidgets(w) }, use12Hour: state.settings.hour12 })
+  /*
+   * The widgets.
+   *
+   * Everything about them is Orbis's: this page hands over where to draw them, a way to read its own clock setting,
+   * and the board it used to keep for itself, which Orbis takes in once.
+   */
+  widgets = mountWidgets({ host: $('widgets'), hour12: () => state.settings.hour12, legacy: state.widgets })
+  $('openWidgets').addEventListener('click', () => widgets.openGallery())
   void topSites()
 }
 

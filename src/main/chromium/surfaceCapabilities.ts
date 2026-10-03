@@ -59,7 +59,8 @@ export const SURFACES: readonly Surface[] = [
   { id: 'extensions', what: 'Extensions', url: 'chrome://extensions/', words: ['extensions', 'add ons', 'addons', 'plugins'] },
   { id: 'extension-shortcuts', what: 'Extension keyboard shortcuts', url: 'chrome://extensions/shortcuts', words: ['extension shortcuts', 'extension keyboard shortcuts'] },
   { id: 'new-tab', what: 'The Orbis new tab page', url: 'chrome://orbis-newtab/', words: ['new tab page', 'home page', 'start page', 'orbis home'] },
-  { id: 'orbis-panel', what: 'The Orbis panel', url: 'chrome://orbis/', words: ['orbis panel', 'side panel', 'the panel', 'orbis sidebar'] }
+  { id: 'orbis-panel', what: 'The Orbis panel', url: 'chrome://orbis/', words: ['orbis panel', 'side panel', 'the panel', 'orbis sidebar'] },
+  { id: 'widgets', what: 'The widget gallery on the start page', url: 'chrome://orbis-newtab/#widgets', words: ['widgets', 'widget gallery', 'add a widget', 'browse widgets', 'widget store'] }
 ]
 
 /**
@@ -172,7 +173,14 @@ export function registerSurfaceCapabilities(d: SurfaceDeps): void {
       `Opens a page belonging to the browser itself -- settings, privacy and security, clear browsing data, site permissions, history, downloads, bookmarks, extensions, saved passwords, profiles, appearance, startup, the default search engine, languages, accessibility, performance, about -- and puts the person in front of it. This is the right capability for "open settings", "show my downloads", "open the extensions page", "take me to browser preferences" and anything else naming a part of the browser rather than a website. Do not search the web for these and do not type their names into the address bar. Names: ${names}.`,
     params: {
       name: str(`Which page: ${names}. Common words work too ("preferences", "notifications", "favourites").`, true),
-      newTab: bool('Open in a new tab, leaving the current page where it is (default true).')
+      newTab: bool('Open in a new tab, leaving the current page where it is (default true).'),
+      /*
+       * A place within that page, for the few of these that have places inside them.
+       *
+       * Only a fragment, and only on the page the name already resolved to: it can open the widget gallery at one
+       * widget, and it cannot turn a name for one of the browser's pages into an address for anywhere else.
+       */
+      at: str('A place within that page, as a fragment beginning with "#" -- for example "#widgets/weather".')
     },
     keywords: SURFACE_WORDS,
     mutates: true,
@@ -187,6 +195,7 @@ export function registerSurfaceCapabilities(d: SurfaceDeps): void {
     describe: (p) => `Open ${resolveSurfaceName(p.name)}`,
     run: async (p) => {
       const found = oneSurface(p.name)
+      const url = withFragment(found.url, p.at)
 
       /*
        * Opened through the browser's own tab model, by address, in the browser.
@@ -196,11 +205,11 @@ export function registerSurfaceCapabilities(d: SurfaceDeps): void {
        * The address is what the menu item itself does.
        */
       if (p.newTab === false) {
-        const tab = await call<{ id: number }>(`chrome.tabs.update({ url: ${json(found.url)} }).then((t) => ({ id: t.id }))`)
-        return { name: found.id, url: found.url, what: found.what, tabId: String(tab.id) }
+        const tab = await call<{ id: number }>(`chrome.tabs.update({ url: ${json(url)} }).then((t) => ({ id: t.id }))`)
+        return { name: found.id, url, what: found.what, tabId: String(tab.id) }
       }
-      const tab = await call<{ id: number }>(`chrome.tabs.create({ url: ${json(found.url)}, active: true }).then((t) => ({ id: t.id }))`)
-      return { name: found.id, url: found.url, what: found.what, tabId: String(tab.id) }
+      const tab = await call<{ id: number }>(`chrome.tabs.create({ url: ${json(url)}, active: true }).then((t) => ({ id: t.id }))`)
+      return { name: found.id, url, what: found.what, tabId: String(tab.id) }
     },
     /**
      * Checked by asking the browser what the tab is now showing.
@@ -212,7 +221,8 @@ export function registerSurfaceCapabilities(d: SurfaceDeps): void {
      */
     verify: async (data) => {
       const { tabId, url, what } = data as { tabId: string; url: string; what: string }
-      const base = url.replace(/\/+$/, '')
+      // Compared without the fragment: Chromium reports a page's address with or without one as it pleases.
+      const base = url.split('#')[0].replace(/\/+$/, '')
       const end = Date.now() + 4000
       let seen = ''
       while (Date.now() < end) {
@@ -249,4 +259,17 @@ function resolveSurfaceName(name: unknown): string {
   if (!found) return `a browser page called "${String(name ?? '')}"`
   if ('ambiguous' in found) return found.ambiguous.map((s) => s.what).join(' or ')
   return found.what
+}
+
+/**
+ * One of these addresses, at a place inside it.
+ *
+ * The fragment is the only part that may be given, and it is put on the address the table already holds -- so this
+ * can say "the widget gallery, at the weather widget" and cannot say "somewhere else entirely".
+ */
+function withFragment(url: string, at: unknown): string {
+  if (typeof at !== 'string' || at.trim() === '') return url
+  const fragment = at.trim()
+  if (!/^#[A-Za-z0-9_\-/?=&.%]{1,120}$/.test(fragment)) fail('invalid-params', 'A place within a page is a fragment beginning with "#", such as "#widgets/weather".')
+  return `${url.split('#')[0]}${fragment}`
 }

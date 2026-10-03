@@ -7,7 +7,7 @@
  */
 
 import type { WidgetInstance } from './widgets'
-import { normalizeWidgets } from './widgets.ts'
+import { normalizeWidgets, widgetById } from './widgets.ts'
 import type { Dashboard } from './dashboards'
 import { normalizeDashboards } from './dashboards.ts'
 import type { StoredTheme } from './themes'
@@ -125,6 +125,17 @@ export interface ExperienceConfig {
   /** Which dashboard's widgets are on screen, or null when the widgets below are simply the ones chosen. */
   activeDashboardId: string | null
   widgets: WidgetInstance[]
+  /** Widget ids the person has marked as favourites, newest first. */
+  widgetFavourites: string[]
+  /** Which widgets were added or changed lately, newest first, for "recently used". Kept here and nowhere else. */
+  widgetRecent: { widget: string; at: number }[]
+  /**
+   * Whether the widgets the browser's start page used to keep for itself have been brought in here.
+   *
+   * The start page had a board of its own in the browser's storage. It is read once, turned into the widgets above,
+   * and this is set -- so it is never read a second time and laid over what the person has done since.
+   */
+  widgetsAdopted: boolean
   scenes: unknown[]
   /** "Tell me when...": what Orbis is watching, and what it should say when it becomes true. */
   rules: StoredRule[]
@@ -154,6 +165,9 @@ export function defaultConfig(): ExperienceConfig {
     dashboards: [],
     activeDashboardId: null,
     widgets: [],
+    widgetFavourites: [],
+    widgetRecent: [],
+    widgetsAdopted: false,
     scenes: [],
     rules: [],
     presets: [],
@@ -165,8 +179,11 @@ export function defaultConfig(): ExperienceConfig {
 
 /** Whether a configuration is the untouched Orbis experience (so "Restore original" can say there is nothing to undo). */
 export function isDefaultConfig(config: ExperienceConfig): boolean {
-  const fresh = defaultConfig()
-  return JSON.stringify({ ...config, updatedAt: 0 }) === JSON.stringify({ ...fresh, updatedAt: 0 })
+  // Both read back through the same reader before they are compared. Compared as written, the two never matched
+  // once anything had been saved: the reader lists the same fields in a different order than the default does, and
+  // text compared as text sees a different order as a different thing.
+  const plain = (one: ExperienceConfig): string => JSON.stringify({ ...normalizeConfig(one), updatedAt: 0 })
+  return plain(config) === plain(defaultConfig())
 }
 
 // ---------------------------------------------------------------- reading stored configuration
@@ -259,6 +276,12 @@ export function normalizeConfig(raw: unknown): ExperienceConfig {
     dashboards,
     activeDashboardId: typeof r.activeDashboardId === 'string' && dashboards.some((d) => d.id === r.activeDashboardId) ? r.activeDashboardId : null,
     widgets: normalizeWidgets(list(r.widgets)),
+    widgetFavourites: [...new Set(list(r.widgetFavourites).filter((id): id is string => typeof id === 'string' && widgetById(id) !== null))].slice(0, 40),
+    widgetRecent: list(r.widgetRecent)
+      .filter((one): one is { widget: string; at: number } => Boolean(one) && typeof one === 'object' && typeof (one as { widget?: unknown }).widget === 'string' && widgetById((one as { widget: string }).widget) !== null && typeof (one as { at?: unknown }).at === 'number')
+      .map((one) => ({ widget: one.widget, at: one.at }))
+      .slice(0, 12),
+    widgetsAdopted: r.widgetsAdopted === true,
     scenes: list(r.scenes),
     rules: cleanRules(r.rules),
     presets: cleanPresets(r.presets),

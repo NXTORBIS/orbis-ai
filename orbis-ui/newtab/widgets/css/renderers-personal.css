@@ -1,0 +1,1216 @@
+/*
+ * The widgets that draw what is already yours: tasks, reminders, notes, bookmarks, downloads, tabs, workspaces,
+ * clipboard, whiteboards and the sites you were just on.
+ *
+ * Everything here is drawn: rings, rails, stacks of paper, piles of pages. There are no title bars, because a card
+ * that has to be labelled is a card that failed to be a picture of its subject. Colours come only from the page's own
+ * tokens, mixed where something wants to be quieter, so the same rules hold in the dark and in the light.
+ *
+ * The group's shared pieces are `wg-p-…`; everything else is named after the widget it belongs to. Nothing moves
+ * outside the motion block at the foot of the file.
+ */
+
+/* ---------------------------------------------------------------- the group's shared pieces */
+
+/* Said aloud and never seen: how a card tells somebody that an invisible thing happened. */
+.wg-p-said {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* A word laid over whatever was pressed -- "Copied", or why it could not be done. */
+.wg-p-flash {
+  position: relative;
+}
+
+.wg-p-flash::after {
+  content: attr(data-said);
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  padding: var(--space-2);
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--accent) 24%, var(--surface));
+  color: var(--text);
+  font: 600 var(--text-sm) / 1.25 var(--font-sans);
+  text-align: center;
+}
+
+.wg-p-glyph {
+  display: block;
+  flex: none;
+}
+
+/* A site's own small picture, with its first letter underneath until one arrives. */
+.wg-p-site {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: var(--wg-site, 20px);
+  block-size: var(--wg-site, 20px);
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+.wg-p-site-letter {
+  font: 600 calc(var(--wg-site, 20px) * 0.5) / 1 var(--font-sans);
+  color: var(--muted-strong);
+  user-select: none;
+}
+
+.wg-p-site[data-icon='yes'] .wg-p-site-letter {
+  visibility: hidden;
+}
+
+.wg-p-site-img {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  padding: calc(var(--wg-site, 20px) * 0.12);
+  object-fit: contain;
+}
+
+/* A grid of tiles. How many across is set per widget and per size, so a short list is never strung out. */
+.wg-p-grid {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-rows: minmax(0, auto);
+  gap: var(--space-2);
+  align-content: center;
+  min-block-size: 0;
+  min-inline-size: 0;
+  overflow: hidden;
+}
+
+.wg-p-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-block-size: 58px;
+  min-inline-size: 0;
+  padding: 8px 6px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface-2) 55%, transparent);
+  color: var(--text);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+
+/* Nothing on a gallery preview is pressable, so nothing on one lights up under the pointer either. */
+.wg-p-tile:hover:not([aria-disabled='true']) {
+  border-color: var(--line-strong);
+  background: var(--hover);
+}
+
+.wg-p-tile:focus-visible,
+.wg-tasks-dial:focus-visible,
+.wg-tasks-tick:focus-visible,
+.wg-tabs-row:focus-visible,
+.wg-clipboard-scrap:focus-visible,
+button.wg-downloads-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.wg-p-tile[aria-disabled='true'] {
+  cursor: default;
+}
+
+.wg-p-tile-name {
+  max-inline-size: 100%;
+  overflow: hidden;
+  font: 500 var(--text-xs) / 1.2 var(--font-sans);
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wg-p-tile-sub {
+  max-inline-size: 100%;
+  overflow: hidden;
+  font: var(--text-xs) / 1.2 var(--font-sans);
+  color: var(--faint);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A ring with part of it painted, and a bar of the same thing. */
+.wg-p-ring {
+  --wg-ink: var(--accent);
+
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  inline-size: var(--wg-ring, 34px);
+  block-size: var(--wg-ring, 34px);
+}
+
+.wg-p-ring[data-wg-tone='green'] { --wg-ink: var(--green); }
+.wg-p-ring[data-wg-tone='amber'] { --wg-ink: var(--amber); }
+.wg-p-ring[data-wg-tone='red'] { --wg-ink: var(--red); }
+.wg-p-ring[data-wg-tone='muted'] { --wg-ink: var(--muted); }
+
+.wg-p-ring-art,
+.wg-p-ring-mid {
+  grid-area: 1 / 1;
+}
+
+.wg-p-ring-mid {
+  display: grid;
+  place-items: center;
+  color: var(--wg-ink);
+}
+
+.wg-p-ring-track {
+  fill: none;
+  stroke: color-mix(in srgb, var(--text) 13%, transparent);
+}
+
+.wg-p-ring-arc {
+  fill: none;
+  stroke: var(--wg-ink);
+}
+
+.wg-p-bar {
+  --wg-ink: var(--accent);
+
+  position: relative;
+  display: block;
+  block-size: 6px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--text) 13%, transparent);
+}
+
+.wg-p-bar[data-wg-tone='green'] { --wg-ink: var(--green); }
+.wg-p-bar[data-wg-tone='amber'] { --wg-ink: var(--amber); }
+.wg-p-bar[data-wg-tone='red'] { --wg-ink: var(--red); }
+
+.wg-p-bar-fill {
+  position: relative;
+  display: block;
+  block-size: 100%;
+  overflow: hidden;
+  border-radius: inherit;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--wg-ink) 55%, transparent), var(--wg-ink));
+}
+
+/* Chips that carry a warning as well as a word. */
+.wg-chip[data-wg-tone] {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.wg-chip[data-wg-tone='red'] {
+  border-color: color-mix(in srgb, var(--red) 40%, transparent);
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.wg-chip[data-wg-tone='amber'] {
+  border-color: color-mix(in srgb, var(--amber) 40%, transparent);
+  background: color-mix(in srgb, var(--amber) 12%, transparent);
+  color: var(--amber);
+}
+
+/* ---------------------------------------------------------------- tasks */
+
+.wg-tasks {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: 0;
+  min-inline-size: 0;
+}
+
+.wg-tasks[data-size='medium'] {
+  flex-direction: row;
+  gap: var(--space-3);
+}
+
+.wg-tasks[data-size='large'] {
+  align-items: stretch;
+}
+
+.wg-tasks-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.wg-tasks-chips {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-inline-size: 0;
+}
+
+/* The dial: today as a ring, the count in it, and the whole thing a way into Tasks. */
+.wg-tasks-dial {
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.wg-tasks-dial::before {
+  content: '';
+  position: absolute;
+  inset: 14%;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--accent) 18%, transparent), transparent 72%);
+}
+
+.wg-tasks-dial[aria-disabled='true'] {
+  cursor: default;
+}
+
+.wg-tasks-art,
+.wg-tasks-mid {
+  grid-area: 1 / 1;
+}
+
+.wg-tasks-mid {
+  display: flex;
+  z-index: 1;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+.wg-tasks-track {
+  fill: none;
+  stroke: color-mix(in srgb, var(--text) 10%, transparent);
+}
+
+.wg-tasks-day {
+  fill: none;
+  stroke: color-mix(in srgb, var(--accent) 50%, transparent);
+}
+
+.wg-tasks-now {
+  fill: var(--accent);
+  stroke: none;
+}
+
+.wg-tasks-mark {
+  stroke: var(--muted-strong);
+}
+
+.wg-tasks-mark[data-late='yes'] {
+  stroke: var(--red);
+}
+
+.wg-tasks-count {
+  font-family: var(--font-display);
+  font-size: calc(var(--wg-dial, 100px) * 0.33);
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.wg-tasks-word {
+  max-inline-size: calc(var(--wg-dial, 100px) * 0.64);
+  overflow: hidden;
+  font-size: max(9px, calc(var(--wg-dial, 100px) * 0.095));
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wg-tasks-list {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-self: stretch;
+  gap: 2px;
+  min-block-size: 0;
+  min-inline-size: 0;
+  overflow: hidden;
+}
+
+.wg-tasks-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: 30px;
+  padding-inline: 6px 2px;
+  border-radius: var(--radius-sm);
+}
+
+.wg-tasks-row[data-late='yes'] {
+  background: color-mix(in srgb, var(--red) 9%, transparent);
+}
+
+.wg-tasks-row[data-late='yes']::before {
+  content: '';
+  position: absolute;
+  inset-block: 5px;
+  inset-inline-start: 0;
+  inline-size: 2px;
+  border-radius: 2px;
+  background: var(--red);
+}
+
+.wg-tasks-row > .wg-p-glyph {
+  color: var(--amber);
+}
+
+.wg-tasks-tick {
+  display: grid;
+  flex: none;
+  place-items: center;
+  inline-size: 28px;
+  block-size: 28px;
+  padding: 0;
+  border: 1.5px solid var(--line-strong);
+  border-radius: 50%;
+  background: none;
+  color: color-mix(in srgb, var(--text) 26%, transparent);
+  cursor: pointer;
+}
+
+.wg-tasks-tick:hover:not([aria-disabled='true']) {
+  border-color: var(--accent);
+  background: var(--accent-fill);
+  color: var(--accent);
+}
+
+.wg-tasks-tick:disabled,
+.wg-tasks-tick[aria-disabled='true'] {
+  cursor: default;
+}
+
+.wg-tasks-name {
+  font: var(--text-sm) / 1.25 var(--font-sans);
+  color: var(--text);
+}
+
+.wg-tasks-when {
+  font-size: var(--text-xs);
+}
+
+.wg-tasks-row[data-late='yes'] .wg-tasks-when {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.wg-tasks-row[data-done='yes'] .wg-tasks-name {
+  color: var(--faint);
+  text-decoration: line-through;
+}
+
+.wg-tasks-row[data-done='yes'] .wg-tasks-tick {
+  border-color: var(--green);
+  background: color-mix(in srgb, var(--green) 22%, transparent);
+  color: var(--green);
+}
+
+/* ---------------------------------------------------------------- reminders */
+
+.wg-reminders {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-block-size: 0;
+  min-inline-size: 0;
+}
+
+.wg-reminders[data-size='medium'] {
+  flex-direction: row;
+  align-items: stretch;
+}
+
+.wg-reminders-next {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 3px;
+  min-inline-size: 0;
+}
+
+.wg-reminders[data-size='medium'] .wg-reminders-next {
+  flex: 1 1 44%;
+  justify-content: center;
+}
+
+.wg-reminders-face {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-inline-size: 0;
+}
+
+.wg-reminders-time {
+  font-family: var(--font-display);
+  font-size: clamp(22px, 17cqmin, 34px);
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.wg-reminders-title {
+  margin: 0;
+  overflow: hidden;
+  font: 500 var(--text-sm) / 1.3 var(--font-sans);
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wg-reminders-away {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font: 600 var(--text-xs) / 1.3 var(--font-sans);
+  color: var(--accent);
+}
+
+.wg-reminders-day {
+  padding: 1px 7px;
+  border: 1px solid var(--pill-border);
+  border-radius: var(--radius-pill);
+  background: var(--pill-bg);
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.wg-reminders-rail {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-block-size: 0;
+  min-inline-size: 0;
+  overflow: hidden;
+}
+
+.wg-reminders[data-size='medium'] .wg-reminders-rail {
+  flex: 1 1 56%;
+  justify-content: center;
+  padding-inline-start: var(--space-3);
+  border-inline-start: 1px solid var(--line);
+}
+
+.wg-reminders-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: 26px;
+  min-inline-size: 0;
+}
+
+.wg-reminders-stem {
+  position: relative;
+  display: grid;
+  flex: none;
+  align-self: stretch;
+  place-items: center;
+  inline-size: 14px;
+}
+
+.wg-reminders-stem::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inline-size: 1px;
+  background: var(--line-strong);
+}
+
+.wg-reminders-row:first-child .wg-reminders-stem::before {
+  inset-block-start: 50%;
+}
+
+.wg-reminders-row:last-child .wg-reminders-stem::before {
+  inset-block-end: 50%;
+}
+
+.wg-reminders-pip-ring {
+  fill: color-mix(in srgb, var(--accent) 18%, transparent);
+  stroke: none;
+}
+
+.wg-reminders-pip-dot {
+  fill: var(--muted-strong);
+  stroke: none;
+}
+
+.wg-reminders-pip[data-lead='yes'] .wg-reminders-pip-dot {
+  fill: var(--accent);
+}
+
+.wg-reminders-pip[data-lead='yes'] .wg-reminders-pip-ring {
+  fill: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.wg-reminders-at {
+  font-size: var(--text-xs);
+}
+
+/* ---------------------------------------------------------------- notes */
+
+.wg-notes {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-block-size: 0;
+  min-inline-size: 0;
+}
+
+.wg-notes-sheets {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+  min-block-size: 0;
+  overflow: hidden;
+}
+
+.wg-notes[data-size='tall'] .wg-notes-sheets {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* A sheet of paper with the corner turned over. It is a picture of a note, not a way into one. */
+.wg-notes-paper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-block-size: 0;
+  min-inline-size: 0;
+  padding: 9px 10px;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(155deg, color-mix(in srgb, var(--accent) 9%, var(--surface-2)), color-mix(in srgb, var(--surface-2) 70%, transparent));
+  box-shadow: inset 0 0 0 1px var(--line);
+  clip-path: polygon(0 0, calc(100% - 13px) 0, 100% 13px, 100% 100%, 0 100%);
+}
+
+.wg-notes-paper::after {
+  content: '';
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  inline-size: 13px;
+  block-size: 13px;
+  background: linear-gradient(45deg, color-mix(in srgb, var(--text) 20%, transparent) 0 50%, transparent 50%);
+}
+
+.wg-notes-name {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  font: 600 var(--text-sm) / 1.25 var(--font-sans);
+  color: var(--text);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.wg-notes-excerpt {
+  display: -webkit-box;
+  flex: 1 1 auto;
+  margin: 0;
+  min-block-size: 0;
+  overflow: hidden;
+  font: var(--text-xs) / 1.35 var(--font-sans);
+  color: var(--muted);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.wg-notes-when {
+  margin: 0;
+}
+
+.wg-notes-feet {
+  flex: none;
+  gap: var(--space-2);
+}
+
+/* ---------------------------------------------------------------- bookmarks and recent sites */
+
+.wg-bookmarks[data-size='medium'],
+.wg-bookmarks[data-size='large'] {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.wg-bookmarks[data-size='tall'],
+.wg-recent[data-size='tall'] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.wg-recent[data-size='medium'],
+.wg-recent[data-size='large'] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* A page you were just on carries a third line, so it needs a little more room than a bookmark. */
+.wg-recent .wg-p-tile {
+  min-block-size: 68px;
+}
+
+/* A card narrower than two tiles gives each site the whole width rather than squeezing two into it. */
+@container wg (max-width: 150px) {
+  .wg-bookmarks,
+  .wg-recent {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---------------------------------------------------------------- downloads */
+
+.wg-downloads {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-block-size: 0;
+  min-inline-size: 0;
+}
+
+.wg-downloads-lead {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 5px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: linear-gradient(140deg, color-mix(in srgb, var(--accent) 14%, transparent), transparent 65%);
+}
+
+.wg-downloads-leadtop {
+  justify-content: space-between;
+  color: var(--accent);
+}
+
+.wg-downloads-lead[data-state='paused'] .wg-downloads-leadtop {
+  color: var(--amber);
+}
+
+.wg-downloads-pc {
+  font-family: var(--font-display);
+  font-size: 28px;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+
+.wg-downloads-leadname {
+  margin: 0;
+  overflow: hidden;
+  font: 500 var(--text-sm) / 1.25 var(--font-sans);
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wg-downloads-leadstate {
+  margin: 0;
+}
+
+.wg-downloads-list {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-block-size: 0;
+  min-inline-size: 0;
+  overflow: hidden;
+}
+
+.wg-downloads-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  inline-size: 100%;
+  min-block-size: 40px;
+  min-inline-size: 0;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+}
+
+button.wg-downloads-row {
+  cursor: pointer;
+}
+
+button.wg-downloads-row:hover:not([aria-disabled='true']) {
+  border-color: var(--line);
+  background: var(--hover);
+}
+
+button.wg-downloads-row[aria-disabled='true'] {
+  cursor: default;
+}
+
+.wg-downloads-inside {
+  display: grid;
+  place-items: center;
+}
+
+.wg-downloads-text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 1px;
+  min-inline-size: 0;
+}
+
+.wg-downloads-name {
+  font: 500 var(--text-sm) / 1.2 var(--font-sans);
+  color: var(--text);
+}
+
+.wg-downloads-state {
+  overflow: hidden;
+  font: var(--text-xs) / 1.25 var(--font-sans);
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wg-downloads-row[data-state='failed'] .wg-downloads-state {
+  color: var(--danger);
+}
+
+/* ---------------------------------------------------------------- open tabs */
+
+.wg-tabs {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: 0;
+  min-inline-size: 0;
+}
+
+.wg-tabs[data-size='medium'] {
+  flex-direction: row;
+  gap: var(--space-3);
+}
+
+.wg-tabs-head {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+}
+
+.wg-tabs-face {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.wg-tabs-count {
+  font-family: var(--font-display);
+  font-size: clamp(28px, 30cqmin, 54px);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.wg-tabs-groups {
+  margin-block-start: 2px;
+}
+
+/* The pages piled up like cards in a hand: one picture each, the one you are on with a brighter edge. */
+.wg-tabs-pile {
+  display: flex;
+  align-items: center;
+  padding-inline-start: 9px;
+}
+
+.wg-tabs-card {
+  display: grid;
+  place-items: center;
+  inline-size: 30px;
+  block-size: 30px;
+  margin-inline-start: -9px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  box-shadow: 0 1px 5px color-mix(in srgb, var(--bg) 80%, transparent);
+}
+
+.wg-tabs-card[data-here='yes'] {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-fill);
+}
+
+.wg-tabs-rest {
+  font: 600 var(--text-xs) / 1 var(--font-sans);
+  color: var(--muted-strong);
+}
+
+.wg-tabs-list {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-self: stretch;
+  gap: 2px;
+  min-block-size: 0;
+  min-inline-size: 0;
+  overflow: hidden;
+}
+
+.wg-tabs-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  inline-size: 100%;
+  min-block-size: 30px;
+  min-inline-size: 0;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: inherit;
+  font: var(--text-sm) / 1.25 var(--font-sans);
+  text-align: start;
+  cursor: pointer;
+}
+
+.wg-tabs-row:hover:not([aria-disabled='true']) {
+  border-color: var(--line);
+  background: var(--hover);
+}
+
+.wg-tabs-row[data-here='yes'] {
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  background: var(--active);
+}
+
+.wg-tabs-row[aria-disabled='true'] {
+  cursor: default;
+}
+
+/* ---------------------------------------------------------------- workspaces */
+
+.wg-workspaces[data-size='medium'],
+.wg-workspaces[data-size='large'] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.wg-workspaces[data-size='tall'] {
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+}
+
+.wg-workspaces-tile {
+  position: relative;
+  min-block-size: 84px;
+}
+
+/* On a narrow card the stack sits beside the name instead of over it, so the name keeps its room. */
+.wg-workspaces[data-size='tall'] .wg-workspaces-tile {
+  display: grid;
+  grid-template-areas: 'art name now' 'art held now';
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--space-2);
+  min-block-size: 56px;
+  padding-inline: 10px;
+  text-align: start;
+}
+
+.wg-workspaces[data-size='tall'] .wg-workspaces-art { grid-area: art; }
+.wg-workspaces[data-size='tall'] .wg-workspaces-name { grid-area: name; align-self: end; }
+.wg-workspaces[data-size='tall'] .wg-workspaces-held { grid-area: held; align-self: start; }
+.wg-workspaces[data-size='tall'] .wg-workspaces-now { grid-area: now; }
+
+.wg-workspaces-name {
+  max-inline-size: 100%;
+  overflow: hidden;
+  font: 600 var(--text-sm) / 1.25 var(--font-sans);
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wg-workspaces-held {
+  max-inline-size: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wg-workspaces:not([data-size='tall']) .wg-workspaces-now {
+  position: absolute;
+  inset-block-start: 5px;
+  inset-inline-end: 5px;
+}
+
+.wg-workspaces-tile[data-here='yes'] {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: var(--accent-fill);
+}
+
+.wg-workspaces-back { fill: color-mix(in srgb, var(--text) 9%, transparent); }
+.wg-workspaces-mid { fill: color-mix(in srgb, var(--text) 14%, transparent); }
+
+.wg-workspaces-front {
+  fill: color-mix(in srgb, var(--accent) 20%, transparent);
+  stroke: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+.wg-workspaces-line {
+  fill: none;
+  stroke: color-mix(in srgb, var(--accent) 60%, transparent);
+}
+
+.wg-workspaces-art {
+  flex: none;
+}
+
+/* ---------------------------------------------------------------- clipboard */
+
+.wg-clipboard {
+  position: relative;
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+  min-block-size: 0;
+  min-inline-size: 0;
+  overflow: hidden;
+}
+
+.wg-clipboard[data-size='tall'] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* Four scraps down a narrow card leave each one two lines; two scraps across leave room for three. */
+.wg-clipboard[data-size='tall'] .wg-clipboard-text {
+  -webkit-line-clamp: 2;
+}
+
+.wg-clipboard-scrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-block-size: 54px;
+  min-inline-size: 0;
+  padding: 8px 10px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface-2) 55%, transparent);
+  color: var(--text);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.wg-clipboard-scrap:hover:not([aria-disabled='true']) {
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+  background: var(--hover);
+}
+
+.wg-clipboard-scrap[aria-disabled='true'] {
+  cursor: default;
+}
+
+.wg-clipboard-kind {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--accent);
+}
+
+.wg-clipboard-scrap[data-kind='image'] .wg-clipboard-kind { color: var(--amber); }
+.wg-clipboard-scrap[data-kind='other'] .wg-clipboard-kind { color: var(--muted); }
+
+.wg-clipboard-text {
+  display: -webkit-box;
+  flex: 1 1 auto;
+  min-block-size: 0;
+  overflow: hidden;
+  font: var(--text-sm) / 1.35 var(--font-sans);
+  color: var(--text);
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.wg-clipboard-when {
+  margin-block-start: auto;
+  color: var(--faint);
+}
+
+/* ---------------------------------------------------------------- whiteboards */
+
+.wg-whiteboard[data-size='medium'],
+.wg-whiteboard[data-size='large'] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.wg-whiteboard[data-size='tall'] {
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+}
+
+.wg-whiteboard-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-block-size: 82px;
+  min-inline-size: 0;
+  padding: 8px 6px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--surface-2) 50%, transparent);
+  text-align: center;
+}
+
+.wg-whiteboard[data-size='tall'] .wg-whiteboard-tile {
+  display: grid;
+  grid-template-areas: 'art name' 'art held';
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--space-2);
+  min-block-size: 54px;
+  padding-inline: 10px;
+  text-align: start;
+}
+
+.wg-whiteboard[data-size='tall'] .wg-whiteboard-art { grid-area: art; }
+.wg-whiteboard[data-size='tall'] .wg-whiteboard-name { grid-area: name; align-self: end; }
+.wg-whiteboard[data-size='tall'] .wg-whiteboard-held { grid-area: held; align-self: start; }
+
+.wg-whiteboard-name {
+  max-inline-size: 100%;
+  margin: 0;
+  overflow: hidden;
+  font: 600 var(--text-sm) / 1.25 var(--font-sans);
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wg-whiteboard-held {
+  max-inline-size: 100%;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wg-whiteboard-art {
+  flex: none;
+}
+
+.wg-whiteboard-face {
+  fill: color-mix(in srgb, var(--text) 6%, transparent);
+  stroke: color-mix(in srgb, var(--accent) 36%, transparent);
+  stroke-width: 1.3;
+}
+
+.wg-whiteboard-rule {
+  fill: none;
+  stroke: color-mix(in srgb, var(--text) 18%, transparent);
+}
+
+.wg-whiteboard-stand {
+  fill: none;
+  stroke: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+/* ---------------------------------------------------------------- everything that moves */
+
+@media (prefers-reduced-motion: no-preference) {
+  .wg-p-tile,
+  .wg-tabs-row,
+  .wg-tasks-tick,
+  .wg-clipboard-scrap,
+  button.wg-downloads-row {
+    transition:
+      background var(--motion-fast) var(--motion-ease),
+      border-color var(--motion-fast) var(--motion-ease),
+      color var(--motion-fast) var(--motion-ease);
+  }
+
+  .wg-p-bar-fill {
+    transition: width var(--motion-base) var(--motion-ease);
+  }
+
+  .wg-p-flash::after {
+    animation: wg-p-say var(--motion-base) var(--motion-ease);
+  }
+
+  /* The next reminder breathes, so the one thing that is about to happen is the one thing that moves. */
+  .wg-reminders[data-still='no'] .wg-reminders-pip[data-lead='yes'] .wg-reminders-pip-ring {
+    animation: wg-p-breathe 2.8s var(--motion-ease) infinite;
+  }
+
+  /* Something arriving right now, shown as something arriving. */
+  .wg-downloads-lead[data-still='no'][data-state='downloading'] .wg-p-bar-fill::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--text) 30%, transparent), transparent);
+    animation: wg-p-sweep 1.9s linear infinite;
+  }
+}
+
+@keyframes wg-p-say {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes wg-p-breathe {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
+}
+
+@keyframes wg-p-sweep {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}

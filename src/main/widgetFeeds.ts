@@ -253,7 +253,11 @@ async function readCapped(res: Response, max: number): Promise<string | null> {
 export function isPrivateHost(host: string): boolean {
   const h = host.toLowerCase().replace(/^\[|\]$/g, '')
   if (h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.local') || h.endsWith('.internal')) return true
-  if (h === '::1' || h === '0.0.0.0' || h.startsWith('fe80:') || h.startsWith('fc') || h.startsWith('fd')) return true
+  // An address of this computer's own network. The three IPv6 forms are only addresses when they really are IPv6:
+  // "fc" and "fd" at the start of a NAME is not a private address, and treating it as one shut out every site
+  // whose name happens to begin that way -- fcbarcelona.com among them.
+  const ipv6 = h.includes(':')
+  if (h === '::1' || h === '0.0.0.0' || (ipv6 && (h.startsWith('fe80:') || h.startsWith('fc') || h.startsWith('fd')))) return true
   const v4 = h.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/)
   if (!v4) return false
   const [a, b] = [Number(v4[1]), Number(v4[2])]

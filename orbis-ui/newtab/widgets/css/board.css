@@ -1,0 +1,433 @@
+/*
+ * The board on the start page, and arranging it.
+ *
+ * The grid is stated in one place -- 156px cells, 14px gaps -- and every card is put in the cells the shared
+ * packing worked out, so the page, the gallery's little picture of the page and the outline shown while dragging
+ * are all the same arrangement rather than three that nearly agree.
+ *
+ * At rest this is a quiet wall of cards. Everything to do with arranging appears only while arranging: handles over
+ * the cards, a bar above them, and the tray of widgets that are kept but not shown.
+ */
+
+.wg-host {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  margin: 26px 0 48px;
+}
+
+.wg-board {
+  display: grid;
+  grid-template-columns: repeat(var(--wg-columns, 1), 156px);
+  grid-auto-rows: 156px;
+  gap: 14px;
+  position: relative;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.wg-board[hidden] {
+  display: none;
+}
+
+.wg-slot {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  border-radius: 26px;
+}
+
+.wg-slot > .wg-card {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .wg-slot {
+    animation: wg-card-in 0.3s var(--motion-ease) both;
+  }
+
+  @keyframes wg-card-in {
+    from {
+      opacity: 0;
+      transform: scale(0.96) translateY(6px);
+    }
+  }
+}
+
+/* ---- nothing there yet, and nothing to ask */
+
+.wg-add-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 156px;
+  height: 156px;
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--muted);
+  background: none;
+  border: 1px dashed var(--line-strong);
+  border-radius: 26px;
+  cursor: pointer;
+}
+
+.wg-add-tile:hover {
+  color: var(--text);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.wg-add-tile:focus-visible,
+.wg-slot:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Said plainly, rather than an empty board that looks like an answer. */
+.wg-offline {
+  margin: 8px 0 0;
+  font-size: var(--text-sm);
+  color: var(--faint);
+}
+
+/* ---- the bar above the grid while arranging */
+
+.wg-arrange-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  width: min(100%, 1006px);
+  padding: 8px 12px;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-pill);
+  backdrop-filter: blur(18px);
+}
+
+.wg-arrange-bar[hidden] {
+  display: none;
+}
+
+.wg-bar-space {
+  flex: 1;
+}
+
+.wg-btn.off,
+.wg-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.wg-name-field {
+  flex: 1;
+  min-width: 140px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--text);
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-pill);
+}
+
+.wg-name-field:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ---- the handles over each card */
+
+.wg-handles {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.wg-handle,
+.wg-handle-group {
+  pointer-events: auto;
+}
+
+.wg-slot.arranging {
+  cursor: grab;
+}
+
+.wg-slot.arranging .wg-card {
+  /* While arranging, the card is a thing being moved rather than a thing being used. */
+  pointer-events: none;
+}
+
+.wg-handle {
+  color: var(--text);
+  background: var(--popover-bg, var(--surface-2));
+  border: 1px solid var(--line-strong);
+  box-shadow: var(--shadow);
+}
+
+/*
+ * The handles sit inside the card, and only on the one being pointed at.
+ *
+ * Outside the edge they overlapped the card next door -- two cards' controls in the same few pixels, with no way to
+ * tell whose was whose. And a board where every card wears five buttons at once reads as a control panel rather than
+ * as the page somebody is arranging.
+ */
+.wg-slot.arranging .wg-handles {
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--motion-ease);
+}
+
+.wg-slot.arranging:hover .wg-handles,
+.wg-slot.arranging:focus-within .wg-handles,
+.wg-slot.arranging:focus-visible .wg-handles,
+.wg-slot.dragging .wg-handles,
+.wg-slot.resizing .wg-handles {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wg-slot.arranging .wg-handles {
+    transition: none;
+  }
+}
+
+.wg-handle-remove {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+}
+
+.wg-handle-group {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  background: var(--popover-bg, var(--surface-2));
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow);
+}
+
+.wg-handle-group .wg-handle {
+  background: none;
+  border: 0;
+  box-shadow: none;
+}
+
+.wg-grip {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 20px;
+  height: 20px;
+  pointer-events: auto;
+  cursor: nwse-resize;
+  background:
+    linear-gradient(135deg, transparent 50%, var(--muted) 50%, var(--muted) 62%, transparent 62%),
+    linear-gradient(135deg, transparent 72%, var(--muted) 72%, var(--muted) 84%, transparent 84%);
+  border-bottom-right-radius: 20px;
+  opacity: 0.8;
+}
+
+/* ---- while a card is being dragged or resized */
+
+.wg-slot.dragging {
+  z-index: 5;
+  cursor: grabbing;
+  transform: translate(var(--wg-drag-x, 0), var(--wg-drag-y, 0)) scale(1.03);
+  filter: drop-shadow(0 18px 34px rgb(0 0 0 / 45%));
+}
+
+.wg-slot.resizing {
+  z-index: 5;
+}
+
+.wg-drop {
+  z-index: 1;
+  border: 2px dashed var(--accent);
+  border-radius: 26px;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  pointer-events: none;
+}
+
+.wg-drop[hidden] {
+  display: none;
+}
+
+/* ---- widgets kept but not on the page */
+
+.wg-tray {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(100%, 1006px);
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+
+.wg-tray[hidden] {
+  display: none;
+}
+
+.wg-tray-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.wg-tray-chip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px 5px 12px;
+  font-size: var(--text-sm);
+  color: var(--text);
+  background: var(--pill-bg);
+  border: 1px solid var(--pill-border);
+  border-radius: var(--radius-pill);
+}
+
+.wg-tray-why {
+  font-size: var(--text-xs);
+  color: var(--amber);
+}
+
+/* ---- what is said to somebody who cannot see the board */
+
+.wg-spoken {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---- the little menu on a card */
+
+.wg-menu {
+  position: fixed;
+  z-index: 60;
+  min-width: 192px;
+  padding: 6px;
+  background: var(--popover-bg, var(--surface-2));
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(20px);
+}
+
+.wg-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 30px;
+  padding: 4px 8px;
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--text);
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.wg-menu-item:hover:not(:disabled) {
+  background: var(--hover);
+}
+
+.wg-menu-item:disabled {
+  color: var(--faint);
+  cursor: default;
+}
+
+.wg-menu-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.wg-menu-tick {
+  width: 12px;
+  color: var(--accent);
+  font-size: 11px;
+}
+
+.wg-menu-words {
+  flex: 1;
+}
+
+.wg-menu-more {
+  color: var(--faint);
+}
+
+.wg-menu-line {
+  height: 1px;
+  margin: 5px 4px;
+  background: var(--line);
+}
+
+/* ---- the line along the bottom that says what happened */
+
+.wg-toast-strip {
+  position: fixed;
+  left: 50%;
+  bottom: 22px;
+  z-index: 70;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.wg-toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(92vw, 560px);
+  padding: 8px 10px 8px 16px;
+  pointer-events: auto;
+  font-size: var(--text-sm);
+  color: var(--text);
+  background: var(--popover-bg, var(--surface-2));
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(20px);
+}
+
+.wg-toast-words {
+  flex: 1;
+}
+
+.wg-toast-close {
+  font-size: 15px;
+  line-height: 1;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .wg-toast {
+    animation: wg-toast-in 0.24s var(--motion-ease) both;
+  }
+
+  @keyframes wg-toast-in {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+  }
+}

@@ -1,0 +1,428 @@
+/*
+ * The card every widget is drawn in, and the small set of parts widgets build themselves out of.
+ *
+ * Orbis's own look: deep glass over the starfield, a single cyan accent, numerals in the display face. A widget is
+ * meant to read as a picture of its subject -- so there is no title bar, no frame around the content, nothing on a
+ * card at rest except what it is for. The controls appear when the board is being arranged, and not before.
+ *
+ * Every colour comes from the tokens, which change with the theme and with whatever look the person chose in Orbis,
+ * so a card in a light theme is a light card without a second set of rules. The one thing stated here in numbers is
+ * the grid: 156px cells with 14px between them, which the board, the gallery's miniature and the drop target all
+ * work out from the same place (src/shared/widgetBoard.ts).
+ */
+
+.wg-card {
+  --wg-cell: 156px;
+  --wg-gap: 14px;
+  --wg-pad: 14px;
+  --wg-radius: 26px;
+
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  color: var(--text);
+  text-align: left;
+  border-radius: var(--wg-radius);
+  isolation: isolate;
+}
+
+/* ---- the four surfaces a card can wear */
+
+.wg-card[data-tone='glass'] {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(22px) saturate(1.25);
+}
+
+.wg-card[data-tone='solid'] {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
+}
+
+.wg-card[data-tone='tint'] {
+  background: linear-gradient(160deg, color-mix(in srgb, var(--accent) 22%, transparent), color-mix(in srgb, var(--accent) 7%, transparent));
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, transparent);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(18px);
+}
+
+.wg-card[data-tone='clear'] {
+  background: none;
+  border: 1px solid transparent;
+  box-shadow: none;
+}
+
+/*
+ * The light along the top edge.
+ *
+ * What makes glass read as glass rather than as a grey box: one hairline of light where a pane would catch it.
+ * Drawn, not painted on, so it follows the corner radius.
+ */
+.wg-card[data-tone='glass']::before,
+.wg-card[data-tone='tint']::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(180deg, rgb(255 255 255 / 9%), rgb(255 255 255 / 0%) 42%);
+}
+
+@media (prefers-color-scheme: light) {
+  .wg-card[data-tone='glass']::before,
+  .wg-card[data-tone='tint']::before {
+    background: linear-gradient(180deg, rgb(255 255 255 / 55%), rgb(255 255 255 / 0%) 46%);
+  }
+}
+
+/* ---- the content box: what a widget actually draws into */
+
+.wg-body {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  min-height: 0;
+  padding: var(--wg-pad);
+  overflow: hidden;
+  /* So a widget can lay itself out by the size of its own card rather than by the size of the window. */
+  container-type: size;
+  container-name: wg;
+}
+
+.wg-card[data-density='compact'] .wg-body {
+  --wg-pad: 10px;
+  gap: 4px;
+  font-size: var(--text-sm);
+}
+
+/* ---- the parts widgets are built from */
+
+.wg-label {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.wg-big {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(28px, 34cqmin, 62px);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.wg-sub {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wg-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+}
+
+.wg-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.wg-row-main {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.wg-row-side {
+  flex: none;
+  font-size: var(--text-xs);
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.wg-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  font-size: var(--text-xs);
+  color: var(--muted-strong);
+  background: var(--pill-bg);
+  border: 1px solid var(--pill-border);
+  border-radius: var(--radius-pill);
+}
+
+/* ---- things to press */
+
+.wg-btn,
+.wg-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--text);
+  background: var(--pill-bg);
+  border: 1px solid var(--pill-border);
+  cursor: pointer;
+}
+
+.wg-btn {
+  min-height: 28px;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+}
+
+.wg-btn.primary {
+  color: #05222b;
+  background: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.wg-icon-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 50%;
+}
+
+.wg-btn:hover,
+.wg-icon-btn:hover {
+  background: var(--pill-bg-strong);
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--pill-border));
+}
+
+.wg-btn.primary:hover {
+  background: color-mix(in srgb, var(--accent) 86%, white);
+}
+
+.wg-btn:focus-visible,
+.wg-icon-btn:focus-visible,
+.wg-card a:focus-visible,
+.wg-card button:focus-visible,
+.wg-card input:focus-visible,
+.wg-card textarea:focus-visible,
+.wg-card select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* A widget's own rows that can be pressed: a task, a tab, a site. They are buttons, and must not look like one. */
+.wg-press {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 28px;
+  padding: 3px 6px;
+  margin: 0 -6px;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  text-decoration: none;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.wg-press:hover {
+  background: var(--hover);
+}
+
+.wg-note {
+  margin: auto 0 0;
+  font-size: var(--text-xs);
+  color: var(--faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- what a card says when it has nothing to show */
+
+.wg-state {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 0;
+  text-align: center;
+}
+
+.wg-state-words {
+  margin: 0;
+  max-width: 22ch;
+  font-size: var(--text-sm);
+  color: var(--muted);
+  text-wrap: balance;
+}
+
+.wg-state-mark {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  color: var(--faint);
+  background: var(--pill-bg);
+  border-radius: 50%;
+}
+
+.wg-state-failed .wg-state-mark {
+  color: var(--red);
+  background: var(--danger-bg);
+}
+
+/* Loading is a quiet shape in the place the content will be, not a spinner: nothing is spinning. */
+.wg-state-loading {
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 10px;
+}
+
+.wg-skeleton {
+  height: 12px;
+  width: 62%;
+  background: linear-gradient(90deg, var(--pill-bg), var(--pill-bg-strong), var(--pill-bg));
+  background-size: 220% 100%;
+  border-radius: var(--radius-sm);
+}
+
+.wg-skeleton-wide {
+  height: 30px;
+  width: 100%;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .wg-skeleton {
+    animation: wg-shimmer 1.6s var(--motion-ease) infinite;
+  }
+
+  @keyframes wg-shimmer {
+    from {
+      background-position: 120% 0;
+    }
+
+    to {
+      background-position: -120% 0;
+    }
+  }
+}
+
+/* ---- drawn pictures */
+
+.wg-draw {
+  display: block;
+  width: 100%;
+  min-height: 0;
+  overflow: visible;
+}
+
+/* A line drawing of something: the stroke follows the text colour so it works in either theme. */
+.wg-draw .line {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.wg-up {
+  color: var(--green);
+}
+
+.wg-down {
+  color: var(--red);
+}
+
+/* ---- a preview, in the gallery or the studio */
+
+/*
+ * A preview is the real card drawn from the sample, shown smaller.
+ *
+ * Nothing in it can be pressed or tabbed to: it is a picture of a widget, and a gallery whose previews stole the
+ * keyboard would be unusable. The card itself is told, so a widget can make its own inputs inert too.
+ */
+.wg-preview-frame {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--wg-radius, 26px);
+}
+
+.wg-preview-frame > .wg-card {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: top left;
+}
+
+.wg-card[data-preview='true'] {
+  pointer-events: none;
+  user-select: none;
+}
+
+/* ---- the sizes, as the board and the gallery both measure them */
+
+.wg-card[data-size='small'] {
+  width: var(--wg-cell);
+  height: var(--wg-cell);
+}
+
+.wg-card[data-size='medium'] {
+  width: calc(var(--wg-cell) * 2 + var(--wg-gap));
+  height: var(--wg-cell);
+}
+
+.wg-card[data-size='tall'] {
+  width: var(--wg-cell);
+  height: calc(var(--wg-cell) * 2 + var(--wg-gap));
+}
+
+.wg-card[data-size='large'] {
+  width: calc(var(--wg-cell) * 2 + var(--wg-gap));
+  height: calc(var(--wg-cell) * 2 + var(--wg-gap));
+}
+
+.wg-card[data-size='wide'] {
+  width: calc(var(--wg-cell) * 4 + var(--wg-gap) * 3);
+  height: var(--wg-cell);
+}
+
+/* On the board the grid decides, so a card fills the cells it was given instead of its own measurements. */
+.wg-board .wg-card {
+  width: auto;
+  height: auto;
+}

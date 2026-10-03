@@ -1,0 +1,405 @@
+/*
+ * The gallery: the layer where every widget Orbis has is browsed, searched and added.
+ *
+ * Everything here is written under `.wg-gallery`, because the gallery is a layer over somebody else's page and must
+ * never reach out of it. The tiles are the heroes: each one is a real widget drawn on a little piece of the start
+ * page's own sky, and the words around it stay quiet so the drawing is what the eye lands on.
+ *
+ * Only the tokens the start page defines are used. Nothing is a fixed colour, so the whole screen turns over with
+ * the theme, and every decorative wash is mixed out of a token rather than guessed at.
+ */
+
+.wg-gallery {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden auto;
+  overscroll-behavior: contain;
+  color: var(--text);
+  background:
+    radial-gradient(ellipse 90% 60% at 50% -10%, color-mix(in srgb, var(--accent) 12%, transparent) 0%, transparent 60%),
+    radial-gradient(ellipse 120% 90% at 50% 40%, var(--bg-center) 0%, var(--bg-mid) 45%, var(--bg-edge) 100%);
+}
+.wg-gallery[hidden] { display: none; }
+.wg-gallery *, .wg-gallery *::before, .wg-gallery *::after { box-sizing: border-box; }
+
+/* A ring that is always the same, on everything that can be reached. */
+.wg-gallery :is(a, button, input, select, textarea, [tabindex]):focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Nothing in here is smaller than a finger. */
+.wg-gallery .wg-btn { min-height: 32px; }
+
+.wg-gal-home, .wg-gal-page {
+  width: min(1180px, 100%);
+  margin: 0 auto;
+  padding: 0 16px 56px;
+}
+.wg-gal-home[hidden], .wg-gal-page[hidden] { display: none; }
+
+/* ---------------------------------------------------------------- the head: the title, the search, the groups */
+
+.wg-gal-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) 0 var(--space-3);
+  background: linear-gradient(to bottom, var(--bg-center) 55%, color-mix(in srgb, var(--bg-center) 70%, transparent) 85%, transparent 100%);
+  backdrop-filter: blur(14px);
+}
+.wg-gal-head-top { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.wg-gal-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(24px, 2.4vw, 34px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  background: linear-gradient(120deg, var(--text) 10%, color-mix(in srgb, var(--accent) 60%, var(--text)) 90%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.wg-gal-title:focus-visible { -webkit-text-fill-color: var(--text); }
+.wg-gal-done { flex: none; }
+
+.wg-gal-find { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); }
+.wg-gal-search {
+  position: relative;
+  flex: 1 1 280px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 10px 0 14px;
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-pill);
+}
+.wg-gal-search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
+.wg-gal-search .wg-mark { flex: none; color: var(--muted); }
+.wg-gal-search-input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: var(--text-md);
+  color: var(--text);
+  background: none;
+  border: 0;
+  outline: none;
+}
+.wg-gal-search-input::placeholder { color: var(--muted); }
+.wg-gal-search-input::-webkit-search-cancel-button { display: none; }
+.wg-gal-search-clear[hidden] { display: none; }
+
+.wg-gal-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.wg-gallery .wg-gal-chip {
+  min-height: 30px;
+  padding: 0 12px;
+  color: var(--muted-strong);
+  cursor: pointer;
+}
+.wg-gal-chip[aria-pressed='true'] {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.wg-gal-rail { display: flex; flex-wrap: wrap; gap: 6px; }
+.wg-gal-rail-one {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--muted-strong);
+  background: var(--pill-bg);
+  border: 1px solid var(--pill-border);
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.wg-gal-rail-one:hover { color: var(--text); background: var(--hover); }
+.wg-gal-rail-one[aria-pressed='true'] {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 18%, var(--pill-bg-strong));
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+}
+.wg-gal-rail-count {
+  min-width: 20px;
+  padding: 0 5px;
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--faint);
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+  border-radius: var(--radius-pill);
+  text-align: center;
+}
+.wg-gal-rail-one[aria-pressed='true'] .wg-gal-rail-count { color: var(--text); }
+
+/* Narrow: the groups become one line that is pushed along rather than a block that eats the screen. */
+@media (max-width: 860px) {
+  .wg-gal-rail { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: thin; padding-bottom: 4px; }
+  .wg-gal-rail-one { flex: none; }
+}
+
+/* ---------------------------------------------------------------- what is said before the widgets */
+
+.wg-gal-banners { display: flex; flex-direction: column; gap: 10px; margin: var(--space-3) 0 0; }
+.wg-gal-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 12px 16px;
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface-2));
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
+  border-radius: var(--radius-md);
+}
+.wg-gal-banner[data-tone='warn'] {
+  background: color-mix(in srgb, var(--amber) 14%, var(--surface-2));
+  border-color: color-mix(in srgb, var(--amber) 38%, transparent);
+}
+.wg-gal-banner-say { margin: 0; font-size: var(--text-sm); color: var(--text); }
+
+.wg-gal-count { margin: var(--space-3) 0 0; font-size: var(--text-sm); color: var(--muted); }
+.wg-gal-count:empty { display: none; }
+.wg-gal-hint { margin: var(--space-5) 0 0; font-size: var(--text-xs); color: var(--faint); text-align: center; }
+
+.wg-gal-nothing { gap: 10px; padding: var(--space-6) var(--space-4); }
+.wg-gal-tries { flex-wrap: wrap; justify-content: center; }
+
+/* ---------------------------------------------------------------- the bands */
+
+.wg-gal-sections { display: flex; flex-direction: column; gap: var(--space-6); margin-top: var(--space-4); }
+.wg-band { display: flex; flex-direction: column; gap: var(--space-3); }
+.wg-band-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; }
+.wg-band-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--text);
+}
+.wg-band-note { margin: 0; font-size: var(--text-xs); color: var(--faint); }
+.wg-band[data-band='missing'] { opacity: 0.86; }
+
+/* ---------------------------------------------------------------- the tiles */
+
+.wg-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(214px, 1fr));
+  gap: 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.wg-grid[data-hero='true'] { grid-template-columns: repeat(auto-fill, minmax(332px, 1fr)); }
+
+.wg-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 12px 14px;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+}
+.wg-tile:hover, .wg-tile:focus-within { border-color: color-mix(in srgb, var(--accent) 45%, var(--glass-border)); }
+
+/* The little piece of sky a widget is drawn on, so a tile looks like the page it is going to. */
+.wg-tile-stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 150px;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 80% 70% at 50% 24%, color-mix(in srgb, var(--accent) 10%, transparent) 0%, transparent 70%),
+    radial-gradient(ellipse 120% 100% at 50% 40%, var(--bg-center) 0%, var(--bg-mid) 60%, var(--bg-edge) 100%);
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+  border-radius: var(--radius-md);
+}
+.wg-tile[data-hero='true'] .wg-tile-stage { height: 190px; }
+.wg-tile-wait { width: 60%; height: 12px; }
+.wg-tile-shrink { position: relative; }
+.wg-tile-real {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+/* A preview cannot be used, only looked at: nothing in it takes a press or the keyboard. */
+.wg-tile-stage * { pointer-events: none; }
+
+.wg-tile-meta { display: flex; flex-direction: column; gap: 5px; }
+.wg-tile-head { margin: 0; font-size: var(--text-md); font-weight: 600; }
+.wg-tile-open {
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--text);
+  text-align: left;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+/* Pressing anywhere on the tile opens the widget, while the two round buttons stay their own thing. */
+.wg-tile-open::after { content: ''; position: absolute; inset: 0; border-radius: var(--radius-lg); }
+.wg-tile-open:focus-visible { outline: none; }
+.wg-tile-open:focus-visible::after { outline: 2px solid var(--accent); outline-offset: 2px; }
+.wg-tile-say {
+  margin: 0;
+  font-size: var(--text-xs);
+  line-height: 1.45;
+  color: var(--muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.wg-tile-badges { display: flex; flex-wrap: wrap; gap: 5px; }
+.wg-gallery .wg-tile-badge { font-size: 10.5px; letter-spacing: 0.02em; text-transform: uppercase; color: var(--faint); }
+.wg-tile-badge[data-tone='on'] { color: var(--text); background: color-mix(in srgb, var(--accent) 22%, transparent); border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.wg-tile-badge[data-tone='net'] { color: var(--muted-strong); border-color: color-mix(in srgb, var(--amber) 38%, transparent); }
+
+.wg-tile-acts {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 1;
+  display: flex;
+  gap: 6px;
+}
+.wg-gallery .wg-tile-acts .wg-icon-btn {
+  color: var(--text);
+  background: color-mix(in srgb, var(--popover-bg) 78%, transparent);
+  border: 1px solid var(--pill-border);
+  backdrop-filter: blur(8px);
+}
+.wg-gallery .wg-tile-acts .wg-icon-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 30%, var(--popover-bg)); border-color: color-mix(in srgb, var(--accent) 55%, transparent); }
+.wg-gallery .wg-tile-acts .wg-icon-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.wg-tile-add span { font-size: 17px; line-height: 1; }
+.wg-tile-star-mark { font-size: 13px; line-height: 1; color: var(--faint); }
+.wg-tile-star[data-on] .wg-tile-star-mark { color: var(--amber); }
+
+/* ---------------------------------------------------------------- the picture of the start page */
+
+.wg-mark { fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+
+.wg-board-picture {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-5);
+  padding: var(--space-4);
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+}
+.wg-board-picture-art {
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: radial-gradient(ellipse 110% 100% at 50% 30%, var(--bg-center) 0%, var(--bg-edge) 100%);
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+  border-radius: var(--radius-md);
+}
+.wg-board-picture-say { flex: 1 1 220px; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+
+.wg-mini { display: block; overflow: visible; }
+.wg-mini-block {
+  fill: color-mix(in srgb, var(--accent) 14%, transparent);
+  stroke: color-mix(in srgb, var(--accent) 32%, transparent);
+  stroke-width: 1;
+}
+.wg-mini-mark {
+  fill: none;
+  stroke: color-mix(in srgb, var(--accent) 65%, var(--text));
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.85;
+}
+
+/* ---------------------------------------------------------------- ready-made layouts and saved ones */
+
+.wg-presets { display: grid; grid-template-columns: repeat(auto-fill, minmax(258px, 1fr)); gap: 18px; margin: 0; padding: 0; list-style: none; }
+.wg-preset {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+}
+.wg-preset-art {
+  display: grid;
+  place-items: center;
+  padding: 14px;
+  background: radial-gradient(ellipse 110% 100% at 50% 25%, var(--bg-center) 0%, var(--bg-edge) 100%);
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+  border-radius: var(--radius-md);
+}
+.wg-preset-name { margin: 2px 0 0; font-family: var(--font-display); font-size: var(--text-md); font-weight: 600; }
+.wg-preset-say { margin: 0; font-size: var(--text-xs); line-height: 1.45; color: var(--muted); }
+.wg-preset .wg-btn { margin-top: auto; align-self: flex-start; }
+
+.wg-saved { display: flex; flex-direction: column; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.wg-saved-one {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 12px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.wg-saved-name { margin: 0; font-size: var(--text-md); font-weight: 600; }
+.wg-saved-acts { gap: 8px; }
+
+/* ---------------------------------------------------------------- the ones that cannot be added */
+
+.wg-missing { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
+.wg-missing-one {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-md);
+}
+.wg-missing-one .wg-mark { flex: none; margin-top: 2px; color: var(--faint); }
+.wg-missing-name { margin: 0 0 2px; font-size: var(--text-sm); font-weight: 600; color: var(--muted-strong); }
+
+/* ---------------------------------------------------------------- one column when there is only room for one */
+
+@media (max-width: 560px) {
+  .wg-gal-home, .wg-gal-page { padding: 0 16px 40px; }
+  .wg-grid, .wg-grid[data-hero='true'] { grid-template-columns: 1fr; }
+  .wg-presets, .wg-missing { grid-template-columns: 1fr; }
+  .wg-gal-head-top { align-items: flex-start; }
+  .wg-board-picture { flex-direction: column; align-items: stretch; }
+}
+
+/* ---------------------------------------------------------------- movement, only for those who want it */
+
+@media (prefers-reduced-motion: no-preference) {
+  .wg-tile, .wg-preset, .wg-gal-rail-one, .wg-gal-chip { transition: transform var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), background var(--motion-fast) var(--motion-ease); }
+  .wg-tile:hover, .wg-preset:hover { transform: translateY(-2px); }
+  .wg-gal-home { animation: wg-gal-rise var(--motion-base) var(--motion-ease); }
+  @keyframes wg-gal-rise { from { opacity: 0; transform: translateY(8px); } }
+}

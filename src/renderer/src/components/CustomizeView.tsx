@@ -1,19 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Bell, Check, ChevronDown, ChevronUp, Copy, Download, FileUp, History, Image, LayoutGrid, Paintbrush, Palette, Plus, RotateCcw, ShieldCheck, Sparkles, Trash2, Undo2, X, Zap } from 'lucide-react'
+import { Bell, Check, Copy, Download, FileUp, History, Image, LayoutGrid, Paintbrush, Palette, Plus, RotateCcw, ShieldCheck, Sparkles, Trash2, Undo2, X, Zap } from 'lucide-react'
 import type { AppearanceConfig, ExperienceConfig } from '../../../shared/experience'
 import { defaultConfig, describeConfig, diffConfig, isDefaultConfig } from '../../../shared/experience'
+import { widgetById } from '../../../shared/widgets'
 import { useExperience, type Experience } from '../lib/experience'
 import type { NoticeKind } from '../App'
-import type { WidgetCategory, WidgetInstance, WidgetSize, ZoneName } from '../../../shared/widgets'
-import { MAX_WIDGETS, newWidgetInstance, permissionsOf, placeWidget, searchWidgets, widgetById, widgetsInZone, ZONES } from '../../../shared/widgets'
 import type { StoredTheme } from '../../../shared/themes'
 import { BUILT_IN_THEMES, copyOfBuiltIn, MAX_THEMES, newTheme, readability, THEME_TOKENS, themeTokens } from '../../../shared/themes'
 import type { StoredPreset } from '../../../shared/presets'
 import type { PresetCategory } from '../../../shared/presets'
 import { applyPreset, BUILT_IN_PRESETS, copyOfPreset, MAX_PRESETS, presetFromConfig } from '../../../shared/presets'
 import { RulesEditor } from './RulesEditor'
-import type { Dashboard } from '../../../shared/dashboards'
-import { MAX_DASHBOARDS, newDashboard, rememberWidgets, removeDashboard, switchTo } from '../../../shared/dashboards'
 
 type Category = 'presets' | 'appearance' | 'themes' | 'newTab' | 'widgets' | 'notify' | 'accessibility' | 'performance' | 'privacy' | 'advanced'
 
@@ -31,16 +28,27 @@ const CATEGORIES: { id: Category; label: string; icon: typeof Paintbrush }[] = [
   { id: 'advanced', label: 'Advanced', icon: History }
 ]
 
-const WIDGET_GROUPS: { id: WidgetCategory | 'all'; label: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'time', label: 'Time' },
-  { id: 'productivity', label: 'Your things' },
-  { id: 'browser', label: 'Browser' },
-  { id: 'information', label: 'Information' },
-  { id: 'utility', label: 'Handy' }
-]
-
-const ZONE_WORDS: Record<ZoneName, string> = { top: 'Top', left: 'Left', centre: 'Middle', right: 'Right', bottom: 'Bottom' }
+/**
+ * What belongs to the browser's start page: its widgets, the sets of them saved by name, and what it remembers
+ * about them.
+ *
+ * This screen used to edit widgets and no longer does. They are added, moved and set up on the start page, and by
+ * Orion, and both go through one set of actions. But a draft here is the whole of the personalisation, widgets
+ * included, and a draft is held for as long as somebody is choosing a colour. Saved as it was, it would put the
+ * widgets back to how they were when the choosing began -- a note typed on the start page in the meantime would be
+ * gone, and nobody would have asked for that. So these are never taken from a draft: whatever this screen shows or
+ * saves, they are what is stored now.
+ */
+const startPageOf = (
+  config: ExperienceConfig
+): Pick<ExperienceConfig, 'widgets' | 'dashboards' | 'activeDashboardId' | 'widgetFavourites' | 'widgetRecent' | 'widgetsAdopted'> => ({
+  widgets: config.widgets,
+  dashboards: config.dashboards,
+  activeDashboardId: config.activeDashboardId,
+  widgetFavourites: config.widgetFavourites,
+  widgetRecent: config.widgetRecent,
+  widgetsAdopted: config.widgetsAdopted
+})
 
 /** Backgrounds Orbis paints itself. Nothing is downloaded, so these work with no connection and carry no tracking. */
 const GRADIENTS: { name: string; source: string }[] = [
@@ -97,11 +105,16 @@ export default function CustomizeView({
   const say = onNotify ?? ((): void => undefined)
   const [category, setCategory] = useState<Category>('appearance')
   const [editingTheme, setEditingTheme] = useState<string | null>(null)
-  const [widgetSearch, setWidgetSearch] = useState('')
-  const [widgetGroup, setWidgetGroup] = useState<WidgetCategory | 'all'>('all')
   const [presetSearch, setPresetSearch] = useState('')
   const [presetGroup, setPresetGroup] = useState<PresetCategory | 'all'>('all')
   const [draft, setDraft] = useState<ExperienceConfig>(experience.config)
+  /**
+   * What is really on the browser's start page.
+   *
+   * Read from what is saved, never from this screen's draft: the widgets are not edited here, and a draft of them
+   * would be a list nobody can change from this screen.
+   */
+  const onStartPage = startPageOf(experience.saved)
   const [snapshots, setSnapshots] = useState<{ id: string; reason: string; takenAt: number; summary: string[] }[]>([])
   const [health, setHealth] = useState<{ ok: boolean; problems: string[]; repairs: string[]; snapshots: number } | null>(null)
   const [confirmRestore, setConfirmRestore] = useState(false)
@@ -110,11 +123,13 @@ export default function CustomizeView({
 
   // The draft follows what is saved until the user starts changing things. A change made elsewhere — by Orion, or in
   // another window — shows here too, so applying never quietly puts back an older draft over someone else's change.
+  // Once they have started, the draft is theirs, except for the start page's widgets: those are changed on the start
+  // page while this screen is open, so the draft takes them as they now are.
   useEffect(() => {
     if (experience.loading) return
     const wasSaved = savedConfig.current
     savedConfig.current = experience.saved
-    setDraft((current) => (isSame(current, wasSaved) ? experience.saved : current))
+    setDraft((current) => (isSame(current, wasSaved) ? experience.saved : { ...current, ...startPageOf(experience.saved) }))
   }, [experience.loading, experience.saved])
 
   const loadHistory = async (): Promise<void> => {
@@ -146,16 +161,23 @@ export default function CustomizeView({
   const changes = useMemo(() => diffConfig(savedConfig.current, draft), [draft])
   const dirty = changes.length > 0
 
-  /** Every change previews at once, so the user sees what they are choosing before keeping it. */
+  /**
+   * Every change previews at once, so the user sees what they are choosing before keeping it.
+   *
+   * Whatever is being changed, the start page's widgets are not: they are laid back over the draft as they are stored.
+   */
   const change = (next: ExperienceConfig): void => {
-    setDraft(next)
-    experience.preview(next)
+    const kept = { ...next, ...startPageOf(savedConfig.current) }
+    setDraft(kept)
+    experience.preview(kept)
   }
   const changeAppearance = (patch: Partial<AppearanceConfig>): void => change({ ...draft, appearance: { ...draft.appearance, ...patch } })
 
   const apply = async (): Promise<void> => {
-    await experience.save(draft, `Changed ${[...new Set(changes.map((c) => c.path.split('.')[0]))].join(', ')}`)
-    savedConfig.current = draft
+    // The widgets as they are at this moment, in case the start page changed them after the last thing chosen here.
+    const next = { ...draft, ...startPageOf(savedConfig.current) }
+    await experience.save(next, `Changed ${[...new Set(changes.map((c) => c.path.split('.')[0]))].join(', ')}`)
+    savedConfig.current = next
     await loadHistory()
     say('Your changes are saved')
   }
@@ -252,37 +274,7 @@ export default function CustomizeView({
   const removeWallpaper = (id: string): void =>
     change({ ...draft, wallpapers: draft.wallpapers.filter((w) => w.id !== id), newTab: { ...draft.newTab, wallpaperId: draft.newTab.wallpaperId === id ? null : draft.newTab.wallpaperId } })
 
-  // ---- dashboards ----
-  const saveAsDashboard = (): void => {
-    if (draft.dashboards.length >= MAX_DASHBOARDS) return say(`That is as many dashboards as one Orbis can hold (${MAX_DASHBOARDS})`, 'error')
-    const dashboard = newDashboard(`Dashboard ${draft.dashboards.length + 1}`, draft.widgets)
-    change({ ...draft, dashboards: [...draft.dashboards, dashboard], activeDashboardId: dashboard.id })
-  }
-  const openDashboard = (id: string): void => {
-    const next = switchTo(draft.dashboards, draft.activeDashboardId, draft.widgets, id)
-    if (next) change({ ...draft, dashboards: next.dashboards, activeDashboardId: next.activeId, widgets: next.widgets })
-  }
-  const renameDashboard = (id: string, name: string): void =>
-    change({ ...draft, dashboards: draft.dashboards.map((d: Dashboard) => (d.id === id ? { ...d, name: name.slice(0, 60) } : d)) })
-  const dropDashboard = (id: string): void => {
-    const next = removeDashboard(draft.dashboards, draft.activeDashboardId, id)
-    change({ ...draft, dashboards: next.dashboards, activeDashboardId: next.activeId })
-  }
-
-  // ---- widgets ----
-  // While a dashboard is in use, the widgets on screen are that dashboard's, so a change here is a change to it.
-  const setWidgets = (widgets: WidgetInstance[]): void =>
-    change({ ...draft, widgets, dashboards: rememberWidgets(draft.dashboards, draft.activeDashboardId, widgets) })
-  const addWidget = (widget: string): void => {
-    if (draft.widgets.length >= MAX_WIDGETS) return say(`That is as many widgets as one Orbis can hold (${MAX_WIDGETS})`, 'error')
-    const instance = newWidgetInstance(widget, 'centre', draft.widgets.filter((w) => w.zone === 'centre').length)
-    if (instance) setWidgets([...draft.widgets, instance])
-  }
-  const patchWidget = (id: string, patch: Partial<WidgetInstance>): void => setWidgets(draft.widgets.map((w) => (w.id === id ? { ...w, ...patch } : w)))
-  const widgetSetting = (instance: WidgetInstance, name: string, value: string | number | boolean): void =>
-    patchWidget(instance.id, { settings: { ...instance.settings, [name]: value } })
-
-  const toggle = (label: string, value: boolean, onChange: (value: boolean) => void, hint?: string) => (
+  const toggle =(label: string, value: boolean, onChange: (value: boolean) => void, hint?: string) => (
     <label className="cz-row">
       <span>
         {label}
@@ -353,10 +345,18 @@ export default function CustomizeView({
             <>
               <div className="cz-section-head">
                 <h3>Presets</h3>
+                {/*
+                  How Orbis looks goes back to how it comes; what you made is kept. Your presets and themes are named
+                  here. Your widgets are kept by `change`, which never lets go of them, and whether they are shown is
+                  kept with them: putting the look back should not take the widgets off the start page.
+                */}
                 <button
                   type="button"
                   className="queue-btn small"
-                  onClick={() => change({ ...defaultConfig(), presets: draft.presets, themes: draft.themes, widgets: draft.widgets, dashboards: draft.dashboards, activeDashboardId: draft.activeDashboardId })}
+                  onClick={() => {
+                    const fresh = defaultConfig()
+                    change({ ...fresh, presets: draft.presets, themes: draft.themes, newTab: { ...fresh.newTab, widgets: draft.newTab.widgets } })
+                  }}
                 >
                   <RotateCcw size={12} /> Back to Orbis
                 </button>
@@ -367,9 +367,8 @@ export default function CustomizeView({
               </p>
 
               {/*
-                Thirty-odd presets is too many to read as one wall, so the collection is narrowed the same way the
-                widget list is: by name, or by the kind of thing you are after. Nothing is hidden -- "All" with an
-                empty box is the whole collection.
+                Thirty-odd presets is too many to read as one wall, so the collection is narrowed by name, or by the
+                kind of thing you are after. Nothing is hidden -- "All" with an empty box is the whole collection.
               */}
               <input
                 className="cz-search"
@@ -689,186 +688,30 @@ export default function CustomizeView({
             <>
               <div className="cz-section-head">
                 <h3>Widgets</h3>
-                <button type="button" className="queue-btn small" onClick={() => void resetSection('widgets', 'Widgets')}>
-                  <RotateCcw size={12} /> Reset this
-                </button>
               </div>
               <p className="view-muted cz-note">
-                Small panels on an empty tab, showing things Orbis already holds. Nothing is added unless you add it, each one says what it reads before you do, and one that stops
-                working is set aside on its own rather than taking the browser with it.
-                {!draft.newTab.widgets && ' They are switched off for the new tab at the moment \u2014 turn them on under New tab.'}
+                Widgets are the cards on the browser&rsquo;s start page: the time, the weather, what is due today, a price you follow. They are chosen
+                where they are shown &mdash; open a new tab in the browser and press <b>Widgets</b>. Every one of them is drawn there first, at the size
+                it will be, so you can see what you are adding before you add it.
               </p>
-
+              <p className="view-muted cz-note">
+                They belong to this profile, with the rest of what is personal, and Orion can add, move and set them when you ask it to.
+              </p>
               <div className="cz-section-head">
-                <h4>Dashboards</h4>
-                <span className="cz-row-actions">
-                  <button type="button" className="queue-btn small" onClick={saveAsDashboard}>
-                    <Plus size={12} /> Save these as a dashboard
-                  </button>
-                </span>
+                <h4>On the start page now</h4>
               </div>
-              {draft.dashboards.length === 0 ? (
+              <p className="view-muted cz-note">
+                {onStartPage.widgets.length === 0
+                  ? 'None yet.'
+                  : `${onStartPage.widgets.length} widget${onStartPage.widgets.length === 1 ? '' : 's'}: ${[...new Set(onStartPage.widgets.map((one) => widgetById(one.widget)?.name ?? one.widget))].join(', ')}.`}
+                {!draft.newTab.widgets && ' They are switched off for the start page at the moment \u2014 turn them on under New tab.'}
+              </p>
+              {onStartPage.dashboards.length > 0 && (
                 <p className="view-muted cz-note">
-                  None yet. A dashboard is a named set of widgets you can switch between — one for work, one for reading. With none, the new tab simply shows the widgets below, as
-                  it does today.
+                  Saved layouts: {onStartPage.dashboards.map((dashboard) => dashboard.name).join(', ')}. These are kept, and switched between,
+                  on the start page while you are arranging it.
                 </p>
-              ) : (
-                <div className="cz-widgets-chosen">
-                  {draft.dashboards.map((dashboard: Dashboard) => (
-                    <div key={dashboard.id} className="cz-widget-row">
-                      <div className="cz-widget-top">
-                        <input className="cz-name" value={dashboard.name} aria-label={`Name of ${dashboard.name}`} onChange={(e) => renameDashboard(dashboard.id, e.target.value)} />
-                        <small className="view-muted">
-                          {dashboard.widgets.length} widget{dashboard.widgets.length === 1 ? '' : 's'}
-                        </small>
-                        <button type="button" className="queue-btn small" disabled={draft.activeDashboardId === dashboard.id} onClick={() => openDashboard(dashboard.id)}>
-                          {draft.activeDashboardId === dashboard.id ? 'In use' : 'Open'}
-                        </button>
-                        <button type="button" className="icon-btn" aria-label={`Delete ${dashboard.name}`} onClick={() => dropDashboard(dashboard.id)}>
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
               )}
-
-              <div className="cz-section-head">
-                <h4>{draft.activeDashboardId ? `Widgets in ${draft.dashboards.find((d: Dashboard) => d.id === draft.activeDashboardId)?.name ?? 'this dashboard'}` : 'Your widgets'}</h4>
-              </div>
-              {draft.widgets.length > 0 && (
-                <div className="cz-widgets-chosen">
-                  {/*
-                    * Listed in the order they appear on the new tab, zone by zone, so this reads as the page reads.
-                    * A list in a different order to the thing it edits makes people move the wrong widget.
-                    */}
-                  {ZONES.flatMap((zone) => widgetsInZone(draft.widgets, zone))
-                    .concat(draft.widgets.filter((w) => w.disabled))
-                    .map((instance) => {
-                    const definition = widgetById(instance.widget)
-                    if (!definition) return null
-                    const siblings = widgetsInZone(draft.widgets, instance.zone)
-                    const at = siblings.findIndex((w) => w.id === instance.id)
-                    return (
-                      <div key={instance.id} className="cz-widget-row">
-                        <div className="cz-widget-top">
-                          <b>{definition.name}</b>
-                          {/* Buttons rather than dragging, so the order can be changed from the keyboard too. */}
-                          <span className="cz-widget-order">
-                            <button
-                              type="button"
-                              className="icon-btn"
-                              aria-label={`Move ${definition.name} earlier`}
-                              disabled={at <= 0}
-                              onClick={() => setWidgets(placeWidget(draft.widgets, instance.id, instance.zone, at - 1))}
-                            >
-                              <ChevronUp size={14} />
-                            </button>
-                            <button
-                              type="button"
-                              className="icon-btn"
-                              aria-label={`Move ${definition.name} later`}
-                              disabled={at === -1 || at >= siblings.length - 1}
-                              onClick={() => setWidgets(placeWidget(draft.widgets, instance.id, instance.zone, at + 1))}
-                            >
-                              <ChevronDown size={14} />
-                            </button>
-                          </span>
-                          <select value={instance.zone} aria-label={`Where ${definition.name} sits`} onChange={(e) => patchWidget(instance.id, { zone: e.target.value as ZoneName })}>
-                            {ZONES.map((zone) => (
-                              <option key={zone} value={zone}>
-                                {ZONE_WORDS[zone]}
-                              </option>
-                            ))}
-                          </select>
-                          <select value={instance.size} aria-label={`How big ${definition.name} is`} onChange={(e) => patchWidget(instance.id, { size: e.target.value as WidgetSize })}>
-                            {definition.sizes.map((size) => (
-                              <option key={size} value={size}>
-                                {size === 'small' ? 'Small' : size === 'medium' ? 'Medium' : 'Large'}
-                              </option>
-                            ))}
-                          </select>
-                          <button type="button" className="icon-btn" aria-label={`Remove ${definition.name}`} onClick={() => setWidgets(draft.widgets.filter((w) => w.id !== instance.id))}>
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                        {definition.settings.length > 0 && (
-                          <div className="cz-widget-settings">
-                            {definition.settings.map((setting) => {
-                              const value = instance.settings[setting.name] ?? setting.default
-                              const label = `${definition.name}: ${setting.label}`
-                              if (setting.type === 'boolean') {
-                                return (
-                                  <label key={setting.name} className="cz-row">
-                                    <span>{setting.label}</span>
-                                    <input type="checkbox" aria-label={label} checked={Boolean(value)} onChange={(e) => widgetSetting(instance, setting.name, e.target.checked)} />
-                                  </label>
-                                )
-                              }
-                              if (setting.type === 'choice') {
-                                return (
-                                  <label key={setting.name} className="cz-row">
-                                    <span>{setting.label}</span>
-                                    <select aria-label={label} value={String(value)} onChange={(e) => widgetSetting(instance, setting.name, e.target.value)}>
-                                      {setting.choices?.map((choice) => (
-                                        <option key={choice.value} value={choice.value}>
-                                          {choice.label}
-                                        </option>
-                                      ))}
-                                    </select>
-                                  </label>
-                                )
-                              }
-                              return (
-                                <label key={setting.name} className="cz-row">
-                                  <span>{setting.label}</span>
-                                  <input
-                                    type={setting.type === 'number' ? 'number' : 'text'}
-                                    aria-label={label}
-                                    min={setting.min}
-                                    max={setting.max}
-                                    value={String(value)}
-                                    onChange={(e) => widgetSetting(instance, setting.name, setting.type === 'number' ? Number(e.target.value) : e.target.value)}
-                                  />
-                                </label>
-                              )
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-
-              <div className="cz-section-head">
-                <h3>Add a widget</h3>
-              </div>
-              <input className="cz-search" value={widgetSearch} placeholder="Search widgets" aria-label="Search widgets" onChange={(e) => setWidgetSearch(e.target.value)} />
-              <div className="cz-chips">
-                {WIDGET_GROUPS.map((group) => (
-                  <button key={group.id} type="button" className={`queue-btn small${widgetGroup === group.id ? ' primary' : ''}`} onClick={() => setWidgetGroup(group.id)}>
-                    {group.label}
-                  </button>
-                ))}
-              </div>
-              <div className="cz-widget-catalogue">
-                {searchWidgets(widgetSearch, widgetGroup).map((definition) => {
-                  const reads = permissionsOf(definition)
-                  const count = draft.widgets.filter((w) => w.widget === definition.id).length
-                  return (
-                    <div key={definition.id} className="cz-widget-card">
-                      <b>{definition.name}</b>
-                      <small className="view-muted">{definition.description}</small>
-                      <small className="view-muted">{reads.length ? reads.join(' \u00b7 ') : 'Reads nothing of yours'}</small>
-                      <button type="button" className="queue-btn small" onClick={() => addWidget(definition.id)}>
-                        <Plus size={12} /> Add{count ? ` another (${count})` : ''}
-                      </button>
-                    </div>
-                  )
-                })}
-                {searchWidgets(widgetSearch, widgetGroup).length === 0 && <p className="view-muted">No widget matches that.</p>}
-              </div>
             </>
           )}
 

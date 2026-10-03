@@ -86,6 +86,8 @@ export interface BrowserManagerOptions {
   tabLockHelper?: HandlerDeps['tabLock']
   /** Markets, for the strip along the bottom of the browser. */
   marketsHelper?: HandlerDeps['markets']
+  /** The widgets on the start page: the board, and what each widget shows. */
+  widgets?: HandlerDeps['widgets']
   workflows?: HandlerDeps['workflows']
   /** The app's skill library, so a skill learned in Orbis is the same skill the browser can run. */
   skills?: HandlerDeps['skills']
@@ -217,6 +219,7 @@ export class BrowserManager {
         secrets: this.o.secrets,
         tabLock: this.o.tabLockHelper,
         markets: this.o.marketsHelper,
+        widgets: this.o.widgets,
         workflows: this.o.workflows,
         skills: this.o.skills,
         galaxy: this.o.galaxy,

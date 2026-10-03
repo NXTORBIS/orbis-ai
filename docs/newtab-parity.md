@@ -7,14 +7,16 @@ Electron (BrowserPanel `browser-newtab`, ShortcutsGrid, WidgetHost, `src/shared/
 - Greeting with a name (set in Customize; the Electron `userName` lives in the app, not reachable from the extension), show/hide.
 - Clock: date and time, 12/24-hour, seconds, show/hide.
 - Background: Orbis gradients drawn in CSS, or the person's own picture (kept locally, under 2 MB).
-- Countdown widget (label + date).
+- Widgets: all of them, and more besides. They are no longer this page's own: there is one catalogue and one board,
+  kept with the rest of what is personal, and the page asks Orbis for them over the helper. Chosen in a gallery on
+  the page itself, where each one is drawn for real before it is added; arranged by dragging; changed by Orion.
+  See docs/widgets.md. The board this page used to keep in its own storage is taken in once and not read again.
 - Most-visited tiles (Chromium's own top sites through the built-in handler; the seeded Chrome Web Store tile is dropped), search through the person's default engine (the same classifier as the address bar).
 - Orbis look from the shared tokens (`orbis-tokens.css`, light and dark) and the assistant orb (quick Orion prompt).
 
 ## Not ported
-- Weather, news: need network feeds (MET Norway, Nominatim, arbitrary feed URLs); would send location or make requests just to render the page.
-- Quote: Electron's collection lives in the renderer views; not duplicated to avoid drift.
-- Tasks, notes, clipboard, whiteboard, workspaces, games, timer, calculator, world clock, recent, bookmarks/downloads/tabs widgets: backed by Orbis app stores/IPC not reachable from an extension page.
+- Offline game scores: the Orbis window keeps them and the start page cannot read them yet. The widget is in the
+  catalogue, marked as not available, with that said on its own page.
 - Restore-last-time: Chromium's own session restore. Private-tab note: not detectable here.
 - Themes/density/accent from Experience: not shared with the extension.
 Electron settings are not synced to the extension; the page starts at its own honest defaults and empty shortcuts.
