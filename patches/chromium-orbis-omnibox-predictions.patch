@@ -1,0 +1,329 @@
+From bd2fed5b1d54164b63eac55d5da91859cb187b88 Mon Sep 17 00:00:00 2001
+From: NXTORBIS TECHNOLOGIES <nxtorbis@gmail.com>
+Date: Sat, 3 Oct 2026 12:02:37 +0530
+Subject: [PATCH] Orbis: the address bar predicts again
+
+Two things were stopping the list of predictions from appearing.
+
+Orbis's own provider never told the omnibox it had finished when it had nothing to add -- Orbis not running, an answer
+that would not parse, or simply no rows for what was typed. Chromium's controller then waits on it, and that wait is a
+wait before anybody's rows appear: a working address bar made to look like a dead one by the one provider with nothing
+to say. Every way out of Start and OnResponse now finishes properly.
+
+And a line of debugging was left in the window message handler, opening, appending to and closing C:/chromium/embed-debug.log
+on every window message that was not a mouse move. Two megabytes had collected. Inside the embedded browser that is the
+whole stream of clicks, keys, focus changes and resizes, each one paying for a file write.
+---
+ components/omnibox/browser/orbis_provider.cc | 287 +++++++++++++++++++
+ ui/views/win/hwnd_message_handler.cc         |   1 -
+ 2 files changed, 287 insertions(+), 1 deletion(-)
+ create mode 100644 components/omnibox/browser/orbis_provider.cc
+
+diff --git a/components/omnibox/browser/orbis_provider.cc b/components/omnibox/browser/orbis_provider.cc
+new file mode 100644
+index 0000000000..4d5b1cf7c1
+--- /dev/null
++++ b/components/omnibox/browser/orbis_provider.cc
+@@ -0,0 +1,287 @@
++// Copyright 2026 The Orbis Authors. All rights reserved.
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++#include "components/omnibox/browser/orbis_provider.h"
++
++#include <utility>
++
++#include "base/command_line.h"
++#include "base/functional/bind.h"
++#include "base/json/json_reader.h"
++#include "base/json/json_writer.h"
++#include "base/strings/strcat.h"
++#include "base/strings/string_number_conversions.h"
++#include "base/strings/utf_string_conversions.h"
++#include "components/omnibox/browser/actions/orbis_workspace_action.h"
++#include "components/omnibox/browser/autocomplete_match.h"
++#include "components/omnibox/browser/autocomplete_provider_client.h"
++#include "components/search_engines/template_url.h"
++#include "components/search_engines/template_url_service.h"
++#include "net/base/load_flags.h"
++#include "net/traffic_annotation/network_traffic_annotation.h"
++#include "services/network/public/cpp/resource_request.h"
++#include "services/network/public/cpp/shared_url_loader_factory.h"
++#include "services/network/public/cpp/simple_url_loader.h"
++#include "url/gurl.h"
++
++namespace {
++
++// The browser is told where Orbis is listening, and with what, on its own
++// command line -- the same two switches the Orbis pages are given.
++constexpr char kHelperPortSwitch[] = "orbis-helper-port";
++constexpr char kHelperTokenSwitch[] = "orbis-helper-token";
++
++// The helper answers only origins it knows. The browser process is not a page,
++// but it is Orbis, and it is holding the token that only Orbis and its pages
++// have.
++constexpr char kOrbisOrigin[] = "chrome://orbis";
++
++// A reply longer than this is not an answer to "what did I just type".
++constexpr size_t kMaxResponseBytes = 64 * 1024;
++
++// Nothing typed into an address bar is longer than this, and nothing longer is
++// worth asking about.
++constexpr size_t kMaxInputChars = 200;
++
++// How many rows to ask for. The omnibox shows a handful of lines in total and
++// most of them belong to the browser's own providers.
++constexpr int kWantedRows = 4;
++
++// Everything Orbis can add is an extra beside what the omnibox found itself, so
++// none of it may ever be what Enter does. `allowed_to_be_default_match` is left
++// false on every match for the same reason.
++bool HelperEndpoint(std::string* origin_out, std::string* token_out) {
++  const base::CommandLine* cl = base::CommandLine::ForCurrentProcess();
++  if (!cl->HasSwitch(kHelperPortSwitch) || !cl->HasSwitch(kHelperTokenSwitch)) {
++    return false;
++  }
++  int port = 0;
++  if (!base::StringToInt(cl->GetSwitchValueASCII(kHelperPortSwitch), &port) ||
++      port <= 0 || port > 65535) {
++    return false;
++  }
++  *origin_out = base::StrCat({"http://127.0.0.1:", base::NumberToString(port)});
++  *token_out = cl->GetSwitchValueASCII(kHelperTokenSwitch);
++  return !token_out->empty();
++}
++
++}  // namespace
++
++OrbisProvider::OrbisProvider(AutocompleteProviderClient* client)
++    : AutocompleteProvider(AutocompleteProvider::TYPE_ORBIS), client_(client) {}
++
++OrbisProvider::~OrbisProvider() = default;
++
++void OrbisProvider::Start(const AutocompleteInput& input, bool minimal_changes) {
++  // Whatever was being asked is about text that is no longer what is typed.
++  Stop(AutocompleteStopReason::kClobbered);
++  matches_.clear();
++
++  // Only for text someone typed. On focus, with nothing typed, Orbis has
++  // nothing to offer that the browser's own zero-suggest does not.
++  if (input.IsZeroSuggest() || input.omit_asynchronous_matches()) {
++    done_ = true;
++    return;
++  }
++  const std::u16string& text = input.text();
++  if (text.empty() || text.length() > kMaxInputChars) {
++    done_ = true;
++    return;
++  }
++
++  std::string base;
++  std::string token;
++  if (!HelperEndpoint(&base, &token)) {
++    // Orbis is not running, or this browser was not started by it. The omnibox
++    // carries on exactly as it would without this provider.
++    done_ = true;
++    return;
++  }
++
++  input_ = input;
++  helper_endpoint_ = base;
++  helper_token_ = token;
++
++  base::DictValue payload;
++  payload.Set("channel", "omnibox:orbis");
++  base::ListValue args;
++  args.Append(base::UTF16ToUTF8(text));
++  args.Append(kWantedRows);
++  payload.Set("args", std::move(args));
++  std::string body;
++  if (!base::JSONWriter::Write(payload, &body)) {
++    done_ = true;
++    return;
++  }
++
++  net::NetworkTrafficAnnotationTag annotation =
++      net::DefineNetworkTrafficAnnotation("orbis_omnibox_suggestions", R"(
++        semantics {
++          sender: "Orbis Omnibox"
++          description:
++            "Asks the Orbis application, which is running on this same "
++            "computer, for the suggestions only it can make for what is being "
++            "typed in the address bar: the person's saved workspaces, "
++            "questions they asked Orion to research, Orion's predictions, and "
++            "the category views of an Orbis search."
++          trigger:
++            "The person types in the address bar of a browser that Orbis "
++            "started."
++          data:
++            "The text typed in the address bar."
++          destination: LOCAL
++          internal { contacts { email: "nxtorbis@gmail.com" } }
++          user_data { type: USER_CONTENT }
++          last_reviewed: "2026-09-27"
++        }
++        policy {
++          cookies_allowed: NO
++          setting:
++            "Turning off search suggestions, or personalised suggestions, in "
++            "Orbis stops the parts of this that depend on them. Closing Orbis "
++            "stops it entirely."
++          policy_exception_justification:
++            "No network request leaves the device: the request is made to a "
++            "service running on this computer, over the loopback interface."
++        })");
++
++  auto request = std::make_unique<network::ResourceRequest>();
++  request->url = GURL(base + "/rpc");
++  request->method = "POST";
++  request->credentials_mode = network::mojom::CredentialsMode::kOmit;
++  request->load_flags = net::LOAD_DISABLE_CACHE | net::LOAD_BYPASS_CACHE;
++  request->headers.SetHeader("Authorization", base::StrCat({"Bearer ", token}));
++  // The helper answers only origins it knows, and checks this.
++  request->headers.SetHeader("Origin", kOrbisOrigin);
++
++  loader_ = network::SimpleURLLoader::Create(std::move(request), annotation);
++  loader_->AttachStringForUpload(body, "application/json");
++  done_ = false;
++  loader_->DownloadToString(
++      client_->GetURLLoaderFactory().get(),
++      base::BindOnce(&OrbisProvider::OnResponse, base::Unretained(this)),
++      kMaxResponseBytes);
++}
++
++void OrbisProvider::Stop(AutocompleteStopReason stop_reason) {
++  AutocompleteProvider::Stop(stop_reason);
++  // Dropping the loader cancels the request, which is what stops an answer to
++  // older text from landing on newer text.
++  loader_.reset();
++}
++
++void OrbisProvider::OnResponse(std::optional<std::string> body) {
++  loader_.reset();
++  done_ = true;
++
++  // Finishing with nothing is still finishing.
++  //
++  // Every way out of here has to tell the controller, including the ways that
++  // add no rows: Orbis not answering, answering something that is not an
++  // answer, or having nothing to say about this text. A provider that quietly
++  // stops leaves the controller waiting on it until its own timer runs out,
++  // and that wait is a wait before anybody's rows appear -- which is a working
++  // omnibox made to look like a dead one by the one provider that had nothing
++  // to add.
++  if (!body) {
++    NotifyListeners(/*updated_matches=*/false);
++    return;
++  }
++
++  std::optional<base::DictValue> root =
++      base::JSONReader::ReadDict(*body, base::JSON_PARSE_RFC);
++  if (!root) {
++    NotifyListeners(/*updated_matches=*/false);
++    return;
++  }
++  const base::DictValue* result = root->FindDict("result");
++  if (!result) {
++    NotifyListeners(/*updated_matches=*/false);
++    return;
++  }
++  const base::ListValue* rows = result->FindList("rows");
++  if (!rows) {
++    NotifyListeners(/*updated_matches=*/false);
++    return;
++  }
++
++  const TemplateURLService* templates = client_->GetTemplateURLService();
++  const TemplateURL* engine =
++      templates ? templates->GetDefaultSearchProvider() : nullptr;
++
++  for (const base::Value& entry : *rows) {
++    const base::DictValue* row = entry.GetIfDict();
++    if (!row) {
++      continue;
++    }
++    const std::string* text = row->FindString("text");
++    if (!text || text->empty()) {
++      continue;
++    }
++    const std::optional<int> relevance = row->FindInt("relevance");
++    if (!relevance) {
++      continue;
++    }
++
++    const std::string* url = row->FindString("url");
++    const std::string* query = row->FindString("query");
++    const std::string* workspace = row->FindString("workspaceId");
++
++    GURL destination;
++    std::u16string fill_into_edit;
++    AutocompleteMatchType::Type type;
++    scoped_refptr<OmniboxAction> action;
++    if (workspace && !workspace->empty()) {
++      // A set of pages, not a place. It is carried as an action on the match --
++      // the shape the omnibox already has for a row that does something rather
++      // than goes somewhere -- so choosing it opens the workspace instead of
++      // navigating to one of its pages and losing the rest.
++      action = base::MakeRefCounted<OrbisWorkspaceAction>(
++          base::UTF8ToUTF16(*text), *workspace, helper_endpoint_, helper_token_,
++          client_->GetURLLoaderFactory());
++      fill_into_edit = base::UTF8ToUTF16(*text);
++      type = AutocompleteMatchType::PEDAL;
++    } else if (url && !url->empty()) {
++      destination = GURL(*url);
++      if (!destination.is_valid()) {
++        continue;
++      }
++      fill_into_edit = base::UTF8ToUTF16(*url);
++      type = AutocompleteMatchType::NAVSUGGEST;
++    } else if (query && !query->empty() && engine) {
++      TemplateURLRef::SearchTermsArgs terms(base::UTF8ToUTF16(*query));
++      const std::string searched = engine->url_ref().ReplaceSearchTerms(
++          terms, templates->search_terms_data());
++      destination = GURL(searched);
++      if (!destination.is_valid()) {
++        continue;
++      }
++      fill_into_edit = base::UTF8ToUTF16(*query);
++      type = AutocompleteMatchType::SEARCH_SUGGEST;
++    } else {
++      // A row this build does not know how to act on. Offering it would mean a
++      // row that does nothing when it is chosen.
++      continue;
++    }
++
++    AutocompleteMatch match(this, *relevance, /*deletable=*/false, type);
++    match.destination_url = destination;
++    if (action) {
++      match.takeover_action = std::move(action);
++    }
++    match.fill_into_edit = fill_into_edit;
++    match.contents = base::UTF8ToUTF16(*text);
++    match.contents_class = {{0, ACMatchClassification::NONE}};
++    if (const std::string* detail = row->FindString("detail")) {
++      match.description = base::UTF8ToUTF16(*detail);
++      match.description_class = {{0, ACMatchClassification::NONE}};
++    }
++    // Never what Enter does. What the person typed, and what the browser found
++    // itself, keep that job.
++    match.allowed_to_be_default_match = false;
++    matches_.push_back(std::move(match));
++  }
++
++  NotifyListeners(/*updated_matches=*/true);
++}
+diff --git a/ui/views/win/hwnd_message_handler.cc b/ui/views/win/hwnd_message_handler.cc
+index 419c66879d..2dfde4d839 100644
+--- a/ui/views/win/hwnd_message_handler.cc
++++ b/ui/views/win/hwnd_message_handler.cc
+@@ -2346,7 +2346,6 @@ LRESULT HWNDMessageHandler::OnMouseRange(UINT message,
+   // Orbis: an embedded browser window (a child of the Orbis app's window, made by
+   // --orbis-embedded) takes keyboard focus when it is clicked; the parent belongs to another
+   // process, so nothing else would give it the focus.
+-  if (message != WM_MOUSEMOVE) { FILE* f = fopen("C:/chromium/embed-debug.log", "a"); if (f) { fprintf(f, "msg=%x style=%lx parent=%p focus=%p hwnd=%p sw=%d | ", (unsigned)message, (unsigned long)::GetWindowLong(hwnd(), GWL_STYLE), ::GetParent(hwnd()), ::GetFocus(), hwnd(), base::CommandLine::ForCurrentProcess()->HasSwitch("orbis-embedded")); fclose(f);} }
+   if ((message == WM_LBUTTONDOWN || message == WM_RBUTTONDOWN ||
+        message == WM_MBUTTONDOWN) &&
+       (::GetWindowLong(hwnd(), GWL_STYLE) & WS_CHILD) && ::GetParent(hwnd()) &&
+-- 
+2.44.0.windows.1
+
