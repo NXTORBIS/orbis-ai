@@ -145,17 +145,26 @@ It reuses, and never duplicates: the table engine (`compute/data.ts`), the expre
 (`compute/document.ts`), the plot engine, the format registry (`compute/interchange.ts`), the ZIP reader, the Pages
 diagram model, and the provider ladder.
 
+## Built since this was written
+
+- **A table is edited cell by cell on the Create screen.** Click a cell and type; Enter and Tab move on, Escape puts
+  it back. A row can be taken out or put back, rows can be added, and a long table is walked a screenful at a time.
+  Nothing is saved until "Save changes", and then it is one change, one new version, with the reason written down.
+  A table that moved on underneath is refused as out of date rather than quietly overwritten.
+- **PowerPoint decks are read.** Slide order from the deck's own relationships, titles from the title placeholder or
+  the first single-line shape, bullets with their depth, tables as tables, speaker notes as quoted text. It says in
+  the document that pictures and charts were not read.
+
 ## Not built
 
 Said plainly so nobody assumes otherwise:
 
-- Editing a table cell by cell on the screen (a table is changed by steps, a sentence, or by replacing it).
 - Images, audio and video as kinds. Orbis's existing image generation and image editor are separate from Create.
 - Projects of several code files, running code, websites. One file at a time, never run.
-- Reading PowerPoint decks or handwriting; text recognition in scanned PDFs (a scanned PDF has no text to read).
+- Handwriting, and text recognition in scanned PDFs (a scanned PDF has no text to read).
 - Dashboards, formulas that live in a cell, charts beyond line, bar, scatter, area, step and pie (asked for a
   histogram or a heat map, the reply says so and says what was drawn instead).
 - Cloud storage, email, calendar and sharing links. Everything is local files.
 - Orbis Search does not list artifacts; the Create screen's own search does.
-- In the chat: a picture cannot be read into a table or a document; PowerPoint files are not read; the check before
+- In the chat: a picture cannot be read into a table or a document; the check before
   the model knows English words only; a long document is at most ten parts.
