@@ -279,7 +279,16 @@ class SelectionOrb {
     const width = Math.min(PANEL_WIDTH, room().width - 16)
     this.panel.style.width = `${width}px`
     this.panel.style.maxHeight = ''
-    const wanted = { width, height: Math.min(420, Math.ceil(this.panel.getBoundingClientRect().height) + 2) }
+    /*
+     * The larger of what it measures and what it contains.
+     *
+     * The panel clips what overflows it, so once it has been given a height it will happily report that height as its
+     * own and swallow the last row -- which it did, cutting "More" in half. Its scroll height plus its own padding is
+     * what it actually needs; the rectangle is what it currently is. Taking the larger is right in both directions.
+     */
+    const pad = 14
+    const natural = Math.max(Math.ceil(this.panel.getBoundingClientRect().height), this.panel.scrollHeight + pad)
+    const wanted = { width, height: Math.min(420, natural + 2) }
     const at = placePanel(anchor, whole, wanted, room())
     this.panel.style.left = `${at.x}px`
     this.panel.style.top = `${at.y}px`
@@ -297,6 +306,17 @@ class SelectionOrb {
       this.can = reply.ok && Array.isArray((reply as { data?: unknown }).data) ? ((reply as { data: Need[] }).data ?? []) : []
     }
     this.drawPalette()
+  }
+
+  /**
+   * Gives everything in the panel its place in the order, so it arrives top to bottom the way an eye reads it.
+   *
+   * Done once after the panel is filled rather than by each caller counting as it goes: the order is a property of
+   * the finished list, and anything that forgot to count would simply arrive first.
+   */
+  private stagger(panel: HTMLElement): void {
+    const parts = [...panel.children].filter((node): node is HTMLElement => node instanceof HTMLElement)
+    parts.forEach((node, at) => node.style.setProperty('--i', String(Math.min(at, 8))))
   }
 
   private freshPanel(): HTMLElement {
@@ -333,6 +353,14 @@ class SelectionOrb {
       panel.append(note('Orion has no API key in this Orbis, so it cannot explain, summarise or answer. The rest still works.', 'warn'))
     }
 
+    /*
+     * A line of the text this is about.
+     *
+     * The panel can open over a long page after the selection has scrolled out of sight, and "Explain" means nothing
+     * without "explain what". It is also the thread back to the orb: the same accent bar, in the same place.
+     */
+    panel.append(aboutLine(selectionPreview(shot.reading.raw, 110)))
+
     const ask = palette.top.find((one) => one.id === 'ask') ?? palette.more.find((one) => one.id === 'ask')
     if (ask) {
       const box = el('input', 'ask')
@@ -362,6 +390,7 @@ class SelectionOrb {
           more.append(this.row('globe', 'Back', '', () => this.drawPalette(back), 'Back to the first actions'))
           more.append(el('div', 'rule'))
           for (const one of rest) more.append(this.actionRow(one))
+          this.stagger(more)
           this.placeThePanel(selectionBounds(shot.rects) ?? shot.rects[0]!)
         })
       )
@@ -377,6 +406,7 @@ class SelectionOrb {
       panel.append(this.row('globe', 'Back', '', back))
     }
 
+    this.stagger(panel)
     this.placeThePanel(selectionBounds(shot.rects) ?? shot.rects[0]!)
     panel.querySelector<HTMLElement>('.ask, .row')?.focus()
   }
@@ -396,6 +426,7 @@ class SelectionOrb {
     for (const choice of choices) panel.append(this.row(one.icon, choice.label, '', () => void this.run(one, choice.id)))
     panel.append(el('div', 'rule'))
     panel.append(this.row('globe', 'Back', '', () => this.drawPalette()))
+    this.stagger(panel)
     this.placeThePanel(selectionBounds(shot.rects) ?? shot.rects[0]!)
     panel.querySelector<HTMLElement>('.row')?.focus()
   }
@@ -466,7 +497,9 @@ class SelectionOrb {
   private stream(action: SelectionAction, shot: Snapshot, extra?: string): void {
     const panel = this.freshPanel()
     const head = el('div', 'head')
-    head.append(el('span', 'what', action.label))
+    const live = el('span', 'live')
+    live.setAttribute('aria-hidden', 'true')
+    head.append(live, el('span', 'what', action.label))
     const shut = el('button', 'icon-btn')
     shut.type = 'button'
     shut.title = 'Close'
@@ -483,7 +516,7 @@ class SelectionOrb {
     const answer = el('div', 'answer')
     answer.setAttribute('role', 'status')
     answer.setAttribute('aria-live', 'polite')
-    const waiting = el('span', 'waiting')
+    const waiting = composing()
     answer.append(waiting)
     panel.append(answer)
 
@@ -512,6 +545,8 @@ class SelectionOrb {
     const done = (failed?: string): void => {
       this.running = null
       waiting.remove()
+      // The lit dot is only true while something is arriving, so it goes the moment nothing is.
+      live.remove()
       stopChip.remove()
       if (failed !== undefined) {
         answer.textContent = failed
@@ -628,6 +663,21 @@ class SelectionOrb {
     for (const off of this.listeners.splice(0)) off()
     this.host.remove()
   }
+}
+
+/** A line of the selected text, so the panel says what it is about. */
+function aboutLine(words: string): HTMLElement {
+  const node = el('div', 'about')
+  node.append(el('span', undefined, words))
+  return node
+}
+
+/** Three dots that rise in turn: something is being composed, rather than a cursor that has got stuck. */
+function composing(): HTMLElement {
+  const node = el('span', 'waiting')
+  node.setAttribute('aria-label', 'Orion is answering')
+  for (let i = 0; i < 3; i++) node.append(el('i'))
+  return node
 }
 
 function note(words: string, tone: 'warn' | 'plain'): HTMLElement {
