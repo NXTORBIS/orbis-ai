@@ -8,6 +8,7 @@ import {
 } from '../../../shared/voiceInput'
 import type { VoiceErrorCode, VoiceInputConfig, VoiceSession, VoiceState, VoiceTarget } from '../../../shared/voiceInput'
 import { toPulsarWav } from './audioToWav'
+import { speech } from './speak'
 
 /**
  * Whether any voice model is installed.
@@ -337,7 +338,16 @@ class VoiceInputService {
   }
 
   private move(event: Parameters<typeof nextState>[1]): void {
+    const was = this.state
     this.state = nextState(this.state, event)
+    /*
+     * The microphone opening stops Orbis talking.
+     *
+     * Here rather than in each place that starts a recording, because it is true of all of them: somebody who starts
+     * speaking has decided they have heard enough, and a machine that carries on over them is one they turn off.
+     * The voice service does not have to know what was being read or which part of Orbis started it.
+     */
+    if (this.state === 'listening' && was !== 'listening') speech.microphoneOpened()
     this.announce()
   }
 

@@ -396,6 +396,7 @@ export const TEST_FILES = [
   'src/shared/conversationBranch.test.ts',
   'src/shared/projectScope.test.ts',
   'src/shared/researchCheck.test.ts',
+  'src/shared/voiceReply.test.ts',
   'src/shared/notificationRoute.test.ts',
   'src/shared/notifications.test.ts',
   'src/main/notifications/manager.test.ts',

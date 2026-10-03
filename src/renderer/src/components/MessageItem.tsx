@@ -1,4 +1,5 @@
-import { memo, useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState , useId } from 'react'
+import { speech } from '../lib/speak'
 import {
   Ban,
   Check,
@@ -305,25 +306,24 @@ function MoreMenu({
   alignRight?: boolean
 }): React.JSX.Element {
   const [open, setOpen] = useState(false)
-  const [speaking, setSpeaking] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
   useDismiss(rootRef, open, () => setOpen(false))
 
-  useEffect(() => () => void (speaking && speechSynthesis.cancel()), [speaking])
+  /*
+   * Reading aloud goes through the one thing in Orbis that talks.
+   *
+   * It used to call the browser's speech directly from here, which meant nothing else in Orbis could speak, two
+   * messages could be read at once, and speaking carried on while somebody held the microphone down and talked over
+   * it. The service settles all three: one voice, and the microphone stops it without knowing what it was reading.
+   */
+  const id = useId()
+  const [speaking, setSpeaking] = useState(false)
+  useEffect(() => speech.subscribe((status) => setSpeaking(status.id === id)), [id])
 
   const toggleSpeech = (): void => {
     setOpen(false)
-    if (speaking) {
-      speechSynthesis.cancel()
-      setSpeaking(false)
-      return
-    }
-    const utterance = new SpeechSynthesisUtterance(getText())
-    utterance.onend = () => setSpeaking(false)
-    utterance.onerror = () => setSpeaking(false)
-    speechSynthesis.cancel()
-    speechSynthesis.speak(utterance)
-    setSpeaking(true)
+    // The markdown, not the plain text: the service decides what a heading, a link or a code block sounds like.
+    if (!speech.speak(id, getMarkdown(), (stop) => stop === 'failed' && onNotify('Orbis could not read that out.', 'error'))) return
   }
 
   return (
