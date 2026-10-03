@@ -2350,17 +2350,60 @@ textarea.hud-input {
   -webkit-line-clamp: 2;
 }
 
+/*
+ * "Latest": the one control that moves the page to the newest output.
+ *
+ * It is a pill with a word in it rather than a circle with an arrow, because this is the only way back from a long
+ * answer that is deliberately not following itself, and a person has to be able to tell what it does without
+ * pressing it to find out. While Orbis is still writing it carries the accent, which is what distinguishes "there is
+ * more below" from "there is more being written below".
+ */
+/* Already at the newest output: there is nothing to offer, whatever was last decided. */
+.stage-content[data-at-bottom='true'] .jump-btn {
+  display: none;
+}
+
+.jump-dock {
+  position: relative;
+  z-index: 6;
+  flex: none;
+  height: 0;
+}
+
 .jump-btn {
   position: absolute;
   left: 50%;
-  bottom: 196px;
+  bottom: 12px;
   z-index: 6;
-  display: grid;
-  place-items: center;
-  width: 32px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
   height: 32px;
+  padding: 0 14px 0 11px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
   transform: translateX(-50%);
-  border-radius: 50%;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.jump-btn.live {
+  color: var(--cyan);
+  border-color: var(--cyan-dim);
+}
+
+/* A quiet pulse while an answer is still being written, so it reads as "and it is still growing". */
+@media (prefers-reduced-motion: no-preference) {
+  .jump-btn.live {
+    animation: jump-live 2.2s ease-in-out infinite;
+  }
+
+  @keyframes jump-live {
+    50% {
+      box-shadow: 0 0 0 4px var(--cyan-fill);
+    }
+  }
 }
 
 /* ================= Thinking orb ================= */
@@ -11452,6 +11495,13 @@ html[data-motion='reduced'] .tool-btn.recording {
 /* Room under the newest turn, so its question can sit at the top with the answer beginning under it. Sized by the
    chat as the answer grows; nothing when no question has just been asked. The negative margin takes back the gap a
    flex child is given, so an empty one adds nothing to the page. */
+/* One real pixel marking the end of the conversation. Something with no height is never "on screen". */
+.messages-end {
+  flex: none;
+  height: 1px;
+  pointer-events: none;
+}
+
 .messages-tail {
   flex: none;
   height: 0;

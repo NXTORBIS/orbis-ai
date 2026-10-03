@@ -10,7 +10,7 @@ import Greeting from './Greeting'
 import MessageItem from './MessageItem'
 import type { Anchored, ChatScrollState, ScrollAction, Viewport } from '../../../shared/chatScroll'
 import {
-  jumpVisible,
+  FOLLOW_THRESHOLD,
   keepAnchored,
   newChatScrollState,
   onJumpPressed,
@@ -130,22 +130,20 @@ export default function ChatView(props: Props): React.JSX.Element {
    */
   const reflect = useCallback((el: HTMLElement): void => {
     el.dataset.follow = scroll.current.mode
+    /*
+     * Whether there is anything below worth going to, written where the stylesheet can see it.
+     *
+     * "Latest" is offered from React state, which is decided at particular moments; this is the geometry itself, at
+     * every moment there is any. It is what guarantees the control is not sitting there offering to take somebody to
+     * the newest output while they are already looking at it -- whatever the state last concluded.
+     */
+    const parent = el.parentElement
+    if (parent) parent.dataset.atBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= FOLLOW_THRESHOLD ? 'true' : 'false'
   }, [])
 
   const perform = useCallback((el: HTMLElement, action: ScrollAction): void => {
     reflect(el)
-    if (action.kind === 'none') {
-      /*
-       * Nothing moves, and the way back is still decided.
-       *
-       * An answer being written while somebody reads further up grows the page under them without producing a single
-       * scroll event -- they are not scrolling, so nothing fires. Left to events, the button offering the newest line
-       * would never appear, and there would be no way back to an answer that had run off the bottom except to drag
-       * the scroller the whole way.
-       */
-      setShowJump((shown) => jumpVisible(measure(el), shown))
-      return
-    }
+    if (action.kind === 'none') return
     if (action.kind === 'toTurn') {
       boxOf(el.querySelector(`[data-msg-id="${CSS.escape(action.messageId)}"]`))?.scrollIntoView({ block: 'start' })
     } else if (action.smooth) {
@@ -156,13 +154,34 @@ export default function ChatView(props: Props): React.JSX.Element {
     // Read back rather than assumed: a smooth scroll has not arrived yet, and `scrollIntoView` lands where the layout
     // allows rather than where it was asked to.
     scroll.current = settled(scroll.current, el.scrollTop)
-    const now = measure(el)
+    measure(el)
     reflect(el)
-    // The button is decided from where the scroller now is, not left to the scroll event this may or may not produce:
-    // a move to where it already was fires nothing, and a move Orbis made is ignored as its own echo. Without this the
-    // way back would stay on screen after the very press that made it unnecessary.
-    setShowJump((shown) => jumpVisible(now, shown))
+
   }, [measure, reflect])
+
+  /**
+   * Whether to offer "Latest": is the end of the conversation on the screen or not?
+   *
+   * Asked of the browser rather than worked out. Every arithmetic version of this was a measurement taken at some
+   * particular moment -- after a move, after a scroll, after a redraw -- and every one of those moments is before
+   * the layout has finished deciding what it is. The answers went stale and the control either never appeared while
+   * a long answer ran off the bottom, or sat there offering to take somebody to output they were already looking at.
+   *
+   * An IntersectionObserver is the question itself. The eighty pixels of margin are the same slack the follow
+   * threshold uses: near enough to the end counts as at the end, which is what stops the control blinking in and out
+   * while somebody nudges a wheel at the edge of it.
+   */
+  useEffect(() => {
+    const el = scrollRef.current
+    const end = endRef.current
+    if (!el || !end) return
+    const watcher = new IntersectionObserver((entries) => setShowJump(!entries[entries.length - 1].isIntersecting), {
+      root: el,
+      rootMargin: `0px 0px ${FOLLOW_THRESHOLD}px 0px`
+    })
+    watcher.observe(end)
+    return () => watcher.disconnect()
+  }, [conversation?.id, messages.length === 0])
 
   /**
    * The question that was last scrolled to, which is the one given room under it.
@@ -172,6 +191,8 @@ export default function ChatView(props: Props): React.JSX.Element {
    */
   const tailTurn = useRef<string | null>(null)
   const tailRef = useRef<HTMLDivElement>(null)
+  /** One pixel at the very end of the conversation, watched to decide whether "Latest" is worth offering. */
+  const endRef = useRef<HTMLDivElement>(null)
 
   /** Sizes the room under the newest turn: enough for its question to reach the top, and no more. */
   const fitTail = useCallback((el: HTMLElement): void => {
@@ -237,6 +258,7 @@ export default function ChatView(props: Props): React.JSX.Element {
         perform(el, action)
       }
       measure(el)
+      reflect(el)
     })
     observer.observe(el)
     // The content, not just the box: a code block growing changes the scroll height without changing the scroller.
@@ -255,7 +277,7 @@ export default function ChatView(props: Props): React.JSX.Element {
       watcher.disconnect()
       observer.disconnect()
     }
-  }, [measure, perform, fitTail, conversation?.id])
+  }, [measure, perform, reflect, fitTail, conversation?.id])
 
   /**
    * A scroll happened. Whose it was is decided by position, then acted on.
@@ -305,7 +327,6 @@ export default function ChatView(props: Props): React.JSX.Element {
     const outcome = onScrolled(scroll.current, view, showJumpRef.current, theirs, (tailRef.current?.offsetHeight ?? 0) > 0)
     scroll.current = outcome.state
     reflect(el)
-    if (outcome.showJump !== showJumpRef.current) setShowJump(outcome.showJump)
   }, [measure, reflect])
 
   const messagesRef = useRef(messages)
@@ -412,13 +433,40 @@ export default function ChatView(props: Props): React.JSX.Element {
             </Fragment>
           ))}
           <div className="messages-tail" ref={tailRef} aria-hidden="true" />
+          {/*
+            * The end of the conversation, as something that can be seen.
+            *
+            * The spacer above it is often zero pixels tall, and a thing with no height is never "on screen" as far
+            * as an IntersectionObserver is concerned -- which made the watcher that decides "Latest" answer "no"
+            * forever. This is one real pixel at the very end, and whether it is in view is exactly the question.
+            */}
+          <div className="messages-end" ref={endRef} aria-hidden="true" />
         </div>
       </div>
       <ChatRail messages={messages} scrollRef={scrollRef} userName={settings?.userName ?? 'You'} />
+      {/*
+        * Where "Latest" sits.
+        *
+        * A strip of no height between the messages and the composer, so the control rides exactly on the line where
+        * one ends and the other begins. It used to be placed a fixed distance up from the bottom of the whole view,
+        * which put it in the middle of the answer the moment the composer was a different height -- a button sitting
+        * on top of the sentence it is offering to take you away from.
+        */}
+      <div className="jump-dock" aria-hidden={!showJump}>
       {showJump && (
         <button
-          className="jump-btn glass"
-          title="Scroll to bottom"
+          /*
+           * The way to the newest output, and the only thing that ever moves the page to it.
+           *
+           * An answer is read from its beginning and never chases its own foot, so while a long one is being written
+           * the newest words are below the fold on purpose. This is what offers them -- a word rather than a bare
+           * arrow, because a circle with an arrow in it is a guess, and it tells the person when there is something
+           * new down there rather than only that down there exists.
+           */
+          className={`jump-btn glass${stream ? ' live' : ''}`}
+          type="button"
+          aria-label={stream ? 'Go to the newest part of the answer' : 'Go to the newest message'}
+          title={stream ? 'Orbis is still writing below' : 'Go to the latest'}
           onClick={() => {
             const el = scrollRef.current
             if (!el) return
@@ -430,9 +478,11 @@ export default function ChatView(props: Props): React.JSX.Element {
             perform(el, action)
           }}
         >
-          <ArrowDown size={15} />
+          <ArrowDown size={14} />
+          <span>Latest</span>
         </button>
       )}
+      </div>
       {composer}
     </div>
   )

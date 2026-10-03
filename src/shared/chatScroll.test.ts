@@ -66,30 +66,29 @@ test('a different conversation is a different place', () => {
 
 // ---------------------------------------------------------------- a new question
 
-test('a new question is put at the top, and its answer is followed from there', () => {
+test('a new question is put at the top, and the answer is read from there rather than chased', () => {
   const { state, action } = onRendered(opened(), { conversationId: 'c1', lastUserId: 'u2' })
   assert.deepEqual(action, { kind: 'toTurn', messageId: 'u2' })
-  // Following, not reading. While the answer is shorter than the view the foot of the page is "the question at the
-  // top", so following moves nothing; when the answer outgrows the view, following is what keeps its newest line in
-  // sight. Somebody who really is reading scrolls up, and that is what turns this back to 'reading'.
-  assert.equal(state.mode, 'following')
+  // Reading, not following: an answer is read from its beginning, and a thirty-paragraph one must not drag the page
+  // to its last paragraph while it is being written. Latest is how somebody asks for the foot of it.
+  assert.equal(state.mode, 'reading')
 })
 
-test('the same question is moved to once, and after that the answer is kept in sight', () => {
+test('the same question is moved to once, however many times the answer redraws', () => {
   const asked = onRendered({ ...newChatScrollState(), conversationId: 'c1', shownTurnId: 'u1' }, { conversationId: 'c1', lastUserId: 'u2' })
   assert.deepEqual(asked.action, { kind: 'toTurn', messageId: 'u2' })
-  // Every redraw after it keeps the foot of the answer in view -- which, while the room under the question lasts, is
-  // the very place the question was put.
+  // Every redraw after it moves nothing at all. This is the rule: streaming never scrolls the page.
   let state = asked.state
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 6; i++) {
     const again = onRendered(state, { conversationId: 'c1', lastUserId: 'u2' })
-    assert.deepEqual(again.action, { kind: 'toBottom', smooth: false }, `redraw ${i} did not keep up with the answer`)
+    assert.deepEqual(again.action, { kind: 'none' }, `redraw ${i} moved the page`)
     state = again.state
   }
-  // And once they scroll up to read, nothing follows them any more.
-  const reading = onScrolled(state, { scrollTop: 100, scrollHeight: 4000, clientHeight: 600 }, false, true, false).state
-  assert.equal(reading.mode, 'reading')
-  assert.deepEqual(onRendered(reading, { conversationId: 'c1', lastUserId: 'u2' }).action, { kind: 'none' })
+  // Latest is how the foot of the answer is asked for, and from there it is followed.
+  const latest = onJumpPressed(state)
+  assert.equal(latest.state.mode, 'following')
+  assert.deepEqual(latest.action, { kind: 'toBottom', smooth: true })
+  assert.deepEqual(onRendered(latest.state, { conversationId: 'c1', lastUserId: 'u2' }).action, { kind: 'toBottom', smooth: false })
 })
 
 test('a question asked while reading old messages still brings the reader to it', () => {
@@ -109,13 +108,13 @@ test("the echo of Orbis own scroll is not mistaken for the person's", () => {
   // The loop this guards against: Orbis moves to a new turn, the browser reports a scroll, and the handler reads it as
   // the person having scrolled -- undoing the decision a frame after making it.
   const moved = onRendered(opened(), { conversationId: 'c1', lastUserId: 'u2' })
-  assert.equal(moved.state.mode, 'following')
+  assert.equal(moved.state.mode, 'reading')
 
   // Orbis's scroll left the scroller at 1180. Landing that close to the end would, under a naive handler, turn
   // following back on and drag the reader off the top of the answer they were just shown.
   const s = settled(moved.state, END)
   const echo = onScrolled(s, view(END), false)
-  assert.equal(echo.state.mode, 'following', 'the decision stands')
+  assert.equal(echo.state.mode, 'reading', 'the decision stands')
 })
 
 test("a scroll to where the scroller already was does not swallow the person's next one", () => {
@@ -275,12 +274,12 @@ test('a scroll is the person\'s when they are holding the scroller, just did som
   assert.equal(scrollIsTheirs(10_000, { ...quiet, lastTheirsAt: 9_700 }), false)
 })
 
-test('a conversation that has just begun opens at its first question, with the answer followed under it', () => {
+test('a conversation that has just begun is read from its first question, not followed to the foot of the answer', () => {
   const begun = onRendered(newChatScrollState(), { conversationId: 'c1', lastUserId: 'u1', started: true })
   assert.deepEqual(begun.action, { kind: 'toTurn', messageId: 'u1' })
-  assert.equal(begun.state.mode, 'following')
+  assert.equal(begun.state.mode, 'reading')
   // The answer growing does not move the view after that.
-  assert.deepEqual(onRendered(begun.state, { conversationId: 'c1', lastUserId: 'u1', started: true }).action, { kind: 'toBottom', smooth: false })
+  assert.deepEqual(onRendered(begun.state, { conversationId: 'c1', lastUserId: 'u1', started: true }).action, { kind: 'none' })
   // An older conversation being opened still lands at its end, however short it is.
   const opened = onRendered(newChatScrollState(), { conversationId: 'c2', lastUserId: 'u9' })
   assert.deepEqual(opened.action, { kind: 'toBottom', smooth: false })
