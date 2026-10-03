@@ -250,5 +250,9 @@ test('the boundary is a known size, so the migration can be estimated rather tha
   // 472 → 473: making things. One door for every artifact operation -- what can be made, make it, list, read, save
   // it where you choose, remove -- the way `pages:compute` is one door for every calculation. One channel means one
   // place the sender is checked and one place an operation is refused; the save dialog runs on this side of it.
-  assert.ok(code.length <= 473, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
+  // 473 → 474: notifications. One door for the whole of it -- the list, read, clear, pressing a button, what the
+  // window is showing, and a real test notification -- because the alternative was six channels for one small
+  // feature. The window can do everything with a notification except make one, which is the point: notifications
+  // come from events published inside Orbis, and nothing on the other side of this boundary can publish one.
+  assert.ok(code.length <= 474, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
 })

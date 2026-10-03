@@ -256,6 +256,23 @@ const api: NxtorbisApi = {
   onMarketsStripChanged: (listener) => subscribe('markets:strip-changed', listener),
   onMarketsShow: (listener) => subscribe('markets:show', listener),
   onOpenArtifact: (listener) => subscribe('artifacts:show', listener),
+  /*
+   * Notifications: everything through the one door, and no way to make one.
+   *
+   * There is deliberately no `notify` here. A notification exists because something inside Orbis finished, failed or
+   * is waiting -- never because a window asked for one -- so the renderer can read them, mark them, forget them and
+   * press their buttons, and that is all it can do.
+   */
+  notifications: () => ipcRenderer.invoke('notifications:do', 'list'),
+  notificationRead: (id: string | null) => ipcRenderer.invoke('notifications:do', 'read', id),
+  notificationClear: (id: string | null) => ipcRenderer.invoke('notifications:do', 'clear', id),
+  notificationAct: (id: string, action: string) => ipcRenderer.invoke('notifications:do', 'act', id, action),
+  /** What the window is showing, so Orbis does not announce what is already in front of somebody. */
+  notificationWatching: (what: string | null) => ipcRenderer.invoke('notifications:do', 'watching', what),
+  notificationTest: () => ipcRenderer.invoke('notifications:do', 'test'),
+  onNotificationsChanged: (listener: () => void) => subscribe('notifications:changed', listener),
+  /** A notification was pressed: the window is told which event it was about and takes the person there. */
+  onNotificationOpen: (listener: (what: { id: string; event: string; subject: Record<string, string> }) => void) => subscribe('notifications:open', listener),
   securityLog: () => ipcRenderer.invoke('security:log'),
   clearSecurityLog: () => ipcRenderer.invoke('security:clear-log'),
   profileLockState: () => ipcRenderer.invoke('profileLock:state'),

@@ -27,6 +27,16 @@ const BROWSER_LAYER = new Set([
   // service as a function. The service and the store know nothing about windows, so this file is rewritten as Mojo
   // and SelectFileDialog and nothing else moves.
   'main/artifacts/ipc.ts',
+  /*
+   * The one Electron file of the notification system, and deliberately the only one.
+   *
+   * Everything that decides -- what an event becomes, whether it is worth interrupting somebody for, how urgent it
+   * is, whether to hold it until morning, which of a burst to fold into one line -- is in src/shared/notifications.ts
+   * and main/notifications/manager.ts, neither of which has ever heard of Electron. This file puts the result on the
+   * screen and reports whether that worked. In Chromium it becomes the browser process's own notification call and
+   * nothing else moves.
+   */
+  'main/notifications/native.ts',
   'main/browserControl/appCapabilities.ts',
   'main/browserControl/page.ts',
   'main/browserControl/pageCapabilities.ts',

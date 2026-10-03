@@ -27,6 +27,7 @@ import type { SpecializedOutcome } from './searchProviders'
 import type { VoiceErrorCode, VoiceModel } from './voiceInput'
 import type { DeviceState } from './temporal/capability'
 import type { JobCondition, JobPolicies, TemporalAction, TemporalJob } from './temporal/job'
+import type { OrbisNotification } from './notifications'
 import type { Schedule } from './temporal/recurrence'
 import type { LockTrigger, TabLockPolicy } from './tabLock'
 import type { ProfileLockPolicy } from './profileLock'
@@ -1492,6 +1493,20 @@ export interface NxtorbisApi {
    * name with two meanings is a bug waiting for whoever reads it next.
    */
   onOpenArtifact(listener: (artifactId: string) => void): () => void
+  /*
+   * Notifications.
+   *
+   * No way to make one, on purpose: a notification exists because something in Orbis finished, failed or is waiting.
+   * The window reads them, marks them, forgets them and presses their buttons.
+   */
+  notifications(): Promise<{ ok: boolean; items?: OrbisNotification[]; unread?: number; can?: { native: boolean; buttons: boolean; quiet: boolean }; message?: string }>
+  notificationRead(id: string | null): Promise<{ ok: boolean }>
+  notificationClear(id: string | null): Promise<{ ok: boolean }>
+  notificationAct(id: string, action: string): Promise<{ ok: boolean; message?: string }>
+  notificationWatching(what: string | null): Promise<{ ok: boolean }>
+  notificationTest(): Promise<{ ok: boolean; message: string }>
+  onNotificationsChanged(listener: () => void): () => void
+  onNotificationOpen(listener: (what: { id: string; event: string; subject: Record<string, string> }) => void): () => void
   securityLog(): Promise<SecurityEvent[] | AccountRefusal>
   clearSecurityLog(): Promise<{ ok: true } | AccountRefusal>
   profileLockState(): Promise<ProfileLockState | ProfileLockRefusal>

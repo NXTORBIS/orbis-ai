@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, nativeTheme, net, Notification, powerMonitor, protocol, shell, Tray } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, nativeTheme, net, powerMonitor, protocol, shell, Tray } from 'electron'
 import type { MenuItemConstructorOptions, OpenDialogOptions, TitleBarOverlayOptions, IpcMainInvokeEvent } from 'electron'
 import { existsSync, promises as fs } from 'node:fs'
 import os from 'node:os'
@@ -110,7 +110,7 @@ import { WhiteboardStore } from './personal/whiteboard'
 import { WorkspacesStore } from './personal/workspaces'
 import { ProfilesStore } from './personal/profiles'
 import { ExperienceStore } from './experience/store'
-import { mayNotify } from '../shared/rules'
+import { createNotifications, type Notifications } from './notifications/index'
 import { activePreset, appearanceVariables, wantsReducedMotion } from '../shared/experience'
 import { presetBackdrop } from '../shared/presets'
 import { RuleWatcher, workflowReadings } from './ruleWatcher'
@@ -583,6 +583,23 @@ let mainWindow: BrowserWindow | null = null
  * need to know whether the person asked not to be interrupted.
  */
 let experienceStore: ExperienceStore | null = null
+/**
+ * The one place in Orbis that interrupts somebody.
+ *
+ * Everything that finishes, fails or waits publishes a fact to this; nothing else in Orbis touches the operating
+ * system's notifications. Held at module level because the things that report to it -- a workflow ending, a schedule
+ * running, a rule becoming true -- happen long after the startup that built it.
+ */
+let notifications: Notifications | null = null
+/** Whose notifications these are. Kept in step with the profile, so one profile's never reach another's screen. */
+let notifyProfileId = 'default'
+/**
+ * What the window last said it was showing.
+ *
+ * Used for one thing only: not announcing what is already on the screen. Null means Orbis does not know, and not
+ * knowing means it says the thing -- being told twice is a smaller fault than not being told at all.
+ */
+let watchingNow: string | null = null
 let ruleWatcher: RuleWatcher | null = null
 
 function isHttpUrl(url: string): boolean {
@@ -733,6 +750,40 @@ function createWindow(): BrowserWindow {
 }
 
 function registerIpc(): void {
+  /*
+   * Everything the window does with notifications, through one door.
+   *
+   * One channel rather than eight, for the same reason `pages:compute` and `artifacts:do` are one each: one place the
+   * sender is checked, one place an operation is refused, and one line in the mapping. The window may read the list,
+   * mark things read, forget them, press a button, say what it is looking at, and ask for a test notification --
+   * and nothing else. It cannot create one: the only way a notification comes into being is an event published
+   * inside Orbis, which is what stops a renderer, a page or an extension manufacturing one.
+   */
+  ipcMain.handle('notifications:do', async (_event, op: string, arg?: unknown, arg2?: unknown) => {
+    if (!notifications) return { ok: false, message: 'Notifications are not ready yet.' }
+    const id = typeof arg === 'string' ? arg.slice(0, 60) : null
+    switch (op) {
+      case 'list':
+        return { ok: true, items: await notifications.list(), unread: await notifications.unread(), can: notifications.capabilities() }
+      case 'read':
+        await notifications.markRead(id)
+        return { ok: true }
+      case 'clear':
+        await notifications.clear(id)
+        return { ok: true }
+      case 'act':
+        return id ? notifications.activate(id, typeof arg2 === 'string' ? arg2.slice(0, 40) : '') : { ok: false, message: 'Which one?' }
+      case 'watching':
+        // What the window is showing, so Orbis does not announce what is already in front of somebody.
+        watchingNow = typeof arg === 'string' && arg !== '' ? arg.slice(0, 80) : null
+        return { ok: true }
+      case 'test':
+        return notifications.test()
+      default:
+        return { ok: false, message: 'That is not something Orbis can do with notifications.' }
+    }
+  })
+
   ipcMain.handle('settings:get', async () => {
     const settings = await store.getSettings()
     // Kept for the browser's own pages, which need it to look like the chat. Only this one field crosses.
@@ -1803,6 +1854,16 @@ if (!app.requestSingleInstanceLock()) {
         .catch(() => undefined)
     }
     app.on('before-quit', () => void securityLog.flush())
+    /*
+     * The notification history, written before the process goes.
+     *
+     * And the one timer stopped. A pending burst holds a timer, and a timer that exists to say "your download
+     * finished" is a timer that would otherwise keep a process alive after somebody has asked it to close.
+     */
+    app.on('before-quit', () => {
+      notifications?.stop()
+      void notifications?.flush()
+    })
     profilesStore.onChange(() => void securityLog.flush())
 
     /**
@@ -2566,13 +2627,15 @@ if (!app.requestSingleInstanceLock()) {
         sendToWindow(channel, ...args)
         void ruleWatcher?.look()
       },
+      /*
+       * A workflow finished, or could not.
+       *
+       * Published as an event, never shown from here. Whether it is worth interrupting somebody for, how urgent it
+       * is, whether it is three in the morning and whether the same thing has already been said are all one decision
+       * made in one place (src/main/notifications), and this is one of the things that reports to it.
+       */
       notify: (title, body) => {
-        // Quiet hours and the per-category switches were settings nothing read: a person could turn notifications off
-        // and still be interrupted at three in the morning. They are read here, where the interrupting happens.
-        // `experienceStore` is created further down this same startup; by the time a workflow finishes there is one.
-        const settings = experienceStore?.current().notifications
-        if (settings && !mayNotify(settings, 'workflows')) return
-        if (Notification.isSupported()) new Notification({ title, body, silent: false }).show()
+        void notifications?.publish({ type: 'workflow.completed', fields: { name: title, summary: body } })
       }
     })
     workflowEngine = workflows
@@ -2622,6 +2685,50 @@ if (!app.requestSingleInstanceLock()) {
     const experience = new ExperienceStore(app.getPath('userData'), (await profilesStore.active()).id)
     experienceStore = experience
     await experience.load().catch((err: unknown) => console.error('[experience] could not be read', err))
+
+    /*
+     * The notification system.
+     *
+     * Built here because it reads its settings from the store above. Everything it can do when somebody presses a
+     * notification is decided now, in one table, and nothing can be added to it later -- a notification carries the
+     * name of an action and the ids of what it is about, never anything that could become a command.
+     */
+    notifyProfileId = (await profilesStore.active()).id
+    // Notifications follow the person: switching profile changes whose history is read and whose is written to.
+    profilesStore.onChange(() => void profilesStore.active().then((p) => void (notifyProfileId = p.id)))
+    notifications = createNotifications({
+      userData: app.getPath('userData'),
+      profileId: () => notifyProfileId,
+      settings: () => experience.current().notifications,
+      /*
+       * What Orbis knows about where somebody's attention is.
+       *
+       * Only two things, and both are facts rather than guesses: whether an Orbis window is in front, and what the
+       * window last said it was showing. A notification about the thing already on the screen is noise.
+       */
+      attention: () => ({ focused: mainWindow?.isFocused() === true && !mainWindow.isMinimized(), watching: watchingNow }),
+      handlers: {
+        open: async (one: { id: string; event: string; subject: Readonly<Record<string, string>> }) => {
+          if (!mainWindow || mainWindow.isDestroyed()) return { ok: false, message: 'Orbis has no window open.' }
+          if (mainWindow.isMinimized()) mainWindow.restore()
+          mainWindow.show()
+          mainWindow.focus()
+          // The window decides where that is. The list of places a notification can send somebody is the list of
+          // screens Orbis has, and a notification only ever says which event it was about.
+          sendToWindow('notifications:open', { id: one.id, event: one.event, subject: one.subject })
+          return { ok: true }
+        },
+        openFile: async (path: string) => {
+          const problem = await shell.openPath(path)
+          return problem === '' ? { ok: true } : { ok: false, message: problem }
+        },
+        showInFolder: async (path: string) => {
+          shell.showItemInFolder(path)
+          return { ok: true }
+        }
+      },
+      onChange: () => sendToWindow('notifications:changed')
+    })
     // Personalisation follows the profile: the widgets on the new tab, what each is set to, the wallpaper and the theme
     // all belong to whoever is using Orbis, and switching profile swaps all of it rather than sharing it.
     profilesStore.onChange(() => {
@@ -2664,8 +2771,9 @@ if (!app.requestSingleInstanceLock()) {
           console.error('[rules] could not be written', err)
         })
       },
+      // A rule that has become true. The lowest kind of noise Orbis makes, which is why it says so rather than deciding.
       notify: (title, body) => {
-        if (Notification.isSupported()) new Notification({ title, body, silent: false }).show()
+        void notifications?.publish({ type: 'rule.fired', fields: { name: title, detail: body } })
       }
     })
     ruleWatcher = watcher
@@ -3214,18 +3322,12 @@ if (!app.requestSingleInstanceLock()) {
           return { ok: true, detail: 'Opened "' + resolved.page.manifest.title + '".' }
         },
         notify: (title, body) => {
-          // The same quiet hours and category switches as everything else. A schedule is not a reason to interrupt
-          // somebody at three in the morning after they have said not to.
-          const settings = experienceStore?.current().notifications
-          if (settings && !mayNotify(settings, 'workflows')) return
-          if (Notification.isSupported()) new Notification({ title, body, silent: false }).show()
+          void notifications?.publish({ type: 'schedule.completed', profileId: scheduleProfileId, fields: { name: title, summary: body } })
         }
       }),
       onChange: (job) => sendToWindow('schedules:changed', job),
       onNotice: (job, body) => {
-        const settings = experienceStore?.current().notifications
-        if (settings && !mayNotify(settings, 'workflows')) return
-        if (Notification.isSupported()) new Notification({ title: job.name, body, silent: false }).show()
+        void notifications?.publish({ type: 'schedule.completed', profileId: scheduleProfileId, fields: { name: job.name, summary: body, scheduleId: job.jobId, runId: `${job.jobId}:${Date.now()}` } })
       }
     })
     registerTemporalIpc({
@@ -3272,8 +3374,8 @@ if (!app.requestSingleInstanceLock()) {
                  * This menu only exists when there is no window, so sending the failure there would be sending it
                  * nowhere -- and "I pressed hibernate and nothing happened" with no reason is the worst outcome.
                  */
-                if (!result.ok && Notification.isSupported()) {
-                  new Notification({ title: 'Orbis could not hibernate', body: result.detail, silent: false }).show()
+                if (!result.ok) {
+                  void notifications?.publish({ type: 'system.problem', fields: { title: 'Orbis could not hibernate', reason: result.detail } })
                 }
               })
             }
