@@ -1,3 +1,5 @@
+import type { EffectPolicy, EffectRule } from './effectPolicy'
+import type { SideEffect } from './browserControl'
 import type { ConversationBranch } from './conversationBranch'
 import type { SkillEdits, SkillMatch, SkillPreview, SkillSettings, SkillView } from './skills'
 import type { MemoryCategory, MemoryEntry, MemorySettings } from './memory'
@@ -876,6 +878,9 @@ export interface NxtorbisApi {
   /** Kinds of browser action switched off for Orion, skills and workflows. */
   controlSwitches(): Promise<ControlDomain[]>
   setControlSwitch(domain: ControlDomain, on: boolean): Promise<ControlDomain[]>
+  /** What Orbis may do on your behalf, by kind of effect rather than by area of the browser. */
+  controlEffects(): Promise<EffectPolicy>
+  setControlEffect(effect: SideEffect, rule: EffectRule): Promise<EffectPolicy>
   /**
    * The password on this profile's account.
    *

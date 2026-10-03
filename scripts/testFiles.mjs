@@ -49,6 +49,7 @@ export const TEST_FILES = [
   'src/shared/browserControl.test.ts',
   'src/main/automationCheckpoint.test.ts',
   'src/main/browserControl/effects.test.ts',
+  'src/shared/effectPolicy.test.ts',
   'src/main/browserControl/browserControl.test.ts',
   'src/main/browserControl/deepQuery.test.ts',
   'src/main/browserControl/feedCapabilities.test.ts',

@@ -18656,3 +18656,13 @@ html[data-motion='reduced'] .tool-btn.recording {
 }
 .unfinished-open:hover { background: var(--bg-hover); }
 .unfinished p { margin: 7px 0 0; }
+
+/* A heading inside a settings panel, above a group of related switches. */
+.setting-subhead {
+  margin: 14px 0 2px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint);
+}

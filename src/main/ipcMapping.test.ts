@@ -256,5 +256,6 @@ test('the boundary is a known size, so the migration can be estimated rather tha
   // come from events published inside Orbis, and nothing on the other side of this boundary can publish one.
   // 474 -> 476: what Orbis was partway through when it last closed, and forgetting one. Long automations had no
   // checkpoint at all, so closing mid-run lost the list of what had already been handled.
-  assert.ok(code.length <= 476, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
+  // 476 -> 478: what Orbis may do by kind of effect (read, write, delete, send, run, lock), beside the area switches.
+  assert.ok(code.length <= 478, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
 })

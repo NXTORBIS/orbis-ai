@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import { BrowserControl, DEFAULT_CAPABILITY_TIMEOUT_MS, effectsOf } from './registry.ts'
+import { DEFAULT_EFFECT_POLICY, readEffectPolicy } from '../../shared/effectPolicy.ts'
 
 /**
  * Two things every action now carries: what kind of effect it has, and how long it may take.
@@ -74,4 +75,44 @@ test('a capability that finishes in time is untouched by the deadline', async ()
 test('the default deadline is long enough for real work and short enough to be a deadline', () => {
   assert.ok(DEFAULT_CAPABILITY_TIMEOUT_MS >= 30_000)
   assert.ok(DEFAULT_CAPABILITY_TIMEOUT_MS <= 300_000)
+})
+
+test('a kind of action set to never is refused, whatever area it is in', async () => {
+  const control = new BrowserControl({ sink: async () => undefined })
+  control.setEffectPolicy(readEffectPolicy({ ...DEFAULT_EFFECT_POLICY, delete: 'never' }))
+  let ran = false
+  control.register({ ...base, id: 'history.clear', domain: 'history', mutates: true, effects: ['delete'], run: async () => ((ran = true), {}) })
+
+  const result = (await control.execute({ capability: 'history.clear', params: {}, source: 'orion' }, { confirm: async () => true })) as { ok: boolean; error?: { message: string } }
+  assert.equal(result.ok, false)
+  assert.equal(ran, false, 'and it really did not run')
+  assert.match(result.error!.message, /remove things/i)
+})
+
+test('a kind of action set to ask is asked about, even when the capability itself would not have', async () => {
+  const control = new BrowserControl({ sink: async () => undefined })
+  control.setEffectPolicy(readEffectPolicy({ ...DEFAULT_EFFECT_POLICY, write: 'ask' }))
+  control.register({ ...base, id: 'tabs.create', mutates: true, confirmation: 'none', run: async () => ({}) })
+
+  let asked = false
+  const result = (await control.execute({ capability: 'tabs.create', params: {}, source: 'orion' }, { confirm: async () => ((asked = true), true) })) as { ok: boolean }
+  assert.equal(asked, true)
+  assert.equal(result.ok, true)
+})
+
+test('the person acting in Orbis themselves is never stopped by this', async () => {
+  const control = new BrowserControl({ sink: async () => undefined })
+  control.setEffectPolicy(readEffectPolicy({ ...DEFAULT_EFFECT_POLICY, delete: 'never' }))
+  control.register({ ...base, id: 'history.clear', domain: 'history', mutates: true, effects: ['delete'], run: async () => ({ done: true }) })
+
+  const result = (await control.execute({ capability: 'history.clear', params: {}, source: 'user' }, { confirm: async () => true })) as { ok: boolean }
+  assert.equal(result.ok, true, 'it decides what Orbis may do on your behalf, not what you may do')
+})
+
+test('reading is left alone by a policy that only tightens changes', async () => {
+  const control = new BrowserControl({ sink: async () => undefined })
+  control.setEffectPolicy(readEffectPolicy({ ...DEFAULT_EFFECT_POLICY, write: 'never', delete: 'never' }))
+  control.register({ ...base, id: 'tabs.count', mutates: false, run: async () => ({ n: 3 }) })
+  const result = (await control.execute({ capability: 'tabs.count', params: {}, source: 'orion' }, { confirm: async () => false })) as { ok: boolean }
+  assert.equal(result.ok, true)
 })

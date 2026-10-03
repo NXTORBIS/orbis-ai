@@ -1,3 +1,4 @@
+import { askFor, decidingEffect, DEFAULT_EFFECT_POLICY, refusalFor, ruleFor, type EffectPolicy } from '../../shared/effectPolicy.ts'
 import type {
   BrowserCommand,
   CapabilityDescriptor,
@@ -288,6 +289,13 @@ export class BrowserControl {
   private readonly locks = new Map<string, string>()
   /** Kinds of action the person has switched off for Orion and automations. */
   private off = new Set<ControlDomain>()
+  /**
+   * What Orbis may do on the person's behalf, by what it does rather than which part of the browser it touches.
+   *
+   * The second axis beside the area switches: "read whatever you like, ask before changing anything, never delete".
+   * Both apply, and they fail towards doing less -- a switched-off area stays off whatever this says.
+   */
+  private effectPolicy: EffectPolicy = DEFAULT_EFFECT_POLICY
   /** How the layer asks whether a tab is locked. Null until the security layer wires itself in. */
   private lockedCheck: LockedTabCheck | null = null
 
@@ -326,6 +334,15 @@ export class BrowserControl {
 
   isSwitchedOff(domain: ControlDomain): boolean {
     return this.off.has(domain)
+  }
+
+  /** Sets what Orbis may do by kind of effect. Never governs the person acting in Orbis themselves. */
+  setEffectPolicy(policy: EffectPolicy): void {
+    this.effectPolicy = policy
+  }
+
+  effects(): EffectPolicy {
+    return this.effectPolicy
   }
 
   /** Registers a named part of the browser state (tabs, downloads, settings...), read only when asked for. */
@@ -731,6 +748,20 @@ export class BrowserControl {
       this.record('decision', def.id, source, runId, { decision: 'block', reason: 'tab locked' })
       return error('tab-locked', 'That tab is locked. It has to be unlocked before Orbis can act on it.', true)
     }
+    /*
+     * What this kind of action is allowed to do at all.
+     *
+     * Checked here, beside the area switch and before anything reads or runs, so a capability is governed the day it
+     * is registered rather than the day somebody remembers to govern it. "Never" refuses; "ask" is folded into the
+     * approval decision further down rather than refusing, because being asked is the point of it.
+     */
+    const effects = effectsOf(def)
+    const effectRule = ruleFor(effects, this.effectPolicy)
+    if (source !== 'user' && effectRule === 'never') {
+      this.record('decision', def.id, source, runId, { decision: 'block', reason: `${decidingEffect(effects)} is switched off` })
+      return error('blocked', refusalFor(effects))
+    }
+
     readOnly = !def.mutates
     const sensitive = new Set(Object.entries(def.params).filter(([, p]) => p.sensitive).map(([k]) => k))
     secrets = [...sensitive]
@@ -779,11 +810,14 @@ export class BrowserControl {
       this.record('decision', def.id, source, runId, { decision: 'block', reason: decision.reason })
       return error('blocked', decision.reason)
     }
-    const needsApproval = source !== 'user' && (def.confirmation === 'always' || decision.decision === 'confirm' || (ctx.flagged === true && def.mutates))
+    // "Ask" on this kind of effect is one more reason to ask, alongside the capability's own policy and the assessment.
+    const needsApproval = source !== 'user' && (def.confirmation === 'always' || decision.decision === 'confirm' || effectRule === 'ask' || (ctx.flagged === true && def.mutates))
     this.record('decision', def.id, source, runId, { decision: needsApproval ? 'confirm' : 'run', reason: decision.reason || (def.confirmation === 'always' ? 'Always asks first.' : undefined) })
     if (needsApproval) {
       const action = def.describe?.(params) ?? def.name
-      const approved = await ctx.confirm({ capability: def.id, action, reason: decision.reason || `${def.name} is a consequential action, so Orbis asks first.`, source }).catch(() => false)
+      const approved = await ctx
+        .confirm({ capability: def.id, action, reason: decision.reason || (effectRule === 'ask' ? askFor(effects) : `${def.name} is a consequential action, so Orbis asks first.`), source })
+        .catch(() => false)
       if (ctx.signal?.aborted) return error('aborted', 'Stopped.')
       if (!approved) return error('declined', `The user declined: ${action}.`)
     }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { CapabilityDescriptor, ControlDomain } from '../../../shared/browserControl'
 import { Toggle } from './SettingsModal'
+import { EFFECT_LABELS, EFFECTS, type EffectPolicy, type EffectRule } from '../../../shared/effectPolicy'
 
 /** Plain names for the kinds of thing Orbis can do, in the order most people care about. */
 const KINDS: { domain: ControlDomain; label: string; about: string }[] = [
@@ -45,9 +46,11 @@ const KINDS: { domain: ControlDomain; label: string; about: string }[] = [
 export default function ControlSwitches(): React.JSX.Element {
   const [off, setOff] = useState<ControlDomain[] | null>(null)
   const [have, setHave] = useState<Set<ControlDomain>>(new Set())
+  const [policy, setPolicy] = useState<EffectPolicy | null>(null)
 
   const load = useCallback(() => {
     void window.api.controlSwitches().then(setOff)
+    void window.api.controlEffects().then(setPolicy)
     void window.api
       .getControlCapabilities({})
       .then((caps: CapabilityDescriptor[]) => setHave(new Set(caps.map((c) => c.domain))))
@@ -64,6 +67,42 @@ export default function ControlSwitches(): React.JSX.Element {
         These decide what Orbis may do for you — Orion, skills, workflows and step-by-step runs. Anything switched off is
         hidden from them and refused if something tries it. What you do yourself is never affected.
       </p>
+
+      {/*
+        * The question people actually have is rarely "may Orion touch downloads". It is "read whatever you like, ask
+        * before changing anything, never delete" -- and that cuts across every area at once, because there are deletes
+        * in history, downloads, bookmarks, extensions and permissions. A per-area switch cannot say it without
+        * switching off five useful things to stop one.
+        */}
+      <h4 className="setting-subhead">By what it does</h4>
+      <p className="setting-note">
+        This applies across every area. Where the two disagree they fail towards doing less: an area switched off below
+        stays off however this is set.
+      </p>
+      {policy &&
+        EFFECTS.map((effect) => (
+          <div key={effect} className="skills-row">
+            <span>
+              {EFFECT_LABELS[effect].label}
+              <small className="skill-meta"> · {EFFECT_LABELS[effect].blurb}</small>
+            </span>
+            <select
+              value={policy[effect]}
+              aria-label={EFFECT_LABELS[effect].label}
+              onChange={(e) => {
+                const rule = e.target.value as EffectRule
+                setPolicy((now) => (now ? { ...now, [effect]: rule } : now))
+                void window.api.setControlEffect(effect, rule).then(setPolicy)
+              }}
+            >
+              <option value="allow">Go ahead</option>
+              <option value="ask">Ask me first</option>
+              <option value="never">Never</option>
+            </select>
+          </div>
+        ))}
+
+      <h4 className="setting-subhead">By area of the browser</h4>
       {kinds.map((kind) => (
         <div key={kind.domain} className="skills-row">
           <span>

@@ -2,7 +2,7 @@ import type { Research, ResearchSource } from '../shared/types'
 import { bus } from './eventBus.ts'
 import { normalizeUrl } from '../shared/research.ts'
 import { disagreementNote, disagreements, dropRepeats } from '../shared/researchCheck.ts'
-import { rankSources } from '../shared/researchPlan.ts'
+import { planQueries, rankSources } from '../shared/researchPlan.ts'
 
 export type FetchFn = (url: string, init?: RequestInit) => Promise<Response>
 export type Recency = Research['recency']
@@ -237,6 +237,10 @@ export function excerptFor(text: string, terms: string[], max = EXCERPT_CHARS): 
 export interface ResearchOptions {
   question: string
   queries: string[]
+  /** What the conversation is about, so a follow-up like "which is cheaper" searches for the right thing. */
+  topic?: string
+  /** Whether this question leans on what came before it. */
+  followUp?: boolean
   recency: Recency
   fetchFn: FetchFn
   signal?: AbortSignal
@@ -249,10 +253,35 @@ export interface ResearchOptions {
  * Readable, suitably recent pages come first; nothing is invented when a page can't be read or shows no date.
  */
 export async function runResearch(o: ResearchOptions): Promise<Research> {
-  const queries = [...new Set(o.queries.map((q) => q.replace(/\s+/g, ' ').trim().slice(0, 200)).filter(Boolean))].slice(0, 3)
-  // The user's own wording is searched too: it often finds the most direct page (e.g. "React Versions").
+  /*
+   * What to actually search for.
+   *
+   * A question that compares two things is one question and three searches: each thing on its own, and the two
+   * against each other. Searching the whole sentence finds comparison articles and misses both of the primary
+   * sources, which is the worst of both. The planner that works this out was written and tested and called by
+   * nothing -- so every comparison was being researched as one search until now. It runs here rather than at each of
+   * the three places research is started, because all three had the same gap.
+   *
+   * What the caller asked for still comes first: a model that worked out good searches keeps them, and the planner
+   * only adds what it would have missed.
+   */
   const asked = o.question.replace(/\s+/g, ' ').trim().slice(0, 200)
-  if (asked && queries.length < 3 && !queries.some((q) => q.toLowerCase() === asked.toLowerCase())) queries.push(asked)
+  const planned = planQueries(o.question, o.topic, o.followUp === true)
+  const tidy = (q: string): string => q.replace(/\s+/g, ' ').trim().slice(0, 200)
+  // The planner drops punctuation, so for a question it is not splitting it returns the question without its "?".
+  // The person's own wording is the one to search, so a planned query that is only that is left out here.
+  const extra = planned.map(tidy).filter((q) => q.toLowerCase() !== asked.toLowerCase().replace(/[?!.,;:]+$/, '').trim())
+  const wanted = [...o.queries.map(tidy), ...extra].filter(Boolean)
+  // Two searches that differ only by a question mark or a capital are one search. The planner drops punctuation, so
+  // without this it would add a near-copy of the question as asked and spend a third of the budget on it.
+  const same = (q: string): string => q.toLowerCase().replace(/[?!.,;:]+$/, '').trim()
+  const queries: string[] = []
+  for (const one of wanted) {
+    if (!queries.some((have) => same(have) === same(one))) queries.push(one)
+    if (queries.length >= 3) break
+  }
+  // The user's own wording is searched too: it often finds the most direct page (e.g. "React Versions").
+  if (asked && queries.length < 3 && !queries.some((q) => same(q) === same(asked))) queries.push(asked)
   const research: Research = { id: crypto.randomUUID(), question: o.question.trim().slice(0, 500), queries, recency: o.recency, retrievedAt: Date.now(), sources: [] }
 
   o.onStatus?.(`Searching the web for “${queries[0]}”…`)

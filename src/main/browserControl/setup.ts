@@ -3,6 +3,7 @@ import { app, ipcMain } from 'electron'
 import type { BrowserWindow, IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
+import { DEFAULT_EFFECT_POLICY, EFFECTS, readEffectPolicy } from '../../shared/effectPolicy.ts'
 import type { BrowserCommand, CapabilityDescriptor, ControlSource, Plan, RunControl } from '../../shared/browserControl.ts'
 import { BrowserControl, fail } from './registry.ts'
 import type { ControlContext } from './registry.ts'
@@ -41,7 +42,13 @@ export function setupBrowserControl(deps: BrowserControlDeps): { control: Browse
   const switchesFile = join(app.getPath('userData'), 'control-switches.json')
   void fs
     .readFile(switchesFile, 'utf8')
-    .then((raw) => control.setSwitchedOff((JSON.parse(raw) as { off?: ControlDomain[] }).off ?? []))
+    .then((raw) => {
+      const saved = JSON.parse(raw) as { off?: ControlDomain[]; effects?: unknown }
+      control.setSwitchedOff(saved.off ?? [])
+      // Anything missing or damaged takes the default rather than the loosest value: a broken file must not widen
+      // what Orbis may do on somebody's behalf.
+      control.setEffectPolicy(readEffectPolicy(saved.effects))
+    })
     .catch(() => undefined)
 
   // Until the browser has started these are listed (so plans and Orion can see them) but say what is missing; Chromium's own
@@ -85,9 +92,27 @@ export function setupBrowserControl(deps: BrowserControlDeps): { control: Browse
     else next.add(wanted)
     control.setSwitchedOff([...next])
     await fs.mkdir(join(switchesFile, '..'), { recursive: true }).catch(() => undefined)
-    await fs.writeFile(switchesFile, JSON.stringify({ off: control.switchedOff() })).catch(() => undefined)
+    await fs.writeFile(switchesFile, JSON.stringify({ off: control.switchedOff(), effects: control.effects() })).catch(() => undefined)
     return control.switchedOff()
   })
+  /**
+   * What Orbis may do on your behalf, by what it does rather than which part of the browser it touches.
+   *
+   * Beside the area switches, not instead of them. Both apply and they fail towards doing less, so switching an area
+   * off still stops everything in it however this is set.
+   */
+  ipcMain.handle('control:effects', (event) => (fromWindow(event) ? control.effects() : DEFAULT_EFFECT_POLICY))
+  ipcMain.handle('control:set-effect', async (event, effect: unknown, rule: unknown) => {
+    if (!fromWindow(event)) return control.effects()
+    const which = String(effect)
+    const wanted = rule === 'allow' || rule === 'ask' || rule === 'never' ? rule : null
+    if (!EFFECTS.includes(which as never) || !wanted) return control.effects()
+    control.setEffectPolicy(readEffectPolicy({ ...control.effects(), [which]: wanted }))
+    await fs.mkdir(join(switchesFile, '..'), { recursive: true }).catch(() => undefined)
+    await fs.writeFile(switchesFile, JSON.stringify({ off: control.switchedOff(), effects: control.effects() })).catch(() => undefined)
+    return control.effects()
+  })
+
   ipcMain.handle('control:execute', async (event, command: unknown) => {
     if (!fromWindow(event) || !command || typeof command !== 'object' || typeof (command as BrowserCommand).capability !== 'string') return { ok: false, capability: '', attempts: 0, durationMs: 0, error: { code: 'invalid-params', message: 'Invalid command.', recoverable: false } }
     const c = command as BrowserCommand
