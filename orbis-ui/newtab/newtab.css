@@ -986,6 +986,11 @@ main { position: relative; z-index: 1; }
   min-width: 0;
 }
 
+/* On the smallest card a footnote ("2 more places are set") shares the room, and the dial is what gives way to it. */
+.wg-world[data-size='small'] .wg-world-dial {
+  max-width: 70px;
+}
+
 .wg-world[data-size='tall'] .wg-world-place {
   flex: none;
   flex-direction: row;
@@ -997,6 +1002,7 @@ main { position: relative; z-index: 1; }
   display: block;
   width: 100%;
   max-width: 84px;
+  /* Set below for the smallest card, where a line of its own sits under this and the dial has to give way. */
   aspect-ratio: 1;
   overflow: visible;
 }
@@ -1236,6 +1242,12 @@ main { position: relative; z-index: 1; }
   min-width: 0;
   min-height: 0;
   aspect-ratio: 1;
+
+  /*
+   * The dial measures itself, so the time inside can be sized against the ring rather than against the card. Sized
+   * against the card, "25:00" came out wider than the circle and lay across it on both sides.
+   */
+  container-type: inline-size;
 }
 
 .wg-timer[data-size='medium'] .wg-timer-dial {
@@ -1258,7 +1270,8 @@ main { position: relative; z-index: 1; }
 
 .wg-timer-left {
   font-family: var(--font-display);
-  font-size: clamp(20px, 30cqmin, 40px);
+  /* Of the dial's width. The face keeps 16% back on each side, and five numerals at this size sit inside what is left. */
+  font-size: clamp(13px, 22cqw, 34px);
   font-weight: 700;
   line-height: 1;
   letter-spacing: -0.03em;
@@ -1266,9 +1279,7 @@ main { position: relative; z-index: 1; }
   font-variant-numeric: tabular-nums;
 }
 
-.wg-timer[data-size='medium'] .wg-timer-left {
-  font-size: 32px;
-}
+/* Medium's dial is a fixed 118px, so the same measure applies; a flat 32px here was what crossed the ring. */
 
 .wg-timer-unit {
   font-size: 9px;
@@ -1608,16 +1619,30 @@ main { position: relative; z-index: 1; }
   white-space: nowrap;
 }
 
+/*
+ * The sky.
+ *
+ * The scene is drawn 2:1 and placed with `slice`, which fills the panel and crops whatever will not fit. At wide the
+ * panel is a long strip and that is exactly right. At medium it was as tall as it was wide, so slice cropped half the
+ * width away: the arc lost both ends, the sun was cut in half at the edge, and what was left read as a brown block.
+ * Keeping the panel the shape of the picture fixes it, and it sits in the middle of the card's height.
+ */
 .wg-greet-sky {
   flex: none;
+  align-self: center;
   width: 128px;
-  height: 100%;
+  height: auto;
+  max-height: 100%;
+  aspect-ratio: 2 / 1;
   border-radius: var(--radius-md);
   overflow: hidden;
 }
 
 .wg-greet[data-size='wide'] .wg-greet-sky {
+  align-self: stretch;
   width: clamp(180px, 34cqw, 420px);
+  height: 100%;
+  aspect-ratio: auto;
 }
 
 .wg-greet-air {
@@ -1813,11 +1838,16 @@ main { position: relative; z-index: 1; }
   position: absolute;
   right: 0;
   bottom: 0;
-  width: 22px;
-  height: 22px;
+  width: 30px;
+  height: 30px;
   pointer-events: none;
   background: linear-gradient(135deg, transparent 50%, color-mix(in srgb, var(--wg-paper) 30%, transparent) 50%);
-  border-bottom-right-radius: inherit;
+
+  /*
+   * No rounding of its own. It used to carry the card's 26px corner on a 22px square, which rounded the fold away to
+   * a thin gold crescent that read as a scratch. The card already clips to that corner, so the fold is drawn square
+   * and the card gives it the curve.
+   */
 }
 
 .wg-notepad-text {
@@ -2503,7 +2533,11 @@ button.wg-downloads-row:focus-visible {
 
 .wg-notes-excerpt {
   display: -webkit-box;
-  flex: 1 1 auto;
+  /*
+   * It must not grow. Two lines is what the clamp promises, and a box that is allowed to stretch past them keeps
+   * laying out the rest: the sheet showed "not the..." and then went on to print the next line underneath it.
+   */
+  flex: 0 1 auto;
   margin: 0;
   min-block-size: 0;
   overflow: hidden;
@@ -2517,9 +2551,20 @@ button.wg-downloads-row:focus-visible {
   margin: 0;
 }
 
+/*
+ * The two buttons.
+ *
+ * They wrap onto separate lines rather than squeezing: a narrow card could not hold both side by side, so each one
+ * broke its own words instead and read as "New / note".
+ */
 .wg-notes-feet {
   flex: none;
+  flex-wrap: wrap;
   gap: var(--space-2);
+}
+
+.wg-notes-feet > * {
+  white-space: nowrap;
 }
 
 /* ---------------------------------------------------------------- bookmarks and recent sites */

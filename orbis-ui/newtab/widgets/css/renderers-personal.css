@@ -642,7 +642,11 @@ button.wg-downloads-row:focus-visible {
 
 .wg-notes-excerpt {
   display: -webkit-box;
-  flex: 1 1 auto;
+  /*
+   * It must not grow. Two lines is what the clamp promises, and a box that is allowed to stretch past them keeps
+   * laying out the rest: the sheet showed "not the..." and then went on to print the next line underneath it.
+   */
+  flex: 0 1 auto;
   margin: 0;
   min-block-size: 0;
   overflow: hidden;
@@ -656,9 +660,20 @@ button.wg-downloads-row:focus-visible {
   margin: 0;
 }
 
+/*
+ * The two buttons.
+ *
+ * They wrap onto separate lines rather than squeezing: a narrow card could not hold both side by side, so each one
+ * broke its own words instead and read as "New / note".
+ */
 .wg-notes-feet {
   flex: none;
+  flex-wrap: wrap;
   gap: var(--space-2);
+}
+
+.wg-notes-feet > * {
+  white-space: nowrap;
 }
 
 /* ---------------------------------------------------------------- bookmarks and recent sites */
