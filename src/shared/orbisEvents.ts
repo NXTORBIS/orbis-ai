@@ -28,10 +28,16 @@ export type OrbisEventName =
   | 'download.started' | 'download.completed' | 'download.failed'
   | 'permission.requested' | 'permission.changed'
   | 'extension.changed'
+  /** A page is asking somebody to prove they are a person, and a run has stopped to wait for them. */
+  | 'captcha.required'
+  /** A run has stopped and will not go on until somebody answers it. */
+  | 'browser.attention'
+  /** An Orbis Page has been built, checked and published -- not merely written. */
+  | 'orbisPage.ready'
   // intelligence
   | 'orion.started' | 'orion.completed'
   | 'search.completed'
-  | 'research.started' | 'research.completed'
+  | 'research.started' | 'research.completed' | 'research.failed'
   | 'vision.completed'
   | 'voice.started' | 'voice.completed'
   // work

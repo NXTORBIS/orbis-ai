@@ -1,4 +1,5 @@
 import type { CommandResult, Condition, ControlError } from '../shared/browserControl.ts'
+import { bus } from './eventBus.ts'
 import type { CaptchaEncounter, PageSignals } from '../shared/captcha.ts'
 import { abandon, askUser, captchaStep, detect, isOpen, notice, recheck, verified } from '../shared/captcha.ts'
 import {
@@ -87,6 +88,15 @@ export type PlanReply =
 export type StepRunnerView = StepRunView
 
 /** A goal being worked through. One per run; several may exist at once, in different tabs. */
+/** Just the site, for saying where without carrying the whole address into a notification. */
+const hostOf = (url: string): string => {
+  try {
+    return new URL(url).hostname.replace(/^www[.]/, '')
+  } catch {
+    return 'a site'
+  }
+}
+
 export class StepRun {
   private session: StepSession
   private readonly deps: StepRunnerDeps
@@ -292,6 +302,14 @@ export class StepRun {
     const encounter = notice(found, { id: this.deps.newId(), tabId: target?.tabId ?? 'active', profileId: this.session.profileId, url: signals.url }, this.now())
     if (!encounter) return false
     this.captcha = askUser(encounter, this.now())
+    /*
+     * Announced the moment the run stops for a person.
+     *
+     * This is the one kind of pause nobody can see coming, and the only one that waits indefinitely -- a challenge
+     * sits there until somebody answers it. Saying so on the bus is what lets Orbis tell them when they have walked
+     * away. Nothing about the challenge itself travels: which site, and that is all.
+     */
+    bus.publish('captcha.required', { site: hostOf(signals.url), url: signals.url, tabId: this.captcha.tabId }, { source: 'steps', profileId: this.session.profileId })
 
     // It becomes an ordinary step that waits for a person, so the run pauses through the machinery it already has.
     const draft = captchaStep(this.captcha)

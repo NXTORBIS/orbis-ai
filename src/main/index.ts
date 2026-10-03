@@ -815,8 +815,20 @@ function registerIpc(): void {
       turns: incoming.messages.length
     })
     const request: ChatRequest = { ...incoming, model: route.model }
+    /*
+     * Everything the answer does on its way out, and the one line that says it is finished.
+     *
+     * `done` is announced on the bus here rather than at each of the places that emit it -- there are several, one
+     * per kind of answer, and the one that matters to anybody waiting is simply that the answer ended. Said once per
+     * request, because a stream that ends twice is a bug in the stream, not two answers.
+     */
+    let saidDone = false
     const emit = (streamEvent: StreamEvent): void => {
       if (!sender.isDestroyed()) sender.send('chat:event', request.requestId, streamEvent)
+      if (streamEvent.type === 'done' && !saidDone) {
+        saidDone = true
+        bus.publish('orion.completed', { requestId: request.requestId, model: streamEvent.model ?? '' }, { source: 'chat', correlationId: request.requestId })
+      }
     }
     const settings = await store.getSettings()
 
@@ -2755,6 +2767,61 @@ if (!app.requestSingleInstanceLock()) {
         type: event.name === 'download.completed' ? 'download.completed' : 'download.failed',
         fields: { filename: one.filename ?? 'A file', ...(one.path ? { path: one.path } : {}), ...(one.reason ? { reason: one.reason } : {}) }
       })
+    })
+
+    /**
+     * Whether somebody is sitting in front of Orbis right now.
+     *
+     * The difference between telling and interrupting. Work finishing while the window is in front is work they
+     * watched finish; the same thing finishing while they are in another application is the thing they wanted to
+     * know.
+     */
+    const away = (): boolean => !mainWindow || mainWindow.isDestroyed() || mainWindow.isMinimized() || !mainWindow.isFocused()
+
+    /*
+     * The rest of what Orbis does, turned into notifications in one place.
+     *
+     * Each of these is published at the moment the thing is really true -- research when its sources are settled, a
+     * Page when it has been compiled and published rather than merely written, an answer when its stream has ended.
+     * Everything here except a challenge is held back while somebody is watching, because telling a person what is
+     * already on their screen is the fastest way to make them turn notifications off.
+     */
+    bus.subscribe({ names: ['research.completed', 'research.failed'] }, (event) => {
+      if (!away()) return
+      const one = event.detail as { question?: string; problem?: string; id?: string }
+      void notifications?.publish({
+        type: event.name === 'research.completed' ? 'research.completed' : 'research.failed',
+        fields: { topic: one.question ?? '', ...(one.problem ? { reason: one.problem } : {}), ...(one.id ? { researchId: one.id } : {}) }
+      })
+    })
+
+    bus.subscribe({ names: ['orbisPage.ready'] }, (event) => {
+      if (!away()) return
+      const one = event.detail as { title?: string; pageId?: string }
+      void notifications?.publish({ type: 'page.ready', fields: { title: one.title ?? '', ...(one.pageId ? { pageId: one.pageId } : {}) } })
+    })
+
+    bus.subscribe({ names: ['orion.completed'] }, (event) => {
+      if (!away()) return
+      const one = event.detail as { requestId?: string }
+      void notifications?.publish({ type: 'orion.completed', fields: { ...(one.requestId ? { requestId: one.requestId } : {}) } })
+    })
+
+    /*
+     * A challenge is the exception, and is said whether or not somebody is watching.
+     *
+     * Everything else here has finished and will still be finished in ten minutes. This has stopped, and stays
+     * stopped until a person goes and answers it -- so it is worth saying even to somebody looking at another part of
+     * Orbis, who would otherwise watch a run sit there apparently doing nothing.
+     */
+    bus.subscribe({ names: ['browser.attention'] }, (event) => {
+      const one = event.detail as { reason?: string }
+      void notifications?.publish({ type: 'browser.attention', fields: { reason: one.reason ?? '' } })
+    })
+
+    bus.subscribe({ names: ['captcha.required'] }, (event) => {
+      const one = event.detail as { site?: string; tabId?: string }
+      void notifications?.publish({ type: 'captcha.required', fields: { site: one.site ?? 'A site', ...(one.tabId ? { tabId: one.tabId } : {}) } })
     })
     // Personalisation follows the profile: the widgets on the new tab, what each is set to, the wallpaper and the theme
     // all belong to whoever is using Orbis, and switching profile swaps all of it rather than sharing it.

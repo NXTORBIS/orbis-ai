@@ -20,6 +20,7 @@
  */
 
 import { makePageId } from '../../shared/pages/identity.ts'
+import { bus } from '../eventBus.ts'
 import type { PageManifest } from '../../shared/pages/manifest.ts'
 import type { PageDocument } from '../../shared/pages/builder.ts'
 import type { GenerationSession } from '../../shared/pages/generation.ts'
@@ -144,6 +145,13 @@ export class GeneratedPages {
     const saved = await this.store.putGraph(profileId, published)
     if (!saved.saved) return { kept: false, message: saved.message, url: null }
     this.pending.delete(pageId)
+    /*
+     * Announced here and nowhere earlier.
+     *
+     * A Page is ready when it has been compiled, published and written -- not when a model finished writing one. Every
+     * step above can still refuse, so this is the first line at which saying "your Page is ready" is true.
+     */
+    bus.publish('orbisPage.ready', { pageId, title: built.manifest.title, slug: built.manifest.slug }, { source: 'pages', profileId })
     return { kept: true, message: '', url: `orbis://pages/${built.manifest.slug}` }
   }
 

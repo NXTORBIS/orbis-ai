@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { bus } from './eventBus.ts'
 import type { PageHandle } from './pageHandle'
 import type { BrowserControl } from './browserControl/registry.ts'
 import { automationProgress } from '../shared/automation.ts'
@@ -673,6 +674,8 @@ export async function runBrowserAgent(options: BrowserAgentOptions): Promise<voi
     }
     const id = crypto.randomUUID()
     step(`Waiting for your approval: ${description}`, 'waiting', id)
+    // A run that has stopped for a person. Worth saying out loud, because it waits until somebody comes back.
+    bus.publish('browser.attention', { reason: description }, { source: 'agent' })
     if (auto) {
       auto.status = 'waiting-approval'
       publish()
@@ -1026,6 +1029,7 @@ export async function runBrowserAgent(options: BrowserAgentOptions): Promise<voi
               const id = crypto.randomUUID()
               if (declined.has(request.action)) return false
               step(`Waiting for your approval: ${request.action}`, 'waiting', id)
+              bus.publish('browser.attention', { reason: request.action }, { source: 'agent' })
               if (auto) {
                 auto.status = 'waiting-approval'
                 publish()

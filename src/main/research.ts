@@ -1,4 +1,5 @@
 import type { Research, ResearchSource } from '../shared/types'
+import { bus } from './eventBus.ts'
 import { normalizeUrl } from '../shared/research.ts'
 
 export type FetchFn = (url: string, init?: RequestInit) => Promise<Response>
@@ -279,7 +280,7 @@ export async function runResearch(o: ResearchOptions): Promise<Research> {
   }
   if (!candidates.length) {
     research.problem = searches.every((s) => s.status === 'rejected') ? "the web search couldn't be reached" : 'the web search found no usable pages'
-    return research
+    return done(research)
   }
 
   o.onStatus?.(`Reading ${candidates.length} sources…`)
@@ -338,6 +339,24 @@ export async function runResearch(o: ResearchOptions): Promise<Research> {
   research.sources = sources.slice(0, MAX_SOURCES).map(({ rank: _rank, index: _index, ...source }, i) => ({ ...source, n: i + 1 }))
   research.retrievedAt = Date.now()
   if (!research.sources.length) research.problem = "none of the pages found could be read"
+  return done(research)
+}
+
+/**
+ * Research has finished, one way or the other.
+ *
+ * Announced on Orbis's one bus at the moment the sources are settled, so anything that cares -- a notification when
+ * somebody has walked away, a workspace recording what it was built from -- hears it without going and asking.
+ * Whether it worked is read from the research itself rather than from how it got here: sources and no problem is the
+ * only thing that counts as having worked.
+ */
+function done(research: Research): Research {
+  const worked = research.sources.length > 0 && !research.problem
+  bus.publish(
+    worked ? 'research.completed' : 'research.failed',
+    { id: research.id, question: research.question, sources: research.sources.length, problem: research.problem ?? '' },
+    { source: 'research' }
+  )
   return research
 }
 
