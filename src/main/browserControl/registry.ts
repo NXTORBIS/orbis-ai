@@ -8,6 +8,7 @@ import type {
   ControlErrorCode,
   ControlRequirement,
   ControlSource,
+  SideEffect,
   ControlTarget,
   ParamSpec
 } from '../../shared/browserControl.ts'
@@ -57,6 +58,50 @@ export interface Assessment {
   reason: string
 }
 
+/**
+ * How long a capability may take when it does not say.
+ *
+ * Ninety seconds: longer than anything that is working and shorter than for ever. Before this, a capability that
+ * never returned hung whoever called it, and if that caller had no deadline either, it hung for good -- which is a
+ * stuck automation nobody can see the cause of rather than a failure anybody can read.
+ */
+export const DEFAULT_CAPABILITY_TIMEOUT_MS = 90_000
+
+/**
+ * What a capability does to the world.
+ *
+ * Most capabilities do not declare this, and the answer for those is not a guess about the name: it is a restatement
+ * of `mutates`, which they *do* declare. Something that changes nothing reads; something that changes something
+ * writes. Only the ones that are stronger than a write -- a delete, something that leaves this computer, something
+ * that runs, something that proves who somebody is -- say so for themselves, because those are the ones where being
+ * wrong matters and no rule should depend on noticing a verb in an id.
+ */
+export const effectsOf = (def: Pick<CapabilityDefinition, 'mutates' | 'effects'>): readonly SideEffect[] =>
+  def.effects?.length ? def.effects : def.mutates ? ['write'] : ['read']
+
+/**
+ * Runs something under its own deadline.
+ *
+ * The timer is cleared whichever way it finishes, so a long automation does not accumulate one live timer per step.
+ * Giving up does not stop the work -- nothing here can reach inside a page and halt it -- it stops *waiting* for it,
+ * and says so in those words rather than claiming the action was undone.
+ */
+async function withLimit<T>(def: { id: string; timeoutMs?: number }, work: () => Promise<T> | T, signal?: AbortSignal): Promise<T> {
+  const ms = Math.max(1000, def.timeoutMs ?? DEFAULT_CAPABILITY_TIMEOUT_MS)
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      Promise.resolve(work()),
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new ControlFailure('timeout', `${def.id} did not finish within ${Math.round(ms / 1000)} seconds. Orbis stopped waiting for it; it may still be going.`, true)), ms)
+        signal?.addEventListener('abort', () => reject(new ControlFailure('aborted', 'Stopped.', false)), { once: true })
+      })
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
 export interface CapabilityDefinition<S = unknown> {
   id: string
   domain: ControlDomain
@@ -73,6 +118,24 @@ export interface CapabilityDefinition<S = unknown> {
    */
   keywords?: readonly string[]
   mutates: boolean
+  /**
+   * What this does to the world, as the kinds of effect it has.
+   *
+   * `mutates` says only whether something changes, which puts "scroll a page" and "send a message" in the same box.
+   * These say which kind, so a permission, a confirmation or an audit line can be about a kind of effect rather than
+   * about a list of capability names somebody has to keep up to date. A capability that declares none is a read.
+   *
+   * It is declared, not guessed. Working it out from the name is how `deletePreview` ends up classed as a delete.
+   */
+  effects?: readonly SideEffect[]
+  /**
+   * How long this may take before it is given up on, in milliseconds.
+   *
+   * Every capability used to run with no limit of its own: one that never returned hung until whoever called it gave
+   * up, and a capability called by something with no deadline hung for ever. The default below applies to anything
+   * that does not say.
+   */
+  timeoutMs?: number
   confirmation: ConfirmationPolicy
   requires?: ControlRequirement[]
   /** Why it can't run right now, or null when it can. Must be cheap: it is asked when listing capabilities. */
@@ -284,7 +347,7 @@ export class BrowserControl {
 
   private descriptor(def: CapabilityDefinition, ctx: Pick<ControlContext, 'source' | 'target'>): CapabilityDescriptor {
     let reason: string | null = this.off.has(def.domain) ? `Switched off in Settings → What Orion may do (${def.domain}).` : null
-    if (reason) return { id: def.id, domain: def.domain, name: def.name, description: def.description, params: def.params, mutates: def.mutates, confirmation: def.confirmation, requires: def.requires ?? [], provider: (def as CapabilityDefinition & { provider?: 'window' }).provider ?? 'main', available: false, unavailableReason: reason }
+    if (reason) return { id: def.id, domain: def.domain, name: def.name, description: def.description, params: def.params, mutates: def.mutates, effects: effectsOf(def), confirmation: def.confirmation, requires: def.requires ?? [], provider: (def as CapabilityDefinition & { provider?: 'window' }).provider ?? 'main', available: false, unavailableReason: reason }
     try {
       reason = def.unavailable?.(ctx) ?? null
     } catch (err) {
@@ -297,6 +360,7 @@ export class BrowserControl {
       description: def.description,
       params: def.params,
       mutates: def.mutates,
+      effects: effectsOf(def),
       confirmation: def.confirmation,
       requires: def.requires ?? [],
       provider: (def as CapabilityDefinition & { provider?: 'window' }).provider ?? 'main',
@@ -750,7 +814,7 @@ export class BrowserControl {
       try {
         const before = def.observe ? await def.observe(attemptParams, ctx) : undefined
         if (def.observe) this.record('observation', def.id, source, runId, scrub(shape(before), secrets))
-        const data = await def.run(attemptParams, ctx, before)
+        const data = await withLimit(def, () => def.run(attemptParams, ctx, before), ctx.signal)
         this.record('execution', def.id, source, runId, { attempt })
         if (def.verify && !command.skipVerify) {
           const verification = await def.verify(data, attemptParams, ctx, before)

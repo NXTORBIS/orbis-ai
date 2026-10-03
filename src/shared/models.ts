@@ -17,10 +17,10 @@ import type { ModelInfo } from './types'
  * depending on a single Groq model to survive.
  */
 export const MODELS: ModelInfo[] = [
-  { id: 'openai/gpt-oss-20b', label: 'ORION Core', description: 'Fast and balanced for everyday chats', reasoningEffort: true, echoReasoning: false, contextWindow: 131072, inputTokenLimit: 6000 },
-  { id: 'openai/gpt-oss-120b', label: 'ORION Max', description: 'Most capable, with deeper reasoning', reasoningEffort: true, echoReasoning: false, contextWindow: 131072, inputTokenLimit: 6000 },
-  { id: 'qwen/qwen3.8-27b', label: 'ORION Ultra', description: 'Strong writing and analysis', reasoningEffort: false, echoReasoning: false, contextWindow: 131042, inputTokenLimit: 6000 },
-  { id: 'orion/pro', apiModel: 'qwen/qwen3.8-27b', label: 'ORION Pro', description: 'Quick, well-structured answers', reasoningEffort: false, echoReasoning: false, contextWindow: 131042, inputTokenLimit: 6000, disableReasoning: true },
+  { id: 'openai/gpt-oss-20b', label: 'ORION Core', description: 'Fast and balanced for everyday chats', reasoningEffort: true, echoReasoning: false, contextWindow: 131072, inputTokenLimit: 6000, maxOutputTokens: 8192, strengths: ['everyday'] },
+  { id: 'openai/gpt-oss-120b', label: 'ORION Max', description: 'Most capable, with deeper reasoning', reasoningEffort: true, echoReasoning: false, contextWindow: 131072, inputTokenLimit: 6000, maxOutputTokens: 8192, strengths: ['everyday', 'code', 'maths', 'reasoning', 'long'] },
+  { id: 'qwen/qwen3.8-27b', label: 'ORION Ultra', description: 'Strong writing and analysis', reasoningEffort: false, echoReasoning: false, contextWindow: 131042, inputTokenLimit: 6000, maxOutputTokens: 8192, strengths: ['writing', 'reasoning', 'long'] },
+  { id: 'orion/pro', apiModel: 'qwen/qwen3.8-27b', label: 'ORION Pro', description: 'Quick, well-structured answers', reasoningEffort: false, echoReasoning: false, contextWindow: 131042, inputTokenLimit: 6000, disableReasoning: true, maxOutputTokens: 8192, strengths: ['everyday', 'writing'] },
   { id: 'openai/gpt-oss-safeguard-20b', label: 'ORION Shield', description: 'Safety-focused reasoning', reasoningEffort: false, echoReasoning: false, contextWindow: 131072, inputTokenLimit: 6000 },
   { id: 'allam-2-7b', label: 'ORION Mini', description: 'Lightweight, for short chats (English and Arabic)', reasoningEffort: false, echoReasoning: false, contextWindow: 4096 },
   /*

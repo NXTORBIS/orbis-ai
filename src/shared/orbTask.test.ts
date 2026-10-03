@@ -25,6 +25,7 @@ const cap = (id: string, extra: Partial<CapabilityDescriptor> = {}): CapabilityD
   description: id,
   params: { url: { type: 'string', description: 'where' } },
   mutates: true,
+  effects: ['read'],
   confirmation: 'none',
   requires: [],
   provider: 'window',

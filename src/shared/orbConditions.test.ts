@@ -22,6 +22,7 @@ const caps = (ids: Record<string, boolean>): CapabilityDescriptor[] =>
     description: id,
     params: {},
     mutates,
+    effects: ['read'],
     confirmation: 'none',
     requires: [],
     provider: 'main',

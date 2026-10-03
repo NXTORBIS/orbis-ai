@@ -4,7 +4,7 @@ import type { CapabilityDescriptor } from '../../shared/browserControl.ts'
 import { compileWorkflow, describeWorkflow } from '../../shared/workflowCompile.ts'
 import { newWorkflow } from '../../shared/workflows.ts'
 
-const cap = (id: string, extra: Partial<CapabilityDescriptor> = {}): CapabilityDescriptor => ({ id, domain: id.split('.')[0] as CapabilityDescriptor['domain'], name: id, description: id, params: {}, mutates: true, confirmation: 'none', requires: [], provider: 'main', available: true, ...extra })
+const cap = (id: string, extra: Partial<CapabilityDescriptor> = {}): CapabilityDescriptor => ({ id, domain: id.split('.')[0] as CapabilityDescriptor['domain'], name: id, description: id, params: {}, mutates: true, effects: ['read'], confirmation: 'none', requires: [], provider: 'main', available: true, ...extra })
 
 test('a workflow compiles to a plan with inputs, secrets, outputs and else-if chains', () => {
   const w = newWorkflow('Keys', 'w1')

@@ -11,6 +11,7 @@ const cap = (id: string, params: CapabilityDescriptor['params'] = {}, extra: Par
   description: id,
   params,
   mutates: true,
+  effects: ['read'],
   confirmation: 'none',
   requires: [],
   provider: 'main',

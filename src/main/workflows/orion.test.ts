@@ -11,6 +11,7 @@ const cap = (id: string, extra: Partial<CapabilityDescriptor> = {}): CapabilityD
   description: `does ${id}`,
   params: { url: { type: 'string', description: 'where to go', required: true } },
   mutates: true,
+  effects: ['read'],
   confirmation: 'none',
   requires: [],
   provider: 'window',

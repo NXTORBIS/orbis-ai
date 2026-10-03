@@ -106,6 +106,7 @@ export function registerSecurityCapabilities(d: SecurityCapabilityDeps): void {
 
   control.register({
     id: 'security.policy',
+    effects: ['authenticate'],
     domain: 'security',
     name: 'Security rules in force',
     description:
@@ -168,6 +169,7 @@ export function registerSecurityCapabilities(d: SecurityCapabilityDeps): void {
 
   control.register({
     id: 'tab.lock',
+    effects: ['authenticate'],
     domain: 'tabs',
     name: 'Lock a tab',
     description:
@@ -193,6 +195,7 @@ export function registerSecurityCapabilities(d: SecurityCapabilityDeps): void {
 
   control.register({
     id: 'security.lockAll',
+    effects: ['authenticate'],
     domain: 'security',
     name: 'Lock everything protected',
     description:
@@ -205,6 +208,7 @@ export function registerSecurityCapabilities(d: SecurityCapabilityDeps): void {
 
   control.register({
     id: 'profile.lock',
+    effects: ['authenticate'],
     domain: 'security',
     name: 'Lock Orbis',
     description:
@@ -223,6 +227,7 @@ export function registerSecurityCapabilities(d: SecurityCapabilityDeps): void {
 
   control.register({
     id: 'security.requestUnlock',
+    effects: ['authenticate'],
     domain: 'tabs',
     name: 'Ask the person to unlock a tab',
     description:

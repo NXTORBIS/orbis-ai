@@ -537,6 +537,7 @@ export function registerChromiumCapabilities(d: ChromiumCapabilityDeps): void {
 
   control.register({
     id: 'downloads.start',
+    effects: ['write', 'communicate'],
     domain: 'downloads',
     name: 'Download a file',
     description: 'Downloads a URL to the Downloads folder (never overwriting a file), as "Save link as" does.',
@@ -558,6 +559,7 @@ export function registerChromiumCapabilities(d: ChromiumCapabilityDeps): void {
 
   control.register({
     id: 'downloads.remove',
+    effects: ['delete'],
     domain: 'downloads',
     name: 'Remove a download from the list',
     description: 'Removes a download from the list. The file, if saved, stays on disk.',
@@ -573,6 +575,7 @@ export function registerChromiumCapabilities(d: ChromiumCapabilityDeps): void {
 
   control.register({
     id: 'downloads.clearFinished',
+    effects: ['delete'],
     domain: 'downloads',
     name: 'Clear finished downloads',
     description: 'Removes completed downloads from the list (paused and running ones stay).',
@@ -642,6 +645,7 @@ export function registerChromiumCapabilities(d: ChromiumCapabilityDeps): void {
 
   control.register({
     id: 'history.delete',
+    effects: ['delete'],
     domain: 'history',
     name: 'Delete a history entry',
     description: 'Removes one page from browsing history, by its address. For a stretch of time, use history.deleteRange.',
@@ -657,6 +661,7 @@ export function registerChromiumCapabilities(d: ChromiumCapabilityDeps): void {
 
   control.register({
     id: 'history.deleteRange',
+    effects: ['delete'],
     domain: 'history',
     name: 'Delete history for a stretch of time',
     description: `Removes every history entry visited in a named stretch of time -- ${PERIOD_NAMES.join(', ')} -- or between two exact times. This is what "clear today's history", "clear the last hour" and "delete yesterday's history" mean. Cookies, downloads and bookmarks are left alone; browser.clearData is what touches those.`,
@@ -693,6 +698,7 @@ export function registerChromiumCapabilities(d: ChromiumCapabilityDeps): void {
 
   control.register({
     id: 'history.clear',
+    effects: ['delete'],
     domain: 'history',
     name: 'Clear history',
     description: 'Clears all browsing history (and what the address bar learned from it).',
@@ -762,6 +768,7 @@ export function registerChromiumCapabilities(d: ChromiumCapabilityDeps): void {
 
   control.register({
     id: 'bookmarks.remove',
+    effects: ['delete'],
     domain: 'bookmarks',
     name: 'Remove a bookmark',
     description: 'Removes the bookmark for one page, leaving the page itself and the folder it was in alone.',

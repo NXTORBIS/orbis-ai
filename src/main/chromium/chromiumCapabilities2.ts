@@ -372,6 +372,7 @@ export function registerMoreChromiumCapabilities(d: ChromiumCapabilityDeps & { s
 
   control.register({
     id: 'extensions.setEnabled',
+    effects: ['write', 'execute'],
     domain: 'extensions',
     name: 'Turn an extension on or off',
     description: 'Enables or disables an installed extension.',
@@ -400,6 +401,7 @@ export function registerMoreChromiumCapabilities(d: ChromiumCapabilityDeps & { s
 
   control.register({
     id: 'extensions.remove',
+    effects: ['delete'],
     domain: 'extensions',
     name: 'Remove an extension',
     description: 'Uninstalls an extension and its stored data, which cannot be undone from here. To turn one off without removing it, use extensions.setEnabled.',
@@ -466,6 +468,7 @@ export function registerMoreChromiumCapabilities(d: ChromiumCapabilityDeps & { s
 
   control.register({
     id: 'bookmarks.readingListRemove',
+    effects: ['delete'],
     domain: 'bookmarks',
     name: 'Remove from the reading list',
     description: 'Removes a page from the browser\'s reading list, leaving any bookmark for it alone.',

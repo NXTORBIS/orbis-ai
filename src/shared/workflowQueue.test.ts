@@ -12,6 +12,7 @@ const cap = (id: string, domain: string, mutates: boolean): CapabilityDescriptor
   description: id,
   params: {},
   mutates,
+  effects: ['read'],
   confirmation: 'none',
   requires: [],
   provider: 'window',

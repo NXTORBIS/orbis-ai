@@ -7,6 +7,30 @@ import type { TransformOp } from './workflows.ts'
  * and any future automation, so there is one control surface for all of them.
  */
 
+/**
+ * What an action does to the world.
+ *
+ * Coarser than a capability and sharper than "it changes something". The point is that a rule -- a permission, a
+ * confirmation, a line in an audit -- can be written about a kind of effect once, instead of about a list of
+ * capability names that somebody has to remember to add to.
+ *
+ * Every one is declared by the capability itself. None of them is worked out from a name, because a name is a guess:
+ * `page.readText` reads and `history.clear` deletes, and no rule should depend on noticing that.
+ */
+export type SideEffect =
+  /** Looks at something and changes nothing. The absence of every other effect. */
+  | 'read'
+  /** Changes something that can be looked at again afterwards -- a tab, a setting, a bookmark. */
+  | 'write'
+  /** Removes something. Usually not reversible, which is why it is not simply a write. */
+  | 'delete'
+  /** Reaches a person or a service outside this computer: a message, a post, a form sent. */
+  | 'communicate'
+  /** Runs something, or makes something else run it. */
+  | 'execute'
+  /** Proves who somebody is, or changes what they may do. */
+  | 'authenticate'
+
 export type ControlDomain =
   | 'tabs'
   | 'groups'
@@ -112,6 +136,13 @@ export interface CapabilityDescriptor {
   params: Record<string, ParamSpec>
   /** Changes browser state (as opposed to only reading it). */
   mutates: boolean
+  /**
+   * What it does to the world, as kinds of effect. Always present: a capability that changes nothing says `read`.
+   *
+   * Here so that a planner, a permission rule or an audit can reason about kinds of effect rather than about a list
+   * of capability names. Never worked out from the id -- see `SideEffect`.
+   */
+  effects: readonly SideEffect[]
   confirmation: ConfirmationPolicy
   requires: ControlRequirement[]
   /** Where it runs: the main process, or the Orbis window (tabs, groups, address bar and other state the window owns). */

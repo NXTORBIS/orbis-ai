@@ -64,6 +64,7 @@ export function registerSitePermissionCapabilities(d: ChromiumCapabilityDeps): v
 
   control.register({
     id: 'permissions.set',
+    effects: ['write', 'authenticate'],
     domain: 'permissions',
     name: 'Set a site permission',
     description: 'Allows, blocks or resets (ask) a site permission such as media, geolocation or notifications, enforced by the browser. Allowing is a security change, so Orbis asks first.',
@@ -92,6 +93,7 @@ export function registerSitePermissionCapabilities(d: ChromiumCapabilityDeps): v
 
   control.register({
     id: 'permissions.forget',
+    effects: ['delete'],
     domain: 'permissions',
     name: 'Forget site permissions Orbis set',
     description: "Resets the permission decisions Orbis set, for one site or every site, so the browser asks again. The person's own choices in the browser's site settings are not touched.",

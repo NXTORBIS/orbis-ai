@@ -110,6 +110,7 @@ export function registerAppCapabilities(d: AppCapabilityDeps): void {
 
   control.register({
     id: 'navigation.openExternal',
+    effects: ['execute'],
     domain: 'navigation',
     name: 'Open in the default browser',
     description: "Opens a tab's page (or an address) in the system's default browser.",
@@ -253,6 +254,7 @@ export function registerAppCapabilities(d: AppCapabilityDeps): void {
 
   control.register({
     id: 'clipboard.clear',
+    effects: ['delete'],
     domain: 'clipboard',
     name: 'Clear the clipboard',
     description: 'Empties the clipboard.',

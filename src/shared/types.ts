@@ -399,7 +399,27 @@ export interface ModelInfo {
   inputTokenLimit?: number
   /** Sends reasoning_effort "none", so the model answers without thinking first. */
   disableReasoning?: boolean
+  /**
+   * What this model is actually good at, in the kinds of work Auto has to choose between.
+   *
+   * Written here rather than as a list of model ids inside the router. Auto used to name three models directly, which
+   * meant retiring one left the router pointing at a model that no longer existed, and a model added to this table
+   * could never be chosen however good it was. A model with no strengths listed is never chosen by Auto on purpose;
+   * it can still be picked by a person.
+   */
+  strengths?: ModelStrength[]
+  /**
+   * How much it can write in one reply, when the service says.
+   *
+   * Used to choose between models for something long, and by the continuation system to know a reply stopped because
+   * it ran out of room rather than because it had finished. Absent means not measured, which is treated as unknown
+   * rather than as unlimited.
+   */
+  maxOutputTokens?: number
 }
+
+/** The kinds of work Auto chooses between. Coarse on purpose: a longer list would be guessing. */
+export type ModelStrength = 'everyday' | 'code' | 'maths' | 'reasoning' | 'writing' | 'long'
 
 export interface ChatRequest {
   requestId: string

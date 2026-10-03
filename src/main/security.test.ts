@@ -23,6 +23,7 @@ const cap = (id: string, mutates = true): CapabilityDescriptor => ({
   description: id,
   params: { url: { type: 'string', description: 'where', required: false }, text: { type: 'string', description: 'what', required: false }, locator: { type: 'object', description: 'which', required: false } },
   mutates,
+  effects: ['read'],
   confirmation: 'none',
   requires: [],
   provider: 'main',

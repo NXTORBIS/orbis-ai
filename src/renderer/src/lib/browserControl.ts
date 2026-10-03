@@ -61,7 +61,16 @@ export function useControlScope(scope: string, capabilities: WindowCapability[])
     listen()
     const ids = latest.current.map((c) => c.id)
     for (const capability of latest.current) handlers.set(capability.id, { mutates: capability.mutates, run: (params, context) => latest.current.find((c) => c.id === capability.id)!.run(params, context) })
-    const descriptors: CapabilityDescriptor[] = latest.current.map(({ run: _run, ...d }) => ({ ...d, confirmation: d.confirmation ?? 'none', requires: d.requires ?? [], provider: 'window', available: true }))
+    const descriptors: CapabilityDescriptor[] = latest.current.map(({ run: _run, ...d }) => ({
+      ...d,
+      confirmation: d.confirmation ?? 'none',
+      // The window's own capabilities say whether they change anything; a kind of effect beyond that is restated
+      // from that, never guessed from the name. See effectsOf in src/main/browserControl/registry.ts.
+      effects: d.mutates ? (['write'] as const) : (['read'] as const),
+      requires: d.requires ?? [],
+      provider: 'window',
+      available: true
+    }))
     window.api.setControlScope(scope, descriptors)
     return () => {
       for (const id of ids) handlers.delete(id)

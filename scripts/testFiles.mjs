@@ -47,6 +47,7 @@ export const TEST_FILES = [
   'src/main/omnibox.test.ts',
   'src/main/favicon.test.ts',
   'src/shared/browserControl.test.ts',
+  'src/main/browserControl/effects.test.ts',
   'src/main/browserControl/browserControl.test.ts',
   'src/main/browserControl/deepQuery.test.ts',
   'src/main/browserControl/feedCapabilities.test.ts',

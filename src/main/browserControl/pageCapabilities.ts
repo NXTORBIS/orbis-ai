@@ -506,6 +506,7 @@ export function registerPageCapabilities(control: BrowserControl, resolve: PageR
   control.register({
     ...common,
     id: 'page.submit',
+    effects: ['write', 'communicate'],
     name: 'Submit a form',
     description: 'Submits the form an element belongs to (with its own submit button when it has one). Asks first unless it is a search.',
     params: { locator: LOCATOR },
@@ -843,6 +844,7 @@ export function registerPageCapabilities(control: BrowserControl, resolve: PageR
   control.register({
     ...common,
     id: 'page.evaluateQuery',
+    effects: ['execute'],
     name: 'Query element state',
     description: 'Reads the state of the elements a CSS selector matches (tag, text, value, checked, disabled, visible, attributes), without changing anything.',
     params: { selector: { type: 'string', description: 'CSS selector.', required: true }, limit: { type: 'integer', description: 'Default 50.' } },
