@@ -1672,6 +1672,15 @@ export interface NxtorbisApi {
   controlAutomation(requestId: string, action: 'pause' | 'stop'): Promise<void>
   /** Adds an instruction to a running browser automation. */
   steerAutomation(requestId: string, text: string): Promise<void>
+  /**
+   * Long automations Orbis was in the middle of when it last closed, newest first.
+   *
+   * Each says where it got to, in words. Nothing here is a promise that carrying on will work -- the page has almost
+   * certainly moved on -- and anything more than a few hours old is not offered at all.
+   */
+  unfinishedAutomations(): Promise<{ id: string; conversationId: string; said: string; state: AutomationState }[]>
+  /** Forgets one, because it was carried on with or because it was not wanted. */
+  forgetAutomation(id: string): Promise<void>
   /** What a message sent during an automation means for it. */
   classifyAutomationMessage(text: string, objective: string): Promise<'stop' | 'pause' | 'resume' | 'steer' | 'other'>
   /** Opens an address as a page, or searches anything else with Orbis Search, in Orbis's Chromium (started if needed). */

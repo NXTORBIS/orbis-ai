@@ -282,7 +282,7 @@ None of these ever touched Electron beyond the channel itself. They are a servic
 | Channel | Becomes |
 | --- | --- |
 | `chat:send`, `chat:abort`, `chat:complete`, `chat:title`, `chat:suggest` | Mojo, same service |
-| `automation:classify`, `automation:control`, `automation:steer` | Mojo, same service |
+| `automation:classify`, `automation:control`, `automation:steer`, `automation:unfinished`, `automation:forget` | Mojo, same service |
 | `image:edit`, `image:save` | Mojo, same service |
 | `voice:transcribe`, `voice:cancel`, `voice:hardware` | Mojo, same service |
 | `voice:models:status`, `voice:models:download`, `voice:models:cancelDownload`, `voice:models:delete`, `voice:models:verify` | Mojo, same service |

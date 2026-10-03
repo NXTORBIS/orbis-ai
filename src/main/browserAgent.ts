@@ -77,6 +77,13 @@ export interface BrowserAgentOptions {
   control?: BrowserControl
   /** Where the tabs are, as the browser reports them (the window's control in Electron; Chromium's own tab list in the Chromium build). */
   windowControl?: { state: { tabs: { active?: boolean; webContentsId?: number | null }[] } | null }
+  /**
+   * Records where a long automation has got to, so Orbis closing unexpectedly does not lose what it already did.
+   *
+   * Called as progress changes and never awaited: a checkpoint that could not be written is a checkpoint that is not
+   * there, and must never be a failed step. Absent means nothing is recorded, which is what a one-off run wants.
+   */
+  checkpoint?(state: AutomationState): void
 }
 
 /** Groq models that call tools reliably, most capable first. */
@@ -499,7 +506,11 @@ export async function runBrowserAgent(options: BrowserAgentOptions): Promise<voi
   }
   const auto = mode === 'once' ? null : startAutomation(options)
   const publish = (): void => {
-    if (auto) emit({ type: 'automation', automation: { ...auto, processed: auto.processed.slice(-300), notes: auto.notes.slice(-100) } })
+    if (!auto) return
+    const shown = { ...auto, processed: auto.processed.slice(-300), notes: auto.notes.slice(-100) }
+    emit({ type: 'automation', automation: shown })
+    // The same state, written where a crash cannot take it. Never awaited: progress must not wait on a disk.
+    options.checkpoint?.(shown)
   }
   const declined = new Set<string>()
   /** Set when Orbis hands the next step to the user (login, CAPTCHA…); the run pauses there. */

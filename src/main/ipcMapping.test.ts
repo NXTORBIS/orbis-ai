@@ -254,5 +254,7 @@ test('the boundary is a known size, so the migration can be estimated rather tha
   // window is showing, and a real test notification -- because the alternative was six channels for one small
   // feature. The window can do everything with a notification except make one, which is the point: notifications
   // come from events published inside Orbis, and nothing on the other side of this boundary can publish one.
-  assert.ok(code.length <= 474, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
+  // 474 -> 476: what Orbis was partway through when it last closed, and forgetting one. Long automations had no
+  // checkpoint at all, so closing mid-run lost the list of what had already been handled.
+  assert.ok(code.length <= 476, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
 })

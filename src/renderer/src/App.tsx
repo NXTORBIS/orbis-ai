@@ -16,6 +16,7 @@ import ImagesView from './components/ImagesView'
 import { useExperience } from './lib/experience'
 import HudBackground from './components/HudBackground'
 import Sidebar from './components/Sidebar'
+import UnfinishedRuns from './components/UnfinishedRuns'
 import type { FeatureId } from './components/Sidebar'
 import { DEFAULT_SETTINGS_SECTION, type SettingsSectionId } from '../../shared/settingsSections'
 import { destinationFor } from '../../shared/notificationRoute'
@@ -1579,6 +1580,8 @@ export default function App(): React.JSX.Element {
         <button className="edge-handle" title="Activity" onClick={toggleActivity}>
           <span />
         </button>
+        {/* What Orbis was partway through when it last closed. Shows nothing when there is nothing. */}
+        <UnfinishedRuns onOpen={selectChat} />
         {activityOpen && <ActivityPanel items={notices} onClear={() => setNotices([])} onClose={() => setActivityOpen(false)} />}
         {/* Outside .stage on purpose: the browser fills everything below the title bar, sidebar included. */}
         {browserOpen && <BrowserView hidden={!browserShowing} />}

@@ -116,6 +116,7 @@ import { ProfilesStore } from './personal/profiles'
 import { ExperienceStore } from './experience/store'
 import { createNotifications, type Notifications } from './notifications/index'
 import { bus } from './eventBus'
+import { AutomationCheckpoints, describeCheckpoint } from './automationCheckpoint'
 import { SiteProfiles } from './siteProfiles'
 import { activePreset, appearanceVariables, wantsReducedMotion } from '../shared/experience'
 import { presetBackdrop } from '../shared/presets'
@@ -608,6 +609,8 @@ let notifyProfileId = 'default'
 let watchingNow: string | null = null
 /** What Orbis has learned about particular sites. Held here because the agent is started from several places. */
 let siteProfiles: SiteProfiles | null = null
+/** Where long automations have got to, so Orbis closing unexpectedly does not lose what one already did. */
+let automationCheckpoints: AutomationCheckpoints | null = null
 let ruleWatcher: RuleWatcher | null = null
 
 function isHttpUrl(url: string): boolean {
@@ -1186,6 +1189,8 @@ ${block}`
               signal: controller.signal,
               emit,
               siteProfiles: siteProfiles ?? undefined,
+              // Where it has got to, written to disk, so Orbis closing mid-run does not lose what it already did.
+              checkpoint: (state) => void automationCheckpoints?.save(state, request.conversationId ?? ''),
               // The browser is Chromium: the agent works in Chromium's active tab, and follows the person when they switch tabs.
               getTarget: async () => {
                 if (!chromiumBrowser) throw new Error(NO_BROWSER)
@@ -1311,6 +1316,23 @@ ${summaryBlock(summary)}`
   // Pause and stop end the current run with the automation's state saved, so "continue" can pick it up.
   ipcMain.handle('automation:control', (_event, requestId: unknown, action: unknown) => {
     if (typeof requestId === 'string' && (action === 'pause' || action === 'stop')) activeRequests.get(requestId)?.abort(action)
+  })
+
+  /**
+   * Long automations Orbis was in the middle of when it last closed.
+   *
+   * It reports where each got to and nothing more. Whether carrying on is safe is decided when somebody asks for it,
+   * with the browser in front of them: a page has almost certainly moved on since, and anything older than a few
+   * hours is not offered at all. Nothing here resumes anything by itself.
+   */
+  ipcMain.handle('automation:unfinished', async () => {
+    const runs = (await automationCheckpoints?.list()) ?? []
+    return runs.map((one) => ({ id: one.state.id, conversationId: one.conversationId, said: describeCheckpoint(one, Date.now()), state: one.state }))
+  })
+
+  /** Forgets one, because it was carried on with or because it was not wanted. */
+  ipcMain.handle('automation:forget', async (_event, id: unknown) => {
+    if (typeof id === 'string' && id) await automationCheckpoints?.forget(id)
   })
 
   ipcMain.handle('automation:steer', (_event, requestId: unknown, text: unknown) => {
@@ -2771,6 +2793,16 @@ if (!app.requestSingleInstanceLock()) {
      */
     siteProfiles = new SiteProfiles({ userData: app.getPath('userData'), profileId: () => notifyProfileId })
     app.on('before-quit', () => void siteProfiles?.flush())
+
+    /*
+     * Where a long automation has got to.
+     *
+     * Workflows checkpoint every step and the scheduler survives being closed; Orion's own automations did neither,
+     * so Orbis closing in the middle of one lost the list of what had already been handled. For anything that acts on
+     * a page, redoing it all is worse than not resuming at all.
+     */
+    automationCheckpoints = new AutomationCheckpoints({ userData: app.getPath('userData'), profileId: () => notifyProfileId })
+    app.on('before-quit', () => void automationCheckpoints?.flush())
 
     notifyProfileId = (await profilesStore.active()).id
     // Notifications follow the person: switching profile changes whose history is read and whose is written to.

@@ -432,6 +432,8 @@ const api: NxtorbisApi = {
   answerBrowserConfirmation: (requestId, confirmationId, approved) => ipcRenderer.invoke('chat:browser-confirm', requestId, confirmationId, approved),
   controlAutomation: (requestId, action) => ipcRenderer.invoke('automation:control', requestId, action),
   steerAutomation: (requestId, text) => ipcRenderer.invoke('automation:steer', requestId, text),
+  unfinishedAutomations: () => ipcRenderer.invoke('automation:unfinished'),
+  forgetAutomation: (id) => ipcRenderer.invoke('automation:forget', id),
   classifyAutomationMessage: (text, objective) => ipcRenderer.invoke('automation:classify', text, objective),
   chromiumEmbedRegion: (region: { x: number; y: number; width: number; height: number; dpr: number; visible: boolean; viewportWidth?: number }) => ipcRenderer.send('chromium:embed-region', region),
   onChromiumShow: (callback: () => void) => {
