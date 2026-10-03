@@ -1,3 +1,4 @@
+import { validateResult } from '../../shared/browserControl.ts'
 import { askFor, decidingEffect, DEFAULT_EFFECT_POLICY, refusalFor, ruleFor, type EffectPolicy } from '../../shared/effectPolicy.ts'
 import type {
   BrowserCommand,
@@ -67,6 +68,15 @@ export interface Assessment {
  * stuck automation nobody can see the cause of rather than a failure anybody can read.
  */
 export const DEFAULT_CAPABILITY_TIMEOUT_MS = 90_000
+
+/** No wait between attempts is ever longer than this: past it, waiting is worse than failing and saying so. */
+export const MAX_RETRY_WAIT_MS = 8_000
+
+/** How long to wait before attempt number `attempt` (2 for the first retry). Doubles each time, up to the ceiling. */
+export function backoffFor(attempt: number, base: number): number {
+  const steps = Math.max(0, Math.round(attempt) - 2)
+  return Math.min(MAX_RETRY_WAIT_MS, Math.max(0, base) * 2 ** steps)
+}
 
 /**
  * What a capability does to the world.
@@ -156,6 +166,14 @@ export interface CapabilityDefinition<S = unknown> {
   /** Reads the relevant real state before acting, for verification. */
   observe?(params: Record<string, unknown>, ctx: ControlContext): Promise<S> | S
   run(params: Record<string, unknown>, ctx: ControlContext, before: S): Promise<unknown> | unknown
+  /**
+   * The shape this promises to give back. Only what is declared is checked, and extra fields are fine.
+   *
+   * Beside `verify`, not instead of it: verifying against real state is the stronger check and stays the authority.
+   * This catches the cheaper and different fault -- a capability quietly giving back a different shape, which breaks
+   * whatever reads it somewhere else and reads as a model mistake rather than as a broken promise.
+   */
+  returns?: Record<string, ParamSpec>
   /** Checks real state after acting. Without it, a mutating capability's run must verify on its own. */
   verify?(data: unknown, params: Record<string, unknown>, ctx: ControlContext, before: S): Promise<{ verified: boolean; detail: string }> | { verified: boolean; detail: string }
   /**
@@ -843,12 +861,28 @@ export class BrowserControl {
       const attemptParams = altIndex >= 0 ? { ...params, ...alternatives[altIndex] } : params
       if (attempt > 1) {
         this.record('recovery', def.id, source, runId, { attempt, after: last, using: altIndex >= 0 ? redact(alternatives[altIndex], sensitive) : 'same parameters, fresh state' })
-        await sleep(retry.delayMs ?? 400, ctx.signal)
+        /*
+         * The wait doubles each time, with a ceiling.
+         *
+         * A fixed delay is the wrong shape for every reason a retry is worth making: a page still loading wants a
+         * moment, a site that is rate-limiting wants rather longer, and hammering it at a fixed interval is what
+         * turns a slow page into a blocked one. The scheduler has backed off like this for a while; this is the
+         * same arithmetic, in the layer that does the retrying.
+         */
+        await sleep(backoffFor(attempt, retry.delayMs ?? 400), ctx.signal)
       }
       try {
         const before = def.observe ? await def.observe(attemptParams, ctx) : undefined
         if (def.observe) this.record('observation', def.id, source, runId, scrub(shape(before), secrets))
         const data = await withLimit(def, () => def.run(attemptParams, ctx, before), ctx.signal)
+        const broken = validateResult(def.returns, data)
+        if (broken) {
+          // Treated as a failure of this attempt rather than passed on: half a result is worse than none, because
+          // whatever reads it downstream has no way to tell the difference.
+          last = { code: 'failed', message: `${def.id} did not give back what it promises: ${broken}`, recoverable: false }
+          this.record('verification', def.id, source, runId, { shape: broken })
+          break
+        }
         this.record('execution', def.id, source, runId, { attempt })
         if (def.verify && !command.skipVerify) {
           const verification = await def.verify(data, attemptParams, ctx, before)

@@ -465,6 +465,41 @@ function describeValue(value: unknown): string {
   return 'nothing'
 }
 
+/**
+ * What a capability promises to give back.
+ *
+ * Correctness was checked behaviourally -- an action verifies against real state afterwards, which is the stronger
+ * check and stays the authority. What was missing is cheaper and different: whether what came back is the *shape*
+ * the rest of Orbis was told to expect. A capability that quietly returns a different shape after a change breaks
+ * whatever reads it, far away, in a way that reads as a model mistake rather than as a broken promise.
+ *
+ * Only declared fields are checked, and extra fields are fine: this says "these will be here", never "only these".
+ */
+export function validateResult(spec: Record<string, ParamSpec> | undefined, data: unknown): string | null {
+  if (!spec || Object.keys(spec).length === 0) return null
+  if (data === null || data === undefined || typeof data !== 'object' || Array.isArray(data)) {
+    return `expected an object with ${Object.keys(spec).join(', ')}, and ${describeValue(data)} came back.`
+  }
+  const got = data as Record<string, unknown>
+  for (const [name, p] of Object.entries(spec)) {
+    const value = got[name]
+    if (value === undefined || value === null) {
+      if (p.required) return `"${name}" was promised and did not come back.`
+      continue
+    }
+    const ok =
+      p.type === 'any' ||
+      (p.type === 'string' && typeof value === 'string') ||
+      (p.type === 'number' && typeof value === 'number' && Number.isFinite(value)) ||
+      (p.type === 'integer' && Number.isInteger(value)) ||
+      (p.type === 'boolean' && typeof value === 'boolean') ||
+      (p.type === 'array' && Array.isArray(value)) ||
+      (p.type === 'object' && typeof value === 'object' && !Array.isArray(value))
+    if (!ok) return `"${name}" was promised as ${p.type === 'integer' ? 'a whole number' : `a ${p.type}`}, and ${describeValue(value)} came back.`
+  }
+  return null
+}
+
 export function validateParams(spec: Record<string, ParamSpec>, params: Record<string, unknown>): string | null {
   for (const [name, p] of Object.entries(spec)) {
     const value = params[name]

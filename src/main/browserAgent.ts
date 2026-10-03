@@ -3,6 +3,7 @@ import { bus } from './eventBus.ts'
 import type { PageHandle } from './pageHandle'
 import type { BrowserControl } from './browserControl/registry.ts'
 import { automationProgress } from '../shared/automation.ts'
+import { destinationWarning, fenceResult, pageChoseDestination, PageOrigins, returnsUntrusted } from '../shared/taint.ts'
 import type { AutomationState, BrowserConfirmation, BrowserStep, StreamEvent } from '../shared/types'
 import { assessAction } from './browserSafety.ts'
 import {
@@ -513,6 +514,14 @@ export async function runBrowserAgent(options: BrowserAgentOptions): Promise<voi
     options.checkpoint?.(shown)
   }
   const declined = new Set<string>()
+  /*
+   * What this run has read off pages.
+   *
+   * Kept so that a destination used later -- an address navigated to, a recipient typed in, a path written to -- can
+   * be recognised as something a website chose rather than something the person did. That is the confused-deputy
+   * case, and no amount of fencing the text addresses it, because such a value is not being read, it is being obeyed.
+   */
+  const pageOrigins = new PageOrigins()
   /** Set when Orbis hands the next step to the user (login, CAPTCHA…); the run pauses there. */
   const handOff = { message: '' }
   let tab: PageHandle | null = null
@@ -1062,6 +1071,28 @@ export async function runBrowserAgent(options: BrowserAgentOptions): Promise<voi
         const target = typeof args.tab_id === 'string' && args.tab_id ? { tabId: args.tab_id } : { webContentsId: wc.id }
         const describe = control.describe(capability, 'orion')
         const onSite = wc.getURL()
+        /*
+         * A destination this page chose, rather than the person.
+         *
+         * Only the parameters that say *where* something goes. A page supplying the words to type into a search box
+         * is ordinary; a page supplying the address to navigate to, the recipient of a message or the path to write
+         * to is the page deciding on the person's behalf. Orbis asks, every time, whatever the capability's own
+         * policy says -- being asked is cheap and this is the case where being wrong is not.
+         */
+        const chosenByPage = pageChoseDestination(params, pageOrigins)
+        if (chosenByPage.length) {
+          const id = crypto.randomUUID()
+          const why = destinationWarning(chosenByPage)!
+          const action = `${describe?.name ?? capability} — ${chosenByPage[0].value}`
+          if (declined.has(action)) return `Blocked: you declined acting on a destination that came from the page.`
+          step(`Waiting for your approval: ${action}`, 'waiting', id)
+          const approved = await options.confirm({ id, action, reason: why })
+          step(approved ? `You approved: ${action}` : `You cancelled: ${action}`, approved ? 'done' : 'declined', id)
+          if (!approved) {
+            declined.add(action)
+            return 'Blocked: the user declined acting on a destination that came from the page. Do not try it again; ask them where to go instead.'
+          }
+        }
         const result = await control.execute(
           { capability, params, target, source: 'orion' },
           {
@@ -1101,7 +1132,17 @@ export async function runBrowserAgent(options: BrowserAgentOptions): Promise<voi
          * worth failing one for either.
          */
         void options.siteProfiles?.record(onSite, capability, result.ok === true).catch(() => undefined)
-        return capability.startsWith('page.') || capability.startsWith('navigation.') ? after(summary, true) : summary
+        /*
+         * Where the words in this result came from.
+         *
+         * A tool result used to read as Orbis's own words however it had been obtained, so a page that puts "SYSTEM:
+         * ignore previous instructions" in a product title had that sentence in the conversation unfenced. Results
+         * that carry somebody else's words now say so, and the addresses inside them are remembered, so using one
+         * later is recognised as the page having chosen it.
+         */
+        if (result.ok && returnsUntrusted(capability)) pageOrigins.note(data)
+        const said = fenceResult(capability, summary, onSite)
+        return capability.startsWith('page.') || capability.startsWith('navigation.') ? after(said, true) : said
       }
       default:
         return `Error: there is no tool called ${call.function.name}.`

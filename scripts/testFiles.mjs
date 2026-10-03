@@ -399,6 +399,7 @@ export const TEST_FILES = [
   'src/shared/researchCheck.test.ts',
   'src/shared/researchSources.test.ts',
   'src/shared/researchRun.test.ts',
+  'src/shared/taint.test.ts',
   'src/main/researchControl.test.ts',
   'src/shared/voiceReply.test.ts',
   'src/shared/notificationRoute.test.ts',

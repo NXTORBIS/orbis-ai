@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { BrowserControl, DEFAULT_CAPABILITY_TIMEOUT_MS, effectsOf } from './registry.ts'
+import { backoffFor, BrowserControl, DEFAULT_CAPABILITY_TIMEOUT_MS, effectsOf, MAX_RETRY_WAIT_MS } from './registry.ts'
 import { DEFAULT_EFFECT_POLICY, readEffectPolicy } from '../../shared/effectPolicy.ts'
 
 /**
@@ -115,4 +115,50 @@ test('reading is left alone by a policy that only tightens changes', async () =>
   control.register({ ...base, id: 'tabs.count', mutates: false, run: async () => ({ n: 3 }) })
   const result = (await control.execute({ capability: 'tabs.count', params: {}, source: 'orion' }, { confirm: async () => false })) as { ok: boolean }
   assert.equal(result.ok, true)
+})
+
+test('a capability that gives back what it promises passes it on', async () => {
+  const control = new BrowserControl({ sink: async () => undefined })
+  control.register({ ...base, id: 'tabs.count', mutates: false, returns: { count: { type: 'integer', description: 'How many.', required: true } }, run: async () => ({ count: 3 }) })
+  const result = (await control.execute({ capability: 'tabs.count', params: {}, source: 'user' }, { confirm: async () => true })) as { ok: boolean; data?: { count: number } }
+  assert.equal(result.ok, true)
+  assert.equal(result.data?.count, 3)
+})
+
+test('a capability that gives back the wrong shape fails rather than passing half a result on', async () => {
+  const control = new BrowserControl({ sink: async () => undefined })
+  control.register({ ...base, id: 'tabs.count', mutates: false, returns: { count: { type: 'integer', description: 'How many.', required: true } }, run: async () => ({ count: 'three' }) })
+  const result = (await control.execute({ capability: 'tabs.count', params: {}, source: 'user' }, { confirm: async () => true })) as { ok: boolean; error?: { message: string } }
+  assert.equal(result.ok, false)
+  assert.match(result.error!.message, /did not give back what it promises/)
+})
+
+test('a promise that was not kept at all is caught, not treated as an empty answer', async () => {
+  const control = new BrowserControl({ sink: async () => undefined })
+  control.register({ ...base, id: 'tabs.count', mutates: false, returns: { count: { type: 'integer', description: 'How many.', required: true } }, run: async () => ({}) })
+  const result = (await control.execute({ capability: 'tabs.count', params: {}, source: 'user' }, { confirm: async () => true })) as { ok: boolean; error?: { message: string } }
+  assert.equal(result.ok, false)
+  assert.match(result.error!.message, /did not come back/)
+})
+
+test('a capability that promises nothing is not held to anything', async () => {
+  const control = new BrowserControl({ sink: async () => undefined })
+  control.register({ ...base, id: 'tabs.odd', mutates: false, run: async () => 'just a string' })
+  const result = (await control.execute({ capability: 'tabs.odd', params: {}, source: 'user' }, { confirm: async () => true })) as { ok: boolean }
+  assert.equal(result.ok, true)
+})
+
+test('extra fields are fine: a promise says what will be there, not what will not', async () => {
+  const control = new BrowserControl({ sink: async () => undefined })
+  control.register({ ...base, id: 'tabs.count', mutates: false, returns: { count: { type: 'integer', description: 'How many.', required: true } }, run: async () => ({ count: 1, extra: 'ok' }) })
+  const result = (await control.execute({ capability: 'tabs.count', params: {}, source: 'user' }, { confirm: async () => true })) as { ok: boolean }
+  assert.equal(result.ok, true)
+})
+
+test('the wait between attempts doubles, and stops growing', () => {
+  assert.equal(backoffFor(2, 400), 400)
+  assert.equal(backoffFor(3, 400), 800)
+  assert.equal(backoffFor(4, 400), 1600)
+  assert.equal(backoffFor(20, 400), MAX_RETRY_WAIT_MS, 'past the ceiling, waiting is worse than failing and saying so')
+  assert.equal(backoffFor(1, 400), 400, 'the first attempt does not wait at all; this is only asked from the second')
 })
