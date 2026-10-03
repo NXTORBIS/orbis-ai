@@ -167,6 +167,8 @@ import { searchArtifacts } from './artifacts/searching'
 import { isArtifactId, type ArtifactRecord } from '../shared/artifacts/model'
 import { mediaFileName, mediaFromDataUrl, mediaIn, verifyMedia } from './artifacts/media'
 import { READ_FOR_CHAT, isReadForChat, nameToOpenAs, readForChat } from './artifacts/attaching'
+import { factsBlock, tableFacts } from '../shared/artifacts/tableFacts'
+import { parseDelimited } from '../shared/compute/data'
 import { IMPORT_LIMITS } from './artifacts/importing'
 import { chooseDestinationWith, chooseSourceWith, downloadsDirWith, registerArtifactsIpc, renderPdfWith, renderPngWith, revealWith } from './artifacts/ipc'
 import { GeneratedStore } from './pages/generatedStore'
@@ -1077,6 +1079,26 @@ ${block}`
           }
         } catch (err) {
           console.error('[projects] could not be read', err)
+        }
+      }
+
+      /*
+       * The numbers in an attached table, worked out rather than read off by a model.
+       *
+       * Orbis has a whole deterministic data layer and a question typed in the chat about an attached spreadsheet
+       * never reached it: the table went into the prompt as text and the model did the arithmetic. That is the one
+       * thing a model should never be trusted with -- "what is the total?" over four hundred rows comes back looking
+       * exactly like a right answer. The figures are computed from every row here and handed over as facts; the model
+       * writes the sentence, the numbers in it are Orbis's.
+       */
+      for (const attachment of (last?.attachments ?? []).filter((one) => one.mimeType === 'text/csv').slice(0, 3)) {
+        try {
+          const table = parseDelimited(attachment.content, { source: attachment.name })
+          if ('error' in table) continue
+          const block = factsBlock(tableFacts(table.table), attachment.name)
+          if (block) systemPrompt = `${systemPrompt}${BREAK}${block}`
+        } catch {
+          // A table that will not parse is a table the model reads as text, exactly as before. Never a failed message.
         }
       }
 

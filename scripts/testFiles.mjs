@@ -401,6 +401,7 @@ export const TEST_FILES = [
   'src/shared/researchRun.test.ts',
   'src/shared/taint.test.ts',
   'src/shared/attachmentIndex.test.ts',
+  'src/shared/artifacts/tableFacts.test.ts',
   'src/main/researchControl.test.ts',
   'src/shared/voiceReply.test.ts',
   'src/shared/notificationRoute.test.ts',
