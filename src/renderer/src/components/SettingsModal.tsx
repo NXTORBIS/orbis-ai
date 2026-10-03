@@ -11,6 +11,7 @@ import {
 } from '../../../shared/settingsSections'
 
 const OfflineGamesSettings = lazy(() => import('./OfflineGamesSettings'))
+const NotificationSettings = lazy(() => import('./NotificationSettings'))
 // A megabyte of licence text: read only when someone asks to see it.
 const NoticesPanel = lazy(() => import('./NoticesPanel'))
 const UpdateSettings = lazy(() => import('./UpdateSettings'))
@@ -418,6 +419,14 @@ export default function SettingsModal({ settings, onUpdate, onClose, section }: 
                   <MarketsSettings />
                 </Suspense>
               </>
+            )}
+
+            {/* ---------------------------------------------------------------- Notifications
+                What Orbis interrupts you for, when it stays quiet, whether it works, and what it has told you. */}
+            {active === 'notifications' && (
+              <Suspense fallback={null}>
+                <NotificationSettings />
+              </Suspense>
             )}
 
             {/* ---------------------------------------------------------------- Appearance

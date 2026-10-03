@@ -181,8 +181,10 @@ export class NotificationManager {
       this.burst = null
       void this.flush()
     }, BURST_MS)
-    // A timer that keeps a process alive to say "your download finished" is a timer that stops a computer sleeping.
-    this.burst.unref?.()
+    /*
+     * Not unref'd, because it does not need to be: `stop()` clears it when Orbis quits, so it can never be the thing
+     * holding the process open.
+     */
   }
 
   /** Shows what is waiting: urgent first, and a run of like things as one line. */

@@ -22,6 +22,7 @@ export type SettingsSectionId =
   | 'security'
   | 'orion'
   | 'browsing'
+  | 'notifications'
   | 'appearance'
   | 'voice'
   | 'games'
@@ -89,6 +90,21 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = Object.freeze([
     icon: 'globe',
     keywords: ['browser', 'default browser', 'suggestions', 'address bar', 'search', 'history', 'launch', 'startup', 'markets', 'ticker', 'strip', 'prices', 'pages you have read', 'reading', 'recall', 'remember pages'],
     settings: ['searchSuggestions', 'personalizedSuggestions', 'openBrowserOnLaunch', 'keepSchedulesRunning', 'wakeForSchedules']
+  },
+  {
+    id: 'notifications',
+    /*
+     * Its own section, not a corner of Appearance.
+     *
+     * These were two settings nothing read -- quiet hours and a set of category switches that no notification ever
+     * consulted, so a person could turn notifications off and still be woken at three in the morning. Now that one
+     * place decides every interruption, this is where that place takes its instructions, and it is worth finding.
+     */
+    label: 'Notifications',
+    blurb: 'What Orbis interrupts you for, and when it stays quiet.',
+    icon: 'bell',
+    keywords: ['notification', 'notifications', 'alert', 'alerts', 'quiet hours', 'do not disturb', 'dnd', 'silence', 'sound', 'toast', 'popup', 'interrupt', 'tell me when', 'badge', 'history'],
+    settings: []
   },
   {
     id: 'appearance',

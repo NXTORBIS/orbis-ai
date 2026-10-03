@@ -18343,3 +18343,154 @@ html[data-motion='reduced'] .tool-btn.recording {
   background: var(--bg-mid);
   overflow: hidden;
 }
+
+/* ================================================================ Notifications
+   The switches for what Orbis interrupts you for, and the list of what it has. One screen, because somebody who
+   feels over-told needs to see what they were told in order to turn off the right thing. */
+
+.notify-cats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.notify-cat {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.notify-cat input {
+  margin-top: 2px;
+  flex: none;
+  accent-color: var(--cyan);
+}
+
+.notify-cat span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.notify-cat b {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.notify-cat small,
+.notify-item small {
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--faint);
+}
+
+.notify-quiet {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.notify-quiet input[type='time'] {
+  padding: 5px 8px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text);
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+}
+
+.notify-quiet input[type='time']:disabled {
+  opacity: 0.45;
+}
+
+.notify-quiet input[type='checkbox'] {
+  accent-color: var(--cyan);
+}
+
+.notify-said {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--cyan);
+}
+
+.notify-none {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--faint);
+}
+
+.notify-tools {
+  display: flex;
+  gap: 8px;
+  margin: 10px 0 6px;
+}
+
+.notify-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.notify-item {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+}
+
+/* A line down the side rather than a dot: it survives being read at a glance and in high contrast. */
+.notify-item.unread {
+  border-left: 2px solid var(--cyan);
+}
+
+.notify-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.notify-text b {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.notify-text span {
+  font-size: 12.5px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.notify-acts {
+  display: flex;
+  flex: none;
+  gap: 6px;
+  align-items: center;
+}
+
+.notify-acts .btn.quiet {
+  color: var(--faint);
+  background: none;
+  border-color: transparent;
+}
+
+.notify-acts .btn.quiet:hover {
+  color: var(--text);
+}
