@@ -1,6 +1,6 @@
 import { icon } from '../../orbis-ui/panel/rail/icons.js'
 import { buildPalette, selectionAction, type SelectionAction, type SelectionNeed } from '../../src/shared/selectionActions.ts'
-import { firstLine, placeBar, placePanel, selectionBounds, stillVisible, type Rect } from '../../src/shared/selectionPlacement.ts'
+import { lastLine, placeOrb, placePanel, selectionBounds, stillVisible, type Rect } from '../../src/shared/selectionPlacement.ts'
 import { REWRITE_TONES, TRANSLATE_INTO } from '../../src/shared/selectionPrompts.ts'
 import { buildShare, shareSaid, shareText } from '../../src/shared/selectionShare.ts'
 import { readSelection, selectionPreview, RISK_REASON, type SelectionReading } from '../../src/shared/selectionText.ts'
@@ -35,6 +35,7 @@ import { SELECTION_STYLES } from './styles.ts'
  * would send it anywhere, and the palette says why.
  */
 
+const ORB_SIZE = 18
 const PANEL_WIDTH = 268
 /** Long enough that dragging through a paragraph does not flicker; short enough not to feel slow. */
 const SETTLE_MS = 180
@@ -102,9 +103,7 @@ class SelectionOrb {
   private readonly host: HTMLElement
   private readonly root: ShadowRoot
   private readonly layer: HTMLElement
-  private bar: HTMLElement | null = null
-  /** Whether what this Orbis can do has been asked for once. It does not change between one selection and the next. */
-  private asked = false
+  private orb: HTMLButtonElement | null = null
   private panel: HTMLElement | null = null
   private toastNode: HTMLElement | null = null
   private snapshot: Snapshot | null = null
@@ -145,7 +144,7 @@ class SelectionOrb {
       this.selectionChanged()
     })
     this.on(document, 'keydown', (event) => {
-      if (event.key === 'Escape' && (this.panel || this.bar)) {
+      if (event.key === 'Escape' && (this.panel || this.orb)) {
         // Only ours. The page's own Escape handling is left alone when nothing of Orbis's is open.
         if (this.panel) {
           this.closePanel()
@@ -185,14 +184,15 @@ class SelectionOrb {
     const raw = selection?.toString() ?? ''
     if (raw.trim() === '') {
       /*
-       * The bar belongs to the selection; the panel does not.
+       * The orb belongs to the selection; the panel does not.
        *
        * An open answer is not taken away by the selection going -- people click into an answer to read it, and
-       * clicking is what clears the selection. The bar is not an answer, so it goes with the words it was about.
-       * These used to be one decision, which meant an open panel kept the bar alive over a selection that no longer
+       * clicking is what clears the selection. The orb is not an answer, so it goes with the words it was about.
+       * These used to be one decision, which meant an open panel kept the orb alive over a selection that no longer
        * existed, pointing at nothing.
        */
-      this.closeBar()
+      this.orb?.remove()
+      this.orb = null
       if (!this.panel) this.dismiss()
       return
     }
@@ -206,7 +206,7 @@ class SelectionOrb {
     if (this.snapshot && this.snapshot.reading.raw === raw && this.panel) return
     this.snapshot = fresh
     if (this.panel) this.closePanel()
-    this.showBar()
+    this.showOrb()
   }
 
   // ---------------------------------------------------------------- the orb
@@ -215,96 +215,39 @@ class SelectionOrb {
     if (!this.host.isConnected) (document.body ?? document.documentElement).append(this.host)
   }
 
-  /**
-   * The contextual bar: what a selection produces, straight away.
-   *
-   * Three actions, in words, above the words they are about. It used to be a bead you pressed to open a list, which
-   * is one press more than the thing is worth -- the three people actually want are small enough to show.
-   *
-   * Everything else Orbis can do with a selection is still here, one press away under "More", which opens the same
-   * palette as before. Nothing was removed to make room for this.
-   */
-  private showBar(): void {
+  private showOrb(): void {
     const shot = this.snapshot
     if (!shot) return
     this.mounted()
-    if (this.can.length === 0 && !this.asked) {
-      this.asked = true
-      // Asked once, not on every selection: what this Orbis can do does not change between one highlight and the next.
-      void askWorker({ kind: 'orbis-selection/can' }).then((reply) => {
-        this.can = reply.ok && Array.isArray((reply as { data?: unknown }).data) ? ((reply as { data: Need[] }).data ?? []) : []
-        if (this.snapshot && !this.panel) this.showBar()
-      })
-    }
+    const line = lastLine(shot.rects)
+    if (!line) return
+    const at = placeOrb(line, ORB_SIZE, room())
 
-    const palette = buildPalette({ reading: shot.reading, available: this.can, ownLanguage: ownLanguage(), top: 4 })
-    this.closeBar()
-
-    const bar = el('div', 'bar')
-    bar.setAttribute('role', 'toolbar')
-    bar.setAttribute('aria-label', 'What to do with the selected text')
-    // Down, not click: taking the pointer before the browser clears the selection keeps the words highlighted.
-    bar.addEventListener('pointerdown', (event) => {
-      event.preventDefault()
-      event.stopPropagation()
-    })
-
-    const press = (label: string, hint: string, run: () => void): HTMLButtonElement => {
-      const button = el('button', 'bar-act')
+    if (!this.orb) {
+      const button = el('button', 'orb')
       button.type = 'button'
-      button.textContent = label
-      button.title = hint
-      button.setAttribute('aria-label', hint)
+      button.setAttribute('aria-label', 'Orbis actions for the selected text')
+      button.append(icon('spark', 11))
+      // Down, not click: taking the pointer before the browser clears the selection keeps the words highlighted.
+      button.addEventListener('pointerdown', (event) => {
+        event.preventDefault()
+        event.stopPropagation()
+      })
       button.addEventListener('click', (event) => {
         event.preventDefault()
         event.stopPropagation()
-        run()
+        void this.openPalette()
       })
-      return button
+      this.orb = button
+      this.layer.append(button)
     }
-
-    for (const one of palette.primary) {
-      if (bar.children.length) bar.append(el('span', 'bar-line'))
-      bar.append(press(one.label, one.hint, () => void this.run(one)))
-    }
-    if (palette.primary.length === 0) {
-      // Nothing can run here. Said, rather than an empty bar nobody can explain.
-      bar.append(el('span', 'bar-none', shot.reading.risk === 'none' ? 'Orbis is not running' : 'Orbis will not act on this'))
-    }
-    if (palette.top.length || palette.more.length) {
-      bar.append(el('span', 'bar-line'))
-      bar.append(press('More', 'Everything else Orbis can do with this', () => void this.openPalette()))
-    }
-
-    this.bar = bar
-    this.layer.append(bar)
-    this.putBar()
-  }
-
-  /** Puts the bar above the selection, or below it when there is no room. Measured, never assumed. */
-  private putBar(): void {
-    const shot = this.snapshot
-    if (!this.bar || !shot) return
-    const selection = document.getSelection()
-    const range = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null
-    const rects = range ? [...range.getClientRects()].map(asRect) : shot.rects
-    const line = firstLine(rects)
-    if (!line) return
-    const box = this.bar.getBoundingClientRect()
-    const at = placeBar(line, { width: Math.ceil(box.width) || 260, height: Math.ceil(box.height) || 34 }, room())
-    this.bar.style.left = `${at.x}px`
-    this.bar.style.top = `${at.y}px`
-    this.bar.dataset.from = at.from
-  }
-
-  private closeBar(): void {
-    this.bar?.remove()
-    this.bar = null
+    this.orb.style.left = `${at.x}px`
+    this.orb.style.top = `${at.y}px`
   }
 
   private reposition(): void {
     const shot = this.snapshot
-    if (!shot || !this.bar) return
+    if (!shot || !this.orb) return
     // The rectangles were taken before the page moved, so they are measured again from the live selection.
     const selection = document.getSelection()
     const range = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null
@@ -314,13 +257,18 @@ class SelectionOrb {
       this.dismiss()
       return
     }
-    this.putBar()
+    const line = lastLine(rects)
+    if (line) {
+      const at = placeOrb(line, ORB_SIZE, room())
+      this.orb.style.left = `${at.x}px`
+      this.orb.style.top = `${at.y}px`
+    }
     if (this.panel) this.placeThePanel(whole)
   }
 
   private placeThePanel(whole: Rect): void {
-    if (!this.panel || !this.bar) return
-    const anchor = asRect(this.bar.getBoundingClientRect())
+    if (!this.panel || !this.orb) return
+    const anchor = asRect(this.orb.getBoundingClientRect())
     /*
      * Measured with the cap taken off first.
      *
@@ -713,7 +661,7 @@ class SelectionOrb {
     node.setAttribute('role', 'status')
     this.toastNode = node
     this.layer.append(node)
-    const anchor = this.bar?.getBoundingClientRect()
+    const anchor = this.orb?.getBoundingClientRect()
     node.style.left = `${Math.max(8, Math.min(room().width - node.offsetWidth - 8, (anchor?.x ?? 20) - 10))}px`
     node.style.top = `${Math.max(8, (anchor?.y ?? 20) + 26)}px`
     window.setTimeout(() => {
@@ -734,7 +682,8 @@ class SelectionOrb {
   private dismiss(): void {
     this.cancel()
     this.closePanel()
-    this.closeBar()
+    this.orb?.remove()
+    this.orb = null
     this.snapshot = null
   }
 

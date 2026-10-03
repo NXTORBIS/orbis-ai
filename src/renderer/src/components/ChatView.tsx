@@ -8,6 +8,7 @@ import MemoryOffer from './MemoryOffer'
 import OtherAnswers from './OtherAnswers'
 import ResearchRunning from './ResearchRunning'
 import VoiceConversation from './VoiceConversation'
+import ChatSelectionBar from './ChatSelectionBar'
 import ChatRail from './ChatRail'
 import Greeting from './Greeting'
 import MessageItem from './MessageItem'
@@ -68,6 +69,20 @@ const formatDay = (ts: number): string => new Date(ts).toLocaleDateString('en-US
  * question was not brought into view and why the reader's place was not held -- both were measuring nothing.
  */
 const boxOf = (slot: Element | null): HTMLElement | null => (slot?.firstElementChild as HTMLElement | null) ?? null
+
+/**
+ * What asking Orion about a highlighted passage actually sends.
+ *
+ * The passage is quoted so it is plainly the subject rather than something the person typed, and it stays in the
+ * conversation it was selected in -- asking about a sentence Orion just wrote is a follow-up, not a new chat.
+ */
+function quotedQuestion(text: string): string {
+  const quoted = text
+    .split('\n')
+    .map((line) => '> ' + line)
+    .join('\n')
+  return ['About this, from above:', '', quoted, ''].join('\n')
+}
 
 export default function ChatView(props: Props): React.JSX.Element {
   const { conversation, stream, settings } = props
@@ -359,6 +374,15 @@ export default function ChatView(props: Props): React.JSX.Element {
    */
   const composer = (
     <>
+      {/*
+        * Three things to do with something you highlighted in the conversation. Nothing until there is a selection.
+        * Deliberately not the browser's orb: that one is for a web page, this one is for Orbis's own window.
+        */}
+      <ChatSelectionBar
+        scopeSelector=".messages"
+        onAsk={(text) => props.onSend(quotedQuestion(text), [])}
+        onNotify={props.onNotify}
+      />
       {/*
         * Talking with Orbis rather than dictating to it: it answers out loud and then listens again.
         * The latest finished answer is what gets read; while one is still being written, nothing is said.

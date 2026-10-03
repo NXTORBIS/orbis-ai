@@ -18756,3 +18756,47 @@ html[data-motion='reduced'] .tool-btn.recording {
 .meeting-summary q { display: block; margin-top: 2px; }
 .meeting-parts p { margin: 3px 0; font-size: 13px; line-height: 1.5; }
 .meeting-parts .small { margin-right: 6px; }
+
+/* ---------------------------------------------------------------- three things to do with a highlighted passage */
+/* In the chat only. The browser has its own contextual orb for selections on a web page; this is Orbis's own window. */
+.chat-sel-bar {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  align-items: stretch;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: var(--glass-shadow);
+  font-size: 12.5px;
+  white-space: nowrap;
+  transform-origin: bottom left;
+  animation: chat-sel-in 120ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+.chat-sel-bar[data-from='below'] { transform-origin: top left; }
+
+@keyframes chat-sel-in {
+  from { opacity: 0; transform: scale(0.94) translateY(3px); }
+  to { opacity: 1; transform: none; }
+}
+
+.chat-sel-act {
+  padding: 7px 11px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.chat-sel-act:hover { background: var(--bg-hover); }
+.chat-sel-act:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
+
+/* A hairline between actions, rather than a border on each button, which would double up. */
+.chat-sel-line { align-self: center; width: 1px; height: 15px; background: var(--line); }
+.chat-sel-why { padding: 7px 11px; color: var(--faint); }
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-sel-bar { animation: none; }
+}
