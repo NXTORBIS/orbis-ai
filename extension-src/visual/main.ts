@@ -439,7 +439,24 @@ class VisualSearch {
 
   // -------------------------------------------------------------- doing the work
 
-  private async refreshAbilities(): Promise<void> {
+  private asking: Promise<void> | null = null
+
+  /**
+   * Ask again, sharing one request.
+   *
+   * Called from two places that used to disagree: the modifier, which fires and forgets, and `submit`, which must
+   * have the answer before it can say anything. Without the shared promise the second would start a second request
+   * while the first was still in the air, and decide on whichever landed first.
+   */
+  private refreshAbilities(): Promise<void> {
+    if (this.asking) return this.asking
+    this.asking = this.askAbilities().finally(() => {
+      this.asking = null
+    })
+    return this.asking
+  }
+
+  private async askAbilities(): Promise<void> {
     this.ableAt = Date.now()
     const reply = await askWorker({ kind: 'orbis-visual/can' })
     if (reply.ok) {
@@ -576,7 +593,17 @@ class VisualSearch {
     this.runningId = ''
   }
 
-  private submit(question: string, quick = ''): void {
+  private async submit(question: string, quick = ''): Promise<void> {
+    /*
+     * A cached "nothing can see" is asked again before it is believed.
+     *
+     * Abilities are remembered for three seconds so that ordinary Ctrl use costs nothing, and the remembered answer
+     * was being treated as the truth here. A tab that was open while Orbis was unreachable -- or before a key was
+     * added -- therefore kept the answer it got then: the Ask button stayed dead and the same sentence came back
+     * every time, on a machine where Orbis was answering perfectly well. The remembered answer is still used when
+     * it is a yes, because that one costs nothing to be wrong about; a no is checked.
+     */
+    if (!this.able.can.includes('eyes')) await this.refreshAbilities()
     if (!this.able.can.includes('eyes')) {
       // Said rather than attempted. A request that cannot be served is a failure with a known cause, and the person
       // can act on "add a key in Settings" in a way they cannot act on silence.
@@ -610,7 +637,7 @@ class VisualSearch {
     }
 
     if (['identify', 'explain', 'read', 'translate', 'summarise', 'solve', 'extract'].includes(id)) {
-      this.submit('', id)
+      void this.submit('', id)
       return
     }
 
@@ -853,8 +880,11 @@ class VisualSearch {
       const arrow = svg('forward') ?? svg('chevronRight')
       if (arrow) go.append(arrow)
       else go.textContent = '→'
-      go.disabled = !this.able.can.includes('eyes')
-      go.addEventListener('click', () => this.submit(input.value))
+      /*
+       * Never disabled from what is remembered. A button that cannot be pressed says nothing about why, and the
+       * answer it was disabled from may be three seconds stale or an hour stale -- `submit` asks again and then says.
+       */
+      go.addEventListener('click', () => void this.submit(input.value))
       row.append(go)
     }
 
@@ -986,7 +1016,7 @@ class VisualSearch {
       for (const question of found.ask) {
         const button = el('button', 'ask-next', question)
         button.type = 'button'
-        button.addEventListener('click', () => this.submit(question))
+        button.addEventListener('click', () => void this.submit(question))
         next.append(button)
       }
       block.append(next)
@@ -1061,7 +1091,7 @@ class VisualSearch {
     if (event.key === 'Enter' && input instanceof HTMLInputElement) {
       event.preventDefault()
       event.stopPropagation()
-      this.submit(input.value)
+      void this.submit(input.value)
       return
     }
     if (event.key === 'Tab') {

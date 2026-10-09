@@ -1,5 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import {
   bigEnough,
   clamp,
@@ -564,5 +565,39 @@ describe('failures', () => {
     const odd = faultFrom('Something nobody predicted happened')
     assert.equal(odd.code, 'action-failed')
     assert.match(odd.says, /nobody predicted/)
+  })
+})
+
+/*
+ * The page side is not unit-testable -- it needs a browser -- so the two faults that made Visual Search look broken
+ * on a working machine are held here as source guards, the way `cssCollisions.test.ts` holds its rules.
+ *
+ * Abilities are remembered for three seconds so that ordinary Ctrl use costs nothing. Both faults were the same
+ * mistake about that memory: a tab open while Orbis was unreachable, or open before a key was added, kept the answer
+ * it got then. The Ask button was disabled from it, and `submit` failed from it -- so the same sentence came back
+ * every time, for the life of the tab, on a machine where Orbis was answering. A remembered yes is still trusted; a
+ * remembered no is asked again.
+ */
+describe('a remembered "nothing can see" is never the final word', () => {
+  it('the Ask button is not disabled from it', async () => {
+    const source = await readFile(new URL('../../../extension-src/visual/main.ts', import.meta.url), 'utf8')
+    assert.doesNotMatch(source, /go\.disabled/, 'a button that cannot be pressed says nothing about why; submit asks again and then says')
+  })
+
+  it('submit asks again before it refuses', async () => {
+    const source = await readFile(new URL('../../../extension-src/visual/main.ts', import.meta.url), 'utf8')
+    const at = source.indexOf('private async submit(')
+    assert.ok(at > 0, 'submit must be async, or it cannot wait for a fresh answer')
+    const body = source.slice(at, at + 1600)
+    assert.match(body, /await this\.refreshAbilities\(\)/, 'submit must ask again before refusing for want of eyes')
+    assert.ok(
+      body.indexOf('await this.refreshAbilities()') < body.indexOf("fault('no-orbis')"),
+      'the fresh answer must come before the refusal is drawn, not after'
+    )
+  })
+
+  it('one request at a time, shared', async () => {
+    const source = await readFile(new URL('../../../extension-src/visual/main.ts', import.meta.url), 'utf8')
+    assert.match(source, /private asking: Promise<void> \| null/, 'two callers must share one request, or they decide on whichever lands first')
   })
 })
