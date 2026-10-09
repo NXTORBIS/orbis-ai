@@ -27,7 +27,7 @@
 // And nothing here is invented. A capability is dimmed only when the thing behind it really is not there, and the
 // reason shown is the reason that was read, never a guess.
 
-import { CATEGORIES, CAPABILITIES, MAX_PINS, addPin, addressFor, capabilitiesIn, capabilityById, movePin, normalizePins, removePin, searchCapabilities, unavailableBecause } from './command-registry.js'
+import { CATEGORIES, CAPABILITIES, LANES, MAX_PINS, addPin, addressFor, capabilitiesIn, capabilityById, movePin, normalizePins, removePin, searchCapabilities, unavailableBecause } from './command-registry.js'
 import { icon } from './rail/icons.js'
 import { call, askBrowser } from './helper.js'
 
@@ -45,7 +45,16 @@ const state = {
   page: null,
   pins: [],
   /** True while the first read is in flight, so nothing is dimmed before it has asked. */
-  loading: true
+  loading: true,
+  /**
+   * Which lanes are open. Only the first at the start.
+   *
+   * Eleven headings all open at once is what made this panel one endless scroll: roughly 1,800px, still cut off
+   * at the ninth heading, so anything below "Browser" had to be hunted for. Remembered for the session but not
+   * written to disk -- which lane somebody left open ten minutes ago is not a preference, and restoring five open
+   * lanes on a fresh start would put the scroll straight back.
+   */
+  open: new Set(['page'])
 }
 
 // ---------------------------------------------------------------- what is actually true
@@ -337,6 +346,64 @@ function pinRow() {
 }
 
 /** Everything, as a drawer: short headings, and the things under them. */
+/**
+ * One lane: a row you can press, and its contents when it is open.
+ *
+ * The row is the whole control -- not a chevron you have to hit -- and it says three things without being opened:
+ * what the lane is, what sort of thing is in it, and how many of them. The count is drawn from the registry at
+ * the moment of drawing, so it cannot drift from what is inside.
+ */
+function lane(one) {
+  const items = CAPABILITIES.filter((c) => c.lane === one.id)
+  if (!items.length) return null
+
+  const section = el('section', `cc-lane${state.open.has(one.id) ? ' open' : ''}`)
+  const head = el('button', 'cc-lane-row')
+  head.type = 'button'
+  head.setAttribute('aria-expanded', String(state.open.has(one.id)))
+  head.setAttribute('aria-controls', `cc-lane-${one.id}`)
+
+  const art = el('span', 'cc-lane-art')
+  art.append(icon(one.icon, 16))
+  const words = el('span', 'cc-lane-words')
+  words.append(el('span', 'cc-lane-name', one.label), el('span', 'cc-lane-hint', one.hint))
+  const count = el('span', 'cc-lane-count', String(items.length))
+  const chev = el('span', 'cc-lane-chev')
+  chev.append(icon('chevronDown', 14))
+  head.append(art, words, count, chev)
+  head.addEventListener('click', () => {
+    if (state.open.has(one.id)) state.open.delete(one.id)
+    else state.open.add(one.id)
+    drawDrawer()
+  })
+  section.append(head)
+
+  const body = el('div', 'cc-lane-body')
+  body.id = `cc-lane-${one.id}`
+  if (!state.open.has(one.id)) body.hidden = true
+
+  /*
+   * The categories become the sub-headings inside an open lane.
+   *
+   * One taxonomy in the registry and one view of it here, rather than two competing copies. A heading is only
+   * drawn when the lane holds more than one category -- a single heading over the whole of a lane repeats the
+   * lane's own name and costs a row.
+   */
+  const groups = CATEGORIES.map((category) => [category, items.filter((c) => c.category === category.id)]).filter(([, list]) => list.length)
+  for (const [category, list] of groups) {
+    if (groups.length > 1) {
+      const h = el('h3', 'cc-sub', category.label)
+      h.title = category.blurb
+      body.append(h)
+    }
+    const grid = el('div', 'cc-grid')
+    for (const capability of list) grid.append(tile(capability))
+    body.append(grid)
+  }
+  section.append(body)
+  return section
+}
+
 function drawDrawer() {
   const main = $('cc-main')
   main.replaceChildren()
@@ -346,17 +413,9 @@ function drawDrawer() {
   const pins = pinRow()
   if (pins) main.append(pins)
 
-  for (const category of CATEGORIES) {
-    const items = capabilitiesIn(category.id)
-    if (!items.length) continue
-    const group = el('section', 'cc-group')
-    const head = el('h2', 'cc-h', category.label)
-    head.title = category.blurb
-    group.append(head)
-    const grid = el('div', 'cc-grid')
-    for (const capability of items) grid.append(tile(capability))
-    group.append(grid)
-    main.append(group)
+  for (const one of LANES) {
+    const section = lane(one)
+    if (section) main.append(section)
   }
 }
 

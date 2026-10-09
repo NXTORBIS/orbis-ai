@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { CAPABILITIES, CATEGORIES, MAX_PINS, addPin, addressFor, canPin, capabilitiesIn, capabilityById, movePin, normalizePins, removePin, scoreCapability, searchCapabilities, unavailableBecause } from './commandCenter.ts'
+import { CAPABILITIES, CATEGORIES, LANES, MAX_PINS, addPin, addressFor, canPin, capabilitiesIn, capabilityById, movePin, normalizePins, removePin, scoreCapability, searchCapabilities, unavailableBecause } from './commandCenter.ts'
 import type { Readiness } from './commandCenter.ts'
 
 const all: Readiness = { browser: true, helper: true, key: true, page: true }
@@ -216,4 +216,59 @@ test('it is not offered for the toolbar, because no toolbar button exists for it
   // `pinnable` is a claim about chrome/browser/ui/browser_actions.cc. Marking it true would put a button in the
   // Command Center that could never become a button on the toolbar.
   assert.equal(canPin(capabilityById('copyLink')!), false)
+})
+
+/*
+ * The lanes, which are how the panel is laid out.
+ *
+ * Eleven categories all open at once made the panel one endless scroll -- roughly 1,800px, still cut off at the
+ * ninth heading. The lanes are the errand rather than the subsystem, and these hold them to being that: a lane
+ * nobody can fill is a heading over nothing, and a capability in no lane is the eighteen-dead-rows bug coming
+ * back in a new shape -- a thing the registry knows about that the panel will never draw.
+ */
+test('every capability is in exactly one lane, and every lane is one Orbis knows', () => {
+  const known = new Set(LANES.map((one) => one.id))
+  const missing = CAPABILITIES.filter((one) => !known.has(one.lane)).map((one) => one.id)
+  assert.deepEqual(missing, [], 'these would be filed under a heading the panel does not draw')
+})
+
+test('no lane is a heading over nothing, and none is a second endless scroll', () => {
+  const counts = new Map(LANES.map((one) => [one.id, 0]))
+  for (const one of CAPABILITIES) counts.set(one.lane, (counts.get(one.lane) ?? 0) + 1)
+  const thin = [...counts].filter(([, n]) => n < 4).map(([id, n]) => `${id}: ${n}`)
+  assert.deepEqual(thin, [], 'a lane with three things in it is a heading, not a place -- fold it into another')
+  const fat = [...counts].filter(([, n]) => n > 16).map(([id, n]) => `${id}: ${n}`)
+  assert.deepEqual(fat, [], 'a lane this big is the scroll the lanes exist to end')
+})
+
+test('the lane a person would look in is the one it is in', () => {
+  // Spot checks, written as the errand rather than as the category. Each of these crosses a category boundary,
+  // which is the whole reason the lanes exist: "where did that go" is one errand whether the answer is a tab, a
+  // download or a screenshot, and those sit in three different categories.
+  const laneOf = (id: string): string | undefined => CAPABILITIES.find((one) => one.id === id)?.lane
+  for (const id of ['tabs', 'history', 'downloads', 'recall', 'media']) {
+    assert.equal(laneOf(id), 'find', `${id} answers "where did that go"`)
+  }
+  for (const id of ['ask', 'orbSummarise', 'adblock', 'copyLink', 'screenshots']) {
+    assert.equal(laneOf(id), 'page', `${id} acts on the page in front of you`)
+  }
+  for (const id of ['notes', 'tasks', 'music', 'secrets', 'workflows']) {
+    assert.equal(laneOf(id), 'keep', `${id} is something of yours`)
+  }
+})
+
+test('an icon identifies one thing, or it identifies nothing', () => {
+  /*
+   * Measured before this was fixed: 21 of 45 capabilities wore an icon that another one also wore -- four used
+   * `privacy`, three used `student`, and Ask Orion and Summarise this page were the same glyph. In a grid of
+   * icons that is half the grid saying nothing. Settings deep links are exempt: they are a list of rows inside
+   * one lane, read by their names, and Chromium's own settings pages do not have twelve distinct marks either.
+   */
+  const shared = new Map<string, string[]>()
+  for (const one of CAPABILITIES) {
+    if (one.id.startsWith('settings.')) continue
+    shared.set(one.icon, [...(shared.get(one.icon) ?? []), one.name])
+  }
+  const clashes = [...shared].filter(([, names]) => names.length > 1).map(([icon, names]) => `${icon}: ${names.join(', ')}`)
+  assert.deepEqual(clashes, [], 'two capabilities wearing one icon means neither is identified by it')
 })

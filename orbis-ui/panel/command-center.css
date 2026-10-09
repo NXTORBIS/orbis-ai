@@ -257,3 +257,139 @@ html.surface #cc-close { display: grid; }
   .omni-mic { transition: none; }
   .omni-mic.on::after { animation: none; opacity: 0.55; }
 }
+
+/* ---- the lanes --------------------------------------------------------------------------------------------- */
+/* Five rows you can press, instead of eleven headings all open at once. The old drawer ran to roughly 1,800px in a
+   340px column and was still cut off at the ninth heading, so everything below "Browser" had to be hunted for by
+   scrolling. Closed, the five lanes and the page card fit on one screen; open, a lane shows its own contents and
+   nothing else moves above it. */
+
+.cc-lane {
+  margin: 0 0 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  overflow: hidden;
+  transition: border-color var(--motion-fast) var(--motion-ease), background var(--motion-fast) var(--motion-ease);
+}
+
+.cc-lane.open {
+  border-color: var(--glass-border);
+  background: var(--surface-2);
+}
+
+/* The whole row is the control, not the chevron. A 44px target the width of the panel is the easiest thing in the
+   design to hit, which is the point of putting the five most important decisions on five of them. */
+.cc-lane-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 11px;
+  font: inherit;
+  text-align: left;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--motion-ease);
+}
+
+.cc-lane-row:hover { background: var(--hover); }
+.cc-lane-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.cc-lane-art {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  color: var(--accent);
+  background: var(--accent-fill);
+  transition: background var(--motion-fast) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
+}
+
+.cc-lane.open .cc-lane-art {
+  color: var(--bg);
+  background: var(--accent);
+}
+
+.cc-lane-words { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1 1 auto; }
+.cc-lane-name { font-size: 13px; font-weight: 600; color: var(--text); }
+
+/* The hint says what sort of thing is in the lane. A folder that names nothing is a guess; one that says what it
+   is for is a signpost, and it is the whole argument for a section somebody has to open. */
+.cc-lane-hint {
+  font-size: 10.5px;
+  line-height: 1.25;
+  color: var(--faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Counted from the registry at the moment of drawing, so it cannot drift from what is actually inside. */
+.cc-lane-count {
+  flex: 0 0 auto;
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: var(--muted);
+  background: var(--pill-bg);
+  border: 1px solid var(--pill-border);
+}
+
+.cc-lane-chev {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  color: var(--faint);
+  transition: transform var(--motion-base) var(--motion-ease), color var(--motion-fast) var(--motion-ease);
+}
+
+.cc-lane.open .cc-lane-chev { transform: rotate(180deg); color: var(--accent); }
+
+/* An open lane's contents sit behind a thin accent spine, so a long grid still reads as belonging to the row that
+   opened it once the row itself has scrolled off the top. */
+.cc-lane-body {
+  padding: 2px 8px 10px;
+  border-top: 1px solid var(--line);
+  box-shadow: inset 2px 0 0 -1px var(--accent-dim);
+}
+
+.cc-sub {
+  margin: 10px 0 2px 3px;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .cc-lane.open .cc-lane-body { animation: cc-lane-open var(--motion-base) var(--motion-ease) both; }
+}
+
+@keyframes cc-lane-open {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ---- the tiles, at a size their own names fit in ------------------------------------------------------------ */
+/* `minmax(64px, 1fr)` put five columns in a 340px panel, which left about 56px for a label and produced
+   "Screenshot s" and "Whiteboar d" -- `overflow-wrap: anywhere` breaking words in the middle because there was
+   nowhere else to break them. Four columns, and words break at spaces only. A label that has to be read twice is
+   worse than one that takes a second line. */
+.cc-grid { grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); }
+
+.cc-tile-name {
+  font-size: 10.5px;
+  line-height: 1.25;
+  overflow-wrap: break-word;
+  word-break: normal;
+  hyphens: none;
+}

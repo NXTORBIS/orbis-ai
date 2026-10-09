@@ -104,7 +104,7 @@ html {
   --google-yellow-700-rgb: 240, 147, 0;  /* #f09300 */
   --google-yellow-700: rgb(var(--google-yellow-700-rgb));
 
-  --cr-card-background-color: #ffffff;
+  --cr-card-background-color: #fff;
 
   /* Vars to help define --cr-elevation-* vars. Components should use the
    * --cr-elevation-* variables instead of these colors directly. */
@@ -130,12 +130,12 @@ html {
   --cr-form-field-label-color: var(--google-grey-700);
   --cr-hairline-rgb: 0, 0, 0;
   --cr-iph-anchor-highlight-color: rgba(10,127,179,0.1);
-  --cr-menu-background-color: #ffffff;
-  --cr-menu-background-focus-color: #ffffff;
+  --cr-menu-background-color: #fff;
+  --cr-menu-background-focus-color: #fff;
   --cr-menu-shadow: 0 12px 36px rgba(30,60,110,0.08);
   --cr-separator-color: rgba(40,90,170,0.1);
   --cr-title-text-color: #556b87;
-  --cr-scrollable-border-color: #ffffff;
+  --cr-scrollable-border-color: #fff;
 
   /* Don't use color values past this point. Instead, create a variable that's
    * set for both light and dark modes and use a single variable below. */
