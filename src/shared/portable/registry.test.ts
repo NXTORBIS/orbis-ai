@@ -1,5 +1,7 @@
 import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
+import { readdir, readFile } from 'node:fs/promises'
+
 
 import {
   CATEGORIES,
@@ -247,6 +249,101 @@ describe('the audit against what is actually on disk', () => {
    * transfer while "Everything" carries on claiming to be everything.
    */
   const covered = new Set(CATEGORIES.flatMap((one) => one.storage.map((path) => path.split('/')[0] as string)))
+
+  /**
+   * Every store the code writes, found by reading the code.
+   *
+   * This used to compare the table against a hand-written list of names, which fails in exactly the way the registry
+   * exists to prevent: a store is added, nobody updates the list, and the guard goes on passing while "Everything"
+   * quietly stops being everything. It had done precisely that for eleven stores -- music, course progress, Student,
+   * everything the Creation Engine made, code pages, meeting notes, apps in conversations, per-site settings,
+   * notification history, Ambient Intelligence and unfinished browser runs.
+   *
+   * So it reads the source now. Two idioms are recognised, and together they are how every store in `src/main`
+   * decides where to write:
+   *
+   *   `join(userData, dataDirFor(id), 'name')`  -- a profile's own folder
+   *   `join(userData, 'name')`                  -- shared across profiles
+   *
+   * A store that invents a third way of saying it would not be seen, which is why `ALSO_WRITTEN` below still lists
+   * the ones already known by other means. The scan is an addition to that list, not a replacement for it: between
+   * them, forgetting this table is caught either by the scan or by the list, and the common case -- a new feature
+   * following the same idiom as every existing one -- is caught automatically.
+   */
+  const SOURCE_ROOT = new URL('../../main/', import.meta.url)
+
+  async function* sourceFiles(dir: URL): AsyncGenerator<URL> {
+    for (const entry of await readdir(dir, { withFileTypes: true })) {
+      const path = new URL(entry.name + (entry.isDirectory() ? '/' : ''), dir)
+      if (entry.isDirectory()) yield* sourceFiles(path)
+      else if (entry.name.endsWith('.ts') && !entry.name.endsWith('.test.ts')) yield path
+    }
+  }
+
+  /** The first path segment of every store the code writes, by scope, with the file that writes it. */
+  async function storesInCode(): Promise<{ profile: Map<string, string>; app: Map<string, string> }> {
+    const profile = new Map<string, string>()
+    const app = new Map<string, string>()
+    for await (const file of sourceFiles(SOURCE_ROOT)) {
+      const source = await readFile(file, 'utf8')
+      const where = file.pathname.split('/src/main/')[1] ?? file.pathname
+      for (const m of source.matchAll(/dataDirFor\([^)]*\)\s*,\s*'([^']+)'/g)) if (!profile.has(m[1])) profile.set(m[1], where)
+      for (const m of source.matchAll(/join\(\s*(?:this\.)?[A-Za-z_]*[Uu]ser[Dd]ata[A-Za-z]*\s*,\s*'([^']+)'/g)) if (!app.has(m[1])) app.set(m[1], where)
+    }
+    return { profile, app }
+  }
+
+  /**
+   * Stores the two idioms above cannot see, because they are reached another way.
+   *
+   * Each is already in the table; this list is only here so the guard below can be one assertion over everything
+   * rather than two with different standards. A name added here without being added to the table fails.
+   */
+  const ALSO_WRITTEN = [
+    'markets.json',
+    'pages.json',
+    'security-log.json',
+    'browser',
+    'browser-library.json',
+    'assets',
+    'generated',
+    'control-switches.json',
+    'control-capabilities.json',
+    'profiles.json'
+  ]
+
+  /** Not a store of the user's: a folder Orbis reads from or stages into, which has nothing to carry. */
+  const NOT_A_STORE: Readonly<Record<string, string>> = Object.freeze({})
+
+  test('every store the code writes is in the table', async () => {
+    const { profile, app } = await storesInCode()
+    const covered = new Set(CATEGORIES.flatMap((one) => one.storage.map((path) => path.split('/')[0] as string)))
+    const found = [
+      ...[...profile].map(([name, where]) => ({ name, where, scope: 'profile' })),
+      ...[...app].map(([name, where]) => ({ name, where, scope: 'app' })),
+      ...ALSO_WRITTEN.map((name) => ({ name, where: 'known by other means', scope: 'either' }))
+    ]
+    // The scan must actually have found the stores, or an assertion over nothing would pass for ever.
+    assert.ok(profile.size >= 15, `the scan found only ${profile.size} per-profile stores; the idiom it looks for has changed`)
+    const missing = found
+      .filter((one) => !covered.has(one.name) && !(one.name in NOT_A_STORE))
+      .map((one) => `${one.name} (${one.scope}, ${one.where})`)
+    assert.deepEqual(missing, [], 'these stores exist in the code and are in no category, so an export would leave them behind')
+  })
+
+  test('nothing in the table points at a store the code does not write', async () => {
+    /*
+     * The other direction, which matters for a different reason: a category whose file no longer exists makes an
+     * export offer something that cannot be found, and the person is told a category failed rather than that it was
+     * never there.
+     */
+    const { profile, app } = await storesInCode()
+    const real = new Set([...profile.keys(), ...app.keys(), ...ALSO_WRITTEN])
+    const dangling = CATEGORIES.filter((one) => one.storage.length > 0)
+      .filter((one) => one.storage.every((path) => !real.has(path.split('/')[0] as string)))
+      .map((one) => `${one.id} -> ${one.storage.join(', ')}`)
+    assert.deepEqual(dangling, [], 'these categories name storage no store in src/main writes')
+  })
 
   test('every per-profile store the code writes is covered', async () => {
     const known = new Set([

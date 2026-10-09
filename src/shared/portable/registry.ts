@@ -416,6 +416,193 @@ export const CATEGORIES: readonly PortableCategory[] = Object.freeze([
     mergeable: false
   }),
 
+  // ---- things you made, and what Orbis learned while you did
+  /*
+   * Eleven categories that were missing, and the reason they were missing.
+   *
+   * Each of these is a store the code has been writing for a while, and none of them was in this table -- so an
+   * export that said "Everything" carried none of them. The guard that was supposed to prevent exactly this compared
+   * the table against a hand-written list of names instead of against the code, so adding a store and forgetting
+   * this file passed. `registry.test.ts` now reads the source, which is what it always claimed to do.
+   */
+  category({
+    id: 'music.library',
+    label: 'Music',
+    describe: 'Your library, playlists, play history, what Orbis recognised, and how the player is set up.',
+    portability: 'transformed',
+    sensitivity: 'personal',
+    storage: ['music'],
+    scope: 'profile',
+    schemaVersion: 1,
+    dependsOn: ['assets'],
+    requiresReauthentication: false,
+    userAction: 'Point Orbis at your music folder again. Your playlists and history are already here.',
+    why:
+      'A track is a reference to an audio file on the machine it was added on, and the audio itself is not in the package -- it would be gigabytes and it is already yours. So the library, the playlists and the play counts travel, and each track stays unplayable until its file is found again at the new location.',
+    mergeable: true
+  }),
+  category({
+    id: 'courses.progress',
+    label: 'Course progress',
+    describe: 'Which lessons you have done, your quiz marks, your mastery and your certificates.',
+    portability: 'portable',
+    sensitivity: 'personal',
+    storage: ['courses'],
+    scope: 'profile',
+    schemaVersion: 1,
+    dependsOn: [],
+    requiresReauthentication: false,
+    why: null,
+    userAction: null,
+    mergeable: true
+  }),
+  category({
+    id: 'student.record',
+    label: 'Orbis Student',
+    describe: 'Study time, mastery, missions, the learning record and how sessions are set up.',
+    portability: 'portable',
+    sensitivity: 'personal',
+    storage: ['student'],
+    scope: 'profile',
+    schemaVersion: 1,
+    dependsOn: [],
+    requiresReauthentication: false,
+    why: null,
+    userAction: null,
+    mergeable: true
+  }),
+  category({
+    id: 'artifacts',
+    label: 'Things you made',
+    describe: 'Documents, tables, charts, figures and office files made in Orbis, with their versions.',
+    portability: 'portable',
+    sensitivity: 'personal',
+    storage: ['artifacts'],
+    scope: 'profile',
+    schemaVersion: 1,
+    dependsOn: ['orion.conversations'],
+    requiresReauthentication: false,
+    why: null,
+    userAction: null,
+    mergeable: true
+  }),
+  category({
+    id: 'pages.code',
+    label: 'Code pages',
+    describe: 'The code of the Pages you or Orion wrote.',
+    portability: 'portable',
+    sensitivity: 'personal',
+    storage: ['code-pages'],
+    scope: 'profile',
+    schemaVersion: 1,
+    dependsOn: ['pages.documents'],
+    requiresReauthentication: false,
+    why: null,
+    userAction: null,
+    mergeable: true
+  }),
+  category({
+    id: 'meetings',
+    label: 'Meeting notes',
+    describe: 'Notes taken while you were talking.',
+    portability: 'portable',
+    sensitivity: 'personal',
+    storage: ['meeting-notes.json'],
+    scope: 'profile',
+    schemaVersion: 1,
+    dependsOn: [],
+    requiresReauthentication: false,
+    why: null,
+    userAction: null,
+    mergeable: true
+  }),
+  category({
+    id: 'native.apps',
+    label: 'Apps in conversations',
+    describe: 'The laboratories and apps opened inside a conversation, and what was done in them.',
+    portability: 'portable',
+    sensitivity: 'personal',
+    storage: ['native'],
+    scope: 'profile',
+    schemaVersion: 1,
+    dependsOn: ['orion.conversations'],
+    requiresReauthentication: false,
+    why: null,
+    userAction: null,
+    mergeable: true
+  }),
+  category({
+    id: 'site.profiles',
+    label: 'Per-site settings',
+    describe: 'Which sites open in which profile, and what each is allowed.',
+    portability: 'portable',
+    sensitivity: 'ordinary',
+    storage: ['site-profiles.json'],
+    scope: 'profile',
+    schemaVersion: 1,
+    dependsOn: [],
+    requiresReauthentication: false,
+    why: null,
+    userAction: null,
+    mergeable: true
+  }),
+  category({
+    id: 'notifications.history',
+    label: 'Notification history',
+    describe: 'What Orbis has interrupted you about, and what you did with it.',
+    portability: 'portable',
+    sensitivity: 'personal',
+    storage: ['notifications.json'],
+    scope: 'profile',
+    schemaVersion: 1,
+    dependsOn: [],
+    requiresReauthentication: false,
+    why: null,
+    userAction: null,
+    mergeable: true
+  }),
+  /*
+   * The two that must not travel, and why each one is a worse package for being in it.
+   *
+   * Ambient Intelligence is a running observation of what is being worked on *on this machine*: which windows, which
+   * pages, which hours. Carried across, it would assert that somebody did things on a computer where they did not,
+   * and Orbis would then feed those assertions to Orion as context. It rebuilds itself in a day of ordinary use.
+   *
+   * An automation checkpoint is the middle of a browser run -- which tab, which step, which element. The tabs it
+   * names belong to a browser process that has since exited. Restoring one would offer to resume something that
+   * cannot be resumed.
+   */
+  category({
+    id: 'ambient',
+    label: 'Ambient Intelligence',
+    describe: 'What Orbis noticed you working on, on this computer.',
+    portability: 'device-bound',
+    sensitivity: 'personal',
+    storage: ['ambient'],
+    scope: 'profile',
+    schemaVersion: 1,
+    dependsOn: [],
+    requiresReauthentication: false,
+    userAction: null,
+    why: 'It is an observation of this computer being used. On another one it would be a record of things that did not happen there, and Orion is given it as context. It builds again from ordinary use.',
+    mergeable: false
+  }),
+  category({
+    id: 'automation.checkpoints',
+    label: 'Unfinished browser runs',
+    describe: 'Where a browser task had got to when it stopped.',
+    portability: 'device-bound',
+    sensitivity: 'ordinary',
+    storage: ['automation-checkpoints.json'],
+    scope: 'profile',
+    schemaVersion: 1,
+    dependsOn: [],
+    requiresReauthentication: false,
+    userAction: null,
+    why: 'A checkpoint names tabs and elements of a browser that has since closed. Carrying it would offer to resume a run that cannot be resumed.',
+    mergeable: false
+  }),
+
   // ---- appearance
   category({
     id: 'personalization',
