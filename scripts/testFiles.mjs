@@ -339,6 +339,7 @@ export const TEST_FILES = [
   'src/main/markets/providers/binanceFutures.test.ts',
   'src/shared/orbisUiSyntax.test.ts',
   'src/shared/cssCollisions.test.ts',
+  'src/shared/screenWidth.test.ts',
   'src/shared/testSuite.test.ts',
   'src/shared/compute/units.test.ts',
   'src/shared/compute/expression.test.ts',
