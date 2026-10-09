@@ -1030,6 +1030,8 @@ class VisualSearch {
     return visualActions({
       kind: found?.kind ?? 'unknown',
       can: this.able.can,
+      // Orbis's own reason, so the list cannot say "no key" when the reason was that nothing answered.
+      why: this.able.says,
       structured: Boolean(found?.data),
       address: Boolean(found?.address),
       answered: this.answered,

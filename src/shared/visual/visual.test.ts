@@ -601,3 +601,27 @@ describe('a remembered "nothing can see" is never the final word', () => {
     assert.match(source, /private asking: Promise<void> \| null/, 'two callers must share one request, or they decide on whichever lands first')
   })
 })
+
+/*
+ * One bar, one reason.
+ *
+ * An empty `can` has two causes that are not interchangeable -- no key, and nothing answering at all -- and the list
+ * said "no key" for both. A bar could therefore show "Orbis is not running" at the top and "Orbis has no key"
+ * underneath, which is worse than saying nothing: one of the two is a lie, and the person acts on the wrong one.
+ */
+describe('the action list says the reason it was given', () => {
+  const bare = { kind: 'unknown' as const, can: [] as const, structured: false, address: false, answered: false, risky: false }
+
+  it('repeats the reason Orbis gave, when it gave one', () => {
+    assert.equal(visualActions({ ...bare, why: 'Orbis is not running.' }).says, 'Orbis is not running.')
+  })
+
+  it('falls back to no key only when nothing was said', () => {
+    assert.match(visualActions(bare).says, /no key/)
+    assert.match(visualActions({ ...bare, why: '' }).says, /no key/)
+  })
+
+  it('a private-looking selection still outranks both', () => {
+    assert.match(visualActions({ ...bare, risky: true, why: 'Orbis is not running.' }).says, /private/)
+  })
+})

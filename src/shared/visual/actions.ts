@@ -113,6 +113,14 @@ export interface ActionsInput {
   readonly answered: boolean
   /** A selection that looked sensitive: everything that sends is dropped, and the bar says why. */
   readonly risky: boolean
+  /**
+   * Why there are no eyes, in Orbis's own words, when it has said.
+   *
+   * An empty `can` has more than one cause and they are not interchangeable: no key is one, and Orbis not being
+   * reachable at all is another. Without this the list said "no key" for both, so a bar could show one reason at the
+   * top and the opposite one underneath -- which is worse than saying nothing, because one of the two is a lie.
+   */
+  readonly why?: string
   /** How many to return. The bar is small on purpose. */
   readonly most?: number
 }
@@ -165,7 +173,8 @@ export function visualActions(input: ActionsInput): ActionList {
   const trimmed = out.slice(0, most)
   let says = ''
   if (input.risky) says = 'This selection looks like it holds something private, so nothing here will send it anywhere.'
-  else if (!can.has('eyes')) says = 'Orbis has no key for the service that can look at an image, so there is nothing to ask.'
+  else if (!can.has('eyes'))
+    says = input.why !== undefined && input.why !== '' ? input.why : 'Orbis has no key for the service that can look at an image, so there is nothing to ask.'
   else if (held.length && !can.has('window')) says = 'Open the Orbis window to carry this on in a conversation or a laboratory.'
   return { actions: trimmed, says }
 }
