@@ -92,6 +92,15 @@ export type ControlDomain =
    * that moves anything is `market.paperOrder`, and what it moves is simulated.
    */
   | 'markets'
+  /**
+   * Orbis Music.
+   *
+   * Its own domain so "what Orion may do about music" is one switch. Note what it cannot do even when it is on:
+   * there is no capability here that acquires audio. The most any of them can do is play a file the person already
+   * has, or keep the name of a song heard on a page -- a website’s own player is reached through , which is
+   * a different switch, and protected sound is never turned into a file by either.
+   */
+  | 'music'
   | 'state'
 
 /** Who asked: the person using Orbis, Orion's browser agent, or an automation run. */

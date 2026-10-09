@@ -359,3 +359,45 @@ test('searching looks at what a secret says about itself, never at the secret', 
   assert.equal(matchesSearch(summary, 'unmistakable'), false, 'the value is not searched')
   assert.equal(matchesSearch(summary, 'private note'), false, 'nor are the notes')
 })
+
+// ---------------------------------------------------------------- a vault that cannot be read is not a missing vault
+
+test('a vault Orbis cannot read is never written over, and setting a new one up is refused', async () => {
+  await withVault(async (vault, dir) => {
+    await vault.create('default', PASSWORD)
+    await vault.add('default', { name: 'Bank', kind: 'password', value: 'hunter2' } as never)
+
+    // Stands in for the real cases -- another program holding the file, a half-written copy. The point is only that
+    // reading throws something other than "there is no file".
+    const path = join(dir, 'secrets.vault')
+    const kept = await readFile(path)
+    await rm(path)
+    await import('node:fs/promises').then((fsp) => fsp.mkdir(path))
+
+    const status = await vault.status('default')
+    assert.equal(status.exists, true, 'there IS a vault; saying otherwise invites setting one up over it')
+    assert.ok(status.unreadable, 'and it says it could not be read')
+
+    await assert.rejects(() => vault.create('default', 'a different password'), VaultFailure, 'creating one must be refused')
+
+    // The original is still exactly where it was.
+    await import('node:fs/promises').then((fsp) => fsp.rm(path, { recursive: true }))
+    await import('node:fs/promises').then((fsp) => fsp.writeFile(path, kept))
+    await vault.unlock('default', PASSWORD)
+    const back = await vault.list('default')
+    assert.equal(back.length, 1, 'the secret that was there is still there')
+  })
+})
+
+test('a vault from a newer Orbis is not mistaken for no vault', async () => {
+  await withVault(async (vault, dir) => {
+    const path = join(dir, 'secrets.vault')
+    const fsp = await import('node:fs/promises')
+    await fsp.writeFile(path, JSON.stringify({ version: 2, master: 'something', secrets: 'x' }))
+
+    const status = await vault.status('default')
+    assert.equal(status.exists, true)
+    assert.match(status.unreadable ?? '', /newer version/)
+    await assert.rejects(() => vault.create('default', PASSWORD), VaultFailure, 'downgrading once must not destroy it')
+  })
+})

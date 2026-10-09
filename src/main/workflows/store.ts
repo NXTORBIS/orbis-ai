@@ -1,4 +1,5 @@
 import { promises as fs } from 'node:fs'
+import { readStored } from '../storedFile.ts'
 import { nullPlatform } from '../platform.ts'
 import type { SecretStorePort } from '../platform'
 import { join } from 'node:path'
@@ -63,10 +64,25 @@ export class WorkflowStore {
     return join(this.dir, ...parts)
   }
 
+  /**
+   * Files that are there and could not be read, which must not be written over.
+   *
+   * Reading used to treat "could not be read" and "is not there" as the same thing, so a workflow file something
+   * else had open for a moment looked like no workflow at all -- and the next save wrote an empty one over it.
+   * Workflow files hold what a workflow was told to remember, which does not exist anywhere else.
+   */
+  private readonly unreadable = new Set<string>()
+
   private write(path: string, data: unknown): Promise<void> {
+    if (this.unreadable.has(path)) {
+      // Looked at again next time: a lock clears, a copy finishes, and refusing costs only this one save.
+      this.unreadable.delete(path)
+      return Promise.resolve()
+    }
     const run = (this.queues.get(path) ?? Promise.resolve()).then(async () => {
       await fs.mkdir(join(path, '..'), { recursive: true })
-      await fs.writeFile(`${path}.tmp`, JSON.stringify(data))
+      // Readable by this account only.
+      await fs.writeFile(`${path}.tmp`, JSON.stringify(data), { mode: 0o600 })
       await fs.rename(`${path}.tmp`, path)
     })
     this.queues.set(path, run.catch(() => undefined))
@@ -74,8 +90,15 @@ export class WorkflowStore {
   }
 
   private async read<T>(path: string, fallback: T): Promise<T> {
+    const stored = await readStored(path)
+    if (stored.kind === 'unreadable') {
+      // There is a file; Orbis just could not read it. Carry on from the fallback, but never write over it.
+      this.unreadable.add(path)
+      return fallback
+    }
+    if (stored.kind === 'missing') return fallback
     try {
-      return JSON.parse(await fs.readFile(path, 'utf8')) as T
+      return JSON.parse(stored.text) as T
     } catch {
       return fallback
     }

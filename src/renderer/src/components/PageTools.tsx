@@ -182,7 +182,7 @@ interface Segment {
   points: { x: number; y: number }[]
 }
 
-interface Series {
+export interface Series {
   id: string
   label: string
   kind: string
@@ -199,7 +199,7 @@ const COLOURS = ['#56b4e9', '#e69f00', '#009e73', '#f0e442', '#0072b2', '#d55e00
  * makes no decisions of its own -- in particular it never joins across a break, because the break is the engine saying
  * there is nothing there to join.
  */
-function Plot({ series, height = 260 }: { series: Series[]; height?: number }): React.JSX.Element | null {
+export function Plot({ series, height = 260 }: { series: Series[]; height?: number }): React.JSX.Element | null {
   const bounds = useMemo(() => {
     let low = Number.POSITIVE_INFINITY
     let high = Number.NEGATIVE_INFINITY
@@ -302,16 +302,22 @@ function Plot({ series, height = 260 }: { series: Series[]; height?: number }): 
 
 export function FunctionPlotterPage({
   pageId,
-  onNotify
+  onNotify,
+  initial
 }: {
   pageId: string
   onNotify(m: string, k?: NoticeKind): void
+  /** Starting values, when this was opened from a sentence rather than by hand. */
+  initial?: Readonly<Record<string, string>>
 }): React.JSX.Element {
-  const [mode, setMode] = useState<'function' | 'parametric' | 'polar'>('function')
-  const [expression, setExpression] = useState('sin(x) / x')
-  const [second, setSecond] = useState('sin(t)')
-  const [from, setFrom] = useState('-20')
-  const [to, setTo] = useState('20')
+  const [mode, setMode] = useState<'function' | 'parametric' | 'polar'>(() => {
+    const given = initial?.mode
+    return given === 'parametric' || given === 'polar' ? given : 'function'
+  })
+  const [expression, setExpression] = useState(() => initial?.expression ?? 'sin(x) / x')
+  const [second, setSecond] = useState(() => initial?.second ?? 'sin(t)')
+  const [from, setFrom] = useState(() => initial?.from ?? '-20')
+  const [to, setTo] = useState(() => initial?.to ?? '20')
 
   const { result, problem, busy } = useEngine<{ series: Series; evaluations: number }>(
     pageId,
@@ -411,14 +417,17 @@ export function FunctionPlotterPage({
 
 export function StatisticsLabPage({
   pageId,
-  onNotify
+  onNotify,
+  initial
 }: {
   pageId: string
   onNotify(m: string, k?: NoticeKind): void
+  /** Starting values, when this was opened from a sentence rather than by hand. */
+  initial?: Readonly<Record<string, string>>
 }): React.JSX.Element {
-  const [text, setText] = useState('12 15 11 18 14 16 13 22 15 14 17 13')
-  const [against, setAgainst] = useState('15')
-  const [other, setOther] = useState('19 21 18 24 20 22 19 25')
+  const [text, setText] = useState(() => initial?.text ?? '12 15 11 18 14 16 13 22 15 14 17 13')
+  const [against, setAgainst] = useState(() => initial?.against ?? '15')
+  const [other, setOther] = useState(() => initial?.other ?? '19 21 18 24 20 22 19 25')
 
   const values = useMemo(() => readNumbers(text), [text])
   const comparison = useMemo(() => readNumbers(other), [other])

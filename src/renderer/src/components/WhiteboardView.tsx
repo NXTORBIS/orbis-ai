@@ -484,7 +484,16 @@ export default function WhiteboardView({ onClose, onNotify }: { onClose(): void;
       return
     }
     if (e.key === 'Escape') {
-      setSelected(new Set())
+      /*
+       * Dropping the selection, and claiming the key so the shell does not close the board.
+       *
+       * Only claimed when there was actually something selected — with nothing selected there is nothing to drop, and
+       * Escape should then mean what it means everywhere else.
+       */
+      if (selected.size > 0) {
+        e.preventDefault()
+        setSelected(new Set())
+      }
       return
     }
     const picked = TOOLS.find((t) => t.key.toLowerCase() === e.key.toLowerCase())

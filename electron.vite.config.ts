@@ -23,12 +23,21 @@ export default defineConfig(({ mode }) => {
         rollupOptions: {
           // The app's preload, and the bridge a sandboxed Page talks to. (Orbis's browser is Chromium and has no
           // Electron preload scripts of its own; `page` is for the Page frames the app itself hosts.)
-          input: { index: resolve('src/preload/index.ts'), page: resolve('src/preload/page.ts') }
+          // `player` is the bridge for the hidden window that plays Orbis Music: four messages and nothing else.
+          input: { index: resolve('src/preload/index.ts'), page: resolve('src/preload/page.ts'), player: resolve('src/preload/player.ts') }
         }
       }
     },
     renderer: {
-      plugins: [react()]
+      plugins: [react()],
+      build: {
+        rollupOptions: {
+          // Two pages: the app itself, and the window nobody sees that holds the one <audio> element Orbis Music
+          // plays through. It is a page rather than something generated at runtime so it is built, typed and checked
+          // like everything else.
+          input: { index: resolve('src/renderer/index.html'), player: resolve('src/renderer/player.html') }
+        }
+      }
     }
   }
 })

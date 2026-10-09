@@ -15,7 +15,7 @@ var CATEGORIES = [
   { id: "customize", label: "Customize", icon: "customize", blurb: "How Orbis looks and what sits on the toolbar" },
   { id: "settings", label: "Settings", icon: "settings", blurb: "Every setting, found by name instead of hunted for" }
 ];
-var PANEL_VIEWS = ["home", "ask", "search", "block", "recall", "schedules", "notes", "tasks", "workflows", "galaxy", "secrets", "account"];
+var PANEL_VIEWS = ["home", "ask", "search", "block", "recall", "schedules", "notes", "tasks", "workflows", "galaxy", "secrets", "account", "music", "student"];
 var RAIL_VIEWS = ["tabs", "tabGroups", "media", "controls", "savedPages", "screenshots", "reminders", "clipboard", "whiteboard", "research", "sources", "workspaces"];
 var CAPABILITIES = [
   // ---- Browser
@@ -67,6 +67,26 @@ var CAPABILITIES = [
    * rail views are a different set, and pointing at one of those would land on the Command Center instead.
    */
   { id: "schedules", name: "Schedules", category: "capture", description: "Things Orbis does at a time you chose", icon: "reminders", keywords: ["schedule", "remind", "reminder", "later", "every", "daily", "timer", "when", "repeat", "automation"], target: { kind: "panel", view: "schedules" }, pinnable: false, needs: ["helper"] },
+  /*
+   * Focus, in the browser.
+   *
+   * Not the whole of Orbis Student -- that lives in the Orbis window, and two homes for one feature is the exact
+   * confusion worth avoiding. This is the part that belongs where the reading happens: what is running, how long is
+   * left, keeping a page or a card, and the way out of a session.
+   */
+  {
+    id: "focus",
+    name: "Focus",
+    category: "tools",
+    description: "Your study session, and keeping what you find while you read",
+    icon: "student",
+    keywords: ["focus", "study", "session", "timer", "pomodoro", "student", "revision", "flashcard", "card", "mistake", "exam", "deep work", "concentrate"],
+    target: { kind: "panel", view: "student" },
+    // Not pinnable: a pin needs a toolbar action registered in the fork, and there is no Focus button there yet.
+    pinnable: false,
+    needs: ["helper"]
+  },
+  { id: "music", name: "Music", category: "media", description: "What is playing, your own music, and songs you hear while browsing", icon: "media", keywords: ["music", "song", "track", "playlist", "album", "artist", "play", "pause", "listen", "library", "audio", "now playing", "shazam", "identify", "recognise", "recognize"], target: { kind: "panel", view: "music" }, pinnable: false, needs: ["helper"] },
   { id: "savedPages", name: "Saved pages", category: "capture", description: "Pages kept on this computer, readable offline", icon: "savedPages", keywords: ["saved", "offline", "archive", "keep"], target: { kind: "view", view: "savedPages" }, pinnable: false, needs: ["helper"] },
   // ---- Media
   { id: "media", name: "Media", category: "media", description: "What is playing, and where", icon: "media", keywords: ["media", "audio", "video", "play", "pause", "sound", "music"], target: { kind: "view", view: "media" }, pinnable: false, needs: ["browser", "helper"] },
@@ -93,6 +113,8 @@ var CAPABILITIES = [
   // the Command Center redrew the Command Center.
   { id: "pages", name: "Pages", category: "tools", description: "Orbis\u2019s own tools, each with its own address", icon: "pages", keywords: ["page", "tool", "calculator", "converter", "lab", "build"], target: { kind: "app" }, app: "pages", pinnable: false, needs: ["helper"] },
   { id: "markets", name: "Markets", category: "tools", description: "Live prices, charts and watchlists", icon: "markets", keywords: ["market", "price", "chart", "crypto", "ticker", "watchlist", "trading"], target: { kind: "app" }, app: "markets", pinnable: false, needs: ["helper"] },
+  { id: "student", name: "Student", category: "tools", description: "Focus sessions, goals, daily learning and Orbi", icon: "student", keywords: ["student", "study", "focus", "school", "exam", "revision", "homework", "learn", "goal", "pomodoro", "timer", "orbi", "xp"], target: { kind: "app" }, app: "student", pinnable: false, needs: [] },
+  { id: "courses", name: "Courses", category: "tools", description: "Structured learning, with what you know actually measured", icon: "student", keywords: ["course", "courses", "lesson", "module", "curriculum", "learn", "learning", "certificate", "quiz", "syllabus", "tutorial", "training"], target: { kind: "app" }, app: "courses", pinnable: false, needs: [] },
   { id: "profiles", name: "Profiles", category: "settings", description: "Separate lives, separate data", icon: "account", keywords: ["profile", "account", "switch", "person"], target: { kind: "panel", view: "account" }, app: "profiles", pinnable: false, needs: ["helper"] },
   { id: "settings", name: "Settings", category: "settings", description: "Everything there is to change", icon: "settings", keywords: ["settings", "preferences", "options", "configure", "setup"], target: { kind: "page", url: "chrome://settings/" }, pinnable: false, needs: ["browser"] },
   { id: "settings.appearance", name: "Appearance", category: "settings", description: "Theme, fonts and how pages are shown", icon: "customize", keywords: ["appearance", "browser theme", "dark mode", "light mode", "font", "font size", "text size", "page zoom"], target: { kind: "page", url: "chrome://settings/appearance" }, pinnable: false, needs: ["browser"] },
@@ -141,7 +163,7 @@ function scoreCapability(capability, query) {
   const name = capability.name.toLowerCase();
   const keywords = capability.keywords.map((k) => k.toLowerCase());
   if (name === q) return 100;
-  if (name.startsWith(q)) return 80;
+  if (name.startsWith(q)) return 80 + Math.round(10 * q.length / name.length);
   if (keywords.includes(q)) return 70;
   const at = name.indexOf(q);
   const startsAWord = at === 0 || at > 0 && !isWordCharacter(name[at - 1]);

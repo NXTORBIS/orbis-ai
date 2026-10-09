@@ -1,4 +1,5 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import type { ChatQuiz } from '../../../shared/types'
 import { ArrowDown, HatGlasses } from 'lucide-react'
 import type { Attachment, Conversation, Settings } from '../../../shared/types'
 import type { NoticeKind, StreamState } from '../App'
@@ -10,6 +11,7 @@ import ResearchRunning from './ResearchRunning'
 import VoiceConversation from './VoiceConversation'
 import ChatSelectionBar from './ChatSelectionBar'
 import ChatRail from './ChatRail'
+import { chipsVisible } from '../../../shared/chatPrediction'
 import Greeting from './Greeting'
 import MessageItem from './MessageItem'
 import type { Anchored, ChatScrollState, ScrollAction, Viewport } from '../../../shared/chatScroll'
@@ -49,10 +51,16 @@ interface Props {
   onEdit(messageId: string, text: string): void
   onResend(messageId: string): void
   onFeedback(messageId: string, feedback: 'up' | 'down' | undefined): void
+  /** Saves how far through a quiz somebody is. */
+  onQuizChange(messageId: string, next: ChatQuiz): void
+  /** Puts a second go at the missed questions in the conversation. */
+  onQuizRetry(next: ChatQuiz): void
   onNotify(text: string, kind?: NoticeKind): void
   onImprovePrompt(text: string): Promise<string | null>
   onNewChat?(): void
   onSearch?(): void
+  /** Opens a Native App into this conversation. The reference is attached to a message, so it survives a reload. */
+  onOpenApp?(appId: string): void
   /** Going back to an answer this conversation moved away from, and throwing one away. */
   onUseBranch(branchId: string): void
   onForgetBranch(branchId: string): void
@@ -87,6 +95,17 @@ function quotedQuestion(text: string): string {
 export default function ChatView(props: Props): React.JSX.Element {
   const { conversation, stream, settings } = props
   const messages = conversation?.messages ?? []
+  /*
+   * Whether there is anything of the person in the message box.
+   *
+   * The chips under a reply -- "Explain further", "Give an example" -- were shown whenever a reply had them, so
+   * they sat there under the last answer while somebody was busy writing a different question. They are offered
+   * to answer "what now?", and somebody who has started typing has answered it. The box tells this, and
+   * `chipsVisible` decides, so the rule is in one testable place rather than spread over two components.
+   */
+  const [draftStarted, setDraftStarted] = useState(false)
+  // A different conversation starts with a clean box as far as the chips are concerned.
+  useEffect(() => setDraftStarted(false), [conversation?.id])
   const scrollRef = useRef<HTMLDivElement>(null)
   /**
    * When Orbis may move the page.
@@ -402,6 +421,7 @@ export default function ChatView(props: Props): React.JSX.Element {
       model={props.model}
       prediction={!stream && last?.role === 'assistant' ? last.prediction : undefined}
       onCompleteDraft={completeDraft}
+      onDraftStarted={setDraftStarted}
       draftContextKey={`${conversation?.id ?? 'new'}:${last?.id ?? ''}:${stream ? 'live' : 'idle'}`}
       queue={props.queue}
       onRemoveQueued={props.onRemoveQueued}
@@ -418,6 +438,7 @@ export default function ChatView(props: Props): React.JSX.Element {
       onImprovePrompt={props.onImprovePrompt}
       onNewChat={props.onNewChat}
       onSearch={props.onSearch}
+      onOpenApp={props.onOpenApp}
       />
     </>
   )
@@ -440,6 +461,7 @@ export default function ChatView(props: Props): React.JSX.Element {
   }
 
   const lastAssistantIndex = messages.findLastIndex((m) => m.role === 'assistant')
+  const chips = { conversationId: conversation?.id ?? null, responseId: messages[lastAssistantIndex]?.id ?? null, draftStarted }
 
   return (
     <div className="stage-content">
@@ -467,7 +489,7 @@ export default function ChatView(props: Props): React.JSX.Element {
                 status={stream?.messageId === m.id ? stream.status : undefined}
                 canRegenerate={!stream && i === lastAssistantIndex}
                 canEdit={!stream}
-                canSuggest
+                canSuggest={chipsVisible(chips, m.id, conversation?.id ?? null)}
                 onSuggest={(text) => {
                   props.onSend(text, [])
                 }}
@@ -475,6 +497,8 @@ export default function ChatView(props: Props): React.JSX.Element {
                 onEdit={props.onEdit}
                 onResend={props.onResend}
                 onFeedback={props.onFeedback}
+                onQuizChange={props.onQuizChange}
+                onQuizRetry={props.onQuizRetry}
                 onNotify={props.onNotify}
                 onBrowserConfirm={props.onBrowserConfirm}
                 onAutomationControl={props.onAutomationControl}

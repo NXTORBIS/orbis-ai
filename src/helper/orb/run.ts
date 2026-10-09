@@ -832,7 +832,7 @@ export function createOrbHandlers(deps: OrbDeps): Record<string, Handler> {
           workflows: deps.has('workflows:list'),
           skills: deps.has('skills:list'),
           memory: deps.has('memory:list'),
-          galaxy: deps.has('galaxy:graph'),
+          galaxy: deps.has('galaxy:view'),
           notes: deps.has('notes:list'),
           tasks: deps.has('tasks:list'),
           whiteboard: deps.has('whiteboard:list'),

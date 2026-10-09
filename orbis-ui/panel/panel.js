@@ -1,9 +1,8 @@
 import { askBrowser, call, HelperDown } from './helper.js'
 import { mountOmnibox } from './omnibox-ui.js'
-import { mountCommandCenter, show as showCommandCenter, useRail } from './command-center.js'
-import { mountRail } from './rail-nav.js'
+import { mountCommandCenter } from './command-center.js'
 import { hasView, showView } from './rail/index.js'
-import { PANEL_VIEWS, RAIL_VIEWS } from './command-registry.js'
+import { CAPABILITIES, PANEL_VIEWS, RAIL_VIEWS } from './command-registry.js'
 
 // The Orbis side panel. Everything it shows comes from the helper; this file only draws it and sends what is typed.
 //
@@ -34,8 +33,19 @@ const RUNTIME_STATES = {
   unreachable: { label: 'No answer', detail: 'Orbis is running but did not answer. It may still be starting.', state: 'down' }
 }
 
+/**
+ * How Orbis is, kept rather than shown.
+ *
+ * There was a badge in the title bar for this -- Ready, No model, Stopped -- and it is gone. Nothing about how the
+ * panel is getting on belongs on screen while somebody is trying to use it; the thing they touch says why it could
+ * not be done, at the moment they touch it.
+ *
+ * The states themselves are kept, and so is this, because the panel is connected to from several places and each of
+ * them says how it went. There is simply nowhere on screen for it to land any more.
+ */
 function setStatus(name) {
   const it = RUNTIME_STATES[name] ?? RUNTIME_STATES.unreachable
+  if (!status) return
   status.textContent = it.label
   status.title = it.detail
   status.className = `status ${it.state}`
@@ -166,12 +176,14 @@ function showTab(name, landing = false) {
    */
   if (!VIEWS.includes(name) && hasView(name)) {
     showView(name)
+    markWhere(name)
     if (viewFromAddress() !== name) history[landing ? 'replaceState' : 'pushState'](null, '', `#${name}`)
     return
   }
   // Every view in the panel, including the rail's own (Tabs, Clipboard, ...), so choosing a tab always hides whichever was in front.
   for (const view of document.querySelectorAll('.view')) view.hidden = view.id !== `view-${name}`
   for (const id of VIEWS) $(`tab-${id}`)?.setAttribute('aria-selected', String(id === name))
+  markWhere(name)
   // Keep the address in step with what is on screen, and leave a history entry so Back returns to the view you came
   // from. It used to `replaceState`, on the reasoning that the address describes the page rather than a trail through
   // it -- but the comment above promises a view is "a page you can open, link to, bookmark and land on directly", and
@@ -181,11 +193,16 @@ function showTab(name, landing = false) {
   if (name === 'block') document.dispatchEvent(new CustomEvent('orbis:blocking-shown'))
   else if (name === 'notes') document.dispatchEvent(new CustomEvent('orbis:notes-shown'))
   else if (name === 'tasks') document.dispatchEvent(new CustomEvent('orbis:tasks-shown'))
-  else if (['workflows', 'galaxy', 'secrets'].includes(name)) document.dispatchEvent(new CustomEvent(`orbis:${name}-shown`))
+  else if (['workflows', 'galaxy', 'secrets', 'music'].includes(name)) document.dispatchEvent(new CustomEvent(`orbis:${name}-shown`))
   // Read afresh every time it is opened, however it was opened: the name can change
   // in the Orbis window while this panel sits here.
   else if (name === 'account') document.dispatchEvent(new CustomEvent('orbis:account-shown'))
-  else if (name === 'home') void commandCenter?.refresh()
+  else if (name === 'home') {
+    void commandCenter?.refresh()
+    // The box is the way to everything here, so it starts with the keyboard. Not on a touch screen, where focusing an
+    // input raises the on-screen keyboard over the thing somebody just opened.
+    commandCenter?.focusSearch()
+  }
   // Which page the question is about is read afresh every time this screen is opened: the tab in front can change
   // while the panel sits here, and the answer has to be about the page that is there now.
   else if (name === 'ask') askShown()
@@ -196,6 +213,47 @@ function showTab(name, landing = false) {
   // being read, so the lines after this one never ran: no hashchange listener, no `connect()`, a panel that never
   // reached Orbis at all. A dead `else` is worth more attention than a dead row.
 }
+/**
+ * What a view is called, in the words the Command Center uses for it.
+ *
+ * Read from the registry rather than written down here, so a view cannot end up with one name in the list you chose it
+ * from and another in the bar above it. A view nothing in the registry points at keeps its own name.
+ */
+const VIEW_NAMES = (() => {
+  const names = {}
+  for (const capability of CAPABILITIES) {
+    const target = capability.target
+    if ((target.kind === 'panel' || target.kind === 'view') && names[target.view] === undefined) {
+      names[target.view] = capability.name
+    }
+  }
+  return names
+})()
+
+const titleCase = (name) => name.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/^./, (c) => c.toUpperCase())
+
+/**
+ * Draws the top bar for the view that is showing.
+ *
+ * On the home there is no bar at all. A row saying "Orbis" over a side panel the browser has already labelled Orbis
+ * is a row spent on nothing. Inside a view it carries the way back and the name of what you are looking at, which are
+ * both things you cannot work out from the screen.
+ */
+function markWhere(name) {
+  const bar = $('pan-bar')
+  const back = $('pan-back')
+  const where = $('pan-where')
+  const home = name === 'home'
+  if (back) back.hidden = home
+  // Over a page this is a dialog, and a dialog with a close button needs a title beside it to say what is being
+  // closed. In the side panel the browser's own chrome is that title, so there it stays empty.
+  const surface = document.documentElement.classList.contains('surface')
+  if (where) where.textContent = home ? (surface ? 'Orbis' : '') : (VIEW_NAMES[name] ?? titleCase(name))
+  if (bar) bar.hidden = home && !surface
+}
+
+$('pan-back')?.addEventListener('click', () => showTab('home'))
+
 // The sidebar is the only navigation now; the row of tabs that repeated it is gone.
 // These listeners are kept behind a guard so the panel still works if the row ever
 // comes back — and so removing it cannot take the panel down with it.
@@ -223,14 +281,9 @@ if (asSurface) {
   })
 }
 
-// One navigation. The rail says where to go; the Command Center shows what is there. Choosing a category always lands
-// on the Command Center, so the rail's mark and the panel agree about where you are.
+// One navigation: the Command Center. There used to be a rail beside it saying the same eleven things, and the two
+// had to be kept in step with each other for no gain -- at panel width the rail was eleven unlabelled icons anyway.
 const commandCenter = mountCommandCenter($('view-home'))
-const rail = mountRail($('rail'), (view) => {
-  showTab('home')
-  showCommandCenter(view)
-})
-useRail(rail)
 
 function renderResults(outcome) {
   results.replaceChildren()
@@ -311,7 +364,10 @@ const omnibox = mountOmnibox({
   },
   onOpenExternally: (target) => {
     void call('browser:openExternal', [target]).catch(() => {
-      // Nothing opened rather than something opened in the wrong place.
+      // Shift+Enter has already stopped this page navigating, so failing quietly here leaves the keystroke a dead end.
+      // Only web addresses can be handed to another browser, so anything else was words: search for them here.
+      $('query').value = target
+      $('search-form').requestSubmit()
     })
   },
   onOrbisAction: (candidate) => {

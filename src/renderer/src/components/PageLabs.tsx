@@ -38,7 +38,17 @@ import { Field, Notes, Problem, readNumbers, useEngine } from './PageTools'
  * number that looks finished and is not.
  */
 
-type Props = { pageId: string; onNotify(m: string, k?: NoticeKind): void }
+type Props = {
+  pageId: string
+  onNotify(m: string, k?: NoticeKind): void
+  /**
+   * Starting values, when the laboratory was opened by Orion with a configuration.
+   *
+   * Text, because every input here is a field somebody types in and keeps as text — which is correct, and which is
+   * what makes wiring one of these cost a default rather than a rewrite.
+   */
+  initial?: Readonly<Record<string, string>>
+}
 
 /** A list of short strings, as themselves. Used wherever an engine hands back findings rather than a number. */
 function Lines({ title, items }: { title: string; items: readonly string[] }): React.JSX.Element | null {
@@ -70,9 +80,9 @@ function useJson<T>(text: string, fallback: T): { value: T; problem: string } {
 
 // ---------------------------------------------------------------- Algebra Lab
 
-export function AlgebraLabPage({ pageId }: Props): React.JSX.Element {
-  const [coefficients, setCoefficients] = useState('-6, 1, 1')
-  const [decimal, setDecimal] = useState('0.142857142857')
+export function AlgebraLabPage({ pageId, initial }: Props): React.JSX.Element {
+  const [coefficients, setCoefficients] = useState(() => initial?.coefficients ?? '-6, 1, 1')
+  const [decimal, setDecimal] = useState(() => initial?.decimal ?? '0.142857142857')
 
   const roots = useEngine<Record<string, unknown>>(
     pageId,
@@ -127,9 +137,9 @@ export function AlgebraLabPage({ pageId }: Props): React.JSX.Element {
 
 // ---------------------------------------------------------------- Matrix Lab
 
-export function MatrixLabPage({ pageId }: Props): React.JSX.Element {
-  const [text, setText] = useState('2 1\n1 3')
-  const [rhs, setRhs] = useState('5, 10')
+export function MatrixLabPage({ pageId, initial }: Props): React.JSX.Element {
+  const [text, setText] = useState(() => initial?.text ?? '2 1\n1 3')
+  const [rhs, setRhs] = useState(() => initial?.rhs ?? '5, 10')
 
   const matrix = useMemo(
     () =>
@@ -161,6 +171,18 @@ export function MatrixLabPage({ pageId }: Props): React.JSX.Element {
       </div>
       <Field label="Right-hand side" value={rhs} onChange={setRhs} wide placeholder="5, 10" />
       <Problem text={solved.problem} />
+      {/*
+        * Two unknowns, drawn as two lines.
+        *
+        * Each row of the matrix with its right-hand side is a straight line, and the solution is where they cross.
+        * One solution is two lines crossing, no solution is two parallel lines, and infinitely many is one line drawn
+        * twice -- the three cases named above the picture, shown.
+        *
+        * Only for two unknowns. Three would be planes, which this cannot draw, and more has no picture at all.
+        */}
+      {matrix.length === 2 && matrix.every((row) => row.length === 2) && readNumbers(rhs).length === 2 && (
+        <LinesDrawing rows={matrix as number[][]} rhs={readNumbers(rhs)} />
+      )}
       {solved.result && (
         <div className="page-result">
           <h4>
@@ -192,10 +214,10 @@ export function MatrixLabPage({ pageId }: Props): React.JSX.Element {
 
 // ---------------------------------------------------------------- Geometry Lab
 
-export function GeometryLabPage({ pageId }: Props): React.JSX.Element {
-  const [a, setA] = useState('0, 0')
-  const [b, setB] = useState('4, 0')
-  const [c, setC] = useState('0, 3')
+export function GeometryLabPage({ pageId, initial }: Props): React.JSX.Element {
+  const [a, setA] = useState(() => initial?.a ?? '0, 0')
+  const [b, setB] = useState(() => initial?.b ?? '4, 0')
+  const [c, setC] = useState(() => initial?.c ?? '0, 3')
 
   const point = (text: string): { x: number; y: number } => {
     const parts = readNumbers(text)
@@ -220,6 +242,13 @@ export function GeometryLabPage({ pageId }: Props): React.JSX.Element {
         <Field label="C" value={c} onChange={setC} placeholder="0, 3" />
       </div>
       <Problem text={facts.problem} />
+      {/*
+        * The triangle itself.
+        *
+        * Three pairs of numbers and a word like "right-angled" describe it; this is it. Move a point and the shape
+        * moves, which is the only way the classification stops being a word somebody has to take on trust.
+        */}
+      {facts.result?.ok === true && <TriangleDrawing a={point(a)} b={point(b)} c={point(c)} />}
       {facts.result?.ok === true && (
         <>
           <div className="page-result">
@@ -250,8 +279,8 @@ export function GeometryLabPage({ pageId }: Props): React.JSX.Element {
 
 // ---------------------------------------------------------------- Number and Graph Lab
 
-export function NumberLabPage({ pageId }: Props): React.JSX.Element {
-  const [value, setValue] = useState('2305843009213693951')
+export function NumberLabPage({ pageId, initial }: Props): React.JSX.Element {
+  const [value, setValue] = useState(() => initial?.value ?? '2305843009213693951')
 
   const prime = useEngine<Record<string, unknown>>(pageId, async (call) => call('number.prime', { value: value.trim() }), [value])
   const factors = useEngine<Record<string, unknown>>(pageId, async (call) => call('number.factorise', { value: value.trim() }), [value])
@@ -300,8 +329,8 @@ export function NumberLabPage({ pageId }: Props): React.JSX.Element {
 
 // ---------------------------------------------------------------- Uncertainty Lab
 
-export function UncertaintyLabPage({ pageId }: Props): React.JSX.Element {
-  const [model, setModel] = useState('a * b')
+export function UncertaintyLabPage({ pageId, initial }: Props): React.JSX.Element {
+  const [model, setModel] = useState(() => initial?.model ?? 'a * b')
   const [raw, setRaw] = useState('[\n  { "id": "a", "value": 10, "uncertainty": 0.1 },\n  { "id": "b", "value": 4, "uncertainty": 0.2 }\n]')
   const inputs = useJson<Record<string, unknown>[]>(raw, [])
 
@@ -814,3 +843,108 @@ export const LAB_PAGES: Readonly<Record<string, (props: Props) => React.JSX.Elem
   'wave-lab': WaveLabPage,
   'integrator-lab': IntegratorLabPage
 })
+
+/**
+ * Three corners, joined, with the longest side marked.
+ *
+ * Scaled to fit whatever the corners are, with equal scaling on both axes -- a triangle squashed to fill a box is a
+ * different triangle, and a right angle that no longer looks like one would be the picture contradicting the words
+ * beside it.
+ */
+function TriangleDrawing({
+  a,
+  b,
+  c
+}: {
+  a: { x: number; y: number }
+  b: { x: number; y: number }
+  c: { x: number; y: number }
+}): React.JSX.Element {
+  const corners = [a, b, c]
+  const minX = Math.min(...corners.map((one) => one.x))
+  const maxX = Math.max(...corners.map((one) => one.x))
+  const minY = Math.min(...corners.map((one) => one.y))
+  const maxY = Math.max(...corners.map((one) => one.y))
+  const spanX = maxX - minX || 1
+  const spanY = maxY - minY || 1
+  const span = Math.max(spanX, spanY)
+  const pad = span * 0.18
+
+  // The vertical axis is flipped, because mathematics counts y upwards and a screen counts it downwards.
+  const view = `${minX - pad} ${-(maxY + pad)} ${span + pad * 2} ${span + pad * 2}`
+  const unit = (span + pad * 2) / 100
+  const at = (p: { x: number; y: number }): string => `${p.x},${-p.y}`
+
+  return (
+    <figure className="page-figure">
+      <svg viewBox={view} role="img" aria-label="The triangle, drawn from its three corners" className="page-triangle">
+        <polygon points={corners.map(at).join(' ')} />
+        {corners.map((corner, index) => (
+          <g key={index}>
+            <circle cx={corner.x} cy={-corner.y} r={unit * 2} />
+            <text x={corner.x} y={-corner.y - unit * 4} fontSize={unit * 7} textAnchor="middle">
+              {['A', 'B', 'C'][index]}
+            </text>
+          </g>
+        ))}
+      </svg>
+    </figure>
+  )
+}
+
+/**
+ * Two equations in two unknowns, as two lines on the plane.
+ *
+ * Each line is drawn by evaluating its own equation across the window, so a vertical line (where the y coefficient is
+ * zero) is drawn vertical rather than being skipped or faked with a very large slope.
+ */
+function LinesDrawing({ rows, rhs }: { rows: readonly (readonly number[])[]; rhs: readonly number[] }): React.JSX.Element {
+  const span = 10
+  const view = `${-span} ${-span} ${span * 2} ${span * 2}`
+  const unit = (span * 2) / 100
+
+  const line = (row: readonly number[], value: number): { from: [number, number]; to: [number, number] } | null => {
+    const [a, b] = row
+    if (b !== 0) {
+      // y = (value - a x) / b, at each edge of the window.
+      return {
+        from: [-span, (value - a * -span) / b],
+        to: [span, (value - a * span) / b]
+      }
+    }
+    if (a !== 0) {
+      // A vertical line: x is fixed and y runs the height of the window.
+      return { from: [value / a, -span], to: [value / a, span] }
+    }
+    // Neither coefficient: not a line at all, so nothing is drawn for it.
+    return null
+  }
+
+  const drawn = rows.map((row, index) => line(row, rhs[index] ?? 0))
+
+  return (
+    <figure className="page-figure">
+      <svg viewBox={view} role="img" aria-label="The two equations, as two lines" className="page-lines">
+        <line x1={-span} y1={0} x2={span} y2={0} className="page-lines-axis" />
+        <line x1={0} y1={-span} x2={0} y2={span} className="page-lines-axis" />
+        {drawn.map((one, index) =>
+          one === null ? null : (
+            <line
+              key={index}
+              x1={one.from[0]}
+              y1={-one.from[1]}
+              x2={one.to[0]}
+              y2={-one.to[1]}
+              className={`page-lines-row row-${index}`}
+              strokeWidth={unit}
+            />
+          )
+        )}
+      </svg>
+      <figcaption className="page-note">
+        Each row is one line. Where they cross is the solution; parallel lines mean there is none, and one line drawn
+        over the other means there are infinitely many.
+      </figcaption>
+    </figure>
+  )
+}

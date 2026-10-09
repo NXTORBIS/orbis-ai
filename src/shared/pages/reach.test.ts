@@ -54,11 +54,20 @@ const productionFiles = (): string[] =>
     (one) => !one.endsWith('.test.ts') && !one.endsWith('.test.tsx')
   )
 
-/** The Pages modules one file imports, by module name. */
-const pagesImportsOf = (body: string): string[] => {
+/**
+ * The Pages modules one file imports, by module name.
+ *
+ * `./name.ts` only counts when the file doing the importing is itself inside the Pages folder. It used to count
+ * from anywhere, so any file in the tree with a sibling of the same name vouched for a Pages module it had never
+ * heard of -- `src/main/notifications/index.ts` importing its own `./actions.ts` made `pages/actions.ts` look
+ * reachable, and this guard exists precisely to catch modules nothing reaches.
+ */
+const pagesImportsOf = (body: string, insidePages: boolean): string[] => {
   const names = new Set<string>()
-  // Both spellings a real import uses: a sibling inside the folder, and the full path from anywhere else.
-  for (const match of body.matchAll(/(?:\.\/|pages\/)([a-zA-Z][a-zA-Z0-9]*)\.ts/g)) names.add(match[1])
+  for (const match of body.matchAll(/pages\/([a-zA-Z][a-zA-Z0-9]*)\.ts/g)) names.add(match[1])
+  if (insidePages) {
+    for (const match of body.matchAll(/\.\/([a-zA-Z][a-zA-Z0-9]*)\.ts/g)) names.add(match[1])
+  }
   return [...names]
 }
 
@@ -71,9 +80,11 @@ const pagesImportsOf = (body: string): string[] => {
  */
 const NOT_WIRED_YET: Readonly<Record<string, string>> = Object.freeze({
   actions: 'Actions on a running Page. Needs a channel that checks a request and hands it to the Page host.',
-  analyzer: 'Analysis over a supplied dataset, with freshness and cache keys. Needs a bridge operation.',
   generator: 'Deterministic dataset, schedule and identifier generation, checked against what was asked for.',
   projects: 'Project saves, checkpoints, undo history and autosave decisions.',
+  // It looked reachable only because the scanner counted a sibling `./research.ts` from anywhere in the tree, and
+  // Orbis has several. Nothing has ever reached this one.
+  research: 'Sources, claims and evidence, each weighed rather than asserted. Needs a bridge operation.',
   resources: 'A job queue with capacity, sweeping and pressure reporting.',
   solution: 'Problem formalisation, method choice and answers verified rather than asserted.'
 })
@@ -93,7 +104,7 @@ describe('every Pages module is reachable from the application, or says why not'
     const queue: string[] = []
     for (const [path, body] of bodies) {
       if (path.startsWith(PAGES_DIR)) continue
-      for (const name of pagesImportsOf(body)) {
+      for (const name of pagesImportsOf(body, false)) {
         if (!modules.includes(name)) continue
         if (!reached.has(name)) {
           reached.add(name)
@@ -106,7 +117,7 @@ describe('every Pages module is reachable from the application, or says why not'
       const name = queue.shift() as string
       const body = bodies.get(`${PAGES_DIR}${name}.ts`)
       if (body === undefined) continue
-      for (const next of pagesImportsOf(body)) {
+      for (const next of pagesImportsOf(body, true)) {
         if (!modules.includes(next) || reached.has(next)) continue
         reached.add(next)
         queue.push(next)
@@ -135,7 +146,7 @@ describe('every Pages module is reachable from the application, or says why not'
     const queue: string[] = []
     for (const [path, body] of bodies) {
       if (path.startsWith(PAGES_DIR)) continue
-      for (const name of pagesImportsOf(body)) {
+      for (const name of pagesImportsOf(body, false)) {
         if (modules.includes(name) && !reached.has(name)) {
           reached.add(name)
           queue.push(name)
@@ -146,7 +157,7 @@ describe('every Pages module is reachable from the application, or says why not'
       const name = queue.shift() as string
       const body = bodies.get(`${PAGES_DIR}${name}.ts`)
       if (body === undefined) continue
-      for (const next of pagesImportsOf(body)) {
+      for (const next of pagesImportsOf(body, true)) {
         if (modules.includes(next) && !reached.has(next)) {
           reached.add(next)
           queue.push(next)

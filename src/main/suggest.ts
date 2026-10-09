@@ -134,6 +134,134 @@ export async function requestJson(
   return null
 }
 
+/**
+ * The same request, for an answer meant to be read rather than parsed.
+ *
+ * `requestJson` asks for JSON mode, which is right for structured work and wrong for an explanation -- a model in
+ * JSON mode writes an explanation wrapped in quotes and escapes, and unwrapping that is guesswork. This is the
+ * plain-prose door, with the same key rotation, the same timeouts and the same rule: anything that goes wrong is
+ * `null`, never a throw into whatever asked.
+ */
+export async function requestText(
+  system: string,
+  user: string,
+  apiKeys: string[],
+  fetchFn: FetchFn,
+  timeoutMs = 30_000,
+  options: { maxTokens?: number; model?: string; mistralKeys?: string[] } = {}
+): Promise<string | null> {
+  if (!Array.isArray(apiKeys) || typeof fetchFn !== 'function') return null
+
+  const model = options.model ?? 'openai/gpt-oss-20b'
+  const provider = providerOf(model)
+  const keys = provider === 'groq' ? apiKeys : (options.mistralKeys ?? [])
+  if (!keys.length) return null
+
+  for (const key of keys) {
+    let res: Response
+    try {
+      res = await fetchFn(`${PROVIDERS[providerOf(model)].baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model,
+          ...(provider === 'groq'
+            ? { reasoning_effort: 'low', max_completion_tokens: options.maxTokens ?? 800 }
+            : { max_tokens: options.maxTokens ?? 800 }),
+          messages: [
+            { role: 'system', content: system },
+            { role: 'user', content: user }
+          ]
+        }),
+        signal: AbortSignal.timeout(timeoutMs)
+      })
+    } catch {
+      return null
+    }
+    if (res.status === 401 || res.status === 403 || res.status === 429) continue
+    if (!res.ok) {
+      if (/restricted/i.test(await res.text().catch(() => ''))) continue
+      return null
+    }
+    try {
+      const json = (await res.json()) as { choices?: { message?: { content?: string } }[] }
+      const content = json.choices?.[0]?.message?.content
+      return typeof content === 'string' && content.trim() ? content.trim() : null
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
+/**
+ * The same request, with a picture.
+ *
+ * Only the vision models can answer this, and they are at the other service -- so the model and the key have to
+ * agree, which is the exact mistake that once sent every vision request to Mistral carrying a Groq key and got back
+ * an empty answer. Here the default model is a vision one and the keys for it are required, or this returns null
+ * before anything is sent.
+ *
+ * The image is handed over as a complete data url and never prefixed twice: a screenshot already arrives as one,
+ * and prefixing it again produces a url no service can decode.
+ */
+export async function requestVision(
+  system: string,
+  user: string,
+  image: string,
+  mistralKeys: string[],
+  fetchFn: FetchFn,
+  timeoutMs = 60_000,
+  options: { maxTokens?: number; model?: string; json?: boolean } = {}
+): Promise<string | Record<string, unknown> | null> {
+  if (!Array.isArray(mistralKeys) || mistralKeys.length === 0 || typeof fetchFn !== 'function') return null
+  if (typeof image !== 'string' || image.length < 32) return null
+
+  const model = options.model ?? 'ministral-8b-2512'
+  const url = image.startsWith('data:') ? image : `data:image/jpeg;base64,${image}`
+
+  for (const key of mistralKeys) {
+    let res: Response
+    try {
+      res = await fetchFn(`${PROVIDERS.mistral.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model,
+          max_tokens: options.maxTokens ?? 1200,
+          ...(options.json ? { response_format: { type: 'json_object' } } : {}),
+          messages: [
+            { role: 'system', content: system },
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: user },
+                { type: 'image_url', image_url: { url } }
+              ]
+            }
+          ]
+        }),
+        signal: AbortSignal.timeout(timeoutMs)
+      })
+    } catch {
+      return null
+    }
+    if (res.status === 401 || res.status === 403 || res.status === 429) continue
+    if (!res.ok) return null
+    try {
+      const json = (await res.json()) as { choices?: { message?: { content?: string } }[] }
+      const content = json.choices?.[0]?.message?.content
+      if (typeof content !== 'string' || !content.trim()) return null
+      if (!options.json) return content.trim()
+      const parsed: unknown = JSON.parse(content)
+      return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null
+    } catch {
+      return null
+    }
+  }
+  return null
+}
+
 /** Predicts the user's likely next message and a few follow-ups. Returns empty results on any failure. */
 export async function suggestFollowups(messages: { role: string; content: string }[], apiKeys: string[], fetchFn: FetchFn): Promise<FollowupSuggestions> {
   const empty: FollowupSuggestions = { next: null, followups: [] }

@@ -92,6 +92,29 @@ test('every panel view this file declares is a section of the panel', async () =
   }
 })
 
+/**
+ * Something that fills each panel section.
+ *
+ * A section with nothing writing into it is the dead-row bug wearing a different hat: the Command Center offers the
+ * row, the row changes the view, and the view is an empty box. So each declared view must either be drawn by
+ * `panel.js` itself (home, ask, search, block are part of the shell) or have a `panel-<view>.js` module that the
+ * page actually loads -- a module on disk which index.html never loads would be just as dead.
+ */
+test('every panel view has something that fills it', async () => {
+  const html = await read('orbis-ui', 'panel', 'index.html')
+  const loaded = new Set([...html.matchAll(/src="(panel-[A-Za-z0-9_-]+\.js)"/g)].map((one) => one[1]))
+  // Drawn by the shell itself rather than by a module of their own.
+  const shell = new Set(['home', 'ask', 'search', 'block'])
+  for (const view of PANEL_VIEWS) {
+    if (shell.has(view)) continue
+    const module = `panel-${view}.js`
+    assert.ok(
+      loaded.has(module),
+      `PANEL_VIEWS names "${view}" but orbis-ui/panel/index.html never loads ${module}, so that view would draw nothing. Either load it or take the name out.`
+    )
+  }
+})
+
 test('every rail view this file declares is one the rail really registers', async () => {
   const registered = await viewsTheRailRegisters()
   for (const view of RAIL_VIEWS) {

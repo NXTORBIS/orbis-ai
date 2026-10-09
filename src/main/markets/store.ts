@@ -1,4 +1,5 @@
 import { promises as fs, mkdirSync, renameSync, writeFileSync } from 'node:fs'
+import { readStored } from '../storedFile.ts'
 import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { dataDirFor } from '../../shared/profiles.ts'
@@ -122,7 +123,11 @@ export class MarketsStore {
     const job = (async () => {
       let workspace: MarketsWorkspace
       try {
-        workspace = cleanWorkspace(JSON.parse(await fs.readFile(this.path(profileId), 'utf8')), this.now())
+        const stored = await readStored(this.path(profileId))
+        if (stored.kind === 'unreadable') this.unreadable.add(profileId)
+        else this.unreadable.delete(profileId)
+        if (stored.kind !== 'read') throw new Error('nothing to read')
+        workspace = cleanWorkspace(JSON.parse(stored.text), this.now())
       } catch {
         // No file yet, or one that cannot be read. An empty workspace is the right answer to both -- and never an error,
         // because somebody who has never opened Markets should not meet one.
@@ -170,12 +175,21 @@ export class MarketsStore {
     this.timer.unref?.()
   }
 
+  /** Profiles whose workspace file is there and could not be read. Nothing is written over those. */
+  private readonly unreadable = new Set<string>()
+
   async flush(): Promise<void> {
     const pending = [...this.dirty]
     this.dirty.clear()
     for (const profileId of pending) {
       const workspace = this.cache.get(profileId)
       if (!workspace) continue
+      if (this.unreadable.has(profileId)) {
+        // A workspace file is there that Orbis could not read: watchlists, layouts and drawings live in it, so an
+        // empty one is never written over it. Looked at again next time.
+        this.unreadable.delete(profileId)
+        continue
+      }
       const path = this.path(profileId)
       try {
         await fs.mkdir(dirname(path), { recursive: true })

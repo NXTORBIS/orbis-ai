@@ -1,4 +1,5 @@
 import { promises as fs } from 'node:fs'
+import { readStored } from './storedFile.ts'
 import { cleanProfileLockPolicy, DEFAULT_PROFILE_LOCK, type ProfileLockPolicy } from '../shared/profileLock.ts'
 import { dirname, join } from 'node:path'
 import { newVaultKey, unwrapKey, wipe, wrapKey } from './vault/crypto.ts'
@@ -115,16 +116,42 @@ export class AccountSecurity {
     return join(this.userData, dataDirFor(profileId), 'account.lock')
   }
 
+  /**
+   * Profiles whose account file is there and could not be read.
+   *
+   * This mattered more here than anywhere: null means "no password is set", so a file something else had open
+   * for a moment meant the account looked open -- and setting a password then wrote a new file over the old one,
+   * which is the password nobody can get back.
+   */
+  private readonly unreadable = new Set<string>()
+
   private async read(profileId: string): Promise<AccountFile | null> {
+    const stored = await readStored(this.path(profileId))
+    if (stored.kind === 'unreadable') {
+      this.unreadable.add(profileId)
+      return null
+    }
+    this.unreadable.delete(profileId)
+    if (stored.kind === 'missing') return null
     try {
-      const raw = JSON.parse(await fs.readFile(this.path(profileId), 'utf8')) as AccountFile
+      const raw = JSON.parse(stored.text) as AccountFile
       return raw && raw.version === 1 && raw.password ? raw : null
     } catch {
       return null
     }
   }
 
+  /** True when this profile has an account file Orbis could not read, so nothing may be written over it. */
+  unreadableFor(profileId: string): boolean {
+    return this.unreadable.has(profileId)
+  }
+
   private async write(profileId: string, file: AccountFile): Promise<void> {
+    if (this.unreadable.has(profileId)) {
+      // Refusing is recoverable; writing a new password file over one that cannot be read is not.
+      this.unreadable.delete(profileId)
+      throw new AccountFailure('io', 'Orbis could not read this profile\u2019s password file. Nothing has been changed; try again in a moment.')
+    }
     const path = this.path(profileId)
     await fs.mkdir(dirname(path), { recursive: true })
     // Written beside and renamed over, so the file is never half-written -- which for this file would mean an account

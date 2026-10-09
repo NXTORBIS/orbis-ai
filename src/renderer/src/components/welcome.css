@@ -167,7 +167,8 @@
   animation: welcome-sway-b 21s ease-in-out infinite alternate;
 }
 
-.spin {
+/* Named for this screen: `.spin` is the app's one-second loading spinner, and this is a 48-second orbit. */
+.welcome-orbit-spin {
   animation: welcome-spin 48s linear infinite;
 }
 

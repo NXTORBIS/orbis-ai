@@ -46,6 +46,20 @@ const int = (description: string, required = false, range?: { min?: number; max?
 /** The states a media element can be in, as a person would name them. */
 export type MediaState = 'playing' | 'paused' | 'buffering' | 'ended' | 'idle'
 
+/** What a page says about the track it is playing. Everything here came from the page itself. */
+export interface NowPlayingReading {
+  session: { title: string; artist: string; album: string; artwork: string | null } | null
+  playbackState: 'none' | 'paused' | 'playing' | string
+  /** The page's own title. A page title is prose, so it is marked as what it is and never read as a song. */
+  pageTitle: string
+  origin: string
+  playing: boolean
+  duration: number
+  position: number
+  muted: boolean
+  kind: 'video' | 'audio' | null
+}
+
 export interface MediaReading {
   index: number
   kind: 'video' | 'audio'
@@ -115,6 +129,40 @@ const READ_SCRIPT = `(() => {
   return read.map((m, i) => { const { area, ...rest } = m; return { ...rest, primary: i === best } })
 })()`
 
+/**
+ * What the page says it is playing, in its own words.
+ *
+ * `navigator.mediaSession.metadata` is the page's own announcement of its track: it is what a player publishes so
+ * the computer can show it on a lock screen. Reading it is not reading the audio, and it is not a guess -- so when
+ * a page has filled it in, it is the best answer there is short of a file's own tags.
+ *
+ * Nothing is invented when it is absent. A page that says nothing comes back with nothing, and the title of the
+ * document is passed along separately, clearly marked as the page title rather than as a song.
+ */
+const NOW_PLAYING_SCRIPT = `(() => {
+  const session = navigator.mediaSession && navigator.mediaSession.metadata
+  const media = [...document.querySelectorAll('video, audio')]
+  const sounding = media.find((el) => !el.paused && el.readyState >= 2) || media[0] || null
+  const art = session && session.artwork && session.artwork.length ? session.artwork[session.artwork.length - 1].src : null
+  return {
+    session: session
+      ? {
+          title: String(session.title || '').slice(0, 300),
+          artist: String(session.artist || '').slice(0, 300),
+          album: String(session.album || '').slice(0, 300),
+          artwork: art ? String(art).slice(0, 2000) : null
+        }
+      : null,
+    playbackState: navigator.mediaSession ? navigator.mediaSession.playbackState : 'none',
+    pageTitle: String(document.title || '').slice(0, 300),
+    origin: location.origin,
+    playing: Boolean(sounding && !sounding.paused && sounding.readyState >= 2),
+    duration: sounding && Number.isFinite(sounding.duration) ? sounding.duration : 0,
+    position: sounding && Number.isFinite(sounding.currentTime) ? sounding.currentTime : 0,
+    muted: Boolean(sounding && sounding.muted),
+    kind: sounding ? sounding.tagName.toLowerCase() : null
+  }
+})()`
 /**
  * Waiting for a media condition, inside the page.
  *
@@ -221,6 +269,18 @@ export function registerMediaCapabilities(control: BrowserControl, d: MediaDeps)
     mutates: false,
     confirmation: 'none',
     run: async (_p: Record<string, unknown>, ctx: ControlContext) => ({ media: await page.exec<MediaReading[]>(d.tab(ctx), READ_SCRIPT, 6000) })
+  })
+
+  control.register({
+    ...common,
+    id: 'media.nowPlaying',
+    name: 'What the page says it is playing',
+    description:
+      'The track the page itself published through Media Session -- title, artist, album, artwork -- plus whether anything is sounding and how far through it is. Reads only what the page announced; it does not touch the audio.',
+    params: {},
+    mutates: false,
+    confirmation: 'none',
+    run: async (_p: Record<string, unknown>, ctx: ControlContext) => page.exec<NowPlayingReading>(d.tab(ctx), NOW_PLAYING_SCRIPT, 6000)
   })
 
   control.register({

@@ -255,6 +255,11 @@ export class CdpPage implements PageHandle {
     this.title = info.title
   }
 
+  /** True once the tab has gone, so anything holding on to this page can let go of it. */
+  get gone(): boolean {
+    return this.destroyed
+  }
+
   markGone(): void {
     if (this.destroyed) return
     this.destroyed = true
@@ -503,6 +508,9 @@ export class CdpBrowser {
       }
     } else if (event.method === 'Target.targetDestroyed' && p.targetId) {
       this.pages.get(p.targetId)?.markGone()
+      // What is known about a tab goes when the tab goes. This was kept for every tab ever opened, so a long browsing
+      // session grew this map for ever.
+      this.infos.delete(p.targetId)
     } else if (event.method === 'Target.detachedFromTarget' && p.sessionId) {
       this.bySession.get(p.sessionId)?.markGone()
     }

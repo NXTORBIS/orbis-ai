@@ -18,10 +18,74 @@ import { join } from 'node:path'
 const ROOT = join(import.meta.dirname, '..')
 
 /** Must never touch Electron: this is the part that moves to Chromium as it is. */
-const PORTABLE = ['shared', 'main/update', 'main/personal', 'main/experience', 'main/workflows', 'main/knowledge', 'main/temporal', 'helper', 'main/chromium', 'main/artifacts']
+const PORTABLE = ['shared', 'main/update', 'main/personal', 'main/experience', 'main/workflows', 'main/knowledge', 'main/temporal', 'helper', 'main/chromium', 'main/artifacts', 'main/ambient', 'main/courses', 'main/native']
 
 /** Talks to the engine on purpose, and is rewritten against Chromium. Listed so the list itself stays honest. */
 const BROWSER_LAYER = new Set([
+  /*
+   * The two Electron files of Orbis Music, and deliberately only two.
+   *
+   * Everything that decides anything -- what a track is, what may be claimed about it, how a file is read, what the
+   * queue does, whether a play counts, what a recognised song becomes -- is in src/shared/music.ts,
+   * src/shared/audioFile.ts and main/music/{store,library,recognise}.ts, none of which has heard of Electron.
+   *
+   * player.ts holds the window that makes sound and the scheme that serves a track to it; in Chromium that becomes
+   * the browser process's own media player. service.ts is the channel and the sender check, which becomes Mojo.
+   * The library, the reading of files and the recognising all move unchanged.
+   */
+  /*
+   * The one Electron file of Ambient Intelligence, and deliberately the only one.
+   *
+   * Everything that decides anything -- what may be recorded, what a subject is, what somebody is doing, whether
+   * to say a word about it -- is in src/shared/ambient/ and main/ambient/{store,service}.ts, none of which has
+   * heard of Electron. This file is the channel, the sender check and the bus subscription, which becomes Mojo.
+   */
+  'main/ambient/ipc.ts',
+  /*
+   * The one Electron file of Orbis Courses, and deliberately the only one.
+   *
+   * Every decision -- what a course is, whether it can be taught, what counts as mastery, whether a quiz was
+   * passed, whether a certificate is deserved -- is in src/shared/courses/ and main/courses/{store,service}.ts,
+   * none of which has heard of Electron. This file is the channel and the sender check, which becomes Mojo.
+   */
+  'main/courses/ipc.ts',
+  // The quiz in the conversation: the asking and the checking are pure, and only the window adapter is not.
+  'main/quiz/ipc.ts',
+  /*
+   * The one Electron file of the Code Playground, and deliberately the only one.
+   *
+   * Everything that decides anything is pure: which languages there are and what Judge0 calls them
+   * (shared/cs/execution.ts), what a submission looks like, how a reply becomes a verdict, and how a prediction is
+   * read back from a model. main/execution/service.ts chooses between the sandbox and Orion and has not heard of
+   * Electron either. This file is the channel and the sender check, which becomes Mojo.
+   *
+   * The sender check matters more here than usual: the sandbox address and key live in settings, so a channel
+   * reachable from anywhere else would be a way to make the main process fetch wherever the caller liked.
+   */
+  'main/execution/ipc.ts',
+  /*
+   * The one Electron file of the Native App runtime, and deliberately the only one.
+   *
+   * Everything that decides anything is pure: what an app is (shared/native/manifest.ts), which app a capability
+   * resolves to (registry.ts), whether a value is allowed (parameters.ts), whether a result still applies
+   * (instances.ts), whether an action from Orion may run (actions.ts), and whether a saved state can be read
+   * (state.ts). This file is the channel and the sender check, which becomes Mojo.
+   */
+  'main/native/ipc.ts',
+  'main/music/player.ts',
+  'main/music/service.ts',
+  /*
+   * The one Electron file of Orbis Student, and deliberately the only one.
+   *
+   * Everything that decides anything is pure: whether a page is appropriate (shared/student/safety.ts), whether it
+   * is a distraction (focus.ts), how time is credited (session.ts), what anything is worth (progress.ts), what comes
+   * back for review (learn.ts). The store is built on the JSON files Orbis already uses, the service imports no
+   * Electron at all, and the enforcer talks to the browser over the debugging pipe -- which is the thing it will go
+   * on doing in Chromium.
+   *
+   * This file is the channel and the sender check. It becomes Mojo and nothing else moves.
+   */
+  'main/student/ipc.ts',
   'main/browserAgent.ts',
   // The one Electron file of the Creation Engine: the channel, the sender check, and the save dialog, handed into the
   // service as a function. The service and the store know nothing about windows, so this file is rewritten as Mojo

@@ -27,3 +27,16 @@ extension/_metadata/
 orbis-ui/results/results.js
 resources/chromium/
 orbis-ui/panel/sidebar.js
+
+# Backups of the browser icons taken before they were replaced. Kept on disk, not in the repository.
+*.before-orbis
+
+# Chromium user-data folders left behind by probe runs (algolab/, sorts/, organic-tabs/, physlab/, every/, cslabs/
+# and their numbered siblings). Each holds a whole browser profile, Widevine binaries included. They are scratch.
+algolab*/
+sorts*/
+organic-tabs*/
+physlab*/
+every*/
+cslabs/
+jarvis-file-list.txt

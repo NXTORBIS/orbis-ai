@@ -1,137 +1,116 @@
-/* The Orbis Command Center: tokens only, so it is the same Orbis as everything else. */
+/* The Orbis panel's home: tokens only, so it is the same Orbis as everything else.
 
-.cc { display: flex; flex-direction: column; gap: var(--space-3); height: 100%; min-height: 0; padding: var(--space-3); overflow: hidden auto; }
+   A drawer, not a list. Everything Orbis can do as icons under short headings, four across, with one box above them.
+   No title, no status badge, no explanation under every name -- the panel is about 360px wide and every one of those
+   was spending it on the panel rather than on what the panel is for. */
 
-.cc-head { display: flex; align-items: center; gap: var(--space-2); }
-.cc-logo { flex: none; }
-.cc-name { margin: 0; font-family: var(--font-display); font-size: 15px; font-weight: 700; letter-spacing: 0.01em; color: var(--text); }
+/* Tight on purpose. The side panel draws at the browser is own zoom, so every size here lands larger than it reads
+   in a designer is window -- what looked right at 360 CSS pixels arrived half again as big. These are the sizes that
+   survive that. */
+.cc { box-sizing: border-box; display: flex; flex-direction: column; gap: 0; height: 100%; min-height: 0; padding: 10px 10px 18px; overflow: hidden auto; }
+.cc *, .cc *::before, .cc *::after { box-sizing: border-box; }
 
-.cc-find { position: sticky; top: 0; z-index: 2; padding-bottom: 2px; background: var(--bg); }
-.cc-search { width: 100%; font: inherit; font-size: var(--text-md); color: var(--text); background: var(--input-bg); border: 1px solid var(--input-border); border-radius: var(--radius-pill); padding: 9px 14px; }
+/* ---- the box, which is the way to everything --------------------------------------------------------- */
+
+/* Sticky: scrolling the drawer should never put the way through it out of reach. */
+.cc-find { position: sticky; top: -10px; z-index: 2; padding: 2px 0 10px; background: var(--bg); }
+.cc-field { display: flex; align-items: center; gap: 8px; padding: 0 12px; background: var(--input-bg); border: 1px solid var(--input-border); border-radius: var(--radius-pill); transition: border-color var(--motion-fast) var(--motion-ease), box-shadow var(--motion-fast) var(--motion-ease); }
+.cc-field:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-fill); }
+.cc-field > svg { flex: none; color: var(--muted); }
+.cc-search { flex: 1; min-width: 0; font: inherit; font-size: var(--text-md); color: var(--text); background: transparent; border: 0; padding: 8px 0; }
+.cc-search:focus { outline: none; }
 .cc-search::placeholder { color: var(--muted); }
-.cc-search:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-fill); }
 
-/* The categories, as a quiet strip rather than a second navigation competing with the browser's own. */
-.cc-nav { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
-.cc-nav::-webkit-scrollbar { display: none; }
-.cc-tab { display: inline-flex; align-items: center; gap: 6px; flex: none; font: inherit; font-size: var(--text-sm); color: var(--muted); background: transparent; border: 0; border-radius: var(--radius-pill); padding: 5px 10px; cursor: pointer; white-space: nowrap; }
-.cc-tab:hover { color: var(--text); background: var(--hover); }
-.cc-tab[aria-current='true'] { color: var(--text); background: var(--active); }
-.cc-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-
-.cc-notice { margin: 0; min-height: 0; color: var(--danger); font-size: var(--text-sm); }
+/* The one thing this panel ever says about itself, and only after somebody touched something. */
+.cc-notice { margin: 0 0 var(--space-2); color: var(--amber); font-size: var(--text-sm); }
 .cc-notice:empty { display: none; }
 
-.cc-body, .cc-results { display: flex; flex-direction: column; gap: var(--space-3); }
-/* display:flex beats the hidden attribute's own rule, so searching left the Overview showing underneath the results. */
+.cc-body, .cc-results { display: flex; flex-direction: column; gap: 14px; }
+/* display:flex beats the hidden attribute's own rule, so searching left the drawer showing underneath the results. */
 .cc-body[hidden], .cc-results[hidden] { display: none; }
-.cc-block { display: flex; flex-direction: column; gap: var(--space-2); }
-.cc-h { margin: 0; font-size: var(--text-sm); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
-.cc-title { margin: 0; font-size: 17px; font-weight: 600; color: var(--text); }
-.cc-desc { color: var(--muted); font-size: var(--text-sm); }
+
+/* ---- the page in front of you --------------------------------------------------------------------------- */
+
+.cc-page { position: relative; display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-lg); overflow: hidden; }
+/* A hairline of accent down the edge: enough to say "this one is about what you are looking at". */
+.cc-page::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 2px; background: linear-gradient(var(--accent), transparent); }
+.cc-page-title { margin: 0; font-size: var(--text-md); font-weight: 500; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cc-page-acts { display: flex; flex-wrap: wrap; gap: 6px; }
+.cc-act { display: inline-flex; align-items: center; gap: 7px; font: inherit; font-size: var(--text-sm); color: var(--text); background: var(--panel2); border: 1px solid var(--line); border-radius: var(--radius-pill); padding: 6px 13px; cursor: pointer; transition: border-color var(--motion-fast) var(--motion-ease), background var(--motion-fast) var(--motion-ease); }
+.cc-act:hover { border-color: var(--accent); background: var(--hover); }
+.cc-act:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* ---- the drawer ----------------------------------------------------------------------------------------- */
+
+.cc-group { display: flex; flex-direction: column; gap: 6px; }
+.cc-h { margin: 0 0 0 4px; font-size: 10px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted); }
 .cc-quiet { margin: 0; color: var(--muted); font-size: var(--text-sm); }
 
-/* A capability: what it is, and whether it can be used. */
-.cc-list { display: flex; flex-direction: column; gap: 2px; }
-.cc-item { display: flex; align-items: center; gap: 4px; border-radius: var(--radius-md); }
+/* Four across at panel width, more when there is room; never fewer, because three leaves a hole on the last row. */
+.cc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 0; }
+
+.cc-cell { position: relative; }
+.cc-tile { display: flex; flex-direction: column; align-items: center; gap: 5px; width: 100%; padding: 8px 2px 7px; font: inherit; color: var(--text); background: transparent; border: 0; border-radius: var(--radius-lg); cursor: pointer; transition: background var(--motion-fast) var(--motion-ease); }
+.cc-tile:hover { background: var(--hover); }
+.cc-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+@media (prefers-reduced-motion: no-preference) { .cc-tile:active .cc-tile-art { transform: scale(0.92); } }
+
+/* The icon in a rounded square, the way an app looks. The tint is the accent at a whisper, so a screenful of them
+   reads as one family rather than as fifty-four coloured buttons. */
+.cc-tile-art { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 11px; color: var(--accent); background: var(--accent-fill); border: 1px solid transparent; transition: transform var(--motion-fast) var(--motion-ease), border-color var(--motion-fast) var(--motion-ease), background var(--motion-fast) var(--motion-ease); }
+.cc-tile:hover .cc-tile-art { border-color: var(--accent); background: var(--panel2); }
+.cc-tile-name { font-size: 10.5px; line-height: 1.2; text-align: center; color: var(--text); overflow-wrap: anywhere; }
+
+/* Something that cannot be used now is dimmed, not taken away: it is still part of what Orbis does, and touching it
+   says why. Hiding it would read as "Orbis cannot do this at all". */
+.cc-cell.off .cc-tile-art { color: var(--muted); background: var(--panel); }
+.cc-cell.off .cc-tile-name { color: var(--muted); }
+
+/* The pin sits in the corner of its tile and only appears when the tile is reached for. */
+.cc-pin { position: absolute; top: 1px; right: 1px; display: grid; place-items: center; width: 19px; height: 19px; color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 50%; cursor: pointer; opacity: 0; transition: opacity var(--motion-fast) var(--motion-ease); }
+.cc-cell:hover .cc-pin, .cc-pin.on, .cc-pin:focus-visible { opacity: 1; }
+.cc-pin:hover { color: var(--text); }
+.cc-pin.on { color: var(--accent); border-color: var(--accent); }
+.cc-pin:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* ---- what the search gives back ------------------------------------------------------------------------- */
+/* Rows here, not tiles: a result is being read rather than recognised, and the line under the name is what tells
+   you which of two near-identical names you meant. */
+
+.cc-item { display: flex; align-items: center; border-radius: var(--radius-md); }
 .cc-item:hover { background: var(--hover); }
-.cc-open { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; font: inherit; text-align: left; color: var(--text); background: transparent; border: 0; border-radius: var(--radius-md); padding: 9px 10px; cursor: pointer; }
-.cc-open:disabled { cursor: default; opacity: 0.55; }
-.cc-open:focus-visible, .cc-pin:focus-visible, .cc-cat:focus-visible, .cc-back:focus-visible, .cc-chip-open:focus-visible, .cc-chip-move:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.cc-item.at { background: var(--active); box-shadow: inset 2px 0 0 var(--accent); }
+.cc-open { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; font: inherit; text-align: left; color: var(--text); background: transparent; border: 0; border-radius: var(--radius-md); padding: 7px 9px; cursor: pointer; }
+.cc-open:focus-visible, .cc-chip-open:focus-visible, .cc-chip-move:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.cc-row-art { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 9px; color: var(--accent); background: var(--accent-fill); }
+.cc-item.off .cc-row-art { color: var(--muted); background: var(--panel); }
 .cc-words { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
 .cc-words strong { font-size: var(--text-md); font-weight: 500; }
-.cc-words .cc-desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* Something that cannot be used says so in its own line; it is not hidden, because hiding it reads as "Orbis cannot do this". */
-.cc-off .cc-desc { color: var(--amber); }
+.cc-desc { color: var(--muted); font-size: var(--text-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cc-item.off .cc-desc { color: var(--amber); }
 
-.cc-pin { flex: none; display: grid; place-items: center; width: 30px; height: 30px; color: var(--muted); background: transparent; border: 0; border-radius: var(--radius-sm); cursor: pointer; opacity: 0; }
-.cc-item:hover .cc-pin, .cc-pin.on, .cc-pin:focus-visible { opacity: 1; }
-.cc-pin:hover { color: var(--text); background: var(--panel2); }
-.cc-pin.on { color: var(--accent); }
+/* ---- what is pinned to the toolbar ---------------------------------------------------------------------- */
 
-/* A category, as a heading with its rows under it.
-   These measurements are the Orbis settings screen's, on purpose: the same 13.5px/600 title over a 12px muted line, the
-   same hairline between sections. Somebody who has changed a setting in Orbis already knows how to read this. */
-.cc-section { padding: 14px 0; border-bottom: 1px solid var(--line); }
-.cc-section:last-child { border-bottom: 0; }
-.cc-sec-head { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 4px 9px; margin-bottom: 8px; }
-.cc-sec-head svg { grid-row: span 2; color: var(--muted); }
-.cc-sec-title { margin: 0; font-size: 13.5px; font-weight: 600; color: var(--text); }
-.cc-sec-blurb { grid-column: 2; margin: 0; font-size: 12px; color: var(--muted); }
-
-/* Categories on the Overview. */
-.cc-cat { display: flex; align-items: center; gap: 10px; font: inherit; text-align: left; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-md); padding: 11px 12px; cursor: pointer; }
-.cc-cat:hover { border-color: var(--accent); background: var(--panel2); }
-.cc-cat strong { font-size: var(--text-md); font-weight: 500; }
-.cc-cat .cc-desc { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-.cc-back { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; font: inherit; font-size: var(--text-sm); color: var(--muted); background: transparent; border: 0; border-radius: var(--radius-sm); padding: 4px 6px; cursor: pointer; }
-.cc-back:hover { color: var(--text); }
-.cc-cat-head { display: flex; flex-direction: column; gap: 2px; }
-
-/* What is pinned: the same order the toolbar has. */
 .cc-pins { display: flex; flex-wrap: wrap; gap: 6px; }
 .cc-chip { display: inline-flex; align-items: center; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-pill); overflow: hidden; }
-.cc-chip-open { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: var(--text-sm); color: var(--text); background: transparent; border: 0; padding: 5px 10px; cursor: pointer; }
+.cc-chip-open { display: inline-flex; align-items: center; gap: 7px; font: inherit; font-size: var(--text-sm); color: var(--text); background: transparent; border: 0; padding: 5px 11px; cursor: pointer; }
 .cc-chip-open:hover { background: var(--hover); }
 .cc-chip-move { font: inherit; font-size: 12px; line-height: 1; color: var(--muted); background: transparent; border: 0; border-left: 1px solid var(--line); padding: 6px 7px; cursor: pointer; }
 .cc-chip-move:hover:not(:disabled) { color: var(--text); background: var(--panel2); }
 .cc-chip-move:disabled { opacity: 0.35; cursor: default; }
 
-/* What Orbis is doing. Only things that were really read appear here. */
-.cc-facts { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0; font-size: var(--text-sm); }
-.cc-facts dt { color: var(--muted); }
-.cc-facts dd { margin: 0; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
 @media (prefers-reduced-motion: reduce) { .cc * { transition: none !important; animation: none !important; } }
 
-/* ---------------------------------------------------------------- the rail
-   The panel's one navigation, and it says what each row is.
+/* ---- the panel's own top bar ---------------------------------------------------------------------------- */
+/* With the rail gone, this is how you get back. One bar, filled in by panel.js from the view that is showing, rather
+   than a back button written into each of the twenty-six views by hand. */
 
-   It used to be 52px of icons with the words at opacity 0 until the pointer arrived, which made the only navigation in
-   the panel twelve unlabelled glyphs: Browser, AI, Automation, Research, Capture, Media, Privacy, Workspace, Tools,
-   Customize and Settings, told apart by guessing. Hovering to find out what something is, every time, is not a saving.
-
-   So the words are there at rest and the rail does not change width when you point at it -- nothing to reflow, nothing
-   to wait for. 196px is measured off the longest of them, "Privacy & Protection", so no label is clipped at rest.
-   Icons-only comes back below 480px, where that much rail would leave the list it navigates too narrow to read; that is
-   the one case where there genuinely is not room for both, and there the hover still gives the words. */
-
-.nav { position: relative; z-index: 3; display: flex; flex-direction: column; width: 196px; height: 100%; min-height: 0; padding: var(--space-2) 6px; background: var(--panel); border-right: 1px solid var(--line); transition: width var(--motion-fast) var(--motion-ease); }
-
-.nav-top { display: flex; align-items: center; height: 34px; padding: 0 8px; margin-bottom: var(--space-2); }
-.nav-mark { flex: none; opacity: 0.95; }
-
-.nav-list { display: flex; flex-direction: column; gap: 1px; min-height: 0; overflow: hidden auto; scrollbar-width: none; }
-.nav-list::-webkit-scrollbar { display: none; }
-.nav-rule { height: 1px; margin: 6px 8px; background: var(--line); flex: none; }
-
-.nav-item { position: relative; display: flex; align-items: center; gap: 12px; flex: none; height: 38px; padding: 0 10px; font: inherit; font-size: var(--text-md); color: var(--muted); background: transparent; border: 0; border-radius: var(--radius-md); cursor: pointer; white-space: nowrap; overflow: hidden; }
-.nav-item:hover { color: var(--text); background: var(--hover); }
-.nav-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.nav-item .ico { flex: none; }
-
-/* Where you are: the mark is a bar at the edge and a tint, not a colour change on the icon alone. */
-.nav-item[aria-current='true'] { color: var(--text); background: var(--active); }
-.nav-item[aria-current='true']::before { content: ''; position: absolute; left: 0; top: 9px; bottom: 9px; width: 2px; border-radius: 0 2px 2px 0; background: var(--accent); }
-
-/* Should a label ever outgrow the rail, it ends in an ellipsis rather than being sliced through a letter, and the
-   button's `title` still carries the whole thing. */
-.nav-label { opacity: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; transition: opacity var(--motion-fast) var(--motion-ease); }
-
-.nav-foot { margin-top: auto; padding: var(--space-2) 10px 0; }
-.nav-state { margin: 0; font-size: var(--text-sm); color: var(--muted); opacity: 1; transition: opacity var(--motion-fast) var(--motion-ease); }
-.nav-state:empty { display: none; }
-
-/* Too narrow for both the words and the list they lead to: icons at rest, and the words on hover as before. */
-@media (max-width: 479px) {
-  .nav { width: 52px; }
-  .nav:hover, .nav:focus-within { width: 208px; box-shadow: var(--shadow); }
-  .nav-label, .nav-state { opacity: 0; }
-  .nav:hover .nav-label, .nav:focus-within .nav-label, .nav:hover .nav-state, .nav:focus-within .nav-state { opacity: 1; }
-}
-
-@media (prefers-reduced-motion: reduce) { .nav, .nav-label, .nav-state { transition: none; } }
+.pan-back { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: var(--text-sm); color: var(--muted); background: transparent; border: 0; border-radius: var(--radius-sm); padding: 4px 8px 4px 5px; cursor: pointer; }
+.pan-back:hover { color: var(--text); background: var(--hover); }
+.pan-back:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.pan-back[hidden] { display: none; }
+.pan-where { font-size: var(--text-md); font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pan-where:empty { display: none; }
 
 /* Asking in words, when a name found nothing. */
 .cc-ask { display: inline-flex; align-items: center; gap: 8px; align-self: flex-start; font: inherit; font-size: var(--text-sm); color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-pill); padding: 7px 13px; cursor: pointer; }

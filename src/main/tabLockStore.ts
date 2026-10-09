@@ -1,4 +1,5 @@
 import { promises as fs } from 'node:fs'
+import { readStored } from './storedFile.ts'
 import { dirname, join } from 'node:path'
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 import { newVaultKey, unwrapKey, wipe, wrapKey } from './vault/crypto.ts'
@@ -167,8 +168,15 @@ export class TabLockStore {
       createdAt: Date.now(),
       updatedAt: Date.now()
     })
+    const stored = await readStored(this.path(profileId))
+    if (stored.kind === 'unreadable') {
+      // An empty set of rules would mean nothing is locked, and the next save would make that true.
+      this.unreadable.add(profileId)
+      return empty()
+    }
+    this.unreadable.delete(profileId)
     try {
-      const raw = JSON.parse(await fs.readFile(this.path(profileId), 'utf8')) as TabLockFile
+      const raw = (stored.kind === 'read' ? JSON.parse(stored.text) : null) as TabLockFile
       if (!raw || raw.version !== 1) return empty()
       // Read defensively: this file is configuration, and configuration arrives from imports and from older versions.
       return {
@@ -193,7 +201,14 @@ export class TabLockStore {
     }
   }
 
+  /** Profiles whose locked-tab file is there and could not be read. Nothing is written over those. */
+  private readonly unreadable = new Set<string>()
+
   private async write(profileId: string, file: TabLockFile): Promise<void> {
+    if (this.unreadable.has(profileId)) {
+      this.unreadable.delete(profileId)
+      return
+    }
     const path = this.path(profileId)
     await fs.mkdir(dirname(path), { recursive: true })
     await fs.writeFile(`${path}.tmp`, JSON.stringify({ ...file, updatedAt: Date.now() }), { mode: 0o600 })

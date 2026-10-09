@@ -108,7 +108,7 @@ export type Target =
  * 'home' is the Command Center itself. It is a real view, which is why it is here, but no capability may point at it:
  * a row whose destination is the screen you clicked it on has not taken you anywhere.
  */
-export const PANEL_VIEWS = ['home', 'ask', 'search', 'block', 'recall', 'schedules', 'notes', 'tasks', 'workflows', 'galaxy', 'secrets', 'account'] as const
+export const PANEL_VIEWS = ['home', 'ask', 'search', 'block', 'recall', 'schedules', 'notes', 'tasks', 'workflows', 'galaxy', 'secrets', 'account', 'music', 'student'] as const
 
 /**
  * The panel's rail views: Tabs, Tab groups, Media, Controls, and the ones that read a store.
@@ -157,6 +157,8 @@ export interface OrbisCapability {
  */
 export type AppFeature =
   | 'pages'
+  | 'student'
+  | 'courses'
   | 'markets'
   | 'workflows'
   | 'galaxy'
@@ -231,6 +233,18 @@ export const CAPABILITIES: OrbisCapability[] = [
    * rail views are a different set, and pointing at one of those would land on the Command Center instead.
    */
   { id: 'schedules', name: 'Schedules', category: 'capture', description: 'Things Orbis does at a time you chose', icon: 'reminders', keywords: ['schedule', 'remind', 'reminder', 'later', 'every', 'daily', 'timer', 'when', 'repeat', 'automation'], target: { kind: 'panel', view: 'schedules' }, pinnable: false, needs: ['helper'] },
+  /*
+   * Focus, in the browser.
+   *
+   * Not the whole of Orbis Student -- that lives in the Orbis window, and two homes for one feature is the exact
+   * confusion worth avoiding. This is the part that belongs where the reading happens: what is running, how long is
+   * left, keeping a page or a card, and the way out of a session.
+   */
+  { id: 'focus', name: 'Focus', category: 'tools', description: 'Your study session, and keeping what you find while you read', icon: 'student', keywords: ['focus', 'study', 'session', 'timer', 'pomodoro', 'student', 'revision', 'flashcard', 'card', 'mistake', 'exam', 'deep work', 'concentrate'], target: { kind: 'panel', view: 'student' },
+    // Not pinnable: a pin needs a toolbar action registered in the fork, and there is no Focus button there yet.
+    pinnable: false,
+    needs: ['helper'] },
+  { id: 'music', name: 'Music', category: 'media', description: 'What is playing, your own music, and songs you hear while browsing', icon: 'media', keywords: ['music', 'song', 'track', 'playlist', 'album', 'artist', 'play', 'pause', 'listen', 'library', 'audio', 'now playing', 'shazam', 'identify', 'recognise', 'recognize'], target: { kind: 'panel', view: 'music' }, pinnable: false, needs: ['helper'] },
   { id: 'savedPages', name: 'Saved pages', category: 'capture', description: 'Pages kept on this computer, readable offline', icon: 'savedPages', keywords: ['saved', 'offline', 'archive', 'keep'], target: { kind: 'view', view: 'savedPages' }, pinnable: false, needs: ['helper'] },
 
   // ---- Media
@@ -261,6 +275,8 @@ export const CAPABILITIES: OrbisCapability[] = [
   // the Command Center redrew the Command Center.
   { id: 'pages', name: 'Pages', category: 'tools', description: 'Orbis\u2019s own tools, each with its own address', icon: 'pages', keywords: ['page', 'tool', 'calculator', 'converter', 'lab', 'build'], target: { kind: 'app' }, app: 'pages', pinnable: false, needs: ['helper'] },
   { id: 'markets', name: 'Markets', category: 'tools', description: 'Live prices, charts and watchlists', icon: 'markets', keywords: ['market', 'price', 'chart', 'crypto', 'ticker', 'watchlist', 'trading'], target: { kind: 'app' }, app: 'markets', pinnable: false, needs: ['helper'] },
+  { id: 'student', name: 'Student', category: 'tools', description: 'Focus sessions, goals, daily learning and Orbi', icon: 'student', keywords: ['student', 'study', 'focus', 'school', 'exam', 'revision', 'homework', 'learn', 'goal', 'pomodoro', 'timer', 'orbi', 'xp'], target: { kind: 'app' }, app: 'student', pinnable: false, needs: [] },
+  { id: 'courses', name: 'Courses', category: 'tools', description: 'Structured learning, with what you know actually measured', icon: 'student', keywords: ['course', 'courses', 'lesson', 'module', 'curriculum', 'learn', 'learning', 'certificate', 'quiz', 'syllabus', 'tutorial', 'training'], target: { kind: 'app' }, app: 'courses', pinnable: false, needs: [] },
   { id: 'profiles', name: 'Profiles', category: 'settings', description: 'Separate lives, separate data', icon: 'account', keywords: ['profile', 'account', 'switch', 'person'], target: { kind: 'panel', view: 'account' }, app: 'profiles', pinnable: false, needs: ['helper'] },
 
   { id: 'settings', name: 'Settings', category: 'settings', description: 'Everything there is to change', icon: 'settings', keywords: ['settings', 'preferences', 'options', 'configure', 'setup'], target: { kind: 'page', url: 'chrome://settings/' }, pinnable: false, needs: ['browser'] },
@@ -356,7 +372,14 @@ export function scoreCapability(capability: OrbisCapability, query: string): num
   const keywords = capability.keywords.map((k) => k.toLowerCase())
 
   if (name === q) return 100
-  if (name.startsWith(q)) return 80
+  /*
+   * The start of the name, and the more of the name it is, the better.
+   *
+   * "tab" starts both Tabs and Tab groups, and a flat score left them tied and sorted by their names, so typing the
+   * name of a thing offered something else first. The share of the name the query covers breaks the tie the way
+   * anybody typing expects: all but one letter of Tabs, a third of Tab groups.
+   */
+  if (name.startsWith(q)) return 80 + Math.round((10 * q.length) / name.length)
   // An exact word somebody knows it by beats letters that merely happen to appear inside another name: "ads" is
   // Ad blocking, not Down(ads).
   if (keywords.includes(q)) return 70

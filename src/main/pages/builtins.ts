@@ -146,7 +146,8 @@ export const BUILT_IN_MANIFESTS: readonly Record<string, unknown>[] = [
     icon: 'function',
     owner: 'system',
     runtimeAtLeast: '1.0.0',
-    capabilities: ['computation.arithmetic', 'storage.page'],
+    // It draws the function and its derivative together, which is the whole lesson, so it asks to draw.
+    capabilities: ['computation.arithmetic', 'computation.plot', 'storage.page'],
     capabilityReasons: {},
     dependencies: [],
     search: {

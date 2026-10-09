@@ -4,6 +4,7 @@ import type { NoticeKind } from '../App'
 import type { PageCard, PageCategoryNode, PageComputeResult, PagePermission, PageSearchHit } from '../../../shared/types'
 import { BuilderPanel, ComposePanel, DiagnosticsPanel, PackagePanel, STUDIO_TABS, type StudioTab } from './PageStudio'
 import { LAB_PAGES } from './PageLabs'
+import { Plot as PagePlot, type Series } from './PageTools'
 import CodePageStudio from './CodePageStudio'
 import { ApplicationsPanel } from './PageApplications'
 import { DescribePanel, GeneratedHistory, RunDocument } from './PageDescribe'
@@ -577,10 +578,18 @@ function LabPageFor(slug: string, pageId: string, onNotify: (m: string, k?: Noti
 
 // ---------------------------------------------------------------- Unit Converter
 
-function UnitConverterPage({ pageId, onNotify }: { pageId: string; onNotify(m: string, k?: NoticeKind): void }): React.JSX.Element {
-  const [value, setValue] = useState('36')
-  const [from, setFrom] = useState('km/h')
-  const [to, setTo] = useState('m/s')
+export function UnitConverterPage({
+  pageId,
+  onNotify,
+  initial
+}: {
+  pageId: string
+  onNotify(m: string, k?: NoticeKind): void
+  initial?: Readonly<Record<string, string>>
+}): React.JSX.Element {
+  const [value, setValue] = useState(() => initial?.value ?? '36')
+  const [from, setFrom] = useState(() => initial?.from ?? 'km/h')
+  const [to, setTo] = useState(() => initial?.to ?? 'm/s')
   const [answer, setAnswer] = useState<{ display: string; dimension: string; exact: boolean } | null>(null)
   const [problem, setProblem] = useState('')
   const [options, setOptions] = useState<{ id: string; symbol: string; name: string }[]>([])
@@ -690,8 +699,16 @@ function UnitConverterPage({ pageId, onNotify }: { pageId: string; onNotify(m: s
 
 // ---------------------------------------------------------------- Equation Solver
 
-function EquationSolverPage({ pageId, onNotify }: { pageId: string; onNotify(m: string, k?: NoticeKind): void }): React.JSX.Element {
-  const [text, setText] = useState('x^2 + 3x + 2 = 0')
+export function EquationSolverPage({
+  pageId,
+  onNotify,
+  initial
+}: {
+  pageId: string
+  onNotify(m: string, k?: NoticeKind): void
+  initial?: Readonly<Record<string, string>>
+}): React.JSX.Element {
+  const [text, setText] = useState(() => initial?.text ?? 'x^2 + 3x + 2 = 0')
   const [result, setResult] = useState<Record<string, unknown> | null>(null)
   const [steps, setSteps] = useState<{ label: string; detail: string }[]>([])
   const [problem, setProblem] = useState('')
@@ -810,14 +827,33 @@ function EquationSolverPage({ pageId, onNotify }: { pageId: string; onNotify(m: 
 
 // ---------------------------------------------------------------- Calculus Laboratory
 
-function CalculusLabPage({ pageId, onNotify }: { pageId: string; onNotify(m: string, k?: NoticeKind): void }): React.JSX.Element {
-  const [text, setText] = useState('sin(x^2)')
-  const [variable, setVariable] = useState('x')
-  const [at, setAt] = useState('1')
+export function CalculusLabPage({
+  pageId,
+  onNotify,
+  initial
+}: {
+  pageId: string
+  onNotify(m: string, k?: NoticeKind): void
+  initial?: Readonly<Record<string, string>>
+}): React.JSX.Element {
+  const [text, setText] = useState(() => initial?.text ?? 'sin(x^2)')
+  const [variable, setVariable] = useState(() => initial?.variable ?? 'x')
+  const [at, setAt] = useState(() => initial?.at ?? '1')
   const [derivative, setDerivative] = useState('')
   const [simplified, setSimplified] = useState('')
   const [value, setValue] = useState<string>('')
   const [problem, setProblem] = useState('')
+  /*
+   * The function and its derivative, drawn.
+   *
+   * A derivative written as an expression is the answer; a derivative drawn under the curve it came from is the
+   * lesson. Where the curve is steepest the derivative is largest, and where the curve turns the derivative crosses
+   * zero -- neither of which is visible in `cos(x^2) * (2 * x)`.
+   *
+   * Both curves are evaluated by the same plotting engine the Function Plotter uses, so a point that cannot be
+   * evaluated breaks the line rather than being joined across.
+   */
+  const [curves, setCurves] = useState<Series[]>([])
 
   const run = useCallback(async () => {
     setProblem('')
@@ -833,6 +869,20 @@ function CalculusLabPage({ pageId, onNotify }: { pageId: string; onNotify(m: str
       } else {
         setDerivative(String(d.text))
       }
+
+      // Drawn over a range around the point being asked about, so the value below is somewhere on the picture.
+      const middle = Number(at)
+      const span = Number.isFinite(middle) ? Math.max(4, Math.abs(middle) * 4) : 10
+      const low = (Number.isFinite(middle) ? middle : 0) - span / 2
+      const high = (Number.isFinite(middle) ? middle : 0) + span / 2
+      const drawn: Series[] = []
+      const ofText = await compute(pageId, 'plot.function', { expression: text, from: low, to: high, initial: 192 })
+      if (ofText.ok === true && ofText.series) drawn.push({ ...(ofText.series as Series), label: text })
+      if (d.ok === true) {
+        const ofSlope = await compute(pageId, 'plot.function', { expression: String(d.text), from: low, to: high, initial: 192 })
+        if (ofSlope.ok === true && ofSlope.series) drawn.push({ ...(ofSlope.series as Series), label: `d/d${variable}` })
+      }
+      setCurves(drawn)
 
       const point = Number(at)
       if (Number.isFinite(point)) {
@@ -854,6 +904,7 @@ function CalculusLabPage({ pageId, onNotify }: { pageId: string; onNotify(m: str
 
   return (
     <section className="page-pane" aria-label="Calculus Laboratory">
+      {curves.length > 0 && <PagePlot series={curves} height={200} />}
       <div className="page-row">
         <label className="page-field wide">
           <span>Expression</span>

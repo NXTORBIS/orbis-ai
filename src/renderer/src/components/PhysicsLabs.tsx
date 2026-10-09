@@ -20,7 +20,16 @@ import { Choice, Field, Notes, Problem, Stats, readNumbers, useEngine } from './
  * rendered beside the number rather than behind a disclosure.
  */
 
-type Props = { pageId: string; onNotify(m: string, k?: NoticeKind): void }
+/*
+ * `initial` is how a laboratory opened from a sentence starts with the values that sentence gave.
+ *
+ * Text, because every field here is text somebody types, so wiring one costs a default rather than a rewrite. A lab
+ * that ignores it is simply not configurable from a sentence, which its manifest says plainly.
+ */
+type Props = { pageId: string; onNotify(m: string, k?: NoticeKind): void; initial?: Readonly<Record<string, string>> }
+
+/** A starting value from the runtime, or the lab's own default. */
+const start = (initial: Props['initial'], id: string, fallback: string): string => initial?.[id] ?? fallback
 
 const round = (value: number, digits = 5): string =>
   Number.isFinite(value) ? String(Number(value.toPrecision(digits))) : '—'
@@ -128,11 +137,11 @@ const number = (text: string, fallback: number): number => {
 
 // ---------------------------------------------------------------- Motion Lab
 
-export function MotionLabPage({ pageId }: Props): React.JSX.Element {
-  const [durations, setDurations] = useState('5, 5, 10')
-  const [accelerations, setAccelerations] = useState('2, 0, -1')
-  const [velocity, setVelocity] = useState('0')
-  const [position, setPosition] = useState('0')
+export function MotionLabPage({ pageId, initial }: Props): React.JSX.Element {
+  const [durations, setDurations] = useState(() => start(initial, 'durations', '5, 5, 10'))
+  const [accelerations, setAccelerations] = useState(() => start(initial, 'accelerations', '2, 0, -1'))
+  const [velocity, setVelocity] = useState(() => start(initial, 'velocity', '0'))
+  const [position, setPosition] = useState(() => start(initial, 'position', '0'))
 
   const phases = useMemo(() => {
     const d = readNumbers(durations)
@@ -246,14 +255,14 @@ export function MotionLabPage({ pageId }: Props): React.JSX.Element {
 
 // ---------------------------------------------------------------- Projectile Lab
 
-export function ProjectileLabPage({ pageId }: Props): React.JSX.Element {
-  const [speed, setSpeed] = useState('40')
-  const [angle, setAngle] = useState('45')
-  const [height, setHeight] = useState('0')
-  const [gravity, setGravity] = useState('9.81')
-  const [drag, setDrag] = useState('quadratic')
-  const [coefficient, setCoefficient] = useState('0.01')
-  const [mass, setMass] = useState('1')
+export function ProjectileLabPage({ pageId, initial }: Props): React.JSX.Element {
+  const [speed, setSpeed] = useState(() => start(initial, 'speed', '40'))
+  const [angle, setAngle] = useState(() => start(initial, 'angle', '45'))
+  const [height, setHeight] = useState(() => start(initial, 'height', '0'))
+  const [gravity, setGravity] = useState(() => start(initial, 'gravity', '9.81'))
+  const [drag, setDrag] = useState(() => start(initial, 'drag', 'quadratic'))
+  const [coefficient, setCoefficient] = useState(() => start(initial, 'coefficient', '0.01'))
+  const [mass, setMass] = useState(() => start(initial, 'mass', '1'))
 
   const setup = {
     speed: number(speed, 0),

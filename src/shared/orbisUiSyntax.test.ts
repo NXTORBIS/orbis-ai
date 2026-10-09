@@ -118,3 +118,53 @@ test('a page that only fails in a browser is not reported as broken', async () =
   ].join('\n')
   assert.equal(await parses(browserOnly), null)
 })
+
+/**
+ * The same name declared twice at the top of a module.
+ *
+ * `new Function` above parses a function body, which is sloppy-mode script, and there two `function x()` declarations
+ * are perfectly legal -- the second quietly wins. In a module they are a SyntaxError, and a SyntaxError does not fail
+ * at the line: it fails the whole file, so the page loads and the feature is simply not there.
+ *
+ * That is what happened to the music panel. Two row builders, one for a search result and one for a library row, both
+ * called `trackRow`. Twelve hundred lines of working music panel, served by the browser, parsed by nobody, doing
+ * nothing. Only the browser's console ever said a word about it.
+ *
+ * Node's own module parser would catch it, and it needs a flag the test runner does not pass, so the declarations are
+ * read instead: anything declared hard against the left margin, which is where a module's own declarations live.
+ */
+function declaredTwice(source: string): string[] {
+  const seen = new Map<string, number>()
+  const twice: string[] = []
+  const DECLARATION = /^(?:export\s+(?:default\s+)?)?(?:async\s+)?(?:function\*?|class|const|let|var)\s+([A-Za-z_$][\w$]*)/
+  for (const line of source.split('\n')) {
+    // Only column zero. A declaration inside any block is in a scope of its own and may repeat a name quite legally.
+    if (/^\s/.test(line)) continue
+    const found = DECLARATION.exec(line)
+    if (!found) continue
+    const name = found[1]
+    const count = (seen.get(name) ?? 0) + 1
+    seen.set(name, count)
+    if (count === 2) twice.push(name)
+  }
+  return twice
+}
+
+test('no Orbis browser page declares the same name twice', async () => {
+  const broken: string[] = []
+  for await (const page of pages(ROOT)) {
+    const twice = declaredTwice(await readFile(page.path, 'utf8'))
+    if (twice.length) broken.push(`${page.path.slice(ROOT.length + 1)}: ${twice.join(', ')}`)
+  }
+  assert.deepEqual(
+    broken,
+    [],
+    `a name declared twice in a module is a SyntaxError, and it takes the whole page down silently:\n  ${broken.join('\n  ')}`
+  )
+})
+
+test('a name declared twice really is caught, so this test can fail', () => {
+  assert.deepEqual(declaredTwice('function a() {}\nfunction a() {}\n'), ['a'])
+  // Inside a block it is another scope, and repeating a name there is ordinary code.
+  assert.deepEqual(declaredTwice('if (x) {\n  const a = 1\n}\nif (y) {\n  const a = 2\n}\n'), [])
+})

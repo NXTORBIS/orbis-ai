@@ -1,4 +1,5 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { mkdir, rename, writeFile } from 'node:fs/promises'
+import { damageNote, openStored } from './storedFile.ts'
 import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type { BrowserBookmark, BrowserDownload, BrowserHistoryEntry, BrowserLibrarySnapshot, BrowserPick, BrowserSearchEntry, SiteShortcut } from '../shared/types'
@@ -55,6 +56,10 @@ export class BrowserLibrary {
   private legacy: Record<string, unknown> = {}
   private saveTimer: NodeJS.Timeout | null = null
   private writing: Promise<void> = Promise.resolve()
+  /** False when a library file is there that Orbis could not read, in which case it must not be written over. */
+  private writable = true
+  /** What to tell somebody about the library file, if anything went wrong opening it. */
+  private problem: string | null = null
   private file: string
   /** Called after any change, so open windows can refresh. */
   onChange?: () => void
@@ -85,8 +90,14 @@ export class BrowserLibrary {
   }
 
   async load(): Promise<void> {
+    // An unreadable file is not an empty library. This used to start from nothing and the next save wrote nothing over
+    // everything -- all the history, bookmarks and downloads -- for a file something else happened to have open.
+    const opened = await openStored(this.file, (text) => JSON.parse(text) as Partial<LibraryFile> & Record<string, unknown>, () => null)
+    this.writable = opened.mayWrite
+    this.problem = damageNote(opened, 'browsing library')
     try {
-      const raw = JSON.parse(await readFile(this.file, 'utf8')) as Partial<LibraryFile> & Record<string, unknown>
+      const raw = opened.value
+      if (!raw) throw new Error('nothing to read')
       this.legacy = Object.fromEntries(['readingList', 'savedPages', 'screenshots'].filter((key) => raw[key] !== undefined).map((key) => [key, raw[key]]))
       this.data = {
         history: Array.isArray(raw.history) ? raw.history.filter((h) => h && typeof h.url === 'string') : [],
@@ -133,15 +144,26 @@ export class BrowserLibrary {
       clearTimeout(this.saveTimer)
       this.saveTimer = null
     }
+    if (!this.writable) {
+      // Something is there that Orbis could not read. It is left alone and looked at again next time.
+      this.writable = true
+      return this.writing
+    }
     const data = JSON.stringify({ ...this.data, ...this.legacy })
     this.writing = this.writing.then(async () => {
       const dir = join(this.file, '..')
       await mkdir(dir, { recursive: true })
       const temp = `${this.file}.tmp`
-      await writeFile(temp, data)
+      // Readable by this account only: this is everywhere the person has been and everything they have downloaded.
+      await writeFile(temp, data, { mode: 0o600 })
       await rename(temp, this.file)
     })
     return this.writing
+  }
+
+  /** What went wrong opening the library file, in plain words. Null when nothing did. */
+  fileProblem(): string | null {
+    return this.problem
   }
 
   snapshot(): BrowserLibrarySnapshot {

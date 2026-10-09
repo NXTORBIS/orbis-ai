@@ -638,7 +638,7 @@ export default function WelcomeExperience({ ready, needsName, needsUnlock, locke
               <g className="orbit-group sway-b">
                 <ellipse className="orbit orbit-2" cx="200" cy="100" rx="168" ry="50" pathLength={1} />
               </g>
-              <g className="orbit-group spin">
+              <g className="orbit-group welcome-orbit-spin">
                 <circle className="orbit orbit-3" cx="200" cy="100" r="62" pathLength={1} />
                 <circle className="orbit-node node-small" cx="200" cy="38" r="1.3" />
               </g>

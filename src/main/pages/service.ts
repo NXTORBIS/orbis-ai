@@ -14,6 +14,7 @@ import {
   emptyRegistry,
   listPages,
   pageById,
+  pageBySlug,
 
   registerPage,
   setFavourite,
@@ -403,6 +404,21 @@ export class PagesService {
    * granted the capability the operation needs is refused whatever it asked for; and every input is bounded before any
    * engine sees it.
    */
+  /**
+   * The Page a caller means, by its id or by its slug.
+   *
+   * A Page has two names: the fixed id in its manifest, and the slug people and other parts of Orbis know it by --
+   * `projectile-lab`. The native app platform holds the slug: a manifest's `surface.ref` is the slug, because that is
+   * what somebody wrote when they registered the app. Looking the slug up by id found nothing, so every laboratory
+   * adopted from Pages drew its controls and then answered "There is no Page with that id" where the work goes. The
+   * controls were real, the engine was real, and the two had no way to reach each other.
+   *
+   * The id is tried first, so a slug can never shadow a real id.
+   */
+  private pageFor(state: PageRegistry, ref: string): RegisteredPage | null {
+    return pageById(state, ref) ?? pageBySlug(state, ref)
+  }
+
   async run(profileId: string, request: ComputeRequest): Promise<ComputeResult> {
     const { operation } = request
     const fail = (error: string, message: string, capability?: string): ComputeResult => ({
@@ -424,7 +440,7 @@ export class PagesService {
     // Deny by default: an operation nobody has mapped to a capability cannot run at all.
     if (needed === undefined) return fail('unknown-operation', `Orbis Pages have no operation called "${operation}".`)
 
-    const page = pageById(await this.state(profileId), request.pageId)
+    const page = this.pageFor(await this.state(profileId), request.pageId)
     if (!page) return fail('not-found', 'There is no Page with that id.')
     if (page.status !== 'available') return fail('unavailable', page.note || 'That Page is not available.')
 

@@ -261,5 +261,20 @@ test('the boundary is a known size, so the migration can be estimated rather tha
   // 479 -> 481: taking one conversation or project out of Orbis, and bringing a project back in.
   // 481 -> 482: the files a project keeps.
   // 482 -> 483: notes Orbis took while somebody talked.
-  assert.ok(code.length <= 483, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
+  // 483 -> 484: the window telling Orbis whether this computer asks for less movement.
+  // 488 -> 490: Orbis Student -- one channel for everything the study environment asks, plus the hidden player's
+  // measurement message. Student's Focus policy is not here at all: it is enforced on the browser's own request
+  // pipeline over the debugging pipe, which is below this boundary rather than across it.
+  // 484 -> 488: Orbis Music -- one channel for everything the window asks, and three messages the hidden player
+  // sends about the audio element it holds.
+  // 490 -> 491: Ambient Intelligence -- one channel for everything the window asks about what it has worked out.
+  // Activity is not here either: it is recorded in the main process off the event bus, so a renderer has no way to
+  // write a row into somebody's history.
+  // 491 -> 492: Orbis Courses -- one channel for everything the window asks about learning.
+  // 492 -> 493: the Native App runtime -- one channel for everything the conversation asks about interactive apps.
+  // 493 -> 497: running code. Languages, the starter program, whether a sandbox is set up, and the run itself.
+  // 497 -> 498: one question to Orion for the Physics Studio's research panels.
+  // 498 -> 499: the same question with a photograph of the simulation attached, for what the numbers cannot say.
+  // 499 -> 500: a quiz in the conversation, asked for and checked in main so the window never sees a loose question.
+  assert.ok(code.length <= 500, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
 })

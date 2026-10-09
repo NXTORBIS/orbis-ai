@@ -25,6 +25,7 @@
  */
 
 import { mkdirSync, renameSync, writeFileSync } from 'node:fs'
+import { readStored } from '../storedFile.ts'
 import fs from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
@@ -181,13 +182,20 @@ export class GeneratedStore {
     if (held) return held
     let saved: Saved
     try {
-      saved = cleanSaved(JSON.parse(await fs.readFile(this.fileFor(profileId), 'utf8')), this.operations)
+      const stored = await readStored(this.fileFor(profileId))
+      if (stored.kind === 'unreadable') this.unreadable.add(profileId)
+      else this.unreadable.delete(profileId)
+      if (stored.kind !== 'read') throw new Error('nothing to read')
+      saved = cleanSaved(JSON.parse(stored.text), this.operations)
     } catch {
       saved = { ...EMPTY }
     }
     this.cache.set(profileId, saved)
     return saved
   }
+
+  /** Profiles whose file is there and could not be read. Nothing is written over those. */
+  private readonly unreadable = new Set<string>()
 
   private touch(profileId: string): void {
     this.dirty.add(profileId)
@@ -208,6 +216,12 @@ export class GeneratedStore {
     if (!this.dirty.delete(profileId)) return
     const saved = this.cache.get(profileId)
     if (!saved) return
+    if (this.unreadable.has(profileId)) {
+      // A file is there that Orbis could not read: it holds what this profile has decided and what it has made,
+      // so it is left alone and looked at again next time rather than written over with defaults.
+      this.unreadable.delete(profileId)
+      return
+    }
     const file = this.fileFor(profileId)
     await fs.mkdir(dirname(file), { recursive: true })
     const temporary = `${file}.tmp`

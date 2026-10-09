@@ -1,8 +1,8 @@
-import { join } from 'node:path'
 import type { ClipboardPort } from '../platform.ts'
 import type { ClipboardSettings, ClipItem, ClipKind } from '../../shared/clipboardHistory.ts'
 import { addClip, clipKind, clipPreview, DEFAULT_CLIPBOARD_SETTINGS, MAX_CLIP_IMAGE_BYTES, normalizeClip, normalizeClipboardSettings, pruneClips, searchClips, shouldCapture } from '../../shared/clipboardHistory.ts'
-import { Collection, JsonFile } from './store.ts'
+import { Collection, JsonFile, personalFile } from './store.ts'
+import { DEFAULT_PROFILE_ID } from '../../shared/profiles.ts'
 
 export interface ClipboardContext {
   /** Whether the page in front is a private tab, and which page it is, so copies can be attributed or skipped. */
@@ -47,8 +47,26 @@ export class ClipboardHistory {
 
   constructor(options: ClipboardHistoryOptions) {
     this.o = options
-    this.clips = new Collection<ClipItem>(join(options.userData, 'personal', 'clipboard.json'), normalizeClip, 2000)
-    this.settingsFile = new JsonFile<ClipboardSettings>(join(options.userData, 'personal', 'clipboard-settings.json'), () => ({ ...DEFAULT_CLIPBOARD_SETTINGS }), normalizeClipboardSettings)
+    this.clips = new Collection<ClipItem>(personalFile(options.userData, DEFAULT_PROFILE_ID, 'clipboard.json'), normalizeClip, 2000)
+    this.settingsFile = new JsonFile<ClipboardSettings>(personalFile(options.userData, DEFAULT_PROFILE_ID, 'clipboard-settings.json'), () => ({ ...DEFAULT_CLIPBOARD_SETTINGS }), normalizeClipboardSettings)
+  }
+
+  /**
+   * Moves to another profile's clipboard history, the way notes and tasks already do.
+   *
+   * This file used to leave the profile out of the path, so every profile shared one history -- something copied in a
+   * work profile was sitting in the list of a personal one. What was last seen is forgotten on the way across on
+   * purpose: the last thing on the clipboard belongs to the profile that saw it.
+   */
+  async useProfile(profileId: string): Promise<void> {
+    this.lastSeen = null
+    this.lastSkip = null
+    this.ownWrite = null
+    await Promise.all([
+      this.clips.usePath(personalFile(this.o.userData, profileId, 'clipboard.json')),
+      this.settingsFile.usePath(personalFile(this.o.userData, profileId, 'clipboard-settings.json'))
+    ])
+    this.changed()
   }
 
   onChange(listener: () => void): () => void {

@@ -1,4 +1,5 @@
 import { promises as fs } from 'node:fs'
+import { readStored } from './storedFile.ts'
 import { dirname, join } from 'node:path'
 import { dataDirFor } from '../shared/profiles.ts'
 import {
@@ -58,13 +59,19 @@ export class SecurityLog {
    * Merged into whatever is already in memory rather than replacing it, because something may have been recorded while
    * this was reading -- and the thing recorded a moment ago is exactly the thing worth keeping.
    */
+  /** Profiles whose log file is there and could not be read. A shorter log is never written over those. */
+  private readonly unreadable = new Set<string>()
+
   private read(profileId: string): Promise<void> {
     const already = this.reading.get(profileId)
     if (already) return already
     const job = (async () => {
       let fromDisk: SecurityEvent[] = []
       try {
-        fromDisk = cleanSecurityEvents(JSON.parse(await fs.readFile(this.path(profileId), 'utf8')))
+        const stored = await readStored(this.path(profileId))
+        if (stored.kind === 'unreadable') this.unreadable.add(profileId)
+        else this.unreadable.delete(profileId)
+        fromDisk = stored.kind === 'read' ? cleanSecurityEvents(JSON.parse(stored.text)) : []
       } catch {
         // No log yet, or one that cannot be read. An empty log is the right answer to both: this is a record of what
         // happened, and a record that cannot be read has nothing to say.
@@ -119,6 +126,12 @@ export class SecurityLog {
         await fs.mkdir(dirname(path), { recursive: true })
         // Beside and renamed over, so a log is never half-written. Mode 0600 because although it holds no secret, it does
         // say when somebody was at their computer, and that is theirs.
+        // A log that could not be read is left alone: it is the record of what happened, and a shorter one
+        // written over it is worse than a gap in what is shown.
+        if (this.unreadable.has(profileId)) {
+          this.unreadable.delete(profileId)
+          continue
+        }
         await fs.writeFile(`${path}.tmp`, JSON.stringify(events), { mode: 0o600 })
         await fs.rename(`${path}.tmp`, path)
       } catch {

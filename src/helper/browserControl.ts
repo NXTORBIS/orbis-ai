@@ -103,6 +103,16 @@ export function createBrowserControlHandlers(get: () => PanelControl | null | un
     'browser:groups': () => run('groups.list'),
 
     /**
+     * Hands an address to whatever the computer opens web pages with.
+     *
+     * Shift+Enter in the browser's address bar does this, and it is listed in Orbis's own list of shortcuts -- but the
+     * panel was calling a channel nobody had registered, so the keystroke was swallowed and then nothing happened at
+     * all. `address` allows only http and https, so this cannot be used to open a file or hand a `javascript:` line to
+     * another program.
+     */
+    'browser:openExternal': ([target]) => run('navigation.openExternal', { url: address(target) }),
+
+    /**
      * Everything the browser can do, as the control layer reports it. The Orb's menu is this list, so a capability
      * added anywhere in Orbis is reachable from the Orb without this file changing.
      */

@@ -1,4 +1,6 @@
 import { promises as fs } from 'node:fs'
+import { basename } from 'node:path'
+import { damageNote, openStored } from '../storedFile.ts'
 import { dirname, join } from 'node:path'
 import { dataDirFor } from '../../shared/profiles.ts'
 
@@ -15,6 +17,17 @@ export class JsonFile<T> {
   private writing: Promise<void> = Promise.resolve()
   private timer: NodeJS.Timeout | null = null
   private dirty = false
+  /**
+   * Whether this file may be written over. Null until the file has been looked at.
+   *
+   * Reading used to be `try { ... } catch { defaults }`, which makes a file that could not be read look exactly like
+   * one that is not there -- and on Windows a file is routinely unreadable for a moment while something else holds it.
+   * The next write then put defaults over real data. False means something is there that was not understood, so
+   * nothing is written at all until it can be read.
+   */
+  private writable: boolean | null = null
+  /** What to tell somebody, if anything went wrong opening it. */
+  private damage: string | null = null
 
   private path: string
   private readonly fallback: () => T
@@ -26,14 +39,23 @@ export class JsonFile<T> {
     this.parse = parse
   }
 
+  /** Looks at the file once, and decides from that whether it may ever be written over. */
+  private async open(): Promise<void> {
+    if (this.writable !== null) return
+    const opened = await openStored(this.path, (text) => this.parse(JSON.parse(text)), this.fallback)
+    this.writable = opened.mayWrite
+    this.damage = damageNote(opened, basename(this.path))
+    if (this.value === null) this.value = opened.value
+  }
+
+  /** What went wrong opening this file, in plain words. Null when nothing did. */
+  problem(): string | null {
+    return this.damage
+  }
+
   async read(): Promise<T> {
-    if (this.value === null) {
-      try {
-        this.value = this.parse(JSON.parse(await fs.readFile(this.path, 'utf8')))
-      } catch {
-        this.value = this.fallback()
-      }
-    }
+    await this.open()
+    if (this.value === null) this.value = this.fallback()
     return this.value
   }
 
@@ -54,6 +76,9 @@ export class JsonFile<T> {
     await this.flush()
     this.path = path
     this.value = null
+    // A different file: whether it can be read is a different question.
+    this.writable = null
+    this.damage = null
   }
 
   /** Writes now and waits for it (used before quitting, and by tests). */
@@ -63,13 +88,22 @@ export class JsonFile<T> {
       this.timer = null
     }
     if (!this.dirty || this.value === null) return this.writing
+    await this.open()
+    if (this.writable === false) {
+      // Something is there and Orbis could not read it. Refusing is recoverable -- the lock clears, the copy finishes
+      // -- and overwriting is not, so what is pending stays pending and is tried again on the next save. The question
+      // is asked again next time rather than answered from this one, which is what lets a cleared lock get through.
+      this.writable = null
+      return this.writing
+    }
     this.dirty = false
     const data = JSON.stringify(this.value)
     // The path is taken now, with the data: a write still queued when the file changes must land where it came from.
     const path = this.path
     this.writing = this.writing.then(async () => {
       await fs.mkdir(dirname(path), { recursive: true })
-      await fs.writeFile(`${path}.tmp`, data)
+      // Readable by this account only: these files hold notes, clipboard history and whatever else is personal.
+      await fs.writeFile(`${path}.tmp`, data, { mode: 0o600 })
       await fs.rename(`${path}.tmp`, path)
     })
     return this.writing.catch(() => undefined)

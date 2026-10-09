@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, shell, type BrowserWindow as BrowserWindowType, type IpcMainInvokeEvent, type NativeImage } from 'electron'
+import { whyNotOpenable } from '../../shared/openableFile'
 import { randomBytes } from 'node:crypto'
 import { rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -231,6 +232,13 @@ export const revealWith =
     if (!open) {
       shell.showItemInFolder(path)
       return
+    }
+    // Orbis wrote this file itself, so its ending is Orbis's own -- but the check costs nothing and means there is one
+    // rule about what may be opened rather than two.
+    const why = whyNotOpenable(path)
+    if (why) {
+      shell.showItemInFolder(path)
+      throw new Error(why)
     }
     const problem = await shell.openPath(path)
     if (problem !== '') throw new Error('Nothing on this computer is set to open that kind of file. It is saved; it can be opened from its folder.')

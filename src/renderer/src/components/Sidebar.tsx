@@ -3,26 +3,34 @@ import type { LucideIcon } from 'lucide-react'
 import type { SettingsSectionId } from '../../../shared/settingsSections'
 import type { NoticeKind } from '../lib/notices'
 import {
+  Archive,
+  ArchiveRestore,
+  BookMarked,
   CalendarClock,
   CandlestickChart,
   ChevronDown,
   ChevronRight,
   CircleHelp,
   ClipboardList,
+  Download,
+  FilePlus2,
+  FlaskConical,
   Globe,
+  GraduationCap,
   Images,
   Keyboard,
   LayoutGrid,
   LayoutTemplate,
-  Pencil,
+  Mic,
   PenTool,
+  Pencil,
   Pin,
   PinOff,
   Search,
   SquarePen,
   Trash2,
-  X,
-  FilePlus2, Archive, ArchiveRestore, Download, Mic } from 'lucide-react'
+  X
+} from 'lucide-react'
 import type { Conversation } from '../../../shared/types'
 import type { StreamState } from '../App'
 import { groupConversations } from '../lib/utils'
@@ -81,17 +89,20 @@ interface Props {
  * is left either needs a canvas the browser does not have, or is not about browsing at all. Customize and Profiles are
  * not here because they are settings, and they are in Settings.
  */
-export type FeatureId = 'create' | 'pages' | 'markets' | 'whiteboard' | 'clipboard' | 'workspaces' | 'schedules' | 'notes'
+export type FeatureId = 'create' | 'pages' | 'labs' | 'markets' | 'whiteboard' | 'clipboard' | 'workspaces' | 'schedules' | 'notes' | 'student' | 'courses'
 
 export const FEATURES: { id: FeatureId; label: string; icon: LucideIcon; hint: string }[] = [
   { id: 'create', label: 'Create', icon: FilePlus2, hint: 'Tables and documents, kept and saved as real files' },
   { id: 'pages', label: 'Pages', icon: LayoutTemplate, hint: "Orbis's own tools, each with its own address" },
+  { id: 'labs', label: 'Laboratories', icon: FlaskConical, hint: 'Every laboratory Orbis has, by subject' },
   { id: 'markets', label: 'Markets', icon: CandlestickChart, hint: 'Live crypto prices, charts and watchlists' },
   { id: 'whiteboard', label: 'Whiteboard', icon: PenTool, hint: 'Room to think' },
   { id: 'clipboard', label: 'Clipboard', icon: ClipboardList, hint: 'What you have copied' },
   { id: 'workspaces', label: 'Workspaces', icon: LayoutGrid, hint: 'Sets of tabs, kept together' },
   { id: 'schedules', label: 'Schedules', icon: CalendarClock, hint: 'Things Orbis does at a time you chose' },
-  { id: 'notes', label: 'Notes', icon: Mic, hint: 'What was said, written down while you talk' }
+  { id: 'notes', label: 'Notes', icon: Mic, hint: 'What was said, written down while you talk' },
+  { id: 'student', label: 'Student', icon: GraduationCap, hint: 'Focus sessions, goals, learning and Orbi' },
+  { id: 'courses', label: 'Courses', icon: BookMarked, hint: 'Structured learning, with what you know actually measured' }
 ]
 
 interface NavItem {

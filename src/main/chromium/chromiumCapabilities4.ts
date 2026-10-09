@@ -99,7 +99,23 @@ export function registerBrowserToolCapabilities(d: MoreDeps): void {
 
   // ---------------------------------------------------------------- console and network, from the browser's own protocol
 
+  /*
+   * What has been recorded from each tab's console.
+   *
+   * Keyed by the page object, and a closed tab's page object was never removed -- so every tab somebody had ever
+   * recorded from was held in memory, with its messages, for as long as Orbis ran. Dropping a tab that has gone is
+   * what makes recording safe to leave on.
+   */
   const consoles = new Map<CdpPage, { entries: ConsoleEntry[]; stop(): void }>()
+  /** Lets go of tabs that have closed. Called whenever this map is touched, which is often enough. */
+  const forgetClosedTabs = (): void => {
+    for (const [page, capture] of consoles) {
+      if (page.gone) {
+        capture.stop()
+        consoles.delete(page)
+      }
+    }
+  }
   control.register({
     id: 'devtools.consoleCapture',
     domain: 'devtools',
@@ -109,6 +125,7 @@ export function registerBrowserToolCapabilities(d: MoreDeps): void {
     mutates: true,
     confirmation: 'none',
     run: async (p) => {
+      forgetClosedTabs()
       const page = await d.activePage()
       const existing = consoles.get(page)
       if (!p.on) {

@@ -1106,6 +1106,10 @@ export default function MarketsView({
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && results[0]) void openMarket(results[0].instrumentId)
                 if (e.key === 'Escape') {
+                  // Claimed, so the shell does not also close Markets. Clearing a search and leaving the screen are
+                  // different intentions and one keypress must not do both.
+                  e.preventDefault()
+                  e.stopPropagation()
                   setQuery('')
                   setSearchOpen(false)
                 }

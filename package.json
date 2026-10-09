@@ -57,6 +57,7 @@
     "@ghostery/adblocker-electron": "^2.18.2",
     "electron-chrome-web-store": "0.13.0",
     "koffi": "^3.3.1",
-    "onnxruntime-web": "^1.29.0"
+    "onnxruntime-web": "^1.29.0",
+    "recharts": "^3.10.1"
   }
 }

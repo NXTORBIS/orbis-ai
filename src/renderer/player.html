@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!--
+      The Orbis Music player.
+
+      A window nobody sees, whose only job is to hold the one <audio> element that actually makes sound. It is here,
+      in Orbis's own window process, rather than in the browser, because music has to carry on while somebody moves
+      between tabs and pages -- and a sound owned by a tab stops when that tab does.
+
+      It can reach nothing. No network, no file paths, no scripts from anywhere: the audio arrives through
+      `orbis-audio://`, which only ever serves a file the library already knows about, by its id. The page never
+      learns where anything is on the disk.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; media-src orbis-audio:; connect-src 'none'"
+    />
+    <title>Orbis Music</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: #000;
+      }
+    </style>
+  </head>
+  <body>
+    <audio id="sound" preload="metadata"></audio>
+    <script type="module" src="/src/player.ts"></script>
+  </body>
+</html>

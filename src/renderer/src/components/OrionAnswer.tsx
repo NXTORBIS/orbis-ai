@@ -90,6 +90,9 @@ export default function OrionAnswer({ question, model, page, context, onClose }:
     return () => {
       unsubscribe()
       if (!finished) void window.api.abortChat(requestId)
+      // Asking again replaces this one, and the call above is still outstanding: without this its answer arrives late
+      // and writes "done" -- or the old error -- over the question being asked now.
+      finished = true
     }
   }, [question, model, context, attempt])
 

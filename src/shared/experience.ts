@@ -501,7 +501,19 @@ export function appearanceVariables(config: ExperienceConfig, systemReducedMotio
   }
   if (a.density !== 'comfortable') out['--density-scale'] = a.density === 'compact' ? '0.82' : '0.92'
   if (a.cornerRadius) out['--radius-scale'] = String(a.cornerRadius)
-  if (a.transparency !== 1) out['--glass'] = `rgba(14, 15, 18, ${Math.min(1, 0.84 * a.transparency).toFixed(2)})`
+  if (a.transparency !== 1) {
+    /*
+     * More see-through means less of the panel's own colour, which is the opposite of what this used to work out.
+     * `0.84 * transparency` made the alpha *rise* with the setting, so dragging "Panel see-through" up made panels
+     * solid and down made them clear -- the slider ran backwards, and at the top of its range panels were completely
+     * opaque. Taking it away from the default instead makes it run the way it is labelled.
+     *
+     * The colour is the theme's own rather than a dark grey written in here: a light theme used to turn its panels
+     * almost black the moment this slider was touched.
+     */
+    const solid = Math.max(0.2, Math.min(1, 0.84 * (2 - a.transparency)))
+    out['--glass'] = `color-mix(in srgb, var(--bg-mid) ${Math.round(solid * 100)}%, transparent)`
+  }
   if (a.blur !== 1) out['--blur-scale'] = String(a.blur)
   if (a.fontScale !== 1) out['--font-scale'] = String(a.fontScale)
   for (const [token, value] of Object.entries(themeTokens(config.themeId, config.themes))) out[`--${token}`] = value

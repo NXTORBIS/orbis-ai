@@ -128,10 +128,9 @@ export function setupBrowserControl(deps: BrowserControlDeps): { control: Browse
   ipcMain.handle('control:runs', (event) => (fromWindow(event) ? windowControl.listRuns() : []))
   ipcMain.handle('control:log', (event, limit: unknown) => (fromWindow(event) ? control.recentLog(typeof limit === 'number' ? limit : 100) : []))
 
-  app.on('before-quit', () => {
-    windowControl.stopAll()
-    void control.flush()
-  })
+  // Only the stopping is done here. Saving the log is registered by the caller against the one list of things to
+  // write before closing, so it is actually waited for rather than started and abandoned.
+  app.on('before-quit', () => windowControl.stopAll())
 
   return { control, windowControl }
 }

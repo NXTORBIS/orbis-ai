@@ -75,7 +75,7 @@ export class SkillManager {
   private write(path: string, data: unknown): Promise<void> {
     const run = (this.queues.get(path) ?? Promise.resolve()).then(async () => {
       await fs.mkdir(join(path, '..'), { recursive: true })
-      await fs.writeFile(`${path}.tmp`, JSON.stringify(data, null, 1))
+      await fs.writeFile(`${path}.tmp`, JSON.stringify(data, null, 1), { mode: 0o600 })
       await fs.rename(`${path}.tmp`, path)
     })
     this.queues.set(path, run.catch(() => undefined))

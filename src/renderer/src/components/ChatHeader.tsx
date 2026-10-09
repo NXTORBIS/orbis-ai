@@ -1,8 +1,10 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useLayoutEffect, useRef, useState } from 'react'
 import ChatProject from './ChatProject'
 import type { NoticeKind } from '../lib/notices'
-import { Ellipsis, HatGlasses, Pencil, Share2, Trash2 } from 'lucide-react'
+import { FlaskConical, Ellipsis, HatGlasses, Pencil, Share2, Trash2 } from 'lucide-react'
 import { useDismiss } from '../lib/useDismiss'
+
+const SearchLabs = lazy(() => import('./native/SearchLabs'))
 
 interface Props {
   title: string
@@ -10,6 +12,13 @@ interface Props {
   thinking: boolean
   incognito: boolean
   onToggleIncognito(): void
+  /**
+   * Opens a Native App, from Search Labs.
+   *
+   * Optional, because the header is rendered in places where there is no conversation to open an app into, and a
+   * button that cannot do anything is not drawn at all rather than drawn and disabled.
+   */
+  onOpenApp?(appId: string): void
   onRename(title: string): void
   onShare(): void
   onDelete(): void
@@ -56,6 +65,35 @@ export default function ChatHeader(props: Props): React.JSX.Element {
   }, [])
 
 
+  /*
+   * Search Labs, and where it opens.
+   *
+   * It used to sit in the composer's tool row, beside the attachment button, which was the wrong place twice over:
+   * that row is about the message being written, and Search Labs is about the whole conversation. It also made the
+   * popover open upwards into the chat it was meant to add to.
+   *
+   * Here it is next to the chat's own controls and opens downwards, which is the direction there is always room in.
+   * The height is still measured rather than assumed — the list wants about 410px and a short window does not have
+   * it, and capping it is what stops a hundred pixels of it going off the bottom of the screen.
+   */
+  const [labsOpen, setLabsOpen] = useState(false)
+  const [labsPlacement, setLabsPlacement] = useState({ down: true, offset: 0, maxHeight: 420 })
+  const labsRef = useRef<HTMLDivElement | null>(null)
+  useDismiss(labsRef, labsOpen, () => setLabsOpen(false))
+
+  const openLabs = (): void => {
+    const anchor = labsRef.current?.getBoundingClientRect()
+    if (anchor) {
+      const below = window.innerHeight - 16 - anchor.bottom
+      setLabsPlacement({
+        down: true,
+        offset: Math.round(anchor.height + 8),
+        maxHeight: Math.max(220, Math.round(Math.min(420, below - 12)))
+      })
+    }
+    setLabsOpen(true)
+  }
+
   const startRename = (): void => {
     if (!props.hasConversation) return
     setDraft(props.title)
@@ -80,6 +118,41 @@ export default function ChatHeader(props: Props): React.JSX.Element {
             <HatGlasses size={12} />
             Incognito
           </span>
+        )}
+
+        {/*
+          Search Labs: the one manual route to a Native App.
+
+          Orion stays the main entrance — "simulate a projectile" should never need a menu walked — so this is for the
+          times somebody would rather look than ask. It is drawn only when there is somewhere to open an app into.
+        */}
+        {props.onOpenApp !== undefined && (
+          <div className="popover-anchor labs-anchor" ref={labsRef}>
+            <button
+              type="button"
+              className={`labs-btn${labsOpen ? ' open' : ''}`}
+              title="Search Labs — open an interactive tool"
+              aria-label="Search Labs"
+              aria-expanded={labsOpen}
+              aria-haspopup="dialog"
+              onClick={() => (labsOpen ? setLabsOpen(false) : openLabs())}
+            >
+              <FlaskConical size={14} />
+              <span>Labs</span>
+            </button>
+            {labsOpen && (
+              <Suspense fallback={null}>
+                <SearchLabs
+                  placement={labsPlacement}
+                  onClose={() => setLabsOpen(false)}
+                  onOpen={(appId) => {
+                    props.onOpenApp?.(appId)
+                    setLabsOpen(false)
+                  }}
+                />
+              </Suspense>
+            )}
+          </div>
         )}
       </div>
 

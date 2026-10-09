@@ -19,7 +19,17 @@ import { Choice, Field, Notes, Problem, Stats, readNumbers, useEngine } from './
  * the answers, because in every case they are the difference between a number and a number somebody can rely on.
  */
 
-type Props = { pageId: string; onNotify(m: string, k?: NoticeKind): void }
+type Props = {
+  pageId: string
+  onNotify(m: string, k?: NoticeKind): void
+  /**
+   * Starting values, when the laboratory was opened by Orion with a configuration.
+   *
+   * Text, because every input here is a field somebody types in and keeps as text — which is correct, and which is
+   * what makes wiring one of these cost a default rather than a rewrite.
+   */
+  initial?: Readonly<Record<string, string>>
+}
 
 const round = (value: number, digits = 6): string =>
   Number.isFinite(value) ? String(Number(value.toPrecision(digits))) : '—'
@@ -37,12 +47,12 @@ const WINDOWS = [
   { value: 'flat-top', label: 'Flat-top — for measuring amplitude' }
 ]
 
-export function SignalLabPage({ pageId }: Props): React.JSX.Element {
+export function SignalLabPage({ pageId, initial }: Props): React.JSX.Element {
   const [values, setValues] = useState(
     Array.from({ length: 128 }, (_, i) => Number((Math.sin((2 * Math.PI * 8 * i) / 128) + 0.4 * Math.sin((2 * Math.PI * 21 * i) / 128)).toFixed(4))).join(', ')
   )
-  const [rate, setRate] = useState('128')
-  const [window, setWindow] = useState('hann')
+  const [rate, setRate] = useState(() => initial?.rate ?? '128')
+  const [window, setWindow] = useState(() => initial?.window ?? 'hann')
   const [removeMean, setRemoveMean] = useState(true)
 
   const samples = readNumbers(values)
@@ -204,11 +214,11 @@ const INTERPOLATIONS = [
   { value: 'polynomial', label: 'One polynomial through every point' }
 ]
 
-export function CurveFitterPage({ pageId }: Props): React.JSX.Element {
-  const [xs, setXs] = useState('1, 2, 3, 4, 5, 6, 7, 8')
-  const [ys, setYs] = useState('2.1, 4.4, 9.1, 15.8, 25.2, 36.1, 49.4, 63.8')
-  const [family, setFamily] = useState('polynomial')
-  const [degree, setDegree] = useState('2')
+export function CurveFitterPage({ pageId, initial }: Props): React.JSX.Element {
+  const [xs, setXs] = useState(() => initial?.xs ?? '1, 2, 3, 4, 5, 6, 7, 8')
+  const [ys, setYs] = useState(() => initial?.ys ?? '2.1, 4.4, 9.1, 15.8, 25.2, 36.1, 49.4, 63.8')
+  const [family, setFamily] = useState(() => initial?.family ?? 'polynomial')
+  const [degree, setDegree] = useState(() => initial?.degree ?? '2')
   const [ceiling, setCeiling] = useState('100')
   const [kind, setKind] = useState('monotone-cubic')
 
@@ -514,10 +524,10 @@ export function ConstantsLibraryPage({ pageId }: Props): React.JSX.Element {
 
 // ---------------------------------------------------------------- Coordinate Lab
 
-export function CoordinateLabPage({ pageId }: Props): React.JSX.Element {
-  const [point, setPoint] = useState('1, 1, 1')
-  const [convention, setConvention] = useState('physics')
-  const [unit, setUnit] = useState('degrees')
+export function CoordinateLabPage({ pageId, initial }: Props): React.JSX.Element {
+  const [point, setPoint] = useState(() => initial?.point ?? '1, 1, 1')
+  const [convention, setConvention] = useState(() => initial?.convention ?? 'physics')
+  const [unit, setUnit] = useState(() => initial?.unit ?? 'degrees')
   const [axis, setAxis] = useState('0, 0, 1')
   const [angle, setAngle] = useState('90')
 

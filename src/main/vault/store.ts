@@ -1,4 +1,5 @@
 import { promises as fs } from 'node:fs'
+import { readStored } from '../storedFile.ts'
 import { join, dirname } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { newVaultKey, open, seal, unwrapKey, wipe, wrapKey } from './crypto.ts'
@@ -71,13 +72,37 @@ export class SecretsVault {
     return join(this.userData, dataDirFor(profileId), 'secrets.vault')
   }
 
-  private async read(profileId: string): Promise<VaultFile | null> {
+  /**
+   * What is on disk for this profile: a vault, nothing, or something Orbis could not read.
+   *
+   * The third answer is the one that matters and the one that did not exist. Every error used to become `null`, which
+   * every caller read as "there is no vault" -- so a file held open by a backup program for a moment reported no
+   * vault, the window offered to set one up, and `create` checked for an existing vault with the same failed read,
+   * passed, and renamed an empty vault over every secret in it.
+   */
+  private async read(profileId: string): Promise<{ file: VaultFile } | { none: true } | { unreadable: string }> {
+    const stored = await readStored(this.path(profileId))
+    if (stored.kind === 'missing') return { none: true }
+    if (stored.kind === 'unreadable') return { unreadable: stored.why }
     try {
-      const raw = JSON.parse(await fs.readFile(this.path(profileId), 'utf8')) as VaultFile
-      return raw && raw.version === 1 && raw.master ? raw : null
+      const raw = JSON.parse(stored.text) as VaultFile
+      if (raw && raw.version === 1 && raw.master) return { file: raw }
+      /*
+       * It read, and it is not a vault this Orbis understands -- a newer format, or a damaged file.
+       *
+       * Reported as unreadable rather than as nothing. Treating a vault written by a later Orbis as "no vault" is how
+       * downgrading once would have destroyed it.
+       */
+      return { unreadable: raw && typeof raw.version === 'number' && raw.version > 1 ? 'it was made by a newer version of Orbis' : 'it is not a vault Orbis understands' }
     } catch {
-      return null
+      return { unreadable: 'it could not be made sense of' }
     }
+  }
+
+  /** The vault file, or null for nothing *and* for unreadable. Only for callers that are not about to write. */
+  private async readFile(profileId: string): Promise<VaultFile | null> {
+    const found = await this.read(profileId)
+    return 'file' in found ? found.file : null
   }
 
   private async write(profileId: string, file: VaultFile): Promise<void> {
@@ -91,7 +116,13 @@ export class SecretsVault {
   // ---------------------------------------------------------------- what the window may ask without unlocking
 
   async status(profileId: string): Promise<VaultStatus> {
-    const file = await this.read(profileId)
+    const found = await this.read(profileId)
+    if ('unreadable' in found) {
+      // Said plainly, and `exists` stays true: there IS a vault, and the one thing that must not happen is being
+      // offered a setup screen that would write over it.
+      return { exists: true, unlocked: false, hasRecovery: false, autoLockMs: normalizeAutoLock(undefined), unreadable: found.unreadable }
+    }
+    const file = 'file' in found ? found.file : null
     const unlocked = this.isUnlocked(profileId)
     return {
       exists: Boolean(file),
@@ -104,7 +135,7 @@ export class SecretsVault {
 
   /** The recovery question, which is the user's own words and is not a secret. */
   async recoveryQuestion(profileId: string): Promise<string | null> {
-    return (await this.read(profileId))?.recovery?.question ?? null
+    return (await this.readFile(profileId))?.recovery?.question ?? null
   }
 
   isUnlocked(profileId: string): boolean {
@@ -120,7 +151,13 @@ export class SecretsVault {
    * given, wraps the same key a second time so that answering it later really does open the vault.
    */
   async create(profileId: string, masterPassword: string, recovery?: { question: string; answer: string }): Promise<void> {
-    if (await this.read(profileId)) throw new VaultFailure('already-exists', 'This profile already has a vault.')
+    const found = await this.read(profileId)
+    if ('file' in found) throw new VaultFailure('already-exists', 'This profile already has a vault.')
+    // The guard that was missing. Something is there and Orbis cannot read it, so it is not written over -- not even
+    // to make a new vault, because the old one would go with it and there is no way back from that.
+    if ('unreadable' in found) {
+      throw new VaultFailure('already-exists', `This profile has a vault and Orbis could not read it (${found.unreadable}). It has not been touched. Nothing new will be written over it.`)
+    }
 
     const key = newVaultKey()
     const now = Date.now()
@@ -138,7 +175,7 @@ export class SecretsVault {
   }
 
   async unlock(profileId: string, masterPassword: string): Promise<void> {
-    const file = await this.read(profileId)
+    const file = await this.readFile(profileId)
     if (!file) throw new VaultFailure('no-vault')
 
     const key = await unwrapKey(masterPassword, file.master)
@@ -220,7 +257,7 @@ export class SecretsVault {
 
   /** Writes the vault back out, sealed. The plaintext exists only as the buffer sealed here. */
   private async save(profileId: string, key: Buffer, contents: VaultContents): Promise<void> {
-    const file = await this.read(profileId)
+    const file = await this.readFile(profileId)
     if (!file) throw new VaultFailure('no-vault')
     const plain = Buffer.from(JSON.stringify(contents), 'utf8')
     file.secrets = seal(key, plain)
@@ -279,7 +316,7 @@ export class SecretsVault {
 
   /** Changing the master password rewraps the same vault key: the secrets are not touched. */
   async changeMasterPassword(profileId: string, current: string, next: string): Promise<void> {
-    const file = await this.read(profileId)
+    const file = await this.readFile(profileId)
     if (!file) throw new VaultFailure('no-vault')
     const key = await unwrapKey(current, file.master)
     if (!key) throw new VaultFailure('wrong-password')
@@ -293,7 +330,7 @@ export class SecretsVault {
 
   /** Setting, changing or removing the way back in. Always requires the master password. */
   async setRecovery(profileId: string, masterPassword: string, recovery: { question: string; answer: string } | null): Promise<void> {
-    const file = await this.read(profileId)
+    const file = await this.readFile(profileId)
     if (!file) throw new VaultFailure('no-vault')
     const key = await unwrapKey(masterPassword, file.master)
     if (!key) throw new VaultFailure('wrong-password')
@@ -315,7 +352,7 @@ export class SecretsVault {
    * its clothes. A vault with no recovery set up cannot be recovered at all, and says so rather than pretending.
    */
   async recover(profileId: string, answer: string, newPassword: string): Promise<void> {
-    const file = await this.read(profileId)
+    const file = await this.readFile(profileId)
     if (!file) throw new VaultFailure('no-vault')
     if (!file.recovery) throw new VaultFailure('no-recovery')
 
@@ -331,7 +368,7 @@ export class SecretsVault {
   }
 
   async setAutoLock(profileId: string, masterPassword: string, autoLockMs: number): Promise<AutoLockMs> {
-    const file = await this.read(profileId)
+    const file = await this.readFile(profileId)
     if (!file) throw new VaultFailure('no-vault')
     const key = await unwrapKey(masterPassword, file.master)
     if (!key) throw new VaultFailure('wrong-password')
@@ -347,7 +384,7 @@ export class SecretsVault {
 
   /** Deleting the vault. Requires the master password, and takes everything with it. */
   async destroy(profileId: string, masterPassword: string): Promise<void> {
-    const file = await this.read(profileId)
+    const file = await this.readFile(profileId)
     if (!file) throw new VaultFailure('no-vault')
     const key = await unwrapKey(masterPassword, file.master)
     if (!key) throw new VaultFailure('wrong-password')

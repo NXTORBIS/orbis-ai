@@ -11,12 +11,20 @@
     <link rel="stylesheet" href="sidebar.css" />
   </head>
   <body>
-    <aside id="rail" aria-label="Orbis sidebar"></aside>
     <div id="app">
-    <header>
-      <span class="mark" aria-hidden="true"></span>
-      <strong>Orbis</strong>
-      <span id="status" class="status" role="status" aria-live="polite" title="Looking for the Orbis helper." hidden>Connecting…</span>
+    <!--
+      A bar only when there is something to put in it.
+
+      There used to be one all the time: a dot, the word Orbis, and nothing else -- above a side panel the browser has
+      already labelled Orbis in its own chrome. A whole row of a narrow panel repeating its own name. It is drawn now
+      only inside a view, where it carries the way back and the name of what you are looking at, and over a page,
+      where it carries the way to close it.
+    -->
+    <header id="pan-bar" hidden>
+      <button id="pan-back" class="pan-back" type="button" aria-label="Back to everything Orbis can do" hidden>
+        <span aria-hidden="true">&#8249;</span><span>Back</span>
+      </button>
+      <span id="pan-where" class="pan-where"></span>
       <span class="head-gap" aria-hidden="true"></span>
       <!-- Only ever seen as a surface over the page; in the side panel the browser already gives a way to close it. -->
       <button id="cc-close" type="button" title="Close (Esc)" aria-label="Close">&#10005;</button>
@@ -98,6 +106,16 @@
       <main id="secrets"></main>
     </section>
 
+    <!-- Focus: the part of Orbis Student that belongs where the reading happens. The rest is in the Orbis window. -->
+    <section id="view-student" class="view" hidden>
+      <main id="student" aria-live="polite"></main>
+    </section>
+
+    <!-- Orbis Music: what is playing, your library, the queue, and the song playing on the page in front of you. -->
+    <section id="view-music" class="view" hidden>
+      <main id="music" aria-live="polite"></main>
+    </section>
+
     </div>
     <script type="module" src="panel.js"></script>
     <script type="module" src="panel-adblock.js"></script>
@@ -108,6 +126,8 @@
     <script type="module" src="panel-workflows.js"></script>
     <script type="module" src="panel-galaxy.js"></script>
     <script type="module" src="panel-secrets.js"></script>
+    <script type="module" src="panel-student.js"></script>
+    <script type="module" src="panel-music.js"></script>
     <script type="module" src="panel-account.js"></script>
   </body>
 </html>

@@ -12,12 +12,12 @@
 
 import { GRADIENTS, MAX_IMAGE_BYTES, MAX_SHORTCUTS, MAX_TILES, clockText, countdownText, normalizeSettings, removeShortcut, saveShortcut, siteUrl } from './newtab-logic.js'
 import * as store from './newtab-store.js'
-import { askBrowser } from './helper.js'
+import { askBrowser, call } from './helper.js'
 // The look the person chose in Orbis, worn here too: the browser and the chat are one application.
 import { followAppearance } from './appearance.js'
 import { introWanted, runIntro } from './intro.js'
 import { mountWidgets } from './widgets.js'
-import { mountRail } from './rail.js'
+import { mountRail, mountMusicEntry } from './rail.js'
 
 const $ = (id) => document.getElementById(id)
 let state = { settings: normalizeSettings(null), shortcuts: [], top: [], widgets: [], image: '' }
@@ -215,6 +215,14 @@ $('settingsForm').addEventListener('submit', async (e) => {
 })
 
 function render() { applyWallpaper(); tick(); schedule(); renderShortcuts(); mountRail($('rail'), state.settings.rail) }
+
+/*
+ * Orbis Music, on every new tab.
+ *
+ * Mounted once rather than on every render: it keeps itself up to date, and a page that redraws its shortcuts has
+ * no reason to rebuild the music line.
+ */
+void mountMusicEntry($('musicEntry'), call)
 
 async function load() {
   try { state = { ...state, ...(await store.load()) } } catch { /* storage unavailable: defaults */ }

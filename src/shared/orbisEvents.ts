@@ -44,6 +44,25 @@ export type OrbisEventName =
   | 'workflow.started' | 'workflow.completed' | 'workflow.failed' | 'workflow.queued'
   | 'task.created' | 'task.due'
   | 'reminder.triggered'
+  // study
+  /*
+   * Orbis Student.
+   *
+   * These are what connects the subsystems: quests, achievements, streaks, insights and Orbi all listen rather than
+   * being called. A completed session publishes once, and five things happen -- which is why the same achievement
+   * cannot be unlocked twice by two different code paths.
+   */
+  | 'focus.started' | 'focus.milestone' | 'focus.paused' | 'focus.resumed'
+  | 'focus.break.started' | 'focus.break.completed'
+  | 'focus.completed' | 'focus.endedEarly' | 'focus.interrupted' | 'focus.restored'
+  | 'focus.distraction' | 'focus.saved'
+  | 'study.task.completed' | 'study.goal.completed' | 'study.milestone.completed'
+  | 'study.xp' | 'study.level' | 'study.achievement' | 'study.quest'
+  /** Exam mode on or off: a deliberate change of behaviour, so it is announced like one. */
+  | 'study.examMode'
+  /** A question written by Orion that the student said was wrong. Worth knowing how often that happens. */
+  | 'study.questionRejected'
+  | 'study.learning.completed'
   // places and people
   | 'workspace.changed' | 'profile.changed'
   | 'security.event'

@@ -418,3 +418,38 @@ export function eventsProvider(bus: OrbisBus | null | undefined, options: { max?
     }
   }
 }
+
+/**
+ * What Orbis has worked out somebody is doing.
+ *
+ * The one thing the other providers cannot know. They each report a fact — this page, these tabs, that note —
+ * and none of them can say what all of it is *about*. Ambient Intelligence can, so it joins the same assembly
+ * line as everything else rather than getting its own path to the model.
+ *
+ * Deliberately tiny: two or three short sentences, and only when Orbis is actually confident. It is marked
+ * `orbis` rather than `web`, because it is Orbis's own reading of its own state — but note that it was *derived
+ * from* web content, so nothing in it is ever more than a subject name and a count. No titles, no addresses, no
+ * page text; those have their own providers, with their own trust.
+ */
+export function ambientProvider(ambient: () => { forOrion(): Promise<{ text: string; label: string } | null> } | null | undefined): ContextProvider {
+  return {
+    name: 'What you are working on',
+    kind: 'memory',
+    async gather() {
+      const one = ambient()
+      if (!one) return []
+      const said = await one.forOrion()
+      if (!said) return []
+      return [
+        {
+          id: 'ambient-context',
+          kind: 'memory' as const,
+          trust: 'orbis' as const,
+          label: said.label,
+          text: said.text,
+          trimmable: true
+        }
+      ]
+    }
+  }
+}

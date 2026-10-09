@@ -4,8 +4,10 @@
    The rail's own chrome used to live here -- modes, densities, group headers, drag targets -- for a rail that
    listed twenty-six features in five groups. The Command Center replaced that, and those rules went with it;
    the rail is styled in command-center.css now. */
-/* The Orbis sidebar rail. Shared tokens only (orbis-tokens.css). The page around it: the rail on the left, the panel (#app) beside it. */
-body { flex-direction: row; }
+/* The page: one column, all of it the panel.
+   There was a rail down the left, 196px of it, inside a side panel about 360px wide -- and below 480px it collapsed to
+   unlabelled icons, which is a navigation you have to hover to read. It is gone, and the Command Center is the one way
+   around, so the panel has the whole width. */
 #app { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 

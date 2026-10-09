@@ -46,10 +46,11 @@ export type NotificationSource =
   | 'security'
   | 'update'
   | 'rules'
+  | 'student'
   | 'system'
 
 /** What the person can switch on and off. Deliberately coarser than the source. */
-export type NotificationCategory = 'workflows' | 'schedules' | 'downloads' | 'orion' | 'research' | 'pages' | 'artifacts' | 'security' | 'updates' | 'attention' | 'system'
+export type NotificationCategory = 'workflows' | 'schedules' | 'downloads' | 'orion' | 'research' | 'pages' | 'artifacts' | 'security' | 'updates' | 'attention' | 'study' | 'system'
 
 /**
  * How much it matters.
@@ -269,6 +270,42 @@ export const NOTIFICATION_TEMPLATES: Readonly<Record<string, Template>> = Object
     actions: OPEN,
     title: () => 'Orion is waiting for you',
     body: (f) => named(f, 'reason', 'It needs an answer before it can go on.')
+  },
+  /*
+   * Orbis Student.
+   *
+   * Four things only, and none of them is encouragement. A study companion that notifies is a study companion that
+   * gets turned off, so the only things that reach this catalogue are the ones a student would be annoyed to miss:
+   * a session that needs a decision, a session that finished, a scheduled session arriving, and something being due.
+   */
+  'focus.needsYou': {
+    source: 'student',
+    category: 'attention',
+    priority: 'high',
+    ttl: null,
+    actions: OPEN,
+    title: () => 'Your session is still here',
+    body: (f) => named(f, 'reason', 'Orbis was closed for a while. That time was not counted.')
+  },
+  'focus.finished': {
+    source: 'student',
+    category: 'study',
+    priority: 'normal',
+    ttl: 6 * HOUR,
+    actions: OPEN,
+    title: () => 'Session complete',
+    body: (f) => named(f, 'summary', 'You finished what you planned.'),
+    group: () => 'study'
+  },
+  'study.due': {
+    source: 'student',
+    category: 'study',
+    priority: 'low',
+    ttl: DAY,
+    actions: OPEN,
+    title: () => 'Something is due for review',
+    body: (f) => named(f, 'summary', 'A few things are ready to come back round.'),
+    group: () => 'study'
   },
   'artifact.created': {
     source: 'artifact',

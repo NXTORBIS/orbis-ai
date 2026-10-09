@@ -96,6 +96,14 @@ export interface VaultStatus {
   /** When it will lock itself, while unlocked. */
   locksAt?: number
   count?: number
+  /**
+   * Set when a vault file is there and Orbis could not read it.
+   *
+   * The difference between this and `exists: false` is the difference between "set one up" and "do not touch it".
+   * An unreadable vault used to be reported as no vault at all, which invited creating one -- and creating one
+   * renamed a fresh empty vault over every stored secret.
+   */
+  unreadable?: string
 }
 
 // ---------------------------------------------------------------- what may be stored

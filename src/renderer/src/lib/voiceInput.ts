@@ -380,6 +380,12 @@ class VoiceInputService {
       // Already stopped; the release below is what matters.
     }
     this.release()
+    // Ignoring the answer is not the same as stopping the work. Writing out speech runs locally on the processor, or
+    // as a paid call to a service, and it used to run to the end for audio that had already been thrown away -- so
+    // starting several short dictations in a row stacked up that many at once. This stops it for real.
+    void window.api.cancelTranscription().catch(() => {
+      // It may already have finished, which is the same outcome.
+    })
     this.session = null
     this.error = null
     this.state = 'idle'

@@ -297,3 +297,36 @@ test('a page that never gets there is still a failure after the looks run out', 
   assert.notEqual(session.steps[0].phase, 'success')
   assert.ok(looks >= 5, `it looked ${looks} times before giving up`)
 })
+
+// ---------------------------------------------------------------- letting go at the end
+
+/**
+ * A run claims the tab it works on, and a claim is only released by the run's own name. Nothing told anybody a run
+ * had ended, so claims outlived the runs that made them and the next run refused to touch that tab until Orbis was
+ * restarted. These three say the end is announced exactly once, and only when it really is the end.
+ */
+
+test('the end of a run is announced once, so what it held can be let go of', async () => {
+  const ends: string[] = []
+  const h = harness({ plans: [step('Press Checkout'), { kind: 'done', summary: 'Ordered.' }] })
+  ;(h.run as unknown as { deps: StepRunnerDeps }).deps.ended = (session) => ends.push(session.status)
+  await h.run.start()
+  assert.deepEqual(ends, ['done'])
+})
+
+test('a run that was stopped says so, and says it once', async () => {
+  const ends: string[] = []
+  const h = harness({ plans: [step('Press Checkout')] })
+  ;(h.run as unknown as { deps: StepRunnerDeps }).deps.ended = (session) => ends.push(session.status)
+  h.run.stopRun('Stopped by you.')
+  h.run.stopRun('Stopped by you again.')
+  assert.deepEqual(ends, ['stopped'], 'twice stopped is still one ending')
+})
+
+test('pausing is not the end, because it is still waiting for somebody', async () => {
+  const ends: string[] = []
+  const h = harness({ plans: [step('Press Checkout')] })
+  ;(h.run as unknown as { deps: StepRunnerDeps }).deps.ended = (session) => ends.push(session.status)
+  h.run.pauseRun()
+  assert.deepEqual(ends, [], 'what a paused run holds is still its own')
+})

@@ -53,6 +53,14 @@ export interface StepRunnerDeps {
   plan(request: PlanRequest): Promise<PlanReply>
   /** Told whenever anything changes, with a session that is already safe to show. */
   emit(view: StepRunnerView): void
+  /**
+   * Told once, when the run is over however it ended -- finished, failed, or stopped.
+   *
+   * Without this nobody let go of what the run held: a run claims a tab while it works on it, and the claim is only
+   * released by name, so a tab stayed claimed by a run that no longer existed until Orbis was restarted. The next run
+   * then refused to touch that tab.
+   */
+  ended?(session: StepSession): void
   newId(): string
   now?(): number
   /** Waiting between looks at a page that is still arriving. Replaceable so tests need not really wait. */
@@ -130,8 +138,18 @@ export class StepRun {
     return this.session.status
   }
 
+  /** True once `ended` has been told, so it is told exactly once however many times the state settles after. */
+  private announcedEnd = false
+
   private changed(): void {
     this.deps.emit(this.view())
+    if (!this.announcedEnd && !isRunning(this.session.status)) {
+      // Paused is not over: it is waiting for somebody, and what it holds is still its own.
+      if (this.session.status === 'done' || this.session.status === 'failed' || this.session.status === 'stopped') {
+        this.announcedEnd = true
+        this.deps.ended?.(this.session)
+      }
+    }
   }
 
   private set(session: StepSession): void {

@@ -70,6 +70,7 @@ const SHORTCUTS: [string, string][] = [
   ['Ctrl + B', 'Toggle chat history'],
   ['Ctrl + K', 'Search chats'],
   ['Ctrl + ,', 'Settings'],
+  ['Ctrl + Shift + U', 'Open Orbis Student'],
   ['Hold Ctrl + Shift + M', 'Push-to-talk: speak into chat, or into Browser Orion if the browser is open']
 ]
 

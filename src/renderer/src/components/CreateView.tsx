@@ -967,7 +967,13 @@ export default function CreateView({
                     if (title !== '' && title !== opened.record.title) void act('rename', { operation: 'artifact.rename', artifactId: opened.record.artifactId, title }, (r) => `Renamed to "${r.title}".`)
                   }}
                 >
-                  <input value={renaming} onChange={(e) => setRenaming(e.target.value)} maxLength={120} autoFocus aria-label="New name" onKeyDown={(e) => e.key === 'Escape' && setRenaming(null)} />
+                  <input value={renaming} onChange={(e) => setRenaming(e.target.value)} maxLength={120} autoFocus aria-label="New name" onKeyDown={(e) => {
+                      if (e.key !== 'Escape') return
+                      // Cancels the rename and nothing else; the shell must not close Create as well.
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setRenaming(null)
+                    }} />
                   <button type="submit" className="queue-btn small">
                     Rename
                   </button>

@@ -234,6 +234,10 @@ class SelectionOrb {
         event.stopPropagation()
       })
       button.addEventListener('click', (event) => {
+        // Only a real press counts. This lives in the page, so a page can reach it: patching `attachShadow` before
+        // this script runs gives a page the root these buttons are in, and a click it dispatches itself looks like any
+        // other to a listener. `isTrusted` is the one thing a page cannot fake, so it is what is checked.
+        if (!event.isTrusted) return
         event.preventDefault()
         event.stopPropagation()
         void this.openPalette()
@@ -449,6 +453,9 @@ class SelectionOrb {
     button.append(el('span', 'label', label))
     if (mark) button.append(el('span', 'more-mark', mark))
     button.addEventListener('click', (event) => {
+      // A press the person made, not one the page sent itself. Without this a page could take the words somebody had
+      // highlighted and have them written into their notes, or sent to Orion, with no press at all.
+      if (!event.isTrusted) return
       event.preventDefault()
       event.stopPropagation()
       run()
@@ -595,7 +602,11 @@ class SelectionOrb {
       copy.addEventListener('click', () => void this.copy(text).then((ok) => this.toast(ok ? 'Copied' : 'Could not copy', ok ? 'good' : 'bad')))
       const keep = el('button', 'chip', 'Save')
       keep.type = 'button'
-      keep.addEventListener('click', () => void this.keepAnswer(action, shot, text))
+      // Keeping writes into the user's own notes, so it too needs a press somebody actually made.
+      keep.addEventListener('click', (event) => {
+        if (!event.isTrusted) return
+        void this.keepAnswer(action, shot, text)
+      })
       feet.prepend(copy, keep)
     }
 
