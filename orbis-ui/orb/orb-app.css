@@ -7,6 +7,57 @@
  * The browser sizes the window these rules are drawn in (orbis_orb_web_view.cc), so the layer is the whole document.
  */
 html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+
+/*
+ * The Orb's shadow, which is a different thing in each theme.
+ *
+ * On a dark page a cyan glow is light spilling off a lit sphere, and it reads as exactly that. On a white page the
+ * same glow is a pale haze -- and because the Orb's own view clips it, the haze comes out as a soft rectangle with
+ * the Orb sitting in the middle of it. It looked like the Orb was standing on a tile, which is the single worst
+ * thing in the light theme. A light surface wants a shadow underneath, not a halo around.
+ */
+:root {
+  --orb-cast: rgba(0, 0, 0, 0.55);
+  --orb-cast-deep: rgba(0, 0, 0, 0.6);
+  --orb-cast-open: rgba(0, 0, 0, 0.5);
+  --orb-halo: rgba(63, 216, 255, 0.22);
+  --orb-halo-hover: rgba(63, 216, 255, 0.4);
+  --orb-halo-drag: rgba(63, 216, 255, 0.5);
+  /*
+   * How far the shadow spreads, which has a hard limit nothing in the page can see.
+   *
+   * The Orb's view is only a little larger than the Orb, and a filter is clipped to it. A shadow wide enough to
+   * reach that edge is cut off square, and on a light page that straight edge is plainly visible -- a faint
+   * rectangle around the Orb. It has to have faded to nothing before it gets there.
+   */
+  --orb-blur: 14px;
+  --orb-drop: 6px;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']) {
+    --orb-cast: rgba(18, 38, 64, 0.26);
+    --orb-cast-deep: rgba(18, 38, 64, 0.32);
+    --orb-cast-open: rgba(18, 38, 64, 0.28);
+    --orb-halo: rgba(10, 127, 179, 0.1);
+    --orb-halo-hover: rgba(10, 127, 179, 0.18);
+    --orb-halo-drag: rgba(10, 127, 179, 0.22);
+    --orb-blur: 9px;
+    --orb-drop: 4px;
+  }
+}
+
+:root[data-theme='light'] {
+  --orb-cast: rgba(18, 38, 64, 0.26);
+  --orb-cast-deep: rgba(18, 38, 64, 0.32);
+  --orb-cast-open: rgba(18, 38, 64, 0.28);
+  --orb-halo: rgba(10, 127, 179, 0.1);
+  --orb-halo-hover: rgba(10, 127, 179, 0.18);
+  --orb-halo-drag: rgba(10, 127, 179, 0.22);
+  --orb-blur: 9px;
+  --orb-drop: 4px;
+}
+
 body { font: 400 13px/1.45 var(--font-sans); color: var(--text); }
 
 .browser-orb-layer {
@@ -42,7 +93,7 @@ body { font: 400 13px/1.45 var(--font-sans); color: var(--text); }
   -webkit-user-drag: none;
   /* Drop shadow rather than box-shadow: it follows the sphere's own edge, and it is one composited layer instead of
      a repaint on every frame of the float. */
-  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.55)) drop-shadow(0 0 10px rgba(63, 216, 255, 0.22));
+  filter: drop-shadow(0 var(--orb-drop) var(--orb-blur) var(--orb-cast)) drop-shadow(0 0 10px var(--orb-halo));
   transition: transform 0.22s cubic-bezier(0.2, 0.9, 0.3, 1), filter 0.22s ease;
   animation: orb-float 5.5s ease-in-out infinite;
   /* Its own layer, so the float never drags the page's compositing with it. */
@@ -52,7 +103,7 @@ body { font: 400 13px/1.45 var(--font-sans); color: var(--text); }
 
 .browser-orb:hover {
   transform: scale(1.07);
-  filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.6)) drop-shadow(0 0 16px rgba(63, 216, 255, 0.4));
+  filter: drop-shadow(0 8px 18px var(--orb-cast-deep)) drop-shadow(0 0 16px var(--orb-halo-hover));
 }
 
 .browser-orb:active { transform: scale(0.97); }
@@ -122,7 +173,7 @@ body { font: 400 13px/1.45 var(--font-sans); color: var(--text); }
 }
 
 .browser-orb.open {
-  filter: drop-shadow(0 0 0 rgba(0, 0, 0, 0)) drop-shadow(0 6px 16px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 14px var(--accent));
+  filter: drop-shadow(0 0 0 rgba(0, 0, 0, 0)) drop-shadow(0 6px 16px var(--orb-cast-open)) drop-shadow(0 0 14px var(--accent));
   animation: none;
 }
 
@@ -135,7 +186,7 @@ body { font: 400 13px/1.45 var(--font-sans); color: var(--text); }
   transform: scale(1.12);
   transition: none;
   animation: none;
-  filter: drop-shadow(0 12px 22px rgba(0, 0, 0, 0.6)) drop-shadow(0 0 20px rgba(63, 216, 255, 0.5));
+  filter: drop-shadow(0 12px 22px var(--orb-cast-deep)) drop-shadow(0 0 20px var(--orb-halo-drag));
 }
 
 /* The busy ring sits outside the sphere. Inset by a proportion rather than 4px, so on a larger Orb it does not end

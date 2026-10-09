@@ -104,7 +104,7 @@ html {
   --google-yellow-700-rgb: 240, 147, 0;  /* #f09300 */
   --google-yellow-700: rgb(var(--google-yellow-700-rgb));
 
-  --cr-card-background-color: #f6f8fb;
+  --cr-card-background-color: #ffffff;
 
   /* Vars to help define --cr-elevation-* vars. Components should use the
    * --cr-elevation-* variables instead of these colors directly. */
@@ -126,16 +126,16 @@ html {
 
   --cr-card-shadow: 0 0 0 1px rgba(40,90,170,0.1);
 
-  --cr-focused-item-color: #dce0e6;
+  --cr-focused-item-color: #fcfdfe;
   --cr-form-field-label-color: var(--google-grey-700);
   --cr-hairline-rgb: 0, 0, 0;
   --cr-iph-anchor-highlight-color: rgba(10,127,179,0.1);
-  --cr-menu-background-color: #f6f8fb;
-  --cr-menu-background-focus-color: #cfd5dc;
+  --cr-menu-background-color: #ffffff;
+  --cr-menu-background-focus-color: #ffffff;
   --cr-menu-shadow: 0 12px 36px rgba(30,60,110,0.08);
   --cr-separator-color: rgba(40,90,170,0.1);
   --cr-title-text-color: #556b87;
-  --cr-scrollable-border-color: #cfd5dc;
+  --cr-scrollable-border-color: #ffffff;
 
   /* Don't use color values past this point. Instead, create a variable that's
    * set for both light and dark modes and use a single variable below. */
@@ -201,25 +201,25 @@ html {
   --cr-fallback-color-primary: var(--color-sys-primary, rgb(10, 127, 179));
   --cr-fallback-color-on-primary: var(--color-sys-on-primary, rgb(255, 255, 255));
 
-  --cr-fallback-color-primary-container: var(--color-sys-primary-container, rgb(210, 225, 235));
+  --cr-fallback-color-primary-container: var(--color-sys-primary-container, rgb(222, 236, 244));
   --cr-fallback-color-on-primary-container: var(--color-sys-on-primary-container, rgb(26, 42, 64));
 
-  --cr-fallback-color-secondary-container: var(--color-sys-secondary-container, rgb(220, 224, 230));
+  --cr-fallback-color-secondary-container: var(--color-sys-secondary-container, rgb(252, 253, 254));
   --cr-fallback-color-on-secondary-container: var(--color-sys-on-secondary-container, rgb(26, 42, 64));
 
-  --cr-fallback-color-neutral-container: rgb(220, 224, 230);
-  --cr-fallback-color-neutral-outline: rgb(207, 213, 220);
+  --cr-fallback-color-neutral-container: rgb(252, 253, 254);
+  --cr-fallback-color-neutral-outline: rgb(255, 255, 255);
 
-  --cr-fallback-color-surface: var(--color-sys-surface, rgb(232, 236, 241));
-  --cr-fallback-color-surface1: var(--color-sys-surface-1, rgb(232, 236, 241));
-  --cr-fallback-color-surface2: var(--color-sys-surface-2, rgb(232, 236, 241));
-  --cr-fallback-color-surface3: var(--color-sys-surface-3, rgb(220, 224, 230));
-  --cr-fallback-color-surface4: var(--color-sys-surface-4, rgb(220, 224, 230));
-  --cr-fallback-color-surface5: var(--color-sys-surface-5, rgb(207, 213, 220));
+  --cr-fallback-color-surface: var(--color-sys-surface, rgb(246, 248, 251));
+  --cr-fallback-color-surface1: var(--color-sys-surface-1, rgb(246, 248, 251));
+  --cr-fallback-color-surface2: var(--color-sys-surface-2, rgb(246, 248, 251));
+  --cr-fallback-color-surface3: var(--color-sys-surface-3, rgb(252, 253, 254));
+  --cr-fallback-color-surface4: var(--color-sys-surface-4, rgb(252, 253, 254));
+  --cr-fallback-color-surface5: var(--color-sys-surface-5, rgb(255, 255, 255));
   --cr-fallback-color-on-surface-rgb: 26, 42, 64;
   --cr-fallback-color-on-surface: rgb(var(--cr-fallback-color-on-surface-rgb));
 
-  --cr-fallback-color-surface-variant: var(--color-sys-surface-variant, rgb(220, 224, 230));
+  --cr-fallback-color-surface-variant: var(--color-sys-surface-variant, rgb(252, 253, 254));
   --cr-fallback-color-on-surface-variant: var(--color-sys-on-surface-variant, rgb(85, 107, 135));
 
   --cr-fallback-color-on-surface-subtle: rgb(85, 107, 135);
@@ -228,14 +228,14 @@ html {
   --cr-fallback-color-inverse-surface: rgb(14, 16, 19);
   --cr-fallback-color-inverse-on-surface: rgb(237, 237, 239);
 
-  --cr-fallback-color-tonal-container: rgb(220, 224, 230);
+  --cr-fallback-color-tonal-container: rgb(252, 253, 254);
   --cr-fallback-color-on-tonal-container: rgb(26, 42, 64);
 
   --cr-fallback-color-tonal-outline: rgb(10, 127, 179);
 
   --cr-fallback-color-error: var(--color-sys-error, rgb(168, 24, 48));
 
-  --cr-fallback-color-divider: rgb(207, 213, 220);
+  --cr-fallback-color-divider: rgb(255, 255, 255);
 
   --cr-fallback-color-state-hover-on-prominent_: rgba(253, 252, 251, .1);
 
@@ -248,7 +248,7 @@ html {
   --cr-fallback-color-state-ripple-primary_: rgba(
       var(--cr-fallback-color-state-ripple-primary-rgb_), 0.32);
 
-  --cr-fallback-color-base-container: rgb(220, 224, 230);
+  --cr-fallback-color-base-container: rgb(252, 253, 254);
 
   --cr-fallback-color-disabled-background: rgba(
       var(--cr-fallback-color-on-surface-rgb), .12);
@@ -334,7 +334,7 @@ html[webui-refresh-2026] {
     --cr-fallback-color-on-surface-variant: var(--color-sys-on-surface-variant, rgb(162, 166, 174));
     --cr-fallback-color-on-surface-subtle: rgb(162, 166, 174);
     --cr-fallback-color-inverse-primary: rgb(10, 127, 179);
-    --cr-fallback-color-inverse-surface: rgb(232, 236, 241);
+    --cr-fallback-color-inverse-surface: rgb(246, 248, 251);
     --cr-fallback-color-inverse-on-surface: rgb(26, 42, 64);
     --cr-fallback-color-tonal-container: rgb(27, 29, 32);
     --cr-fallback-color-on-tonal-container: rgb(237, 237, 239);

@@ -1,3 +1,39 @@
+diff --git a/chrome/browser/ui/views/frame/orbis_orb_web_view.cc b/chrome/browser/ui/views/frame/orbis_orb_web_view.cc
+index 91b90145b7..333f5e711f 100644
+--- a/chrome/browser/ui/views/frame/orbis_orb_web_view.cc
++++ b/chrome/browser/ui/views/frame/orbis_orb_web_view.cc
+@@ -16,6 +16,7 @@
+ #include "content/public/browser/render_widget_host_view.h"
+ #include "content/public/browser/web_contents.h"
+ #include "ui/base/metadata/metadata_impl_macros.h"
++#include "ui/views/controls/webview/web_contents_set_background_color.h"
+ #include "ui/views/accessibility/view_accessibility.h"
+ 
+ namespace {
+@@ -50,9 +51,21 @@ void OrbisOrbWebView::EnsureLoaded() {
+   if (web_contents()) {
+     OrbisOrbHost::CreateForWebContents(web_contents(), this);
+   }
+-  // Transparent, so the Orb and its panel are the only things drawn and the
+-  // page shows through around both.
++  /*
++   * Transparent, so the Orb and its panel are the only things drawn and the page shows through around both.
++   *
++   * The two calls below set it once, on whatever view happens to exist at this moment -- and when this runs there
++   * may be no render widget yet, and there is certainly a new one after any renderer swap. What was left was an
++   * opaque backing the size of this view: invisible in the dark, where it is nearly the colour of the page behind
++   * it, and in the light a pale panel sitting under the Orb with its glow smeared across it. It looked like the Orb
++   * was standing on a tile.
++   *
++   * `WebContentsSetBackgroundColor` is the helper that exists for exactly this: it attaches to the contents and
++   * reapplies the colour to every render widget they get from here on.
++   */
+   if (content::WebContents* contents = web_contents()) {
++    views::WebContentsSetBackgroundColor::CreateForWebContentsWithColor(
++        contents, SK_ColorTRANSPARENT);
+     contents->SetPageBaseBackgroundColor(SK_ColorTRANSPARENT);
+     if (content::RenderWidgetHostView* rwhv =
+             contents->GetRenderWidgetHostView()) {
 diff --git a/chrome/browser/ui/views/status_bubble_views.cc b/chrome/browser/ui/views/status_bubble_views.cc
 index e85542cf2a..e05e416882 100644
 --- a/chrome/browser/ui/views/status_bubble_views.cc
@@ -70,7 +106,7 @@ index 065340740c..c423e835db 100644
        mixer, dark_mode,
        key.contrast_mode == ColorProviderKey::ContrastMode::kHigh);
 diff --git a/ui/views/bubble/bubble_border.cc b/ui/views/bubble/bubble_border.cc
-index 5bb35cf1f9..3f9bd22b37 100644
+index 5bb35cf1f9..c5b1036d00 100644
 --- a/ui/views/bubble/bubble_border.cc
 +++ b/ui/views/bubble/bubble_border.cc
 @@ -13,6 +13,7 @@
@@ -81,7 +117,15 @@ index 5bb35cf1f9..3f9bd22b37 100644
  #include "third_party/skia/include/core/SkBlendMode.h"
  #include "third_party/skia/include/core/SkClipOp.h"
  #include "third_party/skia/include/core/SkColor.h"
-@@ -743,12 +744,65 @@ void BubbleBackground::Paint(gfx::Canvas* canvas, views::View* view) const {
+@@ -24,6 +25,7 @@
+ #include "ui/color/color_id.h"
+ #include "ui/color/color_provider.h"
+ #include "ui/color/color_variant.h"
++#include "ui/gfx/color_utils.h"
+ #include "ui/gfx/canvas.h"
+ #include "ui/gfx/color_palette.h"
+ #include "ui/gfx/geometry/rect.h"
+@@ -743,12 +745,76 @@ void BubbleBackground::Paint(gfx::Canvas* canvas, views::View* view) const {
    cc::PaintFlags flags;
    flags.setAntiAlias(true);
    flags.setStyle(cc::PaintFlags::kFill_Style);
@@ -124,13 +168,24 @@ index 5bb35cf1f9..3f9bd22b37 100644
 +  if (edge_bounds.IsEmpty()) {
 +    return;
 +  }
-+  // Brightest right across the top, where the rim would actually catch the light.
++  /*
++   * Brightest right across the top, where the rim would actually catch the light -- but only on a dark surface.
++   *
++   * A pane of near-black glass catches a highlight along its top edge and that is what makes it read as lifted. A
++   * white one does not: brightening a line on white means darkening it, and a dark line across the top of a white
++   * popup reads as a heading rule somebody forgot to finish, not as light. So in the light theme the hairline stays
++   * even all the way round, which is what a light surface actually looks like, and the shadow does the lifting.
++   */
++  const bool lit_rim = color_utils::IsDark(fill);
++  const U8CPU edge_alpha = SkColorGetA(edge);
++  const U8CPU bright =
++      lit_rim ? static_cast<U8CPU>(std::min(
++                    255u, static_cast<unsigned>(edge_alpha * 2.4)))
++              : edge_alpha;
 +  const SkColor4f edge_colors[3] = {
-+      SkColor4f::FromColor(SkColorSetA(
-+          edge, static_cast<U8CPU>(std::min(
-+                    255u, static_cast<unsigned>(SkColorGetA(edge) * 2.4))))),
-+      SkColor4f::FromColor(SkColorSetA(edge, SkColorGetA(edge))),
-+      SkColor4f::FromColor(SkColorSetA(edge, 0))};
++      SkColor4f::FromColor(SkColorSetA(edge, bright)),
++      SkColor4f::FromColor(SkColorSetA(edge, edge_alpha)),
++      SkColor4f::FromColor(SkColorSetA(edge, lit_rim ? 0 : edge_alpha))};
 +  const SkScalar edge_stops[3] = {0.0f, 0.18f, 1.0f};
 +  const SkPoint edge_points[2] = {
 +      SkPoint::Make(edge_bounds.CenterPoint().x(), edge_bounds.y()),
