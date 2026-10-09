@@ -1,0 +1,463 @@
+/*
+ * The Quantum Studio's own stylesheet.
+ *
+ * Its own namespace (`qs-`), claimed nowhere else, so nothing here reaches another screen. Colours come from the
+ * window's tokens — `--cyan` for the accent, `--faint` for quiet text, `--glass-border` for edges — rather than
+ * from literals, so the studio follows the theme.
+ *
+ * Two deliberate choices. The circuit diagram is a grid of fixed-width cells that scrolls sideways inside
+ * itself, because a twenty-gate circuit is wider than any panel and the alternative is a panel that scrolls.
+ * And every table scrolls inside its own pane for the same reason.
+ */
+
+.qs {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  color: var(--ink, inherit);
+}
+
+.qs-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.qs-title {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.qs-title strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.qs-title span {
+  color: var(--faint);
+  font-size: 11.5px;
+}
+
+.qs-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.qs-tab {
+  padding: 6px 11px;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--faint);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.qs-tab:hover {
+  color: inherit;
+  border-color: color-mix(in srgb, var(--cyan) 40%, transparent);
+}
+
+.qs-tab.is-on {
+  border-color: color-mix(in srgb, var(--cyan) 55%, transparent);
+  background: color-mix(in srgb, var(--cyan) 14%, transparent);
+  color: var(--cyan);
+  font-weight: 600;
+}
+
+.qs-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.qs-split {
+  display: grid;
+  height: 100%;
+  min-height: 0;
+  grid-template-columns: minmax(280px, 1fr) minmax(280px, 1.2fr);
+  gap: 14px;
+}
+
+@container (max-width: 760px) {
+  .qs-split {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+  }
+}
+
+.qs-pane {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.qs-pane h4 {
+  margin: 14px 0 8px;
+  color: var(--faint);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.qs-pane h4:first-child {
+  margin-top: 0;
+}
+
+.qs-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 9px;
+}
+
+.qs-controls label,
+.qs-inline {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--faint);
+  font-size: 11.5px;
+}
+
+.qs-inline {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.qs-wide {
+  grid-column: 1 / -1;
+}
+
+.qs-controls input,
+.qs-controls select,
+.qs-inline input {
+  padding: 6px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--glass-border) 18%, transparent);
+  color: inherit;
+  font: inherit;
+  font-size: 12.5px;
+}
+
+.qs-controls input[type='range'] {
+  padding: 0;
+  background: transparent;
+  border: 0;
+}
+
+.qs-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 12px 0;
+}
+
+.qs-actions button,
+.qs-presets button {
+  padding: 7px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--faint);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.qs-actions button:hover:not(:disabled),
+.qs-presets button:hover {
+  color: inherit;
+  border-color: color-mix(in srgb, var(--cyan) 40%, transparent);
+}
+
+.qs-actions button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.qs-go {
+  border-color: color-mix(in srgb, var(--cyan) 55%, transparent) !important;
+  background: color-mix(in srgb, var(--cyan) 15%, transparent) !important;
+  color: var(--cyan) !important;
+  font-weight: 600;
+}
+
+.qs-presets {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.qs-about {
+  margin: 8px 0;
+  color: var(--faint);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.qs-label {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+}
+
+.qs-warn {
+  margin: 8px 0;
+  padding: 8px 10px;
+  border-left: 2px solid #f87171;
+  border-radius: 0 7px 7px 0;
+  background: color-mix(in srgb, #f87171 10%, transparent);
+  font-size: 12px;
+}
+
+.qs-said {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0;
+  padding: 9px 11px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--cyan) 9%, transparent);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.qs-said button {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: var(--faint);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.qs-faults {
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, #f87171 50%, transparent);
+  border-radius: 9px;
+  background: color-mix(in srgb, #f87171 10%, transparent);
+  font-size: 12.5px;
+}
+
+.qs-faults ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  line-height: 1.55;
+}
+
+.qs-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.qs-table th,
+.qs-table td {
+  padding: 5px 7px;
+  border-bottom: 1px solid color-mix(in srgb, var(--glass-border) 60%, transparent);
+  text-align: left;
+}
+
+.qs-table th {
+  color: var(--faint);
+  font-weight: 500;
+}
+
+.qs-table thead th {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.qs-table td {
+  font-variant-numeric: tabular-nums;
+}
+
+.qs-ket {
+  margin: 0 0 10px;
+  padding: 9px 11px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--glass-border) 25%, transparent);
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+/* ---------------------------------------------------------------- the circuit diagram */
+
+.qs-diagram {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: 9px;
+  /* A long circuit scrolls here rather than widening the panel. */
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.qs-wire {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.qs-wire-name {
+  width: 26px;
+  flex: 0 0 auto;
+  color: var(--faint);
+  font-size: 11px;
+}
+
+.qs-cell {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 5px;
+  /* The wire itself: a line through every cell. */
+  background: linear-gradient(to bottom, transparent 47%, color-mix(in srgb, var(--glass-border) 90%, transparent) 47%, color-mix(in srgb, var(--glass-border) 90%, transparent) 53%, transparent 53%);
+  font-size: 11.5px;
+}
+
+.qs-cell.is-gate {
+  border: 1px solid color-mix(in srgb, var(--cyan) 55%, transparent);
+  background: color-mix(in srgb, var(--cyan) 16%, transparent);
+  color: var(--cyan);
+  font-weight: 600;
+}
+
+.qs-cell.is-control {
+  color: var(--cyan);
+  font-size: 14px;
+}
+
+.qs-cell.is-measure {
+  border: 1px solid color-mix(in srgb, #fbbf24 55%, transparent);
+  background: color-mix(in srgb, #fbbf24 14%, transparent);
+  color: #fbbf24;
+  font-weight: 600;
+}
+
+.qs-cell.is-barrier {
+  color: color-mix(in srgb, var(--faint) 70%, transparent);
+}
+
+/* ---------------------------------------------------------------- the Bloch sphere */
+
+.qs-bloch {
+  width: 100%;
+  max-width: 240px;
+  margin: 4px 0 10px;
+}
+
+.qs-sphere {
+  fill: color-mix(in srgb, var(--cyan) 6%, transparent);
+  stroke: color-mix(in srgb, var(--glass-border) 90%, transparent);
+  stroke-width: 1;
+}
+
+.qs-equator {
+  fill: none;
+  stroke: color-mix(in srgb, var(--glass-border) 70%, transparent);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.qs-axis {
+  stroke: color-mix(in srgb, var(--glass-border) 60%, transparent);
+  stroke-width: 1;
+}
+
+.qs-mark {
+  fill: var(--faint);
+  font-size: 9px;
+}
+
+.qs-vector {
+  stroke: var(--cyan);
+  stroke-width: 2;
+}
+
+.qs-point {
+  fill: var(--cyan);
+}
+
+/* ---------------------------------------------------------------- histograms */
+
+.qs-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 8px 0;
+}
+
+.qs-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+}
+
+.qs-bar-name {
+  width: 56px;
+  flex: 0 0 auto;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.qs-bar-track {
+  position: relative;
+  flex: 1;
+  height: 12px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--glass-border) 55%, transparent);
+  overflow: hidden;
+}
+
+.qs-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--cyan);
+}
+
+/* Where the exact probability sits, so the sample can be read against the theory. */
+.qs-bar-exact {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: #fbbf24;
+}
+
+.qs-bar-value {
+  width: 48px;
+  flex: 0 0 auto;
+  color: var(--faint);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .qs-tab,
+  .qs-bar-fill {
+    transition: none;
+  }
+}
