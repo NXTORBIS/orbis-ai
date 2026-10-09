@@ -3112,7 +3112,20 @@ ${page.text}`, { howMany: 6 })
           // `--hide-crash-restore-bubble` because the embedded browser is not closed by a person clicking its close
           // button -- the Orbis window takes it down with it -- so Chromium decides it crashed and offers to restore
           // the pages. That bubble was appearing over a window the person never asked to see in the first place.
-          chromeArgs: embeddedBrowser ? ['--orbis-embedded', '--hide-crash-restore-bubble'] : [],
+          chromeArgs: [
+            ...(embeddedBrowser ? ['--orbis-embedded', '--hide-crash-restore-bubble'] : []),
+            /*
+             * A way in, for checking the browser Orbis actually runs.
+             *
+             * Normally nothing listens on the network: the browser is driven down a pipe, which is what stops any
+             * other program on the machine from driving it. That also means the real browser cannot be looked at
+             * from outside, and more than one fault has only ever shown itself there -- the extension being told the
+             * helper's address a moment after a page had already asked, for one.
+             *
+             * Off unless the environment variable is set, so a normal run opens nothing.
+             */
+            ...(process.env.ORBIS_BROWSER_DEBUG_PORT ? [`--remote-debugging-port=${process.env.ORBIS_BROWSER_DEBUG_PORT}`] : [])
+          ],
           onStarted: (pid) => {
             if (embeddedBrowser) return embedController.attach(pid)
             /**

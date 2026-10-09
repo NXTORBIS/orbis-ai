@@ -335,6 +335,19 @@ class VisualSearch {
       event.preventDefault()
       event.stopPropagation()
       this.step({ kind: 'cancel' })
+      /*
+       * With the modifier held, that press is the start of the next selection rather than only a dismissal.
+       *
+       * Without this the first Ctrl-drag after a bar has been left open is eaten by it: the press closes the bar,
+       * the drag selects nothing, and the gesture looks dead. You would have to drag twice, which nobody does --
+       * they drag once, see nothing happen, and conclude Visual Search is broken. It is the shape a failure takes
+       * most often, too, because a bar showing a failure is exactly the one somebody leaves on screen.
+       */
+      if (this.held(event) && this.able.on !== false) {
+        this.step({ kind: 'modifier-down' })
+        this.step({ kind: 'pointer-down', at })
+        this.pointerId = event.pointerId
+      }
       return
     }
 

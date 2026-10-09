@@ -625,3 +625,25 @@ describe('the action list says the reason it was given', () => {
     assert.match(visualActions({ ...bare, risky: true, why: 'Orbis is not running.' }).says, /private/)
   })
 })
+
+/*
+ * A bar left on screen must not eat the next gesture.
+ *
+ * Pressing outside the selection dismisses the bar, and that is right. But the press that dismisses it used to be
+ * the whole of what happened: the drag that followed met an idle machine, which ignores movement, so nothing was
+ * selected. You had to drag twice. Nobody drags twice -- they drag once, see nothing, and conclude it is broken,
+ * and the bar most likely to be sitting there is one showing a failure.
+ */
+describe('a press that dismisses can also begin', () => {
+  it('holding the modifier arms and begins in the same press', async () => {
+    const source = await readFile(new URL('../../../extension-src/visual/main.ts', import.meta.url), 'utf8')
+    const at = source.indexOf("this.step({ kind: 'cancel' })\n      /*")
+    assert.ok(at > 0, 'the dismissing branch must be followed by the one that begins the next selection')
+    const after = source.slice(at, at + 1200)
+    assert.match(after, /if \(this\.held\(event\) && this\.able\.on !== false\)/, 'only when the modifier is held')
+    assert.ok(
+      after.indexOf("kind: 'modifier-down'") < after.indexOf("kind: 'pointer-down'"),
+      'armed before the press is given to it, or the press is ignored'
+    )
+  })
+})

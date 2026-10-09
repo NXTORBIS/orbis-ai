@@ -92,9 +92,18 @@ async function protectNow(): Promise<void> {
   await applyRulesets()
   await applyExceptions()
 }
-void protectNow()
+/*
+ * Both of these are started and not awaited, and both must say so when they fail.
+ *
+ * Without a catch a failure here is an unhandled rejection, which Chromium reports against this file as though the
+ * worker had crashed. It has not: the listeners below are already registered and the rest of the worker -- the
+ * selection orb's and Visual Search's, which are imported after this one -- loads perfectly well. Hours went into
+ * reading those two as broken because of what this printed. A failure to turn the blocker on is worth saying out
+ * loud, in a sentence that names what did not happen.
+ */
+void protectNow().catch((failed: unknown) => console.error('[orbis] ad blocking could not be turned on at startup:', failed))
 // Started here rather than awaited anywhere: the cosmetic layer arrives when it arrives.
-void whenEngines()
+void whenEngines().catch((failed: unknown) => console.error('[orbis] the cosmetic filtering engines could not be loaded:', failed))
 
 async function applyRulesets(): Promise<void> {
   const active = core.active()
