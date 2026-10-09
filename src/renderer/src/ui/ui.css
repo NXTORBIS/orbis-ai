@@ -1,0 +1,128 @@
+/*
+ * The shared controls, and only the ones that had no rule of their own.
+ *
+ * Most of what `ui/` offers needs no CSS at all: `.view`, `.view-head`, `.view-actions`, `.view-empty` and
+ * `.icon-btn` already existed and the components simply make them the default. Writing a second set beside them
+ * would be how two sets of rules for one idea come about, which is the thing being undone rather than repeated.
+ *
+ * What is here is the two that genuinely had nothing shared — the search box (sixteen hand-written ones, each with
+ * its own idea of what Escape does) and the toggle chip (seven, inconsistent about `aria-pressed`). The prefix is
+ * `ui-`, which `cssCollisions.test.ts` holds to this file.
+ *
+ * Tokens only. A name that is not in the theme resolves to nothing, silently.
+ */
+
+.ui-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 4px 10px;
+  border: 1px solid var(--pill-border);
+  border-radius: 999px;
+  background: var(--pill-bg);
+  color: var(--muted);
+}
+
+.ui-search:focus-within {
+  border-color: color-mix(in srgb, var(--cyan) 55%, transparent);
+}
+
+.ui-search input {
+  flex: 1 1 180px;
+  /* A floor, so the field cannot collapse to a few characters of its own placeholder in a narrow column. */
+  min-width: 90px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  outline: none;
+}
+
+.ui-search input::placeholder {
+  color: var(--faint);
+}
+
+/* The browser's own clear button, which would be a second way to do what Escape does. */
+.ui-search input::-webkit-search-cancel-button {
+  appearance: none;
+}
+
+.ui-search.small {
+  padding: 2px 8px;
+  font-size: 12px;
+}
+
+.ui-search.small input {
+  flex-basis: 140px;
+}
+
+/* ---------------------------------------------------------------- the toggle chip */
+
+.ui-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--pill-border);
+  border-radius: 999px;
+  background: var(--pill-bg);
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    border-color 110ms ease,
+    color 110ms ease;
+}
+
+.ui-chip:hover {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--cyan) 40%, transparent);
+}
+
+.ui-chip:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+/*
+ * On is said with colour *and* with a border, not colour alone.
+ *
+ * Which of a row of chips is chosen has to be legible to somebody who cannot tell the accent from the muted
+ * colour, and under forced colours where both become the same system colour anyway.
+ */
+.ui-chip[aria-pressed='true'] {
+  color: var(--cyan);
+  border-color: var(--cyan);
+  background: color-mix(in srgb, var(--cyan) 14%, var(--pill-bg));
+}
+
+.ui-chip[disabled] {
+  opacity: 0.45;
+  cursor: default;
+}
+
+@media (forced-colors: active) {
+  .ui-chip[aria-pressed='true'] {
+    border-width: 2px;
+  }
+}
+
+/* ---------------------------------------------------------------- the empty state's one action */
+
+/*
+ * `.view-empty` already styles the words, and it belongs to the global stylesheet — this file must not reach into
+ * it, which is what `cssCollisions.test.ts` is for. What it has never had is somewhere to put the thing that would
+ * fix the emptiness, which is the half that makes a blank screen useful rather than only polite. Both classes here
+ * are new.
+ */
+.view-empty-words {
+  margin: 0;
+}
+
+.view-empty-do {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+}

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowUpRight, Circle, Download, Eraser, Hand, Image as ImageIcon, Minus, MousePointer2, Plus, Redo2, Square, StickyNote, Trash2, Type, Undo2, X } from 'lucide-react'
+import { ArrowUpRight, Circle, Download, Eraser, Hand, Image as ImageIcon, Minus, MousePointer2, Plus, Redo2, Square, StickyNote, Trash2, Type, Undo2 } from 'lucide-react'
+import { Surface } from '../ui'
 import type { Board, BoardElement, Box, NoteElement, Point, ShapeElement, StrokeElement, TextElement } from '../../../shared/whiteboard'
 import { boardBounds, BOARD_COLORS, bounds, boardToSvg, move as moveElement, NOTE_COLORS, pick, pickIn, scale as scaleElement, simplify, topZ } from '../../../shared/whiteboard'
 import type { NoticeKind } from '../App'
@@ -564,10 +565,13 @@ export default function WhiteboardView({ onClose, onNotify }: { onClose(): void;
   const selectedElements = useMemo(() => board?.elements.filter((el) => selected.has(el.id)) ?? [], [board, selected])
 
   return (
-    <div className="view board-view" role="region" aria-label="Whiteboard">
-      <header className="view-head">
-        <h2>Whiteboard</h2>
-        <div className="view-actions">
+    <Surface
+      className="board-view"
+      title="Whiteboard"
+      closeLabel="Close whiteboard"
+      onClose={() => void (board ? window.api.saveBoard(board) : Promise.resolve()).then(onClose)}
+      actions={
+        <>
           <input
             className="board-name"
             value={board?.name ?? ''}
@@ -590,12 +594,9 @@ export default function WhiteboardView({ onClose, onNotify }: { onClose(): void;
           <button type="button" className="queue-btn" onClick={exportPng} title="Save what you see as a picture">
             <Download size={14} /> PNG
           </button>
-          <button type="button" className="icon-btn" aria-label="Close whiteboard" onClick={() => void (board ? window.api.saveBoard(board) : Promise.resolve()).then(onClose)}>
-            <X size={16} />
-          </button>
-        </div>
-      </header>
-
+        </>
+      }
+    >
       <div className="board-body">
         <aside className="board-list" aria-label="Boards">
           <button
@@ -758,7 +759,7 @@ export default function WhiteboardView({ onClose, onNotify }: { onClose(): void;
           <p className="board-hint view-muted">Scroll to move · Ctrl+scroll to zoom · Alt-drag or H to pan · Double-click text or a note to edit it</p>
         </div>
       </div>
-    </div>
+    </Surface>
   )
 }
 

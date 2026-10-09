@@ -865,6 +865,18 @@
   color: var(--danger);
 }
 
+/*
+ * The shared search box, arranged by the screen that holds it.
+ *
+ * `.ui-search` sizes itself to its content, which is right for a toolbar and wrong here: the clipboard's search
+ * reads long lines and had the whole row. Where a control sits and how much room it takes is the screen's decision,
+ * not the control's, so it is made here rather than built into `ui.css`.
+ */
+.clips-toolbar .ui-search {
+  flex: 1;
+  min-width: 0;
+}
+
 .clips-search {
   display: flex;
   align-items: center;

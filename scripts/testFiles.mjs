@@ -341,6 +341,7 @@ export const TEST_FILES = [
   'src/shared/cssCollisions.test.ts',
   'src/shared/screenWidth.test.ts',
   'src/shared/stylesheetIndex.test.ts',
+  'src/shared/uiPrimitives.test.ts',
   'src/shared/testSuite.test.ts',
   'src/shared/compute/units.test.ts',
   'src/shared/compute/expression.test.ts',

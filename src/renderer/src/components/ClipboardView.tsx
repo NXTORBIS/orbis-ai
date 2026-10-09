@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, Clipboard, Code2, Image as ImageIcon, Link2, Palette, Pause, Pin, Play, Search, Settings2, ShieldCheck, Trash2, X } from 'lucide-react'
+import { Check, Clipboard, Code2, Image as ImageIcon, Link2, Palette, Pause, Pin, Play, Settings2, ShieldCheck, Trash2, X } from 'lucide-react'
+import { SearchBox, Surface } from '../ui'
 import type { ClipboardSettings, ClipItem, ClipKind } from '../../../shared/clipboardHistory'
 import { DEFAULT_CLIPBOARD_SETTINGS } from '../../../shared/clipboardHistory'
 import type { NoticeKind } from '../App'
@@ -63,10 +64,14 @@ export default function ClipboardView({ onClose, onNotify }: { onClose(): void; 
   const setSetting = <K extends keyof ClipboardSettings>(key: K, value: ClipboardSettings[K]): void => void window.api.updateClipboardSettings({ [key]: value } as Partial<ClipboardSettings>).then(setSettings)
 
   return (
-    <div className="view clips-view" role="region" aria-label="Clipboard history">
-      <header className="view-head">
-        <h2>Clipboard</h2>
-        <div className="view-actions">
+    <Surface
+      className="clips-view"
+      title="Clipboard"
+      label="Clipboard history"
+      closeLabel="Close clipboard history"
+      onClose={onClose}
+      actions={
+        <>
           <button
             type="button"
             className={`queue-btn${paused ? ' on' : ''}`}
@@ -96,11 +101,9 @@ export default function ClipboardView({ onClose, onNotify }: { onClose(): void; 
               <Trash2 size={14} /> Clear
             </button>
           )}
-          <button type="button" className="icon-btn" aria-label="Close clipboard history" onClick={onClose}>
-            <X size={16} />
-          </button>
-        </div>
-      </header>
+        </>
+      }
+    >
 
       {showSettings && (
         <section className="clips-settings" aria-label="Clipboard settings">
@@ -160,10 +163,7 @@ export default function ClipboardView({ onClose, onNotify }: { onClose(): void; 
       )}
 
       <div className="clips-toolbar">
-        <label className="clips-search">
-          <Search size={13} />
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search what you copied" aria-label="Search clipboard history" />
-        </label>
+        <SearchBox value={query} onChange={setQuery} label="Search clipboard history" placeholder="Search what you copied" />
         <div className="clips-kinds" role="tablist" aria-label="Kinds">
           {KINDS.map((k) => (
             <button key={k.id} type="button" role="tab" aria-selected={kind === k.id} className={`note-tag${kind === k.id ? ' on' : ''}`} onClick={() => setKind(k.id)}>
@@ -230,6 +230,6 @@ export default function ClipboardView({ onClose, onNotify }: { onClose(): void; 
           </p>
         )}
       </div>
-    </div>
+    </Surface>
   )
 }
