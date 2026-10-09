@@ -17,6 +17,7 @@ describe('the set itself', () => {
       for (const [what, value] of [
         ['from', one.from],
         ['to', one.to],
+        ['with', one.with],
         ['rim', one.rim]
       ] as const) {
         assert.match(value, /^#[0-9a-f]{6}$/, `${one.id}.${what} is not a hex colour`)
@@ -101,14 +102,67 @@ describe('the letter on it', () => {
 })
 
 describe('what the stylesheet is handed', () => {
-  it('is the four properties the rules read, and nothing else', () => {
+  it('is the properties the rules read, and nothing else', () => {
     const style = avatarStyle('ember')
-    assert.deepEqual(Object.keys(style).sort(), ['--av-from', '--av-rim', '--av-to', '--av-turn'])
+    assert.deepEqual(Object.keys(style).sort(), ['--av-from', '--av-rim', '--av-to', '--av-turn', '--av-with'])
     assert.match(style['--av-turn'], /^\d+deg$/)
   })
 
   it('an unknown id still produces a full set, so a swatch is never drawn with nothing', () => {
     const style = avatarStyle('nope')
     assert.equal(style['--av-from'], avatarFor(DEFAULT_AVATAR).from)
+  })
+})
+
+describe('what is going on inside each one', () => {
+  /*
+   * The first version was twelve balls of one colour with a letter stamped on them, which is a swatch rather than
+   * a picture somebody would want. These two keep it from drifting back: every orb has a pattern, and no pattern
+   * is used so often that the row reads as four things repeated.
+   */
+  it('every one has a pattern', () => {
+    for (const one of AVATARS) {
+      assert.ok(['bands', 'swirl', 'nebula', 'eye', 'shard', 'wave'].includes(one.pattern), `${one.id} has no pattern`)
+    }
+  })
+
+  it('the patterns are spread, not three of one and nine of another', () => {
+    const counts = new Map<string, number>()
+    for (const one of AVATARS) counts.set(one.pattern, (counts.get(one.pattern) ?? 0) + 1)
+    assert.ok(counts.size >= 5, `only ${counts.size} different patterns across twelve`)
+    assert.ok(Math.max(...counts.values()) <= 3, 'one pattern is used more than three times')
+  })
+
+  it('the pattern colour is not the same as the one it is drawn on', () => {
+    // Same colour means an invisible pattern, which is the silent way this feature stops working.
+    for (const one of AVATARS) {
+      assert.notEqual(one.with.toLowerCase(), one.from.toLowerCase(), `${one.id}'s pattern is its own interior`)
+      assert.notEqual(one.with.toLowerCase(), one.to.toLowerCase(), `${one.id}'s pattern is its own dark side`)
+    }
+  })
+})
+
+describe('the pattern has to be visible', () => {
+  /*
+   * A pattern drawn in a colour near its own interior is a pattern nobody can see.
+   *
+   * The first set was chosen by hue alone and half of them vanished: photographed side by side, the ones that read
+   * were exactly the ones with a wide gap in lightness, and the ones that looked like plain balls were the ones
+   * without. So the rule is about lightness, not hue, and it is measured rather than eyeballed.
+   */
+  const weight = (hex: string): number => parseInt(hex.slice(1, 3), 16) + parseInt(hex.slice(3, 5), 16) + parseInt(hex.slice(5, 7), 16)
+
+  it('the pattern is far enough from the interior to be seen', () => {
+    for (const one of AVATARS) {
+      const gap = Math.abs(weight(one.from) - weight(one.with))
+      assert.ok(gap >= 180, `${one.id}: only ${gap} between the interior and its pattern, which will not read`)
+    }
+  })
+
+  it('and far enough from the dark side not to disappear into it', () => {
+    for (const one of AVATARS) {
+      const gap = Math.abs(weight(one.with) - weight(one.to))
+      assert.ok(gap >= 60, `${one.id}: the pattern is almost the colour of its own dark limb`)
+    }
   })
 })

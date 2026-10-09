@@ -292,9 +292,13 @@ export default function SettingsModal({ settings, onUpdate, onClose, section }: 
                         aria-label={one.name}
                         title={one.name}
                         className={`setting-face${chosen ? ' is-chosen' : ''}`}
+                        data-pattern={one.pattern}
                         style={avatarStyle(one.id)}
                         onClick={() => void onUpdate({ userAvatar: one.id })}
-                      />
+                      >
+                        <span className="setting-face-rim" />
+                        {chosen && <span className="setting-face-tick" />}
+                      </button>
                     )
                   })}
                 </div>

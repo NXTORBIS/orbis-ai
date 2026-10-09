@@ -720,6 +720,22 @@ async function readImages(paths: string[]): Promise<PickedFiles> {
 const activeRequests = new Map<string, AbortController>()
 let store: Store
 let mainWindow: BrowserWindow | null = null
+
+/**
+ * The window, when there is one that can still be spoken to.
+ *
+ * `mainWindow` holds a reference until something replaces it, and a closed window leaves that reference pointing at
+ * an object Electron has already destroyed. Every method on it then throws `Object has been destroyed`, and in the
+ * main process an uncaught throw is a crash dialog rather than a quiet failure -- which is exactly what somebody saw
+ * after opening Orbis a second time while the first window was going away: `second-instance` called `isMinimized`
+ * on it without asking whether it was still there.
+ *
+ * Null is the honest answer, and every caller already has to handle "there is no window" because at startup there
+ * genuinely is not one.
+ */
+function liveWindow(): BrowserWindow | null {
+  return mainWindow && !mainWindow.isDestroyed() ? mainWindow : null
+}
 /**
  * The person's experience settings, once they have been read.
  *
@@ -2227,9 +2243,10 @@ if (!app.requestSingleInstanceLock()) {
   app.on('second-instance', (_event, argv) => {
     const link = linkIn(argv)
     if (link) void openInBrowser(link)
-    if (!mainWindow) return
-    if (mainWindow.isMinimized()) mainWindow.restore()
-    mainWindow.focus()
+    const window = liveWindow()
+    if (!window) return
+    if (window.isMinimized()) window.restore()
+    window.focus()
   })
 
   void app.whenReady().then(async () => {
@@ -2291,7 +2308,7 @@ if (!app.requestSingleInstanceLock()) {
     registerLibraryIpc(browserLibrary, () => mainWindow, () => chromiumBrowser?.current ?? null)
 
     browserControl = setupBrowserControl({
-      getWindow: () => mainWindow,
+      getWindow: () => liveWindow(),
       store,
       onSettingsChanged: (settings) => {
         nativeTheme.themeSource = settings.theme
@@ -2446,7 +2463,7 @@ if (!app.requestSingleInstanceLock()) {
     registerPortableIpc({
       userData: app.getPath('userData'),
       profileId: async () => (await profilesStore.active()).id,
-      getWindow: () => mainWindow,
+      getWindow: () => liveWindow(),
       appVersion: app.getVersion()
     })
 
@@ -2454,7 +2471,7 @@ if (!app.requestSingleInstanceLock()) {
       engine: marketEngine,
       store: marketsStore,
       runtime: markets,
-      getWindow: () => mainWindow,
+      getWindow: () => liveWindow(),
       profileId: async () => (await profilesStore.active()).id,
       // One feed reader for the whole application. A second would be a second set of rate limits to get wrong.
       readFeed: (url) =>
@@ -2598,7 +2615,7 @@ if (!app.requestSingleInstanceLock()) {
 
     registerPagesIpc({
       service: pages,
-      getWindow: () => mainWindow,
+      getWindow: () => liveWindow(),
       profileId: async () => (await profilesStore.active()).id,
       generated,
       code: codePages
@@ -2665,7 +2682,7 @@ if (!app.requestSingleInstanceLock()) {
         void notifications?.publish({ type: 'artifact.created', fields: { filename: what.name, kind: what.kind, ...(what.path ? { path: what.path } : {}) } })
       },
       service: artifacts,
-      getWindow: () => mainWindow,
+      getWindow: () => liveWindow(),
       profileId: async () => (await profilesStore.active()).id
     })
     // Making things belongs to the chat. The Orb is for the browser, so nothing here is registered with it.
@@ -2677,7 +2694,7 @@ if (!app.requestSingleInstanceLock()) {
     const tabLock = registerTabLockIpc({
       store: tabLockStore,
       control: browserControl.control,
-      getWindow: () => mainWindow,
+      getWindow: () => liveWindow(),
       send: (channel, ...args) => {
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, ...args)
       },
@@ -2713,7 +2730,7 @@ if (!app.requestSingleInstanceLock()) {
      */
     const profileLock = registerProfileLockIpc({
       accounts,
-      getWindow: () => mainWindow,
+      getWindow: () => liveWindow(),
       send: (channel, ...args) => {
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, ...args)
       },
@@ -3374,7 +3391,7 @@ ${page.text}`, { howMany: 6 })
       recorder: workflowRecorder!,
       store: workflowStore,
       control: browserControl.control,
-      getWindow: () => mainWindow,
+      getWindow: () => liveWindow(),
       draft: async (instruction, current) =>
         draftValidatedWorkflow(instruction, current, browserControl!.control.list(), GROQ_API_KEYS, fetchForOrion, () => crypto.randomUUID(), await workflowStore.list()),
       regenerateTitle: (workflowId) => workflowTitler.regenerate(workflowId)
@@ -3446,7 +3463,9 @@ ${page.text}`, { howMany: 6 })
        * Only two things, and both are facts rather than guesses: whether an Orbis window is in front, and what the
        * window last said it was showing. A notification about the thing already on the screen is noise.
        */
-      attention: () => ({ focused: mainWindow?.isFocused() === true && !mainWindow.isMinimized(), watching: watchingNow }),
+      // `liveWindow`, not `mainWindow?.`: optional chaining asks whether the reference is there, not whether the
+      // window behind it still is, and `isFocused` on a destroyed one throws rather than answering false.
+      attention: () => ({ focused: liveWindow()?.isFocused() === true && liveWindow()?.isMinimized() !== true, watching: watchingNow }),
       handlers: {
         open: async (one: { id: string; event: string; subject: Readonly<Record<string, string>> }) => {
           if (!mainWindow || mainWindow.isDestroyed()) return { ok: false, message: 'Orbis has no window open.' }
@@ -3564,7 +3583,7 @@ ${page.text}`, { howMany: 6 })
       * added once, in one place, and read back before anybody is told it is there.
       */
     const widgetRuntime = createWidgetRuntime({ store: experience })
-    registerExperienceIpc({ store: experience, control: browserControl.control, widgets: widgetRuntime, getWindow: () => mainWindow, send: sendToWindow })
+    registerExperienceIpc({ store: experience, control: browserControl.control, widgets: widgetRuntime, getWindow: () => liveWindow(), send: sendToWindow })
 
     /**
      * One question to Orion, answered whole rather than streamed.
@@ -3649,7 +3668,7 @@ ${page.text}`, { howMany: 6 })
 
     // Quizzes in the conversation. The asking and the checking both happen in main, so the window never sees a
     // question that has not been checked.
-    registerQuizIpc({ getWindow: () => mainWindow, ask: (prompt: string) => askOrionOnce(prompt) })
+    registerQuizIpc({ getWindow: () => liveWindow(), ask: (prompt: string) => askOrionOnce(prompt) })
 
     ipcMain.handle('physics:ask', (event, prompt, schema) => {
       if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
@@ -3659,7 +3678,7 @@ ${page.text}`, { howMany: 6 })
     // Running code. The sandbox address and key live in settings and never reach the renderer; when there is no
     // sandbox the service asks Orion to read the code instead, and labels the answer a guess rather than a run.
     registerExecutionIpc({
-      getWindow: () => mainWindow,
+      getWindow: () => liveWindow(),
       service: new ExecutionService({
         settings: async () => {
           const current = await store.getSettings()
@@ -4290,7 +4309,7 @@ ${page.text}`, { howMany: 6 })
       engine: scheduleEngine,
       activeProfile: () => scheduleProfileId,
       device: deviceNow,
-      getWindow: () => mainWindow,
+      getWindow: () => liveWindow(),
       send: (channel, ...args) => sendToWindow(channel, ...args)
     })
     /**
@@ -4632,13 +4651,13 @@ ${page.text}`, { howMany: 6 })
       onProgress: (progress) => sendToWindow('music:import-progress', progress),
       dirname: __dirname,
       devUrl: !app.isPackaged ? process.env.ELECTRON_RENDERER_URL : undefined,
-      getWindow: () => mainWindow,
+      getWindow: () => liveWindow(),
       send: sendToWindow
     })
     registerMusicIpc({
       music,
       userData: app.getPath('userData'),
-      getWindow: () => mainWindow,
+      getWindow: () => liveWindow(),
       pickFiles: async (kind) => {
         const win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null
         const options: OpenDialogOptions =
@@ -4755,7 +4774,7 @@ ${page.text}`, { howMany: 6 })
       },
       announce: () => sendToWindow('student:changed')
     })
-    registerStudentIpc({ service: student, store: studentStore, getWindow: () => mainWindow })
+    registerStudentIpc({ service: student, store: studentStore, getWindow: () => liveWindow() })
 
     /*
      * Ambient Intelligence.
@@ -4798,7 +4817,7 @@ ${page.text}`, { howMany: 6 })
     })
     await ambientStore.useProfile((await profilesStore.active()).id).catch(() => undefined)
     ambient.start()
-    registerAmbientIpc({ ambient, bus, getWindow: () => mainWindow })
+    registerAmbientIpc({ ambient, bus, getWindow: () => liveWindow() })
 
     /*
      * Orbis Courses.
@@ -4839,7 +4858,7 @@ ${page.text}`, { howMany: 6 })
       }
     })
     await coursesStore.useProfile((await profilesStore.active()).id).catch(() => undefined)
-    registerCoursesIpc({ courses, getWindow: () => mainWindow })
+    registerCoursesIpc({ courses, getWindow: () => liveWindow() })
 
     /*
      * The courses Orbis ships with.
@@ -4931,7 +4950,7 @@ ${page.text}`, { howMany: 6 })
     await nativeStore.useProfile((await profilesStore.active()).id).catch(() => undefined)
     // References only: restored apps come back `loading` and off screen, never running.
     void native.restoreAll().catch((err: unknown) => console.error('[native] saved apps could not be restored', err))
-    registerNativeIpc({ native, getWindow: () => mainWindow })
+    registerNativeIpc({ native, getWindow: () => liveWindow() })
 
     /*
      * The Database Laboratory's practice databases hold native handles rather than plain objects, so they are let go
@@ -5079,7 +5098,7 @@ ${page.text}`, { howMany: 6 })
       whiteboard: whiteboardStore,
       workspaces: workspacesStore,
       control: browserControl.control,
-      getWindow: () => mainWindow,
+      getWindow: () => liveWindow(),
       send: sendToWindow,
       readPage: async () => {
         const result = await browserControl!.control.execute({ capability: 'page.read', params: { maxChars: 2000 }, target: {}, source: 'user' }, { confirm: async () => true })

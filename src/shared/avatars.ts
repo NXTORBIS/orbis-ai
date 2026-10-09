@@ -19,6 +19,19 @@
  * renamed that to `dawn` is an account whose picture silently becomes the fallback.
  */
 
+/**
+ * What is going on inside the sphere.
+ *
+ * The first version had none of this: twelve balls of one colour each, distinguishable only by hue, with a letter
+ * stamped on them to tell them apart. That is a swatch, not a thing somebody wants as their picture -- and the
+ * letter was doing work the design should have been doing. Each of these is a different weather inside the glass,
+ * so the twelve differ in shape as well as in colour and a person can say "the striped one" rather than "the blue".
+ *
+ * Drawn under the shading, never instead of it: a pattern on a flat disc is a sticker, and what makes these read
+ * as glass is that the same glint, limb and rim sit over all of them.
+ */
+export type Pattern = 'bands' | 'swirl' | 'nebula' | 'eye' | 'shard' | 'wave'
+
 export interface Avatar {
   /** Stored in settings. Never rename one of these. */
   readonly id: string
@@ -27,10 +40,14 @@ export interface Avatar {
   /** The interior, from the lit side to the dark limb. */
   readonly from: string
   readonly to: string
+  /** The second colour the pattern is drawn in. The two should not be neighbours, or the pattern disappears. */
+  readonly with: string
   /** The glow that sits under the rim on the lit side. Usually a brighter relative of `from`. */
   readonly rim: string
   /** Where the light falls, in degrees, so the family does not all face the same way. */
   readonly turn: number
+  /** The weather inside. */
+  readonly pattern: Pattern
 }
 
 /**
@@ -40,21 +57,20 @@ export interface Avatar {
  * eye picks a favourite much faster when consecutive swatches are not nearly the same.
  */
 export const AVATARS: readonly Avatar[] = Object.freeze([
-  { id: 'cyan', name: 'Cyan', from: '#5fe4ff', to: '#06212e', rim: '#a6f2ff', turn: 318 },
-  { id: 'ember', name: 'Ember', from: '#ff9d5c', to: '#2c0d08', rim: '#ffd0a8', turn: 330 },
-  { id: 'jade', name: 'Jade', from: '#48e5a0', to: '#06251a', rim: '#9df5cd', turn: 312 },
-  { id: 'orchid', name: 'Orchid', from: '#c58cff', to: '#1d0a33', rim: '#e6ccff', turn: 324 },
-  { id: 'amber', name: 'Amber', from: '#ffc94d', to: '#2e1c00', rim: '#ffe6a8', turn: 306 },
-  { id: 'cobalt', name: 'Cobalt', from: '#6aa8ff', to: '#071534', rim: '#b8d4ff', turn: 336 },
-  { id: 'rose', name: 'Rose', from: '#ff7d9c', to: '#330711', rim: '#ffc2d1', turn: 300 },
-  { id: 'mint', name: 'Mint', from: '#7ef0d8', to: '#052723', rim: '#c2fbee', turn: 342 },
-  { id: 'slate', name: 'Slate', from: '#b8c6d8', to: '#0d131c', rim: '#e4ecf6', turn: 315 },
-  { id: 'coral', name: 'Coral', from: '#ff8a6b', to: '#2e0f0a', rim: '#ffc4b3', turn: 348 },
-  { id: 'violet', name: 'Violet', from: '#8b7cff', to: '#100a2e', rim: '#cbc3ff', turn: 309 },
-  { id: 'gold', name: 'Gold', from: '#ffd98a', to: '#2b2208', rim: '#fff0c9', turn: 333 }
+  { id: 'cyan', name: 'Tide', from: '#5fe4ff', to: '#04202e', with: '#06566f', rim: '#a6f2ff', turn: 318, pattern: 'wave' },
+  { id: 'ember', name: 'Ember', from: '#ff9d5c', to: '#2a0b06', with: '#8c1b0c', rim: '#ffd0a8', turn: 330, pattern: 'swirl' },
+  { id: 'jade', name: 'Jade', from: '#48e5a0', to: '#042219', with: '#065040', rim: '#9df5cd', turn: 312, pattern: 'bands' },
+  { id: 'orchid', name: 'Orchid', from: '#c58cff', to: '#190830', with: '#3d1278', rim: '#e6ccff', turn: 324, pattern: 'nebula' },
+  { id: 'amber', name: 'Amber', from: '#ffc94d', to: '#2a1900', with: '#7a4100', rim: '#ffe6a8', turn: 306, pattern: 'shard' },
+  { id: 'cobalt', name: 'Cobalt', from: '#6aa8ff', to: '#061331', with: '#102a8c', rim: '#b8d4ff', turn: 336, pattern: 'eye' },
+  { id: 'rose', name: 'Rose', from: '#ff7d9c', to: '#2f0610', with: '#73062c', rim: '#ffc2d1', turn: 300, pattern: 'swirl' },
+  { id: 'mint', name: 'Mint', from: '#7ef0d8', to: '#042421', with: '#065c4e', rim: '#c2fbee', turn: 342, pattern: 'nebula' },
+  { id: 'slate', name: 'Slate', from: '#b8c6d8', to: '#0b111a', with: '#2b3a4d', rim: '#e4ecf6', turn: 315, pattern: 'bands' },
+  { id: 'coral', name: 'Coral', from: '#ff8a6b', to: '#2b0d09', with: '#8a2414', rim: '#ffc4b3', turn: 348, pattern: 'eye' },
+  { id: 'violet', name: 'Violet', from: '#8b7cff', to: '#0e092b', with: '#241680', rim: '#cbc3ff', turn: 309, pattern: 'wave' },
+  { id: 'gold', name: 'Gold', from: '#ffd98a', to: '#281f06', with: '#6d4c05', rim: '#fff0c9', turn: 333, pattern: 'shard' }
 ])
 
-/** The one used when nothing has been chosen, and when a stored id is not one Orbis knows. */
 export const DEFAULT_AVATAR = 'cyan'
 
 const BY_ID = new Map(AVATARS.map((one) => [one.id, one]))
@@ -120,6 +136,7 @@ export function avatarStyle(id: string | null | undefined): Record<string, strin
   return {
     '--av-from': one.from,
     '--av-to': one.to,
+    '--av-with': one.with,
     '--av-rim': one.rim,
     '--av-turn': `${one.turn}deg`
   }

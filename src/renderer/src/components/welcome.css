@@ -8,7 +8,12 @@
   position: fixed;
   inset: 0;
   z-index: 1000;
-  overflow: hidden;
+  /*
+   * No `overflow: hidden`.
+   *
+   * Every layer inside is already a circle of its own, so there is nothing to clip -- and clipping here cut the
+   * "chosen" tick in half, because the tick is meant to sit proud of the sphere's edge.
+   */
   isolation: isolate;
   color: #eef2f6;
   font-family: var(--font);
@@ -887,26 +892,138 @@
   border: 0;
   border-radius: 50%;
   padding: 0;
+  /*
+   * No `overflow: hidden`.
+   *
+   * Every layer inside is already a circle of its own, so there is nothing to clip -- and clipping here cut the
+   * "chosen" tick in half, because the tick is meant to sit proud of the sphere's edge.
+   */
   isolation: isolate;
-  background:
-    /* The glint: small, bright and tight. This is the one thing that reads as glass rather than as paint, and it
-       has to be a hard little spot -- a soft wide one is a matte ball with a pale patch on it. */
-    radial-gradient(circle at 30% 23%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.25) 16%, rgba(255, 255, 255, 0) 30%),
-    /* The broad sheen around it, which is what keeps the glint from looking stuck on. */
-    radial-gradient(ellipse 58% 44% at 36% 28%, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0) 70%),
-    /* Light bounced back up off whatever the sphere is sitting on, along the bottom edge. */
-    radial-gradient(ellipse 70% 40% at 60% 92%, color-mix(in srgb, var(--av-rim) 32%, transparent), transparent 70%),
-    /* The interior: lit face falling to a dark limb. */
-    radial-gradient(circle at 34% 28%, var(--av-from), var(--av-to) 74%),
-    /* The limb itself, so the edge is never the same tone as the middle. */
-    radial-gradient(circle at 50% 50%, transparent 54%, rgba(0, 0, 0, 0.5) 100%);
+  /* The body of the glass. The pattern goes on top of this and the shading on top of that. */
+  background: radial-gradient(circle at 34% 28%, var(--av-from), var(--av-to) 78%);
 }
 
-/* The rim: a ring that is brightest where the light grazes it, drawn with a mask rather than a border, because a
-   border is one flat colour all the way round and a lit sphere never is. */
+/*
+ * The weather inside, and the light on the outside, in one layer each.
+ *
+ * `::after` carries the pattern *and* the shading, in that order, so the glint and the dark limb always sit over
+ * whatever the interior is doing. The alternative -- pattern above, shading below -- was tried and every orb came
+ * out as a flat disc with a decal on it. A sphere is a sphere because of what the light does to it, and the light
+ * has to be the last thing drawn.
+ */
+.welcome-face::after,
+.welcome-face-pick::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  background:
+    /* The glint: small, bright and tight. A soft wide one is a matte ball with a pale patch on it. */
+    radial-gradient(circle at 30% 23%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.22) 15%, rgba(255, 255, 255, 0) 29%),
+    /* The sheen around it, which keeps the glint from looking stuck on. */
+    radial-gradient(ellipse 58% 44% at 36% 28%, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0) 70%),
+    /* Light bounced back up along the bottom edge. */
+    radial-gradient(ellipse 70% 40% at 60% 93%, color-mix(in srgb, var(--av-rim) 30%, transparent), transparent 70%),
+    /* The limb: the edge is never the tone of the middle. */
+    radial-gradient(circle at 50% 50%, transparent 52%, rgba(0, 0, 0, 0.55) 100%);
+}
+
+/* ---------------------------------------------------------------- the six interiors
+
+   Each is one extra layer between the body and the light, drawn in `--av-with` against `--av-from`. They are
+   rotated by the orb's own `--av-turn`, so no two of the same pattern sit at the same angle. */
+
+.welcome-face[data-pattern='bands']::before,
+.welcome-face-pick[data-pattern='bands']::before {
+  background: repeating-linear-gradient(
+    calc(var(--av-turn) + 34deg),
+    color-mix(in srgb, var(--av-with) 85%, transparent) 0 14%,
+    transparent 14% 30%
+  );
+}
+
+.welcome-face[data-pattern='swirl']::before,
+.welcome-face-pick[data-pattern='swirl']::before {
+  /* Soft stops all the way round and the same colour at both ends, or the seam at 0deg shows as a hard crescent. */
+  background: conic-gradient(
+    from var(--av-turn) at 44% 48%,
+    color-mix(in srgb, var(--av-with) 70%, transparent) 0%,
+    color-mix(in srgb, var(--av-with) 10%, transparent) 18%,
+    color-mix(in srgb, var(--av-with) 62%, transparent) 38%,
+    color-mix(in srgb, var(--av-with) 8%, transparent) 58%,
+    color-mix(in srgb, var(--av-with) 66%, transparent) 80%,
+    color-mix(in srgb, var(--av-with) 70%, transparent) 100%
+  );
+}
+
+.welcome-face[data-pattern='nebula']::before,
+.welcome-face-pick[data-pattern='nebula']::before {
+  background:
+    /* Kept inside the middle of the sphere: out at the edge the limb swallows them and the orb reads as plain. */
+    radial-gradient(ellipse 42% 32% at 62% 58%, var(--av-with), transparent 78%),
+    radial-gradient(ellipse 34% 26% at 34% 62%, color-mix(in srgb, var(--av-rim) 60%, transparent), transparent 80%),
+    radial-gradient(ellipse 30% 24% at 56% 34%, color-mix(in srgb, var(--av-with) 90%, transparent), transparent 78%);
+}
+
+.welcome-face[data-pattern='eye']::before,
+.welcome-face-pick[data-pattern='eye']::before {
+  background:
+    radial-gradient(circle at 46% 52%, color-mix(in srgb, var(--av-rim) 70%, transparent) 0 9%, transparent 10%),
+    radial-gradient(circle at 46% 52%, transparent 0 20%, color-mix(in srgb, var(--av-with) 92%, transparent) 21% 34%, transparent 35%),
+    radial-gradient(circle at 46% 52%, transparent 0 46%, color-mix(in srgb, var(--av-with) 55%, transparent) 47% 54%, transparent 55%);
+}
+
+.welcome-face[data-pattern='shard']::before,
+.welcome-face-pick[data-pattern='shard']::before {
+  background:
+    conic-gradient(
+      from var(--av-turn) at 50% 50%,
+      color-mix(in srgb, var(--av-with) 95%, transparent) 0 14deg,
+      transparent 14deg 54deg,
+      color-mix(in srgb, var(--av-with) 70%, transparent) 54deg 78deg,
+      transparent 78deg 150deg,
+      color-mix(in srgb, var(--av-with) 90%, transparent) 150deg 182deg,
+      transparent 182deg 254deg,
+      color-mix(in srgb, var(--av-with) 60%, transparent) 254deg 282deg,
+      transparent 282deg 360deg
+    );
+}
+
+.welcome-face[data-pattern='wave']::before,
+.welcome-face-pick[data-pattern='wave']::before {
+  background:
+    /* A horizon across the middle rather than a band along the bottom, which the limb was eating. */
+    radial-gradient(ellipse 130% 44% at 50% 96%, var(--av-with) 0 56%, transparent 60%),
+    radial-gradient(ellipse 120% 26% at 50% 50%, color-mix(in srgb, var(--av-rim) 50%, transparent) 0 48%, transparent 56%);
+}
+
+/* The pattern layer itself. The rules above only say what is drawn in it. */
 .welcome-face::before,
 .welcome-face-pick::before {
   content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  /*
+   * Painted, not blended.
+   *
+   * `soft-light` was tried first and photographed: against interiors this dark it produces almost nothing, and all
+   * twelve came back looking like plain balls again -- which is the fault this whole layer exists to fix. The
+   * pattern is drawn at full strength and the light over it is what keeps the sphere a sphere.
+   */
+  opacity: 0.88;
+}
+
+/*
+ * The rim, on its own element rather than on `::before`.
+ *
+ * Both pseudo-elements are spoken for now -- the pattern and the light -- and a lit sphere needs its edge brighter
+ * on the side the light comes from. A border is one flat colour all the way round, which a lit sphere never is, so
+ * this is a masked conic ring instead.
+ */
+.welcome-face-rim {
   position: absolute;
   inset: 0;
   border-radius: 50%;
@@ -914,9 +1031,9 @@
   background: conic-gradient(
     from var(--av-turn),
     var(--av-rim),
-    color-mix(in srgb, var(--av-rim) 35%, transparent) 30%,
-    rgba(255, 255, 255, 0.06) 55%,
-    color-mix(in srgb, var(--av-rim) 30%, transparent) 78%,
+    color-mix(in srgb, var(--av-rim) 30%, transparent) 30%,
+    rgba(255, 255, 255, 0.05) 55%,
+    color-mix(in srgb, var(--av-rim) 26%, transparent) 78%,
     var(--av-rim)
   );
   -webkit-mask:
@@ -925,6 +1042,7 @@
   -webkit-mask-composite: xor;
   mask-composite: exclude;
   pointer-events: none;
+  z-index: 2;
 }
 
 /* The letter. Dimmed and small on purpose: it is there so an empty row is not twelve blank balls, and it must never
@@ -1043,8 +1161,16 @@
 }
 
 /* The tick, so "chosen" survives a screenshot in greyscale. */
-.welcome-face-pick.is-chosen::after {
-  content: '';
+/*
+ * The tick is its own element, which took three goes.
+ *
+ * On the swatch's `::after` it fought the light layer -- both want `inset: 0` -- and came out as a dark crescent
+ * near the top-left of the sphere, which reads as a rendering fault, the worst thing a "this one is chosen" mark
+ * can look like. Moved onto the rim's `::after` it vanished instead: the rim is drawn with a mask, and a mask
+ * applies to an element's pseudo-elements as well. Both pseudo-elements on the swatch are spoken for and the rim's
+ * is masked, so the tick gets an element of its own.
+ */
+.welcome-face-tick {
   position: absolute;
   right: -2px;
   bottom: -2px;
@@ -1094,4 +1220,43 @@
   .welcome-face {
     transition: none;
   }
+}
+
+/* On the second screen the name is settled: the field stays so the orb and the name are still visible -- it is
+   the account being made and it should not vanish while a password is chosen for it -- but it reads as a fact
+   rather than as a question. */
+.welcome-field.is-settled {
+  opacity: 0.72;
+  transform: scale(0.97);
+  transition:
+    opacity 0.35s ease,
+    transform 0.35s var(--ease-out);
+}
+
+.welcome-field.is-settled .welcome-input {
+  pointer-events: none;
+}
+
+/* Page two carries more than page one -- two fields, two notes and two buttons -- and on a short window the Back
+   button was landing exactly on the bottom edge. Everything on this page is pulled in a little so the last thing
+   somebody needs is on the screen with the rest. Measured against the default window, not guessed. */
+.welcome-panel.is-locking .welcome-field.is-settled {
+  margin-bottom: -4px;
+}
+
+.welcome-panel.is-locking .welcome-secure.is-shown {
+  margin-top: 12px;
+}
+
+.welcome-panel.is-locking .welcome-note.is-quiet {
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+.welcome-panel.is-locking .welcome-continue {
+  margin-top: 14px;
+}
+
+.welcome-panel.is-locking .welcome-secondary {
+  margin-top: 6px;
 }

@@ -3,7 +3,7 @@ import { Eye, EyeOff } from 'lucide-react'
 import ring from '../assets/orbis-ring-glass.png'
 import logo from '../assets/orbis-logo.png'
 import { confirmPassword, judgePassword, PASSWORD_MAX } from '../../../shared/passwordStrength'
-import { AVATARS, avatarStyle, markFor, suggestFor } from '../../../shared/avatars'
+import { AVATARS, avatarFor, avatarStyle, suggestFor } from '../../../shared/avatars'
 import './welcome.css'
 
 interface Props {
@@ -221,6 +221,14 @@ export default function WelcomeExperience({ ready, needsName, needsUnlock, locke
    * never be taken back by the next letter they type.
    */
   const [pickedAvatar, setPickedAvatar] = useState<string | null>(null)
+  /**
+   * Which half of setup is on screen.
+   *
+   * It was one tall screen and the password sat below the fold: on a laptop the row of pictures pushed "Create a
+   * password" off the bottom, so the one thing that must be read was the one thing nobody saw. Two short screens
+   * instead -- who you are, then how it is locked -- each of which fits without scrolling.
+   */
+  const [step, setStep] = useState<'who' | 'secret'>('who')
   const [savedName, setSavedName] = useState('')
   /** What the person is typing to get in, and what Orbis last said about it. */
   const [unlockWith, setUnlockWith] = useState('')
@@ -276,6 +284,14 @@ export default function WelcomeExperience({ ready, needsName, needsUnlock, locke
    * Twelve spheres do not fit, so the row scrolls -- and the name chooses one of the twelve, which means the answer
    * to what somebody just typed is regularly off the end of it. Without this the row looks like it is ignoring them.
    */
+  /* The field that matters on this screen takes the focus, so Enter always goes somewhere useful. */
+  useEffect(() => {
+    if (phase !== 'name') return
+    const id = step === 'who' ? 'welcome-name' : 'welcome-password'
+    const field = document.getElementById(id)
+    if (field instanceof HTMLInputElement) field.focus()
+  }, [step, phase])
+
   useEffect(() => {
     const row = rowRef.current
     if (!row) return
@@ -442,10 +458,15 @@ export default function WelcomeExperience({ ready, needsName, needsUnlock, locke
   } else if (formPhase) {
     stage = (
       <form
-        className="welcome-panel"
+        className={`welcome-panel${step === 'secret' ? ' is-locking' : ''}`}
         noValidate
         onSubmit={(e) => {
           e.preventDefault()
+          // The first screen has nothing to save; Enter on it is "I have chosen", not "create the account".
+          if (step === 'who') {
+            if (nameValid) setStep('secret')
+            return
+          }
           void submit()
         }}
       >
@@ -454,16 +475,16 @@ export default function WelcomeExperience({ ready, needsName, needsUnlock, locke
           {!title.done && <span className="welcome-caret" aria-hidden="true" />}
         </h1>
         <label htmlFor="welcome-name" className={`welcome-sub${title.done ? ' is-shown' : ''}`}>
-          What should I call you?
+          {step === 'who' ? 'What should I call you?' : 'Now lock it.'}
         </label>
-        <div className="welcome-field has-face">
+        <div className={`welcome-field has-face${step === 'secret' ? ' is-settled' : ''}`}>
           {/*
             The picture sits inside the field, not beside it.
             It is the thing being named, so it belongs where the name is -- and because it changes as the letters
             arrive, it is the first sign that anything is listening.
           */}
-          <span className="welcome-face" style={avatarStyle(avatar)} aria-hidden="true">
-            <span className="welcome-face-mark">{markFor(clean)}</span>
+          <span className="welcome-face" style={avatarStyle(avatar)} data-pattern={avatarFor(avatar).pattern} aria-hidden="true">
+            <span className="welcome-face-rim" />
           </span>
           <input
             id="welcome-name"
@@ -486,7 +507,7 @@ export default function WelcomeExperience({ ready, needsName, needsUnlock, locke
           through the chosen one only, which is what `tabIndex` below is for -- tabbing through twelve swatches to
           reach the password field would be its own small cruelty.
         */}
-        <div className={`welcome-faces${nameValid ? ' is-shown' : ''}`}>
+        <div className={`welcome-faces${step === 'who' && nameValid ? ' is-shown' : ''}`}>
           <p className="welcome-label" id="welcome-faces-label">
             Pick a picture
           </p>
@@ -503,6 +524,7 @@ export default function WelcomeExperience({ ready, needsName, needsUnlock, locke
                   aria-label={one.name}
                   title={one.name}
                   className={`welcome-face-pick${chosen ? ' is-chosen' : ''}`}
+                  data-pattern={one.pattern}
                   style={{ ...avatarStyle(one.id), ['--at' as string]: String(at) }}
                   tabIndex={chosen ? 0 : -1}
                   onClick={() => setPickedAvatar(one.id)}
@@ -517,7 +539,10 @@ export default function WelcomeExperience({ ready, needsName, needsUnlock, locke
                     const next = row?.children[(at + step + AVATARS.length) % AVATARS.length]
                     if (next instanceof HTMLElement) next.focus()
                   }}
-                />
+                >
+                  <span className="welcome-face-rim" />
+                  {chosen && <span className="welcome-face-tick" />}
+                </button>
               )
             })}
           </div>
@@ -525,11 +550,11 @@ export default function WelcomeExperience({ ready, needsName, needsUnlock, locke
         </div>
 
         {/*
-          The password, on the same screen rather than a step after it.
-          The fields appear once there is a name, so the screen opens as the one question it always was and grows into
-          the second only when the first is answered.
+          The password, which is the second screen.
+          It was below the row of pictures on one tall screen, and on a laptop that put the one thing somebody must
+          actually read off the bottom of the window. Two short screens, neither of which scrolls.
         */}
-        <div className={`welcome-secure${nameValid ? ' is-shown' : ''}`}>
+        <div className={`welcome-secure${step === 'secret' ? ' is-shown' : ''}`}>
           <label htmlFor="welcome-password" className="welcome-label">
             Create a password
           </label>
@@ -610,10 +635,19 @@ export default function WelcomeExperience({ ready, needsName, needsUnlock, locke
           </p>
         </div>
 
-        <button type="submit" className="welcome-continue" disabled={!valid || phase === 'saving'}>
-          {nameValid ? 'Create Account' : 'Continue'}
+        <button
+          type="submit"
+          className="welcome-continue"
+          disabled={step === 'who' ? !nameValid : !valid || phase === 'saving'}
+        >
+          {step === 'who' ? 'Continue' : 'Create Account'}
         </button>
-        <p className={`welcome-hint${valid ? ' is-shown' : ''}`} aria-hidden="true">
+        {step === 'secret' && (
+          <button type="button" className="welcome-secondary" onClick={() => setStep('who')}>
+            Back
+          </button>
+        )}
+        <p className={`welcome-hint${(step === 'who' ? nameValid : valid) ? ' is-shown' : ''}`} aria-hidden="true">
           Press Enter to continue
         </p>
       </form>
