@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { IpcRendererEvent } from 'electron'
-import type { NxtorbisApi, ResearchRunView, StreamEvent } from '../shared/types'
+import type { NxtorbisApi, ResearchRunView, StreamEvent, VisualArrival } from '../shared/types'
 
 const api: NxtorbisApi = {
   getSettings: () => ipcRenderer.invoke('settings:get'),
@@ -269,6 +269,43 @@ const api: NxtorbisApi = {
   notificationAct: (id: string, action: string) => ipcRenderer.invoke('notifications:do', 'act', id, action),
   /** What the window is showing, so Orbis does not announce what is already in front of somebody. */
   notificationWatching: (what: string | null) => ipcRenderer.invoke('notifications:do', 'watching', what),
+  /**
+   * Orbis Music, through its one channel.
+   *
+   * `op` names what to do, and everything is checked on the other side. Nothing here can name a file: adding
+   * music opens the operating system's own picker, and the only other thing that touches a disk takes a track id.
+   */
+  music: (op: string, a?: unknown, b?: unknown, c?: unknown) => ipcRenderer.invoke('music:do', op, a, b, c),
+  /**
+   * Ambient Intelligence: what Orbis has worked out somebody is doing.
+   *
+   * Reading only, from the window's point of view -- nothing here records activity. Activity comes off the event
+   * bus in the main process, so a renderer cannot write a row into somebody's history.
+   */
+  ambient: (op: string, a?: unknown, b?: unknown) => ipcRenderer.invoke('ambient:do', op, a, b),
+  /** Orbis Courses: one channel, named operations. See `src/main/courses/ipc.ts` for the list. */
+  courses: (op: string, a?: unknown, b?: unknown, c?: unknown) => ipcRenderer.invoke('courses:do', op, a, b, c),
+  native: (op: string, a?: unknown, b?: unknown, c?: unknown) => ipcRenderer.invoke('native:do', op, a, b, c),
+  // Told when an app's instance changes, so a card on screen can re-read rather than drift out of date.
+  onNativeChanged: (listen: (instanceId: string) => void) => {
+    const handler = (_event: unknown, instanceId: string): void => listen(instanceId)
+    ipcRenderer.on('native:changed', handler)
+    return () => ipcRenderer.removeListener('native:changed', handler)
+  },
+  onAmbientChanged: (listener: (context: unknown) => void) => subscribe('ambient:changed', listener),
+  onMusicChanged: (listener: (state: unknown) => void) => subscribe('music:changed', listener),
+  onMusicImportProgress: (listener: (progress: unknown) => void) => subscribe('music:import-progress', listener),
+
+  /*
+   * Orbis Student.
+   *
+   * One channel with an operation name, the same way Orbis Music does it: Student has well over a hundred things a
+   * surface can ask for, and a channel each would be a hundred lines in the channel map for one feature.
+   */
+  student: (op: string, a?: unknown, b?: unknown, c?: unknown) => ipcRenderer.invoke('student:do', op, a, b, c),
+  onStudentChanged: (listener: () => void) => subscribe('student:changed', listener),
+  /** Tells Orbis whether this computer asks for less movement; the main process cannot read that setting itself. */
+  systemWantsStillness: (still: boolean) => ipcRenderer.invoke('experience:system-motion', still),
   notificationTest: () => ipcRenderer.invoke('notifications:do', 'test'),
   onNotificationsChanged: (listener: () => void) => subscribe('notifications:changed', listener),
   /** A notification was pressed: the window is told which event it was about and takes the person there. */
@@ -473,6 +510,39 @@ const api: NxtorbisApi = {
     ipcRenderer.on('chromium:hide', listener)
     return () => ipcRenderer.removeListener('chromium:hide', listener)
   },
+  /**
+   * The native menu, and "Ask Orion" from a page.
+   *
+   * All three of these were already being sent by the main process and listened for by nothing: File > New Chat did
+   * nothing, Help > About Orbis did nothing, and the page-side "Ask Orion" handed its question to a channel with no
+   * other end. Wired at both ends now.
+   */
+  onMenuNewChat: (listener: () => void) => {
+    const on = (): void => listener()
+    ipcRenderer.on('menu:new-chat', on)
+    return () => ipcRenderer.removeListener('menu:new-chat', on)
+  },
+  onMenuAbout: (listener: () => void) => {
+    const on = (): void => listener()
+    ipcRenderer.on('menu:about', on)
+    return () => ipcRenderer.removeListener('menu:about', on)
+  },
+  onChatAsk: (listener: (text: string) => void) => {
+    const on = (_e: unknown, text: string): void => listener(typeof text === 'string' ? text : '')
+    ipcRenderer.on('chat:ask', on)
+    return () => ipcRenderer.removeListener('chat:ask', on)
+  },
+  /**
+   * A Visual Search arriving from the browser.
+   *
+   * Somebody selected something on a page, asked Orion about it, and pressed either "Continue in chat" or a
+   * laboratory button. The selection comes with it as a picture, because that is what the conversation is about.
+   */
+  onVisualArrived: (listener: (arrival: VisualArrival) => void) => {
+    const on = (_e: unknown, arrival: VisualArrival): void => listener(arrival)
+    ipcRenderer.on('visual:arrived', on)
+    return () => ipcRenderer.removeListener('visual:arrived', on)
+  },
   onChromiumClosed: (callback: () => void) => {
     const listener = (): void => callback()
     ipcRenderer.on('chromium:closed', listener)
@@ -513,6 +583,19 @@ const api: NxtorbisApi = {
   getControlCapabilities: (filter) => ipcRenderer.invoke('control:capabilities', filter),
   getControlState: (parts) => ipcRenderer.invoke('control:state', parts),
   executeControl: (command) => ipcRenderer.invoke('control:execute', command),
+  // Running code. The address and key live in settings; nothing here can point the runner anywhere.
+  // The research panels in the ported Physics Studio ask Orion a question and read the answer whole.
+  physicsAsk: (prompt: string, schema: string | null) => ipcRenderer.invoke('physics:ask', prompt, schema),
+  /** Asks for a quiz about something. Comes back checked, or with a reason it was refused. */
+  writeQuiz: (asked: { about: string; count: number; difficulty: 'easy' | 'ordinary' | 'hard'; source?: string; from?: string }) =>
+    ipcRenderer.invoke('quiz:write', asked),
+  /** The same question with a picture of the simulation attached, for things the numbers do not say. */
+  physicsLook: (prompt: string, area: { x: number; y: number; width: number; height: number }) =>
+    ipcRenderer.invoke('physics:look', prompt, area),
+  executionLanguages: () => ipcRenderer.invoke('execution:languages'),
+  executionStarter: (language: string) => ipcRenderer.invoke('execution:starter', language),
+  executionReady: () => ipcRenderer.invoke('execution:ready'),
+  runCode: (request: { language: string; source: string; stdin: string; predictOnly?: boolean }) => ipcRenderer.invoke('execution:run', request),
   runControlPlan: (plan, source) => ipcRenderer.invoke('control:run-plan', plan, source),
   controlRun: (id, action) => ipcRenderer.invoke('control:run-control', id, action),
   listControlRuns: () => ipcRenderer.invoke('control:runs'),

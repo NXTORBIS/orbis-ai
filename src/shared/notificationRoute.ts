@@ -5,7 +5,7 @@ import type { SettingsSectionId } from './settingsSections.ts'
  * about where things are, and that must stay testable without React anywhere near it. The window's own `FeatureId`
  * is checked against this list by a test, so the two cannot drift apart silently.
  */
-export type WindowFeature = 'create' | 'pages' | 'markets' | 'whiteboard' | 'clipboard' | 'workspaces' | 'schedules' | 'notes'
+export type WindowFeature = 'create' | 'pages' | 'markets' | 'whiteboard' | 'clipboard' | 'workspaces' | 'schedules' | 'notes' | 'student'
 
 /**
  * Where pressing a notification takes you.
@@ -79,6 +79,18 @@ export function destinationFor(event: string, subject: Readonly<Record<string, s
     case 'browser':
     case 'download':
       return { kind: 'browser' }
+
+    /*
+     * Orbis Student.
+     *
+     * `focus.*` is a study session -- still running, needing a decision, or finished. `study.due` is something ready
+     * to come back round. All three are the Student screen, and all three used to land nowhere: the catalogue
+     * published them, the window came forward, and pressing the notification did nothing at all. A notification that
+     * interrupts somebody and then refuses to go anywhere is worse than no notification.
+     */
+    case 'focus':
+    case 'study':
+      return { kind: 'feature', id: 'student', focus }
 
     case 'security':
       return { kind: 'settings', section: 'security' }

@@ -14,6 +14,8 @@ import { createPersonalHandlers } from './personal.ts'
 import { createRecallHandlers, type RecallHelperDeps } from './recall.ts'
 import { createScheduleHandlers, type SchedulesHelperDeps } from './schedules.ts'
 import { createSecretsHandlers } from './secrets.ts'
+import { createStudentHandlers } from './student.ts'
+import type { StudentHelperDeps } from './student.ts'
 import { createTabLockHandlers } from './tabLock.ts'
 import type { TabLockDeps } from './tabLock.ts'
 import { createMarketsHandlers } from './markets.ts'
@@ -36,13 +38,14 @@ import { createBrowserControlHandlers } from './browserControl.ts'
 import { createBrowserTaskHandlers } from './browser/tasks.ts'
 import { createOrionHandlers } from './orion.ts'
 import { gatherContext } from '../main/context/engine.ts'
-import { capabilityProvider, eventsProvider, pageProvider, tabsProvider, timeProvider } from '../main/context/providers.ts'
+import { ambientProvider, capabilityProvider, eventsProvider, pageProvider, tabsProvider, timeProvider } from '../main/context/providers.ts'
 import { bus } from '../main/eventBus.ts'
 import { createMemoryHandlers } from './memory.ts'
 import { createSkillHandlers } from './skills.ts'
 import { createTrayHandlers } from './tray.ts'
 import { createSearchPageHandlers } from './searchPage.ts'
 import { createOrbHandlers } from './orb/run.ts'
+import { createVisualHandlers } from './visual.ts'
 import { WidgetFeeds } from '../main/widgetFeeds.ts'
 import { TrayStore } from '../main/personal/tray.ts'
 import { createVoiceHandlers, type VoiceDeps } from './voice.ts'
@@ -50,6 +53,7 @@ import type { SkillManager } from '../main/skillManager.ts'
 import type { BrowserHost } from './browser/host.ts'
 import type { PanelControl } from './browserControl.ts'
 import { createPanelStoreHandlers } from './panelStores.ts'
+import { createMusicHandlers, type MusicPort } from './music.ts'
 import { createOmniboxSuggestionHandlers } from './omniboxSuggestions.ts'
 import type { PanelStores } from './panelStores.ts'
 import { HelperError } from './server.ts'
@@ -94,6 +98,21 @@ export interface HandlerDeps {
    * other Orbis page. Absent when Orbis has no tab passwords yet, in which case the channels simply are not there.
    */
   tabLock?: () => TabLockDeps | null | undefined
+  /**
+   * What Orbis has worked out somebody is working on.
+   *
+   * Read at call time and allowed to be absent, like everything else here: with no Ambient Intelligence the
+   * Context Engine simply assembles one source fewer, which is a gap rather than a failure.
+   */
+  ambient?: () => { forOrion(): Promise<{ text: string; label: string } | null> } | null | undefined
+  /**
+   * Orbis Student, for the browser.
+   *
+   * A short list on purpose: what is happening, keep this, start, stop. Nothing that reads the learning record and
+   * nothing that can loosen a session's rules. Absent when Orbis is not running, and the browser then says so
+   * instead of offering a button that quietly does nothing.
+   */
+  student?: () => StudentHelperDeps | null | undefined
   /**
    * Markets, for the strip along the bottom of the browser.
    *
@@ -203,7 +222,23 @@ export interface HandlerDeps {
    * time. A store that is missing answers its channels with "not available" and nothing else.
    */
   stores?: () => PanelStores | null | undefined
+  /** Orbis Music, lent at call time. Absent when the Orbis window is not running. */
+  music?: () => MusicPort | null | undefined
   profileId?: string
+  /**
+   * The Orbis window, for the two Visual Search actions only it can do: carry a selection into the conversation, and
+   * open a laboratory with what was read out of a picture. Absent when the window is not running, and those two are
+   * then not offered at all rather than offered and failing.
+   */
+  /** Whether the person has Visual Search turned on. Absent outside Orbis, where it is treated as on. */
+  visualOn?: () => Promise<boolean>
+  visualWindow?: () =>
+    | {
+        toChat(input: { image: string; question: string; answer: string; title: string; page?: { title?: string; url?: string } }): Promise<void>
+        toLab(input: { appId: string; data: Record<string, unknown>; title: string }): Promise<boolean>
+      }
+    | null
+    | undefined
   adblock?: { extensionDir: string; listsDir: string; bundledDir: string }
   /**
    * How the built-in Orbis panel reaches the ad blocker's worker (a component of the browser, not reachable from a chrome:// page).
@@ -306,6 +341,7 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
       : {}),
     ...(deps.secrets ? createSecretsHandlers(deps.secrets) : {}),
     ...(deps.tabLock ? createTabLockHandlers(deps.tabLock) : {}),
+    ...(deps.student ? createStudentHandlers(deps.student) : {}),
     ...(deps.markets ? createMarketsHandlers(deps.markets) : {}),
     ...(deps.widgets ? createWidgetHandlers(deps.widgets) : {}),
     ...(deps.workflows ? createWorkflowHandlers(deps.workflows) : {}),
@@ -349,7 +385,15 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
             const control = () => (host && host.alive ? host.control : null)
             return gatherContext(
               { text: request.text, ...(deps.profileId ? { profileId: deps.profileId } : {}) },
-              [timeProvider(), pageProvider(control), tabsProvider(control), capabilityProvider(control), eventsProvider(bus)],
+              [
+                timeProvider(),
+                pageProvider(control),
+                tabsProvider(control),
+                capabilityProvider(control),
+                eventsProvider(bus),
+                // What all of the above is about, which is the one thing none of them can say.
+                ambientProvider(() => deps.ambient?.() ?? null)
+              ],
               { signal }
             )
           }
@@ -400,6 +444,9 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
       ? createBrowserControlHandlers(() => deps.browserControl?.() ?? deps.browser?.()?.control ?? null)
       : {}),
     ...(deps.stores ? createPanelStoreHandlers(deps.stores) : {}),
+    // Orbis Music, for the browser’s panel, its new-tab page and its mini-player. With the window closed each of
+    // these says so rather than answering with an empty library.
+    ...createMusicHandlers(() => deps.music?.()),
     // The Orb's control loop. It coordinates the systems above rather than repeating any of them: actions go through
     // the Browser Control Layer, questions through the same chat Auto Mode picks a model for, and everything else
     // through the channels already in this object.
@@ -448,6 +495,68 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
           }
         })
       : {}),
+    /*
+     * Orbis Visual Search: hold Ctrl, drag over anything on a page, ask Orion about it.
+     *
+     * Assembled from the channels already in this object rather than given its own anything. The picture goes to
+     * `chat:send` with the vision model named, a search goes through the Browser Control Layer, keeping it goes to
+     * the real Notes, and the two actions that need the window are handed to the window. What Visual Search can do at
+     * any moment is whichever of those are actually present, which is why `visual:can` is asked every time instead of
+     * being decided here.
+     */
+    ...createVisualHandlers(() => ({
+      // Read every time rather than cached: the person may turn it off while the browser is open, and the next
+      // selection must then find the gesture gone rather than find a button that refuses.
+      on: async () => (deps.visualOn ? deps.visualOn() : Promise.resolve(true)),
+      canSee: () => (deps.mistralKeys ?? []).length > 0,
+      ask: async (input, on, signal) => {
+        await handlers['chat:send'](
+          [
+            {
+              webSearch: false,
+              // Named, because left to the ordinary choice this went to the text service, where nothing can see, and
+              // the picture was dropped on the way out rather than refused.
+              model: input.model,
+              messages: [
+                {
+                  role: 'user',
+                  content: input.prompt,
+                  attachments: [{ name: 'selection.png', type: 'image', content: input.image, mimeType: 'image/png' }]
+                }
+              ]
+            }
+          ],
+          {
+            emit: (event: StreamEvent) => {
+              if (event.type === 'delta' && typeof event.content === 'string') on.chunk(event.content)
+              else if (event.type === 'status' && typeof event.message === 'string') on.status(event.message)
+            },
+            signal
+          }
+        )
+      },
+      browser: () => {
+        // The one gate: without the control layer there is no `browser:do`, so searching and opening are not offered.
+        if (!Object.prototype.hasOwnProperty.call(handlers, 'browser:do')) return null
+        const act = async (action: string, args: Record<string, unknown>): Promise<void> => {
+          const reply = (await handlers['browser:do']([action, args], {} as never)) as { ok?: boolean; message?: string } | undefined
+          if (reply && reply.ok === false) throw new HelperError('unavailable', reply.message ?? 'The browser would not do that.')
+        }
+        return {
+          search: (query) => act('search', { query }),
+          open: (url) => act('open', { url })
+        }
+      },
+      notes: () => {
+        if (!Object.prototype.hasOwnProperty.call(handlers, 'notes:create')) return null
+        return {
+          create: async (note) => {
+            await handlers['notes:create']([{ title: note.title, body: note.body, tags: [] }], {} as never)
+          }
+        }
+      },
+      window: () => deps.visualWindow?.() ?? null
+    })),
     // Voice, skills and memory: three things the Orb and the Command Center offer, which until now existed only in the
     // Electron app. None of them is a new system -- each is the same code the app runs -- but the browser could not
     // reach any of them, so the buttons for them led nowhere. These are the ways in.

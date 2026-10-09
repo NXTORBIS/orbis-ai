@@ -84,6 +84,8 @@ export interface BrowserManagerOptions {
   secrets?: HandlerDeps['secrets']
   /** Tab Lock, for the browser's own lock surface: it asks Orbis whether a password is right. */
   tabLockHelper?: HandlerDeps['tabLock']
+  /** Orbis Student, for the browser: what is happening, keep this, start, stop. Nothing that reads the learning record. */
+  student?: HandlerDeps['student']
   /** Markets, for the strip along the bottom of the browser. */
   marketsHelper?: HandlerDeps['markets']
   /** The widgets on the start page: the board, and what each widget shows. */
@@ -107,12 +109,18 @@ export interface BrowserManagerOptions {
   conversations?: HandlerDeps['conversations']
   /** The app's own stores behind the sidebar's saved pages, screenshots, clipboard, reminders, whiteboard, workspaces and sources rows. */
   stores?: HandlerDeps['stores']
+  /** Orbis Music: the library and the player, for the panel, the new tab page and the mini-player. */
+  music?: HandlerDeps['music']
   /** How this profile arranged the sidebar (the app's own store), for the sidebar in the built-in Orbis pages. */
   sidebar?: HandlerDeps['sidebar']
   /** The name the person gave themselves in the app, so the browser names them the same way. */
   identity?: HandlerDeps['identity']
   /** Put the browser away and show the chat: what the browser's own Chat button asks for. */
   showChat?: HandlerDeps['showChat']
+  /** Whether the person has Orbis Visual Search turned on. */
+  visualOn?: HandlerDeps['visualOn']
+  /** The window, for the two Visual Search actions only it can do: the conversation, and a laboratory. */
+  visualWindow?: HandlerDeps['visualWindow']
   /** The things this person has made, for the "Made in Orbis" group on the browser's search page. */
   artifacts?: HandlerDeps['artifacts']
   /** Whether this installation has seen the browser's first-launch introduction, and how to record that it has. */
@@ -220,6 +228,7 @@ export class BrowserManager {
         dataDir: this.o.personalDir(profileId),
         secrets: this.o.secrets,
         tabLock: this.o.tabLockHelper,
+        student: this.o.student,
         markets: this.o.marketsHelper,
         widgets: this.o.widgets,
         workflows: this.o.workflows,
@@ -235,9 +244,12 @@ export class BrowserManager {
         sidebar: this.o.sidebar,
         identity: this.o.identity,
         showChat: this.o.showChat,
+        visualOn: this.o.visualOn,
+        visualWindow: this.o.visualWindow,
         artifacts: this.o.artifacts,
         intro: this.o.intro,
         stores: this.o.stores,
+        music: this.o.music,
         browserControl: () => this.o.control ?? this.active?.service.control,
         /**
          * The browser itself, for the parts of Orbis that need more than the control layer.

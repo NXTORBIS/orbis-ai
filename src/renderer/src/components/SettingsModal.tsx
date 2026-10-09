@@ -14,6 +14,7 @@ import {
 
 const OfflineGamesSettings = lazy(() => import('./OfflineGamesSettings'))
 const NotificationSettings = lazy(() => import('./NotificationSettings'))
+const AmbientSettings = lazy(() => import('./AmbientSettings'))
 // A megabyte of licence text: read only when someone asks to see it.
 const NoticesPanel = lazy(() => import('./NoticesPanel'))
 const UpdateSettings = lazy(() => import('./UpdateSettings'))
@@ -200,7 +201,7 @@ export default function SettingsModal({ settings, onUpdate, onClose, section }: 
 
   return (
     <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && close()}>
-      <div className="modal glass st-modal" ref={settingsRef} role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <div className="modal glass set-modal" ref={settingsRef} role="dialog" aria-modal="true" aria-labelledby="settings-title">
         <div className="modal-header">
           <h2 id="settings-title">Settings</h2>
           <button className="icon-btn" title="Close" onClick={close}>
@@ -208,10 +209,10 @@ export default function SettingsModal({ settings, onUpdate, onClose, section }: 
           </button>
         </div>
 
-        <div className="st-split">
+        <div className="set-split">
           {/* Where everything is. Eight names instead of thirty-one blocks in one scroll. */}
-          <nav className="st-nav" aria-label="Settings sections">
-            <div className="st-search">
+          <nav className="set-nav" aria-label="Settings sections">
+            <div className="set-search">
               <Search size={13} />
               <input
                 ref={search}
@@ -226,7 +227,7 @@ export default function SettingsModal({ settings, onUpdate, onClose, section }: 
               />
             </div>
             {shown.length === 0 ? (
-              <p className="st-none">Nothing matches “{query.trim()}”.</p>
+              <p className="set-none">Nothing matches “{query.trim()}”.</p>
             ) : (
               <ul>
                 {shown.map((one) => {
@@ -249,8 +250,8 @@ export default function SettingsModal({ settings, onUpdate, onClose, section }: 
             )}
           </nav>
 
-          <div className="modal-body st-body" ref={body}>
-            <header className="st-head">
+          <div className="modal-body set-body" ref={body}>
+            <header className="set-head">
               <h3>{current.label}</h3>
               <p>{current.blurb}</p>
             </header>
@@ -314,6 +315,19 @@ export default function SettingsModal({ settings, onUpdate, onClose, section }: 
                   </div>
                   <Suspense fallback={null}>
                     <ControlSwitches />
+                  </Suspense>
+                </section>
+
+                <section className="setting">
+                  <div className="setting-label">
+                    <h3>What you are working on</h3>
+                    <p>
+                      Orbis can notice what you open and work out the subject, so Orion already knows what "this"
+                      means and search knows what matters. It all stays on this computer.
+                    </p>
+                  </div>
+                  <Suspense fallback={null}>
+                    <AmbientSettings />
                   </Suspense>
                 </section>
 
@@ -421,6 +435,17 @@ export default function SettingsModal({ settings, onUpdate, onClose, section }: 
                     <p>As you type in the address bar, ask the search engine and Orion for likely searches. Sends what you type.</p>
                   </div>
                   <Toggle checked={settings.searchSuggestions} onChange={(v) => void onUpdate({ searchSuggestions: v })} />
+                </section>
+
+                <section className="setting row">
+                  <div className="setting-label">
+                    <h3>Visual Search</h3>
+                    <p>
+                      Hold Ctrl and drag over anything on a page to ask Orion about what you selected. The part you select is sent to the service that can
+                      look at an image; nothing is sent until you ask.
+                    </p>
+                  </div>
+                  <Toggle checked={settings.visualSearch !== false} onChange={(v) => void onUpdate({ visualSearch: v })} />
                 </section>
 
                 <section className="setting row">

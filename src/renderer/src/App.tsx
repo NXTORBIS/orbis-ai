@@ -1,5 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { Attachment, ChatMessage, ChatRequest, Conversation, Settings, SettingsUpdate, StreamEvent } from '../../shared/types'
+import { ASK_EVENT } from './components/native/AskBar'
+import type { Attachment, ChatMessage, ChatRequest, Conversation, Settings, SettingsUpdate, StreamEvent, VisualArrival } from '../../shared/types'
 import { isRefusal } from '../../shared/account'
 import { IMAGE_GEN_STATUS, isArtifactStatus } from '../../shared/types'
 import { themeBase } from '../../shared/themes'
@@ -8,7 +9,10 @@ import { AUTO_MODEL } from '../../shared/modelRoute'
 import { automationActive } from '../../shared/automation'
 import { PUSH_TO_TALK_EVENT } from '../../shared/voiceInput'
 import { copyText, newId, titleFromMessage } from './lib/utils'
+import { quizWanted, NOTHING_TO_GO_ON } from '../../shared/quiz/ask'
+import type { ChatQuiz } from '../../shared/types'
 import ChatHeader from './components/ChatHeader'
+import ContextChip from './components/ContextChip'
 import ChatView from './components/ChatView'
 import BrowserView from './components/BrowserView'
 import MarketStrip from './components/MarketStrip'
@@ -20,6 +24,7 @@ import UnfinishedRuns from './components/UnfinishedRuns'
 import type { FeatureId } from './components/Sidebar'
 import { DEFAULT_SETTINGS_SECTION, type SettingsSectionId } from '../../shared/settingsSections'
 import { destinationFor } from '../../shared/notificationRoute'
+import { watchingGroup } from '../../shared/watching'
 import { dropBranch, parkTail, switchToBranch } from '../../shared/conversationBranch'
 // Orbis's own screens. Each was finished and unreachable: nothing imported them, so no amount of looking would have
 // found them. They are loaded lazily because only one is ever open and most sessions open none.
@@ -27,9 +32,12 @@ import { dropBranch, parkTail, switchToBranch } from '../../shared/conversationB
 const MarketsView = lazy(() => import('./components/MarketsView'))
 const PulsarSetup = lazy(() => import('./components/PulsarSetup'))
 const WhiteboardView = lazy(() => import('./components/WhiteboardView'))
+const StudentView = lazy(() => import('./components/student/StudentView'))
 const PagesView = lazy(() => import('./components/PagesView'))
 const CreateView = lazy(() => import('./components/CreateView'))
 const ClipboardView = lazy(() => import('./components/ClipboardView'))
+const CoursesView = lazy(() => import('./components/courses/CoursesView'))
+const LabsView = lazy(() => import('./components/labs/LabsView'))
 const WorkspacesView = lazy(() => import('./components/WorkspacesView'))
 const SchedulesView = lazy(() => import('./components/SchedulesView'))
 const MeetingView = lazy(() => import('./components/MeetingView'))
@@ -210,6 +218,67 @@ export default function App(): React.JSX.Element {
    * Where each one goes is decided in one table, from the event name and the ids, so nothing a notification says can
    * steer the window; and an event with no real screen behind it says so rather than pretending.
    */
+  /**
+   * Tells Orbis what is on screen, so it does not announce something you are already looking at.
+   *
+   * The rule that holds those notifications back was written and tested long ago, but nothing ever sent this, so it
+   * never once ran: a download finishing while the downloads list was open still raised a notification about it.
+   */
+  /*
+   * A question asked from inside a lesson.
+   *
+   * The lesson has already had its context assembled in the main process, with the course material fenced, so
+   * all that arrives here is a finished prompt. The alternative -- threading a send function down through four
+   * screens -- would have been four more props for one feature.
+   */
+  /*
+   * A lab opened full page covers the conversation, so its own ask bar announces what was typed and this sends it.
+   *
+   * The alternative was threading `send` down through the message list, the message, the card and into the bar —
+   * four components that have no other reason to know how a message is sent. One listener here is the smaller
+   * coupling, and it is the shell's job to send things.
+   */
+  useEffect(() => {
+    const onAsk = (event: Event): void => {
+      const asked = (event as CustomEvent<{ text?: string }>).detail?.text
+      if (typeof asked !== 'string' || asked.trim() === '') return
+      send(asked.trim(), [])
+    }
+    window.addEventListener(ASK_EVENT, onAsk)
+    return () => window.removeEventListener(ASK_EVENT, onAsk)
+  })
+
+  useEffect(() => {
+    const onAsk = (event: Event): void => {
+      const detail = (event as CustomEvent<{ prompt?: string }>).detail
+      if (!detail?.prompt) return
+      closeFeature()
+      sendRef.current(detail.prompt, [])
+    }
+    window.addEventListener('orbis:ask-orion', onAsk)
+    return () => window.removeEventListener('orbis:ask-orion', onAsk)
+  }, [])
+
+  useEffect(() => {
+    void window.api.notificationWatching(watchingGroup(feature))
+  }, [feature])
+
+  /**
+   * Tells Orbis whether this computer asks for less movement.
+   *
+   * Only a window can read that setting, so the main process was guessing -- and guessing false -- which left the
+   * browser's own pages animating for somebody who had asked them not to.
+   */
+  useEffect(() => {
+    const asks = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const tell = (): void => {
+      void window.api.systemWantsStillness(asks.matches).catch(() => undefined)
+    }
+    tell()
+    asks.addEventListener('change', tell)
+    return () => asks.removeEventListener('change', tell)
+  }, [])
+
   useEffect(() => {
     return window.api.onNotificationOpen((what) => {
       const where = destinationFor(what.event, what.subject)
@@ -604,6 +673,16 @@ export default function App(): React.JSX.Element {
             artifactChanged(artifact.ref.artifactId)
             break
           }
+          case 'app': {
+            // A pointer, exactly like an artifact: the card reads the live app. One card per instance, so a reply
+            // that mentions the same app twice does not stack.
+            const { app } = event
+            patchAssistant((m) => ({
+              ...m,
+              apps: [...(m.apps ?? []).filter((one) => one.instanceId !== app.instanceId), app].slice(-6)
+            }))
+            break
+          }
           case 'done':
             finish()
             void requestSuggestions(conversationId, assistant.id)
@@ -749,13 +828,202 @@ export default function App(): React.JSX.Element {
       commitConversations(existing ? conversationsRef.current.map((c) => (c.id === updated.id ? updated : c)) : [updated, ...conversationsRef.current])
       setActiveId(updated.id)
       persist(updated.id)
+
+      // "Quiz me on X" is answered with a quiz rather than with words. A quiz *document* is not intercepted: the
+      // Creation Engine makes documents, and this would hand back a card nobody can print.
+      const wantsQuiz = attachments.length === 0 && !browserTask ? quizWanted(content) : null
+      if (wantsQuiz !== null && wantsQuiz.kind === 'card') {
+        void offerQuiz(updated.id, wantsQuiz, conversation.messages)
+        return true
+      }
+
       startGeneration(updated, history)
       if (!existing && content) void autoTitle(updated.id, content, updated.title)
       return true
     },
     [activeId, autoTitle, commitConversations, commitQueues, draft, handleAutomationMessage, notify, persist, startGeneration]
   )
+
+  /** A reply with no model behind it: a quiz, or the reason there is not one. */
+  const addReply = useCallback(
+    (conversationId: string, content: string, quiz?: ChatQuiz) => {
+      const message: ChatMessage = {
+        id: newId(),
+        role: 'assistant',
+        content,
+        createdAt: Date.now(),
+        ...(quiz ? { quiz } : {})
+      }
+      updateConversation(conversationId, (c) => ({ ...c, messages: [...c.messages, message], updatedAt: Date.now() }))
+      persist(conversationId)
+    },
+    [persist, updateConversation]
+  )
+
+  /**
+   * Asks for a quiz and puts it in the conversation.
+   *
+   * The questions are written and checked in main, so nothing unchecked reaches the screen. A refusal is shown as
+   * an ordinary reply saying what went wrong, because "Orion could not write a quiz that held up" is a real
+   * answer and an empty card is not.
+   *
+   * "Quiz me on this" has no subject of its own, so the last reply with words in it is handed over as the text
+   * the questions must come from -- and the card says that is where they came from.
+   */
+  const offerQuiz = useCallback(
+    async (conversationId: string, want: NonNullable<ReturnType<typeof quizWanted>>, before: ChatMessage[]) => {
+      const lastReply = [...before].reverse().find((one) => one.role === 'assistant' && one.content.trim().length > 40)
+      const source = want.pointsBack ? (lastReply?.content ?? '') : ''
+      if (want.about === '' && source === '') {
+        addReply(conversationId, NOTHING_TO_GO_ON)
+        return
+      }
+
+      const made = (await window.api
+        .writeQuiz({
+          about: want.about,
+          count: want.count,
+          difficulty: want.difficulty,
+          ...(source === '' ? {} : { source }),
+          from: want.about === '' ? 'what we were just talking about' : want.about
+        })
+        .catch((error: unknown) => ({ problem: 'The quiz could not be written.', fix: error instanceof Error ? error.message : String(error), failed: 'threw' }))) as
+        | { quiz?: ChatQuiz['quiz'] }
+        | { problem: string; fix: string }
+
+      if (!('quiz' in made) || made.quiz === undefined) {
+        const why = 'problem' in made ? `${made.problem} ${made.fix}`.trim() : 'The quiz could not be written.'
+        addReply(conversationId, why)
+        return
+      }
+      addReply(conversationId, '', { quiz: made.quiz, answers: [] })
+    },
+    [addReply]
+  )
+
+  /** How far through a quiz somebody is, saved with the conversation so it survives a restart. */
+  const setQuiz = useCallback(
+    (conversationId: string, messageId: string, next: ChatQuiz) => {
+      updateConversation(conversationId, (c) => ({
+        ...c,
+        messages: c.messages.map((m) => (m.id === messageId ? { ...m, quiz: next } : m))
+      }))
+      persist(conversationId)
+    },
+    [persist, updateConversation]
+  )
+
+  /**
+   * A Native App opened from Search Labs, into the conversation that is open.
+   *
+   * The app belongs to the conversation, not to the composer: the message carries the reference, so the chat finds the
+   * card again after a reload and the app is part of what was said rather than a panel beside it. If there is no
+   * conversation yet, one is started — opening a laboratory is a thing worth keeping.
+   *
+   * The reference is a pointer. Nothing about the app's state goes into the message.
+   */
+  const openNativeApp = useCallback(
+    (appId: string) => {
+      void (async () => {
+        const existing = activeId ? conversationsRef.current.find((c) => c.id === activeId) : undefined
+        const now = Date.now()
+        const conversation: Conversation =
+          existing ?? { id: newId(), title: 'Labs', ...draft, messages: [], createdAt: now, updatedAt: now }
+
+        const made = (await window.api
+          .native('open', { appId, conversationId: conversation.id })
+          .catch(() => null)) as { ok?: boolean; says?: string; reused?: boolean; instance?: { id: string; appVersion: number } } | null
+
+        if (!made?.ok || !made.instance) {
+          notify(made?.says ?? 'That app could not be opened.', 'warn')
+          return
+        }
+        // Already open here: the runtime reused it, so there is no second card to add.
+        if (made.reused) {
+          notify(made.says ?? 'It is already open in this conversation.')
+          return
+        }
+
+        const message: ChatMessage = {
+          id: newId(),
+          role: 'assistant',
+          content: '',
+          createdAt: now,
+          apps: [
+            {
+              appId,
+              instanceId: made.instance.id,
+              act: 'opened',
+              appVersion: made.instance.appVersion,
+              did: [],
+              openedAt: 'expanded'
+            }
+          ]
+        }
+        const updated = { ...conversation, messages: [...conversation.messages, message], updatedAt: now }
+        commitConversations(existing ? conversationsRef.current.map((c) => (c.id === updated.id ? updated : c)) : [updated, ...conversationsRef.current])
+        setActiveId(updated.id)
+        persist(updated.id)
+      })()
+    },
+    [activeId, commitConversations, draft, notify, persist]
+  )
   sendRef.current = send
+
+  /**
+   * A Visual Search arriving from the browser.
+   *
+   * Somebody selected something on a page, Orion looked at it, and they chose to carry on here. Both arrivals land in
+   * the conversation that is open, or start one -- a selection worth asking about twice is worth keeping.
+   *
+   * The selection arrives as a picture and goes in as an image attachment, which is what makes the *next* question
+   * work without reselecting anything: the conversation holds the pixels, so "how much does it cost?" has something
+   * to be about. The answer already given comes with it as the assistant's turn, so the conversation reads as the
+   * one conversation it is rather than restarting from the question.
+   *
+   * Nothing new is built here. This is the same conversation, the same message shape and the same Native App runtime
+   * everything else in Orbis uses.
+   */
+  const visualArrived = useCallback(
+    (arrival: VisualArrival) => {
+      setFeature(null)
+      setBrowserHidden(true)
+      if (arrival.what === 'lab') {
+        if (arrival.appId) openNativeApp(arrival.appId)
+        return
+      }
+      const image = typeof arrival.image === 'string' ? arrival.image : ''
+      const now = Date.now()
+      const existing = activeId ? conversationsRef.current.find((c) => c.id === activeId) : undefined
+      const conversation: Conversation =
+        existing ?? { id: newId(), title: arrival.title || 'From the screen', ...draft, messages: [], createdAt: now, updatedAt: now }
+
+      const where = arrival.page?.title || arrival.page?.url || ''
+      const question = (arrival.question ?? '').trim() || 'What is this?'
+      const asked: ChatMessage = {
+        id: newId(),
+        role: 'user',
+        content: where ? `${question}
+
+(selected on ${where})` : question,
+        createdAt: now,
+        ...(image ? { attachments: [{ name: 'selection.png', content: image, type: 'image' as const, mimeType: 'image/png' }] } : {})
+      }
+      const messages: ChatMessage[] = [asked]
+      const answer = (arrival.answer ?? '').trim()
+      // Only when there is one. An empty assistant turn would read as Orion having said nothing.
+      if (answer !== '') messages.push({ id: newId(), role: 'assistant', content: answer, createdAt: now + 1 })
+
+      const updated = { ...conversation, messages: [...conversation.messages, ...messages], updatedAt: now + 2 }
+      commitConversations(existing ? conversationsRef.current.map((c) => (c.id === updated.id ? updated : c)) : [updated, ...conversationsRef.current])
+      setActiveId(updated.id)
+      persist(updated.id)
+      notify('Brought over from the browser.')
+    },
+    [activeId, commitConversations, draft, notify, openNativeApp, persist]
+  )
+
+  useEffect(() => window.api.onVisualArrived(visualArrived), [visualArrived])
 
   /** Sends a message into an existing chat that isn't replying; used to run queued messages. */
   const pushUserMessage = useCallback(
@@ -1314,6 +1582,33 @@ export default function App(): React.JSX.Element {
           return setFeature('create')
         case 'images':
           return setImagesOpen(true)
+        case 'study':
+          setImagesOpen(false)
+          return setFeature('student')
+        case 'courses':
+          setImagesOpen(false)
+          return setFeature('courses')
+        case 'focus': {
+          /*
+           * `/focus` opens Student; `/focus 25` starts twenty-five minutes there and then.
+           *
+           * A number is the only thing this takes. Anything else opens the screen rather than guessing, because a
+           * session started by mistake is somebody's twenty-five minutes.
+           */
+          setImagesOpen(false)
+          setFeature('student')
+          const minutes = Number(args.trim())
+          if (Number.isFinite(minutes) && minutes >= 1 && minutes <= 600) {
+            void window.api
+              .student('start-focus', { minutes: Math.round(minutes), title: 'Focus' })
+              .then((out) => {
+                const said = out as { ok?: boolean; why?: string } | null
+                if (said && said.ok === false) notify(said.why ?? 'That session could not be started.', 'warn')
+              })
+              .catch(() => notify('That session could not be started.', 'warn'))
+          }
+          return
+        }
         case 'browser':
           return toggleBrowser()
         case 'theme':
@@ -1362,7 +1657,15 @@ export default function App(): React.JSX.Element {
         // Named rather than left to the default, so that whichever section Settings happens to open at first can
         // change without quietly changing where this shortcut lands.
         setSettingsAt('account')
-      } else if (key === 'b') {
+      } else if (e.shiftKey && key === 'b') {
+        /*
+         * The browser, which the sidebar has been advertising this chord for all along without anything registering
+         * it. Worse than nothing: `Ctrl+B` below had no shift guard, so pressing what the label said opened the
+         * *sidebar*. A label that does the wrong thing is harder to recover from than one that does nothing.
+         */
+        e.preventDefault()
+        toggleBrowser()
+      } else if (key === 'b' && !e.shiftKey && !e.altKey) {
         e.preventDefault()
         toggleSidebar()
       } else if (key === 'e' && !e.shiftKey && !e.altKey) {
@@ -1373,11 +1676,90 @@ export default function App(): React.JSX.Element {
         // Unused until now; web pages keep their own Ctrl+K (it only reaches the Orbis window).
         e.preventDefault()
         openSearch()
+      } else if (e.shiftKey && key === 'u') {
+        // Student. Ctrl+Shift+F is the browser's find-on-page, so study gets a chord pages do not use.
+        e.preventDefault()
+        setImagesOpen(false)
+        setFeature('student')
       }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [newChat, openSearch, toggleIncognito, toggleSidebar, welcome])
+  }, [newChat, openSearch, toggleBrowser, toggleIncognito, toggleSidebar, welcome])
+
+  /**
+   * The native menu, and a question handed in from outside the chat.
+   *
+   * All three arrive from the main process and all three used to arrive nowhere: `File > New Chat` and
+   * `Help > About Orbis` sent a message the window never listened for, so both menu items did nothing at all, and a
+   * page asking Orion a question handed it to `chat:ask`, which had no other end. Placed here rather than with the
+   * other listeners near the top of this file because it needs `newChat`, which is defined further down.
+   */
+  useEffect(() => {
+    const offNewChat = window.api.onMenuNewChat(() => {
+      closeFeature()
+      newChat()
+    })
+    const offAbout = window.api.onMenuAbout(() => setSettingsOpen('about'))
+    const offAsk = window.api.onChatAsk((text) => {
+      const asked = text.trim()
+      if (asked === '') return
+      closeFeature()
+      setBrowserHidden(true)
+      sendRef.current(asked, [])
+    })
+    return () => {
+      offNewChat()
+      offAbout()
+      offAsk()
+    }
+  }, [closeFeature, newChat])
+
+  /*
+   * Escape closes whatever screen is open, handled once, here.
+   *
+   * It was handled nowhere. Five of the ten screens — Pages, Clipboard, Workspaces, Schedules and Notes — had no
+   * keyboard way out at all, and the other five each claimed Escape for something of their own, so there was no rule
+   * anybody could learn. Pressing it did one of six different things depending on where you happened to be.
+   *
+   * The rule now: Escape means "out of this". A screen that wants it for something else keeps it by calling
+   * `preventDefault`, which is what clearing a search box, cancelling a rename, dropping a selection and stepping
+   * back through a course all do. This runs last and does nothing if any of them claimed it.
+   *
+   * The three guards below are what stop it being annoying rather than useful:
+   *  - a popover, menu or modal is open, so Escape belongs to that;
+   *  - the keyboard is in a text field with something in it, where Escape usually means "undo what I typed";
+   *  - the welcome screen is up, which owns the whole window.
+   */
+  useEffect(() => {
+    const onEscape = (event: KeyboardEvent): void => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return
+      if (welcome !== 'closed') return
+      if (feature === null && !imagesOpen) return
+
+      // Something layered on top owns the key.
+      // Unquoted attribute selectors on purpose. The accessibility guard scans for a quoted role attribute and
+      // reads one inside a string as a tag with no name; unquoted is valid CSS and says the same thing.
+      if (document.querySelector('.popover, .modal, [role=dialog], [role=menu], .na-labs') !== null) return
+
+      const focused = document.activeElement as HTMLElement | null
+      if (focused !== null) {
+        const tag = focused.tagName
+        const typing =
+          tag === 'TEXTAREA' ||
+          (tag === 'INPUT' && !['checkbox', 'radio', 'range', 'button', 'submit'].includes((focused as HTMLInputElement).type)) ||
+          focused.isContentEditable
+        // Only when there is something to clear: an empty box has nothing to undo, so Escape may still mean "out".
+        if (typing && String((focused as HTMLInputElement).value ?? focused.textContent ?? '').length > 0) return
+      }
+
+      event.preventDefault()
+      if (imagesOpen) setImagesOpen(false)
+      else closeFeature()
+    }
+    window.addEventListener('keydown', onEscape)
+    return () => window.removeEventListener('keydown', onEscape)
+  }, [closeFeature, feature, imagesOpen, welcome])
 
   // Push-to-talk: hold Ctrl+Shift+M, speak, let go. Not a new transcription engine — it starts and stops the exact
   // session the chat or Browser Orion microphone button would, and hands the words back to whichever of them it
@@ -1491,9 +1873,24 @@ export default function App(): React.JSX.Element {
             thinking={Boolean(active && streams[active.id])}
             incognito={current.incognito}
             onToggleIncognito={toggleIncognito}
+            // Search Labs moved here from the composer, so the header is what opens a Native App now.
+            onOpenApp={openNativeApp}
             onRename={(title) => active && renameConversation(active.id, title)}
             onShare={() => active && shareConversation(active.id)}
             onDelete={() => active && deleteConversation(active.id)}
+          />
+          {/*
+            * What Orbis has worked out you are doing.
+            *
+            * The whole visible surface of Ambient Intelligence, and absent far more often than present: it draws
+            * nothing at all unless Orbis is confident enough to be useful.
+            */}
+          <ContextChip
+            onAsk={(about) => {
+              // Straight into the chat, the same way every other part of Orbis asks Orion something.
+              closeFeature()
+              sendRef.current(`What should I know about ${about}?`, [])
+            }}
           />
         </SystemBar>
       )}
@@ -1555,10 +1952,13 @@ export default function App(): React.JSX.Element {
             onEdit={(messageId, text) => active && editMessage(active.id, messageId, text)}
             onResend={(messageId) => active && resendFrom(active.id, messageId)}
             onFeedback={(messageId, feedback) => active && setFeedback(active.id, messageId, feedback)}
+            onQuizChange={(messageId, next) => active && setQuiz(active.id, messageId, next)}
+            onQuizRetry={(next) => active && addReply(active.id, '', next)}
             onNotify={notify}
             onImprovePrompt={improvePrompt}
             onNewChat={newChat}
             onSearch={openSearch}
+            onOpenApp={openNativeApp}
             onUseBranch={(branchId) => active && useBranch(active.id, branchId)}
             onForgetBranch={(branchId) => active && forgetBranch(active.id, branchId)}
           />
@@ -1570,6 +1970,25 @@ export default function App(): React.JSX.Element {
               {feature === 'pages' && <PagesView onClose={closeFeature} onNotify={notify} landOn={scheduledPage} />}
               {feature === 'markets' && <MarketsView onClose={closeFeature} onNotify={notify} />}
               {feature === 'whiteboard' && <WhiteboardView onClose={closeFeature} onNotify={notify} />}
+              {/*
+                * Orbis Student.
+                *
+                * Handed the three things it cannot do itself: a way to say something, a way to open a page in the
+                * browser, and a way to put a question to Orion. Everything else it owns.
+                */}
+              {feature === 'student' && (
+                <StudentView
+                  onClose={closeFeature}
+                  onNotify={notify}
+                  onOpenUrl={(url) => openChromium(url, { newTab: true })}
+                  onOpenOrion={(prompt) => {
+                    closeFeature()
+                    sendRef.current(prompt, [])
+                  }}
+                />
+              )}
+              {feature === 'labs' && <LabsView onClose={closeFeature} onNotify={notify} onOpenApp={openNativeApp} />}
+              {feature === 'courses' && <CoursesView onClose={closeFeature} onNotify={notify} onOpenApp={openNativeApp} />}
               {feature === 'clipboard' && <ClipboardView onClose={closeFeature} onNotify={notify} />}
               {feature === 'workspaces' && <WorkspacesView onClose={closeFeature} onNotify={notify} />}
               {feature === 'schedules' && <SchedulesView onClose={closeFeature} onNotify={notify} />}

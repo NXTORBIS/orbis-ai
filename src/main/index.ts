@@ -1,13 +1,15 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, nativeTheme, net, powerMonitor, protocol, shell, Tray } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, nativeTheme, net, powerMonitor, protocol, shell, Tray } from 'electron'
 import type { MenuItemConstructorOptions, OpenDialogOptions, TitleBarOverlayOptions, IpcMainInvokeEvent } from 'electron'
 import { existsSync, promises as fs } from 'node:fs'
 import os from 'node:os'
 import { spawn } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import { basename, dirname, join } from 'node:path'
 import type {
   AutomationState,
   BrowserConfirmation,
   ChatMessage,
+  ChatNativeApp,
   ChatRequest,
   Conversation,
   ImageEditRequest,
@@ -67,7 +69,7 @@ import { PulsarService, LocalVoiceError } from './pulsar/service.ts'
 import type { PulsarDownloadProgress } from '../shared/pulsarModels.ts'
 import { openDefaultAppsSettings, readDefaultBrowser, requestDefaultBrowser } from './defaultBrowser'
 import { checkAudio, describeError, isVoiceModel } from '../shared/voiceInput'
-import { completeDraft, generateTitle, generateWorkflowTitle, predictQueries, requestJson, suggestFollowups } from './suggest'
+import { completeDraft, generateTitle, generateWorkflowTitle, predictQueries, requestJson, requestText, requestVision, suggestFollowups } from './suggest'
 import { WorkflowTitler } from './workflows/titler'
 import { parseWebSuggestions } from '../shared/omnibox'
 import { fetchFavicon } from './favicon'
@@ -134,8 +136,78 @@ let projectFiles: ProjectFiles | null = null
 import { conversationToMarkdown, projectToShare, readSharedProject, shareFilename } from '../shared/portable/share'
 import type { ResearchChange } from '../shared/researchRun'
 
+/** Orbis Music: the library and the player. Built once the profile store exists, so it starts in the right one. */
+let music: MusicHandle | null = null
+/**
+ * Orbis Student.
+ *
+ * Three pieces: the store (one profile's work), the service (the only thing that may settle a session), and the
+ * enforcer (what makes a Focus policy true in the browser rather than merely shown in the interface).
+ */
+let student: StudentService | null = null
+let studentStore: StudentStore | null = null
+let ambient: Ambient | null = null
+let ambientStore: AmbientStore | null = null
+let courses: Courses | null = null
+let coursesStore: CoursesStore | null = null
+let native: Native | null = null
+let nativeStore: NativeStore | null = null
+let nativeOrion: NativeOrion | null = null
+let studentEnforcer: FocusEnforcer | null = null
+
+/*
+ * The scheme Orbis Music plays through, declared before the application is ready -- the only time it can be.
+ *
+ * Audio reaches the hidden player as `orbis-audio://track/<id>`, answered from the library. Declaring the scheme is
+ * what makes it streamable and rangeable. Without it the request answers perfectly well and the audio element still
+ * refuses every file, saying this computer cannot play that kind of audio, however ordinary the file is.
+ */
+MusicPlayer.declareScheme()
+
 /** Research runs that are going now, so the window can hold one, let it go, or change what it is doing. */
 const researchControl = new ResearchControl()
+import { QuitFlush } from './quitFlush'
+import { createMusic, registerMusicIpc } from './music/service'
+import { StudentService } from './student/service'
+import { StudentStore } from './student/store'
+import { registerStudentIpc } from './student/ipc'
+import { Ambient } from './ambient/service'
+import { AmbientStore } from './ambient/store'
+import { registerAmbientIpc } from './ambient/ipc'
+import { Courses } from './courses/service'
+import { CoursesStore } from './courses/store'
+import { registerCoursesIpc } from './courses/ipc'
+import { installBuiltInCourses } from './courses/builtIn'
+import { Native } from './native/service'
+import { NativeStore } from './native/store'
+import { registerNativeIpc } from './native/ipc'
+import { NativeOrion } from './native/orion'
+import { FocusEnforcer } from './student/enforce'
+import type { MusicHandle } from './music/service'
+import { MusicPlayer } from './music/player'
+import { AUDIO_ENDINGS } from '../shared/audioFile'
+import { whyNotOpenable } from '../shared/openableFile'
+/**
+ * Whether the computer itself asks for less movement.
+ *
+ * Electron's main process cannot read that setting, so the window reads it and says. It used to be handed
+ * `shouldUseDarkColors ? false : false` -- false either way -- so somebody who had turned movement down in Windows
+ * still got every animation in the browser's own pages.
+ */
+let systemAsksForStillness = false
+/**
+ * Everything that must be written to disk before Orbis closes.
+ *
+ * Each store registers itself here instead of starting its own unawaited save on `before-quit`, which is what used to
+ * let the process end mid-write. The one listener below holds the close open until they are all done.
+ */
+const quitFlush = new QuitFlush({
+  quit: () => app.quit(),
+  onProblem: (what, err) => console.error(`[quit] ${what} could not be saved`, err)
+})
+app.on('before-quit', (event) => {
+  if (quitFlush.beforeQuit()) event.preventDefault()
+})
 import { SiteProfiles } from './siteProfiles'
 import { activePreset, appearanceVariables, wantsReducedMotion } from '../shared/experience'
 import { presetBackdrop } from '../shared/presets'
@@ -146,6 +218,7 @@ import { registerTabLockIpc } from './tabLock/ipc'
 import { registerProfileLockIpc } from './profileLock/ipc'
 import { registerSecurityCapabilities } from './browserControl/securityCapabilities'
 import { registerMarketCapabilities } from './browserControl/marketCapabilities'
+import { registerMusicCapabilities } from './browserControl/musicCapabilities'
 import { SecurityLog } from './securityLog'
 import { MarketEngine } from './markets/engine'
 import { MarketsStore } from './markets/store'
@@ -189,6 +262,9 @@ import { GeneratedStore } from './pages/generatedStore'
 import { OPERATION_CAPABILITIES } from './pages/service'
 import { FxRates } from './markets/fx'
 import { pushLock } from './chromium/tabLockBridge'
+import { ExecutionService } from './execution/service.ts'
+import { registerExecutionIpc } from './execution/ipc.ts'
+import { registerQuizIpc } from './quiz/ipc.ts'
 import { registerExperienceIpc } from './experience/ipc'
 import type { Profile } from '../shared/profiles'
 import { registerPersonalIpc } from './personal/ipc'
@@ -388,6 +464,46 @@ let browserWindow: Standalone | null = null
  * away what was open. The Orbis window is hidden rather than minimised for the same reason: it comes back exactly as
  * it was, in one step.
  */
+/**
+ * A web address Orbis was asked to open from outside itself.
+ *
+ * Two ways in, and both used to go nowhere. Windows starts Orbis with the link on its command line when Orbis is not
+ * running, and hands it to the already-running Orbis through `second-instance` when it is. Neither was read.
+ *
+ * Held when it arrives before the browser exists, which is the ordinary case on a cold start: the link is remembered
+ * and opened the moment there is a browser to open it in, rather than being lost to a race.
+ */
+let linkWaiting: string | null = null
+
+/** The first plain web address in a command line, or null. Only http and https; anything else is not a link to follow. */
+function linkIn(argv: readonly string[]): string | null {
+  for (const one of argv) {
+    if (typeof one !== 'string' || !/^https?:\/\//i.test(one)) continue
+    try {
+      const parsed = new URL(one)
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') return parsed.toString()
+    } catch {
+      // Not an address. The next argument may be.
+    }
+  }
+  return null
+}
+
+async function openInBrowser(url: string): Promise<void> {
+  if (!chromiumBrowser) {
+    linkWaiting = url
+    return
+  }
+  const done = await chromiumBrowser.open(url, { newTab: true, more: [] }).catch(() => null)
+  if (done?.ok && !embeddedBrowser) setTimeout(() => showBrowserWindow(true), 120)
+}
+
+function openWaitingLink(): void {
+  const url = linkWaiting
+  linkWaiting = null
+  if (url) void openInBrowser(url)
+}
+
 function showBrowserWindow(show: boolean): void {
   if (browserWindow) browserWindow.setVisible(show)
   if (!mainWindow || mainWindow.isDestroyed()) return
@@ -1197,6 +1313,40 @@ ${block}`
           deciding
         ])
         if (wanted === 'stopped' || controller.signal.aborted) return emit({ type: 'aborted' })
+
+        /*
+         * Whether the message wants an interactive app rather than an answer.
+         *
+         * Asked after the artifact decision and before the reply, and deliberately only when the artifact layer did
+         * not claim the message: "draw me a flowchart" is a thing Orbis makes and keeps, and two layers both acting on
+         * it would produce a file and an app for one request.
+         *
+         * An app opening does not replace the reply. Orion still answers -- the app is what the person interacts with
+         * and the words are what explains it, which is the whole shape of the platform.
+         */
+        let appsOpened: ChatNativeApp[] = []
+        if (nativeOrion && !wanted && !request.ask && !last.browserTask && detected?.kind !== 'adblock') {
+          const found = await nativeOrion
+            .consider({
+              message: last.content,
+              conversationId: typeof request.conversationId === 'string' ? request.conversationId : null,
+              messageId: null,
+              history: messages.map((one) => ({ role: one.role === 'assistant' ? 'assistant' : 'user', content: typeof one.content === 'string' ? one.content : '' })),
+              signal: controller.signal
+            })
+            .catch((err: unknown) => {
+              // An extra. A failure here must never cost somebody their reply.
+              console.error('[native] deciding whether to open an app failed', err)
+              return null
+            })
+          if (controller.signal.aborted) return emit({ type: 'aborted' })
+          if (found) {
+            appsOpened = [...found.apps]
+            // Sent as it opens, so the card is on screen while the explanation streams in beneath it.
+            for (const app of appsOpened) emit({ type: 'app', app })
+            if (found.says) emit({ type: 'status', message: found.says })
+          }
+        }
         // Ad blocking is its own subject. A browser task wins only when the message is about the page and names no
         // artifact; otherwise a request for a file is a request for a file, even one worded like a drawing.
         const aboutThePage = detected?.kind === 'browse' && wanted && !wanted.target && !wanted.source && /\b(page|site|website|tab|browser|link|url)\b/i.test(last.content)
@@ -1217,7 +1367,17 @@ ${block}`
          * a page it should simply have read.
          */
         const readsThePage = detected?.kind === 'answer' && (detected.usePage || Boolean(detected.research))
-        const intent: ChatIntent | null = request.ask
+        /*
+         * A laboratory opened, so the browser does not also open.
+         *
+         * The two paths ran independently: asking for "collision of two objects" opened the simulation and then
+         * opened the browser on top of it, which is what somebody actually saw -- the browser, over the thing
+         * they asked for. An app is the answer to the message, so nothing else gets to answer it as well.
+         */
+        const labOpened = appsOpened.length > 0
+        const intent: ChatIntent | null = labOpened && (detected?.kind === 'browse' || detected?.kind === 'image')
+          ? null
+          : request.ask
           ? detected?.kind === 'browse' || detected?.kind === 'image'
             ? null
             : detected
@@ -1844,17 +2004,23 @@ ${summaryBlock(summary)}`
     const { url } = shortcut
     void fetchFavicon(url, (u, init) => net.fetch(u, init)).then((icon) => browserLibrary?.setShortcutIcon(id, url, icon))
   }
+  // A shortcut is drawn on the new tab page and opened with one click, so only a web page may be one: a `file:` or
+  // `javascript:` shortcut would be a line of somebody else's choosing waiting under a tile with a friendly name.
   ipcMain.handle('shortcuts:add', (_event, name: unknown, url: unknown) => {
-    if (!browserLibrary || typeof url !== 'string') return null
+    if (!browserLibrary || typeof url !== 'string' || !isHttpUrl(url)) return null
     const added = browserLibrary.addShortcut(typeof name === 'string' ? name : '', url)
     if (added) loadShortcutIcon(added.id)
     return added
   })
   ipcMain.handle('shortcuts:update', (_event, id: unknown, name: unknown, url: unknown) => {
-    if (!browserLibrary || typeof id !== 'string' || typeof url !== 'string') return null
+    if (!browserLibrary || typeof id !== 'string' || typeof url !== 'string' || !isHttpUrl(url)) return null
     const updated = browserLibrary.updateShortcut(id, typeof name === 'string' ? name : '', url)
     if (updated && updated.icon === undefined) loadShortcutIcon(id)
     return updated
+  })
+  // The window telling Orbis what the computer asks for. It can only ever set a flag.
+  ipcMain.handle('experience:system-motion', (_event, still: unknown) => {
+    systemAsksForStillness = still === true
   })
   ipcMain.handle('shortcuts:remove', (_event, id: unknown) => {
     if (typeof id === 'string') browserLibrary?.removeShortcut(id)
@@ -2046,7 +2212,21 @@ protocol.registerSchemesAsPrivileged([PAGE_SCHEME_PRIVILEGES])
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
-  app.on('second-instance', () => {
+  /**
+   * Somebody started Orbis again, usually because Windows handed them a link to open.
+   *
+   * Only one Orbis runs at a time, so the second one exits immediately and its command line arrives here. Bringing
+   * the window forward was all this did, and the command line was dropped on the floor -- which means that with Orbis
+   * set as the default browser, clicking a link in another application brought Orbis forward and showed whatever was
+   * already on screen. The link itself went nowhere.
+   *
+   * Only plain http and https are taken, and only the first one. A second instance's command line is attacker-
+   * controllable in principle (anything that can start a process can put anything on it), so this is the same gate
+   * the browser control layer uses: a web address, or nothing.
+   */
+  app.on('second-instance', (_event, argv) => {
+    const link = linkIn(argv)
+    if (link) void openInBrowser(link)
     if (!mainWindow) return
     if (mainWindow.isMinimized()) mainWindow.restore()
     mainWindow.focus()
@@ -2140,6 +2320,7 @@ if (!app.requestSingleInstanceLock()) {
         return service.pages.resolve(ctx)
       }
     })
+    quitFlush.add('what Orion did in the browser', () => browserControl?.control.flush())
 
     // Profiles: separate browsing identities. Each has its own cookies, logins, site storage, history, bookmarks,
     // downloads and open pages; extensions are installed once and follow whichever profile is in use.
@@ -2182,17 +2363,15 @@ if (!app.requestSingleInstanceLock()) {
         .then((p) => securityLog.record(p.id, event))
         .catch(() => undefined)
     }
-    app.on('before-quit', () => void securityLog.flush())
+    quitFlush.add('the security log', () => securityLog.flush())
     /*
      * The notification history, written before the process goes.
      *
      * And the one timer stopped. A pending burst holds a timer, and a timer that exists to say "your download
      * finished" is a timer that would otherwise keep a process alive after somebody has asked it to close.
      */
-    app.on('before-quit', () => {
-      notifications?.stop()
-      void notifications?.flush()
-    })
+    app.on('before-quit', () => notifications?.stop())
+    quitFlush.add('your notifications', () => notifications?.flush())
     profilesStore.onChange(() => void securityLog.flush())
 
     /**
@@ -2327,10 +2506,8 @@ if (!app.requestSingleInstanceLock()) {
       }
     })
     profilesStore.onChange(() => void markets.profileChanged())
-    app.on('before-quit', () => {
-      markets.stop()
-      void marketsStore.flush()
-    })
+    app.on('before-quit', () => markets.stop())
+    quitFlush.add('your markets', () => marketsStore.flush())
 
     /**
      * Orbis Pages.
@@ -2493,10 +2670,8 @@ if (!app.requestSingleInstanceLock()) {
     })
     // Making things belongs to the chat. The Orb is for the browser, so nothing here is registered with it.
     artifactsForChat = { service: artifacts, chat: new ArtifactChat({ service: artifacts, generation: artifactGeneration }), profileId: async () => (await profilesStore.active()).id }
-    app.on('before-quit', () => {
-      void pagesStore.flush()
-      void generatedStore.flush()
-    })
+    quitFlush.add('your Pages', () => pagesStore.flush())
+    quitFlush.add('the Pages you made', () => generatedStore.flush())
 
     const tabLockStore = new TabLockStore(app.getPath('userData'), accounts)
     const tabLock = registerTabLockIpc({
@@ -2527,7 +2702,7 @@ if (!app.requestSingleInstanceLock()) {
       }
     })
     profilesStore.onChange(() => tabLock.profileChanged())
-    app.on('before-quit', () => void tabLock.shutdown())
+    quitFlush.add('your locked tabs', () => tabLock.shutdown())
 
     /**
      * Profile Lock: Orbis itself, behind the account password.
@@ -2677,7 +2852,7 @@ if (!app.requestSingleInstanceLock()) {
           appearance: () => {
             const config = experienceStore?.current()
             if (!config) return { variables: {}, backdrop: null }
-            const still = wantsReducedMotion(config, nativeTheme.shouldUseDarkColors ? false : false)
+            const still = wantsReducedMotion(config, systemAsksForStillness)
             return {
               variables: appearanceVariables(config, still),
               backdrop: presetBackdrop(activePreset(config), still),
@@ -2733,6 +2908,36 @@ if (!app.requestSingleInstanceLock()) {
             const s = await store.getSettings()
             return { name: s.userName, title: s.userTitle }
           },
+          /** The person's own setting. Read each time: turning it off while the browser is open takes effect at once. */
+          visualOn: async () => (await store.getSettings()).visualSearch !== false,
+          /**
+           * Orbis Visual Search, arriving in the window.
+           *
+           * The two things the browser cannot do for itself. Both bring the window forward, because both are the
+           * person saying they want to carry on here rather than there -- and both hand the work to the renderer,
+           * which owns the conversation and the Native App runtime. Nothing new is built: this is the same
+           * conversation and the same laboratory everything else in Orbis opens.
+           */
+          visualWindow: () => {
+            if (!mainWindow || mainWindow.isDestroyed()) return null
+            const window = mainWindow
+            const arrive = (payload: Record<string, unknown>): void => {
+              window.webContents.send('visual:arrived', payload)
+              if (!embeddedBrowser) showBrowserWindow(false)
+              window.webContents.send('chromium:hide')
+              window.show()
+              window.focus()
+            }
+            return {
+              toChat: async (input) => {
+                arrive({ what: 'chat', ...input })
+              },
+              toLab: async (input) => {
+                arrive({ what: 'lab', ...input })
+                return true
+              }
+            }
+          },
           // The introduction belongs to the installation, not to a browsing profile: adding or switching a profile must not
           // replay it. Recorded only when the browser page says it finished, so a crash partway through shows it again.
           intro: {
@@ -2742,6 +2947,9 @@ if (!app.requestSingleInstanceLock()) {
           // The app's own store, so a chat held in the panel and a chat held in the Orbis window are one chat.
           conversations: () => store,
           stores: () => panelStoresForBrowser,
+          // The browser reads and works Orbis Music through the app’s own service, so the panel, the new tab page
+          // and the window are all one player rather than three.
+          music: () => music?.port,
           sidebar: () => {
             const store = browserSidebarForBrowser
             if (!store) return null
@@ -2752,6 +2960,110 @@ if (!app.requestSingleInstanceLock()) {
           // The browser's lock surface asks Orbis whether a password is right, because Orbis is what holds it. The
           // surface never sees a credential and never decides anything.
           tabLockHelper: () => tabLock.forHelper,
+          /*
+           * Orbis Student, from inside the browser.
+           *
+           * Read at call time and null until Student exists, so the browser's buttons are absent rather than
+           * present-and-dead. Everything here is either a fact about the session the student is already in, or
+           * something they asked to keep -- there is no way through this to the learning record, and no way to
+           * loosen a session's rules.
+           */
+          student: () =>
+            student
+              ? {
+                  state: async () => {
+                    const snapshot = await student!.snapshot()
+                    const session = snapshot.session
+                    return {
+                      running: !!session,
+                      title: session?.title ?? '',
+                      subject: session?.subject ?? null,
+                      level: session?.level ?? 'focus',
+                      minutesLeft: session ? Math.max(0, Math.round(session.plannedMinutes - session.focusedSeconds / 60)) : null,
+                      paused: session?.state === 'paused',
+                      locked: session?.policy.locked === true
+                    }
+                  },
+                  saveCard: async (front, back, subject) => {
+                    await studentStore!.flashcards.put({
+                      id: randomUUID(),
+                      profileId: studentStore!.who(),
+                      front,
+                      back,
+                      subject,
+                      origin: 'web',
+                      deck: 'Default',
+                      // A card clipped from a page says nothing about which topic it is: that is the student's to say.
+                      conceptId: null,
+                      practised: 0,
+                      recalled: 0,
+                      lastPractisedAt: null,
+                      createdAt: Date.now()
+                    })
+                    return { ok: true }
+                  },
+                  saveMistake: async (concept, detail, subject) => {
+                    await studentStore!.mistakes.put({
+                      id: randomUUID(),
+                      profileId: studentStore!.who(),
+                      subject,
+                      concept,
+                      kind: 'concept',
+                      detail,
+                      at: Date.now(),
+                      reviewedAt: null,
+                      sessionId: (await student!.snapshot()).session?.id ?? null
+                    })
+                    return { ok: true }
+                  },
+                  saveResource: async (url, title, subject) => {
+                    // The same page twice is the same resource, said rather than quietly copied.
+                    const held = await studentStore!.resources.all()
+                    const already = held.find((one) => one.url === url)
+                    if (already) return { ok: true, duplicate: true, why: 'Already in your study library.' }
+                    await studentStore!.resources.put({
+                      id: randomUUID(),
+                      profileId: studentStore!.who(),
+                      url,
+                      title,
+                      kind: 'website',
+                      subject,
+                      goalId: null,
+                      tags: [],
+                      notes: '',
+                      origin: 'web',
+                      favourite: false,
+                      read: false,
+                      relevance: null,
+                      savedAt: Date.now(),
+                      lastOpenedAt: null
+                    })
+                    return { ok: true }
+                  },
+                  draftFromPage: async () => {
+                    // Read from the browser, not from the request: the page does not get to say what it contains.
+                    const read = await controlNow('page.read', { maxChars: 12_000 })
+                    const page = read.ok ? (read.data as { title?: string; text?: string }) : null
+                    if (!page?.text || page.text.trim().length < 40) {
+                      return { ok: false, cards: [], why: 'There is not enough readable text on this page.' }
+                    }
+                    const out = await student!.draftCards(`${page.title ?? 'This page'}
+
+${page.text}`, { howMany: 6 })
+                    return { ok: out.ok, cards: out.cards.map((one) => ({ front: one.front, back: one.back })), why: out.why }
+                  },
+                  start: async (minutes, subject) => {
+                    const out = await student!.startFocus({ title: 'Focus', subject, ...(minutes ? { minutes } : {}) })
+                    return { ok: out.ok, why: out.why }
+                  },
+                  // Always available. Focus may be hard to leave by accident; it must never be impossible on purpose.
+                  end: async () => {
+                    const out = await student!.endFocus({ reason: 'ended from the browser' })
+                    // `ok: false` here only ever means there was no session running, which is not a failure.
+                    return { ok: out.ok, why: out.ok ? undefined : 'No session was running.' }
+                  }
+                }
+              : null,
           // The market strip is a page, and pages reach Orbis through the helper.
           // The widgets on the start page, read at call time: see widgetsForBrowser.
           widgets: () => widgetsForBrowser,
@@ -2923,9 +3235,62 @@ if (!app.requestSingleInstanceLock()) {
             void mirrorChromiumInto(browserLibrary, service).catch(() => undefined)
           }
           registerBrowserExtras({ control: service.control, windowControl: browserControl!.windowControl, bridge: service.bridge })
+          /*
+           * The Focus policy, lent the browser.
+           *
+           * The enforcer pauses top-level document requests and asks Orbis about each one, which is below anything a
+           * page or a student can do: the address bar, a redirect, a pop-up and a script's navigation are all the same
+           * request. It arms nothing at all while no policy is in force, so a browser with no session running is a
+           * browser Orbis Student has not touched.
+           */
+          studentEnforcer?.watch(service.browser as never)
+          void student?.reapply()
+          /*
+           * Orbis Music is lent the browser, so it can work out what is playing.
+           *
+           * Everything here is a capability that already existed: what a page published about its track, a picture of
+           * a tab, the list of tabs making a sound. Reading those changes nothing on the page -- the website's own
+           * player is never touched -- and `seePicture` is the one route Orbis has to a model that can see, rather
+           * than a second one grown for music.
+           */
+          music?.watchBrowser({
+            tabs: () => (browserControl?.windowControl.state?.tabs ?? []).map((tab) => ({ id: tab.id, url: tab.url, title: tab.title, audible: tab.audible, active: tab.active })),
+            nowPlaying: async (tabId) => {
+              const read = await browserControl!.control.execute(
+                { capability: 'media.nowPlaying', params: {}, target: tabId ? { tabId } : {}, source: 'user' },
+                { confirm: async () => true }
+              )
+              return read.ok ? (read.data as never) : null
+            },
+            picture: async (tabId) => {
+              const shot = await browserControl!.control.execute(
+                { capability: 'page.screenshot', params: { maxWidth: 1280 }, target: tabId ? { tabId } : {}, source: 'user' },
+                { confirm: async () => true }
+              )
+              const image = (shot.data ?? {}) as { dataUrl?: string }
+              return shot.ok && image.dataUrl ? image.dataUrl : null
+            },
+            askVision: async (prompt, picture) => {
+              // The picture is held for this one request and dropped. Nothing is written down.
+              const found = /^data:([^;]+);base64,(.*)$/.exec(picture)
+              if (!found) return null
+              const answer = await seePicture({ bytes: Buffer.from(found[2], 'base64'), mediaType: found[1] }, prompt)
+              return 'words' in answer ? answer.words : null
+            }
+          })
           void followChromiumTabs(service, browserControl!.windowControl, refreshMirror).catch((err: unknown) => console.error('[browser] could not follow tabs', err))
         }, () => browserControl?.windowControl.setState(closedBrowserState()))
-        app.on('before-quit', () => void chromiumBrowser?.stop())
+        quitFlush.add('the browser', () => chromiumBrowser?.stop())
+        /*
+         * A link Orbis was started with, now that there is a browser to open it in.
+         *
+         * `linkIn(process.argv)` is the cold-start case: Windows launched Orbis *because* somebody clicked a link,
+         * and the address is on this process's own command line. `openWaitingLink` is the one that arrived through
+         * `second-instance` while the browser was still coming up. Both used to be dropped.
+         */
+        const startedWith = linkIn(process.argv.slice(1))
+        if (startedWith) linkWaiting ??= startedWith
+        openWaitingLink()
         profilesStore.onChange(() => void chromiumBrowser?.profileMayHaveChanged())
       }
     }
@@ -3039,7 +3404,7 @@ if (!app.requestSingleInstanceLock()) {
      * wrong the day a site changed its layout. The agent reads it as a note and decides for itself.
      */
     siteProfiles = new SiteProfiles({ userData: app.getPath('userData'), profileId: () => notifyProfileId })
-    app.on('before-quit', () => void siteProfiles?.flush())
+    quitFlush.add('what you have decided for each site', () => siteProfiles?.flush())
 
     /*
      * Where a long automation has got to.
@@ -3052,8 +3417,8 @@ if (!app.requestSingleInstanceLock()) {
     projectFiles = new ProjectFiles({ userData: app.getPath('userData'), profileId: () => notifyProfileId })
     meetings = new Meetings({ userData: app.getPath('userData'), profileId: () => notifyProfileId })
     // The end of a note is exactly the part that would be lost without this.
-    app.on('before-quit', () => void meetings?.flush())
-    app.on('before-quit', () => void automationCheckpoints?.flush())
+    quitFlush.add('your meeting notes', () => meetings?.flush())
+    quitFlush.add('where each browser task got to', () => automationCheckpoints?.flush())
 
     notifyProfileId = (await profilesStore.active()).id
     // Notifications follow the person: switching profile changes whose history is read and whose is written to.
@@ -3081,6 +3446,13 @@ if (!app.requestSingleInstanceLock()) {
           return { ok: true }
         },
         openFile: async (path: string) => {
+          // A download's name and ending belong to the page that sent it, so a file that would run is never opened --
+          // it is shown in its folder, where opening it is the user's own deliberate act.
+          const why = whyNotOpenable(path)
+          if (why) {
+            shell.showItemInFolder(path)
+            return { ok: false, message: why }
+          }
           const problem = await shell.openPath(path)
           return problem === '' ? { ok: true } : { ok: false, message: problem }
         },
@@ -3180,7 +3552,116 @@ if (!app.requestSingleInstanceLock()) {
       */
     const widgetRuntime = createWidgetRuntime({ store: experience })
     registerExperienceIpc({ store: experience, control: browserControl.control, widgets: widgetRuntime, getWindow: () => mainWindow, send: sendToWindow })
-    app.on('before-quit', () => void experience.flush())
+
+    /**
+     * One question to Orion, answered whole rather than streamed.
+     *
+     * The Code Playground uses it to predict what a program would print, and the ported Physics Studio's research
+     * panels use it to explain a result. Both want the complete answer, which the streaming path does not give.
+     */
+    const askOrionOnce = async (prompt: string, schema?: string | null): Promise<string | null> => {
+      if (GROQ_API_KEYS.length === 0 && MISTRAL_API_KEYS.length === 0) return null
+      const current = await store.getSettings()
+      let text = ''
+      let failed = false
+      try {
+        await streamChat({
+          apiKeys: GROQ_API_KEYS,
+          mistralKeys: MISTRAL_API_KEYS,
+          model: current.defaultModel,
+          messages: [{ id: 'ask-once', role: 'user', content: prompt, createdAt: 0 }],
+          systemPrompt: schema
+            ? `Answer only with JSON matching this schema, and nothing else: ${schema}`
+            : 'Answer the question directly and briefly. No preamble.',
+          reasoningEffort: current.reasoningEffort,
+          autoFallback: current.autoFallback,
+          signal: new AbortController().signal,
+          emit: (event) => {
+            /*
+             * Only the words. A thinking model also sends deltas that carry its reasoning and no content at all,
+             * and adding those appended the literal text "undefined" once per chunk -- hundreds of them in front
+             * of the real answer, which then would not parse as the JSON it was asked for.
+             */
+            if (event.type === 'delta' && typeof event.content === 'string') text += event.content
+            if (event.type === 'error') failed = true
+          },
+          fetchFn: (url, init) => net.fetch(url, init)
+        })
+      } catch {
+        failed = true
+      }
+      return failed && text === '' ? null : text
+    }
+
+    /**
+     * The same question, but about what is actually drawn on screen.
+     *
+     * Some things a laboratory shows cannot be read from its numbers: whether a curve has flattened, where two
+     * lines cross, what shape a field has taken. So the renderer measures the rectangle the simulation occupies,
+     * this photographs exactly that rectangle, and the picture goes to the only service in Orbis with eyes.
+     *
+     * The rectangle is clamped to the window, because a rectangle larger than the window makes capturePage throw
+     * and a question about the picture would come back as a crash rather than an answer.
+     */
+    ipcMain.handle('physics:look', async (event, prompt, area) => {
+      if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
+      const window = mainWindow
+      if (!window || window.isDestroyed()) return null
+      const asked = String(prompt ?? '').slice(0, 8_000)
+      const given = (area ?? {}) as Record<string, unknown>
+      const size = window.getContentSize()
+      const round = (value: unknown, most: number): number => {
+        const got = Math.round(Number(value))
+        return Number.isFinite(got) ? Math.max(0, Math.min(most, got)) : 0
+      }
+      const x = round(given.x, size[0])
+      const y = round(given.y, size[1])
+      const rect = {
+        x,
+        y,
+        width: Math.max(1, round(given.width, size[0] - x)),
+        height: Math.max(1, round(given.height, size[1] - y))
+      }
+      let picture: Electron.NativeImage
+      try {
+        picture = await window.webContents.capturePage(rect)
+      } catch {
+        return null
+      }
+      const bytes = picture.toPNG()
+      if (bytes.length === 0) return null
+      const seen = await seePicture({ bytes: new Uint8Array(bytes), mediaType: 'image/png' }, asked)
+      return 'words' in seen ? seen.words : `I could not look at it: ${seen.failed}.`
+    })
+
+    // Quizzes in the conversation. The asking and the checking both happen in main, so the window never sees a
+    // question that has not been checked.
+    registerQuizIpc({ getWindow: () => mainWindow, ask: (prompt: string) => askOrionOnce(prompt) })
+
+    ipcMain.handle('physics:ask', (event, prompt, schema) => {
+      if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
+      return askOrionOnce(String(prompt ?? '').slice(0, 20_000), typeof schema === 'string' ? schema.slice(0, 4_000) : null)
+    })
+
+    // Running code. The sandbox address and key live in settings and never reach the renderer; when there is no
+    // sandbox the service asks Orion to read the code instead, and labels the answer a guess rather than a run.
+    registerExecutionIpc({
+      getWindow: () => mainWindow,
+      service: new ExecutionService({
+        settings: async () => {
+          const current = await store.getSettings()
+          return {
+            url: current.judge0Url ?? '',
+            key: (await store.getJudge0Key()) ?? '',
+            keyHeader: current.judge0KeyHeader ?? 'X-Auth-Token'
+          }
+        },
+        // The same one-shot ask, so there is one place that collects a stream into a string rather than two.
+        ask: (prompt: string) => askOrionOnce(prompt),
+        fetch: ((url: string | URL | Request, init?: RequestInit) => net.fetch(url as string, init)) as typeof globalThis.fetch
+      })
+    })
+    quitFlush.add('how Orbis looks', () => experience.flush())
 
     /**
      * "Tell me when..."
@@ -3447,6 +3928,8 @@ if (!app.requestSingleInstanceLock()) {
      * since changed is worse than no run at all.
      */
     const stepRuns = new Map<string, StepRun>()
+    /** How long a finished run stays readable before it is forgotten, so the window can show how it ended. */
+    const FINISHED_RUN_KEPT_MS = 5 * 60 * 1000
     const countedRuns = new Set<string>()
     let skillsForRuns: SkillManager | null = null
     const stepProfile = async (): Promise<string> => (await profilesStore.active()).id
@@ -3492,7 +3975,19 @@ if (!app.requestSingleInstanceLock()) {
             }
             sendToWindow('steps:changed', view)
           },
-          newId: () => crypto.randomUUID()
+          newId: () => crypto.randomUUID(),
+          /*
+           * The run is over: let go of everything it held, and forget it.
+           *
+           * A run claims the tab it is working on, and a claim is only released by the run's own name. Nothing released
+           * them, so a finished run's claim outlived the run and the next one refused to touch that tab until Orbis was
+           * restarted. The run itself is dropped a little later so the window can still read how it ended.
+           */
+          ended: (session) => {
+            browserControl?.control.releaseRun(session.id)
+            countedRuns.delete(session.id)
+            setTimeout(() => stepRuns.delete(session.id), FINISHED_RUN_KEPT_MS).unref?.()
+          }
         }
       )
 
@@ -3617,7 +4112,7 @@ if (!app.requestSingleInstanceLock()) {
      * here pretends otherwise by, say, queueing something for a machine that is off.
      */
     const schedules = new TemporalStore(app.getPath('userData'))
-    app.on('before-quit', () => void schedules.flush())
+    quitFlush.add('your schedules', () => schedules.flush())
 
     const deviceNow = (): DeviceState => ({
       orbisRunning: true,
@@ -4102,6 +4597,466 @@ if (!app.requestSingleInstanceLock()) {
         return tab ? { private: tab.private, url: tab.url, title: tab.title } : {}
       }
     })
+    /*
+     * Orbis Music: the library, and the one hidden window that makes sound.
+     *
+     * Built here so it joins the same profile switch and the same list of things saved before closing as
+     * everything else that keeps anything. The sound belongs to Orbis rather than to a tab, which is what lets it
+     * carry on while somebody moves between pages -- a website's own player is never touched by any of it.
+     */
+    music = createMusic({
+      userData: app.getPath('userData'),
+      // The one way a path can enter Orbis Music: a picker somebody stood in front of.
+      pickFiles: async (kind) => {
+        const win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null
+        const options: OpenDialogOptions =
+          kind === 'folder'
+            ? { title: 'Choose a music folder', properties: ['openDirectory'] }
+            : { title: 'Add music', properties: ['openFile', 'multiSelections'], filters: [{ name: 'Audio', extensions: [...AUDIO_ENDINGS] }] }
+        const picked = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
+        return picked.canceled ? [] : picked.filePaths.slice(0, 2000)
+      },
+      onProgress: (progress) => sendToWindow('music:import-progress', progress),
+      dirname: __dirname,
+      devUrl: !app.isPackaged ? process.env.ELECTRON_RENDERER_URL : undefined,
+      getWindow: () => mainWindow,
+      send: sendToWindow
+    })
+    registerMusicIpc({
+      music,
+      userData: app.getPath('userData'),
+      getWindow: () => mainWindow,
+      pickFiles: async (kind) => {
+        const win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null
+        const options: OpenDialogOptions =
+          kind === 'folder'
+            ? { title: 'Choose a music folder', properties: ['openDirectory'] }
+            : {
+                title: 'Add music',
+                properties: ['openFile', 'multiSelections'],
+                filters: [{ name: 'Audio', extensions: [...AUDIO_ENDINGS] }]
+              }
+        const picked = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
+        return picked.canceled ? [] : picked.filePaths.slice(0, 2000)
+      },
+      onProgress: (progress) => sendToWindow('music:import-progress', progress)
+    })
+    const followMusic = (): Promise<void> =>
+      profilesStore
+        .active()
+        .then((profile) => music!.useProfile(profile.id))
+        .catch((err: unknown) => console.error('[music] could not switch profile', err))
+    await followMusic()
+    profilesStore.onChange(() => void followMusic())
+    quitFlush.add('your music', () => music?.shutdown())
+
+    /*
+     * Orbis Student: the study environment.
+     *
+     * Built beside Orbis Music and for the same reason -- it joins the same profile switch and the same list of
+     * things written before closing. Nothing about it changes normal Orbis: with no session running, the enforcer
+     * switches itself off and the browser is untouched.
+     */
+    studentStore = new StudentStore(app.getPath('userData'), (await profilesStore.active()).id)
+    studentEnforcer = new FocusEnforcer({
+      mayOpen: (url) => student!.mayOpen(url),
+      saveForLater: (url, title) => student!.saveForLater(url, title),
+      endFocus: () => student!.endFocus({ reason: 'ended from the Focus Shield' }),
+      showStudent: () => {
+        if (!mainWindow || mainWindow.isDestroyed()) return
+        if (mainWindow.isMinimized()) mainWindow.restore()
+        mainWindow.show()
+        mainWindow.focus()
+        sendToWindow('student:changed')
+      },
+      askOrion: (url) => sendToWindow('student:ask-orion', url)
+    })
+    student = new StudentService(studentStore, {
+      // The browser is told, every time; it never works anything out for itself.
+      enforce: (policy) => studentEnforcer?.apply(policy),
+      notify: (notice) =>
+        void notifications?.publish({
+          type: notice.kind === 'problem' ? 'focus.needsYou' : notice.important ? 'focus.needsYou' : 'focus.finished',
+          fields: { reason: notice.body, summary: notice.body, title: notice.title }
+        }),
+      /*
+       * The two doors Student has to a model, and the only ones.
+       *
+       * Both return null rather than throwing, and both are absent when there is no key -- which is what makes
+       * every screen able to say "Orion is not set up" instead of showing a button that fails. Nothing here can
+       * write to the learning record: these produce text, and what becomes evidence is decided by the student.
+       */
+      ask: GROQ_API_KEYS.length + MISTRAL_API_KEYS.length === 0
+        ? undefined
+        : (system, user, options) =>
+            requestJson(system, user, GROQ_API_KEYS, (url, init) => net.fetch(url, init), options?.timeoutMs ?? 45_000, {
+              maxTokens: options?.maxTokens ?? 1800,
+              mistralKeys: MISTRAL_API_KEYS
+            }),
+      askText: GROQ_API_KEYS.length + MISTRAL_API_KEYS.length === 0
+        ? undefined
+        : (system, user, options) =>
+            requestText(system, user, GROQ_API_KEYS, (url, init) => net.fetch(url, init), options?.timeoutMs ?? 45_000, {
+              maxTokens: options?.maxTokens ?? 1200,
+              mistralKeys: MISTRAL_API_KEYS
+            }),
+      /*
+       * Looking at a photograph.
+       *
+       * Only the other service can see, so this is absent without a key for it -- and a student without one is told
+       * that looking is not set up rather than being shown a camera button that fails.
+       */
+      askImage:
+        MISTRAL_API_KEYS.length === 0
+          ? undefined
+          : (system, user, image, options) =>
+              requestVision(system, user, image, MISTRAL_API_KEYS, (url, init) => net.fetch(url, init), options?.timeoutMs ?? 60_000, {
+                maxTokens: options?.maxTokens ?? 1400,
+                json: options?.json === true
+              }),
+      sound: (what) => sendToWindow('student:sound', what),
+      /*
+       * `current`, never `ensure`: this is read on a timer, and asking how many tabs are open must not be what
+       * starts the browser.
+       */
+      tabs: () =>
+        (chromiumBrowser?.current?.agent.windowControl.state.tabs ?? [])
+          .filter((one) => /^https?:/i.test(one.url))
+          .map((one) => ({ url: one.url, title: one.title ?? '' })),
+      /*
+       * Closing tabs the student asked to close.
+       *
+       * Matched by address against what is open right now, so a tab opened since the save is untouched, and counted
+       * by what actually closed rather than by what was asked for. Orbis never closes one on its own initiative.
+       */
+      closeTabs: async (urls) => {
+        const wanted = new Set(urls)
+        const open = chromiumBrowser?.current?.agent.windowControl.state.tabs ?? []
+        let closed = 0
+        for (const tab of open) {
+          if (!wanted.has(tab.url)) continue
+          const out = await controlNow('tabs.close', { tabId: String(tab.id) }).catch(() => null)
+          if (out?.ok) closed += 1
+        }
+        return closed
+      },
+      announce: () => sendToWindow('student:changed')
+    })
+    registerStudentIpc({ service: student, store: studentStore, getWindow: () => mainWindow })
+
+    /*
+     * Ambient Intelligence.
+     *
+     * Built last and wired to almost nothing: it subscribes to the bus everything already publishes on, and hands
+     * what it works out to the Context Engine as one more provider. Nothing else in Orbis has to know it is here,
+     * which is why adding it costs no edits anywhere else.
+     */
+    /** What Focus is doing, kept up to date from the bus. The only state Ambient Intelligence needs from Student. */
+    const focusNow = { running: false, locked: false, subject: null as string | null }
+    bus.subscribe({ names: ['focus.started', 'focus.completed', 'focus.endedEarly', 'focus.interrupted'] }, (event) => {
+      if (event.name === 'focus.started') {
+        const detail = (event.detail ?? {}) as { subject?: unknown; level?: unknown }
+        focusNow.running = true
+        focusNow.locked = detail.level === 'deep'
+        focusNow.subject = typeof detail.subject === 'string' && detail.subject.trim() ? detail.subject.trim().slice(0, 80) : null
+        return
+      }
+      focusNow.running = false
+      focusNow.locked = false
+      focusNow.subject = null
+    })
+
+    ambientStore = new AmbientStore(app.getPath('userData'))
+    ambient = new Ambient({
+      store: ambientStore,
+      now: () => Date.now(),
+      /*
+       * Focus is read off the bus rather than out of Student.
+       *
+       * Student has no synchronous accessor for the running session, and adding one so that another feature can
+       * peer into it is exactly the coupling the event bus exists to avoid. Focus announces itself; this listens.
+       */
+      focusSubject: () => focusNow.subject,
+      focusState: () => ({ running: focusNow.running, locked: focusNow.locked }),
+      // Typing and quiet hours are already decided elsewhere; nothing here second-guesses them.
+      typing: () => false,
+      quiet: () => false,
+      announce: (context) => sendToWindow('ambient:changed', context)
+    })
+    await ambientStore.useProfile((await profilesStore.active()).id).catch(() => undefined)
+    ambient.start()
+    registerAmbientIpc({ ambient, bus, getWindow: () => mainWindow })
+
+    /*
+     * Orbis Courses.
+     *
+     * The catalogue is content and shared; everything a learner does is theirs and follows the profile. XP goes
+     * through Student, which already owns it, rather than Courses keeping a second score nobody reconciles.
+     */
+    coursesStore = new CoursesStore(app.getPath('userData'))
+    courses = new Courses({
+      store: coursesStore,
+      now: () => Date.now(),
+      learnerName: async () => {
+        const settings = await store.getSettings().catch(() => null)
+        return (settings?.userName ?? '').trim() || 'Learner'
+      },
+      /*
+       * XP is announced, not awarded directly.
+       *
+       * Student owns the XP ledger, and reaching into it from here would mean two things writing the same score
+       * with no-one reconciling them. `study.xp` is an event Student already publishes, so whatever listens to it
+       * handles this the same way -- and with nothing listening, nothing breaks.
+       */
+      awardXp: (amount, why) => {
+        bus.publish('study.xp', { amount, reason: why, source: 'courses' }, { source: 'courses' })
+      },
+      announce: (what, detail) => {
+        sendToWindow(what, detail)
+      },
+      /*
+       * A lesson is activity, like a page or a search.
+       *
+       * Handed to Ambient Intelligence through its own door, so the rules about what may be recorded stay in one
+       * place and Courses needs no knowledge of them. A course title is the clearest statement of what somebody
+       * is working on that Orbis ever gets, short of a Focus session.
+       */
+      onLearning: (title, courseId) => {
+        void ambient?.record({ kind: 'file-opened', source: 'student', title, refId: courseId }).catch(() => undefined)
+      }
+    })
+    await coursesStore.useProfile((await profilesStore.active()).id).catch(() => undefined)
+    registerCoursesIpc({ courses, getWindow: () => mainWindow })
+
+    /*
+     * The courses Orbis ships with.
+     *
+     * Through the ordinary install path, so they are validated like any other course, and only when absent or
+     * superseded. Never awaited into the startup path and never fatal: a shipped course that cannot be taught is
+     * logged and left off the shelf rather than stopping Orbis opening.
+     */
+    void installBuiltInCourses(courses)
+      .then((result) => {
+        for (const one of result.refused) console.error(`[courses] ${one.id} was refused: ${one.says}`)
+        if (result.added.length > 0) console.log(`[courses] installed ${result.added.join(', ')}`)
+      })
+      .catch((err: unknown) => console.error('[courses] built-in courses could not be installed', err))
+
+    /*
+     * The Native App runtime.
+     *
+     * Everything a conversation can open: the thirty-seven laboratories Orbis already ships, and the Creation
+     * Engine's flowchart. The runtime holds no domain logic -- it registers what exists, keeps the instances apart,
+     * and validates what Orion asks -- so Phase 2's compiler and Phase 3's scientific engines are additive.
+     *
+     * Readiness is asked for rather than assumed: a pure module cannot know whether this machine has a GPU, and one
+     * that guesses is how an app gets offered and then fails to open.
+     */
+    nativeStore = new NativeStore(app.getPath('userData'))
+    native = new Native({
+      store: nativeStore,
+      now: () => Date.now(),
+      newId: (prefix) => `${prefix}${crypto.randomUUID().replace(/-/g, '').slice(0, 16)}`,
+      readiness: () => ({
+        /*
+         * What this build can actually provide.
+         *
+         * `compute` is the engines, which every shipped app reaches through the capability-checked Pages door.
+         * `file.read`/`file.write` are the existing file pickers and the Creation Engine's writer. GPU, process,
+         * network, camera and microphone are deliberately absent: nothing in this phase has them, and listing one
+         * would make an app launchable that cannot work.
+         */
+        available: ['compute', 'worker', 'file.read', 'file.write', 'clipboard.read', 'clipboard.write'],
+        /*
+         * The engines this build genuinely has.
+         *
+         * `compute` is the hundred-odd modules under shared/compute, reached through the capability-checked Pages
+         * door. `algorithms` is the traced algorithm engine, which runs in the application's own worker. Nothing
+         * else is listed: an engine named here that does not exist makes an app launchable and then broken, which
+         * is exactly what `launchable` refuses to allow.
+         */
+        engines: [
+          'compute',
+          'algorithms',
+          'molecules',
+          'structures',
+          'sqlite',
+          'circuits',
+          'controls',
+          'robotics',
+          'structures-load',
+          'logic',
+          'processor',
+          'scheduling',
+          'networking',
+          'imaging',
+          'learning',
+          'neural',
+          'chemistry',
+          'cs',
+          'physics',
+          // Naming an engine the build does not recognise makes an app launchable in the catalogue and refused the
+          // moment somebody opens it, which is what happened to the CS Studio. This is that lesson applied.
+          'quantum'
+        ]
+      }),
+      announce: (what, detail) => {
+        sendToWindow(what, detail)
+      },
+      /*
+       * What somebody is working on, handed to Ambient Intelligence through its own door.
+       *
+       * An open laboratory is as clear a statement of what somebody is doing as Orbis ever gets, and the rules about
+       * what may be recorded stay in one place rather than being repeated here.
+       */
+      onActivity: (appName, appId, instanceId) => {
+        void ambient
+          ?.record({ kind: 'file-opened', source: 'app', title: appName, refId: `${appId}:${instanceId}` })
+          .catch(() => undefined)
+      }
+    })
+    await nativeStore.useProfile((await profilesStore.active()).id).catch(() => undefined)
+    // References only: restored apps come back `loading` and off screen, never running.
+    void native.restoreAll().catch((err: unknown) => console.error('[native] saved apps could not be restored', err))
+    registerNativeIpc({ native, getWindow: () => mainWindow })
+
+    /*
+     * The Database Laboratory's practice databases hold native handles rather than plain objects, so they are let go
+     * at quit. Each one is already closed when its own card closes; this is for the ones still open when Orbis is.
+     */
+    /*
+     * Orbis has more than ten features that need to write something down before quitting, and Node warns at ten
+     * listeners on the assumption that a limit that low means a leak. Here it means Orbis has eleven features, so
+     * the ceiling is raised once rather than a real hook being left off to stay under it.
+     */
+    app.setMaxListeners(40)
+    app.on('before-quit', () => {
+      native?.closeDatabases()
+    })
+
+    /*
+     * Orion's door to the Native Apps.
+     *
+     * The same quick-question route the Creation Engine uses, so there is one model path for "does this message ask
+     * for something" rather than two that could disagree. Every decision after the model is a check that can refuse.
+     */
+    nativeOrion = new NativeOrion({
+      native,
+      askQuick: (instructions, user, signal) =>
+        artifactGeneration
+          ? artifactGeneration.askQuick(instructions, user, signal)
+          : Promise.resolve({ failed: 'No model is configured.' })
+    })
+
+    profilesStore.onChange(() => {
+      void profilesStore
+        .active()
+        .then((profile) => native?.useProfile(profile.id))
+        .catch((err: unknown) => console.error('[native] could not switch profile', err))
+    })
+    /*
+     * Stopping and flushing share one listener.
+     *
+     * Not because of Electron's ten-listener warning -- this file already attaches twenty-two of them and has done
+     * for a long time -- but because they are one shutdown step: nothing should be flushed while it is still running.
+     */
+    app.on('before-quit', () => {
+      native?.stopEverything()
+      // `native.flush` persists every open instance and then flushes the store, so the store needs no second call.
+      void native?.flush().catch(() => undefined)
+    })
+
+    profilesStore.onChange(() => {
+      void profilesStore
+        .active()
+        .then((profile) => courses?.useProfile(profile.id))
+        .catch((err: unknown) => console.error('[courses] could not switch profile', err))
+    })
+    app.on('before-quit', () => {
+      void courses?.flush().catch(() => undefined)
+    })
+    /*
+     * Whatever had gone quiet is written down before quitting.
+     *
+     * Otherwise closing Orbis at the end of an evening loses the whole evening: the contexts live in memory and
+     * only become session memories when they go dormant, which is usually never while somebody is still working.
+     */
+    app.on('before-quit', () => {
+      ambient?.stop()
+      void ambient?.flush().catch(() => undefined)
+    })
+    profilesStore.onChange(() => {
+      void profilesStore
+        .active()
+        .then((profile) => ambient?.useProfile(profile.id))
+        .catch((err: unknown) => console.error('[ambient] could not switch profile', err))
+    })
+    studentStore.onChange(() => sendToWindow('student:changed'))
+    await student.start()
+    const followStudent = (): Promise<void> =>
+      profilesStore
+        .active()
+        .then((profile) => student!.useProfile(profile.id))
+        .catch((err: unknown) => console.error('[student] could not switch profile', err))
+    profilesStore.onChange(() => void followStudent())
+    quitFlush.add('your study session', () => student?.onQuit())
+    /*
+     * The media keys on a keyboard.
+     *
+     * Registered only while Orbis Music has something to play, and given up the moment it does not -- a key taken for
+     * ever would stop every other player on the computer from seeing it, which is not Orbis’s to do. A key that this
+     * computer or another program has already claimed simply does not register, and that is reported as nothing rather
+     * than as an error.
+     */
+    const mediaKeys = [
+      ['MediaPlayPause', () => music?.player.toggle()],
+      ['MediaNextTrack', () => void music?.player.next()],
+      ['MediaPreviousTrack', () => void music?.player.previous()],
+      ['MediaStop', () => music?.player.stop()]
+    ] as const
+    let keysHeld = false
+    const followMediaKeys = (): void => {
+      const playing = Boolean(music?.player.current().trackId)
+      if (playing === keysHeld) return
+      keysHeld = playing
+      if (!playing) {
+        for (const [key] of mediaKeys) globalShortcut.unregister(key)
+        return
+      }
+      for (const [key, run] of mediaKeys) {
+        try {
+          globalShortcut.register(key, run)
+        } catch {
+          // Another program has that key. Nothing to say about it.
+        }
+      }
+    }
+    music.store.onChange(() => followMediaKeys())
+    const mediaKeyWatch = setInterval(followMediaKeys, 2000)
+    mediaKeyWatch.unref?.()
+    app.on('before-quit', () => {
+      clearInterval(mediaKeyWatch)
+      globalShortcut.unregisterAll()
+    })
+
+    // The clipboard follows the profile too. It is wired here rather than in `personalStores` above only because it is
+    // built later; without this every profile shared one history.
+    const followClipboard = (): Promise<void> =>
+      profilesStore
+        .active()
+        .then((profile) => clipboardHistory.useProfile(profile.id))
+        .catch((err: unknown) => console.error('[clipboard] could not switch profile', err))
+    await followClipboard()
+    profilesStore.onChange(() => void followClipboard())
+    /*
+     * What Orion, the Orb, a workflow or a spoken command may do about music.
+     *
+     * One registration for all four, so there is one place that decides what may be asked of Orbis Music. None of
+     * them can acquire audio: the most they do is play a file the person has, or keep the name of a song heard on a
+     * page.
+     */
+    registerMusicCapabilities({ control: browserControl.control, music: () => music })
+
     registerPersonalIpc({
       notes: notesStore,
       tasks: tasksStore,
@@ -4270,7 +5225,14 @@ if (!app.requestSingleInstanceLock()) {
     panelStoresForBrowser = {
       library: browserLibrary ?? undefined,
       removeFile: (path) => fs.rm(path, { force: true }),
-      openFile: (path) => shell.openPath(path),
+      openFile: async (path) => {
+        const why = whyNotOpenable(path)
+        if (why) {
+          shell.showItemInFolder(path)
+          return why
+        }
+        return shell.openPath(path)
+      },
       clipboard: clipboardHistory,
       tasks: tasksStore,
       whiteboard: whiteboardStore,
@@ -4282,11 +5244,16 @@ if (!app.requestSingleInstanceLock()) {
     app.on('before-quit', () => {
       clipboardHistory.stop()
       workspacesStore.stop()
-      void profilesStore.flush()
-      void Promise.all([notesStore.flush(), tasksStore.flush(), clipboardHistory.flush(), whiteboardStore.flush(), workspacesStore.flush(), browserSidebar.flush()])
     })
+    quitFlush.add('your profiles', () => profilesStore.flush())
+    quitFlush.add('your notes', () => notesStore.flush())
+    quitFlush.add('your tasks', () => tasksStore.flush())
+    quitFlush.add('your clipboard history', () => clipboardHistory.flush())
+    quitFlush.add('your whiteboards', () => whiteboardStore.flush())
+    quitFlush.add('your workspaces', () => workspacesStore.flush())
+    quitFlush.add('how the browser sidebar is arranged', () => browserSidebar.flush())
 
-    app.on('before-quit', () => void browserLibrary?.flush())
+    quitFlush.add('your downloads and saved pages', () => browserLibrary?.flush())
     // Closing to make way for the installer still saves everything first; it is a restart, not a loss.
     app.on('before-quit', () => {
       updates?.stop()

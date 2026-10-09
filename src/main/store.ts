@@ -1,20 +1,24 @@
 import { promises as fs } from 'node:fs'
+import { damageNote, openStored } from './storedFile.ts'
 import { nullPlatform } from './platform.ts'
 import type { SecretStorePort } from './platform'
 import { join } from 'node:path'
-import { readBranches } from '../shared/conversationBranch'
-import { DEFAULT_SOURCE_PREFERENCES, readSourcePreferences } from '../shared/researchSources'
+import { readBranches } from '../shared/conversationBranch.ts'
+import { DEFAULT_SOURCE_PREFERENCES, readSourcePreferences } from '../shared/researchSources.ts'
 import type { Conversation, ReasoningEffort, Settings, SettingsUpdate, Theme } from '../shared/types'
 import { CHAT_MODELS, DEFAULT_MODEL, currentModelId } from '../shared/models.ts'
 import { DEFAULT_PROFILE_ID, dataDirFor } from '../shared/profiles.ts'
 
-interface StoredSettings extends Omit<Settings, 'hasApiKey'> {
+interface StoredSettings extends Omit<Settings, 'hasApiKey' | 'hasJudge0Key'> {
+  /** base64; DPAPI-encrypted via safeStorage when `judge0KeyEncrypted` is true. Same treatment as the model key. */
+  judge0Key?: string
+  judge0KeyEncrypted?: boolean
   /** base64; DPAPI-encrypted via safeStorage when `apiKeyEncrypted` is true. */
   apiKey?: string
   apiKeyEncrypted?: boolean
 }
 
-const DEFAULTS: Omit<Settings, 'hasApiKey'> = {
+const DEFAULTS: Omit<Settings, 'hasApiKey' | 'hasJudge0Key'> = {
   defaultModel: DEFAULT_MODEL,
   autoFallback: true,
   reasoningEffort: 'high',
@@ -27,12 +31,15 @@ const DEFAULTS: Omit<Settings, 'hasApiKey'> = {
   welcomeCompleted: false,
   introVersion: 0,
   searchSuggestions: true,
+  visualSearch: true,
   researchSources: DEFAULT_SOURCE_PREFERENCES,
   showResearchPlan: false,
   personalizedSuggestions: true,
   openBrowserOnLaunch: false,
   keepSchedulesRunning: false,
-  wakeForSchedules: false
+  wakeForSchedules: false,
+  judge0Url: '',
+  judge0KeyHeader: 'X-Auth-Token'
 }
 
 const THEMES: Theme[] = ['system', 'light', 'dark']
@@ -45,6 +52,10 @@ export class Store {
   /** Whose conversations these are. Settings stay shared; conversations belong to the profile that had them. */
   private conversationsDir: string
   private settings: StoredSettings | null = null
+  /** False when a settings file is there that Orbis could not read, in which case it must not be written over. */
+  private settingsWritable = true
+  /** What to tell somebody about the settings file, if anything went wrong opening it. */
+  private settingsProblem: string | null = null
   private readonly writeQueues = new Map<string, Promise<void>>()
 
   private readonly secrets: SecretStorePort
@@ -67,10 +78,10 @@ export class Store {
   }
 
   async getSettings(): Promise<Settings> {
-    const { apiKey, apiKeyEncrypted: _, ...rest } = await this.loadSettings()
+    const { apiKey, apiKeyEncrypted: _, judge0Key, judge0KeyEncrypted: __, ...rest } = await this.loadSettings()
     // Checked on the way out as well as in, so a file edited by hand or written by an older version still produces a
     // setting research can use rather than one it has to guess about.
-    return { ...rest, researchSources: readSourcePreferences(rest.researchSources), hasApiKey: Boolean(apiKey) }
+    return { ...rest, researchSources: readSourcePreferences(rest.researchSources), hasApiKey: Boolean(apiKey), hasJudge0Key: Boolean(judge0Key) }
   }
 
   async updateSettings(update: SettingsUpdate): Promise<Settings> {
@@ -98,6 +109,43 @@ export class Store {
     if (typeof update.keepSchedulesRunning === 'boolean') next.keepSchedulesRunning = update.keepSchedulesRunning
     if (typeof update.wakeForSchedules === 'boolean') next.wakeForSchedules = update.wakeForSchedules
 
+    // The address is checked here rather than trusted. Without this, anything that could write a settings file
+    // could point the main process's fetch at whatever it liked.
+    if (typeof update.judge0Url === 'string') {
+      const given = update.judge0Url.trim()
+      if (given === '') next.judge0Url = ''
+      else {
+        let parsed: URL | null = null
+        try {
+          parsed = new URL(given)
+        } catch {
+          parsed = null
+        }
+        if (parsed && (parsed.protocol === 'http:' || parsed.protocol === 'https:')) {
+          next.judge0Url = parsed.toString().replace(/\/+$/, '')
+        }
+      }
+    }
+    if (typeof update.judge0KeyHeader === 'string') {
+      // A header name is a token. Anything else would let a newline be smuggled into the request.
+      const header = update.judge0KeyHeader.trim()
+      if (/^[A-Za-z0-9-]{1,64}$/.test(header)) next.judge0KeyHeader = header
+      else if (header === '') next.judge0KeyHeader = 'X-Auth-Token'
+    }
+    if (typeof update.judge0Key === 'string') {
+      const key = update.judge0Key.trim()
+      if (!key) {
+        delete next.judge0Key
+        delete next.judge0KeyEncrypted
+      } else if (this.secrets.available()) {
+        next.judge0Key = this.secrets.encrypt(key).toString('base64')
+        next.judge0KeyEncrypted = true
+      } else {
+        next.judge0Key = Buffer.from(key, 'utf8').toString('base64')
+        next.judge0KeyEncrypted = false
+      }
+    }
+
     if (typeof update.apiKey === 'string') {
       const key = update.apiKey.trim()
       if (!key) {
@@ -113,8 +161,28 @@ export class Store {
     }
 
     this.settings = next
-    await this.writeJson(this.settingsPath, next)
+    // A settings file Orbis could not read is left exactly as it is: it holds the key for the model service and
+    // everything that was set up, and writing defaults over it is not something that can be undone. The change still
+    // applies for this run, so nothing the person just did is lost on screen.
+    if (this.settingsWritable) await this.writeJson(this.settingsPath, next)
     return this.getSettings()
+  }
+
+  /** What went wrong opening the settings file, in plain words. Null when nothing did. */
+  settingsFileProblem(): string | null {
+    return this.settingsProblem
+  }
+
+  /** The Judge0 key, decrypted. Never leaves the main process, and never reaches the renderer. */
+  async getJudge0Key(): Promise<string | null> {
+    const { judge0Key, judge0KeyEncrypted } = await this.loadSettings()
+    if (!judge0Key) return null
+    const bytes = Buffer.from(judge0Key, 'base64')
+    try {
+      return judge0KeyEncrypted ? this.secrets.decrypt(bytes) : bytes.toString('utf8')
+    } catch {
+      return null
+    }
   }
 
   async getApiKey(): Promise<string | null> {
@@ -166,8 +234,19 @@ export class Store {
 
   private async loadSettings(): Promise<StoredSettings> {
     if (this.settings) return this.settings
+    /*
+     * A file that could not be read is not a file that is not there.
+     *
+     * This used to be one catch around the read and the parse, so a settings file something else had open for a
+     * moment looked exactly like a first run: Orbis started from defaults, and the next save wrote them over the real
+     * settings -- the model key with them. Now an unreadable file keeps everything in memory and is not written over,
+     * and a file that is really damaged is moved aside with the time on it rather than replaced.
+     */
+    const opened = await openStored(this.settingsPath, (text) => JSON.parse(text) as Partial<StoredSettings>, () => null)
+    this.settingsWritable = opened.mayWrite
+    this.settingsProblem = damageNote(opened, 'settings')
     try {
-      const raw = JSON.parse(await fs.readFile(this.settingsPath, 'utf8')) as Partial<StoredSettings>
+      const raw = opened.value
       // Anything but an object is corrupt; the catch below starts setup again from defaults.
       if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('Corrupt settings')
       this.settings = { ...DEFAULTS, ...raw }
@@ -185,7 +264,9 @@ export class Store {
     return this.enqueue(path, async () => {
       await fs.mkdir(join(path, '..'), { recursive: true })
       const tmp = `${path}.tmp`
-      await fs.writeFile(tmp, JSON.stringify(data), 'utf8')
+      // Readable by this account only. settings.json holds the key for the model service; conversations hold
+      // everything that was ever said.
+      await fs.writeFile(tmp, JSON.stringify(data), { encoding: 'utf8', mode: 0o600 })
       await fs.rename(tmp, path)
     })
   }

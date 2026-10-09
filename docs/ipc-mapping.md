@@ -116,6 +116,14 @@ latter never knew they existed.
 
 | Channel | Becomes |
 | --- | --- |
+| `music:do` | Orbis Music: the library, the playlists, the queue, the player, importing, and keeping a song heard while browsing. One channel with named operations, like `notifications:do`. The hidden window that plays the audio talks over its own messages, not this. Mojo: a music service in the browser process |
+| `music:player-ready`, `music:player-report`, `music:player-finished` | The hidden window that holds Orbis Music’s one audio element, saying it is listening, saying what the audio really reports, and saying a track finished. It can send nothing else and ask for nothing. Mojo: the media player in the browser process |
+| `music:player-measured` | The hidden player saying what it measured in a track’s audio, or why it could not. Numbers or nothing: never a guess. Mojo: the media player in the browser process |
+| `student:do` | Orbis Student: onboarding, Focus sessions, goals, tasks, capsules, spaces, saved-for-later, learning, the study library, progress and the reset scopes. One channel with named operations, like `music:do` — Student has well over a hundred operations and a channel each would be a hundred lines here for one feature. Mojo: a study service in the browser process, with the Focus policy enforced by the network layer |
+| `ambient:do` | Ambient Intelligence: what Orbis has worked out somebody is doing, the evidence for it, putting it right, picking up something unfinished, the one suggestion worth making, and the controls. Reading only — activity is recorded in the main process off the event bus, never from a renderer. One channel with named operations, like `music:do`. Mojo: a context service in the browser process |
+| `courses:do` | Orbis Courses: the shelf, a course, a lesson, questions, marking, the 80% pass, practice, revision, mastery, Orion's lesson context, certificates and installing content. One channel with named operations, like `student:do`. Course content is validated and refused in the main process before it is stored, so nothing a window sends becomes teachable material unchecked. Mojo: a learning service in the browser process |
+| `native:do` | The Native App runtime: the catalogue, Search Labs' search, opening an app in a conversation, its lifecycle, its parameters, late-result rejection, saved state, the card a conversation shows, and Orion's validated actions. One channel with named operations, like `courses:do`. Everything that decides anything is pure and lives in `src/shared/native/`; this channel coerces and delegates. Mojo: a native app service in the browser process |
+| `experience:system-motion` | The window saying whether this computer asks for less movement, which the main process cannot read for itself. Mojo: the browser reads the setting directly |
 | `experience:get`, `experience:save`, `experience:health`, `experience:snapshots`, `experience:restore-snapshot`, `experience:remove-snapshot`, `experience:reset-section`, `experience:restore-original`, `experience:export`, `experience:check-import`, `experience:import` | How Orbis looks and what the new tab shows. Mojo onto the same store; nothing here touches a tab, a bookmark or a setting, which is what makes restoring a snapshot safe |
 
 ### Workflows — the engine, and recording one
@@ -197,6 +205,19 @@ latter never knew they existed.
 
 | `markets:strip`, `markets:strip-enabled` | The market strip along the bottom of the Orbis window: what it draws, and its on/off. Separate from `markets:state` because the strip is on screen on every page and must not re-read the whole of Markets to move a rail, and separate from `markets:quotes` because that one releases every subscription it was not asked for |
 
+## Orbis Visual Search
+
+Visual Search (hold Ctrl, drag over a page, ask Orion about it) adds nothing to the boundary counted here. Its three
+channels — asking what it can do, asking Orion about a selection, and running one of its actions — are answered by the
+**helper**, whose channels are a separate boundary from the Electron IPC in this map, because the thing that calls them
+is the browser extension's worker rather than the Orbis window. The only Electron-side addition is one message from the
+main process to the renderer, carrying a selection into the conversation or opening a laboratory with what was read out
+of it; a message sent to the window is not a channel the window can call, so it is not in the count either.
+
+Where it joins the systems already in this map: the question goes through the same chat the window uses, a search goes
+through the Browser Control Layer, keeping a result goes to the real Notes, and a laboratory is opened by the Native App
+runtime. Nothing in it is a second copy of any of those.
+
 There are now two strips, and they read the same answer by different routes: the one along the bottom of the **Orbis window** is a React component and reads `markets:strip` here, while the one along the bottom of the **browser** is a WebUI page and reads through the helper, whose channels are a separate boundary from the Electron IPC counted here. Which markets each shows is decided in one place either way — `src/shared/markets/strip.ts` — so the two cannot drift into showing different coins.
 
 ### Security activity — what Orbis recorded about its own security
@@ -274,6 +295,22 @@ what a profile has *decided* is persisted, which is why permissions and projects
 | `tabLock:createGroup`, `tabLock:removeGroup`, `tabLock:unlockGroup`, `tabLock:changeGroupPassword`, `tabLock:resetGroupPassword` | The tab passwords themselves. Mojo onto the same store; the key never leaves the browser process, and the account password is the only way back into a forgotten one |
 | `tabLock:setGroupPolicy`, `tabLock:setDefaultPolicy`, `tabLock:setTabPolicy`, `tabLock:addRule`, `tabLock:removeRule`, `tabLock:setRules` | When a tab locks, and which sites are protected automatically. Mojo onto the same store |
 | `tabLock:protect`, `tabLock:unprotect`, `tabLock:lockTab`, `tabLock:unlockTab`, `tabLock:lockAll` | Locking and unlocking. Mojo; in Chromium the hiding itself belongs to the tab strip and the address bar rather than to anything Orbis draws, which is what finally makes a locked tab's title, icon, address, hover card and thumbnail unavailable rather than merely unpainted |
+
+### Running code — the Code Playground
+
+The sandbox address and its key live in settings, in the main process. None of these channels takes either, so
+nothing the renderer runs can decide where code is sent. When no sandbox is configured the service asks Orion to
+read the code instead, and the answer carries `origin: 'predicted'` so a guess can never be mistaken for a run.
+
+| Channel | Becomes |
+| --- | --- |
+| `execution:languages` | The languages the Playground offers, and whether each can really be run. Mojo, same service |
+| `execution:starter` | The example program for a language. Mojo, same service |
+| `execution:ready` | Whether a sandbox is set up, so the lab can say what Run will actually do. Mojo, same service |
+| `execution:run` | Sends source and input to the sandbox, or to Orion when there is none. Mojo, same service |
+| `physics:ask` | One question to Orion, answered whole, for the Physics Studio's research panels. Mojo, same service |
+| `quiz:write` | `writeQuiz` | Asks Orion for a quiz about a subject or a piece of text, and returns only the questions that passed every check. |
+| `physics:look` | The same question with a photograph of the simulation attached, for what the numbers do not say. Mojo, same service |
 
 ### Orion — unchanged
 

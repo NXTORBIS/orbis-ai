@@ -69,6 +69,6 @@ test('the feature names here are the ones the window actually has', () => {
   const line = /export type FeatureId =([^\n]+)/.exec(sidebar)
   assert.ok(line, "the window's feature list moved; this guard needs updating")
   const windowHas = new Set([...line[1].matchAll(/'([a-z]+)'/g)].map((m) => m[1]))
-  const used: WindowFeature[] = ['schedules', 'create', 'pages']
+  const used: WindowFeature[] = ['schedules', 'create', 'pages', 'student']
   for (const id of used) assert.ok(windowHas.has(id), `notifications route to "${id}" and the window has no such screen`)
 })

@@ -1,3 +1,5 @@
+import type { Quiz } from './quiz/build.ts'
+import type { QuizAnswer } from './quiz/score.ts'
 import type { SourcePreferences } from './researchSources'
 import type { ResearchChange, ResearchStage } from './researchRun'
 import type { SharedProject } from './portable/share'
@@ -166,6 +168,17 @@ export interface ChatArtifact {
   format?: string
 }
 
+/**
+ * A Native App opened in a conversation.
+ *
+ * Defined in shared/native/chat.ts, which owns the reference model, and imported here rather than restated so a
+ * message and the runtime cannot disagree about what a reference is. Re-exported because almost everything that reads
+ * a message imports from this file.
+ */
+import type { ChatNativeApp } from './native/chat.ts'
+
+export type { ChatNativeApp }
+
 export interface Attachment {
   name: string
   content: string
@@ -204,7 +217,33 @@ export interface ChatMessage {
   research?: Research
   /** What Orbis made, changed or drew for this reply. Handles only; the card reads each one live. */
   artifacts?: ChatArtifact[]
+  /**
+   * Native Apps opened for this reply.
+   *
+   * Pointers only, exactly like `artifacts`: the card reads the live instance when it is drawn, so a conversation
+   * never carries a copy of an app's state and never gets slower as apps accumulate in it.
+   */
+  apps?: ChatNativeApp[]
+  /**
+   * A quiz offered with this reply, and the attempt at it.
+   *
+   * Kept on the message rather than in a store of its own: the conversation is already saved, so an attempt
+   * survives a restart, and a quiz has no life outside the reply that offered it. `answers` grows as questions
+   * are answered, which is what lets somebody come back to a half-finished quiz.
+   */
+  quiz?: ChatQuiz
   createdAt: number
+}
+
+/** A quiz in the conversation, and how far through it somebody is. */
+export interface ChatQuiz {
+  quiz: Quiz
+  /** What has been answered so far, oldest first. */
+  answers: QuizAnswer[]
+  /** Set once the end screen has been reached. */
+  finished?: boolean
+  /** The quiz this one is a second go at, when it was made from the missed questions. */
+  retryOf?: string
 }
 
 /** A web page Orion actually read (or found) while researching current information. */
@@ -337,9 +376,39 @@ export interface Conversation {
 export type Theme = 'system' | 'light' | 'dark'
 export type ReasoningEffort = 'low' | 'high' | 'max'
 
+/**
+ * A Visual Search arriving in the Orbis window from the browser.
+ *
+ * `chat` carries the selection and the answer into the conversation, so the next question needs no reselecting.
+ * `lab` carries what Orion read out of the picture into the Native App for that kind of thing. The picture is a data
+ * url of the crop -- the selection itself, never the whole window.
+ */
+export interface VisualArrival {
+  what: 'chat' | 'lab'
+  /** The selection, as a picture. Present for `chat`; a laboratory is opened from the structure, not the pixels. */
+  image?: string
+  question?: string
+  answer?: string
+  title?: string
+  page?: { title?: string; url?: string }
+  /** For `lab`: which Native App, and what was read out of the selection to open it with. */
+  appId?: string
+  data?: Record<string, unknown>
+}
+
 export interface Settings {
   /** The renderer never receives the key itself, only whether one is stored. */
   hasApiKey: boolean
+  /**
+   * Where code from the Code Playground is compiled and run — a Judge0 instance, yours or a hosted one. Empty
+   * means there is no sandbox, and the Playground falls back to Orion reading the code and saying what it thinks
+   * would happen, labelled as a guess.
+   */
+  judge0Url: string
+  /** Which header the instance wants its key in. RapidAPI and a self-hosted instance differ. */
+  judge0KeyHeader: string
+  /** As with the model key, the renderer is told only whether one is stored, never what it is. */
+  hasJudge0Key: boolean
   defaultModel: string
   autoFallback: boolean
   reasoningEffort: ReasoningEffort
@@ -365,6 +434,14 @@ export interface Settings {
   searchSuggestions: boolean
   /** The address bar suggests from local history, searches, bookmarks and research, and learns from picks. */
   personalizedSuggestions: boolean
+  /**
+   * Hold Ctrl and drag over anything on a page to ask Orion about it (Orbis Visual Search).
+   *
+   * On by default, and turning it off genuinely removes the gesture rather than hiding a button: the browser asks
+   * Orbis whether it is on before it watches for the drag at all, so with it off a page behaves exactly as it would
+   * without Orbis.
+   */
+  visualSearch: boolean
   /**
    * Which kinds of source research leans towards, and which sites it never reads.
    *
@@ -399,9 +476,35 @@ export interface Settings {
   wakeForSchedules: boolean
 }
 
-export type SettingsUpdate = Partial<Omit<Settings, 'hasApiKey'>> & {
+export type SettingsUpdate = Partial<Omit<Settings, 'hasApiKey' | 'hasJudge0Key'>> & {
   /** Empty string clears the stored key. */
   apiKey?: string
+  /** The Judge0 key. Empty clears it, and it is never sent back out. */
+  judge0Key?: string
+}
+
+/** What came back from running (or predicting) a program. Mirrors the engine's own RunResult exactly. */
+export interface CodeRunResult {
+  language: string
+  /** 'ran' means it really was compiled and executed. 'predicted' means a model read it and guessed. */
+  origin: 'ran' | 'predicted'
+  verdict: 'ok' | 'wrong-output' | 'compile-error' | 'runtime-error' | 'timeout' | 'memory' | 'provider-error'
+  stdout: string
+  stderr: string
+  compileOutput: string
+  /** Null for a prediction: nothing ran, so there is no time to report and inventing one would be a lie. */
+  seconds: number | null
+  memoryKb: number | null
+  exitCode: number | null
+  /** Said above the output, including why this is a prediction when it is one. Never omitted. */
+  says: string
+  notes: string[]
+}
+
+export interface CodeRunRefusal {
+  error: string
+  message: string
+  fix: string
 }
 
 export interface ModelInfo {
@@ -503,6 +606,13 @@ export type StreamEvent =
   | { type: 'research'; research: Research }
   /** Something was made, changed or drawn for this reply. Sent once it has been kept and its copy checked. */
   | { type: 'artifact'; artifact: ChatArtifact }
+  /**
+   * A Native App was opened for this reply.
+   *
+   * A pointer, sent once the runtime has actually opened it — never before, so a card never appears for an app that
+   * then failed to start.
+   */
+  | { type: 'app'; app: ChatNativeApp }
 
 export interface PickedFiles {
   attachments: Attachment[]
@@ -1586,6 +1696,36 @@ export interface NxtorbisApi {
   notificationClear(id: string | null): Promise<{ ok: boolean }>
   notificationAct(id: string, action: string): Promise<{ ok: boolean; message?: string }>
   notificationWatching(what: string | null): Promise<{ ok: boolean }>
+  /** Orbis Music: one channel, named operations. See `src/main/music/service.ts` for the list. */
+  music(op: string, a?: unknown, b?: unknown, c?: unknown): Promise<unknown>
+  onMusicChanged(listener: (state: unknown) => void): () => void
+  onMusicImportProgress(listener: (progress: unknown) => void): () => void
+
+  /**
+   * Ambient Intelligence: what Orbis has worked out somebody is doing.
+   *
+   * Reading only. Activity is recorded in the main process off the event bus, so nothing a window can call will
+   * write a row into somebody's history.
+   */
+  ambient(op: string, a?: unknown, b?: unknown): Promise<unknown>
+  onAmbientChanged(listener: (context: unknown) => void): () => void
+
+  /** Orbis Courses: one operation channel. Content is validated in the main process before it is ever stored. */
+  courses(op: string, a?: unknown, b?: unknown, c?: unknown): Promise<unknown>
+
+  /**
+   * The Native App runtime: one operation channel.
+   *
+   * Everything that decides anything is in `src/shared/native/` and runs in the main process. A window asks to open
+   * an app, set a value or apply a result; whether that is allowed is never decided here.
+   */
+  native(op: string, a?: unknown, b?: unknown, c?: unknown): Promise<unknown>
+
+  /** Orbis Student: one operation channel, and a nudge when anything changed. */
+  student(op: string, a?: unknown, b?: unknown, c?: unknown): Promise<unknown>
+  onStudentChanged(listener: () => void): () => void
+  /** Tells Orbis whether this computer asks for less movement; only a window can read that setting. */
+  systemWantsStillness(still: boolean): Promise<void>
   notificationTest(): Promise<{ ok: boolean; message: string }>
   onNotificationsChanged(listener: () => void): () => void
   onNotificationOpen(listener: (what: { id: string; event: string; subject: Record<string, string> }) => void): () => void
@@ -1765,6 +1905,14 @@ export interface NxtorbisApi {
   /** The browser asked to be put away and the chat shown; the browser stays open behind it. */
   onChromiumHide(callback: () => void): () => void
   onChromiumClosed(callback: () => void): () => void
+  /** File > New Chat in the native menu. */
+  onMenuNewChat(listener: () => void): () => void
+  /** Help > About Orbis in the native menu. */
+  onMenuAbout(listener: () => void): () => void
+  /** A question handed to the chat from somewhere outside it, such as "Ask Orion" on a page. */
+  onChatAsk(listener: (text: string) => void): () => void
+  /** A Visual Search carried into the window: "Continue in chat", or a laboratory opened from what was selected. */
+  onVisualArrived(listener: (arrival: VisualArrival) => void): () => void
   chromiumOpen(input: string, options?: { newTab?: boolean; more?: string[] }): Promise<{ ok: boolean; detail: string }>
   getBrowserLibrary(): Promise<BrowserLibrarySnapshot>
   /** How this profile has arranged the browser sidebar. */
@@ -1803,6 +1951,53 @@ export interface NxtorbisApi {
   getControlState(parts?: string[]): Promise<Record<string, unknown>>
   /** Carries out a command: validated, approved when consequential, verified. */
   executeControl(command: BrowserCommand): Promise<CommandResult>
+
+  /**
+   * Running code in the Code Playground.
+   *
+   * The sandbox address and key are not parameters: they live in settings, in the main process. A channel that
+   * took a URL from the page would let anything the page can reach decide where code is sent.
+   */
+  /**
+   * Told when a Native App's instance changes — by Orion, by another card, by anything. The card re-reads for
+   * itself; this carries only which instance it was. Returns a function that stops listening.
+   */
+  onNativeChanged(listen: (instanceId: string) => void): () => void
+
+  /** Asks Orion one question and returns the whole answer. Used by the Physics Studio's research panels. */
+  physicsAsk(prompt: string, schema: string | null): Promise<string | null>
+  /**
+   * Asks Orion for a quiz about a subject, or about a piece of text.
+   *
+   * What comes back has been checked question by question in main -- exactly one right answer, the answer among
+   * the options, no repeated options, an explanation on every question -- so the window never holds a question
+   * that cannot be answered. A refusal says what went wrong instead.
+   */
+  writeQuiz(asked: {
+    about: string
+    count: number
+    difficulty: 'easy' | 'ordinary' | 'hard'
+    source?: string
+    from?: string
+  }): Promise<{ quiz: Quiz } | { problem: string; fix: string; failed: string }>
+  /** The same question with a photograph of the simulation attached, for what the numbers cannot say. */
+  physicsLook(prompt: string, area: { x: number; y: number; width: number; height: number }): Promise<string | null>
+
+  executionLanguages(): Promise<{
+    languages: {
+      id: string
+      name: string
+      category: string
+      extension: string
+      syntax: string
+      /** False when the sandbox cannot run it, so only a prediction is ever possible. */
+      canReallyRun: boolean
+    }[]
+    notes: string[]
+  }>
+  executionStarter(language: string): Promise<string>
+  executionReady(): Promise<{ sandbox: boolean; orion: boolean; says: string }>
+  runCode(request: { language: string; source: string; stdin: string; predictOnly?: boolean }): Promise<CodeRunResult | CodeRunRefusal>
   runControlPlan(plan: Plan, source?: 'user' | 'automation'): Promise<RunState>
   controlRun(id: string, action: RunControl): Promise<boolean>
   listControlRuns(): Promise<RunState[]>

@@ -88,8 +88,32 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = Object.freeze([
     label: 'Browsing',
     blurb: 'The browser, what it suggests as you type, and the market strip.',
     icon: 'globe',
-    keywords: ['browser', 'default browser', 'suggestions', 'address bar', 'search', 'history', 'launch', 'startup', 'markets', 'ticker', 'strip', 'prices', 'pages you have read', 'reading', 'recall', 'remember pages'],
-    settings: ['searchSuggestions', 'personalizedSuggestions', 'openBrowserOnLaunch', 'keepSchedulesRunning', 'wakeForSchedules']
+    keywords: [
+      'browser',
+      'default browser',
+      'suggestions',
+      'address bar',
+      'search',
+      'history',
+      'launch',
+      'startup',
+      'markets',
+      'ticker',
+      'strip',
+      'prices',
+      'pages you have read',
+      'reading',
+      'recall',
+      'remember pages',
+      // Which sources research uses, and whether it shows its plan first. Searching for either word has to land here.
+      'research',
+      'sources',
+      'research plan',
+      'blocked sites',
+      'official sources',
+      'academic'
+    ],
+    settings: ['searchSuggestions', 'personalizedSuggestions', 'visualSearch', 'openBrowserOnLaunch', 'keepSchedulesRunning', 'wakeForSchedules', 'researchSources', 'showResearchPlan']
   },
   {
     id: 'notifications',
@@ -149,7 +173,18 @@ export const NOT_IN_SETTINGS: Readonly<Record<string, string>> = Object.freeze({
   hasApiKey: 'reported, not chosen',
   // Set once by the startup screen and never again. A switch would offer to replay an introduction.
   welcomeCompleted: 'set by the startup screen',
-  introVersion: 'set by the startup screen'
+  introVersion: 'set by the startup screen',
+  /*
+   * The code sandbox the Code Playground runs programs in.
+   *
+   * Its address and the header its key goes in are set up once for an installation, not chosen while using Orbis, and
+   * there is no screen for them -- the Playground says in words when there is no sandbox and falls back to Orion
+   * reading the code and labelling the answer a guess. A switch here would imply there was something to switch.
+   */
+  judge0Url: 'set up once for the installation, with no screen for it',
+  judge0KeyHeader: 'set up once for the installation, with no screen for it',
+  // Answered by whether a key has been entered, not chosen -- the same as the model key above.
+  hasJudge0Key: 'reported, not chosen'
 })
 
 export const sectionById = (id: string): SettingsSection | undefined =>
