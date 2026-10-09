@@ -1,0 +1,1376 @@
+/*
+ * The utility classes the ported simulations are written in.
+ *
+ * The 230 simulations came across from the original site unedited, and they are written in Tailwind. Orbis has no
+ * Tailwind and adding it would drop a second utility layer on top of 18,000 lines of existing CSS, where a name
+ * like `.grid` or `.flex` would collide with something. So this implements exactly the classes those files
+ * actually use, scoped under `.jx` — nothing here can leak out, and nothing outside can reach in.
+ *
+ * The colour names map onto Orbis's own tokens, so the laboratories follow the theme rather than carrying the
+ * original site's palette into a window that is not it.
+ */
+
+/*
+ * Tailwind's reset sets this on everything, and Orbis's does not. Without it a `width: 100%` input adds its own
+ * padding and border on top and overflows its column by a few pixels — which is every parameter row in all 230
+ * simulations at once.
+ */
+.jx,
+.jx *,
+.jx *::before,
+.jx *::after {
+  box-sizing: border-box;
+}
+
+.jx {
+  --jx-border: var(--glass-border);
+  --jx-card: var(--panel);
+  --jx-bg: var(--bg-deep);
+  --jx-muted: var(--faint);
+  --jx-fore: var(--text);
+  --jx-cyan: var(--cyan);
+  color: var(--jx-fore);
+  font-size: 13px;
+}
+
+/* ---------------------------------------------------------------- layout */
+
+.jx .flex { display: flex; }
+.jx .grid { display: grid; }
+.jx .block { display: block; }
+.jx .hidden { display: none; }
+.jx .inline-flex { display: inline-flex; }
+.jx .flex-wrap { flex-wrap: wrap; }
+.jx .flex-col { flex-direction: column; }
+.jx .flex-1 { flex: 1 1 0%; }
+.jx .flex-shrink-0, .jx .shrink-0 { flex-shrink: 0; }
+.jx .items-center { align-items: center; }
+.jx .items-start { align-items: flex-start; }
+.jx .items-end { align-items: flex-end; }
+.jx .items-baseline { align-items: baseline; }
+.jx .justify-between { justify-content: space-between; }
+.jx .justify-center { justify-content: center; }
+.jx .justify-end { justify-content: flex-end; }
+.jx .ml-auto { margin-left: auto; }
+.jx .mr-auto { margin-right: auto; }
+.jx .mx-auto { margin-left: auto; margin-right: auto; }
+.jx .relative { position: relative; }
+.jx .absolute { position: absolute; }
+.jx .inset-0 { inset: 0; }
+.jx .overflow-hidden { overflow: hidden; }
+.jx .overflow-auto { overflow: auto; }
+.jx .overflow-x-auto { overflow-x: auto; }
+.jx .overflow-y-auto { overflow-y: auto; }
+.jx .h-full { height: 100%; }
+.jx .w-full { width: 100%; }
+.jx .h-auto { height: auto; }
+.jx .min-w-0 { min-width: 0; }
+.jx .max-w-full { max-width: 100%; }
+.jx .w-28 { width: 7rem; }
+.jx .w-24 { width: 6rem; }
+.jx .w-16 { width: 4rem; }
+.jx .w-12 { width: 3rem; }
+.jx .w-20 { width: 5rem; }
+.jx .h-6 { height: 1.5rem; }
+.jx .h-8 { height: 2rem; }
+.jx .h-9 { height: 2.25rem; }
+.jx .h-10 { height: 2.5rem; }
+.jx .w-6 { width: 1.5rem; }
+.jx .w-8 { width: 2rem; }
+.jx .w-9 { width: 2.25rem; }
+.jx .text-left { text-align: left; }
+.jx .text-center { text-align: center; }
+.jx .text-right { text-align: right; }
+.jx .whitespace-nowrap { white-space: nowrap; }
+.jx .whitespace-pre-wrap { white-space: pre-wrap; }
+.jx .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jx .cursor-pointer { cursor: pointer; }
+.jx .select-none { user-select: none; }
+.jx .pointer-events-none { pointer-events: none; }
+
+/* Columns. The bracket forms are the ones the simulations actually use. */
+.jx .grid-cols-1 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+.jx .grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.jx .grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.jx .grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.jx .grid-cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.jx .grid-cols-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.jx .col-span-2 { grid-column: span 2 / span 2; }
+.jx .col-span-3 { grid-column: span 3 / span 3; }
+.jx .col-span-full { grid-column: 1 / -1; }
+
+/*
+ * The three-column simulation layout, and the two-column one. The lab card is far narrower than the original
+ * site's full page, so these collapse on the container rather than the viewport — measuring the window would put
+ * a 260px sidebar beside a 90px canvas on a perfectly wide screen.
+ */
+.jx-wrap { container-type: inline-size; }
+
+.jx .lg\:grid-cols-\[260px_1fr_300px\],
+.jx .lg\:grid-cols-\[280px_1fr_300px\],
+.jx .lg\:grid-cols-\[260px_1fr_260px\],
+.jx .lg\:grid-cols-\[260px_1fr\],
+.jx .lg\:grid-cols-\[280px_1fr\],
+.jx .lg\:grid-cols-2,
+.jx .lg\:grid-cols-3 {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/*
+ * Three columns as soon as there is room for them, measured on the studio's own box rather than the window. The
+ * original site is a full page; a lab card is narrower, so the side columns are trimmed rather than the layout
+ * abandoned — one tall column means scrolling past the canvas to reach the controls, which is what it is for.
+ */
+@container (min-width: 620px) {
+  .jx .lg\:grid-cols-\[260px_1fr_300px\] { grid-template-columns: 200px minmax(0, 1fr) 215px; }
+  .jx .lg\:grid-cols-\[280px_1fr_300px\] { grid-template-columns: 205px minmax(0, 1fr) 215px; }
+  .jx .lg\:grid-cols-\[260px_1fr_260px\] { grid-template-columns: 200px minmax(0, 1fr) 200px; }
+}
+
+@container (min-width: 1000px) {
+  .jx .lg\:grid-cols-\[260px_1fr_300px\] { grid-template-columns: 240px minmax(0, 1fr) 270px; }
+  .jx .lg\:grid-cols-\[280px_1fr_300px\] { grid-template-columns: 250px minmax(0, 1fr) 270px; }
+  .jx .lg\:grid-cols-\[260px_1fr_260px\] { grid-template-columns: 240px minmax(0, 1fr) 240px; }
+}
+
+@container (min-width: 560px) {
+  .jx .lg\:grid-cols-\[260px_1fr\] { grid-template-columns: 230px minmax(0, 1fr); }
+  .jx .lg\:grid-cols-\[280px_1fr\] { grid-template-columns: 245px minmax(0, 1fr); }
+  .jx .lg\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .jx .lg\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+/* ---------------------------------------------------------------- spacing */
+
+.jx .gap-1 { gap: 0.25rem; }
+.jx .gap-1\.5 { gap: 0.375rem; }
+.jx .gap-2 { gap: 0.5rem; }
+.jx .gap-3 { gap: 0.75rem; }
+.jx .gap-4 { gap: 1rem; }
+.jx .gap-6 { gap: 1.5rem; }
+.jx .gap-x-2 { column-gap: 0.5rem; }
+.jx .gap-y-1 { row-gap: 0.25rem; }
+
+.jx .p-1 { padding: 0.25rem; }
+.jx .p-2 { padding: 0.5rem; }
+.jx .p-2\.5 { padding: 0.625rem; }
+.jx .p-3 { padding: 0.75rem; }
+.jx .p-4 { padding: 1rem; }
+.jx .px-1 { padding-left: 0.25rem; padding-right: 0.25rem; }
+.jx .px-2 { padding-left: 0.5rem; padding-right: 0.5rem; }
+.jx .px-2\.5 { padding-left: 0.625rem; padding-right: 0.625rem; }
+.jx .px-3 { padding-left: 0.75rem; padding-right: 0.75rem; }
+.jx .px-4 { padding-left: 1rem; padding-right: 1rem; }
+.jx .px-8 { padding-left: 2rem; padding-right: 2rem; }
+.jx .py-0\.5 { padding-top: 0.125rem; padding-bottom: 0.125rem; }
+.jx .py-1 { padding-top: 0.25rem; padding-bottom: 0.25rem; }
+.jx .py-1\.5 { padding-top: 0.375rem; padding-bottom: 0.375rem; }
+.jx .py-2 { padding-top: 0.5rem; padding-bottom: 0.5rem; }
+.jx .py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+.jx .pb-1 { padding-bottom: 0.25rem; }
+.jx .pt-1 { padding-top: 0.25rem; }
+.jx .pl-4 { padding-left: 1rem; }
+
+.jx .mt-1 { margin-top: 0.25rem; }
+.jx .mt-2 { margin-top: 0.5rem; }
+.jx .mt-3 { margin-top: 0.75rem; }
+.jx .mt-4 { margin-top: 1rem; }
+.jx .mb-1 { margin-bottom: 0.25rem; }
+.jx .mb-2 { margin-bottom: 0.5rem; }
+.jx .mb-3 { margin-bottom: 0.75rem; }
+.jx .ml-1 { margin-left: 0.25rem; }
+.jx .ml-2 { margin-left: 0.5rem; }
+
+/* Tailwind's space-y puts the gap between siblings, not around them. */
+.jx .space-y-1 > * + * { margin-top: 0.25rem; }
+.jx .space-y-2 > * + * { margin-top: 0.5rem; }
+.jx .space-y-3 > * + * { margin-top: 0.75rem; }
+.jx .space-y-4 > * + * { margin-top: 1rem; }
+.jx .space-x-2 > * + * { margin-left: 0.5rem; }
+
+/* ---------------------------------------------------------------- type */
+
+.jx .text-\[10px\] { font-size: 10px; }
+.jx .text-\[11px\] { font-size: 11px; }
+.jx .text-xs { font-size: 11.5px; }
+.jx .text-sm { font-size: 12.5px; }
+.jx .text-base { font-size: 14px; }
+.jx .text-lg { font-size: 16px; }
+.jx .text-xl { font-size: 18px; }
+.jx .text-2xl { font-size: 22px; }
+.jx .font-mono { font-family: ui-monospace, 'Cascadia Code', Consolas, monospace; }
+.jx .font-medium { font-weight: 500; }
+.jx .font-semibold { font-weight: 600; }
+.jx .font-bold { font-weight: 700; }
+.jx .uppercase { text-transform: uppercase; }
+.jx .capitalize { text-transform: capitalize; }
+.jx .tracking-wide { letter-spacing: 0.025em; }
+.jx .tracking-wider { letter-spacing: 0.05em; }
+.jx .leading-relaxed { line-height: 1.625; }
+.jx .italic { font-style: italic; }
+.jx .underline-offset-4 { text-underline-offset: 4px; }
+.jx .tabular-nums { font-variant-numeric: tabular-nums; }
+
+/* ---------------------------------------------------------------- colour */
+
+.jx .text-muted-foreground { color: var(--jx-muted); }
+.jx .text-muted-foreground\/70 { color: color-mix(in srgb, var(--jx-muted) 70%, transparent); }
+.jx .text-foreground { color: var(--jx-fore); }
+.jx .text-cyan-j { color: var(--jx-cyan); }
+.jx .text-cyan-400, .jx .text-cyan-500 { color: var(--jx-cyan); }
+.jx .text-red-500, .jx .text-red-400 { color: #f0564a; }
+.jx .text-orange-400, .jx .text-amber-400 { color: #f0a33a; }
+.jx .text-green-400, .jx .text-emerald-400 { color: #4ad48a; }
+.jx .text-purple-400, .jx .text-violet-400 { color: #a855f7; }
+.jx .text-blue-400 { color: #5b9cf8; }
+.jx .text-yellow-400 { color: #e8c54a; }
+.jx .text-primary { color: var(--jx-cyan); }
+.jx .text-primary-foreground { color: var(--bg-deep); }
+.jx .text-destructive-foreground { color: #fff; }
+
+.jx .bg-background { background: var(--jx-bg); }
+.jx .bg-transparent { background: transparent; }
+.jx .bg-card\/30 { background: color-mix(in srgb, var(--jx-card) 30%, transparent); }
+.jx .bg-card\/40 { background: color-mix(in srgb, var(--jx-card) 40%, transparent); }
+.jx .bg-card\/60 { background: color-mix(in srgb, var(--jx-card) 60%, transparent); }
+.jx .bg-cyan-j\/5 { background: color-mix(in srgb, var(--jx-cyan) 7%, transparent); }
+.jx .bg-cyan-j\/10 { background: color-mix(in srgb, var(--jx-cyan) 12%, transparent); }
+.jx .bg-primary { background: var(--jx-cyan); }
+.jx .bg-secondary { background: var(--bg-mid); }
+.jx .bg-destructive { background: #c0392b; }
+.jx .bg-muted { background: var(--bg-mid); }
+
+.jx .border { border: 1px solid var(--jx-border); }
+.jx .border-t { border-top: 1px solid var(--jx-border); }
+.jx .border-b { border-bottom: 1px solid var(--jx-border); }
+.jx .border-l { border-left: 1px solid var(--jx-border); }
+.jx .border-border\/60 { border-color: color-mix(in srgb, var(--jx-border) 60%, transparent); }
+.jx .border-border\/50 { border-color: color-mix(in srgb, var(--jx-border) 50%, transparent); }
+.jx .border-input { border-color: var(--jx-border); }
+.jx .border-cyan-j\/30 { border-color: color-mix(in srgb, var(--jx-cyan) 30%, transparent); }
+.jx .border-dashed { border-style: dashed; }
+
+.jx .rounded-md { border-radius: 6px; }
+.jx .rounded-lg { border-radius: 9px; }
+.jx .rounded-xl { border-radius: 12px; }
+.jx .rounded-2xl { border-radius: 16px; }
+.jx .rounded-full { border-radius: 999px; }
+
+.jx .shadow, .jx .shadow-sm { box-shadow: 0 1px 2px rgb(0 0 0 / 0.25); }
+.jx .opacity-50 { opacity: 0.5; }
+.jx .opacity-70 { opacity: 0.7; }
+
+/* ---------------------------------------------------------------- icons */
+
+/* Tailwind's size-N sets both. lucide renders an svg, and without this every icon is its natural 24px. */
+.jx .size-3 { width: 0.75rem; height: 0.75rem; }
+.jx .size-3\.5 { width: 0.875rem; height: 0.875rem; }
+.jx .size-4 { width: 1rem; height: 1rem; }
+.jx .size-5 { width: 1.25rem; height: 1.25rem; }
+.jx .size-6 { width: 1.5rem; height: 1.5rem; }
+.jx .h-4 { height: 1rem; }
+.jx .w-4 { width: 1rem; }
+.jx .h-3 { height: 0.75rem; }
+.jx .w-3 { width: 0.75rem; }
+.jx .h-5 { height: 1.25rem; }
+.jx .w-5 { width: 1.25rem; }
+
+.jx svg { flex-shrink: 0; }
+
+/* ---------------------------------------------------------------- controls */
+
+.jx .accent-cyan-500 { accent-color: var(--jx-cyan); }
+
+.jx input[type='range'] {
+  appearance: none;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--bg-mid);
+  accent-color: var(--jx-cyan);
+}
+
+.jx input[type='range']::-webkit-slider-thumb {
+  appearance: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--jx-cyan);
+  cursor: pointer;
+}
+
+.jx input[type='checkbox'] {
+  accent-color: var(--jx-cyan);
+  width: 14px;
+  height: 14px;
+}
+
+.jx select,
+.jx input[type='text'],
+.jx input[type='number'] {
+  border: 1px solid var(--jx-border);
+  border-radius: 6px;
+  background: var(--jx-bg);
+  color: var(--jx-fore);
+  font: inherit;
+  padding: 4px 7px;
+}
+
+.jx select:focus-visible,
+.jx input:focus-visible,
+.jx button:focus-visible {
+  outline: 2px solid var(--jx-cyan);
+  outline-offset: 1px;
+}
+
+/* The ported Button. Same variants and sizes the originals ask for. */
+.jx-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--jx-fore);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease;
+}
+
+.jx-btn:disabled { opacity: 0.5; pointer-events: none; }
+.jx-btn svg { width: 1rem; height: 1rem; }
+
+.jx-btn-default { background: var(--jx-cyan); color: var(--bg-deep); }
+.jx-btn-default:hover { background: color-mix(in srgb, var(--jx-cyan) 88%, #fff); }
+.jx-btn-outline { border-color: var(--jx-border); }
+.jx-btn-outline:hover { background: var(--bg-mid); }
+.jx-btn-secondary { background: var(--bg-mid); border-color: var(--jx-border); }
+.jx-btn-ghost:hover { background: var(--bg-mid); }
+.jx-btn-destructive { background: #c0392b; color: #fff; }
+.jx-btn-link { color: var(--jx-cyan); text-decoration: underline; text-underline-offset: 4px; }
+
+.jx-btn-size-default { height: 2.1rem; padding: 0 0.85rem; }
+.jx-btn-size-sm { height: 1.8rem; padding: 0 0.6rem; font-size: 11.5px; }
+.jx-btn-size-lg { height: 2.4rem; padding: 0 1.6rem; }
+.jx-btn-size-icon { height: 2.1rem; width: 2.1rem; padding: 0; }
+
+/* ---------------------------------------------------------------- canvas */
+
+.jx canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* The simulations paint their own background; without this the canvas is transparent over the card. */
+  background: var(--bg-deep);
+  touch-action: none;
+}
+
+/* recharts draws its own text; keep it legible against the Orbis background. */
+.jx .recharts-text { fill: var(--jx-muted); }
+.jx .recharts-cartesian-axis-line,
+.jx .recharts-cartesian-axis-tick-line { stroke: var(--jx-border); }
+
+/* ---------------------------------------------------- the ported page heading */
+
+.jx-pagetitle {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.jx-pagetitle h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.jx-pagetitle p {
+  margin: 3px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--jx-muted);
+  max-width: 70ch;
+}
+
+/* A link with nowhere to go. It keeps its place in the layout and does not pretend to be pressable. */
+.jx-link {
+  color: var(--jx-muted);
+  cursor: default;
+}
+
+.jx-input {
+  width: 100%;
+  border: 1px solid var(--jx-border);
+  border-radius: 7px;
+  background: var(--jx-bg);
+  color: var(--jx-fore);
+  font: inherit;
+  font-size: 12.5px;
+  padding: 5px 8px;
+}
+
+.jx-select {
+  width: 100%;
+  border: 1px solid var(--jx-border);
+  border-radius: 7px;
+  background: var(--jx-bg);
+  color: var(--jx-fore);
+  font: inherit;
+  font-size: 12.5px;
+  padding: 5px 8px;
+}
+
+/*
+ * The studio's own max-width centres it on a full page; inside a card it should fill what it is given.
+ *
+ * `width: 100%` and `min-width: 0` are the part that matters. The studio is a flex column, so its page is a flex
+ * item — and a flex item with no width sizes to its content. Lifting the max-width alone let it grow to 1,386
+ * pixels inside a 1,154-pixel box, which put the column of live numbers off the side of the screen.
+ */
+.jx .mx-auto.max-w-7xl {
+  max-width: none;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+}
+
+/* --------------------------------------------- what the runtime audit found */
+
+/*
+ * The parameter labels overflowed their column by about four pixels.
+ *
+ * Tailwind's `block` leaves a flex or grid child at its content width, so a long parameter name pushed the label
+ * wider than the 200px column it sits in and the row scrolled sideways. These are the labels in every one of the
+ * 230 simulations, so it showed up everywhere at once.
+ */
+.jx label,
+.jx .space-y-2 > *,
+.jx .space-y-3 > * {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.jx label > span,
+.jx label > div > span {
+  overflow-wrap: anywhere;
+}
+
+/* A number beside a label must not be the thing that widens the row. */
+.jx label .font-mono {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+/*
+ * A range input has no intrinsic width to speak of, and without this it refuses to shrink inside a grid column.
+ *
+ * The inset is for the thumb: it is drawn centred on the track's end, so at either extreme half of it hangs
+ * outside the element and pushes the row about four pixels wider than the column it sits in.
+ */
+.jx input[type='range'] {
+  width: calc(100% - 6px);
+  min-width: 0;
+  margin-left: 3px;
+  margin-right: 3px;
+}
+
+/* The name beside its value: the name must be the part that gives way, not the row. */
+.jx label > div {
+  min-width: 0;
+}
+
+.jx label > div > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/*
+ * Controls were coming out under eighteen pixels tall, which is below what anybody can reliably hit. The slider is
+ * the usual offender: its track is four pixels and the thumb hangs outside the box.
+ */
+.jx input[type='range'] {
+  height: 18px;
+  background: transparent;
+}
+
+.jx input[type='range']::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--bg-mid);
+}
+
+.jx input[type='range']::-webkit-slider-thumb {
+  margin-top: -4.5px;
+}
+
+.jx input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+}
+
+/* recharts measures its own text and can overrun the plot by a few pixels at the ends of an axis. */
+.jx .recharts-wrapper,
+.jx .recharts-surface {
+  overflow: visible;
+}
+
+/* Nothing in a simulation should be able to push the studio sideways. */
+.jx .grid,
+.jx .flex {
+  min-width: 0;
+}
+
+/* ------------------------------------------ reaching the controls without scrolling */
+
+/*
+ * With a topic open, the fifteen section tabs are navigation rather than the point, so they are made smaller.
+ *
+ * They are NOT put on one scrolling row. That saved a few pixels and bought a horizontal scrollbar across the
+ * studio, and something you have to scroll sideways to reach is worse than something that takes a second line.
+ *
+ * `:has(h2)` is the studio saying a topic is open: the heading only exists on a topic's own view.
+ */
+.jx:has(h2) .flex.flex-wrap.gap-1\.5 {
+  gap: 4px;
+}
+
+.jx:has(h2) .flex.flex-wrap.gap-1\.5 > button {
+  padding: 3px 9px;
+  font-size: 11px;
+}
+
+/* The heading block above a simulation: the name and one line, not a paragraph. */
+.jx:has(h2) .mb-4.flex.flex-wrap.items-center.gap-3 {
+  margin-bottom: 10px;
+}
+
+/*
+ * The canvas is given a fixed 420 pixels by the original layout, which was written for a full page with nothing
+ * above it. Inside a window that also carries the studio's own header, that pushes the transport under the fold —
+ * and the transport is the one control somebody reaches for first.
+ */
+.jx .rounded-xl.overflow-hidden:has(canvas) {
+  height: min(420px, 46vh) !important;
+}
+
+/*
+ * Nothing in the studio may be wider than the studio.
+ *
+ * The three-column layout was coming out 1,386 pixels inside an 1,194-pixel window, so the right-hand column —
+ * the one with the live numbers on it — was simply off the side of the screen. A grid child needs `min-width: 0`
+ * before a `1fr` track will actually shrink: without it the track grows to its content and takes the whole row
+ * with it.
+ */
+.jx-wrap,
+.jx {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.jx .grid,
+.jx .grid > * {
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* The scrolling tab row must scroll inside its own width rather than setting it. */
+.jx .flex.flex-wrap.gap-1\.5 {
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* A canvas has an intrinsic width and will happily push a column past the edge if it is not told otherwise. */
+.jx canvas {
+  max-width: 100%;
+}
+
+/*
+ * Nothing anywhere in the studio scrolls sideways.
+ *
+ * Every one of the 245 topics lays itself out differently, and any one of them with a wide table, a long row of
+ * readouts or a fixed-width panel would otherwise push the whole page sideways. Long content wraps or scrolls
+ * inside its own box; the page itself never does.
+ */
+.jx-wrap {
+  overflow-x: clip;
+}
+
+.jx * {
+  max-width: 100%;
+}
+
+/* A table or a pre is the usual culprit: let it scroll inside itself rather than widening the page. */
+.jx table,
+.jx pre {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/* Long unbroken strings — a formula, a hash, a URL — must break rather than widen their column. */
+.jx p,
+.jx span,
+.jx div,
+.jx li,
+.jx code {
+  overflow-wrap: anywhere;
+}
+
+/* …except where breaking a number mid-digit would be worse than a little width. */
+.jx .font-mono,
+.jx input,
+.jx button,
+.jx .recharts-wrapper * {
+  overflow-wrap: normal;
+}
+
+/* ================================================================
+ * The utilities the ported CHEMISTRY studios add on top.
+ *
+ * Their chemistry pages are the same codebase in the same Tailwind, so 142 of the 324 utilities they use were
+ * already above. These are the remaining ones. They live here rather than in chemistry.css because this file
+ * owns the `.jx` scope: two sheets both writing rules under it would mean load order decided which won.
+ * ================================================================ */
+
+@keyframes jx-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* The fade-and-rise the motion shim uses in place of framer-motion. */
+.jx .jx-rise,
+.jx-rise {
+  animation-name: jx-rise;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  animation-fill-mode: both;
+}
+
+@keyframes jx-rise {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jx .jx-rise,
+  .jx-rise,
+  .jx .animate-spin {
+    animation: none;
+  }
+}
+
+.jx .-translate-y-1\/2 { transform: translateY(-50%); }
+.jx .accent-cyan-j { accent-color: var(--jx-cyan); }
+.jx .animate-spin { animation: jx-spin 1s linear infinite; }
+.jx .aspect-square { aspect-ratio: 1 / 1; }
+.jx .backdrop-blur { backdrop-filter: blur(8px); }
+.jx .backdrop-blur-xl { backdrop-filter: blur(20px); }
+.jx .bg-amber-500\/10 { background: color-mix(in srgb, #f59e0b 10%, transparent); }
+.jx .bg-amber-500\/15 { background: color-mix(in srgb, #f59e0b 15%, transparent); }
+.jx .bg-background\/30 { background: color-mix(in srgb, var(--jx-bg) 30%, transparent); }
+.jx .bg-background\/40 { background: color-mix(in srgb, var(--jx-bg) 40%, transparent); }
+.jx .bg-border\/60 { background: color-mix(in srgb, var(--jx-border) 60%, transparent); }
+.jx .bg-card\/20 { background: color-mix(in srgb, var(--jx-card) 20%, transparent); }
+.jx .bg-card\/50 { background: color-mix(in srgb, var(--jx-card) 50%, transparent); }
+.jx .bg-card\/70 { background: color-mix(in srgb, var(--jx-card) 70%, transparent); }
+.jx .bg-destructive\/15 { background: color-mix(in srgb, #f0564a 15%, transparent); }
+.jx .bg-secondary\/40 { background: color-mix(in srgb, var(--bg-mid) 40%, transparent); }
+.jx .border-2 { border-width: 2px; }
+.jx .border-amber-500\/40 { border-color: color-mix(in srgb, #f59e0b 40%, transparent); }
+.jx .border-border\/40 { border-color: color-mix(in srgb, var(--jx-border) 40%, transparent); }
+.jx .border-border\/70 { border-color: color-mix(in srgb, var(--jx-border) 70%, transparent); }
+.jx .border-cyan-j\/20 { border-color: color-mix(in srgb, var(--jx-cyan) 20%, transparent); }
+.jx .border-cyan-j\/40 { border-color: color-mix(in srgb, var(--jx-cyan) 40%, transparent); }
+.jx .disabled\:opacity-40:disabled { opacity: 0.4; }
+.jx .disabled\:opacity-50:disabled { opacity: 0.5; }
+.jx .disabled\:opacity-60:disabled { opacity: 0.6; }
+.jx .focus\:border-cyan-j\/50:focus { border-color: color-mix(in srgb, var(--jx-cyan) 50%, transparent); }
+.jx .font-display { font-family: var(--font); font-weight: 700; }
+.jx .font-mono-j { font-family: ui-monospace, 'Cascadia Code', Consolas, monospace; }
+.jx .gap-0\.5 { gap: 2px; }
+.jx .gap-2\.5 { gap: 10px; }
+.jx .gap-5 { gap: 20px; }
+.jx .glass { background: color-mix(in srgb, var(--jx-card) 72%, transparent); backdrop-filter: blur(12px); }
+.jx .glass-border { border: 1px solid var(--jx-border); }
+.jx .grid-cols-9 { grid-template-columns: repeat(9, minmax(0, 1fr)); }
+.jx .group { position: relative; }
+.jx .group:hover .group-hover\:opacity-100 { opacity: 1.0; }
+.jx .h-11 { height: 44px; }
+.jx .h-12 { height: 48px; }
+.jx .h-16 { height: 64px; }
+.jx .h-1\.5 { height: 6px; }
+.jx .h-2 { height: 8px; }
+.jx .h-20 { height: 80px; }
+.jx .h-24 { height: 96px; }
+.jx .h-28 { height: 112px; }
+.jx .h-3\.5 { height: 14px; }
+.jx .h-48 { height: 192px; }
+.jx .h-56 { height: 224px; }
+.jx .h-64 { height: 256px; }
+.jx .hover\:bg-card\/80:hover { background: color-mix(in srgb, var(--jx-card) 80%, transparent); }
+.jx .hover\:bg-secondary:hover { background: var(--bg-mid); }
+.jx .hover\:border-border:hover { border-color: var(--jx-border); }
+.jx .hover\:border-cyan-j:hover { border-color: var(--jx-cyan); }
+.jx .hover\:border-cyan-j\/50:hover { border-color: color-mix(in srgb, var(--jx-cyan) 50%, transparent); }
+.jx .hover\:opacity-90:hover { opacity: 0.9; }
+.jx .hover\:scale-110:hover { transform: scale(1.1); }
+.jx .hover\:text-amber-400:hover { color: #fbbf24; }
+.jx .hover\:text-destructive:hover { color: #f0564a; }
+.jx .hover\:text-foreground:hover { color: var(--jx-fore); }
+.jx .inline-block { display: inline-block; }
+.jx .leading-none { line-height: 1; }
+.jx .leading-snug { line-height: 1.35; }
+.jx .leading-tight { line-height: 1.2; }
+.jx .left-3 { left: 12px; }
+.jx .left-\[3px\] { left: 3px; }
+.jx .line-clamp-3 { -webkit-line-clamp: 3; -webkit-box-orient: vertical; display: -webkit-box; overflow: hidden; }
+.jx .list-decimal { list-style: decimal; }
+.jx .list-none { list-style: none; }
+.jx .max-h-\[18rem\] { max-height: 18rem; }
+.jx .max-h-\[58vh\] { max-height: 58vh; }
+.jx .max-w-4xl { max-width: 56rem; }
+.jx .max-w-5xl { max-width: 64rem; }
+.jx .max-w-\[200px\] { max-width: 200px; }
+.jx .max-w-\[60\%\] { max-width: 60%; }
+.jx .max-w-none { max-width: none; }
+.jx .mb-1\.5 { margin-bottom: 6px; }
+.jx .mb-5 { margin-bottom: 20px; }
+.jx .mb-6 { margin-bottom: 24px; }
+.jx .mb-8 { margin-bottom: 32px; }
+.jx .min-h-\[3rem\] { min-height: 3rem; }
+.jx .ml-0\.5 { margin-left: 2px; }
+.jx .mt-0\.5 { margin-top: 2px; }
+.jx .mt-1\.5 { margin-top: 6px; }
+.jx .mt-5 { margin-top: 20px; }
+.jx .mt-6 { margin-top: 24px; }
+.jx .mx-1 { margin-left: 4px; margin-right: 4px; }
+.jx .mx-2 { margin-left: 8px; margin-right: 8px; }
+.jx .mx-3 { margin-left: 12px; margin-right: 12px; }
+.jx .my-1 { margin-top: 4px; margin-bottom: 4px; }
+.jx .my-2 { margin-top: 8px; margin-bottom: 8px; }
+.jx .my-5 { margin-top: 20px; margin-bottom: 20px; }
+.jx .opacity-0 { opacity: 0.0; }
+.jx .opacity-40 { opacity: 0.4; }
+.jx .opacity-80 { opacity: 0.8; }
+.jx .outline-none { outline: none; }
+.jx .p-0\.5 { padding: 2px; }
+.jx .p-10 { padding: 40px; }
+.jx .p-1\.5 { padding: 6px; }
+.jx .p-5 { padding: 20px; }
+.jx .p-6 { padding: 24px; }
+.jx .pb-2 { padding-bottom: 8px; }
+.jx .pb-3 { padding-bottom: 12px; }
+.jx .pb-4 { padding-bottom: 16px; }
+.jx .pl-10 { padding-left: 40px; }
+.jx .pl-5 { padding-left: 20px; }
+.jx .place-items-center { place-items: center; }
+.jx .placeholder\:text-muted-foreground::placeholder { color: var(--jx-muted); }
+.jx .pr-1 { padding-right: 4px; }
+.jx .pr-3 { padding-right: 12px; }
+.jx .prose { line-height: 1.6; }
+.jx .prose-sm { font-size: 12.5px; line-height: 1.6; }
+.jx .px-1\.5 { padding-left: 6px; padding-right: 6px; }
+.jx .px-5 { padding-left: 20px; padding-right: 20px; }
+.jx .px-6 { padding-left: 24px; padding-right: 24px; }
+.jx .py-12 { padding-top: 48px; padding-bottom: 48px; }
+.jx .py-20 { padding-top: 80px; padding-bottom: 80px; }
+.jx .py-2\.5 { padding-top: 10px; padding-bottom: 10px; }
+.jx .py-6 { padding-top: 24px; padding-bottom: 24px; }
+.jx .py-8 { padding-top: 32px; padding-bottom: 32px; }
+.jx .rounded-\[5px\] { border-radius: 5px; }
+.jx .rounded-sm { border-radius: 4px; }
+.jx .scrollbar-thin { scrollbar-width: thin; }
+.jx .self-center { align-self: center; }
+.jx .space-y-0\.5 > * + * { margin-top: 2px; }
+.jx .space-y-1\.5 > * + * { margin-top: 6px; }
+.jx .text-3xl { font-size: 25px; }
+.jx .text-4xl { font-size: 31px; }
+.jx .text-\[5\.5px\] { font-size: 5.5px; }
+.jx .text-\[6px\] { font-size: 6px; }
+.jx .text-\[7px\] { font-size: 7px; }
+.jx .text-\[8px\] { font-size: 8px; }
+.jx .text-\[9px\] { font-size: 9px; }
+.jx .text-amber-200\/90 { color: color-mix(in srgb, #fde68a 90%, transparent); }
+.jx .text-amber-500 { color: #f59e0b; }
+.jx .text-background { color: var(--jx-bg); }
+.jx .text-cyan-j\/60 { color: color-mix(in srgb, var(--jx-cyan) 60%, transparent); }
+.jx .text-cyan-j\/70 { color: color-mix(in srgb, var(--jx-cyan) 70%, transparent); }
+.jx .text-cyan-j\/80 { color: color-mix(in srgb, var(--jx-cyan) 80%, transparent); }
+.jx .text-foreground\/70 { color: color-mix(in srgb, var(--jx-fore) 70%, transparent); }
+.jx .text-foreground\/80 { color: color-mix(in srgb, var(--jx-fore) 80%, transparent); }
+.jx .text-foreground\/85 { color: color-mix(in srgb, var(--jx-fore) 85%, transparent); }
+.jx .text-foreground\/90 { color: color-mix(in srgb, var(--jx-fore) 90%, transparent); }
+.jx .text-muted-foreground\/30 { color: color-mix(in srgb, var(--jx-muted) 30%, transparent); }
+.jx .text-muted-foreground\/40 { color: color-mix(in srgb, var(--jx-muted) 40%, transparent); }
+.jx .text-muted-foreground\/80 { color: color-mix(in srgb, var(--jx-muted) 80%, transparent); }
+.jx .text-secondary-foreground { color: var(--jx-fore); }
+.jx .top-1\/2 { top: 50%; }
+.jx .top-\[1px\] { top: 1px; }
+.jx .tracking-\[0\.06em\] { letter-spacing: 0.06em; }
+.jx .tracking-\[0\.2em\] { letter-spacing: 0.2em; }
+.jx .tracking-tight { letter-spacing: -0.02em; }
+.jx .transition { transition: all 0.16s ease; }
+.jx .transition-colors { transition: color 0.16s ease, background-color 0.16s ease, border-color 0.16s ease; }
+.jx .transition-transform { transition: transform 0.16s ease; }
+.jx .w-10 { width: 40px; }
+.jx .w-11 { width: 44px; }
+.jx .w-1\.5 { width: 6px; }
+.jx .w-32 { width: 128px; }
+.jx .w-3\.5 { width: 14px; }
+.jx .w-px { width: 1px; }
+@container (min-width: 1000px) { .jx .lg\:grid-cols-5 { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+@container (min-width: 1000px) { .jx .lg\:grid-cols-\[1\.6fr_1fr\] { grid-template-columns: 1.6fr 1fr; } }
+@container (min-width: 1000px) { .jx .lg\:grid-cols-\[1fr_1\.4fr\] { grid-template-columns: 1fr 1.4fr; } }
+@container (min-width: 1000px) { .jx .lg\:grid-cols-\[280px\,1fr\] { grid-template-columns: 280px,1fr; } }
+@container (min-width: 1000px) { .jx .lg\:grid-cols-\[320px\,1fr\] { grid-template-columns: 320px,1fr; } }
+@container (min-width: 620px) { .jx .sm\:grid-cols-12 { grid-template-columns: repeat(12, minmax(0, 1fr)); } }
+@container (min-width: 620px) { .jx .sm\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container (min-width: 620px) { .jx .sm\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@container (min-width: 620px) { .jx .sm\:grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@container (min-width: 620px) { .jx .sm\:px-6 { padding-left: 24px; padding-right: 24px; } }
+@container (min-width: 620px) { .jx .sm\:py-8 { padding-top: 32px; padding-bottom: 32px; } }
+@container (min-width: 620px) { .jx .sm\:text-4xl { font-size: 31px; } }
+@container (min-width: 768px) { .jx .md\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/*
+ * The ten the generator did not recognise, written out.
+ *
+ * Each is a variant whose inner utility needs a different property than the plain form, or an arbitrary value
+ * small enough that the scale does not reach it.
+ */
+.jx .dark\:prose-invert { color: var(--jx-fore); }
+.jx .hover\:underline:hover { text-decoration: underline; }
+.jx .last\:border-0:last-child { border-width: 0; }
+.jx .mt-\[2px\] { margin-top: 2px; }
+.jx .px-\[2px\] { padding-left: 2px; padding-right: 2px; }
+
+/*
+ * The breakpoint variants. These are container queries, not media queries: a laboratory is a panel inside a
+ * window, so what matters is how wide the panel is, never how wide the screen is. `.jx` is the container.
+ */
+@container (min-width: 620px) {
+  .jx .sm\:flex-row { flex-direction: row; }
+  .jx .sm\:inline { display: inline; }
+  .jx .sm\:items-center { align-items: center; }
+  .jx .sm\:justify-start { justify-content: flex-start; }
+  .jx .sm\:text-left { text-align: left; }
+}
+.jx .jx-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  cursor: pointer;
+}
+.jx .grid-cols-18,
+.jx [class*='grid-cols-18'] {
+  grid-template-columns: repeat(18, minmax(0, 1fr));
+}
+
+/* ================================================================
+ * The utilities the ported COMPUTER SCIENCE studio adds on top.
+ *
+ * Their CS pages are the same codebase in the same Tailwind, so 240 of the 418 utilities they use were
+ * already above. These are the rest. They live here rather than in a sheet of their own because this file
+ * owns the `.jx` scope: two sheets writing rules under it would mean load order decided which won.
+ * ================================================================ */
+
+.jx .-bottom-6 { bottom: -24px; }
+.jx .-ml-2 { margin-left: -8px; }
+.jx .-right-1 { right: -4px; }
+.jx .-top-1 { top: -4px; }
+.jx .backdrop-blur-sm { backdrop-filter: blur(5px); }
+.jx .bg-amber-500\/5 { background: color-mix(in srgb, #f59e0b 5%, transparent); }
+.jx .bg-amber-500\/80 { background: color-mix(in srgb, #f59e0b 80%, transparent); }
+.jx .bg-background\/95 { background: color-mix(in srgb, var(--jx-bg) 95%, transparent); }
+.jx .bg-card\/80 { background: color-mix(in srgb, var(--jx-card) 80%, transparent); }
+.jx .bg-cyan-j\/15 { background: color-mix(in srgb, var(--jx-cyan) 15%, transparent); }
+.jx .bg-cyan-j\/30 { background: color-mix(in srgb, var(--jx-cyan) 30%, transparent); }
+.jx .bg-cyan-j\/70 { background: color-mix(in srgb, var(--jx-cyan) 70%, transparent); }
+.jx .bg-emerald-400 { background: #34d399; }
+.jx .bg-emerald-500 { background: #10b981; }
+.jx .bg-emerald-500\/10 { background: color-mix(in srgb, #10b981 10%, transparent); }
+.jx .bg-fuchsia-500 { background: #d946ef; }
+.jx .bg-green-500 { background: #22c55e; }
+.jx .bg-muted\/30 { background: color-mix(in srgb, var(--bg-mid) 30%, transparent); }
+.jx .bg-popover { background: var(--jx-card); }
+.jx .bg-primary\/20 { background: color-mix(in srgb, var(--jx-cyan) 20%, transparent); }
+.jx .bg-red-500\/10 { background: color-mix(in srgb, #ef4444 10%, transparent); }
+.jx .bg-red-500\/20 { background: color-mix(in srgb, #ef4444 20%, transparent); }
+.jx .bg-red-500\/5 { background: color-mix(in srgb, #ef4444 5%, transparent); }
+.jx .bg-rose-500 { background: #f43f5e; }
+.jx .bg-zinc-700 { background: #3f3f46; }
+.jx .bg-zinc-950\/80 { background: color-mix(in srgb, #09090b 80%, transparent); }
+.jx .border-amber-500\/20 { border-color: color-mix(in srgb, #f59e0b 20%, transparent); }
+.jx .border-amber-500\/30 { border-color: color-mix(in srgb, #f59e0b 30%, transparent); }
+.jx .border-background { border-color: var(--jx-bg); }
+.jx .border-collapse { border-collapse: collapse; }
+.jx .border-cyan-j\/60 { border-color: color-mix(in srgb, var(--jx-cyan) 60%, transparent); }
+.jx .border-primary\/50 { border-color: color-mix(in srgb, var(--jx-cyan) 50%, transparent); }
+.jx .border-r { border-right-width: 1px; }
+.jx .border-red-500\/30 { border-color: color-mix(in srgb, #ef4444 30%, transparent); }
+.jx .bottom-6 { bottom: 24px; }
+.jx .break-all { word-break: break-all; }
+.jx .cursor-crosshair { cursor: crosshair; }
+.jx .cursor-grab { cursor: grab; }
+.jx .divide-border > * + * { border-top: 1px solid var(--jx-border); }
+.jx .drop-shadow { filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.4)); }
+.jx .duration-150 { transition-duration: 0.15s; }
+.jx .fill-cyan-j { fill: var(--jx-cyan); }
+.jx .fill-emerald-400 { fill: #34d399; }
+.jx .fill-foreground { fill: var(--jx-fore); }
+.jx .fill-muted-foreground { fill: var(--jx-muted); }
+.jx .fixed { position: fixed; }
+.jx .flex-col-reverse { flex-direction: column-reverse; }
+.jx .gap-px { gap: 1px; }
+.jx .gap-x-3 { column-gap: 12px; }
+.jx .gap-y-0\.5 { row-gap: 2px; }
+.jx .grid-cols-8 { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+.jx .grow { flex-grow: 1; }
+.jx .h-2\.5 { height: 10px; }
+.jx .h-40 { height: 160px; }
+.jx .h-7 { height: 28px; }
+.jx .h-72 { height: 288px; }
+.jx .h-80 { height: 320px; }
+.jx .h-96 { height: 384px; }
+.jx .h-px { height: 1px; }
+.jx .hover\:bg-accent:hover { background: var(--bg-mid); }
+.jx .hover\:bg-accent\/40:hover { background: color-mix(in srgb, var(--bg-mid) 40%, transparent); }
+.jx .hover\:bg-cyan-j\/20:hover { background: color-mix(in srgb, var(--jx-cyan) 20%, transparent); }
+.jx .hover\:bg-cyan-j\/40:hover { background: color-mix(in srgb, var(--jx-cyan) 40%, transparent); }
+.jx .hover\:bg-cyan-j\/90:hover { background: color-mix(in srgb, var(--jx-cyan) 90%, transparent); }
+.jx .hover\:bg-destructive\/90:hover { background: color-mix(in srgb, #f0564a 90%, transparent); }
+.jx .hover\:bg-primary\/90:hover { background: color-mix(in srgb, var(--jx-cyan) 90%, transparent); }
+.jx .hover\:bg-red-500\/20:hover { background: color-mix(in srgb, #ef4444 20%, transparent); }
+.jx .hover\:border-cyan-j\/40:hover { border-color: color-mix(in srgb, var(--jx-cyan) 40%, transparent); }
+.jx .hover\:border-cyan-j\/60:hover { border-color: color-mix(in srgb, var(--jx-cyan) 60%, transparent); }
+.jx .hover\:text-cyan-j:hover { color: var(--jx-cyan); }
+.jx .hover\:text-red-400:hover { color: #f87171; }
+.jx .hover\:text-red-500:hover { color: #ef4444; }
+.jx .inset-x-0 { left: 0; right: 0; }
+.jx .left-2 { left: 8px; }
+.jx .left-2\.5 { left: 10px; }
+.jx .list-disc { list-style: disc; }
+.jx .list-inside { list-style-position: inside; }
+.jx .max-h-64 { max-height: 256px; }
+.jx .max-h-72 { max-height: 288px; }
+.jx .max-w-2xl { max-width: 42rem; }
+.jx .max-w-48 { max-width: 192px; }
+.jx .max-w-md { max-width: 28rem; }
+.jx .max-w-xl { max-width: 36rem; }
+.jx .mb-0\.5 { margin-bottom: 2px; }
+.jx .min-h-0 { min-height: 0; }
+.jx .min-h-32 { min-height: 128px; }
+.jx .min-h-48 { min-height: 192px; }
+.jx .min-w-40 { min-width: 160px; }
+.jx .min-w-\[14px\] { min-width: 14px; }
+.jx .min-w-\[180px\] { min-width: 180px; }
+.jx .min-w-\[200px\] { min-width: 200px; }
+.jx .min-w-\[40px\] { min-width: 40px; }
+.jx .min-w-max { min-width: max-content; }
+.jx .ml-3 { margin-left: 12px; }
+.jx .mr-0\.5 { margin-right: 2px; }
+.jx .mr-1 { margin-right: 4px; }
+.jx .mr-2 { margin-right: 8px; }
+.jx .mt-8 { margin-top: 32px; }
+.jx .odd\:bg-muted\/10:nth-child(odd) { background: color-mix(in srgb, var(--bg-mid) 10%, transparent); }
+.jx .odd\:bg-muted\/20:nth-child(odd) { background: color-mix(in srgb, var(--bg-mid) 20%, transparent); }
+.jx .p-8 { padding: 32px; }
+.jx .pb-12 { padding-bottom: 48px; }
+.jx .pl-7 { padding-left: 28px; }
+.jx .pl-8 { padding-left: 32px; }
+.jx .pl-9 { padding-left: 36px; }
+.jx .pr-2 { padding-right: 8px; }
+.jx .pt-2 { padding-top: 8px; }
+.jx .py-16 { padding-top: 64px; padding-bottom: 64px; }
+.jx .py-4 { padding-top: 16px; padding-bottom: 16px; }
+.jx .resize-none { resize: none; }
+.jx .right-6 { right: 24px; }
+.jx .rotate-180 { transform: rotate(180deg); }
+.jx .rounded-\[3px\] { border-radius: 3px; }
+.jx .rounded-t { border-radius: 6px 6px 0 0; }
+.jx .scroll-mt-4 { scroll-margin-top: 16px; }
+.jx .shadow-lg { box-shadow: 0 10px 20px rgb(0 0 0 / 0.35); }
+.jx .shadow-xl { box-shadow: 0 16px 34px rgb(0 0 0 / 0.45); }
+.jx .size-2 { width: 8px; height: 8px; }
+.jx .size-20 { width: 80px; height: 80px; }
+.jx .size-2\.5 { width: 10px; height: 10px; }
+.jx .size-7 { width: 28px; height: 28px; }
+.jx .size-8 { width: 32px; height: 32px; }
+.jx .size-9 { width: 36px; height: 36px; }
+.jx .sticky { position: sticky; }
+.jx .text-amber-300\/90 { color: color-mix(in srgb, #fcd34d 90%, transparent); }
+.jx .text-amber-400\/90 { color: color-mix(in srgb, #fbbf24 90%, transparent); }
+.jx .text-emerald-500 { color: #10b981; }
+.jx .text-muted-foreground\/50 { color: color-mix(in srgb, var(--jx-muted) 50%, transparent); }
+.jx .text-muted-foreground\/60 { color: color-mix(in srgb, var(--jx-muted) 60%, transparent); }
+.jx .text-red-400\/90 { color: color-mix(in srgb, #f87171 90%, transparent); }
+.jx .text-white { color: #ffffff; }
+.jx .text-zinc-600 { color: #52525b; }
+.jx .top-0 { top: 0px; }
+.jx .top-1\.5 { top: 6px; }
+.jx .top-2 { top: 8px; }
+.jx .transition-all { transition: all 0.16s ease; }
+.jx .w-2\.5 { width: 10px; }
+.jx .w-48 { width: 192px; }
+.jx .w-52 { width: 208px; }
+.jx .w-60 { width: 240px; }
+.jx .w-64 { width: 256px; }
+.jx .w-7 { width: 28px; }
+.jx .w-fit { width: fit-content; }
+.jx .z-40 { z-index: 40; }
+.jx .z-50 { z-index: 50; }
+@container (min-width: 1000px) { .jx .lg\:grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@container (min-width: 1000px) { .jx .lg\:grid-cols-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+@container (min-width: 768px) { .jx .md\:grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@container (min-width: 768px) { .jx .md\:p-6 { padding: 24px; } }
+@container (min-width: 768px) { .jx .md\:px-6 { padding-left: 24px; padding-right: 24px; } }
+/* The thirteen the generator did not recognise: variants whose inner utility needs its own property, and the
+   two-column layouts their pages write as arbitrary values. */
+.jx .focus-visible\:ring-1:focus-visible { box-shadow: 0 0 0 1px var(--jx-cyan); }
+.jx .focus-visible\:ring-ring:focus-visible { box-shadow: 0 0 0 2px var(--jx-cyan); }
+.jx .hover\:opacity-80:hover { opacity: 0.8; }
+
+/*
+ * The breakpoint variants are container queries, not media queries: a studio is a panel inside a window, so
+ * what matters is how wide the panel is and never how wide the screen is. `.jx` is the container.
+ */
+@container (min-width: 768px) {
+  .jx .md\:flex { display: flex; }
+  .jx .md\:hidden { display: none; }
+}
+
+@container (min-width: 1000px) {
+  .jx .lg\:flex { display: flex; }
+  .jx .lg\:col-span-2 { grid-column: span 2 / span 2; }
+  .jx .lg\:grid-cols-\[1fr_1\.2fr\] { grid-template-columns: 1fr 1.2fr; }
+  .jx .lg\:grid-cols-\[1fr_280px\] { grid-template-columns: 1fr 280px; }
+  .jx .lg\:grid-cols-\[1fr_300px\] { grid-template-columns: 1fr 300px; }
+  .jx .lg\:grid-cols-\[1fr_320px\] { grid-template-columns: 1fr 320px; }
+  .jx .lg\:grid-cols-\[320px_1fr\] { grid-template-columns: 320px 1fr; }
+  .jx .lg\:grid-cols-\[400px_1fr\] { grid-template-columns: 400px 1fr; }
+}
+
+/* ---------------------------------------------------------------- their own classes, not Tailwind */
+
+/*
+ * `btn-cyber` is the look their buttons wear. Their own stylesheet is not part of the port — it is the whole
+ * site's — so this is that look rebuilt on Orbis's tokens, which is what keeps a ported button looking like it
+ * belongs here rather than like a visitor.
+ */
+.jx .btn-cyber {
+  position: relative;
+  border: 1px solid color-mix(in srgb, var(--jx-cyan) 26%, var(--jx-border));
+  background: color-mix(in srgb, var(--jx-cyan) 7%, transparent);
+  color: var(--jx-fore);
+  transition: border-color 0.16s ease, background 0.16s ease, transform 0.12s ease;
+}
+
+.jx .btn-cyber:hover {
+  border-color: color-mix(in srgb, var(--jx-cyan) 55%, var(--jx-border));
+  background: color-mix(in srgb, var(--jx-cyan) 14%, transparent);
+}
+
+.jx .btn-cyber:active,
+.jx .btn-press:active {
+  transform: scale(0.97);
+}
+
+.jx .btn-cyber-no-deco::after {
+  content: none;
+}
+
+/* ---------------------------------------------------------------- the code editor */
+
+/*
+ * A transparent textarea over a highlighted copy of the same text.
+ *
+ * The two layers must agree on every typographic property or the colours drift away from the characters — same
+ * font, same size, same line height, same padding, same tab size, same wrapping. That is why they are set
+ * together here rather than on each.
+ */
+.jx .cse,
+.cse {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--bg-deep, #0b1220);
+  font-family: ui-monospace, 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.55;
+  tab-size: 4;
+}
+
+.cse-gutter {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 8px 8px 10px;
+  overflow: hidden;
+  border-right: 1px solid var(--glass-border);
+  color: var(--faint);
+  text-align: right;
+  user-select: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.cse-stack {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.cse-shown,
+.cse-box {
+  margin: 0;
+  padding: 8px 10px;
+  border: 0;
+  font: inherit;
+  line-height: inherit;
+  tab-size: inherit;
+  white-space: pre;
+  overflow: auto;
+  position: absolute;
+  inset: 0;
+}
+
+.cse.wrap .cse-shown,
+.cse.wrap .cse-box {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.cse-shown {
+  pointer-events: none;
+  background: transparent;
+}
+
+/* The real field: its own text invisible, its caret and selection not. */
+.cse-box {
+  color: transparent;
+  background: transparent;
+  caret-color: var(--cyan);
+  resize: none;
+  outline: none;
+}
+
+.cse-box::selection {
+  background: color-mix(in srgb, var(--cyan) 32%, transparent);
+}
+
+.cse-status {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  left: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 2px 10px;
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  border-top: 1px solid var(--glass-border);
+  color: var(--faint);
+  font-size: 10.5px;
+  pointer-events: none;
+}
+
+.cse-box,
+.cse-shown {
+  padding-bottom: 24px;
+}
+
+/* highlight.js, in Orbis's own colours rather than the theme it ships. */
+.cse .hljs-keyword, .cse .hljs-selector-tag, .cse .hljs-literal, .cse .hljs-section { color: #c084fc; }
+.cse .hljs-string, .cse .hljs-regexp, .cse .hljs-addition { color: #4ade80; }
+.cse .hljs-number, .cse .hljs-symbol, .cse .hljs-bullet { color: #fbbf24; }
+.cse .hljs-comment, .cse .hljs-quote { color: var(--faint); font-style: italic; }
+.cse .hljs-function .hljs-title, .cse .hljs-title.function_ { color: #60a5fa; }
+.cse .hljs-title, .cse .hljs-title.class_, .cse .hljs-type { color: #22d3ee; }
+.cse .hljs-attr, .cse .hljs-attribute, .cse .hljs-variable, .cse .hljs-params { color: #e2e8f0; }
+.cse .hljs-built_in, .cse .hljs-class .hljs-title { color: #38bdf8; }
+.cse .hljs-meta, .cse .hljs-doctag { color: #f0a33a; }
+.cse .hljs-deletion { color: #f0564a; }
+
+.cse.light { background: #f8fafc; }
+.cse.light .cse-box { caret-color: #0f172a; }
+.cse.light .hljs-comment { color: #64748b; }
+
+/* ---------------------------------------------------------------- split panes */
+
+.cs-split-handle {
+  flex: 0 0 auto;
+  width: 7px;
+  cursor: col-resize;
+  background: transparent;
+  border: 0;
+  position: relative;
+  touch-action: none;
+}
+
+.cs-split-handle.across {
+  width: auto;
+  height: 7px;
+  cursor: row-resize;
+}
+
+/* A thin line in the middle, so the handle is visible without taking room. */
+.cs-split-handle::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 1px;
+  height: 100%;
+  background: var(--glass-border);
+  transition: background 0.16s ease;
+}
+
+.cs-split-handle.across::after {
+  width: 100%;
+  height: 1px;
+}
+
+.cs-split-handle:hover::after,
+.cs-split-handle.dragging::after,
+.cs-split-handle:focus-visible::after {
+  background: var(--cyan);
+}
+
+.cs-split-handle:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: -2px;
+}
+
+/* ---------------------------------------------------------------- the slider */
+
+.jx .csl {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 18px;
+  touch-action: none;
+}
+
+/* The real input, invisible but doing all the work: keyboard, pointer and accessibility are the browser's. */
+.csl-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.jx .csl-track {
+  position: relative;
+  flex: 1 1 auto;
+  height: 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--jx-cyan) 20%, transparent);
+  overflow: hidden;
+}
+
+.jx .csl-range {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  background: var(--jx-cyan);
+}
+
+.jx .csl-thumb {
+  position: absolute;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  margin-left: -7px;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--jx-cyan) 60%, transparent);
+  background: var(--bg-deep);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.csl-input:focus-visible ~ .csl-thumb {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cyan) 40%, transparent);
+}
+
+/* ----------------------------------------------------------------------------
+ * The sweep of every studio screen, at a normal width and a narrow one.
+ *
+ * Four faults, all of them the kind a test cannot see: text below the contrast line, text below a readable
+ * size, a floating button that escaped its panel, and a row of tabs that ran off the side with no way back.
+ * Each is fixed here, where the thing is defined, rather than in the twenty-four pages that show it.
+ * -------------------------------------------------------------------------- */
+
+.jx {
+  /*
+   * Secondary text, light enough to read.
+   *
+   * `--faint` is #6e727b, which is about 3.6:1 on the card behind it -- under the 4.5:1 that small text needs.
+   * This is the studio's own value, so nothing outside it changes.
+   */
+  --jx-muted: #9aa1ad;
+}
+
+/*
+ * Nothing in the studio is smaller than 11px.
+ *
+ * The ported pages label at 10px and the register and process tables go to 8px, which is dense rather than
+ * readable. Raised where the three utilities are defined, so no page needs touching.
+ */
+.jx .text-\[8px\],
+.jx .text-\[9px\],
+.jx .text-\[10px\] {
+  font-size: 11px;
+}
+
+
+/*
+ * The editor's status line -- "Line 1, column 1", "1 line · python" -- was 10.5px in the dim colour, which is
+ * the smallest and faintest thing in the studio. 11.5px, and a colour that reads.
+ */
+.cse-status,
+.cse-status * {
+  font-size: 11.5px;
+  color: var(--jx-muted);
+}
+
+/* ----------------------------------------------------------------------------
+ * The plain colour utilities.
+ *
+ * The see-through fractions of each of these were defined and the plain ones were not, which is a quiet way to
+ * fail: `bg-card` fell through to the browser's white, `border-border` drew the border in the text colour, and
+ * `bg-cyan-j` left a primary button with no background at all. Found by listing every class the pages use and
+ * every class the sheet defines, and comparing the two.
+ * -------------------------------------------------------------------------- */
+
+.jx .bg-card { background: var(--jx-card); }
+.jx .bg-cyan-j { background: var(--jx-cyan); }
+.jx .bg-background { background: var(--jx-bg); }
+.jx .border-border { border-color: var(--jx-border); }
+.jx .border-cyan-j { border-color: var(--jx-cyan); }
+.jx .ring-amber-500 { --tw-ring-color: #f59e0b; box-shadow: 0 0 0 2px #f59e0b; }
+.jx .border-l-2 { border-left-width: 2px; }
+.jx .text-black { color: #06070a; }
+.jx .text-emerald-400\/90 { color: color-mix(in srgb, #34d399 90%, transparent); }
+
+/*
+ * A line between rows, which is what `divide-y` means: every child after the first gets a top border. The
+ * problem list and the table in Databases both ask for it, and both had no lines at all.
+ */
+.jx .divide-y > * + * { border-top-width: 1px; }
+.jx .divide-border > * + * { border-color: var(--jx-border); }
+.jx .divide-divide-border > * + * { border-color: var(--jx-border); }

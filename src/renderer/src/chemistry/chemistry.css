@@ -1,0 +1,54 @@
+/*
+ * The Chemistry Studio's own frame.
+ *
+ * Only the classes this studio owns. The utilities the ported pages are written in all live in physics.css,
+ * which owns the `.jx` scope for every ported studio -- two stylesheets both writing rules under `.jx` would
+ * mean load order decided which won, which is what the collision guard caught.
+ */
+
+/* ---------------------------------------------------------------- the studio's own frame */
+
+.ch-studio {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  /*
+   * Sizes to its container rather than to its widest child. Without this the periodic table's eighteen-column
+   * grid pushes the whole laboratory wider than the window -- the same fault the physics studio had.
+   */
+  max-width: 100%;
+  min-width: 0;
+}
+
+.ch-back {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--faint);
+  font-family: var(--font);
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: color 0.16s ease, border-color 0.16s ease;
+}
+
+.ch-back:hover {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--cyan) 45%, var(--glass-border));
+}
+
+.ch-back:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+/* A Link from the router shim is a button; it must not look like one. */
+
+/*
+ * The periodic table is the one grid here that genuinely needs eighteen columns, and it must shrink rather than
+ * overflow. Each tile is already square, so the whole table scales with the width it is given.
+ */
