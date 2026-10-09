@@ -4,3 +4,6 @@
 import './adblock.js'
 // The selection orb's worker: what actually happens when somebody picks an action from the orb on a page.
 import './selection-worker.js'
+// Visual Search's worker: the only side that can take a picture of the window, cut the selection out of it, and
+// reach Orbis. The page side draws a rectangle and knows nothing.
+import './visual-worker.js'

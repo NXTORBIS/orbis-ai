@@ -17,7 +17,22 @@ await build({ ...shared, entryPoints: ['extension-src/prune-main.ts'], outfile: 
 // decides for itself whether to honour it -- which is the whole security model, so these must stay separate files.
 await build({ ...shared, entryPoints: ['extension-src/selection/main.ts'], outfile: 'extension/selection.js', format: 'iife', platform: 'browser' })
 await build({ ...shared, entryPoints: ['extension-src/selection/worker.ts'], outfile: 'extension/selection-worker.js', format: 'esm', platform: 'browser' })
-await build({ ...shared, entryPoints: ['orbis-ui/panel/sidebar.ts'], outfile: 'orbis-ui/panel/sidebar.js', format: 'iife', platform: 'browser' })
+// Orbis Visual Search: hold Ctrl, drag over anything on a page, ask Orion about it. Two halves for the same reason
+// the selection orb has two: `visual.js` runs in the page's isolated world and only draws, and `visual-worker.js`
+// runs in the extension's worker, which is the only place that can take a picture of the window or reach the helper.
+await build({ ...shared, entryPoints: ['extension-src/visual/main.ts'], outfile: 'extension/visual.js', format: 'iife', platform: 'browser' })
+await build({ ...shared, entryPoints: ['extension-src/visual/worker.ts'], outfile: 'extension/visual-worker.js', format: 'esm', platform: 'browser' })
+/*
+ * `orbis-ui/panel/sidebar.ts` is deliberately not built.
+ *
+ * It is the panel's third navigation system -- a 29-panel arrangement with groups, pinning and density -- and the
+ * panel's own page has never loaded it: `panel/index.html` links `sidebar.css` (which the rail's views genuinely use
+ * for their `.rv-*` styles) and no script tag for this. Building it put 391 kilobytes of unreachable code into every
+ * installation and made it look live to anybody reading the build.
+ *
+ * The source stays, because the panel work in docs/parity/01-browser-ui.md is where it is meant to be used. What is
+ * removed is the pretence that it ships.
+ */
 await build({ ...shared, entryPoints: ['orbis-ui/results/results.ts'], outfile: 'orbis-ui/results/results.js', format: 'iife', platform: 'browser' })
 // The capability registry the Command Center reads. Built from src/shared, so the page and the app share one list.
 await build({ ...shared, minify: false, entryPoints: ['orbis-ui/panel/command-registry.ts'], outfile: 'orbis-ui/panel/command-registry.js', format: 'esm', platform: 'browser' })

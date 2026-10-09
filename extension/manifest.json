@@ -28,7 +28,9 @@
     "contentSettings",
     "downloads.open"
   ],
+  "//host_permissions": "<all_urls> is here for one reason: Chromium's capture check accepts only the literal <all_urls> pattern or activeTab. 'http://*/*' plus 'https://*/*' is the same web access in every other respect, but URLPattern::MatchesAllURLs() is true only for the literal pattern, so Visual Search's picture of the page was refused with 'Either the <all_urls> or activeTab permission is required' -- and activeTab is granted only when somebody invokes the extension itself, which a Ctrl-drag on a page is not. The http/https patterns are kept because they are what the content scripts match.",
   "host_permissions": [
+    "<all_urls>",
     "http://127.0.0.1/*",
     "http://*/*",
     "https://*/*"
@@ -104,6 +106,18 @@
       ],
       "run_at": "document_idle",
       "all_frames": true
+    },
+    {
+      "//": "Orbis Visual Search. Isolated world, so a page can neither see it nor reach it, and the top frame only: the capture is of the whole window, and a cross-origin frame cannot know where it sits inside it. document_idle: the gesture is not needed before the page has drawn.",
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "visual.js"
+      ],
+      "run_at": "document_idle",
+      "all_frames": false
     },
     {
       "matches": [
