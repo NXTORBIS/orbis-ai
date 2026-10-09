@@ -1,0 +1,159 @@
+/*
+ * The Computer Science Studio's own frame.
+ *
+ * Only the classes this studio owns. The utilities its pages are written in all live in physics.css, which owns
+ * the `.jx` scope for every ported studio — two stylesheets both writing rules under it would mean load order
+ * decided which won, which is what the collision guard catches.
+ */
+
+.cs-studio {
+  /*
+   * The box a floating button floats inside.
+   *
+   * The ported laboratories carry `position: fixed` buttons, written for pages that own the whole window. In a
+   * card that puts them in the window's corner. physics.css turns `fixed` into `absolute` inside the studio, and
+   * `absolute` needs a positioned ancestor -- this is it.
+   */
+  position: relative;
+
+  /*
+   * Secondary text light enough to read. `--faint` is about 3.6:1 on the card behind it, under the 4.5:1 small
+   * text needs; this is the studio's own value and nothing outside it changes. Declared here rather than in
+   * physics.css because `.cs-studio` belongs to this sheet -- two sheets claiming one class is how a feature
+   * silently loses to load order.
+   */
+  --jx-muted: #9aa1ad;
+  display: flex;
+  flex-direction: column;
+  /*
+   * Sizes to its container rather than to its widest child. Without this the rail plus a wide table pushes the
+   * whole studio past the window — the same fault the physics and chemistry studios each had.
+   */
+  max-width: 100%;
+  min-width: 0;
+  /*
+   * A height, because their shell is `h-full` over a flex column and would otherwise collapse to nothing. The
+   * laboratory is given most of the window and keeps its own scrolling inside.
+   */
+  height: min(760px, 82vh);
+  min-height: 420px;
+}
+
+/* Their shell is a flex row of rail and page; both have to be allowed to shrink. */
+.cs-studio > * {
+  min-height: 0;
+  min-width: 0;
+}
+
+/*
+ * The rail scrolls on its own.
+ *
+ * Twenty-four sections is taller than the studio at most sizes, and without this the whole studio grew to fit
+ * them and the page beside it went off the bottom of the window.
+ */
+.cs-studio nav {
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+/* A table inside a laboratory scrolls inside itself rather than widening the studio. */
+.cs-studio table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.cs-studio thead,
+.cs-studio tbody,
+.cs-studio tr {
+  display: table;
+  width: 100%;
+  table-layout: fixed;
+}
+
+/*
+ * Their pages use `scrollbar-thin`, which is their own class rather than Tailwind's.
+ */
+.cs-studio .scrollbar-thin {
+  scrollbar-width: thin;
+}
+
+.cs-studio .scrollbar-thin::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.cs-studio .scrollbar-thin::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--cyan) 26%, transparent);
+}
+
+/*
+ * The rail's buttons.
+ *
+ * The port's router renders a `NavLink` as a button, and a button does not inherit the alignment or the width a
+ * link had. Without this every rail entry is centred and shrink-wrapped, which reads as a column of pills rather
+ * than a navigation list.
+ */
+.cs-studio nav button {
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* The same for a Link used as a card, which their Overview and Problems both do. */
+.cs-studio button {
+  font-family: inherit;
+}
+
+/* A page inside the studio keeps its own scroll rather than growing the studio. */
+.cs-studio .overflow-y-auto {
+  overscroll-behavior: contain;
+}
+
+/* ----------------------------------------------------------------------------
+ * What the sweep of all 24 screens found.
+ *
+ * These live here rather than in physics.css because `.cs-studio` belongs to this sheet: two stylesheets
+ * claiming one class is decided by load order rather than by anybody's intention, which is what
+ * cssCollisions.test.ts exists to stop.
+ * -------------------------------------------------------------------------- */
+
+/*
+ * A floating button belongs to the panel, not to the window.
+ *
+ * Algorithm Laboratory's button is `position: fixed`, written for a page that owns the whole window. Inside a
+ * card that put it in the window's corner, over whatever else was there. The studio is the containing block.
+ */
+.cs-studio .fixed {
+  position: absolute;
+}
+
+/* The section tabs scroll on their own rather than making the whole panel scroll sideways. */
+.cs-studio .overflow-x-auto,
+.cs-studio nav.flex,
+.cs-studio .cs-tabs {
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+/*
+ * The studio's main area scrolls when the page inside it does not.
+ *
+ * Every page is expected to scroll inside itself, and all but one do. Algorithm Laboratory is a plain block
+ * 2,203px tall in a 670px box with `overflow: hidden` around it, so three quarters of it could not be reached by
+ * any means. A page with its own scroller is unaffected: it still fits, so this never engages.
+ */
+.cs-studio main.overflow-hidden,
+.cs-studio main {
+  /*
+   * Two selectors, and the first is the one that works: `.jx .overflow-hidden` is two classes, which outranks
+   * `.cs-studio main`. The page scrolled when a script pushed it and not when a person used the wheel, which is
+   * the sort of thing only trying it finds.
+   */
+  overflow-y: auto;
+}

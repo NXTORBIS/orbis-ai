@@ -73,7 +73,17 @@ test('every element is internally consistent', () => {
     assert.ok(/^[A-Z][a-z]?$/.test(one.symbol), `${one.symbol} is not a symbol shape`)
     if (one.atomicWeight !== null) assert.ok(one.atomicWeight > 0)
     if (one.electronegativity !== null) assert.ok(one.electronegativity > 0 && one.electronegativity <= 4)
-    assert.ok(one.oxidationStates.length > 0)
+    /*
+     * An element with no oxidation states listed is allowed only where its chemistry has not been measured.
+     *
+     * Everything from meitnerium up has been made a few atoms at a time and never reacted, so a list of oxidation
+     * states for it would be a prediction written as a fact. The note says the configuration is predicted; the
+     * empty list says the same thing about its chemistry. Any other element with an empty list is a gap in the data.
+     */
+    if (one.oxidationStates.length === 0) {
+      assert.ok(one.number >= 109, `${one.symbol} has no oxidation states and is not one of the unmeasured superheavies`)
+      assert.match(one.note, /predicted|longest-lived/, `${one.symbol} has no oxidation states and does not say why`)
+    }
   }
 })
 

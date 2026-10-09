@@ -1,0 +1,892 @@
+/*
+ * The Phase 5 laboratories: logic, the processor, the operating system, the network, images, learning and neural
+ * networks.
+ *
+ * `p5-` only, so nothing here can collide with another stylesheet. Tokens are Orbis's own: `--cyan` for the accent,
+ * `--faint` for dim text, `--glass-border` for edges. A wrong token name fails silently at runtime, which is why the
+ * guard test knows about these.
+ */
+
+.p5 {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.p5-main {
+  min-width: 0;
+}
+
+/* A panel whose content is a warning rather than a fact. */
+.p3-panel.p5-warn {
+  border-color: color-mix(in srgb, #f0a33a 45%, var(--glass-border));
+  background: color-mix(in srgb, #f0a33a 6%, transparent);
+}
+
+/* ---------------------------------------------------------------- digital logic */
+
+.p5-gates {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 8px 0;
+}
+
+.p5-gate {
+  display: grid;
+  grid-template-columns: 70px minmax(0, 1fr) 26px;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.p5-gate-kind {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 10px;
+  color: var(--cyan);
+}
+
+.p5-gate-wires {
+  font-family: var(--font-mono, ui-monospace, Consolas, monospace);
+  color: var(--faint);
+}
+
+.p5-gate-wires strong {
+  color: var(--text);
+}
+
+.p5-level {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  border: 1px solid var(--glass-border);
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.p5-level.on {
+  background: color-mix(in srgb, var(--cyan) 22%, transparent);
+  border-color: var(--cyan);
+  color: var(--text);
+}
+
+.p5-truth {
+  max-height: 340px;
+  overflow: auto;
+}
+
+.p5-bit {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--faint);
+}
+
+.p5-bit.on {
+  color: var(--text);
+  background: color-mix(in srgb, var(--cyan) 10%, transparent);
+}
+
+/* The outputs are what the table is read for, so they are separated from the inputs. */
+.p5-bit.out,
+.p5-out {
+  border-left: 1px solid var(--glass-border);
+}
+
+.p5-bit.out.on {
+  background: color-mix(in srgb, #37d67a 16%, transparent);
+}
+
+.p5-strip {
+  display: flex;
+  gap: 1px;
+  margin: 10px 0;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.p5-strip-tick {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 2px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.p5-strip-tick.here {
+  border-color: var(--cyan);
+}
+
+.p5-strip-bit {
+  display: block;
+  width: 7px;
+  height: 7px;
+  border-radius: 1px;
+  background: var(--glass-border);
+}
+
+.p5-strip-bit.on {
+  background: var(--cyan);
+}
+
+/* ---------------------------------------------------------------- the processor */
+
+.p5-pipeline {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 8px 0;
+  overflow-x: auto;
+}
+
+.p5-pipeline-row {
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.p5-pipeline-name {
+  font-family: var(--font-mono, ui-monospace, Consolas, monospace);
+  font-size: 11px;
+  color: var(--faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.p5-pipeline-track {
+  display: flex;
+  gap: 1px;
+}
+
+.p5-stage {
+  display: grid;
+  place-items: center;
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+  border-radius: 2px;
+  font-size: 9px;
+  font-weight: 600;
+  color: transparent;
+}
+
+/* One colour per stage, so an instruction can be followed across the diagram. */
+.p5-stage.fetch {
+  background: color-mix(in srgb, var(--cyan) 30%, transparent);
+  color: var(--text);
+}
+
+.p5-stage.decode {
+  background: color-mix(in srgb, #5cc8e0 30%, transparent);
+  color: var(--text);
+}
+
+.p5-stage.execute {
+  background: color-mix(in srgb, #37d67a 30%, transparent);
+  color: var(--text);
+}
+
+.p5-stage.memory {
+  background: color-mix(in srgb, #f0a33a 30%, transparent);
+  color: var(--text);
+}
+
+.p5-stage.writeback {
+  background: color-mix(in srgb, #c08bf0 30%, transparent);
+  color: var(--text);
+}
+
+/* A gap where the instruction could not move on. */
+.p5-stage.stalled {
+  background: repeating-linear-gradient(45deg, transparent, transparent 2px, color-mix(in srgb, #e05c5c 30%, transparent) 2px, color-mix(in srgb, #e05c5c 30%, transparent) 4px);
+  color: var(--faint);
+}
+
+.p5-hazards li {
+  padding-left: 6px;
+  border-left: 2px solid var(--glass-border);
+  margin-bottom: 5px;
+}
+
+.p5-hazards li.data,
+.p5-hazards li.load-use {
+  border-left-color: #f0a33a;
+}
+
+.p5-hazards li.control {
+  border-left-color: #c08bf0;
+}
+
+.p5-cache-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin: 8px 0;
+}
+
+.p5-access {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+}
+
+.p5-access.hit {
+  background: #37d67a;
+}
+
+.p5-access.miss {
+  background: #e05c5c;
+}
+
+/* ---------------------------------------------------------------- the operating system */
+
+.p5-gantt {
+  display: flex;
+  height: 38px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  margin-top: 8px;
+}
+
+.p5-gantt-slice {
+  display: grid;
+  place-items: center;
+  min-width: 2px;
+  font-size: 10px;
+  font-weight: 600;
+  color: #0a1428;
+  border-right: 1px solid rgba(0, 0, 0, 0.18);
+  overflow: hidden;
+}
+
+/* Nothing ready to run is drawn as an absence rather than as a colour. */
+.p5-gantt-slice.idle {
+  background: repeating-linear-gradient(45deg, transparent, transparent 3px, var(--glass-border) 3px, var(--glass-border) 5px);
+}
+
+.p5-gantt-scale {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 10px;
+}
+
+.p5-starved td,
+.p5-starved {
+  background: color-mix(in srgb, #e05c5c 8%, transparent);
+}
+
+.p5-paging {
+  max-height: 420px;
+  overflow: auto;
+}
+
+.p5-fault td {
+  background: color-mix(in srgb, #f0a33a 10%, transparent);
+}
+
+.p5-wanted {
+  font-weight: 600;
+}
+
+.p5-frame {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  color: var(--faint);
+}
+
+.p5-frame.here {
+  color: var(--text);
+  background: color-mix(in srgb, var(--cyan) 16%, transparent);
+}
+
+.p5-evicted {
+  color: #e05c5c;
+  font-variant-numeric: tabular-nums;
+}
+
+.p5-belady {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 90px;
+  margin: 8px 0;
+}
+
+.p5-belady-bar {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  height: 100%;
+  position: relative;
+}
+
+.p5-belady-bar > span {
+  width: 100%;
+  background: var(--cyan);
+  border-radius: 2px 2px 0 0;
+  min-height: 2px;
+}
+
+/* More memory making it worse is the whole point, so it is coloured as a fault. */
+.p5-belady-bar.worse > span {
+  background: #e05c5c;
+}
+
+.p5-belady-bar small,
+.p5-belady-bar em {
+  font-size: 9px;
+  color: var(--faint);
+  font-style: normal;
+}
+
+.p5-wait {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0;
+}
+
+.p5-wait-node {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--glass-border);
+  font-size: 12px;
+}
+
+.p5-wait-node.process {
+  background: color-mix(in srgb, var(--cyan) 10%, transparent);
+}
+
+.p5-wait-node.resource {
+  background: color-mix(in srgb, #f0a33a 10%, transparent);
+}
+
+.p5-wait-node em {
+  color: var(--faint);
+  font-style: normal;
+}
+
+.p5-interleaving {
+  margin: 8px 0;
+  padding-left: 22px;
+  font-size: 12px;
+  line-height: 1.7;
+  font-family: var(--font-mono, ui-monospace, Consolas, monospace);
+  max-height: 320px;
+  overflow: auto;
+}
+
+.p5-interleaving li.reads {
+  color: var(--cyan);
+}
+
+.p5-interleaving li.writes {
+  color: #f0a33a;
+}
+
+/* ---------------------------------------------------------------- the network */
+
+.p5-bits {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0;
+  overflow-x: auto;
+}
+
+.p5-bit-row {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.p5-bit-label {
+  font-size: 10px;
+  color: var(--faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.p5-bit-cells {
+  display: flex;
+  gap: 1px;
+}
+
+.p5-bit-cell {
+  display: grid;
+  place-items: center;
+  width: 13px;
+  height: 17px;
+  flex: 0 0 auto;
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+  border-radius: 1px;
+  color: var(--faint);
+  background: color-mix(in srgb, var(--glass-border) 40%, transparent);
+}
+
+/* The two halves of an address, which is the thing a prefix actually means. */
+.p5-bit-cell.network {
+  background: color-mix(in srgb, var(--cyan) 18%, transparent);
+}
+
+.p5-bit-cell.host {
+  background: color-mix(in srgb, #f0a33a 14%, transparent);
+}
+
+.p5-bit-cell.on {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.p5-bit-cell.octet {
+  margin-left: 5px;
+}
+
+.p5-devices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0;
+}
+
+.p5-device {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  font-size: 12px;
+  min-width: 96px;
+}
+
+.p5-device.router {
+  border-color: color-mix(in srgb, #f0a33a 50%, transparent);
+}
+
+.p5-device.server {
+  border-color: color-mix(in srgb, #c08bf0 50%, transparent);
+}
+
+.p5-device.on-route {
+  background: color-mix(in srgb, var(--cyan) 12%, transparent);
+  border-color: var(--cyan);
+}
+
+.p5-device small {
+  font-size: 10px;
+  color: var(--faint);
+}
+
+.p5-device code {
+  font-size: 10px;
+  color: var(--cyan);
+}
+
+.p5-links {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+
+.p5-links li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+
+.p5-links li.on-route {
+  background: color-mix(in srgb, var(--cyan) 10%, transparent);
+}
+
+.p5-links li.down {
+  color: var(--faint);
+  text-decoration: line-through;
+}
+
+.p5-links small {
+  color: var(--faint);
+  font-size: 10px;
+}
+
+.p5-exchange {
+  margin: 8px 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.p5-exchange li p {
+  margin: 3px 0 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--faint);
+}
+
+.p5-exchange-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.p5-exchange-at {
+  font-variant-numeric: tabular-nums;
+  font-size: 10px;
+  color: var(--cyan);
+  min-width: 42px;
+}
+
+.p5-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 5px 0 0;
+  font-size: 10px;
+}
+
+.p5-fields span {
+  display: flex;
+  gap: 4px;
+}
+
+.p5-fields dt {
+  color: var(--faint);
+}
+
+.p5-fields dd {
+  margin: 0;
+  font-family: var(--font-mono, ui-monospace, Consolas, monospace);
+}
+
+.p5-allowed {
+  color: #37d67a;
+}
+
+.p5-blocked {
+  color: #e05c5c;
+}
+
+/* ---------------------------------------------------------------- images */
+
+.p5-pictures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin: 8px 0;
+}
+
+.p5-picture {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.p5-picture canvas {
+  width: 256px;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  /* So a pixel stays a pixel when a small picture is shown large. */
+  image-rendering: pixelated;
+  background: color-mix(in srgb, var(--cyan) 3%, transparent);
+}
+
+.p5-picture figcaption {
+  font-size: 10px;
+  color: var(--faint);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.p5-histogram {
+  display: flex;
+  align-items: flex-end;
+  gap: 0;
+  height: 150px;
+  margin: 8px 0 2px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.p5-histogram-bar {
+  flex: 1;
+  min-width: 1px;
+  background: var(--cyan);
+  min-height: 1px;
+}
+
+/* Pixels at the very ends have lost their detail, so they are marked as such. */
+.p5-histogram-bar.clipped {
+  background: #e05c5c;
+}
+
+.p5-histogram-scale {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--faint);
+  margin-bottom: 10px;
+}
+
+/* ---------------------------------------------------------------- learning */
+
+.p5-versus {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.p5-versus-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.p5-versus-bar > span {
+  height: 20px;
+  border-radius: 3px;
+  min-width: 2px;
+}
+
+.p5-versus-bar > span.model {
+  background: var(--cyan);
+}
+
+/* The baseline is deliberately drab: it is the thing to beat, not an achievement. */
+.p5-versus-bar > span.baseline {
+  background: var(--faint);
+}
+
+.p5-versus-bar small {
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.p5-confusion td {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.p5-confusion th[scope='row'] {
+  text-align: left;
+  font-weight: 500;
+  color: var(--faint);
+}
+
+.p5-right {
+  background: color-mix(in srgb, #37d67a 40%, transparent);
+}
+
+.p5-wrong {
+  background: color-mix(in srgb, #e05c5c 40%, transparent);
+}
+
+.p5-folds {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 56px;
+  margin: 6px 0;
+}
+
+.p5-fold {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+}
+
+.p5-fold > span {
+  width: 100%;
+  background: var(--cyan);
+  border-radius: 2px 2px 0 0;
+}
+
+.p5-loss {
+  display: flex;
+  align-items: flex-end;
+  gap: 1px;
+  height: 130px;
+  margin: 8px 0;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.p5-loss > span {
+  flex: 1;
+  min-width: 1px;
+  background: var(--cyan);
+  min-height: 1px;
+  border-radius: 1px 1px 0 0;
+}
+
+.p5-loss.accuracy > span {
+  background: #37d67a;
+}
+
+.p5-loss.gradient > span {
+  background: #c08bf0;
+}
+
+.p5-components {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.p5-component {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.p5-component > span {
+  height: 14px;
+  background: var(--cyan);
+  border-radius: 2px;
+  min-width: 2px;
+}
+
+.p5-component small {
+  font-size: 10px;
+  color: var(--faint);
+}
+
+/* ---------------------------------------------------------------- neural networks */
+
+.p5-boundary svg {
+  width: 100%;
+  max-width: 420px;
+  aspect-ratio: 1;
+  display: block;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  background: var(--bg-mid, #14161a);
+}
+
+.p5-point {
+  stroke: var(--bg-mid, #14161a);
+  stroke-width: 0.4;
+}
+
+.p5-point.group0 {
+  fill: var(--cyan);
+}
+
+.p5-point.group1 {
+  fill: #f0a33a;
+}
+
+.p5-layers {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0;
+  flex-wrap: wrap;
+}
+
+.p5-layer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 16px;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  min-width: 64px;
+}
+
+.p5-layer.hidden {
+  border-color: color-mix(in srgb, var(--cyan) 45%, transparent);
+  background: color-mix(in srgb, var(--cyan) 7%, transparent);
+}
+
+.p5-layer.out {
+  border-color: color-mix(in srgb, #37d67a 45%, transparent);
+  background: color-mix(in srgb, #37d67a 7%, transparent);
+}
+
+.p5-layer strong {
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+}
+
+.p5-layer small {
+  font-size: 9px;
+  color: var(--faint);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Colour carries meaning in several of these, so the shapes and the text have to carry it too when motion is off. */
+@media (prefers-reduced-motion: reduce) {
+  .p5-strip-tick,
+  .p5-gantt-slice,
+  .p5-stage {
+    transition: none;
+  }
+}
+
+/* ---------------------------------------------------------------- the pictures
+   Shared by every laboratory that draws one (Draw.tsx). Colours come from the series tones the components pass, so
+   the only thing here is the furniture: rules, labels, and the weight of a line. */
+
+.na-draw { margin: 10px 0 0; }
+.na-svg { width: 100%; height: auto; display: block; overflow: visible; }
+.na-draw-note { margin: 6px 2px 0; font-size: 12px; color: var(--faint); }
+
+.na-rule { stroke: var(--glass-border); stroke-width: 1; }
+.na-mark { stroke: var(--cyan); stroke-width: 1; stroke-dasharray: 3 3; opacity: 0.5; }
+.na-frame { stroke: var(--glass-border); stroke-width: 1; }
+
+.na-row-label { font-size: 12px; fill: var(--faint); }
+.na-tick { font-size: 11px; fill: var(--faint); }
+.na-axis { font-size: 12px; fill: var(--faint); }
+.na-in-bar { font-size: 11px; fill: #0a0d12; font-weight: 600; }
+.na-in-cell { font-size: 10.5px; fill: var(--text); }
+.na-cell { stroke: var(--glass-border); stroke-width: 0.5; }
+
+.na-edge { stroke: var(--glass-border); stroke-width: 1.4; }
+.na-edge.marked { stroke: var(--cyan); stroke-width: 2.4; }
+.na-edge.faint { stroke: var(--glass-border); stroke-width: 1; stroke-dasharray: 4 4; opacity: 0.6; }
+.na-edge-label { font-size: 10px; fill: var(--faint); }
+
+.na-node { stroke: var(--glass-border); stroke-width: 1; }
+.na-node-label { font-size: 11px; fill: var(--text); font-weight: 500; }
+.na-node-note { font-size: 9.5px; fill: var(--faint); }
+
+.na-wave { stroke: var(--cyan); stroke-width: 1.8; }
+.na-dot { stroke: rgba(0, 0, 0, 0.35); stroke-width: 0.5; }
+.na-scatter { max-width: 340px; }

@@ -1,0 +1,687 @@
+/*
+ * The Phase 4 laboratories.
+ *
+ * `p4-` only, so nothing here can collide with another stylesheet — the mistake that once turned Student's tabs into
+ * a stack because two features both used `st-`. The tokens are Orbis's own: `--cyan` for the accent, `--faint` for
+ * dim text, `--glass-border` for edges. A wrong token name fails silently at runtime, so these are the ones the
+ * guard test knows about.
+ */
+
+.p4 {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.p4-says {
+  margin: 0;
+  padding: 8px 12px;
+  border-left: 2px solid var(--cyan);
+  background: color-mix(in srgb, var(--cyan) 7%, transparent);
+  border-radius: 0 6px 6px 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.p4-heading {
+  margin: 14px 0 6px;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.p4-notes {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--faint);
+}
+
+.p4-about ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* ---------------------------------------------------------------- rows and chains */
+
+.p4-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: flex-end;
+  padding: 16px 4px;
+}
+
+/* Buckets are numbered slots, so they are laid out in a grid rather than wrapping like a queue. */
+.p4-row.buckets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  align-items: stretch;
+}
+
+.p4-box {
+  min-width: 46px;
+  padding: 10px 8px 6px;
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--cyan) 4%, transparent);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease;
+}
+
+.p4-box.empty {
+  background: transparent;
+  border-style: dashed;
+  color: var(--faint);
+}
+
+.p4-box-value {
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.p4-box small,
+.p4-node small {
+  font-size: 10px;
+  color: var(--faint);
+  letter-spacing: 0.02em;
+}
+
+/* The marks. One colour per meaning, used identically on boxes and on nodes, so a mark means the same thing
+   wherever it appears. */
+.p4-box.looking,
+.p4-node.looking {
+  border-color: var(--cyan);
+  background: color-mix(in srgb, var(--cyan) 18%, transparent);
+}
+
+.p4-box.found,
+.p4-node.found {
+  border-color: #37d67a;
+  background: color-mix(in srgb, #37d67a 20%, transparent);
+}
+
+.p4-box.added,
+.p4-node.added {
+  border-color: #37d67a;
+  background: color-mix(in srgb, #37d67a 12%, transparent);
+  transform: translateY(-2px);
+}
+
+.p4-box.changed,
+.p4-node.changed {
+  border-color: #f0a33a;
+  background: color-mix(in srgb, #f0a33a 16%, transparent);
+}
+
+.p4-box.removed,
+.p4-node.removed {
+  border-color: #e05c5c;
+  background: color-mix(in srgb, #e05c5c 10%, transparent);
+  color: var(--faint);
+}
+
+.p4-box.path,
+.p4-node.path {
+  border-color: color-mix(in srgb, var(--cyan) 60%, transparent);
+  background: color-mix(in srgb, var(--cyan) 9%, transparent);
+}
+
+.p4-box.unbalanced,
+.p4-node.unbalanced {
+  border-color: #e05c5c;
+  box-shadow: 0 0 0 2px color-mix(in srgb, #e05c5c 25%, transparent);
+}
+
+.p4-chain {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  padding: 16px 4px;
+}
+
+.p4-chain-part {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.p4-link {
+  color: var(--faint);
+  padding: 0 2px;
+  font-size: 15px;
+}
+
+/* ---------------------------------------------------------------- trees */
+
+.p4-tree {
+  position: relative;
+  width: 100%;
+  margin: 8px 0;
+  min-height: 200px;
+}
+
+.p4-tree-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.p4-tree-line {
+  stroke: var(--glass-border);
+  stroke-width: 1.5;
+}
+
+.p4-tree-line.path {
+  stroke: var(--cyan);
+  stroke-width: 2;
+}
+
+.p4-tree-line.changed {
+  stroke: #f0a33a;
+  stroke-width: 2;
+}
+
+.p4-tree-line.broken {
+  stroke: #e05c5c;
+  stroke-dasharray: 3 3;
+}
+
+.p4-node {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  min-width: 34px;
+  padding: 5px 7px;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  background: var(--bg-mid, #14161a);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  line-height: 1.15;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- steps and counts */
+
+.p4-step {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+
+.p4-step:hover,
+.p4-step:focus-visible {
+  background: color-mix(in srgb, var(--cyan) 10%, transparent);
+}
+
+.p4-step.here {
+  background: color-mix(in srgb, var(--cyan) 16%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--cyan) 40%, transparent);
+}
+
+.p4-fact {
+  display: contents;
+}
+
+/* ---------------------------------------------------------------- the database laboratory */
+
+.p4-sql-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 300px);
+  gap: 14px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .p4-sql-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.p4-sql-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.p4-sql-label {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.p4-sql-box {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--cyan) 3%, transparent);
+  color: inherit;
+  font-family: var(--font-mono, ui-monospace, 'Cascadia Code', Consolas, monospace);
+  font-size: 13px;
+  line-height: 1.55;
+  resize: vertical;
+  tab-size: 2;
+}
+
+.p4-sql-box:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 1px;
+}
+
+.p4-sql-rows {
+  max-height: 420px;
+  overflow: auto;
+}
+
+.p4-sql-rows .p2-table th small {
+  display: block;
+  font-weight: 400;
+  color: var(--faint);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+}
+
+.p4-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.p4-null {
+  color: var(--faint);
+  font-style: italic;
+}
+
+.p4-plan {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 12px;
+  line-height: 1.6;
+  font-family: var(--font-mono, ui-monospace, Consolas, monospace);
+}
+
+/* A whole-table read and an index lookup are the two things the plan is read for, so they are the two things marked. */
+.p4-plan li.scanning {
+  color: #f0a33a;
+}
+
+.p4-plan li.indexed {
+  color: #37d67a;
+}
+
+.p4-table-facts {
+  margin: 6px 0;
+  font-size: 12px;
+}
+
+.p4-table-facts > summary {
+  cursor: pointer;
+  padding: 3px 0;
+}
+
+.p4-table-facts > summary small {
+  color: var(--faint);
+  font-size: 10px;
+}
+
+.p4-table-facts ul {
+  margin: 4px 0 6px;
+  padding-left: 12px;
+  list-style: none;
+}
+
+.p4-table-facts li {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  padding: 1px 0;
+}
+
+.p4-insert {
+  border: 0;
+  background: transparent;
+  color: var(--cyan);
+  font: inherit;
+  font-family: var(--font-mono, ui-monospace, Consolas, monospace);
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.p4-insert:hover,
+.p4-insert:focus-visible {
+  text-decoration: underline;
+}
+
+.p4-table-facts li small {
+  color: var(--faint);
+  font-size: 10px;
+}
+
+.p4-suggestions {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.p4-suggestions .p2-btn {
+  width: 100%;
+  text-align: left;
+}
+
+/* Reduced motion means no movement, and nothing else: the marks still change colour, because colour is the
+   information and the movement was only decoration. */
+@media (prefers-reduced-motion: reduce) {
+  .p4-box,
+  .p4-node {
+    transition: none;
+  }
+
+  .p4-box.added,
+  .p4-node.added {
+    transform: none;
+  }
+
+  .p4-node {
+    transform: translate(-50%, -50%);
+  }
+}
+
+/* ---------------------------------------------------------------- charts */
+
+.p4-plot {
+  margin: 10px 0;
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  gap: 4px;
+}
+
+.p4-plot-y {
+  grid-row: 1;
+  grid-column: 1;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: 10px;
+  color: var(--faint);
+  justify-self: center;
+  align-self: center;
+  letter-spacing: 0.03em;
+}
+
+.p4-plot-area {
+  grid-row: 1;
+  grid-column: 2;
+  position: relative;
+  min-height: 0;
+  border-left: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.p4-plot-area svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.p4-plot-high,
+.p4-plot-low {
+  position: absolute;
+  left: 3px;
+  font-size: 9px;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--bg-mid, #14161a) 80%, transparent);
+  padding: 0 2px;
+}
+
+.p4-plot-high {
+  top: 1px;
+}
+
+.p4-plot-low {
+  bottom: 1px;
+}
+
+.p4-plot-x {
+  grid-row: 2;
+  grid-column: 2;
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.p4-plot-x-label {
+  letter-spacing: 0.03em;
+}
+
+.p4-plot figcaption {
+  grid-row: 3;
+  grid-column: 2;
+}
+
+.p4-plot-zero {
+  stroke: var(--glass-border);
+  stroke-width: 1;
+  stroke-dasharray: 2 2;
+}
+
+.p4-plot-mark {
+  stroke: color-mix(in srgb, var(--cyan) 45%, transparent);
+  stroke-width: 1;
+  stroke-dasharray: 3 2;
+}
+
+.p4-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.p4-legend li {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.p4-legend-mark {
+  font-style: italic;
+}
+
+.p4-swatch {
+  width: 10px;
+  height: 2px;
+  border-radius: 1px;
+  flex: 0 0 auto;
+}
+
+/* ---------------------------------------------------------------- poles */
+
+.p4-poles svg {
+  width: 100%;
+  max-width: 320px;
+  aspect-ratio: 1;
+  display: block;
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+}
+
+/* The unstable half of the plane, shaded, so the phrase becomes a place. */
+.p4-unstable {
+  fill: color-mix(in srgb, #e05c5c 7%, transparent);
+}
+
+.p4-pole {
+  stroke: var(--cyan);
+  stroke-width: 2;
+}
+
+.p4-zero {
+  fill: none;
+  stroke: #f0a33a;
+  stroke-width: 1.6;
+}
+
+/* ---------------------------------------------------------------- the arm */
+
+.p4-arm svg {
+  width: 100%;
+  max-width: 420px;
+  aspect-ratio: 1;
+  display: block;
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--cyan) 2%, transparent);
+}
+
+.p4-reach {
+  fill: color-mix(in srgb, var(--cyan) 4%, transparent);
+  stroke: color-mix(in srgb, var(--cyan) 25%, transparent);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+
+.p4-limb {
+  stroke: var(--cyan);
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.p4-base {
+  fill: var(--faint);
+}
+
+.p4-joint {
+  fill: var(--bg-mid, #14161a);
+  stroke: var(--cyan);
+  stroke-width: 1.5;
+}
+
+.p4-gripper {
+  fill: #37d67a;
+}
+
+.p4-target {
+  fill: none;
+  stroke: #e05c5c;
+  stroke-width: 1.5;
+}
+
+.p4-target.reached {
+  stroke: #37d67a;
+}
+
+.p4-target-cross {
+  stroke: var(--faint);
+  stroke-width: 1;
+}
+
+/* ---------------------------------------------------------------- beams and trusses */
+
+.p4-beam svg {
+  width: 100%;
+  height: 130px;
+  display: block;
+}
+
+.p4-beam-line {
+  stroke: var(--faint);
+  stroke-width: 3;
+}
+
+.p4-beam-bent {
+  stroke: var(--cyan);
+  stroke-width: 2;
+}
+
+.p4-support {
+  fill: var(--faint);
+}
+
+.p4-load {
+  stroke: #e05c5c;
+  stroke-width: 1.8;
+}
+
+.p4-load.spread {
+  stroke-width: 1;
+}
+
+.p4-load-head {
+  fill: #e05c5c;
+}
+
+.p4-truss svg {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  display: block;
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+}
+
+/* Tension and compression are opposite things and must not share a colour. */
+.p4-member.tension {
+  stroke: #e05c5c;
+}
+
+.p4-member.compression {
+  stroke: var(--cyan);
+}
+
+.p4-member.zero-force {
+  stroke: var(--glass-border);
+  stroke-dasharray: 3 3;
+}
+
+.p4-support-node {
+  fill: #f0a33a;
+}
+
+.p4-tension {
+  color: #e05c5c;
+}
+
+.p4-compression {
+  color: var(--cyan);
+}

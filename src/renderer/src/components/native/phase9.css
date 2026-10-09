@@ -1,0 +1,307 @@
+/* ------------------------------------------------------------ Code Playground */
+
+.p9-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.p9-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--faint);
+}
+
+.p9-pick select {
+  padding: 6px 9px;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  background: var(--bg-deep);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  min-width: 190px;
+}
+
+.p9-run,
+.p9-predict {
+  padding: 7px 14px;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.p9-run {
+  border-color: var(--cyan);
+  background: color-mix(in srgb, var(--cyan) 16%, transparent);
+  color: var(--cyan);
+  font-weight: 600;
+}
+
+.p9-run:disabled,
+.p9-predict:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.p9-run:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--cyan) 26%, transparent);
+}
+
+.p9-predict:hover:not(:disabled) {
+  background: var(--bg-mid);
+}
+
+/* Whether a sandbox is set up, said before anybody presses anything. */
+.p9-where {
+  margin: 0 0 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--faint);
+}
+
+.p9-where.real {
+  color: var(--cyan);
+}
+
+/*
+ * Where the answer came from. This is the most important thing on the screen: a guess and a run look identical as
+ * text, so the difference is made loud rather than noted. The predicted one is amber because it is a caveat, not
+ * an error — the result may well be right, and nothing verified it.
+ */
+.p9-origin {
+  margin-bottom: 10px;
+  padding: 9px 12px;
+  border-radius: 9px;
+  border: 1px solid var(--glass-border);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.p9-origin.ran {
+  border-color: var(--cyan);
+  background: color-mix(in srgb, var(--cyan) 8%, transparent);
+}
+
+.p9-origin.predicted {
+  border-color: color-mix(in srgb, #f0a33a 55%, var(--glass-border));
+  background: color-mix(in srgb, #f0a33a 8%, transparent);
+  color: #f0a33a;
+}
+
+.p9-verdict {
+  display: inline-block;
+  margin-bottom: 10px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--glass-border);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.p9-verdict.ok {
+  border-color: var(--cyan);
+  color: var(--cyan);
+}
+
+.p9-verdict.compile-error,
+.p9-verdict.runtime-error,
+.p9-verdict.timeout,
+.p9-verdict.memory,
+.p9-verdict.wrong-output,
+.p9-verdict.provider-error {
+  border-color: color-mix(in srgb, #f0a33a 55%, var(--glass-border));
+  color: #f0a33a;
+}
+
+.p9-stream {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  background: var(--bg-deep);
+  border: 1px solid var(--glass-border);
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 40vh;
+  overflow: auto;
+}
+
+.p9-stream.error {
+  border-color: color-mix(in srgb, #f0a33a 40%, var(--glass-border));
+}
+
+/* ---------------------------------------------------------------- the editor */
+
+.p9-editor-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 5px;
+  font-size: 12px;
+}
+
+.p9-editor-head code {
+  margin-left: 2px;
+  color: var(--faint);
+}
+
+.p9-code {
+  display: flex;
+  border: 1px solid var(--glass-border);
+  border-radius: 9px;
+  background: var(--bg-deep);
+  overflow: hidden;
+}
+
+/*
+ * The gutter is a real element rather than a background image. A background drifts out of alignment the moment a
+ * line wraps, and in a code editor that is exactly when the numbers matter most.
+ */
+.p9-gutter {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 8px 10px 10px;
+  border-right: 1px solid var(--glass-border);
+  background: var(--bg-mid);
+  color: var(--faint);
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.55;
+  text-align: right;
+  user-select: none;
+  min-width: 34px;
+}
+
+.p9-source {
+  flex: 1;
+  min-width: 0;
+  min-height: 300px;
+  padding: 10px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.55;
+  resize: vertical;
+  /* Off, so the gutter can stay aligned: a wrapped line would need a number that is not there. */
+  white-space: pre;
+  overflow-x: auto;
+  tab-size: 2;
+}
+
+.p9-source:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: -2px;
+}
+
+.p9-stdin {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 12px;
+  font-size: 12px;
+}
+
+.p9-stdin textarea {
+  min-height: 70px;
+  padding: 9px 11px;
+  border: 1px solid var(--glass-border);
+  border-radius: 9px;
+  background: var(--bg-deep);
+  color: var(--text);
+  font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  font-size: 12.5px;
+  resize: vertical;
+}
+
+.p9-stdin textarea:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: -2px;
+}
+
+/* ------------------------------------------------------------- the languages */
+
+.p9-group {
+  margin-bottom: 14px;
+}
+
+.p9-group-head {
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.p9-langs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 7px;
+}
+
+.p9-lang {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 7px 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.p9-lang:hover {
+  background: var(--bg-mid);
+}
+
+.p9-lang.here {
+  border-color: var(--cyan);
+  background: color-mix(in srgb, var(--cyan) 10%, transparent);
+}
+
+.p9-lang code,
+.p9-lang small {
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.p9-about {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.p9-origin strong {
+  display: block;
+  font-weight: 600;
+}
+
+/* Why it fell back, and what that costs. Under the headline rather than hidden behind a tab. */
+.p9-why {
+  margin: 7px 0 0;
+  padding-left: 18px;
+  font-size: 12px;
+  line-height: 1.55;
+  font-weight: 400;
+  opacity: 0.92;
+}
+
+.p9-why li + li {
+  margin-top: 3px;
+}
