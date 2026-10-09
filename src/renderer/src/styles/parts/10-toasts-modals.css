@@ -566,3 +566,64 @@ kbd {
     radial-gradient(ellipse 130% 44% at 50% 96%, var(--av-with) 0 56%, transparent 60%),
     radial-gradient(ellipse 120% 26% at 50% 50%, color-mix(in srgb, var(--av-rim) 50%, transparent) 0 48%, transparent 56%);
 }
+
+/* The two layers the setup screen's worlds have and these were missing: the fine surface detail, and the shell of
+   atmosphere that lifts when one is pointed at. Repeated here rather than shared, because welcome.css belongs to a
+   screen that is unmounted the moment setup finishes. */
+.setting-face-skin {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0.5;
+  background:
+    radial-gradient(circle at 22% 72%, rgba(255, 255, 255, 0.16) 0 6%, transparent 7%),
+    radial-gradient(circle at 68% 18%, rgba(255, 255, 255, 0.12) 0 4%, transparent 5%),
+    radial-gradient(circle at 78% 64%, rgba(0, 0, 0, 0.22) 0 7%, transparent 8%),
+    repeating-conic-gradient(
+      from calc(var(--av-turn) + 90deg) at 46% 44%,
+      rgba(255, 255, 255, 0.05) 0deg 6deg,
+      transparent 6deg 18deg
+    );
+}
+
+.setting-face-air {
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  pointer-events: none;
+  opacity: 0;
+  transform: scale(0.88);
+  background: radial-gradient(circle, transparent 58%, color-mix(in srgb, var(--av-rim) 32%, transparent) 72%, transparent 86%);
+  transition:
+    opacity 0.3s ease,
+    transform 0.4s ease;
+}
+
+.setting-face:hover .setting-face-air,
+.setting-face:focus-visible .setting-face-air,
+.setting-face.is-chosen .setting-face-air {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.setting-face:hover::before,
+.setting-face:focus-visible::before {
+  transform: rotate(16deg) scale(1.06);
+}
+
+.setting-face::before {
+  transition: transform 0.9s cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .setting-face-air,
+  .setting-face::before {
+    transition: none;
+  }
+
+  .setting-face:hover::before,
+  .setting-face:focus-visible::before {
+    transform: none;
+  }
+}

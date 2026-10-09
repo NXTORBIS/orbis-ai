@@ -16,7 +16,9 @@
  * type, which is the moment this is for.
  *
  * The ids are stored in settings and must never be renamed: an account whose picture is `aurora` and a build that has
- * renamed that to `dawn` is an account whose picture silently becomes the fallback.
+ * renamed that to `dawn` is an account whose picture silently becomes the fallback. The *names* are only ever shown,
+ * so those can change freely -- and they are worlds rather than colours, because "Vesper" is something somebody
+ * picks and "Rose" is something somebody is assigned.
  */
 
 /**
@@ -59,16 +61,16 @@ export interface Avatar {
 export const AVATARS: readonly Avatar[] = Object.freeze([
   { id: 'cyan', name: 'Tide', from: '#5fe4ff', to: '#04202e', with: '#06566f', rim: '#a6f2ff', turn: 318, pattern: 'wave' },
   { id: 'ember', name: 'Ember', from: '#ff9d5c', to: '#2a0b06', with: '#8c1b0c', rim: '#ffd0a8', turn: 330, pattern: 'swirl' },
-  { id: 'jade', name: 'Jade', from: '#48e5a0', to: '#042219', with: '#065040', rim: '#9df5cd', turn: 312, pattern: 'bands' },
-  { id: 'orchid', name: 'Orchid', from: '#c58cff', to: '#190830', with: '#3d1278', rim: '#e6ccff', turn: 324, pattern: 'nebula' },
-  { id: 'amber', name: 'Amber', from: '#ffc94d', to: '#2a1900', with: '#7a4100', rim: '#ffe6a8', turn: 306, pattern: 'shard' },
-  { id: 'cobalt', name: 'Cobalt', from: '#6aa8ff', to: '#061331', with: '#102a8c', rim: '#b8d4ff', turn: 336, pattern: 'eye' },
-  { id: 'rose', name: 'Rose', from: '#ff7d9c', to: '#2f0610', with: '#73062c', rim: '#ffc2d1', turn: 300, pattern: 'swirl' },
-  { id: 'mint', name: 'Mint', from: '#7ef0d8', to: '#042421', with: '#065c4e', rim: '#c2fbee', turn: 342, pattern: 'nebula' },
-  { id: 'slate', name: 'Slate', from: '#b8c6d8', to: '#0b111a', with: '#2b3a4d', rim: '#e4ecf6', turn: 315, pattern: 'bands' },
-  { id: 'coral', name: 'Coral', from: '#ff8a6b', to: '#2b0d09', with: '#8a2414', rim: '#ffc4b3', turn: 348, pattern: 'eye' },
-  { id: 'violet', name: 'Violet', from: '#8b7cff', to: '#0e092b', with: '#241680', rim: '#cbc3ff', turn: 309, pattern: 'wave' },
-  { id: 'gold', name: 'Gold', from: '#ffd98a', to: '#281f06', with: '#6d4c05', rim: '#fff0c9', turn: 333, pattern: 'shard' }
+  { id: 'jade', name: 'Verdant', from: '#48e5a0', to: '#042219', with: '#065040', rim: '#9df5cd', turn: 312, pattern: 'bands' },
+  { id: 'orchid', name: 'Nebula', from: '#c58cff', to: '#190830', with: '#3d1278', rim: '#e6ccff', turn: 324, pattern: 'nebula' },
+  { id: 'amber', name: 'Corona', from: '#ffc94d', to: '#2a1900', with: '#7a4100', rim: '#ffe6a8', turn: 306, pattern: 'shard' },
+  { id: 'cobalt', name: 'Abyss', from: '#6aa8ff', to: '#061331', with: '#102a8c', rim: '#b8d4ff', turn: 336, pattern: 'eye' },
+  { id: 'rose', name: 'Vesper', from: '#ff7d9c', to: '#2f0610', with: '#73062c', rim: '#ffc2d1', turn: 300, pattern: 'swirl' },
+  { id: 'mint', name: 'Aurora', from: '#7ef0d8', to: '#042421', with: '#065c4e', rim: '#c2fbee', turn: 342, pattern: 'nebula' },
+  { id: 'slate', name: 'Basalt', from: '#b8c6d8', to: '#0b111a', with: '#2b3a4d', rim: '#e4ecf6', turn: 315, pattern: 'bands' },
+  { id: 'coral', name: 'Solstice', from: '#ff8a6b', to: '#2b0d09', with: '#8a2414', rim: '#ffc4b3', turn: 348, pattern: 'eye' },
+  { id: 'violet', name: 'Twilight', from: '#8b7cff', to: '#0e092b', with: '#241680', rim: '#cbc3ff', turn: 309, pattern: 'wave' },
+  { id: 'gold', name: 'Helios', from: '#ffd98a', to: '#281f06', with: '#6d4c05', rim: '#fff0c9', turn: 333, pattern: 'shard' }
 ])
 
 export const DEFAULT_AVATAR = 'cyan'

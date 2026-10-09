@@ -221,6 +221,8 @@ export default function WelcomeExperience({ ready, needsName, needsUnlock, locke
    * never be taken back by the next letter they type.
    */
   const [pickedAvatar, setPickedAvatar] = useState<string | null>(null)
+  /** Whichever one the pointer or the keyboard is on, so the name under the grid can follow it. */
+  const [hovered, setHovered] = useState<string | null>(null)
   /**
    * Which half of setup is on screen.
    *
@@ -484,6 +486,7 @@ export default function WelcomeExperience({ ready, needsName, needsUnlock, locke
             arrive, it is the first sign that anything is listening.
           */}
           <span className="welcome-face" style={avatarStyle(avatar)} data-pattern={avatarFor(avatar).pattern} aria-hidden="true">
+            <span className="welcome-face-skin" />
             <span className="welcome-face-rim" />
           </span>
           <input
@@ -509,10 +512,9 @@ export default function WelcomeExperience({ ready, needsName, needsUnlock, locke
         */}
         <div className={`welcome-faces${step === 'who' && nameValid ? ' is-shown' : ''}`}>
           <p className="welcome-label" id="welcome-faces-label">
-            Pick a picture
+            Choose your world
           </p>
-          <div className="welcome-face-wrap">
-          <div className="welcome-face-row" ref={rowRef} role="radiogroup" aria-labelledby="welcome-faces-label">
+          <div className="welcome-face-grid" role="radiogroup" aria-labelledby="welcome-faces-label" ref={rowRef}>
             {AVATARS.map((one, at) => {
               const chosen = one.id === avatar
               return (
@@ -528,6 +530,10 @@ export default function WelcomeExperience({ ready, needsName, needsUnlock, locke
                   style={{ ...avatarStyle(one.id), ['--at' as string]: String(at) }}
                   tabIndex={chosen ? 0 : -1}
                   onClick={() => setPickedAvatar(one.id)}
+                  onPointerEnter={() => setHovered(one.id)}
+                  onPointerLeave={() => setHovered((was) => (was === one.id ? null : was))}
+                  onFocus={() => setHovered(one.id)}
+                  onBlur={() => setHovered((was) => (was === one.id ? null : was))}
                   onKeyDown={(event) => {
                     const step = event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1 : event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 0
                     if (step === 0) return
@@ -540,13 +546,23 @@ export default function WelcomeExperience({ ready, needsName, needsUnlock, locke
                     if (next instanceof HTMLElement) next.focus()
                   }}
                 >
+                  <span className="welcome-face-skin" />
                   <span className="welcome-face-rim" />
+                  <span className="welcome-face-air" />
                   {chosen && <span className="welcome-face-tick" />}
                 </button>
               )
             })}
           </div>
-          </div>
+          {/*
+            The world's name, under the grid, in one fixed place.
+            A label on each orb would be twelve words competing with twelve pictures. One line that changes as the
+            pointer moves says the same thing and leaves the pictures to be looked at. It keeps its height when it
+            is empty, or the whole screen jumps every time somebody moves the mouse across the grid.
+          */}
+          <p className="welcome-face-name" aria-hidden="true">
+            {(hovered ?? avatar) === '' ? '' : avatarFor(hovered ?? avatar).name}
+          </p>
         </div>
 
         {/*

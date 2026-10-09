@@ -277,10 +277,10 @@ export default function SettingsModal({ settings, onUpdate, onClose, section }: 
                   Orbis. Saved the moment one is pressed: there is nothing to confirm about a picture.
                 */}
                 <div className="setting-label" style={{ marginTop: 18 }}>
-                  <h3>Your picture</h3>
+                  <h3>Your world</h3>
                   <p>Shown beside your name, and on your messages.</p>
                 </div>
-                <div className="setting-faces" role="radiogroup" aria-label="Your picture">
+                <div className="setting-faces" role="radiogroup" aria-label="Your world">
                   {AVATARS.map((one) => {
                     const chosen = one.id === (settings.userAvatar || DEFAULT_AVATAR)
                     return (
@@ -296,7 +296,9 @@ export default function SettingsModal({ settings, onUpdate, onClose, section }: 
                         style={avatarStyle(one.id)}
                         onClick={() => void onUpdate({ userAvatar: one.id })}
                       >
+                        <span className="setting-face-skin" />
                         <span className="setting-face-rim" />
+                        <span className="setting-face-air" />
                         {chosen && <span className="setting-face-tick" />}
                       </button>
                     )
