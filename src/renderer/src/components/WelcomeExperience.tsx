@@ -3,6 +3,7 @@ import { Eye, EyeOff } from 'lucide-react'
 import ring from '../assets/orbis-ring-glass.png'
 import logo from '../assets/orbis-logo.png'
 import { confirmPassword, judgePassword, PASSWORD_MAX } from '../../../shared/passwordStrength'
+import { AVATARS, avatarStyle, markFor, suggestFor } from '../../../shared/avatars'
 import './welcome.css'
 
 interface Props {
@@ -24,7 +25,7 @@ interface Props {
    * Both together, because a half-created account -- named but unprotected, or protected but unnamed -- is a state
    * nothing else in Orbis knows how to be in.
    */
-  onComplete(name: string, password: string): Promise<void>
+  onComplete(name: string, password: string, avatar: string): Promise<void>
   /**
    * This account has a password and it has not been given yet, so startup stops here until it is.
    *
@@ -212,6 +213,14 @@ export default function WelcomeExperience({ ready, needsName, needsUnlock, locke
    * what stops "12 more characters" appearing under an empty box the moment the screen opens.
    */
   const [touched, setTouched] = useState({ password: false, again: false })
+  /**
+   * The picture, and whether it was asked for.
+   *
+   * Null means nobody has picked one, so the name decides it -- and keeps deciding it on every keystroke, which is
+   * what makes the row feel like it is answering. The moment one is pressed that stops: a choice somebody made must
+   * never be taken back by the next letter they type.
+   */
+  const [pickedAvatar, setPickedAvatar] = useState<string | null>(null)
   const [savedName, setSavedName] = useState('')
   /** What the person is typing to get in, and what Orbis last said about it. */
   const [unlockWith, setUnlockWith] = useState('')
@@ -258,6 +267,24 @@ export default function WelcomeExperience({ ready, needsName, needsUnlock, locke
 
   const clean = cleanName(name)
   const nameValid = NAME_CHAR.test(clean)
+  const avatar = pickedAvatar ?? suggestFor(clean).id
+  const rowRef = useRef<HTMLDivElement>(null)
+
+  /*
+   * The chosen one is brought into view whenever it changes.
+   *
+   * Twelve spheres do not fit, so the row scrolls -- and the name chooses one of the twelve, which means the answer
+   * to what somebody just typed is regularly off the end of it. Without this the row looks like it is ignoring them.
+   */
+  useEffect(() => {
+    const row = rowRef.current
+    if (!row) return
+    const at = AVATARS.findIndex((one) => one.id === avatar)
+    const swatch = row.children[at]
+    if (swatch instanceof HTMLElement) {
+      swatch.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'nearest', inline: 'center' })
+    }
+  }, [avatar, reduced])
   // Judged against the name as well: a password that is just the name protects nothing, and the name is on the screen
   // directly above the field.
   const strength = judgePassword(password, clean)
@@ -354,7 +381,7 @@ export default function WelcomeExperience({ ready, needsName, needsUnlock, locke
     submitting.current = true
     setPhase('saving')
     try {
-      await onComplete(clean, password)
+      await onComplete(clean, password, avatar)
       setSavedName(clean)
       // Forgotten the moment it has been used. It is not needed again, and what is not held cannot leak.
       setPassword('')
@@ -429,7 +456,15 @@ export default function WelcomeExperience({ ready, needsName, needsUnlock, locke
         <label htmlFor="welcome-name" className={`welcome-sub${title.done ? ' is-shown' : ''}`}>
           What should I call you?
         </label>
-        <div className="welcome-field">
+        <div className="welcome-field has-face">
+          {/*
+            The picture sits inside the field, not beside it.
+            It is the thing being named, so it belongs where the name is -- and because it changes as the letters
+            arrive, it is the first sign that anything is listening.
+          */}
+          <span className="welcome-face" style={avatarStyle(avatar)} aria-hidden="true">
+            <span className="welcome-face-mark">{markFor(clean)}</span>
+          </span>
           <input
             id="welcome-name"
             ref={inputRef}
@@ -442,6 +477,51 @@ export default function WelcomeExperience({ ready, needsName, needsUnlock, locke
             readOnly={phase === 'saving'}
             onChange={(e) => setName(e.target.value)}
           />
+        </div>
+
+        {/*
+          The pictures, which arrive with the name.
+          A radiogroup rather than a list of buttons: it is one value with twelve possible answers, arrow keys move
+          between them, and a screen reader says "3 of 12" without being told to. The row is reachable by keyboard
+          through the chosen one only, which is what `tabIndex` below is for -- tabbing through twelve swatches to
+          reach the password field would be its own small cruelty.
+        */}
+        <div className={`welcome-faces${nameValid ? ' is-shown' : ''}`}>
+          <p className="welcome-label" id="welcome-faces-label">
+            Pick a picture
+          </p>
+          <div className="welcome-face-wrap">
+          <div className="welcome-face-row" ref={rowRef} role="radiogroup" aria-labelledby="welcome-faces-label">
+            {AVATARS.map((one, at) => {
+              const chosen = one.id === avatar
+              return (
+                <button
+                  key={one.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={chosen}
+                  aria-label={one.name}
+                  title={one.name}
+                  className={`welcome-face-pick${chosen ? ' is-chosen' : ''}`}
+                  style={{ ...avatarStyle(one.id), ['--at' as string]: String(at) }}
+                  tabIndex={chosen ? 0 : -1}
+                  onClick={() => setPickedAvatar(one.id)}
+                  onKeyDown={(event) => {
+                    const step = event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1 : event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 0
+                    if (step === 0) return
+                    event.preventDefault()
+                    const to = AVATARS[(at + step + AVATARS.length) % AVATARS.length]
+                    setPickedAvatar(to.id)
+                    // The focus follows the selection, or the next arrow key starts from the one left behind.
+                    const row = event.currentTarget.parentElement
+                    const next = row?.children[(at + step + AVATARS.length) % AVATARS.length]
+                    if (next instanceof HTMLElement) next.focus()
+                  }}
+                />
+              )
+            })}
+          </div>
+          </div>
         </div>
 
         {/*

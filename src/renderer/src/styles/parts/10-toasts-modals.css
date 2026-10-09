@@ -388,3 +388,80 @@ kbd {
   font-family: var(--mono);
   font-size: 11px;
 }
+
+/* ---------------------------------------------------------------- the account's picture, in Settings
+
+   The same twelve spheres as the setup screen, drawn from the same four properties (`shared/avatars.ts`). The rules
+   are repeated rather than shared because `welcome.css` belongs to a screen that is unmounted the moment setup
+   finishes, and importing a stylesheet for a screen that is gone would pull the whole welcome layer in with it. */
+
+.setting-faces {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.setting-face {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 50%;
+  padding: 0;
+  cursor: pointer;
+  opacity: 0.75;
+  background:
+    radial-gradient(circle at 30% 23%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.25) 16%, rgba(255, 255, 255, 0) 30%),
+    radial-gradient(ellipse 58% 44% at 36% 28%, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0) 70%),
+    radial-gradient(ellipse 70% 40% at 60% 92%, color-mix(in srgb, var(--av-rim) 32%, transparent), transparent 70%),
+    radial-gradient(circle at 34% 28%, var(--av-from), var(--av-to) 74%),
+    radial-gradient(circle at 50% 50%, transparent 54%, rgba(0, 0, 0, 0.5) 100%);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+  transition:
+    transform 0.2s ease,
+    opacity 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.setting-face:hover {
+  opacity: 1;
+  transform: translateY(-2px);
+}
+
+.setting-face:focus-visible {
+  outline: 2px solid var(--av-rim);
+  outline-offset: 3px;
+}
+
+/* Said with a ring and a tick as well as with lift, because twelve coloured balls is exactly where colour alone
+   stops being enough. */
+.setting-face.is-chosen {
+  opacity: 1;
+  box-shadow:
+    0 6px 14px rgba(0, 0, 0, 0.45),
+    0 0 0 2px var(--av-rim);
+}
+
+.setting-face.is-chosen::after {
+  content: '';
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background-color: var(--av-rim);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 8.4l2.6 2.6L12 5.6' fill='none' stroke='%23000' stroke-opacity='.8' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-size: 100% 100%;
+  box-shadow: 0 0 0 2px var(--bg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .setting-face,
+  .setting-face:hover {
+    transform: none;
+    transition: none;
+  }
+}

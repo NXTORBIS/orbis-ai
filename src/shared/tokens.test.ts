@@ -90,7 +90,21 @@ const SET_AT_RUNTIME = new Set([
  * Read bare, but only inside a rule that selects on the element carrying it: `.mk-logo-fallback[style*="--mk-logo-hue"]`
  * cannot match an element that does not have the colour set on it, so there is nothing for a fallback to catch.
  */
-const SET_ON_THE_ELEMENT = new Set(['--mk-logo-hue'])
+const SET_ON_THE_ELEMENT = new Set([
+  '--mk-logo-hue',
+  /*
+   * An account's picture, from `shared/avatars.ts`.
+   *
+   * These are not theme colours and must not be: every orb on the setup screen carries its own four, set inline on
+   * the element, which is what lets one set of rules draw all twelve. A `:root` definition would be a thirteenth
+   * colour that nothing ever shows, and would hide the real mistake -- an orb rendered with no style at all -- by
+   * quietly painting it in whatever that default happened to be.
+   */
+  '--av-from',
+  '--av-to',
+  '--av-rim',
+  '--av-turn'
+])
 
 test('the window has a definition for every token name it reads', () => {
   const defined = new Set([...declared(windowCss).keys(), ...declared(styles).keys()])

@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { AVATARS, DEFAULT_AVATAR, avatarStyle } from '../../../shared/avatars'
 import { useFocusTrap } from '../lib/useFocusTrap'
 import { Gamepad2, Globe, Info, Lock, Mic, Palette, Search, Sparkles, User, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -267,6 +268,35 @@ export default function SettingsModal({ settings, onUpdate, onClose, section }: 
                   {profileField('assistantName', 'Assistant name', 'Orbis')}
                   {profileField('userName', 'Your name', 'NxtOrbis')}
                   {profileField('userTitle', 'Address me as', 'Commander')}
+                </div>
+
+                {/*
+                  The same twelve as the setup screen, for everybody who is already set up.
+                  Without this the picture could only ever be chosen once, on a screen that an existing account
+                  never sees again -- which would make the whole thing invisible to every person already using
+                  Orbis. Saved the moment one is pressed: there is nothing to confirm about a picture.
+                */}
+                <div className="setting-label" style={{ marginTop: 18 }}>
+                  <h3>Your picture</h3>
+                  <p>Shown beside your name, and on your messages.</p>
+                </div>
+                <div className="setting-faces" role="radiogroup" aria-label="Your picture">
+                  {AVATARS.map((one) => {
+                    const chosen = one.id === (settings.userAvatar || DEFAULT_AVATAR)
+                    return (
+                      <button
+                        key={one.id}
+                        type="button"
+                        role="radio"
+                        aria-checked={chosen}
+                        aria-label={one.name}
+                        title={one.name}
+                        className={`setting-face${chosen ? ' is-chosen' : ''}`}
+                        style={avatarStyle(one.id)}
+                        onClick={() => void onUpdate({ userAvatar: one.id })}
+                      />
+                    )
+                  })}
                 </div>
               </section>
             )}

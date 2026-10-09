@@ -418,6 +418,8 @@ export interface Settings {
   assistantName: string
   /** Shown on your messages. */
   userName: string
+  /** The picture on this account, as an id from `shared/avatars.ts`. */
+  userAvatar: string
   /** How the assistant addresses you, e.g. "Commander". */
   userTitle: string
   /** Animated background particles and motion effects. */

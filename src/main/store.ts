@@ -1,4 +1,5 @@
 import { promises as fs } from 'node:fs'
+import { DEFAULT_AVATAR, isAvatar } from '../shared/avatars.ts'
 import { damageNote, openStored } from './storedFile.ts'
 import { nullPlatform } from './platform.ts'
 import type { SecretStorePort } from './platform'
@@ -26,6 +27,7 @@ const DEFAULTS: Omit<Settings, 'hasApiKey' | 'hasJudge0Key'> = {
   theme: 'dark',
   assistantName: 'Orbis',
   userName: 'NxtOrbis',
+  userAvatar: DEFAULT_AVATAR,
   userTitle: 'Commander',
   effects: true,
   welcomeCompleted: false,
@@ -96,6 +98,9 @@ export class Store {
     if (typeof update.effects === 'boolean') next.effects = update.effects
     if (typeof update.assistantName === 'string') next.assistantName = update.assistantName.trim().slice(0, 40) || DEFAULTS.assistantName
     if (typeof update.userName === 'string') next.userName = update.userName.trim().slice(0, 40) || DEFAULTS.userName
+    // An id Orbis does not know is not kept: a settings file from a newer build would otherwise leave this account
+    // with a picture that cannot be drawn, and nothing downstream would have anything to fall back to.
+    if (isAvatar(update.userAvatar)) next.userAvatar = update.userAvatar
     if (typeof update.userTitle === 'string') next.userTitle = update.userTitle.trim().slice(0, 40)
     if (typeof update.welcomeCompleted === 'boolean') next.welcomeCompleted = update.welcomeCompleted
     if (typeof update.introVersion === 'number' && Number.isFinite(update.introVersion))

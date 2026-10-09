@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { DEFAULT_AVATAR } from '../../shared/avatars'
 import { ASK_EVENT } from './components/native/AskBar'
 import type { Attachment, ChatMessage, ChatRequest, Conversation, Settings, SettingsUpdate, StreamEvent, VisualArrival } from '../../shared/types'
 import { isRefusal } from '../../shared/account'
@@ -1330,8 +1331,8 @@ export default function App(): React.JSX.Element {
    * Throwing is what tells the welcome screen to keep what was typed and say it did not work.
    */
   const completeWelcome = useCallback(
-    async (name: string, password: string) => {
-      const next = await updateSettings({ userName: name, welcomeCompleted: true })
+    async (name: string, password: string, avatar: string) => {
+      const next = await updateSettings({ userName: name, userAvatar: avatar, welcomeCompleted: true })
       if (!next.welcomeCompleted || !next.userName.trim()) throw new Error('Setup was not saved')
 
       const made = await window.api.accountCreate(password, name)
@@ -1913,6 +1914,7 @@ export default function App(): React.JSX.Element {
           }}
           searchToken={searchToken}
           userName={settings?.userName ?? 'You'}
+          userAvatar={settings?.userAvatar ?? DEFAULT_AVATAR}
           userTitle={settings?.userTitle ?? ''}
           onNewChat={newChat}
           onIncognito={toggleIncognito}

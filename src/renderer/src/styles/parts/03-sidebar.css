@@ -472,13 +472,26 @@
   place-items: center;
   width: 30px;
   height: 30px;
-  border: 1px solid var(--avatar-border);
+  border: 0;
   border-radius: 50%;
-  background: radial-gradient(circle at 30% 30%, var(--cyan-fill), var(--avatar-bg));
-  box-shadow: 0 0 10px var(--cyan-glow-soft);
-  font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 700;
+  /*
+   * The sphere the account was given during setup, from `--av-*` on the element.
+   *
+   * It was a fixed cyan disc with two initials on it, which meant the picture somebody chose existed only on the
+   * screen where they chose it. Same three layers as the setup screen: a specular, the interior falling to a dark
+   * limb, and the limb itself.
+   */
+  background:
+    radial-gradient(circle at 32% 26%, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0) 38%),
+    radial-gradient(circle at 34% 28%, var(--av-from, var(--cyan)), var(--av-to, var(--avatar-bg)) 72%),
+    radial-gradient(circle at 50% 50%, transparent 58%, rgba(0, 0, 0, 0.4) 100%);
+  box-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.4),
+    0 0 0 1px color-mix(in srgb, var(--av-rim, var(--cyan)) 38%, transparent);
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 13px;
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
   color: var(--text);
 }
 

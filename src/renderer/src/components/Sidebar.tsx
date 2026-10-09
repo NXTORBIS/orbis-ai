@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { avatarStyle, markFor } from '../../../shared/avatars'
 import type { LucideIcon } from 'lucide-react'
 import type { SettingsSectionId } from '../../../shared/settingsSections'
 import type { NoticeKind } from '../lib/notices'
@@ -49,6 +50,8 @@ interface Props {
   /** Changes whenever the search box should open and take focus. */
   searchToken: number
   userName: string
+  /** The account's picture, as an id from `shared/avatars.ts`. */
+  userAvatar: string
   userTitle: string
   onNewChat(): void
   onIncognito(): void
@@ -122,12 +125,6 @@ function readSections(): Record<string, boolean> {
   } catch {
     return {}
   }
-}
-
-function initials(name: string): string {
-  const words = name.trim().split(/\s+/).filter(Boolean)
-  if (!words.length) return 'U'
-  return (words.length > 1 ? words[0][0] + words[1][0] : words[0].slice(0, 2)).toUpperCase()
 }
 
 export default function Sidebar(props: Props): React.JSX.Element {
@@ -396,7 +393,11 @@ export default function Sidebar(props: Props): React.JSX.Element {
 
       <div className="sb-foot">
         <button type="button" className="sb-user" title="Profile and settings" onClick={() => props.onSettings('account')}>
-          <span className="sb-avatar">{initials(props.userName)}</span>
+          {/* The same sphere that was chosen during setup, at the size a sidebar wants. One letter, never two:
+              initials inside a 28px orb are a smudge. */}
+          <span className="sb-avatar" style={avatarStyle(props.userAvatar)}>
+            {markFor(props.userName)}
+          </span>
           {!collapsed && (
             <span className="sb-user-text">
               <b className="truncate">{props.userName}</b>

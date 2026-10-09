@@ -866,3 +866,232 @@
   opacity: 1;
   transform: none;
 }
+
+/* ================================================================ the account's picture
+
+   One shape, drawn three sizes: inside the name field, in the row of twelve, and anywhere else an account is shown.
+   Every one of them is a sphere lit from the upper left, built from four custom properties that `shared/avatars.ts`
+   hands over -- `--av-from`, `--av-to`, `--av-rim` and `--av-turn`. Nothing here knows the colours, which is what
+   lets the same rules draw all twelve and whatever is added later.
+
+   A sphere, not a flat disc, because Orbis already has one and it is the thing people recognise. Four layers do it:
+   the interior, a specular highlight where the light lands, a rim that is brightest on the lit side and fades round
+   the back, and a dark limb that stops it reading as a ball of paint. */
+
+.welcome-face,
+.welcome-face-pick {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 50%;
+  padding: 0;
+  isolation: isolate;
+  background:
+    /* The glint: small, bright and tight. This is the one thing that reads as glass rather than as paint, and it
+       has to be a hard little spot -- a soft wide one is a matte ball with a pale patch on it. */
+    radial-gradient(circle at 30% 23%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.25) 16%, rgba(255, 255, 255, 0) 30%),
+    /* The broad sheen around it, which is what keeps the glint from looking stuck on. */
+    radial-gradient(ellipse 58% 44% at 36% 28%, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0) 70%),
+    /* Light bounced back up off whatever the sphere is sitting on, along the bottom edge. */
+    radial-gradient(ellipse 70% 40% at 60% 92%, color-mix(in srgb, var(--av-rim) 32%, transparent), transparent 70%),
+    /* The interior: lit face falling to a dark limb. */
+    radial-gradient(circle at 34% 28%, var(--av-from), var(--av-to) 74%),
+    /* The limb itself, so the edge is never the same tone as the middle. */
+    radial-gradient(circle at 50% 50%, transparent 54%, rgba(0, 0, 0, 0.5) 100%);
+}
+
+/* The rim: a ring that is brightest where the light grazes it, drawn with a mask rather than a border, because a
+   border is one flat colour all the way round and a lit sphere never is. */
+.welcome-face::before,
+.welcome-face-pick::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  padding: 1px;
+  background: conic-gradient(
+    from var(--av-turn),
+    var(--av-rim),
+    color-mix(in srgb, var(--av-rim) 35%, transparent) 30%,
+    rgba(255, 255, 255, 0.06) 55%,
+    color-mix(in srgb, var(--av-rim) 30%, transparent) 78%,
+    var(--av-rim)
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* The letter. Dimmed and small on purpose: it is there so an empty row is not twelve blank balls, and it must never
+   compete with the colour, which is the thing actually being chosen. */
+.welcome-face-mark {
+  position: relative;
+  z-index: 1;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.82);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------------- inside the name field */
+
+.welcome-field.has-face .welcome-input {
+  /* Room for the orb, which sits over the padding rather than pushing the text box around. */
+  padding-left: 62px;
+}
+
+.welcome-face {
+  position: absolute;
+  left: 13px;
+  top: 50%;
+  width: 36px;
+  height: 36px;
+  transform: translateY(-50%);
+  font-size: 15px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+  /* The colours cross-fade as the name changes them, so a keystroke turns the orb rather than swapping it. */
+  transition:
+    background 0.5s ease,
+    box-shadow 0.4s ease;
+  z-index: 1;
+}
+
+/* ---------------------------------------------------------------- the row of twelve */
+
+.welcome-faces {
+  width: 100%;
+  margin-top: 20px;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transition:
+    max-height 0.55s var(--ease-out),
+    opacity 0.45s ease 0.1s;
+}
+
+.welcome-faces.is-shown {
+  max-height: 220px;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* The row fades out at both ends rather than stopping at a hard edge, so it is visible that it carries on. */
+.welcome-face-wrap {
+  position: relative;
+  -webkit-mask: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+  mask: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+}
+
+.welcome-face-row {
+  display: flex;
+  gap: 12px;
+  /* It scrolls rather than wrapping: twelve spheres in one line is the shape being copied, and on a narrow window a
+     row that can be pushed reads better than two ragged rows. */
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 6px 2px 12px;
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
+}
+
+.welcome-face-row::-webkit-scrollbar {
+  display: none;
+}
+
+.welcome-face-pick {
+  width: 54px;
+  height: 54px;
+  font-size: 18px;
+  cursor: pointer;
+  scroll-snap-align: center;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.45);
+  transition:
+    transform 0.28s var(--ease-out),
+    box-shadow 0.28s ease,
+    opacity 0.28s ease;
+  /* They arrive one after another, left to right, so the row lands rather than appearing. `--at` is the index. */
+  animation: welcome-face-in 0.5s var(--ease-out) both;
+  animation-delay: calc(var(--at) * 38ms);
+  opacity: 0.78;
+}
+
+.welcome-face-pick:hover {
+  transform: translateY(-4px) scale(1.06);
+  opacity: 1;
+}
+
+.welcome-face-pick:focus-visible {
+  outline: 2px solid var(--av-rim);
+  outline-offset: 3px;
+}
+
+/* Chosen: lifted, full strength, and wearing a ring of its own colour -- said three ways, because colour alone is
+   not a thing everyone can see, and twelve coloured balls is exactly the case where that bites. */
+.welcome-face-pick.is-chosen {
+  opacity: 1;
+  transform: translateY(-5px) scale(1.12);
+  box-shadow:
+    0 10px 24px rgba(0, 0, 0, 0.5),
+    0 0 0 2px var(--av-rim),
+    0 0 18px color-mix(in srgb, var(--av-rim) 45%, transparent);
+}
+
+/* The tick, so "chosen" survives a screenshot in greyscale. */
+.welcome-face-pick.is-chosen::after {
+  content: '';
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background-color: var(--av-rim);
+  box-shadow:
+    0 1px 4px rgba(0, 0, 0, 0.5),
+    0 0 0 2px var(--bg, #06080b);
+  /*
+   * The check, as one small inline SVG.
+   *
+   * Two crossed linear-gradients were tried first and photographed: at sixteen pixels they do not meet where a tick
+   * meets, and it came out as a smudged X. A path is a path at any size.
+   */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 8.4l2.6 2.6L12 5.6' fill='none' stroke='%23000' stroke-opacity='.8' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  z-index: 2;
+}
+
+@keyframes welcome-face-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.86);
+  }
+  to {
+    opacity: 0.78;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Nothing arrives and nothing lifts when motion is turned down. The ring and the tick still say which is chosen,
+   which is the part that carries meaning. */
+@media (prefers-reduced-motion: reduce) {
+  .welcome-face-pick {
+    animation: none;
+    opacity: 1;
+  }
+
+  .welcome-face-pick:hover,
+  .welcome-face-pick.is-chosen {
+    transform: none;
+  }
+
+  .welcome-face {
+    transition: none;
+  }
+}
