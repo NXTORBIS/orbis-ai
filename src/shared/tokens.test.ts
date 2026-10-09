@@ -103,6 +103,7 @@ const SET_ON_THE_ELEMENT = new Set([
   '--av-from',
   '--av-to',
   '--av-with',
+  '--av-sky',
   '--av-rim',
   '--av-turn'
 ])

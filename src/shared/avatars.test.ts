@@ -104,7 +104,7 @@ describe('the letter on it', () => {
 describe('what the stylesheet is handed', () => {
   it('is the properties the rules read, and nothing else', () => {
     const style = avatarStyle('ember')
-    assert.deepEqual(Object.keys(style).sort(), ['--av-from', '--av-rim', '--av-to', '--av-turn', '--av-with'])
+    assert.deepEqual(Object.keys(style).sort(), ['--av-from', '--av-rim', '--av-sky', '--av-to', '--av-turn', '--av-with'])
     assert.match(style['--av-turn'], /^\d+deg$/)
   })
 
@@ -164,5 +164,49 @@ describe('the pattern has to be visible', () => {
       const gap = Math.abs(weight(one.with) - weight(one.to))
       assert.ok(gap >= 60, `${one.id}: the pattern is almost the colour of its own dark limb`)
     }
+  })
+})
+
+describe('the air is the same light on all twelve', () => {
+  /*
+   * The bodies differ so the twelve can be told apart; the air does not, because it is Orbis's own light falling
+   * on all of them. That is what makes a grid of twelve read as one place rather than as a bag of marbles, and it
+   * is the only thing tying the worlds to the rest of the product, whose accent is --cyan (#3fd8ff).
+   *
+   * Measured, not eyeballed: every sky must be a cool colour -- blue at least as strong as red -- and must not be
+   * a brighter copy of the body, which is what `rim` already is and what made the old edge read as a stroke drawn
+   * around the shape rather than as something in front of it.
+   */
+  const rgb = (hex: string): [number, number, number] => [
+    parseInt(hex.slice(1, 3), 16),
+    parseInt(hex.slice(3, 5), 16),
+    parseInt(hex.slice(5, 7), 16)
+  ]
+
+  it('every sky is cool: blue leads, and red never does', () => {
+    for (const one of AVATARS) {
+      const [r, , b] = rgb(one.sky)
+      assert.ok(b >= r, `${one.id}'s air is warmer than it is cool (${one.sky})`)
+      assert.ok(b >= 0xc0, `${one.id}'s air is not light enough at the limb to read (${one.sky})`)
+    }
+  })
+
+  it('the air is never just a brighter copy of the body', () => {
+    for (const one of AVATARS) {
+      const [sr, sg, sb] = rgb(one.sky)
+      const [fr, fg, fb] = rgb(one.from)
+      // Compare the colours' shape, not their brightness: scale both to the same total and look at the difference.
+      const sum = (a: number, b: number, c: number): number => a + b + c || 1
+      const ss = sum(sr, sg, sb)
+      const fs = sum(fr, fg, fb)
+      const apart = Math.abs(sr / ss - fr / fs) + Math.abs(sg / ss - fg / fs) + Math.abs(sb / ss - fb / fs)
+      assert.ok(apart >= 0.045, `${one.id}'s air is the same colour as its body (${one.sky} vs ${one.from})`)
+    }
+  })
+
+  it('all twelve skies sit in one family, or they are not one light', () => {
+    // The spread between the coolest and the warmest sky, as blue-minus-red. A family, not a rainbow.
+    const lean = AVATARS.map((one) => { const [r, , b] = rgb(one.sky); return b - r })
+    assert.ok(Math.max(...lean) - Math.min(...lean) <= 90, 'the skies are too far apart to read as one light')
   })
 })

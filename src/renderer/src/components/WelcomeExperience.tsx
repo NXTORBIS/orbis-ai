@@ -487,6 +487,8 @@ export default function WelcomeExperience({ ready, needsName, needsUnlock, locke
           */}
           <span className="welcome-face" style={avatarStyle(avatar)} data-pattern={avatarFor(avatar).pattern} aria-hidden="true">
             <span className="welcome-face-skin" />
+            <span className="welcome-face-air" />
+            <span className="welcome-face-fresnel" />
             <span className="welcome-face-rim" />
           </span>
           <input
@@ -547,8 +549,10 @@ export default function WelcomeExperience({ ready, needsName, needsUnlock, locke
                   }}
                 >
                   <span className="welcome-face-skin" />
-                  <span className="welcome-face-rim" />
+                  <span className="welcome-face-cap" />
                   <span className="welcome-face-air" />
+                  <span className="welcome-face-fresnel" />
+                  <span className="welcome-face-rim" />
                   {chosen && <span className="welcome-face-tick" />}
                 </button>
               )

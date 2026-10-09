@@ -475,16 +475,28 @@
   border: 0;
   border-radius: 50%;
   /*
-   * The sphere the account was given during setup, from `--av-*` on the element.
+   * The world the account was given during setup, from `--av-*` on the element.
    *
-   * It was a fixed cyan disc with two initials on it, which meant the picture somebody chose existed only on the
-   * screen where they chose it. Same three layers as the setup screen: a specular, the interior falling to a dark
-   * limb, and the limb itself.
+   * This is the smallest of the four sizes it is drawn at -- 56px in the grid, 40px in Settings, 36px in the name
+   * field, 30px here -- and it is the one somebody sees most, every time they look at the sidebar. It used to be
+   * a fixed cyan disc with two initials on it, so the world somebody chose existed only on the screen where they
+   * chose it.
+   *
+   * Less detail than the big ones, deliberately. The weather and the skin are left off: at 30px a six-degree
+   * conic striation is smaller than a pixel and turns to moire, and a pattern you cannot resolve is noise rather
+   * than identity. What is kept is everything that still carries at this size -- the body, the glint, the night
+   * side in the body's own dark, and the limb of air that says which world it is.
    */
   background:
-    radial-gradient(circle at 32% 26%, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0) 38%),
-    radial-gradient(circle at 34% 28%, var(--av-from, var(--cyan)), var(--av-to, var(--avatar-bg)) 72%),
-    radial-gradient(circle at 50% 50%, transparent 58%, rgba(0, 0, 0, 0.4) 100%);
+    radial-gradient(circle at 32% 26%, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 36%),
+    radial-gradient(
+      circle closest-side at 50% 50%,
+      transparent 0 78%,
+      color-mix(in srgb, var(--av-sky, var(--cyan)) 18%, transparent) 94%,
+      color-mix(in srgb, var(--av-sky, var(--cyan)) 34%, transparent) 100%
+    ),
+    radial-gradient(circle at 34% 28%, var(--av-from, var(--cyan)), var(--av-to, var(--avatar-bg)) 74%),
+    radial-gradient(circle at 34% 28%, transparent 46%, color-mix(in srgb, #000 76%, var(--av-to, var(--avatar-bg))) 98%);
   box-shadow:
     0 2px 6px rgba(0, 0, 0, 0.4),
     0 0 0 1px color-mix(in srgb, var(--av-rim, var(--cyan)) 38%, transparent);

@@ -1045,7 +1045,21 @@
     );
 }
 
-/* ---------------------------------------------------------------- 4. the light */
+/* ---------------------------------------------------------------- 4. the light
+
+   This layer was four hand-picked percentages. Four independent design passes were run over it and their critics
+   rendered and measured the results; what follows is only what survived being measured. The full rewrite that
+   derived every term from the sphere's geometry was rejected by its own critic -- sampled at 80% radius, the
+   lit-to-dark ratio fell from 4.38 to 1.21 on Basalt, which is a flatter sphere, not a rounder one. So the
+   directional look that measured better is kept, and four things it genuinely lacked are added.
+
+   The glint is placed by trigonometry from `--av-turn` rather than by hand. Those two numbers agree to within
+   about two pixels at 56px, which is how we know the convention is right: this does not move the light, it
+   explains it -- and it means a world whose `turn` is edited gets a highlight in the right place for free.
+
+   `closest-side` is named on every centred ring on purpose. Without it a radial gradient on a square box measures
+   its percentages to the CORNER, 1.414x the radius, so every stop lands somewhere other than where it reads --
+   and it fails silently, which is the class of bug this product keeps hitting. */
 
 .welcome-face::after,
 .welcome-face-pick::after {
@@ -1054,15 +1068,136 @@
   inset: 0;
   border-radius: 50%;
   pointer-events: none;
+  /*
+   * Where the sun is, in the element's own frame.
+   *
+   * A bearing of 0 points up and turns clockwise, so the screen offset is (sin, -cos). For `--av-turn: 318deg`
+   * that computes to 30.6% 25.4% -- within about a pixel of the 30% 23% that was hand-picked here before, which
+   * is how we know the convention is right. It does not move the light; it says what the light already was, and
+   * a world whose `turn` is edited now gets its highlight in the right place for free.
+   */
+  --sun-x: calc(50% + 29% * sin(var(--av-turn)));
+  --sun-y: calc(50% - 29% * cos(var(--av-turn)));
+  /*
+   * No size keyword on any of these four, on purpose.
+   *
+   * They are drawn from an off-centre point and their stops were tuned against the default, `farthest-corner`.
+   * Naming `closest-side` here was tried and photographed: it shrinks every one of them by about a third, the
+   * night side closes over the whole body, and twelve worlds come back as twelve black marbles. The size keyword
+   * belongs on the CENTRED rings below, where it is needed and where the stops were written for it.
+   */
   background:
     /* The glint: small, bright and tight. A soft wide one is a matte ball with a pale patch on it. */
-    radial-gradient(circle at 30% 23%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.22) 15%, rgba(255, 255, 255, 0) 29%),
+    radial-gradient(
+      circle at var(--sun-x) var(--sun-y),
+      rgba(255, 255, 255, 0.95),
+      rgba(255, 255, 255, 0.22) 15%,
+      rgba(255, 255, 255, 0) 29%
+    ),
     /* The sheen around it, which keeps the glint from looking stuck on. */
-    radial-gradient(ellipse 58% 44% at 36% 28%, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0) 70%),
-    /* Light bounced back up along the bottom edge. */
+    radial-gradient(
+      ellipse 58% 44% at calc(var(--sun-x) + 6%) calc(var(--sun-y) + 5%),
+      rgba(255, 255, 255, 0.26),
+      rgba(255, 255, 255, 0) 70%
+    ),
+    /* Light bounced back up off whatever the world is sitting over. */
     radial-gradient(ellipse 70% 40% at 60% 93%, color-mix(in srgb, var(--av-rim) 30%, transparent), transparent 70%),
-    /* The terminator: the far side falls away, and it falls away off-centre, along the light's own direction. */
-    radial-gradient(circle at 36% 30%, transparent 44%, rgba(0, 0, 0, 0.62) 96%);
+    /*
+     * The night side, tinted with the body's own dark rather than flat black.
+     *
+     * A black dark side is a hole punched in the world and it takes the weather down with it. The same stops as
+     * before -- they were measured against the alternatives and this is the shape that read roundest -- with the
+     * colour changed from `rgba(0, 0, 0, 0.62)` to the body's own `to` mixed into black, which is the one change
+     * worth making here. Subsurface scatter rides on this: the mix leaves the shadow edge carrying the body's
+     * colour, which is why a marble's shadow edge is warm rather than a cut.
+     */
+    radial-gradient(
+      circle at var(--sun-x) var(--sun-y),
+      transparent 44%,
+      color-mix(in srgb, #000 76%, var(--av-to)) 96%
+    );
+}
+
+/* The Fresnel edge: the limb brightens all the way round, on the night side too.
+
+   A sphere's surface near its outline is nearly edge-on to you, so it reflects the room rather than the light --
+   which is why a photographed ball sits in front of its background instead of fading into it. This is the single
+   thing today's orb lacked most; of everything four design passes proposed, it is the one its own critic said to
+   add first if only one could be added. It is NOT directional, and that is the whole point. */
+.welcome-face-fresnel {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 1;
+  background: radial-gradient(
+    circle closest-side at 50% 50%,
+    transparent 0 78%,
+    color-mix(in srgb, var(--av-sky) 13%, transparent) 92%,
+    color-mix(in srgb, var(--av-sky) 28%, transparent) 100%
+  );
+}
+
+/* The air.
+
+   You see through very little atmosphere at the middle of a disc and a great deal of it edge-on at the limb,
+   which is why a photograph of a planet has a bright band hugging its outline. Drawn INSIDE the disc, in
+   percentages: an earlier proposal put it outside on a fixed `inset: -6px`, and its critic measured what that
+   does as the orb shrinks -- 2.84px of band on the disc at 56px, 0.76px at 40px, 0.24px at 36px and nothing at
+   all at 30px, by which point it is a halo floating around a ball rather than air on one.
+
+   The colour is `--av-sky`, and every world's sky is in Orbis's own cyan family. The bodies differ so the twelve
+   can be told apart; the air is the same light falling on all of them. */
+.welcome-face-air {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.85;
+  background: radial-gradient(
+    circle closest-side at 50% 50%,
+    transparent 0 84%,
+    color-mix(in srgb, var(--av-sky) 22%, transparent) 94%,
+    color-mix(in srgb, var(--av-sky) 6%, transparent) 100%
+  );
+  transition: opacity 0.32s ease;
+}
+
+/* Pointed at, the air thickens. It is already there at rest -- air that only exists when you look at it is not
+   air -- so this is a lift, not an appearance. */
+.welcome-face-pick:hover .welcome-face-air,
+.welcome-face-pick:focus-visible .welcome-face-air,
+.welcome-face-pick.is-chosen .welcome-face-air {
+  opacity: 1;
+}
+
+/* A polar cap.
+
+   The one piece of terrain that survived being measured at every size. A spherical cap's outline genuinely is a
+   single circle of latitude, and a circle of latitude seen flat is an exact ellipse -- so unlike bands, which
+   have to be cut off where they pass behind the body, a cap is one shape that is simply true. It sits on the
+   world's axis, which is `--av-turn`, so it is always at the top of the world rather than the top of the screen. */
+.welcome-face-cap {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  transform: rotate(var(--av-turn));
+  background: radial-gradient(
+    ellipse 22% 8% at 50% 12%,
+    color-mix(in srgb, var(--av-sky) 55%, #fff) 0 58%,
+    color-mix(in srgb, var(--av-sky) 30%, transparent) 82%,
+    transparent 100%
+  );
+  /*
+   * Small and faint on purpose.
+   *
+   * The first version was 34% by 13% at 55% white and it was photographed: at 56px, sitting under the sheen, it
+   * stopped reading as ice on a world and became a milky wash over the whole lit half. A cap is a detail you
+   * notice second, not the brightest thing on the body.
+   */
+  opacity: 0.45;
 }
 
 /* ---------------------------------------------------------------- 5. the rim, and the air above it */
@@ -1087,21 +1222,6 @@
   mask-composite: exclude;
   pointer-events: none;
   z-index: 2;
-}
-
-/* Atmosphere: a thin shell of the world's own light, just outside the edge. Nothing at rest, so twelve of them do
-   not turn the grid into a haze; it lifts when the world is pointed at or chosen. */
-.welcome-face-air {
-  position: absolute;
-  inset: -5px;
-  border-radius: 50%;
-  pointer-events: none;
-  opacity: 0;
-  transform: scale(0.88);
-  background: radial-gradient(circle, transparent 58%, color-mix(in srgb, var(--av-rim) 32%, transparent) 72%, transparent 86%);
-  transition:
-    opacity 0.32s ease,
-    transform 0.42s var(--ease-out);
 }
 
 /* ---------------------------------------------------------------- inside the name field */
@@ -1202,12 +1322,6 @@
   transform: rotate(16deg) scale(1.06);
 }
 
-.welcome-face-pick:hover .welcome-face-air,
-.welcome-face-pick:focus-visible .welcome-face-air {
-  opacity: 1;
-  transform: scale(1);
-}
-
 .welcome-face-pick:focus-visible {
   outline: 2px solid var(--av-rim);
   outline-offset: 4px;
@@ -1226,11 +1340,6 @@
     0 12px 26px rgba(0, 0, 0, 0.5),
     0 0 0 2px var(--av-rim),
     0 0 20px color-mix(in srgb, var(--av-rim) 45%, transparent);
-}
-
-.welcome-face-pick.is-chosen .welcome-face-air {
-  opacity: 0.85;
-  transform: scale(1);
 }
 
 /*

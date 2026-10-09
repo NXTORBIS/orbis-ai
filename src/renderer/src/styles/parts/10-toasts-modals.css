@@ -479,17 +479,37 @@ kbd {
   opacity: 0.88;
 }
 
+/* The light, with the sun placed by the world's own bearing rather than by hand -- the same four terms as the
+   setup screen, and the same reason for no size keyword on any of them. */
 .setting-face::after {
   content: '';
   position: absolute;
   inset: 0;
   border-radius: 50%;
   pointer-events: none;
+  --sun-x: calc(50% + 29% * sin(var(--av-turn)));
+  --sun-y: calc(50% - 29% * cos(var(--av-turn)));
   background:
-    radial-gradient(circle at 30% 23%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.22) 15%, rgba(255, 255, 255, 0) 29%),
-    radial-gradient(ellipse 58% 44% at 36% 28%, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0) 70%),
+    radial-gradient(circle at var(--sun-x) var(--sun-y), rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.22) 15%, rgba(255, 255, 255, 0) 29%),
+    radial-gradient(ellipse 58% 44% at calc(var(--sun-x) + 6%) calc(var(--sun-y) + 5%), rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0) 70%),
     radial-gradient(ellipse 70% 40% at 60% 93%, color-mix(in srgb, var(--av-rim) 30%, transparent), transparent 70%),
-    radial-gradient(circle at 50% 50%, transparent 52%, rgba(0, 0, 0, 0.55) 100%);
+    radial-gradient(circle at var(--sun-x) var(--sun-y), transparent 44%, color-mix(in srgb, #000 76%, var(--av-to)) 96%);
+}
+
+/* The limb brightens all the way round, on the night side too: it is what makes the sphere sit in front of the
+   panel rather than fade into it. Not directional, which is the point. */
+.setting-face-fresnel {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 1;
+  background: radial-gradient(
+    circle closest-side at 50% 50%,
+    transparent 0 78%,
+    color-mix(in srgb, var(--av-sky) 13%, transparent) 92%,
+    color-mix(in srgb, var(--av-sky) 28%, transparent) 100%
+  );
 }
 
 .setting-face-rim {
@@ -587,24 +607,28 @@ kbd {
     );
 }
 
+/* The air, drawn inside the disc in percentages. Outside it on a fixed pixel inset the band walks off the sphere
+   as the orb shrinks, which is a halo around a ball rather than air on one. */
 .setting-face-air {
   position: absolute;
-  inset: -4px;
+  inset: 0;
   border-radius: 50%;
   pointer-events: none;
-  opacity: 0;
-  transform: scale(0.88);
-  background: radial-gradient(circle, transparent 58%, color-mix(in srgb, var(--av-rim) 32%, transparent) 72%, transparent 86%);
-  transition:
-    opacity 0.3s ease,
-    transform 0.4s ease;
+  z-index: 1;
+  opacity: 0.85;
+  background: radial-gradient(
+    circle closest-side at 50% 50%,
+    transparent 0 84%,
+    color-mix(in srgb, var(--av-sky) 22%, transparent) 94%,
+    color-mix(in srgb, var(--av-sky) 6%, transparent) 100%
+  );
+  transition: opacity 0.3s ease;
 }
 
 .setting-face:hover .setting-face-air,
 .setting-face:focus-visible .setting-face-air,
 .setting-face.is-chosen .setting-face-air {
   opacity: 1;
-  transform: scale(1);
 }
 
 .setting-face:hover::before,

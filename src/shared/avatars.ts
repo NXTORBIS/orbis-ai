@@ -44,6 +44,19 @@ export interface Avatar {
   readonly to: string
   /** The second colour the pattern is drawn in. The two should not be neighbours, or the pattern disappears. */
   readonly with: string
+  /**
+   * The air: the colour of this world's atmosphere where you look through most of it, at the limb.
+   *
+   * Every one of the twelve is in Orbis's own cyan family, and that is the point. The bodies differ so a person
+   * can tell them apart; the air is the same light falling on all of them, which is what makes twelve separate
+   * spheres read as twelve worlds in one place rather than as a bag of coloured marbles. It is also the single
+   * thing that ties them to the rest of the product, whose accent is `--cyan`.
+   *
+   * It must not be a brighter copy of `from`. `rim` already is one, and an edge drawn in the body's own colour
+   * reads as a stroke around the shape rather than as something in front of it -- which is exactly what the old
+   * version looked like.
+   */
+  readonly sky: string
   /** The glow that sits under the rim on the lit side. Usually a brighter relative of `from`. */
   readonly rim: string
   /** Where the light falls, in degrees, so the family does not all face the same way. */
@@ -59,18 +72,18 @@ export interface Avatar {
  * eye picks a favourite much faster when consecutive swatches are not nearly the same.
  */
 export const AVATARS: readonly Avatar[] = Object.freeze([
-  { id: 'cyan', name: 'Tide', from: '#5fe4ff', to: '#04202e', with: '#06566f', rim: '#a6f2ff', turn: 318, pattern: 'wave' },
-  { id: 'ember', name: 'Ember', from: '#ff9d5c', to: '#2a0b06', with: '#8c1b0c', rim: '#ffd0a8', turn: 330, pattern: 'swirl' },
-  { id: 'jade', name: 'Verdant', from: '#48e5a0', to: '#042219', with: '#065040', rim: '#9df5cd', turn: 312, pattern: 'bands' },
-  { id: 'orchid', name: 'Nebula', from: '#c58cff', to: '#190830', with: '#3d1278', rim: '#e6ccff', turn: 324, pattern: 'nebula' },
-  { id: 'amber', name: 'Corona', from: '#ffc94d', to: '#2a1900', with: '#7a4100', rim: '#ffe6a8', turn: 306, pattern: 'shard' },
-  { id: 'cobalt', name: 'Abyss', from: '#6aa8ff', to: '#061331', with: '#102a8c', rim: '#b8d4ff', turn: 336, pattern: 'eye' },
-  { id: 'rose', name: 'Vesper', from: '#ff7d9c', to: '#2f0610', with: '#73062c', rim: '#ffc2d1', turn: 300, pattern: 'swirl' },
-  { id: 'mint', name: 'Aurora', from: '#7ef0d8', to: '#042421', with: '#065c4e', rim: '#c2fbee', turn: 342, pattern: 'nebula' },
-  { id: 'slate', name: 'Basalt', from: '#b8c6d8', to: '#0b111a', with: '#2b3a4d', rim: '#e4ecf6', turn: 315, pattern: 'bands' },
-  { id: 'coral', name: 'Solstice', from: '#ff8a6b', to: '#2b0d09', with: '#8a2414', rim: '#ffc4b3', turn: 348, pattern: 'eye' },
-  { id: 'violet', name: 'Twilight', from: '#8b7cff', to: '#0e092b', with: '#241680', rim: '#cbc3ff', turn: 309, pattern: 'wave' },
-  { id: 'gold', name: 'Helios', from: '#ffd98a', to: '#281f06', with: '#6d4c05', rim: '#fff0c9', turn: 333, pattern: 'shard' }
+  { id: 'cyan', name: 'Tide', from: '#5fe4ff', to: '#04202e', with: '#06566f', rim: '#a6f2ff', sky: '#bfe0ff', turn: 318, pattern: 'wave' },
+  { id: 'ember', name: 'Ember', from: '#f08a4e', to: '#2a0b06', with: '#8c1b0c', rim: '#ffd0a8', sky: '#8fd8ff', turn: 330, pattern: 'swirl' },
+  { id: 'jade', name: 'Verdant', from: '#3fd79a', to: '#042219', with: '#065040', rim: '#9df5cd', sky: '#7fe8e0', turn: 312, pattern: 'bands' },
+  { id: 'orchid', name: 'Nebula', from: '#b283f5', to: '#190830', with: '#3d1278', rim: '#e6ccff', sky: '#9fb6ff', turn: 324, pattern: 'nebula' },
+  { id: 'amber', name: 'Corona', from: '#eeb846', to: '#2a1900', with: '#7a4100', rim: '#ffe6a8', sky: '#9ad8ff', turn: 306, pattern: 'shard' },
+  { id: 'cobalt', name: 'Abyss', from: '#6aa8ff', to: '#061331', with: '#102a8c', rim: '#b8d4ff', sky: '#a7e6ff', turn: 336, pattern: 'eye' },
+  { id: 'rose', name: 'Vesper', from: '#f0738f', to: '#2f0610', with: '#73062c', rim: '#ffc2d1', sky: '#b9c4ff', turn: 300, pattern: 'swirl' },
+  { id: 'mint', name: 'Aurora', from: '#6fe3cd', to: '#042421', with: '#065c4e', rim: '#c2fbee', sky: '#a8ffe8', turn: 342, pattern: 'nebula' },
+  { id: 'slate', name: 'Basalt', from: '#a9bad0', to: '#0b111a', with: '#2b3a4d', rim: '#e4ecf6', sky: '#8fe4ff', turn: 315, pattern: 'bands' },
+  { id: 'coral', name: 'Solstice', from: '#f07e60', to: '#2b0d09', with: '#8a2414', rim: '#ffc4b3', sky: '#93ccff', turn: 348, pattern: 'eye' },
+  { id: 'violet', name: 'Twilight', from: '#8b7cff', to: '#0e092b', with: '#241680', rim: '#cbc3ff', sky: '#8fc9ff', turn: 309, pattern: 'wave' },
+  { id: 'gold', name: 'Helios', from: '#eec97e', to: '#281f06', with: '#6d4c05', rim: '#fff0c9', sky: '#a9deff', turn: 333, pattern: 'shard' }
 ])
 
 export const DEFAULT_AVATAR = 'cyan'
@@ -139,6 +152,7 @@ export function avatarStyle(id: string | null | undefined): Record<string, strin
     '--av-from': one.from,
     '--av-to': one.to,
     '--av-with': one.with,
+    '--av-sky': one.sky,
     '--av-rim': one.rim,
     '--av-turn': `${one.turn}deg`
   }

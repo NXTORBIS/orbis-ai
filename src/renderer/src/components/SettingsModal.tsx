@@ -297,8 +297,9 @@ export default function SettingsModal({ settings, onUpdate, onClose, section }: 
                         onClick={() => void onUpdate({ userAvatar: one.id })}
                       >
                         <span className="setting-face-skin" />
-                        <span className="setting-face-rim" />
                         <span className="setting-face-air" />
+                        <span className="setting-face-fresnel" />
+                        <span className="setting-face-rim" />
                         {chosen && <span className="setting-face-tick" />}
                       </button>
                     )
