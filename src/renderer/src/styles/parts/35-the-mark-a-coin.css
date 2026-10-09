@@ -1,0 +1,274 @@
+/* ----------------------------------------------------------------------------
+   The mark a coin with no logo wears.
+
+   Its colour comes from its own letters, so a row of coins nothing has
+   catalogued is a row of distinct marks rather than identical grey circles.
+   Some coins genuinely have no logo in existence -- a market listed days ago, a
+   tokenised stock nothing has an image for -- and for those this IS the
+   artwork, so it should look chosen rather than missing.
+
+   One saturation and one lightness for all of them, so they sit at the same
+   weight as the real logos beside them and none of them shouts.
+   ------------------------------------------------------------------------- */
+
+.mk-logo-fallback[style*="--mk-logo-hue"] {
+  --mk-logo-tint: hsl(var(--mk-logo-hue) 58% 52%);
+  border-color: color-mix(in srgb, var(--mk-logo-tint) 55%, transparent);
+  background: color-mix(in srgb, var(--mk-logo-tint) 20%, var(--pill-bg));
+  color: color-mix(in srgb, var(--mk-logo-tint) 72%, var(--text));
+}
+
+/* ============================================================================
+   Settings
+   ----------------------------------------------------------------------------
+   Eight sections beside one another instead of thirty-one blocks in a single
+   scroll. The list on the left is the whole of Settings at a glance, which is
+   the thing the old screen could not do at any size: with no order to the
+   scroll, the only way to find something was to read all of it.
+   ========================================================================= */
+
+.set-modal {
+  width: min(900px, 92vw);
+  height: min(680px, 88vh);
+  display: flex;
+  flex-direction: column;
+  /* The panes scroll; the dialog does not. */
+  overflow: hidden;
+}
+
+.set-split {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+}
+
+/* ---- where everything is ---- */
+
+.set-nav {
+  flex: 0 0 200px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 10px;
+  border-right: 1px solid var(--glass-border);
+  overflow-y: auto;
+}
+
+.set-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  color: var(--faint);
+}
+
+.set-search:focus-within {
+  border-color: var(--cyan-dim);
+}
+
+.set-search > input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 7px 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font-size: 12.5px;
+}
+
+.set-search > input:focus {
+  outline: none;
+}
+
+.set-nav > ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.set-nav button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.set-nav button:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+}
+
+.set-nav button.is-on {
+  color: var(--text);
+  background: var(--cyan-fill);
+  /* The bar rather than a fill alone: which section you are in has to survive a busy background behind the glass. */
+  box-shadow: inset 2px 0 0 var(--cyan);
+}
+
+.set-nav button:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: -2px;
+}
+
+.set-none {
+  margin: 4px 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--faint);
+}
+
+/* ---- the section itself ---- */
+
+.set-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-y: auto;
+  padding: 16px 18px 24px;
+}
+
+.set-head {
+  margin: 0 0 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.set-head h3 {
+  margin: 0;
+  font-size: 17px;
+  color: var(--text);
+}
+
+/* What the section is for, in the words somebody would use — so a heading alone never has to carry it. */
+.set-head p {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--faint);
+}
+
+@media (max-width: 720px) {
+  /*
+    Narrow: the list becomes a row along the top. The labels go with it -- at this width eight of them will not fit
+    beside the icons, and the icons alone are still eight distinct targets in a fixed order.
+  */
+  .set-split {
+    flex-direction: column;
+  }
+
+  .set-nav {
+    flex: 0 0 auto;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    border-right: 0;
+    border-bottom: 1px solid var(--glass-border);
+  }
+
+  .set-search {
+    flex: 1 1 100%;
+  }
+
+  .set-nav > ul {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 2px;
+  }
+
+  .set-nav button {
+    width: auto;
+    padding: 7px 9px;
+  }
+
+  .set-nav button > span {
+    display: none;
+  }
+
+  .set-nav button.is-on {
+    box-shadow: inset 0 -2px 0 var(--cyan);
+  }
+}
+
+/* ----------------------------------------------------------------------------
+   "Browser running"
+
+   Shown only while it is true. The browser is its own window now, so it can be
+   running with the chat in front -- which is exactly when somebody needs
+   telling, because nothing else on screen would say so. When it is not running
+   this is absent entirely rather than saying "off", which is a status nobody
+   asked for.
+
+   It is a button, not a label: the thing you want on being told the browser is
+   running is to go back to it.
+   ------------------------------------------------------------------------- */
+
+.browser-running {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  border: 1px solid color-mix(in srgb, var(--green) 32%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--green) 10%, transparent);
+  color: var(--green);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.browser-running:hover {
+  background: color-mix(in srgb, var(--green) 18%, transparent);
+}
+
+.browser-running:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 1px;
+}
+
+.browser-running-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--green);
+  /* A slow pulse: running, rather than a static dot that could be an indicator of anything. */
+  animation: browser-running-pulse 2.4s ease-in-out infinite;
+}
+
+@keyframes browser-running-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .browser-running-dot {
+    animation: none;
+  }
+}
+
+@media (max-width: 760px) {
+  /* The dot alone still says it, and the bar has other things to fit. */
+  .browser-running {
+    font-size: 0;
+    gap: 0;
+    padding: 5px;
+  }
+}

@@ -1,0 +1,352 @@
+/* ---------------------------------------------------------------- Markets: replay */
+
+.mk-replay {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 4px 12px;
+}
+
+.mk-replay-bar,
+.mk-replay-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--rail-bg);
+}
+
+.mk-replay-bar select,
+.mk-replay-controls select {
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 11.5px;
+}
+
+/* The scrub bar takes the rest of the row: it is the control somebody reaches for most. */
+.mk-scrub {
+  flex: 1 1 180px;
+  min-width: 120px;
+  height: 4px;
+  accent-color: var(--cyan);
+  cursor: pointer;
+}
+
+.mk-replay-position {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--pill-bg);
+  color: var(--muted);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mk-replay-position b {
+  font-weight: 600;
+}
+
+/* Amber, because it is about to be true rather than true: the fill is at a price not yet revealed. */
+.mk-replay-position.is-pending {
+  border-color: rgba(255, 190, 77, 0.3);
+  background: rgba(255, 190, 77, 0.09);
+  color: var(--amber);
+}
+
+.mk-replay-position.is-flat {
+  color: var(--faint);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The replay's motion is the point of it, so it is not disabled — but nothing else here should animate. */
+  .mk-replay-position {
+    transition: none;
+  }
+}
+
+/* ---------------------------------------------------------------- Markets: news */
+
+.mk-news {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 4px 12px;
+}
+
+.mk-headlines {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mk-headlines li {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 12px;
+  border: 1px solid transparent;
+  border-bottom-color: var(--line);
+  border-radius: 8px;
+}
+
+.mk-headlines li:hover {
+  border-color: var(--line-strong);
+  background: var(--hover);
+}
+
+.mk-headlines a {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.45;
+  text-decoration: none;
+}
+
+.mk-headlines a:hover {
+  color: var(--cyan);
+}
+
+.mk-headlines a svg {
+  flex: 0 0 auto;
+  color: var(--faint);
+}
+
+/* The publisher's name is never optional: a headline without one cannot be weighed. */
+.mk-news-meta {
+  color: var(--faint);
+  font-size: 11px;
+}
+
+.mk-news-meta b {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.mk-news-assets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.mk-news-assets button {
+  padding: 1px 7px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--pill-bg);
+  color: var(--muted);
+  font: inherit;
+  font-size: 10.5px;
+  cursor: pointer;
+}
+
+.mk-news-assets button:hover {
+  border-color: var(--cyan-dim);
+  color: var(--cyan);
+}
+
+/* ---------------------------------------------------------------- Markets: asset logos */
+
+.mk-logo {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  /* The image itself is not stretched: a logo squashed to fit is a logo altered. */
+  object-fit: contain;
+  overflow: hidden;
+  vertical-align: middle;
+}
+
+/* A neutral space while the real one loads. Never a stand-in logo, which would flash the wrong coin. */
+.mk-logo-loading {
+  background: var(--hover);
+}
+
+/*
+ * The fallback: the asset's own letters on a neutral mark.
+ *
+ * Not a generic coin — every unknown asset would then look like the same asset. Neutral rather than coloured, so it
+ * cannot be mistaken for branding this asset does not have.
+ */
+.mk-logo-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--pill-bg);
+  color: var(--muted);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.mk-row-name .mk-logo,
+.mk-results .mk-logo,
+.mk-table .mk-logo {
+  margin-right: 1px;
+}
+
+.mk-detail-head > .mk-logo {
+  margin-top: 2px;
+}
+
+.mk-tile .mk-logo {
+  margin-bottom: 1px;
+}
+
+/* ---------------------------------------------------------------- Markets: the currency picker */
+
+.mk-currency {
+  position: relative;
+}
+
+.mk-currency-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill, 999px);
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.mk-currency-button:hover {
+  border-color: var(--cyan-dim);
+}
+
+.mk-currency-button b {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* Prices are not in the currency the button names. Worth a mark on the button itself. */
+.mk-cur-warn {
+  color: var(--amber);
+}
+
+.mk-currency-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 60;
+  width: 320px;
+  max-width: 88vw;
+  padding: 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  background: var(--glass);
+  box-shadow: var(--glass-shadow);
+}
+
+.mk-currency-menu .mk-search {
+  margin-top: 0;
+}
+
+.mk-currency-list {
+  max-height: 320px;
+  overflow-y: auto;
+  margin-top: 8px;
+}
+
+.mk-currency-list h6 {
+  margin: 8px 0 3px;
+  padding: 0 6px;
+  color: var(--faint);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.mk-currency-list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mk-currency-list li {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.mk-currency-list li > button:first-child {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mk-currency-list li > button:first-child:hover {
+  background: var(--hover);
+}
+
+.mk-currency-list li.is-on > button:first-child {
+  background: var(--active);
+  color: var(--cyan);
+}
+
+/* The symbol is never alone: $ is five currencies, so the code sits beside it. */
+.mk-cur-symbol {
+  width: 22px;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.mk-currency-list .tl-icon .is-on {
+  color: var(--amber);
+}
+
+.mk-currency-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.mk-currency-foot p {
+  margin: 0;
+  line-height: 1.5;
+}

@@ -1,0 +1,307 @@
+/* ---------------------------------------------------------------- Orbis Pulsar: choosing a voice model */
+
+/*
+ * Shown the first time a microphone is pressed with nothing installed. The list is the whole of it: each model says
+ * what it is for, what it costs to download and what it needs to run, so the choice can be made here rather than
+ * researched elsewhere.
+ */
+.pulsar-setup { max-width: 640px; width: min(640px, 92vw); display: flex; flex-direction: column; gap: 14px; }
+
+.pulsar-setup-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.pulsar-setup-head h2 { display: flex; align-items: center; gap: 8px; margin: 0 0 4px; font-size: 16px; color: var(--text); }
+.pulsar-setup-machine { margin: 0; }
+
+.pulsar-setup-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; max-height: 46vh; overflow-y: auto; }
+
+.pulsar-model {
+  width: 100%; text-align: left; display: flex; flex-direction: column; gap: 4px;
+  padding: 12px; border: 1px solid var(--line); border-radius: 12px;
+  background: var(--panel); color: var(--text); cursor: pointer;
+}
+.pulsar-model:hover { border-color: var(--line-strong); }
+.pulsar-model.on { border-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 10%, var(--panel)); }
+.pulsar-model:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+/* Still selectable: "why can't I pick the accurate one" deserves an answer on screen rather than a disabled button. */
+.pulsar-model.tight { opacity: 0.72; }
+
+.pulsar-model-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pulsar-model-facts { font-size: 11.5px; color: var(--faint); font-variant-numeric: tabular-nums; }
+
+.pulsar-tag {
+  font-size: 10.5px; letter-spacing: 0.02em; padding: 2px 7px; border-radius: 999px;
+  background: color-mix(in srgb, var(--cyan) 18%, transparent); color: var(--cyan);
+}
+.pulsar-tag.tight { background: color-mix(in srgb, var(--amber) 18%, transparent); color: var(--amber); }
+
+.pulsar-setup-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.pulsar-setup-progress { display: flex; flex-direction: column; gap: 6px; }
+.pulsar-setup-progress progress { width: 100%; height: 6px; }
+.pulsar-setup-progress p { margin: 0; }
+
+
+/* ---------------------------------------------------------------- Markets: search, refresh and folding */
+
+/* The exchange's code for a pair, beside the asset's own name.
+   Dimmer and lighter than the name on purpose: somebody searching "bitcoin" wants Bitcoin first and BTCUSDT as
+   confirmation, not the other way round. */
+.mk-code {
+  flex: none;
+  color: var(--faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  opacity: 0.75;
+}
+
+/* The search box, folded down to its magnifier until it is wanted. */
+.mk-search {
+  transition: width 0.18s ease;
+}
+
+.mk-search > input {
+  /* `flex: 0 0 0` matters more than the width. The base rule gives this input `flex: 1 1 auto`, so it grows to fill
+     whatever space the bar has and a width of zero does nothing at all -- which is why the bar did not collapse. */
+  flex: 0 0 0;
+  width: 0;
+  min-width: 0;
+  padding-left: 0;
+  padding-right: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+  transition: flex-basis 0.18s ease, width 0.18s ease, opacity 0.14s ease, padding 0.18s ease;
+}
+
+.mk-search.is-open > input {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 140px;
+  padding-left: 6px;
+  padding-right: 6px;
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Collapsed, the bar is the magnifier and nothing else -- no empty pill sitting in the header. */
+.mk-search:not(.is-open) {
+  gap: 0;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+}
+
+.mk-search-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /*
+   * A size of its own. Without one the button collapsed to its 14px icon, which is smaller than anything should be
+   * that has to be clicked. The icon is unchanged; the area around it is what grew.
+   */
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  border-radius: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.mk-search-toggle:hover {
+  background: var(--hover);
+}
+
+.mk-search-toggle:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* The refresh control.
+   Three states worth telling apart: resting, asking, and just answered. Without the last one a refresh that
+   changed nothing looked exactly like one that never happened. */
+.mk-refresh {
+  transition: color 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.mk-refresh.is-working {
+  color: var(--cyan);
+  cursor: progress;
+}
+
+.mk-refresh.is-working svg {
+  animation: mk-spin 0.9s linear infinite;
+}
+
+.mk-refresh.is-fresh {
+  color: var(--green);
+  background: color-mix(in srgb, var(--green) 16%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--green) 40%, transparent);
+}
+
+@keyframes mk-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* A section heading that folds what is under it away. */
+.mk-fold {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  margin: 10px 0 6px;
+  padding: 4px 2px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mk-fold small {
+  color: var(--faint);
+  font-weight: 400;
+}
+
+.mk-fold svg {
+  flex: none;
+  transition: transform 0.18s ease;
+  transform: rotate(-90deg);
+}
+
+.mk-fold svg.mk-fold-open {
+  transform: rotate(0deg);
+}
+
+.mk-fold:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mk-search,
+  .mk-search > input,
+  .mk-refresh,
+  .mk-fold svg {
+    transition: none;
+  }
+
+  .mk-refresh.is-working svg {
+    animation: none;
+  }
+}
+
+/* A search result's parts, spaced.
+   The row is a flex container but the button inside it was not, so the name, the code and the venue ran together
+   as one word. */
+.mk-results li > button {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* The asset's name is the brightest thing in the row.
+   It was inheriting whatever the list had and coming out darker than the dim pair code beside it -- the hierarchy
+   exactly inverted, with the thing somebody searched for the hardest to read. */
+.mk-results li > button > b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.mk-results li > button:hover b {
+  color: var(--cyan);
+}
+
+/* The symbol gives up its space last.
+   Both it and the name ellipsise when the panel is narrow, and of the two the symbol is the one somebody is
+   reading -- so the name yields first instead of the two shrinking together. */
+.mk-row-name > b {
+  /* Takes the width it needs and does not give it back. It cannot overflow the row any more, because the button
+     around it clips -- which is what makes holding its width safe now and was not before. */
+  flex: 0 0 auto;
+  max-width: 100%;
+}
+
+.mk-row-name > .mk-name {
+  /* The name is what gives way when the panel is narrow. Of the two, the symbol is the one being read. */
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* The row's fixed columns, given room to give way.
+   A price reserving 96px, a change, a star and a turnover figure are a lot of fixed width in a panel somebody has
+   made narrow -- the name had almost nothing left. The price keeps its alignment and stops reserving space it is
+   not using. */
+/*
+  The rows measure themselves, not the window.
+
+  This was a `@media (max-width: 460px)`, which asks how wide the *window* is -- and the Markets panel is a narrow
+  column inside a window that is usually wide. So the rule never fired where it was needed: every fixed column kept its
+  width, the name button was squeezed to nothing, the symbol disappeared entirely and the logo was sliced down the
+  middle. A container query asks the only question that matters, which is how much room this list actually has.
+*/
+.mk-rows {
+  container-type: inline-size;
+  container-name: mk-rows;
+}
+
+/* The logo is never what gives way. A sliced circle reads as a broken image, not as a narrow column. */
+.mk-row-name > .mk-logo,
+.mk-row-name > .mk-logo-fallback {
+  flex: 0 0 auto;
+}
+
+/*
+  A floor for the name, so the button cannot be squeezed out of existence.
+  Enough for the logo and a few characters of the symbol -- which is the part being read.
+*/
+.mk-row-name {
+  min-width: 96px;
+}
+
+@container mk-rows (max-width: 560px) {
+  /* Value traded is the first thing to go: it is the least of what a row says and the widest. */
+  .mk-vol {
+    display: none;
+  }
+}
+
+@container mk-rows (max-width: 440px) {
+  .mk-price {
+    min-width: 0;
+  }
+
+  /* Then the full name, leaving the logo, the symbol, the price and the move. */
+  .mk-row-name > .mk-name {
+    display: none;
+  }
+
+  /*
+   * And the floor comes down with it.
+   *
+   * 96px was room for a logo and the beginning of a name. With the name gone it is room for nothing, and it was the
+   * reason a row still ran out of its list: in the Markets screen's left-hand panel the list is about 330px wide,
+   * and 96 + the price + the move + two buttons + the gaps came to 364. The symbol clips itself, so a floor of 64 is
+   * a logo and a few characters of it -- which is the part being read.
+   */
+  .mk-row-name {
+    min-width: 64px;
+  }
+}

@@ -1,0 +1,50 @@
+/*
+ * The window's stylesheet, in the order it has always been in.
+ *
+ * One 19,109-line file became these parts, cut at the section banners it already carried. Nothing was
+ * reordered and no rule was changed: `@import` is inlined at build time, so what the browser receives is byte
+ * for byte what it received before. The order here is load-bearing — 1,397 selectors contain pairs that depend
+ * on which came first — so a part may be edited freely and must never be moved.
+ *
+ * New rules for one screen belong beside that screen, as `components/<screen>.css` imported by its component.
+ * These parts are what was already here, not where new work should go.
+ */
+
+@import './parts/01-theme-tokens-base-layout.css'; /* 390 lines */
+@import './parts/02-buttons-inputs-popovers-menus.css'; /* 280 lines */
+@import './parts/03-sidebar.css'; /* 501 lines */
+@import './parts/04-images-library-drawers.css'; /* 303 lines */
+@import './parts/05-chat-header-empty-state.css'; /* 319 lines */
+@import './parts/06-messages.css'; /* 430 lines */
+@import './parts/07-thinking-orb-brand-markdown.css'; /* 338 lines */
+@import './parts/08-image-editor.css'; /* 1410 lines */
+@import './parts/09-composer.css'; /* 870 lines */
+@import './parts/10-toasts-modals.css'; /* 391 lines */
+@import './parts/11-scrollbars-animations.css'; /* 364 lines */
+@import './parts/12-workflows.css'; /* 1862 lines */
+@import './parts/13-choosing-widgets-in-customize.css'; /* 342 lines */
+@import './parts/14-themes-wallpapers-and-dashboards.css'; /* 289 lines */
+@import './parts/15-updating-orbis-orbis-search.css'; /* 316 lines */
+@import './parts/16-orbis-search-the-specialized.css'; /* 510 lines */
+@import './parts/17-orion-asking-and-asking.css'; /* 265 lines */
+@import './parts/18-what-orbis-is-doing.css'; /* 709 lines */
+@import './parts/19-tab-lock.css'; /* 304 lines */
+@import './parts/20-markets-markets-the-screen.css'; /* 919 lines */
+@import './parts/21-markets-screener-and-alerts.css'; /* 379 lines */
+@import './parts/22-markets-the-simulated-portfolio.css'; /* 261 lines */
+@import './parts/23-markets-strategies-and-backtesting.css'; /* 264 lines */
+@import './parts/24-markets-replay-markets-news.css'; /* 353 lines */
+@import './parts/25-markets-the-first-launch.css'; /* 499 lines */
+@import './parts/26-explanations-density.css'; /* 416 lines */
+@import './parts/27-the-analysed-tape-and.css'; /* 274 lines */
+@import './parts/28-the-order-book-orbis.css'; /* 734 lines */
+@import './parts/29-pages-the-newer-tools.css'; /* 1158 lines */
+@import './parts/30-the-page-studio.css'; /* 494 lines */
+@import './parts/31-candlestick-patterns.css'; /* 634 lines */
+@import './parts/32-transfer-orbis.css'; /* 293 lines */
+@import './parts/33-orbis-pulsar-choosing-a.css'; /* 308 lines */
+@import './parts/34-the-market-strip.css'; /* 439 lines */
+@import './parts/35-the-mark-a-coin.css'; /* 275 lines */
+@import './parts/36-schedules.css'; /* 535 lines */
+@import './parts/37-pages-written-as-code.css'; /* 316 lines */
+@import './parts/38-which-project-a-chat.css'; /* 420 lines */

@@ -1,0 +1,509 @@
+/* ---------------------------------------------------------------- Orbis Search: the specialized categories */
+
+/* Pictures are shown as pictures, not as a list of addresses. */
+.osearch-images {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 14px;
+}
+
+.osearch-image {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.osearch-image img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid var(--line-strong);
+  background: var(--pill-bg);
+  display: block;
+}
+
+.osearch-image:hover img {
+  border-color: var(--cyan-dim);
+}
+
+.osearch-image-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.osearch-image-meta b {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.osearch-image-meta small {
+  font-size: 11px;
+  color: var(--faint);
+}
+
+/* A result with something to show beside it: a video, a place, a file. */
+
+.osearch-thumb {
+  position: relative;
+  flex: none;
+  width: 168px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--line-strong);
+  background: var(--pill-bg);
+}
+
+.osearch-thumb img {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  display: block;
+}
+
+/* How long it runs, said over the corner of the picture the way it always is. */
+.osearch-thumb em {
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgb(0 0 0 / 0.78);
+  color: #fff;
+  font-size: 10.5px;
+  font-style: normal;
+  letter-spacing: 0.02em;
+}
+
+.osearch-result-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+
+.osearch-facts {
+  font-size: 11.5px;
+}
+
+@media (max-width: 620px) {
+  .osearch-result {
+    flex-direction: column;
+  }
+
+  .osearch-thumb {
+    width: 100%;
+  }}
+
+/* ---------------------------------------------------------------- speaking instead of typing */
+
+/*
+ * The same microphone in four places: the chat composer, the browser assistant, the address bar and the search box.
+ * It is red while it is actually recording and never before, because "listening" that is not listening is a lie.
+ */
+.orb-mic,
+.url-mic,
+.osearch-mic {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+}
+
+.orb-mic:hover,
+.url-mic:hover,
+.osearch-mic:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.orb-mic:disabled,
+.url-mic:disabled,
+.osearch-mic:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.orb-mic.recording,
+.url-mic.recording,
+.osearch-mic.recording,
+.tool-btn.recording {
+  color: var(--danger, #ff6b6b);
+  background: color-mix(in srgb, var(--danger, #ff6b6b) 16%, transparent);
+  animation: mic-live 1.6s ease-in-out infinite;
+}
+
+.tool-btn.transcribing,
+.orb-mic.transcribing {
+  color: var(--cyan);
+}
+
+@keyframes mic-live {
+  50% {
+    background: color-mix(in srgb, var(--danger, #ff6b6b) 34%, transparent);
+  }
+}
+
+html[data-motion='reduced'] .orb-mic.recording,
+html[data-motion='reduced'] .url-mic.recording,
+html[data-motion='reduced'] .osearch-mic.recording,
+html[data-motion='reduced'] .tool-btn.recording {
+  animation: none;
+}
+
+/* ---------------------------------------------------------------- results, and looking at them */
+
+/*
+ * A result reads downwards: where it came from, what it is called, what it says. The row layout below is only for the
+ * ones with a picture beside them, which is what "media" means here.
+ */
+.osearch-result {
+  flex-direction: column;
+  gap: 4px;
+}
+
+.osearch-result.media {
+  flex-direction: row;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.osearch-result-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.osearch-result-row > .osearch-result {
+  flex: 1;
+  min-width: 0;
+}
+
+/* The site's own mark, which is how a person recognises a result at a glance. */
+.osearch-favicon {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  border-radius: 4px;
+  object-fit: contain;
+  color: var(--faint);
+}
+
+.osearch-site-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.osearch-share {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  margin-top: 2px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+  opacity: 0;
+}
+
+.osearch-result-row:hover .osearch-share,
+.osearch-result-row:focus-within .osearch-share {
+  opacity: 1;
+}
+
+.osearch-share:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.osearch-vertical.orion.on {
+  color: var(--cyan);
+}
+
+/* ---------------------------------------------------------------- the picture, or the video */
+
+.omedia {
+  position: fixed;
+  inset: 0;
+  z-index: 260;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-deep, #0a0d10);
+}
+
+.omedia-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.omedia-query {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.omedia-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 320px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.omedia-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.omedia-actions button,
+.omedia-actions .osearch-share {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 1;
+}
+
+.omedia-actions button:hover,
+.omedia-actions .osearch-share:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.omedia-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 56px 1fr 56px 300px;
+  align-items: stretch;
+}
+
+/* The arrows sit in the middle of their column; everything else fills the height it is given. */
+.omedia-body > .omedia-step {
+  align-self: center;
+}
+
+.omedia-stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 100%;
+  min-height: 0;
+  padding: 18px;
+}
+
+.omedia-image {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+.omedia-video {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 8px;
+  background: #000;
+}
+
+.omedia-loading,
+.omedia-none {
+  color: var(--faint);
+  font-size: 13px;
+  text-align: center;
+  max-width: 420px;
+  line-height: 1.6;
+}
+
+.omedia-step {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: 0 auto;
+  border: 0;
+  border-radius: 50%;
+  background: var(--pill-bg-strong);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.omedia-step:hover:not(:disabled) {
+  background: var(--hover-strong);
+}
+
+.omedia-step:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+
+/* The rest of what was found, so moving through them never means going back to the results. */
+.omedia-rail {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  height: 100%;
+  overflow-y: auto;
+  padding: 12px;
+  align-content: start;
+}
+
+/* A square regardless of what shape the picture is, so the strip reads as a grid rather than as ribbons. */
+.omedia-thumb {
+  position: relative;
+  height: 0;
+  padding: 0 0 100%;
+  border: 2px solid transparent;
+  border-radius: 10px;
+  background: var(--pill-bg);
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.omedia-thumb img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.omedia-thumb.on {
+  border-color: var(--cyan);
+}
+
+.omedia-thumb em {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: rgb(0 0 0 / 0.78);
+  color: #fff;
+  font-size: 10px;
+  font-style: normal;
+}
+
+.omedia-poster {
+  position: relative;
+  display: grid;
+  place-items: center;
+  gap: 12px;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.omedia-poster img {
+  max-width: 100%;
+  max-height: 70vh;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+.omedia-play {
+  position: absolute;
+  width: 64px;
+  height: 64px;
+  border: 0;
+  border-radius: 50%;
+  background: rgb(0 0 0 / 0.6);
+  color: #fff;
+  font-size: 22px;
+  cursor: pointer;
+}
+
+.omedia-play:hover {
+  background: rgb(0 0 0 / 0.78);
+}
+
+.omedia-elsewhere {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  max-width: 420px;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.omedia-elsewhere button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.omedia-caption {
+  max-width: 100%;
+  font-size: 12px;
+  color: var(--faint);
+}
+
+.omedia-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 9px 14px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--faint);
+}
+
+@media (max-width: 900px) {
+  .omedia-body {
+    grid-template-columns: 44px 1fr 44px;
+    grid-template-rows: 1fr 132px;
+  }
+
+  .omedia-rail {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+    height: 132px;
+  }}

@@ -1,0 +1,869 @@
+/* ================= Composer ================= */
+
+.composer-dock {
+  position: relative;
+  z-index: 5;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  margin: 0 auto;
+  padding: 24px 16px 48px;
+  gap: 12px;
+  background: transparent;
+}
+
+/* HUD frame line spanning the stage just above the composer. */
+.composer-dock::before {
+  display: none;
+}
+
+.composer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(950px, calc(100% - 32px));
+  max-width: 95vw;
+  border: 1px solid var(--composer-border);
+  border-radius: 50px;
+  background: var(--composer-bg);
+  backdrop-filter: blur(20px);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15), 0 0 20px var(--composer-glow), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  padding: 0;
+}
+
+.composer.thinking {
+  animation: composer-breathe 1.5s ease-in-out infinite;
+}
+
+/* Light trail left behind while the composer glides down after the first message. */
+.composer-trail {
+  position: absolute;
+  right: 16%;
+  bottom: 100%;
+  left: 16%;
+  pointer-events: none;
+  background: linear-gradient(to top, rgba(63, 216, 255, 0.32), rgba(63, 216, 255, 0.08) 45%, transparent);
+  filter: blur(14px);
+  transform-origin: bottom;
+  animation: composer-trail 1.6s ease-out forwards;
+}
+
+/* A soft ring ripples out where the composer settles. */
+.composer.landed {
+  animation: composer-land 0.9s ease-out;
+}
+
+@keyframes composer-trail {
+  0% {
+    opacity: 0;
+    transform: scaleY(1);
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: scaleY(0.15);
+  }
+}
+
+@keyframes composer-land {
+  0% {
+    box-shadow: 0 0 0 0 rgba(63, 216, 255, 0.4);
+  }
+  100% {
+    box-shadow: 0 0 0 18px rgba(63, 216, 255, 0);
+  }
+}
+
+/* Beam animation removed - using glow effect only */
+.composer-beam {
+  display: none;
+}
+
+.composer-beam rect {
+  display: none;
+}
+
+.beam-tail {
+  display: none;
+}
+
+.composer-beam .beam-head {
+  display: none;
+}
+
+/* A faint scanning sheen drifting across the glass. */
+.composer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(105deg, transparent 35%, rgba(63, 216, 255, 0.06) 50%, transparent 65%);
+  background-size: 260% 100%;
+  animation: composer-sheen 7s linear infinite;
+  pointer-events: none;
+}
+
+.composer:focus-within {
+  border-color: rgba(63, 216, 255, 0.6);
+}
+
+/* Pulsing glow while a reply is streaming. */
+.composer.busy {
+  animation: composer-breathe 0.8s ease-in-out infinite;
+}
+
+.composer textarea {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-height: 40px;
+  max-height: 200px;
+  padding: 10px 16px;
+  border: 0;
+  outline: none;
+  resize: none;
+  background: transparent;
+  color: var(--composer-text);
+  font-size: 15px;
+  line-height: 1.5;
+  font-weight: 500;
+}
+
+.composer textarea::placeholder {
+  color: var(--composer-placeholder);
+  font-weight: 400;
+}
+
+.composer-field {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+
+.composer-field textarea {
+  width: 100%;
+}
+
+/* Sits under the transparent textarea with identical metrics, so the predicted rest lines up after the typed text. */
+.composer-ghost {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  padding: 10px 16px;
+  color: transparent;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  pointer-events: none;
+}
+
+.composer-ghost .ghost-rest {
+  color: var(--composer-placeholder);
+  font-weight: 400;
+}
+
+.composer-ghost kbd {
+  margin-left: 8px;
+  padding: 1px 6px;
+  border: 1px solid var(--pill-border);
+  border-radius: 5px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--faint);
+  vertical-align: 1px;
+}
+
+.followups {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+  animation: followups-in 0.35s ease-out;
+}
+
+.followup-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 100%;
+  padding: 7px 13px;
+  border: 1px solid var(--pill-border);
+  border-radius: 999px;
+  background: var(--pill-bg);
+  color: var(--muted-strong);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s, transform 0.15s;
+}
+
+.followup-chip svg {
+  flex-shrink: 0;
+  color: var(--cyan);
+}
+
+.followup-chip:hover {
+  border-color: var(--cyan-dim);
+  background: var(--cyan-fill);
+  color: var(--text);
+  transform: translateY(-1px);
+}
+
+@keyframes followups-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+.composer-input-wrapper {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px;
+  width: 100%;
+}
+
+.composer-row {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 8px 8px;
+  width: 100%;
+}
+
+.composer-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tool-btn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  color: var(--muted);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  background: transparent;
+  cursor: pointer;
+}
+
+.tool-btn:hover:not(:disabled) {
+  background: rgba(63, 216, 255, 0.08);
+  color: var(--cyan);
+}
+
+.tool-btn:active:not(:disabled) {
+  background: rgba(63, 216, 255, 0.12);
+}
+
+.tool-btn.recording {
+  background: rgba(255, 77, 109, 0.12);
+  color: var(--red);
+  animation: pulse-red 1.5s ease-in-out infinite;
+}
+
+.tool-btn.transcribing {
+  background: rgba(63, 216, 255, 0.12);
+  color: var(--cyan);
+  animation: pulse-cyan 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-red {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+@keyframes pulse-cyan {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.tool-divider {
+  width: 1px;
+  height: 18px;
+  margin: 0 6px;
+  background: var(--glass-border);
+}
+
+/* Slash commands dropdown */
+.slash-commands {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  right: 0;
+  margin-bottom: 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  /* Solid, like the other menus, so the greeting behind it never shows through. */
+  background: var(--popover-bg);
+  box-shadow: var(--glass-shadow);
+  display: flex;
+  flex-direction: column;
+  max-height: 240px;
+  overflow-y: auto;
+  z-index: 10;
+  animation: slide-up 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.slash-command {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border: none;
+  background: transparent;
+  color: var(--composer-text);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.slash-command:first-child {
+  border-radius: 11px 11px 0 0;
+}
+
+.slash-command:last-child {
+  border-radius: 0 0 11px 11px;
+}
+
+.slash-command:hover,
+.slash-command.selected {
+  background: rgba(63, 216, 255, 0.1);
+}
+
+.cmd-args {
+  font-weight: 400;
+  opacity: 0.55;
+}
+
+.cmd-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cmd-name {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--cyan);
+}
+
+.cmd-desc {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.composer-dock > .popover-anchor {
+  display: none;
+}
+
+.composer .popover-anchor {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.mode-selector-corner {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.left-tools,
+.right-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.left-tools {
+  flex-shrink: 0;
+}
+
+.right-tools {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.mode-pill-subtle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid rgba(63, 216, 255, 0.25);
+  border-radius: 999px;
+  background: rgba(63, 216, 255, 0.06);
+  color: var(--muted-strong);
+  font-size: 12px;
+  font-weight: 600;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  white-space: nowrap;
+  backdrop-filter: blur(10px);
+}
+
+.mode-pill-subtle:hover {
+  background: rgba(63, 216, 255, 0.12);
+  border-color: rgba(63, 216, 255, 0.4);
+  color: var(--cyan);
+  box-shadow: 0 0 12px rgba(63, 216, 255, 0.15);
+}
+
+.mode-pill-subtle:active {
+  transform: scale(0.95);
+}
+
+.mode-pill-subtle svg {
+  color: var(--muted);
+  transition: color 0.2s;
+  flex-shrink: 0;
+}
+
+.mode-pill-subtle:hover svg {
+  color: var(--cyan);
+}
+
+.model-label {
+  display: inline-block;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mode-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(63, 216, 255, 0.08);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.mode-pill svg:first-child {
+  color: var(--muted);
+  width: 14px;
+  height: 14px;
+}
+
+.mode-pill svg:last-child {
+  color: var(--muted);
+  width: 12px;
+  height: 12px;
+}
+
+.mode-pill:hover {
+  background: rgba(63, 216, 255, 0.12);
+  color: var(--cyan);
+}
+
+.mode-pill:hover svg {
+  color: var(--cyan);
+}
+
+.mode-pill:active {
+  transform: scale(0.96);
+}
+
+.send-btn {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin-right: 4px;
+  border-radius: 50%;
+  background: var(--cyan);
+  color: #0a1428;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(63, 216, 255, 0.25);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.send-btn:hover:not(:disabled) {
+  background: #2dccff;
+  box-shadow: 0 4px 12px rgba(63, 216, 255, 0.4);
+}
+
+.send-btn:active:not(:disabled) {
+  background: #1fb8ff;
+}
+
+.send-btn:disabled {
+  opacity: 0.5;
+  background: var(--hover);
+  color: var(--faint);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.send-btn.ready {
+  animation: send-pulse 2s ease-out infinite;
+}
+
+/*
+ * The same button, speaking.
+ *
+ * Quiet rather than filled, because with nothing typed there is nothing urgent to press — it is an alternative to
+ * typing, not the end of it. It keeps the send button's size and position exactly, so the thing under the cursor
+ * does not move when the first character is typed.
+ */
+.send-btn.speak {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--glass-border);
+  box-shadow: none;
+}
+
+.send-btn.speak:hover:not(:disabled) {
+  background: rgba(63, 216, 255, 0.08);
+  border-color: rgba(63, 216, 255, 0.35);
+  color: var(--cyan);
+  box-shadow: none;
+}
+
+.send-btn.speak:active:not(:disabled) {
+  background: rgba(63, 216, 255, 0.14);
+}
+
+.send-btn.speak:disabled {
+  background: transparent;
+  border-color: var(--glass-border);
+  opacity: 0.45;
+}
+
+.send-btn.speak.recording {
+  background: var(--red);
+  border-color: var(--red);
+  color: #ffffff;
+  animation: stop-pulse 1.4s ease-out infinite;
+}
+
+.send-btn.speak.transcribing {
+  background: rgba(63, 216, 255, 0.14);
+  border-color: rgba(63, 216, 255, 0.4);
+  color: var(--cyan);
+  animation: send-pulse 1.6s ease-out infinite;
+}
+
+.send-btn.stop {
+  background: var(--red);
+  color: #ffffff;
+  animation: stop-pulse 1.4s ease-out infinite;
+}
+
+.send-btn.queue {
+  border: 1px solid var(--cyan-dim);
+  background: var(--cyan-fill);
+  color: var(--cyan);
+  box-shadow: none;
+  animation: none;
+}
+
+.send-btn.queue:hover:not(:disabled) {
+  background: rgba(63, 216, 255, 0.24);
+  box-shadow: none;
+}
+
+/* Messages waiting behind the current reply, shown just above the composer. */
+.queue-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: min(950px, calc(100% - 32px));
+  max-width: 95vw;
+  padding: 8px 10px;
+  border: 1px solid var(--pill-border);
+  border-radius: 16px;
+  background: var(--popover-bg);
+  box-shadow: var(--glass-shadow);
+  animation: queue-in 0.2s ease-out;
+}
+
+.queue-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 2px 4px 6px;
+}
+
+.queue-head .hud-label.paused {
+  color: var(--amber);
+}
+
+.queue-head-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.queue-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 11px;
+  border: 1px solid var(--pill-border);
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--muted-strong);
+  cursor: pointer;
+}
+
+.queue-btn:hover {
+  border-color: var(--cyan-dim);
+  color: var(--text);
+}
+
+.queue-btn.primary {
+  border-color: var(--cyan-dim);
+  color: var(--cyan);
+}
+
+.queue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 190px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.queue-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+  padding: 2px 4px 2px 6px;
+  border-radius: 10px;
+}
+
+.queue-item:hover {
+  background: var(--hover);
+}
+
+.queue-index {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--pill-bg-strong);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--muted);
+}
+
+.queue-item.next .queue-index {
+  background: var(--cyan-fill);
+  color: var(--cyan);
+}
+
+.queue-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.queue-attach {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+@keyframes queue-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/* Match the pill-shaped composer: round action buttons and a pill model picker. */
+.composer .mode-pill-subtle {
+  border-radius: 999px;
+}
+
+.mode-menu {
+  top: auto;
+  right: 0;
+  bottom: calc(100% + 12px);
+  left: auto;
+  width: 300px;
+  max-height: 320px;
+  overflow-y: auto;
+  max-width: 90vw;
+}
+
+.mode-menu.down {
+  top: calc(100% + 12px);
+  bottom: auto;
+}
+
+/* Lift the composer above the chat header only while its model menu is open. */
+.composer-dock:has(.mode-menu),
+.composer-dock:has(.attach-menu) {
+  z-index: 30;
+}
+
+.mode-dot {
+  display: grid;
+  place-items: center;
+  width: 12px;
+  height: 12px;
+  border: 1.5px solid var(--cyan);
+  border-radius: 50%;
+}
+
+.mode-dot::after {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--cyan);
+}
+
+.mode-item.selected svg {
+  color: var(--cyan);
+}
+
+.mode-models {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 240px;
+  overflow-y: auto;
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid var(--glass-border);
+}
+
+.disclaimer {
+  margin: 7px 0 0;
+  text-align: center;
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.quick-prompts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.quick-prompt {
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12.5px;
+}
+
+.quick-prompt:hover {
+  border-color: var(--cyan-dim);
+}
+
+.plus-btn {
+  display: grid !important;
+  place-items: center;
+  padding: 0 !important;
+  width: 40px !important;
+  height: 40px !important;
+  min-width: 40px !important;
+}
+
+/* Composer sets top (opening down) or bottom (opening up) so the menu clears the whole composer. */
+.attach-menu {
+  position: absolute;
+  top: auto;
+  bottom: calc(100% + 8px);
+  left: 0;
+  min-width: 180px;
+  border-radius: 12px;
+}
+
+.attach-menu.down {
+  bottom: auto;
+}
+
+.attachment-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 12px 8px;
+}
+
+.attachment-row.end {
+  justify-content: flex-end;
+  margin: 6px 0 0;
+}
+
+.attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 240px;
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.attachment-chip svg {
+  flex-shrink: 0;
+  color: var(--cyan);
+}
+
+.attachment-chip button {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}

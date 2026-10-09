@@ -11,7 +11,7 @@ import 'highlight.js/styles/github-dark.css'
 // same file the browser's own pages and Chromium's window frame are built from. It comes before the stylesheet so
 // the stylesheet can override a token where it has to, rather than the other way round.
 import './styles/tokens.generated.css'
-import './styles.css'
+import './styles/index.css'
 import App from './App'
 
 createRoot(document.getElementById('root')!).render(

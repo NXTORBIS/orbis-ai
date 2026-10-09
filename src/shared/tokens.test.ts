@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 
 /**
@@ -33,7 +33,18 @@ const tokens = JSON.parse(read('orbis-ui/tokens.json')) as {
 const browserCss = read('orbis-ui/orbis-tokens.css')
 const windowCss = read('src/renderer/src/styles/tokens.generated.css')
 const header = read('orbis-ui/generated/orbis_tokens.h')
-const styles = read('src/renderer/src/styles.css')
+/*
+ * The window's stylesheet, which is 38 parts now rather than one file. Read as one: splitting it changed no rule
+ * and no order, so every check below asks exactly what it asked before.
+ */
+const styles = (() => {
+  const dir = join(ROOT, 'src/renderer/src/styles/parts')
+  return readdirSync(dir)
+    .filter((one) => one.endsWith('.css'))
+    .sort()
+    .map((one) => readFileSync(join(dir, one), 'utf8'))
+    .join('\n')
+})()
 
 /** Every `--name: value;` a stylesheet declares, last one wins, as the cascade would see it. */
 function declared(css: string): Map<string, string> {

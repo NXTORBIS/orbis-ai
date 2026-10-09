@@ -1,0 +1,292 @@
+/* ---------------------------------------------------------------- Transfer Orbis
+   Moving a whole profile to another machine. Two halves -- out and in -- with everything that cannot travel shown
+   beside the button rather than behind a disclosure. */
+
+.setting.transfer {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.transfer-half {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+}
+
+.transfer-half h4 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  color: var(--text);
+}
+
+.transfer-half h5 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 4px;
+  font-size: 12px;
+  color: var(--muted-strong);
+}
+
+.transfer-categories {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 8px;
+}
+
+.transfer-category {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--pill-bg);
+  cursor: pointer;
+}
+
+.transfer-category input {
+  margin-top: 2px;
+  width: 15px;
+  height: 15px;
+  accent-color: var(--cyan);
+  cursor: pointer;
+}
+
+.transfer-category span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.transfer-category strong {
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.transfer-category em {
+  font-style: normal;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+/* What the person has to do afterwards, on the category that causes it. */
+.transfer-category i {
+  font-style: normal;
+  font-size: 11px;
+  color: var(--amber);
+}
+
+.transfer-excluded {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--pill-bg);
+}
+
+.transfer-excluded ul,
+.transfer-note-list {
+  margin: 0;
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.transfer-excluded li,
+.transfer-note-list li {
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.transfer-excluded li strong {
+  color: var(--muted-strong);
+}
+
+.transfer-password {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.transfer-password label,
+.transfer-single {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.transfer-password span,
+.transfer-single span {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.transfer-password input,
+.transfer-single input {
+  padding: 7px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+  outline: none;
+}
+
+.transfer-password input:focus-visible,
+.transfer-single input:focus-visible {
+  border-color: var(--cyan);
+}
+
+.transfer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.transfer-note,
+.transfer-progress {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.transfer-problem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--red);
+}
+
+.transfer-alert,
+.transfer-done {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 11px 13px;
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.transfer-alert {
+  border: 1px solid var(--amber);
+  background: rgba(255, 176, 32, 0.08);
+  color: var(--text);
+}
+
+.transfer-done {
+  border: 1px solid var(--green);
+  background: rgba(46, 204, 113, 0.08);
+  color: var(--text);
+}
+
+.transfer-alert p,
+.transfer-done p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.transfer-alert ul,
+.transfer-done ul {
+  margin: 4px 0 0;
+  padding-left: 16px;
+  color: var(--muted);
+}
+
+.transfer-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 22px 14px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 11px;
+  background: var(--pill-bg);
+  color: var(--muted);
+  text-align: center;
+}
+
+.transfer-drop.over {
+  border-color: var(--cyan);
+  border-style: solid;
+}
+
+.transfer-drop p {
+  margin: 0;
+  font-size: 12px;
+}
+
+.transfer-inspection {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--pill-bg);
+}
+
+.transfer-inspection > p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.transfer-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.transfer-mode label {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  cursor: pointer;
+}
+
+.transfer-mode input {
+  margin-top: 2px;
+  accent-color: var(--cyan);
+  cursor: pointer;
+}
+
+.transfer-mode span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.transfer-mode strong {
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.transfer-mode em {
+  font-style: normal;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--muted);
+}

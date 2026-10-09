@@ -1,0 +1,500 @@
+/* ================= Sidebar ================= */
+
+.sidebar {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  flex-shrink: 0;
+  flex-direction: column;
+  gap: 4px;
+  width: 264px;
+  padding: 10px 10px 8px;
+  border-right: 1px solid var(--line-strong);
+  background: var(--rail-bg);
+  transition: width 0.22s cubic-bezier(0.4, 0, 0.2, 1), padding 0.22s;
+}
+
+/* A short cyan scan-line on the edge: the HUD accent that marks this as Orbis. */
+.sidebar::after {
+  content: '';
+  position: absolute;
+  top: 14%;
+  right: -1px;
+  width: 1px;
+  height: 28%;
+  background: linear-gradient(180deg, transparent, var(--cyan-dim), transparent);
+  pointer-events: none;
+}
+
+.sidebar.collapsed {
+  align-items: center;
+  width: 60px;
+  padding: 10px 8px 8px;
+}
+
+.sb-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+  min-height: 42px;
+  margin-bottom: 6px;
+}
+
+.sidebar.collapsed .sb-head {
+  justify-content: center;
+}
+
+.sb-brand-anchor {
+  position: relative;
+  min-width: 0;
+}
+
+.sb-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 8px 5px 5px;
+  border-radius: 10px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.sb-brand:hover {
+  background: var(--hover);
+}
+
+.sb-brand .sb-wordmark {
+  height: 24px;
+  margin: 0 2px 0 4px;
+}
+
+.sb-icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.sb-icon.small {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+}
+
+.sb-icon:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+/* Top-bar sidebar toggle: shows the Orbis ring, and swaps to the panel icon on hover or keyboard focus. */
+.bar-logo {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.bar-logo:hover {
+  background: var(--hover);
+}
+
+.bar-logo-mark,
+.bar-logo-toggle {
+  transition: opacity 0.15s;
+}
+
+.orbis-glass-mark {
+  display: inline-block;
+  flex-shrink: 0;
+  object-fit: contain;
+  user-select: none;
+  /* The ring is dark glass; a faint light edge keeps it readable on the black bar. */
+  filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.55));
+}
+
+:root[data-theme='light'] .orbis-glass-mark {
+  filter: none;
+}
+
+.bar-logo-toggle {
+  position: absolute;
+  opacity: 0;
+  color: var(--text);
+}
+
+.bar-logo:hover .bar-logo-toggle,
+.bar-logo:focus-visible .bar-logo-toggle {
+  opacity: 1;
+}
+
+.bar-logo:hover .bar-logo-mark,
+.bar-logo:focus-visible .bar-logo-mark {
+  opacity: 0;
+}
+
+.sb-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+}
+
+.sidebar.collapsed .sb-nav {
+  align-items: center;
+}
+
+.sb-nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: 10px;
+  font-size: 14px;
+  text-align: left;
+  color: var(--muted-strong);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.sidebar.collapsed .sb-nav-item {
+  justify-content: center;
+  width: 40px;
+  padding: 0;
+}
+
+.sb-nav-item svg {
+  flex-shrink: 0;
+}
+
+.sb-nav-item:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.sb-nav-item.active {
+  background: var(--active);
+  color: var(--text);
+}
+
+.sb-nav-item.active svg {
+  color: var(--cyan);
+}
+
+.sb-nav-item.active::before,
+.sb-row.active::before {
+  content: '';
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: -10px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--cyan);
+  box-shadow: 0 0 10px var(--cyan-glow);
+}
+
+.sidebar.collapsed .sb-nav-item.active::before {
+  left: -10px;
+}
+
+.sb-nav-label {
+  flex: 1;
+  min-width: 0;
+}
+
+.sb-badge {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--pill-bg-strong);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  text-align: center;
+  color: var(--muted);
+}
+
+.sb-scroll {
+  flex: 1;
+  min-height: 0;
+  margin: 8px -10px 0;
+  padding: 0 10px 8px;
+  overflow-y: auto;
+}
+
+.sb-spacer {
+  flex: 1;
+}
+
+.sb-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  margin: 4px 0 6px;
+  padding: 0 4px 0 10px;
+  border: 1px solid var(--input-border);
+  border-radius: 10px;
+  background: var(--input-bg);
+  color: var(--muted);
+}
+
+.sb-search:focus-within {
+  border-color: var(--cyan-dim);
+}
+
+.sb-search input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: none;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.sb-section {
+  margin-top: 8px;
+}
+
+.sb-section-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.sb-section-head:hover {
+  color: var(--text);
+}
+
+.sb-section-head svg {
+  transition: transform 0.15s;
+}
+
+.sb-section-head svg.open {
+  transform: rotate(90deg);
+}
+
+.sb-group-label {
+  display: block;
+  margin: 10px 10px 4px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.sb-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  border-radius: 9px;
+}
+
+.sb-row:hover,
+.sb-row.menu-open {
+  background: var(--hover);
+}
+
+.sb-row.active {
+  background: var(--active);
+}
+
+.sb-row-main {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 6px 10px;
+  font-size: 13.5px;
+  text-align: left;
+  color: var(--muted-strong);
+  cursor: pointer;
+}
+
+.sb-row.active .sb-row-main,
+.sb-row:hover .sb-row-main {
+  color: var(--text);
+}
+
+.sb-row-actions {
+  display: none;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 1px;
+  margin-right: 3px;
+}
+
+.sb-row:hover .sb-row-actions,
+.sb-row:focus-within .sb-row-actions {
+  display: flex;
+}
+
+.sb-row-action {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.sb-row-action:hover {
+  background: var(--pill-bg-strong);
+  color: var(--text);
+}
+
+.sb-row-action.danger:hover {
+  color: var(--danger, #f06b7b);
+}
+
+.sb-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  left: auto;
+  z-index: 40;
+  min-width: 170px;
+}
+
+.sb-popover.brand {
+  right: auto;
+  left: 0;
+}
+
+.sb-row.confirm {
+  gap: 4px;
+  padding: 3px 4px 3px 10px;
+  font-size: 12.5px;
+  background: var(--hover);
+}
+
+.sb-row.confirm span {
+  flex: 1;
+  min-width: 0;
+}
+
+.sb-row.editing {
+  padding: 2px;
+}
+
+.sb-text-btn {
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--muted-strong);
+  cursor: pointer;
+}
+
+.sb-text-btn:hover {
+  background: var(--pill-bg-strong);
+  color: var(--text);
+}
+
+.sb-text-btn.danger {
+  color: var(--danger);
+}
+
+.sb-empty {
+  margin: 6px 10px;
+  font-size: 12.5px;
+  color: var(--faint);
+}
+
+.live-dot {
+  width: 6px;
+  height: 6px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--cyan);
+  box-shadow: 0 0 6px var(--cyan-glow);
+  animation: pulse 1.1s ease-in-out infinite;
+}
+
+.sb-foot {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line-strong);
+}
+
+.sidebar.collapsed .sb-foot {
+  justify-content: center;
+}
+
+.sb-user {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 6px;
+  border-radius: 10px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sidebar.collapsed .sb-user {
+  flex: none;
+}
+
+.sb-user:hover {
+  background: var(--hover);
+}
+
+.sb-avatar {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--avatar-border);
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, var(--cyan-fill), var(--avatar-bg));
+  box-shadow: 0 0 10px var(--cyan-glow-soft);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.sb-user-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.sb-user-text b {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.sb-user-text small {
+  font-size: 11px;
+  color: var(--muted);
+}

@@ -1,0 +1,389 @@
+/* ================= Theme tokens =================
+
+The colours, type sizes, spacing and radii used to be written out here, by hand, four times over: once for dark, once
+for the light scheme, and once each for the two forced themes. They now come from src/renderer/src/styles/tokens.generated.css,
+which scripts/build-orbis-ui.mjs builds from orbis-ui/tokens.json -- the same file the browser's own pages and
+Chromium's window frame are built from, so a colour is decided in one place and reaches all three.
+
+main.tsx imports that file before this one. The old names this stylesheet uses that the tokens call something else
+(--cyan, --font, --panel) are kept there as aliases of the token they mean, and come off one feature at a time as
+that feature's CSS is touched, rather than in one twenty-thousand-line pass.
+*/
+
+/* ================= Base ================= */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg-edge);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+input,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: rgba(63, 216, 255, 0.3);
+}
+
+.truncate {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.flipped {
+  transform: rotate(180deg);
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+.glass {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  backdrop-filter: blur(14px);
+}
+
+/* Menus sit over text, and their blur can't reach through a blurred parent (e.g. the composer), so they get a solid surface. */
+.popover.glass {
+  background: var(--popover-bg);
+}
+
+.hud-label {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ================= Layout & background ================= */
+
+.hud {
+  position: fixed;
+  inset: 0;
+  /*
+    The market strip takes its height from the window rather than covering it.
+
+    It used to float on top, which put it straight over the account chip at the foot of the sidebar -- the name and the
+    help button were cut in half behind it. Floating was the wrong call: inside Orbis there is no site underneath, but
+    there is Orbis's own interface, and the bottom of the sidebar is a real place with real controls in it.
+
+    The variable is set by the strip itself and is absent when there is no strip, so a window without one is exactly
+    the window it was before.
+  */
+  bottom: var(--mstrip-reserved, 0px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+}
+
+/*
+ * The background.
+ *
+ * A preset may replace what is drawn here, and may ask for one of the movements below. Both are opt-in: with no
+ * preset, `--preset-background` is unset and the fallback is the background Orbis has always drawn, motionless.
+ */
+.hud-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background: var(
+    --preset-background,
+    radial-gradient(ellipse 80% 70% at 50% 45%, var(--bg-center) 0%, var(--bg-mid) 55%, var(--bg-edge) 100%)
+  );
+}
+
+/*
+ * Movement, on a layer of its own.
+ *
+ * Every one of these animates only `transform` and `opacity`, so the compositor does the work and the main thread --
+ * which is drawing the page, the tabs and whatever is being typed -- is not asked to lay anything out again. The layer
+ * exists at all only while a preset is asking for it: `[data-backdrop]` is absent otherwise, so there is no element,
+ * no animation and no cost.
+ *
+ * It is behind everything and cannot be touched. `pointer-events: none` is not decoration here: the layer covers the
+ * window, and without it the background would swallow every click meant for the page.
+ */
+[data-backdrop] .hud-bg::before,
+[data-backdrop] .hud-bg::after {
+  content: '';
+  position: absolute;
+  inset: -20%;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+/* Paused while the window is not being looked at, so a background costs nothing when nobody can see it. */
+[data-window='hidden'] .hud-bg::before,
+[data-window='hidden'] .hud-bg::after {
+  animation-play-state: paused;
+}
+
+/* drift -- the whole field breathing. The quietest movement there is: nothing crosses the screen. */
+[data-backdrop='drift'] .hud-bg::before {
+  background: radial-gradient(
+    55% 45% at 30% 25%,
+    color-mix(in srgb, var(--cyan) 14%, transparent) 0%,
+    transparent 70%
+  );
+  animation: backdrop-drift var(--backdrop-cycle, 40s) ease-in-out infinite alternate;
+}
+
+@keyframes backdrop-drift {
+  from {
+    transform: translate3d(-3%, -2%, 0) scale(1.02);
+    opacity: 0.55;
+  }
+  to {
+    transform: translate3d(3%, 2%, 0) scale(1.12);
+    opacity: 0.9;
+  }
+}
+
+/* aurora -- two light fields crossing at different rates, so the pattern never visibly repeats. */
+[data-backdrop='aurora'] .hud-bg::before {
+  background: radial-gradient(
+    50% 35% at 25% 20%,
+    color-mix(in srgb, var(--cyan) 26%, transparent) 0%,
+    transparent 72%
+  );
+  animation: backdrop-aurora-a var(--backdrop-cycle, 40s) ease-in-out infinite alternate;
+}
+
+[data-backdrop='aurora'] .hud-bg::after {
+  background: radial-gradient(45% 30% at 75% 30%, rgba(140, 150, 255, 0.2) 0%, transparent 70%);
+  animation: backdrop-aurora-b calc(var(--backdrop-cycle, 40s) * 1.6) ease-in-out infinite alternate;
+}
+
+@keyframes backdrop-aurora-a {
+  from {
+    transform: translate3d(-8%, -4%, 0) scale(1) rotate(-2deg);
+    opacity: 0.45;
+  }
+  to {
+    transform: translate3d(10%, 6%, 0) scale(1.25) rotate(3deg);
+    opacity: 0.95;
+  }
+}
+
+@keyframes backdrop-aurora-b {
+  from {
+    transform: translate3d(9%, 5%, 0) scale(1.15);
+    opacity: 0.8;
+  }
+  to {
+    transform: translate3d(-7%, -6%, 0) scale(1);
+    opacity: 0.35;
+  }
+}
+
+/*
+ * stars -- a field of points, drawn once as a repeating gradient and then simply moved.
+ *
+ * No element per star. A hundred divs would be a hundred things to composite; this is one layer whose position
+ * changes, which costs the same whether it shows ten points or ten thousand.
+ */
+[data-backdrop='stars'] .hud-bg::before {
+  background-image:
+    radial-gradient(1px 1px at 20% 30%, rgba(255, 255, 255, 0.85) 0%, transparent 100%),
+    radial-gradient(1px 1px at 70% 15%, rgba(255, 255, 255, 0.6) 0%, transparent 100%),
+    radial-gradient(1.5px 1.5px at 45% 70%, rgba(255, 255, 255, 0.75) 0%, transparent 100%),
+    radial-gradient(1px 1px at 85% 60%, rgba(255, 255, 255, 0.5) 0%, transparent 100%),
+    radial-gradient(1px 1px at 10% 85%, rgba(255, 255, 255, 0.7) 0%, transparent 100%),
+    radial-gradient(1px 1px at 60% 90%, rgba(255, 255, 255, 0.45) 0%, transparent 100%);
+  background-size: 260px 260px;
+  background-repeat: repeat;
+  animation: backdrop-stars calc(var(--backdrop-cycle, 40s) * 5) linear infinite;
+}
+
+/* A second, larger field moving slower: the near stars pass the far ones, which is what reads as depth. */
+[data-backdrop='stars'] .hud-bg::after {
+  background-image:
+    radial-gradient(1.5px 1.5px at 35% 25%, rgba(255, 255, 255, 0.55) 0%, transparent 100%),
+    radial-gradient(2px 2px at 80% 75%, rgba(200, 215, 255, 0.4) 0%, transparent 100%);
+  background-size: 520px 520px;
+  background-repeat: repeat;
+  animation: backdrop-stars calc(var(--backdrop-cycle, 40s) * 11) linear infinite reverse;
+}
+
+@keyframes backdrop-stars {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-260px, 130px, 0);
+  }
+}
+
+/* flow -- colour moving across the window, the way light does at the end of the day. */
+[data-backdrop='flow'] .hud-bg::before {
+  background: linear-gradient(
+    115deg,
+    transparent 0%,
+    color-mix(in srgb, var(--cyan) 18%, transparent) 40%,
+    transparent 70%
+  );
+  animation: backdrop-flow calc(var(--backdrop-cycle, 40s) * 1.5) linear infinite;
+}
+
+@keyframes backdrop-flow {
+  from {
+    transform: translate3d(-40%, 0, 0);
+  }
+  to {
+    transform: translate3d(40%, 0, 0);
+  }
+}
+
+/* waves -- broad bands rising, slowly, like light through water. */
+[data-backdrop='waves'] .hud-bg::before {
+  background: repeating-linear-gradient(
+    0deg,
+    transparent 0,
+    transparent 70px,
+    color-mix(in srgb, var(--cyan) 7%, transparent) 78px,
+    transparent 92px
+  );
+  animation: backdrop-waves calc(var(--backdrop-cycle, 40s) * 2) linear infinite;
+}
+
+@keyframes backdrop-waves {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(0, -92px, 0);
+  }
+}
+
+/*
+ * scan -- a faint line crossing, over a faint grid.
+ *
+ * The line is one gradient at 4% opacity. Anything stronger is a flicker, and a flicker in the background of a browser
+ * is a thing people cannot read through.
+ */
+[data-backdrop='scan'] .hud-bg::before {
+  background: repeating-linear-gradient(
+    0deg,
+    transparent 0,
+    transparent 2px,
+    rgba(255, 255, 255, 0.022) 3px,
+    transparent 4px
+  );
+  opacity: 0.8;
+  animation: none;
+}
+
+[data-backdrop='scan'] .hud-bg::after {
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    color-mix(in srgb, var(--cyan) 10%, transparent) 50%,
+    transparent 100%
+  );
+  height: 28%;
+  inset: -20% -20% auto -20%;
+  animation: backdrop-scan calc(var(--backdrop-cycle, 40s) * 0.3) linear infinite;
+}
+
+@keyframes backdrop-scan {
+  from {
+    transform: translate3d(0, -30vh, 0);
+  }
+  to {
+    transform: translate3d(0, 130vh, 0);
+  }
+}
+
+/*
+ * Whatever the preset asked for, a person who asked not to be moved is not moved.
+ *
+ * There is deliberately no `@media (prefers-reduced-motion: reduce)` rule here. Orbis's own setting has three states,
+ * and one of them is "off" -- an explicit "I want the movement, whatever my system says". A media query cannot see
+ * that, so a media query here would quietly overrule the person on any machine with animations turned off. Reduced
+ * motion is decided once, by `wantsReducedMotion`, which reads the system preference *and* the person's answer; the
+ * result arrives as `data-motion` and as the absence of `data-backdrop`.
+ */
+[data-motion='reduced'] .hud-bg::before,
+[data-motion='reduced'] .hud-bg::after {
+  animation: none;
+}
+
+.hud-grid {
+  display: none;
+}
+
+.hud-particles {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: var(--particle-opacity);
+}
+
+.hud-body {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.stage {
+  position: relative;
+  container-type: inline-size;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.stage-content {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}

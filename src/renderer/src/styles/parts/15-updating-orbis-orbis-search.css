@@ -1,0 +1,315 @@
+/* ---------------------------------------------------------------- updating Orbis */
+
+.up-state {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.up-line {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted-strong);
+}
+
+.up-line.problem {
+  color: var(--danger);
+}
+
+.up-progress {
+  height: 6px;
+  border-radius: 999px;
+  background: var(--pill-bg-strong);
+  overflow: hidden;
+}
+
+.up-progress span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--cyan);
+}
+
+.up-required {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 9px;
+  border: 1px solid var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: 12px;
+}
+
+.up-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line-strong);
+  background: var(--pill-bg);
+  font-size: 12px;
+}
+
+.up-notes pre {
+  margin: 0;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  color: var(--muted-strong);
+}
+
+.up-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.up-history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.up-history li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+}
+
+/* ---------------------------------------------------------------- Orbis Search */
+
+/*
+ * The results page. Everything around it is the Orbis browser exactly as it was; only what fills the page is ours.
+ */
+.osearch {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  background: linear-gradient(180deg, var(--bg-center), var(--bg-mid));
+  padding: 26px 0 60px;
+}
+
+.osearch-head {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 720px;
+  margin: 0 auto 22px;
+  padding: 0 24px;
+}
+
+.osearch-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.osearch-wordmark {
+  height: 19px;
+  opacity: 0.95;
+}
+
+.osearch-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 15px;
+  border-radius: 999px;
+  border: 1px solid var(--glass-border);
+  background: var(--pill-bg);
+  color: var(--muted);
+}
+
+.osearch-box input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  outline: none;
+}
+
+.osearch-verticals {
+  display: flex;
+  gap: 6px;
+}
+
+.osearch-vertical {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.osearch-vertical:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.osearch-vertical.on {
+  color: var(--cyan);
+  border-color: var(--cyan-dim);
+  background: var(--cyan-fill);
+}
+
+.osearch-body {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+.osearch-status {
+  margin: 30px 0;
+  font-size: 13px;
+}
+
+/* Orion's reading of the results, above them rather than instead of them. */
+.osearch-answer {
+  margin-bottom: 26px;
+  padding: 15px 17px;
+  border-radius: 14px;
+  border: 1px solid var(--glass-border);
+  background: var(--pill-bg-strong);
+}
+
+.osearch-answer h2 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--cyan);
+}
+
+.osearch-answer p {
+  margin: 0 0 6px;
+  font-size: 14px;
+  line-height: 1.65;
+  color: var(--text);
+}
+
+.osearch-answer small {
+  font-size: 11px;
+}
+
+/* Shows the answer is still being written, without a spinner competing with the text. */
+.osearch-caret {
+  display: inline-block;
+  width: 7px;
+  height: 14px;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: var(--cyan);
+  animation: osearch-blink 1s steps(2, start) infinite;
+}
+
+@keyframes osearch-blink {
+  to {
+    visibility: hidden;
+  }
+}
+
+html[data-motion='reduced'] .osearch-caret {
+  animation: none;
+  opacity: 0.6;
+}
+
+.osearch-results {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.osearch-result {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.osearch-site {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.osearch-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 5px;
+  background: var(--pill-bg-strong);
+  font-size: 10px;
+  color: var(--faint);
+}
+
+.osearch-result b {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--cyan);
+  line-height: 1.4;
+}
+
+.osearch-result:hover b {
+  text-decoration: underline;
+}
+
+.osearch-snippet {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted-strong);
+}
+
+.osearch-foot {
+  margin-top: 30px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line-strong);
+  font-size: 11px;
+}
+
+.osearch-elsewhere {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--cyan);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  text-decoration: underline;
+}

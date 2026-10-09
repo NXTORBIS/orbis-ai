@@ -1,0 +1,341 @@
+/* ---------------------------------------------------------------- choosing widgets in Customize */
+
+
+.cz-widget-row {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line-strong);
+  background: var(--pill-bg-strong);
+  min-width: 0;
+}
+
+.cz-widget-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* A widget's name, its size and its buttons do not fit on one line in a narrow panel, so they stop trying to. */
+  flex-wrap: wrap;
+  font-size: 13px;
+  min-width: 0;
+}
+
+.cz-widget-top b {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cz-widget-top select,
+.cz-widget-settings select,
+.cz-widget-settings input[type='text'],
+.cz-widget-settings input[type='number'] {
+  min-width: 0;
+  max-width: 100%;
+  padding: 4px 6px;
+  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+
+.cz-widget-settings {
+  margin-top: 4px;
+  min-width: 0;
+}
+
+/* A widget's own settings are rows too, and wrap the same way rather than reaching past the panel. */
+.cz-widget-settings label {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.cz-search {
+  width: 100%;
+  margin: 8px 0;
+  padding: 7px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line-strong);
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.cz-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+
+
+
+/* ---------------------------------------------------------------- the account password, in Settings
+ *
+ * Built from the tokens the rest of Settings uses, so it reads as another setting rather than a security product that
+ * wandered in. The meter is the same one the welcome screen draws, because it is the same judgement.
+ */
+
+.pw-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.pw-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  color: var(--faint);
+  font-size: 12.5px;
+}
+
+.pw-done {
+  margin-left: 4px;
+  color: var(--green);
+}
+
+.pw-form {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  max-width: 420px;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid var(--line-strong);
+  background: var(--pill-bg-strong);
+}
+
+.pw-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.pw-row > span:first-child {
+  color: var(--faint);
+  font-size: 12px;
+}
+
+.pw-field {
+  position: relative;
+  display: block;
+}
+
+.pw-field input {
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: 9px;
+  border: 1px solid var(--line-strong);
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+/* Room for the button, so it never sits on top of what is typed. */
+.pw-field.has-reveal input {
+  padding-right: 42px;
+}
+
+.pw-reveal {
+  position: absolute;
+  top: 50%;
+  right: 5px;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  transform: translateY(-50%);
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+}
+
+.pw-reveal:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.pw-meter {
+  height: 3px;
+  margin: 8px 0 6px;
+  border-radius: 999px;
+  background: var(--line-strong);
+  overflow: hidden;
+}
+
+.pw-meter > span {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
+  background: var(--faint);
+  transition:
+    width 0.3s ease,
+    background 0.3s ease;
+}
+
+.pw-meter[data-strength='none'] > span {
+  width: 0 !important;
+}
+
+.pw-meter[data-strength='weak'] > span {
+  background: var(--red);
+}
+
+.pw-meter[data-strength='fair'] > span {
+  background: var(--amber);
+}
+
+.pw-meter[data-strength='good'] > span {
+  background: var(--green);
+}
+
+.pw-meter[data-strength='strong'] > span {
+  background: var(--cyan);
+}
+
+.pw-note {
+  min-height: 17px;
+  margin: 0;
+  color: var(--faint);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.pw-note[role='alert'] {
+  color: var(--red);
+}
+
+.pw-note.is-quiet {
+  margin-top: 8px;
+}
+
+.pw-acts {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+[data-motion='reduced'] .pw-meter > span {
+  transition: none;
+}
+
+/* ---------------------------------------------------------------- "Tell me when" */
+
+/*
+ * A rule is read as a sentence, so it is laid out as one: the words that never change sit at their natural size and
+ * the boxes take what is left. Wrapping rather than scrolling, because the sentence gets long in a narrow window and a
+ * sentence you have to scroll sideways to read is not one.
+ */
+.cz-rule-make {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 10px 0 14px;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line-strong);
+  background: var(--pill-bg-strong);
+}
+
+.cz-rule-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+
+.cz-rule-word {
+  min-width: 36px;
+  color: var(--faint);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.cz-rule-row select,
+.cz-rule-row input {
+  flex: 1 1 130px;
+  min-width: 0;
+  padding: 6px 9px;
+  border-radius: 9px;
+  border: 1px solid var(--line-strong);
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.cz-rule-acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* The sentence takes the room, so the two buttons end up together at the right where they are expected. */
+.cz-rule-acts > .view-muted {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+.cz-rules {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cz-rule {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line-strong);
+  background: var(--pill-bg-strong);
+}
+
+/* A rule that has been told to stay quiet looks quiet, and still reads. */
+.cz-rule.off {
+  opacity: 0.55;
+}
+
+.cz-rule-face {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cz-rule-name {
+  font-size: 13px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cz-rule-why,
+.cz-rule-when {
+  color: var(--faint);
+  font-size: 11.5px;
+  line-height: 1.4;
+}

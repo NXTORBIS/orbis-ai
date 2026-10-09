@@ -1,0 +1,918 @@
+/* ---------------------------------------------------------------- Markets
+   The same pieces as the security panels -- .tl-block, .tl-switch, .tl-delay, .pw-note -- so Markets is visibly part of
+   Settings rather than a second design. What is added is the one thing Markets has that they do not: rows of live numbers,
+   which need tabular figures so a price changing does not shift the columns. */
+
+.mk-rows,
+.mk-results {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mk-row,
+.mk-results li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--pill-bg);
+  font-size: 12.5px;
+}
+
+/* The symbol.
+   `flex: none` with a minimum width was what put the price on top of it: the name button beside it may shrink
+   below its content, and a symbol that refuses to shrink simply overflowed the button and drew over whatever came
+   next. It may now shrink and it clips, so a long pair is cut short instead of landing on the price. */
+.mk-row b,
+.mk-results b {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+
+.mk-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--faint);
+  font-size: 11.5px;
+}
+
+.mk-venue {
+  flex: none;
+  color: var(--faint);
+  font-size: 11px;
+}
+
+/* Tabular figures: a price that changes must not move the column next to it. */
+.mk-price,
+.mk-change {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+
+.mk-price {
+  min-width: 96px;
+  text-align: right;
+}
+
+.mk-change {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 74px;
+  justify-content: flex-end;
+  font-size: 11.5px;
+}
+
+.mk-change.up {
+  color: var(--green);
+}
+
+.mk-change.down {
+  color: var(--red);
+}
+
+.mk-change.flat {
+  color: var(--faint);
+}
+
+/* Freshness beside the number it describes, never colour alone. */
+.mk-fresh {
+  flex: none;
+  min-width: 56px;
+  color: var(--faint);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-align: right;
+}
+
+.mk-fresh.is-real-time {
+  color: var(--green);
+}
+
+.mk-fresh.is-delayed {
+  color: var(--amber);
+}
+
+.mk-fresh.is-stale {
+  color: var(--red);
+}
+
+.mk-quiet {
+  color: var(--faint);
+  font-size: 11.5px;
+  border: 0;
+  background: transparent;
+  padding: 4px 2px;
+}
+
+.mk-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill, 999px);
+  background: var(--pill-bg);
+  color: var(--faint);
+}
+
+.mk-search input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 32px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  outline: none;
+}
+
+/* ---------------------------------------------------------------- Markets, the screen
+ *
+ * Built on the same tokens as the rest of Orbis, so the screen follows the theme rather than carrying a trading-terminal
+ * palette of its own. Direction is never colour alone: every rise and fall also carries a glyph, which is what keeps the
+ * numbers readable without colour vision.
+ */
+
+.markets-view {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.markets-view .view-head {
+  gap: 10px;
+  /* Four section tabs, a search box and two buttons: on a narrow window these wrap as a group rather than leaving the
+     close button stranded on a line of its own. */
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+.markets-view .view-actions {
+  /* A small basis so the actions sit beside the section tabs rather than wrapping under them and leaving a band of
+     empty header above the content. */
+  flex: 1 1 200px;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+/*
+ * Six sections is a lot of header. At narrow widths the labels go and the icons carry it — except on the selected tab,
+ * which keeps its label so you can always tell where you are. A row of six anonymous icons is a puzzle.
+ */
+@media (max-width: 1240px) {
+  .mk-modes button:not(.on) span.mk-mode-label {
+    display: none;
+  }
+}
+
+.mk-head-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--faint);
+  font-size: 11.5px;
+}
+
+.mk-conn {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.mk-conn.is-connected {
+  color: var(--green);
+}
+
+.mk-conn.is-delayed,
+.mk-conn.is-reconnecting {
+  color: var(--amber);
+}
+
+/* Ready is neither live nor broken: configured, reachable, nothing subscribed yet. */
+.mk-conn.is-idle {
+  color: var(--muted);
+}
+
+.mk-conn.is-disconnected,
+.mk-conn.is-not-configured {
+  color: var(--red);
+}
+
+/* The search sits in the header, and its results float over the body rather than pushing it down. */
+.markets-view .view-actions .mk-search {
+  position: relative;
+  margin-top: 0;
+  flex: 1 1 180px;
+  min-width: 140px;
+  max-width: 340px;
+}
+
+.markets-view .mk-results {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 40;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: var(--glass);
+  box-shadow: var(--glass-shadow);
+}
+
+.markets-view .mk-results li button {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.markets-view .mk-results li button:hover {
+  background: var(--hover);
+}
+
+/*
+ * `display: grid` beats the user agent's `[hidden] { display: none }`, so hiding this needs saying explicitly. Without
+ * it the dashboard stayed on screen underneath the screener.
+ */
+.mk-body[hidden] {
+  display: none;
+}
+
+.mk-body {
+  display: grid;
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  gap: 14px;
+  min-height: 0;
+  flex: 1 1 auto;
+  padding: 0 4px 10px;
+}
+
+.mk-side {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.mk-main {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/*
+ * Eight tabs that wrap rather than scroll.
+ *
+ * They are `flex: 1 1 auto` and cannot shrink past their own icons, so below about 560px of panel the strip was
+ * 44px wider than the screen -- and because `.mk-main` sets `overflow-y: auto`, which makes overflow-x `auto` too,
+ * the whole screen scrolled sideways rather than the strip saying anything. Wrapping, not scrolling: a scrolling
+ * strip hides half of itself, and a tab you cannot see is a tab you do not know is there.
+ */
+.mk-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill, 999px);
+  background: var(--pill-bg);
+}
+
+.mk-tabs button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  flex: 1 1 auto;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: var(--radius-pill, 999px);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.mk-tabs button.on {
+  background: var(--active);
+  color: var(--cyan);
+}
+
+.mk-tabs.is-wide button {
+  flex: 0 0 auto;
+}
+
+.mk-tabs button small {
+  color: var(--faint);
+  font-size: 10px;
+}
+
+.mk-seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--pill-bg);
+}
+
+.mk-seg button {
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.mk-seg button.on {
+  background: var(--cyan-fill);
+  color: var(--cyan);
+}
+
+.mk-breadth {
+  display: flex;
+  align-items: center;
+  /* Wraps rather than clips. In a narrow panel "of 1,948 markets" was being cut off at the right edge, which is
+     the one part of the line that says what the counts are counting. */
+  flex-wrap: wrap;
+  row-gap: 2px;
+  gap: 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--rail-bg);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mk-breadth .up {
+  color: var(--green);
+}
+
+.mk-breadth .down {
+  color: var(--red);
+}
+
+.mk-breadth .flat {
+  color: var(--faint);
+}
+
+.mk-breadth small {
+  margin-left: auto;
+  color: var(--faint);
+  font-size: 10.5px;
+}
+
+.mk-sub {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 6px 0 0;
+  color: var(--muted-strong);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.mk-sub small {
+  color: var(--faint);
+  font-size: 10.5px;
+  font-weight: 400;
+}
+
+.mk-rank {
+  width: 16px;
+  color: var(--faint);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.mk-row-name {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  flex: 1 1 auto;
+  min-width: 0;
+  /* Nothing inside may draw outside this button. The price sits immediately after it. */
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mk-row-name:hover b {
+  color: var(--cyan);
+}
+
+.mk-vol {
+  color: var(--faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  min-width: 52px;
+  text-align: right;
+}
+
+/* ---- heatmap: tiles sized by their share of the turnover of what is drawn */
+
+.mk-heat {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.mk-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 1px;
+  min-height: 46px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--hover);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.mk-tile b {
+  font-size: 11.5px;
+  letter-spacing: 0.01em;
+}
+
+.mk-tile span {
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mk-tile.up {
+  border-color: rgba(62, 229, 138, 0.3);
+  background: rgba(62, 229, 138, 0.14);
+}
+
+.mk-tile.up span {
+  color: var(--green);
+}
+
+.mk-tile.down {
+  border-color: rgba(255, 77, 109, 0.3);
+  background: rgba(255, 77, 109, 0.13);
+}
+
+.mk-tile.down span {
+  color: var(--red);
+}
+
+.mk-tile.flat span {
+  color: var(--faint);
+}
+
+.mk-tile:hover {
+  border-color: var(--cyan-dim);
+}
+
+/* ---- watchlists */
+
+.mk-list-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mk-list-head select {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+
+/* ---- one market */
+
+.mk-detail-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--rail-bg);
+}
+
+.mk-ident {
+  min-width: 0;
+}
+
+.mk-ident h3 {
+  margin: 0;
+  font-size: 15px;
+  letter-spacing: 0.01em;
+}
+
+.mk-ident p {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 0;
+  flex-wrap: wrap;
+}
+
+.mk-sym {
+  color: var(--muted-strong);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.mk-big {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.mk-big strong {
+  font-size: 22px;
+  letter-spacing: -0.01em;
+}
+
+.mk-big small {
+  color: var(--faint);
+  font-size: 10px;
+}
+
+.mk-detail-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mk-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--pill-bg);
+  color: var(--faint);
+  font-size: 11px;
+}
+
+.mk-stats b {
+  color: var(--text);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  margin-left: 5px;
+}
+
+/* ---- the chart */
+
+.mk-chart-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.mk-chart-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.mk-chart-bar select {
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 11.5px;
+}
+
+.mk-chart {
+  position: relative;
+  min-height: 240px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.28);
+  overflow: hidden;
+}
+
+.mk-chart-note {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--pill-bg);
+  color: var(--faint);
+  font-size: 10.5px;
+}
+
+.mk-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mk-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 4px 3px 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--pill-bg);
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.mk-legend input {
+  width: 46px;
+  height: 22px;
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+}
+
+.mk-readout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--pill-bg);
+  color: var(--faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mk-readout b {
+  color: var(--text);
+  font-weight: 600;
+  margin-left: 4px;
+}
+
+/* ---- order book */
+
+.mk-book-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  padding: 7px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--pill-bg);
+  color: var(--faint);
+  font-size: 11px;
+}
+
+.mk-book-head b {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  margin-left: 5px;
+}
+
+.mk-book-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.mk-book-cols h5 {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.mk-ladder {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mk-ladder li {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.8fr);
+  gap: 8px;
+  padding: 2px 6px;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+}
+
+/* The bar is the level's size against the deepest level shown: a real proportion, not a decorative width. */
+.mk-depth {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  pointer-events: none;
+}
+
+.mk-ladder.is-bid .mk-depth {
+  background: rgba(62, 229, 138, 0.14);
+}
+
+.mk-ladder.is-ask .mk-depth {
+  background: rgba(255, 77, 109, 0.13);
+}
+
+.mk-ladder.is-bid .mk-lvl-price {
+  color: var(--green);
+}
+
+.mk-ladder.is-ask .mk-lvl-price {
+  color: var(--red);
+}
+
+.mk-lvl-size,
+.mk-lvl-total {
+  position: relative;
+  color: var(--muted);
+  text-align: right;
+}
+
+.mk-lvl-total {
+  color: var(--faint);
+}
+
+.mk-lvl-price {
+  position: relative;
+  font-weight: 600;
+}
+
+/* ---- the tape */
+
+.mk-tape table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mk-tape th {
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--line);
+  color: var(--faint);
+  font-size: 10.5px;
+  font-weight: 600;
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.mk-tape td {
+  padding: 3px 8px;
+  color: var(--muted-strong);
+}
+
+.mk-tape td:last-child {
+  color: var(--faint);
+}
+
+.mk-tape tr.buy td:nth-child(2) {
+  color: var(--green);
+}
+
+.mk-tape tr.sell td:nth-child(2) {
+  color: var(--red);
+}
+
+/* ---- nothing here */
+
+.mk-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex: 1 1 auto;
+  min-height: 220px;
+  padding: 30px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.mk-empty p {
+  margin: 0;
+  max-width: 44ch;
+}
+
+.mk-empty svg {
+  color: var(--faint);
+}
+
+.mk-empty-small {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 14px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.mk-empty-small p {
+  margin: 0;
+}
+
+.mk-fresh.is-unavailable {
+  color: var(--faint);
+}
+
+@media (max-width: 1080px) {
+  /* Fewer panels at once rather than everything shrunk: a two-column order book at 300px is unreadable. */
+  .mk-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mk-side {
+    max-height: 40vh;
+  }
+
+  .mk-book-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .markets-view .view-actions .mk-search {
+    min-width: 160px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mk-tile,
+  .mk-row-name {
+    transition: none;
+  }
+}

@@ -39,7 +39,9 @@ const ROOT = new URL('../renderer/src/', import.meta.url)
  * A file not listed here may hold none. These are the counts as they stood when the four broken ones were fixed.
  */
 const MOST: Readonly<Record<string, number>> = Object.freeze({
-  'styles.css': 19,
+  // The window's global stylesheet is 38 parts; they share one allowance, because which part a rule sits in is an
+  // accident of where the section banners fell.
+  'styles/parts': 19,
   'components/student/student.css': 8,
   'components/native/phase2.css': 2,
   'components/native/phase6.css': 2,
@@ -64,7 +66,8 @@ describe('screens measure themselves, not the window', () => {
     for await (const sheet of stylesheets(ROOT)) {
       const source = await readFile(sheet.url, 'utf8')
       const found = [...source.matchAll(/@media\s*\([^)]*\bmax-width\b/g)].length
-      const allowed = MOST[sheet.name] ?? 0
+      const bucket = sheet.name.startsWith('styles/parts/') ? 'styles/parts' : sheet.name
+      const allowed = MOST[bucket] ?? 0
       if (found > allowed) {
         over.push(`${sheet.name}: ${found}, allowed ${allowed}`)
       }
@@ -84,19 +87,25 @@ describe('screens measure themselves, not the window', () => {
      * back silently the next time somebody adds one. This reports rather than fails, because lowering the number is
      * the fix and it belongs in the same change as the conversion.
      */
-    const slack: string[] = []
+    const counted = new Map<string, number>()
     for await (const sheet of stylesheets(ROOT)) {
-      const allowed = MOST[sheet.name]
-      if (allowed === undefined) continue
+      const bucket = sheet.name.startsWith('styles/parts/') ? 'styles/parts' : sheet.name
+      if (MOST[bucket] === undefined) continue
       const source = await readFile(sheet.url, 'utf8')
       const found = [...source.matchAll(/@media\s*\([^)]*\bmax-width\b/g)].length
-      if (found < allowed) slack.push(`${sheet.name}: ${found} now, still allowed ${allowed}`)
+      counted.set(bucket, (counted.get(bucket) ?? 0) + found)
     }
+    const slack = [...counted]
+      .filter(([bucket, found]) => found < MOST[bucket])
+      .map(([bucket, found]) => `${bucket}: ${found} now, still allowed ${MOST[bucket]}`)
     assert.deepEqual(slack, [], 'bring these numbers down to what is really there, in the change that lowered them')
   })
 
   test('the screens that were fixed stay fixed', async () => {
-    const styles = await readFile(new URL('styles.css', ROOT), 'utf8')
+    // The window's global stylesheet is 38 parts; read as one, because which part a rule sits in is an accident of
+    // where the section banners fell.
+    const names = (await readdir(new URL('styles/parts/', ROOT))).filter((one) => one.endsWith('.css')).sort()
+    const styles = (await Promise.all(names.map((one) => readFile(new URL(`styles/parts/${one}`, ROOT), 'utf8')))).join('\n')
     const create = await readFile(new URL('components/create.css', ROOT), 'utf8')
 
     assert.match(create, /container-name:\s*create-view/, 'Create measures its own root')

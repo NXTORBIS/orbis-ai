@@ -1,0 +1,733 @@
+/* ============================================================================
+ * The order book.
+ *
+ * `is-stale` is the important rule: a book whose stream broke continuity keeps its levels on screen and is visibly dimmed,
+ * because they were true a moment ago and are no longer current. Hiding it would lose information; showing it unchanged
+ * would be a lie.
+ * ========================================================================= */
+
+.mk-book-warning {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  padding: 7px 11px;
+  border: 1px solid rgba(255, 190, 77, 0.35);
+  border-radius: 10px;
+  background: rgba(255, 190, 77, 0.1);
+  color: var(--amber);
+  font-size: 11.5px;
+}
+
+.mk-book-touch b.up {
+  color: var(--green);
+}
+
+.mk-book-touch b.down {
+  color: var(--red);
+}
+
+.mk-book-lean {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+  padding: 7px 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--pill-bg);
+  font-size: 11px;
+}
+
+.mk-book-lean > span:first-child {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mk-book-ladder {
+  min-height: 0;
+  overflow-y: auto;
+  transition: opacity 160ms ease;
+}
+
+[data-motion='reduced'] .mk-book-ladder {
+  transition: none;
+}
+
+.mk-book-ladder.is-stale {
+  /* Dimmed, not hidden. The levels were true a moment ago; the warning above says they are not current. */
+  opacity: 0.5;
+}
+
+.mk-book-ladder table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.mk-book-ladder th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 4px 8px;
+  background: var(--bg-center);
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+  text-align: right;
+}
+
+.mk-book-ladder th:first-child {
+  text-align: left;
+}
+
+.mk-book-ladder td {
+  position: relative;
+  padding: 2px 8px;
+  text-align: right;
+  color: var(--muted-strong);
+  white-space: nowrap;
+}
+
+.mk-book-ladder td:first-child {
+  text-align: left;
+  font-weight: 600;
+}
+
+.mk-book-ladder td.up {
+  color: var(--green);
+}
+
+.mk-book-ladder td.down {
+  color: var(--red);
+}
+
+.mk-book-bar {
+  width: 70px;
+  padding: 0 !important;
+}
+
+.mk-book-bar i {
+  display: block;
+  height: 10px;
+  border-radius: 2px;
+  opacity: 0.22;
+}
+
+.mk-book-bar i.up {
+  background: var(--green);
+}
+
+.mk-book-bar i.down {
+  background: var(--red);
+}
+
+.mk-book-ladder tbody.mid td {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 8px;
+  border-top: 1px solid var(--line-strong);
+  border-bottom: 1px solid var(--line-strong);
+  background: var(--pill-bg);
+  text-align: left;
+}
+
+.mk-book-ladder tbody.mid b {
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.mk-depth-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mk-depth-chart svg {
+  width: 100%;
+  height: 72px;
+}
+
+.mk-depth-chart path {
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.mk-depth-chart path.up {
+  fill: rgba(62, 229, 138, 0.18);
+  stroke: var(--green);
+}
+
+.mk-depth-chart path.down {
+  fill: rgba(255, 77, 109, 0.18);
+  stroke: var(--red);
+}
+
+.mk-depth-axis {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  color: var(--faint);
+}
+
+.mk-depth-axis i {
+  font-style: normal;
+}
+
+/* A market kept. The star is an outline until it is one. */
+.mk-fav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+}
+
+.mk-fav:hover {
+  color: var(--amber);
+  background: var(--hover);
+}
+
+.mk-fav.on {
+  color: var(--amber);
+}
+
+.mk-fav.on svg {
+  fill: currentColor;
+}
+
+/* ---------------------------------------------------------------- Orbis Pages
+
+   The library and the frame a Page sits in. Every colour here is a token rather than a literal, so a Page inherits the
+   theme somebody chose instead of carrying its own idea of what Orbis looks like. */
+
+.pages-view {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  /* Measured for the stacking rule at the bottom of this block: the screen's own width, not the window's. */
+  container-type: inline-size;
+  container-name: pages-view;
+}
+
+.pages-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid var(--pill-border);
+  border-radius: 999px;
+  background: var(--pill-bg);
+  color: var(--muted);
+  /* So a search box placed in a narrow column shrinks with it instead of pushing out of it. */
+  min-width: 0;
+}
+
+/*
+ * The field grows and shrinks with the box around it.
+ *
+ * It was a flat `width: 190px`, which went wrong in both directions. Where the box is stretched -- Create puts this
+ * in a wide column -- the field stayed 190px and clipped its own placeholder to "Find by name, notes or wha". Where
+ * the box is narrow, at 880px and under, the field would not shrink and the whole search ran 160 pixels out of its
+ * column. 190px is now the size it *prefers*, which is what it always should have been.
+ */
+.pages-search input {
+  flex: 1 1 190px;
+  /* A floor, so it wraps or the box grows rather than the field collapsing to a few characters of its placeholder. */
+  min-width: 90px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  outline: none;
+}
+
+.pages-search input::placeholder {
+  color: var(--faint);
+}
+
+.pages-body {
+  display: grid;
+  grid-template-columns: minmax(150px, 210px) 1fr;
+  gap: 16px;
+  min-height: 0;
+  overflow: hidden;
+  padding: 12px 16px 16px;
+}
+
+.pages-side {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+/*
+ * Narrow: the subject list lies along the top instead of squeezing into a column nobody can read.
+ *
+ * Two things were wrong with this rule and each one alone was enough to stop it working.
+ *
+ * It was written *above* `.pages-side`, and at equal specificity the later rule wins whatever media query the
+ * earlier one is wrapped in -- so `flex-direction: row` was overridden by the `column` below it every time, in
+ * every window. The list never stacked; it stayed a column and grew a sideways scrollbar two thousand pixels wide.
+ *
+ * And it asked about the window. This screen sits beside a 264px sidebar, so a 860px window is a 596px screen, and
+ * the number was measuring something that was never the thing running out of room.
+ */
+@container pages-view (max-width: 640px) {
+  .pages-body {
+    grid-template-columns: 1fr;
+    /* Two real rows: the subjects, then whatever height is left for the pages. */
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  /*
+   * The subject list keeps its own scrolling and takes a fixed slice of the top.
+   *
+   * Letting it become a wrapping row with `overflow: visible` was the first attempt and was worse than the fault it
+   * replaced: the list grew to its full content height, the cards were drawn over it, and the subjects showed
+   * through them. A short scrolling list is the honest shape for a column that has become a band.
+   */
+  .pages-side {
+    max-height: 168px;
+  }
+}
+
+.pages-side-head {
+  margin: 14px 0 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.pages-cat,
+.pages-recent {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pages-cat:hover,
+.pages-recent:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.pages-cat.active {
+  border-color: var(--cyan-dim);
+  background: var(--cyan-fill);
+  color: var(--text);
+}
+
+.pages-cat-name {
+  text-transform: capitalize;
+}
+
+.pages-count {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.pages-main {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.pages-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.pages-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: var(--glass);
+}
+
+.pages-card:hover {
+  border-color: var(--line-strong);
+}
+
+.pages-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pages-card-head h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.pages-card-title {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pages-card-title:hover {
+  color: var(--cyan);
+}
+
+.pages-card-desc {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.pages-card-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pages-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border: 1px solid var(--pill-border);
+  border-radius: 999px;
+  background: var(--pill-bg);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  text-transform: capitalize;
+}
+
+.pages-url {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--faint);
+  overflow-wrap: anywhere;
+}
+
+.pages-why {
+  margin: 0;
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.pages-empty {
+  margin: 24px 0;
+  color: var(--muted);
+}
+
+.pages-unavailable {
+  margin-top: 20px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--pill-bg);
+}
+
+.pages-unavailable h3 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--amber);
+}
+
+.pages-unavailable p {
+  margin: 4px 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ---- what a Page may do */
+
+.pages-permissions {
+  margin: 0 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: var(--glass);
+}
+
+.pages-permissions h4 {
+  margin: 12px 0 4px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.pages-perm {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 5px 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.pages-perm.allow {
+  color: var(--text);
+}
+
+.pages-perm.allow > svg {
+  color: var(--green);
+}
+
+.pages-perm.prompt > svg,
+.pages-perm.deny > svg,
+.pages-perm.unavailable > svg {
+  color: var(--faint);
+}
+
+.pages-perm-why {
+  flex: 1 1 220px;
+  color: var(--faint);
+}
+
+.pages-limitation {
+  margin: 4px 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ---- a Page's own surface */
+
+.pages-page {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.page-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 760px;
+}
+
+.page-row {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.page-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 110px;
+}
+
+.page-field.wide {
+  flex: 1 1 320px;
+}
+
+.page-field.narrow {
+  max-width: 96px;
+}
+
+.page-field > span {
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.page-field input {
+  padding: 7px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+  outline: none;
+}
+
+.page-field input:focus-visible {
+  border-color: var(--cyan);
+}
+
+/* A dropdown in a Page field. Styled to match the text inputs beside it: the global rule sets only the font, which
+   would leave a select wearing the browser's own chrome next to an input wearing ours. */
+.page-field select {
+  padding: 7px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+  outline: none;
+  cursor: pointer;
+}
+
+.page-field select:focus-visible {
+  border-color: var(--cyan);
+}
+
+/* A checkbox is not a text box, so it does not take the text box's padding, border or full width. */
+.page-field input[type='checkbox'] {
+  align-self: flex-start;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border-radius: 4px;
+  accent-color: var(--cyan);
+  cursor: pointer;
+}
+
+.page-arrow {
+  margin-bottom: 9px;
+  color: var(--faint);
+}
+
+.page-answer {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid var(--cyan-dim);
+  border-radius: 10px;
+  background: var(--cyan-fill);
+  font-size: 15px;
+  color: var(--text);
+}
+
+.page-answer code {
+  font-family: var(--mono);
+  font-size: 13px;
+}
+
+.page-answer-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  font-size: 13px;
+}
+
+.page-label {
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.page-problem {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--red);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--red);
+}
+
+.page-note {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--faint);
+}
+
+.page-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.page-chip {
+  padding: 3px 9px;
+  border: 1px solid var(--pill-border);
+  border-radius: 999px;
+  background: var(--pill-bg);
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.page-chip:hover {
+  border-color: var(--cyan-dim);
+  color: var(--text);
+}
+
+.page-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.page-table th,
+.page-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+}
+
+.page-table th {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.page-table td {
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.page-steps {
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--pill-bg);
+  font-size: 12px;
+}
+
+.page-steps summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.page-steps p {
+  margin: 6px 0;
+  color: var(--muted);
+}

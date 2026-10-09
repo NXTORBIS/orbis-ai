@@ -1,0 +1,363 @@
+/* ================= Scrollbars ================= */
+
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: var(--scrollbar);
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ================= Animations ================= */
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes drawer-left {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+}
+
+@keyframes drawer-right {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes orb-breathe {
+  50% {
+    box-shadow: 0 0 26px var(--cyan-glow), inset 0 0 16px rgba(63, 216, 255, 0.35);
+  }
+}
+
+@keyframes beam-travel {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -100;
+  }
+}
+
+@keyframes beam-travel-head {
+  from {
+    stroke-dashoffset: -7;
+  }
+  to {
+    stroke-dashoffset: -107;
+  }
+}
+
+@keyframes glow-pulse {
+  0%, 100% {
+    box-shadow: 0 0 16px var(--composer-glow), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+  50% {
+    box-shadow: 0 0 34px var(--composer-glow-strong), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+}
+
+@keyframes new-chat-pop {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes composer-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 16px var(--composer-glow), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+  50% {
+    box-shadow: 0 0 34px var(--composer-glow-strong), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+}
+
+@keyframes composer-sheen {
+  from {
+    background-position: 130% 0;
+  }
+  to {
+    background-position: -130% 0;
+  }
+}
+
+@keyframes send-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(63, 216, 255, 0.45), 0 0 14px var(--cyan-glow);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(63, 216, 255, 0), 0 0 14px var(--cyan-glow);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(63, 216, 255, 0), 0 0 14px var(--cyan-glow);
+  }
+}
+
+@keyframes stop-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 77, 109, 0.5);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(255, 77, 109, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 77, 109, 0);
+  }
+}
+
+@keyframes orb-turn {
+  0% {
+    transform: rotate(0deg) scaleX(1);
+  }
+  50% {
+    transform: rotate(180deg) scaleX(0.8);
+  }
+  100% {
+    transform: rotate(360deg) scaleX(1);
+  }
+}
+
+@keyframes glitch-top {
+  0% {
+    transform: translate(-3px, -1px);
+  }
+  50% {
+    transform: translate(2px, 1px);
+  }
+  100% {
+    transform: translate(-1px, 0);
+  }
+}
+
+@keyframes glitch-bottom {
+  0% {
+    transform: translate(3px, 1px);
+  }
+  50% {
+    transform: translate(-2px, -1px);
+  }
+  100% {
+    transform: translate(1px, 0);
+  }
+}
+
+@keyframes glitch-skew {
+  0%,
+  100% {
+    transform: skewX(0);
+  }
+  50% {
+    transform: skewX(-3deg);
+  }
+}
+
+/* Settings → Visual effects turns decorative motion off (instead of the OS reduced-motion
+   setting, which is commonly off on Windows and would hide these animations). */
+.hud:not(.effects) .greeting.glitching,
+.hud:not(.effects) .greeting.glitching::before,
+.hud:not(.effects) .greeting.glitching::after,
+.hud:not(.effects) .orb,
+.hud:not(.effects) .orb-mark,
+.hud:not(.effects) .composer,
+.hud:not(.effects) .composer::after,
+.hud:not(.effects) .composer-beam rect,
+.hud:not(.effects) .send-btn.ready,
+.hud:not(.effects) .send-btn.stop {
+  animation: none;
+}
+
+/* No native title bar: the top row of the window drags it, and leaves room for the Windows buttons drawn over its right end. */
+.url-strip {
+  padding-right: 146px;
+  -webkit-app-region: drag;
+}
+
+.url-strip > *,
+.url-strip .url-form > * {
+  -webkit-app-region: no-drag;
+}
+
+.url-strip .url-form {
+  -webkit-app-region: drag;
+}
+
+.url-strip.loading::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+  background-size: 40% 100%;
+  background-repeat: no-repeat;
+  animation: url-loading 1.1s ease-in-out infinite;
+}
+
+.url-strip .spin {
+  flex-shrink: 0;
+  color: var(--cyan);
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes url-loading {
+  from {
+    background-position: -40% 0;
+  }
+  to {
+    background-position: 140% 0;
+  }
+}
+
+.b-icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  color: var(--muted-strong);
+  cursor: pointer;
+}
+
+.b-icon:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.b-icon:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.b-icon.active {
+  background: var(--cyan-fill);
+  color: var(--cyan);
+}
+
+.b-sep {
+  width: 1px;
+  height: 16px;
+  margin: 0 4px;
+  background: var(--line-strong);
+}
+
+/* While a menu or dropdown is open, nothing drags the window: a click on the empty top rows then reaches the page and
+   closes it, instead of being swallowed as a title-bar click. */
+html[data-dropdown-open] * {
+  -webkit-app-region: no-drag !important;
+}
+
+/* Pop-ups over the top row must take clicks: Windows treats a drag region underneath as the title bar otherwise. */
+.tab-edit,
+.omni,
+.orion-answer {
+  -webkit-app-region: no-drag;
+}
+
+.menu-icon-space {
+  flex-shrink: 0;
+  width: 14px;
+}
+
+.menu-sep {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--line-strong);
+}
+
+.tab-edit.popover {
+  position: fixed;
+  z-index: 90;
+  width: 290px;
+  gap: 6px;
+  padding: 12px;
+}
+
+.tab-edit-btn {
+  padding: 5px 12px;
+  border: 1px solid var(--pill-border);
+  border-radius: 999px;
+  background: var(--pill-bg);
+  color: var(--text);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.tab-edit-btn.primary {
+  border-color: var(--cyan-dim);
+  color: var(--cyan);
+}
+
+/* Approvals for Orion and automations cover the whole window, whatever is open. */
+.control-prompt-backdrop {
+  position: fixed;
+  z-index: 200;
+}
+
+.control-prompt .control-prompt-action {
+  margin: 6px 0;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.control-prompt .control-prompt-more {
+  font-size: 12px;
+}

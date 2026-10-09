@@ -1,0 +1,493 @@
+/* ================================================================ The Page studio
+
+   Building a Page, packaging one, and finding out why one is misbehaving. Three screens that share one arrangement:
+   the thing you act on, then what Orbis says about it. Every caveat is rendered as content rather than behind a
+   disclosure, because a caveat somebody has to think to open is one nobody reads. */
+
+.pages-studio-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 20px 28px;
+}
+
+.studio {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 1100px;
+}
+
+.studio-note {
+  display: flex;
+  gap: 9px;
+  padding: 10px 13px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--cyan-dim);
+  border-radius: 10px;
+  background: var(--pill-bg);
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.65;
+}
+
+.studio-note > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--cyan-dim);
+}
+
+.studio-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--pill-bg);
+}
+
+.studio-block h4 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.studio-block h5 {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--muted-strong);
+}
+
+/* ---- the builder */
+
+.studio-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(280px, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+@media (max-width: 1000px) {
+  .studio-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+.studio-edit,
+.studio-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--pill-bg);
+}
+
+.studio-preview {
+  position: sticky;
+  top: 0;
+}
+
+.studio-preview > header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.studio-preview > header em {
+  font-style: normal;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.studio-pill {
+  margin-left: auto;
+  padding: 2px 8px;
+  border: 1px solid var(--red);
+  border-radius: 999px;
+  color: var(--red);
+  font-size: 10px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.studio-pill.ok {
+  border-color: var(--green);
+  color: var(--green);
+}
+
+.studio-render {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bar-bg);
+}
+
+.studio-h {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text);
+}
+
+/* A section of a built Page: its own title and whatever it holds, stacked. */
+.studio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.studio-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+/* A figure around a table or a plot, so the caption sits with the thing it names. */
+.page-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+}
+
+.studio-hr {
+  border: 0;
+  border-top: 1px solid var(--line);
+  margin: 2px 0;
+}
+
+.studio-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.studio-list > li {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.studio-list > li:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.studio-list select,
+.studio-wide {
+  padding: 6px 9px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--bar-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+}
+
+.studio-wide {
+  width: 100%;
+  font-family: var(--mono);
+  font-size: 11.5px;
+}
+
+.studio-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--muted);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+/* Errors and warnings sit apart. One stops the Page running and the other does not, and that is what somebody acts on. */
+.studio-problems {
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--amber);
+  border-radius: 9px;
+  background: var(--bar-bg);
+}
+
+.studio-problems.is-error {
+  border-left-color: var(--red);
+}
+
+.studio-problems h4 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 5px;
+  font-size: 11.5px;
+  color: var(--muted-strong);
+}
+
+.studio-problems p {
+  margin: 3px 0;
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.studio-problems code {
+  margin-right: 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--faint);
+}
+
+/* ---- packaging */
+
+.studio-secrets {
+  padding: 9px 12px;
+  border: 1px solid var(--amber);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--amber) 7%, transparent);
+}
+
+.studio-secrets p {
+  margin: 0 0 7px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--muted-strong);
+}
+
+.studio-inspect {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--bar-bg);
+}
+
+.studio-inspect h5 {
+  margin: 0;
+  font-size: 14px;
+  color: var(--text);
+}
+
+/* The part somebody has to read before deciding. Given the weight of content, not of a footnote. */
+.studio-decide {
+  margin: 0;
+  padding: 10px 12px 10px 28px;
+  border: 1px solid var(--cyan-dim);
+  border-radius: 9px;
+  background: var(--cyan-fill);
+  font-size: 11.5px;
+  line-height: 1.65;
+  color: var(--text);
+}
+
+.studio-decide li + li {
+  margin-top: 5px;
+}
+
+/* ---- diagnostics */
+
+.studio-diagnosis {
+  padding: 11px 13px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--bar-bg);
+}
+
+.studio-diagnosis > strong {
+  display: block;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.studio-diagnosis > p {
+  margin: 5px 0 0;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.studio-recover {
+  margin: 9px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.studio-recover li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 11.5px;
+}
+
+.studio-recover b {
+  color: var(--text);
+}
+
+.studio-recover em {
+  font-style: normal;
+  font-size: 10.5px;
+  color: var(--faint);
+}
+
+/* What a recovery costs, in the colour of a warning rather than the colour of a caption. */
+.studio-recover em.is-cost {
+  color: var(--amber);
+}
+
+.studio-findings {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.studio-findings li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 11px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--faint);
+  border-radius: 8px;
+  font-size: 11.5px;
+}
+
+.studio-findings li.is-blocker {
+  border-left-color: var(--red);
+}
+
+.studio-findings li.is-serious {
+  border-left-color: var(--amber);
+}
+
+.studio-findings b {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--faint);
+}
+
+.studio-findings span {
+  color: var(--text);
+  line-height: 1.55;
+}
+
+.studio-findings em {
+  font-style: normal;
+  color: var(--cyan);
+}
+
+/* The list that stops a clean audit reading as a certificate. Styled to be read, not skimmed past. */
+.studio-cannot {
+  margin: 0;
+  padding: 10px 12px 10px 28px;
+  border: 1px solid var(--amber);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--amber) 6%, transparent);
+  font-size: 11.5px;
+  line-height: 1.65;
+  color: var(--muted-strong);
+}
+
+.studio-cannot li + li {
+  margin-top: 5px;
+}
+
+.studio-checked summary {
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.studio-checked ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+/* ---- between Pages: who can send, and who accepts */
+
+.studio-routes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.studio-routes h5 {
+  margin: 0 0 6px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.studio-routes ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.studio-routes li {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bar-bg);
+  font-size: 11.5px;
+  color: var(--text);
+}
+
+.studio-routes em {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-style: normal;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--faint);
+}
+
+.studio-routes code {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--cyan);
+}

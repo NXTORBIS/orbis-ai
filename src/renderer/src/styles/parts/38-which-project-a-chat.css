@@ -1,0 +1,419 @@
+/* ---------------------------------------------------------------- which project a chat is kept in */
+.chat-project { position: relative; }
+.chat-project-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 180px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--faint);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.chat-project-btn:hover,
+.chat-project-btn:focus-visible { color: var(--text); border-color: var(--cyan); }
+.chat-project-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  min-width: 200px;
+  max-height: 260px;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: var(--glass-shadow);
+}
+.chat-project-list button {
+  width: 100%;
+  text-align: left;
+  padding: 6px 9px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+.chat-project-list button:hover { background: var(--bg-hover); }
+.chat-project-list button.on { color: var(--cyan); }
+
+/* ---------------------------------------------------------------- where the sources do not agree */
+/* Above the source list, because when it is there it is usually the most useful thing on the screen. */
+.research-conflict {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-left: 2px solid #ffbe4d;
+  border-radius: 8px;
+  background: var(--panel);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.research-conflict svg { flex: none; margin-top: 2px; color: #ffbe4d; }
+.research-conflict ul { margin: 5px 0 0; padding-left: 16px; }
+.research-conflict li { margin: 2px 0; }
+.research-about { color: var(--faint); }
+.research-repeats { margin: 6px 0 0; font-size: 12px; }
+
+/* ---------------------------------------------------------------- what Orbis was partway through */
+/* From a previous run of Orbis. Nothing is shown when there is nothing, which is almost always. */
+.unfinished {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  z-index: 35;
+  width: min(360px, calc(100vw - 36px));
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: var(--glass-shadow);
+  font-size: 12.5px;
+}
+.unfinished-head { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.unfinished ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.unfinished li { display: flex; align-items: center; gap: 6px; }
+.unfinished-open {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  padding: 5px 7px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.unfinished-open:hover { background: var(--bg-hover); }
+.unfinished p { margin: 7px 0 0; }
+
+/* A heading inside a settings panel, above a group of related switches. */
+.setting-subhead {
+  margin: 14px 0 2px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+/* A field with a button beside it, inside a settings panel. */
+.setting-row-inline { display: flex; gap: 6px; margin: 6px 0; }
+.setting-row-inline input { flex: 1; min-width: 0; }
+.blocked-list { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.blocked-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  font-size: 12.5px;
+}
+
+/* ---------------------------------------------------------------- research while it is running */
+/* Shows nothing unless a run is going. The controls that cannot reach anything any more are hidden, not disabled-looking. */
+.research-run {
+  margin: 0 auto 6px;
+  width: min(100%, 760px);
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--panel);
+  font-size: 12.5px;
+}
+.research-run-head { display: flex; align-items: center; gap: 7px; }
+.research-run-head b { flex: 1; }
+.research-run-plan { margin: 6px 0; padding-left: 18px; color: var(--faint); }
+.research-run-plan li { margin: 1px 0; }
+.research-run-prefer { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 6px; }
+.research-run-note { margin: 6px 0 0; }
+
+/* ---------------------------------------------------------------- talking with Orbis */
+.voice-talk { display: flex; align-items: center; gap: 7px; margin: 0 auto 4px; width: min(100%, 760px); padding: 0 12px; }
+.voice-talk-status { color: var(--faint); font-size: 12px; }
+
+/* ---------------------------------------------------------------- notes taken while somebody talks */
+/* The line about what Orbis can hear is above everything else on purpose: finding it out afterwards is too late. */
+.meeting-hears {
+  display: flex;
+  gap: 7px;
+  margin: 0 16px 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--faint);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.meeting-hears svg { flex: none; margin-top: 2px; }
+.meeting-live {
+  margin: 0 16px 10px;
+  padding: 9px 12px;
+  border: 1px solid var(--cyan);
+  border-radius: 10px;
+  background: var(--panel);
+  font-size: 12.5px;
+}
+.meeting-live b { margin: 0 8px 0 6px; }
+.meeting-dot { color: #ff4d6d; vertical-align: middle; }
+.meeting-body { display: flex; gap: 14px; flex: 1; min-height: 0; padding: 0 16px 16px; }
+.meeting-list { list-style: none; margin: 0; padding: 0; width: 260px; flex: none; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.meeting-list li { display: flex; align-items: center; gap: 4px; border-radius: 8px; }
+.meeting-list li.on { background: var(--bg-hover); }
+.meeting-list li > button:first-child {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.meeting-list li > button:first-child:hover { background: var(--bg-hover); }
+.meeting-detail { flex: 1; min-width: 0; overflow-y: auto; }
+.meeting-detail-head { display: flex; align-items: center; gap: 10px; }
+.meeting-detail-head h3 { flex: 1; margin: 0; }
+.meeting-detail h4 { margin: 14px 0 4px; font-size: 13px; }
+.meeting-summary { border-left: 2px solid var(--cyan); padding-left: 10px; margin-top: 8px; }
+.meeting-summary q { display: block; margin-top: 2px; }
+.meeting-parts p { margin: 3px 0; font-size: 13px; line-height: 1.5; }
+.meeting-parts .small { margin-right: 6px; }
+
+/* ---------------------------------------------------------------- three things to do with a highlighted passage */
+/* In the chat only. The browser has its own contextual orb for selections on a web page; this is Orbis's own window. */
+.chat-sel-bar {
+  position: fixed;
+  z-index: 60;
+  display: flex;
+  align-items: stretch;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: var(--glass-shadow);
+  font-size: 12.5px;
+  white-space: nowrap;
+  transform-origin: bottom left;
+  animation: chat-sel-in 120ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+.chat-sel-bar[data-from='below'] { transform-origin: top left; }
+
+@keyframes chat-sel-in {
+  from { opacity: 0; transform: scale(0.94) translateY(3px); }
+  to { opacity: 1; transform: none; }
+}
+
+.chat-sel-act {
+  padding: 7px 11px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.chat-sel-act:hover { background: var(--bg-hover); }
+.chat-sel-act:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
+
+/* A hairline between actions, rather than a border on each button, which would double up. */
+.chat-sel-line { align-self: center; width: 1px; height: 15px; background: var(--line); }
+.chat-sel-why { padding: 7px 11px; color: var(--faint); }
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-sel-bar { animation: none; }
+}
+
+/* ---------------------------------------------------------------- what you are working on
+ *
+ * The entire visible surface of Ambient Intelligence: one quiet word in the system bar, and a small popover.
+ * Deliberately understated — it is a thing Orbis noticed, not a thing Orbis wants you to deal with.
+ */
+.ctx-chip-holder {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.ctx-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 190px;
+  padding: 4px 10px;
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
+  border-radius: 999px;
+  background: transparent;
+  color: var(--faint);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.ctx-chip:hover,
+.ctx-chip.on {
+  color: var(--text);
+  border-color: var(--cyan);
+  background: color-mix(in srgb, var(--cyan) 10%, transparent);
+}
+
+.ctx-chip:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+/* The dot breathes, which is the only hint that anything behind this is still thinking. */
+.ctx-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--cyan);
+  animation: ctx-pulse 3.2s ease-in-out infinite;
+}
+
+@keyframes ctx-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+.ctx-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ctx-pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+  width: min(300px, 80vw);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 13px 14px;
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.12));
+  border-radius: 13px;
+  background: var(--surface);
+  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.45);
+  animation: ctx-in 0.16s ease-out both;
+}
+
+@keyframes ctx-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
+.ctx-pop header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ctx-close {
+  display: inline-flex;
+  padding: 3px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+}
+
+.ctx-close:hover {
+  color: var(--text);
+}
+
+.ctx-line {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.ctx-why,
+.ctx-related {
+  margin: 0;
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11.5px;
+  color: var(--faint);
+}
+
+.ctx-pop h4 {
+  margin: 2px 0 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.ctx-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 2px;
+}
+
+.ctx-btn {
+  padding: 5px 11px;
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.12));
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ctx-btn:hover {
+  border-color: var(--cyan);
+}
+
+.ctx-btn.quiet {
+  color: var(--faint);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ctx-dot { animation: none; }
+  .ctx-pop { animation: none; }
+}
+
+/* A Page laboratory's own small drawing (the triangle, and anything else that is one shape rather than a chart). */
+.page-figure { margin: 10px 0 0; }
+.page-triangle { width: 100%; max-width: 300px; height: auto; display: block; }
+.page-triangle polygon { fill: color-mix(in srgb, var(--cyan) 18%, transparent); stroke: var(--cyan); stroke-width: 0.6%; vector-effect: non-scaling-stroke; }
+.page-triangle circle { fill: var(--cyan); }
+.page-triangle text { fill: var(--faint); }
+.page-lines { width: 100%; max-width: 300px; height: auto; display: block; }
+.page-lines-axis { stroke: var(--glass-border); stroke-width: 0.12; }
+.page-lines-row { stroke-linecap: round; }
+.page-lines-row.row-0 { stroke: var(--cyan); }
+.page-lines-row.row-1 { stroke: #f0a33a; }

@@ -1,0 +1,708 @@
+/* ---------------------------------------------------------------- what Orbis is doing, step by step
+
+   Deliberately plain. A step that has not run looks like a step that has not run: nothing is filled in, ticked or
+   coloured until the browser has confirmed it. Built on the same surface as the orb's own panel, and placed at the top
+   of the page so it never lands on top of the orb, which lives at the bottom unless someone moves it. */
+.steprun {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 8;
+  width: min(340px, calc(100% - 24px));
+  max-height: min(60%, 480px);
+  display: flex;
+  flex-direction: column;
+  border-radius: 14px;
+  border: 1px solid var(--glass-border);
+  background: var(--popover-bg);
+  color: var(--text);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+  font-size: 13px;
+  pointer-events: auto;
+}
+.steprun-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 11px 12px 9px;
+  border-bottom: 1px solid var(--glass-border);
+}
+.steprun-headings { flex: 1; min-width: 0; }
+.steprun-head h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.steprun-head p {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.steprun-dot {
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex: none;
+}
+.steprun-dot.running, .steprun-dot.thinking { background: var(--cyan); animation: steprun-pulse 1.6s ease-in-out infinite; }
+.steprun-dot.waiting, .steprun-dot.paused { background: var(--amber); }
+.steprun-dot.done { background: var(--green); }
+.steprun-dot.failed, .steprun-dot.stopped { background: var(--danger); }
+@keyframes steprun-pulse { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) { .steprun-dot.running, .steprun-dot.thinking { animation: none; }}
+
+.steprun-fold {
+  flex: none;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 6px;
+}
+.steprun-fold:hover { background: var(--hover); color: var(--text); }
+
+.steprun-steps {
+  margin: 0;
+  padding: 8px 12px;
+  list-style: none;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+.steprun-step { display: flex; gap: 9px; padding: 5px 0; align-items: baseline; min-width: 0; }
+.steprun-step.thinking { color: var(--muted); }
+.steprun-mark { flex: none; width: 13px; color: var(--muted); }
+.steprun-step.success .steprun-mark { color: var(--green); }
+.steprun-step.failed .steprun-mark { color: var(--danger); }
+.steprun-step.waiting .steprun-mark { color: var(--amber); }
+.steprun-what { display: flex; flex-direction: column; min-width: 0; overflow-wrap: anywhere; }
+.steprun-step.ready .steprun-what, .steprun-step.cancelled .steprun-what, .steprun-step.skipped .steprun-what { color: var(--muted); }
+.steprun-what em { font-style: normal; color: var(--muted); font-size: 11px; }
+.steprun-what small { color: var(--muted); font-size: 11px; }
+
+.steprun-captcha {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--glass-border);
+  background: color-mix(in srgb, var(--amber) 12%, transparent);
+}
+.steprun-captcha p { margin: 0 0 8px; }
+.steprun-captcha-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.steprun-captcha-actions button, .steprun-actions button {
+  border: 1px solid var(--pill-border);
+  background: var(--pill-bg);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 4px 10px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.steprun-captcha-actions button:hover, .steprun-actions button:hover { background: var(--pill-bg-strong); }
+.steprun-captcha-actions button.primary { border-color: var(--cyan); }
+.steprun-actions button:disabled { opacity: 0.45; cursor: default; }
+
+.steprun-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--glass-border);
+  color: var(--muted);
+  font-size: 12px;
+}
+.steprun-actions { display: flex; gap: 6px; }
+.steprun.small .steprun-foot { border-top: 0; }
+
+@media (max-width: 620px) {
+  .steprun { right: 8px; top: 8px; width: calc(100% - 16px); }}
+
+/* The up/down pair that sets a widget's place in its zone. */
+
+/* Step by step, beside the microphone and shaped like it. Lit only while it is really on. */
+.orb-stepwise {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+}
+.orb-stepwise:hover { background: var(--hover); color: var(--text); }
+.orb-stepwise.on { color: var(--cyan); background: color-mix(in srgb, var(--cyan) 16%, transparent); }
+
+/* Learned skills: the offer after a run, the suggestion before one, and the list in Settings. */
+.skill-offer {
+  margin: 8px 12px 0;
+  padding: 10px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: var(--pill-bg);
+  font-size: 12.5px;
+}
+
+.skill-offer.saved {
+  border-color: var(--cyan-dim);
+  color: var(--text);
+}
+
+.skill-offer p {
+  margin: 0;
+}
+
+.skill-offer-q {
+  font-weight: 600;
+}
+
+.skill-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 0 12px;
+  font-size: 12.5px;
+}
+
+.skill-offer .skill-preview {
+  padding: 0;
+}
+
+.skill-preview label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  color: var(--muted);
+}
+
+.skill-preview input {
+  padding: 6px 9px;
+  border: 1px solid var(--pill-border);
+  border-radius: 8px;
+  background: var(--popover-bg);
+  color: var(--text);
+  font: inherit;
+}
+
+.skill-preview ol {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.skill-preview em {
+  color: var(--amber);
+  font-style: normal;
+}
+
+.skill-meta {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.skill-note {
+  color: var(--amber);
+  font-size: 12px;
+}
+
+.skill-error {
+  margin: 6px 12px 0;
+  color: var(--danger);
+  font-size: 12.5px;
+}
+
+.skill-offer .skill-error {
+  margin: 6px 0 0;
+}
+
+.skill-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.skill-actions button {
+  padding: 5px 12px;
+  border: 1px solid var(--pill-border);
+  border-radius: 999px;
+  background: var(--pill-bg);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.skill-actions button.primary {
+  border-color: var(--cyan-dim);
+  color: var(--cyan);
+}
+
+.skill-actions button.danger {
+  color: var(--danger);
+}
+
+.skill-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.skills-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skills-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.skills-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.skills-tools input[type='search'] {
+  flex: 1;
+  min-width: 140px;
+  padding: 6px 10px;
+  border: 1px solid var(--pill-border);
+  border-radius: 999px;
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+}
+
+.skills-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.skill-item {
+  padding: 10px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  font-size: 12.5px;
+}
+
+.skill-item p {
+  margin: 3px 0 0;
+}
+
+.skill-item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.skill-health {
+  flex-shrink: 0;
+  font-size: 11.5px;
+}
+
+.skill-health.verified {
+  color: var(--green);
+}
+
+.skill-health.needs-review {
+  color: var(--amber);
+}
+
+.skill-health.unstable {
+  color: var(--danger);
+}
+
+.skill-health.disabled {
+  color: var(--muted);
+}
+
+.memory-settings .skills-tools input[type='text'],
+.memory-item input {
+  flex: 1;
+  min-width: 140px;
+  padding: 6px 10px;
+  border: 1px solid var(--pill-border);
+  border-radius: 999px;
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+}
+
+.memory-item select {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.memory-item.archived > p:first-child {
+  color: var(--muted);
+}
+
+/* Orion Search: research saved earlier. */
+.oorion-earlier {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: var(--popover-bg);
+}
+
+.oorion-earlier-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.oorion-earlier-head h4 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.oorion-earlier-head button,
+.oorion-earlier-remove {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.oorion-earlier ul {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.oorion-earlier li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.oorion-earlier-open {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.oorion-earlier-open:hover {
+  background: var(--pill-bg);
+}
+
+.oorion-earlier-open small,
+.oorion-earlier-empty {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* Shown on a generated image while it is being redrawn sharper. */
+.generated-image-open {
+  position: relative;
+}
+
+.image-sharpening {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 11.5px;
+  pointer-events: none;
+}
+
+.galaxy-btn {
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--pill-border);
+  border-radius: 999px;
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+}
+
+.galaxy-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+}
+
+.galaxy-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.space-project {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 6px 0;
+  font-size: 12.5px;
+}
+
+.space-project label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.space-project input {
+  padding: 5px 9px;
+  border: 1px solid var(--pill-border);
+  border-radius: 8px;
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+}
+
+.space-project p {
+  margin: 0;
+}
+
+.space-make-project {
+  align-self: flex-start;
+  margin: 6px 0;
+}
+
+.oorion-searched {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.oorion-warning {
+  margin: 6px 0 0;
+  color: var(--amber);
+  font-size: 12px;
+}
+
+.memory-offer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: var(--thread-width, 760px);
+  margin: 0 auto 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  background: var(--pill-bg);
+  font-size: 12.5px;
+}
+
+.memory-offer button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 3px 10px;
+  border: 1px solid var(--pill-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.memory-offer .memory-offer-yes {
+  border-color: var(--cyan-dim);
+  color: var(--cyan);
+}
+
+.motion-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--amber);
+  border-radius: 10px;
+}
+
+.motion-note p {
+  flex: 1;
+  min-width: 200px;
+  margin: 0;
+}
+/* Browser view: Chromium's own window sits inside this region of the Orbis window (see docs/embedded-browser.md). */
+.browser-view {
+  position: absolute;
+  inset: 0;
+  z-index: 45;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-mid);
+}
+.browser-view[hidden] {
+  display: none;
+}
+.browser-back-chat {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.browser-back-chat:hover {
+  background: var(--bg-hover, rgba(127, 127, 127, 0.15));
+}
+.browser-view-region {
+  flex: 1;
+  min-height: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .spin { animation: wf-spin 0.9s linear infinite; }
+}
+@keyframes wf-spin { to { transform: rotate(360deg); } }
+
+
+/* A question scrolled to sits a little below the top edge rather than jammed against it, so the turn reads as a turn
+   and the reply beneath it is visible straight away. */
+.msg-slot > * {
+  scroll-margin-top: 16px;
+}
+
+/* Room under the newest turn, so its question can sit at the top with the answer beginning under it. Sized by the
+   chat as the answer grows; nothing when no question has just been asked. The negative margin takes back the gap a
+   flex child is given, so an empty one adds nothing to the page. */
+/* One real pixel marking the end of the conversation. Something with no height is never "on screen". */
+.messages-end {
+  flex: none;
+  height: 1px;
+  pointer-events: none;
+}
+
+.messages-tail {
+  flex: none;
+  height: 0;
+  margin-top: -20px;
+  pointer-events: none;
+}
+
+
+/* Presets. The swatch carries the preset's own background and accent, so the grid is a row of real answers to
+   "what would Orbis look like" rather than a row of names. */
+.cz-presets {
+  display: grid;
+  /*
+   * `min()` rather than a flat 168px.
+   *
+   * With a flat minimum, a panel narrower than 168px still lays out a 168px column and the cards hang over the edge.
+   * Taking the smaller of the two means the card is never wider than what it has.
+   */
+  grid-template-columns: repeat(auto-fill, minmax(min(168px, 100%), 1fr));
+  gap: 10px;
+  margin: 12px 0 18px;
+}
+.cz-preset {
+  position: relative;
+  border: 1px solid var(--pill-border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--pill-bg);
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+.cz-preset:hover { border-color: var(--line-strong); }
+.cz-preset.on { border-color: var(--cyan); }
+.cz-preset-face {
+  display: block;
+  width: 100%;
+  padding: 0 0 10px;
+  background: none;
+  border: 0;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cz-preset-swatch {
+  position: relative;
+  display: block;
+  height: 66px;
+  /* The default preset has no gradient of its own, so it shows the one Orbis is already drawing. */
+  background: linear-gradient(180deg, var(--bg-center), var(--bg-edge));
+  border-bottom: 1px solid var(--pill-border);
+}
+.cz-preset-dot {
+  position: absolute;
+  right: 9px;
+  bottom: 9px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--cyan);
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.35);
+}
+.cz-preset-name {
+  display: block;
+  padding: 8px 10px 2px;
+  font-size: 13px;
+  font-weight: 600;
+  /* A long preset name is cut, not allowed to stretch its card past the others. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cz-preset-why {
+  display: block;
+  padding: 0 10px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--muted);
+}
+.cz-preset-acts {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.cz-preset:hover .cz-preset-acts,
+.cz-preset:focus-within .cz-preset-acts { opacity: 1; }

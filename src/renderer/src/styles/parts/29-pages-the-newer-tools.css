@@ -1,0 +1,1157 @@
+/* ---------------------------------------------------------------- Pages: the newer tools
+
+   Plots, tables, statistics and the notes that travel with them. The notes are styled as content rather than as a
+   footnote on purpose: an engine's caveat is the difference between a number somebody can use and one that will
+   mislead them, so it is given the same weight on screen as the number it belongs to. */
+
+.page-field textarea {
+  padding: 7px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--pill-bg);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.5;
+  resize: vertical;
+  outline: none;
+}
+
+.page-field textarea:focus-visible {
+  border-color: var(--cyan);
+}
+
+.page-chip.on {
+  border-color: var(--cyan-dim);
+  background: var(--cyan-fill);
+  color: var(--text);
+}
+
+.page-notes {
+  display: flex;
+  gap: 8px;
+  padding: 9px 12px;
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--cyan-dim);
+  border-radius: 8px;
+  background: var(--pill-bg);
+  color: var(--muted);
+}
+
+.page-notes > svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--cyan-dim);
+}
+
+.page-notes ul {
+  margin: 0;
+  padding-left: 16px;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.page-notes li + li {
+  margin-top: 4px;
+}
+
+.page-note > svg {
+  vertical-align: -2px;
+  margin-right: 4px;
+}
+
+.page-problem > svg {
+  vertical-align: -2px;
+  margin-right: 4px;
+}
+
+/* ---- the plot */
+
+.page-plot {
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--pill-bg);
+}
+
+.page-plot-grid {
+  stroke: var(--grid);
+  stroke-width: 1;
+}
+
+.page-plot-axis {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
+
+.page-plot-label {
+  fill: var(--faint);
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.page-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.page-legend i {
+  display: inline-block;
+  width: 10px;
+  height: 2px;
+  border-radius: 1px;
+}
+
+/* ---- statistics */
+
+.page-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 1px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.page-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 12px;
+  background: var(--pill-bg);
+}
+
+.page-stat span {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.page-stat strong {
+  font-family: var(--mono);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.page-result {
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--pill-bg);
+}
+
+.page-result h4 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--muted-strong);
+}
+
+.page-result p {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.page-result p.page-note {
+  color: var(--faint);
+}
+
+/* ---- tables */
+
+.page-table-wrap {
+  max-height: 380px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.page-table-wrap .page-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bar-bg);
+  backdrop-filter: blur(8px);
+}
+
+.page-table th span {
+  display: block;
+  color: var(--muted-strong);
+}
+
+.page-table th em {
+  display: block;
+  font-style: normal;
+  font-family: var(--mono);
+  font-size: 9px;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--faint);
+}
+
+/* The four kinds of nothing, shown as four different things rather than all as blank. A cell Orbis could not read
+   must not look like a cell that was empty, because they mean opposite things about the data. */
+
+.page-cell-missing {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.page-cell-empty {
+  font-size: 10px;
+  font-style: italic;
+  color: var(--faint);
+}
+
+.page-cell-invalid {
+  color: var(--amber);
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+
+.page-cell-null {
+  color: var(--faint);
+}
+
+/* ================================================================ Markets: the panels that had engines and no screens
+
+   Seven pieces: the chart's drawing toolbar, the comparison view, the panel workspace, the margin panel,
+   walk-forward and Monte Carlo in the backtest panel, the trigger editor, and the screener's groups.
+
+   Everything here reuses the tokens the rest of Markets already uses, so a caveat in the margin panel and a caveat in
+   the tape panel look like the same kind of thing -- which they are. */
+
+/* ---- shared, because several of these panels needed the same three things */
+
+.mk-problem {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--red);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--red) 8%, transparent);
+  color: var(--red);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+.mk-problem > svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+.mk-up {
+  color: var(--green);
+}
+
+.mk-down {
+  color: var(--red);
+}
+
+/* A labelled figure. Sits inside the existing `.mk-stats` row, which is a flex strip. */
+.mk-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.mk-stat > span {
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.mk-stat > b {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.mk-danger:hover {
+  color: var(--red);
+  border-color: var(--red);
+}
+
+.mk-primary {
+  border-color: var(--cyan-dim);
+  background: var(--cyan-fill);
+  color: var(--text);
+}
+
+.mk-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.mk-search-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 220px;
+  padding: 5px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: var(--pill-bg);
+  color: var(--faint);
+}
+
+.mk-search-field input {
+  flex: 1;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  outline: none;
+}
+
+/* ---- 1. the drawing toolbar */
+
+.mk-draw {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+}
+
+.mk-draw-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--pill-bg);
+  width: fit-content;
+}
+
+.mk-draw-tools button {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 5px 7px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.mk-draw-tools button:hover {
+  background: var(--line);
+  color: var(--text);
+}
+
+.mk-draw-tools button.on {
+  background: var(--cyan-fill);
+  color: var(--cyan);
+}
+
+.mk-draw-tools button b {
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.mk-draw-divider {
+  width: 1px;
+  height: 16px;
+  margin: 0 3px;
+  background: var(--line-strong);
+}
+
+.mk-draw-hint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.mk-draw-list {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--pill-bg);
+}
+
+.mk-draw-list header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.mk-draw-bulk {
+  display: flex;
+  gap: 4px;
+}
+
+.mk-draw-bulk button {
+  padding: 3px 8px;
+  border: 1px solid var(--pill-border);
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  font-size: 10.5px;
+  cursor: pointer;
+}
+
+.mk-draw-list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 200px;
+  overflow: auto;
+}
+
+.mk-draw-list li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.mk-draw-list li.on {
+  background: var(--cyan-fill);
+  border-radius: 6px;
+}
+
+.mk-draw-list li > button {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 3px 5px;
+  border-radius: 6px;
+}
+
+.mk-draw-pick {
+  display: flex !important;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  font-size: 11.5px;
+}
+
+.mk-draw-pick em {
+  font-style: normal;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mk-draw-edit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--pill-bg);
+}
+
+.mk-draw-swatches {
+  display: flex;
+  gap: 4px;
+}
+
+.mk-draw-swatches button {
+  width: 16px;
+  height: 16px;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+  padding: 0;
+}
+
+.mk-draw-swatches button.on {
+  border-color: var(--text);
+}
+
+.mk-draw-label {
+  flex: 1 1 160px;
+  padding: 4px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: var(--bar-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+}
+
+/* ---- 2. the comparison view */
+
+.mk-compare {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mk-compare-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.mk-compare-chips {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.mk-compare-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--pill-bg);
+  font-size: 11px;
+  color: var(--text);
+}
+
+.mk-compare-chip i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.mk-compare-chip button {
+  border: 0;
+  background: none;
+  color: var(--faint);
+  cursor: pointer;
+  padding: 0;
+  display: inline-flex;
+}
+
+.mk-compare-chip button:hover {
+  color: var(--red);
+}
+
+.mk-compare-intervals {
+  display: flex;
+  gap: 3px;
+}
+
+.mk-compare-intervals button {
+  padding: 3px 9px;
+  border: 1px solid var(--pill-border);
+  border-radius: 999px;
+  background: var(--pill-bg);
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.mk-compare-intervals button.on {
+  border-color: var(--cyan-dim);
+  background: var(--cyan-fill);
+  color: var(--text);
+}
+
+.mk-compare-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  position: relative;
+}
+
+.mk-compare-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 20;
+  margin: 4px 0 0;
+  padding: 4px;
+  list-style: none;
+  min-width: 260px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--bar-bg);
+  backdrop-filter: blur(10px);
+}
+
+.mk-compare-results button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--text);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mk-compare-results button:hover {
+  background: var(--line);
+}
+
+.mk-compare-chart {
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--pill-bg);
+}
+
+.mk-compare-grid {
+  stroke: var(--grid);
+  stroke-width: 1;
+}
+
+/* The 100 line: solid, because it is what everything else is measured from. */
+.mk-compare-base {
+  stroke: var(--line-strong);
+  stroke-width: 1;
+}
+
+.mk-compare-label {
+  fill: var(--faint);
+  font-family: var(--mono);
+  font-size: 9.5px;
+}
+
+.mk-compare-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  vertical-align: -1px;
+}
+
+.mk-compare-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 18px;
+  justify-content: center;
+}
+
+.mk-corr h4 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--muted-strong);
+}
+
+.mk-corr-table td {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- 3. the panel workspace */
+
+.mk-body.is-workspace {
+  display: block;
+  padding: 10px;
+}
+
+.mk-ws {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  min-height: 0;
+}
+
+.mk-ws-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--faint);
+}
+
+.mk-ws-spacer {
+  flex: 1;
+}
+
+.mk-ws-tree {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.mk-ws-split {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  gap: 0;
+}
+
+.mk-ws-split.is-row {
+  flex-direction: row;
+}
+
+.mk-ws-split.is-column {
+  flex-direction: column;
+}
+
+.mk-ws-pane {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* The grab area is wider than the line, because a one-pixel target is one nobody can hit. */
+.mk-ws-divider {
+  position: absolute;
+  z-index: 5;
+  background: transparent;
+}
+
+.mk-ws-divider.is-row {
+  top: 0;
+  right: -3px;
+  width: 7px;
+  height: 100%;
+  cursor: col-resize;
+}
+
+.mk-ws-divider.is-column {
+  left: 0;
+  bottom: -3px;
+  height: 7px;
+  width: 100%;
+  cursor: row-resize;
+}
+
+.mk-ws-divider:hover,
+.mk-ws-divider:focus-visible {
+  background: var(--cyan-glow-soft);
+  outline: none;
+}
+
+.mk-ws-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  margin: 3px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--pill-bg);
+  overflow: hidden;
+}
+
+.mk-ws-head {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bar-bg);
+}
+
+.mk-ws-head select {
+  padding: 2px 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 11px;
+}
+
+.mk-ws-pin {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--pill-border);
+  border-radius: 999px;
+  background: none;
+  color: var(--faint);
+  font-size: 10.5px;
+  cursor: pointer;
+}
+
+.mk-ws-pin.on {
+  border-color: var(--cyan-dim);
+  color: var(--cyan);
+}
+
+.mk-ws-menu {
+  position: absolute;
+  top: 100%;
+  left: 60px;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  min-width: 170px;
+  padding: 4px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--bar-bg);
+  backdrop-filter: blur(10px);
+}
+
+.mk-ws-menu button {
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--muted);
+  font-size: 11.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mk-ws-menu button:hover {
+  background: var(--line);
+  color: var(--text);
+}
+
+.mk-ws-menu button.on {
+  color: var(--cyan);
+}
+
+.mk-ws-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px;
+}
+
+.mk-ws-empty {
+  display: block;
+  padding: 16px;
+  text-align: center;
+  line-height: 1.6;
+}
+
+.mk-mode-workspace {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* ---- 4. the margin panel */
+
+.mk-margin {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Above the switch, not below it. Somebody reading downward meets it before the control. */
+.mk-margin-warn {
+  display: flex;
+  gap: 9px;
+  padding: 10px 12px;
+  border: 1px solid var(--amber);
+  border-left-width: 3px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--amber) 7%, transparent);
+  color: var(--muted-strong);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+
+.mk-margin-warn > svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--amber);
+}
+
+.mk-margin-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mk-margin-arm {
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--pill-bg);
+}
+
+.mk-margin-arm p {
+  margin: 0 0 8px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.mk-margin-arm div {
+  display: flex;
+  gap: 6px;
+}
+
+.mk-margin-arm button {
+  padding: 5px 12px;
+  border: 1px solid var(--pill-border);
+  border-radius: 8px;
+  background: var(--pill-bg);
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.mk-margin-lever {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  max-width: 460px;
+}
+
+.mk-margin-lever input[type='range'] {
+  accent-color: var(--cyan);
+}
+
+.mk-margin-health {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-left-width: 3px;
+  border-radius: 10px;
+  background: var(--pill-bg);
+}
+
+.mk-margin-health strong {
+  display: block;
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.mk-margin-health span {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.mk-margin-health.is-none {
+  border-left-color: var(--line-strong);
+}
+
+.mk-margin-health.is-comfortable {
+  border-left-color: var(--green);
+}
+
+.mk-margin-health.is-comfortable > svg {
+  color: var(--green);
+}
+
+.mk-margin-health.is-tight {
+  border-left-color: var(--amber);
+}
+
+.mk-margin-health.is-tight > svg {
+  color: var(--amber);
+}
+
+.mk-margin-health.is-critical {
+  border-left-color: var(--red);
+}
+
+.mk-margin-health.is-critical > svg {
+  color: var(--red);
+}
+
+/* ---- 5. walk-forward and Monte Carlo */
+
+.mk-validate {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--pill-bg);
+}
+
+.mk-validate h5 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted-strong);
+}
+
+.mk-validate-head {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+/* The out-of-sample figure, alone and large. If only one number is read it has to be this one. */
+.mk-validate-headline {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.mk-validate-headline > span {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.mk-validate-headline > b {
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.mk-validate-headline > small {
+  font-size: 10.5px;
+}
+
+/* Above the numbers, because it says this is not a forecast. */
+.mk-validate-note {
+  margin: 0;
+  padding: 8px 11px;
+  border: 1px solid var(--line-strong);
+  border-left: 3px solid var(--cyan-dim);
+  border-radius: 9px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.mk-carlo {
+  width: 100%;
+  height: auto;
+}
+
+.mk-carlo-up {
+  fill: color-mix(in srgb, var(--green) 55%, transparent);
+}
+
+.mk-carlo-down {
+  fill: color-mix(in srgb, var(--red) 55%, transparent);
+}
+
+.mk-carlo-zero {
+  stroke: var(--text);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  opacity: 0.55;
+}
+
+.mk-carlo-label {
+  fill: var(--faint);
+  font-family: var(--mono);
+  font-size: 9.5px;
+}
+
+/* ---- 6. the trigger editor */
+
+.mk-triggers {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mk-triggers-intro {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--cyan-dim);
+  border-radius: 10px;
+  background: var(--pill-bg);
+}
+
+.mk-triggers-intro > svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--cyan);
+}
+
+.mk-triggers-intro p {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.mk-trigger-build {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--pill-bg);
+}
+
+.mk-alert-condition {
+  flex: 1;
+  min-width: 0;
+  font-size: 11.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- 7. screener groups */
+
+.mk-screen-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 4px 0 8px;
+}
+
+.mk-screen-groupmatch {
+  font-size: 11px;
+  color: var(--faint);
+}
+
+.mk-screen-group {
+  padding: 8px 10px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--cyan) 3%, transparent);
+}
+
+.mk-screen-group > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 4px;
+}

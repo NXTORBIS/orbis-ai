@@ -25,7 +25,19 @@ import { join, resolve } from 'node:path'
  */
 
 const REPO = resolve(import.meta.dirname, '../..')
-const GLOBAL = join(REPO, 'src/renderer/src/styles.css')
+/*
+ * The global stylesheet is 38 parts now, read as one.
+ *
+ * It was one file of 19,109 lines; splitting it changed no rule and no order, so what this guard cares about --
+ * which classes the global sheet claims -- is exactly what it was. Reading the folder rather than a list means a
+ * part added later is included without anybody remembering to.
+ */
+const GLOBAL_PARTS = join(REPO, 'src/renderer/src/styles/parts')
+const globalCss = async (): Promise<string> => {
+  const names = (await readdir(GLOBAL_PARTS)).filter((one) => one.endsWith('.css')).sort()
+  const parts = await Promise.all(names.map((one) => readFile(join(GLOBAL_PARTS, one), 'utf8')))
+  return parts.join('\n')
+}
 
 /**
  * Class names a stylesheet claims **on their own**.
@@ -68,7 +80,8 @@ async function featureStylesheets(): Promise<{ path: string; css: string }[]> {
         await walk(full)
         continue
       }
-      if (!entry.name.endsWith('.css') || full === GLOBAL) continue
+      // The parts folder is the global stylesheet itself, not a feature's.
+      if (!entry.name.endsWith('.css') || full.includes(GLOBAL_PARTS)) continue
       found.push({ path: full.slice(REPO.length + 1).replace(/\\/g, '/'), css: await readFile(full, 'utf8') })
     }
   }
@@ -77,7 +90,7 @@ async function featureStylesheets(): Promise<{ path: string; css: string }[]> {
 }
 
 test('no feature stylesheet defines a class the global stylesheet also defines', async () => {
-  const globalNames = claimed(await readFile(GLOBAL, 'utf8'))
+  const globalNames = claimed(await globalCss())
   for (const sheet of await featureStylesheets()) {
     const shared = [...claimed(sheet.css)].filter((one) => globalNames.has(one)).sort()
     assert.deepEqual(
