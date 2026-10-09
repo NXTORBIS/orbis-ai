@@ -1,0 +1,5363 @@
+/*
+ * Orbis Student.
+ *
+ * Co-located with its components, the way `welcome.css` and `games.css` already are, so one feature's styling is one
+ * file rather than another two thousand lines in the 18,000-line stylesheet.
+ *
+ * Built on Orbis's own tokens -- the accent is `--cyan` and dim text is `--faint`. Student adds a small set of its
+ * own on top (`--st-*`) rather than inventing colours inline, so the four accessibility settings and the three
+ * densities can change everything at once from the top of the tree.
+ *
+ * Everything here is scoped under `.st-view` or `.st-onb`, so nothing in Student can reach the rest of Orbis.
+ */
+
+.st-view {
+  --st-gap: 16px;
+  --st-pad: 20px;
+  --st-radius: 14px;
+  --st-panel: color-mix(in srgb, var(--cyan) 4%, transparent);
+  --st-line: var(--glass-border, rgba(255, 255, 255, 0.1));
+  --st-strong: color-mix(in srgb, var(--cyan) 26%, transparent);
+  --st-ink: var(--text, #eef2f8);
+  --st-good: #3ee58a;
+  --st-warn: #ffbe4d;
+  --st-danger: #ff5d73;
+  --orbi-light: #cff4ff;
+  --orbi-mid: var(--cyan, #3fd8ff);
+  --orbi-deep: #16607a;
+  --orbi-ring: color-mix(in srgb, var(--cyan) 60%, transparent);
+  --orbi-eye: #06202b;
+  /* The character's own three: the line the face is drawn in, the white behind a wide eye, and the cheeks.
+     --orbi-ink is deliberately near-black rather than the accent, so a face reads at any size and in any theme. */
+  --orbi-ink: #06202b;
+  --orbi-eye-white: #f2fbff;
+  --orbi-blush: #ff8fa8;
+  --orbi-glint: rgba(255, 255, 255, 0.85);
+  --orbi-acc: color-mix(in srgb, var(--cyan) 70%, white 10%);
+
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.st-view.density-calm {
+  --st-gap: 22px;
+  --st-pad: 28px;
+}
+
+.st-view.density-dense {
+  --st-gap: 10px;
+  --st-pad: 14px;
+}
+
+.st-view.st-larger {
+  font-size: 1.08em;
+}
+
+.st-view.st-contrast {
+  --st-line: color-mix(in srgb, var(--cyan) 45%, transparent);
+  --st-panel: color-mix(in srgb, var(--cyan) 8%, transparent);
+}
+
+.st-view.st-solid {
+  --st-panel: var(--surface);
+  backdrop-filter: none;
+}
+
+/* ---------------------------------------------------------------- the frame */
+
+.st-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px var(--st-pad);
+  border-bottom: 1px solid var(--st-line);
+  flex: 0 0 auto;
+}
+
+.st-head-left,
+.st-head-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.st-head-left strong {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.st-head-session {
+  font-size: 12px;
+  color: var(--faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 40ch;
+}
+
+.st-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border: 1px solid var(--st-line);
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--faint);
+  white-space: nowrap;
+}
+
+/*
+ * The whole strip fits the window. It never scrolls sideways.
+ *
+ * A sideways-scrolling row of tabs hides the last ones behind a gesture nobody is told about -- "Settings" sat just
+ * past the right edge and looked like it did not exist. So the tabs shrink instead: they keep their own width while
+ * there is room, give up their padding and then their words as the window narrows, and fall back to icons with the
+ * names still on them for a hover and for a screen reader.
+ */
+.st-nav {
+  display: flex;
+  gap: 4px;
+  padding: 10px var(--st-pad) 0;
+  flex: 0 0 auto;
+  /* No scrolling, in either direction: anything that does not fit has to shrink, not hide. */
+  overflow: hidden;
+}
+
+.st-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  /* Its own width while there is room, and the first thing to give when there is not. */
+  flex: 0 1 auto;
+  min-width: 0;
+  padding: 8px 13px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: none;
+  color: var(--faint);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+
+.st-nav-btn:hover {
+  color: var(--st-ink);
+  background: var(--st-panel);
+}
+
+.st-nav-btn.on {
+  color: var(--cyan);
+  border-color: var(--st-strong);
+  background: var(--st-panel);
+}
+
+.st-body {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: var(--st-pad);
+  /*
+   * Room at the foot for Orbi to sit in.
+   *
+   * Orbi floats over the view rather than in it, so without this the last row of cards ran underneath it and the
+   * bottom of the screen always looked like something had been dropped on it.
+   */
+  padding-bottom: calc(var(--st-pad) + 104px);
+  min-height: 0;
+}
+
+/*
+ * Reading has a comfortable width, and a wide window does not change that.
+ *
+ * Without this every screen stretched to whatever the window was: a heading on the far left, a thin bar marooned
+ * in the middle, and its number against the far right, with a hand's width of nothing between each. Capping the
+ * column is the single change that makes the whole of Student look composed rather than spread out.
+ */
+.st-body > * {
+  max-width: 1180px;
+  margin-inline: auto;
+  width: 100%;
+}
+
+.st-section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: var(--st-gap);
+}
+
+.st-section-head h2,
+.st-home-head h2 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.st-section-head p,
+.st-home-head p {
+  margin: 3px 0 0;
+  font-size: 13px;
+}
+
+.st-faint {
+  color: var(--faint);
+}
+
+.st-faint.small {
+  font-size: 12px;
+}
+
+.st-faint.foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: var(--st-gap);
+}
+
+/* ---------------------------------------------------------------- controls */
+
+.st-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 8px 14px;
+  border: 1px solid var(--st-line);
+  border-radius: 10px;
+  background: var(--st-panel);
+  color: var(--st-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 550;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, transform 0.08s;
+}
+
+.st-btn:hover:not(:disabled) {
+  border-color: var(--st-strong);
+}
+
+.st-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+.st-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.st-btn.primary {
+  background: var(--cyan);
+  border-color: var(--cyan);
+  color: #04212c;
+}
+
+.st-btn.primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.st-btn.quiet {
+  background: none;
+  border-color: transparent;
+  color: var(--faint);
+}
+
+.st-btn.quiet:hover {
+  color: var(--st-ink);
+  border-color: var(--st-line);
+}
+
+.st-btn.danger {
+  border-color: color-mix(in srgb, var(--st-danger) 50%, transparent);
+  color: var(--st-danger);
+}
+
+.st-btn.big {
+  padding: 12px 20px;
+  font-size: 14px;
+}
+
+/* Hold-to-confirm: the bar is the feedback, so nobody has to guess whether holding is working. */
+.st-btn.hold {
+  position: relative;
+  overflow: hidden;
+  border-color: color-mix(in srgb, var(--st-danger) 40%, transparent);
+  color: var(--st-danger);
+}
+
+.st-btn.hold::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--held, 0%);
+  background: color-mix(in srgb, var(--st-danger) 24%, transparent);
+  transition: width 0.1s linear;
+}
+
+.st-btn.hold > * {
+  position: relative;
+}
+
+.st-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: none;
+  color: var(--faint);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.st-icon:hover {
+  color: var(--st-ink);
+  border-color: var(--st-line);
+}
+
+.st-icon .on {
+  color: var(--st-warn);
+}
+
+.st-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  background: none;
+  color: var(--cyan);
+  font: inherit;
+  font-size: 13px;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.st-link:hover {
+  text-decoration: underline;
+}
+
+.st-link.block {
+  display: flex;
+  margin: 2px 0;
+}
+
+.st-tabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.st-tab {
+  padding: 6px 12px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: none;
+  color: var(--faint);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 550;
+  cursor: pointer;
+}
+
+.st-tab:hover {
+  color: var(--st-ink);
+}
+
+.st-tab.on {
+  color: var(--cyan);
+  border-color: var(--st-strong);
+  background: var(--st-panel);
+}
+
+.st-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.st-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border: 1px solid var(--st-line);
+  border-radius: 999px;
+  background: none;
+  color: var(--faint);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.st-pill:hover {
+  color: var(--st-ink);
+}
+
+.st-pill.on {
+  color: var(--cyan);
+  border-color: var(--st-strong);
+  background: var(--st-panel);
+}
+
+.st-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: var(--st-gap);
+  border: none;
+  padding: 0;
+  min-width: 0;
+  /*
+   * A box is as wide as what goes in it.
+   *
+   * A name and a dropdown stretched the full width of the window, which makes a short answer look like a missing
+   * one — the eye reads the empty half as something that should have been filled in.
+   */
+  max-width: 560px;
+}
+
+.st-field > span,
+.st-field > legend {
+  font-size: 12.5px;
+  font-weight: 550;
+  color: var(--faint);
+  padding: 0;
+}
+
+.st-field small {
+  font-size: 11.5px;
+  color: var(--faint);
+}
+
+.st-field input,
+.st-field select,
+.st-field textarea,
+.st-search {
+  padding: 9px 11px;
+  border: 1px solid var(--st-line);
+  border-radius: 10px;
+  background: var(--st-panel);
+  color: var(--st-ink);
+  font: inherit;
+  font-size: 13.5px;
+  min-width: 0;
+}
+
+.st-field textarea {
+  resize: vertical;
+  font-family: inherit;
+}
+
+.st-field input:focus-visible,
+.st-field select:focus-visible,
+.st-field textarea:focus-visible,
+.st-btn:focus-visible,
+.st-tab:focus-visible,
+.st-pill:focus-visible,
+.st-icon:focus-visible,
+.st-nav-btn:focus-visible,
+.st-link:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+.st-row {
+  display: flex;
+  gap: var(--st-gap);
+  flex-wrap: wrap;
+}
+
+.st-row > * {
+  flex: 1 1 200px;
+}
+
+.st-row-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: var(--st-gap);
+}
+
+.st-row-right {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.st-check {
+  display: flex;
+  gap: 11px;
+  align-items: flex-start;
+  margin-bottom: var(--st-gap);
+  cursor: pointer;
+}
+
+.st-check input {
+  margin-top: 3px;
+  accent-color: var(--cyan);
+}
+
+.st-check span {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.st-check strong {
+  font-size: 13.5px;
+  font-weight: 550;
+}
+
+.st-check small {
+  font-size: 12px;
+  color: var(--faint);
+}
+
+.st-minutes {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.st-minutes input[type='range'] {
+  flex: 1;
+  accent-color: var(--cyan);
+  padding: 0;
+  border: none;
+  background: none;
+}
+
+.st-minutes strong {
+  min-width: 4ch;
+  font-variant-numeric: tabular-nums;
+}
+
+.st-disclose {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: none;
+  background: none;
+  color: var(--cyan);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 6px 0;
+  margin-bottom: var(--st-gap);
+}
+
+.st-disclose svg {
+  transition: transform 0.18s;
+}
+
+.st-disclose svg.open {
+  transform: rotate(180deg);
+}
+
+.st-empty {
+  margin: 0;
+  color: var(--faint);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.st-empty.big {
+  padding: 36px 20px;
+  text-align: center;
+  border: 1px dashed var(--st-line);
+  border-radius: var(--st-radius);
+  max-width: 54ch;
+  margin: 0 auto;
+}
+
+.st-big {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.st-origin {
+  font-size: 11px;
+  color: var(--faint);
+  border: 1px solid var(--st-line);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+
+.st-note {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border: 1px solid var(--st-line);
+  border-radius: var(--st-radius);
+  background: var(--st-panel);
+  font-size: 13px;
+  margin-bottom: var(--st-gap);
+  color: var(--faint);
+}
+
+.st-note svg {
+  color: var(--cyan);
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.st-warnline {
+  color: var(--st-warn);
+}
+
+.st-bar {
+  height: 5px;
+  border-radius: 999px;
+  background: var(--st-line);
+  overflow: hidden;
+}
+
+.st-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--cyan);
+  transition: width 0.4s ease;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------- the dashboard */
+
+.st-home-head {
+  margin-bottom: var(--st-gap);
+}
+
+.st-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--st-gap);
+  align-items: start;
+}
+
+.st-board-slot {
+  position: relative;
+}
+
+.st-board-slot.dragging {
+  opacity: 0.45;
+}
+
+.st-grip {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  color: var(--faint);
+  opacity: 0;
+  cursor: grab;
+  transition: opacity 0.15s;
+}
+
+.st-board-slot:hover .st-grip {
+  opacity: 0.6;
+}
+
+.st-widget {
+  border: 1px solid var(--st-line);
+  border-radius: var(--st-radius);
+  background: var(--st-panel);
+  padding: 14px 16px;
+  min-width: 0;
+}
+
+.st-widget.wide {
+  grid-column: 1 / -1;
+}
+
+.st-board-slot:has(.st-widget.wide) {
+  grid-column: 1 / -1;
+}
+
+.st-widget > header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.st-widget h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.st-widget-body > * + * {
+  margin-top: 8px;
+}
+
+.st-orbit {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--st-gap);
+  flex-wrap: wrap;
+}
+
+.st-orbit-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.st-orbit-main strong {
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.st-orbit-numbers {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: var(--faint);
+}
+
+.st-orbit-numbers strong {
+  font-size: 15px;
+  color: var(--st-ink);
+  font-weight: 600;
+}
+
+.st-suggest,
+.st-recommend {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  text-align: left;
+  padding: 12px 14px;
+  border: 1px solid var(--st-strong);
+  border-radius: 12px;
+  background: var(--st-panel);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.st-suggest:hover,
+.st-recommend:hover {
+  border-color: var(--cyan);
+}
+
+.st-suggest-tag,
+.st-recommend-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cyan);
+}
+
+.st-recommend strong {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.st-recommend-level {
+  font-size: 12.5px;
+  color: var(--faint);
+}
+
+.st-recommend-why {
+  font-size: 12.5px;
+  color: var(--faint);
+}
+
+.st-recommend-go {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 8px;
+  color: var(--cyan);
+  font-weight: 600;
+  font-size: 13.5px;
+}
+
+.st-quests,
+.st-tasks,
+.st-goals,
+.st-records,
+.st-subjects,
+.st-wins,
+.st-insights,
+.st-task-list,
+.st-goal-list,
+.st-library,
+.st-later,
+.st-mistakes,
+.st-note-list,
+.st-history,
+.st-sounds,
+.st-resets,
+.st-stored,
+.st-subject-table {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.st-quests li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+}
+
+.st-quest-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  border: 1px solid var(--st-line);
+  border-radius: 5px;
+  flex: 0 0 auto;
+  color: var(--cyan);
+}
+
+.st-quests li.done .st-quest-check {
+  border-color: var(--st-strong);
+  background: var(--st-panel);
+}
+
+.st-quests li.done .st-quest-title {
+  color: var(--faint);
+  text-decoration: line-through;
+}
+
+.st-quest-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.st-quest-count {
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+}
+
+.st-tasks li,
+.st-task-list li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+  min-width: 0;
+}
+
+.st-task-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--st-line);
+  border-radius: 999px;
+  background: none;
+  color: transparent;
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.st-task-check:hover {
+  color: var(--cyan);
+  border-color: var(--st-strong);
+}
+
+.st-task-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.st-task-due {
+  font-size: 12px;
+  color: var(--faint);
+}
+
+.st-task-due.late {
+  color: var(--st-warn);
+}
+
+.st-goals li {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.st-records li,
+.st-subjects li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--faint);
+}
+
+.st-records strong,
+.st-subjects strong {
+  color: var(--st-ink);
+}
+
+.st-streaks {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--faint);
+}
+
+.st-streaks strong {
+  color: var(--st-ink);
+  font-size: 17px;
+}
+
+.st-streaks span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.st-wins li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.st-wins svg {
+  color: var(--st-warn);
+}
+
+.st-insights {
+  font-size: 13px;
+  color: var(--faint);
+  gap: 6px;
+}
+
+.st-insights.big {
+  font-size: 14px;
+}
+
+.st-word strong {
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.st-word p {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.st-orbi-widget {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.st-orbi-widget > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+/* ---------------------------------------------------------------- Orbi */
+
+.orbi {
+  position: relative;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  --orbi-float: 4px;
+}
+
+.orbi-svg {
+  display: block;
+  filter: drop-shadow(0 0 calc(10px + var(--orbi-glow, 0.4) * 22px) color-mix(in srgb, var(--cyan) calc(var(--orbi-glow, 0.4) * 55%), transparent));
+  animation: orbi-float 4.5s ease-in-out infinite;
+}
+
+.orbi-ring-group {
+  transform-origin: 50% 52%;
+  transform: rotate(var(--orbi-tilt, 16deg));
+}
+
+.orbi-bead {
+  transform-origin: 50% 52%;
+  animation: orbi-spin var(--orbi-spin, 20s) linear infinite;
+}
+
+.orbi-body {
+  transform-origin: 50% 52%;
+  animation: orbi-breathe 4s ease-in-out infinite;
+}
+
+.orbi-press {
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 999px;
+}
+
+.orbi-press:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 4px;
+}
+
+.orbi-simple .orbi-bead,
+.orbi-simple .orbi-body {
+  animation: none;
+}
+
+.orbi-still .orbi-svg,
+.orbi-still .orbi-bead,
+.orbi-still .orbi-body {
+  animation: none;
+}
+
+.orbi-warn {
+  --orbi-mid: var(--st-warn);
+  --orbi-deep: #7a5410;
+  --orbi-ring: color-mix(in srgb, var(--st-warn) 60%, transparent);
+}
+
+.orbi-good {
+  --orbi-mid: var(--st-good);
+  --orbi-deep: #116c42;
+  --orbi-ring: color-mix(in srgb, var(--st-good) 60%, transparent);
+}
+
+.orbi-rest {
+  --orbi-mid: #7f93ad;
+  --orbi-deep: #2b3744;
+  --orbi-ring: rgba(160, 180, 200, 0.4);
+}
+
+.orbi-says {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 24ch;
+  padding: 8px 12px;
+  border: 1px solid var(--st-line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--st-ink);
+  font-size: 12.5px;
+  line-height: 1.45;
+  text-align: center;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  z-index: 2;
+  animation: st-in 0.22s ease-out both;
+}
+
+.st-orbi-corner {
+  position: absolute;
+  z-index: 6;
+  pointer-events: auto;
+}
+
+.st-orbi-corner.bottom-right {
+  right: 22px;
+  bottom: 22px;
+}
+
+.st-orbi-corner.bottom-left {
+  left: 22px;
+  bottom: 22px;
+}
+
+.st-orbi-corner.top-right {
+  right: 22px;
+  top: 76px;
+}
+
+.st-orbi-corner.top-left {
+  left: 22px;
+  top: 76px;
+}
+
+@keyframes orbi-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(calc(var(--orbi-float, 4px) * -1));
+  }
+}
+
+@keyframes orbi-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.035);
+  }
+}
+
+@keyframes orbi-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---------------------------------------------------------------- the running session */
+
+.st-focus {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--st-gap);
+  min-height: 100%;
+  position: relative;
+}
+
+.st-focus-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.st-focus-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  font-weight: 600;
+}
+
+.st-focus.locked .st-focus-tag {
+  color: var(--st-warn);
+}
+
+.st-focus.breaking .st-focus-tag {
+  color: var(--st-good);
+}
+
+.st-focus-chips {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.st-focus-middle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 42px;
+  flex-wrap: wrap;
+  flex: 1;
+  padding: 12px 0;
+}
+
+.st-ring-wrap {
+  position: relative;
+  width: min(320px, 72vw);
+  aspect-ratio: 1;
+}
+
+.st-ring {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.st-ring-track {
+  fill: none;
+  stroke: var(--st-line);
+  stroke-width: 6;
+}
+
+.st-ring-fill {
+  fill: none;
+  stroke: var(--cyan);
+  stroke-width: 6;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1s linear;
+}
+
+.st-focus.locked .st-ring-fill {
+  stroke: var(--st-warn);
+}
+
+.st-focus.breaking .st-ring-fill {
+  stroke: var(--st-good);
+}
+
+.st-mark {
+  fill: var(--st-line);
+}
+
+.st-mark.on {
+  fill: var(--cyan);
+}
+
+.st-ring-inner {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  text-align: center;
+  padding: 0 14%;
+}
+
+.st-time {
+  font-size: clamp(42px, 9vw, 64px);
+  font-weight: 300;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.st-focus-title {
+  font-size: 14px;
+  font-weight: 550;
+}
+
+.st-focus-one {
+  font-size: 12.5px;
+  color: var(--faint);
+}
+
+.st-focus-foot {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+  width: 100%;
+  padding-top: 4px;
+  border-top: 1px solid var(--st-line);
+}
+
+.st-focus-spacer {
+  flex: 1;
+}
+
+.st-focus-saved {
+  margin: 0;
+  font-size: 12px;
+  color: var(--faint);
+}
+
+.st-focus-empty {
+  padding: 40px;
+  text-align: center;
+  color: var(--faint);
+}
+
+.st-recover {
+  width: 100%;
+  max-width: 60ch;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--st-warn) 40%, transparent);
+  border-radius: var(--st-radius);
+  background: color-mix(in srgb, var(--st-warn) 6%, transparent);
+}
+
+.st-recover p {
+  margin: 0 0 10px;
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.st-recover-actions {
+  display: flex;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+/* ---------------------------------------------------------------- panels */
+
+.st-sheet {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(4, 7, 12, 0.6);
+  backdrop-filter: blur(6px);
+  z-index: 20;
+  animation: st-fade 0.18s ease-out both;
+}
+
+.st-solid .st-sheet {
+  backdrop-filter: none;
+  background: rgba(4, 7, 12, 0.88);
+}
+
+.st-sheet-card {
+  width: 100%;
+  max-width: 540px;
+  max-height: 100%;
+  overflow: auto;
+  padding: 22px;
+  border: 1px solid var(--st-line);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+  animation: st-in 0.2s ease-out both;
+}
+
+.st-sheet-card.tight {
+  max-width: 420px;
+}
+
+.st-sheet-card h3 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.st-sheet-card > input {
+  width: 100%;
+  padding: 11px 13px;
+  border: 1px solid var(--st-line);
+  border-radius: 10px;
+  background: var(--st-panel);
+  color: var(--st-ink);
+  font: inherit;
+  margin: 10px 0;
+}
+
+.st-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.st-sheet-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  margin-top: 16px;
+}
+
+.st-sheet-foot.wrap {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.st-intention {
+  margin: 10px 0;
+  padding: 10px 13px;
+  border-left: 2px solid var(--st-strong);
+  font-size: 13.5px;
+  color: var(--st-ink);
+  font-style: italic;
+}
+
+.st-reset-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 14px 0;
+}
+
+.st-reset-list button {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-align: left;
+  padding: 11px 13px;
+  border: 1px solid var(--st-line);
+  border-radius: 12px;
+  background: var(--st-panel);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.st-reset-list button:hover {
+  border-color: var(--st-strong);
+}
+
+.st-reset-list strong {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13.5px;
+  font-weight: 550;
+}
+
+.st-reset-list span {
+  font-size: 12.5px;
+  color: var(--faint);
+}
+
+.st-breathe {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  text-align: center;
+}
+
+.st-breathe p {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 300;
+  letter-spacing: 0.02em;
+}
+
+.st-breathe-orb {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, var(--orbi-light), var(--cyan) 60%, var(--orbi-deep));
+  animation: st-breathe 8s ease-in-out infinite;
+}
+
+.st-breathe-orb.still {
+  animation: none;
+}
+
+@keyframes st-breathe {
+  0%,
+  100% {
+    transform: scale(0.72);
+    opacity: 0.6;
+  }
+  50% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.st-complete-title {
+  margin: 0;
+  font-size: 14px;
+  color: var(--faint);
+}
+
+.st-complete-time {
+  display: block;
+  margin: 8px 0 16px;
+  font-size: 44px;
+  font-weight: 300;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.st-complete-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.st-complete-stats div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.st-complete-stats dt {
+  font-size: 11.5px;
+  color: var(--faint);
+}
+
+.st-complete-stats dd {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------- starting a session */
+
+.st-start-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: var(--st-gap);
+}
+
+.st-start-head h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.st-start-head p {
+  margin: 3px 0 0;
+  font-size: 13px;
+  color: var(--faint);
+}
+
+.st-start-modes {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.st-start-quick h3,
+.st-study h3,
+.st-progress h3,
+.st-settings-body h3,
+.st-orbi-page h3 {
+  margin: var(--st-gap) 0 10px;
+  font-size: 12px
+  ;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.st-settings-body h4,
+.st-progress h4,
+.st-goal-detail h4,
+.st-study h4 {
+  margin: var(--st-gap) 0 8px;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.st-start-task {
+  font-size: 13px;
+  color: var(--faint);
+  margin: 10px 0 0;
+}
+
+.st-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 10px;
+}
+
+.st-preset,
+.st-capsule {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+  padding: 12px 14px;
+  border: 1px solid var(--st-line);
+  border-radius: 12px;
+  background: var(--st-panel);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.st-preset:hover:not(:disabled),
+.st-capsule:hover:not(:disabled) {
+  border-color: var(--st-strong);
+}
+
+.st-preset strong,
+.st-capsule strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.st-preset-meta,
+.st-capsule span {
+  font-size: 12px;
+  color: var(--faint);
+}
+
+.st-preset-blurb {
+  font-size: 12px;
+  color: var(--faint);
+  line-height: 1.45;
+}
+
+.st-capsule-row {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.st-capsule {
+  min-width: 170px;
+}
+
+.st-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 9px;
+}
+
+.st-choices.tight {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.st-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-align: left;
+  padding: 11px 13px;
+  border: 1px solid var(--st-line);
+  border-radius: 12px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.st-choice:hover {
+  border-color: var(--st-strong);
+}
+
+.st-choice.on {
+  border-color: var(--cyan);
+  background: var(--st-panel);
+}
+
+.st-choice strong {
+  font-size: 13.5px;
+  font-weight: 550;
+}
+
+.st-choice span {
+  font-size: 12px;
+  color: var(--faint);
+  line-height: 1.4;
+}
+
+.st-advanced {
+  padding: 14px;
+  border: 1px solid var(--st-line);
+  border-radius: var(--st-radius);
+  background: var(--st-panel);
+  margin-bottom: var(--st-gap);
+}
+
+.st-preview {
+  padding: 14px 16px;
+  border: 1px solid color-mix(in srgb, var(--st-warn) 36%, transparent);
+  border-radius: var(--st-radius);
+  background: color-mix(in srgb, var(--st-warn) 5%, transparent);
+  margin-bottom: var(--st-gap);
+}
+
+.st-preview h4 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 10px;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--st-warn);
+}
+
+.st-preview-cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+}
+
+.st-preview h5 {
+  margin: 0 0 6px;
+  font-size: 12px;
+  color: var(--faint);
+  font-weight: 600;
+}
+
+.st-preview ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.st-preview p {
+  margin: 12px 0 0;
+  font-size: 12.5px;
+}
+
+.st-start-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-top: var(--st-gap);
+  border-top: 1px solid var(--st-line);
+}
+
+/* ---------------------------------------------------------------- lists and splits */
+
+/*
+ * A list of short names does not need a third of the window.
+ *
+ * It was `minmax(230px, 320px)` and on a wide screen gave four hundred pixels to the word "You", leaving the
+ * settings themselves squashed against the far side. A nav column is as wide as its longest name and no wider.
+ */
+.st-split {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: var(--st-gap);
+  align-items: start;
+}
+
+@container student (max-width: 700px) {
+  .st-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.st-split-list,
+.st-split-detail {
+  min-width: 0;
+}
+
+.st-goal-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 13px;
+  border: 1px solid var(--st-line);
+  border-radius: 12px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.st-goal-row:hover {
+  border-color: var(--st-strong);
+}
+
+.st-goal-row.on {
+  border-color: var(--cyan);
+  background: var(--st-panel);
+}
+
+.st-goal-name {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 1;
+  min-width: 0;
+  font-weight: 550;
+  font-size: 13.5px;
+}
+
+.st-goal-row .st-faint {
+  font-size: 12px;
+}
+
+.st-plan {
+  margin-top: var(--st-gap);
+  padding: 14px;
+  border: 1px solid var(--st-line);
+  border-radius: var(--st-radius);
+  background: var(--st-panel);
+}
+
+.st-plan h4 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.st-plan-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+
+.st-plan-row input {
+  width: 72px;
+  padding: 7px 9px;
+  border: 1px solid var(--st-line);
+  border-radius: 9px;
+  background: none;
+  color: var(--st-ink);
+  font: inherit;
+}
+
+.st-plan-list {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.st-plan-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.st-plan-list li > span:first-child {
+  min-width: 4ch;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.st-plan-list li.break strong,
+.st-plan-list li.review strong {
+  color: var(--faint);
+  font-weight: 450;
+}
+
+.st-plan-list li strong {
+  flex: 1;
+  font-weight: 550;
+}
+
+.st-detail-empty h3,
+.st-goal-detail h3 {
+  margin: 0 0 10px;
+  font-size: 17px;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: -0.01em;
+  color: var(--st-ink);
+}
+
+.st-goal-detail > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: var(--st-gap);
+}
+
+.st-detail-actions {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+}
+
+.st-journey {
+  list-style: none;
+  margin: 0 0 var(--st-gap);
+  padding: 0 0 0 20px;
+  position: relative;
+}
+
+.st-journey::before {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 8px;
+  bottom: 8px;
+  width: 1px;
+  background: var(--st-line);
+}
+
+.st-journey li {
+  position: relative;
+  padding: 7px 0;
+  display: flex;
+  gap: 12px;
+}
+
+.st-journey-dot {
+  position: absolute;
+  left: -19px;
+  top: 12px;
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--st-line);
+  border-radius: 999px;
+  background: var(--bg-mid, #0b0f16);
+}
+
+.st-journey li.done .st-journey-dot {
+  border-color: var(--cyan);
+  background: var(--cyan);
+}
+
+.st-journey strong {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 550;
+}
+
+.st-journey span.st-faint {
+  font-size: 12px;
+}
+
+.st-add-task {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+.st-add-task input {
+  padding: 8px 11px;
+  border: 1px solid var(--st-line);
+  border-radius: 10px;
+  background: var(--st-panel);
+  color: var(--st-ink);
+  font: inherit;
+  font-size: 13px;
+}
+
+.st-add-task input:first-child {
+  flex: 1 1 200px;
+}
+
+.st-add-task input[type='number'] {
+  width: 76px;
+}
+
+/* ---------------------------------------------------------------- study, library, later */
+
+.st-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: var(--st-gap);
+}
+
+.st-grid.tight {
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.st-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid var(--st-line);
+  border-radius: var(--st-radius);
+  background: var(--st-panel);
+  min-width: 0;
+}
+
+.st-tile > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.st-tile h4 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.st-tile p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.st-tile-foot {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  margin-top: auto;
+  padding-top: 8px;
+  flex-wrap: wrap;
+}
+
+.st-search {
+  flex: 1 1 200px;
+}
+
+.st-library li,
+.st-later li,
+.st-mistakes li,
+.st-sounds li,
+.st-resets li {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--st-line);
+  border-radius: 12px;
+  background: var(--st-panel);
+  flex-wrap: wrap;
+}
+
+.st-library li > div,
+.st-later li > div,
+.st-mistakes li > div,
+.st-sounds li > div,
+.st-resets li > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1 1 240px;
+}
+
+.st-sounds li.off {
+  opacity: 0.55;
+}
+
+.st-mistakes p,
+.st-library p {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.st-mistake-actions {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.st-note-list li {
+  padding: 12px 14px;
+  border: 1px solid var(--st-line);
+  border-radius: 12px;
+  background: var(--st-panel);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.st-note-list p {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--faint);
+}
+
+.st-stored {
+  gap: 4px;
+  padding-left: 20px;
+  list-style: disc;
+  font-size: 13px;
+  color: var(--faint);
+}
+
+.st-stored li {
+  display: list-item;
+}
+
+/* ---------------------------------------------------------------- learning cards */
+
+.st-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: var(--st-gap);
+  align-items: start;
+}
+
+.st-card {
+  padding: 16px 18px;
+  border: 1px solid var(--st-line);
+  border-radius: var(--st-radius);
+  background: var(--st-panel);
+}
+
+.st-card > header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.st-card-kind {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  font-weight: 600;
+}
+
+.st-card h4 {
+  margin: 0 0 6px;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.st-card p {
+  margin: 0 0 8px;
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.st-example {
+  color: var(--faint);
+}
+
+.st-quiz {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--st-line);
+}
+
+.st-quiz input {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--st-line);
+  border-radius: 10px;
+  background: none;
+  color: var(--st-ink);
+  font: inherit;
+  margin-bottom: 9px;
+}
+
+.st-answer {
+  padding: 9px 12px;
+  border-left: 2px solid var(--cyan);
+  background: var(--st-panel);
+  font-weight: 550;
+}
+
+.st-card-actions {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+/* ---------------------------------------------------------------- progress */
+
+.st-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: var(--st-gap);
+  margin-bottom: var(--st-gap);
+}
+
+.st-summary-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 14px;
+  border: 1px solid var(--st-line);
+  border-radius: var(--st-radius);
+  background: var(--st-panel);
+}
+
+.st-summary-grid span {
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.st-summary-grid strong {
+  font-size: 25px;
+  font-weight: 300;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.st-summary-grid small {
+  font-size: 11.5px;
+  color: var(--faint);
+}
+
+.st-heat {
+  display: grid;
+  grid-template-rows: repeat(7, 1fr);
+  grid-auto-flow: column;
+  gap: 3px;
+  margin-bottom: 8px;
+}
+
+.st-heat-cell {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--st-line);
+}
+
+.st-heat-cell[data-level='1'] {
+  background: color-mix(in srgb, var(--cyan) 25%, transparent);
+}
+
+.st-heat-cell[data-level='2'] {
+  background: color-mix(in srgb, var(--cyan) 45%, transparent);
+}
+
+.st-heat-cell[data-level='3'] {
+  background: color-mix(in srgb, var(--cyan) 68%, transparent);
+}
+
+.st-heat-cell[data-level='4'] {
+  background: var(--cyan);
+}
+
+.st-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  height: 140px;
+  padding-bottom: 4px;
+}
+
+.st-bar-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  flex: 1;
+  height: 100%;
+}
+
+.st-bar-stack {
+  width: 100%;
+  max-width: 34px;
+  border-radius: 6px 6px 2px 2px;
+  background: linear-gradient(to top, color-mix(in srgb, var(--cyan) 45%, transparent), var(--cyan));
+  min-height: 4px;
+}
+
+.st-subject-table li {
+  display: grid;
+  grid-template-columns: 1.4fr repeat(3, 0.8fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--st-line);
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+.st-achievements {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(165px, 1fr));
+  gap: 10px;
+}
+
+.st-achievement {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 14px;
+  border: 1px solid var(--st-line);
+  border-radius: 12px;
+  opacity: 0.5;
+}
+
+.st-achievement.on {
+  opacity: 1;
+  border-color: var(--st-strong);
+  background: var(--st-panel);
+}
+
+.st-achievement svg {
+  color: var(--faint);
+}
+
+.st-achievement.on svg {
+  color: var(--st-warn);
+}
+
+.st-achievement strong {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.st-history li button {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--st-line);
+  border-radius: 10px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+  flex-wrap: wrap;
+}
+
+.st-history li button:hover {
+  border-color: var(--st-strong);
+}
+
+.st-history-when {
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+  min-width: 13ch;
+}
+
+.st-history-title {
+  flex: 1;
+  min-width: 0;
+  font-weight: 550;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.st-history-state {
+  font-size: 12px;
+  color: var(--faint);
+}
+
+.st-history-state.completed {
+  color: var(--st-good);
+}
+
+.st-history-state.ended-early,
+.st-history-state.expired {
+  color: var(--st-warn);
+}
+
+/* ---------------------------------------------------------------- settings */
+
+.st-settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.st-nav-row {
+  padding: 9px 13px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: none;
+  color: var(--faint);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+}
+
+.st-nav-row:hover {
+  color: var(--st-ink);
+  background: var(--st-panel);
+}
+
+.st-nav-row.on {
+  color: var(--cyan);
+  border-color: var(--st-strong);
+  background: var(--st-panel);
+}
+
+.st-settings-body {
+  max-width: 66ch;
+}
+
+.st-settings-body h3:first-child {
+  margin-top: 0;
+}
+
+.st-orbi-preview {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  margin-bottom: var(--st-gap);
+  flex-wrap: wrap;
+}
+
+.st-orbi-preview strong {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* ---------------------------------------------------------------- Orbi's room */
+
+.st-room {
+  position: relative;
+  height: 260px;
+  border: 1px solid var(--st-line);
+  border-radius: 18px;
+  background:
+    radial-gradient(600px 300px at 50% 120%, color-mix(in srgb, var(--cyan) 10%, transparent), transparent 70%),
+    var(--st-panel);
+  overflow: hidden;
+  margin-bottom: var(--st-gap);
+}
+
+.st-room-desk {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  bottom: 38px;
+  height: 10px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--cyan) 18%, transparent);
+}
+
+.st-room-orbi {
+  position: absolute;
+  left: 50%;
+  bottom: 44px;
+  transform: translateX(-50%);
+}
+
+.st-room-item {
+  position: absolute;
+  padding: 4px 9px;
+  border: 1px solid var(--st-line);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 11.5px;
+  color: var(--faint);
+}
+
+.st-level-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: var(--st-gap);
+}
+
+.st-level-strip .st-faint {
+  font-size: 12px;
+}
+
+.st-collection section {
+  margin-bottom: var(--st-gap);
+}
+
+.st-collect {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 11px 13px;
+  border: 1px solid var(--st-line);
+  border-radius: 12px;
+  opacity: 0.5;
+}
+
+.st-collect.on {
+  opacity: 1;
+  border-color: var(--st-strong);
+  background: var(--st-panel);
+}
+
+.st-collect strong {
+  font-size: 13px;
+  font-weight: 550;
+}
+
+.st-collect svg {
+  color: var(--faint);
+}
+
+.st-collect.on svg {
+  color: var(--cyan);
+}
+
+/* ---------------------------------------------------------------- onboarding */
+
+.st-onb {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: radial-gradient(1000px 600px at 50% -10%, color-mix(in srgb, var(--cyan) 10%, transparent), transparent 60%), var(--bg-mid, #0b0f16);
+  overflow: auto;
+}
+
+.st-onb-card {
+  width: 100%;
+  max-width: 520px;
+  padding: 30px;
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: 0 24px 72px rgba(0, 0, 0, 0.45);
+}
+
+.st-onb-progress {
+  display: flex;
+  gap: 5px;
+  margin-bottom: 24px;
+}
+
+.st-onb-progress span {
+  flex: 1;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  transition: background 0.3s;
+}
+
+.st-onb-progress span.on {
+  background: var(--cyan);
+}
+
+.st-onb-card h1 {
+  margin: 0 0 8px;
+  font-size: 25px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.st-onb-blurb {
+  margin: 0 0 22px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--faint);
+}
+
+.st-onb-body {
+  min-height: 150px;
+}
+
+.st-onb-hero {
+  display: grid;
+  place-items: center;
+  padding: 10px 0 24px;
+}
+
+.st-onb-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.st-onb-right {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.st-summary {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.st-summary div {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  font-size: 13.5px;
+}
+
+.st-summary dt {
+  color: var(--faint);
+}
+
+.st-summary dd {
+  margin: 0;
+  font-weight: 550;
+  text-align: right;
+}
+
+/* ---------------------------------------------------------------- loading */
+
+.st-loading {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: var(--st-pad);
+}
+
+.st-skeleton {
+  border-radius: 12px;
+  background: linear-gradient(90deg, var(--st-panel), color-mix(in srgb, var(--cyan) 9%, transparent), var(--st-panel));
+  background-size: 200% 100%;
+  animation: st-shimmer 1.4s linear infinite;
+}
+
+.st-skeleton.head {
+  height: 42px;
+  max-width: 320px;
+}
+
+.st-skeleton.row {
+  height: 110px;
+}
+
+@keyframes st-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes st-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@keyframes st-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+/* ---------------------------------------------------------------- narrower windows, and less movement */
+
+@media (max-width: 1100px) {
+  .st-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .st-focus-middle {
+    gap: 20px;
+  }
+
+  .st-orbi-corner {
+    display: none;
+  }
+}
+
+/*
+ * Reduced motion, from the system or from Student's own setting.
+ *
+ * Everything keeps working and every state stays legible: nothing in Student is distinguished by movement alone.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .st-view *,
+  .st-onb * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+.st-still .orbi-svg,
+.st-still .orbi-bead,
+.st-still .orbi-body,
+.st-still .st-breathe-orb,
+.st-still .st-skeleton {
+  animation: none;
+}
+
+.st-still .st-ring-fill {
+  transition: none;
+}
+
+/* ---------------------------------------------------------------- Orbi's animation layer
+ *
+ * Everything below is transforms and opacity only. Nothing animates a layout property, nothing animates a large
+ * DOM tree, and every animation here stops when `.orbi-still` is set -- which is what the reduced-motion setting
+ * and the low-power path both do.
+ */
+
+.orbi-ring-group {
+  transform-origin: 50% 52%;
+  transform: rotate(calc(var(--orbi-tilt, 16deg) + var(--orbi-ring-offset, 0deg)));
+}
+
+.orbi-bead {
+  transform-origin: 50% 52%;
+  animation: orbi-spin var(--orbi-spin, 20s) linear infinite;
+  animation-delay: var(--orbi-ring-delay, 0s);
+}
+
+/* A ring speed of zero is written as 0s, which would be an infinitely fast animation. Switched off instead. */
+.orbi[style*='--orbi-spin: 0s'] .orbi-bead {
+  animation: none;
+}
+
+/* The shield: the ring opening outward, not a second graphic. */
+.orbi-shield {
+  transform-origin: 50% 52%;
+  animation: orbi-shield 2.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  opacity: 0.9;
+}
+
+@keyframes orbi-shield {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  22% {
+    transform: scale(1.04);
+    opacity: 0.95;
+  }
+  80% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+}
+
+/* Particles, drawn only for a moment that earned them. Each takes its own path outward. */
+.orbi-particles circle {
+  transform-origin: 50% 52%;
+  animation: orbi-particle 1.2s ease-out both;
+  animation-delay: calc(var(--orbi-p, 0) * 0.08s);
+}
+
+@keyframes orbi-particle {
+  0% {
+    transform: translate(0, 0) scale(0.6);
+    opacity: 0;
+  }
+  25% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate(calc((var(--orbi-p, 0) - 2.5) * 13px), -26px) scale(0.2);
+    opacity: 0;
+  }
+}
+
+.orbi-stars circle {
+  animation: orbi-twinkle 3.4s ease-in-out infinite alternate;
+}
+
+@keyframes orbi-twinkle {
+  from {
+    opacity: 0.25;
+  }
+  to {
+    opacity: 0.9;
+  }
+}
+
+/* Dragging: the body goes with the pointer and nothing eases, or it lags behind the finger. */
+.orbi-dragging {
+  position: fixed;
+  z-index: 40;
+  cursor: grabbing;
+}
+
+.orbi-dragging .orbi-svg {
+  animation: none;
+  transform: scale(1.04);
+}
+
+.orbi-dragging .orbi-ring-group {
+  transition: transform 0.12s ease-out;
+}
+
+/* Released: it overshoots a little and settles, which is the whole of the physics. */
+.orbi-floating:not(.orbi-dragging) {
+  transition: left 0.42s cubic-bezier(0.34, 1.4, 0.64, 1), top 0.42s cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+.orbi-still .orbi-floating,
+.st-still .orbi-floating {
+  transition: none;
+}
+
+.orbi-tier-explorer {
+  --orbi-ring: color-mix(in srgb, var(--cyan) 75%, white 10%);
+}
+
+.orbi-tier-scholar {
+  --orbi-mid: #7fd4ff;
+  --orbi-deep: #1b5570;
+}
+
+.orbi-tier-astral {
+  --orbi-mid: #a78bfa;
+  --orbi-deep: #3b2a6b;
+  --orbi-ring: color-mix(in srgb, #a78bfa 70%, transparent);
+}
+
+.orbi-tier-quantum {
+  --orbi-mid: #5ee7c2;
+  --orbi-deep: #12544a;
+  --orbi-ring: color-mix(in srgb, #5ee7c2 70%, transparent);
+}
+
+.orbi-tier-orbit-master {
+  --orbi-mid: #ffd98a;
+  --orbi-deep: #6b4a10;
+  --orbi-ring: color-mix(in srgb, #ffd98a 72%, transparent);
+}
+
+/* ---------------------------------------------------------------- Orbi's panel */
+
+.orbi-panel-wrap {
+  position: absolute;
+  bottom: calc(100% + 14px);
+  right: 0;
+  z-index: 30;
+  animation: st-in 0.2s ease-out both;
+}
+
+.st-still .orbi-panel-wrap {
+  animation: none;
+}
+
+.orbi-panel {
+  width: 300px;
+  max-height: 70vh;
+  overflow: auto;
+  padding: 14px;
+  border: 1px solid var(--st-line);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+}
+
+.orbi-panel > header {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  margin-bottom: 10px;
+}
+
+.orbi-panel > header > div {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+
+.orbi-panel > header strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.orbi-panel-record {
+  margin: 0 0 10px;
+  padding: 8px 11px;
+  border-left: 2px solid var(--st-warn);
+  font-size: 12.5px;
+  color: var(--st-ink);
+}
+
+.orbi-panel-rows {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.orbi-panel-rows button {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.orbi-panel-rows button:hover {
+  border-color: var(--st-strong);
+  background: var(--st-panel);
+}
+
+.orbi-panel-rows svg {
+  margin-top: 2px;
+  color: var(--cyan);
+  flex: 0 0 auto;
+}
+
+.orbi-panel-rows span {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.orbi-panel-rows strong {
+  font-size: 13px;
+  font-weight: 550;
+}
+
+.orbi-panel-rows small {
+  font-size: 11.5px;
+  color: var(--faint);
+  line-height: 1.4;
+}
+
+/* ---------------------------------------------------------------- the session's stage, and records */
+
+.st-stage {
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  font-weight: 600;
+}
+
+.st-stage .st-faint {
+  letter-spacing: 0;
+  text-transform: none;
+  font-weight: 450;
+}
+
+.st-record {
+  margin: 0;
+  padding: 7px 13px;
+  border: 1px solid color-mix(in srgb, var(--st-warn) 40%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--st-warn) 7%, transparent);
+  font-size: 12.5px;
+  color: var(--st-ink);
+}
+
+/* ---------------------------------------------------------------- the sky */
+
+.st-sky {
+  margin: 0 0 var(--st-gap);
+  padding: 0;
+}
+
+.st-sky svg {
+  display: block;
+  width: 100%;
+  height: 300px;
+  border: 1px solid var(--st-line);
+  border-radius: 18px;
+  background: radial-gradient(700px 320px at 50% 110%, color-mix(in srgb, var(--cyan) 9%, transparent), transparent 70%), var(--st-panel);
+}
+
+.st-sky-line {
+  stroke: var(--st-line);
+  stroke-width: 0.25;
+}
+
+.st-sky-line.on {
+  stroke: color-mix(in srgb, var(--cyan) 55%, transparent);
+}
+
+.st-sky-star circle {
+  fill: var(--st-line);
+}
+
+.st-sky-star.on circle {
+  fill: var(--cyan);
+}
+
+/* Lit goals get a halo that breathes, so a finished goal reads as finished at a glance. */
+.st-sky-halo {
+  fill: color-mix(in srgb, var(--cyan) 18%, transparent);
+  animation: st-halo 4s ease-in-out infinite alternate;
+  animation-delay: calc(var(--st-star, 0) * 0.4s);
+}
+
+@keyframes st-halo {
+  from {
+    opacity: 0.25;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 0.7;
+    transform: scale(1.08);
+  }
+}
+
+.st-sky.still .st-sky-halo,
+.st-still .st-sky-halo {
+  animation: none;
+}
+
+.st-sky figcaption {
+  margin-top: 9px;
+  font-size: 12.5px;
+  color: var(--faint);
+}
+
+/* ---------------------------------------------------------------- the one suggestion
+
+   Deliberately the plainest thing on the board. It is a sentence with a button, not a banner: the moment a
+   suggestion looks like an advert it gets ignored like one. Priority shows as a thin edge down the left and
+   nothing more -- no red, no alarm, because none of this is an emergency. */
+
+.st-next {
+  border: 1px solid var(--st-line);
+  border-left: 3px solid var(--st-strong);
+  border-radius: var(--st-radius);
+  background: var(--st-panel);
+  padding: 16px 18px;
+  margin-bottom: var(--st-gap);
+}
+
+.st-next.compact {
+  padding: 14px 16px;
+}
+
+.st-next.quiet,
+.st-next.p-low {
+  border-left-color: var(--st-line);
+}
+
+.st-next.p-critical {
+  border-left-color: var(--cyan);
+}
+
+.st-next > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.st-next-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.st-next h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.st-next-because {
+  margin: 5px 0 12px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--faint);
+  max-width: 68ch;
+}
+
+.st-next-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* ---------------------------------------------------------------- the plan
+
+   Time first, then what is coming, then the week. That is the order the planner needs: without minutes there is
+   nothing to plan, so that section stays open until some exist. */
+
+.st-plan-page > section,
+.st-mastery > section {
+  margin-bottom: 26px;
+}
+
+.st-plan-page h3,
+.st-mastery h3 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.st-plan-time {
+  padding: 16px 18px;
+  border: 1px solid var(--st-line);
+  border-radius: var(--st-radius);
+  background: var(--st-panel);
+}
+
+.st-plan-days {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 10px;
+}
+
+.st-plan-days label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12.5px;
+  color: var(--faint);
+}
+
+.st-plan-days input {
+  width: 100%;
+  padding: 7px 9px;
+  border: 1px solid var(--st-line);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--st-ink);
+  font: inherit;
+  font-size: 13px;
+}
+
+.st-plan-days input:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 1px;
+}
+
+.st-radar {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.st-radar > li {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1.4fr) minmax(0, 1.6fr) 90px auto;
+  gap: 12px;
+  align-items: center;
+  padding: 11px 14px;
+  border: 1px solid var(--st-line);
+  border-radius: 11px;
+}
+
+.st-radar-when {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--cyan);
+}
+
+.st-radar-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13.5px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.st-week {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.st-week > li {
+  padding: 14px 16px;
+  border: 1px solid var(--st-line);
+  border-radius: var(--st-radius);
+}
+
+.st-week > li > header {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.st-week > li > header strong {
+  font-size: 14px;
+}
+
+.st-week > li > header .st-link {
+  margin-left: auto;
+}
+
+.st-day-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.st-day-items > li {
+  display: grid;
+  grid-template-columns: 46px 74px minmax(0, 1.2fr) minmax(0, 1.4fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: var(--st-panel);
+  font-size: 13px;
+}
+
+/* A break is part of the plan, not a gap in it -- but it is not work, so it recedes. */
+.st-day-items > li.break {
+  background: transparent;
+  border: 1px dashed var(--st-line);
+  color: var(--faint);
+}
+
+.st-day-minutes {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.st-day-kind {
+  font-size: 11.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.st-day-title,
+.st-day-why {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.st-left-out {
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: var(--faint);
+}
+
+.st-left-out summary {
+  cursor: pointer;
+}
+
+.st-left-out ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.st-syllabus {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--st-line);
+  border-radius: 11px;
+  background: transparent;
+  color: var(--st-ink);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.6;
+  resize: vertical;
+  margin-bottom: 10px;
+}
+
+.st-syllabus:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 1px;
+}
+
+/* ---------------------------------------------------------------- what you know
+
+   A weakness is stated with its reason underneath, because "weak" on its own tells nobody what to do. Nothing
+   here is red: a concept that is not holding yet is ordinary, and colouring it like a failure is the fastest way
+   to make somebody close the page. */
+
+.st-weak {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.st-weak > li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 12px 15px;
+  border: 1px solid var(--st-line);
+  border-radius: 11px;
+}
+
+.st-weak > li > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1 1 280px;
+}
+
+.st-weak > li strong {
+  font-size: 14px;
+}
+
+.st-weak > li p {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  max-width: 62ch;
+}
+
+.st-strong {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.st-strong > li {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 12px;
+  border: 1px solid var(--st-line);
+  border-radius: 999px;
+  font-size: 13px;
+  background: color-mix(in srgb, var(--st-good) 8%, transparent);
+}
+
+.st-tree,
+.st-tree-chapters,
+.st-tree-concepts {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.st-tree > li {
+  border-bottom: 1px solid var(--st-line);
+}
+
+.st-tree-row {
+  display: grid;
+  /*
+   * The name takes the room; the bar and its number sit together at the end.
+   *
+   * The last column used to be another `1fr`, which pushed the number to the far edge and left the bar floating
+   * in the middle of a gap. A measurement belongs next to the thing it measures.
+   */
+  grid-template-columns: 16px minmax(0, 1fr) 180px max-content;
+  gap: 14px;
+  align-items: center;
+  width: 100%;
+  padding: 12px 4px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.st-tree-row:hover {
+  background: var(--st-panel);
+}
+
+/*
+ * The same row without a chevron in front of it.
+ *
+ * It borrows `.st-tree-row`, which reserves a 16px first column for the arrow — so the subject's name was being
+ * forced into sixteen pixels and clipped to nothing. Three cells need three columns.
+ */
+.st-subject-stages .st-tree-row {
+  grid-template-columns: minmax(0, 1fr) 180px max-content;
+}
+
+.st-tree-row svg {
+  transition: transform 0.18s ease;
+}
+
+.st-tree-row svg.open {
+  transform: rotate(90deg);
+}
+
+.st-still .st-tree-row svg {
+  transition: none;
+}
+
+.st-tree-chapters {
+  padding: 0 0 12px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.st-tree-chapter {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.st-tree-concepts {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.st-tree-concepts > li {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) 110px 56px;
+  gap: 10px;
+  align-items: center;
+  padding: 5px 6px;
+  border-radius: 7px;
+  font-size: 13px;
+}
+
+.st-tree-concepts > li:hover {
+  background: var(--st-panel);
+}
+
+.st-tree-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The dot is the whole state indicator. Untouched is hollow, which is honest and is not a warning. */
+.st-tree-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid var(--st-line);
+}
+
+.st-tree-concepts > li[data-state='learning'] .st-tree-dot,
+.st-tree-concepts > li[data-state='reviewing'] .st-tree-dot {
+  background: var(--st-warn);
+  border-color: transparent;
+}
+
+.st-tree-concepts > li[data-state='stable'] .st-tree-dot {
+  background: var(--cyan);
+  border-color: transparent;
+}
+
+.st-tree-concepts > li[data-state='strong'] .st-tree-dot,
+.st-tree-concepts > li[data-state='mastered'] .st-tree-dot {
+  background: var(--st-good);
+  border-color: transparent;
+}
+
+.st-tree-concepts > li[data-state='slipping'] .st-tree-dot {
+  background: transparent;
+  border-color: var(--st-warn);
+}
+
+.st-proof {
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  font-size: 13px;
+}
+
+.st-proof > li {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--faint);
+}
+
+.st-proof > li.done {
+  color: var(--st-ink);
+}
+
+@media (max-width: 880px) {
+  .st-radar > li,
+  .st-day-items > li,
+  .st-tree-row,
+  .st-tree-concepts > li {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .st-week > li > header .st-link {
+    margin-left: 0;
+  }
+}
+
+/* ---------------------------------------------------------------- the written report
+
+   Sentences first, figures underneath. The figures are there so any sentence can be checked against them, which is
+   the only reason a report like this is worth reading at all. Nothing in here is coloured as good or bad. */
+
+.st-report {
+  padding: 16px 18px;
+  margin-bottom: var(--st-gap);
+  border: 1px solid var(--st-line);
+  border-radius: var(--st-radius);
+  background: var(--st-panel);
+}
+
+.st-report .st-section-head {
+  margin-bottom: 10px;
+}
+
+.st-report h3 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.st-report h4 {
+  margin: 0 0 7px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--faint);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.st-report-notes {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 14px;
+  line-height: 1.55;
+  max-width: 72ch;
+}
+
+.st-report-figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.st-report-figures > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.st-report-figures strong {
+  font-size: 17px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.st-report-subjects ul {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.st-report-subjects li {
+  display: grid;
+  grid-template-columns: minmax(80px, 150px) minmax(0, 1fr) 96px;
+  gap: 12px;
+  align-items: center;
+  font-size: 13px;
+}
+
+/* A label and its control side by side, for the pairs that read as one setting ("from … until …"). */
+.st-field.inline {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+}
+
+.st-field.inline > span {
+  font-size: 13px;
+  color: var(--faint);
+}
+
+@media (max-width: 880px) {
+  .st-report-subjects li {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}
+
+/* ---------------------------------------------------------------- Orbi turning up
+
+   Small, beside Orbi, and over nothing. It takes no focus and cannot cover what somebody is reading: an uninvited
+   card that lands on top of the work is the reason people switch companions off. */
+
+.st-appears {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  right: 0;
+  width: min(300px, 78vw);
+  padding: 13px 15px;
+  border: 1px solid var(--st-line);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+  animation: st-in 0.22s ease-out both;
+  z-index: 6;
+}
+
+.st-still .st-appears {
+  animation: none;
+}
+
+.st-appears-body strong {
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 3px;
+}
+
+.st-appears-body p {
+  margin: 0 0 11px;
+  line-height: 1.5;
+}
+
+.st-appears-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.st-btn.small {
+  padding: 5px 10px;
+  font-size: 12.5px;
+}
+
+/* Left-hand corner: the card opens the other way so it stays on screen. */
+.st-orbi-corner.bottom-left .st-appears,
+.st-orbi-corner.top-left .st-appears {
+  right: auto;
+  left: 0;
+}
+
+.st-orbi-corner.top-left .st-appears,
+.st-orbi-corner.top-right .st-appears {
+  bottom: auto;
+  top: calc(100% + 10px);
+}
+
+/* ---------------------------------------------------------------- a chapter test
+
+   Plain, one question at a time, and self-marked. There is no scoring of free text here because there is nothing to
+   score against: the answer is whatever the student wrote on their own card. */
+
+.st-challenge-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.st-challenge-head h3 {
+  margin: 0 0 2px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.st-challenge-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.st-challenge-progress .st-bar {
+  flex: 1 1 auto;
+}
+
+.st-challenge-from {
+  margin: 0 0 4px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 11px;
+}
+
+.st-challenge-ask {
+  margin: 0 0 14px;
+  font-size: 17px;
+  line-height: 1.5;
+}
+
+/* What the student wrote, shown back to them. Never presented as Orbis's answer. */
+.st-challenge-answer {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border-left: 3px solid var(--st-strong);
+  border-radius: 0 10px 10px 0;
+  background: var(--st-panel);
+  font-size: 15px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.st-challenge-says {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--cyan);
+}
+
+.st-challenge-done strong {
+  display: block;
+  font-size: 17px;
+  margin-bottom: 6px;
+}
+
+/* The occasional surprise, on the card that appears when a session ends. */
+.st-surprise {
+  margin: 4px 0 14px;
+  padding: 13px 15px;
+  border: 1px dashed var(--st-line);
+  border-radius: 12px;
+}
+
+.st-surprise strong {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 2px;
+}
+
+.st-surprise p {
+  margin: 0 0 10px;
+}
+
+/* ---------------------------------------------------------------- Orbi, with the sound and the hour
+
+   Two inputs the component measures rather than guesses: how loud the atmosphere actually is, and what time it is.
+   Both are deliberately gentle. A companion that throbs with the music is a companion somebody switches off within
+   the hour, so the sound moves the glow a little and the ring not at all.
+
+   Both effects are off whenever Orbi is still -- which covers reduced motion, the animation setting and a machine
+   that is struggling, because all three already resolve to `orbi-still` or `orbi-simple`. */
+
+.orbi-svg {
+  /* Eased here, not in JavaScript: the readings arrive four times a second and this fills in between them. */
+  transition: filter 0.28s ease-out;
+}
+
+.orbi:not(.orbi-still):not(.orbi-simple) .orbi-svg {
+  filter: drop-shadow(
+    0 0 calc(10px + (var(--orbi-glow, 0.4) + var(--orbi-loud, 0) * 0.5) * 22px)
+      color-mix(in srgb, var(--cyan) calc((var(--orbi-glow, 0.4) + var(--orbi-loud, 0) * 0.45) * 55%), transparent)
+  );
+}
+
+.orbi-still .orbi-svg,
+.orbi-simple .orbi-svg {
+  transition: none;
+}
+
+/* The hour, as a hint of warmth rather than a different Orbi: morning cool, evening warm, night dimmer. */
+.orbi-morning {
+  --orbi-ring: color-mix(in srgb, var(--cyan) 88%, #ffffff);
+}
+
+.orbi-afternoon {
+  --orbi-ring: var(--cyan);
+}
+
+.orbi-evening {
+  --orbi-ring: color-mix(in srgb, var(--cyan) 80%, #ffb470);
+}
+
+.orbi-night {
+  --orbi-ring: color-mix(in srgb, var(--cyan) 72%, #6f7dff);
+}
+
+/* Nothing about the hour changes at all when movement is off, including the colour: somebody who asked for less
+   has asked for less of all of it. */
+.st-still .orbi-evening,
+.st-still .orbi-night,
+.st-still .orbi-morning {
+  --orbi-ring: var(--cyan);
+}
+
+/* ---------------------------------------------------------------- topics found in your own notes
+
+   A list of guesses, shown as guesses: each row says what Orbis noticed and which line it was, and nothing is in
+   the syllabus until it is ticked. */
+
+.st-found {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--st-line);
+  border-radius: var(--st-radius);
+  background: var(--st-panel);
+}
+
+.st-found-list {
+  list-style: none;
+  margin: 10px 0 14px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 4px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.st-found-list .st-check {
+  margin: 0;
+  padding: 5px 7px;
+  border-radius: 8px;
+}
+
+.st-found-list .st-check:hover {
+  background: var(--st-panel);
+}
+
+.st-found-list strong {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 500;
+}
+
+.st-found .st-field.inline input {
+  width: 140px;
+  padding: 6px 9px;
+  border: 1px solid var(--st-line);
+  border-radius: 9px;
+  background: transparent;
+  color: var(--st-ink);
+  font: inherit;
+  font-size: 13px;
+}
+
+/* ---------------------------------------------------------------- hints, and explaining it back
+
+   The ladder is quiet by default -- one small "Stuck?" -- because a row of hint buttons beside every question is an
+   invitation to take them. What each rung costs is beside the rung, never after it. */
+
+.st-hints {
+  margin: 10px 0 14px;
+}
+
+.st-hint-list {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.st-hint-list li {
+  padding: 9px 12px;
+  border-left: 2px solid var(--st-line);
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--st-ink);
+}
+
+.st-hint-next {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.st-teach-ask {
+  margin: 0 0 14px;
+  font-size: 15px;
+  line-height: 1.6;
+  max-width: 62ch;
+}
+
+.st-teach-points {
+  list-style: none;
+  margin: 10px 0 16px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.st-teach-points .st-check {
+  margin: 0;
+  padding: 7px 9px;
+  border-radius: 9px;
+  align-items: flex-start;
+}
+
+.st-teach-points .st-check span {
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.st-teach-said {
+  margin: 0 0 16px;
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.st-mistake-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* ---------------------------------------------------------------- the tab strip, as it narrows */
+
+.st-view {
+  container-type: inline-size;
+  container-name: student;
+}
+
+.st-nav-btn > svg {
+  /* The icon never shrinks: it is what is left when the words have gone. */
+  flex: 0 0 auto;
+}
+
+/*
+ * A name is shown whole or not at all.
+ *
+ * It used to shrink letter by letter, and with fifteen tabs that meant a strip reading "H. F. P L. C. M... What..."
+ * — every label mangled into an initial and a full stop, which is worse than no label at all because it looks
+ * broken rather than deliberate. So labels never shrink: they are either all there, or they give way to the icons
+ * together and the name stays on the button for a hover and a screen reader.
+ */
+.st-nav-label {
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+/* Tighter, before anything is given up. */
+@container student (max-width: 1240px) {
+  .st-nav-btn {
+    gap: 6px;
+    padding: 8px 9px;
+    font-size: 12.5px;
+  }
+
+  .st-nav {
+    gap: 2px;
+  }
+}
+
+/*
+ * Not enough room for fifteen names: icons, and the name of the one you are on.
+ *
+ * Keeping the current tab's name is what stops the strip becoming a row of anonymous glyphs — wherever you are,
+ * the screen you are looking at is spelled out.
+ */
+@container student (max-width: 1100px) {
+  .st-nav-btn .st-nav-label {
+    display: none;
+  }
+
+  .st-nav-btn.on .st-nav-label {
+    display: inline;
+  }
+
+  .st-nav-btn {
+    padding: 8px 10px;
+  }
+}
+
+/* Narrower still: icons only, including the current one, which by then has its own outline to mark it. */
+@container student (max-width: 720px) {
+  .st-nav-btn.on .st-nav-label {
+    display: none;
+  }
+}
+
+/* ---------------------------------------------------------------- cards
+
+   The questions somebody writes for themselves. Plain rows: the front, the answer under it, and what practising it
+   has actually shown -- which is the only number on this screen. */
+
+.st-cards-filters {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: var(--st-gap);
+}
+
+.st-cards-filters .st-row-actions {
+  margin-bottom: 0;
+}
+
+.st-search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 220px;
+  max-width: 340px;
+  padding: 8px 11px;
+  border: 1px solid var(--st-line);
+  border-radius: 10px;
+  background: var(--st-panel);
+  color: var(--faint);
+}
+
+.st-search-box input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  background: none;
+  color: var(--st-ink);
+  font: inherit;
+  font-size: 13.5px;
+  outline: none;
+}
+
+.st-card-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.st-card-list > li {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 15px;
+  border: 1px solid var(--st-line);
+  border-radius: 11px;
+}
+
+.st-card-text {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.st-card-text strong {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 3px;
+}
+
+.st-card-text p {
+  margin: 0 0 5px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--faint);
+  white-space: pre-wrap;
+}
+
+/* ---------------------------------------------------------------- missions
+
+   One topic, in steps, with the minutes adding up to what the button said. */
+
+.st-micro {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 13px 15px;
+  margin-bottom: 22px;
+  border: 1px dashed var(--st-line);
+  border-radius: var(--st-radius);
+}
+
+.st-micro strong {
+  display: block;
+  font-size: 14px;
+}
+
+.st-micro p {
+  margin: 2px 0 0;
+}
+
+.st-missions h3 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.st-steps {
+  list-style: none;
+  margin: 14px 0 18px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  counter-reset: step;
+}
+
+.st-steps > li {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 11px 13px;
+  border: 1px solid var(--st-line);
+  border-radius: 11px;
+}
+
+/* A finished step recedes rather than being struck through: it was done, not cancelled. */
+.st-steps > li.done {
+  border-style: dashed;
+  opacity: 0.6;
+}
+
+.st-step-minutes {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--cyan);
+}
+
+.st-step-text {
+  min-width: 0;
+}
+
+.st-step-text strong {
+  display: block;
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+@media (max-width: 880px) {
+  .st-steps > li {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .st-card-list > li {
+    flex-direction: column;
+  }
+}
+
+/* ---------------------------------------------------------------- the day, and the whiteboard */
+
+.st-briefing {
+  padding: 14px 16px;
+  margin-bottom: var(--st-gap);
+  border: 1px solid var(--st-line);
+  border-left: 3px solid var(--st-strong);
+  border-radius: var(--st-radius);
+  background: var(--st-panel);
+}
+
+.st-briefing strong {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.st-briefing p {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--faint);
+}
+
+.st-day-page h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.st-day-page h3,
+.st-boards h3 {
+  margin: 24px 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.st-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.st-timeline > li {
+  display: grid;
+  grid-template-columns: 74px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  padding: 11px 14px;
+  border: 1px solid var(--st-line);
+  border-radius: 11px;
+}
+
+/* A session that was ended early is shown as what it was, with no colour of judgement on it. */
+.st-timeline > li[data-state='ended-early'] {
+  border-style: dashed;
+}
+
+.st-timeline-when {
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: var(--cyan);
+}
+
+.st-timeline-what {
+  min-width: 0;
+}
+
+.st-timeline-what strong {
+  display: block;
+  font-size: 14px;
+}
+
+.st-journal {
+  margin: 7px 0 0;
+  padding: 9px 11px;
+  border-left: 2px solid var(--st-line);
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  color: var(--st-ink);
+}
+
+.st-xp-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.st-xp-list > li {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.st-xp-list > li:nth-child(odd) {
+  background: var(--st-panel);
+}
+
+.st-xp-amount {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--st-good);
+}
+
+/* ---- the whiteboard */
+
+.st-board-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.st-board-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: none;
+  color: var(--st-ink);
+  font: inherit;
+  font-size: 19px;
+  font-weight: 600;
+}
+
+.st-board-name:hover,
+.st-board-name:focus {
+  border-color: var(--st-line);
+  outline: none;
+}
+
+.st-board-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  border: 1px solid var(--st-line);
+  border-radius: 11px;
+}
+
+.st-board-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--st-line);
+  margin: 0 4px;
+}
+
+.st-swatch {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
+.st-swatch.on {
+  border-color: var(--st-ink);
+}
+
+.st-width-dot {
+  display: block;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* The canvas takes what is left, and never shrinks to nothing. */
+.st-canvas {
+  flex: 1 1 auto;
+  min-height: 320px;
+  width: 100%;
+  border: 1px solid var(--st-line);
+  border-radius: var(--st-radius);
+  background: var(--bg-mid, #0b0f16);
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.st-board-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 10px;
+}
+
+.st-board-list > li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 10px 4px 4px;
+  border: 1px solid var(--st-line);
+  border-radius: 11px;
+}
+
+.st-board-open {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.st-board-open:hover {
+  background: var(--st-panel);
+}
+
+/* A mix-up that has been sorted out stays on the list, quieter: it is a record, not a chore. */
+.st-mistakes > li.done {
+  opacity: 0.6;
+  border-style: dashed;
+}
+
+@media (max-width: 880px) {
+  .st-timeline > li,
+  .st-xp-list > li {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+}
+
+/* ---------------------------------------------------------------- exams, stages, voice, the room
+
+   Nothing on these screens is coloured as urgent. A countdown in red is a countdown somebody stops looking at. */
+
+.st-exam-page section,
+.st-exam-page > section {
+  margin-bottom: 24px;
+}
+
+.st-ahead,
+.st-after {
+  padding: 16px 18px;
+  border: 1px solid var(--st-line);
+  border-left: 3px solid var(--st-strong);
+  border-radius: var(--st-radius);
+  background: var(--st-panel);
+  margin-bottom: 24px;
+}
+
+.st-ahead > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.st-ahead h3,
+.st-after h3 {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-size: 16px;
+}
+
+.st-ahead h4 {
+  margin: 18px 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.st-ready {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 140px;
+}
+
+.st-ahead-says {
+  margin: 10px 0 14px;
+  font-size: 14px;
+  line-height: 1.6;
+  max-width: 70ch;
+}
+
+.st-exam-mode {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  border: 1px dashed var(--st-line);
+  border-radius: 11px;
+}
+
+.st-exam-mode strong {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 14px;
+}
+
+.st-exam-changes {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12.5px;
+  color: var(--faint);
+}
+
+.st-exam-changes li::before {
+  content: '· ';
+}
+
+.st-subject-stages {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.st-subject-stages > li {
+  border-bottom: 1px solid var(--st-line);
+}
+
+.st-stages {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0 0 8px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.st-stages > li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 13px;
+  border: 1px solid var(--st-line);
+  border-radius: 11px;
+}
+
+/* A passed stage is quieter, not struck out: it was done, and it can be taken again. */
+.st-stages > li.done {
+  border-style: dashed;
+  opacity: 0.72;
+}
+
+.st-stage-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.st-stage-text strong {
+  font-size: 13.5px;
+}
+
+/* ---- saying it out loud */
+
+.st-listen {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.st-listen .st-icon.on {
+  color: var(--cyan);
+  border-color: var(--st-strong);
+  background: var(--st-panel);
+}
+
+.st-examples {
+  list-style: none;
+  margin: 12px 0 16px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 13.5px;
+}
+
+/* ---- the room */
+
+.st-room-item {
+  position: absolute;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: none;
+  cursor: grab;
+  line-height: 0;
+}
+
+.st-room-item:hover,
+.st-room-item:focus-visible {
+  border-color: var(--st-line);
+  background: var(--st-panel);
+}
+
+.st-room-item.moving {
+  cursor: grabbing;
+  border-color: var(--st-strong);
+}
+
+.st-room-art {
+  display: block;
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------------- what Orion writes
+
+   Everything generated is marked as generated, and nothing here is styled to look more authoritative than the
+   student's own material. Same type, same colour, one small line saying who wrote it. */
+
+.st-explained {
+  margin: 0 0 18px;
+  font-size: 14.5px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  max-width: 70ch;
+}
+
+.st-drafts {
+  list-style: none;
+  margin: 10px 0 16px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 420px;
+  overflow: auto;
+}
+
+.st-drafts > li {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+}
+
+.st-drafts > li:hover {
+  border-color: var(--st-line);
+}
+
+/* A draft that has been unticked stays visible: it is about to be thrown away, not already gone. */
+.st-drafts > li.out {
+  opacity: 0.5;
+}
+
+.st-drafts .st-check {
+  margin: 0;
+  align-items: flex-start;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.st-drafts strong {
+  display: block;
+  font-size: 13.5px;
+}
+
+.st-drafts textarea {
+  margin: 4px 0;
+}
+
+.st-proposed {
+  list-style: none;
+  margin: 10px 0 14px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 300px;
+  overflow: auto;
+}
+
+.st-proposed > li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: var(--st-panel);
+  font-size: 13px;
+}
+
+/* ---------------------------------------------------------------- the tutor that asks
+
+   A conversation, laid out so the two voices are obvious at a glance and neither looks more authoritative than the
+   other. The student's own words sit on the right; nothing here is styled as a verdict. */
+
+.st-turns {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 44vh;
+  overflow: auto;
+}
+
+.st-turns > li {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-width: 88%;
+}
+
+.st-turns > li.student {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+
+.st-turns > li p {
+  margin: 0;
+  padding: 10px 13px;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.st-turns > li.orbis p {
+  border: 1px solid var(--st-line);
+  border-bottom-left-radius: 4px;
+}
+
+.st-turns > li.student p {
+  background: var(--st-panel);
+  border: 1px solid var(--st-strong);
+  border-bottom-right-radius: 4px;
+}
+
+.st-say {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.st-say input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 10px 13px;
+  border: 1px solid var(--st-line);
+  border-radius: 11px;
+  background: transparent;
+  color: var(--st-ink);
+  font: inherit;
+  font-size: 14px;
+}
+
+.st-say input:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 1px;
+}
+
+/* The answer, when the questions stop. Marked as the answer rather than slipped in as another turn. */
+.st-told {
+  margin: 4px 0 14px;
+  padding: 12px 14px;
+  border-left: 3px solid var(--st-strong);
+  border-radius: 0 12px 12px 0;
+  background: var(--st-panel);
+}
+
+.st-told .st-explained {
+  margin: 4px 0 0;
+}
+
+.st-sheet-card h4 {
+  margin: 16px 0 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+/* ---------------------------------------------------------------- Orbi, the character
+ *
+ * The parts are placed by the rig in JavaScript, so there are no keyframes here that move a limb. What is left is
+ * what CSS is genuinely better at: the glow behind the character, the ring turning, and switching all of it off.
+ */
+.orbi-character {
+  transform-box: fill-box;
+}
+
+.orbi-part {
+  /* Each part is positioned by its own transform. Letting CSS transition them would fight the rig frame by frame. */
+  transition: none;
+}
+
+.orbi-head,
+.orbi-body {
+  filter: drop-shadow(0 0 calc(6px * var(--orbi-glow, 0)) var(--orbi-ring));
+}
+
+.orbi-still .orbi-head,
+.orbi-still .orbi-body,
+.orbi-simple .orbi-head,
+.orbi-simple .orbi-body {
+  filter: none;
+}
+
+/* The antenna bead pulses, and nothing else does. One small sign of life that costs a single property. */
+.orbi-character .orbi-bead {
+  animation: orbi-bead-pulse 2.6s ease-in-out infinite;
+}
+
+@keyframes orbi-bead-pulse {
+  0%, 100% { opacity: 0.75; }
+  50% { opacity: 1; }
+}
+
+.orbi-still .orbi-character .orbi-bead,
+.orbi-simple .orbi-character .orbi-bead {
+  animation: none;
+  opacity: 0.9;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orbi-character .orbi-bead {
+    animation: none;
+  }
+  .orbi-head,
+  .orbi-body {
+    filter: none;
+  }
+}
+
+/* ---------------------------------------------------------------- the tour, and Orbi standing on things
+ *
+ * The screen underneath stays readable: it is the lesson, and dimming it into a wall would teach nothing. So the
+ * veil is light, it lets presses through, and only the card and Orbi sit above it.
+ */
+.st-tour {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  pointer-events: none;
+}
+
+.st-tour-veil {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--bg-deep, #05080c) 46%, transparent);
+  backdrop-filter: blur(1px);
+}
+
+/* Orbi on a real element. Positioned from measurements, and it never swallows a press. */
+.orbi-anchor {
+  position: fixed;
+  z-index: 71;
+  transform: translate(-50%, -100%);
+  pointer-events: none;
+  transition-property: left, top;
+  transition-timing-function: cubic-bezier(0.34, 1.2, 0.64, 1);
+  will-change: left, top;
+}
+
+.st-tour-card {
+  position: absolute;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  width: min(560px, calc(100vw - 32px));
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px;
+  border: 1px solid var(--st-line, rgba(255, 255, 255, 0.12));
+  border-radius: 16px;
+  background: var(--st-card, rgba(14, 20, 28, 0.92));
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+  /* The one thing above the veil that can be touched. */
+  pointer-events: auto;
+}
+
+/* While Orbi is guarding something, the card moves off the middle so it is not standing behind its own words. */
+.st-tour-card.middle {
+  bottom: 18px;
+}
+
+.st-tour-orbi {
+  display: flex;
+  justify-content: center;
+}
+
+.st-tour-says {
+  margin: 0;
+  font-size: 1.02rem;
+  line-height: 1.5;
+  color: var(--st-text, #e8f3ff);
+}
+
+.st-tour-dots {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.st-tour-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--st-line, rgba(255, 255, 255, 0.2));
+}
+
+.st-tour-dot.on {
+  background: var(--cyan);
+  /* Wider as well as brighter, so the step somebody is on is findable without relying on colour. */
+  width: 14px;
+  border-radius: 3px;
+}
+
+.st-tour-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orbi-anchor {
+    transition: none;
+  }
+  .st-tour-veil {
+    backdrop-filter: none;
+  }
+}
+
+/* A narrow window puts the card edge to edge rather than letting it hang off the side. */
+@media (max-width: 620px) {
+  .st-tour-card {
+    left: 16px;
+    right: 16px;
+    width: auto;
+    transform: none;
+  }
+}
+
+/* ---------------------------------------------------------------- the glide, and what it leaves behind
+ *
+ * The motes are positioned frame by frame from the path Orbi has actually covered, so there is no keyframe here
+ * that moves one — only what each looks like. Stretched along the direction of travel, which is what turns a row
+ * of dots into a streak.
+ */
+.orbi-trail-mote {
+  position: fixed;
+  z-index: 70;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--orbi-ring) 0%, transparent 70%);
+  pointer-events: none;
+  filter: blur(0.5px);
+  will-change: opacity, transform;
+}
+
+.orbi-anchor.gliding {
+  /* A faint glow under it while it travels, so the character itself reads as the head of the streak. */
+  filter: drop-shadow(0 0 10px color-mix(in srgb, var(--cyan) 55%, transparent));
+}
+
+/* Nothing trails, and nothing glows, when motion is turned down. */
+@media (prefers-reduced-motion: reduce) {
+  .orbi-trail-mote {
+    display: none;
+  }
+  .orbi-anchor.gliding {
+    filter: none;
+  }
+}
+
+.st-still .orbi-trail-mote {
+  display: none;
+}
+
+/* ---------------------------------------------------------------- what Orbi is saying, where Orbi is
+ *
+ * Beside the character and beside the thing, rather than along the bottom of the window. Positioned from the
+ * measured landing spot, so the only thing CSS decides is how it looks.
+ */
+.st-tour-bubble {
+  position: fixed;
+  z-index: 72;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--st-line, rgba(255, 255, 255, 0.14));
+  border-radius: 14px;
+  background: var(--st-card, rgba(14, 20, 28, 0.95));
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
+  pointer-events: auto;
+  animation: st-bubble-in 180ms ease-out both;
+}
+
+@keyframes st-bubble-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .st-tour-bubble {
+    animation: none;
+  }
+}
+
+.st-tour-bubble .st-tour-says {
+  font-size: 0.97rem;
+}
+
+.st-tour-bubble .st-tour-foot {
+  gap: 8px;
+}
+
+/* On a narrow window the bubble would be wider than the gap beside Orbi, so it goes full width at the foot. */
+@media (max-width: 620px) {
+  .st-tour-bubble {
+    left: 16px !important;
+    right: 16px;
+    top: auto !important;
+    bottom: 16px;
+    width: auto !important;
+  }
+}
+
+/* ---------------------------------------------------------------- Orbi, alive
+ *
+ * Everything below runs for ever and costs almost nothing: transforms and opacity only, which the compositor
+ * handles without waking the main thread. All of it stops under reduced motion and on a struggling machine.
+ */
+
+/* A soft light around the whole character, always slightly on, brighter during a moment. */
+.orbi-character {
+  filter: drop-shadow(0 0 calc(5px + 9px * var(--orbi-glow, 0)) color-mix(in srgb, var(--orbi-ring) 70%, transparent));
+}
+
+/*
+ * The blink.
+ *
+ * Two lids resting above the eyes that drop and lift. Deliberately irregular: the second eye is a hair behind the
+ * first, and the double-blink in the middle of the cycle is what keeps it from reading as a metronome.
+ */
+.orbi-lids ellipse {
+  /*
+   * `fill-box` matters more than it looks.
+   *
+   * Without it a percentage resolves against the whole drawing rather than the lid, so the lid parked a hundred
+   * pixels away and came down to a position that missed the eye entirely — an animation that ran perfectly and
+   * could never be seen.
+   */
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: translateY(-170%);
+  animation: orbi-blink 5.4s infinite;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.orbi-lids ellipse:last-child {
+  animation-delay: 0.04s;
+}
+
+@keyframes orbi-blink {
+  0%, 92%, 100% { transform: translateY(-170%); }
+  94% { transform: translateY(-16%); }
+  96% { transform: translateY(-170%); }
+  97.5% { transform: translateY(-16%); }
+  99% { transform: translateY(-170%); }
+}
+
+/* Breathing: the body swells by a hair, about as often as somebody at rest. */
+.orbi-breathe {
+  transform-origin: center;
+  animation: orbi-breathe 3.8s ease-in-out infinite;
+}
+
+@keyframes orbi-breathe {
+  0%, 100% { transform: scale(1, 1); }
+  50% { transform: scale(1.04, 0.97); }
+}
+
+/* The ring turns slowly, for ever. The one thing that never stops while Orbi is on screen. */
+.orbi-character .orbi-ring {
+  transform-origin: center;
+  animation: orbi-ring-turn 9s linear infinite;
+}
+
+@keyframes orbi-ring-turn {
+  from { transform: rotateY(0deg); }
+  to { transform: rotateY(360deg); }
+}
+
+/* The bead on the antenna, breathing in time with the body. */
+.orbi-character .orbi-bead {
+  transform-origin: center;
+  animation: orbi-bead-glow 2.6s ease-in-out infinite;
+}
+
+@keyframes orbi-bead-glow {
+  0%, 100% { opacity: 0.6; transform: scale(0.88); }
+  50% { opacity: 1; transform: scale(1.12); }
+}
+
+/* Switched off wholesale: a companion that burns a battery to shimmer is one somebody turns off. */
+.orbi-still .orbi-lids ellipse,
+.orbi-still .orbi-breathe,
+.orbi-still .orbi-character .orbi-ring,
+.orbi-still .orbi-character .orbi-bead,
+.orbi-simple .orbi-lids ellipse,
+.orbi-simple .orbi-breathe,
+.orbi-simple .orbi-character .orbi-ring,
+.orbi-simple .orbi-character .orbi-bead,
+.st-still .orbi-lids ellipse,
+.st-still .orbi-breathe,
+.st-still .orbi-character .orbi-ring,
+.st-still .orbi-character .orbi-bead {
+  animation: none;
+}
+
+.orbi-still .orbi-lids,
+.orbi-simple .orbi-lids,
+.st-still .orbi-lids {
+  /* Lids out of the way entirely rather than frozen half-shut over an eye. */
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .orbi-lids {
+    display: none;
+  }
+
+  .orbi-breathe,
+  .orbi-character .orbi-ring,
+  .orbi-character .orbi-bead {
+    animation: none;
+  }
+
+  .orbi-character {
+    filter: drop-shadow(0 0 4px color-mix(in srgb, var(--orbi-ring) 60%, transparent));
+  }
+}
+
+/* ---------------------------------------------------------------- the spotlight
+ *
+ * Darkness everywhere, a hole over the one thing being talked about, and a rim that is alive. This replaced Orbi
+ * growing an arm to point: at the size Orbi appears, an arm aimed across a card is ambiguous, and exactly one lit
+ * object on a dark screen is not.
+ */
+.st-spot-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 69;
+  /* Everything underneath stays usable: the tour explains a real product, not a video of one. */
+  pointer-events: none;
+}
+
+/*
+ * The hole.
+ *
+ * A single element with an enormous spread shadow. The shadow darkens the whole window; the element casts none
+ * over its own box, so what is left is a hole. One element to move, one thing to animate, and no seam.
+ */
+.st-spot {
+  position: absolute;
+  box-shadow:
+    0 0 0 9999px color-mix(in srgb, var(--bg-deep, #05080c) 72%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--cyan) 55%, transparent) inset,
+    0 0 22px 2px color-mix(in srgb, var(--cyan) 45%, transparent);
+  transition-property: left, top, width, height, border-radius;
+  transition-timing-function: cubic-bezier(0.32, 1.1, 0.5, 1);
+  animation: st-spot-rim 2.6s ease-in-out infinite;
+  will-change: left, top, width, height;
+}
+
+/* The rim breathes, so the edge of the light is alive rather than drawn on. */
+@keyframes st-spot-rim {
+  0%, 100% {
+    box-shadow:
+      0 0 0 9999px color-mix(in srgb, var(--bg-deep, #05080c) 72%, transparent),
+      0 0 0 1px color-mix(in srgb, var(--cyan) 55%, transparent) inset,
+      0 0 18px 1px color-mix(in srgb, var(--cyan) 38%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 0 9999px color-mix(in srgb, var(--bg-deep, #05080c) 72%, transparent),
+      0 0 0 1.5px color-mix(in srgb, var(--cyan) 85%, transparent) inset,
+      0 0 34px 4px color-mix(in srgb, var(--cyan) 55%, transparent);
+  }
+}
+
+/*
+ * The sweep: a bright arc travelling round the outline.
+ *
+ * A conic gradient, masked down to a thin ring that follows the rounded corners. The mask is the two-layer
+ * "gradient border" trick -- the whole box, minus its own middle -- because a radial mask only follows the shape
+ * of a circle, and on a wide card it let the gradient out as two enormous diagonal streaks across the window.
+ *
+ * The angle is animated rather than the element rotated, for the same reason: rotating a wide box sweeps its
+ * corners across half the screen.
+ */
+@property --st-sweep {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.st-spot-sweep {
+  position: absolute;
+  inset: -2px;
+  padding: 2px;
+  background: conic-gradient(
+    from var(--st-sweep, 0deg),
+    transparent 0deg,
+    transparent 255deg,
+    color-mix(in srgb, var(--cyan) 90%, white 25%) 318deg,
+    transparent 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  animation: st-spot-sweep 3.4s linear infinite;
+  opacity: 0.95;
+}
+
+@keyframes st-spot-sweep {
+  from { --st-sweep: 0deg; }
+  to { --st-sweep: 360deg; }
+}
+
+/* Sonar: each ring starts on the rim and travels outward, fading as it goes. */
+.st-spot-ring {
+  position: absolute;
+  border: 1.5px solid color-mix(in srgb, var(--cyan) 70%, transparent);
+  opacity: 0;
+  animation: st-spot-ring 2.4s cubic-bezier(0.2, 0.6, 0.3, 1) infinite;
+  will-change: transform, opacity;
+}
+
+@keyframes st-spot-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.75;
+  }
+  70% {
+    opacity: 0.12;
+  }
+  100% {
+    transform: scale(var(--st-ring-to, 1.4));
+    opacity: 0;
+  }
+}
+
+/*
+ * Still, but still lit.
+ *
+ * The point of the thing — *this* is the one I mean — is carried entirely by the hole. Everything that moves can
+ * go without losing any of it.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .st-spot {
+    animation: none;
+    transition: none;
+  }
+
+  .st-spot-sweep,
+  .st-spot-ring {
+    display: none;
+  }
+}
+
+.st-still .st-spot {
+  animation: none;
+}
+
+.st-still .st-spot-sweep,
+.st-still .st-spot-ring {
+  display: none;
+}
+
+/* Orbi standing beside the light rather than in it. Placed from the measured spot, so CSS only draws. */
+.st-tour-orbi-at {
+  position: fixed;
+  z-index: 71;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  transition: left 420ms cubic-bezier(0.32, 1.1, 0.5, 1), top 420ms cubic-bezier(0.32, 1.1, 0.5, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .st-tour-orbi-at {
+    transition: none;
+  }
+}

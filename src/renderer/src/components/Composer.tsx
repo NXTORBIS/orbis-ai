@@ -1,9 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useChatPrediction } from '../lib/useChatPrediction'
 import { Check, FileText, Files, ListPlus, Mic, Paperclip, Pencil, Play, Plus, Send, Square, Upload, X } from 'lucide-react'
 import { MAX_QUEUED_MESSAGES } from '../lib/messageQueue'
 import { SLASH_COMMANDS } from '../lib/commands'
 import type { ChatQueue, QueuedMessage } from '../lib/messageQueue'
 import type { Attachment } from '../../../shared/types'
+import { pictureSrc } from '../../../shared/attachments'
 import { CHAT_MODELS, modelLabel } from '../../../shared/models'
 import { PUSH_TO_TALK_EVENT } from '../../../shared/voiceInput'
 import { useDismiss } from '../lib/useDismiss'
@@ -72,6 +74,13 @@ interface Props {
   onCompleteDraft?(draft: string): Promise<string | null>
   /** Changes whenever the chat context changes, so cached completions are refreshed. */
   draftContextKey?: string
+  /**
+   * Told whether there is anything of the person's own in the box.
+   *
+   * This is what takes the chips out from under the last reply the moment somebody starts writing. They were there
+   * to answer "what now?", and somebody who is typing has answered it.
+   */
+  onDraftStarted?(started: boolean): void
   /** Orbis's Visual effects setting; the animated placeholder follows it. */
   effects: boolean
   /** Messages waiting to be sent after the current reply. */
@@ -86,6 +95,13 @@ interface Props {
   onSend(text: string, attachments: Attachment[]): boolean
   /** Runs a slash command such as "/clear" or "/rename Trip ideas". */
   onCommand(name: string, args: string): void
+  /**
+   * An app opened from Search Labs.
+   *
+   * The composer does not open it itself: the conversation owns the reference, because a card has to belong to a
+   * message for the chat to find it again after a restart.
+   */
+  onOpenApp?(appId: string): void
   onStop(): void
   onNotify(text: string, kind?: NoticeKind): void
   onImprovePrompt(text: string): Promise<string | null>
@@ -169,7 +185,11 @@ export default function Composer(props: Props): React.JSX.Element {
     const onCompose = (e: Event): void => {
       const detail = (e as CustomEvent<unknown>).detail
       if (typeof detail !== 'string' || !detail) return
-      setText((current) => (current.trim() ? `${current.trimEnd()}\n\n${detail}` : detail))
+      setText((current) => {
+      const next = current.trim() ? `${current.trimEnd()}\n\n${detail}` : detail
+      predictor.changed(next, 'pasted')
+      return next
+    })
       requestAnimationFrame(() => textareaRef.current?.focus())
     }
     window.addEventListener('orbis:compose', onCompose)
@@ -196,64 +216,76 @@ export default function Composer(props: Props): React.JSX.Element {
 
   const editQueued = (item: QueuedMessage): void => {
     props.onRemoveQueued(item.id)
-    setText((current) => (current.trim() ? `${current.trimEnd()}\n\n${item.text}` : item.text))
+    setText((current) => {
+      const next = current.trim() ? `${current.trimEnd()}\n\n${item.text}` : item.text
+      predictor.changed(next, 'pasted')
+      return next
+    })
     if (item.attachments.length) setAttachments((current) => [...current, ...item.attachments].slice(0, 10))
     requestAnimationFrame(() => textareaRef.current?.focus())
   }
 
-  const [dismissedPrediction, setDismissedPrediction] = useState<string | null>(null)
   const [caretAtEnd, setCaretAtEnd] = useState(true)
-  const extendsText = (candidate: string | null | undefined, typed: string): candidate is string =>
-    !!candidate && candidate.length > typed.length && candidate.toLowerCase().startsWith(typed.toLowerCase())
 
-  // Live completion of what's being typed: fetched once typing pauses, applied whenever it arrives if it still fits.
-  const [liveCompletion, setLiveCompletion] = useState<string | null>(null)
-  const textRef = useRef(text)
-  textRef.current = text
-  const liveRef = useRef(liveCompletion)
-  liveRef.current = liveCompletion
-  const completeDraftRef = useRef(props.onCompleteDraft)
-  completeDraftRef.current = props.onCompleteDraft
-  const completionCache = useRef(new Map<string, string | null>())
-  useEffect(() => completionCache.current.clear(), [props.draftContextKey])
+  /*
+   * What Orbis thinks comes next, and when it stops being true.
+   *
+   * One state, in `shared/chatPrediction.ts`, which is plain functions and tested without a screen. Three things
+   * used to be wrong here and are now impossible by construction: an answer asked for text that has since changed
+   * could still be shown (it fitted, so it looked valid); the faded text stayed on screen while the next guess was
+   * fetched; and a taken guess, still sitting in its props, continued the longer text it had just made and could be
+   * taken again.
+   */
+  const guessing = Boolean(streaming) || attachments.length > 0
+  const predictor = useChatPrediction({
+    draft: text,
+    replyPrediction: props.prediction,
+    complete: props.onCompleteDraft,
+    contextKey: `${props.draftContextKey ?? ''}:${model}`,
+    suspended: guessing
+  })
+
+  /** Sets the box and tells the guess about it in one place, so no change can slip past it. */
+  const changeText = (next: string, reason: 'typed' | 'pasted' | 'cleared' = 'typed'): void => {
+    setText(next)
+    predictor.changed(next, reason)
+  }
+
+  /*
+   * Telling the conversation that there is a draft.
+   *
+   * This is what takes the chips out from under the last reply the moment somebody starts writing. It is sent from
+   * here because this is the only place that knows what is in the box, and it is sent on the change itself rather
+   * than from an effect, so the chips go on the first character instead of a frame later.
+   */
+  const draftStartedRef = useRef(false)
   useEffect(() => {
-    const draft = text
-    if (!completeDraftRef.current || draft.trim().length < 3 || draft.length > 600 || draft.startsWith('/') || draft.includes('\n')) return
-    if (extendsText(liveRef.current, draft)) return
-    const cached = completionCache.current.get(draft)
-    if (cached !== undefined) {
-      setLiveCompletion(cached)
-      return
-    }
-    const timer = window.setTimeout(() => {
-      if (extendsText(liveRef.current, textRef.current)) return
-      completeDraftRef.current?.(draft)
-        .then((full) => {
-          completionCache.current.set(draft, full)
-          if (extendsText(full, textRef.current)) setLiveCompletion(full)
-        })
-        .catch(() => undefined)
-    }, 450)
-    return () => window.clearTimeout(timer)
-  }, [text])
-
-  const replyPrediction = props.prediction && !streaming && attachments.length === 0 ? props.prediction : undefined
-  // Ghost text continues whatever the user has typed: the reply's prediction while it still matches, otherwise the live completion.
-  const prediction = [replyPrediction, text.trim() ? liveCompletion : null].find(
-    (candidate): candidate is string => extendsText(candidate, text) && candidate !== dismissedPrediction
+    const started = text !== ''
+    if (started === draftStartedRef.current) return
+    draftStartedRef.current = started
+    props.onDraftStarted?.(started)
+  }, [text, props.onDraftStarted])
+  // The box going away is the end of the draft as far as anything else is concerned.
+  useEffect(
+    () => () => {
+      if (draftStartedRef.current) props.onDraftStarted?.(false)
+    },
+    []
   )
-  const ghostRest = prediction && !commandsOpen && caretAtEnd ? prediction.slice(text.length) : ''
+
+  const ghostRest = commandsOpen || !caretAtEnd ? '' : predictor.ghost
   const placeholder = useTypewriterPlaceholder(props.effects && text === '' && !ghostRest)
 
+  /** Takes the guess. One press, one acceptance: the guess is gone before this returns. */
   const acceptPrediction = (): void => {
-    if (!prediction) return
-    // Keep the user's own characters and append the rest, so the result is ordinary editable text.
-    const full = text + prediction.slice(text.length)
+    const full = predictor.accept()
+    if (full === null) return
     setText(full)
     requestAnimationFrame(() => {
       const el = textareaRef.current
       if (!el) return
       el.focus()
+      // At the end of the whole thing, never inside what was just filled in.
       el.setSelectionRange(full.length, full.length)
     })
   }
@@ -264,11 +296,11 @@ export default function Composer(props: Props): React.JSX.Element {
     if (!command) return
     setCommandsOpen(false)
     if (command.args && !command.argsOptional && !args.trim()) {
-      setText(`/${command.name} `)
+      changeText(`/${command.name} `)
       requestAnimationFrame(() => textareaRef.current?.focus())
       return
     }
-    setText('')
+    changeText('')
     if (command.name === 'models') return openModelMenu()
     props.onCommand(command.name, args.trim())
   }
@@ -291,6 +323,8 @@ export default function Composer(props: Props): React.JSX.Element {
     if (form?.closest('.stage-content')?.querySelector('.empty-state')) rememberComposerStart(form.getBoundingClientRect())
     if (props.onSend(text, attachments)) {
       setText('')
+      // Sent: nothing of the old guess survives, and an answer still on its way cannot land in the empty box.
+      predictor.reset('submitted')
       setAttachments([])
     } else {
       clearComposerStart()
@@ -333,7 +367,12 @@ export default function Composer(props: Props): React.JSX.Element {
   const toggleVoiceInput = async (): Promise<void> => {
     const spoken = await voice.toggle()
     if (spoken) {
-      setText((current) => (current ? `${current} ${spoken}` : spoken))
+      setText((current) => {
+        // Dictated text is not typed text, but it is still the person's: the old guess is about something else now.
+        const next = current ? `${current} ${spoken}` : spoken
+        predictor.changed(next, 'pasted')
+        return next
+      })
       requestAnimationFrame(() => textareaRef.current?.focus())
     } else if (voice.error) {
       props.onNotify(voice.error, 'warn')
@@ -393,7 +432,7 @@ export default function Composer(props: Props): React.JSX.Element {
               key={p.label}
               className="quick-prompt glass"
               onClick={() => {
-                setText(p.text)
+                changeText(p.text, 'pasted')
                 props.onQuickPromptsChange(false)
                 textareaRef.current?.focus()
               }}
@@ -409,7 +448,7 @@ export default function Composer(props: Props): React.JSX.Element {
           {attachments.map((a, i) => (
             <span key={`${a.name}-${i}`} className="attachment-chip glass">
               {a.type === 'image' ? (
-                <img src={`data:${a.mimeType || 'image/jpeg'};base64,${a.content}`} alt={a.name} style={{ width: 24, height: 24, borderRadius: 4, objectFit: 'cover' }} />
+                <img src={pictureSrc(a)} alt={a.name} style={{ width: 24, height: 24, borderRadius: 4, objectFit: 'cover' }} />
               ) : (
                 <FileText size={13} />
               )}
@@ -521,6 +560,7 @@ export default function Composer(props: Props): React.JSX.Element {
                 </div>
               )}
             </div>
+
           </div>
 
           <div className="composer-field">
@@ -537,8 +577,8 @@ export default function Composer(props: Props): React.JSX.Element {
             value={text}
             placeholder={ghostRest ? '' : placeholder}
             aria-label="Message Orbis"
-            aria-description={ghostRest ? `Suggestion: ${prediction}. Press Tab to use it.` : undefined}
-            onChange={(e) => setText(e.target.value)}
+            aria-description={ghostRest ? `Suggested ending: ${ghostRest}. Press Tab to use it, Escape to dismiss it.` : undefined}
+            onChange={(e) => changeText(e.target.value)}
             onSelect={(e) => {
               const el = e.currentTarget
               setCaretAtEnd(el.selectionStart === el.value.length && el.selectionEnd === el.value.length)
@@ -561,7 +601,8 @@ export default function Composer(props: Props): React.JSX.Element {
                   e.preventDefault()
                   setCommandsOpen(false)
                 }
-              } else if (ghostRest && e.key === 'Tab' && !e.shiftKey) {
+              } else if (ghostRest && e.key === 'Tab' && !e.shiftKey && !e.repeat) {
+                // Not on a held key: one physical press, one acceptance.
                 e.preventDefault()
                 acceptPrediction()
               } else if (ghostRest && text === '' && e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
@@ -573,7 +614,7 @@ export default function Composer(props: Props): React.JSX.Element {
                 submit()
               } else if (e.key === 'Escape' && ghostRest) {
                 e.preventDefault()
-                setDismissedPrediction(prediction ?? null)
+                predictor.dismiss()
               } else if (e.key === 'Escape' && streaming) {
                 e.preventDefault()
                 props.onStop()
@@ -622,30 +663,64 @@ export default function Composer(props: Props): React.JSX.Element {
               )}
             </div>
 
-            <button
-              type="button"
-              className={`tool-btn${voice.recording ? ' recording' : ''}${voice.transcribing ? ' transcribing' : ''}`}
-              title={voice.recording ? `Stop recording (${Math.round(voice.recordingMs / 1000)}s)` : voice.transcribing ? 'Writing down what you said…' : 'Speak instead of typing'}
-              onClick={() => void toggleVoiceInput()}
-              disabled={voice.transcribing || !voice.available}
-            >
-              <Mic size={16} />
-            </button>
-
-            {(!streaming || canSend) && (
-              <button
-                type="submit"
-                className={`send-btn${canSend ? ' ready' : ''}${streaming ? ' queue' : ''}`}
-                title={streaming ? 'Add to queue (Enter)' : 'Send (Enter)'}
-                aria-label={streaming ? 'Add to queue' : 'Send'}
-                disabled={!canSend}
-              >
-                {streaming ? <ListPlus size={15} /> : <Send size={14} />}
+            {/*
+              * One button, which is whichever one is useful.
+              *
+              * With nothing typed there is nothing to send, so the button speaks instead. Start typing and it becomes
+              * Send. While Orbis is replying it becomes Stop, and if something is also typed it becomes Add to queue.
+              *
+              * Two buttons sat here before — a microphone and a send — and one of them was always dead. A disabled
+              * control that never becomes useful until you type is the sort of thing that reads as broken, and it cost
+              * a slot in a row that is already crowded.
+              *
+              * The recording and transcribing states stay on the same button, so the thing you pressed is the thing
+              * that changes.
+              */}
+            {streaming ? (
+              <>
+                {canSend && (
+                  <button
+                    type="submit"
+                    className="send-btn ready queue"
+                    title="Add to queue (Enter)"
+                    aria-label="Add to queue"
+                  >
+                    <ListPlus size={15} />
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="send-btn stop"
+                  title="Stop generating (Esc)"
+                  aria-label="Stop generating"
+                  onClick={props.onStop}
+                >
+                  <Square size={12} fill="currentColor" />
+                </button>
+              </>
+            ) : canSend ? (
+              <button type="submit" className="send-btn ready" title="Send (Enter)" aria-label="Send">
+                <Send size={14} />
               </button>
-            )}
-            {streaming && (
-              <button type="button" className="send-btn stop" title="Stop generating (Esc)" aria-label="Stop" onClick={props.onStop}>
-                <Square size={12} fill="currentColor" />
+            ) : (
+              <button
+                type="button"
+                className={`send-btn speak${voice.recording ? ' recording' : ''}${voice.transcribing ? ' transcribing' : ''}`}
+                title={
+                  !voice.available
+                    ? 'Speaking needs a voice model. Settings has the download.'
+                    : voice.recording
+                      ? `Stop recording (${Math.round(voice.recordingMs / 1000)}s)`
+                      : voice.transcribing
+                        ? 'Writing down what you said…'
+                        : 'Speak instead of typing'
+                }
+                aria-label={voice.recording ? 'Stop recording' : voice.transcribing ? 'Writing down what you said' : 'Speak instead of typing'}
+                aria-pressed={voice.recording}
+                onClick={() => void toggleVoiceInput()}
+                disabled={voice.transcribing || !voice.available}
+              >
+                <Mic size={15} />
               </button>
             )}
           </div>

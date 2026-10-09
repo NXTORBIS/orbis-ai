@@ -186,7 +186,26 @@ export default function ClipboardView({ onClose, onNotify }: { onClose(): void; 
             <div key={item.id} className={`clip-row clip-${item.kind}`}>
               <button type="button" className="clip-main" title="Copy this again" onClick={() => void use(item)}>
                 <span className="clip-icon">{copiedId === item.id ? <Check size={14} /> : <Icon size={14} />}</span>
-                {item.kind === 'image' ? <img className="clip-image" src={item.content} alt={item.preview} /> : <span className="clip-preview">{item.preview}</span>}
+                {item.kind === 'image' ? (
+                  /*
+                   * A picture that will not load shows what it was, not a broken-image box.
+                   *
+                   * Clips kept before the data url stopped being trimmed at the byte limit are damaged on disk and
+                   * cannot be recovered. Leaving them as the browser's broken-image glyph made the whole row look
+                   * like a fault in Orbis; "Image 1920×1080" is at least true about what is there.
+                   */
+                  <img
+                    className="clip-image"
+                    src={item.content}
+                    alt={item.preview}
+                    onError={(event) => {
+                      const img = event.currentTarget
+                      img.replaceWith(Object.assign(document.createElement('span'), { className: 'clip-preview', textContent: item.preview }))
+                    }}
+                  />
+                ) : (
+                  <span className="clip-preview">{item.preview}</span>
+                )}
                 {item.kind === 'color' && <span className="clip-swatch" style={{ background: item.content.trim() }} aria-hidden="true" />}
                 <span className="clip-meta">
                   {when(item.copiedAt)}

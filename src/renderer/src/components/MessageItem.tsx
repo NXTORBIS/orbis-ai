@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState , useId } from 'react'
+import { Suspense, lazy, memo, useEffect, useId, useRef, useState } from 'react'
 import { speech } from '../lib/speak'
 import {
   Ban,
@@ -27,11 +27,15 @@ import {
 } from 'lucide-react'
 import type { AutomationState, BrowserConfirmation, BrowserStep, ChatMessage } from '../../../shared/types'
 import { automationActive, automationProgress } from '../../../shared/automation'
+import { pictureSrc } from '../../../shared/attachments'
 import { IMAGE_GEN_STATUS } from '../../../shared/types'
 import ImageGenPlaceholder from './ImageGenPlaceholder'
 import { modelLabel } from '../../../shared/models'
 import { copyText, formatDuration } from '../lib/utils'
 import { documentTextFromReply, titleFromText } from '../../../shared/artifacts/naming'
+const NativeAppCard = lazy(() => import('./native/NativeAppCard'))
+const QuizCard = lazy(() => import('./quiz/QuizCard'))
+import type { ChatQuiz } from '../../../shared/types'
 import { useDismiss } from '../lib/useDismiss'
 import type { NoticeKind } from '../App'
 import Markdown from './Markdown'
@@ -58,6 +62,10 @@ interface Props {
   /** Re-send a user message as-is, replacing the replies after it. */
   onResend(messageId: string): void
   onFeedback(messageId: string, feedback: 'up' | 'down' | undefined): void
+  /** Saves how far through a quiz somebody is, so it survives a restart. */
+  onQuizChange?(messageId: string, next: ChatQuiz): void
+  /** Starts a second go at the questions that were missed. */
+  onQuizRetry?(next: ChatQuiz): void
   onNotify(text: string, kind?: NoticeKind): void
   /** Approves or cancels a browser action Orbis asked about in this reply. */
   onBrowserConfirm?(messageId: string, confirmationId: string, approved: boolean): void
@@ -127,7 +135,19 @@ function UserMessage({ message, userName, canEdit, onEdit, onResend, onNotify }:
           <div className="attachment-row end">
             {message.attachments.map((a, i) => (
               <span key={`${a.name}-${i}`} className="attachment-chip glass">
-                <FileText size={13} />
+                {/*
+                  An image shows as an image.
+                  
+                  It used to show as a file chip with a name on it, which for a picture somebody had just selected off
+                  a page read as Orbis having lost it. `pictureSrc` handles both shapes the content arrives in -- bare
+                  base64 from the composer, a whole data url from Visual Search -- because prefixing one that is
+                  already prefixed is a url nothing can decode.
+                */}
+                {a.type === 'image' ? (
+                  <img src={pictureSrc(a)} alt={a.name} style={{ width: 24, height: 24, borderRadius: 4, objectFit: 'cover' }} />
+                ) : (
+                  <FileText size={13} />
+                )}
                 <span className="truncate">{a.name}</span>
               </span>
             ))}
@@ -238,6 +258,22 @@ function AssistantMessage(props: Props): React.JSX.Element {
             <div className="artifact-cards">
               {message.artifacts.map((one) => (
                 <ArtifactCard key={`${one.ref.artifactId}:${one.ref.versionId}:${one.action}`} artifact={one} onNotify={props.onNotify} />
+              ))}
+            </div>
+          )}
+          {message.quiz && props.onQuizChange && (
+            <Suspense fallback={null}>
+              <QuizCard
+                held={message.quiz}
+                onChange={(next) => props.onQuizChange?.(message.id, next)}
+                {...(props.onQuizRetry ? { onRetry: props.onQuizRetry } : {})}
+              />
+            </Suspense>
+          )}
+          {message.apps && message.apps.length > 0 && (
+            <div className="na-cards">
+              {message.apps.map((one) => (
+                <NativeAppCard key={one.instanceId} reference={one} onNotify={props.onNotify} />
               ))}
             </div>
           )}

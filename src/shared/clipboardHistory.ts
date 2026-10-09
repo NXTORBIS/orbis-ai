@@ -51,6 +51,17 @@ export const DEFAULT_CLIPBOARD_SETTINGS: ClipboardSettings = {
 export const MAX_CLIP_TEXT = 100_000
 export const MAX_CLIP_IMAGE_BYTES = 4_000_000
 
+/**
+ * The longest a stored picture may be, counted in characters of its data url.
+ *
+ * A separate number from the byte limit above, and the reason it exists is a bug that made every large copied image
+ * unviewable. The byte limit is checked against the real PNG when it is captured; the stored form is base64, which is
+ * four characters for every three bytes. Slicing the data url at the *byte* number therefore cut a third off the end
+ * of any image above about three megabytes -- and a data url cut mid-base64 is not a smaller picture, it is one no
+ * browser can decode. It showed in the clipboard as a broken-image box.
+ */
+export const MAX_CLIP_IMAGE_CHARS = Math.ceil(MAX_CLIP_IMAGE_BYTES / 3) * 4 + 64
+
 const CODE_HINTS = /(?:^|\n)\s*(?:function|const|let|var|class|import|export|def|public|private|#include|SELECT |<\/?[a-z][\w-]*>|\{\s*"[\w-]+":)/
 
 /** What a copied piece of text is: a link, a color, code, or plain text. */
@@ -75,6 +86,14 @@ export function looksSecret(text: string): boolean {
   if (/^\d{13,19}$/.test(digits) && luhn(digits)) return true
   // Well-known token shapes.
   if (/\b(?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9]{10,}\b|\bgh[pousr]_[A-Za-z0-9]{20,}\b|\bxox[baprs]-[A-Za-z0-9-]{10,}\b|\bAKIA[0-9A-Z]{16}\b|\bAIza[0-9A-Za-z_-]{30,}\b/.test(trimmed)) return true
+  /*
+   * The hyphen form, which the underscore shapes above never matched.
+   *
+   * `sk_live_` is Stripe's. The model services hand out `sk-…`, `sk-proj-…` and `sk-ant-…`, and that is the key
+   * somebody is most likely to copy and paste in a day of using Orbis — so of all the shapes here it was the one
+   * that mattered most and the only one missing.
+   */
+  if (/\b(?:sk|pk)-(?:proj-|ant-|or-v1-|live-|test-)?[A-Za-z0-9_-]{20,}\b/.test(trimmed)) return true
   if (/^ey[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}$/.test(trimmed)) return true
   // A short single line with no spaces, mixing cases, digits and symbols: very likely a password.
   if (!/\s/.test(trimmed) && trimmed.length >= 8 && trimmed.length <= 64 && /[a-z]/.test(trimmed) && /[A-Z]/.test(trimmed) && /\d/.test(trimmed) && /[^A-Za-z0-9]/.test(trimmed) && !/^https?:/i.test(trimmed)) return true
@@ -152,10 +171,14 @@ export function normalizeClip(raw: unknown): ClipItem | null {
   if (typeof r.id !== 'string' || !r.id || typeof r.content !== 'string' || !r.content) return null
   const kind: ClipKind = (['text', 'link', 'image', 'color', 'code'] as ClipKind[]).includes(r.kind as ClipKind) ? (r.kind as ClipKind) : 'text'
   if (kind === 'image' && !r.content.startsWith('data:image/')) return null
+  // Refused rather than trimmed. Anything longer than this cannot be a picture within the byte limit, so it is
+  // already damaged -- and storing a trimmed copy of damaged base64 only makes a broken image that looks kept.
+  if (kind === 'image' && r.content.length > MAX_CLIP_IMAGE_CHARS) return null
   return {
     id: r.id,
     kind,
-    content: r.content.slice(0, kind === 'image' ? MAX_CLIP_IMAGE_BYTES : MAX_CLIP_TEXT),
+    // Text is trimmed; a picture never is, because every character of base64 is load-bearing.
+    content: kind === 'image' ? r.content : r.content.slice(0, MAX_CLIP_TEXT),
     preview: (typeof r.preview === 'string' && r.preview) || clipPreview(kind, r.content, r.size),
     ...(r.source && typeof r.source === 'object' ? { source: { ...(r.source.url ? { url: String(r.source.url).slice(0, 2048) } : {}), ...(r.source.title ? { title: String(r.source.title).slice(0, 300) } : {}), ...(r.source.app ? { app: String(r.source.app).slice(0, 80) } : {}) } } : {}),
     pinned: r.pinned === true,

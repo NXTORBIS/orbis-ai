@@ -1529,6 +1529,68 @@ textarea.hud-input {
   gap: 4px;
 }
 
+/*
+ * Search Labs, in the chat header.
+ *
+ * It was in the composer's tool row, which was wrong twice: that row is about the message being written, and this is
+ * about the whole conversation. Here it sits with the chat's own controls, and its popover opens downwards into the
+ * space there is always room in.
+ *
+ * Labelled rather than an icon alone. An unlabelled flask told nobody what it was, which is the same mistake the
+ * browser panel's rail made with eleven icons at zero opacity.
+ */
+.labs-anchor {
+  display: flex;
+  align-items: center;
+}
+
+.labs-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 13px;
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+}
+
+.labs-btn:hover {
+  background: rgba(63, 216, 255, 0.08);
+  border-color: rgba(63, 216, 255, 0.35);
+  color: var(--cyan);
+}
+
+.labs-btn.open {
+  background: rgba(63, 216, 255, 0.14);
+  border-color: rgba(63, 216, 255, 0.45);
+  color: var(--cyan);
+}
+
+.labs-btn:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+/* On a narrow window the word goes and the flask stays, rather than the row wrapping. */
+@media (max-width: 900px) {
+  .labs-btn span {
+    display: none;
+  }
+
+  .labs-btn {
+    padding: 0 7px;
+  }
+}
+
 /* Positioned on the system bar itself; ChatHeader sets left/width from the free space between the button groups. */
 .header-title {
   position: absolute;
@@ -4455,6 +4517,51 @@ textarea.hud-input {
   animation: send-pulse 2s ease-out infinite;
 }
 
+/*
+ * The same button, speaking.
+ *
+ * Quiet rather than filled, because with nothing typed there is nothing urgent to press — it is an alternative to
+ * typing, not the end of it. It keeps the send button's size and position exactly, so the thing under the cursor
+ * does not move when the first character is typed.
+ */
+.send-btn.speak {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--glass-border);
+  box-shadow: none;
+}
+
+.send-btn.speak:hover:not(:disabled) {
+  background: rgba(63, 216, 255, 0.08);
+  border-color: rgba(63, 216, 255, 0.35);
+  color: var(--cyan);
+  box-shadow: none;
+}
+
+.send-btn.speak:active:not(:disabled) {
+  background: rgba(63, 216, 255, 0.14);
+}
+
+.send-btn.speak:disabled {
+  background: transparent;
+  border-color: var(--glass-border);
+  opacity: 0.45;
+}
+
+.send-btn.speak.recording {
+  background: var(--red);
+  border-color: var(--red);
+  color: #ffffff;
+  animation: stop-pulse 1.4s ease-out infinite;
+}
+
+.send-btn.speak.transcribing {
+  background: rgba(63, 216, 255, 0.14);
+  border-color: rgba(63, 216, 255, 0.4);
+  color: var(--cyan);
+  animation: send-pulse 1.6s ease-out infinite;
+}
+
 .send-btn.stop {
   background: var(--red);
   color: #ffffff;
@@ -6548,6 +6655,10 @@ html[data-dropdown-open] * {
   padding: 6px 10px;
   border-radius: 10px;
   border: 1px solid transparent;
+  /* So one oversized clip cannot widen the row past the panel holding it. */
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .clip-row:hover {
@@ -6596,6 +6707,17 @@ html[data-dropdown-open] * {
 
 .clip-image {
   height: 34px;
+  /*
+   * Capped, because a copied screenshot is wide.
+   *
+   * With only a height set, the image kept its aspect ratio and grew to whatever width that implied — a 1920-wide
+   * screenshot became a 1,920-pixel row inside a panel a few hundred wide, and the whole list scrolled sideways.
+   * `object-fit: cover` keeps it looking like a thumbnail rather than squashing it.
+   */
+  width: 56px;
+  max-width: 56px;
+  flex: 0 0 auto;
+  object-fit: cover;
   border-radius: 6px;
   border: 1px solid var(--line-strong);
 }
@@ -10365,8 +10487,17 @@ html[data-motion='reduced'] .tool-btn.recording {
   overflow-y: auto;
 }
 
+/*
+ * Eight tabs that wrap rather than scroll.
+ *
+ * They are `flex: 1 1 auto` and cannot shrink past their own icons, so below about 560px of panel the strip was
+ * 44px wider than the screen -- and because `.mk-main` sets `overflow-y: auto`, which makes overflow-x `auto` too,
+ * the whole screen scrolled sideways rather than the strip saying anything. Wrapping, not scrolling: a scrolling
+ * strip hides half of itself, and a tab you cannot see is a tab you do not know is there.
+ */
 .mk-tabs {
   display: flex;
+  flex-wrap: wrap;
   gap: 4px;
   padding: 3px;
   border: 1px solid var(--line);
@@ -13643,6 +13774,9 @@ html[data-motion='reduced'] .tool-btn.recording {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  /* Measured for the stacking rule at the bottom of this block: the screen's own width, not the window's. */
+  container-type: inline-size;
+  container-name: pages-view;
 }
 
 .pages-search {
@@ -13654,10 +13788,22 @@ html[data-motion='reduced'] .tool-btn.recording {
   border-radius: 999px;
   background: var(--pill-bg);
   color: var(--muted);
+  /* So a search box placed in a narrow column shrinks with it instead of pushing out of it. */
+  min-width: 0;
 }
 
+/*
+ * The field grows and shrinks with the box around it.
+ *
+ * It was a flat `width: 190px`, which went wrong in both directions. Where the box is stretched -- Create puts this
+ * in a wide column -- the field stayed 190px and clipped its own placeholder to "Find by name, notes or wha". Where
+ * the box is narrow, at 880px and under, the field would not shrink and the whole search ran 160 pixels out of its
+ * column. 190px is now the size it *prefers*, which is what it always should have been.
+ */
 .pages-search input {
-  width: 190px;
+  flex: 1 1 190px;
+  /* A floor, so it wraps or the box grows rather than the field collapsing to a few characters of its placeholder. */
+  min-width: 90px;
   border: 0;
   background: transparent;
   color: var(--text);
@@ -13678,19 +13824,6 @@ html[data-motion='reduced'] .tool-btn.recording {
   padding: 12px 16px 16px;
 }
 
-/* Narrow windows stack rather than squeezing the subject list into unreadability. */
-@media (max-width: 860px) {
-  .pages-body {
-    grid-template-columns: 1fr;
-  }
-
-  .pages-side {
-    flex-direction: row;
-    flex-wrap: wrap;
-    overflow: visible;
-  }
-}
-
 .pages-side {
   display: flex;
   flex-direction: column;
@@ -13698,6 +13831,37 @@ html[data-motion='reduced'] .tool-btn.recording {
   min-height: 0;
   overflow-y: auto;
   padding-right: 4px;
+}
+
+/*
+ * Narrow: the subject list lies along the top instead of squeezing into a column nobody can read.
+ *
+ * Two things were wrong with this rule and each one alone was enough to stop it working.
+ *
+ * It was written *above* `.pages-side`, and at equal specificity the later rule wins whatever media query the
+ * earlier one is wrapped in -- so `flex-direction: row` was overridden by the `column` below it every time, in
+ * every window. The list never stacked; it stayed a column and grew a sideways scrollbar two thousand pixels wide.
+ *
+ * And it asked about the window. This screen sits beside a 264px sidebar, so a 860px window is a 596px screen, and
+ * the number was measuring something that was never the thing running out of room.
+ */
+@container pages-view (max-width: 640px) {
+  .pages-body {
+    grid-template-columns: 1fr;
+    /* Two real rows: the subjects, then whatever height is left for the pages. */
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  /*
+   * The subject list keeps its own scrolling and takes a fixed slice of the top.
+   *
+   * Letting it become a wrapping row with `overflow: visible` was the first attempt and was worse than the fault it
+   * replaced: the list grew to its full content height, the cards were drawn over it, and the subjects showed
+   * through them. A short scrolling list is the honest shape for a column that has become a band.
+   */
+  .pages-side {
+    max-height: 168px;
+  }
 }
 
 .pages-side-head {
@@ -16801,11 +16965,23 @@ html[data-motion='reduced'] .tool-btn.recording {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  /*
+   * A size of its own. Without one the button collapsed to its 14px icon, which is smaller than anything should be
+   * that has to be clicked. The icon is unchanged; the area around it is what grew.
+   */
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  border-radius: 6px;
   padding: 0;
   border: 0;
   background: transparent;
   color: inherit;
   cursor: pointer;
+}
+
+.mk-search-toggle:hover {
+  background: var(--hover);
 }
 
 .mk-search-toggle:focus-visible {
@@ -16986,6 +17162,18 @@ html[data-motion='reduced'] .tool-btn.recording {
   /* Then the full name, leaving the logo, the symbol, the price and the move. */
   .mk-row-name > .mk-name {
     display: none;
+  }
+
+  /*
+   * And the floor comes down with it.
+   *
+   * 96px was room for a logo and the beginning of a name. With the name gone it is room for nothing, and it was the
+   * reason a row still ran out of its list: in the Markets screen's left-hand panel the list is about 330px wide,
+   * and 96 + the price + the move + two buttons + the gaps came to 364. The symbol clips itself, so a floor of 64 is
+   * a logo and a few characters of it -- which is the part being read.
+   */
+  .mk-row-name {
+    min-width: 64px;
   }
 }
 
@@ -17457,7 +17645,7 @@ html[data-motion='reduced'] .tool-btn.recording {
    scroll, the only way to find something was to read all of it.
    ========================================================================= */
 
-.st-modal {
+.set-modal {
   width: min(900px, 92vw);
   height: min(680px, 88vh);
   display: flex;
@@ -17466,7 +17654,7 @@ html[data-motion='reduced'] .tool-btn.recording {
   overflow: hidden;
 }
 
-.st-split {
+.set-split {
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
@@ -17475,7 +17663,7 @@ html[data-motion='reduced'] .tool-btn.recording {
 
 /* ---- where everything is ---- */
 
-.st-nav {
+.set-nav {
   flex: 0 0 200px;
   display: flex;
   flex-direction: column;
@@ -17485,7 +17673,7 @@ html[data-motion='reduced'] .tool-btn.recording {
   overflow-y: auto;
 }
 
-.st-search {
+.set-search {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -17495,11 +17683,11 @@ html[data-motion='reduced'] .tool-btn.recording {
   color: var(--faint);
 }
 
-.st-search:focus-within {
+.set-search:focus-within {
   border-color: var(--cyan-dim);
 }
 
-.st-search > input {
+.set-search > input {
   flex: 1 1 auto;
   min-width: 0;
   padding: 7px 0;
@@ -17509,11 +17697,11 @@ html[data-motion='reduced'] .tool-btn.recording {
   font-size: 12.5px;
 }
 
-.st-search > input:focus {
+.set-search > input:focus {
   outline: none;
 }
 
-.st-nav > ul {
+.set-nav > ul {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -17522,7 +17710,7 @@ html[data-motion='reduced'] .tool-btn.recording {
   gap: 1px;
 }
 
-.st-nav button {
+.set-nav button {
   display: flex;
   align-items: center;
   gap: 9px;
@@ -17537,24 +17725,24 @@ html[data-motion='reduced'] .tool-btn.recording {
   cursor: pointer;
 }
 
-.st-nav button:hover {
+.set-nav button:hover {
   color: var(--text);
   background: color-mix(in srgb, var(--text) 7%, transparent);
 }
 
-.st-nav button.is-on {
+.set-nav button.is-on {
   color: var(--text);
   background: var(--cyan-fill);
   /* The bar rather than a fill alone: which section you are in has to survive a busy background behind the glass. */
   box-shadow: inset 2px 0 0 var(--cyan);
 }
 
-.st-nav button:focus-visible {
+.set-nav button:focus-visible {
   outline: 2px solid var(--cyan);
   outline-offset: -2px;
 }
 
-.st-none {
+.set-none {
   margin: 4px 6px;
   font-size: 12px;
   line-height: 1.5;
@@ -17563,27 +17751,27 @@ html[data-motion='reduced'] .tool-btn.recording {
 
 /* ---- the section itself ---- */
 
-.st-body {
+.set-body {
   flex: 1 1 auto;
   min-width: 0;
   overflow-y: auto;
   padding: 16px 18px 24px;
 }
 
-.st-head {
+.set-head {
   margin: 0 0 14px;
   padding-bottom: 12px;
   border-bottom: 1px solid var(--glass-border);
 }
 
-.st-head h3 {
+.set-head h3 {
   margin: 0;
   font-size: 17px;
   color: var(--text);
 }
 
 /* What the section is for, in the words somebody would use — so a heading alone never has to carry it. */
-.st-head p {
+.set-head p {
   margin: 4px 0 0;
   font-size: 12.5px;
   line-height: 1.5;
@@ -17595,11 +17783,11 @@ html[data-motion='reduced'] .tool-btn.recording {
     Narrow: the list becomes a row along the top. The labels go with it -- at this width eight of them will not fit
     beside the icons, and the icons alone are still eight distinct targets in a fixed order.
   */
-  .st-split {
+  .set-split {
     flex-direction: column;
   }
 
-  .st-nav {
+  .set-nav {
     flex: 0 0 auto;
     flex-direction: row;
     flex-wrap: wrap;
@@ -17608,26 +17796,26 @@ html[data-motion='reduced'] .tool-btn.recording {
     border-bottom: 1px solid var(--glass-border);
   }
 
-  .st-search {
+  .set-search {
     flex: 1 1 100%;
   }
 
-  .st-nav > ul {
+  .set-nav > ul {
     flex-direction: row;
     flex-wrap: wrap;
     gap: 2px;
   }
 
-  .st-nav button {
+  .set-nav button {
     width: auto;
     padding: 7px 9px;
   }
 
-  .st-nav button > span {
+  .set-nav button > span {
     display: none;
   }
 
-  .st-nav button.is-on {
+  .set-nav button.is-on {
     box-shadow: inset 0 -2px 0 var(--cyan);
   }
 }
@@ -18800,3 +18988,176 @@ html[data-motion='reduced'] .tool-btn.recording {
 @media (prefers-reduced-motion: reduce) {
   .chat-sel-bar { animation: none; }
 }
+
+/* ---------------------------------------------------------------- what you are working on
+ *
+ * The entire visible surface of Ambient Intelligence: one quiet word in the system bar, and a small popover.
+ * Deliberately understated — it is a thing Orbis noticed, not a thing Orbis wants you to deal with.
+ */
+.ctx-chip-holder {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.ctx-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 190px;
+  padding: 4px 10px;
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
+  border-radius: 999px;
+  background: transparent;
+  color: var(--faint);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+
+.ctx-chip:hover,
+.ctx-chip.on {
+  color: var(--text);
+  border-color: var(--cyan);
+  background: color-mix(in srgb, var(--cyan) 10%, transparent);
+}
+
+.ctx-chip:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+/* The dot breathes, which is the only hint that anything behind this is still thinking. */
+.ctx-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--cyan);
+  animation: ctx-pulse 3.2s ease-in-out infinite;
+}
+
+@keyframes ctx-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+.ctx-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ctx-pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 60;
+  width: min(300px, 80vw);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 13px 14px;
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.12));
+  border-radius: 13px;
+  background: var(--surface);
+  box-shadow: 0 14px 38px rgba(0, 0, 0, 0.45);
+  animation: ctx-in 0.16s ease-out both;
+}
+
+@keyframes ctx-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
+.ctx-pop header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ctx-close {
+  display: inline-flex;
+  padding: 3px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+}
+
+.ctx-close:hover {
+  color: var(--text);
+}
+
+.ctx-line {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--text);
+}
+
+.ctx-why,
+.ctx-related {
+  margin: 0;
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11.5px;
+  color: var(--faint);
+}
+
+.ctx-pop h4 {
+  margin: 2px 0 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.ctx-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 2px;
+}
+
+.ctx-btn {
+  padding: 5px 11px;
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.12));
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ctx-btn:hover {
+  border-color: var(--cyan);
+}
+
+.ctx-btn.quiet {
+  color: var(--faint);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ctx-dot { animation: none; }
+  .ctx-pop { animation: none; }
+}
+
+/* A Page laboratory's own small drawing (the triangle, and anything else that is one shape rather than a chart). */
+.page-figure { margin: 10px 0 0; }
+.page-triangle { width: 100%; max-width: 300px; height: auto; display: block; }
+.page-triangle polygon { fill: color-mix(in srgb, var(--cyan) 18%, transparent); stroke: var(--cyan); stroke-width: 0.6%; vector-effect: non-scaling-stroke; }
+.page-triangle circle { fill: var(--cyan); }
+.page-triangle text { fill: var(--faint); }
+.page-lines { width: 100%; max-width: 300px; height: auto; display: block; }
+.page-lines-axis { stroke: var(--glass-border); stroke-width: 0.12; }
+.page-lines-row { stroke-linecap: round; }
+.page-lines-row.row-0 { stroke: var(--cyan); }
+.page-lines-row.row-1 { stroke: #f0a33a; }

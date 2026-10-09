@@ -1,6 +1,20 @@
 /* The Create screen. Co-located, the way welcome.css and games.css are. Tokens only: a name that is not in the theme
    resolves to nothing, silently, so nothing here invents one. */
 
+/*
+ * The screen measures itself, not the window.
+ *
+ * Create sits beside a 264px sidebar, so at an 880px window its body has about 616px -- and the single-column rule
+ * at the bottom of this file was a `max-width: 860px` *media* query, which asks about the window. It never fired
+ * where it was needed: two columns with floors of 320 and 260 plus the gap need 642px, so the screen simply ran out
+ * of its own panel and grew a sideways scrollbar. This is the same lesson `.mk-rows` in styles.css records at
+ * length, and the same answer.
+ */
+.create-view {
+  container-type: inline-size;
+  container-name: create-view;
+}
+
 .create-body {
   display: grid;
   grid-template-columns: minmax(320px, 1fr) minmax(260px, 0.8fr);
@@ -12,6 +26,17 @@
   overflow: auto;
   flex: 1;
   min-height: 0;
+}
+
+/*
+ * Each column may be narrower than the widest thing in it.
+ *
+ * A `1fr` track takes its minimum from its contents, so one long select or one wide input sets the floor for the
+ * whole column -- and the screen then runs 202 pixels past its own panel with a sideways scrollbar, even after the
+ * two columns had correctly become one. `min-width: 0` is what lets the track be the size it was asked to be.
+ */
+.create-body > * {
+  min-width: 0;
 }
 
 .create-make {
@@ -54,10 +79,14 @@
   display: flex;
   gap: 8px;
   align-items: center;
+  /* The field takes its own line rather than being squeezed to nothing beside the two buttons. */
+  flex-wrap: wrap;
 }
 
 .create-ask-input {
-  flex: 1;
+  /* 220px is the width it wants; wrapping is what happens when there is less, which is better than shrinking to
+     four characters of its own placeholder -- "De" was what it came to at 880px. */
+  flex: 1 1 220px;
   min-width: 0;
 }
 
@@ -523,7 +552,7 @@
   word-break: break-all;
 }
 
-@media (max-width: 860px) {
+@container create-view (max-width: 700px) {
   .create-body {
     grid-template-columns: 1fr;
     grid-template-areas:
