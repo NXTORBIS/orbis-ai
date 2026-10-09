@@ -457,3 +457,31 @@ function countSelectors(css: string): number {
     .filter((block) => block.includes('{'))
     .reduce((n, block) => n + block.split('{')[0].split(',').filter((s) => s.trim()).length, 0)
 }
+
+/**
+ * A call to the blocking API, with a second chance.
+ *
+ * At startup Chromium is still reading and indexing the extension's rule files, and a call that arrives during
+ * that answers `Internal error.` -- a sentence that says nothing about what went wrong and is indistinguishable
+ * from a rule file being broken. Measured in the real browser: the very same call that fails while the worker is
+ * starting succeeds a moment later, every time.
+ *
+ * So it is tried again, briefly, and only reported if it never takes. Without this the whole first pass is lost:
+ * the settings say to block annoyances and the browser is left with the three rulesets the manifest switched on,
+ * silently, until something else happens to call this again.
+ */
+export async function keepTrying(what: string, run: () => Promise<void>, waits: readonly number[] = [120, 350, 800, 1600, 3000]): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await run()
+      // Said only when it did not take the first time, so a normal start stays silent and a slow one is visible.
+      if (attempt > 0) console.info(`[orbis] ${what.replace('could not be', 'took')} ${attempt + 1} tries`)
+      return
+    } catch (failed) {
+      if (attempt >= waits.length) {
+        throw new Error(`${what} (after ${attempt + 1} tries): ${failed instanceof Error ? failed.message : String(failed)}`)
+      }
+      await new Promise((go) => setTimeout(go, waits[attempt]))
+    }
+  }
+}

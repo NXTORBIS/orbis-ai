@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { FiltersEngine } from '@ghostery/adblocker'
-import { AdBlockCore, ENGINE_CONFIG, activeCategories, extractPopupHosts, normalizeSettings } from './blocker.ts'
+import { AdBlockCore, ENGINE_CONFIG, activeCategories, extractPopupHosts, keepTrying, normalizeSettings } from './blocker.ts'
 import { FilterStore, countRules, sha256, validateList } from './store.ts'
 import type { Catalog } from './store.ts'
 
@@ -347,4 +347,56 @@ test('a first run with no connection stays empty rather than breaking, and recov
   } finally {
     await s.cleanup()
   }
+})
+
+/*
+ * Turning the blocker on, when the browser is not ready to be told yet.
+ *
+ * Measured in the real browser: while Chromium is still reading the extension's rule files, the call that enables
+ * them answers `Internal error.` -- a sentence that names nothing and reads exactly like a broken rule file. The
+ * same call a moment later works. Without a second chance the whole first pass is lost silently and the browser
+ * keeps only the rulesets the manifest switched on.
+ *
+ * Short waits here so the test does not spend the real backoff.
+ */
+test('a call that is not ready yet is tried again', async () => {
+  let tries = 0
+  await keepTrying(
+    'the rulesets could not be switched on',
+    async () => {
+      tries += 1
+      if (tries < 3) throw new Error('Internal error.')
+    },
+    [1, 1, 1]
+  )
+  assert.equal(tries, 3, 'it keeps going until the call takes')
+})
+
+test('one that never takes says so, with what it was and how many times', async () => {
+  let tries = 0
+  await assert.rejects(
+    keepTrying(
+      'the rulesets could not be switched on',
+      async () => {
+        tries += 1
+        throw new Error('Internal error.')
+      },
+      [1, 1]
+    ),
+    (failed: Error) => {
+      assert.match(failed.message, /the rulesets could not be switched on/, 'it names what did not happen')
+      assert.match(failed.message, /after 3 tries/, 'and how hard it tried')
+      assert.match(failed.message, /Internal error\./, 'and keeps what the browser said')
+      return true
+    }
+  )
+  assert.equal(tries, 3, 'one try per wait, plus the first')
+})
+
+test('a call that works first time is not retried', async () => {
+  let tries = 0
+  await keepTrying('the exceptions could not be applied', async () => {
+    tries += 1
+  })
+  assert.equal(tries, 1)
 })

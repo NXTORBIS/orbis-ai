@@ -1,5 +1,5 @@
 import { FiltersEngine } from '@ghostery/adblocker'
-import { AdBlockCore, activeCategories, hostOf, normalizeSettings, type EngineCategory } from '../src/main/adblock/blocker.ts'
+import { AdBlockCore, activeCategories, hostOf, keepTrying, normalizeSettings, type EngineCategory } from '../src/main/adblock/blocker.ts'
 import type { AdBlockCategory, AdBlockSettings } from '../src/shared/types'
 
 /**
@@ -127,7 +127,9 @@ async function applyRulesets(): Promise<void> {
   if (enable.includes('ads') || enable.includes('trackers')) enable.push(FIRST_LINE)
 
   const all = Object.keys(RULESET_CATEGORY)
-  await chrome.declarativeNetRequest.updateEnabledRulesets({ enableRulesetIds: enable, disableRulesetIds: all.filter((id) => !enable.includes(id)) })
+  await keepTrying('the rulesets could not be switched on', () =>
+    chrome.declarativeNetRequest.updateEnabledRulesets({ enableRulesetIds: enable, disableRulesetIds: all.filter((id) => !enable.includes(id)) })
+  )
 }
 
 /** Site and resource exceptions are dynamic allow rules, so Chromium honours them in its own network layer. */
@@ -140,8 +142,10 @@ async function applyExceptions(): Promise<void> {
   for (const key of core.settings.resourceExceptions) {
     rules.push({ id: id++, priority: 100, action: { type: 'allow' as chrome.declarativeNetRequest.RuleActionType }, condition: { urlFilter: `||${key}`, isUrlFilterCaseSensitive: false } })
   }
-  const existing = await chrome.declarativeNetRequest.getDynamicRules()
-  await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: existing.map((r) => r.id), addRules: rules })
+  await keepTrying('the exceptions could not be applied', async () => {
+    const existing = await chrome.declarativeNetRequest.getDynamicRules()
+    await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: existing.map((r) => r.id), addRules: rules })
+  })
 }
 
 async function persistSettings(): Promise<void> {
