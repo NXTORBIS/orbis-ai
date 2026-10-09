@@ -1,5 +1,19 @@
+diff --git a/chrome/browser/ui/views/status_bubble_views.cc b/chrome/browser/ui/views/status_bubble_views.cc
+index e85542cf2a..e05e416882 100644
+--- a/chrome/browser/ui/views/status_bubble_views.cc
++++ b/chrome/browser/ui/views/status_bubble_views.cc
+@@ -64,7 +64,8 @@
+ namespace {
+ 
+ // The roundedness of the edges of our bubble.
+-constexpr int kBubbleCornerRadius = 4;
++// Orbis: the control radius, so the link preview in the corner belongs to the same product as the menus.
++constexpr int kBubbleCornerRadius = 8;
+ 
+ // How close the mouse can get to the infobubble before it starts sliding
+ // off-screen.
 diff --git a/ui/color/ui_color_mixer.cc b/ui/color/ui_color_mixer.cc
-index 065340740c..8b247ac6c6 100644
+index 065340740c..c423e835db 100644
 --- a/ui/color/ui_color_mixer.cc
 +++ b/ui/color/ui_color_mixer.cc
 @@ -14,6 +14,7 @@
@@ -10,7 +24,7 @@ index 065340740c..8b247ac6c6 100644
  #include "ui/gfx/color_palette.h"
  
  namespace ui {
-@@ -285,6 +286,35 @@ void AddUiColorMixer(ColorProvider* provider, const ColorProviderKey& key) {
+@@ -285,6 +286,44 @@ void AddUiColorMixer(ColorProvider* provider, const ColorProviderKey& key) {
    mixer[kColorTreeNodeForegroundSelectedUnfocused] = {
        kColorTreeNodeForegroundSelectedFocused};
    mixer[kColorWindowBackground] = {kColorPrimaryBackground};
@@ -38,6 +52,15 @@ index 065340740c..8b247ac6c6 100644
 +  mixer[kColorBubbleBorder] = {orbis_edge};
 +  mixer[kColorMenuBorder] = {orbis_edge};
 +  mixer[kColorMenuSeparator] = {dark_mode ? orbis::dark::kLine : orbis::light::kLine};
++  /*
++   * The row you are pointing at is a pill with a trace of the accent in it, not a flat band of grey.
++   *
++   * `item_corner_radius` in MenuConfig makes it a pill; this is what colours it. Both are needed -- a rounded
++   * highlight in the system's own grey still reads as somebody else's menu.
++   */
++  mixer[kColorMenuItemBackgroundSelected] = {dark_mode ? orbis::dark::kActive : orbis::light::kActive};
++  mixer[kColorMenuItemBackgroundHighlighted] = {dark_mode ? orbis::dark::kHover : orbis::light::kHover};
++  mixer[kColorMenuItemForegroundSelected] = {dark_mode ? orbis::dark::kText : orbis::light::kText};
 +  mixer[kColorSeparator] = {dark_mode ? orbis::dark::kLine : orbis::light::kLine};
 +  // Deeper than stock, because these sit over a page that is almost black.
 +  mixer[kColorBubbleBorderShadowLarge] = {SetAlpha(kColorShadowBase, dark_mode ? 0x4D : 0x1A)};
@@ -125,6 +148,86 @@ index 5bb35cf1f9..3f9bd22b37 100644
  }
  
  }  // namespace views
+diff --git a/ui/views/controls/menu/menu_config.h b/ui/views/controls/menu/menu_config.h
+index 953cfa206b..4aff2ee6e8 100644
+--- a/ui/views/controls/menu/menu_config.h
++++ b/ui/views/controls/menu/menu_config.h
+@@ -54,7 +54,8 @@ struct VIEWS_EXPORT MenuConfig {
+   // Menu border sizes. Menus with rounded corners use
+   // `rounded_menu_vertical_border_size` if set and fall back to the corner
+   // radius otherwise.
+-  int nonrounded_menu_vertical_border_size = 4;
++  // Orbis: 6, so the first and last rows are not touching the menu's own rounded edge.
++  int nonrounded_menu_vertical_border_size = 6;
+   std::optional<int> rounded_menu_vertical_border_size;
+   int menu_horizontal_border_size = views::RoundRectPainter::kBorderWidth;
+ 
+@@ -78,14 +79,16 @@ struct VIEWS_EXPORT MenuConfig {
+   // is the default behavior.
+ 
+   // Horizontal padding between components in a menu item.
+-  int item_horizontal_padding = 8;
++  // Orbis: 10, so a label is not pressed against the highlight that sits behind it.
++  int item_horizontal_padding = 10;
+ 
+   // Horizontal padding between components in a touchable menu item.
+   int touchable_item_horizontal_padding = 16;
+ 
+   // Additional padding between the item left/right and its contents. Note that
+   // the final padding will also include `item_horizontal_padding`.
+-  int item_horizontal_border_padding = 0;
++  // Orbis: 6, which is the inset the rounded row highlight sits in.
++  int item_horizontal_border_padding = 6;
+ 
+   // Horizontal border padding in a menu item for ash system ui layout.
+   int ash_item_horizontal_border_padding = 0;
+@@ -174,7 +177,15 @@ struct VIEWS_EXPORT MenuConfig {
+   int show_delay = 400;
+ 
+   // Radius of selection background on menu items.
+-  int item_corner_radius = 0;
++  /*
++   * Orbis: a highlighted row is a rounded pill, not a full-width band.
++   *
++   * Square rows inside a 14px rounded menu are the detail that gives away a menu nobody styled -- the highlight
++   * runs into the corner and is clipped by it. 8 is the control radius the rest of the product uses for a row you
++   * can point at, and `item_horizontal_border_padding` below insets the row so the pill has somewhere to sit
++   * rather than running edge to edge.
++   */
++  int item_corner_radius = 8;
+ 
+   // Anchor offset for touchable menus created by a touch event.
+   int touchable_anchor_offset = 8;
+diff --git a/ui/views/corewm/tooltip_view_aura.cc b/ui/views/corewm/tooltip_view_aura.cc
+index e10e08d36a..db780adb28 100644
+--- a/ui/views/corewm/tooltip_view_aura.cc
++++ b/ui/views/corewm/tooltip_view_aura.cc
+@@ -23,8 +23,10 @@ namespace views::corewm {
+ namespace {
+ 
+ constexpr int kTooltipBorderThickness = 1;
+-constexpr int kTooltipCornerRadius = 6;
+-constexpr gfx::Insets kBorderInset = gfx::Insets::TLBR(4, 8, 5, 8);
++// Orbis: the control radius, and room to breathe. A tooltip at 6 beside a menu at 14 and a row at 8 is a third
++// opinion about how round things are in this product.
++constexpr int kTooltipCornerRadius = 8;
++constexpr gfx::Insets kBorderInset = gfx::Insets::TLBR(6, 10, 7, 10);
+ 
+ }  // namespace
+ 
+@@ -34,9 +36,10 @@ TooltipViewAura::TooltipViewAura()
+   render_text_->SetMultiline(true);
+ 
+   // Orbis: rounded (radius 6, the sm token) tooltip with a hairline outline from the palette instead of a square white-bordered box.
+-  SetBackground(views::CreateRoundedRectBackground(ui::kColorSysBaseContainerElevated, kTooltipCornerRadius));
++  // The same surface and the same hairline as every other popup, rather than two of the system's own greys.
++  SetBackground(views::CreateRoundedRectBackground(ui::kColorTooltipBackground, kTooltipCornerRadius));
+   SetBorder(views::CreatePaddedBorder(
+-      views::CreateRoundedRectBorder(kTooltipBorderThickness, kTooltipCornerRadius, ui::kColorSysOutline),
++      views::CreateRoundedRectBorder(kTooltipBorderThickness, kTooltipCornerRadius, ui::kColorBubbleBorder),
+       kBorderInset - gfx::Insets(kTooltipBorderThickness)));
+ 
+   GetViewAccessibility().SetRole(ax::mojom::Role::kTooltip);
 diff --git a/ui/views/layout/layout_provider.cc b/ui/views/layout/layout_provider.cc
 index d243aa3387..445011124f 100644
 --- a/ui/views/layout/layout_provider.cc
