@@ -1,0 +1,172 @@
+diff --git a/ui/color/ui_color_mixer.cc b/ui/color/ui_color_mixer.cc
+index 065340740c..8b247ac6c6 100644
+--- a/ui/color/ui_color_mixer.cc
++++ b/ui/color/ui_color_mixer.cc
+@@ -14,6 +14,7 @@
+ #include "ui/color/color_provider_utils.h"
+ #include "ui/color/color_recipe.h"
+ #include "ui/color/color_transform.h"
++#include "ui/color/orbis_tokens.h"
+ #include "ui/gfx/color_palette.h"
+ 
+ namespace ui {
+@@ -285,6 +286,35 @@ void AddUiColorMixer(ColorProvider* provider, const ColorProviderKey& key) {
+   mixer[kColorTreeNodeForegroundSelectedUnfocused] = {
+       kColorTreeNodeForegroundSelectedFocused};
+   mixer[kColorWindowBackground] = {kColorPrimaryBackground};
++
++  /*
++   * Orbis: every panel that floats above the page is one surface, with one edge.
++   *
++   * Chromium gives a bubble, a menu and a tooltip three different greys and a grey hairline borrowed from a
++   * surface-variant token, which is why a restore prompt read as a stock Chrome dialog that had been painted dark
++   * rather than as part of Orbis. The rest of Orbis -- the panel, the orb, the command centre -- says a floating
++   * surface the same way every time: a near-black glass fill, and a single cool hairline with a trace of the accent
++   * in it, which is what separates the surface from the page behind it without drawing a box around it.
++   *
++   * Set here, on the shared tokens, so it reaches every popup at once rather than one dialog at a time. The shadow
++   * is deepened to match: against a 0x060708 page a stock shadow is invisible, and the hairline alone then has to
++   * do all the lifting.
++   */
++  const SkColor orbis_popover = dark_mode ? orbis::dark::kPopover : orbis::light::kPopover;
++  const SkColor orbis_edge = dark_mode ? orbis::dark::kGlassBorder : orbis::light::kGlassBorder;
++  mixer[kColorBubbleBackground] = {orbis_popover};
++  mixer[kColorDialogBackground] = {orbis_popover};
++  mixer[kColorMenuBackground] = {orbis_popover};
++  mixer[kColorDropdownBackground] = {orbis_popover};
++  mixer[kColorTooltipBackground] = {orbis_popover};
++  mixer[kColorBubbleBorder] = {orbis_edge};
++  mixer[kColorMenuBorder] = {orbis_edge};
++  mixer[kColorMenuSeparator] = {dark_mode ? orbis::dark::kLine : orbis::light::kLine};
++  mixer[kColorSeparator] = {dark_mode ? orbis::dark::kLine : orbis::light::kLine};
++  // Deeper than stock, because these sit over a page that is almost black.
++  mixer[kColorBubbleBorderShadowLarge] = {SetAlpha(kColorShadowBase, dark_mode ? 0x4D : 0x1A)};
++  mixer[kColorBubbleBorderShadowSmall] = {SetAlpha(kColorShadowBase, dark_mode ? 0x73 : 0x33)};
++
+   CompleteDefaultWebNativeRendererColorIdsDefinition(
+       mixer, dark_mode,
+       key.contrast_mode == ColorProviderKey::ContrastMode::kHigh);
+diff --git a/ui/views/bubble/bubble_border.cc b/ui/views/bubble/bubble_border.cc
+index 5bb35cf1f9..3f9bd22b37 100644
+--- a/ui/views/bubble/bubble_border.cc
++++ b/ui/views/bubble/bubble_border.cc
+@@ -13,6 +13,7 @@
+ #include "base/check_op.h"
+ #include "base/no_destructor.h"
+ #include "cc/paint/paint_flags.h"
++#include "cc/paint/paint_shader.h"
+ #include "third_party/skia/include/core/SkBlendMode.h"
+ #include "third_party/skia/include/core/SkClipOp.h"
+ #include "third_party/skia/include/core/SkColor.h"
+@@ -743,12 +744,65 @@ void BubbleBackground::Paint(gfx::Canvas* canvas, views::View* view) const {
+   cc::PaintFlags flags;
+   flags.setAntiAlias(true);
+   flags.setStyle(cc::PaintFlags::kFill_Style);
+-  flags.setColor(border_->color().ResolveToSkColor(view->GetColorProvider()));
++  const SkColor fill =
++      border_->color().ResolveToSkColor(view->GetColorProvider());
+   gfx::RectF bounds(view->GetLocalBounds());
+   bounds.Inset(gfx::InsetsF(border_->GetInsets()));
+ 
++  /*
++   * The fill stays flat, deliberately.
++   *
++   * A top-to-bottom gradient was tried here and photographed: it seams. The frame paints this, and then the
++   * dialog's own content view paints its background flat on top of the lower two thirds, so the gradient survives
++   * only inside the title strip and ends in a hard horizontal line across the bubble. The light that makes these
++   * read as glass is on the rim below, which nothing paints over.
++   */
++  flags.setColor(fill);
++
+   canvas->sk_canvas()->drawRRect(
+       SkRRect(gfx::RRectF(bounds, border_->rounded_corners())), flags);
++
++  /*
++   * Orbis: the light along the top edge.
++   *
++   * One hairline, brightest across the top and gone by about half way down the sides. It is the whole difference
++   * between a rectangle filled with a dark colour and something that reads as a pane of glass lifted off the page,
++   * and it is how the orb, the panel and the command centre already say the same thing. Drawn here rather than in
++   * any one dialog, so every popup in the browser gets it from one place.
++   *
++   * The colour is taken from `kColorBubbleBorder`, which carries the theme's own edge -- a trace of the accent in
++   * the dark, a cool grey in the light -- so this follows the theme instead of hard-coding a glow that would be
++   * wrong on a white surface. Half a pixel in, or a one-pixel stroke centred on the boundary spends half its width
++   * outside the fill and comes out faint and soft.
++   */
++  const SkColor edge =
++      view->GetColorProvider()->GetColor(ui::kColorBubbleBorder);
++  gfx::RectF edge_bounds = bounds;
++  edge_bounds.Inset(0.5f);
++  if (edge_bounds.IsEmpty()) {
++    return;
++  }
++  // Brightest right across the top, where the rim would actually catch the light.
++  const SkColor4f edge_colors[3] = {
++      SkColor4f::FromColor(SkColorSetA(
++          edge, static_cast<U8CPU>(std::min(
++                    255u, static_cast<unsigned>(SkColorGetA(edge) * 2.4))))),
++      SkColor4f::FromColor(SkColorSetA(edge, SkColorGetA(edge))),
++      SkColor4f::FromColor(SkColorSetA(edge, 0))};
++  const SkScalar edge_stops[3] = {0.0f, 0.18f, 1.0f};
++  const SkPoint edge_points[2] = {
++      SkPoint::Make(edge_bounds.CenterPoint().x(), edge_bounds.y()),
++      SkPoint::Make(edge_bounds.CenterPoint().x(),
++                    edge_bounds.y() + edge_bounds.height() * 0.6f)};
++  cc::PaintFlags edge_flags;
++  edge_flags.setAntiAlias(true);
++  edge_flags.setStyle(cc::PaintFlags::kStroke_Style);
++  edge_flags.setStrokeWidth(1.0f);
++  edge_flags.setShader(cc::PaintShader::MakeLinearGradient(
++      edge_points, edge_colors, edge_stops, 3, SkTileMode::kClamp));
++  canvas->sk_canvas()->drawRRect(
++      SkRRect(gfx::RRectF(edge_bounds, border_->rounded_corners())),
++      edge_flags);
+ }
+ 
+ }  // namespace views
+diff --git a/ui/views/layout/layout_provider.cc b/ui/views/layout/layout_provider.cc
+index d243aa3387..445011124f 100644
+--- a/ui/views/layout/layout_provider.cc
++++ b/ui/views/layout/layout_provider.cc
+@@ -229,15 +229,22 @@ int LayoutProvider::GetCornerRadiusMetric(ShapeContextTokens id,
+   ShapeSysTokens token = GetShapeSysToken(id);
+   DCHECK_NE(token, ShapeSysTokens::kDefault)
+       << "kDefault token means there is a missing mapping between shape tokens";
++  /*
++   * Orbis: the radius scale from orbis-ui/tokens.json, which the rest of the product already draws with.
++   *
++   * A dialog at 12 and an Orbis panel at 14 beside each other look like two products, and the eye reads the
++   * two-pixel difference as sloppiness long before it can name it. These are the same five steps the CSS uses --
++   * 6, 8, 14, 18, 24 -- so a bubble, a menu and a panel share one corner.
++   */
+   switch (token) {
+     case ShapeSysTokens::kXSmall:
+-      return 4;
++      return 6;
+     case ShapeSysTokens::kSmall:
+       return 8;
+     case ShapeSysTokens::kMediumSmall:
+-      return 12;
++      return 14;
+     case ShapeSysTokens::kMedium:
+-      return 16;
++      return 18;
+     case ShapeSysTokens::kLarge:
+       return 24;
+     case ShapeSysTokens::kFull:
+diff --git a/ui/views/style/typography_provider.cc b/ui/views/style/typography_provider.cc
+index c5efd08c2b..ec7fc6aa00 100644
+--- a/ui/views/style/typography_provider.cc
++++ b/ui/views/style/typography_provider.cc
+@@ -199,8 +199,9 @@ ui::ResourceBundle::FontDetails TypographyProvider::GetFontDetailsImpl(
+       details.weight = gfx::Font::Weight::MEDIUM;
+       break;
+     case style::STYLE_HEADLINE_4:
++      // Orbis: a popup's title carries the weight, so the sentence under it can stay quiet.
+       details.size_delta = gfx::PlatformFont::GetFontSizeDelta(16);
+-      details.weight = gfx::Font::Weight::MEDIUM;
++      details.weight = gfx::Font::Weight::SEMIBOLD;
+       break;
+     case style::STYLE_HEADLINE_4_BOLD:
+       details.size_delta = gfx::PlatformFont::GetFontSizeDelta(16);
