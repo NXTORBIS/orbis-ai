@@ -198,6 +198,57 @@ index 953cfa206b..4aff2ee6e8 100644
  
    // Anchor offset for touchable menus created by a touch event.
    int touchable_anchor_offset = 8;
+diff --git a/ui/views/controls/menu/menu_item_view.cc b/ui/views/controls/menu/menu_item_view.cc
+index 482d212cd0..1b3d8edbd5 100644
+--- a/ui/views/controls/menu/menu_item_view.cc
++++ b/ui/views/controls/menu/menu_item_view.cc
+@@ -1279,8 +1279,9 @@ void MenuItemView::PaintBackground(gfx::Canvas* canvas,
+     // highlighted item is at the bottom of the menu.
+     gfx::RectF highlight_bounds(GetLocalBounds());
+     SkVector radii[4]{{0, 0}, {0, 0}, {0, 0}, {0, 0}};
++    // Orbis: inset here too, for the same reason as the selected row above.
++    highlight_bounds.Inset(gfx::InsetsF::VH(0, GetItemHorizontalBorder()));
+     if (menu_item_background_.has_value()) {
+-      highlight_bounds.Inset(gfx::InsetsF::VH(0, GetItemHorizontalBorder()));
+       const SkScalar top_r = SkIntToScalar(menu_item_background_->top_radius);
+       const SkScalar bot_r =
+           SkIntToScalar(menu_item_background_->bottom_radius);
+@@ -1289,20 +1290,28 @@ void MenuItemView::PaintBackground(gfx::Canvas* canvas,
+       radii[2] = {bot_r, bot_r};
+       radii[3] = {bot_r, bot_r};
+     } else {
+-      radii[2].set(bottom_rounded_corners_.lower_right(),
+-                   bottom_rounded_corners_.lower_right());
+-      radii[3].set(bottom_rounded_corners_.lower_left(),
+-                   bottom_rounded_corners_.lower_left());
++      // Orbis: the same pill as a selected row, so a highlighted one does not become a second kind of shape.
++      const SkScalar r = SkIntToScalar(MenuConfig::instance().item_corner_radius);
++      radii[0] = {r, r};
++      radii[1] = {r, r};
++      radii[2] = {r, r};
++      radii[3] = {r, r};
+     }
+ 
+     SkRRect rounded_rect;
+     rounded_rect.setRectRadii(gfx::RectFToSkRect(highlight_bounds), radii);
+     canvas->sk_canvas()->drawRRect(rounded_rect, flags);
+   } else if (paint_as_selected) {
++    /*
++     * Orbis: the row you are pointing at is inset, always.
++     *
++     * The inset used to happen only for an item carrying its own background. Everywhere else the highlight ran the
++     * full width of the menu, so its rounded corners sat flush against the menu's own rounded edge and were clipped
++     * away by it -- the radius was being applied and could not be seen. Inset, it reads as a pill sitting inside
++     * the menu, which is what the rest of the product does with a row you can point at.
++     */
+     gfx::Rect item_bounds = GetLocalBounds();
+-    if (menu_item_background_.has_value()) {
+-      item_bounds.Inset(gfx::Insets::VH(0, GetItemHorizontalBorder()));
+-    }
++    item_bounds.Inset(gfx::Insets::VH(0, GetItemHorizontalBorder()));
+     if (type_ == Type::kActionableSubMenu) {
+       if (submenu_area_of_actionable_submenu_selected_) {
+         item_bounds = GetSubmenuAreaOfActionableSubmenu();
 diff --git a/ui/views/corewm/tooltip_view_aura.cc b/ui/views/corewm/tooltip_view_aura.cc
 index e10e08d36a..db780adb28 100644
 --- a/ui/views/corewm/tooltip_view_aura.cc
