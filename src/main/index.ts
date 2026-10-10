@@ -93,6 +93,50 @@ import { GalaxyService } from './knowledge/galaxyService'
 import { projectOfConversation, projectsMentioned } from '../shared/workspaces'
 
 /** A blank line, named because writing one inside a template literal here has broken the file twice. */
+/*
+ * Nothing in Orbis ever shows the Windows crash box again.
+ *
+ * With no `uncaughtException` listener, Electron's own default takes over and puts up "A JavaScript error occurred
+ * in the main process" with a stack trace in it. That dialog is the worst thing Orbis can show somebody: it is in
+ * no way Orbis's, it names a file nobody has, it interrupts whatever they were doing, and it says nothing they can
+ * act on. Several have been shipped -- a destroyed window read from a session handler, a destroyed window read from
+ * a menu item -- and each was a one-line fault behind a dialog that looked like the whole program had fallen over.
+ *
+ * Handling it here is NOT a way of ignoring faults. The fault is written down in full, with its stack, to
+ * `errors.log` beside the person's data, and Orbis is told so it can say so in its own voice, in its own window.
+ * What changes is only who gets interrupted: a line in a log instead of a modal nobody asked for.
+ *
+ * Installed at the top of the file, before anything else can run, because a fault during start-up is exactly the
+ * one most likely to happen and least likely to be caught anywhere else.
+ */
+function recordCrash(kind: string, error: unknown): void {
+  const when = new Date().toISOString()
+  const said = error instanceof Error ? `${error.name}: ${error.message}${String.fromCharCode(10)}${error.stack ?? ''}` : String(error)
+  // The console first, so it is there even if writing the file is the thing that is broken.
+  console.error(`[orbis] ${kind} at ${when}`, said)
+  try {
+    const line = `${when}  ${kind}${String.fromCharCode(10)}${said}${String.fromCharCode(10, 10)}`
+    // `appendFileSync` on purpose: the process may be about to go, and a promise that never settles writes nothing.
+    void import('node:fs').then(({ appendFileSync }) => {
+      try {
+        appendFileSync(join(app.getPath('userData'), 'errors.log'), line, 'utf8')
+      } catch {
+        /* the log is a courtesy, never a reason to fail twice */
+      }
+    })
+  } catch {
+    /* as above */
+  }
+  try {
+    tellWindow('app:fault', { kind, when, said: said.slice(0, 2000) })
+  } catch {
+    /* the window is very likely what just broke */
+  }
+}
+
+process.on('uncaughtException', (error) => recordCrash('something went wrong in the main process', error))
+process.on('unhandledRejection', (reason) => recordCrash('a promise failed and nothing was waiting for it', reason))
+
 const BREAK = String.fromCharCode(10, 10)
 import type { GalaxyNodeType, GalaxyView } from '../shared/galaxy'
 import type { Workflow, WorkflowStep } from '../shared/workflows'
@@ -737,6 +781,21 @@ function liveWindow(): BrowserWindow | null {
   return mainWindow && !mainWindow.isDestroyed() ? mainWindow : null
 }
 /**
+ * Say something to the window, if there is still a window to say it to.
+ *
+ * `mainWindow?.webContents.send(...)` is the shape that causes "Object has been destroyed": the `?.` only asks
+ * whether the reference exists, and a closed window leaves the reference pointing at a destroyed object. Every
+ * such throw in the main process is a crash dialog, not a quiet failure.
+ *
+ * Anything that can still run after a window has gone -- a menu item, an updater listener, a timer, a reply that
+ * took longer than the window did -- goes through here instead.
+ */
+function tellWindow(channel: string, ...args: unknown[]): void {
+  const win = liveWindow()
+  if (!win || win.webContents.isDestroyed()) return
+  win.webContents.send(channel, ...args)
+}
+/**
  * The pages that may ask this machine for a microphone, by id.
  *
  * Ids rather than windows, because the handlers that read this are registered on the session and are still there
@@ -853,8 +912,8 @@ function createWindow(): BrowserWindow {
     win.show()
   })
   // The window's real fullscreen state, however it changes (F11, Esc, the OS).
-  win.on('enter-full-screen', () => win.webContents.send('window:fullscreen-changed', true))
-  win.on('leave-full-screen', () => win.webContents.send('window:fullscreen-changed', false))
+  win.on('enter-full-screen', () => tellWindow('window:fullscreen-changed', true))
+  win.on('leave-full-screen', () => tellWindow('window:fullscreen-changed', false))
 
   /**
    * What the window itself is allowed to ask the machine for.
@@ -887,8 +946,11 @@ function createWindow(): BrowserWindow {
    * silently stopping in a window that still looked fine.
    */
   const allowedForWindow = (permission: string): boolean => permission === 'media' || permission === 'audioCapture'
-  micWindows.add(win.webContents.id)
-  win.webContents.once('destroyed', () => micWindows.delete(win.webContents.id))
+  const micId = win.webContents.id
+  micWindows.add(micId)
+  // The id is read HERE, not inside the handler: by the time `destroyed` runs, `win.webContents` is the destroyed
+  // object and reading anything off it throws -- which is the fault this whole block exists to fix.
+  win.webContents.once('destroyed', () => micWindows.delete(micId))
   if (!permissionHandlersSet) {
     permissionHandlersSet = true
     const mayAsk = (contents: Electron.WebContents | null, permission: string): boolean => {
@@ -2295,7 +2357,7 @@ if (!app.requestSingleInstanceLock()) {
       {
         label: 'File',
         submenu: [
-          { label: 'New Chat', accelerator: 'CmdOrCtrl+N', click: () => mainWindow?.webContents.send('menu:new-chat') },
+          { label: 'New Chat', accelerator: 'CmdOrCtrl+N', click: () => tellWindow('menu:new-chat') },
           { type: 'separator' },
           { label: 'Exit', accelerator: 'CmdOrCtrl+Q', role: 'quit' }
         ]
@@ -2321,7 +2383,7 @@ if (!app.requestSingleInstanceLock()) {
       {
         label: 'Help',
         submenu: [
-          { label: 'About Orbis', click: () => mainWindow?.webContents.send('menu:about') }
+          { label: 'About Orbis', click: () => tellWindow('menu:about') }
         ]
       }
     ])
@@ -3796,7 +3858,7 @@ ${page.text}`, { howMany: 6 })
         }
       }
     })
-    updates.on('changed', (status) => mainWindow?.webContents.send('update:changed', status))
+    updates.on('changed', (status) => tellWindow('update:changed', status))
     /*
      * An update that is ready, said once.
      *
