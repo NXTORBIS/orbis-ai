@@ -47,6 +47,7 @@ export const TEST_FILES = [
   'src/main/omnibox.test.ts',
   'src/main/favicon.test.ts',
   'src/shared/appFeature.test.ts',
+  'src/shared/avatarPatterns.test.ts',
   'src/shared/avatars.test.ts',
   'src/shared/browserControl.test.ts',
   'src/main/automationCheckpoint.test.ts',

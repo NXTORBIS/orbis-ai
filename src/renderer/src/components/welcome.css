@@ -986,32 +986,68 @@
 .welcome-face[data-pattern='nebula']::before,
 .welcome-face-pick[data-pattern='nebula']::before {
   background:
-    radial-gradient(ellipse 42% 32% at 62% 58%, var(--av-with), transparent 78%),
-    radial-gradient(ellipse 34% 26% at 34% 62%, color-mix(in srgb, var(--av-rim) 60%, transparent), transparent 80%),
-    radial-gradient(ellipse 30% 24% at 56% 34%, color-mix(in srgb, var(--av-with) 90%, transparent), transparent 78%);
+    radial-gradient(ellipse 48% 36% at 64% 60%, var(--av-with), transparent 72%),
+    radial-gradient(ellipse 38% 29% at 32% 63%, color-mix(in srgb, var(--av-rim) 70%, transparent), transparent 74%),
+    radial-gradient(ellipse 34% 27% at 57% 32%, color-mix(in srgb, var(--av-with) 95%, transparent), transparent 72%),
+    radial-gradient(ellipse 22% 17% at 40% 42%, color-mix(in srgb, var(--av-rim) 45%, transparent), transparent 76%);
 }
 
+/*
+ * A storm, not a dartboard.
+ *
+ * Concentric circles on the middle of a circle, with hard edges, is a target -- photographed at 56px the first
+ * version was a bullseye and nothing else. Three things fix it and all three are needed: the eye sits off-centre,
+ * the rings are ellipses rather than circles, so they read as a system seen at an angle, and every stop fades
+ * instead of landing, so the edge is weather rather than ink.
+ */
 .welcome-face[data-pattern='eye']::before,
 .welcome-face-pick[data-pattern='eye']::before {
   background:
-    radial-gradient(circle at 46% 52%, color-mix(in srgb, var(--av-rim) 70%, transparent) 0 9%, transparent 10%),
-    radial-gradient(circle at 46% 52%, transparent 0 20%, color-mix(in srgb, var(--av-with) 92%, transparent) 21% 34%, transparent 35%),
-    radial-gradient(circle at 46% 52%, transparent 0 46%, color-mix(in srgb, var(--av-with) 55%, transparent) 47% 54%, transparent 55%);
+    radial-gradient(ellipse 15% 11% at 60% 43%, color-mix(in srgb, var(--av-rim) 80%, transparent), transparent 76%),
+    radial-gradient(
+      ellipse 33% 24% at 60% 43%,
+      transparent 0 42%,
+      color-mix(in srgb, var(--av-with) 88%, transparent) 62% 76%,
+      transparent 98%
+    ),
+    radial-gradient(
+      ellipse 60% 42% at 58% 45%,
+      transparent 0 58%,
+      color-mix(in srgb, var(--av-with) 42%, transparent) 76% 86%,
+      transparent 100%
+    );
 }
 
+/*
+ * Facets, not slices.
+ *
+ * One conic from the centre of a circle cuts it into wedges, and a wedge that reaches the middle is a pie chart --
+ * which is exactly what the first version photographed as. Two conics with different origins overlap into shapes
+ * that belong to neither, and the mask keeps both out of the middle, so what is left catches the light nearer the
+ * limb the way a cut stone does.
+ */
 .welcome-face[data-pattern='shard']::before,
 .welcome-face-pick[data-pattern='shard']::before {
-  background: conic-gradient(
-    from var(--av-turn) at 50% 50%,
-    color-mix(in srgb, var(--av-with) 95%, transparent) 0 14deg,
-    transparent 14deg 54deg,
-    color-mix(in srgb, var(--av-with) 70%, transparent) 54deg 78deg,
-    transparent 78deg 150deg,
-    color-mix(in srgb, var(--av-with) 90%, transparent) 150deg 182deg,
-    transparent 182deg 254deg,
-    color-mix(in srgb, var(--av-with) 60%, transparent) 254deg 282deg,
-    transparent 282deg 360deg
-  );
+  background:
+    conic-gradient(
+      from calc(var(--av-turn) + 18deg) at 64% 37%,
+      transparent 0 26deg,
+      color-mix(in srgb, var(--av-with) 88%, transparent) 31deg 57deg,
+      transparent 62deg 128deg,
+      color-mix(in srgb, var(--av-with) 58%, transparent) 133deg 161deg,
+      transparent 166deg 236deg,
+      color-mix(in srgb, var(--av-with) 80%, transparent) 241deg 267deg,
+      transparent 272deg 360deg
+    ),
+    conic-gradient(
+      from calc(var(--av-turn) + 140deg) at 33% 67%,
+      transparent 0 40deg,
+      color-mix(in srgb, var(--av-with) 50%, transparent) 45deg 75deg,
+      transparent 80deg 196deg,
+      color-mix(in srgb, var(--av-with) 40%, transparent) 201deg 227deg,
+      transparent 232deg 360deg
+    );
+  mask-image: radial-gradient(circle at 50% 50%, transparent 0 15%, #000 36% 86%, transparent 100%);
 }
 
 /* A horizon across the middle rather than a band along the bottom, which the limb was eating. */

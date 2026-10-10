@@ -25,6 +25,31 @@ describe('the set itself', () => {
     }
   })
 
+  /*
+   * Orbis is cyan light on near-black, and these are the only pictures in it. The first set was half warm --
+   * orange, amber, gold, coral -- and photographed beside the product they read as sweets spilled onto it. Warm
+   * is also what the rest of Orbis means by a warning, so a picture that is warm by default says something it
+   * does not mean.
+   *
+   * Measured on every colour of every world, not just the body: a pattern, a limb or a rim drifting warm is how
+   * this would come back, one value at a time, with nobody able to say when.
+   */
+  it('nothing in the set is warm: blue is never weaker than red', () => {
+    for (const one of AVATARS) {
+      for (const [what, value] of [
+        ['from', one.from],
+        ['to', one.to],
+        ['with', one.with],
+        ['rim', one.rim],
+        ['sky', one.sky]
+      ] as const) {
+        const red = parseInt(value.slice(1, 3), 16)
+        const blue = parseInt(value.slice(5, 7), 16)
+        assert.ok(blue >= red, `${one.id}.${what} is a warm colour (${value})`)
+      }
+    }
+  })
+
   it('the lit side is lighter than the dark side, or it is not a sphere', () => {
     // Crude on purpose: the sum of the channels. A proper luminance is not needed to catch a pair written the wrong
     // way round, which is the mistake this exists for.

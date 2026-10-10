@@ -39,7 +39,18 @@ export interface Avatar {
   readonly id: string
   /** Said out loud by a screen reader, and shown as the title on the swatch. */
   readonly name: string
-  /** The interior, from the lit side to the dark limb. */
+  /**
+   * The interior, from the lit side to the dark limb.
+   *
+   * Both are cool -- blue is never weaker than red in any colour in this file, and that is measured rather than
+   * trusted. The first set was half warm: oranges, ambers, golds and a coral, which next to Orbis's own cyan on
+   * near-black read as a bag of sweets somebody had spilled onto the product. Warmth is what the rest of Orbis
+   * reserves for a warning, so a picture that is warm by default is saying something it does not mean.
+   *
+   * The dark side goes almost all the way to the application's own background (`#060708`), so every world sits
+   * in the same black. That and the shared air are the two things that make twelve different bodies read as one
+   * set rather than as twelve separate decisions.
+   */
   readonly from: string
   readonly to: string
   /** The second colour the pattern is drawn in. The two should not be neighbours, or the pattern disappears. */
@@ -68,22 +79,38 @@ export interface Avatar {
 /**
  * Twelve, which is two rows of six on a narrow screen and one long row on a wide one.
  *
- * Ordered so that neighbours differ: a run of four blues in the middle of the row looks like an accident, and the
- * eye picks a favourite much faster when consecutive swatches are not nearly the same.
+ * **All of them are cool**, because the product is: cyan light on near-black. Twelve worlds spread around the cold
+ * half of the wheel -- sea green, aqua, cyan, ice, sky, cobalt, indigo, orchid, magenta -- rather than a rainbow
+ * with four fires in it.
+ *
+ * That costs something, and the cost is paid elsewhere. Hue alone can no longer tell twelve apart inside a 150°
+ * arc, so each also differs in **how bright its body is** and in **which way its weather runs**:
+ *
+ * - *Bright* bodies alternate with *dark* ones down the row, so no two neighbours are the same weight. Quartz is
+ *   almost white and Umbra is almost black, and they sit next to each other on purpose.
+ * - Umbra alone has its weather drawn **lighter** than its body: rings of light on a world that is otherwise the
+ *   application's own black. Four of them were drawn that way at first and it was wrong -- a pale pattern over a
+ *   dark body stops reading as weather inside glass and starts reading as paint on top of it, and Basalt in
+ *   particular came out as a humbug. One is a world with its own light in it; four is a style.
+ * - No two near neighbours in colour share a pattern. Tide and Boreal are both teal and were both waves, which
+ *   made them the same world at two brightnesses; Boreal turning instead is what tells them apart at 56px.
+ *
+ * The `id` of each is what settings stores and must never change; the names moved when the colours did, which is
+ * why `ember` is called Umbra and `gold` is called Cygnus. Nothing shows an id, so that is only ever read here.
  */
 export const AVATARS: readonly Avatar[] = Object.freeze([
-  { id: 'cyan', name: 'Tide', from: '#5fe4ff', to: '#04202e', with: '#06566f', rim: '#a6f2ff', sky: '#bfe0ff', turn: 318, pattern: 'wave' },
-  { id: 'ember', name: 'Ember', from: '#f08a4e', to: '#2a0b06', with: '#8c1b0c', rim: '#ffd0a8', sky: '#8fd8ff', turn: 330, pattern: 'swirl' },
-  { id: 'jade', name: 'Verdant', from: '#3fd79a', to: '#042219', with: '#065040', rim: '#9df5cd', sky: '#7fe8e0', turn: 312, pattern: 'bands' },
-  { id: 'orchid', name: 'Nebula', from: '#b283f5', to: '#190830', with: '#3d1278', rim: '#e6ccff', sky: '#9fb6ff', turn: 324, pattern: 'nebula' },
-  { id: 'amber', name: 'Corona', from: '#eeb846', to: '#2a1900', with: '#7a4100', rim: '#ffe6a8', sky: '#9ad8ff', turn: 306, pattern: 'shard' },
-  { id: 'cobalt', name: 'Abyss', from: '#6aa8ff', to: '#061331', with: '#102a8c', rim: '#b8d4ff', sky: '#a7e6ff', turn: 336, pattern: 'eye' },
-  { id: 'rose', name: 'Vesper', from: '#f0738f', to: '#2f0610', with: '#73062c', rim: '#ffc2d1', sky: '#b9c4ff', turn: 300, pattern: 'swirl' },
-  { id: 'mint', name: 'Aurora', from: '#6fe3cd', to: '#042421', with: '#065c4e', rim: '#c2fbee', sky: '#a8ffe8', turn: 342, pattern: 'nebula' },
-  { id: 'slate', name: 'Basalt', from: '#a9bad0', to: '#0b111a', with: '#2b3a4d', rim: '#e4ecf6', sky: '#8fe4ff', turn: 315, pattern: 'bands' },
-  { id: 'coral', name: 'Solstice', from: '#f07e60', to: '#2b0d09', with: '#8a2414', rim: '#ffc4b3', sky: '#93ccff', turn: 348, pattern: 'eye' },
-  { id: 'violet', name: 'Twilight', from: '#8b7cff', to: '#0e092b', with: '#241680', rim: '#cbc3ff', sky: '#8fc9ff', turn: 309, pattern: 'wave' },
-  { id: 'gold', name: 'Helios', from: '#eec97e', to: '#281f06', with: '#6d4c05', rim: '#fff0c9', sky: '#a9deff', turn: 333, pattern: 'shard' }
+  { id: 'cyan', name: 'Tide', from: '#3fd8ff', to: '#031a26', with: '#0e6b89', rim: '#a9f1ff', sky: '#b4c9ff', turn: 318, pattern: 'wave' },
+  { id: 'violet', name: 'Twilight', from: '#8878ff', to: '#0a0722', with: '#2a1d8c', rim: '#cbc2ff', sky: '#9fd4ff', turn: 309, pattern: 'swirl' },
+  { id: 'jade', name: 'Verdant', from: '#36d9a2', to: '#031f1a', with: '#02574a', rim: '#9af5d2', sky: '#a6d8ff', turn: 312, pattern: 'bands' },
+  { id: 'orchid', name: 'Nebula', from: '#b57af2', to: '#160830', with: '#3d1077', rim: '#e4c8ff', sky: '#a8c6ff', turn: 324, pattern: 'nebula' },
+  { id: 'amber', name: 'Quartz', from: '#d8ecfa', to: '#0c161e', with: '#78b0d2', rim: '#f2fbff', sky: '#8fe0ff', turn: 306, pattern: 'shard' },
+  { id: 'ember', name: 'Umbra', from: '#24404d', to: '#05080b', with: '#6cc8e4', rim: '#8fe6ff', sky: '#a4d2ff', turn: 330, pattern: 'eye' },
+  { id: 'rose', name: 'Vesper', from: '#d46ad4', to: '#230525', with: '#5e0866', rim: '#f5bdf5', sky: '#b7c6ff', turn: 300, pattern: 'swirl' },
+  { id: 'coral', name: 'Boreal', from: '#3a8f9e', to: '#04161c', with: '#063744', rim: '#9fdce8', sky: '#aacdff', turn: 348, pattern: 'swirl' },
+  { id: 'gold', name: 'Cygnus', from: '#93b4fa', to: '#070c22', with: '#3f55b8', rim: '#d2e0ff', sky: '#95e0ff', turn: 333, pattern: 'shard' },
+  { id: 'slate', name: 'Basalt', from: '#6c7e93', to: '#090e15', with: '#1b2733', rim: '#c3d2e4', sky: '#8fdcff', turn: 315, pattern: 'bands' },
+  { id: 'mint', name: 'Aurora', from: '#66ecd4', to: '#032321', with: '#05604f', rim: '#c6fbf0', sky: '#a2c8ff', turn: 342, pattern: 'nebula' },
+  { id: 'cobalt', name: 'Abyss', from: '#4f84f0', to: '#040c22', with: '#122a8e', rim: '#b2cfff', sky: '#9bd6ff', turn: 336, pattern: 'eye' }
 ])
 
 export const DEFAULT_AVATAR = 'cyan'
