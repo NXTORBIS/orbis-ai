@@ -1421,13 +1421,15 @@
   border-radius: 50%;
   padding: 1px;
   background: conic-gradient(
-    from var(--av-turn),
+    /* `--av-sweep` is 0 at rest, so this is exactly what it was; on hover the bright node travels backwards. */
+    from calc(var(--av-turn) + var(--av-sweep)),
     var(--av-rim),
     color-mix(in srgb, var(--av-rim) 30%, transparent) 30%,
     rgba(255, 255, 255, 0.05) 55%,
     color-mix(in srgb, var(--av-rim) 26%, transparent) 78%,
     var(--av-rim)
   );
+  filter: brightness(calc(1 + 0.4 * var(--av-bloom)));
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
@@ -1481,12 +1483,23 @@
 
 /* A grid, not a row. The row scrolled, so two of the twelve were always off the end -- and the one the name had
    chosen was regularly among them. Six and six: everything on screen, nothing to drag. */
+/*
+ * The padding is the room the lift needs, and it had none.
+ *
+ * `.welcome-faces` clips, so whatever a world grows into has to be inside this padding. A chosen world is
+ * `translateY(-5px) scale(1.12)`: 5px of lift plus 3.36px of growth above a 56px disc is 8.36px, against the 8px
+ * there used to be. It never showed, because the arrival animation was overriding the lift -- so the day that was
+ * fixed, the top row would have had its heads shaved. Two faults that hid each other.
+ *
+ * 13px above covers it with a little to spare; 6px at the sides covers the same growth sideways; the column gap
+ * comes down to 8px to pay for it, which still leaves 4px of clear air between two worlds at full size.
+ */
 .welcome-face-grid {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
   justify-items: center;
-  gap: 14px 10px;
-  padding: 8px 2px 2px;
+  gap: 14px 8px;
+  padding: 13px 6px 2px;
 }
 
 /* The world's name, in one place under the grid rather than twelve labels competing with twelve pictures. It keeps
@@ -1511,8 +1524,20 @@
     transform 0.3s var(--ease-out),
     box-shadow 0.3s ease,
     opacity 0.3s ease;
-  /* They arrive one after another, so the grid lands rather than appearing. `--at` is the index. */
-  animation: welcome-face-in 0.5s var(--ease-out) both;
+  /*
+   * They arrive one after another, so the grid lands rather than appearing. `--at` is the index.
+   *
+   * `backwards`, never `both`. `both` includes `forwards`, which keeps applying the last keyframe after the
+   * animation has finished -- and an animation outranks ordinary rules in the cascade. So `to { opacity: .74;
+   * transform: translateY(0) scale(1) }` was quietly overriding the hover lift, the hover scale, the hover
+   * brightening, `:active`, AND the chosen world's lift, from the moment this stagger was added. The shadow, the
+   * weather's turn and the air still moved, because those are not in the keyframes, which is exactly why it read
+   * as a weak hover rather than a broken one.
+   *
+   * `backwards` still holds the first keyframe through the delay, which is all the stagger ever needed, and lets
+   * go the instant the animation ends.
+   */
+  animation: welcome-face-in 0.5s var(--ease-out) backwards;
   animation-delay: calc(var(--at) * 34ms);
   opacity: 0.74;
 }
@@ -1523,16 +1548,114 @@
  * The turn is the part that makes it feel like a body rather than a button -- a sphere that stirs when you look at
  * it. A few degrees, not a spin: anything faster reads as a loading indicator.
  */
+/*
+ * One dial, five layers.
+ *
+ * `--av-bloom` is how awake the world's air is, from 0 to 1. It is **registered**, and that is the whole trick: an
+ * unregistered custom property has no type, so it jumps from one value to the other and cannot be transitioned.
+ * Registered, it interpolates -- and because it inherits, one transition on the button drives the corona, the limb,
+ * the rim's brightness and the dawn crescent together. They cannot fall out of step with each other, because there
+ * is only ever one thing moving.
+ *
+ * `--av-sweep` is how far the light has glanced round the limb. It turns the rim's conic gradient, so the bright
+ * node travels backwards while the weather turns forwards: the body turns one way under a light that grazes the
+ * other, which is what stops the two motions merging into "the whole thing rotated".
+ */
+@property --av-bloom {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+@property --av-sweep {
+  syntax: '<angle>';
+  inherits: true;
+  initial-value: 0deg;
+}
+
+/*
+ * Leaving is slower than arriving: 0.6s out against 0.4s in.
+ *
+ * Air has weight. A corona that snaps off is a lamp being switched, and the asymmetry leaves a short wake of light
+ * behind the pointer as it crosses the row -- which is the cheapest way to make twelve pictures read as one sky
+ * rather than twelve buttons. The durations below are the ones that apply on the way OUT; the hover rule carries
+ * its own, shorter, for the way in.
+ */
+.welcome-face-pick {
+  --av-bloom: 0;
+  --av-sweep: 0deg;
+  transition:
+    transform 0.3s var(--ease-out),
+    box-shadow 0.3s ease,
+    opacity 0.3s ease,
+    --av-bloom 0.6s cubic-bezier(0.33, 0, 0.67, 1),
+    --av-sweep 0.9s var(--ease-out);
+}
+
 .welcome-face-pick:hover,
 .welcome-face-pick:focus-visible {
   transform: translateY(-5px) scale(1.09);
   opacity: 1;
   box-shadow: 0 12px 24px rgba(0, 0, 0, 0.5);
+  --av-bloom: 1;
+  /*
+   * Backwards, and only 20 degrees. On a 56px ring that is about 12px of travel -- plainly a glance of light, and
+   * nowhere near a spin: 20 degrees over 0.72s is 28 degrees a second, which would take thirteen seconds to come
+   * round once. It is a move to a new resting place, not a loop, and nothing here repeats.
+   */
+  --av-sweep: -20deg;
+  transition:
+    transform 0.34s var(--ease-out),
+    box-shadow 0.34s ease,
+    opacity 0.34s ease,
+    /* Deliberately longer than the lift, so the body moves first and the light catches up. That lag is what makes
+       the air look like it is answering rather than being part of the same switch. */
+    --av-bloom 0.4s cubic-bezier(0.16, 0.84, 0.32, 1),
+    --av-sweep 0.72s var(--ease-out);
 }
 
 .welcome-face-pick:hover::before,
 .welcome-face-pick:focus-visible::before {
   transform: rotate(16deg) scale(1.06);
+}
+
+/*
+ * The corona: this world's own air, a few pixels past its edge.
+ *
+ * On `.welcome-face-air::after`, which was free. Not on `.welcome-face-rim` -- that element is drawn with a mask,
+ * and a mask applies to an element's pseudo-elements too, so anything put there is masked away. That has caught
+ * somebody here once already.
+ *
+ * It is brightest on the side the light comes from, so the halo says where the sun is rather than ringing the
+ * whole disc evenly. At `--av-bloom: 0` every stop is fully transparent, so at rest this paints nothing at all.
+ */
+.welcome-face-air::after {
+  content: '';
+  position: absolute;
+  inset: -7px;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(
+    circle closest-side at calc(50% + 26% * sin(var(--av-turn))) calc(50% - 26% * cos(var(--av-turn))),
+    color-mix(in srgb, var(--av-sky) calc(30% * var(--av-bloom)), transparent) 0 62%,
+    color-mix(in srgb, var(--av-sky) calc(12% * var(--av-bloom)), transparent) 82%,
+    transparent 100%
+  );
+}
+
+/* The dawn: the lit limb brightens as the air wakes, inside the disc, where the atmosphere is thickest. */
+.welcome-face-fresnel::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(
+    circle closest-side at 50% 50%,
+    transparent 0 80%,
+    color-mix(in srgb, var(--av-rim) calc(22% * var(--av-bloom)), transparent) 95%,
+    color-mix(in srgb, var(--av-rim) calc(40% * var(--av-bloom)), transparent) 100%
+  );
 }
 
 .welcome-face-pick:focus-visible {
@@ -1615,5 +1738,20 @@
   .welcome-face-air,
   .welcome-face-pick::before {
     transition: none;
+  }
+
+  /*
+   * The air still lights, it just does not travel there.
+   *
+   * Somebody who has asked for less motion has not asked for less feedback: with the lift and the turn gone, the
+   * corona and the brightened limb are the only thing left saying "this is the one you are pointing at". So the
+   * dial still goes to 1 -- it simply arrives at once instead of fading -- and the light never glances round,
+   * because that is motion for its own sake.
+   */
+  .welcome-face-pick,
+  .welcome-face-pick:hover,
+  .welcome-face-pick:focus-visible {
+    transition: none;
+    --av-sweep: 0deg;
   }
 }
