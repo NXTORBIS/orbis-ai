@@ -105,7 +105,8 @@ const SET_ON_THE_ELEMENT = new Set([
   '--av-with',
   '--av-sky',
   '--av-rim',
-  '--av-turn'
+  '--av-turn',
+  '--av-tilt'
 ])
 
 test('the window has a definition for every token name it reads', () => {

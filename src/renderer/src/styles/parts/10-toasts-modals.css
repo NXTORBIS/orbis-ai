@@ -506,9 +506,9 @@ kbd {
   z-index: 1;
   background: radial-gradient(
     circle closest-side at 50% 50%,
-    transparent 0 78%,
-    color-mix(in srgb, var(--av-sky) 13%, transparent) 92%,
-    color-mix(in srgb, var(--av-sky) 28%, transparent) 100%
+    transparent 0 76%,
+    color-mix(in srgb, var(--av-sky) 18%, transparent) 91%,
+    color-mix(in srgb, var(--av-sky) 38%, transparent) 100%
   );
 }
 
@@ -534,55 +534,103 @@ kbd {
   z-index: 2;
 }
 
-.setting-face[data-pattern='bands']::before {
-  background: repeating-linear-gradient(calc(var(--av-turn) + 34deg), color-mix(in srgb, var(--av-with) 85%, transparent) 0 14%, transparent 14% 30%);
+/* The twelve weathers, generated from `components/welcome.css` -- see `shared/avatarPatterns.test.ts`.
+   Settings cannot import that file: it belongs to a screen unmounted the moment setup finishes. */
+
+.setting-face[data-pattern='ocean']::before {
+  background:
+    radial-gradient(ellipse 26% 13% at 33% 35%, color-mix(in srgb, var(--av-rim) 58%, transparent) 0 26%, transparent 88%),
+    radial-gradient(ellipse 104% 20% at 46% 70%, color-mix(in srgb, var(--av-rim) 26%, transparent) 0 46%, transparent 54%),
+    radial-gradient(ellipse 86% 15% at 54% 52%, color-mix(in srgb, var(--av-rim) 20%, transparent) 0 44%, transparent 52%),
+    radial-gradient(ellipse 132% 38% at 48% 84%, var(--av-with) 0 60%, transparent 72%),
+    radial-gradient(ellipse 98% 18% at 56% 44%, color-mix(in srgb, var(--av-with) 84%, transparent) 0 52%, transparent 74%),
+    radial-gradient(ellipse 46% 13% at 24% 62%, color-mix(in srgb, var(--av-with) 60%, transparent) 0 54%, transparent 80%);
 }
 
-.setting-face[data-pattern='swirl']::before {
-  /* Soft stops all the way round and the same colour at both ends, or the seam at 0deg shows as a hard crescent. */
-  background: conic-gradient(
-    from var(--av-turn) at 44% 48%,
-    color-mix(in srgb, var(--av-with) 70%, transparent) 0%,
-    color-mix(in srgb, var(--av-with) 10%, transparent) 18%,
-    color-mix(in srgb, var(--av-with) 62%, transparent) 38%,
-    color-mix(in srgb, var(--av-with) 8%, transparent) 58%,
-    color-mix(in srgb, var(--av-with) 66%, transparent) 80%,
-    color-mix(in srgb, var(--av-with) 70%, transparent) 100%
-  );
+.setting-face[data-pattern='vortex']::before {
+  background:
+    radial-gradient(ellipse 9% 9% at 52% 46%, color-mix(in srgb, var(--av-rim) 70%, transparent) 0 54%, transparent 100%),
+    conic-gradient(
+      from var(--av-tilt) at 52% 46%,
+      var(--av-with) 0deg 30deg,
+      transparent 52deg 76deg,
+      color-mix(in srgb, var(--av-with) 88%, transparent) 94deg 124deg,
+      transparent 144deg 166deg,
+      var(--av-with) 184deg 214deg,
+      transparent 234deg 256deg,
+      color-mix(in srgb, var(--av-with) 88%, transparent) 274deg 304deg,
+      transparent 322deg 360deg
+    );
+  mask-image: radial-gradient(circle closest-side at 52% 46%, transparent 0 7%, #000 20% 94%, transparent 100%);
+}
+
+.setting-face[data-pattern='belts']::before {
+  background:
+    linear-gradient(
+      var(--av-tilt),
+      transparent 0 43%,
+      color-mix(in srgb, var(--av-with) 94%, transparent) 46% 55%,
+      transparent 58% 100%
+    ),
+    linear-gradient(
+      var(--av-tilt),
+      transparent 0 22%,
+      color-mix(in srgb, var(--av-rim) 34%, transparent) 26% 33%,
+      transparent 37% 100%
+    ),
+    repeating-linear-gradient(
+      var(--av-tilt),
+      color-mix(in srgb, var(--av-with) 82%, transparent) 0 6%,
+      transparent 6% 12%,
+      color-mix(in srgb, var(--av-with) 48%, transparent) 12% 15%,
+      transparent 15% 26%
+    );
 }
 
 .setting-face[data-pattern='nebula']::before {
   background:
-    /* Kept inside the middle of the sphere: out at the edge the limb swallows them and the orb reads as plain. */
     radial-gradient(ellipse 48% 36% at 64% 60%, var(--av-with), transparent 72%),
     radial-gradient(ellipse 38% 29% at 32% 63%, color-mix(in srgb, var(--av-rim) 70%, transparent), transparent 74%),
     radial-gradient(ellipse 34% 27% at 57% 32%, color-mix(in srgb, var(--av-with) 95%, transparent), transparent 72%),
     radial-gradient(ellipse 22% 17% at 40% 42%, color-mix(in srgb, var(--av-rim) 45%, transparent), transparent 76%);
 }
 
-/* A storm, not a dartboard: off-centre, elliptical, and every stop fades instead of landing. */
-.setting-face[data-pattern='eye']::before {
+.setting-face[data-pattern='lattice']::before {
   background:
-    radial-gradient(ellipse 15% 11% at 60% 43%, color-mix(in srgb, var(--av-rim) 80%, transparent), transparent 76%),
-    radial-gradient(
-      ellipse 33% 24% at 60% 43%,
-      transparent 0 42%,
-      color-mix(in srgb, var(--av-with) 88%, transparent) 62% 76%,
-      transparent 98%
+    radial-gradient(ellipse 26% 26% at 46% 42%, color-mix(in srgb, var(--av-rim) 46%, transparent) 0 18%, transparent 100%),
+    repeating-linear-gradient(
+      var(--av-tilt),
+      color-mix(in srgb, var(--av-with) 72%, transparent) 0 1.4%,
+      transparent 1.4% 13%
     ),
-    radial-gradient(
-      ellipse 60% 42% at 58% 45%,
-      transparent 0 58%,
-      color-mix(in srgb, var(--av-with) 42%, transparent) 76% 86%,
-      transparent 100%
+    repeating-linear-gradient(
+      calc(var(--av-tilt) + 62deg),
+      color-mix(in srgb, var(--av-with) 72%, transparent) 0 1.4%,
+      transparent 1.4% 13%
+    ),
+    repeating-linear-gradient(
+      calc(var(--av-tilt) + 124deg),
+      color-mix(in srgb, var(--av-with) 40%, transparent) 0 1%,
+      transparent 1% 19%
     );
+  mask-image: radial-gradient(circle closest-side at 50% 50%, #000 0 70%, transparent 96%);
 }
 
-/* Facets, not slices: two conics from different origins, with the middle masked out so no wedge reaches it. */
-.setting-face[data-pattern='shard']::before {
+.setting-face[data-pattern='craters']::before {
+  background:
+    radial-gradient(ellipse 13% 13% at 36% 30%, transparent 0 48%, color-mix(in srgb, var(--av-with) 82%, transparent) 60% 84%, transparent 100%),
+    radial-gradient(ellipse 9% 9% at 63% 52%, transparent 0 44%, color-mix(in srgb, var(--av-with) 88%, transparent) 58% 84%, transparent 100%),
+    radial-gradient(ellipse 7% 7% at 45% 66%, transparent 0 42%, color-mix(in srgb, var(--av-with) 76%, transparent) 56% 84%, transparent 100%),
+    radial-gradient(ellipse 5% 5% at 72% 28%, transparent 0 40%, color-mix(in srgb, var(--av-with) 70%, transparent) 54% 84%, transparent 100%),
+    radial-gradient(ellipse 4% 4% at 26% 54%, transparent 0 38%, color-mix(in srgb, var(--av-with) 64%, transparent) 52% 84%, transparent 100%),
+    radial-gradient(ellipse 6% 6% at 56% 80%, transparent 0 42%, color-mix(in srgb, var(--av-with) 58%, transparent) 56% 84%, transparent 100%),
+    radial-gradient(ellipse 30% 24% at 58% 62%, color-mix(in srgb, var(--av-with) 20%, transparent) 0 40%, transparent 86%);
+}
+
+.setting-face[data-pattern='facets']::before {
   background:
     conic-gradient(
-      from calc(var(--av-turn) + 18deg) at 64% 37%,
+      from calc(var(--av-tilt) + 18deg) at 64% 37%,
       transparent 0 26deg,
       color-mix(in srgb, var(--av-with) 88%, transparent) 31deg 57deg,
       transparent 62deg 128deg,
@@ -592,21 +640,121 @@ kbd {
       transparent 272deg 360deg
     ),
     conic-gradient(
-      from calc(var(--av-turn) + 140deg) at 33% 67%,
+      from calc(var(--av-tilt) + 140deg) at 33% 67%,
       transparent 0 40deg,
-      color-mix(in srgb, var(--av-with) 50%, transparent) 45deg 75deg,
+      color-mix(in srgb, var(--av-with) 54%, transparent) 45deg 75deg,
       transparent 80deg 196deg,
-      color-mix(in srgb, var(--av-with) 40%, transparent) 201deg 227deg,
+      color-mix(in srgb, var(--av-with) 44%, transparent) 201deg 227deg,
       transparent 232deg 360deg
+    ),
+    conic-gradient(
+      from calc(var(--av-tilt) + 262deg) at 54% 70%,
+      transparent 0 84deg,
+      color-mix(in srgb, var(--av-rim) 26%, transparent) 90deg 118deg,
+      transparent 124deg 360deg
     );
   mask-image: radial-gradient(circle at 50% 50%, transparent 0 15%, #000 36% 86%, transparent 100%);
 }
 
-.setting-face[data-pattern='wave']::before {
+.setting-face[data-pattern='veins']::before {
   background:
-    /* A horizon across the middle rather than a band along the bottom, which the limb was eating. */
-    radial-gradient(ellipse 130% 44% at 50% 96%, var(--av-with) 0 56%, transparent 60%),
-    radial-gradient(ellipse 120% 26% at 50% 50%, color-mix(in srgb, var(--av-rim) 50%, transparent) 0 48%, transparent 56%);
+    repeating-linear-gradient(
+      calc(var(--av-tilt) + 14deg),
+      color-mix(in srgb, var(--av-with) 82%, transparent) 0 1.1%,
+      transparent 1.1% 27%
+    ),
+    repeating-linear-gradient(
+      calc(var(--av-tilt) + 96deg),
+      color-mix(in srgb, var(--av-with) 62%, transparent) 0 0.8%,
+      transparent 0.8% 39%
+    ),
+    repeating-linear-gradient(
+      calc(var(--av-tilt) + 51deg),
+      color-mix(in srgb, var(--av-with) 40%, transparent) 0 0.6%,
+      transparent 0.6% 53%
+    );
+  mask-image: radial-gradient(circle closest-side at 50% 50%, #000 0 62%, rgba(0, 0, 0, 0.3) 88%, transparent 100%);
+}
+
+.setting-face[data-pattern='ring']::before {
+  background:
+    /* The bright outer edge, then the body of the ring, then the bright inner edge. Drawn dark alone it was
+       invisible twice over: `rim` on a pale world is the world's own colour, and `with` down on the limb is a
+       dark band inside the night side. Light-dark-light reads against either. */
+    radial-gradient(
+      ellipse 118% 35% at 50% 44%,
+      transparent 0 40%,
+      color-mix(in srgb, var(--av-rim) 95%, transparent) 43% 47%,
+      var(--av-with) 50% 59%,
+      color-mix(in srgb, var(--av-rim) 70%, transparent) 61% 64%,
+      transparent 68%
+    ),
+    radial-gradient(
+      ellipse 140% 44% at 50% 44%,
+      transparent 0 66%,
+      color-mix(in srgb, var(--av-with) 64%, transparent) 71% 80%,
+      transparent 87%
+    );
+  mask-image: linear-gradient(calc(var(--av-tilt) + 84deg), transparent 0 36%, #000 45%);
+}
+
+.setting-face[data-pattern='strata']::before {
+  background:
+    repeating-linear-gradient(
+      var(--av-tilt),
+      var(--av-with) 0 11%,
+      transparent 11% 24%,
+      color-mix(in srgb, var(--av-with) 74%, transparent) 24% 32%,
+      transparent 32% 39%,
+      color-mix(in srgb, var(--av-with) 48%, transparent) 39% 43%,
+      transparent 43% 58%
+    ),
+    repeating-linear-gradient(
+      calc(var(--av-tilt) + 7deg),
+      color-mix(in srgb, var(--av-rim) 26%, transparent) 0 1.6%,
+      transparent 1.6% 29%
+    );
+}
+
+.setting-face[data-pattern='aurora']::before {
+  --pole-x: calc(50% + 30% * sin(var(--av-tilt)));
+  --pole-y: calc(50% - 30% * cos(var(--av-tilt)));
+  background:
+    repeating-linear-gradient(
+      var(--av-tilt),
+      color-mix(in srgb, var(--av-with) 30%, transparent) 0 1.2%,
+      transparent 1.2% 7%
+    ),
+    radial-gradient(
+      ellipse 30% 22% at var(--pole-x) var(--pole-y),
+      transparent 0 42%,
+      color-mix(in srgb, var(--av-with) 88%, transparent) 58% 76%,
+      transparent 94%
+    ),
+    radial-gradient(
+      ellipse 46% 34% at var(--pole-x) var(--pole-y),
+      transparent 0 54%,
+      color-mix(in srgb, var(--av-with) 40%, transparent) 68% 84%,
+      transparent 98%
+    );
+  mask-image: radial-gradient(circle closest-side at 50% 50%, #000 0 76%, transparent 99%);
+}
+
+.setting-face[data-pattern='eye']::before {
+  background:
+    radial-gradient(ellipse 15% 11% at 60% 43%, color-mix(in srgb, var(--av-rim) 80%, transparent), transparent 76%),
+    radial-gradient(
+      ellipse 33% 24% at 60% 43%,
+      transparent 0 42%,
+      var(--av-with) 60% 78%,
+      transparent 98%
+    ),
+    radial-gradient(
+      ellipse 60% 42% at 58% 45%,
+      transparent 0 56%,
+      color-mix(in srgb, var(--av-with) 62%, transparent) 74% 87%,
+      transparent 100%
+    );
 }
 
 /* The two layers the setup screen's worlds have and these were missing: the fine surface detail, and the shell of

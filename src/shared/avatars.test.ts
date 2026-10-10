@@ -129,8 +129,9 @@ describe('the letter on it', () => {
 describe('what the stylesheet is handed', () => {
   it('is the properties the rules read, and nothing else', () => {
     const style = avatarStyle('ember')
-    assert.deepEqual(Object.keys(style).sort(), ['--av-from', '--av-rim', '--av-sky', '--av-to', '--av-turn', '--av-with'])
+    assert.deepEqual(Object.keys(style).sort(), ['--av-from', '--av-rim', '--av-sky', '--av-tilt', '--av-to', '--av-turn', '--av-with'])
     assert.match(style['--av-turn'], /^\d+deg$/)
+    assert.match(style['--av-tilt'], /^\d+deg$/)
   })
 
   it('an unknown id still produces a full set, so a swatch is never drawn with nothing', () => {
@@ -145,17 +146,28 @@ describe('what is going on inside each one', () => {
    * a picture somebody would want. These two keep it from drifting back: every orb has a pattern, and no pattern
    * is used so often that the row reads as four things repeated.
    */
-  it('every one has a pattern', () => {
-    for (const one of AVATARS) {
-      assert.ok(['bands', 'swirl', 'nebula', 'eye', 'shard', 'wave'].includes(one.pattern), `${one.id} has no pattern`)
-    }
+  it('no two worlds share an interior', () => {
+    // Six weathers shared between twelve worlds photographed as "most of them look the same": the same drawing in
+    // two colours is one world at two settings, and with the warm half of the wheel ruled out there is not enough
+    // hue left to carry the difference on its own.
+    const used = AVATARS.map((one) => one.pattern)
+    assert.equal(new Set(used).size, AVATARS.length, 'two worlds are drawn the same way')
   })
 
-  it('the patterns are spread, not three of one and nine of another', () => {
-    const counts = new Map<string, number>()
-    for (const one of AVATARS) counts.set(one.pattern, (counts.get(one.pattern) ?? 0) + 1)
-    assert.ok(counts.size >= 5, `only ${counts.size} different patterns across twelve`)
-    assert.ok(Math.max(...counts.values()) <= 3, 'one pattern is used more than three times')
+  it('the worlds lean in every direction, while the light barely moves', () => {
+    /*
+     * The light is what the twelve share; the axis is where their variety is allowed to live.
+     *
+     * While the bands were drawn from `turn` they were all within fifty degrees of each other and every banded
+     * world looked like the same world. Both halves are checked, because widening the light instead would undo
+     * the thing that makes a grid of twelve read as one place.
+     */
+    const spread = (values: number[]): number => Math.max(...values) - Math.min(...values)
+    assert.ok(spread(AVATARS.map((one) => one.turn)) <= 60, 'the light is lit from too many directions to be one set')
+    assert.ok(spread(AVATARS.map((one) => one.tilt)) >= 300, 'the worlds all lean the same way')
+    for (const one of AVATARS) {
+      assert.ok(Number.isInteger(one.tilt) && one.tilt >= 0 && one.tilt < 360, `${one.id} has no usable axis`)
+    }
   })
 
   it('the pattern colour is not the same as the one it is drawn on', () => {

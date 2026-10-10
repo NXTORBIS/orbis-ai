@@ -31,8 +31,26 @@
  *
  * Drawn under the shading, never instead of it: a pattern on a flat disc is a sticker, and what makes these read
  * as glass is that the same glint, limb and rim sit over all of them.
+ *
+ * **Twelve weathers, not six shared between twelve.** Six was tried and photographed, and the row came back as
+ * "most of them look the same": two worlds drawn the same way in two colours are one world at two settings, and
+ * with half the arc of the colour wheel ruled out there was not enough hue left to carry the difference on its
+ * own. Each world now has an interior nobody else has -- an ocean, a storm, a ring, a cratered crust -- so the
+ * thing that tells them apart is what they *are*, not merely what colour they came in.
  */
-export type Pattern = 'bands' | 'swirl' | 'nebula' | 'eye' | 'shard' | 'wave'
+export type Pattern =
+  | 'ocean'
+  | 'vortex'
+  | 'belts'
+  | 'nebula'
+  | 'lattice'
+  | 'craters'
+  | 'facets'
+  | 'veins'
+  | 'ring'
+  | 'strata'
+  | 'aurora'
+  | 'eye'
 
 export interface Avatar {
   /** Stored in settings. Never rename one of these. */
@@ -70,9 +88,24 @@ export interface Avatar {
   readonly sky: string
   /** The glow that sits under the rim on the lit side. Usually a brighter relative of `from`. */
   readonly rim: string
-  /** Where the light falls, in degrees, so the family does not all face the same way. */
+  /**
+   * Where the light falls, in degrees.
+   *
+   * It moves only a little across the twelve, and that is deliberate: the glint, the night side and the bounce
+   * all come off this, so a wide spread would light twelve worlds from twelve directions and they would stop
+   * being one set. The light is the thing they share.
+   */
   readonly turn: number
-  /** The weather inside. */
+  /**
+   * Which way the world itself leans, in degrees. Not the light.
+   *
+   * Everything that belongs to the body rather than to the room hangs off this -- the belts, the strata, the
+   * crystal lattice, the ocean's glitter, the polar cap. It is spread right round the circle, because this is
+   * where the variety is allowed to live: one light, twelve axes. While bands were drawn from `turn` they were
+   * all within fifty degrees of each other and every banded world looked like the same world.
+   */
+  readonly tilt: number
+  /** The weather inside. No two worlds share one. */
   readonly pattern: Pattern
 }
 
@@ -88,29 +121,29 @@ export interface Avatar {
  *
  * - *Bright* bodies alternate with *dark* ones down the row, so no two neighbours are the same weight. Quartz is
  *   almost white and Umbra is almost black, and they sit next to each other on purpose.
- * - Umbra alone has its weather drawn **lighter** than its body: rings of light on a world that is otherwise the
- *   application's own black. Four of them were drawn that way at first and it was wrong -- a pale pattern over a
- *   dark body stops reading as weather inside glass and starts reading as paint on top of it, and Basalt in
- *   particular came out as a humbug. One is a world with its own light in it; four is a style.
- * - No two near neighbours in colour share a pattern. Tide and Boreal are both teal and were both waves, which
- *   made them the same world at two brightnesses; Boreal turning instead is what tells them apart at 56px.
+ * - **No two share an interior.** Twelve weathers for twelve worlds, each written once.
+ * - Three draw their weather **lighter** than their body -- Umbra's crater rims, Boreal's fractures, Aurora's
+ *   arc -- because all three are light on a dark crust rather than cloud in an atmosphere. Four were drawn that
+ *   way at an earlier attempt and it was wrong: a pale pattern over a dark body stops reading as weather inside
+ *   glass and starts reading as paint on top of it, and Basalt came out as a humbug. It has to be something the
+ *   world is emitting, or it is a sticker.
  *
  * The `id` of each is what settings stores and must never change; the names moved when the colours did, which is
  * why `ember` is called Umbra and `gold` is called Cygnus. Nothing shows an id, so that is only ever read here.
  */
 export const AVATARS: readonly Avatar[] = Object.freeze([
-  { id: 'cyan', name: 'Tide', from: '#3fd8ff', to: '#031a26', with: '#0e6b89', rim: '#a9f1ff', sky: '#b4c9ff', turn: 318, pattern: 'wave' },
-  { id: 'violet', name: 'Twilight', from: '#8878ff', to: '#0a0722', with: '#2a1d8c', rim: '#cbc2ff', sky: '#9fd4ff', turn: 309, pattern: 'swirl' },
-  { id: 'jade', name: 'Verdant', from: '#36d9a2', to: '#031f1a', with: '#02574a', rim: '#9af5d2', sky: '#a6d8ff', turn: 312, pattern: 'bands' },
-  { id: 'orchid', name: 'Nebula', from: '#b57af2', to: '#160830', with: '#3d1077', rim: '#e4c8ff', sky: '#a8c6ff', turn: 324, pattern: 'nebula' },
-  { id: 'amber', name: 'Quartz', from: '#d8ecfa', to: '#0c161e', with: '#78b0d2', rim: '#f2fbff', sky: '#8fe0ff', turn: 306, pattern: 'shard' },
-  { id: 'ember', name: 'Umbra', from: '#24404d', to: '#05080b', with: '#6cc8e4', rim: '#8fe6ff', sky: '#a4d2ff', turn: 330, pattern: 'eye' },
-  { id: 'rose', name: 'Vesper', from: '#d46ad4', to: '#230525', with: '#5e0866', rim: '#f5bdf5', sky: '#b7c6ff', turn: 300, pattern: 'swirl' },
-  { id: 'coral', name: 'Boreal', from: '#3a8f9e', to: '#04161c', with: '#063744', rim: '#9fdce8', sky: '#aacdff', turn: 348, pattern: 'swirl' },
-  { id: 'gold', name: 'Cygnus', from: '#93b4fa', to: '#070c22', with: '#3f55b8', rim: '#d2e0ff', sky: '#95e0ff', turn: 333, pattern: 'shard' },
-  { id: 'slate', name: 'Basalt', from: '#6c7e93', to: '#090e15', with: '#1b2733', rim: '#c3d2e4', sky: '#8fdcff', turn: 315, pattern: 'bands' },
-  { id: 'mint', name: 'Aurora', from: '#66ecd4', to: '#032321', with: '#05604f', rim: '#c6fbf0', sky: '#a2c8ff', turn: 342, pattern: 'nebula' },
-  { id: 'cobalt', name: 'Abyss', from: '#4f84f0', to: '#040c22', with: '#122a8e', rim: '#b2cfff', sky: '#9bd6ff', turn: 336, pattern: 'eye' }
+  { id: 'cyan', name: 'Tide', from: '#38d6ff', to: '#02141f', with: '#07506e', rim: '#a6f0ff', sky: '#b4c9ff', turn: 318, tilt: 12, pattern: 'ocean' },
+  { id: 'violet', name: 'Twilight', from: '#8c7bff', to: '#080520', with: '#2a1a90', rim: '#cdc5ff', sky: '#9fd4ff', turn: 309, tilt: 196, pattern: 'vortex' },
+  { id: 'jade', name: 'Verdant', from: '#2fd9a4', to: '#021d18', with: '#01503f', rim: '#96f5d0', sky: '#a6d8ff', turn: 312, tilt: 64, pattern: 'belts' },
+  { id: 'orchid', name: 'Nebula', from: '#a86ff5', to: '#13062c', with: '#3a0b7d', rim: '#e6c6ff', sky: '#a8c6ff', turn: 324, tilt: 248, pattern: 'nebula' },
+  { id: 'amber', name: 'Quartz', from: '#d4ecfc', to: '#0a141c', with: '#5f9fc8', rim: '#f2fbff', sky: '#8fe0ff', turn: 306, tilt: 118, pattern: 'lattice' },
+  { id: 'ember', name: 'Umbra', from: '#2a4654', to: '#04070a', with: '#7fd2ec', rim: '#8fe6ff', sky: '#a4d2ff', turn: 330, tilt: 303, pattern: 'craters' },
+  { id: 'rose', name: 'Vesper', from: '#cf5fd6', to: '#1f0421', with: '#5c0665', rim: '#f7bdf7', sky: '#b7c6ff', turn: 300, tilt: 33, pattern: 'facets' },
+  { id: 'coral', name: 'Boreal', from: '#2e8496', to: '#03131a', with: '#a8ecf7', rim: '#9fdce8', sky: '#aacdff', turn: 348, tilt: 221, pattern: 'veins' },
+  { id: 'gold', name: 'Cygnus', from: '#8cb0fa', to: '#050a20', with: '#2c44a8', rim: '#d2e0ff', sky: '#95e0ff', turn: 333, tilt: 86, pattern: 'ring' },
+  { id: 'slate', name: 'Basalt', from: '#6b7d94', to: '#070c13', with: '#18222f', rim: '#c3d2e4', sky: '#8fdcff', turn: 315, tilt: 8, pattern: 'strata' },
+  { id: 'mint', name: 'Aurora', from: '#2fa894', to: '#021f1d', with: '#a9ffea', rim: '#b6fbe8', sky: '#a2c8ff', turn: 342, tilt: 155, pattern: 'aurora' },
+  { id: 'cobalt', name: 'Abyss', from: '#4a7df0', to: '#030a20', with: '#0f2486', rim: '#b2cfff', sky: '#9bd6ff', turn: 336, tilt: 338, pattern: 'eye' }
 ])
 
 export const DEFAULT_AVATAR = 'cyan'
@@ -181,6 +214,7 @@ export function avatarStyle(id: string | null | undefined): Record<string, strin
     '--av-with': one.with,
     '--av-sky': one.sky,
     '--av-rim': one.rim,
-    '--av-turn': `${one.turn}deg`
+    '--av-turn': `${one.turn}deg`,
+    '--av-tilt': `${one.tilt}deg`
   }
 }

@@ -959,30 +959,79 @@
   transition: transform 0.9s var(--ease-out);
 }
 
-.welcome-face[data-pattern='bands']::before,
-.welcome-face-pick[data-pattern='bands']::before {
-  background: repeating-linear-gradient(
-    calc(var(--av-turn) + 34deg),
-    color-mix(in srgb, var(--av-with) 85%, transparent) 0 14%,
-    transparent 14% 30%
-  );
+/* ---------------------------------------------------------------- the twelve weathers
+
+   One per world, written once each. Six shared between twelve was tried and photographed, and the row came back
+   as "most of them look the same" -- two worlds drawn the same way in two colours are one world at two settings,
+   and with the warm half of the wheel ruled out there is not enough hue left to carry the difference alone.
+
+   Everything that belongs to the BODY hangs off `--av-tilt`, the world's own lean, which is spread right round
+   the circle. `--av-turn` is the LIGHT and barely moves, because that is the thing all twelve share. While the
+   bands were drawn from `turn` they sat within fifty degrees of each other and every banded world looked like
+   the same world. */
+
+/* An ocean: a deep basin, the shelf where it shallows, two swells and the patch where the light lands on it.
+
+   Every layer is an arc. A straight repeat was tried twice, at full strength and at a sixth of it, and both
+   times the world came back as corduroy -- water is curved, and a ruled line across a sphere is cloth. */
+.welcome-face[data-pattern='ocean']::before,
+.welcome-face-pick[data-pattern='ocean']::before {
+  background:
+    radial-gradient(ellipse 26% 13% at 33% 35%, color-mix(in srgb, var(--av-rim) 58%, transparent) 0 26%, transparent 88%),
+    radial-gradient(ellipse 104% 20% at 46% 70%, color-mix(in srgb, var(--av-rim) 26%, transparent) 0 46%, transparent 54%),
+    radial-gradient(ellipse 86% 15% at 54% 52%, color-mix(in srgb, var(--av-rim) 20%, transparent) 0 44%, transparent 52%),
+    radial-gradient(ellipse 132% 38% at 48% 84%, var(--av-with) 0 60%, transparent 72%),
+    radial-gradient(ellipse 98% 18% at 56% 44%, color-mix(in srgb, var(--av-with) 84%, transparent) 0 52%, transparent 74%),
+    radial-gradient(ellipse 46% 13% at 24% 62%, color-mix(in srgb, var(--av-with) 60%, transparent) 0 54%, transparent 80%);
 }
 
-/* Soft stops all the way round and the same colour at both ends, or the seam at 0deg shows as a hard crescent. */
-.welcome-face[data-pattern='swirl']::before,
-.welcome-face-pick[data-pattern='swirl']::before {
-  background: conic-gradient(
-    from var(--av-turn) at 44% 48%,
-    color-mix(in srgb, var(--av-with) 70%, transparent) 0%,
-    color-mix(in srgb, var(--av-with) 10%, transparent) 18%,
-    color-mix(in srgb, var(--av-with) 62%, transparent) 38%,
-    color-mix(in srgb, var(--av-with) 8%, transparent) 58%,
-    color-mix(in srgb, var(--av-with) 66%, transparent) 80%,
-    color-mix(in srgb, var(--av-with) 70%, transparent) 100%
-  );
+/* A cyclone: four arms and a bright eye. The mask keeps the arms off the middle, or they meet in a point and the
+   whole thing is a pie chart again. */
+.welcome-face[data-pattern='vortex']::before,
+.welcome-face-pick[data-pattern='vortex']::before {
+  background:
+    radial-gradient(ellipse 9% 9% at 52% 46%, color-mix(in srgb, var(--av-rim) 70%, transparent) 0 54%, transparent 100%),
+    conic-gradient(
+      from var(--av-tilt) at 52% 46%,
+      var(--av-with) 0deg 30deg,
+      transparent 52deg 76deg,
+      color-mix(in srgb, var(--av-with) 88%, transparent) 94deg 124deg,
+      transparent 144deg 166deg,
+      var(--av-with) 184deg 214deg,
+      transparent 234deg 256deg,
+      color-mix(in srgb, var(--av-with) 88%, transparent) 274deg 304deg,
+      transparent 322deg 360deg
+    );
+  mask-image: radial-gradient(circle closest-side at 52% 46%, transparent 0 7%, #000 20% 94%, transparent 100%);
 }
 
-/* Kept inside the middle of the sphere: out at the edge the limb swallows them and the world reads as plain. */
+/* A giant's belts and zones, across the world's equator. The widths differ on purpose: an even repeat is
+   corduroy, and what makes a banded planet read is that no two bands are the same. */
+.welcome-face[data-pattern='belts']::before,
+.welcome-face-pick[data-pattern='belts']::before {
+  background:
+    linear-gradient(
+      var(--av-tilt),
+      transparent 0 43%,
+      color-mix(in srgb, var(--av-with) 94%, transparent) 46% 55%,
+      transparent 58% 100%
+    ),
+    linear-gradient(
+      var(--av-tilt),
+      transparent 0 22%,
+      color-mix(in srgb, var(--av-rim) 34%, transparent) 26% 33%,
+      transparent 37% 100%
+    ),
+    repeating-linear-gradient(
+      var(--av-tilt),
+      color-mix(in srgb, var(--av-with) 82%, transparent) 0 6%,
+      transparent 6% 12%,
+      color-mix(in srgb, var(--av-with) 48%, transparent) 12% 15%,
+      transparent 15% 26%
+    );
+}
+
+/* Cloud at four scales, kept inside the middle: out at the edge the limb swallows them and the world reads plain. */
 .welcome-face[data-pattern='nebula']::before,
 .welcome-face-pick[data-pattern='nebula']::before {
   background:
@@ -992,45 +1041,52 @@
     radial-gradient(ellipse 22% 17% at 40% 42%, color-mix(in srgb, var(--av-rim) 45%, transparent), transparent 76%);
 }
 
-/*
- * A storm, not a dartboard.
- *
- * Concentric circles on the middle of a circle, with hard edges, is a target -- photographed at 56px the first
- * version was a bullseye and nothing else. Three things fix it and all three are needed: the eye sits off-centre,
- * the rings are ellipses rather than circles, so they read as a system seen at an angle, and every stop fades
- * instead of landing, so the edge is weather rather than ink.
- */
-.welcome-face[data-pattern='eye']::before,
-.welcome-face-pick[data-pattern='eye']::before {
+/* A crystal: three sets of planes crossing, with the light caught where they meet. Masked well inside the limb,
+   or a grid that runs to the edge reads as a wireframe laid over a ball rather than structure inside one. */
+.welcome-face[data-pattern='lattice']::before,
+.welcome-face-pick[data-pattern='lattice']::before {
   background:
-    radial-gradient(ellipse 15% 11% at 60% 43%, color-mix(in srgb, var(--av-rim) 80%, transparent), transparent 76%),
-    radial-gradient(
-      ellipse 33% 24% at 60% 43%,
-      transparent 0 42%,
-      color-mix(in srgb, var(--av-with) 88%, transparent) 62% 76%,
-      transparent 98%
+    radial-gradient(ellipse 26% 26% at 46% 42%, color-mix(in srgb, var(--av-rim) 46%, transparent) 0 18%, transparent 100%),
+    repeating-linear-gradient(
+      var(--av-tilt),
+      color-mix(in srgb, var(--av-with) 72%, transparent) 0 1.4%,
+      transparent 1.4% 13%
     ),
-    radial-gradient(
-      ellipse 60% 42% at 58% 45%,
-      transparent 0 58%,
-      color-mix(in srgb, var(--av-with) 42%, transparent) 76% 86%,
-      transparent 100%
+    repeating-linear-gradient(
+      calc(var(--av-tilt) + 62deg),
+      color-mix(in srgb, var(--av-with) 72%, transparent) 0 1.4%,
+      transparent 1.4% 13%
+    ),
+    repeating-linear-gradient(
+      calc(var(--av-tilt) + 124deg),
+      color-mix(in srgb, var(--av-with) 40%, transparent) 0 1%,
+      transparent 1% 19%
     );
+  mask-image: radial-gradient(circle closest-side at 50% 50%, #000 0 70%, transparent 96%);
 }
 
-/*
- * Facets, not slices.
- *
- * One conic from the centre of a circle cuts it into wedges, and a wedge that reaches the middle is a pie chart --
- * which is exactly what the first version photographed as. Two conics with different origins overlap into shapes
- * that belong to neither, and the mask keeps both out of the middle, so what is left catches the light nearer the
- * limb the way a cut stone does.
- */
-.welcome-face[data-pattern='shard']::before,
-.welcome-face-pick[data-pattern='shard']::before {
+/* An airless crust. Six craters of six sizes, each a ring rather than a disc, because what you actually see of a
+   crater is its wall catching the light. One old basin underneath them, to stop it reading as spots. */
+.welcome-face[data-pattern='craters']::before,
+.welcome-face-pick[data-pattern='craters']::before {
+  background:
+    radial-gradient(ellipse 13% 13% at 36% 30%, transparent 0 48%, color-mix(in srgb, var(--av-with) 82%, transparent) 60% 84%, transparent 100%),
+    radial-gradient(ellipse 9% 9% at 63% 52%, transparent 0 44%, color-mix(in srgb, var(--av-with) 88%, transparent) 58% 84%, transparent 100%),
+    radial-gradient(ellipse 7% 7% at 45% 66%, transparent 0 42%, color-mix(in srgb, var(--av-with) 76%, transparent) 56% 84%, transparent 100%),
+    radial-gradient(ellipse 5% 5% at 72% 28%, transparent 0 40%, color-mix(in srgb, var(--av-with) 70%, transparent) 54% 84%, transparent 100%),
+    radial-gradient(ellipse 4% 4% at 26% 54%, transparent 0 38%, color-mix(in srgb, var(--av-with) 64%, transparent) 52% 84%, transparent 100%),
+    radial-gradient(ellipse 6% 6% at 56% 80%, transparent 0 42%, color-mix(in srgb, var(--av-with) 58%, transparent) 56% 84%, transparent 100%),
+    radial-gradient(ellipse 30% 24% at 58% 62%, color-mix(in srgb, var(--av-with) 20%, transparent) 0 40%, transparent 86%);
+}
+
+/* A cut stone. One conic from the centre of a circle slices it into wedges and any wedge reaching the middle is a
+   pie chart; three from three origins overlap into shapes belonging to none of them, and the mask keeps all of
+   them out of the centre so the facets catch the light near the limb the way a stone does. */
+.welcome-face[data-pattern='facets']::before,
+.welcome-face-pick[data-pattern='facets']::before {
   background:
     conic-gradient(
-      from calc(var(--av-turn) + 18deg) at 64% 37%,
+      from calc(var(--av-tilt) + 18deg) at 64% 37%,
       transparent 0 26deg,
       color-mix(in srgb, var(--av-with) 88%, transparent) 31deg 57deg,
       transparent 62deg 128deg,
@@ -1040,22 +1096,142 @@
       transparent 272deg 360deg
     ),
     conic-gradient(
-      from calc(var(--av-turn) + 140deg) at 33% 67%,
+      from calc(var(--av-tilt) + 140deg) at 33% 67%,
       transparent 0 40deg,
-      color-mix(in srgb, var(--av-with) 50%, transparent) 45deg 75deg,
+      color-mix(in srgb, var(--av-with) 54%, transparent) 45deg 75deg,
       transparent 80deg 196deg,
-      color-mix(in srgb, var(--av-with) 40%, transparent) 201deg 227deg,
+      color-mix(in srgb, var(--av-with) 44%, transparent) 201deg 227deg,
       transparent 232deg 360deg
+    ),
+    conic-gradient(
+      from calc(var(--av-tilt) + 262deg) at 54% 70%,
+      transparent 0 84deg,
+      color-mix(in srgb, var(--av-rim) 26%, transparent) 90deg 118deg,
+      transparent 124deg 360deg
     );
   mask-image: radial-gradient(circle at 50% 50%, transparent 0 15%, #000 36% 86%, transparent 100%);
 }
 
-/* A horizon across the middle rather than a band along the bottom, which the limb was eating. */
-.welcome-face[data-pattern='wave']::before,
-.welcome-face-pick[data-pattern='wave']::before {
+/* A frozen crust, fractured. Three families of cracks at three angles, each thin and far apart, fading out
+   towards the limb so they lie on the surface instead of being ruled across the picture. */
+.welcome-face[data-pattern='veins']::before,
+.welcome-face-pick[data-pattern='veins']::before {
   background:
-    radial-gradient(ellipse 130% 44% at 50% 96%, var(--av-with) 0 56%, transparent 60%),
-    radial-gradient(ellipse 120% 26% at 50% 50%, color-mix(in srgb, var(--av-rim) 50%, transparent) 0 48%, transparent 56%);
+    repeating-linear-gradient(
+      calc(var(--av-tilt) + 14deg),
+      color-mix(in srgb, var(--av-with) 82%, transparent) 0 1.1%,
+      transparent 1.1% 27%
+    ),
+    repeating-linear-gradient(
+      calc(var(--av-tilt) + 96deg),
+      color-mix(in srgb, var(--av-with) 62%, transparent) 0 0.8%,
+      transparent 0.8% 39%
+    ),
+    repeating-linear-gradient(
+      calc(var(--av-tilt) + 51deg),
+      color-mix(in srgb, var(--av-with) 40%, transparent) 0 0.6%,
+      transparent 0.6% 53%
+    );
+  mask-image: radial-gradient(circle closest-side at 50% 50%, #000 0 62%, rgba(0, 0, 0, 0.3) 88%, transparent 100%);
+}
+
+/* A ring system. Only the arc that passes in FRONT is drawn -- the half going behind is hidden by the world
+   itself, so drawing it is what makes a ring read as a hoop painted on a ball. The mask cuts along the world's
+   own lean rather than along the screen, which is what tilts the plane. */
+.welcome-face[data-pattern='ring']::before,
+.welcome-face-pick[data-pattern='ring']::before {
+  background:
+    /* The bright outer edge, then the body of the ring, then the bright inner edge. Drawn dark alone it was
+       invisible twice over: `rim` on a pale world is the world's own colour, and `with` down on the limb is a
+       dark band inside the night side. Light-dark-light reads against either. */
+    radial-gradient(
+      ellipse 118% 35% at 50% 44%,
+      transparent 0 40%,
+      color-mix(in srgb, var(--av-rim) 95%, transparent) 43% 47%,
+      var(--av-with) 50% 59%,
+      color-mix(in srgb, var(--av-rim) 70%, transparent) 61% 64%,
+      transparent 68%
+    ),
+    radial-gradient(
+      ellipse 140% 44% at 50% 44%,
+      transparent 0 66%,
+      color-mix(in srgb, var(--av-with) 64%, transparent) 71% 80%,
+      transparent 87%
+    );
+  mask-image: linear-gradient(calc(var(--av-tilt) + 84deg), transparent 0 36%, #000 45%);
+}
+
+/* Layered rock: a close repeat at two frequencies, so the eye reads sediment rather than stripes. */
+.welcome-face[data-pattern='strata']::before,
+.welcome-face-pick[data-pattern='strata']::before {
+  background:
+    repeating-linear-gradient(
+      var(--av-tilt),
+      var(--av-with) 0 11%,
+      transparent 11% 24%,
+      color-mix(in srgb, var(--av-with) 74%, transparent) 24% 32%,
+      transparent 32% 39%,
+      color-mix(in srgb, var(--av-with) 48%, transparent) 39% 43%,
+      transparent 43% 58%
+    ),
+    repeating-linear-gradient(
+      calc(var(--av-tilt) + 7deg),
+      color-mix(in srgb, var(--av-rim) 26%, transparent) 0 1.6%,
+      transparent 1.6% 29%
+    );
+}
+
+/* Light over the pole, with streamers hanging from it.
+
+   The arc is placed by trigonometry from `--av-tilt`, the same way the glint is placed from `--av-turn`, so it
+   sits on the world's pole rather than at the top of the screen. An aurora that ignores which way its own world
+   is leaning is a halo stuck on a picture. */
+.welcome-face[data-pattern='aurora']::before,
+.welcome-face-pick[data-pattern='aurora']::before {
+  --pole-x: calc(50% + 30% * sin(var(--av-tilt)));
+  --pole-y: calc(50% - 30% * cos(var(--av-tilt)));
+  background:
+    repeating-linear-gradient(
+      var(--av-tilt),
+      color-mix(in srgb, var(--av-with) 30%, transparent) 0 1.2%,
+      transparent 1.2% 7%
+    ),
+    radial-gradient(
+      ellipse 30% 22% at var(--pole-x) var(--pole-y),
+      transparent 0 42%,
+      color-mix(in srgb, var(--av-with) 88%, transparent) 58% 76%,
+      transparent 94%
+    ),
+    radial-gradient(
+      ellipse 46% 34% at var(--pole-x) var(--pole-y),
+      transparent 0 54%,
+      color-mix(in srgb, var(--av-with) 40%, transparent) 68% 84%,
+      transparent 98%
+    );
+  mask-image: radial-gradient(circle closest-side at 50% 50%, #000 0 76%, transparent 99%);
+}
+
+/* A storm, not a dartboard.
+
+   Concentric circles on the middle of a circle with hard edges is a target, and at 56px that is all the first
+   version was. Three things fix it and all three are needed: the eye sits off-centre, the rings are ellipses, so
+   they read as a system seen at an angle, and every stop fades instead of landing. */
+.welcome-face[data-pattern='eye']::before,
+.welcome-face-pick[data-pattern='eye']::before {
+  background:
+    radial-gradient(ellipse 15% 11% at 60% 43%, color-mix(in srgb, var(--av-rim) 80%, transparent), transparent 76%),
+    radial-gradient(
+      ellipse 33% 24% at 60% 43%,
+      transparent 0 42%,
+      var(--av-with) 60% 78%,
+      transparent 98%
+    ),
+    radial-gradient(
+      ellipse 60% 42% at 58% 45%,
+      transparent 0 56%,
+      color-mix(in srgb, var(--av-with) 62%, transparent) 74% 87%,
+      transparent 100%
+    );
 }
 
 /* ---------------------------------------------------------------- 3. the skin
@@ -1168,9 +1344,9 @@
   z-index: 1;
   background: radial-gradient(
     circle closest-side at 50% 50%,
-    transparent 0 78%,
-    color-mix(in srgb, var(--av-sky) 13%, transparent) 92%,
-    color-mix(in srgb, var(--av-sky) 28%, transparent) 100%
+    transparent 0 76%,
+    color-mix(in srgb, var(--av-sky) 18%, transparent) 91%,
+    color-mix(in srgb, var(--av-sky) 38%, transparent) 100%
   );
 }
 
@@ -1213,13 +1389,14 @@
    The one piece of terrain that survived being measured at every size. A spherical cap's outline genuinely is a
    single circle of latitude, and a circle of latitude seen flat is an exact ellipse -- so unlike bands, which
    have to be cut off where they pass behind the body, a cap is one shape that is simply true. It sits on the
-   world's axis, which is `--av-turn`, so it is always at the top of the world rather than the top of the screen. */
+   world's axis, which is `--av-tilt`, so it is always at the top of the world rather than the top of the screen --
+   and `tilt` is spread right round the circle, so twelve caps sit in twelve different places. */
 .welcome-face-cap {
   position: absolute;
   inset: 0;
   border-radius: 50%;
   pointer-events: none;
-  transform: rotate(var(--av-turn));
+  transform: rotate(var(--av-tilt));
   background: radial-gradient(
     ellipse 22% 8% at 50% 12%,
     color-mix(in srgb, var(--av-sky) 55%, #fff) 0 58%,

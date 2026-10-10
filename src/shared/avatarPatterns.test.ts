@@ -44,8 +44,21 @@ describe('the two copies of the weather', () => {
   const patterns = [...new Set(AVATARS.map((one) => one.pattern))].sort()
 
   it('covers every pattern the set actually uses', () => {
-    // Six are drawn; if `avatars.ts` ever gains a seventh, this names it rather than quietly skipping it.
-    assert.deepEqual(patterns, ['bands', 'eye', 'nebula', 'shard', 'swirl', 'wave'])
+    // One per world. If `avatars.ts` ever gains a thirteenth, this names it rather than quietly skipping it.
+    assert.deepEqual(patterns, [
+      'aurora',
+      'belts',
+      'craters',
+      'eye',
+      'facets',
+      'lattice',
+      'nebula',
+      'ocean',
+      'ring',
+      'strata',
+      'veins',
+      'vortex'
+    ])
   })
 
   for (const pattern of patterns) {
