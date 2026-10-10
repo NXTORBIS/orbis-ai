@@ -737,6 +737,16 @@ function liveWindow(): BrowserWindow | null {
   return mainWindow && !mainWindow.isDestroyed() ? mainWindow : null
 }
 /**
+ * The pages that may ask this machine for a microphone, by id.
+ *
+ * Ids rather than windows, because the handlers that read this are registered on the session and are still there
+ * long after a window has gone -- see `createWindow`. A window adds itself on creation and takes itself out when it
+ * is destroyed, so a closed window cannot be asked about and nothing has to survive being asked.
+ */
+const micWindows = new Set<number>()
+/** The session holds one handler of each kind, so they are registered on the first window and never replaced. */
+let permissionHandlersSet = false
+/**
  * The person's experience settings, once they have been read.
  *
  * Held here because things that interrupt -- a finished workflow, a rule coming true -- happen long after startup and
@@ -861,13 +871,41 @@ function createWindow(): BrowserWindow {
    * `setPermissionCheckHandler` matters as much as the request handler: `getUserMedia` consults it synchronously,
    * and a renderer that is refused there never reaches the request at all.
    */
+  /*
+   * Asked by id, and registered once.
+   *
+   * Both handlers used to close over `win` and reach for `win.webContents` when something asked for a permission.
+   * They are registered on the SESSION, which is shared and outlives any one window, so the first permission check
+   * after that window closed read a destroyed object -- and a throw in the main process is not a quiet failure, it
+   * is the "A JavaScript error occurred in the main process" dialog. Same family as `liveWindow()` above, in the one
+   * place a guard could not help: by then there is no window left to ask about.
+   *
+   * A number cannot be destroyed, so the allowed contents are remembered by id and the window is never touched here.
+   *
+   * Registering once also fixes a quieter fault. A session holds ONE handler of each kind, so a second window
+   * replaced the first window's, and from then on the first window was refused its own microphone -- speech input
+   * silently stopping in a window that still looked fine.
+   */
   const allowedForWindow = (permission: string): boolean => permission === 'media' || permission === 'audioCapture'
-  win.webContents.session.setPermissionRequestHandler((contents, permission, callback) => {
-    callback(contents === win.webContents && allowedForWindow(permission))
-  })
-  win.webContents.session.setPermissionCheckHandler((contents, permission) => {
-    return contents === win.webContents && allowedForWindow(permission)
-  })
+  micWindows.add(win.webContents.id)
+  win.webContents.once('destroyed', () => micWindows.delete(win.webContents.id))
+  if (!permissionHandlersSet) {
+    permissionHandlersSet = true
+    const mayAsk = (contents: Electron.WebContents | null, permission: string): boolean => {
+      if (!allowedForWindow(permission)) return false
+      // `contents` is handed in by Electron and is normally alive, but it is not ours and the cost of being wrong
+      // here is the crash dialog again, so its id is read defensively too.
+      try {
+        return contents !== null && !contents.isDestroyed() && micWindows.has(contents.id)
+      } catch {
+        return false
+      }
+    }
+    win.webContents.session.setPermissionRequestHandler((contents, permission, callback) => {
+      callback(mayAsk(contents, permission))
+    })
+    win.webContents.session.setPermissionCheckHandler((contents, permission) => mayAsk(contents, permission))
+  }
 
   // Links always open in the system browser, never inside the app window.
   win.webContents.setWindowOpenHandler(({ url }) => {
