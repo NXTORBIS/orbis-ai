@@ -180,26 +180,35 @@ export interface OrbisCapability {
 }
 
 /**
- * The screens the Orbis window can open.
+ * The screens the Orbis window can open. Exactly those, and nothing aspirational.
  *
- * Declared here rather than in the renderer because this is the list both halves read. `Sidebar.tsx` used to hold a
- * second copy of it, with its own labels and its own order, and the two disagreed about nine features.
+ * Declared here rather than in the renderer because this is the list both halves read. `Sidebar.tsx` held a second
+ * copy with its own labels and its own order, and the two had drifted nine features apart -- which is not a tidiness
+ * problem, it is two kinds of lie:
+ *
+ *   - Six capabilities said `app` and the window could not open any of them. Four -- Galaxy, Secrets, Tasks and
+ *     Workflows -- had moved to the browser and their window screens were deleted; the field saying the window
+ *     still had them was simply left behind. Two more, Customize and Profiles, are reached through Settings and
+ *     were never screens of their own. That is the "finished feature nothing can open" bug: a route that renders
+ *     as live and goes nowhere, which this product has already shipped once in the browser's panel.
+ *   - Three screens the window really does have -- Create, Laboratories and Schedules -- were in no capability at
+ *     all, so nothing that reads the registry could offer them. The Command Centre could not list them and the
+ *     window's own search could not find them.
+ *
+ * `appFeatureGuard.test.ts` now holds this to a one-to-one match in both directions.
  */
 export type AppFeature =
+  | 'create'
   | 'pages'
-  | 'student'
-  | 'courses'
+  | 'labs'
   | 'markets'
-  | 'workflows'
-  | 'galaxy'
-  | 'notes'
-  | 'tasks'
   | 'whiteboard'
   | 'clipboard'
   | 'workspaces'
-  | 'secrets'
-  | 'customize'
-  | 'profiles'
+  | 'schedules'
+  | 'notes'
+  | 'student'
+  | 'courses'
 
 /**
  * The capabilities Orbis has.
@@ -241,11 +250,11 @@ export const CAPABILITIES: OrbisCapability[] = [
   { id: 'browserTask', name: 'Do something on this page', lane: 'page', category: 'ai', description: 'Give Orbis a task and watch every step it takes', icon: 'spark', keywords: ['task', 'agent', 'automate', 'click', 'do', 'act'], target: { kind: 'panel', view: 'ask' }, pinnable: false, needs: ['helper', 'key', 'browser'] },
 
   // ---- Automation
-  { id: 'workflows', name: 'Workflows', lane: 'keep', category: 'automation', description: 'Sequences Orbis runs for you, and what they did', icon: 'workflows', keywords: ['workflow', 'automation', 'automate', 'routine', 'schedule', 'run'], target: { kind: 'panel', view: 'workflows' }, app: 'workflows', pinnable: true, needs: ['helper'] },
+  { id: 'workflows', name: 'Workflows', lane: 'keep', category: 'automation', description: 'Sequences Orbis runs for you, and what they did', icon: 'workflows', keywords: ['workflow', 'automation', 'automate', 'routine', 'schedule', 'run'], target: { kind: 'panel', view: 'workflows' }, pinnable: true, needs: ['helper'] },
 
   // ---- Research
   { id: 'search', name: 'Search', lane: 'find', category: 'research', description: 'Search the web from Orbis', icon: 'search', keywords: ['search', 'find', 'web', 'images', 'videos', 'news'], target: { kind: 'panel', view: 'search' }, pinnable: true, needs: ['helper'] },
-  { id: 'galaxy', name: 'Galaxy', lane: 'find', category: 'research', description: 'A map of everything Orbis keeps, and how it connects', icon: 'galaxy', keywords: ['galaxy', 'map', 'graph', 'connections', 'knowledge'], target: { kind: 'panel', view: 'galaxy' }, app: 'galaxy', pinnable: true, needs: ['helper'] },
+  { id: 'galaxy', name: 'Galaxy', lane: 'find', category: 'research', description: 'A map of everything Orbis keeps, and how it connects', icon: 'galaxy', keywords: ['galaxy', 'map', 'graph', 'connections', 'knowledge'], target: { kind: 'panel', view: 'galaxy' }, pinnable: true, needs: ['helper'] },
   { id: 'notes', name: 'Notes', lane: 'keep', category: 'research', description: 'Notes kept in Orbis', icon: 'notes', keywords: ['note', 'write', 'jot'], target: { kind: 'panel', view: 'notes' }, app: 'notes', pinnable: true, needs: ['helper'] },
   { id: 'whiteboard', name: 'Whiteboard', lane: 'keep', category: 'research', description: 'Boards to gather things on', icon: 'whiteboard', keywords: ['whiteboard', 'board', 'canvas', 'draw'], target: { kind: 'view', view: 'whiteboard' }, app: 'whiteboard', pinnable: false, needs: ['helper'] },
   { id: 'sources', name: 'Sources', lane: 'find', category: 'research', description: 'The pages behind an answer', icon: 'sources', keywords: ['source', 'citation', 'reference', 'research'], target: { kind: 'view', view: 'sources' }, pinnable: false, needs: ['helper'] },
@@ -257,12 +266,17 @@ export const CAPABILITIES: OrbisCapability[] = [
   // The pages this person has read, searchable by what was in them. A `panel` target, not a `view` one: this is a
   // section of index.html, not one of the rail's. It said `view` and worked anyway, because the panel happened to
   // know the name -- which is exactly the sort of near-miss that makes a wrong kind survive for months.
+  // Create and Laboratories are screens the Orbis window has had all along and the registry had never heard of, so
+  // nothing that reads the registry -- the browser's Command Centre, the window's own palette -- could offer
+  // either of them. They open in the window, which is what `app` says and what `kind: 'app'` means.
+  { id: 'create', name: 'Create', lane: 'keep', category: 'workspace', description: 'Tables and documents, kept and saved as real files', icon: 'edit', keywords: ['create', 'make', 'new', 'document', 'table', 'sheet', 'spreadsheet', 'write', 'file'], target: { kind: 'app' }, app: 'create', pinnable: false, needs: [] },
+  { id: 'labs', name: 'Laboratories', lane: 'keep', category: 'tools', description: 'Every laboratory Orbis has, by subject', icon: 'calculator', keywords: ['lab', 'laboratory', 'physics', 'chemistry', 'experiment', 'simulate', 'science', 'computing'], target: { kind: 'app' }, app: 'labs', pinnable: false, needs: [] },
   { id: 'recall', name: 'Pages you have read', lane: 'find', category: 'capture', description: 'Find a page again by what was in it', icon: 'book', keywords: ['read', 'history', 'again', 'remember', 'find', 'article', 'recall'], target: { kind: 'panel', view: 'recall' }, pinnable: false, needs: ['helper'] },
   /*
    * Schedules. A `panel` target rather than a `view` one, because the panel's own section is where it lives -- the
    * rail views are a different set, and pointing at one of those would land on the Command Center instead.
    */
-  { id: 'schedules', name: 'Schedules', lane: 'keep', category: 'capture', description: 'Things Orbis does at a time you chose', icon: 'clock', keywords: ['schedule', 'remind', 'reminder', 'later', 'every', 'daily', 'timer', 'when', 'repeat', 'automation'], target: { kind: 'panel', view: 'schedules' }, pinnable: false, needs: ['helper'] },
+  { id: 'schedules', name: 'Schedules', lane: 'keep', category: 'capture', description: 'Things Orbis does at a time you chose', icon: 'clock', keywords: ['schedule', 'remind', 'reminder', 'later', 'every', 'daily', 'timer', 'when', 'repeat', 'automation'], target: { kind: 'panel', view: 'schedules' }, app: 'schedules', pinnable: false, needs: ['helper'] },
   /*
    * Focus, in the browser.
    *
@@ -290,16 +304,16 @@ export const CAPABILITIES: OrbisCapability[] = [
   { id: 'lockOrbis', name: 'Lock Orbis', lane: 'browse', category: 'protection', description: 'Puts Orbis away and asks for your account password. Nothing is closed', icon: 'lock', keywords: ['lock', 'orbis', 'profile', 'away', 'sign out'], target: { kind: 'ask', channel: 'security:lockProfile' }, pinnable: false, needs: ['helper'] },
   { id: 'adblock', name: 'Ad blocking', lane: 'page', category: 'protection', description: 'What was blocked here, and the rules behind it', icon: 'adblock', keywords: ['ad', 'advert', 'advertising', 'block', 'blocker', 'ads'], target: { kind: 'panel', view: 'block' }, pinnable: true, needs: ['helper'] },
   { id: 'permissions', name: 'Site permissions', lane: 'page', category: 'protection', description: 'What this site is allowed to do', icon: 'eye', keywords: ['permission', 'camera', 'microphone', 'location', 'notification', 'site'], target: { kind: 'page', url: 'chrome://settings/content' }, pinnable: false, needs: ['browser'] },
-  { id: 'secrets', name: 'Secrets', lane: 'keep', category: 'protection', description: 'Keys and passwords, behind a master password', icon: 'secrets', keywords: ['secret', 'password', 'key', 'vault', 'credential'], target: { kind: 'panel', view: 'secrets' }, app: 'secrets', pinnable: true, needs: ['helper'] },
+  { id: 'secrets', name: 'Secrets', lane: 'keep', category: 'protection', description: 'Keys and passwords, behind a master password', icon: 'secrets', keywords: ['secret', 'password', 'key', 'vault', 'credential'], target: { kind: 'panel', view: 'secrets' }, pinnable: true, needs: ['helper'] },
 
   // ---- Workspace
   { id: 'workspaces', name: 'Workspaces', lane: 'keep', category: 'workspace', description: 'Sets of tabs kept together and reopened as one', icon: 'workspaces', keywords: ['workspace', 'space', 'session', 'project'], target: { kind: 'view', view: 'workspaces' }, app: 'workspaces', pinnable: false, needs: ['helper'] },
-  { id: 'tasks', name: 'Tasks', lane: 'keep', category: 'workspace', description: 'Things to do', icon: 'tasks', keywords: ['task', 'todo', 'to-do', 'reminder'], target: { kind: 'panel', view: 'tasks' }, app: 'tasks', pinnable: true, needs: ['helper'] },
+  { id: 'tasks', name: 'Tasks', lane: 'keep', category: 'workspace', description: 'Things to do', icon: 'tasks', keywords: ['task', 'todo', 'to-do', 'reminder'], target: { kind: 'panel', view: 'tasks' }, pinnable: true, needs: ['helper'] },
   { id: 'reminders', name: 'Reminders', lane: 'keep', category: 'workspace', description: 'Tasks with a time on them', icon: 'reminders', keywords: ['reminder', 'due', 'alarm', 'later'], target: { kind: 'view', view: 'reminders' }, pinnable: false, needs: ['helper'] },
   { id: 'clipboard', name: 'Clipboard', lane: 'keep', category: 'workspace', description: 'What has been copied lately', icon: 'clipboard', keywords: ['clipboard', 'copied', 'paste', 'copy'], target: { kind: 'view', view: 'clipboard' }, app: 'clipboard', pinnable: false, needs: ['helper'] },
 
   // ---- Customize
-  { id: 'customize', name: 'Customize', lane: 'browse', category: 'customize', description: 'How the new tab page looks, and what it shows', icon: 'customize', keywords: ['customize', 'customise', 'theme', 'appearance', 'wallpaper', 'widget', 'look'], target: { kind: 'page', url: 'chrome://orbis-newtab/' }, app: 'customize', pinnable: false, needs: ['browser'] },
+  { id: 'customize', name: 'Customize', lane: 'browse', category: 'customize', description: 'How the new tab page looks, and what it shows', icon: 'customize', keywords: ['customize', 'customise', 'theme', 'appearance', 'wallpaper', 'widget', 'look'], target: { kind: 'page', url: 'chrome://orbis-newtab/' }, pinnable: false, needs: ['browser'] },
   // Tools. Both of these are Orbis window screens with no browser counterpart, which is why they are `app` targets:
   // the browser has nowhere to put them. They were both written down as the panel's 'home' view, so choosing Pages in
   // the Command Center redrew the Command Center.
@@ -307,7 +321,7 @@ export const CAPABILITIES: OrbisCapability[] = [
   { id: 'markets', name: 'Markets', lane: 'elsewhere', category: 'tools', description: 'Live prices, charts and watchlists', icon: 'markets', keywords: ['market', 'price', 'chart', 'crypto', 'ticker', 'watchlist', 'trading'], target: { kind: 'app' }, app: 'markets', pinnable: false, needs: ['helper'] },
   { id: 'student', name: 'Student', lane: 'elsewhere', category: 'tools', description: 'Focus sessions, goals, daily learning and Orbi', icon: 'student', keywords: ['student', 'study', 'focus', 'school', 'exam', 'revision', 'homework', 'learn', 'goal', 'pomodoro', 'timer', 'orbi', 'xp'], target: { kind: 'app' }, app: 'student', pinnable: false, needs: [] },
   { id: 'courses', name: 'Courses', lane: 'elsewhere', category: 'tools', description: 'Structured learning, with what you know actually measured', icon: 'board', keywords: ['course', 'courses', 'lesson', 'module', 'curriculum', 'learn', 'learning', 'certificate', 'quiz', 'syllabus', 'tutorial', 'training'], target: { kind: 'app' }, app: 'courses', pinnable: false, needs: [] },
-  { id: 'profiles', name: 'Profiles', lane: 'set', category: 'settings', description: 'Separate lives, separate data', icon: 'profiles', keywords: ['profile', 'account', 'switch', 'person'], target: { kind: 'panel', view: 'account' }, app: 'profiles', pinnable: false, needs: ['helper'] },
+  { id: 'profiles', name: 'Profiles', lane: 'set', category: 'settings', description: 'Separate lives, separate data', icon: 'profiles', keywords: ['profile', 'account', 'switch', 'person'], target: { kind: 'panel', view: 'account' }, pinnable: false, needs: ['helper'] },
 
   { id: 'settings', name: 'Settings', lane: 'set', category: 'settings', description: 'Everything there is to change', icon: 'settings', keywords: ['settings', 'preferences', 'options', 'configure', 'setup'], target: { kind: 'page', url: 'chrome://settings/' }, pinnable: false, needs: ['browser'] },
   { id: 'settings.appearance', name: 'Appearance', lane: 'set', category: 'settings', description: 'Theme, fonts and how pages are shown', icon: 'customize', keywords: ['appearance', 'browser theme', 'dark mode', 'light mode', 'font', 'font size', 'text size', 'page zoom'], target: { kind: 'page', url: 'chrome://settings/appearance' }, pinnable: false, needs: ['browser'] },

@@ -1,4 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import CommandPalette from './components/CommandPalette'
 import { DEFAULT_AVATAR } from '../../shared/avatars'
 import { ASK_EVENT } from './components/native/AskBar'
 import type { Attachment, ChatMessage, ChatRequest, Conversation, Settings, SettingsUpdate, StreamEvent, VisualArrival } from '../../shared/types'
@@ -339,6 +340,14 @@ export default function App(): React.JSX.Element {
   /** Latest state of each running browser automation, by chat request, for the browser banner. */
   const [, setAutomations] = useState<Record<string, NonNullable<ChatMessage['automation']>>>({})
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  /**
+   * Everything Orbis can do, from one box.
+   *
+   * Nine of the window's eleven screens had exactly one way in -- a flat dropdown on the wordmark -- and no
+   * keyboard route at all. This is the keyboard route, and it reads the same registry the browser's Command
+   * Centre does, so the two cannot offer different things.
+   */
+  const [paletteOpen, setPaletteOpen] = useState(false)
   /** Shown when a microphone is pressed and Pulsar has no model yet. Raised by the voice service, not by a button. */
   const [pulsarSetup, setPulsarSetup] = useState(false)
 
@@ -1674,7 +1683,12 @@ export default function App(): React.JSX.Element {
         e.preventDefault()
         window.dispatchEvent(new Event('orbis:focus-url'))
       } else if (key === 'k' && !e.shiftKey && !e.altKey) {
-        // Unused until now; web pages keep their own Ctrl+K (it only reaches the Orbis window).
+        // Everything Orbis can do. Web pages keep their own Ctrl+K: this only reaches the Orbis window.
+        e.preventDefault()
+        setPaletteOpen(true)
+      } else if (e.shiftKey && key === 'f') {
+        // The chat search, which Ctrl+K used to be. Moved rather than dropped: it is a different question --
+        // "where did I say that" is about this conversation, not about what Orbis can do.
         e.preventDefault()
         openSearch()
       } else if (e.shiftKey && key === 'u') {
@@ -2032,6 +2046,24 @@ export default function App(): React.JSX.Element {
         <SettingsModal settings={settings} section={settingsAt} onUpdate={updateSettings} onClose={() => setSettingsAt(null)} />
       )}
       {shortcutsOpen && <ShortcutsModal onClose={() => setShortcutsOpen(false)} />}
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        onFeature={(id) => {
+          // One surface at a time: a screen opened from here replaces whatever was showing, rather than landing
+          // on top of the image gallery or behind the browser.
+          setImagesOpen(false)
+          setBrowserHidden(true)
+          setFeature(id)
+        }}
+        onBrowser={() => {
+          setImagesOpen(false)
+          setFeature(null)
+          setBrowserHidden(false)
+          setBrowserOpen(true)
+        }}
+        ready={{ browser: browserOpen, helper: browserOpen, key: true, page: browserOpen && !browserHidden }}
+      />
       {/*
         Offered the first time a microphone is pressed with no model installed. Raised by the voice service rather
         than by any one microphone, because there are four of them and each would otherwise need to know about this.

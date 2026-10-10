@@ -1,37 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { FEATURE_GROUPS } from '../lib/features'
+import type { AppFeature } from '../../../shared/commandCenter'
 import { avatarStyle, markFor } from '../../../shared/avatars'
 import type { LucideIcon } from 'lucide-react'
 import type { SettingsSectionId } from '../../../shared/settingsSections'
 import type { NoticeKind } from '../lib/notices'
-import {
-  Archive,
-  ArchiveRestore,
-  BookMarked,
-  CalendarClock,
-  CandlestickChart,
-  ChevronDown,
-  ChevronRight,
-  CircleHelp,
-  ClipboardList,
-  Download,
-  FilePlus2,
-  FlaskConical,
-  Globe,
-  GraduationCap,
-  Images,
-  Keyboard,
-  LayoutGrid,
-  LayoutTemplate,
-  Mic,
-  PenTool,
-  Pencil,
-  Pin,
-  PinOff,
-  Search,
-  SquarePen,
-  Trash2,
-  X
-} from 'lucide-react'
+import { Archive, ArchiveRestore, ChevronDown, ChevronRight, CircleHelp, Download, Globe, Images, Keyboard, Pencil, Pin, PinOff, Search, SquarePen, Trash2, X } from 'lucide-react'
 import type { Conversation } from '../../../shared/types'
 import type { StreamState } from '../App'
 import { groupConversations } from '../lib/utils'
@@ -92,21 +66,14 @@ interface Props {
  * is left either needs a canvas the browser does not have, or is not about browsing at all. Customize and Profiles are
  * not here because they are settings, and they are in Settings.
  */
-export type FeatureId = 'create' | 'pages' | 'labs' | 'markets' | 'whiteboard' | 'clipboard' | 'workspaces' | 'schedules' | 'notes' | 'student' | 'courses'
+/**
+ * The window's screens.
+ *
+ * An alias, not a declaration. The list lives in the capability registry, which is what the browser's Command
+ * Centre reads as well; a second copy here is how the two came to disagree about nine of them.
+ */
+export type FeatureId = AppFeature
 
-export const FEATURES: { id: FeatureId; label: string; icon: LucideIcon; hint: string }[] = [
-  { id: 'create', label: 'Create', icon: FilePlus2, hint: 'Tables and documents, kept and saved as real files' },
-  { id: 'pages', label: 'Pages', icon: LayoutTemplate, hint: "Orbis's own tools, each with its own address" },
-  { id: 'labs', label: 'Laboratories', icon: FlaskConical, hint: 'Every laboratory Orbis has, by subject' },
-  { id: 'markets', label: 'Markets', icon: CandlestickChart, hint: 'Live crypto prices, charts and watchlists' },
-  { id: 'whiteboard', label: 'Whiteboard', icon: PenTool, hint: 'Room to think' },
-  { id: 'clipboard', label: 'Clipboard', icon: ClipboardList, hint: 'What you have copied' },
-  { id: 'workspaces', label: 'Workspaces', icon: LayoutGrid, hint: 'Sets of tabs, kept together' },
-  { id: 'schedules', label: 'Schedules', icon: CalendarClock, hint: 'Things Orbis does at a time you chose' },
-  { id: 'notes', label: 'Notes', icon: Mic, hint: 'What was said, written down while you talk' },
-  { id: 'student', label: 'Student', icon: GraduationCap, hint: 'Focus sessions, goals, learning and Orbi' },
-  { id: 'courses', label: 'Courses', icon: BookMarked, hint: 'Structured learning, with what you know actually measured' }
-]
 
 interface NavItem {
   label: string
@@ -291,21 +258,32 @@ export default function Sidebar(props: Props): React.JSX.Element {
               </button>
               {brandOpen && (
                 <div className="popover glass sb-popover brand" role="menu">
-                  {FEATURES.map(({ id, label, icon: Icon, hint }) => (
-                    <button
-                      key={id}
-                      type="button"
-                      role="menuitem"
-                      className={`menu-item${props.feature === id ? ' selected' : ''}`}
-                      title={hint}
-                      onClick={() => {
-                        props.onFeature(id)
-                        setBrandOpen(false)
-                      }}
-                    >
-                      <Icon size={14} />
-                      {label}
-                    </button>
+                  {/*
+                    Grouped, and built from the registry.
+                    Eleven rows flat offered a 280-line notepad and a 1,950-line trading terminal as equals, and
+                    left somebody reading all eleven to find either. Under their categories most of the list can
+                    be skipped at a glance.
+                  */}
+                  {FEATURE_GROUPS.map((group) => (
+                    <div key={group.id} className="sb-menu-group" role="group" aria-label={group.label}>
+                      <p className="sb-menu-head">{group.label}</p>
+                      {group.items.map(({ id, label, icon: Icon, hint }) => (
+                        <button
+                          key={id}
+                          type="button"
+                          role="menuitem"
+                          className={`menu-item${props.feature === id ? ' selected' : ''}`}
+                          title={hint}
+                          onClick={() => {
+                            props.onFeature(id)
+                            setBrandOpen(false)
+                          }}
+                        >
+                          <Icon size={14} />
+                          {label}
+                        </button>
+                      ))}
+                    </div>
                   ))}
                   {/*
                     Settings is not a row here.
