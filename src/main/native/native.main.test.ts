@@ -16,6 +16,9 @@ import { PHASE6_CATALOGUE } from '../../shared/native/phase6.ts'
 import { PHASE7_CATALOGUE } from '../../shared/native/phase7.ts'
 import { PHASE8_CATALOGUE } from '../../shared/native/phase8.ts'
 import { PHASE9_CATALOGUE } from '../../shared/native/phase9.ts'
+import { PHASE10_CATALOGUE } from '../../shared/native/phase10.ts'
+import { PHASE11_CATALOGUE } from '../../shared/native/phase11.ts'
+import { PHASE12_CATALOGUE } from '../../shared/native/phase12.ts'
 
 /**
  * The Native App runtime against real files.
@@ -65,19 +68,32 @@ describe('the runtime against real files', () => {
     const { native } = build(await freshRoot())
     const health = await native.health()
     assert.match(health.registry, /^OK/)
-    // Counted from the catalogues rather than written down, so adding an app does not make this test a liar.
-    assert.equal(
-      (await native.catalogue()).length,
-      CATALOGUE.length +
-        PHASE2_CATALOGUE.length +
-        PHASE3_CATALOGUE.length +
-        PHASE4_CATALOGUE.length +
-        PHASE5_CATALOGUE.length +
-        PHASE6_CATALOGUE.length +
-        PHASE7_CATALOGUE.length +
-        PHASE8_CATALOGUE.length +
-        PHASE9_CATALOGUE.length
-    )
+    /*
+     * Counted from the catalogues rather than written down, so adding an app does not make this test a liar.
+     *
+     * It became one anyway, twice over. It summed phases 2 to 9 and three more were added after it -- so it
+     * expected 72 while 75 were registered. And `catalogue()` is the list of apps somebody may OPEN, which leaves
+     * out the ones a later app superseded; ten are retired, so the real answer was 65 and the test read that as
+     * forty missing apps. "Counted rather than written down" has to count the same thing the method counts.
+     */
+    const everything = [
+      ...CATALOGUE,
+      ...PHASE2_CATALOGUE,
+      ...PHASE3_CATALOGUE,
+      ...PHASE4_CATALOGUE,
+      ...PHASE5_CATALOGUE,
+      ...PHASE6_CATALOGUE,
+      ...PHASE7_CATALOGUE,
+      ...PHASE8_CATALOGUE,
+      ...PHASE9_CATALOGUE,
+      ...PHASE10_CATALOGUE,
+      ...PHASE11_CATALOGUE,
+      ...PHASE12_CATALOGUE
+    ]
+    const stillOffered = everything.filter((one) => (one as { supersededBy?: string }).supersededBy === undefined)
+    assert.ok(stillOffered.length > 50, 'the catalogues should hold a lot of apps; this guard needs updating')
+    assert.ok(everything.length > stillOffered.length, 'some are retired, and this is the test that they are left out')
+    assert.equal((await native.catalogue()).length, stillOffered.length)
   })
 
   it('opens an app, writes its state, and restores it after a restart', async () => {
