@@ -68,10 +68,15 @@ test('with no sandbox it asks Orion, and nothing pretends otherwise', async () =
   })
   const got = ran(await service.run({ language: 'python', source: 'print("hi")', stdin: 'Sam\n' }))
   assert.equal(got.origin, 'predicted')
-  assert.equal(got.seconds, null, 'a guess has no running time')
-  assert.equal(got.memoryKb, null, 'a guess has no memory figure')
+  assert.equal(got.seconds, null, 'a reading has no running time')
+  assert.equal(got.memoryKb, null, 'a reading has no memory figure')
   assert.ok(got.says.trim() !== '', 'it must say something about where this came from')
-  assert.ok(got.notes.some((one) => /no sandbox/i.test(one)), `the reason should be kept: ${got.notes.join(' | ')}`)
+  // Matched on what it means rather than on the words "no sandbox", which the wording no longer uses: it says
+  // Orion read the code instead of running it, which is the thing somebody has to understand.
+  assert.ok(
+    got.notes.some((one) => /reading the code rather than running it/i.test(one)),
+    `the reason should be kept: ${got.notes.join(' | ')}`
+  )
 })
 
 test('a sandbox that refuses falls back, and keeps the reason it fell back', async () => {
@@ -155,6 +160,8 @@ test('ready() says what will happen before anybody presses Run', async () => {
   assert.equal((await withSandbox.ready()).sandbox, true)
   const none = await without.ready()
   assert.equal(none.sandbox, false)
-  // Somebody must not press Run expecting a real answer and get a guess without warning.
-  assert.match(none.says, /guess/i)
+  // Somebody must not press Run expecting a real answer and get a reading without warning. Matched on the
+  // distinction rather than on the word "guess", which the wording deliberately stopped using -- it reads as a
+  // judgement about the model rather than a statement about what happened.
+  assert.match(none.says, /reading rather than a run/i)
 })
