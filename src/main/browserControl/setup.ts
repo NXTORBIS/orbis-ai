@@ -85,7 +85,10 @@ export function setupBrowserControl(deps: BrowserControlDeps): { control: Browse
   ipcMain.handle('control:state', (event, parts: unknown) => (fromWindow(event) ? control.snapshot(Array.isArray(parts) ? parts.map(String) : undefined) : {}))
   ipcMain.handle('control:switches', (event) => (fromWindow(event) ? control.switchedOff() : []))
   ipcMain.handle('control:set-switch', async (event, domain: unknown, on: unknown) => {
-    if (!fromWindow(event)) return control.switchedOff()
+    // `[]`, not the live list. The write is refused either way, but the refusal used to hand back the real set of
+    // switched-off areas -- which is exactly what `control:switches` above withholds from a sender it does not
+    // recognise. The two refusal paths disagreed, so the setter leaked what the getter was written to hide.
+    if (!fromWindow(event)) return []
     const wanted = String(domain) as ControlDomain
     const next = new Set(control.switchedOff())
     if (on === true) next.delete(wanted)
@@ -103,7 +106,9 @@ export function setupBrowserControl(deps: BrowserControlDeps): { control: Browse
    */
   ipcMain.handle('control:effects', (event) => (fromWindow(event) ? control.effects() : DEFAULT_EFFECT_POLICY))
   ipcMain.handle('control:set-effect', async (event, effect: unknown, rule: unknown) => {
-    if (!fromWindow(event)) return control.effects()
+    // The same fault as `control:set-switch`: refusing used to return the live policy, while `control:effects`
+    // returns the default to a sender it does not recognise.
+    if (!fromWindow(event)) return DEFAULT_EFFECT_POLICY
     const which = String(effect)
     const wanted = rule === 'allow' || rule === 'ask' || rule === 'never' ? rule : null
     if (!EFFECTS.includes(which as never) || !wanted) return control.effects()

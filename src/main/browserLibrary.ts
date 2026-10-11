@@ -249,14 +249,29 @@ export class BrowserLibrary {
     this.changed()
   }
 
-  /** The user chose a suggestion; its key ranks higher next time. */
+  /**
+   * The user chose a suggestion; its key ranks higher next time.
+   *
+   * **What goes when the cap is reached is the least-chosen thing, not the least-recent.** Eviction used to be by
+   * `lastAt` alone, and the shape test below bounds what a key may LOOK like rather than which keys exist -- so
+   * five hundred keys that were never offered pushed past the cap and threw away suggestions somebody had actually
+   * picked dozens of times. Sorting by count first means a key chosen once is the first to go and a key chosen
+   * often survives, which is the right answer whether the extra keys arrived by mistake or on purpose.
+   *
+   * Still no membership test: a `u:` key is a normalised address from the browser's own suggestions, which this
+   * side does not always hold, so requiring it to be here already would quietly stop real picks counting.
+   */
   recordPick(key: string): void {
     if (!/^[uq]:.{1,600}$/s.test(key)) return
     const known = this.data.picks[key]
     this.data.picks[key] = { count: (known?.count ?? 0) + 1, lastAt: this.now() }
     const keys = Object.keys(this.data.picks)
     if (keys.length > MAX_PICKS) {
-      for (const old of keys.sort((a, b) => this.data.picks[a].lastAt - this.data.picks[b].lastAt).slice(0, keys.length - MAX_PICKS)) delete this.data.picks[old]
+      const weakest = keys.sort((a, b) => {
+        const byCount = this.data.picks[a].count - this.data.picks[b].count
+        return byCount !== 0 ? byCount : this.data.picks[a].lastAt - this.data.picks[b].lastAt
+      })
+      for (const old of weakest.slice(0, keys.length - MAX_PICKS)) delete this.data.picks[old]
     }
     this.changed()
   }

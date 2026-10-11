@@ -170,3 +170,28 @@ test('lists an earlier Orbis kept (reading list, saved pages, pictures of pages)
     await done()
   }
 })
+
+test('a flood of new picks does not evict the ones that were actually chosen', async () => {
+  // Eviction used to be by last use alone, and the shape test on a pick key bounds what a key may LOOK like rather
+  // than which keys exist. So five hundred and one keys nobody was ever offered pushed past the cap and threw away
+  // a suggestion somebody had picked dozens of times -- which is a worse outcome than the invented keys themselves,
+  // because the real ranking is what the address bar is for.
+  const { lib, clock, done } = await library()
+  clock.t = 1_000
+
+  // One genuine favourite, chosen often and a long time ago.
+  for (let i = 0; i < 40; i++) lib.recordPick('u:example.com')
+  clock.t = 90_000
+
+  // Then far more keys than the cap, each chosen once, each more recent.
+  for (let i = 0; i < 520; i++) {
+    clock.t += 1
+    lib.recordPick(`u:invented-${i}.example`)
+  }
+
+  const picks = lib.snapshot().picks ?? {}
+  assert.ok(picks['u:example.com'], 'the one that was really chosen forty times is still there')
+  assert.equal(picks['u:example.com'].count, 40)
+  assert.ok(Object.keys(picks).length <= 500, 'and the cap still holds')
+  await done()
+})

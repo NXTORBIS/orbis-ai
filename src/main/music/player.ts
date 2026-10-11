@@ -1,4 +1,5 @@
 import { BrowserWindow, protocol } from 'electron'
+import type { WebContents } from 'electron'
 import { promises as fs, createReadStream } from 'node:fs'
 import { Readable } from 'node:stream'
 import { join } from 'node:path'
@@ -230,6 +231,17 @@ export class MusicPlayer {
     for (const command of queued) this.send(command)
     this.send({ kind: 'volume', value: this.state.volume })
     this.send({ kind: 'muted', on: this.state.muted })
+  }
+
+  /**
+   * Whether a message really came from the player's own window.
+   *
+   * The four `music:player-*` messages are the player talking back, and until now anything in the application
+   * could send them: a resume position, a finished play, a measurement the recommender is built on. The check has
+   * to be against THIS window rather than the Orbis window, because this is the window that sends them.
+   */
+  isPlayer(contents: WebContents): boolean {
+    return this.window !== null && !this.window.isDestroyed() && this.window.webContents === contents
   }
 
   private send(command: unknown): void {

@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import type { WebContents } from 'electron'
 import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
 import { MusicLibrary, type ImportResult, type ScanProgress } from './library.ts'
 import { MusicPlayer, playerPaths, type PlayerReport } from './player.ts'
@@ -252,13 +253,31 @@ export function createMusic(options: MusicServiceOptions): MusicHandle {
     void engine.refreshLibrary()
   })
 
-  // What the hidden player says. These are the only three messages it can send, and only it can send them.
-  ipcMain.on('music:player-ready', () => player.playerReady())
-  ipcMain.on('music:player-report', (_event, report: unknown) => {
+  /*
+   * What the hidden player says.
+   *
+   * The comment here used to read "These are the only three messages it can send, and only it can send them." There
+   * are four, and nothing made the second half true: none of them checked the sender, so anything in the
+   * application could have sent all four. `player-report` carries the position a track resumes from,
+   * `player-finished` is what counts a play, and `player-measured` hands over what the recommender is built on --
+   * where a null measurement puts a track in an `unmeasurable` set it never leaves for the life of the process.
+   *
+   * The check is against the player's own window, not the Orbis window, because the player is what sends them.
+   */
+  const fromPlayer = (event: { sender: WebContents }): boolean => player.isPlayer(event.sender)
+  ipcMain.on('music:player-ready', (event) => {
+    if (fromPlayer(event)) player.playerReady()
+  })
+  ipcMain.on('music:player-report', (event, report: unknown) => {
+    if (!fromPlayer(event)) return
     if (report && typeof report === 'object') void player.onReport(report as PlayerReport)
   })
-  ipcMain.on('music:player-finished', (_event, trackId: unknown) => void player.onFinished(typeof trackId === 'string' ? trackId : null))
-  ipcMain.on('music:player-measured', (_event, trackId: unknown, features: unknown, problem: unknown) => {
+  ipcMain.on('music:player-finished', (event, trackId: unknown) => {
+    if (!fromPlayer(event)) return
+    void player.onFinished(typeof trackId === 'string' ? trackId : null)
+  })
+  ipcMain.on('music:player-measured', (event, trackId: unknown, features: unknown, problem: unknown) => {
+    if (!fromPlayer(event)) return
     if (typeof trackId !== 'string') return
     // Measured from the audio or not measured at all: there is no third answer, and no defaults are filled in.
     const measured = features && typeof features === 'object' ? { ...(features as Record<string, number>), measuredAt: Date.now(), version: 1 } : null
