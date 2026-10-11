@@ -101,6 +101,15 @@ const BROWSER_LAYER = new Set([
   // The quiz in the conversation: the asking and the checking are pure, and only the window adapter is not.
   'main/quiz/ipc.ts',
   /*
+   * Orbis Choose: the channel only.
+   *
+   * Everything that decides anything is on the other side of this line and knows nothing about Electron --
+   * `shared/choose/` holds the model, the arithmetic, the sensitivity sweep and the validation, and
+   * `main/choose/{service,store}.ts` hold the orchestration and the file. This file is the channel and the sender
+   * check, which becomes Mojo.
+   */
+  'main/choose/ipc.ts',
+  /*
    * The one Electron file of learned skills, and deliberately the only one: `main/skills/` holds nothing else.
    *
    * Every decision is on the other side of this line -- whether a run can be learned from, what a skill is made

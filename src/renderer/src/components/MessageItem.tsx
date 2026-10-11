@@ -35,7 +35,10 @@ import { copyText, formatDuration } from '../lib/utils'
 import { documentTextFromReply, titleFromText } from '../../../shared/artifacts/naming'
 const NativeAppCard = lazy(() => import('./native/NativeAppCard'))
 const QuizCard = lazy(() => import('./quiz/QuizCard'))
+const DecisionCard = lazy(() => import('./choose/DecisionCard'))
 import type { ChatQuiz } from '../../../shared/types'
+import type { Change } from '../../../shared/choose/update'
+import type { Detail } from '../../../shared/choose/detect'
 import { useDismiss } from '../lib/useDismiss'
 import type { NoticeKind } from '../lib/notices'
 import Markdown from './Markdown'
@@ -66,6 +69,12 @@ interface Props {
   onQuizChange?(messageId: string, next: ChatQuiz): void
   /** Starts a second go at the questions that were missed. */
   onQuizRetry?(next: ChatQuiz): void
+  /** Applies a change to the decision this reply drew, and recalculates it. */
+  onDecisionChange?(decisionId: string, changes: Change[]): void
+  /** Asks for more of that decision's working, in words. */
+  onDecisionExplain?(decisionId: string, of: Detail): void
+  /** Keeps the decision this reply worked out. */
+  onDecisionKeep?(decisionId: string): void
   onNotify(text: string, kind?: NoticeKind): void
   /** Approves or cancels a browser action Orbis asked about in this reply. */
   onBrowserConfirm?(messageId: string, confirmationId: string, approved: boolean): void
@@ -267,6 +276,16 @@ function AssistantMessage(props: Props): React.JSX.Element {
                 held={message.quiz}
                 onChange={(next) => props.onQuizChange?.(message.id, next)}
                 {...(props.onQuizRetry ? { onRetry: props.onQuizRetry } : {})}
+              />
+            </Suspense>
+          )}
+          {message.decision && (
+            <Suspense fallback={null}>
+              <DecisionCard
+                held={message.decision}
+                {...(props.onDecisionChange ? { onChange: props.onDecisionChange } : {})}
+                {...(props.onDecisionExplain ? { onExplain: props.onDecisionExplain } : {})}
+                {...(props.onDecisionKeep ? { onKeep: props.onDecisionKeep } : {})}
               />
             </Suspense>
           )}

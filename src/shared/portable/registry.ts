@@ -457,6 +457,25 @@ export const CATEGORIES: readonly PortableCategory[] = Object.freeze([
     mergeable: true
   }),
   category({
+    id: 'choose.decisions',
+    label: 'Decisions',
+    describe: 'Comparisons you asked Orbis to work through, with the options, what mattered and the answer.',
+    portability: 'portable',
+    sensitivity: 'personal',
+    storage: ['choose/decisions.json'],
+    scope: 'profile',
+    schemaVersion: 1,
+    /*
+     * Each decision names the conversation it was worked out in, so the conversations go first. A decision whose
+     * conversation is missing still opens from the saved list; it just has nothing above it to scroll back to.
+     */
+    dependsOn: ['orion.conversations'],
+    requiresReauthentication: false,
+    userAction: null,
+    why: null,
+    mergeable: true
+  }),
+  category({
     id: 'student.record',
     label: 'Orbis Student',
     describe: 'Study time, mastery, missions, the learning record and how sessions are set up.',

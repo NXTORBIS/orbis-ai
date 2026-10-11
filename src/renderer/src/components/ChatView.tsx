@@ -1,5 +1,7 @@
 import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ChatQuiz } from '../../../shared/types'
+import type { Change as ChooseChange } from '../../../shared/choose/update'
+import type { Detail as ChooseDetail } from '../../../shared/choose/detect'
 import { ArrowDown, HatGlasses } from 'lucide-react'
 import type { Attachment, Conversation, Settings } from '../../../shared/types'
 import type { NoticeKind, StreamState } from '../lib/notices'
@@ -55,6 +57,12 @@ interface Props {
   onQuizChange(messageId: string, next: ChatQuiz): void
   /** Puts a second go at the missed questions in the conversation. */
   onQuizRetry(next: ChatQuiz): void
+  /** Applies a change to the decision a card was drawn from. */
+  onDecisionChange(decisionId: string, changes: ChooseChange[]): void
+  /** Asks for more of that decision's working. */
+  onDecisionExplain(decisionId: string, of: ChooseDetail): void
+  /** Keeps that decision. */
+  onDecisionKeep(decisionId: string): void
   onNotify(text: string, kind?: NoticeKind): void
   onImprovePrompt(text: string): Promise<string | null>
   onNewChat?(): void
@@ -499,6 +507,9 @@ export default function ChatView(props: Props): React.JSX.Element {
                 onFeedback={props.onFeedback}
                 onQuizChange={props.onQuizChange}
                 onQuizRetry={props.onQuizRetry}
+                onDecisionChange={props.onDecisionChange}
+                onDecisionExplain={props.onDecisionExplain}
+                onDecisionKeep={props.onDecisionKeep}
                 onNotify={props.onNotify}
                 onBrowserConfirm={props.onBrowserConfirm}
                 onAutomationControl={props.onAutomationControl}

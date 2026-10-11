@@ -1,5 +1,7 @@
 import type { Quiz } from './quiz/build.ts'
 import type { QuizAnswer } from './quiz/score.ts'
+import type { Verdict } from './choose/explain.ts'
+import type { Difference } from './choose/scenario.ts'
 import type { SourcePreferences } from './researchSources'
 import type { ResearchChange, ResearchStage } from './researchRun'
 import type { SharedProject } from './portable/share'
@@ -231,7 +233,32 @@ export interface ChatMessage {
    * are answered, which is what lets somebody come back to a half-finished quiz.
    */
   quiz?: ChatQuiz
+  /**
+   * A decision worked out for this reply: the ranking, the reasons, what is still unknown.
+   *
+   * The whole verdict is on the message, unlike an app or an artifact, which are pointers. Two reasons: it is what
+   * was said at the time and must not change under somebody when the decision moves on -- scrolling back to the
+   * first answer has to show the first answer -- and it means a reopened conversation draws without asking main
+   * for anything. The live decision it came from is kept separately, and a follow-up works on that.
+   */
+  decision?: ChatDecision
   createdAt: number
+}
+
+/** A decision in the conversation: what was said about it in this reply. */
+export interface ChatDecision {
+  /** Everything the card draws, as it was when this reply was made. */
+  verdict: Verdict
+  /** What a follow-up changed, when this reply was one. */
+  applied?: string[]
+  /** What it could not change, and why. */
+  refused?: string[]
+  /** For a what-if: what it was called. The decision itself is untouched. */
+  scenario?: string
+  /** For a what-if: what it did to the answer. */
+  difference?: Difference
+  /** True when the card should start with the full working shown. */
+  showDetail?: boolean
 }
 
 /** A quiz in the conversation, and how far through it somebody is. */
@@ -1721,6 +1748,15 @@ export interface NxtorbisApi {
    * an app, set a value or apply a result; whether that is allowed is never decided here.
    */
   native(op: string, a?: unknown, b?: unknown, c?: unknown): Promise<unknown>
+
+  /**
+   * Orbis Choose: one operation channel.
+   *
+   * Every score, ranking and sensitivity figure is calculated in `src/shared/choose/engine.ts`, in the main
+   * process, from a structure that was validated first. Orion lays the decision out and puts the answer into
+   * words; it never produces a number that is added up. See `src/main/choose/ipc.ts` for the operations.
+   */
+  choose(op: string, asked?: unknown): Promise<unknown>
 
   /** Orbis Student: one operation channel, and a nudge when anything changed. */
   student(op: string, a?: unknown, b?: unknown, c?: unknown): Promise<unknown>

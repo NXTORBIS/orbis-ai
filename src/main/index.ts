@@ -334,6 +334,9 @@ import { pushLock } from './chromium/tabLockBridge'
 import { ExecutionService } from './execution/service.ts'
 import { registerExecutionIpc } from './execution/ipc.ts'
 import { registerQuizIpc } from './quiz/ipc.ts'
+import { ChooseStore } from './choose/store.ts'
+import { Choose } from './choose/service.ts'
+import { registerChooseIpc } from './choose/ipc.ts'
 import { registerExperienceIpc } from './experience/ipc'
 import type { Profile } from '../shared/profiles'
 import { registerPersonalIpc } from './personal/ipc'
@@ -3895,6 +3898,28 @@ ${page.text}`, { howMany: 6 })
     // Quizzes in the conversation. The asking and the checking both happen in main, so the window never sees a
     // question that has not been checked.
     registerQuizIpc({ getWindow: () => liveWindow(), ask: (prompt: string) => askOrionOnce(prompt) })
+
+    /*
+     * Orbis Choose: deciding things in the conversation.
+     *
+     * Beside the quiz because both are capabilities of the chat rather than screens, and both lean on the same
+     * one-shot ask. The difference that matters is where the answer comes from: a quiz is checked model output,
+     * while a decision's scores and rankings are arithmetic over a validated structure, and Orion only lays the
+     * problem out and reads the result back in words.
+     *
+     * Decisions follow the profile. One person's comparisons are never another's.
+     */
+    const chooseStore = new ChooseStore(app.getPath('userData'))
+    await chooseStore.useProfile((await profilesStore.active()).id).catch(() => undefined)
+    const choose = new Choose({ store: chooseStore, ask: (prompt: string) => askOrionOnce(prompt) })
+    registerChooseIpc({ choose, getWindow: () => liveWindow() })
+    quitFlush.add('your decisions', () => chooseStore.flush())
+    profilesStore.onChange(() => {
+      void profilesStore
+        .active()
+        .then((profile) => chooseStore.useProfile(profile.id))
+        .catch((err: unknown) => console.error('[choose] could not switch profile', err))
+    })
 
     ipcMain.handle('physics:ask', (event, prompt, schema) => {
       if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')

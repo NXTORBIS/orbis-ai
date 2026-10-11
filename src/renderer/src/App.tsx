@@ -12,7 +12,10 @@ import { automationActive } from '../../shared/automation'
 import { PUSH_TO_TALK_EVENT } from '../../shared/voiceInput'
 import { copyText, newId, titleFromMessage } from './lib/utils'
 import { quizWanted, NOTHING_TO_GO_ON } from '../../shared/quiz/ask'
-import type { ChatQuiz } from '../../shared/types'
+import { readMessage, type Detail as ChooseDetail, type Reading as ChooseReading } from '../../shared/choose/detect'
+import { isAnswered, isHandedBack, wasKept, whyNot, type Answered as ChooseAnswer } from '../../shared/choose/reply'
+import type { Change as ChooseChange } from '../../shared/choose/update'
+import type { ChatDecision, ChatQuiz } from '../../shared/types'
 import ChatHeader from './components/ChatHeader'
 import ContextChip from './components/ContextChip'
 import ChatView from './components/ChatView'
@@ -846,22 +849,51 @@ export default function App(): React.JSX.Element {
         return true
       }
 
+      /*
+       * Somebody trying to decide something gets a comparison rather than a paragraph.
+       *
+       * The gate is pure and runs here, so an ordinary message costs nothing -- no round trip, no model call, and
+       * the existing path is reached exactly as it was. It is also deliberately generous about what might be a
+       * decision, because `offerDecision` falls back to the ordinary reply whenever Orion hands the message back,
+       * and a message that is read as a decision and is not one must come out the same as one that never was.
+       */
+      const deciding =
+        attachments.length === 0 && !browserTask
+          ? readMessage(content, { hasOpen: conversation.messages.some((one) => one.decision !== undefined) })
+          : ({ want: 'nothing' } as ChooseReading)
+      if (deciding.want !== 'nothing') {
+        void offerDecision(updated, history, content, deciding)
+        return true
+      }
+
       startGeneration(updated, history)
       if (!existing && content) void autoTitle(updated.id, content, updated.title)
       return true
     },
+    /*
+     * `offerQuiz` and `offerDecision` are deliberately not in this list. Both are declared below it, so naming
+     * them here is read before the declaration -- and neither needs to be: the body only reaches them when a
+     * message is actually sent, by which time both exist, and neither changes identity in a way that matters.
+     */
     [activeId, autoTitle, commitConversations, commitQueues, draft, handleAutomationMessage, notify, persist, startGeneration]
   )
 
-  /** A reply with no model behind it: a quiz, or the reason there is not one. */
+  /**
+   * A reply with no model behind it: a quiz, a decision, or the reason there is not one.
+   *
+   * Not every reply comes from a stream. A quiz card and a decision card are both the answer rather than something
+   * attached to one, so they are put in the conversation directly -- which is also what makes them survive a
+   * restart, since the conversation is already saved.
+   */
   const addReply = useCallback(
-    (conversationId: string, content: string, quiz?: ChatQuiz) => {
+    (conversationId: string, content: string, extra?: { quiz?: ChatQuiz; decision?: ChatDecision }) => {
       const message: ChatMessage = {
         id: newId(),
         role: 'assistant',
         content,
         createdAt: Date.now(),
-        ...(quiz ? { quiz } : {})
+        ...(extra?.quiz ? { quiz: extra.quiz } : {}),
+        ...(extra?.decision ? { decision: extra.decision } : {})
       }
       updateConversation(conversationId, (c) => ({ ...c, messages: [...c.messages, message], updatedAt: Date.now() }))
       persist(conversationId)
@@ -905,9 +937,200 @@ export default function App(): React.JSX.Element {
         addReply(conversationId, why)
         return
       }
-      addReply(conversationId, '', { quiz: made.quiz, answers: [] })
+      addReply(conversationId, '', { quiz: { quiz: made.quiz, answers: [] } })
     },
     [addReply]
+  )
+
+  /**
+   * One answer from Orbis Choose, put in the conversation.
+   *
+   * `stale` is the one case that produces nothing: a newer message for this conversation has already been
+   * answered, so this answer is about a decision that has since moved, and adding it would show somebody an older
+   * state below a newer one.
+   */
+  const addVerdict = useCallback(
+    (conversationId: string, answer: ChooseAnswer, extra: Partial<ChatDecision> = {}): void => {
+      if (answer.stale === true) return
+      addReply(conversationId, '', {
+        decision: {
+          verdict: answer.verdict,
+          ...(answer.applied ? { applied: [...answer.applied] } : {}),
+          ...(answer.refused ? { refused: [...answer.refused] } : {}),
+          ...(answer.scenario ? { scenario: answer.scenario } : {}),
+          ...(answer.difference ? { difference: answer.difference } : {}),
+          ...extra
+        }
+      })
+    },
+    [addReply]
+  )
+
+  /**
+   * Asks Orbis Choose for a comparison, and puts whatever comes back in the conversation.
+   *
+   * ## Handing the message back is the safety catch
+   *
+   * The gate upstream errs towards calling something a decision, which is only safe because of what happens here:
+   * if Orion reads the message and says it is not a decision, or if a merely *probable* reading fails for any
+   * reason, the ordinary reply runs instead -- the same reply the person would have got if none of this existed.
+   * A clear reading that fails does say so, because silently answering "help me choose between A and B" with a
+   * paragraph after something went wrong hides a fault.
+   *
+   * ## A follow-up that turns out to be a different decision starts a new one
+   *
+   * Somebody comparing laptops who then asks which language to learn has not changed their mind about laptops.
+   * Orion says so, and that becomes a fresh comparison rather than two unrelated things in one table.
+   */
+  const offerDecision = useCallback(
+    async (conversation: Conversation, history: ChatMessage[], content: string, reading: ChooseReading): Promise<void> => {
+      const conversationId = conversation.id
+      const ordinary = (): void => startGeneration(conversation, history)
+
+      if (reading.want === 'unsure') {
+        addReply(conversationId, reading.ask)
+        return
+      }
+
+      /*
+       * Every operation answers with one of a handful of shapes, and the guards from `reply.ts` are what tell them
+       * apart. A thrown call is turned into a refusal rather than being left to reject, so there is one path out of
+       * here and no unhandled rejection sitting behind a card that never appeared.
+       */
+      const ask = async (op: string, payload: Record<string, unknown>): Promise<unknown> =>
+        window.api.choose(op, { conversationId, message: content, ...payload }).catch((error: unknown) => ({
+          problem: 'That could not be worked out.',
+          fix: error instanceof Error ? error.message : String(error),
+          failed: 'threw'
+        }))
+
+
+      /** Everything the person has written here, for checking that an option was really mentioned. */
+      const said = history
+        .filter((one) => one.role === 'user')
+        .map((one) => one.content)
+        .join('\n')
+      /** The last few turns, for context. The user message just added is left off: it is sent on its own. */
+      const before = history
+        .slice(-9, -1)
+        .map((one) => `${one.role === 'user' ? 'They' : 'Orbis'}: ${one.content}`)
+        .filter((one) => one.trim() !== '')
+
+      const start = async (justDecide = false): Promise<void> => {
+        const answer = await ask('start', {
+          said,
+          before,
+          sort: reading.want === 'new' ? reading.sort : 'other',
+          named: reading.want === 'new' ? [...reading.named] : [],
+          ...(justDecide ? { justDecide: true } : {})
+        })
+        if (isAnswered(answer)) {
+          addVerdict(conversationId, answer)
+          return
+        }
+        // Not a decision after all, or a probable reading that did not hold up: the ordinary reply, as if nothing ran.
+        if (isHandedBack(answer) || (reading.want === 'new' && reading.sure === 'probable')) {
+          ordinary()
+          return
+        }
+        addReply(conversationId, whyNot(answer))
+      }
+
+      if (reading.want === 'new') {
+        await start()
+        return
+      }
+
+      if (reading.want === 'just-decide') {
+        const answer = await ask('just-decide', {})
+        if (isAnswered(answer)) addVerdict(conversationId, answer)
+        else ordinary()
+        return
+      }
+
+      if (reading.want === 'detail') {
+        const answer = await ask('explain', { of: reading.of })
+        if (isAnswered(answer)) addVerdict(conversationId, answer, { showDetail: reading.of === 'everything' })
+        else ordinary()
+        return
+      }
+
+      if (reading.want === 'save') {
+        const answer = await ask('keep', {})
+        if (wasKept(answer)) {
+          addReply(conversationId, `Kept, as “${answer.title}”. Ask for it again any time.`)
+        } else if (isHandedBack(answer) || isAnswered(answer)) {
+          ordinary()
+        } else {
+          addReply(conversationId, whyNot(answer))
+        }
+        return
+      }
+
+      if (reading.want === 'what-if') {
+        const answer = await ask('what-if', {})
+        if (isAnswered(answer)) addVerdict(conversationId, answer)
+        else if (isHandedBack(answer)) ordinary()
+        else addReply(conversationId, whyNot(answer))
+        return
+      }
+
+      // A follow-up.
+      const answer = await ask('change', {})
+      if (isAnswered(answer)) {
+        addVerdict(conversationId, answer)
+        return
+      }
+      // A different decision, not a change to this one.
+      if (isHandedBack(answer)) {
+        await start()
+        return
+      }
+      ordinary()
+    },
+    [addReply, addVerdict, startGeneration]
+  )
+
+  /** A change made with a control on a decision card, applied and worked out again. */
+  const changeDecision = useCallback(
+    (decisionId: string, changes: ChooseChange[]): void => {
+      const conversationId = activeId
+      if (!conversationId || changes.length === 0) return
+      void (async () => {
+        const answer: unknown = await window.api.choose('adjust', { conversationId, decisionId, changes }).catch(() => null)
+        if (answer && isAnswered(answer)) addVerdict(conversationId, answer)
+        else if (answer && !isHandedBack(answer)) notify(whyNot(answer), 'warn')
+      })()
+    },
+    [activeId, addVerdict, notify]
+  )
+
+  /** More of the working, asked for with a button rather than in words. */
+  const explainDecision = useCallback(
+    (decisionId: string, of: ChooseDetail): void => {
+      const conversationId = activeId
+      if (!conversationId) return
+      void (async () => {
+        const answer: unknown = await window.api.choose('explain', { conversationId, decisionId, of, message: '' }).catch(() => null)
+        if (answer && isAnswered(answer)) addVerdict(conversationId, answer, { showDetail: of === 'everything' })
+        else if (answer && !isHandedBack(answer)) notify(whyNot(answer), 'warn')
+      })()
+    },
+    [activeId, addVerdict, notify]
+  )
+
+  /** Keeps the open decision. Only says it is kept once the write came back. */
+  const keepDecision = useCallback(
+    (decisionId: string): void => {
+      const conversationId = activeId
+      if (!conversationId) return
+      void (async () => {
+        const answer: unknown = await window.api.choose('keep', { conversationId, decisionId }).catch(() => null)
+        if (wasKept(answer)) notify(`Kept, as \u201c${answer.title}\u201d.`)
+        else notify(whyNot(answer), 'warn')
+      })()
+    },
+    [activeId, notify]
   )
 
   /** How far through a quiz somebody is, saved with the conversation so it survives a restart. */
@@ -1959,8 +2182,11 @@ export default function App(): React.JSX.Element {
             onEdit={(messageId, text) => active && editMessage(active.id, messageId, text)}
             onResend={(messageId) => active && resendFrom(active.id, messageId)}
             onFeedback={(messageId, feedback) => active && setFeedback(active.id, messageId, feedback)}
+            onDecisionChange={changeDecision}
+            onDecisionExplain={explainDecision}
+            onDecisionKeep={keepDecision}
             onQuizChange={(messageId, next) => active && setQuiz(active.id, messageId, next)}
-            onQuizRetry={(next) => active && addReply(active.id, '', next)}
+            onQuizRetry={(next) => active && addReply(active.id, '', { quiz: next })}
             onNotify={notify}
             onImprovePrompt={improvePrompt}
             onNewChat={newChat}

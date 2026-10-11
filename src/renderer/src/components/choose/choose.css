@@ -1,0 +1,654 @@
+/*
+ * The decision card, in the conversation.
+ *
+ * Its own namespace (`dc-`), claimed nowhere else in the window or the browser, so nothing here can reach another
+ * screen and nothing from another screen can reach it. Colours are tokens -- `--cyan` for the accent, `--faint`
+ * for quiet text, `--glass-border` for edges -- never literals, so the card follows the theme in all four
+ * combinations rather than in the one it was written in.
+ *
+ * It never sets a width: it fills whatever the message column gives it, and at narrow widths the table scrolls
+ * sideways inside itself rather than pushing the conversation out.
+ */
+
+.dc-card {
+  /*
+   * The card is what the layout inside it measures itself against.
+   *
+   * Not the window: this sits inside a message, inside a conversation column, beside the sidebar, so it is
+   * routinely under 500px while the window is 1400. A width media query here would be asking about something
+   * three steps removed from the thing running out of room.
+   */
+  container-type: inline-size;
+  container-name: decision;
+  margin-top: 10px;
+  padding: 14px;
+  border: 1px solid var(--glass-border);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--bg-mid) 70%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 100%;
+}
+
+/* ---------------------------------------------------------------- the heading */
+
+.dc-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.dc-mark {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--cyan) 16%, transparent);
+  color: var(--cyan);
+}
+
+.dc-title {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dc-title strong {
+  font-size: 14.5px;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.dc-title > span {
+  overflow: hidden;
+  color: var(--faint);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+ * How steady the answer is, as a word rather than a percentage.
+ *
+ * Three colours for four states, and the fourth -- no clear winner -- is deliberately the same grey as "could go
+ * the other way" rather than a red: there being no winner is a finding, not a fault.
+ */
+.dc-steady {
+  flex: 0 0 auto;
+  padding: 3px 8px;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  color: var(--faint);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+/*
+ * The state gets its own prefix rather than reusing `dc-steady`.
+ *
+ * Four states, one of which is itself called steady, and naming it `dc-steady` would put the same class on the
+ * element twice -- which works and is impossible to read, and the first time somebody styled the base class
+ * differently it would quietly only apply to that one state.
+ */
+.dc-hold-steady {
+  border-color: color-mix(in srgb, var(--cyan) 40%, var(--glass-border));
+  color: var(--cyan);
+}
+
+.dc-hold-somewhat-sensitive {
+  color: var(--text);
+}
+
+.dc-hold-very-sensitive,
+.dc-hold-no-clear-winner {
+  border-color: color-mix(in srgb, var(--warn, #e9b44c) 40%, var(--glass-border));
+  color: var(--warn, #e9b44c);
+}
+
+/* ---------------------------------------------------------------- what was said */
+
+.dc-says {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.dc-line {
+  margin: 0;
+  color: var(--text);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.dc-line strong {
+  font-weight: 600;
+}
+
+.dc-whatif,
+.dc-next,
+.dc-ask,
+.dc-warn {
+  display: flex;
+  margin: 0;
+  padding: 8px 10px;
+  align-items: flex-start;
+  gap: 7px;
+  border-radius: 9px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.dc-whatif {
+  border: 1px dashed color-mix(in srgb, var(--cyan) 35%, var(--glass-border));
+  color: var(--faint);
+}
+
+.dc-whatif strong {
+  color: var(--text);
+}
+
+.dc-next {
+  background: color-mix(in srgb, var(--cyan) 10%, transparent);
+  color: var(--text);
+}
+
+.dc-next > svg,
+.dc-ask > svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--cyan);
+}
+
+.dc-ask {
+  border: 1px solid color-mix(in srgb, var(--cyan) 30%, var(--glass-border));
+  color: var(--text);
+}
+
+.dc-warn {
+  background: color-mix(in srgb, var(--warn, #e9b44c) 12%, transparent);
+  color: var(--text);
+}
+
+.dc-warn > svg {
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: var(--warn, #e9b44c);
+}
+
+/* What a follow-up changed. */
+
+.dc-applied {
+  display: flex;
+  margin: 0;
+  padding: 0;
+  flex-direction: column;
+  gap: 3px;
+  list-style: none;
+}
+
+.dc-applied li {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  color: var(--faint);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.dc-applied li > svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--cyan);
+}
+
+.dc-refused li > svg {
+  color: var(--warn, #e9b44c);
+}
+
+/* ---------------------------------------------------------------- the ranking */
+
+.dc-rows {
+  display: flex;
+  margin: 2px 0 0;
+  padding: 0;
+  flex-direction: column;
+  gap: 6px;
+  list-style: none;
+  counter-reset: none;
+}
+
+.dc-row {
+  display: grid;
+  padding: 7px 8px;
+  align-items: center;
+  gap: 9px;
+  grid-template-columns: 20px minmax(0, 1fr) 90px 44px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+}
+
+.dc-row.dc-leads {
+  border-color: color-mix(in srgb, var(--cyan) 38%, var(--glass-border));
+  background: color-mix(in srgb, var(--cyan) 8%, transparent);
+}
+
+/*
+ * An option that breaks a hard requirement.
+ *
+ * Dimmed and struck through rather than removed. Removing it would answer a question nobody asked -- somebody who
+ * named four options wants to see all four and why one is out, not a silently shorter list.
+ */
+.dc-row.dc-out {
+  opacity: 0.62;
+}
+
+.dc-row.dc-out .dc-name strong {
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+
+.dc-place {
+  display: grid;
+  place-items: center;
+  color: var(--faint);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.dc-row.dc-leads .dc-place {
+  color: var(--cyan);
+}
+
+.dc-row.dc-out .dc-place {
+  color: var(--warn, #e9b44c);
+}
+
+.dc-name {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dc-name strong {
+  overflow: hidden;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dc-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.dc-tag {
+  padding: 1px 5px;
+  border: 1px solid var(--glass-border);
+  border-radius: 4px;
+  color: var(--faint);
+  font-size: 9.5px;
+  font-style: normal;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.dc-tag-warn {
+  border-color: color-mix(in srgb, var(--warn, #e9b44c) 40%, var(--glass-border));
+  color: var(--warn, #e9b44c);
+}
+
+.dc-breaks {
+  color: var(--warn, #e9b44c);
+  font-size: 10.5px;
+  line-height: 1.35;
+}
+
+/*
+ * The bar, and the band behind it.
+ *
+ * `--dc-band` is the range the score could land in once what is unknown is known. Drawn behind the solid fill and
+ * positioned absolutely from the left, so a wide band on a short bar reads as "this figure rests on very little",
+ * which is exactly what it means.
+ */
+.dc-bar {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+  overflow: hidden;
+}
+
+.dc-band {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: color-mix(in srgb, var(--cyan) 22%, transparent);
+}
+
+.dc-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--cyan) 55%, transparent);
+}
+
+.dc-row.dc-leads .dc-fill {
+  background: var(--cyan);
+}
+
+.dc-row.dc-out .dc-fill {
+  background: color-mix(in srgb, var(--text) 30%, transparent);
+}
+
+.dc-score {
+  color: var(--faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.dc-row.dc-leads .dc-score {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* ---------------------------------------------------------------- the buttons */
+
+.dc-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dc-btn {
+  display: inline-flex;
+  padding: 5px 10px;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11.5px;
+  transition: color 0.14s ease, border-color 0.14s ease, background 0.14s ease;
+}
+
+.dc-btn:hover {
+  border-color: color-mix(in srgb, var(--cyan) 45%, var(--glass-border));
+  background: color-mix(in srgb, var(--cyan) 8%, transparent);
+  color: var(--text);
+}
+
+.dc-btn:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------- changing what matters */
+
+.dc-tune {
+  display: flex;
+  padding: 10px;
+  flex-direction: column;
+  gap: 7px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+}
+
+.dc-tune-row {
+  display: grid;
+  align-items: center;
+  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) 72px 34px 22px 22px;
+}
+
+.dc-tune-name {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dc-tune-bar {
+  height: 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+  overflow: hidden;
+}
+
+.dc-tune-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--cyan);
+}
+
+.dc-tune-pc {
+  color: var(--faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.dc-step {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border: 1px solid var(--glass-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--faint);
+  cursor: pointer;
+}
+
+.dc-step:hover {
+  border-color: color-mix(in srgb, var(--cyan) 45%, var(--glass-border));
+  color: var(--cyan);
+}
+
+.dc-step:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+.dc-tune-note {
+  margin: 0;
+  color: var(--faint);
+  font-size: 10.5px;
+}
+
+/* ---------------------------------------------------------------- the working */
+
+.dc-detail {
+  display: flex;
+  padding-top: 10px;
+  flex-direction: column;
+  gap: 10px;
+  border-top: 1px solid var(--glass-border);
+}
+
+/*
+ * The table.
+ *
+ * `auto` columns rather than equal ones, because a criterion measured in rupees needs more room than one measured
+ * out of five, and it scrolls sideways at narrow widths rather than squeezing every column into illegibility.
+ */
+.dc-table {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow-x: auto;
+  font-size: 11.5px;
+}
+
+.dc-tr {
+  display: grid;
+  min-width: max-content;
+  padding: 5px 4px;
+  align-items: start;
+  gap: 10px;
+  grid-auto-columns: minmax(64px, auto);
+  grid-auto-flow: column;
+  grid-template-columns: minmax(96px, 1.4fr);
+  border-radius: 5px;
+}
+
+.dc-tr:nth-child(even of .dc-tr) {
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+}
+
+.dc-th {
+  color: var(--faint);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.dc-th > span {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.dc-th i {
+  color: var(--faint);
+  font-size: 9.5px;
+  font-style: normal;
+  opacity: 0.75;
+}
+
+.dc-cell-name {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dc-cell {
+  font-variant-numeric: tabular-nums;
+}
+
+.dc-cell small {
+  color: var(--faint);
+  font-size: 10px;
+}
+
+/* A guess, marked on the figure itself rather than in a footnote nobody reads. */
+.dc-cell b {
+  margin-left: 2px;
+  color: var(--warn, #e9b44c);
+  font-weight: 700;
+}
+
+.dc-nothing em {
+  color: var(--faint);
+  font-size: 10.5px;
+  font-style: normal;
+  opacity: 0.8;
+}
+
+.dc-how {
+  margin: 0;
+  color: var(--faint);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.dc-notes {
+  display: flex;
+  margin: 0;
+  padding-left: 16px;
+  flex-direction: column;
+  gap: 3px;
+  color: var(--faint);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.dc-block h4 {
+  margin: 0 0 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.dc-block ul {
+  display: flex;
+  margin: 0;
+  padding-left: 16px;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.dc-block em {
+  color: var(--faint);
+  font-style: normal;
+}
+
+/* Whether knowing a missing thing would change the answer -- measured, not guessed, so it is stated plainly. */
+.dc-worth {
+  margin-left: 6px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-size: 9.5px;
+  white-space: nowrap;
+}
+
+.dc-worth.dc-would-decide-it {
+  background: color-mix(in srgb, var(--warn, #e9b44c) 18%, transparent);
+  color: var(--warn, #e9b44c);
+}
+
+.dc-worth.dc-could-change-it {
+  background: color-mix(in srgb, var(--cyan) 14%, transparent);
+  color: var(--cyan);
+}
+
+.dc-worth.dc-would-not-change-it,
+.dc-worth.dc-not-tested {
+  background: color-mix(in srgb, var(--text) 8%, transparent);
+  color: var(--faint);
+}
+
+/* Narrow -- the card, not the window: the four-column row becomes two, so nothing is squeezed to nothing. */
+@container decision (max-width: 420px) {
+  .dc-row {
+    gap: 7px;
+    grid-template-columns: 18px minmax(0, 1fr) 40px;
+  }
+
+  .dc-bar {
+    grid-column: 2 / -1;
+  }
+
+  .dc-tune-row {
+    grid-template-columns: minmax(0, 1fr) 30px 22px 22px;
+  }
+
+  .dc-tune-bar {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-btn {
+    transition: none;
+  }
+}

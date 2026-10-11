@@ -286,6 +286,8 @@ const api: NxtorbisApi = {
   /** Orbis Courses: one channel, named operations. See `src/main/courses/ipc.ts` for the list. */
   courses: (op: string, a?: unknown, b?: unknown, c?: unknown) => ipcRenderer.invoke('courses:do', op, a, b, c),
   native: (op: string, a?: unknown, b?: unknown, c?: unknown) => ipcRenderer.invoke('native:do', op, a, b, c),
+  /** Orbis Choose: one channel, named operations. See `src/main/choose/ipc.ts` for the list. */
+  choose: (op: string, asked?: unknown) => ipcRenderer.invoke('choose:do', op, asked),
   // Told when an app's instance changes, so a card on screen can re-read rather than drift out of date.
   onNativeChanged: (listen: (instanceId: string) => void) => {
     const handler = (_event: unknown, instanceId: string): void => listen(instanceId)

@@ -310,6 +310,7 @@ read the code instead, and the answer carries `origin: 'predicted'` so a guess c
 | `execution:run` | Sends source and input to the sandbox, or to Orion when there is none. Mojo, same service |
 | `physics:ask` | One question to Orion, answered whole, for the Physics Studio's research panels. Mojo, same service |
 | `quiz:write` | `writeQuiz` | Asks Orion for a quiz about a subject or a piece of text, and returns only the questions that passed every check. |
+| `choose:do` | Orbis Choose: lays a decision out, scores it, answers follow-ups and what-ifs, and keeps it. One channel, named operations. The scoring is arithmetic in `src/shared/choose/engine.ts`; Orion only structures and explains. Mojo, same service |
 | `physics:look` | The same question with a photograph of the simulation attached, for what the numbers do not say. Mojo, same service |
 
 ### Orion — unchanged
