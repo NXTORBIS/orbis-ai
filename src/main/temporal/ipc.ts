@@ -1,5 +1,5 @@
-import { ipcMain } from 'electron'
-import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
+import { plainHandle } from '../ipc/handle.ts'
+import type { BrowserWindow } from 'electron'
 import { UNSUPPORTED, answerAboutOffline, type DeviceState } from '../../shared/temporal/capability.ts'
 import type { JobCondition, JobPolicies, TemporalAction } from '../../shared/temporal/job.ts'
 import { occurrencesBetween, type Schedule } from '../../shared/temporal/recurrence.ts'
@@ -28,13 +28,7 @@ export interface TemporalIpcOptions {
 }
 
 export function registerTemporalIpc(o: TemporalIpcOptions): void {
-  // Destructured, not called as `o.handle`, so the channel scanner that checks every channel is documented sees these.
-  const handle = (channel: string, handler: (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown): void => {
-    ipcMain.handle(channel, (event, ...args) => {
-      if (event.sender !== o.getWindow()?.webContents) throw new Error('Not allowed.')
-      return handler(event, ...args)
-    })
-  }
+  const handle = plainHandle(o)
 
   const text = (value: unknown, cap = 400): string => (typeof value === 'string' ? value.slice(0, cap) : '')
   const profile = (): string => o.activeProfile()

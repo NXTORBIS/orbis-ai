@@ -1,4 +1,5 @@
-import { ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
+import { profileHandle } from '../ipc/handle.ts'
+import { ipcMain, type BrowserWindow } from 'electron'
 import {
   categoryTree,
   listPages,
@@ -103,17 +104,9 @@ const cardFor = (page: RegisteredPage): PageCard => ({
 })
 
 export function registerPagesIpc(o: PagesIpcOptions): void {
-  const handle = (channel: string, run: (profileId: string, ...args: unknown[]) => unknown): void => {
-    ipcMain.handle(channel, async (event: IpcMainInvokeEvent, ...args: unknown[]) => {
-      if (event.sender !== o.getWindow()?.webContents) throw new Error('Not allowed.')
-      try {
-        return await run(await o.profileId(), ...args)
-      } catch (err) {
-        // A code and a sentence. Never a stack, and never a path.
-        return { error: 'failed', message: err instanceof Error && err.message.length < 200 ? err.message : 'That did not work.' }
-      }
-    })
-  }
+  // A code and a sentence, from `ipc/handle.ts`. Never a stack and never a path, which is what the cap is for: a
+  // message long enough to exceed it is almost never a sentence.
+  const handle = profileHandle(o)
 
   const str = (value: unknown, max = 200): string => (typeof value === 'string' ? value.slice(0, max) : '')
   const count = (value: unknown, low: number, high: number, fallback: number): number =>

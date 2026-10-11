@@ -1,4 +1,3 @@
-import { ipcMain, type IpcMainInvokeEvent, type WebContents } from 'electron'
 import { RecallStore } from './recall.ts'
 import { describeSize, type RecallSettings } from '../../shared/recall.ts'
 
@@ -99,25 +98,12 @@ export function registerRecallIpc(o: RecallIpcOptions): () => void {
   return o.store.onChange(() => o.broadcast('recall:changed'))
 }
 
-/**
- * The sender check, copied from the shape every other feature here uses.
+/*
+ * There used to be a `plainHandle` here: a fourteenth hand-written copy of the sender check, exported "so the module
+ * is usable on its own in a test". Nothing imported it, in any test or anywhere else -- the composition root passed
+ * its own copy, which had no `try`/`catch` at all, so a thrown error reached the renderer raw while the careful
+ * version with the catch sat here as dead code.
  *
- * Exported so the composition root can pass its own instead; this is the fallback so the module is usable on its own in
- * a test without pulling the whole application in.
+ * `ipc/handle.ts` is the one implementation now and the root passes it in. Nothing is exported from here to replace
+ * this, because a second way to make the check is how there came to be thirteen.
  */
-export function plainHandle(
-  profileId: () => Promise<string>,
-  isOurs: (contents: WebContents) => boolean
-): RecallIpcOptions['handle'] {
-  return (channel, run) => {
-    ipcMain.handle(channel, async (event: IpcMainInvokeEvent, ...args: unknown[]) => {
-      if (!isOurs(event.sender)) return { error: 'refused' }
-      try {
-        return await run(await profileId(), ...args)
-      } catch (err) {
-        // A code and a sentence. Never a path and never the underlying message, which could carry either.
-        return { error: 'failed', message: err instanceof Error && err.message.length < 200 ? err.message : 'That did not work.' }
-      }
-    })
-  }
-}

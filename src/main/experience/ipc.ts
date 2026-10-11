@@ -1,6 +1,6 @@
 import { registerWidgetCapabilities } from './widgetCapabilities.ts'
-import { ipcMain } from 'electron'
-import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
+import { plainHandle } from '../ipc/handle.ts'
+import type { BrowserWindow } from 'electron'
 import type { AppearanceConfig, ExperienceConfig } from '../../shared/experience'
 import { describeConfig, isDefaultConfig } from '../../shared/experience'
 import type { BrowserControl } from '../browserControl/registry'
@@ -22,12 +22,7 @@ export interface ExperienceIpcOptions {
  * the customisation layer: tabs, bookmarks, notes, tasks, workflows and settings are never affected.
  */
 export function registerExperienceIpc(o: ExperienceIpcOptions): void {
-  const handle = (channel: string, handler: (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown): void => {
-    ipcMain.handle(channel, (event, ...args) => {
-      if (event.sender !== o.getWindow()?.webContents) throw new Error('Not allowed.')
-      return handler(event, ...args)
-    })
-  }
+  const handle = plainHandle(o)
 
   o.store.onChange((config) => o.send('experience:changed', config))
 

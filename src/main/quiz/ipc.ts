@@ -1,5 +1,5 @@
-import { ipcMain } from 'electron'
-import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
+import { plainHandle } from '../ipc/handle.ts'
+import type { BrowserWindow } from 'electron'
 import { quizPrompt, readQuiz, isQuizRefusal, type Quiz, type QuizDifficulty } from '../../shared/quiz/build.ts'
 
 /**
@@ -34,12 +34,7 @@ export interface QuizAsked {
 export function registerQuizIpc(o: QuizIpcOptions): void {
   const now = o.now ?? ((): number => Date.now())
 
-  const handle = (channel: string, handler: (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown): void => {
-    ipcMain.handle(channel, (event, ...args) => {
-      if (event.sender !== o.getWindow()?.webContents) throw new Error('Not allowed.')
-      return handler(event, ...args)
-    })
-  }
+  const handle = plainHandle(o)
 
   handle('quiz:write', async (_event, asked) => {
     const want = (typeof asked === 'object' && asked !== null ? asked : {}) as QuizAsked

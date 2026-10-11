@@ -1,5 +1,5 @@
-import { ipcMain } from 'electron'
-import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
+import { plainHandle } from '../ipc/handle.ts'
+import type { BrowserWindow } from 'electron'
 import type { ClipboardSettings, ClipItem, ClipKind } from '../../shared/clipboardHistory'
 import type { Note, NoteFilter } from '../../shared/notes'
 import type { Task, TaskFilter, TaskList } from '../../shared/tasks'
@@ -44,13 +44,7 @@ const obj = (value: unknown): Record<string, unknown> => (value && typeof value 
  * Control Layer, so Orion and workflows use exactly one implementation of each.
  */
 export function registerPersonalIpc(o: PersonalIpcOptions): void {
-  const fromWindow = (event: IpcMainInvokeEvent): boolean => event.sender === o.getWindow()?.webContents
-  const handle = (channel: string, handler: (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown): void => {
-    ipcMain.handle(channel, (event, ...args) => {
-      if (!fromWindow(event)) throw new Error('Not allowed.')
-      return handler(event, ...args)
-    })
-  }
+  const handle = plainHandle(o)
 
   o.notes.onChange(() => o.send('notes:changed'))
   o.tasks.onChange(() => o.send('tasks:changed'))

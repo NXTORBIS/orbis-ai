@@ -1,5 +1,5 @@
-import { ipcMain } from 'electron'
-import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
+import { plainHandle } from '../ipc/handle.ts'
+import type { BrowserWindow } from 'electron'
 import { LANGUAGES, starterFor, EXECUTION_NOTES } from '../../shared/cs/execution.ts'
 import type { ExecutionService } from './service.ts'
 
@@ -16,12 +16,7 @@ export interface ExecutionIpcOptions {
  * would let a generated page point the runner at anywhere it liked.
  */
 export function registerExecutionIpc(o: ExecutionIpcOptions): void {
-  const handle = (channel: string, handler: (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown): void => {
-    ipcMain.handle(channel, (event, ...args) => {
-      if (event.sender !== o.getWindow()?.webContents) throw new Error('Not allowed.')
-      return handler(event, ...args)
-    })
-  }
+  const handle = plainHandle(o)
 
   handle('execution:languages', () => ({
     languages: LANGUAGES.map((one) => ({

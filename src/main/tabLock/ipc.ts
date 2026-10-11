@@ -1,5 +1,6 @@
-import { ipcMain, powerMonitor } from 'electron'
-import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
+import { profileHandle } from '../ipc/handle.ts'
+import { powerMonitor } from 'electron'
+import type { BrowserWindow } from 'electron'
 import type { BrowserControl } from '../browserControl/registry.ts'
 import { TabLockFailure, TabLockStore, type GroupSummary } from '../tabLockStore.ts'
 import { TabLockWatcher, type TabInfo } from '../tabLockWatcher.ts'
@@ -231,21 +232,12 @@ export function registerTabLockIpc(o: TabLockIpcOptions): TabLockRuntime {
 
   // ---------------------------------------------------------------- what the window may ask for
 
-  const handle = (channel: string, run: (profileId: string, ...args: unknown[]) => unknown): void => {
-    ipcMain.handle(channel, async (event: IpcMainInvokeEvent, ...args: unknown[]) => {
-      if (event.sender !== o.getWindow()?.webContents) throw new Error('Not allowed.')
-      try {
-        const id = await o.profileId()
-        const result = await run(id, ...args)
-        return result
-      } catch (err) {
-        // A code the window can act on and a sentence it can show. Never anything of a credential, and never anything
-        // about a page.
-        if (err instanceof TabLockFailure) return { error: err.code, message: err.message, waitMs: err.waitMs }
-        return { error: 'io' }
-      }
-    })
-  }
+  // A code the window can act on and a sentence it can show. Never anything of a credential, and never anything
+  // about a page -- which is why everything that is not a `TabLockFailure` is `io` and nothing more.
+  const handle = profileHandle({
+    ...o,
+    failure: (err) => (err instanceof TabLockFailure ? { error: err.code, message: err.message, waitMs: err.waitMs } : { error: 'io' })
+  })
 
   const str = (value: unknown, max = 256): string => (typeof value === 'string' ? value.slice(0, max) : '')
   const num = (value: unknown): number | null => {

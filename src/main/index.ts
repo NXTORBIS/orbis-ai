@@ -231,6 +231,7 @@ MusicPlayer.declareScheme()
 
 /** Research runs that are going now, so the window can hold one, let it go, or change what it is doing. */
 const researchControl = new ResearchControl()
+import { profileHandle } from './ipc/handle.ts'
 import { QuitFlush } from './quitFlush'
 import { createMusic, registerMusicIpc } from './music/service'
 import { StudentService } from './student/service'
@@ -4265,12 +4266,10 @@ ${page.text}`, { howMany: 6 })
     registerRecallIpc({
       store: recall,
       profileId: stepProfile,
-      handle: (channel, run) => {
-        ipcMain.handle(channel, async (event: IpcMainInvokeEvent, ...args: unknown[]) => {
-          if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
-          return run(await stepProfile(), ...args)
-        })
-      },
+      // The shared check, from `ipc/handle.ts`. The copy that used to be written out here had no `try`/`catch`, so
+      // a thrown error in any of the nine `recall:*` handlers reached the renderer raw -- while the version beside
+      // them in `recallIpc.ts`, which did catch, was dead code nothing imported.
+      handle: profileHandle({ getWindow: liveWindow, profileId: stepProfile }),
       broadcast: (channel, payload) => sendToWindow(channel, payload)
     })
 

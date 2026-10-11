@@ -1,5 +1,6 @@
-import { ipcMain, powerMonitor } from 'electron'
-import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
+import { profileHandle } from '../ipc/handle.ts'
+import { powerMonitor } from 'electron'
+import type { BrowserWindow } from 'electron'
 import { ProfileLockWatcher } from '../profileLockWatcher.ts'
 import { AccountFailure, type AccountSecurity } from '../accountSecurity.ts'
 import {
@@ -126,17 +127,13 @@ export function registerProfileLockIpc(o: ProfileLockIpcOptions): ProfileLockRun
 
   // ---------------------------------------------------------------- what the window may ask for
 
-  const handle = (channel: string, run: (profileId: string, ...args: unknown[]) => unknown): void => {
-    ipcMain.handle(channel, async (event: IpcMainInvokeEvent, ...args: unknown[]) => {
-      if (event.sender !== o.getWindow()?.webContents) throw new Error('Not allowed.')
-      try {
-        return await run(await o.profileId(), ...args)
-      } catch (err) {
-        if (err instanceof AccountFailure) return { error: err.code, message: err.message, waitMs: err.waitMs }
-        return { error: 'io' }
-      }
-    })
-  }
+  // A refusal here carries a code the window acts on -- a cooldown to show, a password that was wrong -- and
+  // anything else is `io` and nothing more, because the rest of what can go wrong is about this person's password
+  // file and none of it belongs on screen.
+  const handle = profileHandle({
+    ...o,
+    failure: (err) => (err instanceof AccountFailure ? { error: err.code, message: err.message, waitMs: err.waitMs } : { error: 'io' })
+  })
 
   const state = async (profileId: string): Promise<{
     policy: ProfileLockPolicy

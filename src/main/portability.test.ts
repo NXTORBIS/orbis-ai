@@ -23,6 +23,18 @@ const PORTABLE = ['shared', 'main/update', 'main/personal', 'main/experience', '
 /** Talks to the engine on purpose, and is rewritten against Chromium. Listed so the list itself stays honest. */
 const BROWSER_LAYER = new Set([
   /*
+   * The sender check, written once instead of thirteen times.
+   *
+   * `senderCheck.ts` names electron only in a type position, so nothing of it survives to run time -- which is
+   * what lets the check and the failure shape be tested without starting an application. `handle.ts` is the
+   * `ipcMain` registration itself, and is the single most Electron-specific file in the tree by design: it is the
+   * whole of "however the application talks to its window", and in Chromium it becomes the Mojo receiver that
+   * every `register*Ipc` is then handed. Thirteen features import it; none of them imports electron for this any
+   * more.
+   */
+  'main/ipc/handle.ts',
+  'main/ipc/senderCheck.ts',
+  /*
    * The two Electron files of Orbis Music, and deliberately only two.
    *
    * Everything that decides anything -- what a track is, what may be claimed about it, how a file is read, what the

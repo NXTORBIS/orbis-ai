@@ -18,7 +18,8 @@
  * path the dialog returned and the import reads only the file the person chose.
  */
 
-import { dialog, ipcMain, type IpcMainInvokeEvent, type BrowserWindow } from 'electron'
+import { profileHandle } from '../ipc/handle.ts'
+import { dialog, type BrowserWindow } from 'electron'
 import { createHash } from 'node:crypto'
 import { mkdir, readdir, readFile, rm, stat, statfs, writeFile } from 'node:fs/promises'
 import { dirname, join, relative, sep } from 'node:path'
@@ -197,17 +198,9 @@ export function registerPortableIpc(o: PortableIpcOptions): void {
   /** The run in flight, so it can be cancelled and so two cannot overlap. */
   let running: { kind: 'export' | 'import'; cancel: boolean } | null = null
 
-  const handle = (channel: string, run: (profileId: string, ...args: unknown[]) => unknown): void => {
-    ipcMain.handle(channel, async (event: IpcMainInvokeEvent, ...args: unknown[]) => {
-      if (event.sender !== o.getWindow()?.webContents) throw new Error('Not allowed.')
-      try {
-        return await run(await o.profileId(), ...args)
-      } catch (err) {
-        // A sentence, never a path from inside the profile and never anything derived from the password.
-        return { error: 'failed', message: err instanceof Error && err.message.length < 300 ? err.message : 'That did not work.' }
-      }
-    })
-  }
+  // A sentence, from `ipc/handle.ts`: never a path from inside the profile and never anything derived from the
+  // password. This copy allowed 300 characters, which is long enough to be a path. 200 everywhere now.
+  const handle = profileHandle(o)
 
   const send = (progress: ExportProgress | { stage: string; category: string | null; message: string }): void => {
     o.getWindow()?.webContents.send(PORTABLE_PROGRESS_CHANNEL, progress)

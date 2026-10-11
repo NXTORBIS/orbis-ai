@@ -1,4 +1,5 @@
-import { ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from 'electron'
+import { profileHandle } from '../ipc/handle.ts'
+import type { BrowserWindow } from 'electron'
 import { randomUUID } from 'node:crypto'
 import type { MarketEngine } from './engine.ts'
 import type { MarketsStore } from './store.ts'
@@ -486,18 +487,12 @@ export interface BookAnswer {
 }
 
 export function registerMarketsIpc(o: MarketsIpcOptions): void {
-  const handle = (channel: string, run: (profileId: string, ...args: unknown[]) => unknown): void => {
-    ipcMain.handle(channel, async (event: IpcMainInvokeEvent, ...args: unknown[]) => {
-      if (event.sender !== o.getWindow()?.webContents) throw new Error('Not allowed.')
-      try {
-        return await run(await o.profileId(), ...args)
-      } catch (err) {
-        // A code and a sentence. Never a provider's URL, and never a key -- there are none here, but the habit is what
-        // keeps that true.
-        return { error: 'failed', message: err instanceof Error && err.message.length < 160 ? err.message : 'That did not work.' }
-      }
-    })
-  }
+  // A code and a sentence, from `ipc/handle.ts`. Never a provider's URL and never a key -- there are none here,
+  // but the shared cap is what keeps that true across every feature instead of in this one file.
+  //
+  // This copy capped the message at 160 characters, Pages at 200 and Transfer at 300, for the same sentence in the
+  // same place. 200 everywhere now.
+  const handle = profileHandle(o)
 
   const str = (value: unknown, max = 200): string => (typeof value === 'string' ? value.slice(0, max) : '')
 
