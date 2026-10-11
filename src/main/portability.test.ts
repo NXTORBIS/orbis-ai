@@ -18,7 +18,7 @@ import { join } from 'node:path'
 const ROOT = join(import.meta.dirname, '..')
 
 /** Must never touch Electron: this is the part that moves to Chromium as it is. */
-const PORTABLE = ['shared', 'main/update', 'main/personal', 'main/experience', 'main/workflows', 'main/knowledge', 'main/temporal', 'helper', 'main/chromium', 'main/artifacts', 'main/ambient', 'main/courses', 'main/native']
+const PORTABLE = ['shared', 'main/update', 'main/personal', 'main/experience', 'main/workflows', 'main/knowledge', 'main/temporal', 'helper', 'main/chromium', 'main/artifacts', 'main/ambient', 'main/courses', 'main/native', 'main/vault', 'main/pages']
 
 /** Talks to the engine on purpose, and is rewritten against Chromium. Listed so the list itself stays honest. */
 const BROWSER_LAYER = new Set([
@@ -42,6 +42,16 @@ const BROWSER_LAYER = new Set([
    */
   'main/security/ipc.ts',
   'main/vault/ipc.ts',
+  /*
+   * Orbis Pages: the two files of it that are about Electron rather than about Pages.
+   *
+   * `host.ts` builds the `WebContentsView` a Page runs in and refuses navigation, popups, permissions and
+   * downloads at the point Chromium asks -- in a Chromium Orbis that is the same three jobs against the real
+   * browser. `ipc.ts` is the channels. The sandbox policy, the protocol handler, the capability checks and every
+   * compute engine under `pages/` know nothing about either.
+   */
+  'main/pages/host.ts',
+  'main/pages/ipc.ts',
   'main/ipc/senderCheck.ts',
   /*
    * The two Electron files of Orbis Music, and deliberately only two.
