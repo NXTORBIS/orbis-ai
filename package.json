@@ -22,7 +22,8 @@
     "stage:browser": "node --experimental-strip-types src/helper/adblock/cli.ts && node scripts/build-extension.mjs && node scripts/stage-orbis-extension.mjs && node scripts/stage-neterror.mjs && node scripts/stage-chromium.mjs",
     "dist": "npm run typecheck && npm run stage:browser && npm run notices && npm run build && electron-builder --win",
     "notices": "node scripts/generate-notices.mjs",
-    "typecheck:ui": "tsc --noEmit -p tsconfig.orbis-ui.json"
+    "typecheck:ui": "tsc --noEmit -p tsconfig.orbis-ui.json",
+    "css:report": "node scripts/cssReport.mjs"
   },
   "devDependencies": {
     "@fontsource-variable/inter": "^5.3.0",
