@@ -35,8 +35,8 @@ The service and Orion channels are the easy two thirds. The browser channels are
 | `chromium:embed-region` | The renderer's browser view rectangle (CSS pixels, device pixel ratio, visible flag) so Chromium's window sits exactly over it inside the Orbis window | `EmbedController.setRegion`: SetWindowPos on the child HWND (see docs/embedded-browser.md) |
 | `chat:browser-confirm` | The user's yes or no to a browser action Orion proposes in chat | Unchanged: an approval card in the Orbis window |
 | `window:fullscreen`, `window:is-fullscreen` | Window fullscreen | `FullscreenController` |
-| `shell:openExternal` | Opens a link outside Orbis | `platform_util::OpenExternal` |
-| `files:pickImages`, `files:pickText` | File dialogs | `ui::SelectFileDialog` |
+| `shell:open-external` | Opens a link outside Orbis | `platform_util::OpenExternal` |
+| `files:pick-images`, `files:pick-text` | File dialogs | `ui::SelectFileDialog` |
 | `system:cpu` | Load, for the status strip | `base::SystemMonitor` |
 
 ### Library — becomes Chromium's own services rather than Orbis's JSON files
@@ -78,7 +78,7 @@ The blocker is the Orbis extension in Chromium. The Electron session blocker's s
 
 | Channel | Becomes |
 | --- | --- |
-| `settings:get`, `settings:update`, `settings:testKey` | Mojo onto the same store |
+| `settings:get`, `settings:update`, `settings:test-key` | Mojo onto the same store |
 | `conversations:list`, `conversations:save`, `conversations:delete` | Mojo onto the same store |
 | `update:status`, `update:check`, `update:download`, `update:cancel-download`, `update:restart-and-update`, `update:settings` | Mojo onto the same update manager; the installer changes, the manager does not |
 | `shortcuts:add`, `shortcuts:remove`, `shortcuts:update`, `shortcuts:refresh-icon` | Mojo onto the same store |
@@ -230,7 +230,7 @@ There are now two strips, and they read the same answer by different routes: the
 
 | Channel | Becomes |
 | --- | --- |
-| `profileLock:state`, `profileLock:save`, `profileLock:lock` | When Orbis locks itself, and locking it now. Mojo onto the same store — the policy lives in `account.lock` beside the password that opens it, so there is one account-security file rather than two. In Chromium the triggers become its own session and idle observers instead of Electron's `powerMonitor`, which is the same operating-system notification either way |
+| `profile-lock:state`, `profile-lock:save`, `profile-lock:lock` | When Orbis locks itself, and locking it now. Mojo onto the same store — the policy lives in `account.lock` beside the password that opens it, so there is one account-security file rather than two. In Chromium the triggers become its own session and idle observers instead of Electron's `powerMonitor`, which is the same operating-system notification either way |
 
 ### Orbis Pages — Orbis's own interactive destinations
 
@@ -292,10 +292,10 @@ what a profile has *decided* is persisted, which is why permissions and projects
 
 | Channel | Becomes |
 | --- | --- |
-| `tabLock:state`, `tabLock:judge`, `tabLock:checkLabel`, `tabLock:explain` | What is protected, whether a password is strong enough, whether a label would give the site away, and why a tab is locked. Mojo; no answer here ever carries a page's address or title |
-| `tabLock:createGroup`, `tabLock:removeGroup`, `tabLock:unlockGroup`, `tabLock:changeGroupPassword`, `tabLock:resetGroupPassword` | The tab passwords themselves. Mojo onto the same store; the key never leaves the browser process, and the account password is the only way back into a forgotten one |
-| `tabLock:setGroupPolicy`, `tabLock:setDefaultPolicy`, `tabLock:setTabPolicy`, `tabLock:addRule`, `tabLock:removeRule`, `tabLock:setRules` | When a tab locks, and which sites are protected automatically. Mojo onto the same store |
-| `tabLock:protect`, `tabLock:unprotect`, `tabLock:lockTab`, `tabLock:unlockTab`, `tabLock:lockAll` | Locking and unlocking. Mojo; in Chromium the hiding itself belongs to the tab strip and the address bar rather than to anything Orbis draws, which is what finally makes a locked tab's title, icon, address, hover card and thumbnail unavailable rather than merely unpainted |
+| `tab-lock:state`, `tab-lock:judge`, `tab-lock:check-label`, `tab-lock:explain` | What is protected, whether a password is strong enough, whether a label would give the site away, and why a tab is locked. Mojo; no answer here ever carries a page's address or title |
+| `tab-lock:create-group`, `tab-lock:remove-group`, `tab-lock:unlock-group`, `tab-lock:change-group-password`, `tab-lock:reset-group-password` | The tab passwords themselves. Mojo onto the same store; the key never leaves the browser process, and the account password is the only way back into a forgotten one |
+| `tab-lock:set-group-policy`, `tab-lock:set-default-policy`, `tab-lock:set-tab-policy`, `tab-lock:add-rule`, `tab-lock:remove-rule`, `tab-lock:set-rules` | When a tab locks, and which sites are protected automatically. Mojo onto the same store |
+| `tab-lock:protect`, `tab-lock:unprotect`, `tab-lock:lock-tab`, `tab-lock:unlock-tab`, `tab-lock:lock-all` | Locking and unlocking. Mojo; in Chromium the hiding itself belongs to the tab strip and the address bar rather than to anything Orbis draws, which is what finally makes a locked tab's title, icon, address, hover card and thumbnail unavailable rather than merely unpainted |
 
 ### Running code — the Code Playground
 
@@ -327,7 +327,7 @@ None of these ever touched Electron beyond the channel itself. They are a servic
 | `research:control` | Holding a research run, letting it go, and changing what it is doing. Mojo, same service |
 | `image:edit`, `image:save` | Mojo, same service |
 | `voice:transcribe`, `voice:cancel`, `voice:hardware` | Mojo, same service |
-| `voice:models:status`, `voice:models:download`, `voice:models:cancelDownload`, `voice:models:delete`, `voice:models:verify` | Mojo, same service |
+| `voice:models-status`, `voice:models-download`, `voice:models-cancel-download`, `voice:models-delete`, `voice:models-verify` | Mojo, same service |
 
 Download progress is pushed to the window as it happens over its own channel (named voice colon models colon
 progress), sent rather than handled — there is nothing for the window to ask back, only something to be told — the

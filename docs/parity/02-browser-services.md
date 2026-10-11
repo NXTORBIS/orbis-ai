@@ -392,7 +392,7 @@ Tests: text, HTML, PNG round trip; history skips private-window copies.
 ## 20. File upload and file chooser
 
 Current: no Orbis code; `<input type=file>` uses Chromium's default chooser in the webview. Orbis dialogs are for its own
-features (`files:pickText`, `files:pickImages`, `image:save`; `dialog.showOpenDialog/showSaveDialog`, `index.ts:795`, `:809`,
+features (`files:pick-text`, `files:pick-images`, `image:save`; `dialog.showOpenDialog/showSaveDialog`, `index.ts:795`, `:809`,
 `:992`; save page `browserIntegration.ts:406`). Orion has no file-input attach (no `DOM.setFileInputFiles` use found;
 uncertain). Drag and drop is Chromium default.
 

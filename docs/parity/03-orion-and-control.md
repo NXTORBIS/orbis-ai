@@ -179,7 +179,7 @@ Electron dep: `readOpenPage` (`webContents.getAllWebContents`, `getType()==='web
   Test: `adblock.test.ts` (core), `dnr.test.ts` (conversion); add a real-Chromium block-count test.
 
 ## 7. Voice / whisper / vision hooks
-- Whisper: `whisper/{service,runtime,modelManager}.ts`; IPC `voice:transcribe|cancel|hardware`, `voice:models:*`
+- Whisper: `whisper/{service,runtime,modelManager}.ts`; IPC `voice:transcribe|cancel|hardware`, `voice:models-*`
   (`index.ts:1013-1047`). Audio is captured in the renderer and sent as data; no browser-page hook in main (searched
   `browser|control|page` in `whisper/service.ts`: none). Local runtime unchanged. On Chromium the panel needs microphone
   permission (extension/site permission; uncertain).

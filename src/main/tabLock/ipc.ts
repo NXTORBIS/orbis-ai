@@ -138,7 +138,7 @@ export function registerTabLockIpc(o: TabLockIpcOptions): TabLockRuntime {
       const policy = watcher.policyFor(tabId)
       // The window updates its own strip; the browser hides -- or gives back -- the tab's title, favicon, address and
       // thumbnail. Neither is told anything about the page: only that a tab with this id is locked, and why.
-      o.send('tabLock:changed', { tabId, locked, reason, label: policy.label })
+      o.send('tab-lock:changed', { tabId, locked, reason, label: policy.label })
       o.log?.({
         kind: locked ? (reason === 'manual' || reason === null ? 'TAB_LOCKED' : 'TAB_AUTO_LOCKED') : 'TAB_UNLOCKED',
         tabId,
@@ -193,11 +193,11 @@ export function registerTabLockIpc(o: TabLockIpcOptions): TabLockRuntime {
    */
   const onLock = (): void => {
     const locked = watcher.systemLocked()
-    if (locked > 0) o.send('tabLock:swept', { count: locked, reason: 'systemLock' })
+    if (locked > 0) o.send('tab-lock:swept', { count: locked, reason: 'systemLock' })
   }
   const onSuspend = (): void => {
     const locked = watcher.systemSuspended()
-    if (locked > 0) o.send('tabLock:swept', { count: locked, reason: 'sleep' })
+    if (locked > 0) o.send('tab-lock:swept', { count: locked, reason: 'sleep' })
   }
   powerMonitor.on('lock-screen', onLock)
   powerMonitor.on('suspend', onSuspend)
@@ -282,17 +282,17 @@ export function registerTabLockIpc(o: TabLockIpcOptions): TabLockRuntime {
     }
   }
 
-  handle('tabLock:state', (id) => state(id))
+  handle('tab-lock:state', (id) => state(id))
 
-  handle('tabLock:judge', (_id, password, name) => judgePassword(str(password), str(name, 80)))
+  handle('tab-lock:judge', (_id, password, name) => judgePassword(str(password), str(name, 80)))
 
-  handle('tabLock:createGroup', async (id, name, password, policy) => {
+  handle('tab-lock:create-group', async (id, name, password, policy) => {
     const summary = await store.createGroup(id, str(name, 60), str(password), policy)
     o.log?.({ kind: 'TAB_PASSWORD_CREATED', password: summary.name })
     return { group: summary, state: await state(id) }
   })
 
-  handle('tabLock:removeGroup', async (id, groupId, password) => {
+  handle('tab-lock:remove-group', async (id, groupId, password) => {
     const removed = groups.find((g) => g.id === groupId)?.name
     await store.removeGroup(id, str(groupId, 80), str(password))
     o.log?.({ kind: 'TAB_PASSWORD_REMOVED', password: removed })
@@ -302,56 +302,56 @@ export function registerTabLockIpc(o: TabLockIpcOptions): TabLockRuntime {
     return { ok: true, state: await state(id) }
   })
 
-  handle('tabLock:unlockGroup', async (id, groupId, password) => {
+  handle('tab-lock:unlock-group', async (id, groupId, password) => {
     await store.unlockGroup(id, str(groupId, 80), str(password))
     return { ok: true, state: await state(id) }
   })
 
-  handle('tabLock:changeGroupPassword', async (id, groupId, current, next) => {
+  handle('tab-lock:change-group-password', async (id, groupId, current, next) => {
     await store.changeGroupPassword(id, str(groupId, 80), str(current), str(next))
     o.log?.({ kind: 'TAB_PASSWORD_CHANGED', password: groups.find((g) => g.id === groupId)?.name })
     return { ok: true, state: await state(id) }
   })
 
-  handle('tabLock:resetGroupPassword', async (id, groupId, accountPassword, next) => {
+  handle('tab-lock:reset-group-password', async (id, groupId, accountPassword, next) => {
     await store.resetGroupPassword(id, str(groupId, 80), str(accountPassword), str(next))
     o.log?.({ kind: 'TAB_PASSWORD_RESET', password: groups.find((g) => g.id === groupId)?.name })
     return { ok: true, state: await state(id) }
   })
 
-  handle('tabLock:setGroupPolicy', async (id, groupId, policy) => {
+  handle('tab-lock:set-group-policy', async (id, groupId, policy) => {
     await store.setGroupPolicy(id, str(groupId, 80), policy)
     o.log?.({ kind: 'POLICY_CHANGED', password: groups.find((g) => g.id === groupId)?.name })
     return { ok: true, state: await state(id) }
   })
 
-  handle('tabLock:setDefaultPolicy', async (id, policy) => {
+  handle('tab-lock:set-default-policy', async (id, policy) => {
     await store.setDefaultPolicy(id, policy)
     o.log?.({ kind: 'POLICY_CHANGED' })
     return { ok: true, state: await state(id) }
   })
 
-  handle('tabLock:addRule', async (id, rule) => {
+  handle('tab-lock:add-rule', async (id, rule) => {
     await store.addRule(id, rule)
     // The rule's pattern is a site, and a site is not recorded here: the log's shape has no field for one, deliberately.
     o.log?.({ kind: 'RULE_ADDED' })
     return { ok: true, state: await state(id) }
   })
 
-  handle('tabLock:removeRule', async (id, ruleId) => {
+  handle('tab-lock:remove-rule', async (id, ruleId) => {
     await store.removeRule(id, str(ruleId, 80))
     o.log?.({ kind: 'RULE_REMOVED' })
     return { ok: true, state: await state(id) }
   })
 
-  handle('tabLock:setRules', async (id, raw) => {
+  handle('tab-lock:set-rules', async (id, raw) => {
     await store.setRules(id, raw)
     return { ok: true, state: await state(id) }
   })
 
   // ---------------------------------------------------------------- the tabs themselves
 
-  handle('tabLock:protect', async (id, tabId, groupId) => {
+  handle('tab-lock:protect', async (id, tabId, groupId) => {
     const tab = num(tabId)
     if (tab === null) return { error: 'bad-input', message: 'Which tab?' }
     const group = str(groupId, 80)
@@ -364,7 +364,7 @@ export function registerTabLockIpc(o: TabLockIpcOptions): TabLockRuntime {
     return { ok: true, state: await state(id) }
   })
 
-  handle('tabLock:unprotect', async (id, tabId, password) => {
+  handle('tab-lock:unprotect', async (id, tabId, password) => {
     const tab = num(tabId)
     if (tab === null) return { error: 'bad-input', message: 'Which tab?' }
     const group = watcher.groupOf(tab)
@@ -377,7 +377,7 @@ export function registerTabLockIpc(o: TabLockIpcOptions): TabLockRuntime {
     return { ok: true, state: await state(id) }
   })
 
-  handle('tabLock:unlockTab', async (id, tabId, password) => {
+  handle('tab-lock:unlock-tab', async (id, tabId, password) => {
     const tab = num(tabId)
     if (tab === null) return { error: 'bad-input', message: 'Which tab?' }
     const group = watcher.groupOf(tab)
@@ -389,21 +389,21 @@ export function registerTabLockIpc(o: TabLockIpcOptions): TabLockRuntime {
     return { ok: true, state: await state(id) }
   })
 
-  handle('tabLock:lockTab', async (id, tabId) => {
+  handle('tab-lock:lock-tab', async (id, tabId) => {
     const tab = num(tabId)
     if (tab === null) return { error: 'bad-input', message: 'Which tab?' }
     watcher.lock(tab, 'manual')
     return { ok: true, state: await state(id) }
   })
 
-  handle('tabLock:setTabPolicy', async (id, tabId, policy) => {
+  handle('tab-lock:set-tab-policy', async (id, tabId, policy) => {
     const tab = num(tabId)
     if (tab === null) return { error: 'bad-input', message: 'Which tab?' }
     watcher.setTabPolicy(tab, policy === null ? null : cleanPolicy(policy, watcher.policyFor(tab)))
     return { ok: true, state: await state(id) }
   })
 
-  handle('tabLock:lockAll', async (id) => {
+  handle('tab-lock:lock-all', async (id) => {
     const count = watcher.panic()
     // Closing every credential as well, so nothing reopens without a password. Locking the tabs while leaving the
     // credentials open would be a lock that the next click undid.
@@ -412,7 +412,7 @@ export function registerTabLockIpc(o: TabLockIpcOptions): TabLockRuntime {
     return { ok: true, count, state: await state(id) }
   })
 
-  handle('tabLock:explain', async (id, tabId) => {
+  handle('tab-lock:explain', async (id, tabId) => {
     const tab = num(tabId)
     if (tab === null) return { error: 'bad-input', message: 'Which tab?' }
     const groupId = watcher.groupOf(tab)
@@ -432,7 +432,7 @@ export function registerTabLockIpc(o: TabLockIpcOptions): TabLockRuntime {
   })
 
   /** Whether a label somebody typed would give the site away. Asked as they type, so the warning arrives in time. */
-  handle('tabLock:checkLabel', (_id, label, url) => ({
+  handle('tab-lock:check-label', (_id, label, url) => ({
     reveals: labelRevealsSite(str(label, 60), str(url, 2048))
   }))
 
@@ -551,7 +551,7 @@ export function registerTabLockIpc(o: TabLockIpcOptions): TabLockRuntime {
     // Rules get a look at the rest, so a protected site that was not open last time is still protected the moment it is.
     for (const tab of tabs) watcher.applyRules(tab)
     await store.forgetLockedOnClose(id)
-    if (count > 0) o.send('tabLock:swept', { count, reason: 'startup' })
+    if (count > 0) o.send('tab-lock:swept', { count, reason: 'startup' })
     return count
   }
 

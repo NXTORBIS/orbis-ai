@@ -1099,7 +1099,7 @@ function registerIpc(): void {
     return settings
   })
 
-  ipcMain.handle('settings:testKey', () => testApiKey(GROQ_API_KEYS, (url, init) => net.fetch(url, init), MISTRAL_API_KEYS))
+  ipcMain.handle('settings:test-key', () => testApiKey(GROQ_API_KEYS, (url, init) => net.fetch(url, init), MISTRAL_API_KEYS))
 
   ipcMain.handle('conversations:list', () => store.listConversations())
   ipcMain.handle('conversations:save', (_event, conversation: Conversation) => store.saveConversation(conversation))
@@ -1905,13 +1905,13 @@ ${summaryBlock(summary)}`
       : 'other'
   )
 
-  ipcMain.handle('shell:openExternal', async (_event, url: string) => {
+  ipcMain.handle('shell:open-external', async (_event, url: string) => {
     if (isHttpUrl(url)) await shell.openExternal(url)
   })
 
   ipcMain.handle('system:cpu', () => sampleCpuUsage())
 
-  ipcMain.handle('files:pickText', async (event) => {
+  ipcMain.handle('files:pick-text', async (event) => {
     const options: OpenDialogOptions = {
       title: 'Attach files',
       properties: ['openFile', 'multiSelections'],
@@ -1925,7 +1925,7 @@ ${summaryBlock(summary)}`
     return result.canceled ? { attachments: [], skipped: [] } : readTextFiles(result.filePaths)
   })
 
-  ipcMain.handle('files:pickImages', async (event) => {
+  ipcMain.handle('files:pick-images', async (event) => {
     const options: OpenDialogOptions = {
       title: 'Upload images',
       properties: ['openFile', 'multiSelections'],
@@ -2292,17 +2292,17 @@ ${summaryBlock(summary)}`
     return Pulsar?.hardware() ?? null
   })
 
-  ipcMain.handle('voice:models:status', async (event) => {
+  ipcMain.handle('voice:models-status', async (event) => {
     if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
     return Pulsar ? await Pulsar.status() : { installed: [], downloading: [] }
   })
 
-  ipcMain.handle('voice:models:download', async (event, id: unknown) => {
+  ipcMain.handle('voice:models-download', async (event, id: unknown) => {
     if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
     if (!Pulsar || !isVoiceModel(id)) return { ok: false, message: 'Not a recognised model.' }
     try {
       await Pulsar.download(id, (progress: PulsarDownloadProgress) => {
-        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('voice:models:progress', progress)
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('voice:models-progress', progress)
       })
       return { ok: true }
     } catch (err) {
@@ -2310,17 +2310,17 @@ ${summaryBlock(summary)}`
     }
   })
 
-  ipcMain.handle('voice:models:cancelDownload', (event, id: unknown) => {
+  ipcMain.handle('voice:models-cancel-download', (event, id: unknown) => {
     if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
     if (Pulsar && isVoiceModel(id)) Pulsar.cancelDownload(id)
   })
 
-  ipcMain.handle('voice:models:delete', async (event, id: unknown) => {
+  ipcMain.handle('voice:models-delete', async (event, id: unknown) => {
     if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
     if (Pulsar && isVoiceModel(id)) await Pulsar.delete(id)
   })
 
-  ipcMain.handle('voice:models:verify', async (event, id: unknown) => {
+  ipcMain.handle('voice:models-verify', async (event, id: unknown) => {
     if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
     return Pulsar && isVoiceModel(id) ? await Pulsar.verify(id) : false
   })

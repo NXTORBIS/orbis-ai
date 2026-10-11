@@ -166,16 +166,16 @@ export function registerProfileLockIpc(o: ProfileLockIpcOptions): ProfileLockRun
     }
   }
 
-  handle('profileLock:state', (id) => state(id))
+  handle('profile-lock:state', (id) => state(id))
 
-  handle('profileLock:save', async (id, raw) => {
+  handle('profile-lock:save', async (id, raw) => {
     // The store refuses a policy on a profile with no password, because there would be nothing to unlock it with.
     await o.accounts.setProfileLock(id, raw)
     o.log?.({ kind: 'POLICY_CHANGED' })
     return { ok: true, state: await state(id) }
   })
 
-  handle('profileLock:lock', async (id) => {
+  handle('profile-lock:lock', async (id) => {
     watcher.lockNow()
     return { ok: true, state: await state(id) }
   })

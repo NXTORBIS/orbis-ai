@@ -342,43 +342,10 @@ test('the boundary is a known size, so the migration can be estimated rather tha
  * rather than left to make it look longer than it is.
  */
 const LEGACY: ReadonlyArray<string> = [
-  // camelCase after the colon -- index.ts
-  'files:pickImages',
-  'files:pickText',
-  'settings:testKey',
-  'shell:openExternal',
-  // camelCase prefix -- profileLock/ipc.ts
-  'profileLock:lock',
-  'profileLock:save',
-  'profileLock:state',
-  // camelCase prefix, and mostly camelCase after it too -- tabLock/ipc.ts
-  'tabLock:addRule',
-  'tabLock:changeGroupPassword',
-  'tabLock:checkLabel',
-  'tabLock:createGroup',
-  'tabLock:explain',
-  'tabLock:judge',
-  'tabLock:lockAll',
-  'tabLock:lockTab',
-  'tabLock:protect',
-  'tabLock:removeGroup',
-  'tabLock:removeRule',
-  'tabLock:resetGroupPassword',
-  'tabLock:setDefaultPolicy',
-  'tabLock:setGroupPolicy',
-  'tabLock:setRules',
-  'tabLock:setTabPolicy',
-  'tabLock:state',
-  'tabLock:unlockGroup',
-  'tabLock:unlockTab',
-  'tabLock:unprotect',
-  // three parts rather than two -- index.ts. These are a group within a group, which the name tries to carry and
-  // a two-part name would carry as `voice:models-status`.
-  'voice:models:cancelDownload',
-  'voice:models:delete',
-  'voice:models:download',
-  'voice:models:status',
-  'voice:models:verify'
+  // Empty, and it stays empty. The thirty-two that were here -- `tabLock:*`, `profileLock:*`, the camelCase four
+  // in `index.ts` and the five three-part `voice:models:*` -- were renamed rather than excused. Because the
+  // renderer never names a channel, each rename was four edits: the handler, the preload binding, the migration
+  // map, and this list. No shims and no dual registration: there was nothing to be compatible with.
 ]
 
 const WELL_NAMED = /^[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$/
