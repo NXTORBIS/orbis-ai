@@ -3,8 +3,8 @@ import assert from 'node:assert/strict'
 import { CAPABILITIES, CATEGORIES, LANES, MAX_PINS, addPin, addressFor, canPin, capabilitiesIn, capabilityById, movePin, normalizePins, removePin, scoreCapability, searchCapabilities, unavailableBecause } from './commandCenter.ts'
 import type { Readiness } from './commandCenter.ts'
 
-const all: Readiness = { browser: true, helper: true, key: true, page: true }
-const nothing: Readiness = { browser: false, helper: false, key: false, page: false }
+const all: Readiness = { browser: true, task: true, helper: true, key: true, page: true }
+const nothing: Readiness = { browser: false, task: false, helper: false, key: false, page: false }
 
 // ---------------------------------------------------------------- the registry itself
 
@@ -64,7 +64,15 @@ test('the three Orion rows open a screen that is really there', () => {
   }
   // And each of them still names what it needs, rather than being offered whatever the state of the world.
   assert.match(unavailableBecause(capabilityById('orbSummarise')!, { ...all, page: false })!, /no page/)
-  assert.match(unavailableBecause(capabilityById('browserTask')!, { ...all, browser: false })!, /not connected/)
+  /*
+   * It depends on the task host, not merely on the browser answering. Those were one flag, and five rows about
+   * tabs and navigation said "the browser is not connected" while the views behind them listed the open tabs.
+   */
+  assert.match(unavailableBecause(capabilityById('browserTask')!, { ...all, task: false })!, /cannot act in the browser/)
+  assert.equal(unavailableBecause(capabilityById('browserTask')!, { ...all, browser: false }), null, 'it does not need the tab list')
+  // And the rows that are about the tab list do need it, and do not need the task host.
+  assert.match(unavailableBecause(capabilityById('tabs')!, { ...all, browser: false })!, /not connected/)
+  assert.equal(unavailableBecause(capabilityById('tabs')!, { ...all, task: false }), null, 'listing tabs is not a task')
 })
 
 test('with nothing running, nothing claims to be usable', () => {
@@ -278,7 +286,7 @@ test('a screen the window has is offered by the window, whatever the browser is 
   // screen in the launcher unavailable while the browser was closed -- the palette offered "Whiteboard — Orbis is
   // not running" to somebody who was looking at Orbis. Measured in the running application, which is the only
   // place it showed up: the registry is shared and the two sides mean different things by the same word.
-  const shut = { window: true, browser: false, helper: false, key: false, page: false }
+  const shut = { window: true, browser: false, task: false, helper: false, key: false, page: false }
   const screens = CAPABILITIES.filter((one) => one.app)
   assert.ok(screens.length > 5, 'there are screens to check')
   for (const screen of screens) {
@@ -287,7 +295,7 @@ test('a screen the window has is offered by the window, whatever the browser is 
 })
 
 test('the browser side is unchanged: without `window`, needs are read as they always were', () => {
-  const shut = { browser: false, helper: false, key: false, page: false }
+  const shut = { browser: false, task: false, helper: false, key: false, page: false }
   const needsHelper = CAPABILITIES.find((one) => one.needs.includes('helper') && one.app)
   assert.ok(needsHelper, 'there is a screen that also names the helper')
   assert.equal(unavailableBecause(needsHelper, shut), 'Orbis is not running')

@@ -30,7 +30,7 @@ const ROOT = join(import.meta.dirname, '..', '..')
 
 const read = (...parts: string[]) => readFile(join(ROOT, ...parts), 'utf8')
 
-const all: Readiness = { browser: true, helper: true, key: true, page: true }
+const all: Readiness = { browser: true, task: true, helper: true, key: true, page: true }
 
 /** The sections written into the panel's markup: `<section id="view-notes">` means the panel has a view called notes. */
 async function sectionsInMarkup(): Promise<Set<string>> {
@@ -224,7 +224,7 @@ test('a missing destination is the reason given, not a thing the person could go
       destinationMissing(capability),
       `${capability.id} has nowhere to go and yet reports something else with everything running`
     )
-    const nothingRunning: Readiness = { browser: false, helper: false, key: false, page: false }
+    const nothingRunning: Readiness = { browser: false, task: false, helper: false, key: false, page: false }
     assert.equal(
       unavailableBecause(capability, nothingRunning),
       destinationMissing(capability),

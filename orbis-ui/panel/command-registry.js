@@ -53,10 +53,10 @@ var CAPABILITIES = [
   // were drawn as live, clicked, and quietly redrew the Command Center -- and because 'ask' carries a real toolbar
   // action, the Ask Orion button beside the address bar did exactly the same thing.
   { id: "ask", name: "Ask Orion", lane: "page", category: "ai", description: "Ask about this page, or about anything", icon: "orion", keywords: ["orion", "ai", "chat", "ask", "assistant", "question"], target: { kind: "panel", view: "ask" }, pinnable: true, needs: ["helper", "key"] },
-  { id: "orbSummarise", name: "Summarise this page", lane: "page", category: "ai", description: "What this page says, in short", icon: "lines", keywords: ["summary", "summarise", "summarize", "tldr", "explain"], target: { kind: "panel", view: "ask" }, pinnable: false, needs: ["helper", "key", "browser", "page"] },
+  { id: "orbSummarise", name: "Summarise this page", lane: "page", category: "ai", description: "What this page says, in short", icon: "lines", keywords: ["summary", "summarise", "summarize", "tldr", "explain"], target: { kind: "panel", view: "ask" }, pinnable: false, needs: ["helper", "key", "task", "page"] },
   // "watch it work in the browser" was a promise nothing kept while the screen did not exist. It does now, and the
   // wording says what is actually shown: the steps the Browser Control Layer confirmed, as it confirms them.
-  { id: "browserTask", name: "Do something on this page", lane: "page", category: "ai", description: "Give Orbis a task and watch every step it takes", icon: "spark", keywords: ["task", "agent", "automate", "click", "do", "act"], target: { kind: "panel", view: "ask" }, pinnable: false, needs: ["helper", "key", "browser"] },
+  { id: "browserTask", name: "Do something on this page", lane: "page", category: "ai", description: "Give Orbis a task and watch every step it takes", icon: "spark", keywords: ["task", "agent", "automate", "click", "do", "act"], target: { kind: "panel", view: "ask" }, pinnable: false, needs: ["helper", "key", "task"] },
   // ---- Automation
   { id: "workflows", name: "Workflows", lane: "keep", category: "automation", description: "Sequences Orbis runs for you, and what they did", icon: "workflows", keywords: ["workflow", "automation", "automate", "routine", "schedule", "run"], target: { kind: "panel", view: "workflows" }, pinnable: true, needs: ["helper"] },
   // ---- Research
@@ -131,7 +131,15 @@ var CAPABILITIES = [
   { id: "markets", name: "Markets", lane: "elsewhere", category: "tools", description: "Live prices, charts and watchlists", icon: "markets", keywords: ["market", "price", "chart", "crypto", "ticker", "watchlist", "trading"], target: { kind: "app" }, app: "markets", pinnable: false, needs: ["helper"] },
   { id: "student", name: "Student", lane: "elsewhere", category: "tools", description: "Focus sessions, goals, daily learning and Orbi", icon: "student", keywords: ["student", "study", "focus", "school", "exam", "revision", "homework", "learn", "goal", "pomodoro", "timer", "orbi", "xp"], target: { kind: "app" }, app: "student", pinnable: false, needs: [] },
   { id: "courses", name: "Courses", lane: "elsewhere", category: "tools", description: "Structured learning, with what you know actually measured", icon: "board", keywords: ["course", "courses", "lesson", "module", "curriculum", "learn", "learning", "certificate", "quiz", "syllabus", "tutorial", "training"], target: { kind: "app" }, app: "courses", pinnable: false, needs: [] },
-  { id: "profiles", name: "Profiles", lane: "set", category: "settings", description: "Separate lives, separate data", icon: "profiles", keywords: ["profile", "account", "switch", "person"], target: { kind: "panel", view: "account" }, pinnable: false, needs: ["helper"] },
+  /*
+   * There is no Profiles row here, and that is deliberate.
+   *
+   * It used to point at the panel's Account view, which is about the name somebody typed in: no list of profiles,
+   * nothing to switch, and a true sentence about a different thing ("Orbis has no account") where the answer
+   * should have been. Profiles are Settings and Settings is in the Orbis window, so there is nothing in the
+   * browser for this row to open -- and the rule for this registry is that a row either goes somewhere or is not
+   * here. Searching for "profile" finds Account, which is the thing the browser really has.
+   */
   { id: "settings", name: "Settings", lane: "set", category: "settings", description: "Everything there is to change", icon: "settings", keywords: ["settings", "preferences", "options", "configure", "setup"], target: { kind: "page", url: "chrome://settings/" }, pinnable: false, needs: ["browser"] },
   { id: "settings.appearance", name: "Appearance", lane: "set", category: "settings", description: "Theme, fonts and how pages are shown", icon: "customize", keywords: ["appearance", "browser theme", "dark mode", "light mode", "font", "font size", "text size", "page zoom"], target: { kind: "page", url: "chrome://settings/appearance" }, pinnable: false, needs: ["browser"] },
   { id: "settings.privacy", name: "Privacy and security", lane: "set", category: "settings", description: "Cookies, tracking, safe browsing and clearing what is kept", icon: "privacy", keywords: ["privacy", "security", "cookies", "tracking", "clear", "delete", "safe browsing", "https"], target: { kind: "page", url: "chrome://settings/privacy" }, pinnable: false, needs: ["browser"] },
@@ -144,7 +152,7 @@ var CAPABILITIES = [
   { id: "settings.reset", name: "Reset settings", lane: "set", category: "settings", description: "Put every setting back the way it started", icon: "reset", keywords: ["reset", "restore", "defaults", "factory", "start over"], target: { kind: "page", url: "chrome://settings/reset" }, pinnable: false, needs: ["browser"] },
   // Under Settings, beside Profiles, which opens the same screen. It used to sit under Customize -- "How Orbis looks
   // and what sits on the toolbar" -- where who you are signed in as is not what anybody was looking for.
-  { id: "account", name: "Account", lane: "set", category: "settings", description: "Who Orbis knows you as", icon: "account", keywords: ["account", "profile", "name", "identity", "who"], target: { kind: "panel", view: "account" }, pinnable: true, needs: ["helper"] }
+  { id: "account", name: "Account", lane: "set", category: "settings", description: "Who Orbis knows you as", icon: "account", keywords: ["account", "profile", "profiles", "name", "identity", "who", "person"], target: { kind: "panel", view: "account" }, pinnable: true, needs: ["helper"] }
 ];
 var capabilityById = (id) => CAPABILITIES.find((c) => c.id === id);
 var capabilitiesIn = (category) => CAPABILITIES.filter((c) => c.category === category);
@@ -166,6 +174,7 @@ function unavailableBecause(capability, ready) {
   if (nowhere) return nowhere;
   for (const need of capability.needs) {
     if (need === "browser" && !ready.browser) return "The browser is not connected";
+    if (need === "task" && !ready.task) return "Orbis cannot act in the browser yet";
     if (need === "helper" && !ready.helper) return "Orbis is not running";
     if (need === "key" && !ready.key) return "Orion has no key";
     if (need === "page" && !ready.page) return "There is no page to act on";

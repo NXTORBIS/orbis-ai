@@ -40,7 +40,7 @@ const state = {
   /** Which search result the arrow keys are on. -1 is none. */
   at: -1,
   /** What Orbis can do right now. Everything false until something says otherwise. */
-  ready: { browser: false, helper: false, key: false, page: false },
+  ready: { browser: false, task: false, helper: false, key: false, page: false },
   /** The page in front, when there is one Orbis can act on. */
   page: null,
   pins: [],
@@ -64,23 +64,36 @@ const state = {
  * assumption that the thing behind it is probably there.
  */
 async function readReadiness() {
+  /*
+   * `task` is whether Orion could be asked to do something in the browser: the task host alive, and a key
+   * configured. `browser` is a different and simpler question -- can this panel reach the browser at all -- and
+   * it is what Tabs, Tab groups, Navigation and Zoom actually need.
+   *
+   * They were the same answer, and five rows said "The browser is not connected" while the view behind each of
+   * them listed the open tabs perfectly well. One flag cannot answer two questions; the one that was asked was
+   * the wrong one for most of the rows asking it.
+   */
   try {
     const ready = await call('browser:task-ready')
     state.ready.helper = true
-    state.ready.browser = ready.browser === true
+    state.ready.task = ready.browser === true
     state.ready.key = ready.key === true
   } catch {
-    state.ready = { browser: false, helper: false, key: false, page: false }
+    state.ready = { browser: false, task: false, helper: false, key: false, page: false }
     state.page = null
     return
   }
-  // A real page to act on, as opposed to a new tab or one of Orbis's own pages.
+  // A real page to act on, as opposed to a new tab or one of Orbis's own pages -- and, separately, whether the
+  // browser answered at all, which is what the rows about tabs and navigation are really asking.
   try {
     const page = await call('browser:do', ['page-read', { maxChars: 1 }])
     const url = String(page?.url ?? '')
+    state.ready.browser = true
     state.ready.page = /^https?:/.test(url)
     state.page = state.ready.page ? { url, title: String(page.title ?? '') } : null
   } catch {
+    // It did not answer: there is nothing to list and nothing to act on.
+    state.ready.browser = state.ready.task
     state.ready.page = false
     state.page = null
   }
