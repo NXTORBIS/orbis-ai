@@ -73,6 +73,16 @@ const BROWSER_LAYER = new Set([
   // The quiz in the conversation: the asking and the checking are pure, and only the window adapter is not.
   'main/quiz/ipc.ts',
   /*
+   * The one Electron file of learned skills, and deliberately the only one: `main/skills/` holds nothing else.
+   *
+   * Every decision is on the other side of this line -- whether a run can be learned from, what a skill is made
+   * of, how one is ranked against what somebody asked, whether an exported skill may be imported, what a
+   * skill is worth and whether it is still healthy are all in `shared/skills.ts`, and the per-profile store,
+   * the versions and the run through the workflow engine are in `main/skillManager.ts`. Neither imports
+   * Electron. This file is the fourteen channels and the sender check, which becomes Mojo.
+   */
+  'main/skills/ipc.ts',
+  /*
    * The one Electron file of the Code Playground, and deliberately the only one.
    *
    * Everything that decides anything is pure: which languages there are and what Judge0 calls them

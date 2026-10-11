@@ -2046,7 +2046,10 @@ export default function App(): React.JSX.Element {
           go({ kind: 'feature', id })
         }}
         onBrowser={() => go({ kind: 'browser' })}
-        ready={{ browser: browserOpen, helper: browserOpen, key: true, page: browserOpen && !browserHidden }}
+        // `window: true`: this IS the window, so every screen it has is reachable from here. Without it the
+        // palette read every capability's `needs` -- which describe what the BROWSER side requires -- and offered
+        // "Whiteboard -- Orbis is not running" to somebody looking at Orbis.
+        ready={{ window: true, browser: browserOpen, helper: browserOpen, key: true, page: browserOpen && !browserHidden }}
       />
       {/*
         Offered the first time a microphone is pressed with no model installed. Raised by the voice service rather

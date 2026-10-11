@@ -344,6 +344,13 @@ export const capabilitiesIn = (category: CommandCategory): OrbisCapability[] => 
 
 /** What is true of Orbis right now. Everything unknown is taken as absent: an unproven capability is not offered. */
 export interface Readiness {
+  /**
+   * The Orbis window is the one asking.
+   *
+   * Absent on the browser's side, where every capability is reached from a page rather than from a screen the
+   * window has. Set there, a capability with an `app` is one of the window's own screens and is always reachable.
+   */
+  window?: boolean
   browser: boolean
   helper: boolean
   key: boolean
@@ -382,7 +389,24 @@ export function destinationMissing(capability: OrbisCapability): string | null {
 
 /** Why a capability cannot be used, in the words the interface says. Null when it can. */
 export function unavailableBecause(capability: OrbisCapability, ready: Readiness): string | null {
-  // Asked before anything else. Nothing a person can start, connect or set up will make a destination that was never
+  /*
+   * A screen the Orbis window has is available whenever the window is the one asking, and this is asked first.
+   *
+   * Both of the checks below are written from the BROWSER's point of view, because that is the side the registry
+   * was built for, and in the window both of them say the wrong thing. `destinationMissing` answers
+   * `{ kind: 'app' }` with "Only in the Orbis window" -- true in a browser panel, nonsense in the Orbis window.
+   * And `needs` names the helper and a connected browser, which a window screen does not need at all.
+   *
+   * Measured in the running application, which is the only place it showed: with the browser closed, the command
+   * palette offered "Whiteboard -- Orbis is not running" to somebody who was looking at Orbis, and every one of
+   * the eleven screens in the launcher read as unavailable.
+   *
+   * `app` is what says "the window has this screen". Nothing a person can start, connect or set up changes whether
+   * it is there.
+   */
+  if (capability.app && ready.window === true) return null
+
+  // Asked before the needs. Nothing a person can start, connect or set up will make a destination that was never
   // built appear, so telling them Orbis is not running would send them off to fix the wrong thing.
   const nowhere = destinationMissing(capability)
   if (nowhere) return nowhere

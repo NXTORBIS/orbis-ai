@@ -81,6 +81,7 @@ import { embedSupported, hwndFromHandle } from './chromium/embed'
 import { readSignals } from './browserControl/captchaCapabilities'
 import { StepRun } from './stepRunner'
 import { SkillManager } from './skillManager'
+import { registerSkillsIpc } from './skills/ipc.ts'
 import { resolveModel } from '../shared/modelRoute'
 import { isKnownModel, modelLabel } from '../shared/models'
 import { planCompression, summarise, summaryBlock } from './compress'
@@ -163,7 +164,6 @@ import type { GalaxyNodeType, GalaxyView } from '../shared/galaxy'
 import type { Workflow, WorkflowStep } from '../shared/workflows'
 import { memoryFromRequest, memoryPromptBlock, parseMemoryCommand } from '../shared/memory'
 import type { MemoryCategory } from '../shared/memory'
-import type { SkillEdits } from './skillManager'
 import { planNextStep } from './stepPlanner'
 import { WidgetFeeds } from './widgetFeeds'
 import { WorkflowStore } from './workflows/store'
@@ -4157,15 +4157,6 @@ ${page.text}`, { howMany: 6 })
       if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
     }
     const text = (value: unknown, max: number): string => (typeof value === 'string' ? value.slice(0, max) : '')
-    const edits = (value: unknown): SkillEdits => {
-      const v = (value ?? {}) as Record<string, unknown>
-      return {
-        ...(typeof v.name === 'string' ? { name: v.name } : {}),
-        ...(typeof v.whenToUse === 'string' ? { whenToUse: v.whenToUse } : {}),
-        ...(typeof v.category === 'string' ? { category: v.category } : {}),
-        ...(Array.isArray(v.domains) ? { domains: v.domains.filter((d): d is string => typeof d === 'string') } : {})
-      }
-    }
     /** The run itself, in the main process, and only if it belongs to the profile in use. */
     const ownRun = async (runId: unknown): Promise<StepRun> => {
       const run = typeof runId === 'string' ? stepRuns.get(runId) : undefined
@@ -4544,60 +4535,19 @@ ${page.text}`, { howMany: 6 })
       return store.setSettings({ ...(typeof n.enabled === 'boolean' ? { enabled: n.enabled } : {}), ...(typeof n.useInChat === 'boolean' ? { useInChat: n.useInChat } : {}) })
     }))
 
-    ipcMain.handle('skills:settings', (event) => (fromWindow(event), skills.settings()))
-    ipcMain.handle('skills:set-settings', (event, next: unknown) => {
-      fromWindow(event)
-      const v = (next ?? {}) as Record<string, unknown>
-      return skills.setSettings({
-        ...(typeof v.enabled === 'boolean' ? { enabled: v.enabled } : {}),
-        ...(typeof v.learnFromRuns === 'boolean' ? { learnFromRuns: v.learnFromRuns } : {}),
-        ...(v.reuse === 'never' || v.reuse === 'suggest' || v.reuse === 'auto' ? { reuse: v.reuse } : {})
-      })
+    /*
+     * Fourteen channels for learned skills used to be written out here, with a sender-checking predicate and two
+     * validators above them. They are in `skills/ipc.ts` now, which is where the rules about them can be read
+     * without a five-thousand-line file in the way -- who may ask, why a run is identified rather than handed
+     * over, and why a match works out the page itself. The manager stays here, because Orion reaches it directly
+     * and a finished run counts a success through it.
+     */
+    registerSkillsIpc({
+      skills,
+      getWindow: liveWindow,
+      ownRun,
+      pageUrl: () => activePage()?.getURL()
     })
-    ipcMain.handle('skills:list', (event) => (fromWindow(event), skills.list()))
-    ipcMain.handle('skills:preview', async (event, runId: unknown) => {
-      fromWindow(event)
-      const settings = await skills.settings()
-      const run = await ownRun(runId)
-      const { candidate, why } = skills.preview(run.state)
-      return {
-        offer: settings.learnFromRuns && Boolean(candidate),
-        timesDone: await skills.timesDone(run.state.goal),
-        why,
-        candidate: candidate && {
-          name: candidate.workflow.name,
-          whenToUse: candidate.meta.whenToUse,
-          category: candidate.meta.category,
-          domains: candidate.meta.domains,
-          steps: candidate.workflow.steps.map((step) => ({ name: step.name, byYou: step.type === 'userAction' })),
-          inputs: candidate.workflow.inputs.map((input) => ({ label: input.label || input.name, asked: input.default === undefined })),
-          permissions: candidate.workflow.settings.permissions,
-          notes: candidate.notes
-        }
-      }
-    })
-    ipcMain.handle('skills:save', async (event, runId: unknown, changes: unknown) => {
-      fromWindow(event)
-      return skills.saveFromRun((await ownRun(runId)).state, edits(changes))
-    })
-    ipcMain.handle('skills:match', (event, request: unknown) => {
-      fromWindow(event)
-      // The page the person is really on, read here rather than taken from the window.
-      const url = activePage()?.getURL()
-      return skills.match(text(request, 2000), url)
-    })
-    ipcMain.handle('skills:run', (event, workflowId: unknown, inputs: unknown, request: unknown) => {
-      fromWindow(event)
-      const values = inputs && typeof inputs === 'object' ? Object.fromEntries(Object.entries(inputs as Record<string, unknown>).filter(([, v]) => typeof v === 'string').map(([k, v]) => [k, (v as string).slice(0, 2000)])) : {}
-      return skills.run(text(workflowId, 80), values, text(request, 200) || undefined)
-    })
-    ipcMain.handle('skills:edit', (event, workflowId: unknown, changes: unknown) => (fromWindow(event), skills.edit(text(workflowId, 80), edits(changes))))
-    ipcMain.handle('skills:set-enabled', (event, workflowId: unknown, on: unknown) => (fromWindow(event), skills.setEnabled(text(workflowId, 80), on === true)))
-    ipcMain.handle('skills:remove', (event, workflowId: unknown, alsoWorkflow: unknown) => (fromWindow(event), skills.remove(text(workflowId, 80), alsoWorkflow === true)))
-    ipcMain.handle('skills:remove-all', (event) => (fromWindow(event), skills.removeAll()))
-    ipcMain.handle('skills:roll-back', (event, workflowId: unknown) => (fromWindow(event), skills.rollBack(text(workflowId, 80))))
-    ipcMain.handle('skills:export', (event, workflowId: unknown) => (fromWindow(event), skills.exportSkill(text(workflowId, 80))))
-    ipcMain.handle('skills:import', (event, json: unknown) => (fromWindow(event), skills.importSkill(text(json, 2_000_000))))
 
     /**
      * Galaxy: the profile's own things and how they are really connected, built from the stores above whenever it is

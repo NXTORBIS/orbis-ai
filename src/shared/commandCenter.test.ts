@@ -272,3 +272,23 @@ test('an icon identifies one thing, or it identifies nothing', () => {
   const clashes = [...shared].filter(([, names]) => names.length > 1).map(([icon, names]) => `${icon}: ${names.join(', ')}`)
   assert.deepEqual(clashes, [], 'two capabilities wearing one icon means neither is identified by it')
 })
+
+test('a screen the window has is offered by the window, whatever the browser is doing', () => {
+  // `needs` describes what the BROWSER side of a capability requires. Read literally in the window it made every
+  // screen in the launcher unavailable while the browser was closed -- the palette offered "Whiteboard — Orbis is
+  // not running" to somebody who was looking at Orbis. Measured in the running application, which is the only
+  // place it showed up: the registry is shared and the two sides mean different things by the same word.
+  const shut = { window: true, browser: false, helper: false, key: false, page: false }
+  const screens = CAPABILITIES.filter((one) => one.app)
+  assert.ok(screens.length > 5, 'there are screens to check')
+  for (const screen of screens) {
+    assert.equal(unavailableBecause(screen, shut), null, `${screen.id} is one of the window's own screens`)
+  }
+})
+
+test('the browser side is unchanged: without `window`, needs are read as they always were', () => {
+  const shut = { browser: false, helper: false, key: false, page: false }
+  const needsHelper = CAPABILITIES.find((one) => one.needs.includes('helper') && one.app)
+  assert.ok(needsHelper, 'there is a screen that also names the helper')
+  assert.equal(unavailableBecause(needsHelper, shut), 'Orbis is not running')
+})
