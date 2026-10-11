@@ -60,7 +60,10 @@ function namedByConstant(source: string): string[] {
 /**
  * Every channel the main process answers.
  *
- * Three ways of registering one, because there are three in the code. Most call `ipcMain.handle` directly. The larger
+ * Four ways of registering one, because there are four in the code. The fourth is `listen`, for the one-way
+ * messages that used to be written as `ipcMain.on` -- it was added when `registerIpc` moved onto the shared sender
+ * check, and `chromium:embed-region` went invisible to this test the moment it did, which is what this sentence
+ * exists to stop happening again silently. Most call `ipcMain.handle` directly. The larger
  * modules -- personal data, workflows, personalisation, tab locking -- define a local `handle` that checks the sender
  * first and then calls `ipcMain.handle` with the channel it was given, so the channel name never appears next to
  * `ipcMain` at all.
@@ -75,7 +78,7 @@ async function channelsInCode(): Promise<Registration[]> {
     const source = await readFile(file, 'utf8')
     const where = relative(join(ROOT, 'main'), file).split(sep).join('/')
     for (const match of source.matchAll(/ipcMain\.(?:handle|on)\(\s*'([^']+)'/g)) found.push({ channel: match[1], file: where })
-    for (const match of source.matchAll(/(?:^|[^.\w])handle\(\s*'([a-z][a-zA-Z0-9-]*:[a-zA-Z0-9:_-]+)'/g)) found.push({ channel: match[1], file: where })
+    for (const match of source.matchAll(/(?:^|[^.\w])(?:handle|listen)\(\s*'([a-z][a-zA-Z0-9-]*:[a-zA-Z0-9:_-]+)'/g)) found.push({ channel: match[1], file: where })
     for (const channel of namedByConstant(source)) found.push({ channel, file: where })
   }
   return found.sort((a, b) => (a.channel < b.channel ? -1 : a.channel > b.channel ? 1 : 0))

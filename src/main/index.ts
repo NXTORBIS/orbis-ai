@@ -231,7 +231,7 @@ MusicPlayer.declareScheme()
 
 /** Research runs that are going now, so the window can hold one, let it go, or change what it is doing. */
 const researchControl = new ResearchControl()
-import { profileHandle } from './ipc/handle.ts'
+import { plainHandle, plainListen, profileHandle } from './ipc/handle.ts'
 import { QuitFlush } from './quitFlush'
 import { createMusic, registerMusicIpc } from './music/service'
 import { StudentService } from './student/service'
@@ -1053,6 +1053,27 @@ function createWindow(): BrowserWindow {
 
 function registerIpc(): void {
   /*
+   * Who is allowed to ask.
+   *
+   * A channel registered on `ipcMain` answers ANY renderer in this process, not just the Orbis window -- so every
+   * one of them has to establish where the message came from. Everything registered later, inside `whenReady`,
+   * goes through a wrapper that does. This function predates that convention and was never gone back over:
+   * forty-one of its channels asked nobody. Among them `settings:get` and `settings:update` (every setting, which
+   * includes whether a key is configured), `conversations:list`/`save`/`delete` (every conversation on this
+   * computer), `meetings:do` (the notes), `image:edit`, `chat:suggest`, `chat:complete` and `chat:title` (each a
+   * model call somebody else pays for), `shell:open-external`, and the four `automation:*` channels that drive a
+   * run on the browser.
+   *
+   * `handle` and `listen` come from `ipc/handle.ts`, which is the one implementation of this check. `listen` is
+   * for one-way messages, where a message from anywhere else is dropped rather than refused -- there is nothing
+   * waiting for an answer, and a console line per message would be a way to fill the log.
+   *
+   * Called `handle` on purpose: `ipcMapping.test.ts` finds channels by that literal, so a factory reached any
+   * other way would make every channel here invisible to the guard that checks they are all written down.
+   */
+  const handle = plainHandle({ getWindow: liveWindow })
+  const listen = plainListen({ getWindow: liveWindow })
+  /*
    * Everything the window does with notifications, through one door.
    *
    * One channel rather than eight, for the same reason `pages:compute` and `artifacts:do` are one each: one place the
@@ -1061,7 +1082,7 @@ function registerIpc(): void {
    * and nothing else. It cannot create one: the only way a notification comes into being is an event published
    * inside Orbis, which is what stops a renderer, a page or an extension manufacturing one.
    */
-  ipcMain.handle('notifications:do', async (_event, op: string, arg?: unknown, arg2?: unknown) => {
+  handle('notifications:do', async (_event, op: string, arg?: unknown, arg2?: unknown) => {
     if (!notifications) return { ok: false, message: 'Notifications are not ready yet.' }
     const id = typeof arg === 'string' ? arg.slice(0, 60) : null
     switch (op) {
@@ -1086,25 +1107,25 @@ function registerIpc(): void {
     }
   })
 
-  ipcMain.handle('settings:get', async () => {
+  handle('settings:get', async () => {
     const settings = await store.getSettings()
     // Kept for the browser's own pages, which need it to look like the chat. Only this one field crosses.
     settingsForBrowser = { effects: settings.effects !== false }
     return settings
   })
 
-  ipcMain.handle('settings:update', async (_event, update: SettingsUpdate) => {
+  handle('settings:update', async (_event, update: SettingsUpdate) => {
     const settings = await store.updateSettings(update)
     nativeTheme.themeSource = settings.theme
     settingsForBrowser = { effects: settings.effects !== false }
     return settings
   })
 
-  ipcMain.handle('settings:test-key', () => testApiKey(GROQ_API_KEYS, (url, init) => net.fetch(url, init), MISTRAL_API_KEYS))
+  handle('settings:test-key', () => testApiKey(GROQ_API_KEYS, (url, init) => net.fetch(url, init), MISTRAL_API_KEYS))
 
-  ipcMain.handle('conversations:list', () => store.listConversations())
-  ipcMain.handle('conversations:save', (_event, conversation: Conversation) => store.saveConversation(conversation))
-  ipcMain.handle('conversations:delete', (_event, id: string) => store.deleteConversation(id))
+  handle('conversations:list', () => store.listConversations())
+  handle('conversations:save', (_event, conversation: Conversation) => store.saveConversation(conversation))
+  handle('conversations:delete', (_event, id: string) => store.deleteConversation(id))
 
   ipcMain.handle('chat:send', async (event, incoming: ChatRequest) => {
     const sender = event.sender
@@ -1382,6 +1403,14 @@ ${block}`
           if (held.length) {
             const context = contextFrom(chooseContext(last.content, held, PROJECT_FILE_BUDGET))
             if (context) systemPrompt = `${systemPrompt}${BREAK}These are the files kept in this project.${BREAK}${context}`
+          }
+          // Nothing to search is either a project with no files or a project whose list could not be read, and the
+          // second one used to answer as though the files were not there. Said rather than left for somebody to
+          // wonder why the answer ignored the spec they put in the project.
+          const note = projectFiles.note(homeProjectId)
+          if (note) {
+            systemPrompt = `${systemPrompt}${BREAK}This project keeps files and they could not be read just now, so none of them are in front of you. Say that before answering anything that would need them.`
+            console.error('[project files]', note)
           }
         } catch (err) {
           // A project's files help an answer; they are never a reason for one to fail.
@@ -1709,16 +1738,16 @@ ${summaryBlock(summary)}`
     }
   })
 
-  ipcMain.handle('chat:abort', (_event, requestId: string) => {
+  handle('chat:abort', (_event, requestId: string) => {
     activeRequests.get(requestId)?.abort()
   })
 
-  ipcMain.handle('chat:browser-confirm', (_event, requestId: unknown, confirmationId: unknown, approved: unknown) => {
+  handle('chat:browser-confirm', (_event, requestId: unknown, confirmationId: unknown, approved: unknown) => {
     if (typeof requestId === 'string' && typeof confirmationId === 'string') browserConfirmations.get(`${requestId}:${confirmationId}`)?.(approved === true)
   })
 
   // Pause and stop end the current run with the automation's state saved, so "continue" can pick it up.
-  ipcMain.handle('automation:control', (_event, requestId: unknown, action: unknown) => {
+  handle('automation:control', (_event, requestId: unknown, action: unknown) => {
     if (typeof requestId === 'string' && (action === 'pause' || action === 'stop')) activeRequests.get(requestId)?.abort(action)
   })
 
@@ -1757,7 +1786,7 @@ ${summaryBlock(summary)}`
    * model transcribes them; nothing here records anything. The summary is asked of Orion and checked against the
    * transcript before it is kept, because an invented action item becomes a task nobody agreed to.
    */
-  ipcMain.handle('meetings:do', async (_event, op: unknown, arg?: unknown, arg2?: unknown) => {
+  handle('meetings:do', async (_event, op: unknown, arg?: unknown, arg2?: unknown) => {
     if (!meetings) return { ok: false, message: 'Notes are not ready yet.' }
     if (op === 'list') return { ok: true, notes: await meetings.list() }
     if (op === 'get') return { ok: true, note: await meetings.get(typeof arg === 'string' ? arg : '') }
@@ -1792,7 +1821,12 @@ ${summaryBlock(summary)}`
   ipcMain.handle('project-files:do', async (event, op: unknown, projectId: unknown, arg?: unknown) => {
     const id = typeof projectId === 'string' ? projectId : ''
     if (!projectFiles || !id) return { ok: false, message: 'That is not a project.' }
-    if (op === 'list') return { ok: true, files: await projectFiles.list(id) }
+    // The note is asked for after the list, because reading the list is what finds out whether it could be read at
+    // all. Without it a project whose list is being held open looked exactly like one nobody has added anything to.
+    if (op === 'list') {
+      const files = await projectFiles.list(id)
+      return { ok: true, files, message: projectFiles.note(id) ?? undefined }
+    }
     if (op === 'remove') return { ok: await projectFiles.remove(id, typeof arg === 'string' ? arg : '') }
     if (op !== 'add') return { ok: false, message: 'Orbis cannot do that with a project’s files.' }
 
@@ -1877,7 +1911,7 @@ ${summaryBlock(summary)}`
     }
   })
 
-  ipcMain.handle('research:control', (_event, op: unknown, id: unknown, change: unknown) => {
+  handle('research:control', (_event, op: unknown, id: unknown, change: unknown) => {
     const runId = typeof id === 'string' ? id : ''
     if (op === 'list') return researchControl.list()
     if (op === 'pause') return researchControl.pause(runId)
@@ -1886,31 +1920,31 @@ ${summaryBlock(summary)}`
     return false
   })
 
-  ipcMain.handle('automation:unfinished', async () => {
+  handle('automation:unfinished', async () => {
     const runs = (await automationCheckpoints?.list()) ?? []
     return runs.map((one) => ({ id: one.state.id, conversationId: one.conversationId, said: describeCheckpoint(one, Date.now()), state: one.state }))
   })
 
   /** Forgets one, because it was carried on with or because it was not wanted. */
-  ipcMain.handle('automation:forget', async (_event, id: unknown) => {
+  handle('automation:forget', async (_event, id: unknown) => {
     if (typeof id === 'string' && id) await automationCheckpoints?.forget(id)
   })
 
-  ipcMain.handle('automation:steer', (_event, requestId: unknown, text: unknown) => {
+  handle('automation:steer', (_event, requestId: unknown, text: unknown) => {
     if (typeof requestId === 'string' && typeof text === 'string' && text.trim()) automationInstructions.get(requestId)?.push(text.trim().slice(0, 500))
   })
 
-  ipcMain.handle('automation:classify', (_event, text: unknown, objective: unknown) =>
+  handle('automation:classify', (_event, text: unknown, objective: unknown) =>
     typeof text === 'string'
       ? classifyAutomationMessage(text, typeof objective === 'string' ? objective : '', GROQ_API_KEYS, (url, init) => net.fetch(url, init))
       : 'other'
   )
 
-  ipcMain.handle('shell:open-external', async (_event, url: string) => {
+  handle('shell:open-external', async (_event, url: string) => {
     if (isHttpUrl(url)) await shell.openExternal(url)
   })
 
-  ipcMain.handle('system:cpu', () => sampleCpuUsage())
+  handle('system:cpu', () => sampleCpuUsage())
 
   ipcMain.handle('files:pick-text', async (event) => {
     const options: OpenDialogOptions = {
@@ -1940,7 +1974,7 @@ ${summaryBlock(summary)}`
     return result.canceled ? { attachments: [], skipped: [] } : readImages(result.filePaths)
   })
 
-  ipcMain.handle('chat:suggest', (_event, messages: unknown) => {
+  handle('chat:suggest', (_event, messages: unknown) => {
     if (!Array.isArray(messages)) return { next: null, followups: [] }
     const valid = messages.filter(
       (m): m is { role: string; content: string } => !!m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string'
@@ -1948,7 +1982,7 @@ ${summaryBlock(summary)}`
     return suggestFollowups(valid, GROQ_API_KEYS, (url, init) => net.fetch(url, init))
   })
 
-  ipcMain.handle('chat:complete', (_event, draft: unknown, messages: unknown) => {
+  handle('chat:complete', (_event, draft: unknown, messages: unknown) => {
     if (typeof draft !== 'string' || !Array.isArray(messages)) return null
     const valid = messages.filter(
       (m): m is { role: string; content: string } => !!m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string'
@@ -1956,7 +1990,7 @@ ${summaryBlock(summary)}`
     return completeDraft(draft, valid, GROQ_API_KEYS, (url, init) => net.fetch(url, init))
   })
 
-  ipcMain.handle('chat:title', (_event, prompt: unknown) => {
+  handle('chat:title', (_event, prompt: unknown) => {
     if (typeof prompt !== 'string') return null
     return generateTitle(prompt, GROQ_API_KEYS, (url, init) => net.fetch(url, init))
   })
@@ -1978,13 +2012,13 @@ ${summaryBlock(summary)}`
     if (typeof input !== 'string' || !(await store.getSettings()).searchSuggestions) return []
     return predictQueries(input, GROQ_API_KEYS, (url, init) => net.fetch(url, init))
   }
-  ipcMain.handle('omnibox:web', (_event, query: unknown) => webSuggestions(query))
-  ipcMain.handle('omnibox:predict', (_event, input: unknown) => orionPredictions(input))
+  handle('omnibox:web', (_event, query: unknown) => webSuggestions(query))
+  handle('omnibox:predict', (_event, input: unknown) => orionPredictions(input))
 
   // Orbis's browser is Chromium. Everything that used to open the in-app browser (the address bar, links, research sources, "open the
   // browser") opens it here instead: an address as a page, anything else as an Orbis Search.
   // The renderer's browser view: where Chromium's window goes inside the Orbis window (see chromium/embed.ts).
-  ipcMain.on('chromium:embed-region', (_event, region: unknown) => {
+  listen('chromium:embed-region', (_event, region: unknown) => {
     const r = parseRegion(region)
     if (r) embedController.setRegion(r)
   })
@@ -1996,7 +2030,7 @@ ${summaryBlock(summary)}`
    * collapsing its browser view -- as a separate window it cannot, because the window belongs to this process, so
    * without this there was no way back except through the browser.
    */
-  ipcMain.handle('chromium:return-to-chat', () => {
+  handle('chromium:return-to-chat', () => {
     if (!embeddedBrowser) showBrowserWindow(false)
     /**
      * Both halves, from one call.
@@ -2009,7 +2043,7 @@ ${summaryBlock(summary)}`
     return { ok: true }
   })
 
-  ipcMain.handle('chromium:open', async (_event, input: unknown, options: unknown) => {
+  handle('chromium:open', async (_event, input: unknown, options: unknown) => {
     if (!chromiumBrowser) return { ok: false, detail: 'The Orbis browser (Chromium) is not installed on this computer.' }
     const o = (options && typeof options === 'object' ? options : {}) as { newTab?: unknown; more?: unknown }
     try {
@@ -2073,7 +2107,7 @@ ${summaryBlock(summary)}`
     })
   }
   const specializedSearch = new SearxngProvider({ endpoint: endpointFromEnvironment(), fetchFn: (url, init) => net.fetch(url, init) })
-  ipcMain.handle('search:run', async (_e, query: unknown, vertical: unknown) => {
+  handle('search:run', async (_e, query: unknown, vertical: unknown) => {
     const words = typeof query === 'string' ? query : ''
     const asked = typeof vertical === 'string' ? vertical : 'all'
     // Orbis's own Pages, answered from the register. It reaches no network, so it is the one tab that still works
@@ -2100,24 +2134,24 @@ ${summaryBlock(summary)}`
     if (isSpecialized(asked)) return specializedSearch.search(asked, words)
     return runSearch({ query: words, vertical: 'all', fetchFn: (url, init) => net.fetch(url, init) })
   })
-  ipcMain.handle('search:specialized-health', () => specializedSearch.check())
+  handle('search:specialized-health', () => specializedSearch.check())
 
   // Updating Orbis. Everything the window and Orion can ask goes through the one manager.
-  ipcMain.handle('update:status', () => (updates ? { status: updates.getStatus(), settings: updates.getSettings(), history: updates.getUpdateHistory() } : null))
-  ipcMain.handle('update:check', () => updates?.checkForUpdates() ?? null)
-  ipcMain.handle('update:download', () => updates?.downloadUpdate() ?? null)
-  ipcMain.handle('update:cancel-download', () => {
+  handle('update:status', () => (updates ? { status: updates.getStatus(), settings: updates.getSettings(), history: updates.getUpdateHistory() } : null))
+  handle('update:check', () => updates?.checkForUpdates() ?? null)
+  handle('update:download', () => updates?.downloadUpdate() ?? null)
+  handle('update:cancel-download', () => {
     updates?.cancelDownload()
     return updates?.getStatus() ?? null
   })
-  ipcMain.handle('update:restart-and-update', () => updates?.restartAndUpdate() ?? null)
-  ipcMain.handle('update:settings', (_e, patch: unknown) => updates?.setSettings((patch ?? {}) as Parameters<UpdateManager['setSettings']>[0]) ?? null)
+  handle('update:restart-and-update', () => updates?.restartAndUpdate() ?? null)
+  handle('update:settings', (_e, patch: unknown) => updates?.setSettings((patch ?? {}) as Parameters<UpdateManager['setSettings']>[0]) ?? null)
 
   /**
    * The licences of everything Orbis is built from, generated at build time from what is actually installed. Most of
    * them require their text to travel with the app, so this is read from the file rather than written by hand.
    */
-  ipcMain.handle('app:notices', async () => {
+  handle('app:notices', async () => {
     const file = app.isPackaged ? join(process.resourcesPath, 'notices.json') : join(app.getAppPath(), 'resources', 'notices.json')
     try {
       return JSON.parse(await fs.readFile(file, 'utf8')) as unknown
@@ -2126,7 +2160,7 @@ ${summaryBlock(summary)}`
     }
   })
   /** The Electron and Chromium licences, which ship as files beside Orbis rather than inside it. */
-  ipcMain.handle('app:licence-file', async (_event, which: 'electron' | 'chromium') => {
+  handle('app:licence-file', async (_event, which: 'electron' | 'chromium') => {
     const beside = app.isPackaged ? join(process.resourcesPath, '..') : join(app.getAppPath(), 'node_modules', 'electron', 'dist')
     const name = which === 'chromium' ? ['LICENSES.chromium.html', 'LICENSES.chromium.html'] : ['LICENSE.electron.txt', 'LICENSE']
     for (const candidate of name) {
@@ -2160,30 +2194,30 @@ ${summaryBlock(summary)}`
   }
   // A shortcut is drawn on the new tab page and opened with one click, so only a web page may be one: a `file:` or
   // `javascript:` shortcut would be a line of somebody else's choosing waiting under a tile with a friendly name.
-  ipcMain.handle('shortcuts:add', (_event, name: unknown, url: unknown) => {
+  handle('shortcuts:add', (_event, name: unknown, url: unknown) => {
     if (!browserLibrary || typeof url !== 'string' || !isHttpUrl(url)) return null
     const added = browserLibrary.addShortcut(typeof name === 'string' ? name : '', url)
     if (added) loadShortcutIcon(added.id)
     return added
   })
-  ipcMain.handle('shortcuts:update', (_event, id: unknown, name: unknown, url: unknown) => {
+  handle('shortcuts:update', (_event, id: unknown, name: unknown, url: unknown) => {
     if (!browserLibrary || typeof id !== 'string' || typeof url !== 'string' || !isHttpUrl(url)) return null
     const updated = browserLibrary.updateShortcut(id, typeof name === 'string' ? name : '', url)
     if (updated && updated.icon === undefined) loadShortcutIcon(id)
     return updated
   })
   // The window telling Orbis what the computer asks for. It can only ever set a flag.
-  ipcMain.handle('experience:system-motion', (_event, still: unknown) => {
+  handle('experience:system-motion', (_event, still: unknown) => {
     systemAsksForStillness = still === true
   })
-  ipcMain.handle('shortcuts:remove', (_event, id: unknown) => {
+  handle('shortcuts:remove', (_event, id: unknown) => {
     if (typeof id === 'string') browserLibrary?.removeShortcut(id)
   })
-  ipcMain.handle('shortcuts:refresh-icon', (_event, id: unknown) => {
+  handle('shortcuts:refresh-icon', (_event, id: unknown) => {
     if (typeof id === 'string') loadShortcutIcon(id)
   })
 
-  ipcMain.handle('image:edit', async (_event, request: ImageEditRequest): Promise<ImageEditResult> => {
+  handle('image:edit', async (_event, request: ImageEditRequest): Promise<ImageEditResult> => {
     const instruction = String(request?.instruction ?? '').trim().slice(0, 2000)
     if (!instruction) throw new Error('Describe the edit first.')
     const prompt = String(request?.prompt ?? '').trim().slice(0, 1000)
@@ -2233,9 +2267,9 @@ ${summaryBlock(summary)}`
    * can act on rather than as a string it has to guess at, and neither the audio nor the words are kept or logged.
    */
   // Whether Orbis is the browser Windows opens links with. Windows decides; Orbis asks and reports what it is told.
-  ipcMain.handle('default-browser:state', () => readDefaultBrowser())
-  ipcMain.handle('default-browser:request', () => requestDefaultBrowser())
-  ipcMain.handle('default-browser:settings', () => openDefaultAppsSettings())
+  handle('default-browser:state', () => readDefaultBrowser())
+  handle('default-browser:request', () => requestDefaultBrowser())
+  handle('default-browser:settings', () => openDefaultAppsSettings())
 
   // One transcription in flight at a time is all a single window ever asks for; a second call cancels the first's
   // process the same way the window cancelling a session would, so nothing is left running for words nobody wants.
@@ -2444,7 +2478,9 @@ if (!app.requestSingleInstanceLock()) {
     // history, bookmarks and downloads are copied into it on demand.
     browserLibrary = new BrowserLibrary(app.getPath('userData'))
     await browserLibrary.load()
-    registerLibraryIpc(browserLibrary, () => mainWindow, () => chromiumBrowser?.current ?? null)
+    // `liveWindow`, not the raw `mainWindow`: this was the only one of the registration sites passing the
+    // mutable handle, so the library's own check could read `webContents` off a window that had closed.
+    registerLibraryIpc(browserLibrary, liveWindow, () => chromiumBrowser?.current ?? null)
 
     browserControl = setupBrowserControl({
       getWindow: () => liveWindow(),
@@ -4027,10 +4063,9 @@ ${page.text}`, { howMany: 6 })
     // The security log: read and cleared, and nothing else. There is no channel that writes one -- events are recorded by
     // the code that does the thing, so a window cannot put an event in the log that did not happen.
     ipcMain.handle('security:log', accountCall((id) => securityLog.all(id)))
-    ipcMain.handle('security:clear-log', accountCall(async (id) => {
-      await securityLog.clear(id)
-      return { ok: true }
-    }))
+    // What the store actually managed, not `{ ok: true }` regardless. A log file something else is holding open stays
+    // where it is, and a window told the clear worked shows an empty list that fills itself back in at the next launch.
+    ipcMain.handle('security:clear-log', accountCall(async (id) => ({ ok: await securityLog.clear(id) })))
 
     ipcMain.handle('vault:status', vaultCall((id) => vault.status(id)))
     ipcMain.handle('vault:question', vaultCall((id) => vault.recoveryQuestion(id)))

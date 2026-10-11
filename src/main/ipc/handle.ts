@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import type { IpcMainInvokeEvent } from 'electron'
+import type { IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 
 import { failureFor, fromOrbisWindow, type WindowSource } from './senderCheck.ts'
 
@@ -25,7 +25,15 @@ import { failureFor, fromOrbisWindow, type WindowSource } from './senderCheck.ts
  * already.
  */
 
-export type PlainHandler = (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown
+/**
+ * A handler's arguments are its own business.
+ *
+ * Generic rather than `...args: unknown[]`, because a hundred handlers in this codebase declare what they expect --
+ * `(event, update: SettingsUpdate)` -- and validate it themselves. `unknown[]` refuses all of those, and widening
+ * them to `unknown` to satisfy this wrapper would mean rewriting the validation at every one. Electron types its
+ * own handler the same way, for the same reason.
+ */
+export type PlainHandler<A extends unknown[] = unknown[]> = (event: IpcMainInvokeEvent, ...args: A) => unknown
 
 /**
  * Channels that answer for the whole application rather than for one profile.
@@ -33,11 +41,27 @@ export type PlainHandler = (event: IpcMainInvokeEvent, ...args: unknown[]) => un
  * Synchronous and throwing: a refusal is an exception, which `ipcRenderer.invoke` turns into a rejected promise on
  * the other side. Nothing is caught here, so a handler's own error stays the handler's own business.
  */
-export function plainHandle(o: WindowSource): (channel: string, handler: PlainHandler) => void {
+export function plainHandle(o: WindowSource): <A extends unknown[]>(channel: string, handler: PlainHandler<A>) => void {
   return (channel, handler) => {
     ipcMain.handle(channel, (event, ...args) => {
       if (!fromOrbisWindow(o, event)) throw new Error('Not allowed.')
-      return handler(event, ...args)
+      return handler(event, ...(args as never))
+    })
+  }
+}
+
+/**
+ * One-way messages -- `ipcMain.on` rather than `ipcMain.handle`.
+ *
+ * There is no answer to withhold here, so a message from somewhere else is simply dropped. Silently: there is
+ * nobody to tell, because nothing is waiting for a reply, and a console line per message would be a way for an
+ * unwanted sender to fill the log.
+ */
+export function plainListen(o: WindowSource): <A extends unknown[]>(channel: string, handler: (event: IpcMainEvent, ...args: A) => void) => void {
+  return (channel, handler) => {
+    ipcMain.on(channel, (event, ...args) => {
+      if (!fromOrbisWindow(o, event)) return
+      handler(event, ...(args as never))
     })
   }
 }
@@ -52,7 +76,7 @@ export interface ProfileHandleOptions extends WindowSource {
   failure?(err: unknown): unknown
 }
 
-export type ProfileHandler = (profileId: string, ...args: unknown[]) => unknown
+export type ProfileHandler<A extends unknown[] = unknown[]> = (profileId: string, ...args: A) => unknown
 
 /**
  * Channels that answer for the active profile.
@@ -60,12 +84,12 @@ export type ProfileHandler = (profileId: string, ...args: unknown[]) => unknown
  * The profile is read at the moment of the call, not once when the handler is registered: somebody may switch
  * profile at any time, and a captured id would answer the new profile's question out of the old profile's data.
  */
-export function profileHandle(o: ProfileHandleOptions): (channel: string, run: ProfileHandler) => void {
+export function profileHandle(o: ProfileHandleOptions): <A extends unknown[]>(channel: string, run: ProfileHandler<A>) => void {
   return (channel, run) => {
     ipcMain.handle(channel, async (event: IpcMainInvokeEvent, ...args: unknown[]) => {
       if (!fromOrbisWindow(o, event)) throw new Error('Not allowed.')
       try {
-        return await run(await o.profileId(), ...args)
+        return await run(await o.profileId(), ...(args as never))
       } catch (err) {
         const own = o.failure?.(err)
         return own === undefined ? failureFor(err) : own

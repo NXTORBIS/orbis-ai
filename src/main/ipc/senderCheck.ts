@@ -1,4 +1,4 @@
-import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
+import type { BrowserWindow, IpcMainEvent, IpcMainInvokeEvent } from 'electron'
 
 /**
  * Who is allowed to ask, and what is said back when something goes wrong.
@@ -25,7 +25,7 @@ export interface WindowSource {
  * occurred in the main process" on screen from the permission handlers. Twelve of the thirteen copies were one
  * closing window away from it.
  */
-export function fromOrbisWindow(o: WindowSource, event: Pick<IpcMainInvokeEvent, 'sender'>): boolean {
+export function fromOrbisWindow(o: WindowSource, event: Pick<IpcMainInvokeEvent | IpcMainEvent, 'sender'>): boolean {
   const win = o.getWindow()
   if (!win || win.isDestroyed()) return false
   return event.sender === win.webContents

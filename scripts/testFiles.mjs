@@ -80,6 +80,7 @@ export const TEST_FILES = [
   'src/main/platform.test.ts',
   'src/main/portability.test.ts',
   'src/main/ipc/senderCheck.test.ts',
+  'src/main/senderChecked.test.ts',
   'src/main/ipcMapping.test.ts',
   'src/main/transport.test.ts',
   'src/main/orionContract.test.ts',
