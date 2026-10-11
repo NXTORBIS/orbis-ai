@@ -1,0 +1,244 @@
+/* ----------------------------------------------------------------  the address bar's dropdown
+
+   The list of predictions under the address bar: everything named `omni-`, and nothing else.
+
+   It used to be spread between the image editor's stylesheet and the one holding scrollbars and animations, which
+   is where a rule ends up when a file grows past the point of having a subject. Nothing about it was wrong; it was
+   simply impossible to find, and a row's layout was three screens away from the card it sits in.
+
+   The layout is the one the Electron browser's dropdown had, which is the shape people already know from every
+   other address bar: a card hanging just below the box, rows with a fixed icon column on the left, and two stacked
+   lines of text -- what the thing is called, and where it actually goes.
+
+   It was one line before. The title and the address sat side by side on a single row, sharing the width, so a long
+   title pushed the address out of sight and a long address squeezed the title. Two lines gives each the full width
+   and means the eye reads down a column of names rather than along a row of pairs. */
+
+/* ---------------------------------------------------------------- the card */
+
+.omni.popover {
+  /* Hanging below the box with a real gap. It used to be `calc(100% - 3px)`, overlapping the bar by three pixels,
+     which reads as one shape with a seam rather than as a card the bar has opened. */
+  top: calc(100% + 6px);
+  right: 0;
+  left: 0;
+  z-index: 70;
+  gap: 2px;
+  max-height: min(70vh, 560px);
+  padding: 6px;
+  overflow-y: auto;
+  border-radius: 10px;
+  /* The light leak: a hairline that is brighter along the top edge, where a light above the window would catch it.
+     `--glass-border` is the same hairline every other glass surface in Orbis uses, so this is the family's border
+     with one edge lifted rather than a border of its own. */
+  border: 1px solid var(--glass-border);
+  border-top-color: var(--line-strong);
+  /* Dense blur, and saturation with it: blurring alone leaves what is behind looking grey, because averaging
+     colours together pulls them towards the middle. */
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  /* Two shadows, not one: a wide soft dispersion that separates the card from the page, and a tight dark one
+     directly under it that stops the card floating. */
+  box-shadow:
+    0 24px 60px -12px rgba(0, 0, 0, 0.55),
+    0 4px 14px -4px rgba(0, 0, 0, 0.4);
+}
+
+/* A heading over a group of rows -- Recent, Bookmarks -- shown only when nothing has been typed. */
+.omni-section {
+  padding: 8px 10px 4px;
+  color: var(--faint);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* ---------------------------------------------------------------- a row */
+
+.omni-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  /* 12px above and below the text. A row of two lines is tall enough already; the padding is what stops the list
+     reading as a solid block of text with no gaps for the eye to rest in. */
+  padding: 12px 8px 12px 11px;
+  border-radius: 8px;
+  color: var(--text);
+  cursor: pointer;
+  /* Instant, deliberately. A row that fades in as the pointer crosses it is a row that is still fading when the
+     pointer has moved on, and holding the arrow key down through a long list leaves a trail of half-lit rows. */
+  transition: none;
+}
+
+.omni-item:hover {
+  background: var(--hover);
+}
+
+/* The keyboard's place in the list, which has to be legible without a pointer anywhere near it -- so it is a fill
+   AND a bar down the leading edge rather than a slightly different grey. */
+.omni-item.selected {
+  background: var(--cyan-fill);
+  box-shadow: inset 2px 0 0 var(--cyan);
+}
+
+/* ---------------------------------------------------------------- the icon column */
+
+.omni-icon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  /* Fixed, so every title in the list starts at the same place. A column that sized itself to its contents would
+     leave the names stepping in and out as the icons changed between a favicon, a clock and a magnifying glass. */
+  width: 18px;
+  height: 18px;
+  color: var(--muted);
+}
+
+.omni-item.selected .omni-icon {
+  color: var(--cyan);
+}
+
+.omni-favicon {
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  object-fit: contain;
+}
+
+/* ---------------------------------------------------------------- the two lines */
+
+.omni-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  /* Without this a flex child refuses to shrink below its content, so a long address widens the row instead of
+     being clipped and the whole card scrolls sideways. */
+  min-width: 0;
+}
+
+/* What the thing is called. */
+.omni-main {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.25;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* The part of the title that matches what has been typed so far, dimmed so the REST of it stands out -- the eye
+   needs to find what it has not typed yet, not what it has. */
+.omni-main .omni-typed {
+  color: var(--muted-strong);
+  font-weight: 500;
+}
+
+.omni-main b {
+  color: var(--text);
+  font-weight: 700;
+}
+
+/* Where it goes: the address, or the words under a suggestion. Quieter and smaller, so the column of titles reads
+   as the list and this reads as the detail under each one. */
+.omni-detail {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 400;
+  line-height: 1.25;
+  white-space: nowrap;
+  /* Clipped at the END rather than the middle. An address is read from the left -- the site first, then the path --
+     so the beginning is the part worth keeping. */
+  text-overflow: ellipsis;
+}
+
+/* ---------------------------------------------------------------- what sits at the end of a row */
+
+.omni-star {
+  flex-shrink: 0;
+  color: var(--cyan);
+  fill: currentColor;
+}
+
+.omni-remove {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  /* Hidden rather than absent, so the row does not change width when the pointer arrives. */
+  visibility: hidden;
+}
+
+.omni-item:hover .omni-remove,
+.omni-item.selected .omni-remove {
+  visibility: visible;
+}
+
+.omni-remove:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+/* ---------------------------------------------------------------- the foot */
+
+.omni-foot {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  margin-top: 4px;
+  padding: 7px 8px 3px;
+  border-top: 1px solid var(--line);
+}
+
+.omni-foot button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.omni-foot button:hover {
+  color: var(--text);
+}
+
+/* The keys and what they do, along the bottom. Said rather than left to be discovered: Ctrl+Enter asking Orion is
+   not something anybody guesses. */
+.omni-keys {
+  margin-right: auto;
+  padding: 3px 6px;
+  overflow: hidden;
+  color: var(--faint);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.omni-keys kbd {
+  margin-left: 10px;
+  padding: 1px 5px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--pill-bg);
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.omni-keys kbd:first-child {
+  margin-left: 0;
+}
+
+/* Pop-ups over the top row must take clicks: Windows treats a drag region underneath as the title bar otherwise. */
+.omni {
+  -webkit-app-region: no-drag;
+}

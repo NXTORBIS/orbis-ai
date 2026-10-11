@@ -25,7 +25,25 @@ export function useDropdownOpen(active: boolean): void {
  * (including the window's drag areas), inside a browser page (which the window's document never sees, so the main
  * process reports it), or outside Orbis. Escape dismisses too.
  */
-export function useDismiss(ref: RefObject<HTMLElement | null> | RefObject<HTMLElement | null>[], active: boolean, onDismiss: () => void): void {
+export interface DismissOptions {
+  /**
+   * Whether Escape dismisses too. True unless said otherwise.
+   *
+   * The address bar sets it false, because Escape there is a chain rather than a single answer: the first press
+   * clears the keyboard's place in the list and the inline completion, the second puts the list away, and the
+   * third gives up on what was typed. Binding Escape here as well made the first press do all three at once --
+   * which is not a small difference, because somebody pressing Escape to get rid of a highlighted suggestion does
+   * not want the list they were reading to vanish with it.
+   */
+  escape?: boolean
+}
+
+export function useDismiss(
+  ref: RefObject<HTMLElement | null> | RefObject<HTMLElement | null>[],
+  active: boolean,
+  onDismiss: () => void,
+  options: DismissOptions = {}
+): void {
   const dismissRef = useRef(onDismiss)
   dismissRef.current = onDismiss
   // A panel rendered at the top of the HUD is not inside its own button, so a dropdown can name every part of itself.
@@ -43,13 +61,17 @@ export function useDismiss(ref: RefObject<HTMLElement | null> | RefObject<HTMLEl
     const onKeyDown = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') dismiss()
     }
+    const wantsEscape = options.escape !== false
     document.addEventListener('mousedown', onMouseDown)
-    document.addEventListener('keydown', onKeyDown)
+    if (wantsEscape) document.addEventListener('keydown', onKeyDown)
     window.addEventListener('blur', dismiss)
     return () => {
       document.removeEventListener('mousedown', onMouseDown)
-      document.removeEventListener('keydown', onKeyDown)
+      if (wantsEscape) document.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('blur', dismiss)
     }
+    // `options.escape` is read rather than watched: a caller that changed its mind mid-open would be a caller
+    // describing two different controls, and every one of them passes a literal.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active])
 }

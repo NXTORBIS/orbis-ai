@@ -108,6 +108,25 @@ function useCache(): { get(key: string): string[] | undefined; headStart(key: st
 }
 
 /**
+ * How long typing has to stop before the web's own autocomplete is asked.
+ *
+ * Every keystroke would otherwise be a request. 150ms is about the gap between two letters typed quickly, so a word
+ * typed straight through asks once at the end of it rather than once per letter -- and the cache below means
+ * backspacing over a word somebody just typed answers from memory instead of asking again.
+ */
+const TYPING_PAUSE = 150
+
+/**
+ * The same, for Orion.
+ *
+ * Longer on purpose, and not a value to bring into line with the one above. The web's autocomplete is a cheap
+ * public endpoint; this is a model, and a model asked every 150ms is a model asked about half-typed words nobody
+ * meant. Three letters minimum, and a longer pause, so it answers the question somebody has actually finished
+ * forming.
+ */
+const ORION_PAUSE = 450
+
+/**
  * Fetches predictions for the latest text after a pause. Only the newest request may update the list, so a slow
  * answer for "a" never replaces the one for "ai m".
  */
@@ -266,6 +285,14 @@ export default function UrlBar({
   const [recordingWorkflow, setRecordingWorkflow] = useState(false)
   const workflowsRef = useRef<HTMLDivElement>(null)
   const workflowsPanelRef = useRef<HTMLDivElement>(null)
+  /**
+   * The address bar and its dropdown together, for the click that happens outside both.
+   *
+   * One ref over the form rather than two, because the list is rendered inside it: a click on a suggestion must not
+   * read as a click outside the bar, and a click on the bar's own buttons must not close the list underneath the
+   * press that was about to use it.
+   */
+  const omniRef = useRef<HTMLFormElement>(null)
   /** Half-typed text per tab, kept until it is submitted, dismissed with Esc, or the tab navigates elsewhere. */
   const drafts = useRef(new Map<string, string>())
 
@@ -391,8 +418,8 @@ export default function UrlBar({
     }
   }, [editing, personalized])
 
-  const web = usePredictions(typing ? typed : '', searchSuggestions, 90, 1, fetchWeb)
-  const orion = usePredictions(typing ? typed : '', searchSuggestions, 450, 3, fetchOrion)
+  const web = usePredictions(typing ? typed : '', searchSuggestions, TYPING_PAUSE, 1, fetchWeb)
+  const orion = usePredictions(typing ? typed : '', searchSuggestions, ORION_PAUSE, 3, fetchOrion)
 
   const sources = useMemo(
     () => ({
@@ -553,6 +580,25 @@ export default function UrlBar({
   }
 
   const listOpen = open && items.length > 0
+  /*
+   * Clicking anywhere else puts the list away.
+   *
+   * It never did. The list stayed open over whatever had just been clicked -- a message, a button, another part of
+   * the window -- until something else happened to close it, which is the one behaviour every dropdown is expected
+   * to have and the only one of the five this bar was missing. Measured in the running window: typed "exa", pressed
+   * the page, and the eight rows were still there.
+   *
+   * `useDismiss` also covers the window losing focus, which is the same situation arriving a different way: Orbis
+   * going behind something else should not leave a list hanging over the page.
+   *
+   * Only the list is put away, not the text. Somebody who clicks away mid-sentence and comes back expects to find
+   * what they had typed, so the draft stays and `close()` -- which throws it away -- is for Escape and submitting.
+   *
+   * The click only, not Escape. The input already owns Escape and answers it as a chain: the first press clears
+   * the keyboard's place in the list and the inline completion, the second puts the list away, the third gives up
+   * on what was typed. Letting this bind it too made one press do all three.
+   */
+  useDismiss(omniRef, listOpen, () => setOpen(false), { escape: false })
   useDropdownOpen(listOpen)
 
   // ---------------------------------------------------------------- Browser Control Layer: the address bar
@@ -701,6 +747,7 @@ export default function UrlBar({
   return (
     <div className={`url-strip${loading ? ' loading' : ''}`}>
       <form
+        ref={omniRef}
         className="url-form"
         role="search"
         onSubmit={(e) => {

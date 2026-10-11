@@ -304,9 +304,9 @@ html[data-dropdown-open] * {
   -webkit-app-region: no-drag !important;
 }
 
-/* Pop-ups over the top row must take clicks: Windows treats a drag region underneath as the title bar otherwise. */
+/* Pop-ups over the top row must take clicks: Windows treats a drag region underneath as the title bar otherwise.
+   The address bar's dropdown says the same thing for itself, in `39-the-address-bar-dropdown.css`. */
 .tab-edit,
-.omni,
 .orion-answer {
   -webkit-app-region: no-drag;
 }
