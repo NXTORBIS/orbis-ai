@@ -118,17 +118,105 @@ body { font: 400 13px/1.45 var(--font-sans); color: var(--text); }
   isolation: isolate;
 }
 
-/* The lit face: light from the upper left, falling away to a dark limb. */
+/*
+ * Two angles the browser can actually animate.
+ *
+ * A custom property is a string unless it is registered, and a string cannot be interpolated -- an animation on an
+ * unregistered `--angle` jumps from one keyframe to the next with nothing in between. Registered as `<angle>`,
+ * they tween, which is what lets the light turn smoothly rather than snap round.
+ */
+@property --orb-sweep {
+  syntax: '<angle>';
+  inherits: true;
+  initial-value: 0deg;
+}
+
+@property --orb-tilt {
+  syntax: '<angle>';
+  inherits: true;
+  initial-value: 0deg;
+}
+
+/* Everything inside the ball shares the two angles, so one timeline turns the light on every layer at once rather
+   than each layer keeping its own clock and slowly drifting out of step with the others. */
+.orb-body {
+  animation: orb-light 14s linear infinite;
+}
+
+/* The lit face: light from the upper left, falling away to a dark limb, and slowly going round. */
 .orb-face {
   position: absolute;
   inset: 0;
   border-radius: 50%;
   /* Dark glass. The first version lit this far too brightly and the Orb came out as a teal disc with the mark lost
      on top of it -- the body has to stay dark for the mark to read, and for the rim and the highlight to be the
-     things the eye finds. */
+     things the eye finds.
+
+     These numbers are not to be lightened. Raised once to make the sphere "read" better and the face came out a
+     flat teal disc: the colours are semi-transparent over a dark page, so brightening the near stop and pushing
+     the dark one further out averages the whole thing to one muddy tone with no shading left in it.
+
+     Three gradients from three directions: the key light up and to the left, a cool bounce from below right, and
+     a wide linear wash on `--orb-tilt` that sweeps across as the light turns. The wash is what stops the face
+     reading as a fixed painted-on shine. */
   background:
     radial-gradient(circle at 34% 28%, rgba(98, 190, 220, 0.22), rgba(12, 26, 36, 0.86) 42%, rgba(4, 8, 12, 0.98) 76%),
-    radial-gradient(circle at 72% 84%, rgba(63, 216, 255, 0.12), transparent 52%);
+    radial-gradient(circle at 72% 84%, rgba(63, 216, 255, 0.12), transparent 52%),
+    linear-gradient(var(--orb-tilt), rgba(130, 220, 255, 0.1), transparent 46%, rgba(130, 220, 255, 0.07));
+}
+
+/*
+ * The light it throws past its own edge.
+ *
+ * Underneath everything and slightly larger than the ball, so what shows is only the part beyond the edge. It
+ * breathes on its own slower clock, which is what makes the Orb look alive while it is sitting still.
+ */
+.orb-halo {
+  position: absolute;
+  inset: -16%;
+  border-radius: 50%;
+  /* Falls away fast. At a third of the way out it is already almost gone, which is what makes it light coming off
+     the ball rather than a second, larger ball behind it -- the first version read as a teal ring around a dark
+     disc, because the glow was still at a third of its strength where the ball's own edge was. */
+  background: radial-gradient(circle closest-side, rgba(63, 216, 255, 0.34) 0 78%, rgba(63, 216, 255, 0.13) 88%, transparent 100%);
+  /* Cut out where the ball covers it.
+     The face is deliberately semi-transparent -- that is what makes it glass rather than paint -- so without this
+     the glow shines straight THROUGH the ball and the Orb reads as a big teal disc with a darker circle inside
+     it, which is how it came out twice.
+     **`closest-side`, and that is the whole trick.** A radial-gradient sizes itself to the FARTHEST CORNER by
+     default, so in a square box 100% is the half-diagonal -- 1.41 times the half-width. Percentages written
+     against the obvious reading are therefore about 30% too small, which is why two attempts at this number both
+     left the glow sitting over the ball. `closest-side` makes 100% the half-width, so the numbers below mean what
+     they look like they mean.
+
+     The ball fills the middle 76% of this box (it is inset by -16% on each side), so everything inside 76% of the
+     radius is cut away and what is left is light past the edge. */
+  -webkit-mask: radial-gradient(circle closest-side, transparent 0 75.5%, #000 78%);
+  mask: radial-gradient(circle closest-side, transparent 0 75.5%, #000 78%);
+  opacity: 0.6;
+  pointer-events: none;
+  animation: orb-breathe 6.5s ease-in-out infinite;
+}
+
+/*
+ * The inside of the edge, in shadow.
+ *
+ * An inset shadow rather than another gradient, because this is the one thing a flat disc cannot fake: a surface
+ * curving away from you is darker at the edge than a circle with a dark ring painted on it, and the difference is
+ * that the shadow sits *under* the rim light rather than beside it.
+ */
+.orb-depth {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  /* In percentages of the ball, not pixels: at a fixed 10px this was a hairline on a 30px Orb and a thick black
+     band on a large one. Three shadows -- the limb all the way round, the deeper shadow away from the light, and a
+     faint bounce back towards it. */
+  box-shadow:
+    inset 0 0 6% 1.5% rgba(0, 0, 0, 0.62),
+    inset -2% -3.5% 8% rgba(0, 0, 0, 0.5),
+    inset 2% 2.5% 7% rgba(140, 215, 240, 0.14);
+  pointer-events: none;
 }
 
 /* The rim: a thin bright edge, brightest where the light grazes it. A ring drawn with a mask rather than a border,
@@ -137,19 +225,58 @@ body { font: 400 13px/1.45 var(--font-sans); color: var(--text); }
   position: absolute;
   inset: 0;
   border-radius: 50%;
+  /* `from var(--orb-sweep)`: the bright part of the ring travels round the edge as the angle turns, which is one
+     light moving rather than a ring that pulses in place. */
   background: conic-gradient(
-    from 210deg,
+    from calc(210deg + var(--orb-sweep)),
     rgba(160, 240, 255, 0.85),
     rgba(63, 216, 255, 0.35) 28%,
     rgba(255, 255, 255, 0.08) 52%,
     rgba(63, 216, 255, 0.3) 76%,
     rgba(160, 240, 255, 0.85)
   );
-  /* A hairline, in percent rather than pixels. At 1.2px the ring was a hairline on a 30px Orb and a thick teal band
-     on a large one, because the mask did not scale with the element. 4% is the same edge at every size. */
-  -webkit-mask: radial-gradient(circle, transparent 0 46%, #000 46.5%);
-  mask: radial-gradient(circle, transparent 0 46%, #000 46.5%);
-  opacity: 0.75;
+  /* A hairline, in percent rather than pixels: at 1.2px the ring was a hairline on a 30px Orb and a thick band on
+     a large one, because the mask did not scale with the element.
+
+     **`closest-side`, which this was missing.** A radial-gradient sizes itself to the farthest CORNER unless told
+     otherwise, and in a square box that is 1.41 times the half-width -- so "46%" was cutting at 65% of the ball's
+     radius and the "hairline" was a bright band a third of the radius wide. That band, with the dark face showing
+     inside it, is why the Orb read as a dark disc inside a lit ring rather than as a sphere. With `closest-side`
+     the numbers mean what they say, and 92% to 94% is the edge at every size. */
+  -webkit-mask: radial-gradient(circle closest-side, transparent 0 92%, #000 94%);
+  mask: radial-gradient(circle closest-side, transparent 0 92%, #000 94%);
+  opacity: 0.85;
+}
+
+/*
+ * What the glass does to the light coming through it.
+ *
+ * A band across the ball in `screen`, which adds light rather than painting over it -- so it brightens the mark
+ * where it crosses it and disappears where the body is already dark, the way a curved transparent thing bends
+ * what is behind it. Painted normally it would be a grey stripe lying on top of everything.
+ *
+ * Masked to a circle so it stops at the edge, and turned by the same `--orb-sweep` as the rim, so the band and the
+ * bright part of the edge are the same light arriving at two places.
+ */
+.orb-refract {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: linear-gradient(
+    calc(126deg + var(--orb-sweep)),
+    transparent 28%,
+    rgba(170, 235, 255, 0.16) 42%,
+    rgba(255, 255, 255, 0.26) 50%,
+    rgba(120, 215, 255, 0.14) 58%,
+    transparent 72%
+  );
+  mix-blend-mode: screen;
+  /* `closest-side` for the same reason as the rim above: without it this stopped at 69% of the ball and the band
+     ended in mid-air instead of at the edge. */
+  -webkit-mask: radial-gradient(circle closest-side, #000 0 98%, transparent 100%);
+  mask: radial-gradient(circle closest-side, #000 0 98%, transparent 100%);
+  opacity: 0.7;
+  pointer-events: none;
 }
 
 /* The specular highlight, above the mark. Small, soft, and off-centre -- the thing that says "sphere" more than any
@@ -165,6 +292,9 @@ body { font: 400 13px/1.45 var(--font-sans); color: var(--text); }
      surface, and it flattened everything under it. */
   background: radial-gradient(ellipse at 42% 38%, rgba(255, 255, 255, 0.4), rgba(220, 245, 255, 0.08) 58%, transparent 74%);
   pointer-events: none;
+  /* Its own slow pulse, out of step with the halo's on purpose: two things breathing in time read as one thing
+     flashing. */
+  animation: orb-gloss-pulse 4.5s ease-in-out infinite;
 }
 
 .browser-orb:focus-visible {
@@ -675,6 +805,57 @@ body { font: 400 13px/1.45 var(--font-sans); color: var(--text); }
   }
 }
 
+/*
+ * One turn of the light, shared by every layer inside the ball.
+ *
+ * `linear` and a full 360 on both angles, so it loops without a seam -- an eased rotation visibly slows at the
+ * joint, and 0deg to 360deg is the same picture at both ends.
+ */
+@keyframes orb-light {
+  to {
+    --orb-sweep: 360deg;
+    --orb-tilt: 360deg;
+  }
+}
+
+/* The halo breathing: brighter and a little wider, then back. Scale rather than a changing blur, which would
+   repaint the gradient on every frame. */
+@keyframes orb-breathe {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.78;
+    transform: scale(1.06);
+  }
+}
+
+/* The highlight, going soft and sharp again. Small numbers on purpose: a specular that visibly throbs is a lamp,
+   not a reflection. */
+@keyframes orb-gloss-pulse {
+  0%,
+  100% {
+    opacity: 0.85;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
+
+@keyframes orb-glint {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
 @keyframes orb-spin {
   to {
     transform: rotate(360deg);
@@ -704,32 +885,68 @@ body { font: 400 13px/1.45 var(--font-sans); color: var(--text); }
 .orb-sources a { color: var(--accent); text-decoration: none; }
 .orb-sources a:hover { text-decoration: underline; }
 
-/* The real mark inside the Orb. It fills the ball rather than sitting in the middle of it, because the artwork is
-   already a ring with its own space around it -- inset twice and it reads as a dot. */
-/* The real artwork, sitting inside the sphere rather than being the sphere.
-   Smaller than it was: at 86% it filled the disc edge to edge and read as a picture on a circle. At 68% there is
-   body around it, which is what makes the thing look like an object with a mark on it. */
+/*
+ * The mark inside the Orb, drawn rather than photographed.
+ *
+ * It was a 549px PNG in a 22px box. Vector now, so it is sharp at every size and every zoom, carries no file, and
+ * is lit by the same light as the glass around it -- which a picture never could be.
+ *
+ * 72% rather than filling the ball: at 86% it reached the edge and read as a picture on a circle, and the body
+ * around it is what makes the thing look like an object with a mark on it.
+ */
 .orbis-mark {
   position: relative;
   z-index: 1;
   width: 72%;
   height: 72%;
-  object-fit: contain;
+  overflow: visible;
   pointer-events: none;
   user-select: none;
-  -webkit-user-drag: none;
-  /* The artwork is 549px being drawn at about 20. Telling the browser to treat it as a photograph stops the cheap
-     filter it otherwise picks for a downscale that large, which is where the jagged edges came from. */
-  image-rendering: auto;
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55)) drop-shadow(0 0 5px rgba(63, 216, 255, 0.45));
+}
+
+/* The cyan pass over the crossing points, brightening and fading on its own clock. */
+.orbis-mark-glint {
+  animation: orb-glint 3.8s ease-in-out infinite;
 }
 
 .orb-panel-head .orbis-mark { width: 18px; height: 18px; filter: none; }
 
 /* Somebody who has asked for less movement gets a still Orb. It still lights up and still shows the dot; it
    just does not drift or spin. */
+/*
+ * The pointer speeds everything up.
+ *
+ * The same timelines, not different ones: changing the duration of a running animation keeps its progress, so the
+ * Orb accelerates from wherever it had got to rather than snapping back to the start of the loop. Four and a half
+ * seconds a turn instead of fourteen, with the halo and the highlight quickening to match, and the halo widening
+ * -- so the thing leans towards the pointer without moving.
+ */
+.browser-orb:hover .orb-body { animation-duration: 4.5s; }
+/* Brighter, not bigger. Changing `inset` would move the ball's edge away from where the mask cuts and let the
+   glow back over the ball; the breathing scale is what widens it. */
+.browser-orb:hover .orb-halo { animation-duration: 2.6s; opacity: 1; }
+.browser-orb:hover .orb-gloss { animation-duration: 2s; }
+.browser-orb:hover .orbis-mark-glint { animation-duration: 1.6s; }
+.browser-orb:hover .orb-refract { opacity: 0.95; }
+
+/* Open, it settles: the light keeps turning, slower, because a panel is being read and the thing that opened it
+   should stop asking for attention. */
+.browser-orb.open .orb-body { animation-duration: 20s; }
+.browser-orb.open .orb-halo { opacity: 0.7; }
+
+/* Somebody who has asked for less movement gets a still Orb. It still lights up, still shows the mark and still
+   has every layer -- it just does not drift, turn, breathe or pulse. */
 @media (prefers-reduced-motion: reduce) {
   .browser-orb { animation: none; }
+  .browser-orb .orb-body,
+  .browser-orb .orb-halo,
+  .browser-orb .orb-gloss,
+  .browser-orb .orbis-mark-glint,
+  .browser-orb:hover .orb-body,
+  .browser-orb:hover .orb-halo,
+  .browser-orb:hover .orb-gloss,
+  .browser-orb:hover .orbis-mark-glint { animation: none; }
   .browser-orb.working::after,
   .browser-orb.attention::after { animation: none; border-color: var(--accent); opacity: 0.6; }
 }

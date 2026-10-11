@@ -54,30 +54,102 @@ const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls)
 
 // ---------------------------------------------------------------- the mark
 
+const SVG = 'http://www.w3.org/2000/svg'
+
+/** A namespaced element with its attributes, because `setAttribute` eleven times in a row reads as nothing at all. */
+function svg(tag, attrs) {
+  const node = document.createElementNS(SVG, tag)
+  for (const name of Object.keys(attrs)) node.setAttribute(name, String(attrs[name]))
+  return node
+}
+
 /**
- * The Orbis mark: the real logo, not a drawing of it.
+ * The Orbis mark, drawn rather than photographed.
  *
- * This used to be two SVG ellipses -- an approximation of the ring, good enough at 20px and wrong everywhere else. The
- * actual artwork ships with the browser (orbis-ring.png, the same file the new tab page and the Command Center use),
- * so the Orb wears the real mark and there is one logo in Orbis rather than one logo and a sketch of it.
+ * It was `orbis-ring.png` -- 549 pixels of artwork handed to a 22px box, which is a downscale large enough that
+ * the browser picks a cheap filter and the edges come out soft. Worse than soft: it was a *picture*, so it could
+ * not be lit by the same light as the glass it sits in, could not turn with it, and arrived over the network like
+ * any other resource, which is a mark that is briefly absent every time the Orb is built.
  *
- * If the image cannot be loaded the element is left empty rather than falling back to a drawing: an Orb with nothing
- * in it is a loading problem somebody can see, while a lookalike is one nobody would ever notice.
+ * Two rings, tilted against each other, which is what the mark is: a band that crosses itself. Each is an ellipse
+ * stroked with its own gradient running white -> steel -> black along the direction the light falls, so the near
+ * edge is lit and the far edge falls away. A cyan pass over the top catches where the two cross, which is the part
+ * of the real artwork the eye actually remembers.
+ *
+ * Drawn once per Orb and never replaced, so nothing here runs again after the first build.
+ *
+ * `id` has to be unique per mark: two marks on one page -- the Orb and the panel's heading -- would otherwise
+ * share one set of gradient definitions, and the second would take the first's.
  */
+let marksMade = 0
+
 function orbisMark(size) {
-  const img = document.createElement('img')
-  img.className = 'orbis-mark'
-  img.src = 'orbis-ring.png'
-  img.alt = ''
-  // Asked for at the size it is actually drawn, in device pixels. The artwork is 549px wide and was being handed to
-  // a 26px box with no guidance, which is where the softness came from: the browser picks a cheap filter when it is
-  // downscaling that far in one step. Telling it the real box lets it pick the right one.
-  img.width = size
-  img.height = size
-  img.decoding = 'async'
-  img.draggable = false
-  img.addEventListener('error', () => img.remove())
-  return img
+  const id = `orbis-mark-${++marksMade}`
+  const root = svg('svg', { class: 'orbis-mark', viewBox: '0 0 100 100', width: size, height: size, 'aria-hidden': 'true', focusable: 'false' })
+
+  const defs = svg('defs', {})
+
+  /*
+   * One gradient per ring, each running along that ring's own tilt rather than straight down.
+   *
+   * This is the "multi-directional" part and it is the whole illusion: a band crossing itself is lit differently
+   * on each pass, and two bands sharing one top-to-bottom gradient read as a flat pretzel.
+   */
+  const metal = (gradientId, x1, y1, x2, y2) => {
+    const g = svg('linearGradient', { id: gradientId, x1, y1, x2, y2 })
+    g.append(svg('stop', { offset: '0%', 'stop-color': '#f4f8fb' }))
+    g.append(svg('stop', { offset: '26%', 'stop-color': '#9fb3c0' }))
+    g.append(svg('stop', { offset: '54%', 'stop-color': '#2b3a45' }))
+    g.append(svg('stop', { offset: '78%', 'stop-color': '#0b1218' }))
+    g.append(svg('stop', { offset: '100%', 'stop-color': '#050a0e' }))
+    return g
+  }
+  defs.append(metal(`${id}-a`, '12%', '0%', '88%', '100%'))
+  defs.append(metal(`${id}-b`, '88%', '0%', '12%', '100%'))
+
+  /* The cyan that catches along an edge. Transparent at both ends so it is a glint rather than a stripe. */
+  const glint = svg('linearGradient', { id: `${id}-glint`, x1: '0%', y1: '0%', x2: '100%', y2: '100%' })
+  glint.append(svg('stop', { offset: '0%', 'stop-color': '#7ff0ff', 'stop-opacity': '0' }))
+  glint.append(svg('stop', { offset: '38%', 'stop-color': '#7ff0ff', 'stop-opacity': '0.95' }))
+  glint.append(svg('stop', { offset: '62%', 'stop-color': '#3fd8ff', 'stop-opacity': '0.35' }))
+  glint.append(svg('stop', { offset: '100%', 'stop-color': '#7ff0ff', 'stop-opacity': '0' }))
+  defs.append(glint)
+
+  root.append(defs)
+
+  /*
+   * The two passes of the band.
+   *
+   * 37 by 26 with a 6.2 stroke, crossed at 22 degrees each way. The proportions are the whole of whether this
+   * reads as the mark or as a blob: a thicker band on a narrower ellipse closes the hole in the middle and the
+   * two passes merge into a figure of eight. The real mark is mostly the space inside it.
+   */
+  const ring = (gradientId, rotation) =>
+    svg('ellipse', {
+      cx: 50,
+      cy: 50,
+      rx: 37,
+      ry: 26,
+      fill: 'none',
+      stroke: `url(#${gradientId})`,
+      'stroke-width': 6.2,
+      transform: `rotate(${rotation} 50 50)`
+    })
+
+  root.append(ring(`${id}-a`, -22))
+  root.append(ring(`${id}-b`, 22))
+
+  /* The glint over both, thin and on top, so the crossing points are where the light is. */
+  const over = ring(`${id}-glint`, -22)
+  over.setAttribute('stroke-width', '1.6')
+  over.setAttribute('class', 'orbis-mark-glint')
+  root.append(over)
+  const overTwo = ring(`${id}-glint`, 22)
+  overTwo.setAttribute('stroke-width', '1.6')
+  overTwo.setAttribute('class', 'orbis-mark-glint')
+  root.append(overTwo)
+
+  return root
 }
 
 /**
@@ -92,11 +164,34 @@ function orbisMark(size) {
  * All of it is drawn by CSS on elements that are created once and never replaced, so it stays crisp at any zoom and
  * the animation never restarts.
  */
-function buildOrbBody() {
+/*
+ * Exported so the Orb's body can be built and photographed without a browser, a helper or a page behind it.
+ *
+ * Nothing else imports it, and that is the point: the layers below are the whole of what the Orb looks like, and
+ * a check on them should not need the rest of the application running to see them.
+ */
+export function buildOrbBody() {
   const body = el('span', 'orb-body')
+  /*
+   * Six layers, outside in, and the order is the thing that makes it a sphere rather than a stack of circles:
+   *
+   *   orb-halo     the light it throws past its own edge, which is what sets it off the page
+   *   orb-face     the lit body, dark glass with the light falling away to a dark limb
+   *   orb-depth    an inner shadow around the inside of the edge, so the face is a surface curving away
+   *   orb-rim      the bright hairline where the light grazes the edge, turning slowly
+   *   the mark     drawn, not a photograph
+   *   orb-refract  a bent band of light across the glass, in `screen`, which is what glass does to what is behind it
+   *   orb-gloss    the specular highlight, small and off-centre, above everything
+   *
+   * All of them are created once here and never replaced, so the animation never restarts and nothing re-renders
+   * when the Orb's state changes.
+   */
+  body.append(el('span', 'orb-halo'))
   body.append(el('span', 'orb-face'))
+  body.append(el('span', 'orb-depth'))
   body.append(el('span', 'orb-rim'))
   body.append(orbisMark(22))
+  body.append(el('span', 'orb-refract'))
   body.append(el('span', 'orb-gloss'))
   return body
 }
