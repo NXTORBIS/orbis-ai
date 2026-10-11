@@ -102,6 +102,8 @@ export interface BrowserManagerOptions {
   searchSessions?: HandlerDeps['searchSessions']
   /** Notes and tasks: the application's own stores, never a second pair opened over the same files. */
   personal?: HandlerDeps['personal']
+  /** Memory: the application's own, never a second connection to the same database. */
+  memory?: HandlerDeps['memory']
   /** The pages this person has read, for the browser panel that searches them. */
   /** How Orbis looks, so the browser's pages wear the same theme and preset as the chat. */
   appearance?: HandlerDeps['appearance']
@@ -238,6 +240,7 @@ export class BrowserManager {
         pages: this.o.pages,
         searchSessions: this.o.searchSessions,
         personal: this.o.personal,
+        memory: this.o.memory,
         appearance: this.o.appearance,
         recall: this.o.recall,
         schedules: this.o.schedules,

@@ -3110,6 +3110,8 @@ if (!app.requestSingleInstanceLock()) {
            * next save put the step back where it had never been.
            */
           personal: () => personalForBrowser,
+          // Memory: the application's own connection, never a second one opened over the same database file.
+          memory: () => memory,
           // The reading index the browser's panel searches: the app's own, never a second one opened over the same file.
           /**
            * How Orbis looks, for the browser's own pages.

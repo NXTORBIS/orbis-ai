@@ -23,6 +23,18 @@ export interface MemoryDeps {
   userData: string
   /** Which profile is in use, read on every call, so switching profile in Orbis reaches the browser without a restart. */
   profileId: () => string | null | undefined | Promise<string | null | undefined>
+  /**
+   * The application's own memory, when it is running.
+   *
+   * Lent rather than opened again, and for a sharper reason than the other stores: this is SQLite, and two
+   * connections to one database file is how a database gets locked at the worst moment -- the comment beside the
+   * reading index in handlers.ts says exactly that about exactly this. The header above already says memory is
+   * meant to be "one set of things rather than two that drift apart"; a second connection is not how that is got.
+   *
+   * Absent when the browser is running without the application, which is the one case where opening one here is
+   * right.
+   */
+  store?: () => MemoryStore | null | undefined
 }
 
 /** A profile id becomes a folder name under the user data folder, so only the shape profiles.ts gives them is accepted. */
@@ -83,6 +95,11 @@ export function createMemoryHandlers(deps: MemoryDeps): Record<string, Handler> 
     const profile = await deps.profileId()
     if (typeof profile !== 'string' || !PROFILE_ID.test(profile)) {
       throw new HelperError('not-ready', 'Orbis has not said which profile is in use, so its memory cannot be opened.')
+    }
+    const lent = deps.store?.()
+    if (lent) {
+      lent.useProfile(profile)
+      return lent
     }
     store ??= new MemoryStore(deps.userData, profile)
     // A no-op while the profile is the same one; on a change it closes the database, so the next read opens the new profile's file.

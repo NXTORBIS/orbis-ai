@@ -40,7 +40,7 @@ import { createOrionHandlers } from './orion.ts'
 import { gatherContext } from '../main/context/engine.ts'
 import { ambientProvider, capabilityProvider, eventsProvider, pageProvider, tabsProvider, timeProvider } from '../main/context/providers.ts'
 import { bus } from '../main/eventBus.ts'
-import { createMemoryHandlers } from './memory.ts'
+import { createMemoryHandlers, type MemoryDeps } from './memory.ts'
 import { createSkillHandlers } from './skills.ts'
 import { createTrayHandlers } from './tray.ts'
 import { createSearchPageHandlers } from './searchPage.ts'
@@ -166,6 +166,8 @@ export interface HandlerDeps {
    * save wrote its stale copy back over the change.
    */
   personal?: () => { notes: NonNullable<PersonalDeps['notes']>; tasks: NonNullable<PersonalDeps['tasks']> } | null
+  /** What a person asked Orbis to remember: the app's own store, never a second connection to the same database. */
+  memory?: MemoryDeps['store']
   /**
    * The pages this person has read: the app's own index, never a second one opened here.
    *
@@ -571,7 +573,7 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
     // so this exists only for the helper running on its own, where there is no app to ask.
     ...(deps.voice && !deps.appServices ? createVoiceHandlers(deps.voice) : {}),
     ...(deps.dataDir
-      ? createMemoryHandlers({ userData: deps.dataDir, profileId: () => deps.profileId })
+      ? createMemoryHandlers({ userData: deps.dataDir, profileId: () => deps.profileId, ...(deps.memory ? { store: deps.memory } : {}) })
       : {}),
     /*
      * The comparison tray: search results pinned side by side, and compared from what their pages say.
