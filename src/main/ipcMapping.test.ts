@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readdir, readFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { join, relative, sep } from 'node:path'
 
 /**
  * The migration map, kept honest.
@@ -17,6 +17,9 @@ import { join } from 'node:path'
 const ROOT = join(import.meta.dirname, '..')
 const MAP = join(ROOT, '..', 'docs', 'ipc-mapping.md')
 
+/** How many channels the boundary may have before somebody has to look. Raise it deliberately, with a line saying why. */
+const CEILING = 540
+
 async function* typescriptFiles(dir: string): AsyncGenerator<string> {
   for (const entry of await readdir(dir, { withFileTypes: true })) {
     const path = join(dir, entry.name)
@@ -25,10 +28,39 @@ async function* typescriptFiles(dir: string): AsyncGenerator<string> {
   }
 }
 
+interface Registration {
+  channel: string
+  /** Where it was registered, relative to `src/main`, so a duplicate can be pointed at. */
+  file: string
+}
+
+/**
+ * Channels registered through a constant rather than a literal.
+ *
+ * `ipcMain.on(PAGE_CHANNEL, ...)` puts the name nowhere near either `ipcMain` or `handle(`, so both scans below
+ * miss it completely. Two real channels were hiding that way -- `orbis-page:request` and `orbis-page:ready`, the
+ * whole bridge an Orbis Page talks to the application over. Undocumented, uncounted, and unchecked by anything.
+ *
+ * This is the same hole as the one that hid a hundred and twenty-three helper-registered channels, one level
+ * deeper. The constant is looked up in the file that registers it, which is where a channel constant always lives;
+ * a constant imported from somewhere else would still be missed, so the test below also refuses a registration
+ * whose first argument is a name this cannot resolve.
+ */
+function namedByConstant(source: string): string[] {
+  const constants = new Map<string, string>()
+  for (const match of source.matchAll(/(?:const|let)\s+([A-Z][A-Z0-9_]*)\s*=\s*'([^']+)'/g)) constants.set(match[1], match[2])
+  const found: string[] = []
+  for (const match of source.matchAll(/(?:ipcMain\.(?:handle|on)|(?:^|[^.\w])handle)\(\s*([A-Z][A-Z0-9_]*)\s*[,)]/gm)) {
+    const resolved = constants.get(match[1])
+    if (resolved !== undefined && resolved.includes(':')) found.push(resolved)
+  }
+  return found
+}
+
 /**
  * Every channel the main process answers.
  *
- * Two ways of registering one, because there are two in the code. Most call `ipcMain.handle` directly. The larger
+ * Three ways of registering one, because there are three in the code. Most call `ipcMain.handle` directly. The larger
  * modules -- personal data, workflows, personalisation, tab locking -- define a local `handle` that checks the sender
  * first and then calls `ipcMain.handle` with the channel it was given, so the channel name never appears next to
  * `ipcMain` at all.
@@ -37,15 +69,20 @@ async function* typescriptFiles(dir: string): AsyncGenerator<string> {
  * called with a literal that has a colon in it is a channel; that is specific enough to find them and narrow enough not
  * to catch anything else.
  */
-async function channelsInCode(): Promise<string[]> {
-  const found = new Set<string>()
+async function channelsInCode(): Promise<Registration[]> {
+  const found: Registration[] = []
   for await (const file of typescriptFiles(join(ROOT, 'main'))) {
     const source = await readFile(file, 'utf8')
-    for (const match of source.matchAll(/ipcMain\.(?:handle|on)\(\s*'([^']+)'/g)) found.add(match[1])
-    for (const match of source.matchAll(/(?:^|[^.\w])handle\(\s*'([a-z][a-zA-Z0-9-]*:[a-zA-Z0-9:_-]+)'/g)) found.add(match[1])
+    const where = relative(join(ROOT, 'main'), file).split(sep).join('/')
+    for (const match of source.matchAll(/ipcMain\.(?:handle|on)\(\s*'([^']+)'/g)) found.push({ channel: match[1], file: where })
+    for (const match of source.matchAll(/(?:^|[^.\w])handle\(\s*'([a-z][a-zA-Z0-9-]*:[a-zA-Z0-9:_-]+)'/g)) found.push({ channel: match[1], file: where })
+    for (const channel of namedByConstant(source)) found.push({ channel, file: where })
   }
-  return [...found].sort()
+  return found.sort((a, b) => (a.channel < b.channel ? -1 : a.channel > b.channel ? 1 : 0))
 }
+
+/** The distinct channel names, which is what both halves of the map are compared against. */
+const namesIn = (registrations: Registration[]): string[] => [...new Set(registrations.map((one) => one.channel))].sort()
 
 /** Every channel named in the map, which writes them as `code` spans. */
 async function channelsInMap(): Promise<Set<string>> {
@@ -58,7 +95,7 @@ async function channelsInMap(): Promise<Set<string>> {
 }
 
 test('every way the interface asks for something is written down in the migration map', async () => {
-  const code = await channelsInCode()
+  const code = namesIn(await channelsInCode())
   const map = await channelsInMap()
   const missing = code.filter((channel) => !map.has(channel))
   assert.deepEqual(
@@ -69,7 +106,7 @@ test('every way the interface asks for something is written down in the migratio
 })
 
 test('the map does not describe channels that no longer exist', async () => {
-  const code = new Set(await channelsInCode())
+  const code = new Set(namesIn(await channelsInCode()))
   const map = await channelsInMap()
   // Only the ones that look like our own channels. The map also names Chromium classes, which are written the C++
   // way with a double colon — `content::WebContents` is not a channel.
@@ -79,7 +116,7 @@ test('the map does not describe channels that no longer exist', async () => {
 })
 
 test('the boundary is a known size, so the migration can be estimated rather than guessed', async () => {
-  const code = await channelsInCode()
+  const code = namesIn(await channelsInCode())
   assert.ok(code.length > 50, 'the boundary should be substantial; if this drops sharply, something was deleted by accident')
   // A ceiling as well as a floor: the boundary should shrink as the migration goes, never grow by accident.
   // Raised deliberately for the specialized search provider, the reading list and saved pages, the browser sidebar,
@@ -276,5 +313,107 @@ test('the boundary is a known size, so the migration can be estimated rather tha
   // 497 -> 498: one question to Orion for the Physics Studio's research panels.
   // 498 -> 499: the same question with a photograph of the simulation attached, for what the numbers cannot say.
   // 499 -> 500: a quiz in the conversation, asked for and checked in main so the window never sees a loose question.
-  assert.ok(code.length <= 500, `the boundary has grown to ${code.length} channels. New ones are fine, but they are new work — check that is intended.`)
+  // 500 -> 502: the bridge an Orbis Page talks to the application over -- `orbis-page:request` and
+  // `orbis-page:ready`. Not new. They have been registered since Pages existed, through a constant
+  // (`ipcMain.on(PAGE_CHANNEL, ...)`) rather than a literal, so the name appeared nowhere this test looked and
+  // neither channel was counted, documented or checked. The scan resolves a constant now. The jump is the
+  // measurement being corrected, not the boundary growing -- the same correction as 158 -> 239 and 239 -> 260.
+  //
+  // The ceiling has headroom on purpose. It used to sit exactly on the count, which meant the next channel
+  // anybody added failed the build with a message about the migration rather than about their work -- so the
+  // raise became a reflex and the changelog above it became a list nobody read. The arithmetic in it no longer
+  // chains for the same reason. A ceiling is for noticing a jump; it is not a per-channel approval queue.
+  assert.ok(
+    code.length <= CEILING,
+    `the boundary has grown to ${code.length} channels, past ${CEILING}. New ones are fine, but they are new work:\n` +
+      `check it is intended, then raise CEILING and say in one line what the new channels are for.`
+  )
+})
+
+/**
+ * How the names are written: `feature:verb`, lower case, hyphens between words, exactly two parts.
+ *
+ * Not fussiness. Four hundred and sixty-eight channels already do this, so the thirty-two that do not are the ones
+ * somebody has to remember -- and `tabLock:addRule` beside `tab-lock:add-rule` is a bug that only shows up at run
+ * time, as a channel with no handler, which looks like a broken feature rather than a typo.
+ *
+ * `LEGACY` is what is there today, and it may only ever get shorter. The test checks it in both directions: a new
+ * offender fails on the day it is written, and a name that has since been fixed must be taken out of the list
+ * rather than left to make it look longer than it is.
+ */
+const LEGACY: ReadonlyArray<string> = [
+  // camelCase after the colon -- index.ts
+  'files:pickImages',
+  'files:pickText',
+  'settings:testKey',
+  'shell:openExternal',
+  // camelCase prefix -- profileLock/ipc.ts
+  'profileLock:lock',
+  'profileLock:save',
+  'profileLock:state',
+  // camelCase prefix, and mostly camelCase after it too -- tabLock/ipc.ts
+  'tabLock:addRule',
+  'tabLock:changeGroupPassword',
+  'tabLock:checkLabel',
+  'tabLock:createGroup',
+  'tabLock:explain',
+  'tabLock:judge',
+  'tabLock:lockAll',
+  'tabLock:lockTab',
+  'tabLock:protect',
+  'tabLock:removeGroup',
+  'tabLock:removeRule',
+  'tabLock:resetGroupPassword',
+  'tabLock:setDefaultPolicy',
+  'tabLock:setGroupPolicy',
+  'tabLock:setRules',
+  'tabLock:setTabPolicy',
+  'tabLock:state',
+  'tabLock:unlockGroup',
+  'tabLock:unlockTab',
+  'tabLock:unprotect',
+  // three parts rather than two -- index.ts. These are a group within a group, which the name tries to carry and
+  // a two-part name would carry as `voice:models-status`.
+  'voice:models:cancelDownload',
+  'voice:models:delete',
+  'voice:models:download',
+  'voice:models:status',
+  'voice:models:verify'
+]
+
+const WELL_NAMED = /^[a-z][a-z0-9-]*:[a-z][a-z0-9-]*$/
+
+test('a channel is named feature:verb, in lower case with hyphens', async () => {
+  const code = namesIn(await channelsInCode())
+  const allowed = new Set(LEGACY)
+  const offenders = code.filter((channel) => !WELL_NAMED.test(channel) && !allowed.has(channel))
+  assert.deepEqual(
+    offenders,
+    [],
+    `these do not match ${WELL_NAMED}. Rename them, or -- only if there is a real reason -- add them to LEGACY\n` +
+      `with the reason beside them:\n  ${offenders.join('\n  ')}`
+  )
+})
+
+test('the list of badly named channels only ever gets shorter', async () => {
+  const code = new Set(namesIn(await channelsInCode()))
+  const fixed = LEGACY.filter((channel) => WELL_NAMED.test(channel))
+  assert.deepEqual(fixed, [], `these are named properly now and must come out of LEGACY:\n  ${fixed.join('\n  ')}`)
+  const gone = LEGACY.filter((channel) => !code.has(channel))
+  assert.deepEqual(gone, [], `these are in LEGACY and no longer registered anywhere; remove them:\n  ${gone.join('\n  ')}`)
+})
+
+test('no channel is registered in two places', async () => {
+  // A second registration does not fail or warn. Electron keeps the first handler and ignores the rest, so the
+  // newer code is simply never reached -- and what you get is a feature that does nothing, with no error anywhere
+  // to say why. Worth a test precisely because nothing else notices.
+  const seen = new Map<string, string[]>()
+  for (const { channel, file } of await channelsInCode()) {
+    const where = seen.get(channel)
+    if (where) {
+      if (!where.includes(file)) where.push(file)
+    } else seen.set(channel, [file])
+  }
+  const twice = [...seen.entries()].filter(([, files]) => files.length > 1).map(([channel, files]) => `${channel} -- ${files.join(' and ')}`)
+  assert.deepEqual(twice, [], `registered more than once. Electron keeps the first and silently ignores the rest:\n  ${twice.join('\n  ')}`)
 })

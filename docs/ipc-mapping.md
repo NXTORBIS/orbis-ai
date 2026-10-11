@@ -269,6 +269,7 @@ what a profile has *decided* is persisted, which is why permissions and projects
 | `pages:code-health` | How an open code Page is doing: whether its code ran, what it has asked for, any faults. In Chromium this is the same sandbox record, read over Mojo |
 | `pages:code-close` | Closes an open code Page. Not a fault: nothing about the Page's health is recorded |
 | `pages:code-region` | Where in the window a code Page is shown, measured by the renderer and sent on every move. One-way, as the browser's own embed region is |
+| `orbis-page:ready`, `orbis-page:request` | The bridge a running Orbis Page talks to the application over, from inside its sandbox: one message to say the Page has loaded, and one channel for everything it then asks. One channel for every request on purpose, so there is a single place the capability check happens -- a second channel would be a second place to forget it. Who is asking comes from which `WebContents` sent the message and never from the message itself, so a Page has no way to claim to be a different Page: there is nowhere in a request to put the claim. Registered through a constant rather than a literal, which is why neither appeared in this map for as long as Pages have existed. In Chromium this is the Page renderer’s own Mojo interface, narrowed to what its manifest was granted |
 
 ## Creation
 
