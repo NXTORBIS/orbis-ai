@@ -65,8 +65,7 @@ import { classifyAutomationMessage, classifyIntent } from './intent'
 import type { ChatIntent } from './intent'
 import { automationProgress } from '../shared/automation'
 import { runBrowserAgent } from './browserAgent'
-import { PulsarService, LocalVoiceError } from './pulsar/service.ts'
-import type { PulsarDownloadProgress } from '../shared/pulsarModels.ts'
+import { PulsarService } from './pulsar/service.ts'
 import { openDefaultAppsSettings, readDefaultBrowser, requestDefaultBrowser } from './defaultBrowser'
 import { checkAudio, describeError, isVoiceModel } from '../shared/voiceInput'
 import { completeDraft, generateTitle, generateWorkflowTitle, predictQueries, requestJson, requestText, requestVision, suggestFollowups } from './suggest'
@@ -334,6 +333,7 @@ import { pushLock } from './chromium/tabLockBridge'
 import { ExecutionService } from './execution/service.ts'
 import { registerExecutionIpc } from './execution/ipc.ts'
 import { registerQuizIpc } from './quiz/ipc.ts'
+import { registerWhisperIpc } from './whisper/ipc.ts'
 import { ChooseStore } from './choose/store.ts'
 import { Choose } from './choose/service.ts'
 import { registerChooseIpc } from './choose/ipc.ts'
@@ -2340,94 +2340,35 @@ ${summaryBlock(summary)}`
   handle('default-browser:request', () => requestDefaultBrowser())
   handle('default-browser:settings', () => openDefaultAppsSettings())
 
-  // One transcription in flight at a time is all a single window ever asks for; a second call cancels the first's
-  // process the same way the window cancelling a session would, so nothing is left running for words nobody wants.
-  let voiceAbort: AbortController | null = null
-
-  const transcribeClip = async (audio: Buffer, o: { model?: unknown; language?: unknown }) => {
-    if (!Pulsar) return { ok: false as const, code: 'runtime-error' as const, message: 'Speech input is not ready yet.' }
-    const bad = checkAudio(audio.length)
-    if (bad) return { ok: false as const, code: bad, message: describeError(bad) }
-
-    voiceAbort?.abort()
-    const controller = new AbortController()
-    voiceAbort = controller
-
-    try {
-      const model = isVoiceModel(o.model) ? o.model : Pulsar.hardware().recommended
-      const language = typeof o.language === 'string' && /^[a-z]{2}$/i.test(o.language) ? o.language.toLowerCase() : null
-      // Nothing here reaches the network: this is a local child process, run against a model file already on disk.
-      const text = await Pulsar.transcribe(audio, model, language, controller.signal)
-      return { ok: true as const, text }
-    } catch (err) {
-      const code = err instanceof LocalVoiceError ? err.code : 'runtime-error'
-      // The reason travels; the audio and the words never do — and neither is written down anywhere along the way.
-      return { ok: false as const, code, message: describeError(code) }
-    } finally {
-      if (voiceAbort === controller) voiceAbort = null
-    }
-  }
-
-  ipcMain.handle('voice:transcribe', async (event, audioData: unknown, options: unknown) => {
-    if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
-    return transcribeClip(audioData instanceof Uint8Array ? Buffer.from(audioData) : Buffer.alloc(0), (options ?? {}) as { model?: unknown; language?: unknown })
+  /*
+   * Speech into text, in `whisper/ipc.ts`.
+   *
+   * Eight channels and the controller that holds the one transcription in flight. What stays here is the handle
+   * the browser's own services use, which is what they were already using -- the move changed nothing about the
+   * behaviour, only where it lives.
+   */
+  const voice = registerWhisperIpc({
+    getWindow: () => liveWindow(),
+    speech: () => Pulsar,
+    isModel: isVoiceModel,
+    checkAudio,
+    describeError,
+    recommended: () => Pulsar?.hardware().recommended ?? null
   })
 
-  // What the pages in the Orbis browser (the search results) may use of the app: the same suggestions and the same local speech to text.
+  // What the pages in the Orbis browser (the search results) may use of the app: the same suggestions and the same
+  // local speech to text.
   appServicesForBrowser = {
     suggestWeb: webSuggestions,
     suggestOrion: orionPredictions,
     // The browser's address bar honours the same setting as this window's: turned off, neither offers rows drawn from
     // what the person has done before.
     personalizedSuggestions: async () => (await store.getSettings()).personalizedSuggestions !== false,
-    transcribe: (audio, options) => transcribeClip(Buffer.from(audio), options),
-    cancelTranscription: () => voiceAbort?.abort(),
-    voiceHardware: () => Pulsar?.hardware() ?? null,
-    voiceModels: async () => (Pulsar ? await Pulsar.status() : { installed: [], downloading: [] })
+    transcribe: (audio, options) => voice.transcribe(Buffer.from(audio), options),
+    cancelTranscription: () => voice.cancel(),
+    voiceHardware: () => voice.hardware(),
+    voiceModels: () => voice.models()
   }
-
-  ipcMain.handle('voice:cancel', (event) => {
-    if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
-    voiceAbort?.abort()
-  })
-
-  ipcMain.handle('voice:hardware', (event) => {
-    if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
-    return Pulsar?.hardware() ?? null
-  })
-
-  ipcMain.handle('voice:models-status', async (event) => {
-    if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
-    return Pulsar ? await Pulsar.status() : { installed: [], downloading: [] }
-  })
-
-  ipcMain.handle('voice:models-download', async (event, id: unknown) => {
-    if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
-    if (!Pulsar || !isVoiceModel(id)) return { ok: false, message: 'Not a recognised model.' }
-    try {
-      await Pulsar.download(id, (progress: PulsarDownloadProgress) => {
-        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('voice:models-progress', progress)
-      })
-      return { ok: true }
-    } catch (err) {
-      return { ok: false, message: err instanceof Error ? err.message : String(err) }
-    }
-  })
-
-  ipcMain.handle('voice:models-cancel-download', (event, id: unknown) => {
-    if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
-    if (Pulsar && isVoiceModel(id)) Pulsar.cancelDownload(id)
-  })
-
-  ipcMain.handle('voice:models-delete', async (event, id: unknown) => {
-    if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
-    if (Pulsar && isVoiceModel(id)) await Pulsar.delete(id)
-  })
-
-  ipcMain.handle('voice:models-verify', async (event, id: unknown) => {
-    if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
-    return Pulsar && isVoiceModel(id) ? await Pulsar.verify(id) : false
-  })
 }
 
 // Settings and chats saved before the rename to Orbis live under the old folder name.

@@ -25,6 +25,7 @@
  */
 
 import { join } from 'node:path'
+import { dataDirFor } from '../../shared/profiles.ts'
 import { ProfileJsonFile } from '../storage/profileJsonFile.ts'
 
 import { check, type PageDocument } from '../../shared/pages/builder.ts'
@@ -33,8 +34,13 @@ import { manifestToJson, readManifest, type PageManifest } from '../../shared/pa
 import { checkSpec, type PageSpec } from '../../shared/pages/spec.ts'
 import { VERSION_LIMITS, type PageVersionNode, type VersionGraph, type VersionState } from '../../shared/pages/versioning.ts'
 
-/** Where a profile's data lives, mirroring how `store.ts` decides it. */
-const dataDirFor = (profileId: string): string => (profileId === 'default' ? '' : join('profiles', profileId))
+/*
+ * Where a profile's data lives: the shared answer, not a second copy of it.
+ *
+ * This was a local line "mirroring how store.ts decides it", which is a mirror of a rule that lives in
+ * `shared/profiles.ts` and is imported by sixteen other files. A mirror of a rule is a place for the rule to
+ * change in one copy and not the other, and the thing that would break is which folder somebody's Pages are in.
+ */
 
 const FILE = join('pages', 'generated.json')
 const FLUSH_MS = 1500

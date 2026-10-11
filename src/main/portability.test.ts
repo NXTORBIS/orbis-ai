@@ -109,6 +109,8 @@ const BROWSER_LAYER = new Set([
    * check, which becomes Mojo.
    */
   'main/choose/ipc.ts',
+  // Speech into text: the controller and the checks are pure, and only the window adapter is not.
+  'main/whisper/ipc.ts',
   /*
    * The one Electron file of learned skills, and deliberately the only one: `main/skills/` holds nothing else.
    *
