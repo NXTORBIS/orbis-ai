@@ -1,167 +1,109 @@
-diff --git a/components/search_engines/template_url_prepopulate_data.cc b/components/search_engines/template_url_prepopulate_data.cc
-index 85b0c96053..99e580833c 100644
---- a/components/search_engines/template_url_prepopulate_data.cc
-+++ b/components/search_engines/template_url_prepopulate_data.cc
-@@ -41,6 +41,25 @@ inline std::unique_ptr<TemplateURLData> PrepopulatedEngineToTemplateURLData(
-   return TemplateURLDataFromPrepopulatedEngine(*engine);
- }
- 
-+// Orbis: Orbis Search is the default search engine. Its results page belongs to Orbis (the built-in chrome://orbis-search page), so a
-+// search typed in the address bar, the new-tab page or a context menu lands in Orbis and not on another company's page. Google and
-+// the others stay available: as engines to pick in settings, by keyword (@google), and by name (`!g ...` on the results page).
-+constexpr int kOrbisPrepopulateId = 9001;
-+
-+std::unique_ptr<TemplateURLData> OrbisSearchEngine() {
-+  auto data = std::make_unique<TemplateURLData>();
-+  data->SetShortName(u"Orbis Search");
-+  data->SetKeyword(u"orbis");
-+  data->SetURL("chrome://orbis-search/#q={searchTerms}");
-+  // Suggestions are the search engine's own, as in every browser; only the words typed are sent.
-+  data->suggestions_url = "https://suggestqueries.google.com/complete/search?client=firefox&q={searchTerms}";
-+  data->favicon_url = GURL("chrome://orbis-search/orbis-ring.png");
-+  data->safe_for_autoreplace = true;
-+  data->input_encodings = {"UTF-8"};
-+  data->prepopulate_id = kOrbisPrepopulateId;
-+  return data;
-+}
-+
- // These values are persisted to logs. Entries should not be renumbered and
- // numeric values should never be reused.
- enum class SearchProviderOverrideStatus {
-@@ -192,8 +211,11 @@ std::vector<std::unique_ptr<TemplateURLData>> GetPrepopulatedEngines(
-     return t_urls;
-   }
- 
--  return base::ToVector(regional_prepopulated_engines,
--                        &PrepopulatedEngineToTemplateURLData);
-+  std::vector<std::unique_ptr<TemplateURLData>> engines = base::ToVector(
-+      regional_prepopulated_engines, &PrepopulatedEngineToTemplateURLData);
-+  // Orbis: first in the list, so it is the default (the first engine is the default).
-+  engines.insert(engines.begin(), OrbisSearchEngine());
-+  return engines;
- }
- 
- std::unique_ptr<TemplateURLData> GetPrepopulatedEngine(
-@@ -317,9 +339,8 @@ std::unique_ptr<TemplateURLData> GetPrepopulatedFallbackSearch(
-     PrefService& prefs,
-     const std::vector<raw_ptr<const PrepopulatedEngine>>&
-         regional_prepopulated_engines) {
--  return FindPrepopulatedEngineInternal(prefs, regional_prepopulated_engines,
--                                        google.id,
--                                        /*use_first_as_fallback=*/true);
-+  // Orbis: the fallback default is Orbis Search, not Google (which the stock code looks up by id first).
-+  return OrbisSearchEngine();
- }
- 
- }  // namespace TemplateURLPrepopulateData
 diff --git a/components/search_engines/template_url_service.cc b/components/search_engines/template_url_service.cc
-index afb1bb3c58..c33a948b95 100644
+index c33a948b95..defc0a1e60 100644
 --- a/components/search_engines/template_url_service.cc
 +++ b/components/search_engines/template_url_service.cc
-@@ -662,6 +662,10 @@ void TemplateURLService::RegisterProfilePrefs(
-     user_prefs::PrefRegistrySyncable* registry) {
-   registry->RegisterStringPref(prefs::kDefaultSearchProviderGUID,
-                                std::string());
-+  // Orbis: set once the one-time move from the untouched prepopulated Google default to Orbis Search has been considered.
-+  registry->RegisterBooleanPref("orbis.default_search_migrated", false);
-+  // Set once profiles that had the older Orbis Search engine (a page of the Orbis extension) have been moved to the built-in page.
-+  registry->RegisterBooleanPref("orbis.default_search_scheme_migrated", false);
-   registry->RegisterBooleanPref(prefs::kDefaultSearchProviderEnabled, true);
-   registry->RegisterBooleanPref(
-       prefs::kDefaultSearchProviderContextMenuAccessAllowed, true);
-@@ -2838,6 +2842,7 @@ void TemplateURLService::ChangeToLoadedState() {
-       default_search_provider_source_);
-   ApplyEnterpriseSearchChanges(pre_loading_providers_->TakeSearchEngines());
-   pre_loading_providers_.reset();
-+  MaybeMigrateDefaultToOrbisSearch();
- 
-   if (on_loaded_callback_for_sync_) {
-     std::move(on_loaded_callback_for_sync_).Run();
-@@ -2846,6 +2851,75 @@ void TemplateURLService::ChangeToLoadedState() {
-   on_loaded_callbacks_.Notify();
- }
- 
-+// Orbis: profiles made before Orbis Search became the default keep the prepopulated Google engine as their default. Once, and only
-+// when the default is still that untouched prepopulated Google entry (prepopulated, not edited by the user, not set by policy or an
-+// extension), switch it to Orbis Search. Any other engine the user picked (DuckDuckGo, ...) is left alone. A profile whose owner
-+// deliberately chose the untouched prepopulated Google engine cannot be told apart from an old default, so it is switched too;
-+// Google stays one click away in settings and by the @google keyword.
-+void TemplateURLService::MaybeMigrateDefaultToOrbisSearch() {
-+  // Profiles whose default is the earlier Orbis Search engine (results page in the Orbis extension) move to the built-in
-+  // chrome://orbis-search engine. Engines the person chose (any other engine) are not touched.
-+  constexpr char kSchemeMigratedPref[] = "orbis.default_search_scheme_migrated";
-+  if (!prefs_->GetBoolean(kSchemeMigratedPref)) {
+@@ -2861,7 +2861,8 @@ void TemplateURLService::MaybeMigrateDefaultToOrbisSearch() {
+   // chrome://orbis-search engine. Engines the person chose (any other engine) are not touched.
+   constexpr char kSchemeMigratedPref[] = "orbis.default_search_scheme_migrated";
+   if (!prefs_->GetBoolean(kSchemeMigratedPref)) {
+-    prefs_->SetBoolean(kSchemeMigratedPref, true);
++    // Marked done at the END, for the same reason as below: this used to be set before the work, so a start-up
++    // that reached here early was recorded as migrated without having migrated anything.
+     const TemplateURL* old_default = default_search_provider_;
+     if (old_default && old_default->type() == TemplateURL::NORMAL &&
+         (default_search_provider_source_ == DefaultSearchManager::FROM_USER ||
+@@ -2889,35 +2890,68 @@ void TemplateURLService::MaybeMigrateDefaultToOrbisSearch() {
+         }
+       }
+     }
 +    prefs_->SetBoolean(kSchemeMigratedPref, true);
-+    const TemplateURL* old_default = default_search_provider_;
-+    if (old_default && old_default->type() == TemplateURL::NORMAL &&
-+        (default_search_provider_source_ == DefaultSearchManager::FROM_USER ||
-+         default_search_provider_source_ ==
-+             DefaultSearchManager::FROM_FALLBACK) &&
-+        old_default->url().starts_with(
-+            "chrome-extension://gcaebckmlhiagfagcplpjmibhkhjljab/")) {
-+      TemplateURL* current_orbis = FindPrepopulatedTemplateURL(9001);
-+      if (current_orbis && current_orbis != old_default &&
-+          current_orbis->url().starts_with("chrome://orbis-search/")) {
-+        SetUserSelectedDefaultSearchProvider(current_orbis);
-+      } else if (current_orbis == old_default) {
-+        // The prepopulated entry was not refreshed with the built-in address: refresh it here.
-+        ResetTemplateURL(current_orbis, current_orbis->short_name(),
-+                         current_orbis->keyword(),
-+                         "chrome://orbis-search/#q={searchTerms}");
-+      } else if (!current_orbis) {
-+        std::unique_ptr<TemplateURLData> data =
-+            prepopulate_data_resolver_->GetFallbackSearch();
-+        if (data && data->prepopulate_id == 9001) {
-+          data->id = kInvalidTemplateURLID;
-+          if (TemplateURL* added = Add(std::make_unique<TemplateURL>(*data))) {
-+            SetUserSelectedDefaultSearchProvider(added);
-+          }
-+        }
-+      }
+   }
++  // A profile with NO default search engine at all is a broken profile, and no flag may keep it that way.
++  //
++  // Chromium's omnibox needs a default engine to do almost anything: without one the search provider has nothing
++  // to offer, there is no "search for what you typed" row, and what drops down is nothing at all. A profile was
++  // found in exactly that state -- `Secure Preferences` holding a MAC for `default_search_provider_data` with the
++  // value itself gone, which is what Chromium leaves behind when it validates a protected preference, finds it
++  // bad and clears it -- and `orbis.default_search_migrated` already true, so the repair below had been skipped
++  // on every start since. The address bar had simply stopped suggesting anything, for months.
++  //
++  // So this runs first and is not gated on the flag. It only ever acts when there is nothing to lose.
++  if (!default_search_provider_) {
++    if (TemplateURL* repaired = EnsureOrbisSearchEngine()) {
++      SetUserSelectedDefaultSearchProvider(repaired);
 +    }
-+  }
-+  constexpr char kMigratedPref[] = "orbis.default_search_migrated";
-+  if (prefs_->GetBoolean(kMigratedPref)) {
++    // Whether or not that worked, there was no engine for the migration below to move away from.
 +    return;
 +  }
++
+   constexpr char kMigratedPref[] = "orbis.default_search_migrated";
+   if (prefs_->GetBoolean(kMigratedPref)) {
+     return;
+   }
+-  prefs_->SetBoolean(kMigratedPref, true);
++  // NOT marked done here. It used to be, one line before four separate `return`s -- so a profile that reached
++  // this during loading, before the default had settled, was marked migrated without anything having been
++  // migrated, and never looked again. The flag is set at the bottom, once the work has actually happened or has
++  // definitely been decided against.
+   if (default_search_provider_source_ != DefaultSearchManager::FROM_USER &&
+       default_search_provider_source_ != DefaultSearchManager::FROM_FALLBACK) {
++    // Set by policy or an extension: not ours to change, now or later.
++    prefs_->SetBoolean(kMigratedPref, true);
+     return;
+   }
+   const TemplateURL* current = default_search_provider_;
+-  if (!current || current->prepopulate_id() != 1 ||
+-      !current->safe_for_autoreplace() ||
++  if (current->prepopulate_id() != 1 || !current->safe_for_autoreplace() ||
+       current->type() != TemplateURL::NORMAL) {
++    // Something the person chose. Leave it, and stop asking.
++    prefs_->SetBoolean(kMigratedPref, true);
+     return;
+   }
+-  TemplateURL* orbis = FindPrepopulatedTemplateURL(9001);
++  TemplateURL* orbis = EnsureOrbisSearchEngine();
+   if (!orbis) {
+-    std::unique_ptr<TemplateURLData> data =
+-        prepopulate_data_resolver_->GetFallbackSearch();
+-    if (!data || data->prepopulate_id != 9001) {
+-      return;
+-    }
+-    data->id = kInvalidTemplateURLID;
+-    orbis = Add(std::make_unique<TemplateURL>(*data));
++    // The engine could not be found or built. Try again next time rather than giving up for ever.
++    return;
++  }
++  SetUserSelectedDefaultSearchProvider(orbis);
 +  prefs_->SetBoolean(kMigratedPref, true);
-+  if (default_search_provider_source_ != DefaultSearchManager::FROM_USER &&
-+      default_search_provider_source_ != DefaultSearchManager::FROM_FALLBACK) {
-+    return;
-+  }
-+  const TemplateURL* current = default_search_provider_;
-+  if (!current || current->prepopulate_id() != 1 ||
-+      !current->safe_for_autoreplace() ||
-+      current->type() != TemplateURL::NORMAL) {
-+    return;
-+  }
-+  TemplateURL* orbis = FindPrepopulatedTemplateURL(9001);
-+  if (!orbis) {
-+    std::unique_ptr<TemplateURLData> data =
-+        prepopulate_data_resolver_->GetFallbackSearch();
-+    if (!data || data->prepopulate_id != 9001) {
-+      return;
-+    }
-+    data->id = kInvalidTemplateURLID;
-+    orbis = Add(std::make_unique<TemplateURL>(*data));
-+  }
-+  if (orbis) {
-+    SetUserSelectedDefaultSearchProvider(orbis);
-+  }
 +}
 +
++// The Orbis Search engine, found or built. Null only when neither was possible.
++TemplateURL* TemplateURLService::EnsureOrbisSearchEngine() {
++  if (TemplateURL* found = FindPrepopulatedTemplateURL(9001)) {
++    return found;
+   }
+-  if (orbis) {
+-    SetUserSelectedDefaultSearchProvider(orbis);
++  std::unique_ptr<TemplateURLData> data =
++      prepopulate_data_resolver_->GetFallbackSearch();
++  if (!data || data->prepopulate_id != 9001) {
++    return nullptr;
+   }
++  data->id = kInvalidTemplateURLID;
++  return Add(std::make_unique<TemplateURL>(*data));
+ }
+ 
  bool TemplateURLService::CanAddAutogeneratedKeywordForHost(
-     const std::string& host) const {
-   const TemplateURLSet* urls = provider_map_->GetURLsForHost(host);
 diff --git a/components/search_engines/template_url_service.h b/components/search_engines/template_url_service.h
-index e423785680..5bdf1534c8 100644
+index 5bdf1534c8..cef266fe5d 100644
 --- a/components/search_engines/template_url_service.h
 +++ b/components/search_engines/template_url_service.h
-@@ -823,6 +823,7 @@ class TemplateURLService final : public WebDataServiceConsumer,
- 
+@@ -824,6 +824,8 @@ class TemplateURLService final : public WebDataServiceConsumer,
    // Transitions to the loaded state.
    void ChangeToLoadedState();
-+  void MaybeMigrateDefaultToOrbisSearch();
+   void MaybeMigrateDefaultToOrbisSearch();
++  // The Orbis Search engine, found among the prepopulated ones or built from the fallback.
++  TemplateURL* EnsureOrbisSearchEngine();
  
    // Applies a DSE change and reports metrics if appropriate.
    void ApplyDefaultSearchChange(const TemplateURLData* new_dse_data,
