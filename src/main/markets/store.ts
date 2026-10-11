@@ -1,5 +1,5 @@
 import { promises as fs, mkdirSync, renameSync, writeFileSync } from 'node:fs'
-import { readStored } from '../storedFile.ts'
+import { openStored } from '../storedFile.ts'
 import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { dataDirFor } from '../../shared/profiles.ts'
@@ -11,7 +11,6 @@ import {
   cleanScreen,
   cleanWorkspace,
   DEFAULT_COLUMNS,
-  EMPTY_WORKSPACE,
   cleanLayout,
   cleanRun,
   type BacktestRun,
@@ -121,18 +120,23 @@ export class MarketsStore {
     const already = this.reading.get(profileId)
     if (already) return already
     const job = (async () => {
-      let workspace: MarketsWorkspace
-      try {
-        const stored = await readStored(this.path(profileId))
-        if (stored.kind === 'unreadable') this.unreadable.add(profileId)
-        else this.unreadable.delete(profileId)
-        if (stored.kind !== 'read') throw new Error('nothing to read')
-        workspace = cleanWorkspace(JSON.parse(stored.text), this.now())
-      } catch {
-        // No file yet, or one that cannot be read. An empty workspace is the right answer to both -- and never an error,
-        // because somebody who has never opened Markets should not meet one.
-        workspace = { ...EMPTY_WORKSPACE, updatedAt: this.now() }
-      }
+      // Opened the shared way, because the three things that can be wrong with a file are three different answers and
+      // this store used to give the same one to all of them. Parsing inside the same `try` as the read made a file that
+      // was read and could not be made sense of -- half written, or cut short by a disk that filled up -- look exactly
+      // like no file at all: an empty workspace, nothing marked, and the next save renaming it over the watchlists.
+      // `openStored` moves a file like that aside first, so the words somebody wrote are still on the disk, and says
+      // writing is forbidden when it could not be moved.
+      const opened = await openStored(
+        this.path(profileId),
+        (text) => JSON.parse(text) as unknown,
+        () => null,
+        this.now()
+      )
+      if (opened.mayWrite) this.unwritable.delete(profileId)
+      else this.unwritable.add(profileId)
+      // An empty workspace is the right answer to a missing file and to a damaged one alike, and never an error,
+      // because somebody who has never opened Markets should not meet one. `cleanWorkspace` gives that for null.
+      const workspace = cleanWorkspace(opened.value, this.now())
       this.cache.set(profileId, workspace)
       this.reading.delete(profileId)
       return workspace
@@ -175,8 +179,15 @@ export class MarketsStore {
     this.timer.unref?.()
   }
 
-  /** Profiles whose workspace file is there and could not be read. Nothing is written over those. */
-  private readonly unreadable = new Set<string>()
+  /**
+   * Profiles whose workspace file is there and Orbis does not know what it says -- it could not be read, or it could
+   * not be made sense of and could not be moved aside. Nothing is written over those, by either write path.
+   *
+   * The mark lasts as long as the empty workspace it is protecting against, which is until the file is opened again:
+   * a new store, or a profile change. It used to be cleared by the first `flush`, which only delayed the loss by one
+   * edit -- the cache stays warm, so nothing looks at the file again, and the next save went straight through.
+   */
+  private readonly unwritable = new Set<string>()
 
   async flush(): Promise<void> {
     const pending = [...this.dirty]
@@ -184,10 +195,9 @@ export class MarketsStore {
     for (const profileId of pending) {
       const workspace = this.cache.get(profileId)
       if (!workspace) continue
-      if (this.unreadable.has(profileId)) {
-        // A workspace file is there that Orbis could not read: watchlists, layouts and drawings live in it, so an
-        // empty one is never written over it. Looked at again next time.
-        this.unreadable.delete(profileId)
+      if (this.unwritable.has(profileId)) {
+        // Layouts, watchlists, alerts, the portfolio and the triggers all live in this one file, so an empty workspace
+        // is never written over something Orbis could not make sense of. Refusing can be undone; the write cannot.
         continue
       }
       const path = this.path(profileId)
@@ -1048,6 +1058,8 @@ export class MarketsStore {
     await this.flush()
     this.cache.clear()
     this.reading.clear()
+    // Another profile's file is another question: whether it may be written is decided by opening it, not inherited.
+    this.unwritable.clear()
   }
 
   /**
@@ -1206,6 +1218,9 @@ export class MarketsStore {
     for (const profileId of pending) {
       const workspace = this.cache.get(profileId)
       if (!workspace) continue
+      // Closing is exactly when this matters most: the last thing Orbis does must not be to rename an empty workspace
+      // over a file it could not make sense of. Quitting refuses for the same reason `flush` does.
+      if (this.unwritable.has(profileId)) continue
       const path = this.path(profileId)
       try {
         mkdirSync(dirname(path), { recursive: true })

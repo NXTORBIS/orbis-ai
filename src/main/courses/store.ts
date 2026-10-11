@@ -2,6 +2,7 @@ import { promises as fs } from 'node:fs'
 import { join } from 'node:path'
 import { dataDirFor, DEFAULT_PROFILE_ID } from '../../shared/profiles.ts'
 import { Collection, JsonFile } from '../personal/store.ts'
+import { openStored } from '../storedFile.ts'
 import { cleanCourse } from '../../shared/courses/validate.ts'
 import type { Certificate, Course, Enrollment, LessonProgress, MasteryRecord, QuestionAttempt, QuizAttempt } from '../../shared/courses/types.ts'
 
@@ -26,6 +27,17 @@ import type { Certificate, Course, Enrollment, LessonProgress, MasteryRecord, Qu
  *
  * The dashboard needs titles and counts, not lessons. Summaries live in their own small file so the shelf loads
  * instantly however large the courses are, and a course's content is read only when somebody opens it.
+ *
+ * ## A course file that could not be read is not a course that is not there
+ *
+ * `course()` used to answer null to four different questions -- there is no file, something else has the file open,
+ * the file is half-written, the file is not a course -- and null means "not installed" to everybody who asks. So a
+ * truncated course file read as an uninstalled course while the shelf went on listing it, and installing the same id
+ * again renamed a fresh file over the only copy of a course somebody had imported or Orion had written for them.
+ *
+ * `storedFile.ts` already says what to do, and `openCourse` below does it: a file that is there and was not
+ * understood is moved aside before anything is written, so the words survive; a file that is merely unreadable is
+ * left exactly as it is and `install` refuses rather than writing over something nobody has read.
  */
 
 export const MAX_COURSES = 500
@@ -271,6 +283,12 @@ export class CoursesStore {
   private profileId = DEFAULT_PROFILE_ID
   /** Whole courses, held briefly. Content is the same for every profile, so this survives a switch. */
   private readonly loaded = new Map<string, Course>()
+  /**
+   * Course files that were there and were not understood, by course id: what to say about it, and whether that path
+   * may be written over. Only a file Orbis could not read at all is a path to keep off; one that was moved aside is
+   * safe to write, because the original is still on the disk under another name.
+   */
+  private readonly damaged = new Map<string, { says: string; mayWrite: boolean }>()
 
   constructor(userData: string) {
     this.userData = userData
@@ -311,27 +329,52 @@ export class CoursesStore {
   }
 
   /**
-   * A whole course, read from its own file.
+   * One course's file, read and decided about.
    *
    * Validated again on the way out: a file on disk can be changed by anything, and trusting it because it was
    * clean when written is trusting the disk.
+   *
+   * The deciding is `openStored`'s, which is the point: no file means no course and the path may be written; a file
+   * that will not parse or is not a course is moved aside first and then may be written; a file that could not be
+   * read at all means no course and a path to leave completely alone.
+   */
+  private async openCourse(id: string): Promise<{ course: Course | null; mayWrite: boolean }> {
+    const path = courseFile(this.userData, id)
+    const opened = await openStored<Course | null>(
+      path,
+      (raw) => {
+        const course = cleanCourse(JSON.parse(raw), Date.now())
+        // Thrown rather than returned, so `openStored` counts it as damage. Valid JSON that is not a course is as
+        // unusable as a half-written file and as much worth keeping a copy of -- and if this returned null instead,
+        // it would be indistinguishable from there being no file, which is the fault this whole path exists to fix.
+        if (!course) throw new Error('that file is not a course')
+        return course
+      },
+      () => null
+    )
+    if (opened.wasDamaged) {
+      // Said in full here rather than through `damageNote`, because nothing fresh is started for a course: the row
+      // stays on the shelf and the course simply cannot be opened until it is installed again.
+      const says = opened.movedTo
+        ? `Orbis could not make sense of the file for "${id}", so it was moved to ${opened.movedTo}. Nothing was deleted, and the course cannot be opened until it is installed again.`
+        : `Orbis could not read the file for "${id}". It has been left exactly as it is and nothing has been written over it. This is usually another program holding the file; try again in a moment.`
+      this.damaged.set(id, { says, mayWrite: opened.mayWrite })
+    } else {
+      this.damaged.delete(id)
+    }
+    return { course: opened.value, mayWrite: opened.mayWrite }
+  }
+
+  /**
+   * A whole course, read from its own file.
+   *
+   * Null is "Orbis has no course by that id to give you", and never on its own a reason to write: whoever reads
+   * null and wants to put a course there asks `problem(id)` or goes through `install`, which refuses.
    */
   async course(id: string): Promise<Course | null> {
     const held = this.loaded.get(id)
     if (held) return held
-    let raw: string
-    try {
-      raw = await fs.readFile(courseFile(this.userData, id), 'utf8')
-    } catch {
-      return null
-    }
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(raw)
-    } catch {
-      return null
-    }
-    const course = cleanCourse(parsed, Date.now())
+    const { course } = await this.openCourse(id)
     if (!course) return null
     // Oldest out first, so a few open courses never grow into the whole catalogue in memory.
     if (this.loaded.size >= CACHE) this.loaded.delete(this.loaded.keys().next().value as string)
@@ -339,8 +382,20 @@ export class CoursesStore {
     return course
   }
 
+  /** What went wrong reading a course's file, in plain words, so a blank page can say why. Null when nothing did. */
+  problem(id: string): string | null {
+    return this.damaged.get(id)?.says ?? null
+  }
+
   /** A course written to disk and listed on the shelf. The only way content gets in. */
   async install(course: Course): Promise<Course> {
+    if (this.damaged.get(course.id)?.mayWrite === false) {
+      // Something is at that path that Orbis could not read. The disk is asked again rather than the answer from
+      // last time being trusted -- a lock clears, a copy finishes -- and the install is refused only while it is
+      // still true, because the file holding an imported or generated course is the only copy of it anywhere.
+      const again = await this.openCourse(course.id)
+      if (!again.mayWrite) throw new Error(this.damaged.get(course.id)?.says ?? `Orbis could not read the file for "${course.id}".`)
+    }
     await fs.mkdir(coursesDir(this.userData), { recursive: true })
     const path = courseFile(this.userData, course.id)
     const temporary = `${path}.tmp`
@@ -353,6 +408,9 @@ export class CoursesStore {
 
   async uninstall(id: string): Promise<boolean> {
     this.loaded.delete(id)
+    // Somebody asked for this one to go, so the file may go. What was noted about it must go with it: a path to keep
+    // off outliving the file it was about would refuse an install of the same id for the rest of the session.
+    this.damaged.delete(id)
     await fs.rm(courseFile(this.userData, id), { force: true }).catch(() => undefined)
     return this.summaries.remove(id)
   }

@@ -1,5 +1,5 @@
 import { promises as fs } from 'node:fs'
-import { readStored } from './storedFile.ts'
+import { openStored } from './storedFile.ts'
 import { dirname, join } from 'node:path'
 import { createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 import { newVaultKey, unwrapKey, wipe, wrapKey } from './vault/crypto.ts'
@@ -168,37 +168,48 @@ export class TabLockStore {
       createdAt: Date.now(),
       updatedAt: Date.now()
     })
-    const stored = await readStored(this.path(profileId))
-    if (stored.kind === 'unreadable') {
-      // An empty set of rules would mean nothing is locked, and the next save would make that true.
-      this.unreadable.add(profileId)
-      return empty()
-    }
-    this.unreadable.delete(profileId)
-    try {
-      const raw = (stored.kind === 'read' ? JSON.parse(stored.text) : null) as TabLockFile
-      if (!raw || raw.version !== 1) return empty()
-      // Read defensively: this file is configuration, and configuration arrives from imports and from older versions.
-      return {
-        version: 1,
-        groups: Array.isArray(raw.groups) ? raw.groups.filter((g) => g && typeof g.id === 'string' && g.password) : [],
-        rules: cleanRules(raw.rules),
-        policy: cleanPolicy(raw.policy),
-        lockedOnClose: Array.isArray(raw.lockedOnClose)
-          ? raw.lockedOnClose
-              .filter((t) => t && typeof t.groupId === 'string' && typeof t.mark === 'string')
-              .slice(0, 200)
-          : [],
-        // A file written before this existed has no key, and a file whose key was lost cannot recognise its old marks --
-        // in both cases a new key is made and the marks are dropped, which costs a tab coming back unprotected once and
-        // never costs an address on disk.
-        recognition: typeof raw.recognition === 'string' && raw.recognition.length >= 40 ? raw.recognition : randomBytes(32).toString('base64'),
-        createdAt: typeof raw.createdAt === 'number' ? raw.createdAt : Date.now(),
-        updatedAt: Date.now()
-      }
-    } catch {
-      return empty()
-    }
+    /**
+     * The parse is handed to `openStored` rather than wrapped in a `try` here, and that is the whole point: a file cut
+     * off halfway through a save reads perfectly and parses not at all, and this used to answer that with an empty set
+     * of rules. Nothing is locked, Orbis says nothing about why, and the next save makes it true -- every credential
+     * and every rule the person set gone, with no copy of the file left anywhere. Throwing out of here instead means
+     * the file is moved aside with its bytes intact before anything is written, and a file that is merely held open by
+     * something else is left exactly as it is and marked unwritable.
+     */
+    const opened = await openStored(
+      this.path(profileId),
+      (text): TabLockFile => {
+        const raw = JSON.parse(text) as TabLockFile
+        // A file from a newer Orbis counts as damaged too, not as absent. Starting from nothing would unlock every tab
+        // protected by that newer version and then overwrite the credentials that could still open them.
+        if (!raw || raw.version !== 1) throw new Error('not a locked-tab file this Orbis understands')
+        // Read defensively: this file is configuration, and configuration arrives from imports and from older versions.
+        return {
+          version: 1,
+          groups: Array.isArray(raw.groups) ? raw.groups.filter((g) => g && typeof g.id === 'string' && g.password) : [],
+          rules: cleanRules(raw.rules),
+          policy: cleanPolicy(raw.policy),
+          lockedOnClose: Array.isArray(raw.lockedOnClose)
+            ? raw.lockedOnClose
+                .filter((t) => t && typeof t.groupId === 'string' && typeof t.mark === 'string')
+                .slice(0, 200)
+            : [],
+          // A file written before this existed has no key, and a file whose key was lost cannot recognise its old marks --
+          // in both cases a new key is made and the marks are dropped, which costs a tab coming back unprotected once and
+          // never costs an address on disk.
+          recognition: typeof raw.recognition === 'string' && raw.recognition.length >= 40 ? raw.recognition : randomBytes(32).toString('base64'),
+          createdAt: typeof raw.createdAt === 'number' ? raw.createdAt : Date.now(),
+          updatedAt: Date.now()
+        }
+      },
+      empty
+    )
+    // An empty set of rules would mean nothing is locked, and the next save would make that true. A damaged file has
+    // already been moved aside by now, so writing over its place costs nothing; one that could not be moved, and one
+    // that could not be read at all, both say no here.
+    if (opened.mayWrite) this.unreadable.delete(profileId)
+    else this.unreadable.add(profileId)
+    return opened.value
   }
 
   /** Profiles whose locked-tab file is there and could not be read. Nothing is written over those. */

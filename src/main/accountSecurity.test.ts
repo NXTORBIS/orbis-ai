@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, readdir } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AccountFailure, AccountSecurity, cooldownFor } from './accountSecurity.ts'
@@ -272,4 +272,85 @@ test('the same password in two profiles produces different stored bytes', SLOW, 
   // A per-account salt is why: without it, identical passwords would be visibly identical on disk.
   assert.notEqual(one.password.salt, two.password.salt)
   assert.notEqual(one.password.data, two.password.data)
+})
+
+// ---------------------------------------------------------------- a file that is there and not understood
+
+/** Whatever was moved aside, by the name quarantine gives it. */
+const movedAside = async (dir: string): Promise<string[]> =>
+  (await readdir(dir)).filter((name) => name.includes('.unreadable-'))
+
+test('a password file damaged into nonsense is moved aside, and the bytes are still there', SLOW, async () => {
+  const { security, dir } = await fresh()
+  await security.create('default', GOOD)
+
+  // What a half-written file looks like: perfectly readable, and not JSON any more. This is the case that used to
+  // read as "no password set" -- and the next save renamed defaults over the only copy of the wrapped key.
+  const damaged = (await readFile(lockFile(dir, 'default'), 'utf8')).slice(0, 40)
+  await writeFile(lockFile(dir, 'default'), damaged, 'utf8')
+
+  const afterRestart = new AccountSecurity(dir)
+  assert.equal(await afterRestart.hasPassword('default'), false, 'there is no password file this Orbis can use')
+
+  const aside = await movedAside(dir)
+  assert.equal(aside.length, 1, 'it was moved aside rather than left to be written over')
+  assert.equal(await readFile(join(dir, aside[0]), 'utf8'), damaged, 'and every byte of it is still on the disk')
+
+  // And Orbis is usable again: a password file nobody can read must not become a profile nobody can ever open.
+  await afterRestart.create('default', OTHER)
+  assert.equal(afterRestart.isUnlocked('default'), true)
+  assert.equal(aside.length, (await movedAside(dir)).length, 'the copy that was put aside stays put')
+})
+
+test('a password file from a newer version of Orbis is not an account with no password', SLOW, async () => {
+  const { security, dir } = await fresh()
+  await security.create('default', GOOD)
+  const real = JSON.parse(await readFile(lockFile(dir, 'default'), 'utf8'))
+  await writeFile(lockFile(dir, 'default'), JSON.stringify({ ...real, version: 2 }), 'utf8')
+  const onDisk = await readFile(lockFile(dir, 'default'), 'utf8')
+
+  const afterDowngrade = new AccountSecurity(dir)
+  assert.equal(await afterDowngrade.hasPassword('default'), false, 'this build cannot open it')
+  assert.equal(afterDowngrade.unreadableFor('default'), true, 'but it knows something is there')
+
+  await assert.rejects(
+    () => afterDowngrade.create('default', OTHER),
+    (err: AccountFailure) => err.code === 'io' && /newer version/.test(err.message)
+  )
+  assert.equal(await readFile(lockFile(dir, 'default'), 'utf8'), onDisk, 'and the file is exactly as it was')
+  assert.deepEqual(await movedAside(dir), [], 'still where the newer Orbis left it, so that Orbis still works')
+})
+
+test('a password file Orbis does not understand refuses the write instead of replacing it', SLOW, async () => {
+  const { security, dir } = await fresh()
+  const onDisk = JSON.stringify({ version: 1, somethingElse: true })
+  await writeFile(lockFile(dir, 'default'), onDisk, 'utf8')
+
+  assert.equal(await security.hasPassword('default'), false)
+  await assert.rejects(() => security.create('default', GOOD), (err: AccountFailure) => err.code === 'io')
+  assert.equal(await readFile(lockFile(dir, 'default'), 'utf8'), onDisk)
+  assert.deepEqual(await movedAside(dir), [])
+})
+
+test('a password file that cannot be read at all is left alone and never written over', SLOW, async () => {
+  const { security, dir } = await fresh()
+  // Something is at that path and it cannot be read -- which on Windows is routinely true for a moment anyway, when
+  // antivirus or a backup program has the file open.
+  await mkdir(lockFile(dir, 'default'), { recursive: true })
+
+  assert.equal(await security.hasPassword('default'), false)
+  assert.equal(security.unreadableFor('default'), true)
+  await assert.rejects(() => security.create('default', GOOD), (err: AccountFailure) => err.code === 'io')
+  assert.deepEqual(await movedAside(dir), [], 'and nothing was moved either')
+})
+
+test('no password file at all still means defaults, and a password may still be set', SLOW, async () => {
+  const { security, dir } = await fresh()
+  assert.equal(await security.hasPassword('default'), false)
+  assert.equal(security.unreadableFor('default'), false, 'nothing is there, so nothing is at risk')
+  assert.equal((await security.status('default')).hasPassword, false)
+
+  await security.create('default', GOOD)
+  assert.equal(await security.hasPassword('default'), true, 'a missing file is still the one case that may be written')
+  assert.deepEqual(await movedAside(dir), [], 'and nothing was moved aside on the way')
 })

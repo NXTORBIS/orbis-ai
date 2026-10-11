@@ -1,9 +1,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { SecurityLog } from './securityLog.ts'
+import { dataDirFor } from '../shared/profiles.ts'
 import { MAX_SECURITY_EVENTS } from '../shared/securityEvents.ts'
 
 /**
@@ -186,6 +187,147 @@ test('clearing leaves nothing to read, not an empty list in a file', async () =>
     await w.log.clear('default')
     assert.deepEqual(await w.log.all('default'), [])
     await assert.rejects(() => readFile(path, 'utf8'), 'the file is still there')
+  } finally {
+    await w.cleanUp()
+  }
+})
+
+// ================================================================ a log that was not understood
+
+/** Where a profile's log lives, without having to go looking for it. */
+const logFile = (dir: string, profileId = 'default'): string => join(dir, dataDirFor(profileId), 'security-log.json')
+
+/** The names of anything quarantined beside the log, newest first. */
+const movedAside = async (dir: string): Promise<string[]> =>
+  (await readdir(join(dir, dataDirFor('default'))))
+    .filter((name) => name.startsWith('security-log.json.unreadable-'))
+    .sort()
+    .reverse()
+
+/** Whether a half-finished write was left behind. Nothing removes it, so its absence means no write was attempted. */
+const triedToWrite = async (dir: string): Promise<boolean> =>
+  (await readdir(join(dir, dataDirFor('default')))).includes('security-log.json.tmp')
+
+test('a truncated log is kept, not read as "nothing happened"', async () => {
+  const w = await bench()
+  try {
+    w.log.record('default', { kind: 'FAILED_ACCOUNT_UNLOCK', at: 1_700_000_000_000 })
+    w.log.record('default', { kind: 'TAB_PASSWORD_RESET', password: 'Banking', at: 1_700_000_001_000 })
+    await w.log.flush()
+    // What a write interrupted by a power cut leaves behind: readable, nearly all there, and not JSON.
+    const whole = await readFile(logFile(w.dir), 'utf8')
+    const cut = whole.slice(0, whole.length - 10)
+    await writeFile(logFile(w.dir), cut)
+
+    // Orbis starts again and logs one thing of its own.
+    const after = new SecurityLog(w.dir)
+    after.record('default', { kind: 'ACCOUNT_UNLOCKED' })
+    await after.flush()
+    after.stop()
+
+    // What is shown is only this session, because the rest cannot be made sense of...
+    assert.deepEqual((await after.all('default')).map((e) => e.kind), ['ACCOUNT_UNLOCKED'])
+
+    // ...but the attempts somebody needed to see are still on the disk, byte for byte, under their own name. This is
+    // the whole point: before, those two events were silently replaced by the single one above, and the short list
+    // read as the complete record.
+    const kept = await movedAside(w.dir)
+    assert.equal(kept.length, 1, 'the damaged log was moved aside, not overwritten')
+    const bytes = await readFile(join(w.dir, dataDirFor('default'), kept[0]), 'utf8')
+    assert.equal(bytes, cut, 'byte for byte what was there')
+    assert.match(bytes, /FAILED_ACCOUNT_UNLOCK/, 'including the wrong password nobody would otherwise know about')
+    assert.match(bytes, /Banking/)
+
+    // And once it is safely aside the log really does start again, so this is not passing because nothing was written.
+    assert.match(await readFile(logFile(w.dir), 'utf8'), /ACCOUNT_UNLOCKED/)
+  } finally {
+    await w.cleanUp()
+  }
+})
+
+test('a log in a shape this Orbis does not know is kept too, rather than treated as absent', async () => {
+  const w = await bench()
+  try {
+    // What a newer Orbis might leave: good JSON, and not a list of events this one has ever heard of. Treating it as
+    // "no log yet" is the same loss as a truncated file, so it takes the same path.
+    const newer = '{"version":2,"events":[{"kind":"SCREEN_RECORDED","at":1700000000000}]}'
+    await writeFile(logFile(w.dir), newer)
+
+    w.log.record('default', { kind: 'TAB_LOCKED' })
+    await w.log.flush()
+
+    const kept = await movedAside(w.dir)
+    assert.equal(kept.length, 1, 'kept rather than replaced')
+    assert.equal(await readFile(join(w.dir, dataDirFor('default'), kept[0]), 'utf8'), newer)
+    assert.match(await readFile(logFile(w.dir), 'utf8'), /TAB_LOCKED/, 'and this Orbis carried on')
+  } finally {
+    await w.cleanUp()
+  }
+})
+
+test('a list of events none of which are events is damage, not an empty log', async () => {
+  const w = await bench()
+  try {
+    const foreign = '[{"event":"locked","when":"yesterday"}]'
+    await writeFile(logFile(w.dir), foreign)
+    w.log.record('default', { kind: 'PANIC_LOCK' })
+    await w.log.flush()
+    const kept = await movedAside(w.dir)
+    assert.equal(kept.length, 1)
+    assert.equal(await readFile(join(w.dir, dataDirFor('default'), kept[0]), 'utf8'), foreign)
+  } finally {
+    await w.cleanUp()
+  }
+})
+
+test('a log that could not be read is not written over, not even by the flush after', async () => {
+  const w = await bench()
+  try {
+    // A directory where the log is expected cannot be read, and the reason is not "there is no log". It stands in for
+    // the real case -- a backup tool holding the file open -- which cannot be made to happen reliably in a test.
+    await mkdir(logFile(w.dir))
+
+    w.log.record('default', { kind: 'TAB_LOCKED' })
+    await w.log.flush()
+    // The refusal used to be dropped by the very flush that obeyed it, and nothing put it back, so the next flush
+    // wrote the short list anyway. One and a half seconds of protection.
+    w.log.record('default', { kind: 'PANIC_LOCK' })
+    await w.log.flush()
+
+    assert.equal((await stat(logFile(w.dir))).isDirectory(), true, 'it was left exactly as it is')
+    assert.equal(await triedToWrite(w.dir), false, 'and no write was attempted at all')
+    assert.equal((await movedAside(w.dir)).length, 0, 'nor moved aside, because it may be perfectly good')
+  } finally {
+    await w.cleanUp()
+  }
+})
+
+test('clearing a log that could not be read does not then allow it to be written over', async () => {
+  const w = await bench()
+  try {
+    await mkdir(logFile(w.dir))
+    // Clearing removes the file. This one resists being removed, so it is still there and still not understood, and
+    // forgetting that is how the next flush would write over it.
+    await w.log.clear('default')
+    w.log.record('default', { kind: 'TAB_LOCKED' })
+    await w.log.flush()
+    w.log.record('default', { kind: 'PANIC_LOCK' })
+    await w.log.flush()
+    assert.equal((await stat(logFile(w.dir))).isDirectory(), true)
+    assert.equal(await triedToWrite(w.dir), false)
+  } finally {
+    await w.cleanUp()
+  }
+})
+
+test('no log yet is still no log yet: nothing to show, and a write is allowed', async () => {
+  const w = await bench()
+  try {
+    assert.deepEqual(await w.log.all('default'), [])
+    assert.equal((await movedAside(w.dir)).length, 0, 'nothing was moved aside, because nothing was there')
+    w.log.record('default', { kind: 'ACCOUNT_CREATED' })
+    await w.log.flush()
+    assert.match(await readFile(logFile(w.dir), 'utf8'), /ACCOUNT_CREATED/, 'the write was allowed')
   } finally {
     await w.cleanUp()
   }

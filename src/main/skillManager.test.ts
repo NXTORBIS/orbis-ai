@@ -52,28 +52,31 @@ function setup() {
   const dir = mkdtempSync(join(tmpdir(), 'orbis-skills-'))
   const store = new WorkflowStore(dir)
   const started: { id: string; inputs?: Record<string, unknown> }[] = []
-  const skills = new SkillManager({
-    userData: dir,
-    capabilities: () => CAPS,
-    workflows: {
-      get: (id) => store.get(id),
-      save: (w, note) => store.save(w, note),
-      remove: (id) => store.remove(id),
-      history: (id) => store.runs(id),
-      versions: (id) => store.versions(id),
-      restoreVersion: (id, v) => store.restoreVersion(id, v),
-      run: async (id, options) => {
-        started.push({ id, inputs: options.inputs })
-        return { runId: 'r', workflowId: id } as ActiveWorkflowRun
-      }
-    },
-    announce: () => undefined
-  })
+  // One more manager over the same folder is how a restart is tested: nothing is read from the disk twice otherwise.
+  const make = (): SkillManager =>
+    new SkillManager({
+      userData: dir,
+      capabilities: () => CAPS,
+      workflows: {
+        get: (id) => store.get(id),
+        save: (w, note) => store.save(w, note),
+        remove: (id) => store.remove(id),
+        history: (id) => store.runs(id),
+        versions: (id) => store.versions(id),
+        restoreVersion: (id, v) => store.restoreVersion(id, v),
+        run: async (id, options) => {
+          started.push({ id, inputs: options.inputs })
+          return { runId: 'r', workflowId: id } as ActiveWorkflowRun
+        }
+      },
+      announce: () => undefined
+    })
+  const skills = make()
   const useProfile = (id: string): void => {
     store.useProfile(id)
     skills.useProfile(id)
   }
-  return { dir, store, skills, started, useProfile, done: () => rmSync(dir, { recursive: true, force: true }) }
+  return { dir, store, skills, make, started, useProfile, done: () => rmSync(dir, { recursive: true, force: true }) }
 }
 
 const summary = (workflowId: string, version: number, status: WorkflowRunSummary['status'], startedAt: number): WorkflowRunSummary => ({
@@ -225,6 +228,92 @@ test('an exported skill imports switched off and untrusted, and cannot run until
 
     await assert.rejects(t.skills.importSkill('{"kind":"orbis-skill","format":1}'), /incomplete/)
     await assert.rejects(t.skills.importSkill('not json'), /not an Orbis skill/)
+  } finally {
+    t.done()
+  }
+})
+
+/**
+ * The settings, the count of repeated goals and each skill's own file were all read inside
+ * `.then(JSON.parse).catch(() => defaults)`, which makes a damaged file indistinguishable from one that was never
+ * written. A settings.json cut off halfway through a save read as "no settings", and the next flick of any switch
+ * renamed the defaults over the rest, with no copy of the old file anywhere.
+ */
+
+test('settings that will not parse are moved aside with their words, not read as settings nobody chose', async () => {
+  const t = setup()
+  try {
+    await t.skills.setSettings({ learnFromRuns: true, reuse: 'auto' })
+    const path = join(t.dir, 'skills', 'settings.json')
+    const whole = readFileSync(path, 'utf8')
+    writeFileSync(path, whole.slice(0, -3))
+
+    const fresh = t.make()
+    assert.equal((await fresh.settings()).reuse, 'suggest', 'the file made no sense, so what is in front of the person is the defaults')
+    await fresh.setSettings({ enabled: false })
+
+    const aside = readdirSync(join(t.dir, 'skills')).filter((name) => name.includes('.unreadable-'))
+    assert.equal(aside.length, 1, 'the damaged file was moved aside, never deleted')
+    assert.ok(readFileSync(join(t.dir, 'skills', aside[0]), 'utf8').includes('"reuse": "auto'), 'what the person had chosen is still on the disk')
+    assert.equal((await t.make().settings()).enabled, false, 'and the fresh one was saved in its place')
+  } finally {
+    t.done()
+  }
+})
+
+test('settings that are there and cannot be read are never written over, and the person is told why', async () => {
+  const t = setup()
+  try {
+    await t.skills.setSettings({ learnFromRuns: true, reuse: 'auto' })
+    const path = join(t.dir, 'skills', 'settings.json')
+    rmSync(path)
+    // A folder where the file belongs: reading it fails with EISDIR, not ENOENT. It stands in for the real cases --
+    // something holding the file open, a backup copying it -- which cannot be made to happen reliably in a test.
+    mkdirSync(path)
+
+    const fresh = t.make()
+    assert.equal((await fresh.settings()).reuse, 'suggest')
+    await assert.rejects(fresh.setSettings({ enabled: false }), /nothing has been written over it/)
+    assert.equal(readdirSync(path).length, 0, 'nothing was written in its place')
+    assert.equal(readdirSync(join(t.dir, 'skills')).some((name) => name.includes('.unreadable-')), false, 'and it was not moved either: it may be perfectly good')
+  } finally {
+    t.done()
+  }
+})
+
+test('a damaged count of repeated goals is kept, and the next success does not start on top of nothing', async () => {
+  const t = setup()
+  try {
+    for (const _ of [1, 2, 3]) await t.skills.countSuccess('download the latest report')
+    assert.equal(await t.skills.timesDone('download the latest report'), 3)
+    const path = join(t.dir, 'skills', 'repeats.json')
+    const whole = readFileSync(path, 'utf8')
+    writeFileSync(path, whole.slice(0, -2))
+
+    assert.equal(await t.skills.timesDone('download the latest report'), 0, 'asked a question it cannot answer, Orbis does not invent a number')
+    assert.equal(readdirSync(join(t.dir, 'skills')).some((name) => name.includes('.unreadable-')), false, 'and asking moved nothing')
+
+    assert.equal(await t.skills.countSuccess('download the latest report'), 1, 'counting again starts over, because the old count could not be read')
+    const aside = readdirSync(join(t.dir, 'skills')).filter((name) => name.includes('.unreadable-'))
+    assert.equal(aside.length, 1)
+    assert.ok(readFileSync(join(t.dir, 'skills', aside[0]), 'utf8').includes('3'), 'the three the person had done are still on the disk')
+  } finally {
+    t.done()
+  }
+})
+
+test('a skill file from a newer Orbis is left exactly where it is, not moved and not written over', async () => {
+  const t = setup()
+  try {
+    await t.skills.saveFromRun(PDF_RUN())
+    const path = join(t.dir, 'skills', 'from-the-future.json')
+    const future = JSON.stringify({ format: 99, workflowId: 'from-the-future', whenToUse: 'something this Orbis cannot do' })
+    writeFileSync(path, future)
+
+    const fresh = t.make()
+    assert.equal((await fresh.list()).length, 1, 'it is left out of the library, like a damaged one')
+    assert.equal(readFileSync(path, 'utf8'), future, 'and still there untouched, so it is a skill again after the next update')
+    assert.equal(readdirSync(join(t.dir, 'skills')).some((name) => name.includes('.unreadable-')), false)
   } finally {
     t.done()
   }

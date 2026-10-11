@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict'
 import { describe, it } from 'node:test'
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 import { compile, isCompileError } from '../../shared/pages/compiler.ts'
 import { SPEC_VERSION, type PageSpec } from '../../shared/pages/spec.ts'
 import { publish, startGraph, type VersionGraph } from '../../shared/pages/versioning.ts'
 import { manifestToJson } from '../../shared/pages/manifest.ts'
-import { cleanGraph, cleanSaved, GENERATED_LIMITS } from './generatedStore.ts'
+import { cleanGraph, cleanSaved, GeneratedStore, GENERATED_LIMITS } from './generatedStore.ts'
 
 const OPERATIONS: Readonly<Record<string, string>> = Object.freeze({ 'motion.projectile': 'computation.physics' })
 
@@ -188,5 +191,115 @@ describe('reading the whole file back', () => {
     assert.equal(read.sessions.length, GENERATED_LIMITS.sessions)
     // The newest are the ones kept.
     assert.equal(read.sessions.at(-1)?.sessionId, `s${many.length - 1}`)
+  })
+})
+
+/**
+ * The file on disk, in the four states it can really be in.
+ *
+ * Everything above is `cleanSaved` on a value somebody handed it. These are about the file: no file, a file that reads
+ * and makes sense, a file that reads and does not, and a file that cannot be read at all. Three of those used to be
+ * treated as one, and the middle one is the one that lost Pages -- a write interrupted half-way leaves bytes that are
+ * perfectly readable and not JSON, and calling that "there is nothing here" meant starting empty and then renaming
+ * that emptiness over every Page the person had built.
+ */
+describe('the file on disk', () => {
+  const PROFILE = 'default'
+  const fileIn = (dir: string): string => join(dir, 'pages', 'generated.json')
+
+  /** Copies of a damaged file, by the name `quarantine()` gives them. */
+  const movedAside = async (dir: string): Promise<string[]> =>
+    (await readdir(join(dir, 'pages'))).filter((name) => name.startsWith('generated.json.unreadable-'))
+
+  async function withDir(body: (dir: string) => Promise<void>): Promise<void> {
+    const dir = await mkdtemp(join(tmpdir(), 'orbis-generated-store-'))
+    try {
+      await body(dir)
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  }
+
+  it('reads back a Page it wrote, which is what surviving a restart means', async () => {
+    await withDir(async (dir) => {
+      const { graph } = built()
+      const before = new GeneratedStore(dir, OPERATIONS)
+      assert.deepEqual(await before.putGraph(PROFILE, graph), { saved: true, message: '' })
+      await before.flush()
+
+      // The whole point of writing the file. It used to come back empty: a manifest holds its version as three numbers
+      // in memory, `JSON.stringify` wrote that out as an object, and every version was then dropped on the way in.
+      const after = new GeneratedStore(dir, OPERATIONS)
+      const read = await after.graphs(PROFILE)
+      assert.equal(read.length, 1)
+      assert.equal(read[0].pageId, graph.pageId)
+      assert.equal(read[0].publishedVersionId, 'v1')
+      assert.deepEqual(await movedAside(dir), [])
+    })
+  })
+
+  it('moves a half-written file aside, and its words are still on the disk afterwards', async () => {
+    await withDir(async (dir) => {
+      // Exactly what a write interrupted half-way leaves behind: readable, and not JSON.
+      const half = '{"graphs":[{"pageId":"page_a1b2c3d4e5f6a7b8c9d0e1f2","nodes":[{"versionId":"v1","man'
+      await mkdir(join(dir, 'pages'), { recursive: true })
+      await writeFile(fileIn(dir), half, 'utf8')
+
+      const store = new GeneratedStore(dir, OPERATIONS)
+      assert.deepEqual(await store.graphs(PROFILE), [])
+
+      const moved = await movedAside(dir)
+      assert.equal(moved.length, 1)
+      assert.equal(await readFile(join(dir, 'pages', moved[0]), 'utf8'), half)
+
+      // Moved rather than overwritten, so this session may now save normally.
+      await store.putGraph(PROFILE, built().graph)
+      await store.flush()
+      const written = JSON.parse(await readFile(fileIn(dir), 'utf8')) as { graphs: unknown[] }
+      assert.equal(written.graphs.length, 1)
+      assert.equal((await movedAside(dir)).length, 1)
+    })
+  })
+
+  it('never writes over a file that is there and cannot be read, however many saves follow', async () => {
+    await withDir(async (dir) => {
+      // A directory where the file should be is a file that exists and cannot be read -- EISDIR, not ENOENT -- which
+      // is the same answer Orbis gets on Windows for the moment something else is holding the real file open.
+      await mkdir(fileIn(dir), { recursive: true })
+
+      const store = new GeneratedStore(dir, OPERATIONS)
+      assert.deepEqual(await store.graphs(PROFILE), [])
+
+      await store.putGraph(PROFILE, built().graph)
+      await store.flush()
+      // Nothing moved, nothing written beside it, nothing left half-written: only the thing that was in the way.
+      assert.deepEqual(await readdir(join(dir, 'pages')), ['generated.json'])
+
+      // And again. The refusal used to clear itself on the way out, so the second save went through and did the damage
+      // the first one had just avoided.
+      await store.putGraph(PROFILE, { ...built().graph, pageId: 'page_c1b2c3d4e5f6a7b8c9d0e1f2' })
+      await store.flush()
+      assert.deepEqual(await readdir(join(dir, 'pages')), ['generated.json'])
+
+      // Including on the way out of the process.
+      await store.putGraph(PROFILE, { ...built().graph, pageId: 'page_d1b2c3d4e5f6a7b8c9d0e1f2' })
+      store.flushSync()
+      assert.deepEqual(await readdir(join(dir, 'pages')), ['generated.json'])
+    })
+  })
+
+  it('still starts empty when there is no file, and still writes one', async () => {
+    await withDir(async (dir) => {
+      const store = new GeneratedStore(dir, OPERATIONS)
+      assert.deepEqual(await store.graphs(PROFILE), [])
+      assert.deepEqual(await store.sessions(PROFILE, 1000), [])
+
+      await store.putGraph(PROFILE, built().graph)
+      await store.flush()
+      const written = JSON.parse(await readFile(fileIn(dir), 'utf8')) as { graphs: unknown[] }
+      assert.equal(written.graphs.length, 1)
+      // Nothing was moved aside, because there was nothing there to move.
+      assert.deepEqual(await movedAside(dir), [])
+    })
   })
 })

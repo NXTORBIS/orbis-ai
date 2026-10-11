@@ -25,13 +25,13 @@
  */
 
 import { mkdirSync, renameSync, writeFileSync } from 'node:fs'
-import { readStored } from '../storedFile.ts'
+import { openStored } from '../storedFile.ts'
 import fs from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
 import { check, type PageDocument } from '../../shared/pages/builder.ts'
 import { isExpired, RESTING, type GenerationSession, type Stage } from '../../shared/pages/generation.ts'
-import { readManifest, type PageManifest } from '../../shared/pages/manifest.ts'
+import { manifestToJson, readManifest, type PageManifest } from '../../shared/pages/manifest.ts'
 import { checkSpec, type PageSpec } from '../../shared/pages/spec.ts'
 import { VERSION_LIMITS, type PageVersionNode, type VersionGraph, type VersionState } from '../../shared/pages/versioning.ts'
 
@@ -161,6 +161,24 @@ export function cleanSaved(raw: unknown, operations: Readonly<Record<string, str
   return { graphs: graphs.slice(0, GENERATED_LIMITS.pages), sessions: sessions.slice(-GENERATED_LIMITS.sessions) }
 }
 
+/**
+ * The file, in the form it is written in.
+ *
+ * Every manifest goes out through `manifestToJson`, because that is the form `readManifest` reads one back from. A
+ * manifest in memory holds its version as three numbers, and `JSON.stringify` writes that out as an object, which
+ * `readManifest` refuses -- so `cleanNode` dropped every version on the way back in and the whole library came back
+ * empty. Writing the built object was silent, total loss: build three Pages, restart Orbis, and they were gone,
+ * because the file was perfectly good JSON that said nothing this store would accept.
+ */
+const asWritten = (saved: Saved): string =>
+  JSON.stringify({
+    ...saved,
+    graphs: saved.graphs.map((graph) => ({
+      ...graph,
+      nodes: graph.nodes.map((one) => ({ ...one, manifest: manifestToJson(one.manifest) }))
+    }))
+  })
+
 export class GeneratedStore {
   private readonly root: string
   private readonly operations: Readonly<Record<string, string>>
@@ -180,21 +198,31 @@ export class GeneratedStore {
   private async read(profileId: string): Promise<Saved> {
     const held = this.cache.get(profileId)
     if (held) return held
-    let saved: Saved
-    try {
-      const stored = await readStored(this.fileFor(profileId))
-      if (stored.kind === 'unreadable') this.unreadable.add(profileId)
-      else this.unreadable.delete(profileId)
-      if (stored.kind !== 'read') throw new Error('nothing to read')
-      saved = cleanSaved(JSON.parse(stored.text), this.operations)
-    } catch {
-      saved = { ...EMPTY }
-    }
-    this.cache.set(profileId, saved)
-    return saved
+    // The parse belongs inside `openStored`, not in a `try` of our own. It used to sit in the same `try` as the read,
+    // which made a file that is there but not valid JSON -- a write interrupted by a power cut, a half-finished sync --
+    // look exactly like no file at all: an empty library in memory, the mark that refuses writes cleared, and the next
+    // Page built renamed that emptiness over every Page this profile had ever generated, every version of each of them,
+    // with nothing kept anywhere. `openStored` tells the two apart: a damaged file is moved aside under its own name
+    // first, so the words are still on the disk, and only then may anything be written. When it could not even be
+    // moved, `mayWrite` is false and this store refuses to write at all, because something is there and Orbis does not
+    // know what.
+    const opened = await openStored(
+      this.fileFor(profileId),
+      (text) => cleanSaved(JSON.parse(text), this.operations),
+      () => ({ ...EMPTY })
+    )
+    if (opened.mayWrite) this.unreadable.delete(profileId)
+    else this.unreadable.add(profileId)
+    this.cache.set(profileId, opened.value)
+    return opened.value
   }
 
-  /** Profiles whose file is there and could not be read. Nothing is written over those. */
+  /**
+   * Profiles whose file may not be written over: there is one, and it was neither read nor moved out of the way.
+   *
+   * Set from `mayWrite` rather than worked out here, so the rule lives in one place. It stays set until the file is
+   * looked at again, which is the next time this profile's cache is empty.
+   */
   private readonly unreadable = new Set<string>()
 
   private touch(profileId: string): void {
@@ -218,15 +246,16 @@ export class GeneratedStore {
     if (!saved) return
     if (this.unreadable.has(profileId)) {
       // A file is there that Orbis could not read: it holds what this profile has decided and what it has made,
-      // so it is left alone and looked at again next time rather than written over with defaults.
-      this.unreadable.delete(profileId)
+      // so it is left alone and looked at again next time rather than written over with defaults. The mark is not
+      // cleared here -- clearing it let the very next save through a moment later, which is the write this whole
+      // branch exists to stop.
       return
     }
     const file = this.fileFor(profileId)
     await fs.mkdir(dirname(file), { recursive: true })
     const temporary = `${file}.tmp`
     // Write beside, then move: an interrupted write leaves the old file rather than half of the new one.
-    await fs.writeFile(temporary, JSON.stringify(saved), 'utf8')
+    await fs.writeFile(temporary, asWritten(saved), 'utf8')
     await fs.rename(temporary, file)
   }
 
@@ -238,11 +267,16 @@ export class GeneratedStore {
     for (const profileId of [...this.dirty]) {
       const saved = this.cache.get(profileId)
       if (!saved) continue
+      if (this.unreadable.has(profileId)) {
+        // The same rule as the timed write, because quitting is not a reason to overwrite something Orbis never
+        // understood. Losing the last few seconds of a session is recoverable; this is not.
+        continue
+      }
       try {
         const file = this.fileFor(profileId)
         mkdirSync(dirname(file), { recursive: true })
         const temporary = `${file}.tmp`
-        writeFileSync(temporary, JSON.stringify(saved), 'utf8')
+        writeFileSync(temporary, asWritten(saved), 'utf8')
         renameSync(temporary, file)
       } catch {
         // The very end of the process. There is nowhere to report this and nothing that could act on it.

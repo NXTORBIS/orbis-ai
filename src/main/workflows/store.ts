@@ -1,5 +1,5 @@
 import { promises as fs } from 'node:fs'
-import { readStored } from '../storedFile.ts'
+import { openStored } from '../storedFile.ts'
 import { nullPlatform } from '../platform.ts'
 import type { SecretStorePort } from '../platform'
 import { join } from 'node:path'
@@ -12,6 +12,17 @@ export type { WorkflowCheckpoint, WorkflowVersion }
 const MAX_VERSIONS = 50
 const MAX_RUNS = 500
 const ID = /^[A-Za-z0-9_-]{1,80}$/
+
+/**
+ * What a workflow file has to be for this version of Orbis to use it.
+ *
+ * Failing this is checked while the file is being read rather than afterwards, so it counts as a file Orbis could not
+ * make sense of and goes down the same path as one that will not parse: moved aside under its own name, nothing
+ * written over it. A file saved by a newer Orbis, with a format number this one has never heard of, is the case that
+ * matters -- it used to be dropped as quietly as a file that was not there, which left the person's workflow out of
+ * their library with the next save free to land on top of it.
+ */
+const usableWorkflow = (w: Workflow | null): boolean => !!w && w.format === WORKFLOW_FORMAT && typeof w.id === 'string' && Array.isArray(w.steps)
 
 /**
  * Where workflows live on disk (under the user's data folder): each workflow in its own file, its earlier versions,
@@ -70,6 +81,9 @@ export class WorkflowStore {
    * Reading used to treat "could not be read" and "is not there" as the same thing, so a workflow file something
    * else had open for a moment looked like no workflow at all -- and the next save wrote an empty one over it.
    * Workflow files hold what a workflow was told to remember, which does not exist anywhere else.
+   *
+   * A damaged file that could not even be moved aside lands here too, for the same reason: it is still sitting there
+   * and still not understood.
    */
   private readonly unreadable = new Set<string>()
 
@@ -89,19 +103,30 @@ export class WorkflowStore {
     return run
   }
 
-  private async read<T>(path: string, fallback: T): Promise<T> {
-    const stored = await readStored(path)
-    if (stored.kind === 'unreadable') {
-      // There is a file; Orbis just could not read it. Carry on from the fallback, but never write over it.
-      this.unreadable.add(path)
-      return fallback
+  /**
+   * Reads one of these files, with the damaged case kept apart from the absent one.
+   *
+   * The parse used to sit in its own `try` that fell back to the same empty value a missing file gives, so a workflow
+   * file that was half written -- Orbis stopped mid-save, the disk filled, a copy caught it part way -- read as no
+   * workflow at all and the next save put the empty value on top of it. A truncated file reads perfectly well; it
+   * just does not parse, which is why that case has to be told apart from the file not being there.
+   *
+   * `openStored` is the one place that knows the four cases. It moves a file it cannot make sense of aside under its
+   * own name first, so the words are still on the disk, and only says writing is allowed once that worked. When it
+   * says writing is not allowed -- the file is locked, or it could not be moved -- the path goes in `unreadable` and
+   * saves to it are refused, because something is there and Orbis does not know what.
+   *
+   * `check` is for the shape: a file this version of Orbis does not understand is damaged, not absent.
+   */
+  private async read<T>(path: string, fallback: T, check?: (value: T) => boolean): Promise<T> {
+    const parse = (text: string): T => {
+      const value = JSON.parse(text) as T
+      if (check && !check(value)) throw new Error('Not something this version of Orbis understands.')
+      return value
     }
-    if (stored.kind === 'missing') return fallback
-    try {
-      return JSON.parse(stored.text) as T
-    } catch {
-      return fallback
-    }
+    const opened = await openStored<T>(path, parse, () => fallback)
+    if (!opened.mayWrite) this.unreadable.add(path)
+    return opened.value
   }
 
   // ---------------------------------------------------------------- workflows
@@ -112,8 +137,8 @@ export class WorkflowStore {
       const names = await fs.readdir(this.file('items')).catch(() => [] as string[])
       for (const name of names) {
         if (!name.endsWith('.json')) continue
-        const w = await this.read<Workflow | null>(this.file('items', name), null)
-        if (w && w.format === WORKFLOW_FORMAT && typeof w.id === 'string' && Array.isArray(w.steps)) this.cache.set(w.id, w)
+        const w = await this.read<Workflow | null>(this.file('items', name), null, usableWorkflow)
+        if (w) this.cache.set(w.id, w)
       }
     }
     return [...this.cache.values()].sort((a, b) => Number(b.pinned) - Number(a.pinned) || b.updatedAt - a.updatedAt)

@@ -21,8 +21,21 @@ export type { SkillEdits, SkillView }
 import type { StepSession } from '../shared/stepPlan.ts'
 import { exportWorkflow, importWorkflow, newWorkflow } from '../shared/workflows.ts'
 import type { ActiveWorkflowRun, Workflow, WorkflowRunSummary, WorkflowVersion } from '../shared/workflows.ts'
+import { damageNote, openStored, readStored, writeStored } from './storedFile.ts'
 
 const ID = /^[A-Za-z0-9_-]{1,80}$/
+
+/**
+ * How many times a goal has been reached, or nothing when the file is not that.
+ *
+ * It throws instead of shrugging, so a file that is there and makes no sense goes down the damaged path rather than
+ * the missing one. `null` used to come back from here as a value and then crash the save that followed it.
+ */
+function asCounts(text: string): Record<string, number> {
+  const raw = JSON.parse(text) as unknown
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('not a count of repeated goals')
+  return raw as Record<string, number>
+}
 
 /** What skills need from the rest of Orbis, handed in so this file knows nothing about Electron. */
 export interface SkillManagerOptions {
@@ -54,6 +67,10 @@ export class SkillManager {
   private cache: Map<string, SkillMeta> | null = null
   private settingsCache: SkillSettings | null = null
   private readonly queues = new Map<string, Promise<void>>()
+  /** Files that are there and were not understood, by path. Nothing is ever written over one of these. */
+  private readonly refuse = new Set<string>()
+  /** What to tell the person about their settings file, when there is something to tell them. */
+  private settingsNote: string | null = null
 
   constructor(options: SkillManagerOptions) {
     this.o = options
@@ -65,6 +82,7 @@ export class SkillManager {
     this.profileId = profileId
     this.cache = null
     this.settingsCache = null
+    this.settingsNote = null
   }
 
   private dir(): string {
@@ -73,11 +91,10 @@ export class SkillManager {
 
   /** Written whole to a temporary file and renamed into place, one write per file at a time, so a crash leaves the old one. */
   private write(path: string, data: unknown): Promise<void> {
-    const run = (this.queues.get(path) ?? Promise.resolve()).then(async () => {
-      await fs.mkdir(join(path, '..'), { recursive: true })
-      await fs.writeFile(`${path}.tmp`, JSON.stringify(data, null, 1), { mode: 0o600 })
-      await fs.rename(`${path}.tmp`, path)
-    })
+    // Nothing goes over a file that is there and was not understood. A damaged one was moved aside by the read before
+    // it reached here, so its place is free; what this stops is the one still sitting there holding the person's work.
+    if (this.refuse.has(path)) return Promise.resolve()
+    const run = (this.queues.get(path) ?? Promise.resolve()).then(() => writeStored(path, JSON.stringify(data, null, 1)))
     this.queues.set(path, run.catch(() => undefined))
     return run
   }
@@ -86,14 +103,29 @@ export class SkillManager {
 
   async settings(): Promise<SkillSettings> {
     if (!this.settingsCache) {
-      const raw = await fs.readFile(join(this.dir(), 'settings.json'), 'utf8').then(JSON.parse).catch(() => undefined)
-      this.settingsCache = normalizeSkillSettings(raw)
+      const path = join(this.dir(), 'settings.json')
+      /**
+       * The parse goes to `openStored` rather than into a `catch` here, and that is the whole point: a settings file
+       * cut off halfway through a save reads perfectly and parses not at all. This used to answer that with the
+       * defaults, and the next flick of any switch renamed the defaults over the rest -- learning back off, reuse back
+       * to suggesting -- with no copy of the old file left anywhere. Now it is moved aside with its words intact
+       * first, and one that is merely being held open is left exactly as it is and refuses the write.
+       */
+      const opened = await openStored(path, (text) => normalizeSkillSettings(JSON.parse(text)), () => normalizeSkillSettings(undefined))
+      if (opened.mayWrite) this.refuse.delete(path)
+      else this.refuse.add(path)
+      this.settingsNote = opened.mayWrite ? null : damageNote(opened, 'skill settings')
+      this.settingsCache = opened.value
     }
     return { ...this.settingsCache }
   }
 
   async setSettings(next: Partial<SkillSettings>): Promise<SkillSettings> {
-    const merged = normalizeSkillSettings({ ...(await this.settings()), ...next })
+    const current = await this.settings()
+    // Said, not done quietly. The switch in front of the person must not move when the file it belongs to could not be
+    // read, because nothing has been saved and it would be back where it was the next time Orbis started.
+    if (this.settingsNote) throw new Error(this.settingsNote)
+    const merged = normalizeSkillSettings({ ...current, ...next })
     this.settingsCache = merged
     await this.write(join(this.dir(), 'settings.json'), merged)
     this.o.announce()
@@ -106,11 +138,30 @@ export class SkillManager {
   private async all(): Promise<Map<string, SkillMeta>> {
     if (!this.cache) {
       const found = new Map<string, SkillMeta>()
-      const names = await fs.readdir(this.dir()).catch(() => [] as string[])
+      let names: string[] = []
+      try {
+        names = await fs.readdir(this.dir())
+      } catch (err) {
+        // No folder means no skills have been saved yet, and that is remembered. A folder that is there and could not
+        // be listed is not: a moment of something holding it would otherwise leave the library looking empty until
+        // Orbis was restarted.
+        if ((err as NodeJS.ErrnoException)?.code !== 'ENOENT') return found
+      }
       for (const name of names) {
         if (!name.endsWith('.json') || name === 'settings.json') continue
-        const meta = (await fs.readFile(join(this.dir(), name), 'utf8').then(JSON.parse).catch(() => null)) as SkillMeta | null
-        if (meta && meta.format === SKILL_FORMAT && typeof meta.workflowId === 'string' && ID.test(meta.workflowId)) found.set(meta.workflowId, meta)
+        const path = join(this.dir(), name)
+        const opened = await openStored(path, (text) => JSON.parse(text) as SkillMeta | null, () => null)
+        const meta = opened.value
+        if (meta && meta.format === SKILL_FORMAT && typeof meta.workflowId === 'string' && ID.test(meta.workflowId)) {
+          found.set(meta.workflowId, meta)
+          this.refuse.delete(path)
+          continue
+        }
+        // Left out of the library either way, but not written over either. A file that parsed and still made no sense
+        // is most likely a skill saved by a newer Orbis, so it is left exactly where it is rather than moved aside: it
+        // has to still be a skill after the next update. Only a file whose bytes are already safe elsewhere is free.
+        if (opened.movedTo) this.refuse.delete(path)
+        else this.refuse.add(path)
       }
       this.cache = found
     }
@@ -170,7 +221,12 @@ export class SkillManager {
     const key = goalKey(goal)
     if (!key) return 0
     const path = join(this.dir(), 'repeats.json')
-    const counts = (await fs.readFile(path, 'utf8').then(JSON.parse).catch(() => ({}))) as Record<string, number>
+    const opened = await openStored(path, asCounts, (): Record<string, number> => ({}))
+    // A count cut off halfway through a save used to read as "nothing has ever been repeated", and this line then
+    // renamed one count over every count the person had built up. Damaged, it has been moved aside by now and a fresh
+    // one is right; unreadable, this success goes uncounted rather than counted on top of nothing.
+    if (!opened.mayWrite) return 0
+    const counts = opened.value
     counts[key] = (counts[key] ?? 0) + 1
     const kept = Object.fromEntries(Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 500))
     await this.write(path, kept)
@@ -178,8 +234,15 @@ export class SkillManager {
   }
 
   async timesDone(goal: string): Promise<number> {
-    const counts = (await fs.readFile(join(this.dir(), 'repeats.json'), 'utf8').then(JSON.parse).catch(() => ({}))) as Record<string, number>
-    return counts[goalKey(goal)] ?? 0
+    // A question moves nothing aside, so this reads rather than opens: a file that makes no sense is left for the
+    // next success to deal with, and until then Orbis says it does not know of any rather than inventing a number.
+    const stored = await readStored(join(this.dir(), 'repeats.json'))
+    if (stored.kind !== 'read') return 0
+    try {
+      return asCounts(stored.text)[goalKey(goal)] ?? 0
+    } catch {
+      return 0
+    }
   }
 
   /** What saving this run would make, for the person to look at first. Nothing is written. */

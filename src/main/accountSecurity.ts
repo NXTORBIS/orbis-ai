@@ -1,5 +1,5 @@
 import { promises as fs } from 'node:fs'
-import { readStored } from './storedFile.ts'
+import { damageNote, openStored } from './storedFile.ts'
 import { cleanProfileLockPolicy, DEFAULT_PROFILE_LOCK, type ProfileLockPolicy } from '../shared/profileLock.ts'
 import { dirname, join } from 'node:path'
 import { newVaultKey, unwrapKey, wipe, wrapKey } from './vault/crypto.ts'
@@ -117,40 +117,89 @@ export class AccountSecurity {
   }
 
   /**
-   * Profiles whose account file is there and could not be read.
+   * Profiles whose account file is there and could not be used, and what to tell somebody about each.
    *
    * This mattered more here than anywhere: null means "no password is set", so a file something else had open
    * for a moment meant the account looked open -- and setting a password then wrote a new file over the old one,
    * which is the password nobody can get back.
+   *
+   * The sentence is kept beside the marker rather than worked out again at the refusal, because "another program is
+   * holding the file, try again in a moment" and "it was made by a newer version of Orbis" are different situations
+   * with different things to do about them, and only the read knows which one happened.
    */
-  private readonly unreadable = new Set<string>()
+  private readonly unreadable = new Map<string, string>()
 
   private async read(profileId: string): Promise<AccountFile | null> {
-    const stored = await readStored(this.path(profileId))
-    if (stored.kind === 'unreadable') {
-      this.unreadable.add(profileId)
+    const path = this.path(profileId)
+    const opened = await openStored<AccountFile | null>(
+      path,
+      (text) => {
+        const raw = JSON.parse(text) as AccountFile | null
+        // `null`, a number, a bare string: it parsed, and there is nothing in it that could ever be a password file.
+        // Thrown so it goes down the damaged path with the rest of the rubbish, rather than being kept exactly where
+        // it is as something a later Orbis might still want.
+        if (!raw || typeof raw !== 'object') throw new Error('not an account file')
+        return raw
+      },
+      () => null
+    )
+
+    if (!opened.mayWrite) {
+      // There, not understood, and still there: either it could not be read at all, or it could not be moved aside.
+      // Either way something is on the disk and Orbis does not know what, so nothing may be written over it.
+      this.unreadable.set(
+        profileId,
+        damageNote(opened, 'password file') ?? 'Orbis could not read this profile\u2019s password file. Nothing has been changed.'
+      )
       return null
     }
     this.unreadable.delete(profileId)
-    if (stored.kind === 'missing') return null
-    try {
-      const raw = JSON.parse(stored.text) as AccountFile
-      return raw && raw.version === 1 && raw.password ? raw : null
-    } catch {
-      return null
-    }
+
+    const raw = opened.value
+    // Nothing there, or something damaged that `openStored` has already moved aside with the time in its name. Both
+    // are honestly "no password set": in the second case the original bytes are still on the disk for somebody to
+    // recover, and a profile whose password file is unreadable rubbish must not become a profile nobody can use
+    // again -- there is no reset route in Orbis that could undo that.
+    if (!raw) return null
+    if (raw.version === 1 && raw.password) return raw
+
+    /*
+     * It read, it parsed, and it is not a password file this build understands -- a newer format, or damage that
+     * happens to still be JSON.
+     *
+     * This is the case that used to be indistinguishable from having no password at all, and it is the one that cost
+     * somebody their account: the file was left alone, the marker was cleared, `status` reported no password, the
+     * window offered to set one, and `create` checked for an existing password with the same read, passed, and
+     * renamed a brand-new file over the old wrapped key. One file per profile and no reset route, so that is final.
+     *
+     * Treated as damaged, and deliberately NOT moved aside -- which is what `vault/store.ts` does with the same case
+     * for the same reason: a file written by a later Orbis must still be where that Orbis left it after a downgrade.
+     * Writing is refused instead, so "set a password" gets a sentence rather than destroying the account.
+     */
+    const newer = typeof raw.version === 'number' && raw.version > 1
+    this.unreadable.set(
+      profileId,
+      newer
+        ? 'This profile\u2019s password file was made by a newer version of Orbis. Nothing has been changed. Open that version again, or move the file aside yourself if you mean to start over.'
+        : 'Orbis does not understand this profile\u2019s password file. Nothing has been changed and nothing has been written over it.'
+    )
+    return null
   }
 
-  /** True when this profile has an account file Orbis could not read, so nothing may be written over it. */
+  /**
+   * True when this profile has an account file Orbis could not read or could not make sense of, so nothing may be
+   * written over it.
+   */
   unreadableFor(profileId: string): boolean {
     return this.unreadable.has(profileId)
   }
 
   private async write(profileId: string, file: AccountFile): Promise<void> {
-    if (this.unreadable.has(profileId)) {
+    const damage = this.unreadable.get(profileId)
+    if (damage !== undefined) {
       // Refusing is recoverable; writing a new password file over one that cannot be read is not.
       this.unreadable.delete(profileId)
-      throw new AccountFailure('io', 'Orbis could not read this profile\u2019s password file. Nothing has been changed; try again in a moment.')
+      throw new AccountFailure('io', damage)
     }
     const path = this.path(profileId)
     await fs.mkdir(dirname(path), { recursive: true })

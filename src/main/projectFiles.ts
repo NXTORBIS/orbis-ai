@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
-import { promises as fs } from 'node:fs'
 import { extname, join } from 'node:path'
 import { dataDirFor } from '../shared/profiles.ts'
+import { openStored, writeStored } from './storedFile.ts'
 
 /**
  * Files a project keeps, so every conversation in it already has them.
@@ -48,6 +48,23 @@ interface Saved {
   files: (ProjectFile & { text: string })[]
 }
 
+/**
+ * What a saved list holds, with anything in it that is not a file left out.
+ *
+ * The parse throws rather than being caught here, and that is the point: a list cut off halfway through a save reads
+ * perfectly and parses not at all, and this used to answer that with an empty project. The next file added then
+ * renamed a one-file list over the six that were really in it, and there was no copy of the old one anywhere.
+ */
+function parseSaved(text: string): Saved {
+  const raw = JSON.parse(text) as unknown
+  const files = Array.isArray((raw as Saved)?.files) ? (raw as Saved).files : []
+  return {
+    files: files.filter(
+      (one) => Boolean(one) && typeof one.id === 'string' && ID.test(one.id) && typeof one.name === 'string' && typeof one.text === 'string'
+    )
+  }
+}
+
 export class ProjectFiles {
   private readonly userData: string
   private readonly profileId: () => string
@@ -65,31 +82,36 @@ export class ProjectFiles {
     return join(this.userData, dataDirFor(this.profileId()), 'project-files', projectId)
   }
 
+  /** Projects whose file list is there and was not understood. Nothing is ever written over one of those. */
+  private readonly unreadable = new Set<string>()
+
+  /**
+   * A project's list. Opening it is left to `openStored`, which tells the three apart: no list at all, a list, and a
+   * list that is there and makes no sense. A file list that will not read is still never a crash on opening a project.
+   */
   private async read(projectId: string): Promise<Saved> {
     const dir = this.dir(projectId)
     if (!dir) return { files: [] }
-    try {
-      const raw = JSON.parse(await fs.readFile(join(dir, 'files.json'), 'utf8')) as unknown
-      const files = Array.isArray((raw as Saved)?.files) ? (raw as Saved).files : []
-      return {
-        files: files.filter(
-          (one) => Boolean(one) && typeof one.id === 'string' && ID.test(one.id) && typeof one.name === 'string' && typeof one.text === 'string'
-        )
-      }
-    } catch {
-      // A file list that will not read is a project with no files, never a crash on opening it.
-      return { files: [] }
-    }
+    const path = join(dir, 'files.json')
+    const opened = await openStored(path, parseSaved, (): Saved => ({ files: [] }))
+    // A damaged list has been moved aside by now and its place is free. One that could not be read, and one that
+    // could not be moved, are both still sitting there and may still be the person's files: those say no.
+    if (opened.mayWrite) this.unreadable.delete(path)
+    else this.unreadable.add(path)
+    return opened.value
+  }
+
+  /** Whether a new list may go over this project's. False when something is there that Orbis did not understand. */
+  private mayWrite(projectId: string): boolean {
+    const dir = this.dir(projectId)
+    return dir !== null && !this.unreadable.has(join(dir, 'files.json'))
   }
 
   private async write(projectId: string, saved: Saved): Promise<void> {
     const dir = this.dir(projectId)
-    if (!dir) return
-    await fs.mkdir(dir, { recursive: true })
-    const path = join(dir, 'files.json')
+    if (!dir || !this.mayWrite(projectId)) return
     // Written whole and renamed, so an interrupted write cannot leave a project with half a file list.
-    await fs.writeFile(`${path}.tmp`, JSON.stringify(saved), { encoding: 'utf8', mode: 0o600 })
-    await fs.rename(`${path}.tmp`, path)
+    await writeStored(join(dir, 'files.json'), JSON.stringify(saved))
   }
 
   /** The files a project holds, without their text. */
@@ -110,6 +132,10 @@ export class ProjectFiles {
     if (!words) return { ok: false, message: `${name} has no words in it that Orbis can read, so there would be nothing for it to answer from.` }
 
     const saved = await this.read(projectId)
+    // Said rather than done quietly. An empty list here is either a project with no files or a list Orbis could not
+    // read, and adding to the second one would rename this single file over everything the project really holds.
+    if (!this.mayWrite(projectId))
+      return { ok: false, message: 'This project’s file list is there and could not be read, so nothing has been written over it. Something else is probably holding the file; try again in a moment.' }
     if (saved.files.length >= MAX_PROJECT_FILES) return { ok: false, message: `A project holds ${MAX_PROJECT_FILES} files. Remove one first.` }
     const held = saved.files.reduce((n, one) => n + one.text.length, 0)
     if (held + words.length > PROJECT_FILES_LIMIT) return { ok: false, message: 'That would be more text than one project holds. Remove something first.' }

@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AccountSecurity } from './accountSecurity.ts'
@@ -451,4 +451,81 @@ test('a credential opened for one profile is not open for another with the same 
   // Opening something in the other profile must not leave the first profile's group open.
   await locks.createGroup('work', 'Work things', OTHER)
   assert.equal(locks.isOpen('default', mine.id), false, 'the profile changed, so everything closed')
+})
+
+// ================================================================ a damaged file
+
+/** The names of anything quarantined beside the locked-tab file, newest first. */
+const movedAside = async (dir: string): Promise<string[]> =>
+  (await readdir(join(dir, dataDirFor('default'))))
+    .filter((name) => name.startsWith('tab-locks.json.unreadable-'))
+    .sort()
+    .reverse()
+
+test('a half-written file is kept, not read as "nothing is locked"', SLOW, async () => {
+  const { locks, dir } = await bench()
+  const group = await locks.createGroup('default', 'Personal', TAB)
+  await locks.addRule('default', { pattern: 'bank.example', groupId: group.id })
+
+  // What a save interrupted by a power cut leaves behind: readable, and not JSON.
+  const whole = await readFile(lockFile(dir), 'utf8')
+  await writeFile(lockFile(dir), whole.slice(0, Math.floor(whole.length / 2)))
+
+  // Orbis carries on with nothing locked, because it cannot do otherwise...
+  assert.deepEqual(await locks.groups('default'), [])
+  assert.deepEqual(await locks.rules('default'), [])
+
+  // ...but the credential that can open those tabs is still on the disk, under its own name.
+  const kept = await movedAside(dir)
+  assert.equal(kept.length, 1, 'the damaged file was moved aside, not overwritten')
+  const bytes = await readFile(join(dir, dataDirFor('default'), kept[0]), 'utf8')
+  assert.equal(bytes, whole.slice(0, Math.floor(whole.length / 2)), 'byte for byte what was there')
+  assert.match(bytes, /Personal/, 'including the credential it was holding')
+})
+
+test('once the damaged file is safely aside, Orbis can be used again', SLOW, async () => {
+  const { locks, dir } = await bench()
+  await locks.createGroup('default', 'Personal', TAB)
+  await writeFile(lockFile(dir), '{"version":1,"groups":[')
+
+  const fresh = await locks.createGroup('default', 'Second go', OTHER)
+  assert.deepEqual((await locks.groups('default')).map((g) => g.name), ['Second go'])
+  assert.equal(fresh.open, true)
+  assert.equal((await movedAside(dir)).length, 1, 'and the first attempt is still recoverable')
+})
+
+test('a file from a newer Orbis is kept too, rather than being treated as absent', SLOW, async () => {
+  const { locks, dir } = await bench()
+  await locks.createGroup('default', 'Personal', TAB)
+  const whole = await readFile(lockFile(dir), 'utf8')
+  // A newer version wrote this. Orbis cannot read it, which is not the same as there being nothing to read.
+  await writeFile(lockFile(dir), JSON.stringify({ ...JSON.parse(whole), version: 2 }))
+
+  assert.deepEqual(await locks.groups('default'), [])
+  const kept = await movedAside(dir)
+  assert.equal(kept.length, 1, 'the newer file was moved aside, so going back to that version still works')
+  assert.match(await readFile(join(dir, dataDirFor('default'), kept[0]), 'utf8'), /"version":2/)
+})
+
+test('nothing is written over a file that is merely unreadable', SLOW, async () => {
+  const { locks, dir } = await bench()
+  // A directory where the file belongs: reading it fails with something that is not "not there". It stands in for the
+  // real cases -- a backup copying it, antivirus holding it -- which cannot be made to happen reliably in a test.
+  await mkdir(join(dir, dataDirFor('default')), { recursive: true })
+  await mkdir(lockFile(dir))
+
+  assert.deepEqual(await locks.groups('default'), [], 'nothing can be shown')
+  await locks.setDefaultPolicy('default', { inactivity: 60_000 })
+  assert.equal((await stat(lockFile(dir))).isDirectory(), true, 'and the save was refused, so it is untouched')
+  assert.deepEqual(await movedAside(dir), [], 'nothing was moved either: it may yet be readable')
+})
+
+test('a missing file is still just a missing file, and the first save works', SLOW, async () => {
+  const { locks, dir } = await bench()
+  assert.deepEqual(await locks.groups('default'), [])
+  assert.deepEqual(await locks.rules('default'), [])
+
+  await locks.createGroup('default', 'Personal', TAB)
+  assert.match(await readFile(lockFile(dir), 'utf8'), /Personal/, 'it wrote, because there was nothing there')
+  assert.deepEqual(await movedAside(dir), [], 'and nothing was quarantined for a file that never existed')
 })

@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { MarketsStore } from './store.ts'
 import type { Instrument } from '../../shared/markets/instrument.ts'
 
@@ -394,7 +394,7 @@ test('a file somebody has edited by hand is read for what it can give', async ()
   }
 })
 
-test('a file that cannot be read at all is an empty workspace, not a failure', async () => {
+test('a file nobody can make sense of is an empty workspace, not a failure', async () => {
   const w = await bench()
   try {
     await w.store.createWatchlist('default', 'Real')
@@ -404,6 +404,120 @@ test('a file that cannot be read at all is an empty workspace, not a failure', a
     const after = new MarketsStore(w.dir)
     assert.deepEqual((await after.read('default')).watchlists, [])
     after.stop()
+  } finally {
+    await w.done()
+  }
+})
+
+// ---------------------------------------------------------------- a file that went wrong
+
+/**
+ * The file is damaged, which is not the same as missing.
+ *
+ * A file that is cut short -- the power went during a save, or the disk filled up -- reads perfectly well and makes no
+ * sense. This store used to answer that with an empty workspace and no mark, and the next save renamed the empty one
+ * over somebody's layouts, watchlists, alerts, portfolio and triggers. So the rule is: it is moved aside before
+ * anything is written, and if it cannot be moved aside nothing is written at all.
+ */
+
+/** A readable file that is not JSON: a save that stopped halfway through. */
+const CUT_SHORT = '{"version":1,"watchlists":[{"id":"mine","name":"Mine","items":['
+
+test('a damaged file is moved aside before anything replaces it, so the words are still on the disk', async () => {
+  const w = await bench()
+  try {
+    await w.store.createWatchlist('default', 'Real')
+    await w.store.flush()
+    const path = await find(w.dir)
+    const { readdir, writeFile } = await import('node:fs/promises')
+    await writeFile(path, CUT_SHORT)
+
+    const after = new MarketsStore(w.dir)
+    assert.deepEqual((await after.read('default')).watchlists, [], 'a damaged file still starts Markets')
+    await after.createWatchlist('default', 'New')
+    await after.flush()
+    after.stop()
+
+    const folder = dirname(path)
+    const aside = (await readdir(folder)).filter((name) => name.includes('.unreadable-'))
+    assert.equal(aside.length, 1, 'the damaged file was not moved aside')
+    assert.equal(await readFile(join(folder, aside[0]), 'utf8'), CUT_SHORT, 'the original bytes were not kept')
+    // Moved aside, so writing is allowed again and the new list is kept rather than refused forever.
+    assert.deepEqual((await after.watchlists('default')).map((l) => l.name), ['New'])
+  } finally {
+    await w.done()
+  }
+})
+
+test('a damaged file that could not be moved aside is never written over, by either write path', async () => {
+  const w = await bench()
+  try {
+    await w.store.createWatchlist('default', 'Real')
+    await w.store.flush()
+    const path = await find(w.dir)
+    const { mkdir, writeFile } = await import('node:fs/promises')
+    await writeFile(path, CUT_SHORT)
+
+    // The store's clock decides the name the damaged file would be moved to, so a frozen clock says exactly where that
+    // is. A folder sitting there makes the move fail the way a file somebody else has open does, without needing one.
+    const clock = () => 1000
+    await mkdir(`${path}.unreadable-${new Date(clock()).toISOString().replace(/[:.]/g, '-')}`)
+
+    const after = new MarketsStore(w.dir, clock)
+    assert.deepEqual((await after.read('default')).watchlists, [])
+    await after.createWatchlist('default', 'New')
+    await after.flush()
+    assert.equal(await readFile(path, 'utf8'), CUT_SHORT, 'flush wrote over a file it could not make sense of')
+
+    // And again, because the mark used to be cleared by the first flush: the loss simply waited for the second edit.
+    await after.createWatchlist('default', 'Another')
+    await after.flush()
+    assert.equal(await readFile(path, 'utf8'), CUT_SHORT, 'the second save wrote over it')
+
+    // Quitting writes synchronously and had no such check at all.
+    await after.createWatchlist('default', 'Third')
+    after.stop()
+    assert.equal(await readFile(path, 'utf8'), CUT_SHORT, 'quitting wrote over it')
+  } finally {
+    await w.done()
+  }
+})
+
+test('a file that is there and cannot be read is left exactly as it is', async () => {
+  const w = await bench()
+  try {
+    await w.store.createWatchlist('default', 'Real')
+    await w.store.flush()
+    const path = await find(w.dir)
+    const { mkdir, rm, stat } = await import('node:fs/promises')
+    // A folder where the file should be reads as EISDIR: there, and not readable, which is what a file another program
+    // is holding open looks like from here. Nothing about it is understood, so nothing may be written.
+    await rm(path)
+    await mkdir(path)
+
+    const after = new MarketsStore(w.dir)
+    assert.deepEqual((await after.read('default')).watchlists, [])
+    await after.createWatchlist('default', 'New')
+    await after.flush()
+    await after.createWatchlist('default', 'Another')
+    after.stop()
+    // A refused write leaves no half-written file beside it; an attempted one would have left `markets.json.tmp`,
+    // because the rename over it cannot succeed.
+    await assert.rejects(() => stat(`${path}.tmp`), 'a write was attempted on a file Orbis could not read')
+    assert.ok((await stat(path)).isDirectory(), 'the thing that was there is gone')
+  } finally {
+    await w.done()
+  }
+})
+
+test('no file at all still gives defaults, and the first save is written', async () => {
+  const w = await bench()
+  try {
+    assert.deepEqual((await w.store.read('fresh')).watchlists, [])
+    await w.store.createWatchlist('fresh', 'First')
+    await w.store.flush()
+    const written = JSON.parse(await readFile(await find(w.dir), 'utf8'))
+    assert.deepEqual(written.watchlists.map((l: { name: string }) => l.name), ['First'])
   } finally {
     await w.done()
   }
