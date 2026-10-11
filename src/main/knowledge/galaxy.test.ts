@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { buildGalaxy, checkUserLink, describeNode, GALAXY_PAGE, GALAXY_TYPE_COLORS, GALAXY_TYPES, isGalaxyPage, matchesQuery, pageKey, selectionForOrion, viewGalaxy } from '../../shared/galaxy.ts'
-import { PANELS } from '../../shared/browserSidebar.ts'
+import { CAPABILITIES } from '../../shared/commandCenter.ts'
 import type { GalaxySources } from '../../shared/galaxy.ts'
 
 const empty = (): GalaxySources => ({ memories: [], searches: [], notes: [], tasks: [], skills: [], workflows: [], workspaces: [], whiteboards: [], bookmarks: [], artifacts: [], links: [] })
@@ -196,10 +196,14 @@ test('Galaxy has an address of its own, so the browser can hold it in a tab', ()
   assert.equal(isGalaxyPage('https://galaxy.example/orbis://galaxy'), false, 'a website cannot pretend to be it')
 })
 
-test('every kind of thing on the map has a colour, and the map lives in the browser sidebar', () => {
+test('every kind of thing on the map has a colour, and the map is somewhere you can reach', () => {
   for (const type of GALAXY_TYPES) assert.match(GALAXY_TYPE_COLORS[type], /^#[0-9a-f]{6}$/, `${type} has a colour`)
+  // It used to be `PANELS.some(p => p.id === 'galaxy')`, from `shared/browserSidebar.ts` -- a list of 29 panels
+  // that nothing ever loaded, so this was asserting Galaxy's place in a sidebar that did not exist. The capability
+  // registry is the one that drives both halves of the application, and being in it is what makes Galaxy
+  // reachable: from the browser's Command Center, from the window's launcher and from the command palette.
   assert.ok(
-    PANELS.some((p) => p.id === 'galaxy'),
-    'Galaxy is one of the browser panels'
+    CAPABILITIES.some((one) => one.id === 'galaxy'),
+    'Galaxy is one of the things Orbis can open'
   )
 })

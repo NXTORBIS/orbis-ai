@@ -558,10 +558,6 @@ const api: NxtorbisApi = {
   /** Puts the browser's window away and brings this one back. The chat's side of the handoff. */
   chromiumReturnToChat: () => ipcRenderer.invoke('chromium:return-to-chat'),
   getBrowserLibrary: () => ipcRenderer.invoke('library:get'),
-  getBrowserSidebar: () => ipcRenderer.invoke('browser-sidebar:get'),
-  saveBrowserSidebar: (layout) => ipcRenderer.invoke('browser-sidebar:save', layout),
-  resetBrowserSidebar: () => ipcRenderer.invoke('browser-sidebar:reset'),
-  onBrowserSidebar: (listener) => subscribe('browser-sidebar:changed', listener),
   onBrowserLibrary: (listener) => subscribe('library:changed', listener),
   toggleBookmark: (url, title) => ipcRenderer.invoke('library:toggle-bookmark', url, title),
   removeHistory: (url) => ipcRenderer.invoke('library:remove-history', url),

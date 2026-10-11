@@ -111,8 +111,6 @@ export interface BrowserManagerOptions {
   stores?: HandlerDeps['stores']
   /** Orbis Music: the library and the player, for the panel, the new tab page and the mini-player. */
   music?: HandlerDeps['music']
-  /** How this profile arranged the sidebar (the app's own store), for the sidebar in the built-in Orbis pages. */
-  sidebar?: HandlerDeps['sidebar']
   /** The name the person gave themselves in the app, so the browser names them the same way. */
   identity?: HandlerDeps['identity']
   /** Put the browser away and show the chat: what the browser's own Chat button asks for. */
@@ -241,7 +239,6 @@ export class BrowserManager {
         recall: this.o.recall,
         schedules: this.o.schedules,
         conversations: this.o.conversations,
-        sidebar: this.o.sidebar,
         identity: this.o.identity,
         showChat: this.o.showChat,
         visualOn: this.o.visualOn,

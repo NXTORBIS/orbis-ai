@@ -5,7 +5,7 @@
 //   -> prints  PAGE http://127.0.0.1:<port>/index.html?orbis-test-helper=<helper port>#<token>   and keeps running (Ctrl+C to stop).
 //
 // What is real: the helper (src/helper, all channels), and every store behind it (library, clipboard history, tasks, whiteboard, workspaces,
-// search sessions, sidebar layout) as temp-folder copies seeded through the stores' own methods / the helper's own channels.
+// search sessions) as temp-folder copies seeded through the stores' own methods / the helper's own channels.
 // What is a stand-in: the Browser Control Layer. There is no browser here, so Tabs / Tab groups / Media / Controls talk to a small
 // in-memory browser (tabs, groups, zoom) that answers the same capabilities. Those four rows are therefore checked for their UI and their
 // wiring, not against Chromium.
@@ -21,7 +21,6 @@ import { newToken } from '../src/helper/auth.ts'
 import { createHandlers } from '../src/helper/handlers.ts'
 import { createHelperServer } from '../src/helper/server.ts'
 import { BrowserLibrary } from '../src/main/browserLibrary.ts'
-import { BrowserSidebarStore } from '../src/main/browserSidebarStore.ts'
 import { ClipboardHistory } from '../src/main/personal/clipboard.ts'
 import { TasksStore } from '../src/main/personal/tasks.ts'
 import { WhiteboardStore } from '../src/main/personal/whiteboard.ts'
@@ -233,7 +232,6 @@ await new Promise((resolve) => pageServer.listen(0, '127.0.0.1', resolve))
 const pagePort = pageServer.address().port
 
 const token = newToken()
-const sidebarStore = new BrowserSidebarStore(dir)
 const stores = () =>
   noStores
     ? null
@@ -255,7 +253,6 @@ const helper = createHelperServer({
     apiKeys: [],
     dataDir: dir,
     searchSessions: () => sessions,
-    sidebar: () => ({ read: () => sidebarStore.read('default'), write: (l) => sidebarStore.write('default', l), reset: () => sidebarStore.reset('default') }),
     browserControl: () => (noStores ? null : control),
     stores
   })

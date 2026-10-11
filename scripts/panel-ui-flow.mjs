@@ -173,40 +173,18 @@ await withChrome(async ({ send, run, errors }) => {
   await ev(`const f = $$('#view-screenshots .rv-shot')[0]; await tap(byLabel(f, 'Delete'), 200); await tap(byLabel($$('#view-screenshots .rv-shot')[0], 'Confirm'), 900)`)
   check('deleting a picture needs a second press and removes it', (await ev(`return (await rpc('library:screenshots')).length === 2`)))
 
-  // ---- The rail: layout, resize, arranging
-  await ev(`await tap('#rail [aria-label="Sidebar width"]', 100); $('#rail .rail-resizer').focus(); return true`)
-  await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'ArrowRight', code: 'ArrowRight', windowsVirtualKeyCode: 39 })
-  await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'ArrowRight', code: 'ArrowRight', windowsVirtualKeyCode: 39 })
-  await sleep(700)
-  check('the arrow keys resize the rail and the width is saved', (await ev(`const s = await rpc('sidebar:get'); return s.width === 222 && $('#rail').style.width === '222px'`)))
-  await ev(`const g = $('#rail .rail-resizer'); const r = g.getBoundingClientRect(); return [r.x + 3, r.y + 100]`)
-  const at = await ev(`const g = $('#rail .rail-resizer'); const r = g.getBoundingClientRect(); return [r.x + 3, r.y + 100]`)
-  await send('Input.dispatchMouseEvent', { type: 'mousePressed', x: at[0], y: at[1], button: 'left', clickCount: 1 })
-  await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: at[0] + 60, y: at[1], button: 'left' })
-  await send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: at[0] + 60, y: at[1], button: 'left', clickCount: 1 })
-  await sleep(800)
-  check('dragging the edge resizes the rail and saves the width', (await ev(`const s = await rpc('sidebar:get'); return s.width >= 270 && s.width <= 290`)))
-  await ev(`await tap('#rail [aria-label^="Arrange the sidebar"]', 400)`)
-  await ev(`await tap('#rail [aria-label="New group"]', 700)`)
-  check('a group is created and saved', (await ev(`return (await rpc('sidebar:get')).groups.some(g => g.label === 'New group')`)))
-  await ev(`await tap($$('#rail .rail-tool').find(b => b.getAttribute('aria-label').startsWith('Rename the group New group')), 300)`)
-  await ev(`const i = $('#rail .rail-rename'); i.value = 'Mine'; i.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' })); await pause(700)`)
-  check('the group is renamed and saved', (await ev(`return (await rpc('sidebar:get')).groups.some(g => g.label === 'Mine')`)))
-  // Drag a row into the new group with real drag events.
-  await ev(`
-    const dt = new DataTransfer()
-    const row = $('#rail .rail-row[data-panel="media"]'), head = $('#rail .rail-headrow[data-group]:not(:has(.rail-rename))'), heads = $$('#rail .rail-headrow'), mine = heads.find(h => h.innerText.toLowerCase().includes('mine'))
-    row.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt }))
-    mine.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }))
-    mine.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }))
-    await pause(800)`)
-  check('dragging a row onto a group moves it there and saves it', (await ev(`const s = await rpc('sidebar:get'); const g = s.groups.find(x => x.label === 'Mine'); return g.items.includes('media')`)))
-  await ev(`const dt = new DataTransfer(); const rowA = $('#rail .rail-row[data-panel="tabs"]'), rowB = $('#rail .rail-row[data-panel="tabGroups"]'); rowA.dispatchEvent(new DragEvent('dragstart', { bubbles: true, dataTransfer: dt })); const r = rowB.getBoundingClientRect(); rowB.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt, clientY: r.bottom - 1 })); rowB.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt, clientY: r.bottom - 1 })); await pause(800)`)
-  check('dragging a row below another reorders within its group', (await ev(`const s = await rpc('sidebar:get'); const g = s.groups.find(x => x.items.includes('tabs')); return g.items.indexOf('tabGroups') < g.items.indexOf('tabs')`)))
-  await ev(`await tap($$('#rail .rail-tool').find(b => b.getAttribute('aria-label').startsWith('Delete the group Mine')), 700)`)
-  check('deleting the group keeps its panels', (await ev(`const s = await rpc('sidebar:get'); return !s.groups.some(g => g.label === 'Mine') && s.groups.flatMap(g => g.items).includes('media')`)))
-  await ev(`await tap('#rail [aria-label="Icons only"]', 500)`)
-  check('icon-only mode drops the labels and is saved', (await ev(`const s = await rpc('sidebar:get'); return s.mode === 'icons' && !$('#rail .rail-label')`)))
+  /*
+   * There were eight checks here for the rail's own layout: resizing it, arranging it into groups, dragging rows
+   * between them, icon-only mode. Every one of them drove `#rail` and read `sidebar:get`.
+   *
+   * Neither has existed for a long time. `#rail` is an element the panel's page does not have, `sidebar.ts` that
+   * built it was never loaded (the page links `sidebar.css` and no `sidebar.js`, and the build step says in a
+   * comment that it deliberately does not build it), and `sidebar:get` was a helper channel whose only caller was
+   * that same dead file. So the checks could not run, and did not: this block sat after one that exits on the
+   * first failure.
+   *
+   * The whole registry is gone now, so they are gone with it rather than left looking like coverage.
+   */
 
   check('no page errors were raised during the whole run', errors.length === 0, errors.slice(0, 3).join(' | '))
 })

@@ -23,15 +23,14 @@ await build({ ...shared, entryPoints: ['extension-src/selection/worker.ts'], out
 await build({ ...shared, entryPoints: ['extension-src/visual/main.ts'], outfile: 'extension/visual.js', format: 'iife', platform: 'browser' })
 await build({ ...shared, entryPoints: ['extension-src/visual/worker.ts'], outfile: 'extension/visual-worker.js', format: 'esm', platform: 'browser' })
 /*
- * `orbis-ui/panel/sidebar.ts` is deliberately not built.
+ * `orbis-ui/panel/sidebar.ts` used to be here, not built, with a note saying the source was kept for later.
  *
- * It is the panel's third navigation system -- a 29-panel arrangement with groups, pinning and density -- and the
- * panel's own page has never loaded it: `panel/index.html` links `sidebar.css` (which the rail's views genuinely use
- * for their `.rv-*` styles) and no script tag for this. Building it put 391 kilobytes of unreachable code into every
- * installation and made it look live to anybody reading the build.
+ * It was the panel's third navigation system -- 29 panels in 9 groups, with pinning and density -- and nothing
+ * ever loaded it: the page links `sidebar.css` (which the rail's views genuinely use for their `.rv-*` styles) and
+ * no script tag for this, and its entry point mounted on an element id the page does not have. Later never came.
  *
- * The source stays, because the panel work in docs/parity/01-browser-ui.md is where it is meant to be used. What is
- * removed is the pretence that it ships.
+ * It is deleted, along with its store, its three Electron channels, its four preload bindings, its three helper
+ * channels and its export category. `sidebar.css` stays; everything under `rail/` stays.
  */
 await build({ ...shared, entryPoints: ['orbis-ui/results/results.ts'], outfile: 'orbis-ui/results/results.js', format: 'iife', platform: 'browser' })
 // The capability registry the Command Center reads. Built from src/shared, so the page and the app share one list.

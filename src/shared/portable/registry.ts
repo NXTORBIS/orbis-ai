@@ -619,21 +619,13 @@ export const CATEGORIES: readonly PortableCategory[] = Object.freeze([
     why: 'Sizes travel as logical values rather than as pixels measured on the source display, so a layout made at 4K stays usable at 1366 by 768.',
     mergeable: true
   }),
-  category({
-    id: 'browser.sidebar',
-    label: 'Browser sidebar',
-    describe: 'What is in the sidebar, in what order, and how wide it is.',
-    portability: 'transformed',
-    sensitivity: 'ordinary',
-    storage: ['browser-sidebar.json'],
-    scope: 'profile',
-    schemaVersion: 1,
-    dependsOn: [],
-    requiresReauthentication: false,
-    userAction: null,
-    why: 'A width is kept as a logical size and clamped to what fits the destination window.',
-    mergeable: false
-  }),
+  /*
+   * There was a `browser.sidebar` category here, carrying `browser-sidebar.json`.
+   *
+   * It is gone with the sidebar it described -- 29 panels in 9 groups that nothing ever loaded. A package made by
+   * an older Orbis may still name it, and that is fine: the importer skips a category it does not recognise rather
+   * than refusing the package, and `roundTrip.test.ts` keeps a fixture that says so.
+   */
 
   // ---- the browser
   category({

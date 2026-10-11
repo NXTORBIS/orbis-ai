@@ -5,7 +5,7 @@
 //   -> prints  PAGE http://127.0.0.1:<port>/index.html?orbis-test-helper=<helper port>#<token>   and keeps running (Ctrl+C to stop).
 //
 // What is real: the helper (src/helper, all channels), and every store behind it (library, clipboard history, tasks, whiteboard, workspaces,
-// search sessions, sidebar layout) as temp-folder copies seeded through the stores' own methods / the helper's own channels.
+// search sessions) as temp-folder copies seeded through the stores' own methods / the helper's own channels.
 // What is a stand-in: the Browser Control Layer. There is no browser here, so Tabs / Tab groups / Media / Controls talk to a small
 // in-memory browser (tabs, groups, zoom) that answers the same capabilities. Those four rows are therefore checked for their UI and their
 // wiring, not against Chromium.
@@ -17,7 +17,6 @@ import { join, extname, normalize } from 'node:path'
 import { deflateSync } from 'node:zlib'
 import { fileURLToPath } from 'node:url'
 import { BrowserLibrary } from '../src/main/browserLibrary.ts'
-import { BrowserSidebarStore } from '../src/main/browserSidebarStore.ts'
 import { ClipboardHistory } from '../src/main/personal/clipboard.ts'
 import { TasksStore } from '../src/main/personal/tasks.ts'
 import { WhiteboardStore } from '../src/main/personal/whiteboard.ts'
@@ -117,7 +116,6 @@ await tasks.create({ title: 'Send the invoice', due: Date.now() - 2 * 3_600_000,
 const board = await whiteboard.create({ name: 'Launch plan' })
 const now = Date.now()
 sessions.save({ id: 'sreal1', profileId: 'default', topic: 'How does the Fetch API stream a response body', turns: [{ id: 't1', question: 'q', answer: 'a', used: [1], researched: true, at: now }], sources: [{ url: 'https://developer.mozilla.org/en-US/docs/Fetch', title: 'MDN reference', site: 'developer.mozilla.org', snippet: '', turn: 0 }], entities: [], constraints: [], startedAt: now, updatedAt: now })
-const sidebarStore = new BrowserSidebarStore(dir)
 const manager = new BrowserManager({
   chrome: 'C:/chromium/src/out/Default/chrome.exe',
   extensionSource: join(REPO, 'extension'),
@@ -128,7 +126,6 @@ const manager = new BrowserManager({
   adblockListsDir: join(dir, 'lists'),
   personalDir: (id) => join(dir, 'personal', id),
   searchSessions: () => sessions,
-  sidebar: () => ({ read: () => sidebarStore.read('default'), write: (l) => sidebarStore.write('default', l), reset: () => sidebarStore.reset('default') }),
   stores: () => ({ library, removeFile: async () => undefined, openFile: async () => '', clipboard, tasks, whiteboard, workspaces, research: { withSources: (n) => sessions.withSources(n) }, control: manager.active?.service.control })
 })
 globalThis.manager = manager

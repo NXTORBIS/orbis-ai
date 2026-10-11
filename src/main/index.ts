@@ -334,7 +334,6 @@ import { registerQuizIpc } from './quiz/ipc.ts'
 import { registerExperienceIpc } from './experience/ipc'
 import type { Profile } from '../shared/profiles'
 import { registerPersonalIpc } from './personal/ipc'
-import { BrowserSidebarStore } from './browserSidebarStore'
 import { SecretsVault, VaultFailure } from './vault/store'
 import { secretsFromVault } from '../helper/secrets'
 import type { SecretsDeps } from '../helper/secrets'
@@ -614,7 +613,6 @@ let artifactsForChat: { service: ArtifactService; chat: ArtifactChat; profileId:
 /** The app's search-box suggestions and local speech to text, lent to the pages in the Orbis browser. */
 let appServicesForBrowser: AppServicesDeps | null = null
 /** The sidebar arrangement store, for the sidebar inside the built-in Orbis pages of the browser. */
-let browserSidebarForBrowser: BrowserSidebarStore | null = null
 /** Saved Orion Search research, once it exists: the results page in the browser and the Orbis window share this one store. */
 let searchSessionsForBrowser: SearchSessionStore | null = null
 /** The stores behind the Orbis panel's saved pages, screenshots, clipboard, reminders, whiteboard, workspaces and sources rows (set once they exist). */
@@ -3159,12 +3157,6 @@ if (!app.requestSingleInstanceLock()) {
           // The browser reads and works Orbis Music through the app’s own service, so the panel, the new tab page
           // and the window are all one player rather than three.
           music: () => music?.port,
-          sidebar: () => {
-            const store = browserSidebarForBrowser
-            if (!store) return null
-            const active = async (): Promise<string> => (await profilesStore.active()).id
-            return { read: async () => store.read(await active()), write: async (layout) => store.write(await active(), layout), reset: async () => store.reset(await active()) }
-          },
           control: browserControl?.control,
           // The browser's lock surface asks Orbis whether a password is right, because Orbis is what holds it. The
           // surface never sees a credential and never decides anything.
@@ -4813,23 +4805,6 @@ ${page.text}`, { howMany: 6 })
       return widgetFeeds.feed(typeof url === 'string' ? url.slice(0, 2000) : '')
     })
 
-    const browserSidebar = new BrowserSidebarStore(app.getPath('userData'))
-    browserSidebarForBrowser = browserSidebar
-    const sidebarProfile = async (): Promise<string> => (await profilesStore.active()).id
-    ipcMain.handle('browser-sidebar:get', async (event) => {
-      if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
-      return browserSidebar.read(await sidebarProfile())
-    })
-    ipcMain.handle('browser-sidebar:save', async (event, layout: unknown) => {
-      if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
-      return browserSidebar.write(await sidebarProfile(), layout)
-    })
-    ipcMain.handle('browser-sidebar:reset', async (event) => {
-      if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
-      return browserSidebar.reset(await sidebarProfile())
-    })
-    // Switching profile brings that profile's arrangement with it.
-    profilesStore.onChange(() => void sidebarProfile().then(async (id) => sendToWindow('browser-sidebar:changed', await browserSidebar.read(id))).catch(() => undefined))
     // A workspace that keeps itself up to date follows the window while it is the one that is open.
     browserControl.windowControl.onState((state) => workspacesStore.onBrowserState(state ? { tabs: state.tabs, groups: state.groups } : null))
     const clipboardHistory = new ClipboardHistory({
@@ -5505,7 +5480,6 @@ ${page.text}`, { howMany: 6 })
     quitFlush.add('your clipboard history', () => clipboardHistory.flush())
     quitFlush.add('your whiteboards', () => whiteboardStore.flush())
     quitFlush.add('your workspaces', () => workspacesStore.flush())
-    quitFlush.add('how the browser sidebar is arranged', () => browserSidebar.flush())
 
     quitFlush.add('your downloads and saved pages', () => browserLibrary?.flush())
     app.on('before-quit', () => {

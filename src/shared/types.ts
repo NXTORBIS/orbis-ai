@@ -46,7 +46,6 @@ import type {
   WindowRunRequest,
   WindowRunResult, ControlDomain } from './browserControl'
 import type { ControlLogEntryView } from './browserControlView'
-import type { SidebarLayout } from './browserSidebar'
 import type { StepRunView } from './stepPlan'
 import type { Feed, Weather } from './widgetData'
 import type { SpecializedOutcome } from './searchProviders'
@@ -1918,12 +1917,6 @@ export interface NxtorbisApi {
   onVisualArrived(listener: (arrival: VisualArrival) => void): () => void
   chromiumOpen(input: string, options?: { newTab?: boolean; more?: string[] }): Promise<{ ok: boolean; detail: string }>
   getBrowserLibrary(): Promise<BrowserLibrarySnapshot>
-  /** How this profile has arranged the browser sidebar. */
-  getBrowserSidebar(): Promise<SidebarLayout>
-  saveBrowserSidebar(layout: SidebarLayout): Promise<SidebarLayout>
-  resetBrowserSidebar(): Promise<SidebarLayout>
-  /** Told when the arrangement changes elsewhere — switching profile, say. */
-  onBrowserSidebar(listener: (layout: SidebarLayout) => void): () => void
   onBrowserLibrary(listener: (library: BrowserLibrarySnapshot) => void): () => void
   /** Bookmarks the page, or removes its bookmark; resolves to whether it is bookmarked now. */
   toggleBookmark(url: string, title: string): Promise<boolean>

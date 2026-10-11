@@ -202,14 +202,31 @@ describe('a whole round trip', () => {
 
   it('works without a password when nothing personal was chosen', async () => {
     const source = makeProfile()
-    source.put('profile', 'browser-sidebar.json', { panels: ['history'] })
-    const { archive, outcome } = await exportIt(source, { password: null, categories: ['browser.sidebar'] })
+    source.put('profile', 'site-profiles.json', { sites: [{ host: 'example.com', profile: 'work' }] })
+    const { archive, outcome } = await exportIt(source, { password: null, categories: ['site.profiles'] })
     assert.equal(outcome.manifest.encryption.encrypted, false)
     assert.ok(outcome.notes.some((one) => /not encrypted/.test(one)))
     const destination = new FakeDisk()
-    const result = await importPackage(archive, { categoryIds: ['browser.sidebar'], mode: 'replace', password: null }, destination.importDeps())
+    const result = await importPackage(archive, { categoryIds: ['site.profiles'], mode: 'replace', password: null }, destination.importDeps())
     assert.ok(!isImportError(result))
-    assert.deepEqual(destination.get('profile', 'browser-sidebar.json'), { panels: ['history'] })
+    assert.deepEqual(destination.get('profile', 'site-profiles.json'), { sites: [{ host: 'example.com', profile: 'work' }] })
+  })
+
+  it('a package from an older Orbis naming a category that no longer exists still imports', async () => {
+    // `browser.sidebar` was a real category until the sidebar it described was deleted. Somebody's package from
+    // before that still names it, and the whole point of a transfer is that it keeps working: the importer skips
+    // a category it does not recognise rather than refusing everything in the package alongside it.
+    const source = makeProfile()
+    source.put('profile', 'site-profiles.json', { sites: [{ host: 'example.com', profile: 'work' }] })
+    const { archive } = await exportIt(source, { password: null, categories: ['site.profiles'] })
+    const destination = new FakeDisk()
+    const result = await importPackage(
+      archive,
+      { categoryIds: ['site.profiles', 'browser.sidebar'], mode: 'replace', password: null },
+      destination.importDeps()
+    )
+    assert.ok(!isImportError(result), 'the package imports')
+    assert.deepEqual(destination.get('profile', 'site-profiles.json'), { sites: [{ host: 'example.com', profile: 'work' }] })
   })
 
   it('carries a file that serves three categories exactly once', async () => {
@@ -256,11 +273,11 @@ describe('the export refuses what it should', () => {
   })
 
   it('says which categories forced the password', () => {
-    const verdict = needsPassword(['notes', 'browser.sidebar'])
+    const verdict = needsPassword(['notes', 'site.profiles'])
     assert.equal(verdict.required, true)
     assert.deepEqual(verdict.because, ['Notes'])
-    // A sidebar layout is nobody's private content, so on its own it needs no password.
-    assert.equal(needsPassword(['browser.sidebar']).required, false)
+    // Which site opens in which profile is nobody's private content, so on its own it needs no password.
+    assert.equal(needsPassword(['site.profiles']).required, false)
   })
 
   it('refuses a weak password', async () => {

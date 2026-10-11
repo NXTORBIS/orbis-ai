@@ -85,7 +85,6 @@ export const TEST_FILES = [
   'src/main/transport.test.ts',
   'src/main/orionContract.test.ts',
   'src/main/orbisSearch.test.ts',
-  'src/main/browserSidebar.test.ts',
   'src/main/workflowTitle.test.ts',
   'src/main/workflowTitler.test.ts',
   'src/main/specializedSearch.test.ts',

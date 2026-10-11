@@ -358,7 +358,6 @@ describe('the audit against what is actually on disk', () => {
       'secrets.vault',
       'account.lock',
       'tab-locks.json',
-      'browser-sidebar.json',
       'security-log.json',
       'browser',
       'browser-library.json',

@@ -207,8 +207,6 @@ export interface HandlerDeps {
    * go back to: run on its own, Orbis is the browser and the channel does not exist.
    */
   showChat?: () => void
-  /** How this profile has arranged the browser sidebar (the app's own store); when given, the sidebar:* channels exist. */
-  sidebar?: () => { read(): Promise<unknown>; write(layout: unknown): Promise<unknown>; reset(): Promise<unknown> } | null | undefined
   /**
    * The browser the helper holds, when it holds one (src/helper/browser/host.ts). This is what makes Orbis able to act
    * on the browser rather than only talk about it: with it, the browser:task channels exist and the whole control layer
@@ -263,12 +261,6 @@ const MAX_CONTENT = 400_000
 const EFFORTS = new Set<ReasoningEffort>(['low', 'high', 'max'])
 
 /** A conversation from the panel, checked: the panel is trusted with the token, not with the shape of what it sends. */
-function sidebarOf(get: NonNullable<HandlerDeps['sidebar']>): NonNullable<ReturnType<NonNullable<HandlerDeps['sidebar']>>> {
-  const sidebar = get()
-  if (!sidebar) throw Object.assign(new Error('The Orbis app is not ready.'), { code: 'not-ready' })
-  return sidebar
-}
-
 function readMessages(value: unknown): ChatMessage[] {
   if (!Array.isArray(value) || value.length === 0 || value.length > MAX_MESSAGES) throw new HelperError('bad-request', 'Expected a conversation of 1 to 200 messages.')
   return value.map((raw, i): ChatMessage => {
@@ -429,13 +421,6 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
             const who = await deps.identity!()
             return who ? { name: who.name, title: who.title } : null
           }
-        }
-      : {}),
-    ...(deps.sidebar
-      ? {
-          'sidebar:get': () => sidebarOf(deps.sidebar!).read(),
-          'sidebar:save': ([layout]: unknown[]) => sidebarOf(deps.sidebar!).write(layout),
-          'sidebar:reset': () => sidebarOf(deps.sidebar!).reset()
         }
       : {}),
     // The control layer, from whichever side has one: the app's when Orbis runs it, or the browser the helper
