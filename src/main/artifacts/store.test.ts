@@ -37,7 +37,7 @@ const withStore = async (run: (store: ArtifactStore, dir: string) => Promise<voi
   try {
     await run(new ArtifactStore({ userData: dir }), dir)
   } finally {
-    await rm(dir, { recursive: true, force: true })
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 }
 
@@ -179,7 +179,7 @@ test('a folder that is busy for a moment is waited for, and the version is writt
     assert.equal((await store.readRecord('default', id))?.title, 'Second')
     assert.equal(new TextDecoder().decode((await store.readVersionFile('default', id, makeVersionId('a'.repeat(32)), 'content.json'))!), '[]', 'the version before is kept')
   } finally {
-    await rm(dir, { recursive: true, force: true })
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 
@@ -208,7 +208,7 @@ test('a folder that stays busy is reported, and what was there before is still t
     assert.equal((await store.readRecord('default', id))?.title, 'First', 'the old version is current again')
     assert.equal(new TextDecoder().decode((await store.readFile('default', id, 'content.json'))!), '[]')
   } finally {
-    await rm(dir, { recursive: true, force: true })
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 
@@ -228,7 +228,7 @@ test('a refusal that is not "busy" is not waited for', async () => {
     await assert.rejects(store.write('default', record(makeArtifactId('3'.repeat(32))), [{ name: SOURCE_FILE, bytes: bytes('{}') }]), /ENOSPC/)
     assert.equal(waits, 0)
   } finally {
-    await rm(dir, { recursive: true, force: true })
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 
@@ -261,7 +261,7 @@ test('a read asked for in the middle of a write sees the old version or the new 
     assert.equal(seen?.title, 'Second', 'the read waited for the write and saw what it wrote')
     assert.equal(new TextDecoder().decode(content!), '[1]')
   } finally {
-    await rm(dir, { recursive: true, force: true })
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 
@@ -277,6 +277,6 @@ test('the queue keeps nothing once the work is done: not what a read handed back
     const queues = (store as unknown as { queues: Map<string, Promise<unknown>> }).queues
     assert.equal(queues.size, 0)
   } finally {
-    await rm(dir, { recursive: true, force: true })
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })

@@ -73,7 +73,7 @@ export async function applyWake(at: number, command: string, args: readonly stri
   } catch (error) {
     return { ok: false, detail: error instanceof Error ? error.message.slice(0, 200) : 'The wake task could not be written.' }
   } finally {
-    if (dir) await rm(dir, { recursive: true, force: true }).catch(() => undefined)
+    if (dir) await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 }).catch(() => undefined)
   }
 }
 

@@ -72,7 +72,7 @@ const stage = async (answers: (Record<string, unknown> | { failed: string })[], 
   try {
     await run(s)
   } finally {
-    await rm(dir, { recursive: true, force: true })
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 }
 

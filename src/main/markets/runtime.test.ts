@@ -115,7 +115,7 @@ const bench = async (): Promise<{
     feed,
     done: async () => {
       runtime.stop()
-      await rm(dir, { recursive: true, force: true })
+      await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
     }
   }
 }
@@ -176,7 +176,7 @@ test('with no provider at all it says so rather than claiming a connection', asy
     assert.equal(runtime.connection(), 'not-configured')
   } finally {
     runtime.stop()
-    await rm(dir, { recursive: true, force: true })
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 
@@ -244,7 +244,7 @@ test('the strip is told to hide when Markets is off, whatever the ticker’s own
     assert.equal((await store.ticker('one')).enabled, true, 'the ticker’s own setting should be untouched')
   } finally {
     runtime.stop()
-    await rm(dir, { recursive: true, force: true })
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 
@@ -286,6 +286,6 @@ test('priming asks for nothing while Markets is off', async () => {
     assert.equal(asked, 0)
   } finally {
     runtime.stop()
-    await rm(dir, { recursive: true, force: true })
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })

@@ -24,7 +24,7 @@ const bench = async (): Promise<{ store: MarketsStore; dir: string; done: () => 
     dir,
     done: async () => {
       store.stop()
-      await rm(dir, { recursive: true, force: true })
+      await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
     }
   }
 }

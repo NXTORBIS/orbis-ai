@@ -16,7 +16,7 @@ async function library(): Promise<{ lib: BrowserLibrary; dir: string; clock: { t
     clock,
     done: async () => {
       await lib.flush()
-      await rm(dir, { recursive: true, force: true })
+      await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
     }
   }
 }

@@ -146,7 +146,7 @@ const bench = async (
     shown,
     done: async () => {
       runtime.stop()
-      await rm(dir, { recursive: true, force: true })
+      await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
     }
   }
 }

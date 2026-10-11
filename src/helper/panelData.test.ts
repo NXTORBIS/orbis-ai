@@ -79,7 +79,7 @@ test('secrets: locked vault says so; unlock, list without values, add, update ke
       for (const channel of ['secrets:get', 'secrets:copy']) await assert.rejects(rpc(channel, ['x']))
     })
   } finally {
-    await rm(dir, { recursive: true, force: true })
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 
@@ -100,7 +100,7 @@ test('secrets: bad shapes are refused and no vault is reported plainly', async (
       await assert.rejects(rpc('secrets:status'), (e: any) => e.code === 'unavailable')
     })
   } finally {
-    await rm(dir, { recursive: true, force: true })
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 
@@ -301,7 +301,7 @@ test('secrets: reveal sends one value on request; vault creation, recovery, pass
       assert.equal((await rpc('secrets:destroy', ['recovered master password'])).exists, false)
     })
   } finally {
-    await rm(dir, { recursive: true, force: true })
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 

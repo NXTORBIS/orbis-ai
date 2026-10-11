@@ -70,7 +70,7 @@ async function bench(): Promise<{
   return {
     store,
     dir,
-    cleanup: () => rm(dir, { recursive: true, force: true }),
+    cleanup: () => rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 }),
     ran,
     notices,
     clock,
@@ -195,7 +195,7 @@ test('a runner that throws is a failure, not a crash, and its message is capped'
     assert.equal(after?.history[0].state, 'failed')
     assert.equal(after?.history[0].detail.length, 200, 'capped, so a store is not a place to put an essay')
   } finally {
-    await rm(dir, { recursive: true, force: true })
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 
@@ -212,7 +212,7 @@ test('an action with no runner blocks the job rather than silently never happeni
     assert.equal(after?.state, 'blocked')
     assert.equal(after?.history.length, 0, 'and nothing is recorded as having run')
   } finally {
-    await rm(dir, { recursive: true, force: true })
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 
@@ -413,7 +413,7 @@ test('one broken job does not stop the others being looked at', async () => {
     await engine.tick()
     assert.deepEqual(done, ['Fine'])
   } finally {
-    await rm(dir, { recursive: true, force: true })
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 

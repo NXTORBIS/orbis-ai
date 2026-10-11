@@ -77,7 +77,7 @@ test("the app's copy of Chromium's history, bookmarks and downloads is read from
   await mirrorChromiumInto(library, { control, bridge: { run: async <T>() => undefined as T } })
   const snapshot = library.snapshot()
   await library.flush()
-  await rm(dir, { recursive: true, force: true })
+  await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   assert.deepEqual(snapshot.history, [{ url: 'https://a.example/', title: 'A', visitedAt: 1235 }])
   assert.deepEqual(snapshot.bookmarks.map((b) => b.url), ['https://b.example/'])
   assert.equal(snapshot.downloads[0].id, '9', 'download ids are text')

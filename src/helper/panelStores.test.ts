@@ -77,7 +77,19 @@ async function world() {
       }
     }
   }
-  return { dir, stores, copy, removed, opened, controlCalls, clipboard, library, cleanup: () => rm(dir, { recursive: true, force: true }) }
+  /*
+   * Everything written before the folder goes.
+   *
+   * These stores write a moment after they change, so removing the folder straight away raced the writes: the
+   * listing was taken, a write landed, and `rmdir` failed with ENOTEMPTY -- on a different test each run, with a
+   * message about nothing the test was checking. Under the whole suite at once it happened often enough to make
+   * every run suspect, which is worse than a test that fails reliably.
+   */
+  const cleanup = async (): Promise<void> => {
+    await Promise.all([clipboard.flush(), tasks.flush(), whiteboard.flush(), workspaces.flush()])
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
+  }
+  return { dir, stores, copy, removed, opened, controlCalls, clipboard, library, cleanup }
 }
 
 test('saved pages: listed without damaged rows, opened only from the list, forgotten without touching the file', async () => {

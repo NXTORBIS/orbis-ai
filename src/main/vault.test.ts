@@ -15,7 +15,7 @@ const withVault = async (run: (vault: SecretsVault, dir: string) => Promise<void
   try {
     await run(new SecretsVault(dir), dir)
   } finally {
-    await rm(dir, { recursive: true, force: true })
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 }
 

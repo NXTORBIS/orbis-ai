@@ -61,7 +61,7 @@ test('a chat saved from the panel is the same chat the Orbis window reads', asyn
       assert.equal(read.messages[1].model, DEFAULT_MODEL)
     })
   } finally {
-    await rm(dir, { recursive: true, force: true })
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 
@@ -85,7 +85,7 @@ test('the list is newest first and carries no message bodies; a chat opens again
       assert.equal(await rpc('conversations:get', ['missing']), null)
     })
   } finally {
-    await rm(dir, { recursive: true, force: true })
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 
@@ -98,7 +98,7 @@ test('an incognito chat is refused, and nothing of it reaches the disk', async (
       assert.deepEqual(await new Store(dir).listConversations(), [])
     })
   } finally {
-    await rm(dir, { recursive: true, force: true })
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 
@@ -115,7 +115,7 @@ test('what a page sends is checked before it is written', async () => {
       assert.deepEqual(await rpc('conversations:list'), [], 'not one of those was written')
     })
   } finally {
-    await rm(dir, { recursive: true, force: true })
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 
@@ -133,6 +133,6 @@ test('a chat can be removed, and removing one leaves the rest', async () => {
       )
     })
   } finally {
-    await rm(dir, { recursive: true, force: true })
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })

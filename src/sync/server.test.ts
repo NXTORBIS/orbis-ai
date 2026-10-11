@@ -27,7 +27,7 @@ async function withServer(fn: (s: RunningSyncServer, post: Post) => Promise<void
     await fn(running, post)
   } finally {
     await running.close()
-    await rm(dir, { recursive: true, force: true })
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 }
 

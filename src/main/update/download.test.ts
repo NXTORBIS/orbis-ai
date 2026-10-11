@@ -79,7 +79,7 @@ async function withTemp<T>(run: (dir: string) => Promise<T>): Promise<T> {
   try {
     return await run(dir)
   } finally {
-    await rm(dir, { recursive: true, force: true })
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 }
 

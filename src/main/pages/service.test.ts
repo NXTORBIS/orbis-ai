@@ -35,7 +35,7 @@ async function withService(
     await body(service, store)
     await store.flush()
   } finally {
-    await rm(dir, { recursive: true, force: true })
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 }
 
@@ -461,7 +461,7 @@ test('decisions survive a restart, and the register is rebuilt rather than resto
     // happened to be favourited before the restart.
     assert.equal(after.builtIn().length, BUILT_IN_MANIFESTS.length)
   } finally {
-    await rm(dir, { recursive: true, force: true })
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 
@@ -475,7 +475,7 @@ test('one profile\'s decisions are not another\'s', async () => {
     assert.deepEqual(await store.projects('other'), [])
     assert.equal((await store.favourites('default')).length, 1)
   } finally {
-    await rm(dir, { recursive: true, force: true })
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 
@@ -487,7 +487,7 @@ test('a store file that cannot be read starts from defaults rather than failing'
     assert.deepEqual(await store.grants('default'), [])
     assert.deepEqual(await store.favourites('default'), [])
   } finally {
-    await rm(dir, { recursive: true, force: true })
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 
@@ -875,7 +875,7 @@ test('an application survives a restart', async () => {
     assert.equal(listed[0].title, 'Kept')
     assert.equal(listed[0].pageCount, 1)
   } finally {
-    await rm(dir, { recursive: true, force: true })
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 

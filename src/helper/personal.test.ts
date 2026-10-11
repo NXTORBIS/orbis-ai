@@ -51,7 +51,7 @@ test('notes through the real server: create, update, search, delete, and they pe
       await assert.rejects(rpc('notes:update', [id, { title: 'x' }]), /no longer exists/)
     })
   } finally {
-    await rm(dir, { recursive: true, force: true })
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 
@@ -71,7 +71,7 @@ test('tasks through the real server: create, complete, update, delete', async ()
       assert.equal((await rpc('tasks:delete', [t.id])).removed, false)
     })
   } finally {
-    await rm(dir, { recursive: true, force: true })
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 
@@ -105,7 +105,7 @@ test('bad shapes are refused before they reach the store', async () => {
       assert.equal(n.evil, undefined)
     })
   } finally {
-    await rm(dir, { recursive: true, force: true })
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 
@@ -204,7 +204,7 @@ test('one set of notes and tasks, not two', async () => {
       await server.close()
     }
   } finally {
-    await rm(dir, { recursive: true, force: true })
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 })
 

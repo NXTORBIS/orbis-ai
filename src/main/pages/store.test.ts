@@ -36,7 +36,7 @@ async function withDir(body: (dir: string) => Promise<void>): Promise<void> {
   try {
     await body(dir)
   } finally {
-    await rm(dir, { recursive: true, force: true })
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 }
 

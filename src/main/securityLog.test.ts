@@ -22,7 +22,7 @@ const bench = async (): Promise<{ log: SecurityLog; dir: string; cleanUp: () => 
     dir,
     cleanUp: async () => {
       log.stop()
-      await rm(dir, { recursive: true, force: true })
+      await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
     }
   }
 }

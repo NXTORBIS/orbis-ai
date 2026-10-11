@@ -142,7 +142,7 @@ const build = async (): Promise<{
     changes,
     cleanUp: async () => {
       watcher.stop()
-      await rm(dir, { recursive: true, force: true })
+      await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
     }
   }
 }

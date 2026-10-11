@@ -28,7 +28,7 @@ const bench = async (): Promise<{ store: RecallStore; dir: string; done: () => P
     dir,
     done: async () => {
       store.close()
-      await rm(dir, { recursive: true, force: true })
+      await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
     }
   }
 }

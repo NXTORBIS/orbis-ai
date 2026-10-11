@@ -163,7 +163,7 @@ const withService = async (
   try {
     await run(h)
   } finally {
-    await rm(dir, { recursive: true, force: true })
+    await rm(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 50 })
   }
 }
 
