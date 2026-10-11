@@ -142,6 +142,28 @@ main { flex: 1; overflow-y: auto; padding: 14px 12px; display: flex; flex-direct
 #tasks .task input[type="checkbox"] { accent-color: var(--accent); margin-top: 12px; }
 #notes input[type="checkbox"] { accent-color: var(--accent); }
 #tasks .seg button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+#notes .seg button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+#tasks input[type="time"], #tasks input[type="number"] { padding: 6px 9px; font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; }
+#tasks input[type="number"] { width: 72px; flex: 0 0 auto; }
+
+/* The steps inside a task, edited with it. Scoped to #tasks: #workflows uses the same two names for its own steps. */
+#tasks .steps { display: flex; flex-direction: column; gap: 4px; padding: 6px 0 0; border-top: 1px solid var(--line); }
+#tasks .row.step { gap: 6px; }
+#tasks .row.step button { flex: 0 0 auto; }
+#tasks .row.step input[type="checkbox"] { margin-top: 0; }
+
+/*
+ * A note's colour, as a stripe down its edge rather than a wash behind the words.
+ *
+ * A filled card would have to win against the panel's own surface in both themes and would make the text harder
+ * to read in at least one of them; a stripe is the same mark in both and never competes with what is written.
+ */
+#notes .item[class*="note-"] { border-left: 3px solid transparent; }
+#notes .item.note-cyan { border-left-color: #3fd8ff; }
+#notes .item.note-green { border-left-color: #3ee58a; }
+#notes .item.note-amber { border-left-color: #ffbe4d; }
+#notes .item.note-red { border-left-color: #ff8197; }
+#notes .item.note-violet { border-left-color: #b58cff; }
 
 /* Workflows, Galaxy, Secrets */
 .tabs { flex-wrap: wrap; }

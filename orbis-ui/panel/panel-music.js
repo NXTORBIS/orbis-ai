@@ -1194,3 +1194,14 @@ if (root) {
   void refresh()
   watch()
 }
+
+/*
+ * And once, now, if this is the view the panel opened at.
+ *
+ * `showTab` dispatches the event as the page loads for whichever view the address names, which is before this
+ * module exists. Landing straight on #music drew an empty screen until somebody navigated away and back.
+ */
+{
+  const here = document.getElementById('view-music')
+  if (here && !here.hidden) document.dispatchEvent(new CustomEvent('orbis:music-shown'))
+}

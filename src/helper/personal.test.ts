@@ -7,6 +7,8 @@ import { newToken } from './auth.ts'
 import { createHandlers } from './handlers.ts'
 import { createHelperServer } from './server.ts'
 import { noteFilter, notePatch, taskPatch } from './personal.ts'
+import { NotesStore } from '../main/personal/notes.ts'
+import { TasksStore } from '../main/personal/tasks.ts'
 
 const PANEL = 'chrome-extension://abcdefghijklmnopabcdefghijklmnop'
 const TOKEN = newToken()
@@ -112,6 +114,98 @@ test('pure validators', () => {
   assert.deepEqual(notePatch({ pinned: true, junk: 1 }), { pinned: true })
   assert.deepEqual(taskPatch({ due: null }), { due: undefined })
   assert.throws(() => taskPatch({ subtasks: [{ id: 'a' }] }))
+})
+
+test('a task can be set to repeat, and to stop', () => {
+  /*
+   * `repeat` was not in the patch at all, so the browser panel could show a repeating task and had no way to set
+   * one or stop one. A field a screen can show and cannot change is the half of a feature that looks finished.
+   */
+  assert.deepEqual(taskPatch({ repeat: { every: 'week', interval: 2 } }), { repeat: { every: 'week', interval: 2 } })
+  assert.deepEqual(taskPatch({ repeat: null }), { repeat: undefined }, 'null is how somebody stops it repeating')
+  // Not mentioned is not the same as cleared: an editor that does not know about repeats leaves them alone.
+  assert.deepEqual(taskPatch({ title: 'just a rename' }), { title: 'just a rename' })
+
+  assert.throws(() => taskPatch({ repeat: { every: 'fortnight', interval: 1 } }), /Unknown repeat/)
+  assert.throws(() => taskPatch({ repeat: { every: 'day', interval: 0 } }), /every 1 to 365/)
+  assert.throws(() => taskPatch({ repeat: { every: 'day', interval: 400 } }), /every 1 to 365/)
+  assert.throws(() => taskPatch({ repeat: { every: 'day', interval: 'often' } }), /every 1 to 365/)
+})
+
+test('a due time survives being edited', () => {
+  /*
+   * The fault this is really for. `tasks:update` replaces what it is given, and the panel's editor sent
+   * `hasTime: false` on every save -- so opening a task due at three o'clock and pressing Save moved it to
+   * midnight, with nothing said and no way to put it back.
+   */
+  const threeOClock = new Date('2026-03-04T15:00:00').getTime()
+  assert.deepEqual(taskPatch({ due: threeOClock, hasTime: true }), { due: threeOClock, hasTime: true })
+  // And a day with no time on it is still a day with no time on it.
+  const theDay = new Date('2026-03-04T00:00:00').getTime()
+  assert.deepEqual(taskPatch({ due: theDay, hasTime: false }), { due: theDay, hasTime: false })
+})
+
+test('one set of notes and tasks, not two', async () => {
+  /*
+   * The fault, measured. The panel and the window each held their own store over the same file, and both keep what
+   * they read in memory -- so a step added to a task in the browser was written to disk, the panel showed it, and
+   * the window went on showing the task without it for as long as it stayed open. Worse, the window's next save
+   * wrote its own stale copy back, and the step had never happened.
+   *
+   * Lending the application's store to the helper is the whole fix, and this is what it has to hold: a change made
+   * through the helper's channels is visible to whoever holds the store, immediately, with nothing re-read.
+   */
+  const dir = await mkdtemp(join(tmpdir(), 'orbis-personal-'))
+  try {
+    const notes = new NotesStore(dir)
+    const tasks = new TasksStore(dir)
+    const server = createHelperServer({
+      token: TOKEN,
+      allowedOrigins: [PANEL],
+      handlers: createHandlers({ apiKeys: [], dataDir: dir, personal: () => ({ notes, tasks }) })
+    })
+    const { port } = await server.listen()
+    const rpc = async (channel: string, args: unknown[] = []): Promise<any> => {
+      const res = await fetch(`http://127.0.0.1:${port}/rpc`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${TOKEN}`, Origin: PANEL, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel, args })
+      })
+      const lines = (await res.text()).split('\n').filter(Boolean).map((l) => JSON.parse(l))
+      const last = lines[lines.length - 1]
+      if (last.error) throw Object.assign(new Error(last.error.message), { code: last.error.code })
+      return last.result ?? last.value ?? last
+    }
+
+    try {
+      // Made by the application.
+      const task = await tasks.create({ title: 'Ring the dentist' })
+      const note = await notes.create({ title: 'A note', body: 'Something' })
+
+      // Changed through the helper, the way the browser panel does it.
+      await rpc('tasks:update', [task.id, { subtasks: [{ id: 'st_1', title: 'Find the number', done: false }] }])
+      await rpc('notes:update', [note.id, { body: 'Something else' }])
+
+      // And the application sees it, with nothing re-read and no watcher anywhere.
+      const seen = await tasks.get(task.id)
+      assert.deepEqual(
+        seen?.subtasks.map((one) => one.title),
+        ['Find the number'],
+        'a change made in the panel is a change the window can see'
+      )
+      assert.equal((await notes.get(note.id))?.body, 'Something else')
+
+      // And the other way round, which is the half that used to overwrite the first.
+      await tasks.update(task.id, { title: 'Ring the dentist back' })
+      const listed = await rpc('tasks:list', [{ view: 'all' }])
+      assert.equal(listed[0].title, 'Ring the dentist back')
+      assert.deepEqual(listed[0].subtasks.map((one: { title: string }) => one.title), ['Find the number'], 'and nothing was written over')
+    } finally {
+      await server.close()
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true })
+  }
 })
 
 test('without a data folder there are no personal channels', async () => {

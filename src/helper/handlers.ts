@@ -10,7 +10,7 @@ import { answerContext, runResearch } from '../main/research.ts'
 import { isSpecialized } from '../shared/searchProviders.ts'
 import type { Research } from '../shared/types'
 import { createAdblockHandlers } from './adblock/service.ts'
-import { createPersonalHandlers } from './personal.ts'
+import { createPersonalHandlers, type PersonalDeps } from './personal.ts'
 import { createRecallHandlers, type RecallHelperDeps } from './recall.ts'
 import { createScheduleHandlers, type SchedulesHelperDeps } from './schedules.ts'
 import { createSecretsHandlers } from './secrets.ts'
@@ -158,6 +158,14 @@ export interface HandlerDeps {
   searchSessions?: SearchSessionsDeps['store']
   /** Chats: the app's own store when given, else the helper opens the same folder under dataDir. */
   conversations?: ConversationsDeps['store']
+  /**
+   * Notes and tasks: the app's own stores when given, never a second pair opened over the same files.
+   *
+   * Both the window and these handlers hold what they read in memory. Opening a second pair meant a task edited
+   * in the browser panel was written to disk and the window went on showing the old one, and the window's next
+   * save wrote its stale copy back over the change.
+   */
+  personal?: () => { notes: NonNullable<PersonalDeps['notes']>; tasks: NonNullable<PersonalDeps['tasks']> } | null
   /**
    * The pages this person has read: the app's own index, never a second one opened here.
    *
@@ -307,6 +315,19 @@ function trayStore(dataDir: string): TrayStore {
   return made
 }
 
+/**
+ * Notes and tasks, from the application's own stores when it is running.
+ *
+ * Lent rather than opened again: both copies hold what they read in memory, so a second pair meant a task edited
+ * in the browser panel was written to disk and the window went on showing the old one. Opened here only when the
+ * application is not running, which is the one case where there is no other copy to be out of step with.
+ */
+function personalHandlers(deps: HandlerDeps): Record<string, Handler> {
+  const lent = deps.personal?.()
+  if (lent) return createPersonalHandlers({ dataDir: deps.dataDir ?? '', notes: lent.notes, tasks: lent.tasks })
+  return deps.dataDir ? createPersonalHandlers({ dataDir: deps.dataDir }) : {}
+}
+
 export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
   const doFetch = (url: string, init?: RequestInit): Promise<Response> => (deps.fetchFn ?? fetch)(url, init)
   // Orbis Search is two providers: ordinary web search, and a specialized one for every other category. Neither can
@@ -318,7 +339,7 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
     ...createSearchSessionHandlers({ store: deps.searchSessions, userData: deps.dataDir, profileId: deps.profileId, apiKeys: deps.apiKeys, fetchFn: doFetch }),
     ...createFaviconHandlers({ fetchFn: doFetch }),
     ...createConversationHandlers({ store: deps.conversations, userData: deps.dataDir, profileId: deps.profileId }),
-    ...(deps.dataDir ? createPersonalHandlers({ dataDir: deps.dataDir }) : {}),
+    ...personalHandlers(deps),
     ...createRecallHandlers(() => {
       // Read at call time, like the other stores here: the window may start after the browser has.
       const store = deps.recall?.()

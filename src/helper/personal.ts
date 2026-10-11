@@ -2,7 +2,7 @@ import { NotesStore } from '../main/personal/notes.ts'
 import { TasksStore } from '../main/personal/tasks.ts'
 import { NOTE_COLORS, MAX_NOTE_BODY } from '../shared/notes.ts'
 import type { Note, NoteFilter } from '../shared/notes.ts'
-import { INBOX_LIST_ID, TASK_PRIORITIES } from '../shared/tasks.ts'
+import { INBOX_LIST_ID, TASK_PRIORITIES, TASK_REPEATS } from '../shared/tasks.ts'
 import type { Task, TaskFilter } from '../shared/tasks.ts'
 import { HelperError } from './server.ts'
 import type { Handler } from './server.ts'
@@ -97,6 +97,24 @@ export function taskPatch(raw: unknown): Partial<Task> {
     if (!TASK_PRIORITIES.includes(r.priority as never)) throw bad('Unknown priority.')
     p.priority = r.priority as Task['priority']
   }
+  /*
+   * How often it comes back.
+   *
+   * It was not here, so the browser panel could show a repeating task and had no way to set or clear one -- and
+   * because `update` replaces what it is given, editing such a task anywhere that did not send `repeat` back left
+   * the repeat intact only by accident of it not being mentioned. Null clears it, which is how somebody stops a
+   * task repeating.
+   */
+  if (r.repeat !== undefined) {
+    if (r.repeat === null) p.repeat = undefined
+    else {
+      const o = obj(r.repeat, 'The repeat')
+      if (!TASK_REPEATS.includes(o.every as never)) throw bad('Unknown repeat.')
+      const interval = Math.round(Number(o.interval))
+      if (!Number.isFinite(interval) || interval < 1 || interval > 365) throw bad('A repeat happens every 1 to 365.')
+      p.repeat = { every: o.every as 'day' | 'week' | 'month' | 'year', interval }
+    }
+  }
   if (r.subtasks !== undefined) {
     if (!Array.isArray(r.subtasks) || r.subtasks.length > 100) throw bad('subtasks must be a list of at most 100.')
     p.subtasks = r.subtasks.map((s) => {
@@ -107,11 +125,28 @@ export function taskPatch(raw: unknown): Partial<Task> {
   return p
 }
 
-/** `dataDir` is this profile's own folder; two profiles never share one. */
-export function createPersonalHandlers(o: { dataDir: string }): Record<string, Handler> {
-  if (!o.dataDir) throw new Error('Notes and tasks need a data folder.')
-  const notes = new NotesStore(o.dataDir)
-  const tasks = new TasksStore(o.dataDir)
+export interface PersonalDeps {
+  /** This profile's own folder; two profiles never share one. */
+  dataDir: string
+  /**
+   * The application's own stores, when the application is running.
+   *
+   * Lent rather than opened again, for the same reason the reading index is: both copies hold what they read in
+   * memory, so a task edited in the browser panel was written to disk and the window went on showing the old one
+   * -- and the window's next save wrote its stale copy back over the change. Two caches over one file is one copy
+   * too many, not a synchronisation problem.
+   *
+   * Absent when the browser is running without the application, which is the only case where opening a second
+   * one is right: there is no other copy to be out of step with.
+   */
+  notes?: NotesStore
+  tasks?: TasksStore
+}
+
+export function createPersonalHandlers(o: PersonalDeps): Record<string, Handler> {
+  if (!o.dataDir && !(o.notes && o.tasks)) throw new Error('Notes and tasks need a data folder.')
+  const notes = o.notes ?? new NotesStore(o.dataDir)
+  const tasks = o.tasks ?? new TasksStore(o.dataDir)
   const first = (a: unknown[]): unknown => a[0]
   // Every answer is written to disk before it is sent, so nothing acknowledged can be lost to a quick shutdown.
   const saved = (run: (a: unknown[]) => Promise<unknown> | unknown): Handler => async (a) => {

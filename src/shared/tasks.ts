@@ -50,6 +50,8 @@ export interface TaskList {
 }
 
 export const TASK_PRIORITIES: TaskPriority[] = ['none', 'low', 'medium', 'high']
+/** How often a repeating task comes back. Named here so the window, the panel and the helper agree on the list. */
+export const TASK_REPEATS: TaskRepeat['every'][] = ['day', 'week', 'month', 'year']
 export const LIST_COLORS = ['#3fd8ff', '#3ee58a', '#ffbe4d', '#ff4d6d', '#a78bfa', '#f472b6']
 export const INBOX_LIST_ID = 'inbox'
 

@@ -102,3 +102,16 @@ export function showAccount() {
 
 document.addEventListener('orbis:account-shown', () => showAccount())
 void refresh()
+
+/*
+ * And once, now, if this is the view the panel opened at.
+ *
+ * The event above is dispatched by `showTab`, which runs as the page loads for whichever view the address names --
+ * before this module has been evaluated, so there is nobody listening yet. Without this, landing straight on
+ * #account drew the frame and nothing in it, and going to another view and back filled it in: a fault that only
+ * shows itself to somebody who opens the address directly and does not look twice.
+ */
+{
+  const here = document.getElementById('view-account')
+  if (here && !here.hidden) showAccount()
+}

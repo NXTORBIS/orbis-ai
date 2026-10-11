@@ -621,6 +621,15 @@ let appServicesForBrowser: AppServicesDeps | null = null
 /** The sidebar arrangement store, for the sidebar inside the built-in Orbis pages of the browser. */
 /** Saved Orion Search research, once it exists: the results page in the browser and the Orbis window share this one store. */
 let searchSessionsForBrowser: SearchSessionStore | null = null
+/**
+ * Notes and tasks, lent to the browser's panel.
+ *
+ * Here, rather than the panel opening its own pair, because both copies hold what they read in memory: a task
+ * edited in the panel was written to disk, the panel showed it, the window did not -- its copy never looks at the
+ * file again -- and the window's next save put it back where it had never been. Measured, with a step added to a
+ * real task.
+ */
+let personalForBrowser: { notes: NotesStore; tasks: TasksStore } | null = null
 /** The stores behind the Orbis panel's saved pages, screenshots, clipboard, reminders, whiteboard, workspaces and sources rows (set once they exist). */
 let panelStoresForBrowser: PanelStores | null = null
 
@@ -3093,6 +3102,14 @@ if (!app.requestSingleInstanceLock()) {
                   }
                 },
           searchSessions: () => searchSessionsForBrowser,
+          /*
+           * Notes and tasks: the application's own, never a second pair opened over the same files.
+           *
+           * Measured before this was here: a step added to a task in the browser panel was written to disk, the
+           * panel showed it, and the window did not -- its copy never looks at the file again -- and the window's
+           * next save put the step back where it had never been.
+           */
+          personal: () => personalForBrowser,
           // The reading index the browser's panel searches: the app's own, never a second one opened over the same file.
           /**
            * How Orbis looks, for the browser's own pages.
@@ -4043,6 +4060,7 @@ ${page.text}`, { howMany: 6 })
     const whiteboardStore = new WhiteboardStore(app.getPath('userData'))
     const workspacesStore = new WorkspacesStore(app.getPath('userData'))
     // Notes, tasks, whiteboards and workspaces belong to the profile in use, like its browsing and its workflows.
+    personalForBrowser = { notes: notesStore, tasks: tasksStore }
     const personalStores = [notesStore, tasksStore, whiteboardStore, workspacesStore]
     const followProfile = (): Promise<void> =>
       profilesStore
