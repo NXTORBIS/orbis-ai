@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { FEATURE_GROUPS } from '../lib/features'
 import type { AppFeature } from '../../../shared/commandCenter'
-import { avatarStyle, markFor } from '../../../shared/avatars'
+import { avatarFor, avatarStyle } from '../../../shared/avatars'
 import type { LucideIcon } from 'lucide-react'
 import type { SettingsSectionId } from '../../../shared/settingsSections'
 import type { NoticeKind } from '../lib/notices'
@@ -387,11 +387,11 @@ export default function Sidebar(props: Props): React.JSX.Element {
 
       <div className="sb-foot">
         <button type="button" className="sb-user" title="Profile and settings" onClick={() => props.onSettings('account')}>
-          {/* The same sphere that was chosen during setup, at the size a sidebar wants. One letter, never two:
-              initials inside a 28px orb are a smudge. */}
-          <span className="sb-avatar" style={avatarStyle(props.userAvatar)}>
-            {markFor(props.userName)}
-          </span>
+          {/* The world that was chosen during setup, and nothing else on it.
+              It used to carry the first letter of the name and leave the weather off, so the orb in the sidebar --
+              the one somebody sees every time they look at Orbis -- was neither the world they picked nor a letter
+              they asked for. It is the world now: same body, same weather, same air, just smaller. */}
+          <span className="sb-avatar" data-pattern={avatarFor(props.userAvatar).pattern} style={avatarStyle(props.userAvatar)} />
           {!collapsed && (
             <span className="sb-user-text">
               <b className="truncate">{props.userName}</b>

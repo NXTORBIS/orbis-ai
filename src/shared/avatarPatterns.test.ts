@@ -24,6 +24,7 @@ const read = (relative: string): string => readFileSync(fileURLToPath(new URL(re
 
 const WELCOME = read('../renderer/src/components/welcome.css')
 const SETTINGS = read('../renderer/src/styles/parts/10-toasts-modals.css')
+const SIDEBAR = read('../renderer/src/styles/parts/03-sidebar.css')
 
 /** The declarations of the first `[data-pattern='<name>']::before` rule in a stylesheet, with the noise removed. */
 function bodyFor(css: string, pattern: string): string {
@@ -62,11 +63,18 @@ describe('the two copies of the weather', () => {
   })
 
   for (const pattern of patterns) {
-    it(`${pattern} is drawn the same way on the setup screen and in Settings`, () => {
+    it(`${pattern} is drawn the same way wherever a world appears`, () => {
+      // Three sizes in three stylesheets -- the setup screen, Settings, and the sidebar orb somebody sees every
+      // time they look at Orbis. One of them drifting is the same world looking like a different world.
       assert.equal(
         bodyFor(SETTINGS, pattern),
         bodyFor(WELCOME, pattern),
         `the ${pattern} pattern differs between welcome.css and 10-toasts-modals.css`
+      )
+      assert.equal(
+        bodyFor(SIDEBAR, pattern),
+        bodyFor(WELCOME, pattern),
+        `the ${pattern} pattern differs between welcome.css and 03-sidebar.css`
       )
     })
   }

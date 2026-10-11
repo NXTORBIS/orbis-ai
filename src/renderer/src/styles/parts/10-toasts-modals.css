@@ -535,7 +535,7 @@ kbd {
 }
 
 /* The twelve weathers, generated from `components/welcome.css` -- see `shared/avatarPatterns.test.ts`.
-   Settings cannot import that file: it belongs to a screen unmounted the moment setup finishes. */
+   This file cannot import that one: it belongs to a screen unmounted the moment setup finishes. */
 
 .setting-face[data-pattern='ocean']::before {
   background:
