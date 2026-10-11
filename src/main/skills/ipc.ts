@@ -37,8 +37,10 @@ export interface SkillsIpcOptions {
   pageUrl(): string | undefined
 }
 
+/** Strings only, bounded. Anything else is the empty string, which every call below then refuses on its own terms. */
 const text = (value: unknown, max: number): string => (typeof value === 'string' ? value.slice(0, max) : '')
 
+/** Only the four fields a person may change about a skill, and only when each is the right kind of thing. */
 const edits = (value: unknown): SkillEdits => {
   const v = (value ?? {}) as Record<string, unknown>
   return {
