@@ -275,15 +275,40 @@ export default function CustomizeView({
   const removeWallpaper = (id: string): void =>
     change({ ...draft, wallpapers: draft.wallpapers.filter((w) => w.id !== id), newTab: { ...draft.newTab, wallpaperId: draft.newTab.wallpaperId === id ? null : draft.newTab.wallpaperId } })
 
-  const toggle =(label: string, value: boolean, onChange: (value: boolean) => void, hint?: string) => (
-    <label className="cz-row">
-      <span>
-        {label}
-        {hint && <small className="view-muted">{hint}</small>}
-      </span>
-      <input type="checkbox" checked={value} onChange={(e) => onChange(e.target.checked)} />
-    </label>
-  )
+  /*
+   * One switch, said once.
+   *
+   * The hint sits inside the `<span>` inside the `<label>`, and a wrapping label names its control from ALL of its
+   * text -- so a reader said "Reduce motion Animations are kept to a minimum across Orbis" as though that whole
+   * sentence were what the switch is called. Thirteen switches on this screen, every one of them.
+   *
+   * The markup is deliberately unchanged, because `.cz-row` is a flex label and the shared field would put the
+   * sentence after the control rather than beside the name -- which is pixels moving. Instead the input is told
+   * explicitly what names it and what merely describes it: `aria-labelledby` points at the label text alone, and
+   * `aria-describedby` at the sentence. An explicit name beats the implicit one a wrapping label would give.
+   */
+  const toggle = (label: string, value: boolean, onChange: (value: boolean) => void, hint?: string) => {
+    const id = `cz-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
+    return (
+      <label className="cz-row" key={id}>
+        <span>
+          <span id={`${id}-name`}>{label}</span>
+          {hint && (
+            <small className="view-muted" id={`${id}-hint`}>
+              {hint}
+            </small>
+          )}
+        </span>
+        <input
+          type="checkbox"
+          checked={value}
+          aria-labelledby={`${id}-name`}
+          aria-describedby={hint ? `${id}-hint` : undefined}
+          onChange={(e) => onChange(e.target.checked)}
+        />
+      </label>
+    )
+  }
 
   /*
     Apply and Cancel belong to the whole screen, so they are the header's actions both ways round -- hiding them

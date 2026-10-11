@@ -1,6 +1,6 @@
 import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, nativeTheme, net, powerMonitor, protocol, shell, Tray } from 'electron'
 import type { MenuItemConstructorOptions, OpenDialogOptions, TitleBarOverlayOptions, IpcMainInvokeEvent } from 'electron'
-import { existsSync, promises as fs } from 'node:fs'
+import { appendFileSync, existsSync, promises as fs } from 'node:fs'
 import os from 'node:os'
 import { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
@@ -109,28 +109,49 @@ import { projectOfConversation, projectsMentioned } from '../shared/workspaces'
  * Installed at the top of the file, before anything else can run, because a fault during start-up is exactly the
  * one most likely to happen and least likely to be caught anywhere else.
  */
+/**
+ * Where faults are written, worked out once.
+ *
+ * `app.getPath` is a call into Electron and can itself fail very late in a shutdown. Asking for it at the moment
+ * something has already gone wrong is asking the wrong question at the worst time, so it is asked early and the
+ * answer kept. Empty until the app is ready, which is the only window where the console is all there is.
+ */
+let crashLog = ''
+/** A fault raised from inside the recorder must not come back round through it. */
+let recording = false
+
 function recordCrash(kind: string, error: unknown): void {
-  const when = new Date().toISOString()
-  const said = error instanceof Error ? `${error.name}: ${error.message}${String.fromCharCode(10)}${error.stack ?? ''}` : String(error)
-  // The console first, so it is there even if writing the file is the thing that is broken.
-  console.error(`[orbis] ${kind} at ${when}`, said)
+  if (recording) return
+  recording = true
   try {
-    const line = `${when}  ${kind}${String.fromCharCode(10)}${said}${String.fromCharCode(10, 10)}`
-    // `appendFileSync` on purpose: the process may be about to go, and a promise that never settles writes nothing.
-    void import('node:fs').then(({ appendFileSync }) => {
+    const when = new Date().toISOString()
+    const said = error instanceof Error ? `${error.name}: ${error.message}${String.fromCharCode(10)}${error.stack ?? ''}` : String(error)
+    // The console first, so it is there even if writing the file is the thing that is broken.
+    console.error(`[orbis] ${kind} at ${when}`, said)
+    if (crashLog !== '') {
       try {
-        appendFileSync(join(app.getPath('userData'), 'errors.log'), line, 'utf8')
+        /*
+         * Synchronous, and statically imported.
+         *
+         * This line said "a promise that never settles writes nothing" and then wrapped the write in exactly such
+         * a promise: `import('node:fs')` resolves on a later tick, and once Electron's quit teardown has begun
+         * there is no later tick. Measured rather than reasoned -- a throw inside a `before-quit` listener wrote
+         * nothing at all through the dynamic import and wrote correctly through this, three runs out of three.
+         * That matters because roughly thirty things run during quit here, and a fault in any of them was being
+         * recorded nowhere, which is what kept this class of fault undiagnosable.
+         */
+        appendFileSync(crashLog, `${when}  ${kind}${String.fromCharCode(10)}${said}${String.fromCharCode(10, 10)}`, 'utf8')
       } catch {
         /* the log is a courtesy, never a reason to fail twice */
       }
-    })
-  } catch {
-    /* as above */
-  }
-  try {
-    tellWindow('app:fault', { kind, when, said: said.slice(0, 2000) })
-  } catch {
-    /* the window is very likely what just broke */
+    }
+    try {
+      tellWindow('app:fault', { kind, when, said: said.slice(0, 2000) })
+    } catch {
+      /* the window is very likely what just broke */
+    }
+  } finally {
+    recording = false
   }
 }
 
@@ -779,6 +800,22 @@ let mainWindow: BrowserWindow | null = null
  */
 function liveWindow(): BrowserWindow | null {
   return mainWindow && !mainWindow.isDestroyed() ? mainWindow : null
+}
+/**
+ * Bring the window up and make it the one everything else means.
+ *
+ * `createWindow()` only builds a window. Being THE window is a second thing: it has to be recorded in
+ * `mainWindow`, and it has to forget itself when it closes, or every later `liveWindow()` hands back something
+ * that is gone. Start-up did both; the tray's "Open Orbis" did neither, and the window it opened was ignored by
+ * everything -- including all thirty IPC guards, which compare the sender against the recorded window and refuse
+ * anything else. One way in, so there is only one thing to remember.
+ */
+function openWindow(): BrowserWindow {
+  const win = createWindow()
+  win.on('closed', () => {
+    if (mainWindow === win) mainWindow = null
+  })
+  return win
 }
 /**
  * Say something to the window, if there is still a window to say it to.
@@ -2351,6 +2388,9 @@ if (!app.requestSingleInstanceLock()) {
 
   void app.whenReady().then(async () => {
     app.setAppUserModelId('ai.nxtorbis.desktop')
+    // Worked out here, while everything is fine, so the crash recorder never has to ask Electron for anything at
+    // the moment something has already gone wrong. See `recordCrash`.
+    crashLog = join(app.getPath('userData'), 'errors.log')
 
     // Create menu like ChatGPT
     const menu = Menu.buildFromTemplate([
@@ -4431,7 +4471,32 @@ ${page.text}`, { howMany: 6 })
         Menu.buildFromTemplate([
           { label: because, enabled: false },
           { type: 'separator' },
-          { label: 'Open Orbis', click: () => void createWindow() },
+          /*
+           * The same way in as every other way in.
+           *
+           * This used to call `createWindow()` straight, which returns a window that is never recorded as THE
+           * window. Everything that matters then looked past it: nothing could be sent to it, because `tellWindow`
+           * asks for the recorded one; nothing it asked for was allowed, because all thirty IPC guards compare the
+           * sender against the recorded one and refuse anything else; and tab lock and profile lock were never
+           * attached to it. The window opened and nothing inside it worked -- no settings, no conversations, no
+           * voice. And this is the one menu item guaranteed to run in that state, because the tray only exists
+           * when there is no window.
+           */
+          {
+            label: 'Open Orbis',
+            click: () => {
+              const already = liveWindow()
+              if (already) {
+                if (already.isMinimized()) already.restore()
+                already.focus()
+                return
+              }
+              mainWindow = openWindow()
+              // The locks watch a window; a window they were never given is one they cannot lock.
+              tabLock.attachWindow()
+              profileLock.attachWindow()
+            }
+          },
           /*
            * Hibernate, offered here because this is the menu somebody sees when Orbis is running for a schedule.
            *
@@ -5399,8 +5464,7 @@ ${page.text}`, { howMany: 6 })
      */
     startInBrowser = !embeddedBrowser && (await store.getSettings()).openBrowserOnLaunch === true
 
-    mainWindow = createWindow()
-    mainWindow.on('closed', () => (mainWindow = null))
+    mainWindow = openWindow()
 
     if (startInBrowser) {
       /**
