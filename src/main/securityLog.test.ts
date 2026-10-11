@@ -214,7 +214,8 @@ test('a truncated log is kept, not read as "nothing happened"', async () => {
     w.log.record('default', { kind: 'FAILED_ACCOUNT_UNLOCK', at: 1_700_000_000_000 })
     w.log.record('default', { kind: 'TAB_PASSWORD_RESET', password: 'Banking', at: 1_700_000_001_000 })
     await w.log.flush()
-    // What a write interrupted by a power cut leaves behind: readable, nearly all there, and not JSON.
+    // What something outside Orbis having been at the file leaves behind, or a rename on a folder that syncs: readable,
+    // nearly all there, and not JSON. Not this store's own interrupted write -- it writes beside and renames over.
     const whole = await readFile(logFile(w.dir), 'utf8')
     const cut = whole.slice(0, whole.length - 10)
     await writeFile(logFile(w.dir), cut)
@@ -315,6 +316,102 @@ test('clearing a log that could not be read does not then allow it to be written
     await w.log.flush()
     assert.equal((await stat(logFile(w.dir))).isDirectory(), true)
     assert.equal(await triedToWrite(w.dir), false)
+  } finally {
+    await w.cleanUp()
+  }
+})
+
+test('a damaged log that could not be moved aside is left exactly as it is, and nothing is written', async () => {
+  const w = await bench()
+  try {
+    const foreign = '[{"event":"locked","when":"yesterday"}]'
+    await writeFile(logFile(w.dir), foreign)
+    // The store's clock decides the name a damaged log would be moved to, so a frozen clock says exactly where that is.
+    // A folder sitting there makes the move fail the way a file something else has open does, without needing one. This
+    // is the branch that decides a log which could not be moved aside may not be written over either, and nothing had
+    // ever taken it: it was right by construction only.
+    const clock = (): number => 1000
+    const aside = `${logFile(w.dir)}.unreadable-${new Date(clock()).toISOString().replace(/[:.]/g, '-')}`
+    await mkdir(aside)
+
+    const after = new SecurityLog(w.dir, clock)
+    after.record('default', { kind: 'TAB_LOCKED' })
+    await after.flush()
+    after.record('default', { kind: 'PANIC_LOCK' })
+    await after.flush()
+    after.stop()
+
+    assert.equal(await readFile(logFile(w.dir), 'utf8'), foreign, 'a log that could not be moved aside was written over')
+    assert.equal(await triedToWrite(w.dir), false, 'and no write was even attempted')
+    assert.equal((await stat(aside)).isDirectory(), true, 'nothing was moved, because there was nowhere to move it')
+    const note = after.problem('default')
+    assert.ok(note, 'nothing was able to say what had happened to the log')
+    assert.match(note, /nothing has been written over it/)
+  } finally {
+    await w.cleanUp()
+  }
+})
+
+test('a log that was moved aside is something the store can say happened, in words somebody could act on', async () => {
+  const w = await bench()
+  try {
+    const foreign = '[{"event":"locked","when":"yesterday"}]'
+    await writeFile(logFile(w.dir), foreign)
+    w.log.record('default', { kind: 'TAB_LOCKED' })
+    await w.log.flush()
+
+    const kept = await movedAside(w.dir)
+    assert.equal(kept.length, 1)
+    // The bytes being on the disk is only half of it. Nothing pointed anybody at them, so the trail simply looked as
+    // though it started this morning.
+    const note = w.log.problem('default')
+    assert.ok(note, 'nothing anywhere said the log had been moved')
+    assert.ok(note.includes(kept[0]), 'and it does not say where to find it')
+    assert.match(note, /Nothing was deleted/)
+  } finally {
+    await w.cleanUp()
+  }
+})
+
+test('a log that opened cleanly has nothing to report', async () => {
+  const w = await bench()
+  try {
+    w.log.record('default', { kind: 'ACCOUNT_CREATED' })
+    await w.log.flush()
+    const again = new SecurityLog(w.dir)
+    await again.all('default')
+    assert.equal(again.problem('default'), null)
+    assert.equal(again.problem('never-used'), null, 'and neither has a profile with no log at all')
+    again.stop()
+  } finally {
+    await w.cleanUp()
+  }
+})
+
+test('a clear that could not happen says so, rather than reporting success', async () => {
+  const w = await bench()
+  try {
+    // A folder where the log is expected resists being removed the way a file something else is holding open does.
+    await mkdir(logFile(w.dir))
+    w.log.record('default', { kind: 'FAILED_ACCOUNT_UNLOCK' })
+
+    assert.equal(await w.log.clear('default'), false, 'a clear that did not happen reported success')
+    assert.equal((await stat(logFile(w.dir))).isDirectory(), true, 'it is still exactly where it was')
+    // And the list is left as it was, because an empty panel over a log that still holds the events is two answers to
+    // the same question -- and the file's is the one that is still there at the next launch.
+    assert.deepEqual((await w.log.all('default')).map((e) => e.kind), ['FAILED_ACCOUNT_UNLOCK'])
+  } finally {
+    await w.cleanUp()
+  }
+})
+
+test('a clear that did happen says so', async () => {
+  const w = await bench()
+  try {
+    w.log.record('default', { kind: 'ACCOUNT_CREATED' })
+    await w.log.flush()
+    assert.equal(await w.log.clear('default'), true)
+    assert.deepEqual(await w.log.all('default'), [], 'and there is nothing left to show')
   } finally {
     await w.cleanUp()
   }

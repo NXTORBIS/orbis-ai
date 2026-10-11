@@ -1,5 +1,5 @@
 import { promises as fs } from 'node:fs'
-import { openStored } from './storedFile.ts'
+import { damageNote, openStored } from './storedFile.ts'
 import { dirname, join } from 'node:path'
 import { dataDirFor } from '../shared/profiles.ts'
 import {
@@ -31,9 +31,11 @@ const FLUSH_MS = 1500
  *
  * It throws rather than shrugging, and that is the point: `openStored` reads a throw as damage, which moves the file
  * aside with its bytes intact before anything is written in its place. A file that holds something other than a list of
- * events is one of three things -- half of a rename a crash interrupted, a truncated write, or a log a newer Orbis
- * wrote in a shape this one has never heard of -- and all three are a file worth keeping, not a file worth replacing
- * with whatever this session happened to log.
+ * events is one of three things -- a log a newer Orbis wrote in a shape this one has never heard of, a file something
+ * outside Orbis has been at, or a rename that was not atomic because the folder is on a network share or inside
+ * something that syncs -- and all three are a file worth keeping, not a file worth replacing with whatever this session
+ * happened to log. Half of this store's own write is not among them: it writes beside the file and renames over, so an
+ * interrupted save leaves the whole old log or a stray `.tmp`, never a cut-short `security-log.json`.
  *
  * A list that held entries and yielded no events is the same case. `cleanSecurityEvents` drops what it does not
  * recognise, so a newer Orbis's log would otherwise arrive here as an empty list and read as "nothing happened".
@@ -55,6 +57,14 @@ export class SecurityLog {
   private readonly dirty = new Set<string>()
   /** Profiles whose log file is there and was not understood. A shorter log is never written over those. */
   private readonly unreadable = new Set<string>()
+  /**
+   * What went wrong opening each profile's log, in the words somebody would recognise. Only the ones that went wrong.
+   *
+   * Kept because `openStored` works this out and the store used to throw it away. A log moved aside is not data lost --
+   * the bytes are on the disk under `security-log.json.unreadable-` -- but nothing anywhere pointed anybody at them, so
+   * the trail simply appeared to start this morning.
+   */
+  private readonly damage = new Map<string, string>()
   private timer: ReturnType<typeof setTimeout> | null = null
   private readonly now: () => number
 
@@ -94,6 +104,10 @@ export class SecurityLog {
       const opened = await openStored<SecurityEvent[]>(this.path(profileId), readLog, () => [], this.now())
       if (opened.mayWrite) this.unreadable.delete(profileId)
       else this.unreadable.add(profileId)
+      const note = damageNote(opened, 'security log')
+      if (note) this.damage.set(profileId, note)
+      // Removed, not left behind, so a log that has since been read cleanly does not keep reporting yesterday's damage.
+      else this.damage.delete(profileId)
       const merged = [...this.list(profileId), ...opened.value]
       merged.sort((a, b) => b.at - a.at)
       if (merged.length > MAX_SECURITY_EVENTS) merged.length = MAX_SECURITY_EVENTS
@@ -162,20 +176,43 @@ export class SecurityLog {
     return [...(this.events.get(profileId) ?? [])]
   }
 
-  /** Everything forgotten, on purpose, because somebody asked. */
-  async clear(profileId: string): Promise<void> {
+  /**
+   * What went wrong opening this profile's log, in plain words. Null when nothing did.
+   *
+   * Answers from the last read, so it is worth asking after `all`. Named and shaped like `JsonFile.problem()` in
+   * `personal/store.ts`, because a second way of saying the same thing is a second thing to keep right.
+   */
+  problem(profileId: string): string | null {
+    return this.damage.get(profileId) ?? null
+  }
+
+  /**
+   * Everything forgotten, on purpose, because somebody asked.
+   *
+   * Says whether it happened. This used to work it out and return nothing, so the window replied `{ ok: true }` to a
+   * clear that had not happened: a log file something else was holding open stayed exactly where it was, the panel
+   * showed an empty list, and the events were back at the next launch. Somebody who is told their log is cleared and
+   * finds it is not has no way to tell that from Orbis having kept it on purpose.
+   */
+  async clear(profileId: string): Promise<boolean> {
     await this.read(profileId)
-    this.events.set(profileId, [])
-    this.dirty.delete(profileId)
     // The file itself, rather than an empty list in it: "cleared" should leave nothing to read.
     const gone = await fs
       .rm(this.path(profileId), { force: true })
       .then(() => true)
       .catch(() => false)
+    // Nothing in memory changes when the file would not go. An empty panel over a file that still holds the events is
+    // two different answers to the same question, and the file's is the one that survives the next launch.
+    if (!gone) return false
+    this.events.set(profileId, [])
+    this.dirty.delete(profileId)
     // Nothing is there now, so the refusal has nothing left to protect and this profile can be written again. Only on
     // a removal that worked: if the file resisted being deleted it is still there and still not understood, and
     // forgetting that is how the next flush would write over it.
-    if (gone) this.unreadable.delete(profileId)
+    this.unreadable.delete(profileId)
+    // And nothing is left to say about a file that is no longer there.
+    this.damage.delete(profileId)
+    return true
   }
 
   stop(): void {

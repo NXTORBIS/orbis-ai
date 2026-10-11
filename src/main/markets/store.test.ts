@@ -489,11 +489,13 @@ test('a file that is there and cannot be read is left exactly as it is', async (
     await w.store.createWatchlist('default', 'Real')
     await w.store.flush()
     const path = await find(w.dir)
-    const { mkdir, rm, stat } = await import('node:fs/promises')
+    const { mkdir, readdir, rm, stat } = await import('node:fs/promises')
     // A folder where the file should be reads as EISDIR: there, and not readable, which is what a file another program
     // is holding open looks like from here. Nothing about it is understood, so nothing may be written.
     await rm(path)
     await mkdir(path)
+    const folder = dirname(path)
+    const before = (await readdir(folder)).sort()
 
     const after = new MarketsStore(w.dir)
     assert.deepEqual((await after.read('default')).watchlists, [])
@@ -501,10 +503,108 @@ test('a file that is there and cannot be read is left exactly as it is', async (
     await after.flush()
     await after.createWatchlist('default', 'Another')
     after.stop()
-    // A refused write leaves no half-written file beside it; an attempted one would have left `markets.json.tmp`,
-    // because the rename over it cannot succeed.
-    await assert.rejects(() => stat(`${path}.tmp`), 'a write was attempted on a file Orbis could not read')
+    // The guarantee is that nothing happened to the folder at all, so the whole listing is what is compared. This used
+    // to assert only that `markets.json.tmp` was absent, which detects a write solely because a failed one leaves its
+    // half-written file behind: the day a write path tidies up after itself, or writes beside the file under another
+    // name, that assertion would have gone on passing and noticing nothing.
+    assert.deepEqual((await readdir(folder)).sort(), before, 'something was written beside a file Orbis could not read')
     assert.ok((await stat(path)).isDirectory(), 'the thing that was there is gone')
+  } finally {
+    await w.done()
+  }
+})
+
+test('a file held for a moment is refused, not thrown away: the save lands once the lock clears', async () => {
+  const w = await bench()
+  try {
+    await w.store.createWatchlist('default', 'Real')
+    await w.store.flush()
+    const path = await find(w.dir)
+    const { mkdir, rm, stat } = await import('node:fs/promises')
+    // Unreadable for a while and then not, which is the ordinary Windows case this whole guard exists for: antivirus
+    // or a backup tool has the file for a fifth of a second at launch and then lets go.
+    await rm(path)
+    await mkdir(path)
+
+    const after = new MarketsStore(w.dir)
+    assert.deepEqual((await after.read('default')).watchlists, [], 'nothing could be read, so Markets starts empty')
+    await after.createWatchlist('default', 'Made while it was held')
+    await after.flush()
+    assert.ok((await stat(path)).isDirectory(), 'the refusal did not hold')
+
+    // Whatever was holding it lets go. The refusal used to be the end of it: the first read was the only one there
+    // would ever be, so every watchlist, alert and trade made after it was dropped at quit without a word.
+    await rm(path, { recursive: true })
+    await after.flush()
+    after.stop()
+    const written = await readFile(path, 'utf8').catch(() => '')
+    assert.match(written, /Made while it was held/, 'the work that was waiting was never written once it could be')
+    assert.equal(after.problem('default'), null, 'and nothing is still being reported as wrong with the file')
+  } finally {
+    await w.done()
+  }
+})
+
+test('quitting refuses too, and leaves the change for the save that follows rather than dropping it', async () => {
+  const w = await bench()
+  try {
+    await w.store.createWatchlist('default', 'Real')
+    await w.store.flush()
+    const path = await find(w.dir)
+    const { mkdir, rm } = await import('node:fs/promises')
+    await rm(path)
+    await mkdir(path)
+
+    const after = new MarketsStore(w.dir)
+    await after.read('default')
+    await after.createWatchlist('default', 'Last thing')
+    // Closing writes synchronously, so it cannot look at the file again -- it can only refuse. What it must not do is
+    // take the change off the list on its way past: `flush` is registered as a quit save too, and it can look.
+    after.stop()
+    await rm(path, { recursive: true })
+    await after.flush()
+    const written = await readFile(path, 'utf8').catch(() => '')
+    assert.match(written, /Last thing/, 'quitting refused and dropped the change instead of leaving it pending')
+  } finally {
+    await w.done()
+  }
+})
+
+test('a damaged file is something the store can say happened, not a profile that looks brand new', async () => {
+  const w = await bench()
+  try {
+    await w.store.createWatchlist('default', 'Real')
+    await w.store.flush()
+    const path = await find(w.dir)
+    const { writeFile } = await import('node:fs/promises')
+    await writeFile(path, CUT_SHORT)
+
+    const after = new MarketsStore(w.dir)
+    const workspace = await after.read('default')
+    // This is the part nothing could explain. A damaged file gives an empty workspace, and an empty workspace has an
+    // empty onboarding record, which is what Markets reads as "this person has never been here" -- so somebody who had
+    // used it for a year met the first-run setup, with no mention of the file holding their real lists beside it.
+    assert.equal(workspace.onboarding.completed, false, 'an empty workspace is what a damaged file gives')
+    const note = after.problem('default')
+    assert.ok(note, 'nothing was able to say the file had been damaged')
+    assert.match(note, /\.unreadable-/, 'and it does not say where the words that were there went')
+    assert.match(note, /Nothing was deleted/)
+    after.stop()
+  } finally {
+    await w.done()
+  }
+})
+
+test('a file that opened cleanly has nothing to report', async () => {
+  const w = await bench()
+  try {
+    await w.store.createWatchlist('default', 'Real')
+    await w.store.flush()
+    const again = new MarketsStore(w.dir)
+    await again.read('default')
+    assert.equal(again.problem('default'), null)
+    assert.equal(again.problem('never-opened'), null, 'and neither has a profile with no file at all')
+    again.stop()
   } finally {
     await w.done()
   }
@@ -853,4 +953,48 @@ test('a change that does mention the groups is still allowed to empty them', asy
   const after = await store.setTicker('one', { groups: [] })
   assert.deepEqual(after.groups, [])
   await done()
+})
+
+test('a lock that clears gives the real workspace back, and never writes an empty one over it', async () => {
+  const w = await bench()
+  try {
+    await w.store.createWatchlist('default', 'A year of work')
+    await w.store.createWatchlist('default', 'Second list')
+    await w.store.flush()
+    const path = await find(w.dir)
+    const real = await readFile(path, 'utf8')
+    const { mkdir, rm, writeFile } = await import('node:fs/promises')
+
+    // The file is there and held, which on Windows reads as EISDIR here. The REAL BYTES ARE KEPT, which is what
+    // makes this different from the test above: there, the file was deleted, so when the lock cleared there was
+    // genuinely nothing to lose.
+    await rm(path)
+    await mkdir(path)
+
+    const after = new MarketsStore(w.dir)
+    assert.deepEqual((await after.read('default')).watchlists, [], 'nothing could be read, so Markets starts empty')
+    // And somebody works against that empty screen, because nothing told them not to.
+    await after.createWatchlist('default', 'One new list')
+    await after.flush()
+
+    // Whatever was holding it lets go, and the real file is there again, unchanged.
+    await rm(path, { recursive: true })
+    await writeFile(path, real)
+    await after.flush()
+
+    // The year of work is what is on disk, and it is also what Markets now shows.
+    const written = await readFile(path, 'utf8')
+    assert.match(written, /A year of work/, 'the real file was not written over')
+    assert.match(written, /Second list/)
+    assert.doesNotMatch(written, /One new list/, 'and the empty workspace did not replace it')
+    const names = (await after.read('default')).watchlists.map((one) => one.name)
+    assert.deepEqual(names, ['A year of work', 'Second list'], 'the real lists are back in front of the person')
+    assert.match(
+      after.problem('default') ?? '',
+      /could not be read when Orbis started/,
+      'and it says so, rather than leaving somebody to notice their new list went'
+    )
+  } finally {
+    await w.done()
+  }
 })

@@ -94,6 +94,68 @@ test('no file still means no course, and still allows a write', async () => {
   await store.flush()
 })
 
+test('a store that has never read the file still moves a damaged one aside before installing', async () => {
+  const dir = await here()
+  await fs.mkdir(join(dir, 'courses'), { recursive: true })
+  await fs.writeFile(fileFor(dir, 'demo'), '{"id":"demo","title":"The only copy","modu')
+
+  // No `course('demo')` first, which is the real order of events: installing is the first thing to touch an id on a
+  // fresh start -- the shipped courses, an import, a course Orion wrote. A guard that read only this session's notes
+  // found none and renamed a fresh file over these words.
+  const store = new CoursesStore(dir)
+  await store.install(course())
+
+  const kept = (await fs.readdir(join(dir, 'courses'))).filter((name) => name.includes('.unreadable-'))
+  assert.equal(kept.length, 1, 'the words that were there were kept, by an install that had read nothing')
+  assert.ok((await fs.readFile(join(dir, 'courses', kept[0]), 'utf8')).includes('The only copy'), 'and they are the same words')
+  assert.equal((await store.course('demo'))?.title, 'Demo')
+  await store.flush()
+})
+
+test('a store that has never read the file refuses to install over one it cannot read', async () => {
+  const dir = await here()
+  await fs.mkdir(join(dir, 'courses'), { recursive: true })
+  await fs.mkdir(fileFor(dir, 'demo'))
+
+  const store = new CoursesStore(dir)
+  // The message is the assertion: on Windows renaming over a directory throws EPERM by itself, so a bare rejection
+  // would pass with no guard at all. Refusing in words somebody can act on is the behaviour being held down.
+  await assert.rejects(store.install(course()), /could not read/)
+  assert.equal((await fs.stat(fileFor(dir, 'demo'))).isDirectory(), true, 'what was there is still there')
+  assert.equal((await fs.readdir(join(dir, 'courses'))).filter((name) => name.includes('.unreadable-')).length, 0, 'and nothing was moved either')
+})
+
+test('installing over a file that was moved aside clears what was said about it', async () => {
+  const dir = await here()
+  await fs.mkdir(join(dir, 'courses'), { recursive: true })
+  await fs.writeFile(fileFor(dir, 'demo'), '{"id":"demo","title":"Demo","modu')
+
+  // Installing is what finds the damage here, with no read before it -- the only order in which the note can outlive
+  // it. Read first and the install's own read finds the path empty, because the damaged file has already been moved
+  // aside, and clears the note on the way past. So this order is the test: the note is made and the file written
+  // inside one call, and if that call does not clear it nothing else will -- `loaded` makes the next `course()` a
+  // cache hit that never re-reads the file, and `problem` would report damage about a course that opens perfectly.
+  const store = new CoursesStore(dir)
+  await store.install(course())
+  assert.equal(store.problem('demo'), null, 'a course Orbis has just written and read is not a course it is unsure about')
+  assert.ok((await fs.readdir(join(dir, 'courses'))).some((name) => name.includes('.unreadable-')), 'and the words it replaced were still kept')
+  assert.equal((await store.course('demo'))?.title, 'Demo')
+  await store.flush()
+})
+
+test('what was noted about a file is found under the other id that shares it', async () => {
+  const dir = await here()
+  await fs.mkdir(join(dir, 'courses'), { recursive: true })
+  // A course id may hold a colon and a file name may not, so 'my:course' and 'mycourse' are one file on the disk.
+  await fs.mkdir(join(dir, 'courses', 'mycourse.json'))
+
+  const store = new CoursesStore(dir)
+  assert.equal(await store.course('my:course'), null)
+  assert.ok(store.problem('mycourse'), 'the same file, so the same answer about it')
+  assert.ok(store.problem('my:course'), 'asked either way')
+  await assert.rejects(store.install(course('mycourse')), /could not read/)
+})
+
 test('uninstalling clears what was noted about the file, so the id is installable again', async () => {
   const dir = await here()
   await fs.mkdir(join(dir, 'courses'), { recursive: true })

@@ -45,6 +45,7 @@ test('a file list that will not parse is moved aside with its words, never read 
 
     const fresh = files(dir)
     assert.deepEqual(await fresh.list('alpha'), [], 'nothing can be listed out of a list that makes no sense')
+    assert.equal(fresh.note('alpha'), null, 'the old list is safe elsewhere and the project really does hold nothing now')
     assert.equal((await fresh.add('alpha', 'notes.md', 'something new')).ok, true, 'and a fresh list may be started')
 
     const aside = readdirSync(dirOf(dir, 'alpha')).filter((name) => name.includes('.unreadable-'))
@@ -71,7 +72,12 @@ test('nothing is written over a list that is there and could not be read, and th
     mkdirSync(path)
 
     const fresh = files(dir)
+    assert.equal(fresh.note('alpha'), null, 'nothing is said about a project nothing has been read from yet')
     assert.deepEqual(await fresh.list('alpha'), [])
+    // The refusal to write was only half of it. An empty list is what a project nobody has added anything to looks
+    // like, so the panel said "No files yet" for a project holding one, and a chat in it answered without it.
+    assert.ok(/could not be read/.test(fresh.note('alpha') ?? ''), 'reading it says why there is nothing to show')
+    assert.equal(fresh.note('beta'), null, 'and a project that really holds nothing has nothing wrong with it')
     const refused = await fresh.add('alpha', 'notes.md', 'something new')
     assert.equal(refused.ok, false)
     assert.ok(refused.ok === false && /could not be read/.test(refused.message), refused.ok === false ? refused.message : '')

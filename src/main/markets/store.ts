@@ -1,5 +1,5 @@
 import { promises as fs, mkdirSync, renameSync, writeFileSync } from 'node:fs'
-import { openStored } from '../storedFile.ts'
+import { damageNote, openStored, type Opened } from '../storedFile.ts'
 import { dirname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { dataDirFor } from '../../shared/profiles.ts'
@@ -134,6 +134,7 @@ export class MarketsStore {
       )
       if (opened.mayWrite) this.unwritable.delete(profileId)
       else this.unwritable.add(profileId)
+      this.noteDamage(profileId, opened)
       // An empty workspace is the right answer to a missing file and to a damaged one alike, and never an error,
       // because somebody who has never opened Markets should not meet one. `cleanWorkspace` gives that for null.
       const workspace = cleanWorkspace(opened.value, this.now())
@@ -189,15 +190,99 @@ export class MarketsStore {
    */
   private readonly unwritable = new Set<string>()
 
+  /**
+   * What went wrong opening each profile's file, in the words somebody would recognise. Only the ones that went wrong.
+   *
+   * Kept because the store used to throw this away and keep only "may I write", and a damaged file then left a profile
+   * looking exactly like a brand-new one: no watchlists, no onboarding record, so Markets positively told somebody who
+   * had used it for a year that they had never opened it, with nothing anywhere mentioning the `.unreadable-` file
+   * holding their real lists in the same folder.
+   */
+  private readonly damage = new Map<string, string>()
+
+  private noteDamage(profileId: string, opened: Opened<unknown>): void {
+    const note = damageNote(opened, 'Markets')
+    if (note) this.damage.set(profileId, note)
+    // Removed, not left behind, so a file that has since been read cleanly does not keep reporting yesterday's damage.
+    else this.damage.delete(profileId)
+  }
+
+  /**
+   * What went wrong opening this profile's file, in plain words. Null when nothing did.
+   *
+   * Named and shaped like `JsonFile.problem()` in `personal/store.ts`, and answers from the last read, so it is worth
+   * asking only after `read`.
+   */
+  problem(profileId: string): string | null {
+    return this.damage.get(profileId) ?? null
+  }
+
+  /**
+   * Opens the file again to see whether it may be written over now, without disturbing what this session is holding.
+   *
+   * Asked again rather than answered from the first read, because the usual reason a file cannot be read on Windows is
+   * a lock that lasts a moment -- antivirus has it, a backup tool is copying it -- and the first read is the only one
+   * there would otherwise ever be: the cache stays warm, so nothing looks at the file again for the life of this store
+   * and profile. One read per refused save, so it cannot spin.
+   *
+   * **And what the file says IS taken, which is the whole point.** It used to be read only for permission: on a
+   * successful re-read this cleared the mark and returned true, and `flush()` then wrote THE CACHE -- which was the
+   * empty workspace the failed read had produced, with whatever this session had added on top of it. The file
+   * parsed, so nothing was quarantined; the note was cleared, so `problem()` said nothing. A fifth of a second of
+   * a lock at launch, and a year of watchlists, alerts, drawings, paper trades and triggers was renamed away by an
+   * empty workspace with one new list in it. Measured, both ways: refusing lost the session's edit and kept the
+   * file; this lost the file.
+   *
+   * Taking the permission from the file and the content from a cache the file never filled is the one combination
+   * that destroys data. So the file's contents are adopted: the cache is replaced by what was really there, the
+   * profile is taken off the pending list, and the note says the changes made while it could not be read were not
+   * kept. Somebody loses the few minutes they worked against an empty screen, which they can see; they do not lose
+   * the year, which they cannot get back.
+   */
+  private async askAgain(profileId: string): Promise<boolean> {
+    const opened = await openStored(
+      this.path(profileId),
+      (text) => cleanWorkspace(JSON.parse(text), this.now()),
+      () => null,
+      this.now()
+    )
+    this.noteDamage(profileId, opened)
+    if (!opened.mayWrite) return false
+    this.unwritable.delete(profileId)
+    if (opened.value !== null) {
+      // The real workspace, back in front of the person, replacing the empty one they have been looking at.
+      this.cache.set(profileId, opened.value)
+      this.dirty.delete(profileId)
+      // Said rather than left for somebody to notice. `noteDamage` above clears the note on a clean read, which is
+      // right for damage and wrong here: there IS something to tell, and it is not about damage.
+      this.damage.set(
+        profileId,
+        'Your Markets workspace could not be read when Orbis started, so it was shown empty. It has been read now and is back as it was. Anything changed in Markets while it was empty was not kept.'
+      )
+      for (const listener of this.listeners) listener(profileId, opened.value)
+      return false
+    }
+    // `missing` with `mayWrite` true: there is genuinely nothing there, so this session's workspace is the only
+    // copy and writing it is right.
+    return true
+  }
+
   async flush(): Promise<void> {
     const pending = [...this.dirty]
     this.dirty.clear()
     for (const profileId of pending) {
       const workspace = this.cache.get(profileId)
       if (!workspace) continue
-      if (this.unwritable.has(profileId)) {
+      if (this.unwritable.has(profileId) && !(await this.askAgain(profileId))) {
         // Layouts, watchlists, alerts, the portfolio and the triggers all live in this one file, so an empty workspace
         // is never written over something Orbis could not make sense of. Refusing can be undone; the write cannot.
+        //
+        // Put back on the list, because the clear above has already taken it off and a refusal that leaves it off is a
+        // refusal that threw the work away. A file held for a fifth of a second at launch was enough: the read failed,
+        // and every watchlist, alert, drawing and paper trade made for the rest of the session was then dropped at
+        // quit without a word. Pending work stays pending, which is what makes refusing the recoverable choice it is
+        // meant to be.
+        this.dirty.add(profileId)
         continue
       }
       const path = this.path(profileId)
@@ -1060,19 +1145,9 @@ export class MarketsStore {
     this.reading.clear()
     // Another profile's file is another question: whether it may be written is decided by opening it, not inherited.
     this.unwritable.clear()
+    // And neither is what went wrong with it: one profile's damaged file is not something to say about the next one.
+    this.damage.clear()
   }
-
-  /**
-   * Stops, and writes down anything still waiting.
-   *
-   * Writes are batched, so at any moment there may be a change from the last second that has not reached the disk.
-   * Cancelling the timer and leaving is how a watchlist added a moment before quitting disappears -- which looks exactly
-   * like it was never added.
-   *
-   * Synchronously, because this runs while Orbis is closing and there is no promise anybody is left to await. It is a
-   * handful of small files at most, written the same way as `flush`: beside, then renamed over, so an interrupted write
-   * leaves the old file rather than half of the new one.
-   */
 
   // ---------------------------------------------------------------- candlestick patterns
 
@@ -1210,6 +1285,17 @@ export class MarketsStore {
     return { ...DEFAULT_PATTERN_SETTINGS }
   }
 
+  /**
+   * Stops, and writes down anything still waiting.
+   *
+   * Writes are batched, so at any moment there may be a change from the last second that has not reached the disk.
+   * Cancelling the timer and leaving is how a watchlist added a moment before quitting disappears -- which looks exactly
+   * like it was never added.
+   *
+   * Synchronously, because this runs while Orbis is closing and there is no promise anybody is left to await. It is a
+   * handful of small files at most, written the same way as `flush`: beside, then renamed over, so an interrupted write
+   * leaves the old file rather than half of the new one.
+   */
   stop(): void {
     if (this.timer) clearTimeout(this.timer)
     this.timer = null
@@ -1220,7 +1306,14 @@ export class MarketsStore {
       if (!workspace) continue
       // Closing is exactly when this matters most: the last thing Orbis does must not be to rename an empty workspace
       // over a file it could not make sense of. Quitting refuses for the same reason `flush` does.
-      if (this.unwritable.has(profileId)) continue
+      //
+      // Left pending rather than dropped, because this is not the only save on the way out -- `flush` is registered
+      // with the quit saves as well, and it can do what nothing here can: look at the file once more, in case whatever
+      // was holding it has let go. Nothing is re-read here because there is no awaiting a read while closing.
+      if (this.unwritable.has(profileId)) {
+        this.dirty.add(profileId)
+        continue
+      }
       const path = this.path(profileId)
       try {
         mkdirSync(dirname(path), { recursive: true })

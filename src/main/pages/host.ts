@@ -12,7 +12,10 @@
  * all three are set here:
  *
  * 1. **The frame's own settings.** `nodeIntegration` off, `contextIsolation` on, `sandbox` on. Without these the rest is
- *    decoration, so `applyPolicy` refuses to build a frame whose settings fail `checkRuntimePolicy`.
+ *    decoration, so `open` refuses to build a frame whose settings fail `checkRuntimePolicy` -- see the call below
+ *    `isSandboxProblem`. That sentence used to name an `applyPolicy` that does not exist in this file, and the
+ *    check it named had no caller anywhere: it was asserted in `sandbox.test.ts` and nowhere else. A frame built
+ *    from a weakened policy would have been built.
  * 2. **The protocol handler.** A Page's files are served from `orbis-page://<pageId>/`, and the handler refuses any path
  *    that escapes the Page's own directory. The CSP travels with the response, so the browser enforces the network
  *    policy itself rather than relying on us to check every request.
@@ -31,6 +34,7 @@ import {
   admit,
   createSandbox,
   isMessageProblem,
+  checkRuntimePolicy,
   isSandboxProblem,
   markReady,
   recordFault,
@@ -253,6 +257,19 @@ export class PageHost {
       now: this.now()
     })
     if (isSandboxProblem(made)) return { error: made.error, message: made.message }
+
+    // The policy is checked against the base before a frame is built from it, not only in a test. Everything below
+    // is read off `made.policy`, so a policy that had been weakened anywhere -- by a change to `runtimePolicyFor`,
+    // by a field added to `RuntimePolicy` and defaulted wrongly -- would have produced a frame with that weakness
+    // in it. `checkRuntimePolicy` names each field and says why in words; refusing is the only safe answer.
+    //
+    // `preload` is a label in the policy rather than a path, and the real file is pinned on the line below. The
+    // check is what says the Page is meant to get the bridge and nothing else; the pinned path is what makes it so.
+    const weakened = checkRuntimePolicy(made.policy)
+    if (weakened.length > 0) {
+      console.error('[pages] a Page was refused because its sandbox policy was weakened:', weakened)
+      return { error: 'refused', message: 'That Page cannot be opened safely on this build.' }
+    }
 
     const view = new WebContentsView({
       webPreferences: {

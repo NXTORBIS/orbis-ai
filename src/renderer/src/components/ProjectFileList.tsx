@@ -15,11 +15,17 @@ import type { NoticeKind } from '../lib/notices'
  */
 export default function ProjectFileList({ projectId, onNotify }: { projectId: string; onNotify(text: string, kind?: NoticeKind): void }): ReactElement {
   const [files, setFiles] = useState<ProjectFileView[]>([])
+  // Why there is nothing to show, when there is a reason. No files and a file list that could not be read look
+  // identical in the list itself, and this panel said "No files yet" for a project holding six of them.
+  const [note, setNote] = useState<string | null>(null)
 
   const load = useCallback(() => {
     void window.api
       .projectFiles(projectId)
-      .then((done) => setFiles(done.files ?? []))
+      .then((done) => {
+        setFiles(done.files ?? [])
+        setNote(done.message ?? null)
+      })
       .catch(() => setFiles([]))
   }, [projectId])
   useEffect(load, [load])
@@ -40,8 +46,9 @@ export default function ProjectFileList({ projectId, onNotify }: { projectId: st
         <button type="button" className="queue-btn small" onClick={add}>
           <FilePlus2 size={13} aria-hidden="true" /> Add files
         </button>
-        <span className="view-muted small">{files.length === 0 ? 'No files yet' : `${files.length} file${files.length === 1 ? '' : 's'}, used by every chat in this project`}</span>
+        <span className="view-muted small">{files.length === 0 ? (note ? 'Not being used' : 'No files yet') : `${files.length} file${files.length === 1 ? '' : 's'}, used by every chat in this project`}</span>
       </div>
+      {note && <p className="project-files-note">{note}</p>}
       {files.length > 0 && (
         <ul className="blocked-list">
           {files.map((one) => (

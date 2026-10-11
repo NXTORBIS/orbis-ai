@@ -319,6 +319,76 @@ test('a skill file from a newer Orbis is left exactly where it is, not moved and
   }
 })
 
+test('listing the library does not stop a repeated goal from being counted', async () => {
+  const t = setup()
+  try {
+    await t.skills.countSuccess('download the latest report')
+    // The count of repeated goals lives in the skills folder, beside the skills, and is not one. Walking that folder
+    // put it on the list of files nothing may be written over, after which every success was read, added to and
+    // thrown away -- while the number handed back kept going up, so nothing anywhere looked wrong.
+    await t.skills.list()
+    assert.equal(await t.skills.countSuccess('download the latest report'), 2)
+    assert.equal(await t.make().timesDone('download the latest report'), 2, 'and the second one is on the disk, not only in the answer')
+    assert.equal(readdirSync(join(t.dir, 'skills')).some((name) => name.includes('.unreadable-')), false, 'and it was not mistaken for a damaged skill and moved aside')
+  } finally {
+    t.done()
+  }
+})
+
+test('settings that could not be read are asked for again, not answered from the defaults for the rest of the session', async () => {
+  const t = setup()
+  try {
+    await t.skills.setSettings({ learnFromRuns: true, reuse: 'auto' })
+    const path = join(t.dir, 'skills', 'settings.json')
+    const whole = readFileSync(path, 'utf8')
+    rmSync(path)
+    // A folder where the file belongs: reading it fails with EISDIR, not ENOENT. It stands in for the real cases --
+    // something holding the file open, a backup copying it -- which cannot be made to happen reliably in a test.
+    mkdirSync(path)
+
+    const fresh = t.make()
+    assert.equal((await fresh.settings()).reuse, 'suggest', 'nothing is invented while it cannot be read')
+    await assert.rejects(fresh.setSettings({ enabled: false }), /nothing has been written over it/)
+
+    // Whatever was holding the file lets go. The words shown promise "try again in a moment", and remembering the
+    // defaults made that a lie: somebody with learning switched on got no suggestions and no offer to save a skill
+    // for the rest of the session, with nothing on screen to say why and no way back but restarting Orbis.
+    rmSync(path, { recursive: true })
+    writeFileSync(path, whole)
+    assert.equal((await fresh.settings()).reuse, 'auto', 'what the person chose is back without restarting Orbis')
+    assert.equal((await fresh.settings()).learnFromRuns, true)
+    assert.equal((await fresh.setSettings({ enabled: false })).enabled, false, 'and the switches in front of them work again')
+  } finally {
+    t.done()
+  }
+})
+
+test('forgetting a skill never deletes a file Orbis could not make sense of', async () => {
+  const t = setup()
+  try {
+    const keep = await t.skills.saveFromRun(PDF_RUN())
+    const future = JSON.stringify({ format: 99, workflowId: 'from-the-future', whenToUse: 'something this Orbis cannot do' })
+    const held = join(t.dir, 'skills', 'from-the-future.json')
+    writeFileSync(held, future)
+    const open = join(t.dir, 'skills', 'held-open.json')
+    mkdirSync(open)
+
+    const fresh = t.make()
+    assert.deepEqual((await fresh.list()).map((one) => one.workflow.id), [keep.workflow.id], 'neither is in the library, and the rest of it still loads')
+
+    // Forgetting a skill deletes its file, and it used to do that by name alone. These two are the files that must
+    // not go: one is a skill a newer Orbis understands, the other may be perfectly good a second later. Deleting is
+    // the only thing here that cannot be undone.
+    await fresh.remove('from-the-future')
+    assert.equal(readFileSync(held, 'utf8'), future, 'the skill from a newer Orbis is still there, untouched')
+    await fresh.remove('held-open')
+    assert.equal(readdirSync(open).length, 0, 'and so is the one that could not be read, with nothing written in its place')
+    assert.equal(readdirSync(join(t.dir, 'skills')).some((name) => name.includes('.unreadable-')), false, 'neither was moved aside: both may be perfectly good')
+  } finally {
+    t.done()
+  }
+})
+
 test('nothing typed into a sensitive field reaches the disk', async () => {
   const t = setup()
   try {
@@ -335,6 +405,70 @@ test('nothing typed into a sensitive field reaches the disk', async () => {
         .join('\n')
     mkdirSync(join(t.dir, 'workflows'), { recursive: true })
     assert.ok(!everything(t.dir).includes('correct-horse-battery'))
+  } finally {
+    t.done()
+  }
+})
+
+test('the store\u2019s own files cannot be deleted by asking to forget a skill with their name', async () => {
+  const t = setup()
+  try {
+    // Two real things to lose: what the person chose, and how many times they have done something.
+    await t.skills.setSettings({ reuse: 'auto', learnFromRuns: true })
+    await t.skills.countSuccess('download the latest report')
+    await t.skills.countSuccess('download the latest report')
+    assert.equal(await t.skills.timesDone('download the latest report'), 2)
+
+    // `settings` and `repeats` pass the id test, and this folder holds `settings.json` and `repeats.json`. Orion
+    // reaches this with an id straight from a sentence -- "forget the skill called settings" -- and before the
+    // guard it deleted them, silently, with nothing moved aside.
+    await t.skills.remove('settings')
+    await t.skills.remove('repeats')
+
+    const left = readdirSync(join(t.dir, 'skills')).sort()
+    assert.deepEqual(left, ['repeats.json', 'settings.json'], 'both are still there')
+    assert.equal(await t.skills.timesDone('download the latest report'), 2, 'and still counting')
+    const after = t.make()
+    assert.equal((await after.settings()).reuse, 'auto', 'and a restart still reads what the person chose')
+  } finally {
+    t.done()
+  }
+})
+
+test('a skill file that appeared after the library was read is not deleted either', async () => {
+  const t = setup()
+  try {
+    // The library is read once and cached for the life of the profile, so the list of files not to touch is a
+    // snapshot. Anything arriving after it -- from a newer Orbis, or held open by something -- was not on the list.
+    await t.skills.list()
+    mkdirSync(join(t.dir, 'skills'), { recursive: true })
+    writeFileSync(join(t.dir, 'skills', 'later-skill.json'), JSON.stringify({ format: 99, workflowId: 'later-skill' }))
+
+    await t.skills.remove('later-skill')
+    assert.ok(
+      readdirSync(join(t.dir, 'skills')).includes('later-skill.json'),
+      'the file is asked about now rather than taken from a list made before it existed'
+    )
+  } finally {
+    t.done()
+  }
+})
+
+test('nothing is offered while the settings file cannot be read, whatever the defaults say', async () => {
+  const t = setup()
+  try {
+    await t.skills.setSettings({ enabled: false, reuse: 'never' })
+    // A folder where the file belongs: there, and not readable. The defaults say learning is on and skills may be
+    // suggested, which is right for somebody who never touched the switches and wrong for somebody who turned them
+    // off -- and it is their file, the one that says not to, that cannot be read.
+    const path = join(t.dir, 'skills', 'settings.json')
+    rmSync(path)
+    mkdirSync(path)
+
+    const after = t.make()
+    const offered = await after.match('download the latest report')
+    assert.deepEqual(offered.matches, [], 'nothing is suggested')
+    assert.equal(offered.reuse, 'never', 'and the answer is no, not the default')
   } finally {
     t.done()
   }

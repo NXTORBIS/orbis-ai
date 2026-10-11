@@ -26,6 +26,16 @@ import { damageNote, openStored, readStored, writeStored } from './storedFile.ts
 const ID = /^[A-Za-z0-9_-]{1,80}$/
 
 /**
+ * The store's own files, which live in the skills folder beside the skills and are not skills.
+ *
+ * `repeats.json` went through the loop that reads a skill file, did not look like a skill, and was put on the list of
+ * files nothing may be written over. Every success after that was read from the disk, added to, and thrown away --
+ * while the number handed back kept going up, so "you have done this before" quietly stopped counting and nothing
+ * anywhere looked wrong. Anything new that lives in this folder belongs on this list too.
+ */
+const NOT_SKILLS = new Set(['settings.json', 'repeats.json'])
+
+/**
  * How many times a goal has been reached, or nothing when the file is not that.
  *
  * It throws instead of shrugging, so a file that is there and makes no sense goes down the damaged path rather than
@@ -102,22 +112,27 @@ export class SkillManager {
   // ---------------------------------------------------------------- settings
 
   async settings(): Promise<SkillSettings> {
-    if (!this.settingsCache) {
-      const path = join(this.dir(), 'settings.json')
-      /**
-       * The parse goes to `openStored` rather than into a `catch` here, and that is the whole point: a settings file
-       * cut off halfway through a save reads perfectly and parses not at all. This used to answer that with the
-       * defaults, and the next flick of any switch renamed the defaults over the rest -- learning back off, reuse back
-       * to suggesting -- with no copy of the old file left anywhere. Now it is moved aside with its words intact
-       * first, and one that is merely being held open is left exactly as it is and refuses the write.
-       */
-      const opened = await openStored(path, (text) => normalizeSkillSettings(JSON.parse(text)), () => normalizeSkillSettings(undefined))
-      if (opened.mayWrite) this.refuse.delete(path)
-      else this.refuse.add(path)
-      this.settingsNote = opened.mayWrite ? null : damageNote(opened, 'skill settings')
-      this.settingsCache = opened.value
-    }
-    return { ...this.settingsCache }
+    if (this.settingsCache) return { ...this.settingsCache }
+    const path = join(this.dir(), 'settings.json')
+    /**
+     * The parse goes to `openStored` rather than into a `catch` here, and that is the whole point: a settings file
+     * cut off halfway through a save reads perfectly and parses not at all. This used to answer that with the
+     * defaults, and the next flick of any switch renamed the defaults over the rest -- learning back off, reuse back
+     * to suggesting -- with no copy of the old file left anywhere. Now it is moved aside with its words intact
+     * first, and one that is merely being held open is left exactly as it is and refuses the write.
+     */
+    const opened = await openStored(path, (text) => normalizeSkillSettings(JSON.parse(text)), () => normalizeSkillSettings(undefined))
+    if (opened.mayWrite) this.refuse.delete(path)
+    else this.refuse.add(path)
+    this.settingsNote = opened.mayWrite ? null : damageNote(opened, 'skill settings')
+    // An answer is only remembered when it was really read. Remembering the defaults from a file that could not be
+    // read made the refusal last the whole session: the three lines above are the only ones that take a file back off
+    // the refuse list and clear the note, and they never ran a second time. Somebody with learning switched on got no
+    // suggestions and no offer to save a skill until they restarted Orbis, while the words on screen promised "try
+    // again in a moment". Reading a small file again on each ask is what makes that promise true, and it only happens
+    // in the case where reading it failed.
+    if (opened.mayWrite) this.settingsCache = opened.value
+    return { ...opened.value }
   }
 
   async setSettings(next: Partial<SkillSettings>): Promise<SkillSettings> {
@@ -126,8 +141,21 @@ export class SkillManager {
     // read, because nothing has been saved and it would be back where it was the next time Orbis started.
     if (this.settingsNote) throw new Error(this.settingsNote)
     const merged = normalizeSkillSettings({ ...current, ...next })
+    // Remembered only once it is written, and the write is awaited first. It used to be the other way round, which
+    // is the mirror image of the fault above: with the cache warm from an earlier good read, a file that had SINCE
+    // been taken hold of gave a failed write -- and the panel, re-reading from the cache, showed the new position
+    // of a switch that was still the old position on disk and would be again after a restart.
+    //
+    // A refused write is not a failure: `write` returns quietly when the path is on the refuse list, and the throw
+    // above has already covered the case where this read could not be done at all.
+    try {
+      await this.write(join(this.dir(), 'settings.json'), merged)
+    } catch (err) {
+      this.refuse.add(join(this.dir(), 'settings.json'))
+      this.settingsCache = null
+      throw new Error('Orbis could not save that just now, so nothing has changed. This is usually another program holding the file; try again in a moment.')
+    }
     this.settingsCache = merged
-    await this.write(join(this.dir(), 'settings.json'), merged)
     this.o.announce()
     return merged
   }
@@ -148,7 +176,7 @@ export class SkillManager {
         if ((err as NodeJS.ErrnoException)?.code !== 'ENOENT') return found
       }
       for (const name of names) {
-        if (!name.endsWith('.json') || name === 'settings.json') continue
+        if (!name.endsWith('.json') || NOT_SKILLS.has(name)) continue
         const path = join(this.dir(), name)
         const opened = await openStored(path, (text) => JSON.parse(text) as SkillMeta | null, () => null)
         const meta = opened.value
@@ -298,6 +326,12 @@ export class SkillManager {
   /** Skills that might do what was asked, if the person uses skills at all. */
   async match(request: string, currentUrl?: string): Promise<{ matches: SkillMatch[]; reuse: SkillSettings['reuse'] }> {
     const settings = await this.settings()
+    // Nothing offered while the settings file could not be read. The defaults say learning is on and skills may be
+    // suggested, which is the right answer for somebody who has never touched the switches and the wrong one for
+    // somebody who turned them off: their file says `enabled: false` and Orbis would go on suggesting, because it
+    // could not read the file that says not to. "Orbis does not know what you chose" has to behave as no, not as
+    // whatever the default happens to be.
+    if (this.settingsNote) return { matches: [], reuse: 'never' }
     if (!settings.enabled || settings.reuse === 'never') return { matches: [], reuse: settings.reuse }
     const skills: { meta: SkillMeta; workflow: Pick<Workflow, 'id' | 'name' | 'description'> }[] = []
     for (const meta of (await this.all()).values()) {
@@ -360,9 +394,40 @@ export class SkillManager {
   /** Forgets the skill. Its workflow is kept unless the person asks for that to go too. */
   async remove(workflowId: string, removeWorkflow = false): Promise<void> {
     if (!ID.test(workflowId)) return
+    // `settings` and `repeats` are valid ids by that test, and this folder holds `settings.json` and `repeats.json`.
+    // `remove('settings')` deleted the person's skill settings and `remove('repeats')` deleted every "you have done
+    // this before" count -- silently, because `force: true`, and unrecoverably, because nothing is moved aside.
+    // Both are reachable from Orion: "forget the skill called settings" passes the same id test on the way in.
+    if (NOT_SKILLS.has(`${workflowId}.json`)) return
     const all = await this.all()
     all.delete(workflowId)
-    await fs.rm(join(this.dir(), `${workflowId}.json`), { force: true })
+    const path = join(this.dir(), `${workflowId}.json`)
+    // Deleting is the one thing in here that cannot be undone, so it does not happen to a file Orbis does not
+    // understand: one that merely could not be read may be perfectly good a second later, and one that parsed and is
+    // not a skill is most likely a skill a newer Orbis understands.
+    //
+    // The file is asked about NOW rather than taken from `refuse`. That list is filled only by reading the library,
+    // which caches and never runs again for the life of the profile -- so a file that appeared after the one read,
+    // from a newer Orbis or held open by something, was not on it and was deleted. Measured both ways: the file the
+    // test protects survived only because the library read happened to have seen it.
+    const opened = await openStored(path, (text) => JSON.parse(text) as SkillMeta | null, () => null)
+    const meta = opened.value
+    const isSkill = Boolean(meta) && meta!.format === SKILL_FORMAT && typeof meta!.workflowId === 'string'
+    if (!opened.mayWrite || !isSkill) {
+      this.refuse.add(path)
+      if (opened.wasDamaged) this.o.announce()
+      return
+    }
+    // `force: true` only swallows "it is not there". A file genuinely held open gives EPERM or EBUSY, and that used
+    // to come out of here as a raw Windows errno carrying the person's profile path -- which `removeAll` then let
+    // abort the whole loop, so "forget every skill" half-finished without saying so.
+    try {
+      await fs.rm(path, { force: true })
+    } catch {
+      this.refuse.add(path)
+      this.o.announce()
+      return
+    }
     if (removeWorkflow) await this.o.workflows.remove(workflowId)
     this.o.announce()
   }

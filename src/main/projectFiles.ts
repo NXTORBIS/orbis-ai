@@ -107,6 +107,20 @@ export class ProjectFiles {
     return dir !== null && !this.unreadable.has(join(dir, 'files.json'))
   }
 
+  /**
+   * What to tell somebody about this project's files, when there is something to tell them.
+   *
+   * Refusing to write is only half of it. A list that could not be read comes back from `list()` as no files and from
+   * `forSearch()` as nothing to search, which is exactly what a project nobody has added anything to looks like -- so
+   * the panel said "No files yet" for a project holding six, and a chat in it answered without them and said nothing.
+   * Reading the list is what finds this out, so this is asked after `list()` or `forSearch()`, not instead of them.
+   */
+  note(projectId: string): string | null {
+    const dir = this.dir(projectId)
+    if (!dir || !this.unreadable.has(join(dir, 'files.json'))) return null
+    return 'This project’s files are there and could not be read, so none of them are being used. Nothing has been written over them. Something else is probably holding the file; try again in a moment.'
+  }
+
   private async write(projectId: string, saved: Saved): Promise<void> {
     const dir = this.dir(projectId)
     if (!dir || !this.mayWrite(projectId)) return

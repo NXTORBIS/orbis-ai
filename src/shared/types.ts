@@ -1732,7 +1732,8 @@ export interface NxtorbisApi {
   onNotificationsChanged(listener: () => void): () => void
   onNotificationOpen(listener: (what: { id: string; event: string; subject: Record<string, string> }) => void): () => void
   securityLog(): Promise<SecurityEvent[] | AccountRefusal>
-  clearSecurityLog(): Promise<{ ok: true } | AccountRefusal>
+  /** False when the log file would not go: it is still there, and it will be back on the screen at the next launch. */
+  clearSecurityLog(): Promise<{ ok: boolean } | AccountRefusal>
   profileLockState(): Promise<ProfileLockState | ProfileLockRefusal>
   profileLockSave(policy: Partial<ProfileLockPolicy>): Promise<ProfileLockDone | ProfileLockRefusal>
   /** Locks Orbis now. Always works, even with Profile Lock switched off: somebody asked. */

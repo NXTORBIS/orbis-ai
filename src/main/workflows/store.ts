@@ -16,11 +16,17 @@ const ID = /^[A-Za-z0-9_-]{1,80}$/
 /**
  * What a workflow file has to be for this version of Orbis to use it.
  *
- * Failing this is checked while the file is being read rather than afterwards, so it counts as a file Orbis could not
- * make sense of and goes down the same path as one that will not parse: moved aside under its own name, nothing
- * written over it. A file saved by a newer Orbis, with a format number this one has never heard of, is the case that
- * matters -- it used to be dropped as quietly as a file that was not there, which left the person's workflow out of
- * their library with the next save free to land on top of it.
+ * Failing this counts as a file Orbis could not make sense of, so it stays out of the library and nothing may be
+ * written over it -- it used to be dropped as quietly as a file that was not there, which left the person's workflow
+ * out of their library with the next save free to land on top of it.
+ *
+ * Checked after the file has parsed, though, and deliberately not moved aside. A format number this version has never
+ * heard of is not damage: it is a workflow a newer Orbis wrote, and Orbis read the number out of it, so it understood
+ * the file well enough to know it is not for this version. `skillManager.ts` and `vault/store.ts` already reach that
+ * conclusion for the same case, and the two have to agree, because a skill is two files: its details in `skills/` and
+ * its workflow here. Moving the workflow aside while the details stayed meant opening the newer Orbis again found a
+ * skill with no workflow under it and dropped it from the library -- the workflow renamed out from under the only
+ * version that could still read it. A file that will not parse at all is the other case, and that one is moved aside.
  */
 const usableWorkflow = (w: Workflow | null): boolean => !!w && w.format === WORKFLOW_FORMAT && typeof w.id === 'string' && Array.isArray(w.steps)
 
@@ -87,10 +93,37 @@ export class WorkflowStore {
    */
   private readonly unreadable = new Set<string>()
 
+  /**
+   * Files that read and parsed and are not something this Orbis understands -- a workflow saved by a newer version.
+   *
+   * Kept apart from `unreadable` because the two give opposite answers to "ask again". A file held open for a
+   * moment may be perfectly readable a second later, so a refusal to delete it has to be re-decided against the
+   * file. A file from a newer Orbis reads perfectly every time and must still never be deleted -- it has to still
+   * be there after the next update -- so re-asking about one of those would delete it.
+   */
+  private readonly foreign = new Set<string>()
+
   private write(path: string, data: unknown): Promise<void> {
-    if (this.unreadable.has(path)) {
-      // Looked at again next time: a lock clears, a copy finishes, and refusing costs only this one save.
-      this.unreadable.delete(path)
+    if (this.unreadable.has(path) || this.foreign.has(path)) {
+      /*
+       * Refused, and the mark is NOT cleared on the way out.
+       *
+       * It used to be, on the argument that every caller reads before it writes, so the next read would put the mark
+       * back and refusing would cost only this one save. Both halves of that are wrong here, because two of these
+       * files are cached: `list()` fills `cache` and `runs()` fills `runsCache` with the fallback the damaged file
+       * handed back, and nothing reads that path again for the rest of the session. So the mark was never put back,
+       * and save number two went straight through. Measured on a workflow file that could be read and could not be
+       * moved aside -- a backup program holding it, which is why the move failed: save one was refused and cleared
+       * the mark, save two wrote a blank workflow over the real one, with no copy kept anywhere. The mark is cleared
+       * in `read()`, and only when the file has actually read cleanly, which is the one place that knows that.
+       *
+       * Refusing stays silent and writes nothing. `tabLockStore.ts` and `accountSecurity.ts` throw at this point,
+       * because a tab password or an account password reported saved and not saved cannot be got back; what goes
+       * through here is mostly bookkeeping Orbis does for itself, and the callers are not built to hear about it --
+       * `engine.ts:482` saves a checkpoint with no `catch` on it at all, and `engine.ts:541` records a run in the
+       * middle of finishing one, so throwing would turn a file something else has open into an unhandled rejection
+       * and a run that never reports that it finished.
+       */
       return Promise.resolve()
     }
     const run = (this.queues.get(path) ?? Promise.resolve()).then(async () => {
@@ -104,6 +137,42 @@ export class WorkflowStore {
   }
 
   /**
+   * Deletes one of these files, unless it is one Orbis could not make sense of.
+   *
+   * `fs.rm` used to be called straight from the two places that delete, so none of the refusing above applied to
+   * them: a checkpoint that could be read, could not be parsed and could not be moved aside was deleted outright the
+   * moment its run ended, which is the one outcome `storedFile.ts` exists to prevent. Deleting is the only thing in
+   * this store that cannot be taken back, so it is the last place that should have been left out.
+   *
+   * Silent, like the write above, and for the same reason: the caller is the engine finishing a run, not somebody
+   * waiting to be told. The file stays on the disk and the next read decides again.
+   *
+   * **The file is asked about now, not taken from the mark.** The mark is set by a read and cleared by a read, and
+   * `remove()` does not read a workflow's versions before deleting them -- so somebody who opened a version history
+   * while something held the file for a moment left the mark set for the rest of the session, and "delete this
+   * workflow" then silently left `versions/<id>.json` on the disk while the window reported it deleted. What is in
+   * that file is not a stub: it is every earlier definition of the workflow, with its `set` step values and its
+   * variables, and only `exportWorkflow` scrubs secrets -- nothing scrubs this.
+   *
+   * So a refusal to delete has to mean the file is unreadable *now*. One read per delete, which cannot spin.
+   */
+  private async erase(path: string): Promise<void> {
+    // Never, and without asking: it reads perfectly and will keep doing so, and it has to still be there after the
+    // next update.
+    if (this.foreign.has(path)) return
+    if (this.unreadable.has(path)) {
+      const opened = await openStored<unknown>(path, (text) => JSON.parse(text) as unknown, () => null)
+      if (!opened.mayWrite) return
+      this.unreadable.delete(path)
+    }
+    await fs.rm(path, { force: true }).catch(() => {
+      // Held open: EPERM or EBUSY, which `force` does not swallow. Marked so the next read decides again, rather
+      // than thrown -- the caller is the engine finishing a run and has nowhere to put it.
+      this.unreadable.add(path)
+    })
+  }
+
+  /**
    * Reads one of these files, with the damaged case kept apart from the absent one.
    *
    * The parse used to sit in its own `try` that fell back to the same empty value a missing file gives, so a workflow
@@ -111,21 +180,54 @@ export class WorkflowStore {
    * workflow at all and the next save put the empty value on top of it. A truncated file reads perfectly well; it
    * just does not parse, which is why that case has to be told apart from the file not being there.
    *
-   * `openStored` is the one place that knows the four cases. It moves a file it cannot make sense of aside under its
-   * own name first, so the words are still on the disk, and only says writing is allowed once that worked. When it
-   * says writing is not allowed -- the file is locked, or it could not be moved -- the path goes in `unreadable` and
-   * saves to it are refused, because something is there and Orbis does not know what.
+   * `openStored` is the one place that knows the four cases, and all four are answered separately here:
    *
-   * `check` is for the shape: a file this version of Orbis does not understand is damaged, not absent.
+   *  - not there: the fallback, and saving is allowed.
+   *  - read and understood: the value, and saving is allowed.
+   *  - read and would not parse: `openStored` has already moved it aside under its own name, so the words are still
+   *    on the disk and this name is free to use again.
+   *  - still there and not understood: it could not be read at all, or it could not be moved aside, or `check` says
+   *    it is not a file this version knows. The path goes in `unreadable` and saves to it are refused, because
+   *    something is there and Orbis does not know what.
+   *
+   * This is also the only place the mark is taken off a path, and only on a file that has just read cleanly. The
+   * refusal in `write()` used to take it off instead, which is the fault described there.
+   *
+   * `check` is for the shape, and it runs out here rather than inside the parse so that a file failing it is kept
+   * where it is -- see `usableWorkflow`.
    */
   private async read<T>(path: string, fallback: T, check?: (value: T) => boolean): Promise<T> {
+    // What the file held, when it was there and did parse. Kept because `openStored` reports a missing file and a
+    // clean read the same way, and running `check` on the fallback a missing file gives back would mark a name
+    // unwritable for the rest of the session on the grounds that nothing is using it.
+    const held: { value?: T } = {}
     const parse = (text: string): T => {
       const value = JSON.parse(text) as T
-      if (check && !check(value)) throw new Error('Not something this version of Orbis understands.')
+      // `null`, a number, a bare string: it parsed, and there is nothing in it that could ever be one of these files.
+      // Thrown, so it goes down the damaged path with the rest of the rubbish rather than being kept where it is as
+      // something a later Orbis might still want. Only a caller with a shape in mind can say that much, which is why
+      // this sits with `check` rather than applying to every file in here.
+      if (check && (!value || typeof value !== 'object')) throw new Error('Not one of these files at all.')
+      held.value = value
       return value
     }
     const opened = await openStored<T>(path, parse, () => fallback)
-    if (!opened.mayWrite) this.unreadable.add(path)
+    if (!opened.mayWrite) {
+      this.unreadable.add(path)
+      return fallback
+    }
+    if (opened.wasDamaged) {
+      this.unreadable.delete(path)
+      return fallback
+    }
+    if (check && held.value !== undefined && !check(held.value)) {
+      // It read, it parsed, and it is not one of ours. Almost always a workflow a newer Orbis saved.
+      this.foreign.add(path)
+      this.unreadable.delete(path)
+      return fallback
+    }
+    this.unreadable.delete(path)
+    this.foreign.delete(path)
     return opened.value
   }
 
@@ -173,7 +275,7 @@ export class WorkflowStore {
     if (!ID.test(id)) throw new Error('Invalid workflow id.')
     await this.list()
     this.cache!.delete(id)
-    await Promise.all([fs.rm(this.file('items', `${id}.json`), { force: true }), fs.rm(this.file('versions', `${id}.json`), { force: true }), this.forgetSecrets(id)])
+    await Promise.all([this.erase(this.file('items', `${id}.json`)), this.erase(this.file('versions', `${id}.json`)), this.forgetSecrets(id)])
   }
 
   async versions(id: string): Promise<WorkflowVersion[]> {
@@ -208,7 +310,7 @@ export class WorkflowStore {
   }
 
   async clearCheckpoint(runId: string): Promise<void> {
-    if (ID.test(runId)) await fs.rm(this.file('checkpoints', `${runId}.json`), { force: true })
+    if (ID.test(runId)) await this.erase(this.file('checkpoints', `${runId}.json`))
   }
 
   /** Runs that were in progress when Orbis last closed. */
@@ -216,6 +318,12 @@ export class WorkflowStore {
     const names = await fs.readdir(this.file('checkpoints')).catch(() => [] as string[])
     const out: WorkflowCheckpoint[] = []
     for (const name of names) {
+      // Only the checkpoints, not what has been moved aside -- the same filter `list()` uses on its own folder, and
+      // this folder needs it for a reason that only appeared once anything was moved aside at all: a quarantined
+      // file was read back, failed to parse again and was quarantined again, so every single call that asked what
+      // was interrupted put another `.unreadable-` stamp on the end of the name. The words survived each time; the
+      // name grew by thirty-odd characters a call until the disk would not take it.
+      if (!name.endsWith('.json')) continue
       const cp = await this.read<WorkflowCheckpoint | null>(this.file('checkpoints', name), null)
       if (cp && typeof cp.runId === 'string') out.push(cp)
     }
