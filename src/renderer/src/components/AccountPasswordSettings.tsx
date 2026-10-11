@@ -16,6 +16,22 @@ import { confirmPassword, judgePassword, PASSWORD_MAX, PASSWORD_MIN } from '../.
  *
  * Nothing is decided in this file. Every judgement about a password is `shared/passwordStrength`, and every judgement
  * about the account is the main process's. This asks, shows what came back, and holds nothing afterwards.
+ *
+ * ## Why the three rows here are not the shared `Field`
+ *
+ * They look exactly like one -- a name, a box, a sentence under it -- and they cannot become one until the stylesheet
+ * moves. This family names a row with a bare `<span>` and styles it by where it sits: `.pw-row > span:first-child` is
+ * the only thing making a name 12px and dim. `Field` names a control with a `<label>`, because a name has to point at
+ * the box it names, and a `<label>` in that slot matches nothing -- so all three names would come out at the window's
+ * own 14px in full text colour. That is a visible change wearing a construction change's clothes, which is the one
+ * thing this pass must not do, so the rows stay hand-written and the reason is written down instead.
+ *
+ * Two declarations for a `label` in that slot, in `styles/parts/13-choosing-widgets-in-customize.css`, and all three
+ * convert for nothing -- along with the six in `TabLockSettings`, which borrows this family wholesale.
+ *
+ * What that conversion would have fixed, and so is still true: the sentences under the new password and the
+ * confirmation are pointed at by nothing, so each is only ever read out when it turns into an alert; and the reveal
+ * button sits inside the labelling element, which means the new password box takes "Show passwords" into its own name.
  */
 
 interface Props {
@@ -145,6 +161,10 @@ export default function AccountPasswordSettings({ userName }: Props): React.JSX.
               void submit()
             }}
           >
+            {/* These three rows are deliberately not the shared `Field`: the family styles a row's name by where the
+                span sits, so `Field`'s `<label>` would wear nothing. The reason, and the one line that undoes it, are
+                at the top of this file. */}
+
             {/* Only asked for when there is one. Requiring it is what stops anything that reaches this taking the account over. */}
             {has && (
               <label className="pw-row">

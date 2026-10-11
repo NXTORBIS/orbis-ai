@@ -27,7 +27,17 @@ const FAMILIES = /^\.([a-z0-9-]+(?:-head|-header|-empty|-none|-search))\b/
 /**
  * Every one that existed when the shared controls were finished.
  *
- * Not a target and not an approval -- a debt. Delete a line when its screen moves onto the shared control.
+ * Mostly a debt: delete a line when its screen moves onto the shared control.
+ *
+ * But NOT all of it, and the difference matters. A sweep over these found that several own real layout of their
+ * own and the shared control would restyle them -- `.images-empty` is a flex column centred in the whole panel
+ * while `.view-empty` is a narrow block near the top; `.labs-search` takes the room left in its header row and
+ * carries a clear button that the shared search box has not got. Converting those would move pixels, which is the
+ * one thing the whole exercise forbids.
+ *
+ * So a name staying here is not automatically a failure. What this list guarantees is narrower and still worth
+ * having: nothing NEW appears, and nothing is listed that the stylesheet no longer has. A name that genuinely
+ * belongs to its screen should say so beside it.
  */
 const STILL_HAND_MADE: readonly string[] = [
   'automation-head',

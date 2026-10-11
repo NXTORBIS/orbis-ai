@@ -6,7 +6,7 @@ import { BuilderPanel, ComposePanel, DiagnosticsPanel, PackagePanel, STUDIO_TABS
 import { LAB_PAGES } from './PageLabs'
 import { Plot as PagePlot, type Series } from './PageTools'
 import CodePageStudio from './CodePageStudio'
-import { SplitView } from '../ui'
+import { SplitView, Surface } from '../ui'
 import { ApplicationsPanel } from './PageApplications'
 import { DescribePanel, GeneratedHistory, RunDocument } from './PageDescribe'
 import type { PageDocument } from '../../../shared/pages/builder'
@@ -281,10 +281,18 @@ export default function PagesView({
   if (screen.kind === 'write') return <CodePageStudio onBack={() => setScreen({ kind: 'library' })} />
 
   return (
-    <div className="view pages-view" role="region" aria-label="Orbis Pages">
-      <header className="view-head">
-        <h2>Pages</h2>
-        <div className="view-actions">
+    <Surface
+      title="Pages"
+      /*
+       * The region keeps the longer name it has always had. The heading says which screen you are looking at and the
+       * name says which screen you are on; "Orbis Pages" is the second of those, and they are not the same question.
+       */
+      label="Orbis Pages"
+      closeLabel="Close Pages"
+      onClose={onClose}
+      className="pages-view"
+      actions={
+        <>
           <label className="pages-search">
             <Search size={14} />
             <input
@@ -316,12 +324,9 @@ export default function PagesView({
           >
             <Wrench size={13} /> Studio
           </button>
-          <button type="button" className="icon-btn" aria-label="Close Pages" onClick={onClose}>
-            <X size={16} />
-          </button>
-        </div>
-      </header>
-
+        </>
+      }
+    >
       <SplitView
         className="pages-body"
         listLabel="Subjects"
@@ -430,7 +435,7 @@ export default function PagesView({
           </>
         }
       />
-    </div>
+    </Surface>
   )
 }
 

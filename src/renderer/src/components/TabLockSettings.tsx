@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Eye, EyeOff, Globe, KeyRound, Lock, LockOpen, Plus, ShieldCheck, Trash2 } from 'lucide-react'
+import { Button, Field } from '../ui'
 import type { TabLockGroup, TabLockState } from '../../../shared/tabLockView'
 import { isTabLockRefusal } from '../../../shared/tabLockView'
 import type { PresetName, TabLockPolicy } from '../../../shared/tabLock'
@@ -239,17 +240,18 @@ export default function TabLockSettings({ userName }: Props): React.JSX.Element 
         )}
 
         {!adding ? (
-          <button
-            type="button"
-            className="queue-btn small"
+          <Button
+            size="small"
+            icon={<Plus size={14} />}
             onClick={() => {
               clear()
               setProblem('')
               setAdding(true)
             }}
           >
-            <Plus size={14} /> New tab password
-          </button>
+            {' '}
+            New tab password
+          </Button>
         ) : (
           <form
             className="pw-form"
@@ -317,30 +319,35 @@ export default function TabLockSettings({ userName }: Props): React.JSX.Element 
             </label>
             <p className="pw-note">{again ? match.problem : ''}</p>
 
-            <fieldset className="tl-presets">
-              <legend>How strict</legend>
-              {(['standard', 'strong', 'maximum'] as PresetName[]).map((key) => (
-                <label key={key} className={preset === key ? 'is-on' : undefined}>
-                  <input type="radio" name="tl-preset" checked={preset === key} onChange={() => setPreset(key)} />
-                  <b>{key === 'standard' ? 'Standard' : key === 'strong' ? 'Strong' : 'Maximum'}</b>
-                  <span>
-                    {key === 'standard'
-                      ? 'Locks when this computer locks or sleeps, and after 15 minutes of nothing.'
-                      : key === 'strong'
-                        ? 'Also locks half a minute after Orbis loses focus, and the moment it is minimised.'
-                        : 'Locks the instant you look away from it.'}
-                  </span>
-                </label>
-              ))}
-            </fieldset>
+            {/* A group, so `fieldset` -- a `label` here would claim to name one of the three rather than the choice.
+                Each choice keeps its own `label`, because `.tl-presets label` is an element selector: the sentence
+                inside it is still part of that radio's name, and moving it out needs a CSS change this pass will not
+                make. */}
+            <Field as="fieldset" className="tl-presets" label="How strict">
+              {() =>
+                (['standard', 'strong', 'maximum'] as PresetName[]).map((key) => (
+                  <label key={key} className={preset === key ? 'is-on' : undefined}>
+                    <input type="radio" name="tl-preset" checked={preset === key} onChange={() => setPreset(key)} />
+                    <b>{key === 'standard' ? 'Standard' : key === 'strong' ? 'Strong' : 'Maximum'}</b>
+                    <span>
+                      {key === 'standard'
+                        ? 'Locks when this computer locks or sleeps, and after 15 minutes of nothing.'
+                        : key === 'strong'
+                          ? 'Also locks half a minute after Orbis loses focus, and the moment it is minimised.'
+                          : 'Locks the instant you look away from it.'}
+                    </span>
+                  </label>
+                ))
+              }
+            </Field>
 
             <div className="tl-actions">
-              <button type="submit" className="queue-btn small" disabled={!canCreate || busy === 'creating'}>
-                {busy === 'creating' ? 'Making it…' : 'Create'}
-              </button>
-              <button
-                type="button"
-                className="queue-btn small ghost"
+              <Button type="submit" size="small" busy={busy === 'creating'} busyLabel="Making it…" disabled={!canCreate}>
+                Create
+              </Button>
+              <Button
+                size="small"
+                kind="quiet"
                 onClick={() => {
                   clear()
                   setAdding(false)
@@ -348,7 +355,7 @@ export default function TabLockSettings({ userName }: Props): React.JSX.Element 
                 }}
               >
                 Cancel
-              </button>
+              </Button>
             </div>
           </form>
         )}
@@ -364,18 +371,22 @@ export default function TabLockSettings({ userName }: Props): React.JSX.Element 
             </p>
 
             <div className="tl-presets row">
+              {/* Lit by `is-on`, kept as a class rather than `on`: this family's lit rule is `.queue-btn.is-on`, and
+                  `.queue-btn.on` is a different rule in another part with different cyan. `aria-pressed` is what `on`
+                  would have carried, so it is said here instead. */}
               {(['standard', 'strong', 'maximum'] as PresetName[]).map((key) => (
-                <button
+                <Button
                   key={key}
-                  type="button"
-                  className={`queue-btn small${matchedPreset === key ? ' is-on' : ''}`}
+                  size="small"
+                  className={matchedPreset === key ? 'is-on' : undefined}
+                  aria-pressed={matchedPreset === key}
                   disabled={busy === 'policy'}
                   onClick={() =>
                     void run('policy', () => window.api.tabLockSetDefaultPolicy(state!.presets[key]), 'Saved.')
                   }
                 >
                   {key === 'standard' ? 'Standard' : key === 'strong' ? 'Strong' : 'Maximum'}
-                </button>
+                </Button>
               ))}
             </div>
 
@@ -545,9 +556,9 @@ export default function TabLockSettings({ userName }: Props): React.JSX.Element 
                   </option>
                 ))}
               </select>
-              <button type="submit" className="queue-btn small" disabled={busy === 'rule' || !pattern.trim()}>
+              <Button type="submit" size="small" disabled={busy === 'rule' || !pattern.trim()}>
                 Add
-              </button>
+              </Button>
             </form>
           </div>
         )}
@@ -560,16 +571,18 @@ export default function TabLockSettings({ userName }: Props): React.JSX.Element 
             <p className="pw-note is-quiet">
               Locks every protected tab and closes every tab password, so nothing reopens without being typed again.
             </p>
-            <button
-              type="button"
-              className="queue-btn small danger"
+            <Button
+              size="small"
+              kind="danger"
+              icon={<Lock size={14} />}
               disabled={busy === 'panic'}
               onClick={() =>
                 void run('panic', () => window.api.tabLockLockAll(), 'Everything is locked.')
               }
             >
-              <Lock size={14} /> Lock everything
-            </button>
+              {' '}
+              Lock everything
+            </Button>
           </div>
         )}
       </div>
@@ -618,25 +631,29 @@ function GroupRow(p: GroupRowProps): React.JSX.Element {
         </span>
         <div className="tl-group-buttons">
           {!group.open && (
-            <button type="button" className="queue-btn tiny" onClick={() => p.onAct(acting === 'open' ? null : 'open')}>
+            <Button size="tiny" onClick={() => p.onAct(acting === 'open' ? null : 'open')}>
               Open
-            </button>
+            </Button>
           )}
-          <button type="button" className="queue-btn tiny" onClick={() => p.onAct(acting === 'change' ? null : 'change')}>
-            <KeyRound size={13} /> Change
-          </button>
+          <Button size="tiny" icon={<KeyRound size={13} />} onClick={() => p.onAct(acting === 'change' ? null : 'change')}>
+            {' '}
+            Change
+          </Button>
           {group.recoverable && (
-            <button type="button" className="queue-btn tiny" onClick={() => p.onAct(acting === 'reset' ? null : 'reset')}>
-              <ShieldCheck size={13} /> Forgot it
-            </button>
+            <Button size="tiny" icon={<ShieldCheck size={13} />} onClick={() => p.onAct(acting === 'reset' ? null : 'reset')}>
+              {' '}
+              Forgot it
+            </Button>
           )}
-          <button
-            type="button"
-            className="queue-btn tiny danger"
+          <Button
+            size="tiny"
+            kind="danger"
+            icon={<Trash2 size={13} />}
             onClick={() => p.onAct(acting === 'remove' ? null : 'remove')}
           >
-            <Trash2 size={13} /> Remove
-          </button>
+            {' '}
+            Remove
+          </Button>
         </div>
       </div>
 
@@ -696,16 +713,17 @@ function GroupRow(p: GroupRowProps): React.JSX.Element {
           )}
 
           <div className="tl-actions">
-            <button
+            <Button
               type="submit"
-              className={`queue-btn small${acting === 'remove' ? ' danger' : ''}`}
+              size="small"
+              kind={acting === 'remove' ? 'danger' : 'normal'}
               disabled={Boolean(p.busy) || p.current.length === 0 || (needsNew && !p.strengthOk)}
             >
               {acting === 'open' ? 'Open' : acting === 'remove' ? 'Remove' : 'Save'}
-            </button>
-            <button type="button" className="queue-btn small ghost" onClick={() => p.onAct(null)}>
+            </Button>
+            <Button size="small" kind="quiet" onClick={() => p.onAct(null)}>
               Cancel
-            </button>
+            </Button>
           </div>
         </form>
       )}
@@ -725,19 +743,21 @@ function DelayRow({
   onChange(value: number | null): void
 }): React.JSX.Element {
   return (
-    <label className="tl-delay">
-      <span>{label}</span>
-      <select
-        value={value === null ? 'never' : String(value)}
-        onChange={(e) => onChange(e.target.value === 'never' ? null : Number(e.target.value))}
-      >
-        <option value="never">Never</option>
-        {DELAY_CHOICES.map((ms) => (
-          <option key={ms} value={ms}>
-            {describeDelay(ms)}
-          </option>
-        ))}
-      </select>
-    </label>
+    <Field className="tl-delay" label={label}>
+      {(wiring) => (
+        <select
+          {...wiring}
+          value={value === null ? 'never' : String(value)}
+          onChange={(e) => onChange(e.target.value === 'never' ? null : Number(e.target.value))}
+        >
+          <option value="never">Never</option>
+          {DELAY_CHOICES.map((ms) => (
+            <option key={ms} value={ms}>
+              {describeDelay(ms)}
+            </option>
+          ))}
+        </select>
+      )}
+    </Field>
   )
 }

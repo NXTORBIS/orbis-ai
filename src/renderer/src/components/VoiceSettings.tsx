@@ -3,6 +3,7 @@ import { Check, Download, Mic, Trash2, X } from 'lucide-react'
 import type { ExperienceConfig } from '../../../shared/experience'
 import { PULSAR_MODELS, PULSAR_MODEL_INFO } from '../../../shared/pulsarModels'
 import type { PulsarDownloadProgress, PulsarHardwareInfo, PulsarModelId } from '../../../shared/pulsarModels'
+import { Field } from '../ui'
 
 const LANGUAGES: [string, string][] = [
   ['', 'Auto-detect'],
@@ -178,31 +179,39 @@ export default function VoiceSettings(): React.JSX.Element {
         <p className="skill-meta">Pulsar needs one model downloaded once — after that it works completely offline, with no limit and nothing sent anywhere.</p>
       )}
 
-      <div className="voice-settings-row">
-        <label htmlFor="voice-language">Language</label>
-        <select id="voice-language" value={experience.voice.language ?? ''} onChange={(e) => void save({ ...experience, voice: { ...experience.voice, language: e.target.value || null } })}>
-          {LANGUAGES.map(([code, label]) => (
-            <option key={code || 'auto'} value={code}>
-              {label}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {devices.length > 0 && (
-        <div className="voice-settings-row">
-          <label htmlFor="voice-device">
-            <Mic size={13} /> Microphone
-          </label>
-          <select id="voice-device" value={experience.voice.deviceId ?? ''} onChange={(e) => void save({ ...experience, voice: { ...experience.voice, deviceId: e.target.value || null } })}>
-            <option value="">System default</option>
-            {devices.map((d) => (
-              <option key={d.deviceId} value={d.deviceId}>
-                {d.label}
+      <Field label="Language" className="voice-settings-row">
+        {(w) => (
+          <select {...w} value={experience.voice.language ?? ''} onChange={(e) => void save({ ...experience, voice: { ...experience.voice, language: e.target.value || null } })}>
+            {LANGUAGES.map(([code, label]) => (
+              <option key={code || 'auto'} value={code}>
+                {label}
               </option>
             ))}
           </select>
-        </div>
+        )}
+      </Field>
+
+      {devices.length > 0 && (
+        <Field
+          label={
+            <>
+              <Mic size={13} />
+              Microphone
+            </>
+          }
+          className="voice-settings-row"
+        >
+          {(w) => (
+            <select {...w} value={experience.voice.deviceId ?? ''} onChange={(e) => void save({ ...experience, voice: { ...experience.voice, deviceId: e.target.value || null } })}>
+              <option value="">System default</option>
+              {devices.map((d) => (
+                <option key={d.deviceId} value={d.deviceId}>
+                  {d.label}
+                </option>
+              ))}
+            </select>
+          )}
+        </Field>
       )}
     </div>
   )

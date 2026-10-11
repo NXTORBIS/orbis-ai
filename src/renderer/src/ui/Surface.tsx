@@ -17,6 +17,13 @@ import { IconButton } from './IconButton'
  *   - it has a way out, because `onClose` is required and draws the button;
  *   - the title is a real heading rather than a styled `div`.
  *
+ * **What it cannot do, which is worth knowing before reaching for it.** Everything passed as `actions` lands
+ * inside `.view-actions`. Markets puts some of its header -- the currency picker, the live-connection state, the
+ * section strip -- directly in `.view-head` and only the rest in `.view-actions`, and moving those into the
+ * actions group changes the layout. So Markets keeps a hand-written frame, on purpose. A screen whose header is
+ * genuinely two groups is not the shape this component is, and forcing it would be the one thing forbidden here:
+ * a visible change smuggled in beside a construction change.
+ *
  * Escape is not handled here. It is handled once in `App.tsx`, where it can see whether a popover or a text field
  * wants the key first — a screen that needs it for something of its own keeps it by calling `preventDefault`, which
  * is the contract Markets, Create, Whiteboard and Student already follow.
@@ -36,13 +43,21 @@ export interface SurfaceProps {
   closeLabel?: string
   /** Extra classes for the screen's own rules — `board-view`, `clips-view`. */
   className?: string
+  /**
+   * Attributes the screen's own stylesheet reads off its root.
+   *
+   * Markets writes `data-density` there and twenty-odd rules key off it, so without a way through this component
+   * the biggest screen in the window could not wear the frame at all -- it would have had to keep its own copy
+   * for the sake of one attribute. Narrow on purpose: the frame still decides the class, the role and the name.
+   */
+  rootData?: Record<string, string | number | undefined>
   children: ReactNode
 }
 
-export function Surface({ title, label, actions, onClose, closeLabel = 'Close', className, children }: SurfaceProps): React.JSX.Element {
+export function Surface({ title, label, actions, onClose, closeLabel = 'Close', className, rootData, children }: SurfaceProps): React.JSX.Element {
   const named = label ?? (typeof title === 'string' ? title : undefined)
   return (
-    <div className={['view', className ?? ''].filter((one) => one !== '').join(' ')} role="region" aria-label={named}>
+    <div className={['view', className ?? ''].filter((one) => one !== '').join(' ')} role="region" aria-label={named} {...(rootData ?? {})}>
       <header className="view-head">
         <h2>{title}</h2>
         <div className="view-actions">
