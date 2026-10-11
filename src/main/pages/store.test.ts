@@ -125,3 +125,29 @@ test('no file at all still means defaults, and still allows a write', async () =
     assert.deepEqual(await movedAside(dir), [])
   })
 })
+
+/**
+ * Two profiles that have never used Pages do not share the same empty state.
+ *
+ * `EMPTY` was one object, handed out with `{ ...EMPTY }`. That copies one level, and `usage` and `approved` are
+ * objects -- so every profile's "empty" shared the *same two objects*, and `recordOpen` and `approve` change them
+ * in place. Open a Page in one profile and the count appeared in a profile that had never opened Pages at all, and
+ * was then written to that profile's file.
+ *
+ * It is a function now, so there is nothing to share rather than nothing being shared by convention.
+ */
+test('one profile opening a Page does not put it in another profile', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'orbis-pages-share-'))
+  const store = new PagesStore(dir)
+
+  await store.recordOpen('default', PAGE, 1_000)
+  assert.deepEqual(await store.usage('default'), { [PAGE]: { openCount: 1, lastOpenedAt: 1_000 } })
+  assert.deepEqual(await store.usage('second'), {}, 'this profile has never opened anything')
+
+  await store.approve('default', PAGE, '1.2.0')
+  assert.deepEqual(await store.approved('second'), {}, 'nor approved anything')
+
+  // And the other way round, because sharing one object would show up in either direction.
+  await store.recordOpen('second', PAGE, 2_000)
+  assert.deepEqual(await store.usage('default'), { [PAGE]: { openCount: 1, lastOpenedAt: 1_000 } })
+})

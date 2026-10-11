@@ -198,7 +198,12 @@ export class AccountSecurity {
     const damage = this.unreadable.get(profileId)
     if (damage !== undefined) {
       // Refusing is recoverable; writing a new password file over one that cannot be read is not.
-      this.unreadable.delete(profileId)
+      //
+      // The mark is NOT cleared here. It used to be -- so that the question would be asked again on the next
+      // attempt -- but clearing it on the way out of a refusal leaves `unreadableFor()` answering false while the
+      // file is still there and still not understood, and leaves a second attempt arriving before any read
+      // unguarded. It is cleared in `read()`, and only when the file has actually read cleanly, which is the one
+      // place that knows it is safe to clear. A cleared lock still gets through, because every caller reads first.
       throw new AccountFailure('io', damage)
     }
     const path = this.path(profileId)

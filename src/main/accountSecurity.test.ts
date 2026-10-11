@@ -354,3 +354,29 @@ test('no password file at all still means defaults, and a password may still be 
   assert.equal(await security.hasPassword('default'), true, 'a missing file is still the one case that may be written')
   assert.deepEqual(await movedAside(dir), [], 'and nothing was moved aside on the way')
 })
+
+/**
+ * A refusal that stays refused.
+ *
+ * `write()` used to delete the mark on its way out of a refusal, so that the question would be asked again next
+ * time. The trouble is what happens before that next read: `unreadableFor()` -- whose entire job is to answer "is
+ * there a file here Orbis could not make sense of" -- started answering false while the file was still there and
+ * still not understood, and a second attempt arriving before any read had nothing in its way.
+ *
+ * It is cleared in `read()` now, and only when the file has actually read cleanly. A lock that clears still gets
+ * through, because every caller reads first; what no longer gets through is the refusal disarming itself.
+ */
+test('a refused save does not clear the mark that refused it', SLOW, async () => {
+  const { security, dir } = await fresh()
+  // A directory where the file belongs: readable, in the sense that it is there, and impossible to make sense of.
+  await mkdir(lockFile(dir, 'default'), { recursive: true })
+
+  assert.equal(await security.hasPassword('default'), false, 'nothing can be read')
+  assert.equal(security.unreadableFor('default'), true, 'but Orbis knows something is there')
+
+  await assert.rejects(() => security.create('default', GOOD), (err: { code?: string }) => err.code === 'io')
+  assert.equal(security.unreadableFor('default'), true, 'and still knows, after the refusal')
+
+  await assert.rejects(() => security.create('default', OTHER), (err: { code?: string }) => err.code === 'io')
+  assert.deepEqual(await movedAside(dir), [], 'nothing was moved: it may yet be readable')
+})

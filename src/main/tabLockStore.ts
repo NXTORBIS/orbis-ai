@@ -217,8 +217,24 @@ export class TabLockStore {
 
   private async write(profileId: string, file: TabLockFile): Promise<void> {
     if (this.unreadable.has(profileId)) {
-      this.unreadable.delete(profileId)
-      return
+      // The mark is NOT cleared here, and the refusal is thrown rather than returned. Both of those were wrong,
+      // and together they were worse than the fault they were guarding against.
+      //
+      // Clearing it: the argument was that every caller reads before it writes, so the next read would set the
+      // mark again. That holds only if no two saves overlap, and nothing serialises them -- `ipcMain.handle`
+      // handlers run concurrently, and the slow operations here hold their read-then-write gap open for a second
+      // or more because scrypt sits inside it. `createGroup` reads, derives a key, and writes; any quick save that
+      // finishes inside that window -- a rule added, a policy set, the startup sweep, the quit-time save -- was
+      // refused, cleared the mark on its way out, and left `createGroup` to write over the file with nothing in
+      // its way. Measured, with a real wrapped group key on disk: alone, the file survived; with one other save
+      // finishing 120ms in, the key was gone and nothing had been quarantined. The mark is cleared in `read()`
+      // when the file reads cleanly, which is the only place that knows it is safe to clear.
+      //
+      // Throwing: this used to `return`, so `createGroup` carried on and handed back a group with `open: true`
+      // while nothing had been written. Somebody was told their tab password existed, protected tabs with it, and
+      // on the next read the group was not there -- a locked tab with no credential that could ever open it, and
+      // no reset route. A refused save has to be a failure the window can show.
+      throw new TabLockFailure('io', 'Orbis could not read this profile’s locked-tab file, so nothing was changed. This is usually another program holding the file; try again in a moment.')
     }
     const path = this.path(profileId)
     await fs.mkdir(dirname(path), { recursive: true })

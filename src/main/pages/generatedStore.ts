@@ -53,7 +53,13 @@ interface Saved {
   sessions: GenerationSession[]
 }
 
-const EMPTY: Saved = { graphs: [], sessions: [] }
+/**
+ * A profile with no generated Pages, made fresh each time.
+ *
+ * A function rather than a constant, for the same reason as `pages/store.ts`: `{ ...EMPTY }` copies one level,
+ * so every profile would share the same two arrays and anything that changed one in place would change them all.
+ */
+const empty = (): Saved => ({ graphs: [], sessions: [] })
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -151,7 +157,7 @@ function cleanSession(raw: unknown): GenerationSession | null {
 }
 
 export function cleanSaved(raw: unknown, operations: Readonly<Record<string, string>>): Saved {
-  if (!isPlainObject(raw)) return { ...EMPTY }
+  if (!isPlainObject(raw)) return empty()
   const graphs = Array.isArray(raw.graphs)
     ? raw.graphs.map((one) => cleanGraph(one, operations)).filter((one): one is VersionGraph => one !== null)
     : []
@@ -209,7 +215,7 @@ export class GeneratedStore {
     const opened = await openStored(
       this.fileFor(profileId),
       (text) => cleanSaved(JSON.parse(text), this.operations),
-      () => ({ ...EMPTY })
+      empty
     )
     if (opened.mayWrite) this.unreadable.delete(profileId)
     else this.unreadable.add(profileId)

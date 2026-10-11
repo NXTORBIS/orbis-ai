@@ -69,7 +69,16 @@ interface Saved {
   applications: Record<string, unknown>[]
 }
 
-const EMPTY: Saved = {
+/**
+ * A profile that has never used Pages, made fresh each time it is asked for.
+ *
+ * It used to be a single frozen-by-convention object spread with `{ ...EMPTY }`, which copies one level: `usage`
+ * and `approved` are objects, so every profile's "empty" state shared the *same two objects*, and `recordOpen` and
+ * `approve` change them in place. One profile's history therefore appeared in another profile that had never
+ * opened Pages at all -- and was then written to that profile's file. A function instead of a constant is the
+ * whole fix, and the only way to make the sharing impossible rather than remembered.
+ */
+const empty = (): Saved => ({
   schema: SCHEMA,
   grants: [],
   favourites: [],
@@ -77,7 +86,7 @@ const EMPTY: Saved = {
   projects: [],
   approved: {},
   applications: []
-}
+})
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -151,7 +160,7 @@ function cleanProject(raw: unknown): PageProject | null {
 
 /** A saved file read back. Everything unrecognised is dropped rather than repaired. */
 export function cleanSaved(raw: unknown): Saved {
-  if (!isObject(raw)) return { ...EMPTY }
+  if (!isObject(raw)) return empty()
   const grants = (Array.isArray(raw.grants) ? raw.grants : [])
     .map(cleanGrant)
     .filter((one): one is PermissionGrant => one !== null)
@@ -211,7 +220,7 @@ export class PagesStore {
     // so the words are still on the disk, and only then may anything be written. When it could not even be moved,
     // `mayWrite` is false and this store refuses to write at all, because something is there and Orbis does not know
     // what.
-    const opened = await openStored(this.fileFor(profileId), (text) => cleanSaved(JSON.parse(text)), () => ({ ...EMPTY }))
+    const opened = await openStored(this.fileFor(profileId), (text) => cleanSaved(JSON.parse(text)), empty)
     if (opened.mayWrite) this.unreadable.delete(profileId)
     else this.unreadable.add(profileId)
     this.cache.set(profileId, opened.value)

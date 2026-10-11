@@ -515,7 +515,13 @@ test('nothing is written over a file that is merely unreadable', SLOW, async () 
   await mkdir(lockFile(dir))
 
   assert.deepEqual(await locks.groups('default'), [], 'nothing can be shown')
-  await locks.setDefaultPolicy('default', { inactivity: 60_000 })
+  // The refusal is thrown rather than silently returned, so nothing upstream can report a change that did not
+  // happen. It used to return void, which is how `createGroup` came to hand back a tab password that existed only
+  // in memory -- and then a locked tab with no credential that could ever open it.
+  await assert.rejects(
+    () => locks.setDefaultPolicy('default', { inactivity: 60_000 }),
+    (err: TabLockFailure) => err.code === 'io'
+  )
   assert.equal((await stat(lockFile(dir))).isDirectory(), true, 'and the save was refused, so it is untouched')
   assert.deepEqual(await movedAside(dir), [], 'nothing was moved either: it may yet be readable')
 })
@@ -528,4 +534,54 @@ test('a missing file is still just a missing file, and the first save works', SL
   await locks.createGroup('default', 'Personal', TAB)
   assert.match(await readFile(lockFile(dir), 'utf8'), /Personal/, 'it wrote, because there was nothing there')
   assert.deepEqual(await movedAside(dir), [], 'and nothing was quarantined for a file that never existed')
+})
+
+// ================================================================ a refusal that stays refused
+
+/**
+ * The guard that used to disarm itself.
+ *
+ * `write()` refused when the file was marked unwritable, and on its way out it DELETED the mark. The argument was
+ * that every caller reads before it writes, so the next read would set the mark again. That holds only if no two
+ * saves ever overlap, and nothing serialises them: the handlers behind these channels run concurrently, and the
+ * slow operations hold their read-then-write gap open for a second or more because scrypt sits inside it.
+ *
+ * So a quick save finishing inside `createGroup`'s window -- a rule added, a policy set, the startup sweep, the
+ * quit-time save -- was refused, cleared the mark on its way out, and left the slow one to write over the file with
+ * nothing in its way. Measured against a real file with a real wrapped group key in it: alone the file survived;
+ * with one other save finishing 120ms in, the key was gone and nothing had been quarantined.
+ *
+ * And the refusal was a `return`, not a throw, so `createGroup` carried on and handed back a group marked open
+ * while nothing had been written. Somebody was told their tab password existed, protected tabs with it, and on the
+ * next read the group was not there -- a locked tab with no credential that could ever open it.
+ */
+test('a refused save stays refused, however many times it is asked', SLOW, async () => {
+  const { locks, dir } = await bench()
+  const first = await locks.createGroup('default', 'Personal', TAB)
+  const path = lockFile(dir)
+  const original = await readFile(path, 'utf8')
+  assert.ok(original.includes('Personal'), 'the credential is on disk to begin with')
+
+  // A directory where the file should be: readable by nothing, so `readStored` says unreadable and the mark is set.
+  // This is the state a lock or a copy in progress leaves, and nothing destructive may happen in it.
+  const blocked = join(dir, dataDirFor('other'), 'tab-locks.json')
+  await mkdir(blocked, { recursive: true })
+
+  await assert.rejects(
+    () => locks.setDefaultPolicy('other', 'always'),
+    (err: TabLockFailure) => err.code === 'io',
+    'the refusal is thrown, so nothing upstream can report success'
+  )
+  // The second ask is the whole point. Before, the first refusal cleared the mark and this one went through.
+  await assert.rejects(
+    () => locks.setDefaultPolicy('other', 'never'),
+    (err: TabLockFailure) => err.code === 'io',
+    'the mark was not cleared by the refusal, so this is refused too'
+  )
+  await assert.rejects(() => locks.createGroup('other', 'Second', OTHER), (err: TabLockFailure) => err.code === 'io')
+
+  // And the other profile's real file is exactly as it was.
+  assert.equal(await readFile(path, 'utf8'), original)
+  assert.equal((await locks.groups('default')).length, 1)
+  assert.equal((await locks.groups('default'))[0].id, first.id)
 })
