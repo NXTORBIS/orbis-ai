@@ -230,6 +230,24 @@ export class GeneratedStore {
    * looked at again, which is the next time this profile's cache is empty.
    */
   private readonly unreadable = new Set<string>()
+  /**
+   * The same read, for something that is about to change this profile's file.
+   *
+   * A read that is only going to be shown can happily hand back defaults for a file Orbis could not make sense of.
+   * A read that is about to be followed by a save cannot: the save will be refused, and the method would have
+   * already returned the new favourite, the saved project, `true` -- so the screen says it saved and nothing was
+   * written. Somebody loses a Page's work and is told the opposite, which is worse than being told it failed.
+   *
+   * So the refusal happens here, before anything is changed, and the window hears a failure.
+   */
+  private async readForWrite(profileId: string): Promise<Saved> {
+    const saved = await this.read(profileId)
+    if (this.unreadable.has(profileId)) {
+      throw new Error('Orbis could not make sense of this profile\u2019s Pages file, so nothing was changed. It has been left exactly as it is.')
+    }
+    return saved
+  }
+
 
   private touch(profileId: string): void {
     this.dirty.add(profileId)
@@ -309,7 +327,7 @@ export class GeneratedStore {
    * exactly one correct answer.
    */
   async putGraph(profileId: string, graph: VersionGraph): Promise<{ saved: boolean; message: string }> {
-    const saved = await this.read(profileId)
+    const saved = await this.readForWrite(profileId)
     const existing = saved.graphs.findIndex((one) => one.pageId === graph.pageId)
     if (existing === -1 && saved.graphs.length >= GENERATED_LIMITS.pages) {
       return {
@@ -324,7 +342,7 @@ export class GeneratedStore {
   }
 
   async deleteGraph(profileId: string, pageId: string): Promise<boolean> {
-    const saved = await this.read(profileId)
+    const saved = await this.readForWrite(profileId)
     const graphs = saved.graphs.filter((one) => one.pageId !== pageId)
     if (graphs.length === saved.graphs.length) return false
     this.cache.set(profileId, { ...saved, graphs })
@@ -335,6 +353,9 @@ export class GeneratedStore {
   // ---------------------------------------------------------------- sessions
 
   async sessions(profileId: string, now: number): Promise<readonly GenerationSession[]> {
+    // The plain read, not `readForWrite`: this is bookkeeping, not something somebody asked for. Failing to
+    // record it must never stop the thing it was recording -- a damaged Pages file would otherwise mean no Page
+    // would open at all. Nothing is written either, because the write is still refused further down.
     const saved = await this.read(profileId)
     const live = saved.sessions.filter((one) => !isExpired(one, now))
     if (live.length !== saved.sessions.length) {
@@ -345,6 +366,9 @@ export class GeneratedStore {
   }
 
   async putSession(profileId: string, session: GenerationSession): Promise<void> {
+    // The plain read, not `readForWrite`: this is bookkeeping, not something somebody asked for. Failing to
+    // record it must never stop the thing it was recording -- a damaged Pages file would otherwise mean no Page
+    // would open at all. Nothing is written either, because the write is still refused further down.
     const saved = await this.read(profileId)
     const existing = saved.sessions.findIndex((one) => one.sessionId === session.sessionId)
     const sessions =

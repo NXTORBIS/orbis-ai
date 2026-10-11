@@ -234,6 +234,24 @@ export class PagesStore {
    * looked at again, which is the next time this profile's cache is empty.
    */
   private readonly unreadable = new Set<string>()
+  /**
+   * The same read, for something that is about to change this profile's file.
+   *
+   * A read that is only going to be shown can happily hand back defaults for a file Orbis could not make sense of.
+   * A read that is about to be followed by a save cannot: the save will be refused, and the method would have
+   * already returned the new favourite, the saved project, `true` -- so the screen says it saved and nothing was
+   * written. Somebody loses a Page's work and is told the opposite, which is worse than being told it failed.
+   *
+   * So the refusal happens here, before anything is changed, and the window hears a failure.
+   */
+  private async readForWrite(profileId: string): Promise<Saved> {
+    const saved = await this.read(profileId)
+    if (this.unreadable.has(profileId)) {
+      throw new Error('Orbis could not make sense of this profile\u2019s Pages file, so nothing was changed. It has been left exactly as it is.')
+    }
+    return saved
+  }
+
 
   private touch(profileId: string): void {
     this.dirty.add(profileId)
@@ -311,7 +329,7 @@ export class PagesStore {
    * means a revocation has to find both, and the one it misses is the one that matters.
    */
   async grant(profileId: string, grant: PermissionGrant): Promise<PermissionGrant[]> {
-    const saved = await this.read(profileId)
+    const saved = await this.readForWrite(profileId)
     const cleaned = cleanGrant(grant)
     if (!cleaned) return saved.grants
     const same = (one: PermissionGrant): boolean =>
@@ -325,7 +343,7 @@ export class PagesStore {
 
   /** Every grant for a Page and capability marked withdrawn. Marked rather than deleted, so the decision is visible. */
   async revoke(profileId: string, pageId: string, capabilityId?: string): Promise<PermissionGrant[]> {
-    const saved = await this.read(profileId)
+    const saved = await this.readForWrite(profileId)
     saved.grants = saved.grants.map((one) =>
       one.pageId === pageId && (capabilityId === undefined || one.capabilityId === capabilityId)
         ? { ...one, state: 'revoked' as const }
@@ -337,6 +355,9 @@ export class PagesStore {
 
   /** Grants that have lapsed, tidied away. Never changes what is allowed -- an expired grant already allowed nothing. */
   async pruneGrants(profileId: string, now: number): Promise<void> {
+    // The plain read, not `readForWrite`: this is bookkeeping, not something somebody asked for. Failing to
+    // record it must never stop the thing it was recording -- a damaged Pages file would otherwise mean no Page
+    // would open at all. Nothing is written either, because the write is still refused further down.
     const saved = await this.read(profileId)
     const before = saved.grants.length
     saved.grants = saved.grants.filter((one) => one.state === 'active' && grantIsLive(one, now))
@@ -350,7 +371,7 @@ export class PagesStore {
   }
 
   async setFavourite(profileId: string, pageId: string, favourite: boolean): Promise<boolean> {
-    const saved = await this.read(profileId)
+    const saved = await this.readForWrite(profileId)
     if (!isPageId(pageId)) return false
     const has = saved.favourites.includes(pageId)
     if (favourite && !has) saved.favourites = [...saved.favourites, pageId].slice(-STORE_LIMITS.favourites)
@@ -366,6 +387,9 @@ export class PagesStore {
 
   async recordOpen(profileId: string, pageId: string, now: number): Promise<void> {
     if (!isPageId(pageId)) return
+    // The plain read, not `readForWrite`: this is bookkeeping, not something somebody asked for. Failing to
+    // record it must never stop the thing it was recording -- a damaged Pages file would otherwise mean no Page
+    // would open at all. Nothing is written either, because the write is still refused further down.
     const saved = await this.read(profileId)
     const held = saved.usage[pageId] ?? { openCount: 0, lastOpenedAt: 0 }
     saved.usage[pageId] = { openCount: Math.min(1e9, held.openCount + 1), lastOpenedAt: now }
@@ -380,7 +404,7 @@ export class PagesStore {
 
   async approve(profileId: string, pageId: string, version: string): Promise<void> {
     if (!isPageId(pageId)) return
-    const saved = await this.read(profileId)
+    const saved = await this.readForWrite(profileId)
     saved.approved[pageId] = version.slice(0, 24)
     this.touch(profileId)
   }
@@ -425,7 +449,7 @@ export class PagesStore {
       }
     }
 
-    const saved = await this.read(profileId)
+    const saved = await this.readForWrite(profileId)
     const existing = saved.projects.find((one) => one.projectId === cleaned.projectId)
     if (existing) {
       const updated: PageProject = { ...existing, name: cleaned.name, state: cleaned.state, updatedAt: now }
@@ -447,7 +471,7 @@ export class PagesStore {
   }
 
   async deleteProject(profileId: string, projectId: string): Promise<boolean> {
-    const saved = await this.read(profileId)
+    const saved = await this.readForWrite(profileId)
     const before = saved.projects.length
     saved.projects = saved.projects.filter((one) => one.projectId !== projectId)
     if (saved.projects.length === before) return false
@@ -491,7 +515,7 @@ export class PagesStore {
    */
   async saveApplication(profileId: string, application: PageApplication): Promise<boolean> {
     if (application.ownerProfile !== profileId) return false
-    const saved = await this.read(profileId)
+    const saved = await this.readForWrite(profileId)
     const json = applicationToJson(application)
     const index = saved.applications.findIndex((one) => one.applicationId === application.applicationId)
     if (index === -1) {
@@ -506,7 +530,7 @@ export class PagesStore {
   }
 
   async deleteApplication(profileId: string, applicationId: string): Promise<boolean> {
-    const saved = await this.read(profileId)
+    const saved = await this.readForWrite(profileId)
     const left = saved.applications.filter((one) => one.applicationId !== applicationId)
     if (left.length === saved.applications.length) return false
     saved.applications = left
@@ -516,7 +540,7 @@ export class PagesStore {
   }
 
   async forgetPage(profileId: string, pageId: string): Promise<void> {
-    const saved = await this.read(profileId)
+    const saved = await this.readForWrite(profileId)
     saved.projects = saved.projects.filter((one) => one.pageId !== pageId)
     saved.grants = saved.grants.filter((one) => one.pageId !== pageId)
     saved.favourites = saved.favourites.filter((one) => one !== pageId)

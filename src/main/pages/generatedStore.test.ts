@@ -261,6 +261,17 @@ describe('the file on disk', () => {
     })
   })
 
+/**
+ * `refused` rather than a bare call: a save that cannot be written now says so.
+ *
+ * These three used to call `setFavourite`/`putGraph` and ignore the answer, because the answer was the new value --
+ * the store changed its cache, returned happily, and only the write at the end was refused. So the screen said it
+ * saved and nothing had been written. The refusal happens at the read now, before anything is changed.
+ */
+const refused = async (save: () => Promise<unknown>): Promise<void> => {
+  await assert.rejects(save, /could not make sense of/)
+}
+
   it('never writes over a file that is there and cannot be read, however many saves follow', async () => {
     await withDir(async (dir) => {
       // A directory where the file should be is a file that exists and cannot be read -- EISDIR, not ENOENT -- which
@@ -270,19 +281,19 @@ describe('the file on disk', () => {
       const store = new GeneratedStore(dir, OPERATIONS)
       assert.deepEqual(await store.graphs(PROFILE), [])
 
-      await store.putGraph(PROFILE, built().graph)
+      await refused(() => store.putGraph(PROFILE, built().graph))
       await store.flush()
       // Nothing moved, nothing written beside it, nothing left half-written: only the thing that was in the way.
       assert.deepEqual(await readdir(join(dir, 'pages')), ['generated.json'])
 
       // And again. The refusal used to clear itself on the way out, so the second save went through and did the damage
       // the first one had just avoided.
-      await store.putGraph(PROFILE, { ...built().graph, pageId: 'page_c1b2c3d4e5f6a7b8c9d0e1f2' })
+      await refused(() => store.putGraph(PROFILE, { ...built().graph, pageId: 'page_c1b2c3d4e5f6a7b8c9d0e1f2' }))
       await store.flush()
       assert.deepEqual(await readdir(join(dir, 'pages')), ['generated.json'])
 
       // Including on the way out of the process.
-      await store.putGraph(PROFILE, { ...built().graph, pageId: 'page_d1b2c3d4e5f6a7b8c9d0e1f2' })
+      await refused(() => store.putGraph(PROFILE, { ...built().graph, pageId: 'page_d1b2c3d4e5f6a7b8c9d0e1f2' }))
       store.flushSync()
       assert.deepEqual(await readdir(join(dir, 'pages')), ['generated.json'])
     })

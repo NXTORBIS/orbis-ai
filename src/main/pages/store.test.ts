@@ -77,6 +77,17 @@ test('a half-written file is moved aside, and its words are still on the disk af
   })
 })
 
+/**
+ * `refused` rather than a bare call: a save that cannot be written now says so.
+ *
+ * These three used to call `setFavourite`/`putGraph` and ignore the answer, because the answer was the new value --
+ * the store changed its cache, returned happily, and only the write at the end was refused. So the screen said it
+ * saved and nothing had been written. The refusal happens at the read now, before anything is changed.
+ */
+const refused = async (save: () => Promise<unknown>): Promise<void> => {
+  await assert.rejects(save, /could not make sense of/)
+}
+
 test('a file that is there and cannot be read is never written over, however many saves follow', async () => {
   await withDir(async (dir) => {
     // A directory where the file should be is a file that exists and cannot be read -- EISDIR, not ENOENT -- which is
@@ -86,14 +97,14 @@ test('a file that is there and cannot be read is never written over, however man
     const store = new PagesStore(dir)
     assert.deepEqual(await store.favourites(PROFILE), [])
 
-    await store.setFavourite(PROFILE, PAGE, true)
+    await refused(() => store.setFavourite(PROFILE, PAGE, true))
     await store.flush()
     // Nothing moved, nothing written beside it, nothing left half-written: only the thing that was in the way.
     assert.deepEqual(await readdir(dir), ['pages.json'])
 
     // And again. The refusal used to clear itself on the way out, so the second save went through and did the damage
     // the first one had just avoided.
-    await store.setFavourite(PROFILE, OTHER_PAGE, true)
+    await refused(() => store.setFavourite(PROFILE, OTHER_PAGE, true))
     await store.flush()
     assert.deepEqual(await readdir(dir), ['pages.json'])
   })
@@ -103,7 +114,7 @@ test('the quit-time save refuses the file the timed save refuses', async () => {
   await withDir(async (dir) => {
     await mkdir(fileIn(dir))
     const store = new PagesStore(dir)
-    await store.setFavourite(PROFILE, PAGE, true)
+    await refused(() => store.setFavourite(PROFILE, PAGE, true))
     store.flushSync()
     assert.deepEqual(await readdir(dir), ['pages.json'])
   })
