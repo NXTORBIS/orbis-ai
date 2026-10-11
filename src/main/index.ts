@@ -1180,6 +1180,23 @@ function registerIpc(): void {
     }
     const settings = await store.getSettings()
 
+    /*
+     * One run per request id, and the id is the caller's.
+     *
+     * `requestId` arrives from the window and is never checked against anything: `activeRequests.set` simply
+     * overwrote whatever was there. So a second `chat:send` reusing a live id took over the first one's entry --
+     * and `automationInstructions` keyed by the same id with it -- after which the FIRST run's `finally` deleted
+     * the second's. The result is a run nothing can stop any more: pressing stop aborts a controller that is no
+     * longer the one listening, and `automation:control` pauses the wrong run.
+     *
+     * Refused rather than renamed, because the id is what every answer, every event and every abort is addressed
+     * by: handing back a different one would mean the window listening on an id nothing will ever send.
+     */
+    if (activeRequests.has(request.requestId)) {
+      emit({ type: 'error', message: 'Orbis is already working on a request with that id.' })
+      emit({ type: 'done', model: request.model, truncated: false })
+      return
+    }
     const controller = new AbortController()
     activeRequests.set(request.requestId, controller)
     try {
