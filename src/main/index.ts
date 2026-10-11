@@ -783,6 +783,16 @@ async function readImages(paths: string[]): Promise<PickedFiles> {
   return picked
 }
 
+/*
+ * Orbis has more than ten things that stop or save something before quitting, and Node warns at ten listeners on
+ * the assumption that a limit that low means a leak. Here it means Orbis has more than ten features.
+ *
+ * Raised at module scope rather than inside `whenReady`, which is where it used to be: by then eleven listeners
+ * had already been attached, so the warning it exists to prevent was printed on every single launch before the
+ * line that prevents it ran.
+ */
+app.setMaxListeners(40)
+
 const activeRequests = new Map<string, AbortController>()
 let store: Store
 let mainWindow: BrowserWindow | null = null
@@ -815,8 +825,43 @@ function openWindow(): BrowserWindow {
   const win = createWindow()
   win.on('closed', () => {
     if (mainWindow === win) mainWindow = null
+    // Closing the Orbis window ends Orbis, unless it was asked to stay for something.
+    //
+    // This used to be left to `window-all-closed`, which never fired: Electron counts EVERY `BrowserWindow`, and
+    // Orbis keeps hidden ones -- the music player holding the audio element, and the windows an artifact opens in.
+    // So the last window a person can see would close and the process went on running with nothing on screen,
+    // which means `app.quit()` was never called, `before-quit` never ran, and nothing `QuitFlush` holds was saved.
+    //
+    // Measured on a fresh profile with nothing scheduled: still running sixty seconds later. That is how six
+    // Orbis processes from a previous day came to be running at once -- and because of the single-instance lock,
+    // clicking the icon wakes one of those rather than starting the build that was just installed.
+    //
+    // Deliberately `closed` rather than `close`: by here the window is gone, so this cannot stop somebody closing
+    // it, only decide what happens afterwards.
+    leaveIfNothingToStayFor()
   })
   return win
+}
+
+/**
+ * Nothing left on screen: quit, or put a tray icon up and say why.
+ *
+ * `reconsiderStaying` is the one place that decides, and it decides from what is actually scheduled -- so Orbis
+ * stays only when somebody asked it to and there is something to stay for. Null until the schedules are built,
+ * and quitting straight away is right before that: there is nothing yet that could want to keep running.
+ */
+function leaveIfNothingToStayFor(): void {
+  if (liveWindow() !== null) return
+  for (const controller of activeRequests.values()) controller.abort()
+  if (!reconsiderStaying) {
+    app.quit()
+    return
+  }
+  void reconsiderStaying()
+    .then(() => {
+      if (!stayingAlive) app.quit()
+    })
+    .catch(() => app.quit())
 }
 /**
  * Say something to the window, if there is still a window to say it to.
@@ -4983,12 +5028,6 @@ ${page.text}`, { howMany: 6 })
      * The Database Laboratory's practice databases hold native handles rather than plain objects, so they are let go
      * at quit. Each one is already closed when its own card closes; this is for the ones still open when Orbis is.
      */
-    /*
-     * Orbis has more than ten features that need to write something down before quitting, and Node warns at ten
-     * listeners on the assumption that a limit that low means a leak. Here it means Orbis has eleven features, so
-     * the ceiling is raised once rather than a real hook being left off to stay under it.
-     */
-    app.setMaxListeners(40)
     app.on('before-quit', () => {
       native?.closeDatabases()
     })
@@ -5352,20 +5391,11 @@ ${page.text}`, { howMany: 6 })
     profileLock.attachWindow()
   })
 
-  app.on('window-all-closed', () => {
-    for (const controller of activeRequests.values()) controller.abort()
-    /**
-     * Closing the window usually means quitting, and sometimes means only closing the window.
-     *
-     * `reconsiderStaying` decides, and it decides from what is actually scheduled -- so Orbis stays only when
-     * somebody asked it to and there is something for it to stay for, and puts a tray icon up when it does.
-     */
-    if (!reconsiderStaying) {
-      app.quit()
-      return
-    }
-    void reconsiderStaying().then(() => {
-      if (!stayingAlive) app.quit()
-    })
-  })
+  /*
+   * Kept, although the window's own `closed` handler now covers the case this was written for.
+   *
+   * It never fired: Electron counts every `BrowserWindow`, and Orbis keeps hidden ones. It would fire if those
+   * ever all went, and the answer would be the same, so it asks the same function rather than repeating it.
+   */
+  app.on('window-all-closed', () => leaveIfNothingToStayFor())
 }
