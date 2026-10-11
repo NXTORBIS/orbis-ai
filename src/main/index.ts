@@ -2341,8 +2341,6 @@ const platform = (): Platform => (platformInstance ??= electronPlatform())
 
 /** The one place that knows about updating Orbis; everything else asks it rather than doing any of it itself. */
 let updates: UpdateManager | null = null
-/** Set while Orbis is closing to make way for the installer, so nothing mistakes it for the user quitting. */
-let updatesQuitting = false
 
 /**
  * Where a released Orbis asks about updates. Set by the build rather than by anything in the application, so a
@@ -3880,8 +3878,8 @@ ${page.text}`, { howMany: 6 })
       endpoint: process.env.ORBIS_UPDATE_URL ?? UPDATE_ENDPOINT,
       pid: process.pid,
       quit: () => {
-        // Everything is written out before Orbis goes; the installer waits for this process to end.
-        updatesQuitting = true
+        // Everything is written out before Orbis goes, by `quitFlush`, which holds this close open until every
+        // store has finished. The installer waits for this process to end, so it waits for that too.
         app.quit()
       },
       spawnDetached: async (command, args) => {
@@ -5159,9 +5157,15 @@ ${page.text}`, { howMany: 6 })
      */
     app.on('before-quit', () => {
       native?.stopEverything()
-      // `native.flush` persists every open instance and then flushes the store, so the store needs no second call.
-      void native?.flush().catch(() => undefined)
     })
+    // The save goes through `quitFlush`, which holds the close open until it finishes.
+    //
+    // It used to be `void native?.flush().catch(...)` in the listener above: that starts the write and returns, and
+    // the process is then free to end in the middle of it. Which is the whole reason `quitFlush` exists -- this one
+    // and the two below were simply missed when the other twenty-three were moved onto it.
+    //
+    // `native.flush` persists every open app instance and then flushes the store, so the store needs no second call.
+    quitFlush.add('your apps', () => native?.flush())
 
     profilesStore.onChange(() => {
       void profilesStore
@@ -5169,9 +5173,9 @@ ${page.text}`, { howMany: 6 })
         .then((profile) => courses?.useProfile(profile.id))
         .catch((err: unknown) => console.error('[courses] could not switch profile', err))
     })
-    app.on('before-quit', () => {
-      void courses?.flush().catch(() => undefined)
-    })
+    // Unawaited before this, so quitting in the middle of a lesson could lose the lesson: what has been read, what
+    // has been passed and where somebody was up to all live in memory until the store writes them.
+    quitFlush.add('how far you have got through your courses', () => courses?.flush())
     /*
      * Whatever had gone quiet is written down before quitting.
      *
@@ -5180,8 +5184,10 @@ ${page.text}`, { howMany: 6 })
      */
     app.on('before-quit', () => {
       ambient?.stop()
-      void ambient?.flush().catch(() => undefined)
     })
+    // Stopping first and saving second is deliberate -- nothing should be written while it is still changing -- and
+    // the two are separate calls because only the second one can be waited for.
+    quitFlush.add('what Orbis noticed today', () => ambient?.flush())
     profilesStore.onChange(() => {
       void profilesStore
         .active()
@@ -5451,11 +5457,14 @@ ${page.text}`, { howMany: 6 })
     quitFlush.add('how the browser sidebar is arranged', () => browserSidebar.flush())
 
     quitFlush.add('your downloads and saved pages', () => browserLibrary?.flush())
-    // Closing to make way for the installer still saves everything first; it is a restart, not a loss.
     app.on('before-quit', () => {
       updates?.stop()
-      if (updatesQuitting) void updates?.getStatus()
     })
+    // There was a line here reading `if (updatesQuitting) void updates?.getStatus()`, under a comment saying that
+    // closing for the installer saves everything first. It saved nothing: `getStatus()` is synchronous and returns a
+    // value, so `void` discarded it and no write happened. Nothing was lost by that, because there is nothing
+    // pending to write -- the update journal is written through on every step (`update/journal.ts`, `record()`), not
+    // debounced -- but a line that looks like a save and is not one is worse than no line, so it is gone.
     /**
      * Whether this launch is the browser's, decided before the window is made.
      *

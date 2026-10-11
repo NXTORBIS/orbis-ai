@@ -89,6 +89,7 @@ export const TEST_FILES = [
   'src/main/specializedSearch.test.ts',
   'src/main/voiceInput.test.ts',
   'src/main/quitFlush.test.ts',
+  'src/main/quitSaves.test.ts',
   'src/main/storedFile.test.ts',
   'src/main/vault.test.ts',
   'src/main/orionSearch.test.ts',
