@@ -232,6 +232,8 @@ MusicPlayer.declareScheme()
 /** Research runs that are going now, so the window can hold one, let it go, or change what it is doing. */
 const researchControl = new ResearchControl()
 import { plainHandle, plainListen, profileHandle } from './ipc/handle.ts'
+import { registerVaultIpc } from './vault/ipc.ts'
+import { registerSecurityIpc } from './security/ipc.ts'
 import { QuitFlush } from './quitFlush'
 import { createMusic, registerMusicIpc } from './music/service'
 import { StudentService } from './student/service'
@@ -278,7 +280,7 @@ import { SiteProfiles } from './siteProfiles'
 import { activePreset, appearanceVariables, wantsReducedMotion } from '../shared/experience'
 import { presetBackdrop } from '../shared/presets'
 import { RuleWatcher, workflowReadings } from './ruleWatcher'
-import { AccountFailure, AccountSecurity } from './accountSecurity'
+import { AccountSecurity } from './accountSecurity'
 import { TabLockStore } from './tabLockStore'
 import { registerTabLockIpc } from './tabLock/ipc'
 import { registerProfileLockIpc } from './profileLock/ipc'
@@ -334,7 +336,7 @@ import { registerQuizIpc } from './quiz/ipc.ts'
 import { registerExperienceIpc } from './experience/ipc'
 import type { Profile } from '../shared/profiles'
 import { registerPersonalIpc } from './personal/ipc'
-import { SecretsVault, VaultFailure } from './vault/store'
+import { SecretsVault } from './vault/store'
 import { secretsFromVault } from '../helper/secrets'
 import type { SecretsDeps } from '../helper/secrets'
 import { Store } from './store'
@@ -4001,136 +4003,22 @@ ${page.text}`, { howMany: 6 })
     // Switching profile takes the vault with it: a vault unlocked for one profile is not unlocked for another.
     profilesStore.onChange(() => vault.lock())
 
-    const vaultCall = <T,>(run: (profileId: string) => Promise<T> | T): ((event: IpcMainInvokeEvent, ...args: unknown[]) => Promise<T | { error: string }>) => {
-      return async (event) => {
-        if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
-        try {
-          return await run(await vaultProfile())
-        } catch (err) {
-          // The reason travels as a code the window can act on; nothing of the vault ever does.
-          return { error: err instanceof VaultFailure ? err.code : 'io' }
-        }
-      }
-    }
-    const str = (value: unknown, max = 4096): string => (typeof value === 'string' ? value.slice(0, max) : '')
-
-    const accountCall = <T,>(run: (profileId: string) => Promise<T> | T): ((event: IpcMainInvokeEvent) => Promise<T | { error: string; message?: string; waitMs?: number }>) => {
-      return async (event) => {
-        if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
-        try {
-          return await run(await vaultProfile())
-        } catch (err) {
-          // A code the window can act on, and a sentence it can show. Never anything of the credential itself.
-          if (err instanceof AccountFailure) return { error: err.code, message: err.message, waitMs: err.waitMs }
-          return { error: 'io' }
-        }
-      }
-    }
-
-    ipcMain.handle('account:status', accountCall((id) => accounts.status(id)))
-    ipcMain.handle('account:create', (event, password: unknown, name: unknown) =>
-      accountCall(async (id) => {
-        await accounts.create(id, str(password, 256), str(name, 80))
-        recordSecurity({ kind: 'ACCOUNT_CREATED' })
-        return accounts.status(id)
-      })(event)
-    )
-    ipcMain.handle('account:unlock', (event, password: unknown) =>
-      accountCall(async (id) => {
-        try {
-          await accounts.unlock(id, str(password, 256))
-        } catch (err) {
-          // Recorded, because somebody finding attempts they did not make is the whole reason the log exists. What is
-          // recorded is that one was wrong -- never what was tried.
-          if (err instanceof AccountFailure && err.code === 'wrong-password') {
-            recordSecurity({ kind: 'FAILED_ACCOUNT_UNLOCK' })
-          }
-          throw err
-        }
-        recordSecurity({ kind: 'ACCOUNT_UNLOCKED' })
-        // Somebody has just been here and typed a password into this window, so the idle and focus clocks start again from
-        // now rather than from whenever they last ran.
-        profileLock.unlocked()
-        return accounts.status(id)
-      })(event)
-    )
-    ipcMain.handle('account:lock', accountCall(async (id) => {
-      accounts.lock()
-      return accounts.status(id)
-    }))
-    ipcMain.handle('account:verify', (event, password: unknown) =>
-      accountCall(async (id) => ({ ok: await accounts.verify(id, str(password, 256)) }))(event)
-    )
-    ipcMain.handle('account:change', (event, current: unknown, next: unknown, name: unknown) =>
-      accountCall(async (id) => {
-        await accounts.change(id, str(current, 256), str(next, 256), str(name, 80))
-        recordSecurity({ kind: 'ACCOUNT_PASSWORD_CHANGED' })
-        return accounts.status(id)
-      })(event)
-    )
-
-    // The security log: read and cleared, and nothing else. There is no channel that writes one -- events are recorded by
-    // the code that does the thing, so a window cannot put an event in the log that did not happen.
-    ipcMain.handle('security:log', accountCall((id) => securityLog.all(id)))
-    // What the store actually managed, not `{ ok: true }` regardless. A log file something else is holding open stays
-    // where it is, and a window told the clear worked shows an empty list that fills itself back in at the next launch.
-    ipcMain.handle('security:clear-log', accountCall(async (id) => ({ ok: await securityLog.clear(id) })))
-
-    ipcMain.handle('vault:status', vaultCall((id) => vault.status(id)))
-    ipcMain.handle('vault:question', vaultCall((id) => vault.recoveryQuestion(id)))
-    ipcMain.handle('vault:create', (event, password: unknown, recovery: unknown) =>
-      vaultCall(async (id) => {
-        const r = (recovery ?? {}) as { question?: unknown; answer?: unknown }
-        await vault.create(id, str(password), str(r.question) && str(r.answer) ? { question: str(r.question, 300), answer: str(r.answer) } : undefined)
-        return vault.status(id)
-      })(event)
-    )
-    ipcMain.handle('vault:unlock', (event, password: unknown) =>
-      vaultCall(async (id) => {
-        await vault.unlock(id, str(password))
-        return vault.status(id)
-      })(event)
-    )
-    ipcMain.handle('vault:lock', vaultCall(async (id) => {
-      vault.lock()
-      return vault.status(id)
-    }))
-    ipcMain.handle('vault:list', vaultCall((id) => vault.list(id)))
-    ipcMain.handle('vault:reveal', (event, secretId: unknown) => vaultCall((id) => vault.reveal(id, str(secretId, 80)))(event))
-    ipcMain.handle('vault:add', (event, secret: unknown) => vaultCall((id) => vault.add(id, secret))(event))
-    ipcMain.handle('vault:update', (event, secretId: unknown, secret: unknown) => vaultCall((id) => vault.update(id, str(secretId, 80), secret))(event))
-    ipcMain.handle('vault:remove', (event, secretId: unknown) => vaultCall((id) => vault.remove(id, str(secretId, 80)))(event))
-    ipcMain.handle('vault:change-password', (event, current: unknown, next: unknown) =>
-      vaultCall(async (id) => {
-        await vault.changeMasterPassword(id, str(current), str(next))
-        return vault.status(id)
-      })(event)
-    )
-    ipcMain.handle('vault:set-recovery', (event, password: unknown, recovery: unknown) =>
-      vaultCall(async (id) => {
-        const r = recovery as { question?: unknown; answer?: unknown } | null
-        await vault.setRecovery(id, str(password), r && str(r.question) && str(r.answer) ? { question: str(r.question, 300), answer: str(r.answer) } : null)
-        return vault.status(id)
-      })(event)
-    )
-    ipcMain.handle('vault:recover', (event, answer: unknown, password: unknown) =>
-      vaultCall(async (id) => {
-        await vault.recover(id, str(answer), str(password))
-        return vault.status(id)
-      })(event)
-    )
-    ipcMain.handle('vault:auto-lock', (event, password: unknown, ms: unknown) =>
-      vaultCall(async (id) => {
-        await vault.setAutoLock(id, str(password), typeof ms === 'number' ? ms : 0)
-        return vault.status(id)
-      })(event)
-    )
-    ipcMain.handle('vault:destroy', (event, password: unknown) =>
-      vaultCall(async (id) => {
-        await vault.destroy(id, str(password))
-        return vault.status(id)
-      })(event)
-    )
+    /*
+     * Twenty-three channels used to be written out here: the vault's fifteen, the account password's six and the
+     * security log's two, with two hand-written sender-checking wrappers above them. They are in `vault/ipc.ts`
+     * and `security/ipc.ts` now, which is where the rules about them can be read without a five-thousand-line
+     * file in the way -- what may come back from the vault, what a failure may say, and why nothing can write a
+     * row into somebody's security log.
+     */
+    registerVaultIpc({ vault, getWindow: liveWindow, profileId: vaultProfile })
+    registerSecurityIpc({
+      accounts,
+      securityLog,
+      getWindow: liveWindow,
+      profileId: vaultProfile,
+      record: recordSecurity,
+      unlocked: () => profileLock.unlocked()
+    })
 
     /**
      * Goals worked through one step at a time.

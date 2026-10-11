@@ -33,6 +33,15 @@ const BROWSER_LAYER = new Set([
    * more.
    */
   'main/ipc/handle.ts',
+  /*
+   * The two adapters lifted out of `index.ts`.
+   *
+   * `vault/{crypto,store}.ts` and `accountSecurity.ts` know nothing about Electron -- the crypto, the file format
+   * and every rule about what may be read are all pure. These two files are the channels and the sender check,
+   * which is what becomes Mojo. They are listed for the same reason `personal/ipc.ts` and `workflows/ipc.ts` are.
+   */
+  'main/security/ipc.ts',
+  'main/vault/ipc.ts',
   'main/ipc/senderCheck.ts',
   /*
    * The two Electron files of Orbis Music, and deliberately only two.
