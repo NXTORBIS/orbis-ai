@@ -4,6 +4,7 @@ import { Check, Download, Mic, X } from 'lucide-react'
 import { PULSAR_MODELS, PULSAR_MODEL_INFO, saidSize } from '../../../shared/pulsarModels'
 import type { PulsarDownloadProgress, PulsarHardwareInfo, PulsarModelId } from '../../../shared/pulsarModels'
 import type { NoticeKind } from '../lib/notices'
+import { Button, Modal } from '../ui'
 
 /**
  * Choosing a voice model, the first time somebody presses a microphone.
@@ -54,16 +55,6 @@ export function PulsarSetup({
 
   useEffect(() => window.api.onPulsarModelProgress((one) => setProgress(one)), [])
 
-  // Escape closes, the way every other overlay in Orbis does -- but not mid-download, where it would leave a
-  // half-written file and no way to see it finish.
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape' && downloading === null) onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose, downloading])
-
   const fits = useCallback(
     (id: PulsarModelId): boolean => hardware === null || hardware.totalRamMb >= PULSAR_MODEL_INFO[id].ramMb * 2.2,
     [hardware]
@@ -91,83 +82,124 @@ export function PulsarSetup({
     progress && progress.totalBytes > 0 ? Math.min(100, Math.round((progress.receivedBytes / progress.totalBytes) * 100)) : null
 
   return (
-    <div className="modal-backdrop" role="presentation">
-      <div className="modal pulsar-setup" role="dialog" aria-modal="true" aria-labelledby="pulsar-setup-title">
-        <header className="pulsar-setup-head">
-          <div>
-            <h2 id="pulsar-setup-title">
-              <Mic size={16} aria-hidden="true" /> Set up Orbis Pulsar
-            </h2>
-            <p className="page-note">
-              Speech to text runs on this computer, so it needs a model downloaded once. After that it works offline,
-              with no limit, and nothing you say leaves the machine.
-            </p>
-          </div>
-          <button type="button" className="icon-btn" aria-label="Close" onClick={onClose} disabled={downloading !== null}>
-            <X size={16} />
-          </button>
-        </header>
-
-        {hardware && (
-          <p className="page-note pulsar-setup-machine">
-            This machine: {hardware.cpuThreads} cores, {Math.round(hardware.totalRamMb / 1000)} GB of memory
-            {hardware.hasNvidiaGpu ? ', with a GPU' : ''}.
+    <Modal
+      label="Set up Orbis Pulsar"
+      onClose={onClose}
+      /*
+       * This one answer used to be given three separate times, and that is all `canClose` is replacing.
+       *
+       * There was a hand-written Escape listener on the window -- `if (event.key === 'Escape' && downloading ===
+       * null) onClose()`, commented "Escape closes, the way every other overlay in Orbis does -- but not
+       * mid-download, where it would leave a half-written file and no way to see it finish". It is deleted: Modal
+       * takes Escape itself, and takes it capturing, so the screen behind this one no longer sees the key either.
+       * There was a backdrop with no handler at all, which is the second way of saying not now. And there is the
+       * close button in the header below, which disables itself while a download runs.
+       *
+       * One condition, said once.
+       */
+      canClose={downloading === null}
+      /*
+       * The backdrop here has never closed this dialog: it carried no click handler at all, not even before a
+       * download started. Leaving the shared default on would have been a behaviour change smuggled in beside a
+       * construction change, which is the one thing this pass must not do.
+       */
+      outsideCloses={false}
+      /*
+       * `modal pulsar-setup`, exactly the two classes it has always written, rather than the usual `modal glass`
+       * plus a `className`.
+       *
+       * Worth saying plainly rather than quietly correcting: neither of those classes paints anything. `.modal` is
+       * a width, a flex column and a corner radius; `.pulsar-setup` is a width, a flex column and a gap. The
+       * background, border, shadow and blur all live in `.glass`, which this dialog has never had -- so its
+       * heading, its list of models and its buttons sit directly on the dimmed window with no panel behind them.
+       * That is how it shipped. Adding `glass` here would fix it and change how the dialog looks in the same
+       * commit, which is the one thing this pass must not do. Written down, not fixed.
+       *
+       * `panel` also keeps `.modal` on the element, which is the only hook the Corners setting has.
+       */
+      panel="modal pulsar-setup"
+    >
+      {/* Titles itself in its body, so no `title` prop: that would swap this header for `modal-header` and drop the
+          paragraph under the heading. Modal names the dialog with `label` instead of the old
+          `aria-labelledby="pulsar-setup-title"`; same words either way. */}
+      <header className="pulsar-setup-head">
+        <div>
+          <h2 id="pulsar-setup-title">
+            <Mic size={16} aria-hidden="true" /> Set up Orbis Pulsar
+          </h2>
+          <p className="page-note">
+            Speech to text runs on this computer, so it needs a model downloaded once. After that it works offline,
+            with no limit, and nothing you say leaves the machine.
           </p>
-        )}
+        </div>
+        {/* Icon only, so it stays as it is -- that is IconButton's job, not this pass's. Its `disabled` is the same
+            condition `canClose` carries, because without a `title` prop Modal draws no close button of its own. */}
+        <button type="button" className="icon-btn" aria-label="Close" onClick={onClose} disabled={downloading !== null}>
+          <X size={16} />
+        </button>
+      </header>
 
-        <ul className="pulsar-setup-list" role="radiogroup" aria-label="Which model to download">
-          {PULSAR_MODELS.map((id) => {
-            const model = PULSAR_MODEL_INFO[id]
-            const roomy = fits(id)
-            const suggested = hardware?.recommended === id
-            return (
-              <li key={id}>
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={chosen === id}
-                  className={`pulsar-model${chosen === id ? ' on' : ''}${roomy ? '' : ' tight'}`}
-                  onClick={() => setChosen(id)}
-                  disabled={downloading !== null}
-                >
-                  <span className="pulsar-model-head">
-                    <strong>{model.label}</strong>
-                    {suggested && <span className="pulsar-tag">Recommended for this machine</span>}
-                    {!roomy && <span className="pulsar-tag tight">Needs more memory than this machine has</span>}
-                    {chosen === id && <Check size={14} aria-hidden="true" />}
-                  </span>
-                  <span className="page-note">{model.description}</span>
-                  <span className="pulsar-model-facts">
-                    {saidSize(model.sizeBytes)} to download · about {Math.round(model.ramMb / 100) / 10} GB of memory
-                    while it runs
-                  </span>
-                </button>
-              </li>
-            )
-          })}
-        </ul>
+      {hardware && (
+        <p className="page-note pulsar-setup-machine">
+          This machine: {hardware.cpuThreads} cores, {Math.round(hardware.totalRamMb / 1000)} GB of memory
+          {hardware.hasNvidiaGpu ? ', with a GPU' : ''}.
+        </p>
+      )}
 
-        {downloading !== null ? (
-          <div className="pulsar-setup-progress">
-            <p>
-              Downloading {PULSAR_MODEL_INFO[downloading].label}
-              {percent === null ? '…' : ` — ${percent}%`}
-            </p>
-            <progress value={percent ?? undefined} max={100} aria-label="Download progress" />
-            <p className="page-note">You can keep working; this carries on in the background.</p>
-          </div>
-        ) : (
-          <div className="pulsar-setup-actions">
-            <button type="button" className="queue-btn" onClick={onClose}>
-              Not now
-            </button>
-            <button type="button" className="queue-btn primary" disabled={chosen === null} onClick={() => void get()}>
-              <Download size={14} /> Download {chosen ? PULSAR_MODEL_INFO[chosen].label : ''}
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
+      <ul className="pulsar-setup-list" role="radiogroup" aria-label="Which model to download">
+        {PULSAR_MODELS.map((id) => {
+          const model = PULSAR_MODEL_INFO[id]
+          const roomy = fits(id)
+          const suggested = hardware?.recommended === id
+          return (
+            <li key={id}>
+              {/* Not a Button: `pulsar-model` is its own card and belongs to neither shared family, and this is a
+                  radio rather than a button that does something. */}
+              <button
+                type="button"
+                role="radio"
+                aria-checked={chosen === id}
+                className={`pulsar-model${chosen === id ? ' on' : ''}${roomy ? '' : ' tight'}`}
+                onClick={() => setChosen(id)}
+                disabled={downloading !== null}
+              >
+                <span className="pulsar-model-head">
+                  <strong>{model.label}</strong>
+                  {suggested && <span className="pulsar-tag">Recommended for this machine</span>}
+                  {!roomy && <span className="pulsar-tag tight">Needs more memory than this machine has</span>}
+                  {chosen === id && <Check size={14} aria-hidden="true" />}
+                </span>
+                <span className="page-note">{model.description}</span>
+                <span className="pulsar-model-facts">
+                  {saidSize(model.sizeBytes)} to download · about {Math.round(model.ramMb / 100) / 10} GB of memory
+                  while it runs
+                </span>
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+
+      {downloading !== null ? (
+        <div className="pulsar-setup-progress">
+          <p>
+            Downloading {PULSAR_MODEL_INFO[downloading].label}
+            {percent === null ? '…' : ` — ${percent}%`}
+          </p>
+          <progress value={percent ?? undefined} max={100} aria-label="Download progress" />
+          <p className="page-note">You can keep working; this carries on in the background.</p>
+        </div>
+      ) : (
+        <div className="pulsar-setup-actions">
+          <Button onClick={onClose}>Not now</Button>
+          <Button kind="primary" icon={<Download size={14} />} disabled={chosen === null} onClick={() => void get()}>
+            {/* The space the old markup had between the icon and the word, kept literally so nothing can shift. */}
+            {' '}
+            Download {chosen ? PULSAR_MODEL_INFO[chosen].label : ''}
+          </Button>
+        </div>
+      )}
+    </Modal>
   )
 }
 

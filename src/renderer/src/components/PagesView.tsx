@@ -6,6 +6,7 @@ import { BuilderPanel, ComposePanel, DiagnosticsPanel, PackagePanel, STUDIO_TABS
 import { LAB_PAGES } from './PageLabs'
 import { Plot as PagePlot, type Series } from './PageTools'
 import CodePageStudio from './CodePageStudio'
+import { SplitView } from '../ui'
 import { ApplicationsPanel } from './PageApplications'
 import { DescribePanel, GeneratedHistory, RunDocument } from './PageDescribe'
 import type { PageDocument } from '../../../shared/pages/builder'
@@ -173,6 +174,27 @@ export default function PagesView({
     return pages.filter((page) => page.categories.some((one) => one === category || one.startsWith(`${category}.`)))
   }, [hits, category, pages])
 
+  /**
+   * What the right-hand half is called. The subject is stored as a path, so the readable name has to come out of the
+   * tree -- and it is worth the walk: "Subjects" beside "Pages" tells somebody moving by region which half is which,
+   * and naming it after the chosen subject says what they will find in it before they go in. Searching ignores the
+   * subject, so the name says so rather than claiming a subject that is not being applied.
+   */
+  const detailLabel = useMemo(() => {
+    if (hits !== null) return 'Matching Pages'
+    if (category === null) return 'Pages'
+    const nameOf = (nodes: PageCategoryNode[]): string | null => {
+      for (const node of nodes) {
+        if (node.path === category) return node.name
+        const inside = nameOf(node.children)
+        if (inside !== null) return inside
+      }
+      return null
+    }
+    const name = nameOf(categories)
+    return name === null ? 'Pages' : `Pages in ${name}`
+  }, [hits, category, categories])
+
   if (screen.kind === 'studio') {
     const current = screen.tab
     return (
@@ -300,104 +322,114 @@ export default function PagesView({
         </div>
       </header>
 
-      <div className="pages-body">
-        <aside className="pages-side" aria-label="Subjects">
-          <button
-            type="button"
-            className={`pages-cat${category === null ? ' active' : ''}`}
-            onClick={() => setCategory(null)}
-          >
-            Everything <span className="pages-count">{pages.length}</span>
-          </button>
-          {categories.map((node) => (
-            <CategoryRow key={node.path} node={node} active={category} onPick={setCategory} depth={0} />
-          ))}
-          {recent.length > 0 && (
-            <>
-              <h3 className="pages-side-head">Recently opened</h3>
-              {recent.map((page) => (
-                <button key={page.pageId} type="button" className="pages-recent" onClick={() => void open(page)}>
-                  {page.title}
-                </button>
-              ))}
-            </>
-          )}
-        </aside>
+      <SplitView
+        className="pages-body"
+        listLabel="Subjects"
+        listAs="aside"
+        listClassName="pages-side"
+        list={
+          <>
+            <button
+              type="button"
+              className={`pages-cat${category === null ? ' active' : ''}`}
+              onClick={() => setCategory(null)}
+            >
+              Everything <span className="pages-count">{pages.length}</span>
+            </button>
+            {categories.map((node) => (
+              <CategoryRow key={node.path} node={node} active={category} onPick={setCategory} depth={0} />
+            ))}
+            {recent.length > 0 && (
+              <>
+                <h3 className="pages-side-head">Recently opened</h3>
+                {recent.map((page) => (
+                  <button key={page.pageId} type="button" className="pages-recent" onClick={() => void open(page)}>
+                    {page.title}
+                  </button>
+                ))}
+              </>
+            )}
+          </>
+        }
+        detailLabel={detailLabel}
+        detailAs="section"
+        detailClassName="pages-main"
+        detail={
+          <>
+            {loading && <p className="pages-empty">Loading…</p>}
 
-        <section className="pages-main" aria-label="Pages">
-          {loading && <p className="pages-empty">Loading…</p>}
+            {!loading && shown.length === 0 && (
+              <p className="pages-empty">
+                {hits !== null
+                  ? `Nothing matches “${query.trim()}”.`
+                  : 'No Pages here yet.'}
+              </p>
+            )}
 
-          {!loading && shown.length === 0 && (
-            <p className="pages-empty">
-              {hits !== null
-                ? `Nothing matches “${query.trim()}”.`
-                : 'No Pages here yet.'}
-            </p>
-          )}
-
-          <div className="pages-grid">
-            {shown.map((page) => {
-              const hit = hits?.find((one) => one.page.pageId === page.pageId)
-              return (
-                <article key={page.pageId} className="pages-card">
-                  <div className="pages-card-head">
-                    <h3>
-                      <button type="button" className="pages-card-title" onClick={() => void open(page)}>
-                        {page.title}
+            <div className="pages-grid">
+              {shown.map((page) => {
+                const hit = hits?.find((one) => one.page.pageId === page.pageId)
+                return (
+                  <article key={page.pageId} className="pages-card">
+                    <div className="pages-card-head">
+                      <h3>
+                        <button type="button" className="pages-card-title" onClick={() => void open(page)}>
+                          {page.title}
+                        </button>
+                      </h3>
+                      <button
+                        type="button"
+                        className={`icon-btn${page.favourite ? ' active' : ''}`}
+                        aria-label={page.favourite ? `Remove ${page.title} from favourites` : `Add ${page.title} to favourites`}
+                        aria-pressed={page.favourite}
+                        onClick={() => void toggleFavourite(page)}
+                      >
+                        <Star size={14} />
                       </button>
-                    </h3>
-                    <button
-                      type="button"
-                      className={`icon-btn${page.favourite ? ' active' : ''}`}
-                      aria-label={page.favourite ? `Remove ${page.title} from favourites` : `Add ${page.title} to favourites`}
-                      aria-pressed={page.favourite}
-                      onClick={() => void toggleFavourite(page)}
-                    >
-                      <Star size={14} />
-                    </button>
-                  </div>
-                  <p className="pages-card-desc">{page.description}</p>
-                  <div className="pages-card-meta">
-                    <span className="pages-tag">{page.kind}</span>
-                    {page.offline && (
-                      <span className="pages-tag" title="Everything this Page does works with no network">
-                        <WifiOff size={11} /> Offline
-                      </span>
-                    )}
-                    <code className="pages-url">{page.url}</code>
-                  </div>
-                  {/* The signals that fired, so a ranking can be understood rather than trusted. */}
-                  {hit && hit.matched.length > 0 && <p className="pages-why">Matched: {hit.matched.join(', ')}</p>}
-                </article>
-              )
-            })}
-          </div>
+                    </div>
+                    <p className="pages-card-desc">{page.description}</p>
+                    <div className="pages-card-meta">
+                      <span className="pages-tag">{page.kind}</span>
+                      {page.offline && (
+                        <span className="pages-tag" title="Everything this Page does works with no network">
+                          <WifiOff size={11} /> Offline
+                        </span>
+                      )}
+                      <code className="pages-url">{page.url}</code>
+                    </div>
+                    {/* The signals that fired, so a ranking can be understood rather than trusted. */}
+                    {hit && hit.matched.length > 0 && <p className="pages-why">Matched: {hit.matched.join(', ')}</p>}
+                  </article>
+                )
+              })}
+            </div>
 
-          {unavailable.length > 0 && (
-            <section className="pages-unavailable" aria-label="Unavailable Pages">
-              <h3>Not available</h3>
-              {unavailable.map((page) => (
-                <p key={page.pageId}>
-                  <strong>{page.title}</strong> — {page.note || 'cannot open in this version of Orbis.'}
-                </p>
-              ))}
-            </section>
-          )}
+            {unavailable.length > 0 && (
+              <section className="pages-unavailable" aria-label="Unavailable Pages">
+                <h3>Not available</h3>
+                {unavailable.map((page) => (
+                  <p key={page.pageId}>
+                    <strong>{page.title}</strong> — {page.note || 'cannot open in this version of Orbis.'}
+                  </p>
+                ))}
+              </section>
+            )}
 
-          {/* A built-in Page whose manifest did not validate is shown rather than hidden: a Page that quietly failed to
-              register would otherwise look like a Page that was never written. */}
-          {problems.length > 0 && (
-            <section className="pages-unavailable" aria-label="Pages that could not be registered">
-              <h3>Could not be registered</h3>
-              {problems.map((one) => (
-                <p key={one.slug}>
-                  <strong>{one.slug}</strong> — {one.message}
-                </p>
-              ))}
-            </section>
-          )}
-        </section>
-      </div>
+            {/* A built-in Page whose manifest did not validate is shown rather than hidden: a Page that quietly failed to
+                register would otherwise look like a Page that was never written. */}
+            {problems.length > 0 && (
+              <section className="pages-unavailable" aria-label="Pages that could not be registered">
+                <h3>Could not be registered</h3>
+                {problems.map((one) => (
+                  <p key={one.slug}>
+                    <strong>{one.slug}</strong> — {one.message}
+                  </p>
+                ))}
+              </section>
+            )}
+          </>
+        }
+      />
     </div>
   )
 }

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react'
-import { Circle, FileText, Info, Mic, Square, Trash2, X } from 'lucide-react'
-import { SplitView } from '../ui'
+import { Circle, FileText, Info, Mic, Square, Trash2 } from 'lucide-react'
+import { SplitView, Surface } from '../ui'
 import { atText, mustStop, summaryNote, titleFrom, WHAT_IT_HEARS, withPart, type Meeting } from '../../../shared/meeting'
 import { voiceInput } from '../lib/voiceInput'
 import { newId } from '../lib/utils'
@@ -107,25 +107,23 @@ export default function MeetingView({ onClose, onNotify }: { onClose(): void; on
   }
 
   return (
-    <section className="view meeting-view">
-      <header className="view-head">
-        <h2>Notes</h2>
-        <div className="view-actions">
-          {recording ? (
-            <button type="button" className="queue-btn primary" onClick={() => void finish(recording)}>
-              <Square size={14} aria-hidden="true" /> Stop
-            </button>
-          ) : (
-            <button type="button" className="queue-btn primary" onClick={start}>
-              <Mic size={14} aria-hidden="true" /> Start a note
-            </button>
-          )}
-          <button type="button" className="icon-btn" aria-label="Close notes" onClick={onClose}>
-            <X size={16} aria-hidden="true" />
+    <Surface
+      title="Notes"
+      onClose={onClose}
+      closeLabel="Close notes"
+      className="meeting-view"
+      actions={
+        recording ? (
+          <button type="button" className="queue-btn primary" onClick={() => void finish(recording)}>
+            <Square size={14} aria-hidden="true" /> Stop
           </button>
-        </div>
-      </header>
-
+        ) : (
+          <button type="button" className="queue-btn primary" onClick={start}>
+            <Mic size={14} aria-hidden="true" /> Start a note
+          </button>
+        )
+      }
+    >
       {/* Said before anybody records, every time, because finding it out afterwards is finding it out too late. */}
       <p className="meeting-hears">
         <Info size={13} aria-hidden="true" /> {WHAT_IT_HEARS}
@@ -243,6 +241,6 @@ export default function MeetingView({ onClose, onNotify }: { onClose(): void; on
           )
         }
       />
-    </section>
+    </Surface>
   )
 }

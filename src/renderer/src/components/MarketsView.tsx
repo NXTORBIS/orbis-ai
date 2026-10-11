@@ -63,6 +63,7 @@ import type { Watchlist } from '../../../shared/markets/workspace'
 import type { DiscoveryAnswer, MarketDetail, WatchlistsAnswer } from '../../../main/markets/ipc'
 import type { MarketRow } from '../../../shared/markets/discovery'
 import type { NoticeKind } from '../App'
+import { Surface } from '../ui'
 
 /**
  * Markets.
@@ -913,15 +914,14 @@ export default function MarketsView({
    */
   if (experience.needsSetup || settingUp) {
     return (
-      <div className="view markets-view" role="region" aria-label="Markets setup">
-        <header className="view-head">
-          <h2>Markets</h2>
-          <div className="view-actions">
-            <button type="button" className="icon-btn" aria-label="Close markets" onClick={onClose}>
-              <X size={16} />
-            </button>
-          </div>
-        </header>
+      <Surface
+        title="Markets"
+        /* The heading says Markets; the region says which Markets screen this is, as it did before. */
+        label="Markets setup"
+        closeLabel="Close markets"
+        onClose={onClose}
+        className="markets-view"
+      >
         <MarketsOnboarding
           onNotify={(message, kind) => onNotify(message, kind === 'error' ? 'error' : undefined)}
           onFinished={() => {
@@ -931,7 +931,7 @@ export default function MarketsView({
             void readState()
           }}
         />
-      </div>
+      </Surface>
     )
   }
 
@@ -939,15 +939,7 @@ export default function MarketsView({
 
   if (enabled === false) {
     return (
-      <div className="view markets-view" role="region" aria-label="Markets">
-        <header className="view-head">
-          <h2>Markets</h2>
-          <div className="view-actions">
-            <button type="button" className="icon-btn" aria-label="Close markets" onClick={onClose}>
-              <X size={16} />
-            </button>
-          </div>
-        </header>
+      <Surface title="Markets" closeLabel="Close markets" onClose={onClose} className="markets-view">
         <div className="mk-empty">
           <p>Markets is switched off, so nothing is being subscribed to.</p>
           <p className="pw-note is-quiet">
@@ -967,7 +959,7 @@ export default function MarketsView({
             Switch Markets on
           </button>
         </div>
-      </div>
+      </Surface>
     )
   }
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Bell, Check, Copy, Download, FileUp, History, Image, LayoutGrid, Paintbrush, Palette, Plus, RotateCcw, ShieldCheck, Sparkles, Trash2, Undo2, X, Zap } from 'lucide-react'
+import { Bell, Check, Copy, Download, FileUp, History, Image, LayoutGrid, Paintbrush, Palette, Plus, RotateCcw, ShieldCheck, Sparkles, Trash2, Undo2, Zap } from 'lucide-react'
 import type { AppearanceConfig, ExperienceConfig } from '../../../shared/experience'
 import { defaultConfig, describeConfig, diffConfig, isDefaultConfig } from '../../../shared/experience'
 import { widgetById } from '../../../shared/widgets'
@@ -11,6 +11,7 @@ import type { StoredPreset } from '../../../shared/presets'
 import type { PresetCategory } from '../../../shared/presets'
 import { applyPreset, BUILT_IN_PRESETS, copyOfPreset, MAX_PRESETS, presetFromConfig } from '../../../shared/presets'
 import { RulesEditor } from './RulesEditor'
+import { Button, Surface } from '../ui'
 
 type Category = 'presets' | 'appearance' | 'themes' | 'newTab' | 'widgets' | 'notify' | 'accessibility' | 'performance' | 'privacy' | 'advanced'
 
@@ -284,37 +285,26 @@ export default function CustomizeView({
     </label>
   )
 
-  return (
-    <div className={embedded ? 'customize-view is-embedded' : 'view customize-view'} role="region" aria-label="Customize Orbis">
-      {/*
-        The header stays even when embedded, because Apply and Cancel live in it -- hiding it would strand a change
-        somebody had made. What goes is the title, which Settings has already said, and the close button, which is the
-        overlay's and not this screen's.
-      */}
-      <header className="view-head">
-        {!embedded && <h2>Customize</h2>}
-        <div className="view-actions">
-          {dirty && (
-            <>
-              <span className="cz-dirty">
-                {changes.length} change{changes.length === 1 ? '' : 's'} being shown
-              </span>
-              <button type="button" className="queue-btn" onClick={cancel}>
-                Cancel
-              </button>
-              <button type="button" className="queue-btn primary" onClick={() => void apply()}>
-                <Check size={14} /> Apply
-              </button>
-            </>
-          )}
-          {!embedded && onClose && (
-            <button type="button" className="icon-btn" aria-label="Close customize" onClick={() => (dirty ? cancel() : undefined, onClose())}>
-              <X size={16} />
-            </button>
-          )}
-        </div>
-      </header>
+  /*
+    Apply and Cancel belong to the whole screen, so they are the header's actions both ways round -- hiding them
+    when embedded would strand a change somebody had made.
+  */
+  const actions = dirty ? (
+    <>
+      <span className="cz-dirty">
+        {changes.length} change{changes.length === 1 ? '' : 's'} being shown
+      </span>
+      <Button onClick={cancel}>
+        Cancel
+      </Button>
+      <Button kind="primary" icon={<Check size={14} />} onClick={() => void apply()}>
+        Apply
+      </Button>
+    </>
+  ) : null
 
+  // Named rather than inlined, because the two frames below put the same body inside different things.
+  const body = (
       <div className="cz-body">
         <nav className="cz-nav" aria-label="Categories">
           {CATEGORIES.map((c) => (
@@ -350,16 +340,16 @@ export default function CustomizeView({
                   here. Your widgets are kept by `change`, which never lets go of them, and whether they are shown is
                   kept with them: putting the look back should not take the widgets off the start page.
                 */}
-                <button
-                  type="button"
-                  className="queue-btn small"
+                <Button
+                  size="small"
+                  icon={<RotateCcw size={12} />}
                   onClick={() => {
                     const fresh = defaultConfig()
                     change({ ...fresh, presets: draft.presets, themes: draft.themes, newTab: { ...fresh.newTab, widgets: draft.newTab.widgets } })
                   }}
                 >
-                  <RotateCcw size={12} /> Back to Orbis
-                </button>
+                  Back to Orbis
+                </Button>
               </div>
               <p className="view-muted">
                 A preset sets the palette, how solid the panels are, how tight the layout is and how much Orbis moves.
@@ -379,15 +369,17 @@ export default function CustomizeView({
               />
               <div className="cz-chips">
                 {(['all', 'Orbis', 'Calm', 'Dark', 'Light', 'Vivid', 'Work'] as const).map((group) => (
-                  <button
+                  <Button
                     key={group}
-                    type="button"
-                    className={`queue-btn small${presetGroup === group ? ' primary' : ''}`}
+                    size="small"
+                    // The lit one in this row has always been `primary`, not `on`, so `kind` says that and
+                    // `aria-pressed` is passed through exactly as it was.
+                    kind={presetGroup === group ? 'primary' : 'normal'}
                     aria-pressed={presetGroup === group}
                     onClick={() => setPresetGroup(group)}
                   >
                     {group === 'all' ? 'All' : group}
-                  </button>
+                  </Button>
                 ))}
               </div>
 
@@ -451,17 +443,17 @@ export default function CustomizeView({
 
               <div className="cz-row">
                 <span>Keep how Orbis looks now</span>
-                <button
-                  type="button"
-                  className="queue-btn small"
+                <Button
+                  size="small"
+                  icon={<Plus size={12} />}
                   disabled={draft.presets.length >= MAX_PRESETS}
                   onClick={() => {
                     const mine = presetFromConfig(draft, 'My preset')
                     change({ ...draft, presets: [...draft.presets, mine], activePresetId: mine.id })
                   }}
                 >
-                  <Plus size={12} /> Save as preset
-                </button>
+                  Save as preset
+                </Button>
               </div>
             </>
           )}
@@ -469,9 +461,9 @@ export default function CustomizeView({
             <>
               <div className="cz-section-head">
                 <h3>Appearance</h3>
-                <button type="button" className="queue-btn small" onClick={() => void resetSection('appearance', 'Appearance')}>
-                  <RotateCcw size={12} /> Reset this
-                </button>
+                <Button size="small" icon={<RotateCcw size={12} />} onClick={() => void resetSection('appearance', 'Appearance')}>
+                  Reset this
+                </Button>
               </div>
               <div className="cz-row">
                 <span>Accent colour</span>
@@ -517,9 +509,9 @@ export default function CustomizeView({
             <>
               <div className="cz-section-head">
                 <h3>Themes</h3>
-                <button type="button" className="queue-btn small" onClick={() => void resetSection('themes', 'Themes')}>
-                  <RotateCcw size={12} /> Reset this
-                </button>
+                <Button size="small" icon={<RotateCcw size={12} />} onClick={() => void resetSection('themes', 'Themes')}>
+                  Reset this
+                </Button>
               </div>
               <p className="view-muted cz-note">
                 A theme changes the colours Orbis paints itself with, and nothing else. Orbis's own colours are always one click away, and a light theme turns on the light Orbis
@@ -554,13 +546,13 @@ export default function CustomizeView({
               <div className="cz-section-head">
                 <h4>Your themes</h4>
                 <span className="cz-row-actions">
-                  <button type="button" className="queue-btn small" onClick={() => addTheme(newTheme('My theme', 'dark', themeTokens(draft.themeId, draft.themes)))}>
-                    <Plus size={12} /> From what is on screen
-                  </button>
+                  <Button size="small" icon={<Plus size={12} />} onClick={() => addTheme(newTheme('My theme', 'dark', themeTokens(draft.themeId, draft.themes)))}>
+                    From what is on screen
+                  </Button>
                   {draft.themeId && BUILT_IN_THEMES.some((t) => t.id === draft.themeId) && (
-                    <button type="button" className="queue-btn small" onClick={() => addTheme(copyOfBuiltIn(BUILT_IN_THEMES.find((t) => t.id === draft.themeId)!))}>
-                      <Copy size={12} /> Copy this one
-                    </button>
+                    <Button size="small" icon={<Copy size={12} />} onClick={() => addTheme(copyOfBuiltIn(BUILT_IN_THEMES.find((t) => t.id === draft.themeId)!))}>
+                      Copy this one
+                    </Button>
                   )}
                 </span>
               </div>
@@ -581,12 +573,12 @@ export default function CustomizeView({
                         <option value="dark">Dark</option>
                         <option value="light">Light</option>
                       </select>
-                      <button type="button" className="queue-btn small" onClick={() => useTheme(theme.id)} disabled={draft.themeId === theme.id}>
+                      <Button size="small" onClick={() => useTheme(theme.id)} disabled={draft.themeId === theme.id}>
                         {draft.themeId === theme.id ? 'In use' : 'Use'}
-                      </button>
-                      <button type="button" className="queue-btn small" onClick={() => setEditingTheme(open ? null : theme.id)}>
+                      </Button>
+                      <Button size="small" onClick={() => setEditingTheme(open ? null : theme.id)}>
                         {open ? 'Done' : 'Colours'}
-                      </button>
+                      </Button>
                       <button type="button" className="icon-btn" aria-label={`Copy ${theme.name}`} onClick={() => addTheme(newTheme(`${theme.name} (copy)`, theme.base, theme.tokens))}>
                         <Copy size={14} />
                       </button>
@@ -659,9 +651,9 @@ export default function CustomizeView({
                   <input type="file" accept="image/*" aria-label="Add a wallpaper picture" onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ''; if (file) void addWallpaper(file) }} />
                 </label>
                 {GRADIENTS.map((gradient) => (
-                  <button key={gradient.name} type="button" className="queue-btn small" onClick={() => addGradient(gradient)}>
-                    <Plus size={12} /> {gradient.name}
-                  </button>
+                  <Button key={gradient.name} size="small" icon={<Plus size={12} />} onClick={() => addGradient(gradient)}>
+                    {gradient.name}
+                  </Button>
                 ))}
               </div>
             </>
@@ -671,9 +663,9 @@ export default function CustomizeView({
             <>
               <div className="cz-section-head">
                 <h3>New tab</h3>
-                <button type="button" className="queue-btn small" onClick={() => void resetSection('newTab', 'New tab')}>
-                  <RotateCcw size={12} /> Reset this
-                </button>
+                <Button size="small" icon={<RotateCcw size={12} />} onClick={() => void resetSection('newTab', 'New tab')}>
+                  Reset this
+                </Button>
               </div>
               <p className="view-muted cz-note">
                 The new tab is the Orbis one unless you choose otherwise. Turn widgets on here and choose them under Widgets. Other modes and wallpapers arrive with the next part of this work; what is here now is what works today.
@@ -719,9 +711,9 @@ export default function CustomizeView({
             <>
               <div className="cz-section-head">
                 <h3>Accessibility</h3>
-                <button type="button" className="queue-btn small" onClick={() => void resetSection('accessibility', 'Accessibility')}>
-                  <RotateCcw size={12} /> Reset this
-                </button>
+                <Button size="small" icon={<RotateCcw size={12} />} onClick={() => void resetSection('accessibility', 'Accessibility')}>
+                  Reset this
+                </Button>
               </div>
               {toggle('High contrast', draft.accessibility.highContrast, (highContrast) => change({ ...draft, accessibility: { ...draft.accessibility, highContrast } }), 'Stronger text and edges')}
               {toggle('Larger text', draft.accessibility.largerText, (largerText) => change({ ...draft, accessibility: { ...draft.accessibility, largerText } }), 'At least 115%')}
@@ -733,9 +725,9 @@ export default function CustomizeView({
             <>
               <div className="cz-section-head">
                 <h3>Performance</h3>
-                <button type="button" className="queue-btn small" onClick={() => void resetSection('performance', 'Performance')}>
-                  <RotateCcw size={12} /> Reset this
-                </button>
+                <Button size="small" icon={<RotateCcw size={12} />} onClick={() => void resetSection('performance', 'Performance')}>
+                  Reset this
+                </Button>
               </div>
               <label className="cz-row">
                 <span>Mode</span>
@@ -756,9 +748,9 @@ export default function CustomizeView({
             <>
               <div className="cz-section-head">
                 <h3>Privacy</h3>
-                <button type="button" className="queue-btn small" onClick={() => void resetSection('privacy', 'Privacy')}>
-                  <RotateCcw size={12} /> Reset this
-                </button>
+                <Button size="small" icon={<RotateCcw size={12} />} onClick={() => void resetSection('privacy', 'Privacy')}>
+                  Reset this
+                </Button>
               </div>
               {toggle('Do not personalise', draft.privacy.doNotPersonalize, (doNotPersonalize) => change({ ...draft, privacy: { ...draft.privacy, doNotPersonalize } }), 'Nothing about how you use Orbis is learnt or kept')}
               {toggle('Keep personalisation out of private tabs', draft.privacy.keepOutOfPrivate, (keepOutOfPrivate) => change({ ...draft, privacy: { ...draft.privacy, keepOutOfPrivate } }))}
@@ -790,9 +782,9 @@ export default function CustomizeView({
                       {repair}
                     </p>
                   ))}
-                  <button type="button" className="queue-btn small" onClick={() => void loadHistory()}>
+                  <Button size="small" onClick={() => void loadHistory()}>
                     Check again
-                  </button>
+                  </Button>
                 </div>
               )}
 
@@ -806,9 +798,9 @@ export default function CustomizeView({
                       <b>{snapshot.reason}</b>
                       <small className="view-muted">{when(snapshot.takenAt)}</small>
                     </span>
-                    <button
-                      type="button"
-                      className="queue-btn small"
+                    <Button
+                      size="small"
+                      icon={<Undo2 size={12} />}
                       onClick={() =>
                         void window.api.restoreExperienceSnapshot(snapshot.id).then(async (config) => {
                           savedConfig.current = config
@@ -819,8 +811,8 @@ export default function CustomizeView({
                         })
                       }
                     >
-                      <Undo2 size={12} /> Go back to this
-                    </button>
+                      Go back to this
+                    </Button>
                   </div>
                 ))}
                 {!snapshots.length && <p className="view-muted">Nothing has been changed yet.</p>}
@@ -830,12 +822,12 @@ export default function CustomizeView({
                 <h4>Your personalisation as a file</h4>
               </div>
               <div className="og-inline">
-                <button type="button" className="queue-btn" onClick={() => void exportFile()}>
-                  <Download size={14} /> Save to a file
-                </button>
-                <button type="button" className="queue-btn" onClick={() => fileRef.current?.click()}>
-                  <FileUp size={14} /> Bring in from a file
-                </button>
+                <Button icon={<Download size={14} />} onClick={() => void exportFile()}>
+                  Save to a file
+                </Button>
+                <Button icon={<FileUp size={14} />} onClick={() => fileRef.current?.click()}>
+                  Bring in from a file
+                </Button>
                 <input
                   ref={fileRef}
                   type="file"
@@ -854,24 +846,58 @@ export default function CustomizeView({
               </div>
               {confirmRestore ? (
                 <div className="og-inline">
-                  <button type="button" className="queue-btn danger" onClick={() => void restoreOriginal()}>
+                  <Button kind="danger" onClick={() => void restoreOriginal()}>
                     Yes, restore the original Orbis
-                  </button>
-                  <button type="button" className="queue-btn" onClick={() => setConfirmRestore(false)}>
+                  </Button>
+                  <Button onClick={() => setConfirmRestore(false)}>
                     Keep my personalisation
-                  </button>
+                  </Button>
                 </div>
               ) : (
-                <button type="button" className="queue-btn" onClick={() => setConfirmRestore(true)}>
-                  <RotateCcw size={14} /> Restore the original Orbis experience
-                </button>
+                <Button icon={<RotateCcw size={14} />} onClick={() => setConfirmRestore(true)}>
+                  Restore the original Orbis experience
+                </Button>
               )}
               <p className="view-muted cz-note">This puts back only what you personalised. Your tabs, bookmarks, history, notes, tasks, boards, workflows, extensions and settings are untouched.</p>
             </>
           )}
         </section>
       </div>
-    </div>
+  )
+
+  /*
+    Embedded in Settings this is not a screen of its own: Settings has already said the title, and the close button
+    belongs to the overlay rather than to this. So the embedded half keeps exactly the frame it had -- no `.view`, no
+    heading, no close -- and is not a Surface, because a Surface insists on both of the things this half deliberately
+    does without. Only the standalone half, which was already `.view customize-view` with its own `view-head`, an
+    `h2` and a close button, becomes one.
+  */
+  if (embedded) {
+    return (
+      <div className="customize-view is-embedded" role="region" aria-label="Customize Orbis">
+        <header className="view-head">
+          <div className="view-actions">{actions}</div>
+        </header>
+        {body}
+      </div>
+    )
+  }
+
+  return (
+    <Surface
+      title="Customize"
+      /* The region has always been called the longer thing, while the heading has always been the one word. */
+      label="Customize Orbis"
+      className="customize-view"
+      actions={actions}
+      closeLabel="Close customize"
+      onClose={() => {
+        if (dirty) cancel()
+        onClose?.()
+      }}
+    >
+      {body}
+    </Surface>
   )
 }
 

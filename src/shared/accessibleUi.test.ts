@@ -120,6 +120,13 @@ test('every dialog says which dialog it is', () => {
       const start = file.text.lastIndexOf('<', match.index ?? 0)
       const end = file.text.indexOf('>', match.index ?? 0)
       const tag = file.text.slice(start, end)
+      /*
+       * Only a real tag. Searching raw text cannot tell markup from prose, and it found these words inside a
+       * COMMENT explaining why a dialog stays a dialog -- then walked back to the nearest `<`, which was a
+       * TypeScript generic several hundred lines earlier, and reported the function it landed in. A tag has no
+       * `>` inside it, so anything with one between the bracket and the match is not one.
+       */
+      if (tag.includes('>')) continue
       if (!named(tag)) bad.push(`${file.path}: ${tag.slice(0, 90)}`)
     }
   }

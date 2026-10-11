@@ -3,8 +3,8 @@ import { newWorkspace } from '../../../shared/workspaces'
 import ProjectFileList from './ProjectFileList'
 import { CHAT_MODELS, modelLabel } from '../../../shared/models'
 import { AUTO_MODEL } from '../../../shared/modelRoute'
-import { Check, Copy, FolderOpen, Layers, Plus, RefreshCw, Save, Trash2, X } from 'lucide-react'
-import { Modal } from '../ui'
+import { Check, Copy, FolderOpen, Layers, Plus, RefreshCw, Save, Trash2 } from 'lucide-react'
+import { Modal, Surface } from '../ui'
 import type { Workspace, WorkspaceSummary } from '../../../shared/workspaces'
 import { WORKSPACE_COLORS } from '../../../shared/workspaces'
 import type { NoticeKind } from '../App'
@@ -73,10 +73,13 @@ export default function WorkspacesView({ onClose, onNotify }: { onClose(): void;
   }
 
   return (
-    <div className="view spaces-view" role="region" aria-label="Workspaces">
-      <header className="view-head">
-        <h2>Workspaces</h2>
-        <div className="view-actions">
+    <Surface
+      title="Workspaces"
+      closeLabel="Close workspaces"
+      onClose={onClose}
+      className="spaces-view"
+      actions={
+        <>
           <label className="spaces-save">
             <Save size={13} />
             <input value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void saveCurrent()} placeholder="Save what is open as…" aria-label="Name for the workspace" />
@@ -103,12 +106,9 @@ export default function WorkspacesView({ onClose, onNotify }: { onClose(): void;
           >
             Open a project
           </button>
-          <button type="button" className="icon-btn" aria-label="Close workspaces" onClick={onClose}>
-            <X size={16} />
-          </button>
-        </div>
-      </header>
-
+        </>
+      }
+    >
       <div className="spaces-grid">
         {workspaces.map((workspace) => (
           <div key={workspace.id} className={`space-card${workspace.id === currentId ? ' current' : ''}`} style={{ borderTopColor: workspace.color }}>
@@ -274,6 +274,6 @@ export default function WorkspacesView({ onClose, onNotify }: { onClose(): void;
           </>
         </Modal>
       )}
-    </div>
+    </Surface>
   )
 }

@@ -23,8 +23,10 @@ import { IconButton } from './IconButton'
  * No new CSS. Every class is passed in, so a converted row is the same pixels; what changes is what it says.
  */
 export interface RowAction {
-  /** What it does, in words. Becomes the name and the tooltip. */
+  /** What it does, in words. Becomes the name a screen reader says. */
   label: string
+  /** What hovering shows, when the spoken name is longer than the tooltip should be. Defaults to the label. */
+  tooltip?: string
   icon: ReactNode
   onClick: () => void
   /** Lit, for something currently on. */
@@ -54,12 +56,21 @@ export interface ListRowProps {
   mainClassName?: string
   /** The class around the buttons — `sb-row-actions`, `sched-tools`. */
   actionsClassName?: string
-  /** The class on each button, when the family styles them itself rather than using `.icon-btn`. */
+  /**
+   * The class on each button.
+   *
+   * When this is given, the button wears ONLY this class -- `.icon-btn` is not added. That matters more than it
+   * looks: `.icon-btn.small` is two classes and beats a family's own one-class rule, so routing the sidebar's
+   * buttons through it quietly changed their corner radius from 7px to 6px and their hover from one alpha to
+   * another. The required name is the part worth keeping; the look belongs to whoever already had it.
+   */
   actionClassName?: string
   /** The family's own classes for the two pieces of text. Nothing is invented here: a class of our own would
       change the layout of every row it touched, and the whole rule is that day one looks identical. */
   titleClassName?: string
   subtitleClassName?: string
+  /** What hovering the row itself shows -- usually the full text when the title is cut short. */
+  tooltip?: string
   children?: ReactNode
 }
 
@@ -78,6 +89,7 @@ export function ListRow({
   actionClassName,
   titleClassName,
   subtitleClassName,
+  tooltip,
   children
 }: ListRowProps): React.JSX.Element {
   const Tag = as
@@ -92,6 +104,7 @@ export function ListRow({
       <button
         type="button"
         className={mainClassName}
+        title={tooltip}
         onClick={onSelect}
         // `aria-current` rather than `aria-selected`: this is the one being shown, not one picked from a set that
         // is presented as a set. The two are not interchangeable and four of these got it wrong by using neither.
@@ -110,20 +123,28 @@ export function ListRow({
       {children}
       {actions === undefined || actions.length === 0 ? null : (
         <div className={actionsClassName}>
-          {actions.map((one) => (
-            <IconButton
-              key={one.label}
-              label={one.label}
-              onClick={one.onClick}
-              on={one.on}
-              danger={one.danger}
-              disabled={one.disabled}
-              className={actionClassName}
-              small
-            >
-              {one.icon}
-            </IconButton>
-          ))}
+          {actions.map((one) =>
+            actionClassName === undefined ? (
+              <IconButton key={one.label} label={one.label} onClick={one.onClick} on={one.on} danger={one.danger} disabled={one.disabled} small>
+                {one.icon}
+              </IconButton>
+            ) : (
+              <button
+                key={one.label}
+                type="button"
+                className={[actionClassName, one.danger === true ? 'danger' : '', one.on === true ? 'on' : '']
+                  .filter((bit) => bit !== '')
+                  .join(' ')}
+                aria-label={one.label}
+                title={one.tooltip ?? one.label}
+                disabled={one.disabled}
+                {...(one.on === undefined ? {} : { 'aria-pressed': one.on })}
+                onClick={one.onClick}
+              >
+                {one.icon}
+              </button>
+            )
+          )}
         </div>
       )}
     </Tag>

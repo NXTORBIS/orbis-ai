@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Ban, BatteryCharging, CalendarClock, CalendarDays, Check, Clock, Info, Moon, Pause, Pencil, Play, Plus, SkipForward, Trash2, Zap } from 'lucide-react'
+import { AlertTriangle, BatteryCharging, CalendarClock, CalendarDays, Check, Clock, Info, Moon, Pause, Pencil, Play, Plus, SkipForward, Trash2, Zap } from 'lucide-react'
 import type { TemporalJob } from '../../../shared/temporal/job'
 import { describeAction, describeRecurrence } from '../../../shared/temporal/phrase'
 import type { NoticeKind } from '../App'
+import { Button, IconButton, Surface } from '../ui'
 
 /**
  * Things Orbis does at a time you chose.
@@ -161,36 +162,29 @@ export default function SchedulesView({
   const stopped = useMemo(() => jobs.filter((j) => j.state === 'cancelled'), [jobs])
 
   return (
-    <div className="view sched-view" role="region" aria-label="Schedules">
-      <header className="view-head">
-        <h2>Schedules</h2>
-        <div className="view-actions">
-          <button type="button" className="icon-btn" aria-label="What Orbis cannot do" onClick={() => setShowLimits((s) => !s)}>
+    <Surface
+      className="sched-view"
+      title="Schedules"
+      closeLabel="Close schedules"
+      onClose={onClose}
+      actions={
+        <>
+          <IconButton label="What Orbis cannot do" onClick={() => setShowLimits((s) => !s)}>
             <Info size={15} />
-          </button>
-          <button
-            type="button"
-            className="icon-btn"
-            aria-label="What is coming"
-            aria-pressed={showComing}
-            onClick={() => setShowComing((s) => !s)}
-          >
+          </IconButton>
+          {/*
+            `aria-pressed` is passed straight through rather than through `on`, because `on` would also light the
+            button, and these two have never been lit. Day one looks the same; what it says is unchanged too.
+          */}
+          <IconButton label="What is coming" aria-pressed={showComing} onClick={() => setShowComing((s) => !s)}>
             <CalendarDays size={15} />
-          </button>
-          <button
-            type="button"
-            className="icon-btn"
-            aria-label="Waking this computer"
-            aria-pressed={showPower}
-            onClick={() => setShowPower((s) => !s)}
-          >
+          </IconButton>
+          <IconButton label="Waking this computer" aria-pressed={showPower} onClick={() => setShowPower((s) => !s)}>
             <BatteryCharging size={15} />
-          </button>
-          <button type="button" className="icon-btn" aria-label="Close schedules" onClick={onClose}>
-            <Ban size={15} />
-          </button>
-        </div>
-      </header>
+          </IconButton>
+        </>
+      }
+    >
 
       <div className="sched-body">
         {/*
@@ -275,10 +269,15 @@ export default function SchedulesView({
             */}
             {power.facts.windows && (
               <div className="sched-power-do">
-                <button
-                  type="button"
-                  className="queue-btn"
-                  disabled={hibernating || power.facts.canHibernate === false}
+                {/*
+                  `busy` is the half of this the button used to only half-say: it already stopped a second press
+                  while hibernating, but nothing announced that it was working. It still says "Hibernate now"
+                  either way, because that is what it said before.
+                */}
+                <Button
+                  icon={<Moon size={14} />}
+                  busy={hibernating}
+                  disabled={power.facts.canHibernate === false}
                   onClick={() => {
                     setHibernating(true)
                     void window.api.hibernateNow().then((result) => {
@@ -287,8 +286,9 @@ export default function SchedulesView({
                     })
                   }}
                 >
-                  <Moon size={14} /> Hibernate now
-                </button>
+                  {' '}
+                  Hibernate now
+                </Button>
                 <span className="view-muted">
                   {power.facts.canHibernate === false
                     ? 'Hibernate is switched off on this computer, so Orbis cannot use it.'
@@ -329,9 +329,9 @@ export default function SchedulesView({
           {!phrase && (
             <div className="sched-examples">
               {EXAMPLES.map((example) => (
-                <button key={example} type="button" className="queue-btn small" onClick={() => setPhrase(example)}>
+                <Button key={example} size="small" onClick={() => setPhrase(example)}>
                   {example}
-                </button>
+                </Button>
               ))}
             </div>
           )}
@@ -356,9 +356,11 @@ export default function SchedulesView({
                   <AlertTriangle size={13} /> One of those is on a morning the clocks change, so it moves by an hour.
                 </p>
               )}
-              <button type="button" className="queue-btn primary" onClick={() => void keep()}>
-                <Plus size={14} /> Keep this
-              </button>
+              {/* The margin and the left edge come from `.sched-read .queue-btn`, which still finds this. */}
+              <Button kind="primary" icon={<Plus size={14} />} onClick={() => void keep()}>
+                {' '}
+                Keep this
+              </Button>
             </div>
           )}
 
@@ -458,9 +460,9 @@ export default function SchedulesView({
                       half-changed into something nobody asked for.
                     */}
                     <div className="sched-edit-row">
-                      <button
-                        type="button"
-                        className="queue-btn primary"
+                      <Button
+                        kind="primary"
+                        icon={<Check size={14} />}
                         onClick={() => {
                           const phrase = editing.phrase.trim()
                           const rename = editing.name.trim()
@@ -494,11 +496,12 @@ export default function SchedulesView({
                           })()
                         }}
                       >
-                        <Check size={14} /> Save
-                      </button>
-                      <button type="button" className="queue-btn small" onClick={() => setEditing(null)}>
+                        {' '}
+                        Save
+                      </Button>
+                      <Button size="small" onClick={() => setEditing(null)}>
                         Cancel
-                      </button>
+                      </Button>
                     </div>
 
                     {/* Snoozing, which is a pause with an end rather than a different idea. */}
@@ -509,10 +512,9 @@ export default function SchedulesView({
                         ['Until tomorrow', 86_400_000],
                         ['A week', 7 * 86_400_000]
                       ].map(([label, ms]) => (
-                        <button
+                        <Button
                           key={String(label)}
-                          type="button"
-                          className="queue-btn small"
+                          size="small"
                           onClick={() => {
                             void window.api.pauseSchedule(job.jobId, Date.now() + Number(ms)).then(() => {
                               setEditing(null)
@@ -522,11 +524,17 @@ export default function SchedulesView({
                           }}
                         >
                           {String(label)}
-                        </button>
+                        </Button>
                       ))}
                     </div>
 
                     {/* What to do about a run that was missed, and about one that fails. */}
+                    {/*
+                      The chosen one of each set below keeps `aria-pressed` written out rather than taking the
+                      shared `on`. Both say the same thing out loud, but `on` also lights the button with the
+                      window's cyan fill, and the chosen setting here is a border and text colour only --
+                      `.sched-edit-row .queue-btn[aria-pressed='true']`. Same words, different picture.
+                    */}
                     <div className="sched-edit-row">
                       <span className="view-muted">If Orbis was not running</span>
                       {(
@@ -536,15 +544,14 @@ export default function SchedulesView({
                           ['Let it go', 'skip']
                         ] as const
                       ).map(([label, value]) => (
-                        <button
+                        <Button
                           key={value}
-                          type="button"
-                          className="queue-btn small"
+                          size="small"
                           aria-pressed={job.policies.missed === value}
                           onClick={() => void window.api.updateSchedule(job.jobId, { policies: { missed: value } }).then(load)}
                         >
                           {label}
-                        </button>
+                        </Button>
                       ))}
                     </div>
 
@@ -557,15 +564,14 @@ export default function SchedulesView({
                           ['None', 'nextOnly']
                         ] as const
                       ).map(([label, value]) => (
-                        <button
+                        <Button
                           key={value}
-                          type="button"
-                          className="queue-btn small"
+                          size="small"
                           aria-pressed={job.policies.catchUp === value}
                           onClick={() => void window.api.updateSchedule(job.jobId, { policies: { catchUp: value } }).then(load)}
                         >
                           {label}
-                        </button>
+                        </Button>
                       ))}
                     </div>
 
@@ -578,10 +584,9 @@ export default function SchedulesView({
                           ['Do not retry', 0]
                         ] as const
                       ).map(([label, attempts]) => (
-                        <button
+                        <Button
                           key={label}
-                          type="button"
-                          className="queue-btn small"
+                          size="small"
                           aria-pressed={
                             attempts === 0
                               ? job.policies.retry.kind === 'none'
@@ -598,7 +603,7 @@ export default function SchedulesView({
                           }
                         >
                           {label}
-                        </button>
+                        </Button>
                       ))}
                     </div>
                   </div>
@@ -638,9 +643,9 @@ export default function SchedulesView({
                       </ul>
                     )}
                     {last && last.state === 'failed' && (
-                      <button type="button" className="queue-btn small" onClick={() => void window.api.runScheduleNow(job.jobId).then(load)}>
+                      <Button size="small" onClick={() => void window.api.runScheduleNow(job.jobId).then(load)}>
                         Try it now
-                      </button>
+                      </Button>
                     )}
                   </div>
                 )}
@@ -665,6 +670,6 @@ export default function SchedulesView({
           </details>
         )}
       </div>
-    </div>
+    </Surface>
   )
 }

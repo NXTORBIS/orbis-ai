@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronDown, ChevronRight, Search, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, Search } from 'lucide-react'
 import type { NoticeEntry, Notices } from '../../../shared/types'
+import { Button, Modal } from '../ui'
 
 /**
  * The licences of everything Orbis is built from, in full.
@@ -36,74 +37,60 @@ export default function NoticesPanel({ onClose }: { onClose(): void }): React.JS
     setFile({ title, text })
   }
 
+  // Both views were hand-built backdrops, and the only way out of either was the mouse: neither view ever listened
+  // for Escape, and nothing held focus inside. Modal brings both. On this one the close button still says "Back",
+  // because it returns to the list rather than closing the screen.
   if (file) {
     return (
-      <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setFile(null)}>
-        <div className="modal glass notices-modal" role="dialog" aria-modal="true" aria-label={file.title}>
-          <div className="modal-header">
-            <h2>{file.title}</h2>
-            <button className="icon-btn" title="Back" onClick={() => setFile(null)}>
-              <X size={16} />
-            </button>
-          </div>
-          <div className="modal-body">
-            {/* Chromium's licences arrive as a page of their own; shown as text so nothing in it can run here. */}
-            <pre className="notices-text notices-file">{file.text}</pre>
-          </div>
+      <Modal label={file.title} title={file.title} closeLabel="Back" className="notices-modal" onClose={() => setFile(null)}>
+        <div className="modal-body">
+          {/* Chromium's licences arrive as a page of their own; shown as text so nothing in it can run here. */}
+          <pre className="notices-text notices-file">{file.text}</pre>
         </div>
-      </div>
+      </Modal>
     )
   }
 
   return (
-    <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal glass notices-modal" role="dialog" aria-modal="true" aria-labelledby="notices-title">
-        <div className="modal-header">
-          <h2 id="notices-title">Third-party notices</h2>
-          <button className="icon-btn" title="Close" onClick={onClose}>
-            <X size={16} />
-          </button>
-        </div>
-
-        <div className="modal-body">
-          {notices === 'loading' && <p className="view-muted">Reading the licences…</p>}
-          {notices === null && (
-            <p className="view-muted">
-              The licence list could not be read. It is generated when Orbis is built; in a development copy, run <code>npm run notices</code>.
+    <Modal label="Third-party notices" title="Third-party notices" className="notices-modal" onClose={onClose}>
+      <div className="modal-body">
+        {notices === 'loading' && <p className="view-muted">Reading the licences…</p>}
+        {notices === null && (
+          <p className="view-muted">
+            The licence list could not be read. It is generated when Orbis is built; in a development copy, run <code>npm run notices</code>.
+          </p>
+        )}
+        {notices && notices !== 'loading' && (
+          <>
+            <p className="view-muted notices-intro">
+              Orbis is built on work by many other people. Their licences are reproduced here in full, as those licences require. This list is generated from what is actually
+              installed, so it always matches the version you are running.
             </p>
-          )}
-          {notices && notices !== 'loading' && (
-            <>
-              <p className="view-muted notices-intro">
-                Orbis is built on work by many other people. Their licences are reproduced here in full, as those licences require. This list is generated from what is actually
-                installed, so it always matches the version you are running.
-              </p>
 
-              <div className="notices-files">
-                <button type="button" className="queue-btn small" onClick={() => void showFile('electron', 'Electron licence')}>
-                  Electron licence
-                </button>
-                <button type="button" className="queue-btn small" onClick={() => void showFile('chromium', 'Chromium licences')}>
-                  Chromium licences
-                </button>
-              </div>
+            <div className="notices-files">
+              <Button size="small" onClick={() => void showFile('electron', 'Electron licence')}>
+                Electron licence
+              </Button>
+              <Button size="small" onClick={() => void showFile('chromium', 'Chromium licences')}>
+                Chromium licences
+              </Button>
+            </div>
 
-              <label className="notices-search">
-                <Search size={13} aria-hidden="true" />
-                <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={`Search ${notices.packages.length} packages`} aria-label="Search the licences" />
-              </label>
+            <label className="notices-search">
+              <Search size={13} aria-hidden="true" />
+              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={`Search ${notices.packages.length} packages`} aria-label="Search the licences" />
+            </label>
 
-              <ul className="notices-list">
-                {shown.map((entry) => (
-                  <NoticeRow key={`${entry.name}@${entry.version}`} entry={entry} open={open === `${entry.name}@${entry.version}`} onToggle={(id) => setOpen((current) => (current === id ? null : id))} />
-                ))}
-                {shown.length === 0 && <li className="view-muted">Nothing matches that.</li>}
-              </ul>
-            </>
-          )}
-        </div>
+            <ul className="notices-list">
+              {shown.map((entry) => (
+                <NoticeRow key={`${entry.name}@${entry.version}`} entry={entry} open={open === `${entry.name}@${entry.version}`} onToggle={(id) => setOpen((current) => (current === id ? null : id))} />
+              ))}
+              {shown.length === 0 && <li className="view-muted">Nothing matches that.</li>}
+            </ul>
+          </>
+        )}
       </div>
-    </div>
+    </Modal>
   )
 }
 

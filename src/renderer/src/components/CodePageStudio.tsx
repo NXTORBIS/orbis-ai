@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowLeft, Loader2, PenLine, ShieldAlert, X } from 'lucide-react'
+import { Loader2, PenLine, ShieldAlert, X } from 'lucide-react'
 import CodePageView from './CodePageView'
+import { Surface } from '../ui'
 
 /**
  * Asking Orbis to write a Page, and watching it run.
@@ -95,21 +96,26 @@ export default function CodePageStudio({ onBack }: { onBack: () => void }): Reac
   }
 
   return (
-    <div className="view pages-view" role="region" aria-label="Write a Page">
-      <header className="view-head">
-        <button type="button" className="icon-btn" aria-label="Back to Pages" onClick={onBack}>
-          <ArrowLeft size={16} />
-        </button>
-        <h2>{built ? built.title : 'Write a Page'}</h2>
-        <div className="view-actions">
-          {open && (
-            <button type="button" className="queue-btn small ghost" onClick={() => void close()}>
-              <X size={13} /> Close this Page
-            </button>
-          )}
-        </div>
-      </header>
-
+    <Surface
+      title={built ? built.title : 'Write a Page'}
+      /*
+       * The region keeps the name it has always had rather than following the built Page's title: the heading says
+       * which Page you are looking at, and the name says which screen you are on. They are not the same question.
+       */
+      label="Write a Page"
+      /* The way out of this screen goes back to the library, which is where it came from. */
+      closeLabel="Back to Pages"
+      onClose={onBack}
+      className="pages-view"
+      actions={
+        /* Closes the Page without leaving the screen, so it is only there while one is open. */
+        open ? (
+          <button type="button" className="queue-btn small ghost" onClick={() => void close()}>
+            <X size={13} /> Close this Page
+          </button>
+        ) : null
+      }
+    >
       <div className="code-page-studio">
         <form
           className="code-page-ask"
@@ -185,6 +191,6 @@ export default function CodePageStudio({ onBack }: { onBack: () => void }): Reac
         */}
         <CodePageView hidden={!open} />
       </div>
-    </div>
+    </Surface>
   )
 }

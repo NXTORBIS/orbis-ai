@@ -10,6 +10,7 @@ import type { Conversation } from '../../../shared/types'
 import type { StreamState } from '../App'
 import { groupConversations } from '../lib/utils'
 import { useDismiss } from '../lib/useDismiss'
+import { ListRow } from '../ui'
 import { OrbisWordmark } from './Brand'
 
 interface Props {
@@ -202,47 +203,62 @@ export default function Sidebar(props: Props): React.JSX.Element {
         </div>
       )
     }
+    /*
+      The chat row, on the shared one.
+
+      Same classes, same order, same two elements inside the part you press -- what is new is that the row being
+      shown says so out loud: `selected` becomes `aria-current`, where before there was only the `active` colour.
+      The actions are given as words and icons rather than as five hand-written buttons, so a name is no longer
+      something this file could forget. This list already revealed them on focus as well as hover, and still does:
+      the rule is `.sb-row:focus-within .sb-row-actions`, and the row is still the element carrying `sb-row`.
+
+      The double-click lives on the element around it. Double-clicking a chat renames it -- the same gesture as the
+      title in the chat header, which is why the rename button was taken off that header -- and the shared row has
+      no way to put a second gesture on the part you press. The check keeps it exactly where it was: on the chat,
+      not on the buttons beside it.
+    */
     return (
-      <div key={c.id} className={`sb-row${c.id === activeId ? ' active' : ''}`}>
-        <button type="button" className="sb-row-main" title={c.title} onClick={() => props.onSelect(c.id)} onDoubleClick={() => setEditingId(c.id)}>
-          {streams[c.id] && <span className="live-dot" />}
-          <span className="truncate">{c.title}</span>
-        </button>
-        {/* Pin, rename and delete sit in line with the chat, shown on hover or focus. */}
-        <div className="sb-row-actions">
-          <button type="button" className="sb-row-action" aria-label={`${c.pinned ? 'Unpin' : 'Pin'} ${c.title}`} title={c.pinned ? 'Unpin' : 'Pin'} onClick={() => props.onTogglePin(c.id)}>
-            {c.pinned ? <PinOff size={14} /> : <Pin size={14} />}
-          </button>
-          <button type="button" className="sb-row-action" aria-label={`Rename ${c.title}`} title="Rename" onClick={() => setEditingId(c.id)}>
-            <Pencil size={14} />
-          </button>
-          <button
-            type="button"
-            className="sb-row-action"
-            aria-label={`Export ${c.title}`}
-            title="Export"
-            onClick={() =>
-              void window.api.exportConversation(c.id).then((done) => {
-                if (done.message) props.onNotify?.(done.message, 'error')
-                else if (done.ok) props.onNotify?.('Saved.')
-              })
-            }
-          >
-            <Download size={14} />
-          </button>
-          <button
-            type="button"
-            className="sb-row-action"
-            aria-label={`${c.archived ? 'Bring back' : 'Archive'} ${c.title}`}
-            title={c.archived ? 'Bring back' : 'Archive'}
-            onClick={() => props.onArchive(c.id, !c.archived)}
-          >
-            {c.archived ? <ArchiveRestore size={14} /> : <Archive size={14} />}
-          </button>
-          <button type="button" className="sb-row-action danger" aria-label={`Delete ${c.title}`} title="Delete" onClick={() => setConfirmId(c.id)}>
-            <Trash2 size={14} />
-          </button>
-        </div>
+      <div key={c.id} onDoubleClick={(e) => { if ((e.target as HTMLElement).closest('.sb-row-main')) setEditingId(c.id) }}>
+        <ListRow
+          as="div"
+          name={c.title}
+          title={c.title}
+          titleClassName="truncate"
+          icon={streams[c.id] ? <span className="live-dot" /> : undefined}
+          onSelect={() => props.onSelect(c.id)}
+          selected={c.id === activeId}
+          className={`sb-row${c.id === activeId ? ' active' : ''}`}
+          mainClassName="sb-row-main"
+              tooltip={c.title}
+          actionsClassName="sb-row-actions"
+          actionClassName="sb-row-action"
+          actions={[
+            {
+              label: `${c.pinned ? 'Unpin' : 'Pin'} ${c.title}`,
+              tooltip: c.pinned ? 'Unpin' : 'Pin',
+              icon: c.pinned ? <PinOff size={14} /> : <Pin size={14} />,
+              onClick: () => props.onTogglePin(c.id)
+            },
+            { label: `Rename ${c.title}`, tooltip: 'Rename', icon: <Pencil size={14} />, onClick: () => setEditingId(c.id) },
+            {
+              label: `Export ${c.title}`,
+              tooltip: 'Export',
+              icon: <Download size={14} />,
+              onClick: () =>
+                void window.api.exportConversation(c.id).then((done) => {
+                  if (done.message) props.onNotify?.(done.message, 'error')
+                  else if (done.ok) props.onNotify?.('Saved.')
+                })
+            },
+            {
+              label: `${c.archived ? 'Bring back' : 'Archive'} ${c.title}`,
+              tooltip: c.archived ? 'Bring back' : 'Archive',
+              icon: c.archived ? <ArchiveRestore size={14} /> : <Archive size={14} />,
+              onClick: () => props.onArchive(c.id, !c.archived)
+            },
+            { label: `Delete ${c.title}`, tooltip: 'Delete', icon: <Trash2 size={14} />, onClick: () => setConfirmId(c.id), danger: true }
+          ]}
+        />
       </div>
     )
   }

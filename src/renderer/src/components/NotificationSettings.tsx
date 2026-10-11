@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useId, useState } from 'react'
 import type { OrbisNotification, NotificationCategory } from '../../../shared/notifications'
 import type { NotificationsConfig } from '../../../shared/experience'
 
@@ -42,6 +42,8 @@ export default function NotificationSettings(): React.JSX.Element | null {
   const [said, setSaid] = useState('')
   /** The whole personalisation, because saving one part of it means saving the whole and this is where it lives. */
   const [experience, setExperience] = useState<{ notifications: NotificationsConfig } | null>(null)
+  /** One stem for the switch names and the sentences under them, so two of these screens cannot share an id. */
+  const stem = useId()
 
   useEffect(() => {
     void window.api.getExperience().then((got) => setExperience(got as { notifications: NotificationsConfig }))
@@ -89,12 +91,26 @@ export default function NotificationSettings(): React.JSX.Element | null {
           {CATEGORIES.map((category) => {
             // Never decided about means on: Orbis does not go silent about something new because nobody chose yet.
             const on = notifications.categories[category.id] !== false
+            const named = `${stem}-${category.id}-name`
+            const described = `${stem}-${category.id}-what`
             return (
               <label className="notify-cat" key={category.id}>
-                <input type="checkbox" checked={on} onChange={(e) => setCategory(category.id, e.target.checked)} />
+                {/* The sentence is inside this label, so it was part of what the switch is called: read aloud, every
+                    one of these was "Waiting for you When Orbis cannot go on without you — a verification, a workflow
+                    that is stuck.". Pointing the box at the title names it and at the sentence describes it, so the
+                    sentence is read after the name, once. The label still wraps both, so pressing anywhere on the
+                    card still works -- which is why this is not the shared Field: Field puts the name before the
+                    control, and here the box comes first. */}
+                <input
+                  type="checkbox"
+                  checked={on}
+                  onChange={(e) => setCategory(category.id, e.target.checked)}
+                  aria-labelledby={named}
+                  aria-describedby={described}
+                />
                 <span>
-                  <b>{category.label}</b>
-                  <small>{category.what}</small>
+                  <b id={named}>{category.label}</b>
+                  <small id={described}>{category.what}</small>
                 </span>
               </label>
             )

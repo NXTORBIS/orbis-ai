@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AlertTriangle, Check, Search, Star } from 'lucide-react'
 import { searchCurrencies, type Currency } from '../../../../shared/markets/currency'
+import { ListRow } from '../../ui'
 import type { CurrencyState } from './useCurrency'
 
 /**
@@ -28,21 +29,30 @@ function Row({
   onFavourite(): void
 }): React.JSX.Element {
   return (
-    <li className={selected ? 'is-on' : ''}>
-      <button
-        type="button"
-        onClick={onChoose}
-        // "Indian Rupee, INR, selected" — the name, the code, and the state, in that order.
-        aria-label={`${currency.name}, ${currency.code}${selected ? ', selected' : ''}`}
-        aria-current={selected ? 'true' : undefined}
-      >
-        <span className="mk-cur-symbol" aria-hidden="true">
-          {currency.symbol}
-        </span>
-        <b>{currency.code}</b>
-        <span className="mk-name">{currency.name}</span>
-        {selected && <Check size={12} />}
-      </button>
+    <ListRow
+      // "Indian Rupee, INR" — the name and the code. The third thing the old label spelled out, "selected", is
+      // `aria-current` now, so the state is said once by the row rather than written into its name.
+      name={`${currency.name}, ${currency.code}`}
+      className={selected ? 'is-on' : ''}
+      selected={selected}
+      onSelect={onChoose}
+      // The symbol and the code are one thing: `$` is five currencies, so they are never apart. They stay
+      // siblings here, with the same 8px gap between them that the row has always had.
+      icon={
+        <>
+          <span className="mk-cur-symbol" aria-hidden="true">
+            {currency.symbol}
+          </span>
+          <b>{currency.code}</b>
+        </>
+      }
+      title={currency.name}
+      titleClassName="mk-name"
+      subtitle={selected ? <Check size={12} /> : undefined}
+    >
+      {/* Deliberately not an `action`. The family's star is 24px; `actions` are `.icon-btn.small`, which is
+          26px and outranks `.tl-icon` on specificity, so every row in the list would grow. It already has a
+          name and a tooltip, which is what `actions` would have been fixing. */}
       <button
         type="button"
         className="tl-icon"
@@ -52,7 +62,7 @@ function Row({
       >
         <Star size={11} className={favourite ? 'is-on' : ''} />
       </button>
-    </li>
+    </ListRow>
   )
 }
 

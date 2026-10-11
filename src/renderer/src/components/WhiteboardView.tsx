@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowUpRight, Circle, Download, Eraser, Hand, Image as ImageIcon, Minus, MousePointer2, Plus, Redo2, Square, StickyNote, Trash2, Type, Undo2 } from 'lucide-react'
-import { Surface } from '../ui'
+import { Button, Surface } from '../ui'
 import type { Board, BoardElement, Box, NoteElement, Point, ShapeElement, StrokeElement, TextElement } from '../../../shared/whiteboard'
 import { boardBounds, BOARD_COLORS, bounds, boardToSvg, move as moveElement, NOTE_COLORS, pick, pickIn, scale as scaleElement, simplify, topZ } from '../../../shared/whiteboard'
 import type { NoticeKind } from '../App'
@@ -585,23 +585,23 @@ export default function WhiteboardView({ onClose, onNotify }: { onClose(): void;
             <option value="lines">Lines</option>
             <option value="plain">Plain</option>
           </select>
-          <button type="button" className="queue-btn" onClick={() => void addPage()} title="Put a picture of the page you have open on the board">
-            <ImageIcon size={14} /> Add page
-          </button>
-          <button type="button" className="queue-btn" onClick={() => void exportSvg()} title="Copy the board as SVG">
-            <Download size={14} /> SVG
-          </button>
-          <button type="button" className="queue-btn" onClick={exportPng} title="Save what you see as a picture">
-            <Download size={14} /> PNG
-          </button>
+          <Button icon={<ImageIcon size={14} />} onClick={() => void addPage()} title="Put a picture of the page you have open on the board">
+            Add page
+          </Button>
+          <Button icon={<Download size={14} />} onClick={() => void exportSvg()} title="Copy the board as SVG">
+            SVG
+          </Button>
+          <Button icon={<Download size={14} />} onClick={exportPng} title="Save what you see as a picture">
+            PNG
+          </Button>
         </>
       }
     >
       <div className="board-body">
         <aside className="board-list" aria-label="Boards">
-          <button
-            type="button"
-            className="queue-btn primary"
+          <Button
+            kind="primary"
+            icon={<Plus size={14} />}
             onClick={() =>
               void window.api.createBoard({ name: `Board ${boards.length + 1}` }).then((made) => {
                 void loadList()
@@ -609,8 +609,8 @@ export default function WhiteboardView({ onClose, onNotify }: { onClose(): void;
               })
             }
           >
-            <Plus size={14} /> New board
-          </button>
+            New board
+          </Button>
           {boards.map((item) => (
             <div key={item.id} className={`board-item${item.id === board?.id ? ' selected' : ''}`}>
               <button type="button" className="board-item-main" onClick={() => void openBoard(item.id)}>
@@ -660,9 +660,9 @@ export default function WhiteboardView({ onClose, onNotify }: { onClose(): void;
                 </button>
               ))}
             </div>
-            <button type="button" className={`queue-btn small${filled ? ' on' : ''}`} aria-pressed={filled} onClick={() => setFilled((v) => !v)} title="Fill new shapes">
+            <Button size="small" on={filled} onClick={() => setFilled((v) => !v)} title="Fill new shapes">
               Fill
-            </button>
+            </Button>
             <span className="board-sep" />
             <button type="button" className="board-tool" title="Undo (Ctrl+Z)" aria-label="Undo" onClick={undo} disabled={!history.current.past.length}>
               <Undo2 size={15} />
@@ -674,12 +674,12 @@ export default function WhiteboardView({ onClose, onNotify }: { onClose(): void;
               <Trash2 size={15} />
             </button>
             <span className="board-sep" />
-            <button type="button" className="queue-btn small" onClick={fit}>
+            <Button size="small" onClick={fit}>
               Fit
-            </button>
-            <button type="button" className="queue-btn small" onClick={() => setView({ x: 0, y: 0, scale: 1 })}>
+            </Button>
+            <Button size="small" onClick={() => setView({ x: 0, y: 0, scale: 1 })}>
               {Math.round(view.scale * 100)}%
-            </button>
+            </Button>
           </div>
 
           <div
@@ -726,21 +726,20 @@ export default function WhiteboardView({ onClose, onNotify }: { onClose(): void;
                 <span>
                   {selectedElements.length} selected
                 </span>
-                <button type="button" className="queue-btn small" onClick={() => board && change(board.elements.map((el) => (selected.has(el.id) ? { ...el, z: topZ(board.elements) } : el)))}>
+                <Button size="small" onClick={() => board && change(board.elements.map((el) => (selected.has(el.id) ? { ...el, z: topZ(board.elements) } : el)))}>
                   Bring to front
-                </button>
-                <button type="button" className="queue-btn small" onClick={() => board && change(board.elements.map((el) => (selected.has(el.id) ? { ...el, z: Math.min(0, ...board.elements.map((x) => x.z)) - 1 } : el)))}>
+                </Button>
+                <Button size="small" onClick={() => board && change(board.elements.map((el) => (selected.has(el.id) ? { ...el, z: Math.min(0, ...board.elements.map((x) => x.z)) - 1 } : el)))}>
                   Send to back
-                </button>
-                <button type="button" className="queue-btn small" onClick={() => resize(1.25)}>
+                </Button>
+                <Button size="small" onClick={() => resize(1.25)}>
                   Bigger
-                </button>
-                <button type="button" className="queue-btn small" onClick={() => resize(0.8)}>
+                </Button>
+                <Button size="small" onClick={() => resize(0.8)}>
                   Smaller
-                </button>
-                <button
-                  type="button"
-                  className="queue-btn small"
+                </Button>
+                <Button
+                  size="small"
                   onClick={() => {
                     if (!board) return
                     const copies = selectedElements.map((el, i) => ({ ...moveElement(el, 24, 24), id: crypto.randomUUID(), z: topZ(board.elements) + i }))
@@ -749,10 +748,10 @@ export default function WhiteboardView({ onClose, onNotify }: { onClose(): void;
                   }}
                 >
                   Duplicate
-                </button>
-                <button type="button" className="queue-btn small danger" onClick={removeSelected}>
+                </Button>
+                <Button size="small" kind="danger" onClick={removeSelected}>
                   Delete
-                </button>
+                </Button>
               </div>
             )}
           </div>

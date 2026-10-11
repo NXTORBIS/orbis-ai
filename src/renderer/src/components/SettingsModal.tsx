@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AVATARS, DEFAULT_AVATAR, avatarStyle } from '../../../shared/avatars'
-import { useFocusTrap } from '../lib/useFocusTrap'
+import { Modal } from '../ui'
 import { Gamepad2, Globe, Info, Lock, Mic, Palette, Search, Sparkles, User, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { DefaultBrowserState, Settings, SettingsUpdate, Theme } from '../../../shared/types'
@@ -70,9 +70,9 @@ const ICONS: Record<string, LucideIcon> = {
 }
 
 export default function SettingsModal({ settings, onUpdate, onClose, section }: Props): React.JSX.Element {
-  // The keyboard stays in the dialog while it is open, and goes back where it was afterwards.
-  const settingsRef = useRef<HTMLDivElement>(null)
-  useFocusTrap(settingsRef, true)
+  // The keyboard stays in the dialog while it is open, and goes back where it was afterwards. That used to be a
+  // `useFocusTrap(settingsRef, true)` written here; the dialog does it now, with the same hook and the same `true`,
+  // so the panel no longer needs a ref of its own. Settings was the only screen that had this. Now all of them do.
   const [instructions, setInstructions] = useState(settings.systemPrompt)
   const [noticesOpen, setNoticesOpen] = useState(false)
   const [active, setActive] = useState<SettingsSectionId>(() => cleanSectionId(section))
@@ -98,6 +98,22 @@ export default function SettingsModal({ settings, onUpdate, onClose, section }: 
     saveText()
     onClose()
   }, [saveText, onClose])
+
+  /**
+   * What Escape means, and the dark outside with it.
+   *
+   * The innermost thing first. The licences open on top of Settings, so Escape should put them away and leave
+   * Settings where it was, rather than closing both and losing the section somebody was reading. A search that has
+   * been typed is cleared before the dialog goes, because that is far more often what was meant.
+   *
+   * This is the chain the hand-written Escape handler below used to hold; the dialog owns the key now, so the chain
+   * has to be what closing MEANS rather than something read off a keypress.
+   */
+  const dismiss = useCallback((): void => {
+    if (noticesOpen) setNoticesOpen(false)
+    else if (query) setQuery('')
+    else close()
+  }, [noticesOpen, query, close])
 
   /** Opening a section starts it at the top, rather than wherever the previous one had been scrolled to. */
   useEffect(() => {
@@ -125,9 +141,12 @@ export default function SettingsModal({ settings, onUpdate, onClose, section }: 
   /**
    * Getting around without the mouse.
    *
-   * Escape closes, or clears the search first when there is one, because that is far more often what was meant. Up
-   * and down move through the list of sections. The slash key jumps to the search box, so finding a setting by name
-   * never needs the mouse either.
+   * Up and down move through the list of sections. The slash key jumps to the search box, so finding a setting by
+   * name never needs the mouse either.
+   *
+   * Escape was read here as well: it put the licences away if they were open, cleared the search if there was one,
+   * and otherwise closed Settings. The dialog owns Escape now — and holds the keyboard inside itself, which this
+   * screen was alone in doing — so that chain reads as `dismiss` above instead, in the same order.
    *
    * The check on what is being typed into is the whole difficulty here. Settings is full of boxes — names, custom
    * instructions, every password panel — and the instructions box is several lines tall. Inside one of those, up and
@@ -151,16 +170,7 @@ export default function SettingsModal({ settings, onUpdate, onClose, section }: 
       const typing = !inSearch && (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable === true)
       const inSection = target !== null && body.current !== null && body.current.contains(target)
 
-      if (e.key === 'Escape') {
-        // Innermost thing first. The licences open on top of Settings, so Escape should put them away and leave
-        // Settings where it was, rather than closing both and losing the section somebody was reading.
-        if (noticesOpen) setNoticesOpen(false)
-        else if (query) setQuery('')
-        else close()
-        return
-      }
-
-      // Nothing else reaches past the licences: moving the section behind them would be a change nobody could see.
+      // Nothing reaches past the licences: moving the section behind them would be a change nobody could see.
       if (noticesOpen) return
 
       if (e.key === '/' && !typing && !inSearch && !e.ctrlKey && !e.metaKey && !e.altKey) {
@@ -182,7 +192,7 @@ export default function SettingsModal({ settings, onUpdate, onClose, section }: 
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [query, close, shown, active, noticesOpen])
+  }, [shown, active, noticesOpen])
 
   const profileField = (key: ProfileKey, label: string, placeholder: string): React.JSX.Element => (
     <label className="field">
@@ -201,8 +211,13 @@ export default function SettingsModal({ settings, onUpdate, onClose, section }: 
   const current = SETTINGS_SECTIONS.find((one) => one.id === active) ?? SETTINGS_SECTIONS[0]
 
   return (
-    <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && close()}>
-      <div className="modal glass set-modal" ref={settingsRef} role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <>
+      <Modal label="Settings" onClose={dismiss} className="set-modal">
+        {/*
+          Its own heading bar rather than the dialog's `title`, for one reason: this button closes Settings outright,
+          where Escape and the dark outside put away whatever is innermost first. One close button that sometimes only
+          clears the search box would be a button that lies about itself.
+        */}
         <div className="modal-header">
           <h2 id="settings-title">Settings</h2>
           <button className="icon-btn" title="Close" onClick={close}>
@@ -587,13 +602,19 @@ export default function SettingsModal({ settings, onUpdate, onClose, section }: 
             )}
           </div>
         </div>
-      </div>
+      </Modal>
+      {/*
+        The licences stay beside the dialog rather than inside it. They bring their own cover across the whole window,
+        and `glass` blurs what is behind it — which pens a fixed child inside the Settings panel and would crop the
+        licences to it. Beside it, both covers are still the same full-window `modal-backdrop` at the same depth, with
+        this one second, so the licences sit over Settings exactly as they did.
+      */}
       {noticesOpen && (
         <Suspense fallback={null}>
           <NoticesPanel onClose={() => setNoticesOpen(false)} />
         </Suspense>
       )}
-    </div>
+    </>
   )
 }
 

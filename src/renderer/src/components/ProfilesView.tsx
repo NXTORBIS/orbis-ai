@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Check, Plus, Trash2, UserRound, X } from 'lucide-react'
+import { Check, Plus, Trash2, UserRound } from 'lucide-react'
 import type { Profile } from '../../../shared/profiles'
 import { DEFAULT_PROFILE_ID, PROFILE_COLORS } from '../../../shared/profiles'
 import type { NoticeKind } from '../App'
+import { Surface } from '../ui'
 
 /**
  * Profiles: separate browsing identities. Each keeps its own cookies and logins, its own history, bookmarks and
@@ -75,27 +76,21 @@ export default function ProfilesView({
     void load()
   }
 
-  return (
-    <div className={embedded ? 'profiles-view is-embedded' : 'view profiles-view'} role="region" aria-label="Profiles">
-      {/* The header stays: adding a profile lives in it. The title and the close button are the overlay's, not this. */}
-      <header className="view-head">
-        {!embedded && <h2>Profiles</h2>}
-        <div className="view-actions">
-          <label className="spaces-save">
-            <UserRound size={13} />
-            <input value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void create()} placeholder="New profile name" aria-label="Name for the new profile" />
-          </label>
-          <button type="button" className="queue-btn primary" disabled={!name.trim()} onClick={() => void create()}>
-            <Plus size={14} /> Add profile
-          </button>
-          {!embedded && onClose && (
-            <button type="button" className="icon-btn" aria-label="Close profiles" onClick={onClose}>
-              <X size={16} />
-            </button>
-          )}
-        </div>
-      </header>
+  // Adding a profile is the screen's own action, not something in the body: it sits in the header in both shapes.
+  const adding = (
+    <>
+      <label className="spaces-save">
+        <UserRound size={13} />
+        <input value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void create()} placeholder="New profile name" aria-label="Name for the new profile" />
+      </label>
+      <button type="button" className="queue-btn primary" disabled={!name.trim()} onClick={() => void create()}>
+        <Plus size={14} /> Add profile
+      </button>
+    </>
+  )
 
+  const body = (
+    <>
       <p className="profiles-note view-muted">
         Each profile keeps its own logins, cookies, history, bookmarks, downloads and open pages. Notes, tasks, boards and workflows are yours across all of them, and extensions are installed once and follow the profile you are using.
       </p>
@@ -136,6 +131,27 @@ export default function ProfilesView({
           </div>
         ))}
       </div>
-    </div>
+    </>
+  )
+
+  // Embedded in Settings this is not a `.view` screen at all -- no positioning, no name of its own, no way out,
+  // because the Settings frame around it has all three. And standalone with no `onClose` there is nothing for a
+  // close button to call. Surface cannot keep its promises for either, so both keep the frame they were drawn with.
+  if (embedded || !onClose) {
+    return (
+      <div className={embedded ? 'profiles-view is-embedded' : 'view profiles-view'} role="region" aria-label="Profiles">
+        <header className="view-head">
+          {!embedded && <h2>Profiles</h2>}
+          <div className="view-actions">{adding}</div>
+        </header>
+        {body}
+      </div>
+    )
+  }
+
+  return (
+    <Surface title="Profiles" actions={adding} onClose={onClose} closeLabel="Close profiles" className="profiles-view">
+      {body}
+    </Surface>
   )
 }

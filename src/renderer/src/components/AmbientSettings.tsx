@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { Field } from '../ui'
 
 /**
  * The controls for Ambient Intelligence.
@@ -12,6 +13,13 @@ import { useCallback, useEffect, useState } from 'react'
  *
  * Somebody who clears their activity has not asked to have the feature turned back on, and somebody who turns it
  * off has not asked to lose what it already knew. They are different requests and they have different buttons.
+ *
+ * ## The sentence under a switch is read after its name, not as part of it
+ *
+ * Every switch here used to carry its sentence inside the same label as its name, which is what a screen reader
+ * uses to work out what the switch is called — so instead of "Pause for now" it said the name and then the whole
+ * sentence, every time, as though that were the name. The sentences now sit beside their control and are pointed
+ * at, so each is read once, after the name. `Field` is what does that, here and everywhere else in the window.
  */
 
 interface Settings {
@@ -71,51 +79,67 @@ export default function AmbientSettings({ onNotify }: { onNotify?(message: strin
 
   return (
     <div className="ambient-settings">
-      <label className="setting-check">
-        <input type="checkbox" checked={settings.enabled} onChange={(e) => void save({ enabled: e.target.checked })} />
-        <span>
-          <strong>Understand what I am working on</strong>
+      <Field
+        className="setting-check"
+        label={<strong>Understand what I am working on</strong>}
+        hint={
           <small>
             Orbis notices what you open and works out the subject, so Orion and search can be more useful. Everything
             stays on this computer, and nothing is recorded on a sign-in, payment or banking page, or in a private tab.
           </small>
-        </span>
-      </label>
+        }
+      >
+        {(w) => (
+          <input {...w} type="checkbox" checked={settings.enabled} onChange={(e) => void save({ enabled: e.target.checked })} />
+        )}
+      </Field>
 
-      <label className="setting-check">
-        <input type="checkbox" checked={settings.paused} disabled={off} onChange={(e) => void save({ paused: e.target.checked })} />
-        <span>
-          <strong>Pause for now</strong>
-          <small>Keeps what it already knows and stops learning anything new. Browsing is unaffected.</small>
-        </span>
-      </label>
+      <Field
+        className="setting-check"
+        label={<strong>Pause for now</strong>}
+        hint={<small>Keeps what it already knows and stops learning anything new. Browsing is unaffected.</small>}
+      >
+        {(w) => (
+          <input {...w} type="checkbox" checked={settings.paused} disabled={off} onChange={(e) => void save({ paused: e.target.checked })} />
+        )}
+      </Field>
 
       <div className={`ambient-switches${off || settings.paused ? ' dimmed' : ''}`}>
         {SWITCHES.map((one) => (
-          <label className="setting-check" key={one.key}>
-            <input
-              type="checkbox"
-              checked={settings[one.key] === true}
-              disabled={off || settings.paused}
-              onChange={(e) => void save({ [one.key]: e.target.checked } as Partial<Settings>)}
-            />
-            <span>
-              <strong>{one.label}</strong>
-              <small>{one.blurb}</small>
-            </span>
-          </label>
+          <Field
+            key={one.key}
+            className="setting-check"
+            label={<strong>{one.label}</strong>}
+            hint={<small>{one.blurb}</small>}
+          >
+            {(w) => (
+              <input
+                {...w}
+                type="checkbox"
+                checked={settings[one.key] === true}
+                disabled={off || settings.paused}
+                onChange={(e) => void save({ [one.key]: e.target.checked } as Partial<Settings>)}
+              />
+            )}
+          </Field>
         ))}
       </div>
 
-      <label className="setting-field">
-        <span>Keep activity for</span>
-        <select value={String(settings.keepDays)} disabled={off} onChange={(e) => void save({ keepDays: Number(e.target.value) })}>
-          <option value="7">a week</option>
-          <option value="30">a month</option>
-          <option value="90">three months</option>
-        </select>
-        <small>What it made of your activity — the subjects and the counts — is kept longer than the activity itself.</small>
-      </label>
+      <Field
+        className="setting-field"
+        label="Keep activity for"
+        hint={
+          <small>What it made of your activity — the subjects and the counts — is kept longer than the activity itself.</small>
+        }
+      >
+        {(w) => (
+          <select {...w} value={String(settings.keepDays)} disabled={off} onChange={(e) => void save({ keepDays: Number(e.target.value) })}>
+            <option value="7">a week</option>
+            <option value="30">a month</option>
+            <option value="90">three months</option>
+          </select>
+        )}
+      </Field>
 
       {confirming ? (
         <div className="setting-confirm">

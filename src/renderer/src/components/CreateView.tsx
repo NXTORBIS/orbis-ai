@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import { AlertTriangle, ArrowLeft, BarChart3, Check, CalendarPlus, Cloud, Code2, Copy, FilePlus2, FolderOpen, FolderTree, History, Image as ImageIcon, LayoutTemplate, LineChart, Loader2, Mail, Music, Pencil, Play, Save, Search, Sparkles, Table2, FileText, Trash2, Video, Workflow, X } from 'lucide-react'
+import { AlertTriangle, BarChart3, Check, CalendarPlus, Cloud, Code2, Copy, FilePlus2, FolderOpen, FolderTree, History, Image as ImageIcon, LayoutTemplate, LineChart, Loader2, Mail, Music, Pencil, Play, Save, Search, Sparkles, Table2, FileText, Trash2, Video, Workflow, X } from 'lucide-react'
 import type { NoticeKind } from '../lib/notices'
 import { CreateChange } from './CreateChange'
 import { CreateGrid } from './CreateGrid'
+import { Button, Surface } from '../ui'
 import './create.css'
 
 /**
@@ -264,9 +265,9 @@ function Findings({ failure, onAccept }: { failure: Failure; onAccept: () => voi
               </li>
             ))}
           </ul>
-          <button type="button" className="queue-btn small" onClick={onAccept}>
+          <Button size="small" onClick={onAccept}>
             Write it anyway
-          </button>
+          </Button>
         </>
       )}
       {/* What Orion said each time and what was wrong with it. Specific, because "could not make it" is not. */}
@@ -752,15 +753,7 @@ export default function CreateView({
   }
 
   return (
-    <div className="view create-view" role="region" aria-label="Create">
-      <header className="view-head">
-        <button type="button" className="icon-btn" aria-label="Back to chat" onClick={onClose}>
-          <ArrowLeft size={16} />
-        </button>
-        <h2>Create</h2>
-        <div className="view-actions" />
-      </header>
-
+    <Surface title="Create" closeLabel="Back to chat" onClose={onClose} className="create-view">
       <div className="create-body">
         <section className="create-make" aria-label="Make something">
           {/* The sentence first. Orion decides whether it is a table or a document and writes it; the rest is the same path. */}
@@ -782,14 +775,20 @@ export default function CreateView({
                 maxLength={4000}
               />
             </label>
-            <button type="submit" className="queue-btn primary" disabled={asking || request.trim() === ''}>
-              {asking ? <Loader2 size={13} className="spin" /> : <Sparkles size={13} />}
-              {asking ? 'Writing…' : 'Make it with Orion'}
-            </button>
-            <button type="button" className="queue-btn" disabled={importing} onClick={() => void importOne()} title="Open a CSV, Excel, Word, PDF, Markdown, JSON or text file">
-              {importing ? <Loader2 size={13} className="spin" /> : <FolderOpen size={13} />}
+            {/* `busy` is the dance this used to write out: the words swapped for "Writing…", the button disabled, and both put back. */}
+            <Button
+              type="submit"
+              kind="primary"
+              busy={asking}
+              busyLabel="Writing…"
+              disabled={request.trim() === ''}
+              icon={asking ? <Loader2 size={13} className="spin" /> : <Sparkles size={13} />}
+            >
+              Make it with Orion
+            </Button>
+            <Button disabled={importing} onClick={() => void importOne()} title="Open a CSV, Excel, Word, PDF, Markdown, JSON or text file" icon={importing ? <Loader2 size={13} className="spin" /> : <FolderOpen size={13} />}>
               Open a file…
-            </button>
+            </Button>
           </form>
           {/*
            * A scanned PDF, and the question before anything is sent.
@@ -802,13 +801,12 @@ export default function CreateView({
             <section className="create-failure" aria-label="This PDF is pictures of its pages">
               <p>{scanned.ask}</p>
               <div className="create-save">
-                <button type="button" className="queue-btn small primary" disabled={importing} onClick={() => void importOne(false, true)}>
-                  {importing ? <Loader2 size={13} className="spin" /> : <Check size={13} />}
+                <Button kind="primary" size="small" disabled={importing} onClick={() => void importOne(false, true)} icon={importing ? <Loader2 size={13} className="spin" /> : <Check size={13} />}>
                   Yes, send {scanned.pages === 1 ? 'the picture' : `all ${scanned.pages} pictures`} to {scanned.to}
-                </button>
-                <button type="button" className="queue-btn small" onClick={() => setScanned(null)}>
+                </Button>
+                <Button size="small" onClick={() => setScanned(null)}>
                   No
-                </button>
+                </Button>
               </div>
             </section>
           )}
@@ -836,10 +834,14 @@ export default function CreateView({
                   </optgroup>
                 ))}
               </select>
-              <button type="submit" className="queue-btn" disabled={starting || templateId === ''} title="A table with its columns chosen, or a document with its headings written. Works with no connection.">
-                {starting ? <Loader2 size={13} className="spin" /> : <LayoutTemplate size={13} />}
+              <Button
+                type="submit"
+                disabled={starting || templateId === ''}
+                title="A table with its columns chosen, or a document with its headings written. Works with no connection."
+                icon={starting ? <Loader2 size={13} className="spin" /> : <LayoutTemplate size={13} />}
+              >
                 Start
-              </button>
+              </Button>
             </form>
           )}
           <p className="create-or">or paste it yourself</p>
@@ -886,21 +888,27 @@ export default function CreateView({
             />
           </label>
           <div className="create-actions">
-            <button type="button" className="queue-btn primary" disabled={working || text.trim() === ''} onClick={() => void make()}>
-              {working ? <Loader2 size={13} className="spin" /> : <FilePlus2 size={13} />}
-              {working ? 'Making…' : 'Make it'}
-            </button>
+            <Button
+              kind="primary"
+              busy={working}
+              busyLabel="Making…"
+              disabled={text.trim() === ''}
+              onClick={() => void make()}
+              icon={working ? <Loader2 size={13} className="spin" /> : <FilePlus2 size={13} />}
+            >
+              Make it
+            </Button>
             {/* The same text can replace what is open, as its next version. The version before stays. */}
             {opened && opened.record.kind === kind && (
-              <button
-                type="button"
-                className="queue-btn"
+              <Button
                 disabled={busy !== null || text.trim() === ''}
                 onClick={() => void act('update', { operation: 'artifact.update', artifactId: opened.record.artifactId, text, reason: 'Replaced with new text.' }, (r) => `"${r.title}" is now version ${r.version}; version ${r.version - 1} is kept.`)}
                 title="Keeps the current version and makes this the next one"
+                icon={<History size={13} />}
               >
-                <History size={13} /> Replace “{opened.record.title}” with this
-              </button>
+                {' '}
+                Replace “{opened.record.title}” with this
+              </Button>
             )}
             <span className="create-hint">Orbis keeps it, reads the copy back, and shows what it checked.</span>
           </div>
@@ -974,9 +982,9 @@ export default function CreateView({
                       e.stopPropagation()
                       setRenaming(null)
                     }} />
-                  <button type="submit" className="queue-btn small">
+                  <Button type="submit" size="small">
                     Rename
-                  </button>
+                  </Button>
                 </form>
               ) : (
                 <h3>{opened.record.title}</h3>
@@ -1004,9 +1012,9 @@ export default function CreateView({
                       <strong>Version {one.version}</strong> · {when(one.createdAt)} · {shapeText(opened.record.kind, one.shape)} · {sizeOf(one.bytes)}
                       {one.reason ? ` · ${one.reason}` : ''}
                     </span>
-                    <button type="button" className="queue-btn small ghost" disabled={busy !== null} onClick={() => void act('restore', { operation: 'artifact.restore', artifactId: opened.record.artifactId, versionId: one.versionId }, (r) => `Version ${one.version} is current again, as version ${r.version}.`)}>
+                    <Button kind="quiet" size="small" disabled={busy !== null} onClick={() => void act('restore', { operation: 'artifact.restore', artifactId: opened.record.artifactId, versionId: one.versionId }, (r) => `Version ${one.version} is current again, as version ${r.version}.`)}>
                       Restore
-                    </button>
+                    </Button>
                   </li>
                 ))}
                 {opened.record.reason && <li className="create-history-now"><span>Version {opened.record.version} (current) · {opened.record.reason}</span></li>}
@@ -1025,10 +1033,10 @@ export default function CreateView({
               <div className="create-project">
                 <div className="create-save" aria-label="The files in this project">
                   {opened.project.files.map((one) => (
-                    <button
+                    <Button
                       key={one.path}
-                      type="button"
-                      className={`queue-btn small${(filePath || opened.project!.entry) === one.path ? ' primary' : ''}`}
+                      size="small"
+                      kind={(filePath || opened.project!.entry) === one.path ? 'primary' : 'normal'}
                       onClick={() => {
                         setFilePath(one.path)
                         setFileText('')
@@ -1038,7 +1046,7 @@ export default function CreateView({
                     >
                       {one.path}
                       {one.path === opened.project!.entry ? ' ★' : ''}
-                    </button>
+                    </Button>
                   ))}
                 </div>
                 <textarea
@@ -1050,27 +1058,25 @@ export default function CreateView({
                   rows={14}
                 />
                 <div className="create-save">
-                  <button
-                    type="button"
-                    className="queue-btn small"
+                  <Button
+                    size="small"
                     disabled={editingFile || fileText === '' || fileText === opened.project.shown}
                     onClick={() => void saveFile()}
                     title="Kept as a new version. The one before it stays."
+                    icon={editingFile ? <Loader2 size={13} className="spin" /> : <Save size={13} />}
                   >
-                    {editingFile ? <Loader2 size={13} className="spin" /> : <Save size={13} />}
                     Save {filePath || opened.project.entry}
-                  </button>
+                  </Button>
                   {opened.project.runnable ? (
-                    <button
-                      type="button"
-                      className="queue-btn small"
+                    <Button
+                      size="small"
                       disabled={running}
                       onClick={() => void runInSandbox()}
                       title="Shown in Orbis's sandbox: no network, no files, no Node. Nothing is run on this computer."
+                      icon={running ? <Loader2 size={13} className="spin" /> : <Play size={13} />}
                     >
-                      {running ? <Loader2 size={13} className="spin" /> : <Play size={13} />}
                       Run in the sandbox
-                    </button>
+                    </Button>
                   ) : (
                     // A reason, not a greyed-out button: a button that cannot say why is worse than no button.
                     <span className="create-note">{opened.project.cannotRun}</span>
@@ -1130,27 +1136,31 @@ export default function CreateView({
                     ))}
                 </select>
                 <input className="create-revise" value={figureCaption} onChange={(event) => setFigureCaption(event.target.value)} placeholder="Caption (optional)" aria-label="Caption" maxLength={200} />
-                <button type="submit" className="queue-btn small" disabled={busy !== null || figureId === ''} title="The document points at the chart rather than copying it, so a chart redrawn later is the chart the document shows the next time it is saved.">
-                  <LineChart size={13} />
+                <Button
+                  type="submit"
+                  size="small"
+                  disabled={busy !== null || figureId === ''}
+                  title="The document points at the chart rather than copying it, so a chart redrawn later is the chart the document shows the next time it is saved."
+                  icon={<LineChart size={13} />}
+                >
                   Add figure
-                </button>
+                </Button>
               </form>
             )}
             {opened.record.kind === 'document' && opened.tables.length > 0 && (
               <div className="create-save" aria-label="Tables in this document">
                 <span>Take a table out</span>
                 {opened.tables.map((one) => (
-                  <button
+                  <Button
                     key={one.index}
-                    type="button"
-                    className="queue-btn small"
+                    size="small"
                     disabled={busy !== null}
                     title={`Kept as a table of its own, so it can be sorted, totalled and drawn. Headings: ${one.headings.join(', ')}`}
                     onClick={() => void act(`extract-${one.index}`, { operation: 'artifact.extractTable', artifactId: opened.record.artifactId, index: one.index }, (r) => `Took out "${r.title}" as a table of its own.`)}
+                    icon={<Table2 size={13} />}
                   >
-                    <Table2 size={13} />
                     {one.caption || `Table ${one.index}`} ({one.rows} rows × {one.columns} columns)
-                  </button>
+                  </Button>
                 ))}
               </div>
             )}
@@ -1171,19 +1181,31 @@ export default function CreateView({
                   aria-label="What to change"
                   maxLength={2000}
                 />
-                <button type="submit" className="queue-btn small" disabled={revising || revision.trim() === ''} title="Orion rewrites it and Orbis keeps the result as a new version. The one before stays.">
-                  {revising ? <Loader2 size={13} className="spin" /> : <Sparkles size={13} />}
-                  {revising ? 'Revising…' : 'Revise with Orion'}
-                </button>
+                <Button
+                  type="submit"
+                  size="small"
+                  busy={revising}
+                  busyLabel="Revising…"
+                  disabled={revision.trim() === ''}
+                  title="Orion rewrites it and Orbis keeps the result as a new version. The one before stays."
+                  icon={revising ? <Loader2 size={13} className="spin" /> : <Sparkles size={13} />}
+                >
+                  Revise with Orion
+                </Button>
               </form>
             )}
             {opened.record.kind === 'table' && (
               <>
                 <div className="create-save">
-                  <button type="button" className="queue-btn small" disabled={analysing} onClick={() => void analyse()} title="Counts, statistics, quality and relationships, computed by Orbis and kept as a document">
-                    {analysing ? <Loader2 size={13} className="spin" /> : <BarChart3 size={13} />}
+                  <Button
+                    size="small"
+                    disabled={analysing}
+                    onClick={() => void analyse()}
+                    title="Counts, statistics, quality and relationships, computed by Orbis and kept as a document"
+                    icon={analysing ? <Loader2 size={13} className="spin" /> : <BarChart3 size={13} />}
+                  >
                     Analyse this table
-                  </button>
+                  </Button>
                 </div>
                 <CreateChange
                   artifactId={opened.record.artifactId}
@@ -1236,10 +1258,15 @@ export default function CreateView({
                         ))}
                       </select>
                     </label>
-                    <button type="submit" className="queue-btn small" disabled={charting || chartY.length === 0} title="A chart drawn by Orbis from these columns, kept as a drawing that remembers this table">
-                      {charting ? <Loader2 size={13} className="spin" /> : <LineChart size={13} />}
+                    <Button
+                      type="submit"
+                      size="small"
+                      disabled={charting || chartY.length === 0}
+                      title="A chart drawn by Orbis from these columns, kept as a drawing that remembers this table"
+                      icon={charting ? <Loader2 size={13} className="spin" /> : <LineChart size={13} />}
+                    >
                       Draw a chart
-                    </button>
+                    </Button>
                   </form>
                 )}
               </>
@@ -1247,17 +1274,16 @@ export default function CreateView({
             <div className="create-save">
               <span>Save as</span>
               {opened.formats.map((one) => (
-                <button
+                <Button
                   key={one.format}
-                  type="button"
-                  className="queue-btn small"
+                  size="small"
                   disabled={saving !== null}
                   onClick={() => void save(one.format)}
                   title={one.limitations.join(' ')}
+                  icon={saving === one.format ? <Loader2 size={13} className="spin" /> : one.format === 'ics' ? <CalendarPlus size={13} /> : <Save size={13} />}
                 >
-                  {saving === one.format ? <Loader2 size={13} className="spin" /> : one.format === 'ics' ? <CalendarPlus size={13} /> : <Save size={13} />}
                   {one.name} ({one.extension})
-                </button>
+                </Button>
               ))}
               {/*
                * A workbook whose computed columns and totals stay live.
@@ -1268,16 +1294,15 @@ export default function CreateView({
                * numbers with the reason said in the notes.
                */}
               {opened.record.kind === 'table' && opened.columns.some((one) => one.type === 'number' || one.type === 'integer') && (
-                <button
-                  type="button"
-                  className="queue-btn small"
+                <Button
+                  size="small"
                   disabled={saving !== null}
                   onClick={() => void save('xlsx', false, { liveFormulas: true, totalsRow: true })}
                   title="The columns Orbis computed and a row of totals are written as real Excel formulas, with the numbers Orbis worked out already in the cells. Anything Excel would answer differently is written as numbers, and the notes say which."
+                  icon={saving === 'xlsx' ? <Loader2 size={13} className="spin" /> : <Save size={13} />}
                 >
-                  {saving === 'xlsx' ? <Loader2 size={13} className="spin" /> : <Save size={13} />}
                   Excel, with live formulas
-                </button>
+                </Button>
               )}
             </div>
             {/*
@@ -1296,16 +1321,15 @@ export default function CreateView({
                 aria-label="Who the draft is addressed to"
                 maxLength={400}
               />
-              <button
-                type="button"
-                className="queue-btn small"
+              <Button
+                size="small"
                 disabled={emailing || opened.formats.length === 0}
                 onClick={() => void writeDraft(opened.formats[0]?.format ?? opened.record.format)}
                 title="Writes a draft file with this attached into your Downloads folder, reads it back and checks it. Orbis does not send it."
+                icon={emailing ? <Loader2 size={13} className="spin" /> : <Mail size={13} />}
               >
-                {emailing ? <Loader2 size={13} className="spin" /> : <Mail size={13} />}
                 Write a draft
-              </button>
+              </Button>
             </div>
             {draft && (
               <section className="create-saved" aria-label="The draft">
@@ -1325,10 +1349,9 @@ export default function CreateView({
               <div className="create-save" aria-label="Save a copy to a cloud folder">
                 <span>Save a copy to</span>
                 {cloud.map((one) => (
-                  <button
+                  <Button
                     key={one.path}
-                    type="button"
-                    className="queue-btn small"
+                    size="small"
                     disabled={saving !== null || !one.writable}
                     onClick={() => void saveToCloud(one.path, opened.formats[0]?.format ?? opened.record.format)}
                     title={
@@ -1336,10 +1359,10 @@ export default function CreateView({
                         ? `${one.keptBy} uploads what appears in that folder. Orbis writes the file there, reads it back and checks it; it does not upload anything and has no account there.`
                         : `Orbis cannot write into ${one.name}. Check that the folder is not read-only and that ${one.keptBy} is running.`
                     }
+                    icon={saving === `cloud:${one.path}` ? <Loader2 size={13} className="spin" /> : <Cloud size={13} />}
                   >
-                    {saving === `cloud:${one.path}` ? <Loader2 size={13} className="spin" /> : <Cloud size={13} />}
                     {one.name}
-                  </button>
+                  </Button>
                 ))}
               </div>
             )}
@@ -1356,6 +1379,6 @@ export default function CreateView({
           </section>
         )}
       </div>
-    </div>
+    </Surface>
   )
 }

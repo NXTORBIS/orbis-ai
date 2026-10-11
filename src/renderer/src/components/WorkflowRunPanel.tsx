@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { AlertTriangle, Check, CircleStop, KeyRound, LoaderCircle, Pause, Play, RotateCcw, SkipForward, StepForward, X } from 'lucide-react'
+import { Modal } from '../ui'
 import type { RunControl, StepRecord } from '../../../shared/browserControl'
 import type { ActiveWorkflowRun, Workflow, WorkflowIssue, WorkflowRunSummary } from '../../../shared/workflows'
 
@@ -235,21 +236,27 @@ export function RunDialog({
     }
   }
 
+  // Escape was handled on the form itself, which only hears the key once something inside it already has focus,
+  // and it stopped the key there so the shell would not close the panel behind this dialog as well. The shared
+  // dialog listens at the window and holds focus inside, so the key works whatever you were doing and still does
+  // not reach what is behind. A click outside must not close it: this holds words somebody has typed, secrets
+  // among them. Still a form rather than a question, so it stays `role="dialog"`.
   return (
-    <div className="ext-prompt-backdrop control-prompt-backdrop">
+    <Modal
+      label={`Run ${workflow.name}`}
+      onClose={onCancel}
+      outsideCloses={false}
+      cover="ext-prompt-backdrop control-prompt-backdrop"
+      panel="popover glass ext-prompt wf-run-dialog"
+    >
+      {/* The form stays, so Enter in a field starts the run and the submit button still submits. It takes no space
+          of its own, which leaves its children direct children of the panel -- the panel is the flex column that
+          spaces them, and a box between the two would collapse that spacing. */}
       <form
-        className="popover glass ext-prompt wf-run-dialog"
-        role="dialog"
-        aria-label={`Run ${workflow.name}`}
+        style={{ display: 'contents' }}
         onSubmit={(e) => {
           e.preventDefault()
           void start()
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Escape') {
-            e.stopPropagation()
-            onCancel()
-          }
         }}
       >
         <div className="ext-prompt-head">
@@ -317,6 +324,6 @@ export function RunDialog({
           </button>
         </div>
       </form>
-    </div>
+    </Modal>
   )
 }

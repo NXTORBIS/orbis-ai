@@ -12,6 +12,7 @@ import type { AlertsAnswer } from '../../../../main/markets/ipc'
 import type { Instrument, QuoteView } from '../../../../shared/markets/instrument'
 import type { IndicatorKind } from '../../../../shared/markets/indicators'
 import AssetLogo from './AssetLogo'
+import { ListRow } from '../../ui'
 import type { NoticeKind } from '../../App'
 
 /**
@@ -491,12 +492,30 @@ export default function AlertsPanel({
               const instrument = instrumentOf(alert.instrumentId)
               const symbol = instrument?.symbol ?? alert.instrumentId
               return (
-                <li key={alert.id} className={`mk-row mk-alert${alert.enabled ? '' : ' is-off'}`}>
-                  <button type="button" className="mk-row-name" onClick={() => onOpenMarket(alert.instrumentId)}>
-                    <AssetLogo symbol={symbol} size="small" />
-                    <b>{symbol}</b>
-                    <span className="mk-name">{alert.label || describeAlert(alert, symbol)}</span>
-                  </button>
+                /*
+                 * The row, the part you press and the two pieces of text come from ListRow; the symbol travels with
+                 * the logo because `.mk-row-name > b` is a direct-child rule and a wrapper would lose it.
+                 *
+                 * The two buttons stay where they are, as children rather than as `actions`. ListRow draws actions
+                 * through IconButton, which always carries `.icon-btn`, and `.icon-btn.small` outranks `.tl-icon` on
+                 * width, height and corner — 24px at radius 7 would become 26px at radius 6. Day one has to look
+                 * identical, so they keep their own class and their own names.
+                 */
+                <ListRow
+                  key={alert.id}
+                  className={`mk-row mk-alert${alert.enabled ? '' : ' is-off'}`}
+                  mainClassName="mk-row-name"
+                  name={`${symbol} — ${alert.label || describeAlert(alert, symbol)}`}
+                  icon={
+                    <>
+                      <AssetLogo symbol={symbol} size="small" />
+                      <b>{symbol}</b>
+                    </>
+                  }
+                  title={alert.label || describeAlert(alert, symbol)}
+                  titleClassName="mk-name"
+                  onSelect={() => onOpenMarket(alert.instrumentId)}
+                >
                   <span className="mk-alert-now" title="The last value this alert was judged against">
                     now {seenBy(alert)}
                   </span>
@@ -522,7 +541,7 @@ export default function AlertsPanel({
                   >
                     <Trash2 size={13} />
                   </button>
-                </li>
+                </ListRow>
               )
             })}
           </ul>
@@ -547,16 +566,25 @@ export default function AlertsPanel({
             ) : (
               <ul className="mk-rows">
                 {history.map((one) => (
-                  <li key={one.id} className="mk-row">
-                    <button type="button" className="mk-row-name" onClick={() => onOpenMarket(one.instrumentId)}>
-                      <AssetLogo symbol={one.symbol} size="small" />
-                      <b>{one.symbol || one.instrumentId}</b>
-                      <span className="mk-name">{one.label}</span>
-                    </button>
+                  <ListRow
+                    key={one.id}
+                    className="mk-row"
+                    mainClassName="mk-row-name"
+                    name={`${one.symbol || one.instrumentId} — ${one.label}`}
+                    icon={
+                      <>
+                        <AssetLogo symbol={one.symbol} size="small" />
+                        <b>{one.symbol || one.instrumentId}</b>
+                      </>
+                    }
+                    title={one.label}
+                    titleClassName="mk-name"
+                    onSelect={() => onOpenMarket(one.instrumentId)}
+                  >
                     {/* The value that met the condition, at the moment it did. */}
                     <span className="mk-price">at {number(one.value)}</span>
                     <span className="mk-quiet">{new Date(one.at).toLocaleString()}</span>
-                  </li>
+                  </ListRow>
                 ))}
               </ul>
             )}
