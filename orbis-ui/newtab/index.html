@@ -18,7 +18,45 @@
     </div>
     <nav id="rail" class="rail" aria-label="Orbis"></nav>
     <main>
-      <img class="logo" src="orbis-ring.png" alt="Orbis" width="76" height="76" />
+      <!--
+        The Orbis mark, drawn rather than photographed.
+
+        It was `orbis-ring.png` -- 549 pixels of artwork drawn at 76, which is a downscale large enough that the
+        browser picks a cheap filter and the edges come out soft. The same two crossed rings the Orb wears, in the
+        same proportions, written out here because this page has no script it needs to wait for and a mark that
+        appears a moment after the page does is a mark that flickers on every new tab.
+
+        `aria-hidden` with the name on the figure: a decorative drawing of a brand should not be read out as a
+        list of ellipses, and the page says "Orbis" in its heading anyway.
+      -->
+      <svg class="logo" viewBox="0 0 100 100" width="76" height="76" role="img" aria-label="Orbis" focusable="false">
+        <defs>
+          <linearGradient id="nt-ring-a" x1="12%" y1="0%" x2="88%" y2="100%">
+            <stop offset="0%" stop-color="#f4f8fb" />
+            <stop offset="26%" stop-color="#9fb3c0" />
+            <stop offset="54%" stop-color="#2b3a45" />
+            <stop offset="78%" stop-color="#0b1218" />
+            <stop offset="100%" stop-color="#050a0e" />
+          </linearGradient>
+          <linearGradient id="nt-ring-b" x1="88%" y1="0%" x2="12%" y2="100%">
+            <stop offset="0%" stop-color="#f4f8fb" />
+            <stop offset="26%" stop-color="#9fb3c0" />
+            <stop offset="54%" stop-color="#2b3a45" />
+            <stop offset="78%" stop-color="#0b1218" />
+            <stop offset="100%" stop-color="#050a0e" />
+          </linearGradient>
+          <linearGradient id="nt-ring-glint" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#7ff0ff" stop-opacity="0" />
+            <stop offset="38%" stop-color="#7ff0ff" stop-opacity="0.95" />
+            <stop offset="62%" stop-color="#3fd8ff" stop-opacity="0.35" />
+            <stop offset="100%" stop-color="#7ff0ff" stop-opacity="0" />
+          </linearGradient>
+        </defs>
+        <ellipse cx="50" cy="50" rx="37" ry="26" fill="none" stroke="url(#nt-ring-a)" stroke-width="6.2" transform="rotate(-22 50 50)" />
+        <ellipse cx="50" cy="50" rx="37" ry="26" fill="none" stroke="url(#nt-ring-b)" stroke-width="6.2" transform="rotate(22 50 50)" />
+        <ellipse cx="50" cy="50" rx="37" ry="26" fill="none" stroke="url(#nt-ring-glint)" stroke-width="1.6" transform="rotate(-22 50 50)" />
+        <ellipse cx="50" cy="50" rx="37" ry="26" fill="none" stroke="url(#nt-ring-glint)" stroke-width="1.6" transform="rotate(22 50 50)" />
+      </svg>
       <p id="clock" class="clock" aria-live="off"></p>
       <p id="countdown" class="countdown"></p>
       <form id="search" role="search">
