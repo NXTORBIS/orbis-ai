@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { SurfaceProps } from './surfaces'
+import { Segmented } from '../../ui'
 import Parameters from './Parameters'
 import Plot, { tidy } from './Plot'
 import { useEngineering } from './useEngineering'
@@ -224,20 +225,22 @@ export default function ControlLab({ instance, onConfigure }: SurfaceProps): Rea
         </p>
       )}
 
-      <div className="p2-tabs" role="tablist">
-        {(['response', 'frequency', 'poles'] as const).map((one) => (
-          <button
-            key={one}
-            type="button"
-            role="tab"
-            className="p2-tab"
-            aria-selected={showing === one}
-            onClick={() => setShowing(one)}
-          >
-            {one === 'response' ? 'How it responds' : one === 'frequency' ? 'Across frequency' : 'Why it behaves that way'}
-          </button>
-        ))}
-      </div>
+      {/*
+        * The chosen tab wears `on`, which `.p2-tab.on` has always had a rule for and nothing here ever added — so
+        * all three looked the same whichever one you were on.
+        */}
+      <Segmented
+        className="p2-tabs"
+        optionClass="p2-tab"
+        label="What to show about this loop"
+        value={showing}
+        options={[
+          { value: 'response', label: 'How it responds' },
+          { value: 'frequency', label: 'Across frequency' },
+          { value: 'poles', label: 'Why it behaves that way' }
+        ]}
+        onChange={(one) => setShowing(one)}
+      />
 
       <div className="p3-split">
         <div>

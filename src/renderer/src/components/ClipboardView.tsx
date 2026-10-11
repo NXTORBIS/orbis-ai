@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Check, Clipboard, Code2, Image as ImageIcon, Link2, Palette, Pause, Pin, Play, Settings2, ShieldCheck, Trash2, X } from 'lucide-react'
-import { SearchBox, Surface } from '../ui'
+import { SearchBox, Segmented, Surface } from '../ui'
 import type { ClipboardSettings, ClipItem, ClipKind } from '../../../shared/clipboardHistory'
 import { DEFAULT_CLIPBOARD_SETTINGS } from '../../../shared/clipboardHistory'
 import type { NoticeKind } from '../App'
@@ -164,13 +164,14 @@ export default function ClipboardView({ onClose, onNotify }: { onClose(): void; 
 
       <div className="clips-toolbar">
         <SearchBox value={query} onChange={setQuery} label="Search clipboard history" placeholder="Search what you copied" />
-        <div className="clips-kinds" role="tablist" aria-label="Kinds">
-          {KINDS.map((k) => (
-            <button key={k.id} type="button" role="tab" aria-selected={kind === k.id} className={`note-tag${kind === k.id ? ' on' : ''}`} onClick={() => setKind(k.id)}>
-              {k.label}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          className="clips-kinds"
+          optionClass="note-tag"
+          label="Which kind of copy to show"
+          value={kind}
+          options={KINDS.map((k) => ({ value: k.id, label: k.label }))}
+          onChange={setKind}
+        />
       </div>
 
       {skipped && (

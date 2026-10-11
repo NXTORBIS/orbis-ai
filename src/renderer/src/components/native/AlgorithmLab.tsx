@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, Code2, Pause, Play, RotateCcw, SkipForward, Sparkles, Variable } from 'lucide-react'
 import type { SurfaceProps } from './surfaces'
+import { Segmented } from '../../ui'
 import Parameters from './Parameters'
 import { useAlgorithms } from './useAlgorithms'
 import { arrayAt, lineAt, regionAt, settledAt, stackAt, varsAt, visitedAt, type Frame, type Run, type Step } from '../../../../shared/algorithms/trace'
@@ -303,15 +304,19 @@ export default function AlgorithmLab({ instance, onNotify, onConfigure }: Surfac
       )}
 
       {/* ------------------------------------------------ views */}
-      <div className="p2-tabs" role="tablist" aria-label="How to show it">
-        {(['bars', 'graph', 'table', 'trace'] as View[])
+      <Segmented<View>
+        className="p2-tabs"
+        optionClass="p2-tab"
+        label="How to show it"
+        value={view}
+        options={(['bars', 'graph', 'table', 'trace'] as View[])
           .filter((one) => (one === 'graph' ? family === 'graphs' : one === 'table' ? family === 'dynamic' : one === 'bars' ? family !== 'graphs' : true))
-          .map((one) => (
-            <button key={one} type="button" role="tab" aria-selected={view === one} className={`p2-tab${view === one ? ' on' : ''}`} onClick={() => setView(one)}>
-              {one === 'bars' ? 'Values' : one === 'graph' ? 'Graph' : one === 'table' ? 'Table' : 'Every step'}
-            </button>
-          ))}
-      </div>
+          .map((one) => ({
+            value: one,
+            label: one === 'bars' ? 'Values' : one === 'graph' ? 'Graph' : one === 'table' ? 'Table' : 'Every step'
+          }))}
+        onChange={setView}
+      />
 
       <div className={`p2-stage${panel === 'none' ? '' : ' with-panel'}`}>
         {panel === 'code' && code !== null && <CodePanel lines={code.lines} on={onLine} />}

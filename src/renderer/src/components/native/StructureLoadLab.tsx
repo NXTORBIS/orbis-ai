@@ -3,6 +3,7 @@ import type { SurfaceProps } from './surfaces'
 import Parameters from './Parameters'
 import Plot, { tidy } from './Plot'
 import { useEngineering } from './useEngineering'
+import { Segmented } from '../../ui'
 import './phase2.css'
 import './phase3.css'
 import './phase4.css'
@@ -244,13 +245,18 @@ export default function StructureLoadLab({ instance, onConfigure }: SurfaceProps
         </p>
       )}
 
-      <div className="p2-tabs" role="tablist">
-        {(['beam', 'truss'] as const).map((one) => (
-          <button key={one} type="button" role="tab" className="p2-tab" aria-selected={showing === one} onClick={() => setShowing(one)}>
-            {one === 'beam' ? 'A beam' : 'A truss'}
-          </button>
-        ))}
-      </div>
+      {/* `.p2-tab.on` is what the stylesheet lights up, and this strip never added it: both tabs looked chosen. */}
+      <Segmented
+        className="p2-tabs"
+        optionClass="p2-tab"
+        label="Which structure to load"
+        value={showing}
+        options={[
+          { value: 'beam', label: 'A beam' },
+          { value: 'truss', label: 'A truss' }
+        ]}
+        onChange={(one) => setShowing(one)}
+      />
 
       <div className="p3-split">
         <div>

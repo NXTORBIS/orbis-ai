@@ -22,8 +22,8 @@ import { useFocusTrap } from '../lib/useFocusTrap'
  * menus, and a menu's habits are wrong for a dialog.
  *
  * **A click on the backdrop closes it, but only a click that began there.** A drag that started inside the panel
- * and ended outside is not somebody dismissing it; it is somebody selecting text. Pass `keepsTyping` for a dialog
- * holding words somebody has written, where a stray click should never throw them away.
+ * and ended outside is not somebody dismissing it; it is somebody selecting text. Pass `outsideCloses={false}`
+ * where closing by accident would cost something: words somebody typed, or an approval that would be answered no.
  *
  * No new CSS: `.modal-backdrop`, `.modal`, `.glass`, `.modal-header` and `.modal-body` already exist. Note that
  * `.modal` carries no background of its own — that comes from `glass` — and `.modal` is the only thing the
@@ -40,8 +40,13 @@ export interface ModalProps {
   closeLabel?: string
   /** False while something must finish first — a download, a save. Closes off Escape, the backdrop and the button together. */
   canClose?: boolean
-  /** False for a dialog holding typed words, where a stray click outside must not throw them away. */
-  keepsTyping?: boolean
+  /**
+   * Whether a click on the backdrop closes it. True nearly always.
+   *
+   * False for a dialog holding words somebody has typed, where a stray click must not throw them away -- and for
+   * one whose closing MEANS something, like an approval prompt, where closing by accident is answering no.
+   */
+  outsideCloses?: boolean
   /** For a dialog that is only a question. Says `alertdialog`, which asks to be read out at once. */
   asking?: boolean
   /** The id of the block that says what is at stake, so a question is read out with its stakes. */
@@ -63,7 +68,7 @@ export function Modal({
   title,
   closeLabel = 'Close',
   canClose = true,
-  keepsTyping = false,
+  outsideCloses = true,
   asking = false,
   describedBy,
   small,
@@ -99,7 +104,7 @@ export function Modal({
       className={cover ?? 'modal-backdrop'}
       role="presentation"
       onMouseDown={(event) => {
-        if (!canClose || keepsTyping) return
+        if (!canClose || !outsideCloses) return
         if (event.target === event.currentTarget) onClose()
       }}
     >

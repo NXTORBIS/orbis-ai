@@ -3,6 +3,7 @@ import { Layers, TrendingDown, TrendingUp } from 'lucide-react'
 import { PRESSURE_WINDOWS } from '../../../../shared/markets/tape'
 import type { TapeAnswer } from '../../../../main/markets/ipc'
 import type { TradePrint } from '../../../../shared/markets/provider'
+import { Segmented } from '../../ui'
 import { Introduce } from './Explain'
 import type { ExperienceState } from './useExperience'
 import type { CurrencyState } from './useCurrency'
@@ -143,13 +144,13 @@ export default function TapePanel({
 
       {/* ---------------------------------------------------------------- pressure */}
       <div className="mk-pressure">
-        <div className="mk-seg is-small">
-          {PRESSURE_WINDOWS.map((one) => (
-            <button key={one.id} type="button" className={window_ === one.id ? 'on' : ''} onClick={() => setWindow(one.id)}>
-              {one.label}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          className="mk-seg is-small"
+          label="Over what period"
+          value={window_}
+          options={PRESSURE_WINDOWS.map((one) => ({ value: one.id, label: one.label }))}
+          onChange={(next) => setWindow(next)}
+        />
 
         <span className={`mk-pressure-verdict is-${reading}`}>{READING_LABEL[reading] ?? reading}</span>
 
@@ -212,21 +213,22 @@ export default function TapePanel({
 
       {/* ---------------------------------------------------------------- filters */}
       <div className="mk-tape-bar">
-        <div className="mk-seg is-small">
-          {FILTERS.map((one) => (
-            <button
-              key={one.id}
-              type="button"
-              className={filter === one.id ? 'on' : ''}
-              onClick={() => setFilter(one.id)}
-              // Only offered when there is a threshold behind it, so it cannot silently filter everything out.
-              disabled={one.id === 'large' && effective === null}
-              title={one.id === 'large' && effective === null ? 'Not enough trades yet to judge what large means here' : undefined}
-            >
-              {one.label}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          className="mk-seg is-small"
+          label="Which trades to show"
+          value={filter}
+          options={FILTERS.map((one) => ({
+            value: one.id,
+            label: one.label,
+            // Only offered when there is a threshold behind it, so it cannot silently filter everything out.
+            disabled: one.id === 'large' && effective === null,
+            why:
+              one.id === 'large' && effective === null
+                ? 'Not enough trades yet to judge what large means here'
+                : undefined
+          }))}
+          onChange={(next) => setFilter(next)}
+        />
 
         {filter === 'large' ? (
           <label className="mk-tape-threshold">

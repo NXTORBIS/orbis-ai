@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react'
 import { Circle, FileText, Info, Mic, Square, Trash2, X } from 'lucide-react'
+import { SplitView } from '../ui'
 import { atText, mustStop, summaryNote, titleFrom, WHAT_IT_HEARS, withPart, type Meeting } from '../../../shared/meeting'
 import { voiceInput } from '../lib/voiceInput'
 import { newId } from '../lib/utils'
@@ -147,8 +148,17 @@ export default function MeetingView({ onClose, onNotify }: { onClose(): void; on
         </div>
       )}
 
-      <div className="meeting-body">
-        <ul className="meeting-list">
+      {/* Neither half of this screen had a name, so moving around by region gave "region, region" and you had to
+          go in and read to find out which one was the list. */}
+      <SplitView
+        className="meeting-body"
+        listLabel="Your notes"
+        listClassName="meeting-list"
+        listAs="ul"
+        detailLabel={open ? open.title || 'Note' : 'The note you pick'}
+        detailClassName="meeting-detail"
+        list={
+          <>
           {notes.length === 0 && !recording && <li className="view-muted">No notes yet.</li>}
           {notes.map((one) => (
             <li key={one.id} className={one.id === openId ? 'on' : ''}>
@@ -167,11 +177,11 @@ export default function MeetingView({ onClose, onNotify }: { onClose(): void; on
               </button>
             </li>
           ))}
-        </ul>
-
-        <div className="meeting-detail">
-          {!open && <p className="view-muted">Pick a note, or start one.</p>}
-          {open && (
+          </>
+        }
+        nothingPicked={<p className="view-muted">Pick a note, or start one.</p>}
+        detail={
+          open && (
             <>
               <div className="meeting-detail-head">
                 <h3>{open.title || 'Note'}</h3>
@@ -230,9 +240,9 @@ export default function MeetingView({ onClose, onNotify }: { onClose(): void; on
                 ))}
               </div>
             </>
-          )}
-        </div>
-      </div>
+          )
+        }
+      />
     </section>
   )
 }

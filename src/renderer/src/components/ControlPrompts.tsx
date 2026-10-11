@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ShieldAlert } from 'lucide-react'
+import { Modal } from '../ui'
 import type { ControlConfirmRequest } from '../../../shared/browserControl'
 
 const WHO: Record<ControlConfirmRequest['source'], string> = { orion: 'Orion', automation: 'An automation', user: 'Orbis' }
@@ -21,20 +22,22 @@ export default function ControlPrompts(): React.JSX.Element | null {
     setQueue((q) => q.slice(1))
   }
 
+  // Escape was handled on the panel itself, which only hears the key when something inside it already has
+  // focus -- and nothing here ever took focus, so in practice there was no way out but the mouse. The shared
+  // dialog listens at the window and holds focus inside, so the key works whatever you were doing.
+  // practice there was no way out but the mouse. The shared dialog listens at the window and holds focus inside.
+  // A click on the backdrop must NOT close it: closing this one by accident is answering no.
   return (
-    <div className="ext-prompt-backdrop control-prompt-backdrop">
-      <div
-        className="popover glass ext-prompt control-prompt"
-        role="alertdialog"
-        aria-labelledby="control-prompt-title"
-        aria-describedby="control-prompt-body"
-        onKeyDown={(e) => {
-          if (e.key === 'Escape') {
-            e.stopPropagation()
-            answer(false)
-          }
-        }}
-      >
+    <Modal
+      label={`${WHO[prompt.source]} wants to ${prompt.action}`}
+      asking
+      describedBy="control-prompt-body"
+      outsideCloses={false}
+      onClose={() => answer(false)}
+      cover="ext-prompt-backdrop control-prompt-backdrop"
+      panel="popover glass ext-prompt control-prompt"
+    >
+      <>
         <div className="ext-prompt-head">
           <ShieldAlert size={26} aria-hidden="true" />
           <h3 id="control-prompt-title">{WHO[prompt.source]} wants to:</h3>
@@ -52,7 +55,7 @@ export default function ControlPrompts(): React.JSX.Element | null {
             Approve
           </button>
         </div>
-      </div>
-    </div>
+      </>
+    </Modal>
   )
 }

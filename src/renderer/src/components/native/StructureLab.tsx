@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { SurfaceProps } from './surfaces'
+import { Segmented } from '../../ui'
 import Parameters from './Parameters'
 import { useStructures } from './useStructures'
 import './phase2.css'
@@ -127,6 +128,13 @@ interface Comparison {
 
 /** The only structures that can be walked, so the walk control is only sent for them. */
 const WALKABLE = new Set(['binary-search-tree', 'avl-tree'])
+
+/** The three things this laboratory can show you about whatever is built. */
+const SHOWING = [
+  { value: 'picture', label: 'The structure' },
+  { value: 'steps', label: 'Every step' },
+  { value: 'about', label: 'About it' }
+] as const satisfies readonly { value: 'picture' | 'steps' | 'about'; label: string }[]
 
 // ---------------------------------------------------------------- drawing
 
@@ -383,20 +391,18 @@ export default function StructureLab({ instance, onConfigure }: SurfaceProps): R
         </p>
       )}
 
-      <div className="p2-tabs" role="tablist">
-        {(['picture', 'steps', 'about'] as const).map((one) => (
-          <button
-            key={one}
-            type="button"
-            role="tab"
-            className="p2-tab"
-            aria-selected={showing === one}
-            onClick={() => setShowing(one)}
-          >
-            {one === 'picture' ? 'The structure' : one === 'steps' ? 'Every step' : 'About it'}
-          </button>
-        ))}
-      </div>
+      {/*
+       * `.p2-tab.on` is what the stylesheet lights up, and this strip had never added `on` — so the chosen tab
+       * looked exactly like the other two. The shared control adds it, along with the question the three answer.
+       */}
+      <Segmented
+        className="p2-tabs"
+        optionClass="p2-tab"
+        label="What to show about this structure"
+        value={showing}
+        options={SHOWING}
+        onChange={setShowing}
+      />
 
       <div className="p2-split">
         <div className="p2-stage">

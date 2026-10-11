@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Check, HelpCircle, Mic, Plus, RotateCcw, Sparkles } from 'lucide-react'
+import { Segmented } from '../../ui'
 import TeachBack from './TeachBack'
 import { onDay, type Call } from './useStudent'
 import type { LearningItem, LearningReview, Mistake, StudentSnapshot } from '../../../../shared/student/types'
@@ -192,6 +193,8 @@ export default function Learn({
   }
 
   const due = today?.dueItems ?? []
+  /** Mix-ups still open: the count beside the tab, as it was. */
+  const openMixups = mixups.filter((one) => !one.resolvedAt).length
 
   return (
     <div className="st-learn" data-tour="learn-ask">
@@ -202,20 +205,22 @@ export default function Learn({
             {snapshot.streaks.find((one) => one.kind === 'learning')?.current ?? 0} days of learning · {today?.due ?? 0} due
           </p>
         </div>
-        <div className="st-tabs">
-          <button type="button" className={`st-tab${tab === 'review' ? ' on' : ''}`} aria-pressed={tab === 'review'} onClick={() => setTab('review')}>
-            Review {today?.due ? `(${today.due})` : ''}
-          </button>
-          <button type="button" className={`st-tab${tab === 'today' ? ' on' : ''}`} aria-pressed={tab === 'today'} onClick={() => setTab('today')}>
-            Today
-          </button>
-          <button type="button" className={`st-tab${tab === 'mistakes' ? ' on' : ''}`} aria-pressed={tab === 'mistakes'} onClick={() => setTab('mistakes')}>
-            Mistakes {mistakes.length ? `(${mistakes.length})` : ''}
-          </button>
-          <button type="button" className={`st-tab${tab === 'mixups' ? ' on' : ''}`} aria-pressed={tab === 'mixups'} onClick={() => setTab('mixups')}>
-            Mix-ups {mixups.filter((one) => !one.resolvedAt).length ? `(${mixups.filter((one) => !one.resolvedAt).length})` : ''}
-          </button>
-        </div>
+        {/* These four were each saying `aria-pressed`, so anything not looking at the screen heard four separate
+            on/off switches rather than one choice of four — and nothing moved between them with the arrow keys.
+            Same classes, same four words, same counts; only what the row says about itself has changed. */}
+        <Segmented<'today' | 'review' | 'mistakes' | 'mixups'>
+          className="st-tabs"
+          optionClass="st-tab"
+          label="What to work on"
+          value={tab}
+          options={[
+            { value: 'review', label: `Review${today?.due ? ` (${today.due})` : ''}` },
+            { value: 'today', label: 'Today' },
+            { value: 'mistakes', label: `Mistakes${mistakes.length ? ` (${mistakes.length})` : ''}` },
+            { value: 'mixups', label: `Mix-ups${openMixups ? ` (${openMixups})` : ''}` }
+          ]}
+          onChange={(one) => setTab(one)}
+        />
       </header>
 
       {tab === 'review' ? (

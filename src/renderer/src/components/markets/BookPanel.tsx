@@ -10,6 +10,7 @@ import {
   type BookView
 } from '../../../../shared/markets/orderbook'
 import type { BookAnswer } from '../../../../main/markets/ipc'
+import { Segmented } from '../../ui'
 import { Explain, Introduce } from './Explain'
 import type { ExperienceState } from './useExperience'
 import type { CurrencyState } from './useCurrency'
@@ -208,13 +209,14 @@ export default function BookPanel({
       <div className="mk-book-lean">
         <span className="mk-quiet">
           Within
-          <span className="mk-seg is-small">
-            {BANDS.map((one) => (
-              <button key={one.id} type="button" className={band === one.id ? 'on' : ''} onClick={() => setBand(one.id)}>
-                {one.label}
-              </button>
-            ))}
-          </span>
+          {/* "0.1% 0.5% 1%" on its own says nothing: the strip now carries the question it answers. */}
+          <Segmented
+            className="mk-seg is-small"
+            label="How far either side of the mid to measure"
+            value={String(band)}
+            options={BANDS.map((one) => ({ value: String(one.id), label: one.label }))}
+            onChange={(one) => setBand(Number(one))}
+          />
         </span>
         {lean?.bidShare === null || lean === null ? (
           <em className="mk-quiet">Nothing resting on one side in this range.</em>
@@ -234,25 +236,36 @@ export default function BookPanel({
 
       {/* ---------------------------------------------------------------- controls */}
       <div className="mk-tape-bar">
-        <div className="mk-seg is-small">
-          {BOOK_DEPTHS.map((one) => (
-            <button key={one} type="button" className={depth === one ? 'on' : ''} onClick={() => setDepth(one)}>
-              {one}
-            </button>
-          ))}
-        </div>
+        {/* A row of bare numbers; without a name it is five buttons and no clue what they count. */}
+        <Segmented
+          className="mk-seg is-small"
+          label="How many price levels to show"
+          value={String(depth)}
+          options={BOOK_DEPTHS.map((one) => ({ value: String(one), label: String(one) }))}
+          onChange={(one) => setDepth(Number(one))}
+        />
 
         {grids.length > 0 ? (
-          <div className="mk-seg is-small" title="Group price levels">
-            <button type="button" className={grid === 0 ? 'on' : ''} onClick={() => setGrid(0)}>
-              <Layers size={11} /> raw
-            </button>
-            {grids.map((one) => (
-              <button key={one} type="button" className={grid === one ? 'on' : ''} onClick={() => setGrid(one)}>
-                {one >= 1 ? one.toLocaleString() : one.toPrecision(1)}
-              </button>
-            ))}
-          </div>
+          <Segmented
+            className="mk-seg is-small"
+            label="How to group price levels"
+            value={String(grid)}
+            options={[
+              {
+                value: '0',
+                label: (
+                  <>
+                    <Layers size={11} /> raw
+                  </>
+                )
+              },
+              ...grids.map((one) => ({
+                value: String(one),
+                label: one >= 1 ? one.toLocaleString() : one.toPrecision(1)
+              }))
+            ]}
+            onChange={(one) => setGrid(Number(one))}
+          />
         ) : null}
 
         <button

@@ -24,8 +24,13 @@ export interface SplitViewProps {
   /** What the list is — "Your notes", "Boards", "Settings". */
   listLabel: string
   listClassName?: string
-  /** `nav` when the list is how you move around the screen; `aside` when it is a filter beside the main thing. */
-  listAs?: 'nav' | 'aside' | 'div'
+  /**
+   * `nav` when the list is how you move around the screen, `aside` when it is a filter beside the main thing, and
+   * `ul` when the pane IS the list. The last one matters more than it looks: wrapping an existing `ul` in a `div`
+   * puts a second element between the rules and the rows, and the browser's own list margins come back with it --
+   * which is pixels moving, and pixels must not move.
+   */
+  listAs?: 'nav' | 'aside' | 'div' | 'ul'
   /** The thing that is open. Left out when nothing is picked, and then `nothingPicked` is shown instead. */
   detail?: ReactNode
   /** What the right-hand side is. Worth naming after whatever is open, when the screen knows. */
