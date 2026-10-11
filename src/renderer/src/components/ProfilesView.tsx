@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Check, Plus, Trash2, UserRound } from 'lucide-react'
 import type { Profile } from '../../../shared/profiles'
 import { DEFAULT_PROFILE_ID, PROFILE_COLORS } from '../../../shared/profiles'
-import type { NoticeKind } from '../App'
+import type { NoticeKind } from '../lib/notices'
 import { Surface } from '../ui'
 
 /**

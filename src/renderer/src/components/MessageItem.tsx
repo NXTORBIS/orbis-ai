@@ -37,7 +37,7 @@ const NativeAppCard = lazy(() => import('./native/NativeAppCard'))
 const QuizCard = lazy(() => import('./quiz/QuizCard'))
 import type { ChatQuiz } from '../../../shared/types'
 import { useDismiss } from '../lib/useDismiss'
-import type { NoticeKind } from '../App'
+import type { NoticeKind } from '../lib/notices'
 import Markdown from './Markdown'
 import ArtifactCard from './ArtifactCard'
 import ResearchSources from './ResearchSources'

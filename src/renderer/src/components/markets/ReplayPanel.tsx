@@ -18,7 +18,7 @@ import type { Candle } from '../../../../shared/markets/indicators'
 import MarketChart from './MarketChart'
 import EquityChart from './EquityChart'
 import { useCurrency } from './useCurrency'
-import type { NoticeKind } from '../../App'
+import type { NoticeKind } from '../../lib/notices'
 
 /**
  * Replay: a strategy meeting a market one bar at a time.

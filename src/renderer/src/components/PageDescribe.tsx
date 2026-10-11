@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { History, Loader2, Sparkles, Trash2, Wand2 } from 'lucide-react'
 
-import type { NoticeKind } from '../App'
+import type { NoticeKind } from '../lib/notices'
 import type { PageDocument } from '../../../shared/pages/builder'
 import { measure, PreviewComponent, useDocumentRunner } from './PageStudio'
 import { examine, type Rendered, type VisualResult } from '../../../shared/pages/visual'

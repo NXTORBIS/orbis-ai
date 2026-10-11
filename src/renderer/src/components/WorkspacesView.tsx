@@ -7,7 +7,7 @@ import { Check, Copy, FolderOpen, Layers, Plus, RefreshCw, Save, Trash2 } from '
 import { Modal, Surface } from '../ui'
 import type { Workspace, WorkspaceSummary } from '../../../shared/workspaces'
 import { WORKSPACE_COLORS } from '../../../shared/workspaces'
-import type { NoticeKind } from '../App'
+import type { NoticeKind } from '../lib/notices'
 
 type Listed = Workspace & { summary: WorkspaceSummary }
 

@@ -6,7 +6,7 @@ import type { OrderType, PaperOrder, Side } from '../../../../shared/markets/pap
 import { saveJournalNote, tradeNote } from './journal'
 import AssetLogo from './AssetLogo'
 import { useCurrency } from './useCurrency'
-import type { NoticeKind } from '../../App'
+import type { NoticeKind } from '../../lib/notices'
 
 /**
  * The simulated portfolio, and the desk that trades into it.

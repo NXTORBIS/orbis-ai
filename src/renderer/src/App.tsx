@@ -58,22 +58,13 @@ import { ImageEditorContext, collectImages, imageMarkdown } from './lib/imageEdi
 import type { EditableImage, GalleryImage } from './lib/imageEditor'
 import { MAX_QUEUED_MESSAGES } from './lib/messageQueue'
 import type { ChatQueue } from './lib/messageQueue'
+// A reply in flight, a notice, and how much a notice matters. These three were declared in this file, so
+// thirty-five screens imported the application shell to get a union of three words -- which is most of what made
+// this file look impossible to split. They live in `lib/notices.ts`. Nothing is re-exported from here, on purpose:
+// a re-export would let the old import keep working and the dependency would grow straight back.
+import type { Notice, NoticeKind, StreamState } from './lib/notices'
 
-export interface StreamState {
-  requestId: string
-  messageId: string
-  /** Rate-limit / fallback notices from the main process. */
-  status?: string
-}
 
-export type NoticeKind = 'info' | 'warn' | 'error'
-
-export interface Notice {
-  id: string
-  text: string
-  kind: NoticeKind
-  at: number
-}
 
 interface PendingDelta {
   conversationId: string

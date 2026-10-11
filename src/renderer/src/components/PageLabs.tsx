@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Download, FileText, GitBranch, Grid3x3, Hash, Layers, MessageCircle, Shapes, Sigma, Sliders, Target, Triangle, Workflow } from 'lucide-react'
-import type { NoticeKind } from '../App'
+import type { NoticeKind } from '../lib/notices'
 import {
   ConstantsLibraryPage,
   ConstraintCheckerPage,

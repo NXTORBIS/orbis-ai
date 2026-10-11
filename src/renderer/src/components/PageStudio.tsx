@@ -17,7 +17,7 @@ import {
   Wrench,
   X
 } from 'lucide-react'
-import type { NoticeKind } from '../App'
+import type { NoticeKind } from '../lib/notices'
 import {
   BUILDER_LIMITS,
   argumentsFor,

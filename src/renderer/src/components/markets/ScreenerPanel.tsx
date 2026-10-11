@@ -17,7 +17,7 @@ import type { ScreenAnswer } from '../../../../main/markets/ipc'
 import { compactNumber } from './MarketChart'
 import AssetLogo from './AssetLogo'
 import { useCurrency } from './useCurrency'
-import type { NoticeKind } from '../../App'
+import type { NoticeKind } from '../../lib/notices'
 
 /**
  * The screener.

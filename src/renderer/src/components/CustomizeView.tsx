@@ -4,7 +4,7 @@ import type { AppearanceConfig, ExperienceConfig } from '../../../shared/experie
 import { defaultConfig, describeConfig, diffConfig, isDefaultConfig } from '../../../shared/experience'
 import { widgetById } from '../../../shared/widgets'
 import { useExperience, type Experience } from '../lib/experience'
-import type { NoticeKind } from '../App'
+import type { NoticeKind } from '../lib/notices'
 import type { StoredTheme } from '../../../shared/themes'
 import { BUILT_IN_THEMES, copyOfBuiltIn, MAX_THEMES, newTheme, readability, THEME_TOKENS, themeTokens } from '../../../shared/themes'
 import type { StoredPreset } from '../../../shared/presets'

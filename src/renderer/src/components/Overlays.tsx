@@ -1,6 +1,6 @@
 import { CircleX, Info, TriangleAlert, X } from 'lucide-react'
 import { Modal } from '../ui'
-import type { Notice, NoticeKind } from '../App'
+import type { Notice, NoticeKind } from '../lib/notices'
 import { SLASH_COMMANDS } from '../lib/commands'
 
 const KIND_ICONS: Record<NoticeKind, typeof Info> = { info: Info, warn: TriangleAlert, error: CircleX }

@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { Download, Images, MessageSquare, Pencil, X } from 'lucide-react'
 import type { GalleryImage } from '../lib/imageEditor'
-import type { NoticeKind } from '../App'
+import type { NoticeKind } from '../lib/notices'
 
 interface Props {
   images: GalleryImage[]

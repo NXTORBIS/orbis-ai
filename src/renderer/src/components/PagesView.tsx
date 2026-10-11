@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, ArrowRight, Check, Equal, FlaskConical, Info, PenLine, Ruler, Search, ShieldCheck, Star, WifiOff, Wrench, X } from 'lucide-react'
-import type { NoticeKind } from '../App'
+import type { NoticeKind } from '../lib/notices'
 import type { PageCard, PageCategoryNode, PageComputeResult, PagePermission, PageSearchHit } from '../../../shared/types'
 import { BuilderPanel, ComposePanel, DiagnosticsPanel, PackagePanel, STUDIO_TABS, type StudioTab } from './PageStudio'
 import { LAB_PAGES } from './PageLabs'

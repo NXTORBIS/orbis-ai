@@ -11,7 +11,7 @@ import { PUSH_TO_TALK_EVENT } from '../../../shared/voiceInput'
 import { useDismiss } from '../lib/useDismiss'
 import { useVoiceInput } from '../hooks/useVoiceInput'
 import { clearComposerStart, peekComposerStart, rememberComposerStart } from '../lib/composerGlide'
-import type { NoticeKind } from '../App'
+import type { NoticeKind } from '../lib/notices'
 
 const QUICK_PROMPTS = [
   { label: 'Summarize a document', text: 'Summarize the attached document in five bullet points.' },

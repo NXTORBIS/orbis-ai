@@ -3,7 +3,7 @@ import { ArrowUpRight, Circle, Download, Eraser, Hand, Image as ImageIcon, Minus
 import { Button, Surface } from '../ui'
 import type { Board, BoardElement, Box, NoteElement, Point, ShapeElement, StrokeElement, TextElement } from '../../../shared/whiteboard'
 import { boardBounds, BOARD_COLORS, bounds, boardToSvg, move as moveElement, NOTE_COLORS, pick, pickIn, scale as scaleElement, simplify, topZ } from '../../../shared/whiteboard'
-import type { NoticeKind } from '../App'
+import type { NoticeKind } from '../lib/notices'
 import { copyText } from '../lib/utils'
 
 type Tool = 'select' | 'pan' | 'pen' | 'highlighter' | 'eraser' | 'rectangle' | 'ellipse' | 'line' | 'arrow' | 'text' | 'note'

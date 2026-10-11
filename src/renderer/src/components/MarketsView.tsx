@@ -62,7 +62,7 @@ import type { Instrument, QuoteView } from '../../../shared/markets/instrument'
 import type { Watchlist } from '../../../shared/markets/workspace'
 import type { DiscoveryAnswer, MarketDetail, WatchlistsAnswer } from '../../../main/markets/ipc'
 import type { MarketRow } from '../../../shared/markets/discovery'
-import type { NoticeKind } from '../App'
+import type { NoticeKind } from '../lib/notices'
 import { Surface } from '../ui'
 
 /**

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AlertTriangle, Gauge, ShieldAlert, ShieldCheck } from 'lucide-react'
 import { MAX_LEVERAGE, type AccountMargin, type MarginSettings, type PositionMargin } from '../../../../shared/markets/margin'
-import type { NoticeKind } from '../../App'
+import type { NoticeKind } from '../../lib/notices'
 import { Introduce } from './Explain'
 import type { CurrencyState } from './useCurrency'
 import type { ExperienceState } from './useExperience'

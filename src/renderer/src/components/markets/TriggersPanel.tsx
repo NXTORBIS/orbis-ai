@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Pause, Play, Plus, Trash2, Workflow, Zap } from 'lucide-react'
 import { MIN_TRIGGER_COOLDOWN, type MarketTrigger, type TriggerKind } from '../../../../shared/markets/triggers'
 import type { AlertSubject, Comparison } from '../../../../shared/markets/alerts'
-import type { NoticeKind } from '../../App'
+import type { NoticeKind } from '../../lib/notices'
 import type { ExperienceState } from './useExperience'
 
 /**

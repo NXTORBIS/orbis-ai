@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, BatteryCharging, CalendarClock, CalendarDays, Check, Clock, Info, Moon, Pause, Pencil, Play, Plus, SkipForward, Trash2, Zap } from 'lucide-react'
 import type { TemporalJob } from '../../../shared/temporal/job'
 import { describeAction, describeRecurrence } from '../../../shared/temporal/phrase'
-import type { NoticeKind } from '../App'
+import type { NoticeKind } from '../lib/notices'
 import { Button, IconButton, Surface } from '../ui'
 
 /**

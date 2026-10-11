@@ -16,7 +16,7 @@ import {
   Unlock,
   Waypoints
 } from 'lucide-react'
-import type { NoticeKind } from '../../App'
+import type { NoticeKind } from '../../lib/notices'
 import {
   DRAWING_INFO,
   DRAWING_KINDS,

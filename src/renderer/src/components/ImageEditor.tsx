@@ -5,7 +5,7 @@ import type { EditableImage } from '../lib/imageEditor'
 import { imageCanvas, inpaint, resizeImage, resizedSize, toDataUrl } from '../lib/imageTools'
 import { cutOutSubject } from '../lib/backgroundRemoval'
 import { useDismiss } from '../lib/useDismiss'
-import type { NoticeKind } from '../App'
+import type { NoticeKind } from '../lib/notices'
 
 type Tool = 'markup' | 'comment' | 'removebg' | 'erase' | 'resize'
 

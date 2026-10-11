@@ -23,7 +23,7 @@ import {
   type PanelNode
 } from '../../../../shared/markets/panels'
 import { PANELS, type Panel } from '../../../../shared/markets/experience'
-import type { NoticeKind } from '../../App'
+import type { NoticeKind } from '../../lib/notices'
 
 /**
  * The workspace: several panels at once, arranged however somebody wants them.

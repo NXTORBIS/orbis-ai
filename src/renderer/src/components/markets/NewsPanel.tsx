@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { AlertTriangle, ExternalLink, Newspaper, RefreshCw } from 'lucide-react'
 import type { NewsAnswer } from '../../../../main/markets/ipc'
 import type { NewsItem } from '../../../../shared/markets/news'
-import type { NoticeKind } from '../../App'
+import type { NoticeKind } from '../../lib/notices'
 
 /**
  * Crypto headlines.

@@ -32,7 +32,7 @@ import type { IndicatorKind } from '../../../../shared/markets/indicators'
 import EquityChart from './EquityChart'
 import AssetLogo from './AssetLogo'
 import { backtestNote, saveJournalNote } from './journal'
-import type { NoticeKind } from '../../App'
+import type { NoticeKind } from '../../lib/notices'
 
 /**
  * Strategies, and running them over history.

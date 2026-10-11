@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Activity, Book, CheckSquare, Compass, Hash, TrendingUp } from 'lucide-react'
-import type { NoticeKind } from '../App'
+import type { NoticeKind } from '../lib/notices'
 import { Choice, Field, Notes, Problem, Stats, readNumbers, useEngine } from './PageTools'
 
 /**

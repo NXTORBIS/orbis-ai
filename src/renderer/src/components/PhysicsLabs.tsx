@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Activity, Clock, GitCompare, Move, Orbit, RotateCw, Target, Waves, Zap } from 'lucide-react'
-import type { NoticeKind } from '../App'
+import type { NoticeKind } from '../lib/notices'
 import { Choice, Field, Notes, Problem, Stats, readNumbers, useEngine } from './PageTools'
 
 /**

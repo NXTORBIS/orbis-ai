@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useLayoutEffect, useRef, useState } f
 import type { ChatQuiz } from '../../../shared/types'
 import { ArrowDown, HatGlasses } from 'lucide-react'
 import type { Attachment, Conversation, Settings } from '../../../shared/types'
-import type { NoticeKind, StreamState } from '../App'
+import type { NoticeKind, StreamState } from '../lib/notices'
 import type { ChatQueue } from '../lib/messageQueue'
 import Composer from './Composer'
 import MemoryOffer from './MemoryOffer'

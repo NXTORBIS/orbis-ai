@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Activity, AlertTriangle, Info, LineChart, Sigma, Table as TableIcon, Target } from 'lucide-react'
-import type { NoticeKind } from '../App'
+import type { NoticeKind } from '../lib/notices'
 import type { PageComputeResult } from '../../../shared/types'
 
 /**

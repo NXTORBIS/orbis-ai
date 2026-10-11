@@ -31,7 +31,7 @@ import { buildSuggestions, isAddress, pickKey, queryKey, recentSuggestions, toUr
 import type { OmniSuggestion } from '../../../shared/omnibox'
 import type { BrowserLibrarySnapshot } from '../../../shared/types'
 import { useVoiceInput } from '../hooks/useVoiceInput'
-import type { NoticeKind } from '../App'
+import type { NoticeKind } from '../lib/notices'
 import OrionAnswer from './OrionAnswer'
 
 // The quick Workflows panel (and the run dialog it uses) loads the first time the button is opened.

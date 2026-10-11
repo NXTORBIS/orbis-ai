@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, ArrowLeft, Check, GripVertical, Home, Plus, Trash2, X } from 'lucide-react'
-import type { NoticeKind } from '../App'
+import type { NoticeKind } from '../lib/notices'
 import type { PageApplicationSummary, PageCard } from '../../../shared/types'
 
 /**

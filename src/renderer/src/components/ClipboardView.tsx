@@ -3,7 +3,7 @@ import { Check, Clipboard, Code2, Image as ImageIcon, Link2, Palette, Pause, Pin
 import { SearchBox, Segmented, Surface } from '../ui'
 import type { ClipboardSettings, ClipItem, ClipKind } from '../../../shared/clipboardHistory'
 import { DEFAULT_CLIPBOARD_SETTINGS } from '../../../shared/clipboardHistory'
-import type { NoticeKind } from '../App'
+import type { NoticeKind } from '../lib/notices'
 
 const KINDS: { id: ClipKind | 'all' | 'pinned'; label: string }[] = [
   { id: 'all', label: 'All' },

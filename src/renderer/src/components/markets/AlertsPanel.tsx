@@ -13,7 +13,7 @@ import type { Instrument, QuoteView } from '../../../../shared/markets/instrumen
 import type { IndicatorKind } from '../../../../shared/markets/indicators'
 import AssetLogo from './AssetLogo'
 import { ListRow } from '../../ui'
-import type { NoticeKind } from '../../App'
+import type { NoticeKind } from '../../lib/notices'
 
 /**
  * Alerts.

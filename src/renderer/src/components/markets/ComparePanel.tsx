@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { GitCompareArrows, Plus, RefreshCw, Search, X } from 'lucide-react'
 import { MAX_COMPARED, type CompareStat, type CorrelationCell, type IndexedSeries } from '../../../../shared/markets/compare'
-import type { NoticeKind } from '../../App'
+import type { NoticeKind } from '../../lib/notices'
 import { Introduce } from './Explain'
 import type { ExperienceState } from './useExperience'
 
