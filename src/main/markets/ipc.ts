@@ -1678,7 +1678,10 @@ export function registerMarketsIpc(o: MarketsIpcOptions): void {
       settings: resolved.settings,
       sources,
       onboarding: workspace.onboarding,
-      needsSetup: needsOnboarding(workspace.onboarding),
+      // Never while the file could not be read. An empty workspace and a workspace nobody has set up look the same
+      // from here, and offering the first-run wizard to somebody whose file is merely held open invites them to
+      // configure Markets from scratch over the top of what is already in it.
+      needsSetup: o.store.problem(profileId) === null && needsOnboarding(workspace.onboarding),
       orion: orionContext(resolved),
       summary: describeExperience(resolved),
       levels: (Object.keys(LEVEL_LABELS) as (keyof typeof LEVEL_LABELS)[])
