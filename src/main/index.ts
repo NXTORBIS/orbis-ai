@@ -1,5 +1,5 @@
 import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, nativeTheme, net, powerMonitor, protocol, shell, Tray } from 'electron'
-import type { MenuItemConstructorOptions, OpenDialogOptions, TitleBarOverlayOptions, IpcMainInvokeEvent } from 'electron'
+import type { MenuItemConstructorOptions, OpenDialogOptions, TitleBarOverlayOptions } from 'electron'
 import { appendFileSync, existsSync, promises as fs } from 'node:fs'
 import os from 'node:os'
 import { spawn } from 'node:child_process'
@@ -160,10 +160,8 @@ process.on('uncaughtException', (error) => recordCrash('something went wrong in 
 process.on('unhandledRejection', (reason) => recordCrash('a promise failed and nothing was waiting for it', reason))
 
 const BREAK = String.fromCharCode(10, 10)
-import type { GalaxyNodeType, GalaxyView } from '../shared/galaxy'
 import type { Workflow, WorkflowStep } from '../shared/workflows'
 import { memoryFromRequest, memoryPromptBlock, parseMemoryCommand } from '../shared/memory'
-import type { MemoryCategory } from '../shared/memory'
 import { planNextStep } from './stepPlanner'
 import { WidgetFeeds } from './widgetFeeds'
 import { WorkflowStore } from './workflows/store'
@@ -234,6 +232,9 @@ const researchControl = new ResearchControl()
 import { plainHandle, plainListen, profileHandle } from './ipc/handle.ts'
 import { registerVaultIpc } from './vault/ipc.ts'
 import { registerSecurityIpc } from './security/ipc.ts'
+import { registerUpdateIpc } from './update/ipc.ts'
+import { registerStepsIpc } from './steps/ipc.ts'
+import { registerGalaxyIpc, registerMemoryIpc, registerSearchSessionsIpc } from './knowledge/ipc.ts'
 import { QuitFlush } from './quitFlush'
 import { createMusic, registerMusicIpc } from './music/service'
 import { StudentService } from './student/service'
@@ -2199,15 +2200,9 @@ ${summaryBlock(summary)}`
   handle('search:specialized-health', () => specializedSearch.check())
 
   // Updating Orbis. Everything the window and Orion can ask goes through the one manager.
-  handle('update:status', () => (updates ? { status: updates.getStatus(), settings: updates.getSettings(), history: updates.getUpdateHistory() } : null))
-  handle('update:check', () => updates?.checkForUpdates() ?? null)
-  handle('update:download', () => updates?.downloadUpdate() ?? null)
-  handle('update:cancel-download', () => {
-    updates?.cancelDownload()
-    return updates?.getStatus() ?? null
-  })
-  handle('update:restart-and-update', () => updates?.restartAndUpdate() ?? null)
-  handle('update:settings', (_e, patch: unknown) => updates?.setSettings((patch ?? {}) as Parameters<UpdateManager['setSettings']>[0]) ?? null)
+  // Six channels in `update/ipc.ts`. The manager is built later in starting up, so they ask for it at the moment
+  // of the call rather than holding it -- one captured here would be null for the life of the process.
+  registerUpdateIpc({ updates: () => updates, getWindow: liveWindow })
 
   /**
    * The licences of everything Orbis is built from, generated at build time from what is actually installed. Most of
@@ -4139,49 +4134,16 @@ ${page.text}`, { howMany: 6 })
         }
       )
 
-    /** Only the Orbis window may drive a run, and only ever one of its own profile's. */
-    const stepCall = <T,>(run: (current: StepRun | undefined, profileId: string) => Promise<T> | T) => {
-      return async (event: IpcMainInvokeEvent, runId: unknown): Promise<T | null> => {
-        if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
-        const profileId = await stepProfile()
-        const found = typeof runId === 'string' ? stepRuns.get(runId) : undefined
-        return run(found && found.state.profileId === profileId ? found : undefined, profileId)
-      }
-    }
-
-    ipcMain.handle('steps:start', async (event, goal: unknown) => {
-      if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
-      const task = typeof goal === 'string' ? goal.trim().slice(0, 2000) : ''
-      if (!task) return null
-      const id = crypto.randomUUID()
-      const run = makeStepRun(id, await stepProfile(), task)
-      stepRuns.set(id, run)
-      // Started in the background: the window watches it through steps:changed rather than waiting on this call.
-      void run.start().catch(() => undefined)
-      return run.view()
+    // Seven channels in `steps/ipc.ts`. A run is found by id there, and the id is checked against the active
+    // profile -- an id is a guess anybody could make, so one belonging to another profile's run resolves to
+    // nothing rather than to that run.
+    registerStepsIpc({
+      getWindow: liveWindow,
+      profileId: stepProfile,
+      runs: () => stepRuns,
+      make: (id, profileId, goal) => makeStepRun(id, profileId, goal),
+      newId: () => crypto.randomUUID()
     })
-    ipcMain.handle('steps:read', stepCall((run) => run?.view() ?? null))
-    ipcMain.handle('steps:pause', stepCall((run) => {
-      run?.pauseRun('Paused by you.')
-      return run?.view() ?? null
-    }))
-    ipcMain.handle('steps:resume', stepCall(async (run) => {
-      await run?.resumeRun()
-      return run?.view() ?? null
-    }))
-    ipcMain.handle('steps:stop', stepCall((run) => {
-      run?.stopRun('Stopped by you.')
-      return run?.view() ?? null
-    }))
-    ipcMain.handle('steps:skip', stepCall(async (run) => {
-      await run?.skipCurrent('You chose to skip this.')
-      return run?.view() ?? null
-    }))
-    // The person says they have dealt with a challenge. The page is looked at before that is believed.
-    ipcMain.handle('steps:verified', stepCall(async (run) => {
-      await run?.captchaDone()
-      return run?.view() ?? null
-    }))
 
     /**
      * Learned skills: successful step-by-step runs the person chose to keep, stored per profile beside its workflows and
@@ -4198,10 +4160,6 @@ ${page.text}`, { howMany: 6 })
     profilesStore.onChange(() => {
       void stepProfile().then((id) => skills.useProfile(id))
     })
-    const fromWindow = (event: IpcMainInvokeEvent): void => {
-      if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
-    }
-    const text = (value: unknown, max: number): string => (typeof value === 'string' ? value.slice(0, max) : '')
     /** The run itself, in the main process, and only if it belongs to the profile in use. */
     const ownRun = async (runId: unknown): Promise<StepRun> => {
       const run = typeof runId === 'string' ? stepRuns.get(runId) : undefined
@@ -4215,11 +4173,6 @@ ${page.text}`, { howMany: 6 })
       void stepProfile().then((id) => memory?.useProfile(id))
     })
     app.on('before-quit', () => memory?.close())
-    const memoryCall = <T,>(run: (store: MemoryStore, ...args: unknown[]) => T) => (event: IpcMainInvokeEvent, ...args: unknown[]): T => {
-      if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
-      return run(memory!, ...args)
-    }
-    const category = (value: unknown): MemoryCategory | undefined => (['about', 'preference', 'project', 'general'].includes(String(value)) ? (value as MemoryCategory) : undefined)
     /**
      * The pages this person has read, per profile, on this computer.
      *
@@ -4544,41 +4497,11 @@ ${page.text}`, { howMany: 6 })
       void stepProfile().then((id) => searchSessions.useProfile(id))
     })
     app.on('before-quit', () => searchSessions.close())
-    const searchCall = <T,>(run: (...args: unknown[]) => T) => (event: IpcMainInvokeEvent, ...args: unknown[]): T => {
-      if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
-      return run(...args)
-    }
-    ipcMain.handle('search-sessions:save', searchCall((session) => searchSessions.save(session)))
-    ipcMain.handle('search-sessions:list', searchCall((query) => searchSessions.list(typeof query === 'string' ? query.slice(0, 200) : undefined)))
-    ipcMain.handle('search-sessions:get', searchCall((id) => searchSessions.get(String(id))))
-    ipcMain.handle('search-sessions:find', searchCall((about) => searchSessions.find(String(about).slice(0, 200))))
-    ipcMain.handle('search-sessions:remove', searchCall((id) => searchSessions.remove(String(id))))
-    ipcMain.handle('search-sessions:clear', searchCall(() => searchSessions.clear()))
-
-    ipcMain.handle('memory:list', memoryCall((store, options) => {
-      const o = (options ?? {}) as Record<string, unknown>
-      return store.list({ query: typeof o.query === 'string' ? o.query.slice(0, 200) : undefined, includeArchived: o.includeArchived === true, category: category(o.category) })
-    }))
-    ipcMain.handle('memory:add', memoryCall((store, text, options) => {
-      const o = (options ?? {}) as Record<string, unknown>
-      return store.add(text, { category: category(o.category), pinned: o.pinned === true, origin: 'settings' })
-    }))
-    ipcMain.handle('memory:update', memoryCall((store, id, patch) => {
-      const p = (patch ?? {}) as Record<string, unknown>
-      return store.update(String(id), {
-        ...(p.text !== undefined ? { text: p.text } : {}),
-        ...(category(p.category) ? { category: category(p.category) } : {}),
-        ...(typeof p.pinned === 'boolean' ? { pinned: p.pinned } : {}),
-        ...(typeof p.archived === 'boolean' ? { archived: p.archived } : {})
-      })
-    }))
-    ipcMain.handle('memory:remove', memoryCall((store, id) => store.remove(String(id))))
-    ipcMain.handle('memory:clear', memoryCall((store) => store.clear()))
-    ipcMain.handle('memory:settings', memoryCall((store) => store.settings()))
-    ipcMain.handle('memory:set-settings', memoryCall((store, next) => {
-      const n = (next ?? {}) as Record<string, unknown>
-      return store.setSettings({ ...(typeof n.enabled === 'boolean' ? { enabled: n.enabled } : {}), ...(typeof n.useInChat === 'boolean' ? { useInChat: n.useInChat } : {}) })
-    }))
+    // Six for saved searches and seven for memory, in `knowledge/ipc.ts`. Nothing there can switch memory on:
+    // the settings channels change what is remembered and whether it is used in a conversation, and the switch
+    // itself stays in Settings with the wording beside it.
+    registerSearchSessionsIpc({ getWindow: liveWindow, sessions: () => searchSessions })
+    registerMemoryIpc({ getWindow: liveWindow, memory: () => memory! })
 
     /*
      * Fourteen channels for learned skills used to be written out here, with a sender-checking predicate and two
@@ -4640,30 +4563,8 @@ ${page.text}`, { howMany: 6 })
       void stepProfile().then((id) => galaxy.useProfile(id))
     })
     app.on('before-quit', () => galaxy.close())
-    const TYPES: GalaxyNodeType[] = ['project', 'memory', 'search', 'page', 'site', 'note', 'task', 'skill', 'workflow', 'workspace', 'whiteboard', 'bookmark']
-    ipcMain.handle('galaxy:view', async (event, raw: unknown) => {
-      fromWindow(event)
-      // Skills and workflows announce changes to the window rather than to Galaxy, so the map is rebuilt when opened.
-      galaxy.refresh()
-      const v = (raw ?? {}) as Record<string, unknown>
-      const view: GalaxyView = {
-        ...(Array.isArray(v.types) ? { types: v.types.filter((t): t is GalaxyNodeType => TYPES.includes(t as GalaxyNodeType)) } : {}),
-        ...(typeof v.query === 'string' ? { query: v.query.slice(0, 200) } : {}),
-        ...(typeof v.focus === 'string' ? { focus: v.focus.slice(0, 2100) } : {}),
-        ...(typeof v.depth === 'number' ? { depth: v.depth } : {}),
-        ...(typeof v.from === 'number' ? { from: v.from } : {}),
-        ...(typeof v.to === 'number' ? { to: v.to } : {}),
-        limit: typeof v.limit === 'number' ? Math.max(10, Math.min(1500, v.limit)) : 400
-      }
-      return galaxy.view(view)
-    })
-    ipcMain.handle('galaxy:describe', (event, id: unknown) => (fromWindow(event), galaxy.describe(text(id, 2100))))
-    ipcMain.handle('galaxy:link', (event, from: unknown, to: unknown, note: unknown) => (fromWindow(event), galaxy.link(text(from, 2100), text(to, 2100), text(note, 200) || undefined)))
-    ipcMain.handle('galaxy:unlink', (event, id: unknown) => (fromWindow(event), galaxy.unlink(text(id, 80))))
-    ipcMain.handle('galaxy:ask', (event, ids: unknown, question: unknown) => {
-      fromWindow(event)
-      return galaxy.askAbout(Array.isArray(ids) ? ids.filter((i): i is string => typeof i === 'string') : [], text(question, 1000))
-    })
+    // Five for the map, in `knowledge/ipc.ts` with the two stores it is drawn from.
+    registerGalaxyIpc({ getWindow: liveWindow, galaxy: () => galaxy })
 
     app.on('before-quit', () => {
       for (const run of stepRuns.values()) run.stopRun('Orbis is closing.')

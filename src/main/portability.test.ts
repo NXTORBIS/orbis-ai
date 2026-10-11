@@ -52,6 +52,24 @@ const BROWSER_LAYER = new Set([
    */
   'main/pages/host.ts',
   'main/pages/ipc.ts',
+  /*
+   * Updating Orbis: the channels only.
+   *
+   * `update/{manager,journal,package}.ts` decide everything -- what an update is, whether one may be applied,
+   * what an interrupted one left behind -- and none of them names Electron. This file is the six questions the
+   * window asks.
+   */
+  'main/update/ipc.ts',
+  // Working a goal one step at a time: `stepRunner.ts` and everything it uses are pure; this is the channels.
+  'main/steps/ipc.ts',
+  /*
+   * What Orbis remembers, and the map over it: the channels only.
+   *
+   * `knowledge/{memory,recall,searchSessions,galaxyService}.ts` and `shared/galaxy.ts` hold every decision --
+   * what may be remembered, what the map is drawn from, what a question about it may reach. This file is the
+   * eighteen questions the window asks, beside `recallIpc.ts`, which is the same job for the nine recall ones.
+   */
+  'main/knowledge/ipc.ts',
   'main/ipc/senderCheck.ts',
   /*
    * The two Electron files of Orbis Music, and deliberately only two.
