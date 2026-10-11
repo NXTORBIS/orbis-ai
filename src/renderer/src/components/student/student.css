@@ -2585,6 +2585,18 @@
   min-height: 150px;
 }
 
+/*
+ * The way out of the first screen anybody sees.
+ *
+ * In the corner the rest of Student keeps its close button, above the onboarding card rather than inside it --
+ * the card is a sequence of steps and this is not one of them.
+ */
+.st-onb-exit {
+  display: flex;
+  justify-content: flex-end;
+  padding: 10px 12px 0;
+}
+
 .st-onb-hero {
   display: grid;
   place-items: center;

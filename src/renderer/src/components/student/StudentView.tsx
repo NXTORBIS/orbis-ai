@@ -288,6 +288,18 @@ export default function StudentView({
   if (!prefs.onboarded) {
     return (
       <div className="view st-view" role="region" aria-label="Orbis Student">
+        {/*
+          A way out of the first screen anybody sees.
+
+          Its first step is deliberately not skippable, and it sat in a bare view with no heading row -- so the
+          only exit was Escape, which works and which nothing said. The close button the rest of Student has,
+          in the same corner, doing the same thing.
+        */}
+        <div className="st-onb-exit">
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close Orbis Student">
+            <X size={16} />
+          </button>
+        </div>
         <Onboarding call={call} onDone={() => void refresh()} />
       </div>
     )

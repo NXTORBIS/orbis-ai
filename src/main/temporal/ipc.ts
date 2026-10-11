@@ -106,12 +106,22 @@ export function registerTemporalIpc(o: TemporalIpcOptions): void {
     return { ...reading, preview: soon.map((o2) => ({ at: o2.at, resolution: o2.resolution })) }
   })
 
-  /** What a rule will actually do, for a schedule being edited. */
+  /**
+   * What a rule will actually do, for a schedule being edited.
+   *
+   * The schedule is checked rather than cast. `raw as Schedule` is a cast telling the compiler to stop asking,
+   * and what arrived was then read field by field -- so asking for a preview of nothing answered "Cannot read
+   * properties of undefined (reading 'timeZone')", which the main process logged as a handler error and the
+   * window showed to somebody as though it meant anything.
+   */
   handle('schedules:preview', (_e, raw, count) => {
+    if (raw === null || typeof raw !== 'object' || typeof (raw as { kind?: unknown }).kind !== 'string') {
+      return { occurrences: [], said: '', problem: 'There is no rule to look ahead at yet.' }
+    }
     const schedule = raw as Schedule
     const limit = Math.min(Math.max(Number(count) || 5, 1), 50)
     const soon = occurrencesBetween(schedule, Date.now(), Date.now() + 366 * 4 * 86_400_000, limit)
-    return { occurrences: soon, said: schedule ? describeSchedule(schedule) : '' }
+    return { occurrences: soon, said: describeSchedule(schedule) }
   })
 
   /**
@@ -128,7 +138,18 @@ export function registerTemporalIpc(o: TemporalIpcOptions): void {
     needsThisComputer: true
   }))
 
-  handle('schedules:can-run-offline', (_e, action) => answerAboutOffline(action as TemporalAction))
+  /**
+   * Whether one thing a schedule does could happen with this computer off.
+   *
+   * Checked rather than cast, for the same reason as the preview above: asked about nothing, this used to answer
+   * "Cannot read properties of undefined (reading 'kind')".
+   */
+  handle('schedules:can-run-offline', (_e, action) => {
+    if (action === null || typeof action !== 'object' || typeof (action as { kind?: unknown }).kind !== 'string') {
+      return 'Nothing was named, so there is nothing to say about whether it could run with this computer off.'
+    }
+    return answerAboutOffline(action as TemporalAction)
+  })
 
   /**
    * What this computer can be woken from, read from the computer itself.
