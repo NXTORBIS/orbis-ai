@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import type { LiveInstance } from './surfaces'
 import Parameters from './Parameters'
+import { Segmented } from '../../ui'
 import './phase2.css'
 import './phase3.css'
 import './phase4.css'
@@ -93,21 +94,17 @@ export default function LabShell({
         </p>
       )}
 
-      {tabs !== undefined && tabs.length > 1 && (
-        <div className="p2-tabs" role="tablist">
-          {tabs.map((one) => (
-            <button
-              key={one.id}
-              type="button"
-              role="tab"
-              className="p2-tab"
-              aria-selected={showing === one.id}
-              onClick={() => onShow?.(one.id)}
-            >
-              {one.label}
-            </button>
-          ))}
-        </div>
+      {/* `.p2-tab.on` has been in phase2.css since this was written and nothing ever added `on`, so in all twenty
+          laboratories the chosen tab looked exactly like every other tab. It is lit now. */}
+      {tabs !== undefined && (
+        <Segmented
+          className="p2-tabs"
+          optionClass="p2-tab"
+          label={`What to show in ${title}`}
+          value={showing ?? null}
+          options={tabs.map((one) => ({ value: one.id, label: one.label }))}
+          onChange={(id) => onShow?.(id)}
+        />
       )}
 
       {/* With nothing to put beside it, the side column was still holding its 260px and the main column was laid

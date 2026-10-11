@@ -1,4 +1,5 @@
 import { CircleX, Info, TriangleAlert, X } from 'lucide-react'
+import { Modal } from '../ui'
 import type { Notice, NoticeKind } from '../App'
 import { SLASH_COMMANDS } from '../lib/commands'
 
@@ -112,15 +113,11 @@ const BROWSER_SHORTCUTS: [string, string][] = [
 ]
 
 export function ShortcutsModal({ onClose }: { onClose(): void }): React.JSX.Element {
+  // Escape did nothing here. The shell steps aside when a dialog is on screen, rightly, and nothing ever picked
+  // the key up on this side -- so the only way out of the shortcuts list was the mouse.
   return (
-    <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="modal glass small shortcuts-modal" role="dialog" aria-modal="true" aria-labelledby="shortcuts-title">
-        <div className="modal-header">
-          <h2 id="shortcuts-title">Commands and shortcuts</h2>
-          <button className="icon-btn" title="Close" onClick={onClose}>
-            <X size={16} />
-          </button>
-        </div>
+    <Modal label="Commands and shortcuts" title="Commands and shortcuts" onClose={onClose} small className="shortcuts-modal">
+      <>
         <div className="modal-body">
           <p className="hud-label shortcuts-section">Commands · type / in the message box</p>
           {SLASH_COMMANDS.map((command) => (
@@ -147,7 +144,7 @@ export function ShortcutsModal({ onClose }: { onClose(): void }): React.JSX.Elem
             </div>
           ))}
         </div>
-      </div>
-    </div>
+      </>
+    </Modal>
   )
 }

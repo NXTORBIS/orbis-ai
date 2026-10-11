@@ -4,6 +4,7 @@ import ProjectFileList from './ProjectFileList'
 import { CHAT_MODELS, modelLabel } from '../../../shared/models'
 import { AUTO_MODEL } from '../../../shared/modelRoute'
 import { Check, Copy, FolderOpen, Layers, Plus, RefreshCw, Save, Trash2, X } from 'lucide-react'
+import { Modal } from '../ui'
 import type { Workspace, WorkspaceSummary } from '../../../shared/workspaces'
 import { WORKSPACE_COLORS } from '../../../shared/workspaces'
 import type { NoticeKind } from '../App'
@@ -244,9 +245,16 @@ export default function WorkspacesView({ onClose, onNotify }: { onClose(): void;
         {!workspaces.length && <p className="view-empty">No workspaces yet. Open the pages you want to keep together, then save them here.</p>}
       </div>
 
+      {/* The other dialog Escape did nothing in. It is also a question rather than a form, so it says
+           `alertdialog` now and is read out at once rather than waiting to be found. */}
       {confirming && (
-        <div className="modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setConfirming(null)}>
-          <div className="modal glass space-confirm" role="dialog" aria-modal="true" aria-label="Open this workspace?">
+        <Modal
+          label="Open this workspace?"
+          asking
+          onClose={() => setConfirming(null)}
+          className="space-confirm"
+        >
+          <>
             <h3>Open “{workspaces.find((w) => w.id === confirming.id)?.name}”?</h3>
             <p className="view-muted">
               {confirming.plan.open} page{confirming.plan.open === 1 ? '' : 's'} would open, {confirming.plan.close} would close
@@ -263,8 +271,8 @@ export default function WorkspacesView({ onClose, onNotify }: { onClose(): void;
                 Cancel
               </button>
             </div>
-          </div>
-        </div>
+          </>
+        </Modal>
       )}
     </div>
   )
