@@ -110,6 +110,11 @@ test('every button says what it does, by its words or by a label', () => {
 test('every dialog says which dialog it is', () => {
   const bad: string[] = []
   for (const file of FILES) {
+    // The shared dialog is where `role="dialog"` is allowed to live without a name beside it in the source: it
+    // takes a REQUIRED `label` and writes `aria-label` or `aria-labelledby` from it, so there is no way to render
+    // an unnamed one. That is checked separately below, and it is a stronger promise than this search can make --
+    // which is the point, because the moment a screen uses the shared dialog this search stops seeing it at all.
+    if (file.path.endsWith('ui\\Modal.tsx') || file.path.endsWith('ui/Modal.tsx')) continue
     for (const match of file.text.matchAll(/role="dialog"/g)) {
       // The label may be before or after role= on the same tag, so the whole tag is looked at.
       const start = file.text.lastIndexOf('<', match.index ?? 0)
@@ -119,6 +124,23 @@ test('every dialog says which dialog it is', () => {
     }
   }
   assert.deepEqual(bad, [], 'a dialog with no name is announced only as "dialog"')
+})
+
+test('the shared dialog cannot be rendered without a name', () => {
+  /*
+   * The promise the search above can no longer make.
+   *
+   * A grep over the screen files worked only while every dialog was written out by hand. As screens move onto the
+   * shared one, `role="dialog"` disappears from them and that search quietly covers less and less until it covers
+   * nothing -- a guard that passes because it has stopped looking. So the promise moves here: the shared dialog
+   * takes a required name and always writes it out, and this reads the component to check both halves.
+   */
+  const modal = FILES.find((file) => file.path.endsWith('ui\\Modal.tsx') || file.path.endsWith('ui/Modal.tsx'))
+  assert.ok(modal, 'the shared dialog is gone; every dialog is hand-written again and the search above is the guard')
+  assert.match(modal.text, /label: string/, 'the shared dialog takes no name')
+  assert.ok(!/label\?: string/.test(modal.text), 'the name is optional, so a dialog can be rendered without one')
+  assert.match(modal.text, /aria-label/, 'the name is taken and never written out')
+  assert.match(modal.text, /aria-labelledby/, 'a dialog with a heading does not point at it')
 })
 
 test('every text field can be named without looking at what is beside it', () => {
