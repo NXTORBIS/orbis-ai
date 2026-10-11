@@ -161,6 +161,7 @@ function destinationMissing(capability) {
   return null;
 }
 function unavailableBecause(capability, ready) {
+  if (capability.app && ready.window === true) return null;
   const nowhere = destinationMissing(capability);
   if (nowhere) return nowhere;
   for (const need of capability.needs) {
