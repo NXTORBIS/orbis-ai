@@ -24,10 +24,8 @@
  * is a Page in the library that fails when somebody opens it, and that is worse than one that is missing.
  */
 
-import { mkdirSync, renameSync, writeFileSync } from 'node:fs'
-import { openStored } from '../storedFile.ts'
-import fs from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
+import { ProfileJsonFile } from '../storage/profileJsonFile.ts'
 
 import { check, type PageDocument } from '../../shared/pages/builder.ts'
 import { isExpired, RESTING, type GenerationSession, type Stage } from '../../shared/pages/generation.ts'
@@ -186,50 +184,34 @@ const asWritten = (saved: Saved): string =>
   })
 
 export class GeneratedStore {
-  private readonly root: string
   private readonly operations: Readonly<Record<string, string>>
-  private readonly cache = new Map<string, Saved>()
-  private readonly timers = new Map<string, NodeJS.Timeout>()
-  private readonly dirty = new Set<string>()
-
-  constructor(userDataPath: string, operations: Readonly<Record<string, string>>) {
-    this.root = userDataPath
-    this.operations = operations
-  }
-
-  private fileFor(profileId: string): string {
-    return join(this.root, dataDirFor(profileId), FILE)
-  }
-
-  private async read(profileId: string): Promise<Saved> {
-    const held = this.cache.get(profileId)
-    if (held) return held
-    // The parse belongs inside `openStored`, not in a `try` of our own. It used to sit in the same `try` as the read,
-    // which made a file that is there but not valid JSON -- a write interrupted by a power cut, a half-finished sync --
-    // look exactly like no file at all: an empty library in memory, the mark that refuses writes cleared, and the next
-    // Page built renamed that emptiness over every Page this profile had ever generated, every version of each of them,
-    // with nothing kept anywhere. `openStored` tells the two apart: a damaged file is moved aside under its own name
-    // first, so the words are still on the disk, and only then may anything be written. When it could not even be
-    // moved, `mayWrite` is false and this store refuses to write at all, because something is there and Orbis does not
-    // know what.
-    const opened = await openStored(
-      this.fileFor(profileId),
-      (text) => cleanSaved(JSON.parse(text), this.operations),
-      empty
-    )
-    if (opened.mayWrite) this.unreadable.delete(profileId)
-    else this.unreadable.add(profileId)
-    this.cache.set(profileId, opened.value)
-    return opened.value
-  }
 
   /**
-   * Profiles whose file may not be written over: there is one, and it was neither read nor moved out of the way.
+   * One file per profile, with the cache, the timers and the refusals in `storage/profileJsonFile.ts`.
    *
-   * Set from `mayWrite` rather than worked out here, so the rule lives in one place. It stays set until the file is
-   * looked at again, which is the next time this profile's cache is empty.
+   * Nothing about how this behaves changed when it moved there. The rules it keeps are the ones this store had and
+   * needs: a file that could not be read is never written over, a change to one is refused in words before
+   * anything is changed, and quitting does not relax either of those.
    */
-  private readonly unreadable = new Set<string>()
+  private readonly files: ProfileJsonFile<Saved>
+
+  constructor(userDataPath: string, operations: Readonly<Record<string, string>>) {
+    this.operations = operations
+    this.files = new ProfileJsonFile<Saved>({
+      fileFor: (profileId) => join(userDataPath, dataDirFor(profileId), FILE),
+      empty,
+      parse: (text) => cleanSaved(JSON.parse(text), this.operations),
+      write: asWritten,
+      delayMs: FLUSH_MS,
+      refusal: () =>
+        'Orbis could not make sense of this profile\u2019s Pages file, so nothing was changed. It has been left exactly as it is.'
+    })
+  }
+
+  private read(profileId: string): Promise<Saved> {
+    return this.files.read(profileId)
+  }
+
   /**
    * The same read, for something that is about to change this profile's file.
    *
@@ -237,76 +219,17 @@ export class GeneratedStore {
    * A read that is about to be followed by a save cannot: the save will be refused, and the method would have
    * already returned the new favourite, the saved project, `true` -- so the screen says it saved and nothing was
    * written. Somebody loses a Page's work and is told the opposite, which is worse than being told it failed.
-   *
-   * So the refusal happens here, before anything is changed, and the window hears a failure.
    */
-  private async readForWrite(profileId: string): Promise<Saved> {
-    const saved = await this.read(profileId)
-    if (this.unreadable.has(profileId)) {
-      throw new Error('Orbis could not make sense of this profile\u2019s Pages file, so nothing was changed. It has been left exactly as it is.')
-    }
-    return saved
-  }
-
-
-  private touch(profileId: string): void {
-    this.dirty.add(profileId)
-    const existing = this.timers.get(profileId)
-    if (existing) clearTimeout(existing)
-    this.timers.set(
-      profileId,
-      setTimeout(() => {
-        void this.flushOne(profileId)
-      }, FLUSH_MS)
-    )
-  }
-
-  private async flushOne(profileId: string): Promise<void> {
-    const timer = this.timers.get(profileId)
-    if (timer) clearTimeout(timer)
-    this.timers.delete(profileId)
-    if (!this.dirty.delete(profileId)) return
-    const saved = this.cache.get(profileId)
-    if (!saved) return
-    if (this.unreadable.has(profileId)) {
-      // A file is there that Orbis could not read: it holds what this profile has decided and what it has made,
-      // so it is left alone and looked at again next time rather than written over with defaults. The mark is not
-      // cleared here -- clearing it let the very next save through a moment later, which is the write this whole
-      // branch exists to stop.
-      return
-    }
-    const file = this.fileFor(profileId)
-    await fs.mkdir(dirname(file), { recursive: true })
-    const temporary = `${file}.tmp`
-    // Write beside, then move: an interrupted write leaves the old file rather than half of the new one.
-    await fs.writeFile(temporary, asWritten(saved), 'utf8')
-    await fs.rename(temporary, file)
+  private readForWrite(profileId: string): Promise<Saved> {
+    return this.files.forWrite(profileId)
   }
 
   async flush(): Promise<void> {
-    await Promise.all([...this.dirty].map((profileId) => this.flushOne(profileId)))
+    await this.files.flush()
   }
 
   flushSync(): void {
-    for (const profileId of [...this.dirty]) {
-      const saved = this.cache.get(profileId)
-      if (!saved) continue
-      if (this.unreadable.has(profileId)) {
-        // The same rule as the timed write, because quitting is not a reason to overwrite something Orbis never
-        // understood. Losing the last few seconds of a session is recoverable; this is not.
-        continue
-      }
-      try {
-        const file = this.fileFor(profileId)
-        mkdirSync(dirname(file), { recursive: true })
-        const temporary = `${file}.tmp`
-        writeFileSync(temporary, asWritten(saved), 'utf8')
-        renameSync(temporary, file)
-      } catch {
-        // The very end of the process. There is nowhere to report this and nothing that could act on it.
-      }
-    }
-    this.dirty.clear()
+    this.files.flushSync()
   }
 
   // ---------------------------------------------------------------- Pages
@@ -336,8 +259,7 @@ export class GeneratedStore {
       }
     }
     const graphs = existing === -1 ? [...saved.graphs, graph] : saved.graphs.map((one, i) => (i === existing ? graph : one))
-    this.cache.set(profileId, { ...saved, graphs })
-    this.touch(profileId)
+    this.files.set(profileId, { ...saved, graphs })
     return { saved: true, message: '' }
   }
 
@@ -345,8 +267,7 @@ export class GeneratedStore {
     const saved = await this.readForWrite(profileId)
     const graphs = saved.graphs.filter((one) => one.pageId !== pageId)
     if (graphs.length === saved.graphs.length) return false
-    this.cache.set(profileId, { ...saved, graphs })
-    this.touch(profileId)
+    this.files.set(profileId, { ...saved, graphs })
     return true
   }
 
@@ -359,8 +280,7 @@ export class GeneratedStore {
     const saved = await this.read(profileId)
     const live = saved.sessions.filter((one) => !isExpired(one, now))
     if (live.length !== saved.sessions.length) {
-      this.cache.set(profileId, { ...saved, sessions: live })
-      this.touch(profileId)
+      this.files.set(profileId, { ...saved, sessions: live })
     }
     return live
   }
@@ -375,8 +295,7 @@ export class GeneratedStore {
       existing === -1
         ? [...saved.sessions, session].slice(-GENERATED_LIMITS.sessions)
         : saved.sessions.map((one, i) => (i === existing ? session : one))
-    this.cache.set(profileId, { ...saved, sessions })
-    this.touch(profileId)
+    this.files.set(profileId, { ...saved, sessions })
   }
 
   /** Sessions that were interrupted, for whoever decides what to do about them. */
@@ -384,11 +303,8 @@ export class GeneratedStore {
     return (await this.sessions(profileId, now)).filter((one) => !RESTING.has(one.stage))
   }
 
+  /** Throws away what is held, without writing it: for a profile that has gone, and after a profile switch. */
   forget(profileId?: string): void {
-    if (profileId === undefined) {
-      this.cache.clear()
-      return
-    }
-    this.cache.delete(profileId)
+    this.files.drop(profileId)
   }
 }

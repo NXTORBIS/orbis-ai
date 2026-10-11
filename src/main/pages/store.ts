@@ -1,6 +1,5 @@
-import { promises as fs, mkdirSync, renameSync, writeFileSync } from 'node:fs'
-import { openStored } from '../storedFile.ts'
-import { dirname, join } from 'node:path'
+import { ProfileJsonFile } from '../storage/profileJsonFile.ts'
+import { join } from 'node:path'
 import { dataDirFor } from '../../shared/profiles.ts'
 import { grantIsLive, type PermissionGrant, type Scope } from '../../shared/pages/capabilities.ts'
 import { isPageId } from '../../shared/pages/identity.ts'
@@ -195,125 +194,48 @@ export function cleanSaved(raw: unknown): Saved {
 }
 
 export class PagesStore {
-  private readonly root: string
-  private readonly cache = new Map<string, Saved>()
-  private readonly timers = new Map<string, NodeJS.Timeout>()
-  private readonly dirty = new Set<string>()
+  /**
+   * One file per profile, with the cache, the timers and the refusals in `storage/profileJsonFile.ts`.
+   *
+   * This store and the generated-Pages store beside it had the same hundred lines each: a map of profiles, a dirty
+   * set, a timer each, the set of files that must not be written over, and write-beside-then-rename twice -- once
+   * for the timed write and once for the one at quitting. Nothing about the behaviour changed when they moved.
+   */
+  private readonly files: ProfileJsonFile<Saved>
 
   constructor(userDataPath: string) {
-    this.root = userDataPath
-  }
-
-  private fileFor(profileId: string): string {
-    return join(this.root, dataDirFor(profileId), FILE)
+    this.files = new ProfileJsonFile<Saved>({
+      fileFor: (profileId) => join(userDataPath, dataDirFor(profileId), FILE),
+      empty,
+      parse: (text) => cleanSaved(JSON.parse(text)),
+      delayMs: FLUSH_MS,
+      refusal: () =>
+        'Orbis could not make sense of this profile\u2019s Pages file, so nothing was changed. It has been left exactly as it is.'
+    })
   }
 
   /** Everything this profile has decided. Read once and kept, because every question below asks it. */
-  async read(profileId: string): Promise<Saved> {
-    const held = this.cache.get(profileId)
-    if (held) return held
-    // The parse belongs inside `openStored`, not in a `try` of our own. It used to sit in the same `try` as the read,
-    // which made a file that is there but not valid JSON -- a write interrupted by a power cut, a half-finished sync --
-    // look exactly like no file at all: defaults in memory, the mark that refuses writes cleared, and the next
-    // favourite toggled renamed those defaults over every grant, project and application this profile had, with
-    // nothing kept anywhere. `openStored` tells the two apart: a damaged file is moved aside under its own name first,
-    // so the words are still on the disk, and only then may anything be written. When it could not even be moved,
-    // `mayWrite` is false and this store refuses to write at all, because something is there and Orbis does not know
-    // what.
-    const opened = await openStored(this.fileFor(profileId), (text) => cleanSaved(JSON.parse(text)), empty)
-    if (opened.mayWrite) this.unreadable.delete(profileId)
-    else this.unreadable.add(profileId)
-    this.cache.set(profileId, opened.value)
-    return opened.value
+  read(profileId: string): Promise<Saved> {
+    return this.files.read(profileId)
   }
 
-  /**
-   * Profiles whose file may not be written over: there is one, and it was neither read nor moved out of the way.
-   *
-   * Set from `mayWrite` rather than worked out here, so the rule lives in one place. It stays set until the file is
-   * looked at again, which is the next time this profile's cache is empty.
-   */
-  private readonly unreadable = new Set<string>()
   /**
    * The same read, for something that is about to change this profile's file.
    *
    * A read that is only going to be shown can happily hand back defaults for a file Orbis could not make sense of.
    * A read that is about to be followed by a save cannot: the save will be refused, and the method would have
-   * already returned the new favourite, the saved project, `true` -- so the screen says it saved and nothing was
-   * written. Somebody loses a Page's work and is told the opposite, which is worse than being told it failed.
-   *
-   * So the refusal happens here, before anything is changed, and the window hears a failure.
+   * already returned the saved project and `true` -- so the screen says it saved and nothing was written.
    */
-  private async readForWrite(profileId: string): Promise<Saved> {
-    const saved = await this.read(profileId)
-    if (this.unreadable.has(profileId)) {
-      throw new Error('Orbis could not make sense of this profile\u2019s Pages file, so nothing was changed. It has been left exactly as it is.')
-    }
-    return saved
+  private readForWrite(profileId: string): Promise<Saved> {
+    return this.files.forWrite(profileId)
   }
 
-
-  private touch(profileId: string): void {
-    this.dirty.add(profileId)
-    const existing = this.timers.get(profileId)
-    if (existing) clearTimeout(existing)
-    this.timers.set(
-      profileId,
-      setTimeout(() => {
-        void this.flushOne(profileId)
-      }, FLUSH_MS)
-    )
-  }
-
-  private async flushOne(profileId: string): Promise<void> {
-    const timer = this.timers.get(profileId)
-    if (timer) clearTimeout(timer)
-    this.timers.delete(profileId)
-    if (!this.dirty.delete(profileId)) return
-    const saved = this.cache.get(profileId)
-    if (!saved) return
-    if (this.unreadable.has(profileId)) {
-      // A file is there that Orbis could not read: it holds what this profile has decided and what it has made,
-      // so it is left alone and looked at again next time rather than written over with defaults. The mark is not
-      // cleared here -- clearing it let the very next save through a moment later, which is the write this whole
-      // branch exists to stop.
-      return
-    }
-    const file = this.fileFor(profileId)
-    await fs.mkdir(dirname(file), { recursive: true })
-    const temporary = `${file}.tmp`
-    // Write beside, then move: an interrupted write leaves the old file rather than half of the new one.
-    await fs.writeFile(temporary, JSON.stringify(saved), 'utf8')
-    await fs.rename(temporary, file)
-  }
-
-  /** Everything pending, written now. Called on quit, where there is no time for a timer. */
   async flush(): Promise<void> {
-    await Promise.all([...this.dirty].map((profileId) => this.flushOne(profileId)))
+    await this.files.flush()
   }
 
-  /** The synchronous version, for the very end of the process where promises will not be waited on. */
   flushSync(): void {
-    for (const profileId of [...this.dirty]) {
-      const saved = this.cache.get(profileId)
-      if (!saved) continue
-      if (this.unreadable.has(profileId)) {
-        // The same rule as the timed write, because quitting is not a reason to overwrite something Orbis never
-        // understood. Losing the last few seconds of a session is recoverable; this is not.
-        this.dirty.delete(profileId)
-        continue
-      }
-      try {
-        const file = this.fileFor(profileId)
-        mkdirSync(dirname(file), { recursive: true })
-        const temporary = `${file}.tmp`
-        writeFileSync(temporary, JSON.stringify(saved), 'utf8')
-        renameSync(temporary, file)
-      } catch {
-        // Nothing useful to do at this point in the process, and throwing would stop the rest from being written.
-      }
-      this.dirty.delete(profileId)
-    }
+    this.files.flushSync()
   }
 
   // ---------------------------------------------------------------- grants
@@ -337,7 +259,7 @@ export class PagesStore {
       one.capabilityId === cleaned.capabilityId &&
       JSON.stringify(one.scope) === JSON.stringify(cleaned.scope)
     saved.grants = [...saved.grants.filter((one) => !same(one)), cleaned].slice(-STORE_LIMITS.grants)
-    this.touch(profileId)
+    this.files.touch(profileId)
     return saved.grants
   }
 
@@ -349,7 +271,7 @@ export class PagesStore {
         ? { ...one, state: 'revoked' as const }
         : one
     )
-    this.touch(profileId)
+    this.files.touch(profileId)
     return saved.grants
   }
 
@@ -361,7 +283,7 @@ export class PagesStore {
     const saved = await this.read(profileId)
     const before = saved.grants.length
     saved.grants = saved.grants.filter((one) => one.state === 'active' && grantIsLive(one, now))
-    if (saved.grants.length !== before) this.touch(profileId)
+    if (saved.grants.length !== before) this.files.touch(profileId)
   }
 
   // ---------------------------------------------------------------- favourites and usage
@@ -377,7 +299,7 @@ export class PagesStore {
     if (favourite && !has) saved.favourites = [...saved.favourites, pageId].slice(-STORE_LIMITS.favourites)
     else if (!favourite && has) saved.favourites = saved.favourites.filter((one) => one !== pageId)
     else return has
-    this.touch(profileId)
+    this.files.touch(profileId)
     return favourite
   }
 
@@ -393,7 +315,7 @@ export class PagesStore {
     const saved = await this.read(profileId)
     const held = saved.usage[pageId] ?? { openCount: 0, lastOpenedAt: 0 }
     saved.usage[pageId] = { openCount: Math.min(1e9, held.openCount + 1), lastOpenedAt: now }
-    this.touch(profileId)
+    this.files.touch(profileId)
   }
 
   // ---------------------------------------------------------------- accepted updates
@@ -406,7 +328,7 @@ export class PagesStore {
     if (!isPageId(pageId)) return
     const saved = await this.readForWrite(profileId)
     saved.approved[pageId] = version.slice(0, 24)
-    this.touch(profileId)
+    this.files.touch(profileId)
   }
 
   // ---------------------------------------------------------------- each Page's own work
@@ -454,7 +376,7 @@ export class PagesStore {
     if (existing) {
       const updated: PageProject = { ...existing, name: cleaned.name, state: cleaned.state, updatedAt: now }
       saved.projects = saved.projects.map((one) => (one.projectId === cleaned.projectId ? updated : one))
-      this.touch(profileId)
+      this.files.touch(profileId)
       return { project: updated }
     }
 
@@ -466,7 +388,7 @@ export class PagesStore {
       }
     }
     saved.projects = [...saved.projects, cleaned]
-    this.touch(profileId)
+    this.files.touch(profileId)
     return { project: cleaned }
   }
 
@@ -475,7 +397,7 @@ export class PagesStore {
     const before = saved.projects.length
     saved.projects = saved.projects.filter((one) => one.projectId !== projectId)
     if (saved.projects.length === before) return false
-    this.touch(profileId)
+    this.files.touch(profileId)
     return true
   }
 
@@ -524,8 +446,7 @@ export class PagesStore {
     } else {
       saved.applications = saved.applications.map((one, i) => (i === index ? json : one))
     }
-    this.cache.set(profileId, saved)
-    this.touch(profileId)
+    this.files.set(profileId, saved)
     return true
   }
 
@@ -534,8 +455,7 @@ export class PagesStore {
     const left = saved.applications.filter((one) => one.applicationId !== applicationId)
     if (left.length === saved.applications.length) return false
     saved.applications = left
-    this.cache.set(profileId, saved)
-    this.touch(profileId)
+    this.files.set(profileId, saved)
     return true
   }
 
@@ -546,15 +466,15 @@ export class PagesStore {
     saved.favourites = saved.favourites.filter((one) => one !== pageId)
     delete saved.usage[pageId]
     delete saved.approved[pageId]
-    this.touch(profileId)
+    this.files.touch(profileId)
   }
 
   /** Called when the profile changes, so the next read is from the new profile's file. */
   forget(profileId?: string): void {
     if (profileId === undefined) {
-      this.cache.clear()
+      this.files.drop()
       return
     }
-    this.cache.delete(profileId)
+    this.files.drop(profileId)
   }
 }
