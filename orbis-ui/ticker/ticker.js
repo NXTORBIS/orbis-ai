@@ -256,8 +256,9 @@ let watching = []
  * so the first request simply never settled and the strip sat there blank for ever. Blank is the one state that says
  * nothing: a person cannot tell it from a market with no movement. A limit turns it into a sentence.
  */
+const SLOW = Symbol('slow')
 const within = (ms, work) =>
-  Promise.race([work, new Promise((_resolve, reject) => setTimeout(() => reject(new HelperDown('Orbis did not answer.')), ms))])
+  Promise.race([work, new Promise((resolve) => setTimeout(() => resolve(SLOW), ms))])
 
 /**
  * Telling the browser whether the strip is wanted.
@@ -278,6 +279,17 @@ let answered = false
 async function load() {
   try {
     const state = await within(6000, call('markets:ticker', []))
+    /*
+     * Slow is not absent.
+     *
+     * This used to reject, and every rejection here reads as "Orbis not running" -- which was the message somebody
+     * saw while Orbis was running and merely fetching prices. A slow read says so and is tried again; `answered`
+     * stays false, so the retry above keeps going with its growing wait.
+     */
+    if (state === SLOW) {
+      stateLabel.textContent = 'Waiting for Orbis\u2026'
+      return
+    }
     answered = true
     config = { ...config, ...(state?.config ?? {}) }
     settleMotion()

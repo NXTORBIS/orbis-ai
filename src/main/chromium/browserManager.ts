@@ -36,7 +36,24 @@ export const ORBIS_PANEL_ORIGIN = 'chrome://orbis'
  */
 // The lock surface is here for a sharper reason than the others: the password it takes is checked by Orbis, so a lock
 // screen whose origin the helper refuses is a lock screen that can never open anything.
-export const ORBIS_BUILTIN_ORIGINS = [ORBIS_PANEL_ORIGIN, 'chrome://orbis-newtab', 'chrome://orbis-search', 'chrome://orbis-orb', 'chrome://orbis-lock']
+/*
+ * Every Orbis page that talks to the helper.
+ *
+ * The helper answers nothing from an origin that is not here, and a page left out has no way to say so: the strip
+ * was missing, so every request it made -- `helper:ping` included -- was refused, and its one sentence for a
+ * request that does not come back is "Orbis not running". It said that for as long as it existed, while Orbis was
+ * running and answering the panel in the same browser.
+ *
+ * `builtinOrigins.test.ts` checks this against the pages that really import the helper client.
+ */
+export const ORBIS_BUILTIN_ORIGINS = [
+  ORBIS_PANEL_ORIGIN,
+  'chrome://orbis-newtab',
+  'chrome://orbis-search',
+  'chrome://orbis-orb',
+  'chrome://orbis-lock',
+  'chrome://orbis-ticker'
+]
 
 /** The code the ad blocker's worker runs for one operation of the panel's Blocking tab. */
 export function adblockCall(message: { type: string; [key: string]: unknown }): string {

@@ -61,8 +61,19 @@ export function createMarketsHandlers(getDeps: () => MarketsHelperDeps | null | 
   return {
     'markets:ticker': guarded(async () => {
       const deps = need()
-      // Primed first, so a strip that has just opened shows prices rather than dashes while it waits for a stream.
-      await deps.prime().catch(() => undefined)
+      /*
+       * Primed first, so a strip that has just opened shows prices rather than dashes -- but only for as long as
+       * that is worth waiting for.
+       *
+       * Priming fetches every quote the strip does not have, over the network. On a fresh profile that took longer
+       * than the six seconds the strip waits before giving up, so the read never came back and the strip reported
+       * "Orbis not running" -- about an Orbis that was running and had answered everything else.
+       *
+       * Two and a half seconds to help, and then the state goes out as it stands. The priming carries on behind
+       * it and the next read has the prices, so a slow network costs a moment of dashes rather than the strip.
+       */
+      const priming = deps.prime().catch(() => undefined)
+      await Promise.race([priming, new Promise((resolve) => setTimeout(resolve, 2500))])
       return deps.tickerState()
     }),
 

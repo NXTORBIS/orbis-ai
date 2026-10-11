@@ -96,3 +96,32 @@ test('a request made before Orbis is ready is refused rather than answered empti
     }
   )
 })
+
+test('the strip is answered even when the prices are slow to arrive', async () => {
+  /*
+   * The fault, measured. Priming fetches every quote the strip does not have, and the strip waits six seconds
+   * before deciding Orbis is not running. On a fresh profile the prime took longer than that, so the read never
+   * came back and the strip said Orbis was not running about an Orbis that was.
+   */
+  let primeFinished = false
+  const handlers = createMarketsHandlers(() => ({
+    tickerState: async () => ({ config: { enabled: true }, items: [], connection: 'live' }),
+    nextBatch: async () => ({ items: [] }),
+    prime: async () => {
+      await new Promise((resolve) => setTimeout(resolve, 9000))
+      primeFinished = true
+    },
+    act: async () => true,
+    openGroups: async () => undefined,
+    watch: async () => undefined,
+    hideStrip: async () => undefined
+  }))
+
+  const began = Date.now()
+  const answer = (await handlers['markets:ticker']([], {} as never)) as { connection: string }
+  const took = Date.now() - began
+
+  assert.equal(answer.connection, 'live', 'it answered')
+  assert.ok(took < 5000, `it waited ${took}ms for prices it could fill in afterwards`)
+  assert.equal(primeFinished, false, 'and the priming is still going, which is the point')
+})
