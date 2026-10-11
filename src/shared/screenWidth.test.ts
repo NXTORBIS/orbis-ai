@@ -40,7 +40,11 @@ const ROOT = new URL('../renderer/src/', import.meta.url)
 const MOST: Readonly<Record<string, number>> = Object.freeze({
   // The window's global stylesheet is 38 parts; they share one allowance, because which part a rule sits in is an
   // accident of where the section banners fell.
-  'styles/parts': 19,
+  //
+  // 19 -> 16: three went with the stylesheets of four deleted screens, which this guard noticed in the same change
+  // that lowered them. That is what it is for -- a ceiling left above what is really there is room for the fault
+  // to come back without anybody seeing it.
+  'styles/parts': 16,
   'components/student/student.css': 8,
   'components/native/phase2.css': 2,
   'components/native/phase6.css': 2,

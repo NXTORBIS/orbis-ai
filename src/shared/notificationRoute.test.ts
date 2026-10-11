@@ -64,11 +64,23 @@ test('every event Orbis can notify about has somewhere to go', () => {
   assert.deepEqual(lost, [], 'these notifications would bring the window forward and land nowhere')
 })
 
-test('the feature names here are the ones the window actually has', () => {
-  const sidebar = readFileSync(new URL('../renderer/src/components/Sidebar.tsx', import.meta.url), 'utf8')
-  const line = /export type FeatureId =([^\n]+)/.exec(sidebar)
-  assert.ok(line, "the window's feature list moved; this guard needs updating")
-  const windowHas = new Set([...line[1].matchAll(/'([a-z]+)'/g)].map((m) => m[1]))
+test('the feature names here are the ones the window actually has', async () => {
+  /*
+   * Asked of the capability registry, which is where the window's screens are listed.
+   *
+   * This used to read `export type FeatureId =` out of `Sidebar.tsx` and pull the quoted names off that line.
+   * The line reads `export type FeatureId = AppFeature` now -- an alias, with no names in it -- so the set came
+   * back empty and all four assertions below failed on every run.
+   *
+   * A guard that reads a list by its shape rather than by its meaning stops working the moment the list moves,
+   * and says nothing about having stopped: it fails for a reason that looks exactly like the thing it guards, so
+   * what it actually reports is "notifications route nowhere", which was never true.
+   *
+   * `CAPABILITIES` is the one registry both halves of Orbis read, and `app` is what says the window has a screen.
+   */
+  const { CAPABILITIES } = await import('./commandCenter.ts')
+  const windowHas = new Set(CAPABILITIES.map((one) => one.app).filter((one): one is NonNullable<typeof one> => Boolean(one)))
+  assert.ok(windowHas.size > 5, 'the registry should name the window’s screens; this guard needs updating')
   const used: WindowFeature[] = ['schedules', 'create', 'pages', 'student']
   for (const id of used) assert.ok(windowHas.has(id), `notifications route to "${id}" and the window has no such screen`)
 })
