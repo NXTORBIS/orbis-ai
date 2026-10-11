@@ -17,7 +17,7 @@ import type { ComposedPage } from './modules.ts'
  * so typing in the address bar, the new-tab search box and "search for …" in a context menu all arrive here, and nothing is sent to
  * Google, or anywhere else, until the web is actually searched.
  *
- * The same search Orbis has always had, minus a search box of its own (the address bar is the one search box): the verticals (Orion, All, Images, Videos, News, Maps, Music,
+ * The same search Orbis has always had, minus a search box of its own (the address bar is the one search box): the verticals (Orion, All, Images, Videos, Pages, News, Maps, Music,
  * Science, Files, Social), each result drawn as the kind of thing it is, pictures and videos looked at in a viewer, Orion's answers in
  * a saved session with numbered sources, and a plain link to search Google instead. Results are the providers' real results; a field
  * that did not arrive is not drawn. Nothing untrusted is ever put into the page as markup: every node is built with textContent.

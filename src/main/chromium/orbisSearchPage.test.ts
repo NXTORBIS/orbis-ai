@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import assert from 'node:assert/strict'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -229,7 +230,23 @@ test('Orbis Search in the real browser: every vertical, the viewer, Orion sessio
     await until("document.querySelector('.vertical')")
     const shown = await text()
     assert.ok(!/chrom(e|ium)/i.test(shown), shown)
-    assert.deepEqual(await js('[...document.querySelectorAll(".vertical")].map(a => a.textContent)'), ['Orion', 'All', 'Images', 'Videos', 'News', 'Maps', 'Music', 'Science', 'Files', 'Social'])
+    // Taken from `VERTICALS` rather than written out: Pages was added as a tab after this was written, and a list
+    // copied by hand reports the new tab as a fault in the page rather than as a change to the list.
+    const { VERTICALS } = await import('../../shared/orbisSearch.ts')
+    assert.equal((await js('[...document.querySelectorAll(".vertical")].map(a => a.textContent)') as string[]).length, VERTICALS.length)
+    assert.deepEqual(await js('[...document.querySelectorAll(".vertical")].map(a => a.textContent)'), [
+      'Orion',
+      'All',
+      'Images',
+      'Videos',
+      'Pages',
+      'News',
+      'Maps',
+      'Music',
+      'Science',
+      'Files',
+      'Social'
+    ])
     assert.equal(await js('document.title'), 'hello · Orbis Search')
   })
 
@@ -373,7 +390,15 @@ test('Orbis Search in the real browser: every vertical, the viewer, Orion sessio
     await open('#q=everest&in=images', { width: 390, dark: false })
     await until("document.querySelector('.imgwall .imgtile img')")
     assert.ok((await js<number>('document.documentElement.scrollWidth')) <= 392, 'no sideways scrolling')
-    assert.equal(await js('getComputedStyle(document.body).backgroundColor'), 'rgb(217, 223, 232)')
+    // Read from `tokens.json` rather than written out. The light palette was reworked -- it had no ladder and no
+    // white -- and `--bg` moved from #d9dfe8 to #eceff4, which this reported as the page ignoring the light theme
+    // when what had happened was the theme changing underneath a copied colour.
+    const tokens = JSON.parse(await readFile(new URL('../../../orbis-ui/tokens.json', import.meta.url), 'utf8')) as {
+      light: Record<string, string>
+    }
+    const hex = tokens.light.bg.replace('#', '')
+    const expected = `rgb(${parseInt(hex.slice(0, 2), 16)}, ${parseInt(hex.slice(2, 4), 16)}, ${parseInt(hex.slice(4, 6), 16)})`
+    assert.equal(await js('getComputedStyle(document.body).backgroundColor'), expected)
     await shot('images-light-narrow')
     await open('#q=everest&in=videos', { width: 390, dark: false })
     await until("document.querySelector('.thumbbox')")
