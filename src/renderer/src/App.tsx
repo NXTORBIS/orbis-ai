@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import CommandPalette from './components/CommandPalette'
 import { DEFAULT_AVATAR } from '../../shared/avatars'
 import { ASK_EVENT } from './components/native/AskBar'
@@ -24,6 +24,7 @@ import HudBackground from './components/HudBackground'
 import Sidebar from './components/Sidebar'
 import UnfinishedRuns from './components/UnfinishedRuns'
 import type { FeatureId } from './components/Sidebar'
+import { INITIAL_NAV, featureOf, navReducer, showingBrowser, showingImages } from '../../shared/navigation'
 import { DEFAULT_SETTINGS_SECTION, type SettingsSectionId } from '../../shared/settingsSections'
 import { destinationFor } from '../../shared/notificationRoute'
 import { watchingGroup } from '../../shared/watching'
@@ -116,9 +117,20 @@ export default function App(): React.JSX.Element {
       return false
     }
   })
-  const [imagesOpen, setImagesOpen] = useState(false)
-  /** Which of Orbis's own screens is open, or null for the chat. Only ever one. */
-  const [feature, setFeature] = useState<FeatureId | null>(null)
+  /**
+   * What is on screen, and whether the browser is running. One reducer, in `shared/navigation.ts`.
+   *
+   * This was four independent pieces of state -- the open screen, the image gallery, whether Chromium had started
+   * and whether it was in front -- so every place that opened something had to remember to close the other three.
+   * The places that forgot were the bug: a notification opening a screen left the browser covering it, and the
+   * sidebar opening a screen left it mounted behind the browser.
+   *
+   * The names below are kept, because sixty-odd lines read them. They are derived from one value now, so "two
+   * screens at once" is no longer something to remember; it is a sentence that cannot be said.
+   */
+  const [nav, go] = useReducer(navReducer, INITIAL_NAV)
+  const imagesOpen = showingImages(nav)
+  const feature: FeatureId | null = featureOf(nav)
   /** What was typed after /create, handed to the Create screen. The token makes the same words asked twice two requests. */
   const [createAsked, setCreateAsked] = useState<{ text: string; token: number } | null>(null)
   /** Which kept artifact a card in the conversation asked the Create screen to open. The token makes a second press a second request. */
@@ -136,7 +148,7 @@ export default function App(): React.JSX.Element {
    */
   const openOrbisView = useCallback(
     (name: string): void => {
-      setImagesOpen(false)
+      go({ kind: 'chat' })
       void window.api
         .executeControl({ capability: 'surface.open', params: { name: 'orbis panel', at: `#${name}` }, target: {}, source: 'user' })
         .then((result) => {
@@ -167,8 +179,8 @@ export default function App(): React.JSX.Element {
    */
   // Orbis's browser is Chromium. Its window sits inside this window, over the browser view (the old full-page mode): opening the
   // browser shows the view, "Return to chat" hides it and Chromium keeps running with its tabs.
-  const [browserOpen, setBrowserOpen] = useState(false)
-  const [browserHidden, setBrowserHidden] = useState(false)
+  const browserOpen = nav.browserLaunched
+  const browserHidden = nav.surface.kind !== 'browser'
   /**
    * Whether the browser is running at all, which is not whether it is in front.
    *
@@ -176,12 +188,12 @@ export default function App(): React.JSX.Element {
    * every tab. The chat says so while it is true and says nothing when it is not.
    */
   const [browserRunning, setBrowserRunning] = useState(false)
-  const browserLive = useRef({ open: false, hidden: false })
-  browserLive.current = { open: browserOpen, hidden: browserHidden }
+  // Read inside callbacks that must not be rebuilt every time the screen changes.
+  const navLive = useRef(nav)
+  navLive.current = nav
   const notifyRef = useRef<(text: string, kind?: NoticeKind) => void>(() => undefined)
   const openChromium = useCallback((input: string, options?: { newTab?: boolean; more?: string[] }) => {
-    setBrowserOpen(true)
-    setBrowserHidden(false)
+    go({ kind: 'browser' })
     void window.api.chromiumOpen(input, options).then((result) => {
       if (!result.ok) notifyRef.current(result.detail, 'error')
     })
@@ -189,15 +201,16 @@ export default function App(): React.JSX.Element {
   const openBrowser = useCallback(() => openChromium(''), [openChromium])
   /** Sidebar and /browser: show the browser, or go back to the chat when it is already showing. */
   const toggleBrowser = useCallback(() => {
-    const { open, hidden } = browserLive.current
+    const open = navLive.current.browserLaunched
+    const hidden = !showingBrowser(navLive.current)
     if (open && !hidden) {
-      setBrowserHidden(true)
+      go({ kind: 'browserDismissed' })
       // The browser is its own window now, so hiding it is this process's job and not something the renderer can do
       // by collapsing a view. Without this there was no way back to the chat except through the browser's own toolbar.
       void window.api.chromiumReturnToChat()
     }
     else if (open) {
-      setBrowserHidden(false)
+      go({ kind: 'browser' })
       void window.api.chromiumOpen('', { newTab: false })
     } else openChromium('')
   }, [openChromium])
@@ -277,18 +290,16 @@ export default function App(): React.JSX.Element {
       const where = destinationFor(what.event, what.subject)
       switch (where.kind) {
         case 'feature':
-          setImagesOpen(false)
           setSettingsAt(null)
-          setFeature(where.id as FeatureId)
+          go({ kind: 'feature', id: where.id as FeatureId })
           if (where.id === 'create' && where.focus) setCreateOpenAt({ artifactId: where.focus, token: Date.now() })
           return
         case 'settings':
           setSettingsAt(where.section)
           return
         case 'chat':
-          setImagesOpen(false)
           setSettingsAt(null)
-          setFeature(null)
+          go({ kind: 'chat' })
           if (where.conversationId) setActiveId(where.conversationId)
           return
         case 'browser':
@@ -307,14 +318,12 @@ export default function App(): React.JSX.Element {
 
   useEffect(() => {
     const offShow = window.api.onChromiumShow(() => {
-      setBrowserOpen(true)
-      setBrowserHidden(false)
+      go({ kind: 'browserShown' })
     })
-    const offHide = window.api.onChromiumHide(() => setBrowserHidden(true))
+    const offHide = window.api.onChromiumHide(() => go({ kind: 'browserDismissed' }))
     const offRunning = window.api.onChromiumRunning((running) => setBrowserRunning(running))
     const offClosed = window.api.onChromiumClosed(() => {
-      setBrowserOpen(false)
-      setBrowserHidden(false)
+      go({ kind: 'browserGone' })
     })
     return () => {
       offShow()
@@ -451,8 +460,7 @@ export default function App(): React.JSX.Element {
     () =>
       window.api.onScheduleOpenPage((url) => {
         setScheduledPage(url)
-        setFeature('pages')
-        setImagesOpen(false)
+        go({ kind: 'feature', id: 'pages' })
       }),
     []
   )
@@ -987,8 +995,7 @@ export default function App(): React.JSX.Element {
    */
   const visualArrived = useCallback(
     (arrival: VisualArrival) => {
-      setFeature(null)
-      setBrowserHidden(true)
+      go({ kind: 'chat' })
       if (arrival.what === 'lab') {
         if (arrival.appId) openNativeApp(arrival.appId)
         return
@@ -1280,7 +1287,9 @@ export default function App(): React.JSX.Element {
   const startChat = useCallback(
     (incognito: boolean) => {
       setActiveId(null)
-      setImagesOpen(false)
+      // A new conversation IS the chat screen. Started from behind Markets, this used to leave Markets in front,
+      // so the window looked like it had ignored the press.
+      go({ kind: 'chat' })
       const preferred = settings?.defaultModel ?? DEFAULT_MODEL
       setDraft({ model: isKnownModel(preferred) ? preferred : DEFAULT_MODEL, incognito })
     },
@@ -1289,7 +1298,7 @@ export default function App(): React.JSX.Element {
 
   const newChat = useCallback(() => startChat(false), [startChat])
 
-  const closeFeature = useCallback(() => setFeature(null), [])
+  const closeFeature = useCallback(() => go({ kind: 'chat' }), [])
   // Whichever way a screen was left -- its own back button, the menu, another screen opened over it -- something may
   // have been changed or removed on it: cards in the chat read again.
   useEffect(() => {
@@ -1416,7 +1425,7 @@ export default function App(): React.JSX.Element {
 
   const selectChat = useCallback((id: string) => {
     setActiveId(id)
-    setImagesOpen(false)
+    go({ kind: 'chat' })
   }, [])
 
   const togglePin = useCallback(
@@ -1463,9 +1472,8 @@ export default function App(): React.JSX.Element {
     const onOpen = (e: Event): void => {
       const artifactId = (e as CustomEvent<OpenArtifactDetail>).detail?.artifactId
       if (typeof artifactId !== 'string' || artifactId === '') return
-      setImagesOpen(false)
       setCreateOpenAt({ artifactId, token: Date.now() })
-      setFeature('create')
+      go({ kind: 'feature', id: 'create' })
     }
     window.addEventListener(OPEN_ARTIFACT_EVENT, onOpen)
     return () => window.removeEventListener(OPEN_ARTIFACT_EVENT, onOpen)
@@ -1578,17 +1586,14 @@ export default function App(): React.JSX.Element {
           return openSearch()
         case 'create':
           // Opens the Create screen; with words after it, hands them over to be made straight away.
-          setImagesOpen(false)
           if (args.trim() !== '') setCreateAsked({ text: args.trim(), token: Date.now() })
-          return setFeature('create')
+          return go({ kind: 'feature', id: 'create' })
         case 'images':
-          return setImagesOpen(true)
+          return go({ kind: 'images' })
         case 'study':
-          setImagesOpen(false)
-          return setFeature('student')
+          return go({ kind: 'feature', id: 'student' })
         case 'courses':
-          setImagesOpen(false)
-          return setFeature('courses')
+          return go({ kind: 'feature', id: 'courses' })
         case 'focus': {
           /*
            * `/focus` opens Student; `/focus 25` starts twenty-five minutes there and then.
@@ -1596,8 +1601,7 @@ export default function App(): React.JSX.Element {
            * A number is the only thing this takes. Anything else opens the screen rather than guessing, because a
            * session started by mistake is somebody's twenty-five minutes.
            */
-          setImagesOpen(false)
-          setFeature('student')
+          go({ kind: 'feature', id: 'student' })
           const minutes = Number(args.trim())
           if (Number.isFinite(minutes) && minutes >= 1 && minutes <= 600) {
             void window.api
@@ -1685,8 +1689,7 @@ export default function App(): React.JSX.Element {
       } else if (e.shiftKey && key === 'u') {
         // Student. Ctrl+Shift+F is the browser's find-on-page, so study gets a chord pages do not use.
         e.preventDefault()
-        setImagesOpen(false)
-        setFeature('student')
+        go({ kind: 'feature', id: 'student' })
       }
     }
     window.addEventListener('keydown', onKeyDown)
@@ -1711,7 +1714,6 @@ export default function App(): React.JSX.Element {
       const asked = text.trim()
       if (asked === '') return
       closeFeature()
-      setBrowserHidden(true)
       sendRef.current(asked, [])
     })
     return () => {
@@ -1760,12 +1762,11 @@ export default function App(): React.JSX.Element {
       }
 
       event.preventDefault()
-      if (imagesOpen) setImagesOpen(false)
-      else closeFeature()
+      go({ kind: 'escape' })
     }
     window.addEventListener('keydown', onEscape)
     return () => window.removeEventListener('keydown', onEscape)
-  }, [closeFeature, feature, imagesOpen, welcome])
+  }, [feature, imagesOpen, welcome])
 
   // Push-to-talk: hold Ctrl+Shift+M, speak, let go. Not a new transcription engine — it starts and stops the exact
   // session the chat or Browser Orion microphone button would, and hands the words back to whichever of them it
@@ -1829,7 +1830,9 @@ export default function App(): React.JSX.Element {
   )
   const galleryImages = useMemo(() => collectImages(savedConversations), [savedConversations])
   /** The browser is on screen: it takes the whole window below the address bar, so none of the chat's own bars are shown. */
-  const browserShowing = browserOpen && !browserHidden && !settingsOpen && !shortcutsOpen
+  // Settings and the shortcut sheet draw over everything, the browser included: they belong to this window, and a
+  // native Chromium window on top of them would hide them outright rather than sit behind the dimming.
+  const browserShowing = showingBrowser(nav) && !settingsOpen && !shortcutsOpen
 
   return (
     <ImageEditorContext.Provider value={openImageEditor}>
@@ -1913,10 +1916,7 @@ export default function App(): React.JSX.Element {
           imageCount={galleryImages.length}
           imagesOpen={imagesOpen}
           feature={feature}
-          onFeature={(id) => {
-            setImagesOpen(false)
-            setFeature((current) => (current === id ? null : id))
-          }}
+          onFeature={(id) => go({ kind: 'toggleFeature', id })}
           searchToken={searchToken}
           userName={settings?.userName ?? 'You'}
           userAvatar={settings?.userAvatar ?? DEFAULT_AVATAR}
@@ -1924,7 +1924,7 @@ export default function App(): React.JSX.Element {
           onNewChat={newChat}
           onIncognito={toggleIncognito}
           onSearch={openSearch}
-          onImages={() => setImagesOpen((open) => !open)}
+          onImages={() => go({ kind: 'toggleImages' })}
           onBrowser={toggleBrowser}
           onSelect={selectChat}
           onRename={renameConversation}
@@ -1970,7 +1970,7 @@ export default function App(): React.JSX.Element {
             onForgetBranch={(branchId) => active && forgetBranch(active.id, branchId)}
           />
           {imagesOpen && (
-            <ImagesView images={galleryImages} onClose={() => setImagesOpen(false)} onOpenChat={selectChat} onEdit={editGalleryImage} onNotify={notify} />
+            <ImagesView images={galleryImages} onClose={() => go({ kind: 'chat' })} onOpenChat={selectChat} onEdit={editGalleryImage} onNotify={notify} />
           )}
           {feature && (
             <Suspense fallback={<div className="feature-loading" role="status">Opening…</div>}>
@@ -2043,16 +2043,9 @@ export default function App(): React.JSX.Element {
         onFeature={(id) => {
           // One surface at a time: a screen opened from here replaces whatever was showing, rather than landing
           // on top of the image gallery or behind the browser.
-          setImagesOpen(false)
-          setBrowserHidden(true)
-          setFeature(id)
+          go({ kind: 'feature', id })
         }}
-        onBrowser={() => {
-          setImagesOpen(false)
-          setFeature(null)
-          setBrowserHidden(false)
-          setBrowserOpen(true)
-        }}
+        onBrowser={() => go({ kind: 'browser' })}
         ready={{ browser: browserOpen, helper: browserOpen, key: true, page: browserOpen && !browserHidden }}
       />
       {/*
