@@ -68,4 +68,32 @@ if ($new -ne $txt) { [IO.File]::WriteAllText($grd, $new) }
 # nothing has changed, and silently serves the stale file while reporting a successful build. Stamping every file we
 # have just written is what makes the next build see the change.
 Get-ChildItem -Path $dest -Recurse -File -ErrorAction SilentlyContinue | ForEach-Object { $_.LastWriteTime = Get-Date }
+
+# Every file the pages ask for must be one Chromium will actually serve.
+#
+# A WebUI page is served from a table in orbis_ui.cc, one AddResourcePath per file. A file missing from that table
+# is answered with ERR_FAILED -- and everything else about it looks right: it is on disk, the page references it,
+# this script copies it. panel-student.js was in exactly that state, so the Focus view in the panel was an empty
+# box for as long as it had existed, with the only evidence in a console nobody opens.
+#
+# This is the one place that can see both halves at once, so it is where the check belongs.
+$ui = Join-Path $Src 'chrome\browser\ui\webui\orbis\orbis_ui.cc'
+if (Test-Path $ui) {
+  $served = [regex]::Matches([IO.File]::ReadAllText($ui), 'AddResourcePath\("([^"]+)"') | ForEach-Object { $_.Groups[1].Value }
+  $missing = @()
+  foreach ($page in Get-ChildItem $dest -Filter '*.html' -File) {
+    $html = [IO.File]::ReadAllText($page.FullName)
+    foreach ($m in [regex]::Matches($html, '(?:src|href)="([^"]+)"')) {
+      $asked = $m.Groups[1].Value
+      # Only files this page expects from its own origin: an absolute url or a chrome:// path is somebody else's.
+      if ($asked -match '^(https?:|chrome:|data:|//|#)') { continue }
+      $asked = $asked -replace '^\./', '' -replace '\?.*$', ''
+      if ($served -notcontains $asked) { $missing += "$($page.Name) asks for $asked" }
+    }
+  }
+  if ($missing.Count -gt 0) {
+    throw "These are referenced by a page and not served by orbis_ui.cc, so Chromium will refuse them:`n  " + ($missing -join "`n  ") + "`nAdd an <include> to chrome/browser/browser_resources.grd and an AddResourcePath to orbis_ui.cc."
+  }
+  "checked: every file the pages ask for is served ($($served.Count) in the table)"
+}
 "synced shared WebUI style foundation (cr_shared_vars.css, md_colors.css, Inter, web font family)"

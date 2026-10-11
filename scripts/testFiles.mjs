@@ -215,6 +215,7 @@ export const TEST_FILES = [
   'src/shared/quiz/quiz.test.ts',
   'src/shared/choose/choose.test.ts',
   'src/main/choose/choose.test.ts',
+  'src/main/storage/jsonFile.test.ts',
   'src/shared/courses/content/ai/ai.test.ts',
   'src/shared/courses/content/quantum/quantum.test.ts',
   'src/shared/clipboardHistory.test.ts',
