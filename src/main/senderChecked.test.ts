@@ -127,9 +127,10 @@ test('every channel the main process registers directly asks who is asking', asy
   const all = await registrations()
   // A floor, not a target. It falls as families move onto `plainHandle`/`profileHandle`, which do not register
   // through `ipcMain` directly and so are not counted here -- they are checked by construction instead. It fell
-  // from 166 to 86 when `registerIpc`'s forty-five and the vault's twenty-three moved. What it guards against is
-  // the scan silently stopping, which is the failure that would make this whole test pass while seeing nothing.
-  assert.ok(all.length > 40, `only ${all.length} registrations found -- the scan has stopped seeing them`)
+  // from 166 to 86 when `registerIpc`'s forty-five and the vault's twenty-three moved, and from 47 to 39 when the
+  // eight voice channels became `whisper/ipc.ts`. What it guards against is the scan silently stopping, which is
+  // the failure that would make this whole test pass while seeing nothing at all.
+  assert.ok(all.length > 25, `only ${all.length} registrations found -- the scan has stopped seeing them`)
   const silent = all
     .filter((one) => !one.asks && !allowed.has(one.channel))
     .map((one) => `${one.where}: ${one.channel}`)
