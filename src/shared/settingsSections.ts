@@ -58,8 +58,11 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = Object.freeze([
     label: 'Account',
     blurb: 'Who you are to Orbis, and what it calls you.',
     icon: 'user',
-    keywords: ['name', 'profile', 'assistant name', 'address me as', 'title', 'who am i', 'rename'],
-    settings: ['assistantName', 'userName', 'userTitle']
+    keywords: ['name', 'profile', 'assistant name', 'address me as', 'title', 'who am i', 'rename', 'picture', 'avatar', 'world'],
+    // `userAvatar` is the world somebody picked for themselves. The picker has been in this section since the
+    // twelve worlds were drawn; the setting was simply never written down here, so searching Settings for
+    // "picture" found nothing and the guard that says every setting has a home was failing.
+    settings: ['assistantName', 'userName', 'userTitle', 'userAvatar']
   },
   {
     id: 'security',
