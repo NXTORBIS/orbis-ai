@@ -1,21 +1,15 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
+import { useNotices } from './app/useNotices'
+import { useChat } from './app/useChat'
 import CommandPalette from './components/CommandPalette'
 import { DEFAULT_AVATAR } from '../../shared/avatars'
 import { ASK_EVENT } from './components/native/AskBar'
-import type { Attachment, ChatMessage, ChatRequest, Conversation, Settings, SettingsUpdate, StreamEvent, VisualArrival } from '../../shared/types'
+import type { ChatMessage, Settings, SettingsUpdate } from '../../shared/types'
 import { isRefusal } from '../../shared/account'
-import { IMAGE_GEN_STATUS, isArtifactStatus } from '../../shared/types'
 import { themeBase } from '../../shared/themes'
-import { DEFAULT_MODEL, MODELS, isKnownModel, modelLabel } from '../../shared/models'
-import { AUTO_MODEL } from '../../shared/modelRoute'
-import { automationActive } from '../../shared/automation'
+import { MODELS } from '../../shared/models'
 import { PUSH_TO_TALK_EVENT } from '../../shared/voiceInput'
-import { copyText, newId, titleFromMessage } from './lib/utils'
-import { quizWanted, NOTHING_TO_GO_ON } from '../../shared/quiz/ask'
-import { readMessage, type Detail as ChooseDetail, type Reading as ChooseReading } from '../../shared/choose/detect'
-import { isAnswered, isHandedBack, wasKept, whyNot, type Answered as ChooseAnswer } from '../../shared/choose/reply'
-import type { Change as ChooseChange } from '../../shared/choose/update'
-import type { ChatDecision, ChatQuiz } from '../../shared/types'
+import { copyText, newId } from './lib/utils'
 import ChatHeader from './components/ChatHeader'
 import ContextChip from './components/ContextChip'
 import ChatView from './components/ChatView'
@@ -31,7 +25,6 @@ import { INITIAL_NAV, featureOf, navReducer, showingBrowser, showingImages } fro
 import { DEFAULT_SETTINGS_SECTION, type SettingsSectionId } from '../../shared/settingsSections'
 import { destinationFor } from '../../shared/notificationRoute'
 import { watchingGroup } from '../../shared/watching'
-import { dropBranch, parkTail, switchToBranch } from '../../shared/conversationBranch'
 // Orbis's own screens. Each was finished and unreachable: nothing imported them, so no amount of looking would have
 // found them. They are loaded lazily because only one is ever open and most sessions open none.
 // Lazy like the rest: the chart and its indicators are a large bundle for a screen most sessions never open.
@@ -60,36 +53,11 @@ import SystemBar from './components/SystemBar'
 import ImageEditor from './components/ImageEditor'
 import { ImageEditorContext, collectImages, imageMarkdown } from './lib/imageEditor'
 import type { EditableImage, GalleryImage } from './lib/imageEditor'
-import { MAX_QUEUED_MESSAGES } from './lib/messageQueue'
-import type { ChatQueue } from './lib/messageQueue'
-// A reply in flight, a notice, and how much a notice matters. These three were declared in this file, so
-// thirty-five screens imported the application shell to get a union of three words -- which is most of what made
-// this file look impossible to split. They live in `lib/notices.ts`. Nothing is re-exported from here, on purpose:
-// a re-export would let the old import keep working and the dependency would grow straight back.
-import type { Notice, NoticeKind, StreamState } from './lib/notices'
 
 
-
-interface PendingDelta {
-  conversationId: string
-  content: string
-  reasoning: string
-  reasoningMs?: number
-}
-
-interface DraftChat {
-  incognito: boolean
-  model: string
-}
-
-const COUNTDOWN = /Retrying in \d+s/
 
 export default function App(): React.JSX.Element {
   const [settings, setSettings] = useState<Settings | null>(null)
-  const [conversations, setConversations] = useState<Conversation[]>([])
-  const [streams, setStreams] = useState<Record<string, StreamState>>({})
-  const [activeId, setActiveId] = useState<string | null>(null)
-  const [draft, setDraft] = useState<DraftChat>({ model: DEFAULT_MODEL, incognito: false })
   const [loaded, setLoaded] = useState(false)
   /** The Orbis startup screen, shown on every launch; 'leaving' while it hands over to the main interface. */
   const [welcome, setWelcome] = useState<'closed' | 'open' | 'leaving'>('open')
@@ -194,7 +162,6 @@ export default function App(): React.JSX.Element {
   // Read inside callbacks that must not be rebuilt every time the screen changes.
   const navLive = useRef(nav)
   navLive.current = nav
-  const notifyRef = useRef<(text: string, kind?: NoticeKind) => void>(() => undefined)
   const openChromium = useCallback((input: string, options?: { newTab?: boolean; more?: string[] }) => {
     go({ kind: 'browser' })
     void window.api.chromiumOpen(input, options).then((result) => {
@@ -336,12 +303,8 @@ export default function App(): React.JSX.Element {
     }
   }, [])
 
-  /** Which model and mode the user is on, read when a task starts rather than captured before there is one. */
-  const currentRef = useRef<DraftChat>({ model: DEFAULT_MODEL, incognito: false })
 
 
-  /** Latest state of each running browser automation, by chat request, for the browser banner. */
-  const [, setAutomations] = useState<Record<string, NonNullable<ChatMessage['automation']>>>({})
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
   /**
    * Everything Orbis can do, from one box.
@@ -360,93 +323,45 @@ export default function App(): React.JSX.Element {
     return () => window.removeEventListener('orbis:pulsar-needed', open)
   }, [])
   const [quickPromptsOpen, setQuickPromptsOpen] = useState(false)
-  const [notices, setNotices] = useState<Notice[]>([])
-  const [unread, setUnread] = useState(0)
-  const [toasts, setToasts] = useState<Notice[]>([])
+
+  // ---------- Hooks ----------
+  const { notices, setNotices, unread, setUnread, toasts, setToasts, notify, logActivity, notifyRef, activityOpenRef } = useNotices()
+  const chat = useChat({ notify, logActivity, go, webSearch, settings })
+  const {
+    conversations, streams, activeId, setActiveId, active, current, queues,
+    send, sendRef, stop, regenerate, editMessage, resendFrom, useBranch, forgetBranch,
+    deleteConversation, renameConversation, archiveConversation, shareConversation,
+    setFeedback, changeModel, clearConversation, newChat, toggleIncognito,
+    improvePrompt, removeQueued, clearQueue, resumeQueue, setQuiz, addReply,
+    changeDecision, explainDecision, keepDecision, openNativeApp,
+    answerBrowserConfirmation, controlAutomation, persist, updateConversation,
+    conversationsRef, streamsRef
+  } = chat
+
+  const closeFeature = useCallback(() => go({ kind: 'chat' }), [])
+  useEffect(() => { artifactChanged() }, [feature])
+
   const [systemDark, setSystemDark] = useState(() => matchMedia('(prefers-color-scheme: dark)').matches)
 
-  // Refs mirror state synchronously so stream callbacks never read stale data.
-  const conversationsRef = useRef<Conversation[]>([])
-  const streamsRef = useRef<Record<string, StreamState>>({})
-  const pendingRef = useRef(new Map<string, PendingDelta>())
-  const frameRef = useRef<number | null>(null)
-  const activityOpenRef = useRef(false)
-
-  useEffect(() => {
-    activityOpenRef.current = activityOpen
-  }, [activityOpen])
-
-  const commitConversations = useCallback((next: Conversation[]) => {
-    conversationsRef.current = next
-    setConversations(next)
-  }, [])
-
-  const commitStreams = useCallback((fn: (s: Record<string, StreamState>) => Record<string, StreamState>) => {
-    streamsRef.current = fn(streamsRef.current)
-    setStreams(streamsRef.current)
-  }, [])
-
-  const updateConversation = useCallback(
-    (id: string, fn: (c: Conversation) => Conversation) => {
-      commitConversations(conversationsRef.current.map((c) => (c.id === id ? fn(c) : c)))
-    },
-    [commitConversations]
-  )
-
-  const persist = useCallback((id: string) => {
-    const conversation = conversationsRef.current.find((c) => c.id === id)
-    if (conversation && !conversation.incognito) void window.api.saveConversation(conversation)
-  }, [])
-
-  const notify = useCallback((text: string, kind: NoticeKind = 'info') => {
-    const toast = { id: newId(), text, kind, at: Date.now() }
-    setToasts((current) => [...current.slice(-3), toast])
-    setTimeout(() => setToasts((current) => current.filter((t) => t.id !== toast.id)), kind === 'info' ? 3000 : 5000)
-  }, [])
-  notifyRef.current = notify
-
-  const logActivity = useCallback((text: string, kind: NoticeKind) => {
-    setNotices((current) => [...current.slice(-49), { id: newId(), text, kind, at: Date.now() }])
-    if (!activityOpenRef.current) setUnread((n) => n + 1)
-  }, [])
-
-  // Another profile's conversations: the list is read again, and a chat from the old profile is never left open.
-  useEffect(
-    () =>
-      window.api.onConversationsReload(() => {
-        void window.api.listConversations().then((list) => {
-          commitConversations(list)
-          setActiveId((current) => (current && list.some((c) => c.id === current) ? current : null))
-        })
-      }),
-    [commitConversations]
-  )
 
   const load = useCallback(() => {
-    Promise.all([window.api.getSettings(), window.api.listConversations()]).then(
-      ([s, list]) => {
+    window.api.getSettings().then(
+      (s) => {
         setSettings(s)
-        setDraft((d) => ({ ...d, model: isKnownModel(s.defaultModel) ? s.defaultModel : DEFAULT_MODEL }))
-        commitConversations(list)
-        // A blank saved name means setup never really finished.
+        chat.loadConversations(s)
         setNeedsName(!s.welcomeCompleted || !s.userName.trim())
-        // Asked separately, because an account's password is not a setting: it lives with the profile, and the answer
-        // comes from the process that holds it.
         void window.api
           .accountStatus()
           .then((status) => {
             if (!isRefusal(status)) setNeedsUnlock(status.hasPassword && !status.unlocked)
           })
-          // A refusal or a failure leaves `needsUnlock` false, which is the state an account with no password is in.
-          // That is the right way to fail: an account that cannot be asked about is not one this can lock somebody out
-          // of, and the main process refuses every protected operation on its own anyway.
           .finally(() => setAccountChecked(true))
         setLoadError(false)
         setLoaded(true)
       },
       () => setLoadError(true)
     )
-  }, [commitConversations])
+  }, [chat])
 
   useEffect(load, [load])
   // Settings changed through the Browser Control Layer show up straight away.
@@ -499,1052 +414,6 @@ export default function App(): React.JSX.Element {
   useEffect(() => {
     document.documentElement.dataset.theme = experienceBase ?? (dark ? 'dark' : 'light')
   }, [dark, experienceBase])
-
-  /** Applies buffered stream text once per animation frame instead of once per token. */
-  const flushDeltas = useCallback(() => {
-    frameRef.current = null
-    const pending = pendingRef.current
-    if (!pending.size) return
-    pendingRef.current = new Map()
-    let next = conversationsRef.current
-    for (const [messageId, d] of pending) {
-      next = next.map((c) =>
-        c.id !== d.conversationId
-          ? c
-          : {
-              ...c,
-              messages: c.messages.map((m) =>
-                m.id !== messageId
-                  ? m
-                  : {
-                      ...m,
-                      content: m.content + d.content,
-                      reasoning: d.reasoning ? (m.reasoning ?? '') + d.reasoning : m.reasoning,
-                      reasoningMs: m.reasoningMs ?? d.reasoningMs
-                    }
-              )
-            }
-      )
-    }
-    commitConversations(next)
-  }, [commitConversations])
-
-  const queueDelta = useCallback(
-    (conversationId: string, messageId: string, content: string, reasoning: string, reasoningMs?: number) => {
-      const entry = pendingRef.current.get(messageId) ?? { conversationId, content: '', reasoning: '' }
-      entry.content += content
-      entry.reasoning += reasoning
-      if (reasoningMs !== undefined) entry.reasoningMs = reasoningMs
-      pendingRef.current.set(messageId, entry)
-      if (frameRef.current === null) frameRef.current = requestAnimationFrame(flushDeltas)
-    },
-    [flushDeltas]
-  )
-
-  const [queues, setQueues] = useState<Record<string, ChatQueue>>({})
-  const queuesRef = useRef<Record<string, ChatQueue>>({})
-  const commitQueues = useCallback((fn: (q: Record<string, ChatQueue>) => Record<string, ChatQueue>) => {
-    queuesRef.current = fn(queuesRef.current)
-    setQueues(queuesRef.current)
-  }, [])
-  // Assigned once the queue runner exists below; startGeneration reports each finished reply through it.
-  const settleQueueRef = useRef<(conversationId: string, outcome: 'done' | 'stopped' | 'error') => void>(() => undefined)
-
-  // Suggestions are optional extras: fetched after a reply completes and silently skipped on any failure.
-  const requestSuggestions = useCallback(
-    async (conversationId: string, messageId: string) => {
-      const conversation = conversationsRef.current.find((c) => c.id === conversationId)
-      const index = conversation ? conversation.messages.findIndex((m) => m.id === messageId) : -1
-      if (!conversation || index < 0) return
-      const reply = conversation.messages[index]
-      if (reply.error || !reply.content.trim()) return
-      const recent = conversation.messages.slice(Math.max(0, index - 5), index + 1).map((m) => ({ role: m.role, content: m.content }))
-      try {
-        const result = await window.api.suggestFollowups(recent)
-        if (!result.followups.length && !result.next) return
-        updateConversation(conversationId, (c) => ({
-          ...c,
-          messages: c.messages.map((m) => (m.id === messageId ? { ...m, suggestions: result.followups, prediction: result.next ?? undefined } : m))
-        }))
-        persist(conversationId)
-      } catch {
-        // No suggestions this time; the chat works the same without them.
-      }
-    },
-    [persist, updateConversation]
-  )
-
-  const startGeneration = useCallback(
-    (conversation: Conversation, history: ChatMessage[]) => {
-      const conversationId = conversation.id
-      const requestId = newId()
-      const assistant: ChatMessage = { id: newId(), role: 'assistant', content: '', model: conversation.model, createdAt: Date.now() }
-      // The replies this answer takes the place of, when it takes the place of any: their cards go with them, so
-      // what those replies made or changed is undone before the question is answered again.
-      const replaced = conversation.messages
-        .slice(history.length)
-        .flatMap((m) => (m.role === 'assistant' ? (m.artifacts ?? []) : []))
-        .filter((one) => one.action !== 'shown')
-        .map((one) => ({ artifactId: one.ref.artifactId, versionId: one.ref.versionId, version: one.ref.version, action: one.action }))
-      updateConversation(conversationId, (c) => ({ ...c, messages: [...history, assistant] }))
-      commitStreams((s) => ({ ...s, [conversationId]: { requestId, messageId: assistant.id } }))
-
-      const patchAssistant = (fn: (m: ChatMessage) => ChatMessage): void =>
-        updateConversation(conversationId, (c) => ({ ...c, messages: c.messages.map((m) => (m.id === assistant.id ? fn(m) : m)) }))
-      const setStatus = (status: string | undefined): void =>
-        commitStreams((s) => (s[conversationId] ? { ...s, [conversationId]: { ...s[conversationId], status } } : s))
-
-      let thinkStart: number | null = null
-      let answered = false
-      let finished = false
-      let countdownLogged = false
-
-      const finish = (patch?: Partial<ChatMessage>): void => {
-        if (finished) return
-        finished = true
-        unsubscribe()
-        flushDeltas()
-        setAutomations(({ [requestId]: _ended, ...rest }) => rest)
-        patchAssistant((m) => ({
-          ...m,
-          confirmation: undefined,
-          ...patch,
-          reasoningMs: m.reasoningMs ?? (thinkStart !== null && m.reasoning ? Date.now() - thinkStart : undefined)
-        }))
-        commitStreams(({ [conversationId]: _done, ...rest }) => rest)
-        persist(conversationId)
-      }
-
-      const unsubscribe = window.api.onChatEvent(requestId, (event: StreamEvent) => {
-        switch (event.type) {
-          case 'start':
-            patchAssistant((m) => ({ ...m, model: event.model }))
-            if (event.model === conversation.model || conversation.model === AUTO_MODEL) {
-              // Auto choosing a model is not a model failing; the reply's own label says which one answered.
-              setStatus(undefined)
-            } else {
-              // The preceding status event already logged the switch.
-              setStatus(`${modelLabel(conversation.model)} couldn't take this one, so ${modelLabel(event.model)} is answering.`)
-            }
-            break
-          case 'delta': {
-            const now = Date.now()
-            let reasoningMs: number | undefined
-            if (event.reasoning && thinkStart === null) thinkStart = now
-            if (event.content && !answered) {
-              answered = true
-              if (thinkStart !== null) reasoningMs = now - thinkStart
-            }
-            queueDelta(conversationId, assistant.id, event.content ?? '', event.reasoning ?? '', reasoningMs)
-            break
-          }
-          case 'status':
-            setStatus(event.message)
-            // What Orbis is doing right now is progress, not a warning: it is shown beside the reply and not logged.
-            if (event.message === IMAGE_GEN_STATUS || isArtifactStatus(event.message)) break
-            if (!COUNTDOWN.test(event.message)) {
-              logActivity(event.message, 'warn')
-            } else if (!countdownLogged) {
-              countdownLogged = true
-              logActivity('All models are rate-limited. Waiting for the per-minute limit to reset.', 'warn')
-            }
-            break
-          case 'image':
-            queueDelta(conversationId, assistant.id, imageMarkdown({ src: event.url, prompt: event.prompt, seed: event.seed }), '', undefined)
-            break
-          case 'step':
-            patchAssistant((m) => {
-              const steps = m.steps ?? []
-              const known = steps.some((s) => s.id === event.step.id)
-              // Long automations keep only their most recent steps; progress lives in the automation state.
-              return { ...m, steps: known ? steps.map((s) => (s.id === event.step.id ? event.step : s)) : [...steps, event.step].slice(-200) }
-            })
-            break
-          case 'automation':
-            patchAssistant((m) => ({ ...m, automation: event.automation }))
-            setAutomations((all) => ({ ...all, [requestId]: event.automation }))
-            break
-          case 'confirm':
-            patchAssistant((m) => ({ ...m, confirmation: event.confirmation }))
-            break
-          case 'confirm-done':
-            patchAssistant((m) => (m.confirmation?.id === event.id ? { ...m, confirmation: undefined } : m))
-            break
-          case 'research':
-            patchAssistant((m) => ({ ...m, research: event.research }))
-            break
-          case 'artifact': {
-            // Only a pointer is kept on the message; the card reads the artifact itself. The same version shown
-            // twice in one reply is one card.
-            const { artifact } = event
-            patchAssistant((m) => ({
-              ...m,
-              artifacts: [...(m.artifacts ?? []).filter((one) => one.ref.versionId !== artifact.ref.versionId || one.action !== artifact.action), artifact].slice(-12)
-            }))
-            // Cards higher up that show the same thing read it again, and say they are no longer the newest.
-            artifactChanged(artifact.ref.artifactId)
-            break
-          }
-          case 'app': {
-            // A pointer, exactly like an artifact: the card reads the live app. One card per instance, so a reply
-            // that mentions the same app twice does not stack.
-            const { app } = event
-            patchAssistant((m) => ({
-              ...m,
-              apps: [...(m.apps ?? []).filter((one) => one.instanceId !== app.instanceId), app].slice(-6)
-            }))
-            break
-          }
-          case 'done':
-            finish()
-            void requestSuggestions(conversationId, assistant.id)
-            settleQueueRef.current(conversationId, 'done')
-            break
-          case 'error':
-            finish({ error: event.message })
-            logActivity(event.message, 'error')
-            settleQueueRef.current(conversationId, 'error')
-            break
-          case 'aborted':
-            finish()
-            settleQueueRef.current(conversationId, 'stopped')
-            break
-        }
-      })
-
-      const request: ChatRequest = {
-        requestId,
-        model: conversation.model,
-        messages: history,
-        webSearch,
-        // So what is made in this chat remembers the chat, and "add a chart to it" can find what "it" is.
-        conversationId,
-        incognito: Boolean(conversation.incognito),
-        // Regenerate, Resend, or the question edited: the replies being replaced, and what they made or changed.
-        ...(replaced.length ? { replaced } : {})
-      }
-      window.api.sendChat(request).catch((err: unknown) => {
-        finish({ error: err instanceof Error ? err.message : String(err) })
-        settleQueueRef.current(conversationId, 'error')
-      })
-    },
-    [commitStreams, flushDeltas, logActivity, persist, queueDelta, requestSuggestions, updateConversation, webSearch]
-  )
-
-  // The quick title from the first message shows immediately; the AI title replaces it unless the user renamed the chat first.
-  const autoTitle = useCallback(
-    async (conversationId: string, prompt: string, quickTitle: string) => {
-      try {
-        const title = await window.api.generateTitle(prompt)
-        const conversation = conversationsRef.current.find((c) => c.id === conversationId)
-        if (!title || !conversation || conversation.title !== quickTitle) return
-        updateConversation(conversationId, (c) => ({ ...c, title }))
-        persist(conversationId)
-      } catch {
-        // The quick title stays.
-      }
-    },
-    [persist, updateConversation]
-  )
-
-  /** While an automation runs, a message can stop, pause or steer it; anything else waits in the queue. */
-  const handleAutomationMessage = useCallback(
-    async (conversationId: string, requestId: string, objective: string, text: string) => {
-      const action = await window.api.classifyAutomationMessage(text, objective).catch(() => 'other' as const)
-      if (action === 'stop' || action === 'pause') {
-        notify(action === 'pause' ? 'Pausing the automation…' : 'Stopping the automation…')
-        void window.api.controlAutomation(requestId, action)
-        return
-      }
-      if (action === 'resume') return notify('The automation is already running.')
-      if (action === 'steer') {
-        notify('Got it. Orbis will take that into account from its next step.')
-        void window.api.steerAutomation(requestId, text)
-        return
-      }
-      const queue = queuesRef.current[conversationId]
-      if ((queue?.items.length ?? 0) >= MAX_QUEUED_MESSAGES) {
-        return notify(`Up to ${MAX_QUEUED_MESSAGES} messages can wait in the queue. Remove one or stop the automation.`, 'warn')
-      }
-      commitQueues((q) => ({
-        ...q,
-        [conversationId]: { paused: queue?.paused ?? false, items: [...(queue?.items ?? []), { id: newId(), text, attachments: [] }] }
-      }))
-      notify('Your message will be sent when the automation finishes or you stop it.')
-    },
-    [commitQueues, notify]
-  )
-
-  const sendRef = useRef<(text: string, attachments: Attachment[], skipControlCheck?: boolean, browserTask?: boolean) => boolean>(() => false)
-
-  const send = useCallback(
-    /** `browserTask` marks a message from the browser's floating assistant, which always acts on the page. */
-    (text: string, attachments: Attachment[], skipControlCheck = false, browserTask = false): boolean => {
-      const content = text.trim()
-      if (!content && attachments.length === 0) return false
-      const existing = activeId ? conversationsRef.current.find((c) => c.id === activeId) : undefined
-      const running = existing ? streamsRef.current[existing.id] : undefined
-      const automation = running && existing?.messages.find((m) => m.id === running.messageId)?.automation
-      if (existing && running && automation && automationActive(automation) && attachments.length === 0) {
-        void handleAutomationMessage(existing.id, running.requestId, automation.objective, content)
-        return true
-      }
-      // "Stop" just after an automation ended would otherwise reach the chat model, which might claim it stopped something.
-      const ended = !running && existing ? [...existing.messages].reverse().find((m) => m.role === 'assistant')?.automation : undefined
-      if (!skipControlCheck && existing && ended && !automationActive(ended) && attachments.length === 0 && content.length <= 60) {
-        window.api
-          .classifyAutomationMessage(content, ended.objective)
-          .then((action) => {
-            if (action === 'stop' || action === 'pause') {
-              notify(ended.status === 'completed' ? 'That automation has already finished.' : "Nothing is running right now, so there's nothing to stop.")
-            } else {
-              sendRef.current(content, attachments, true, browserTask)
-            }
-          })
-          .catch(() => sendRef.current(content, attachments, true, browserTask))
-        return true
-      }
-      if (existing && streamsRef.current[existing.id]) {
-        // Orbis is still replying: queue the message to go out after the reply (and any earlier queued ones).
-        const queue = queuesRef.current[existing.id]
-        if ((queue?.items.length ?? 0) >= MAX_QUEUED_MESSAGES) {
-          notify(`Up to ${MAX_QUEUED_MESSAGES} messages can wait in the queue. Remove one or let Orbis catch up.`, 'warn')
-          return false
-        }
-        commitQueues((q) => ({
-          ...q,
-          [existing.id]: { paused: queue?.paused ?? false, items: [...(queue?.items ?? []), { id: newId(), text: content, attachments }] }
-        }))
-        return true
-      }
-
-      const now = Date.now()
-      const conversation: Conversation = existing ?? {
-        id: newId(),
-        title: titleFromMessage(content || attachments[0].name),
-        ...draft,
-        messages: [],
-        createdAt: now,
-        updatedAt: now
-      }
-      const userMessage: ChatMessage = {
-        id: newId(),
-        role: 'user',
-        content,
-        createdAt: now,
-        ...(attachments.length ? { attachments } : {}),
-        ...(browserTask ? { browserTask: true } : {})
-      }
-      const history = [...conversation.messages, userMessage]
-      const updated = { ...conversation, messages: history, updatedAt: now }
-      commitConversations(existing ? conversationsRef.current.map((c) => (c.id === updated.id ? updated : c)) : [updated, ...conversationsRef.current])
-      setActiveId(updated.id)
-      persist(updated.id)
-
-      // "Quiz me on X" is answered with a quiz rather than with words. A quiz *document* is not intercepted: the
-      // Creation Engine makes documents, and this would hand back a card nobody can print.
-      const wantsQuiz = attachments.length === 0 && !browserTask ? quizWanted(content) : null
-      if (wantsQuiz !== null && wantsQuiz.kind === 'card') {
-        void offerQuiz(updated.id, wantsQuiz, conversation.messages)
-        return true
-      }
-
-      /*
-       * Somebody trying to decide something gets a comparison rather than a paragraph.
-       *
-       * The gate is pure and runs here, so an ordinary message costs nothing -- no round trip, no model call, and
-       * the existing path is reached exactly as it was. It is also deliberately generous about what might be a
-       * decision, because `offerDecision` falls back to the ordinary reply whenever Orion hands the message back,
-       * and a message that is read as a decision and is not one must come out the same as one that never was.
-       */
-      const deciding =
-        attachments.length === 0 && !browserTask
-          ? readMessage(content, { hasOpen: conversation.messages.some((one) => one.decision !== undefined) })
-          : ({ want: 'nothing' } as ChooseReading)
-      if (deciding.want !== 'nothing') {
-        void offerDecision(updated, history, content, deciding)
-        return true
-      }
-
-      startGeneration(updated, history)
-      if (!existing && content) void autoTitle(updated.id, content, updated.title)
-      return true
-    },
-    /*
-     * `offerQuiz` and `offerDecision` are deliberately not in this list. Both are declared below it, so naming
-     * them here is read before the declaration -- and neither needs to be: the body only reaches them when a
-     * message is actually sent, by which time both exist, and neither changes identity in a way that matters.
-     */
-    [activeId, autoTitle, commitConversations, commitQueues, draft, handleAutomationMessage, notify, persist, startGeneration]
-  )
-
-  /**
-   * A reply with no model behind it: a quiz, a decision, or the reason there is not one.
-   *
-   * Not every reply comes from a stream. A quiz card and a decision card are both the answer rather than something
-   * attached to one, so they are put in the conversation directly -- which is also what makes them survive a
-   * restart, since the conversation is already saved.
-   */
-  const addReply = useCallback(
-    (conversationId: string, content: string, extra?: { quiz?: ChatQuiz; decision?: ChatDecision }) => {
-      const message: ChatMessage = {
-        id: newId(),
-        role: 'assistant',
-        content,
-        createdAt: Date.now(),
-        ...(extra?.quiz ? { quiz: extra.quiz } : {}),
-        ...(extra?.decision ? { decision: extra.decision } : {})
-      }
-      updateConversation(conversationId, (c) => ({ ...c, messages: [...c.messages, message], updatedAt: Date.now() }))
-      persist(conversationId)
-    },
-    [persist, updateConversation]
-  )
-
-  /**
-   * Asks for a quiz and puts it in the conversation.
-   *
-   * The questions are written and checked in main, so nothing unchecked reaches the screen. A refusal is shown as
-   * an ordinary reply saying what went wrong, because "Orion could not write a quiz that held up" is a real
-   * answer and an empty card is not.
-   *
-   * "Quiz me on this" has no subject of its own, so the last reply with words in it is handed over as the text
-   * the questions must come from -- and the card says that is where they came from.
-   */
-  const offerQuiz = useCallback(
-    async (conversationId: string, want: NonNullable<ReturnType<typeof quizWanted>>, before: ChatMessage[]) => {
-      const lastReply = [...before].reverse().find((one) => one.role === 'assistant' && one.content.trim().length > 40)
-      const source = want.pointsBack ? (lastReply?.content ?? '') : ''
-      if (want.about === '' && source === '') {
-        addReply(conversationId, NOTHING_TO_GO_ON)
-        return
-      }
-
-      const made = (await window.api
-        .writeQuiz({
-          about: want.about,
-          count: want.count,
-          difficulty: want.difficulty,
-          ...(source === '' ? {} : { source }),
-          from: want.about === '' ? 'what we were just talking about' : want.about
-        })
-        .catch((error: unknown) => ({ problem: 'The quiz could not be written.', fix: error instanceof Error ? error.message : String(error), failed: 'threw' }))) as
-        | { quiz?: ChatQuiz['quiz'] }
-        | { problem: string; fix: string }
-
-      if (!('quiz' in made) || made.quiz === undefined) {
-        const why = 'problem' in made ? `${made.problem} ${made.fix}`.trim() : 'The quiz could not be written.'
-        addReply(conversationId, why)
-        return
-      }
-      addReply(conversationId, '', { quiz: { quiz: made.quiz, answers: [] } })
-    },
-    [addReply]
-  )
-
-  /**
-   * One answer from Orbis Choose, put in the conversation.
-   *
-   * `stale` is the one case that produces nothing: a newer message for this conversation has already been
-   * answered, so this answer is about a decision that has since moved, and adding it would show somebody an older
-   * state below a newer one.
-   */
-  const addVerdict = useCallback(
-    (conversationId: string, answer: ChooseAnswer, extra: Partial<ChatDecision> = {}): void => {
-      if (answer.stale === true) return
-      addReply(conversationId, '', {
-        decision: {
-          verdict: answer.verdict,
-          ...(answer.applied ? { applied: [...answer.applied] } : {}),
-          ...(answer.refused ? { refused: [...answer.refused] } : {}),
-          ...(answer.scenario ? { scenario: answer.scenario } : {}),
-          ...(answer.difference ? { difference: answer.difference } : {}),
-          ...extra
-        }
-      })
-    },
-    [addReply]
-  )
-
-  /**
-   * Asks Orbis Choose for a comparison, and puts whatever comes back in the conversation.
-   *
-   * ## Handing the message back is the safety catch
-   *
-   * The gate upstream errs towards calling something a decision, which is only safe because of what happens here:
-   * if Orion reads the message and says it is not a decision, or if a merely *probable* reading fails for any
-   * reason, the ordinary reply runs instead -- the same reply the person would have got if none of this existed.
-   * A clear reading that fails does say so, because silently answering "help me choose between A and B" with a
-   * paragraph after something went wrong hides a fault.
-   *
-   * ## A follow-up that turns out to be a different decision starts a new one
-   *
-   * Somebody comparing laptops who then asks which language to learn has not changed their mind about laptops.
-   * Orion says so, and that becomes a fresh comparison rather than two unrelated things in one table.
-   */
-  const offerDecision = useCallback(
-    async (conversation: Conversation, history: ChatMessage[], content: string, reading: ChooseReading): Promise<void> => {
-      const conversationId = conversation.id
-      const ordinary = (): void => startGeneration(conversation, history)
-
-      if (reading.want === 'unsure') {
-        addReply(conversationId, reading.ask)
-        return
-      }
-
-      /*
-       * Every operation answers with one of a handful of shapes, and the guards from `reply.ts` are what tell them
-       * apart. A thrown call is turned into a refusal rather than being left to reject, so there is one path out of
-       * here and no unhandled rejection sitting behind a card that never appeared.
-       */
-      const ask = async (op: string, payload: Record<string, unknown>): Promise<unknown> =>
-        window.api.choose(op, { conversationId, message: content, ...payload }).catch((error: unknown) => ({
-          problem: 'That could not be worked out.',
-          fix: error instanceof Error ? error.message : String(error),
-          failed: 'threw'
-        }))
-
-
-      /** Everything the person has written here, for checking that an option was really mentioned. */
-      const said = history
-        .filter((one) => one.role === 'user')
-        .map((one) => one.content)
-        .join('\n')
-      /** The last few turns, for context. The user message just added is left off: it is sent on its own. */
-      const before = history
-        .slice(-9, -1)
-        .map((one) => `${one.role === 'user' ? 'They' : 'Orbis'}: ${one.content}`)
-        .filter((one) => one.trim() !== '')
-
-      const start = async (justDecide = false): Promise<void> => {
-        const answer = await ask('start', {
-          said,
-          before,
-          sort: reading.want === 'new' ? reading.sort : 'other',
-          named: reading.want === 'new' ? [...reading.named] : [],
-          ...(justDecide ? { justDecide: true } : {})
-        })
-        if (isAnswered(answer)) {
-          addVerdict(conversationId, answer)
-          return
-        }
-        // Not a decision after all, or a probable reading that did not hold up: the ordinary reply, as if nothing ran.
-        if (isHandedBack(answer) || (reading.want === 'new' && reading.sure === 'probable')) {
-          ordinary()
-          return
-        }
-        addReply(conversationId, whyNot(answer))
-      }
-
-      if (reading.want === 'new') {
-        await start()
-        return
-      }
-
-      if (reading.want === 'just-decide') {
-        const answer = await ask('just-decide', {})
-        if (isAnswered(answer)) addVerdict(conversationId, answer)
-        else ordinary()
-        return
-      }
-
-      if (reading.want === 'detail') {
-        const answer = await ask('explain', { of: reading.of })
-        if (isAnswered(answer)) addVerdict(conversationId, answer, { showDetail: reading.of === 'everything' })
-        else ordinary()
-        return
-      }
-
-      if (reading.want === 'save') {
-        const answer = await ask('keep', {})
-        if (wasKept(answer)) {
-          addReply(conversationId, `Kept, as “${answer.title}”. Ask for it again any time.`)
-        } else if (isHandedBack(answer) || isAnswered(answer)) {
-          ordinary()
-        } else {
-          addReply(conversationId, whyNot(answer))
-        }
-        return
-      }
-
-      if (reading.want === 'what-if') {
-        const answer = await ask('what-if', {})
-        if (isAnswered(answer)) addVerdict(conversationId, answer)
-        else if (isHandedBack(answer)) ordinary()
-        else addReply(conversationId, whyNot(answer))
-        return
-      }
-
-      // A follow-up.
-      const answer = await ask('change', {})
-      if (isAnswered(answer)) {
-        addVerdict(conversationId, answer)
-        return
-      }
-      // A different decision, not a change to this one.
-      if (isHandedBack(answer)) {
-        await start()
-        return
-      }
-      ordinary()
-    },
-    [addReply, addVerdict, startGeneration]
-  )
-
-  /** A change made with a control on a decision card, applied and worked out again. */
-  const changeDecision = useCallback(
-    (decisionId: string, changes: ChooseChange[]): void => {
-      const conversationId = activeId
-      if (!conversationId || changes.length === 0) return
-      void (async () => {
-        const answer: unknown = await window.api.choose('adjust', { conversationId, decisionId, changes }).catch(() => null)
-        if (answer && isAnswered(answer)) addVerdict(conversationId, answer)
-        else if (answer && !isHandedBack(answer)) notify(whyNot(answer), 'warn')
-      })()
-    },
-    [activeId, addVerdict, notify]
-  )
-
-  /** More of the working, asked for with a button rather than in words. */
-  const explainDecision = useCallback(
-    (decisionId: string, of: ChooseDetail): void => {
-      const conversationId = activeId
-      if (!conversationId) return
-      void (async () => {
-        const answer: unknown = await window.api.choose('explain', { conversationId, decisionId, of, message: '' }).catch(() => null)
-        if (answer && isAnswered(answer)) addVerdict(conversationId, answer, { showDetail: of === 'everything' })
-        else if (answer && !isHandedBack(answer)) notify(whyNot(answer), 'warn')
-      })()
-    },
-    [activeId, addVerdict, notify]
-  )
-
-  /** Keeps the open decision. Only says it is kept once the write came back. */
-  const keepDecision = useCallback(
-    (decisionId: string): void => {
-      const conversationId = activeId
-      if (!conversationId) return
-      void (async () => {
-        const answer: unknown = await window.api.choose('keep', { conversationId, decisionId }).catch(() => null)
-        if (wasKept(answer)) notify(`Kept, as \u201c${answer.title}\u201d.`)
-        else notify(whyNot(answer), 'warn')
-      })()
-    },
-    [activeId, notify]
-  )
-
-  /** How far through a quiz somebody is, saved with the conversation so it survives a restart. */
-  const setQuiz = useCallback(
-    (conversationId: string, messageId: string, next: ChatQuiz) => {
-      updateConversation(conversationId, (c) => ({
-        ...c,
-        messages: c.messages.map((m) => (m.id === messageId ? { ...m, quiz: next } : m))
-      }))
-      persist(conversationId)
-    },
-    [persist, updateConversation]
-  )
-
-  /**
-   * A Native App opened from Search Labs, into the conversation that is open.
-   *
-   * The app belongs to the conversation, not to the composer: the message carries the reference, so the chat finds the
-   * card again after a reload and the app is part of what was said rather than a panel beside it. If there is no
-   * conversation yet, one is started — opening a laboratory is a thing worth keeping.
-   *
-   * The reference is a pointer. Nothing about the app's state goes into the message.
-   */
-  const openNativeApp = useCallback(
-    (appId: string) => {
-      void (async () => {
-        const existing = activeId ? conversationsRef.current.find((c) => c.id === activeId) : undefined
-        const now = Date.now()
-        const conversation: Conversation =
-          existing ?? { id: newId(), title: 'Labs', ...draft, messages: [], createdAt: now, updatedAt: now }
-
-        const made = (await window.api
-          .native('open', { appId, conversationId: conversation.id })
-          .catch(() => null)) as { ok?: boolean; says?: string; reused?: boolean; instance?: { id: string; appVersion: number } } | null
-
-        if (!made?.ok || !made.instance) {
-          notify(made?.says ?? 'That app could not be opened.', 'warn')
-          return
-        }
-        // Already open here: the runtime reused it, so there is no second card to add.
-        if (made.reused) {
-          notify(made.says ?? 'It is already open in this conversation.')
-          return
-        }
-
-        const message: ChatMessage = {
-          id: newId(),
-          role: 'assistant',
-          content: '',
-          createdAt: now,
-          apps: [
-            {
-              appId,
-              instanceId: made.instance.id,
-              act: 'opened',
-              appVersion: made.instance.appVersion,
-              did: [],
-              openedAt: 'expanded'
-            }
-          ]
-        }
-        const updated = { ...conversation, messages: [...conversation.messages, message], updatedAt: now }
-        commitConversations(existing ? conversationsRef.current.map((c) => (c.id === updated.id ? updated : c)) : [updated, ...conversationsRef.current])
-        setActiveId(updated.id)
-        persist(updated.id)
-      })()
-    },
-    [activeId, commitConversations, draft, notify, persist]
-  )
-  sendRef.current = send
-
-  /**
-   * A Visual Search arriving from the browser.
-   *
-   * Somebody selected something on a page, Orion looked at it, and they chose to carry on here. Both arrivals land in
-   * the conversation that is open, or start one -- a selection worth asking about twice is worth keeping.
-   *
-   * The selection arrives as a picture and goes in as an image attachment, which is what makes the *next* question
-   * work without reselecting anything: the conversation holds the pixels, so "how much does it cost?" has something
-   * to be about. The answer already given comes with it as the assistant's turn, so the conversation reads as the
-   * one conversation it is rather than restarting from the question.
-   *
-   * Nothing new is built here. This is the same conversation, the same message shape and the same Native App runtime
-   * everything else in Orbis uses.
-   */
-  const visualArrived = useCallback(
-    (arrival: VisualArrival) => {
-      go({ kind: 'chat' })
-      if (arrival.what === 'lab') {
-        if (arrival.appId) openNativeApp(arrival.appId)
-        return
-      }
-      const image = typeof arrival.image === 'string' ? arrival.image : ''
-      const now = Date.now()
-      const existing = activeId ? conversationsRef.current.find((c) => c.id === activeId) : undefined
-      const conversation: Conversation =
-        existing ?? { id: newId(), title: arrival.title || 'From the screen', ...draft, messages: [], createdAt: now, updatedAt: now }
-
-      const where = arrival.page?.title || arrival.page?.url || ''
-      const question = (arrival.question ?? '').trim() || 'What is this?'
-      const asked: ChatMessage = {
-        id: newId(),
-        role: 'user',
-        content: where ? `${question}
-
-(selected on ${where})` : question,
-        createdAt: now,
-        ...(image ? { attachments: [{ name: 'selection.png', content: image, type: 'image' as const, mimeType: 'image/png' }] } : {})
-      }
-      const messages: ChatMessage[] = [asked]
-      const answer = (arrival.answer ?? '').trim()
-      // Only when there is one. An empty assistant turn would read as Orion having said nothing.
-      if (answer !== '') messages.push({ id: newId(), role: 'assistant', content: answer, createdAt: now + 1 })
-
-      const updated = { ...conversation, messages: [...conversation.messages, ...messages], updatedAt: now + 2 }
-      commitConversations(existing ? conversationsRef.current.map((c) => (c.id === updated.id ? updated : c)) : [updated, ...conversationsRef.current])
-      setActiveId(updated.id)
-      persist(updated.id)
-      notify('Brought over from the browser.')
-    },
-    [activeId, commitConversations, draft, notify, openNativeApp, persist]
-  )
-
-  useEffect(() => window.api.onVisualArrived(visualArrived), [visualArrived])
-
-  /** Sends a message into an existing chat that isn't replying; used to run queued messages. */
-  const pushUserMessage = useCallback(
-    (conversationId: string, content: string, attachments: Attachment[]): boolean => {
-      const conversation = conversationsRef.current.find((c) => c.id === conversationId)
-      if (!conversation || streamsRef.current[conversationId]) return false
-      const now = Date.now()
-      const userMessage: ChatMessage = { id: newId(), role: 'user', content, createdAt: now, ...(attachments.length ? { attachments } : {}) }
-      const history = [...conversation.messages, userMessage]
-      const updated = { ...conversation, messages: history, updatedAt: now }
-      commitConversations(conversationsRef.current.map((c) => (c.id === updated.id ? updated : c)))
-      persist(updated.id)
-      startGeneration(updated, history)
-      return true
-    },
-    [commitConversations, persist, startGeneration]
-  )
-
-  const runNextQueued = useCallback(
-    (conversationId: string) => {
-      const queue = queuesRef.current[conversationId]
-      if (!queue || queue.paused || !queue.items.length || streamsRef.current[conversationId]) return
-      const [next, ...rest] = queue.items
-      commitQueues(({ [conversationId]: _sent, ...others }) => (rest.length ? { ...others, [conversationId]: { ...queue, items: rest } } : others))
-      pushUserMessage(conversationId, next.text, next.attachments)
-    },
-    [commitQueues, pushUserMessage]
-  )
-
-  useEffect(() => {
-    settleQueueRef.current = (conversationId, outcome) => {
-      const queue = queuesRef.current[conversationId]
-      if (!queue?.items.length) return
-      if (outcome !== 'done') {
-        commitQueues((q) => ({ ...q, [conversationId]: { ...queue, paused: true } }))
-        return
-      }
-      // A short beat lets the finished reply settle on screen before the next message goes out.
-      window.setTimeout(() => runNextQueued(conversationId), 450)
-    }
-  }, [commitQueues, runNextQueued])
-
-  const removeQueued = useCallback(
-    (conversationId: string, itemId: string) => {
-      commitQueues((q) => {
-        const queue = q[conversationId]
-        if (!queue) return q
-        const items = queue.items.filter((item) => item.id !== itemId)
-        const { [conversationId]: _old, ...others } = q
-        return items.length ? { ...others, [conversationId]: { ...queue, items } } : others
-      })
-    },
-    [commitQueues]
-  )
-
-  const clearQueue = useCallback((conversationId: string) => commitQueues(({ [conversationId]: _cleared, ...others }) => others), [commitQueues])
-
-  const resumeQueue = useCallback(
-    (conversationId: string) => {
-      const queue = queuesRef.current[conversationId]
-      if (!queue) return
-      commitQueues((q) => ({ ...q, [conversationId]: { ...queue, paused: false } }))
-      runNextQueued(conversationId)
-    },
-    [commitQueues, runNextQueued]
-  )
-
-  const stop = useCallback((conversationId: string) => {
-    const stream = streamsRef.current[conversationId]
-    if (stream) void window.api.abortChat(stream.requestId)
-  }, [])
-
-  /**
-   * Asking for a different answer.
-   *
-   * The answer being replaced is parked rather than dropped, so a worse second try is one press away from the first
-   * one again. Nothing here throws anything away.
-   */
-  const regenerate = useCallback(
-    (conversationId: string, messageId: string) => {
-      const conversation = conversationsRef.current.find((c) => c.id === conversationId)
-      if (!conversation || streamsRef.current[conversationId]) return
-      const index = conversation.messages.findIndex((m) => m.id === messageId)
-      const history = conversation.messages.slice(0, index)
-      if (index < 1 || history[history.length - 1].role !== 'user') return
-      const parked = parkTail(conversation, index, Date.now(), newId())
-      updateConversation(conversationId, (c) => ({ ...c, messages: parked.messages, branches: parked.branches, updatedAt: Date.now() }))
-      startGeneration(conversation, history)
-    },
-    [startGeneration, updateConversation]
-  )
-
-  const editMessage = useCallback(
-    (conversationId: string, messageId: string, text: string) => {
-      const conversation = conversationsRef.current.find((c) => c.id === conversationId)
-      const content = text.trim()
-      if (!conversation || !content || streamsRef.current[conversationId]) return
-      const index = conversation.messages.findIndex((m) => m.id === messageId)
-      if (index < 0) return
-      const history = [...conversation.messages.slice(0, index), { ...conversation.messages[index], content, createdAt: Date.now() }]
-      // What followed the message being changed is parked, not deleted: the old wording and everything it led to can
-      // be returned to. This used to cut the conversation at this point and lose the rest for good.
-      const parked = parkTail(conversation, index, Date.now(), newId())
-      updateConversation(conversationId, (c) => ({ ...c, messages: history, branches: parked.branches, updatedAt: Date.now() }))
-      startGeneration(conversation, history)
-    },
-    [startGeneration, updateConversation]
-  )
-
-  const resendFrom = useCallback(
-    (conversationId: string, messageId: string) => {
-      const conversation = conversationsRef.current.find((c) => c.id === conversationId)
-      if (!conversation || streamsRef.current[conversationId]) return
-      const index = conversation.messages.findIndex((m) => m.id === messageId)
-      if (index < 0 || conversation.messages[index].role !== 'user') return
-      updateConversation(conversationId, (c) => ({ ...c, updatedAt: Date.now() }))
-      startGeneration(conversation, conversation.messages.slice(0, index + 1))
-    },
-    [startGeneration, updateConversation]
-  )
-
-  /** Goes back to an answer that was moved away from, parking the one being left in its place. */
-  const useBranch = useCallback(
-    (conversationId: string, branchId: string) => {
-      const conversation = conversationsRef.current.find((c) => c.id === conversationId)
-      if (!conversation || streamsRef.current[conversationId]) return
-      const moved = switchToBranch(conversation, branchId, Date.now(), newId())
-      updateConversation(conversationId, (c) => ({ ...c, messages: moved.messages, branches: moved.branches, updatedAt: Date.now() }))
-      persist(conversationId)
-    },
-    [persist, updateConversation]
-  )
-
-  /** Throws one away on purpose. The only move here that loses anything, and it is only ever asked for. */
-  const forgetBranch = useCallback(
-    (conversationId: string, branchId: string) => {
-      const conversation = conversationsRef.current.find((c) => c.id === conversationId)
-      if (!conversation) return
-      updateConversation(conversationId, (c) => ({ ...c, branches: dropBranch(conversation, branchId).branches }))
-      persist(conversationId)
-    },
-    [persist, updateConversation]
-  )
-
-  /** Out of the list, still there. Archiving is the alternative to deleting something you may want back. */
-  const archiveConversation = useCallback(
-    (conversationId: string, archived: boolean) => {
-      updateConversation(conversationId, (c) => ({ ...c, archived, updatedAt: Date.now() }))
-      persist(conversationId)
-    },
-    [persist, updateConversation]
-  )
-
-  const setFeedback = useCallback(
-    (conversationId: string, messageId: string, feedback: 'up' | 'down' | undefined) => {
-      updateConversation(conversationId, (c) => ({ ...c, messages: c.messages.map((m) => (m.id === messageId ? { ...m, feedback } : m)) }))
-      persist(conversationId)
-    },
-    [persist, updateConversation]
-  )
-
-  const deleteConversation = useCallback(
-    (id: string) => {
-      clearQueue(id)
-      stop(id)
-      commitConversations(conversationsRef.current.filter((c) => c.id !== id))
-      setActiveId((current) => (current === id ? null : current))
-      void window.api.deleteConversation(id)
-    },
-    [clearQueue, commitConversations, stop]
-  )
-
-  const renameConversation = useCallback(
-    (id: string, title: string) => {
-      const trimmed = title.trim()
-      if (!trimmed) return
-      updateConversation(id, (c) => ({ ...c, title: trimmed }))
-      persist(id)
-    },
-    [persist, updateConversation]
-  )
-
-  const changeModel = useCallback(
-    (model: string) => {
-      if (!activeId) return setDraft((d) => ({ ...d, model }))
-      updateConversation(activeId, (c) => ({ ...c, model }))
-      persist(activeId)
-    },
-    [activeId, persist, updateConversation]
-  )
-
-  const improvePrompt = useCallback(
-    (text: string): Promise<string | null> => {
-      return new Promise((resolve) => {
-        const requestId = newId()
-        let output = ''
-        const unsubscribe = window.api.onChatEvent(requestId, (event) => {
-          if (event.type === 'delta' && event.content) {
-            output += event.content
-          } else if (event.type === 'done' || event.type === 'aborted') {
-            unsubscribe()
-            resolve(output.trim() || null)
-          } else if (event.type === 'error') {
-            unsubscribe()
-            notify(`Couldn't improve the prompt: ${event.message}`, 'error')
-            resolve(null)
-          }
-        })
-        window.api
-          .sendChat({
-            requestId,
-            model: DEFAULT_MODEL,
-            reasoningEffort: 'low',
-            images: false,
-            messages: [
-              {
-                id: newId(),
-                role: 'user',
-                createdAt: Date.now(),
-                content:
-                  "Rewrite the prompt below so it is clearer and more specific, keeping the user's intent and language. " +
-                  `Reply with only the rewritten prompt, with no preamble or quotes.\n\n<prompt>\n${text}\n</prompt>`
-              }
-            ]
-          })
-          .catch((err: unknown) => {
-            unsubscribe()
-            notify(String(err), 'error')
-            resolve(null)
-          })
-      })
-    },
-    [notify]
-  )
-
-  const shareConversation = useCallback(
-    (id: string) => {
-      const conversation = conversationsRef.current.find((c) => c.id === id)
-      if (!conversation || !settings) return
-      const body = conversation.messages
-        .filter((m) => m.content || m.attachments?.length)
-        .map((m) => {
-          const who = m.role === 'user' ? settings.userName : settings.assistantName
-          const files = m.attachments?.length ? `\n\n_Attached: ${m.attachments.map((a) => a.name).join(', ')}_` : ''
-          return `**${who}**\n\n${m.content}${files}`
-        })
-        .join('\n\n---\n\n')
-      void copyText(`# ${conversation.title}\n\n${body}\n`).then(() => notify('Chat copied as Markdown.'))
-    },
-    [notify, settings]
-  )
-
-  const startChat = useCallback(
-    (incognito: boolean) => {
-      setActiveId(null)
-      // A new conversation IS the chat screen. Started from behind Markets, this used to leave Markets in front,
-      // so the window looked like it had ignored the press.
-      go({ kind: 'chat' })
-      const preferred = settings?.defaultModel ?? DEFAULT_MODEL
-      setDraft({ model: isKnownModel(preferred) ? preferred : DEFAULT_MODEL, incognito })
-    },
-    [settings?.defaultModel]
-  )
-
-  const newChat = useCallback(() => startChat(false), [startChat])
-
-  const closeFeature = useCallback(() => go({ kind: 'chat' }), [])
-  // Whichever way a screen was left -- its own back button, the menu, another screen opened over it -- something may
-  // have been changed or removed on it: cards in the chat read again.
-  useEffect(() => {
-    artifactChanged()
-  }, [feature])
-
-  const toggleIncognito = useCallback(() => {
-    const on = !(activeId ? conversationsRef.current.find((c) => c.id === activeId)?.incognito : draft.incognito)
-    startChat(on)
-    notify(on ? "Incognito chat on. It won't be saved or shown in your history." : 'Incognito chat off.')
-  }, [activeId, draft.incognito, notify, startChat])
-
-  // Incognito chats only exist while open, so leaving one discards it (and stops its reply).
-  useEffect(() => {
-    const stale = conversationsRef.current.filter((c) => c.incognito && c.id !== activeId)
-    if (!stale.length) return
-    for (const c of stale) {
-      const stream = streamsRef.current[c.id]
-      if (stream) void window.api.abortChat(stream.requestId)
-    }
-    commitQueues((q) => Object.fromEntries(Object.entries(q).filter(([id]) => !stale.some((c) => c.id === id))))
-    commitConversations(conversationsRef.current.filter((c) => !c.incognito || c.id === activeId))
-  }, [activeId, commitConversations, commitQueues])
 
   const updateSettings = useCallback(async (update: SettingsUpdate) => {
     const next = await window.api.updateSettings(update)
@@ -1663,20 +532,16 @@ export default function App(): React.JSX.Element {
     setEditing({ conversationId: image.conversationId, image: { src: image.src, prompt: image.prompt, seed: image.seed, alpha: image.alpha } })
   }, [])
 
+  useEffect(() => {
+    activityOpenRef.current = activityOpen
+  }, [activityOpen, activityOpenRef])
+
   const toggleActivity = useCallback(() => {
     setActivityOpen((open) => !open)
     setUnread(0)
   }, [])
 
-  const answerBrowserConfirmation = useCallback((messageId: string, confirmationId: string, approved: boolean) => {
-    const stream = Object.values(streamsRef.current).find((s) => s.messageId === messageId)
-    if (stream) void window.api.answerBrowserConfirmation(stream.requestId, confirmationId, approved)
-  }, [])
 
-  const controlAutomation = useCallback((messageId: string, action: 'pause' | 'stop') => {
-    const stream = Object.values(streamsRef.current).find((s) => s.messageId === messageId)
-    if (stream) void window.api.controlAutomation(stream.requestId, action)
-  }, [])
 
   /** From the URL bar, links and research sources: show the address in the Orbis browser, in a new tab when asked. */
   const openInBrowser = useCallback((input: string, options?: Omit<OpenUrlDetail, 'url'>) => openChromium(input, { newTab: options?.newTab, more: options?.more }), [openChromium])
@@ -1728,17 +593,6 @@ export default function App(): React.JSX.Element {
       return true
     },
     [notify, persist, updateConversation]
-  )
-
-  /** Empties a chat but keeps it (title, model and assistant) so the conversation can start over in place. */
-  const clearConversation = useCallback(
-    (id: string) => {
-      clearQueue(id)
-      stop(id)
-      updateConversation(id, (c) => ({ ...c, messages: [], updatedAt: Date.now() }))
-      persist(id)
-    },
-    [clearQueue, persist, stop, updateConversation]
   )
 
   /** Slash commands from the message box, e.g. "/clear" or "/model max". */
@@ -2028,9 +882,6 @@ export default function App(): React.JSX.Element {
     }
   }, [welcome])
 
-  const active = activeId ? conversations.find((c) => c.id === activeId) : undefined
-  const current: DraftChat = active ? { model: active.model, incognito: Boolean(active.incognito) } : draft
-  currentRef.current = current
 
   // The floating browser assistant follows the current chat's latest reply: its steps, progress, approvals and summary.
   /**
