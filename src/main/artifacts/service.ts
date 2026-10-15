@@ -39,6 +39,7 @@ import { ArtifactStore, CONTENT_PREFIX, SOURCE_FILE } from './store.ts'
 import { toDelimited } from '../../shared/compute/data.ts'
 import { toText } from '../../shared/compute/documentHtml.ts'
 import { analyseTable, analysisDocument } from '../../shared/artifacts/analysis.ts'
+import { restoreEscapedBreaks } from '../../shared/artifacts/escapes.ts'
 import { diagramToSvg, PIE_LIMITS, pieProblem, pieToSvg, plotToSvg, verifySvgFile } from '../../shared/artifacts/svg.ts'
 import { asNumber, formatDate, isQuantityCell, type Column } from '../../shared/compute/data.ts'
 import { buildPlot, isPlotError, seriesFromPoints, type Series, type SeriesKind } from '../../shared/compute/plot.ts'
@@ -627,7 +628,8 @@ export class ArtifactService {
       if (!found) return { error: 'bad-input', message: `Say which language it is. Orbis knows: ${LANGUAGES.map((one) => one.name).join(', ')}.` }
       if (text.trim() === '') return { error: 'bad-input', message: 'There is no code to keep.' }
       if (text.length > CODE_LIMITS.characters) return { error: 'too-large', message: `That is ${text.length.toLocaleString('en')} characters, past the ${CODE_LIMITS.characters.toLocaleString('en')} one file may hold.` }
-      return { kind: 'code', code: { language: found.id, source: text } }
+      // A file that was escaped twice on its way here (`\\n` where a line break belongs) is put right before it is kept.
+      return { kind: 'code', code: { language: found.id, source: restoreEscapedBreaks(text).text } }
     }
     const parsed = fromMarkdown(text, 'b')
     if (isDocumentError(parsed)) return { error: 'parse', message: parsed.message }

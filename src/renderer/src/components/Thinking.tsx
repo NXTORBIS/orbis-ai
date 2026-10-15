@@ -4,7 +4,7 @@ import { OrbisMark } from './Brand'
 /** The Orbis ring turning inside a glowing halo while a reply is pending. */
 export function ThinkingOrb(): React.JSX.Element {
   return (
-    <div className="orb" aria-hidden="true">
+    <div className="orb" data-mood="thinking" aria-hidden="true">
       <OrbisMark size={30} className="orb-mark" />
     </div>
   )

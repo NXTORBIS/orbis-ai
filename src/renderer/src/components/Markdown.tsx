@@ -13,6 +13,7 @@ import rehypeKatex from 'rehype-katex'
 import rehypeHighlight from 'rehype-highlight'
 import { copyText, hastText, normalizeMath } from '../lib/utils'
 import { rehypeCallouts } from '../../../shared/chatCallout'
+import { rehypeGlide } from '../../../shared/chatGlide'
 import { tableChart } from '../../../shared/chatTableChart'
 import { plotToSvg } from '../../../shared/artifacts/svg'
 import { Download, Pencil } from 'lucide-react'
@@ -23,6 +24,24 @@ import ImageLightbox from './ImageLightbox'
 const remarkPlugins: Options['remarkPlugins'] = [remarkGfm, remarkMath]
 // Auto-detection is skipped: it's slow on streaming text and often wrong for short snippets.
 const rehypePlugins: Options['rehypePlugins'] = [rehypeCallouts, rehypeKatex, [rehypeHighlight, { detect: false }]]
+// While a reply streams, the words of its last block are wrapped so each new word can fade in as it arrives.
+const streamingPlugins: Options['rehypePlugins'] = [...rehypePlugins, rehypeGlide]
+
+/**
+ * Makes a chart grow when it appears: bars rise from the baseline one after another and a line draws itself. The
+ * motion is CSS inside the picture (a picture in an <img> runs its own animations, and runs them once), and it is
+ * switched off inside the picture when the system asks for reduced motion.
+ */
+function drawnIn(svg: string): string {
+  let n = 0
+  const body = svg.replace(/<rect ([^>]*fill-opacity="[^"]*"[^>]*)\/>/g, (_m, attrs: string) => `<rect class="bar" style="animation-delay:${(0.08 * n++).toFixed(2)}s" ${attrs}/>`)
+  const css =
+    '<style>@keyframes rise{from{transform:scaleY(0)}}@keyframes draw{to{stroke-dashoffset:0}}' +
+    '.bar{transform-box:fill-box;transform-origin:50% 100%;animation:rise .75s cubic-bezier(.2,.8,.2,1) both}' +
+    'path[stroke-width="1.8"]{stroke-dasharray:3000;stroke-dashoffset:3000;animation:draw 1.3s ease-out .1s forwards}' +
+    '@media (prefers-reduced-motion:reduce){.bar,path{animation:none!important;stroke-dashoffset:0!important}}</style>'
+  return body.replace(/(<svg[^>]*>)/, `$1${css}`)
+}
 
 interface HastLike {
   type: string
@@ -58,7 +77,7 @@ function TableChart({ header, rows }: { header: string[]; rows: string[][] }): R
     const c = tableChart(header, rows)
     if (!c) return null
     const { svg } = plotToSvg({ ...c.plot, title: '' }, { width: 760, height: 320 })
-    return { c, src: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}` }
+    return { c, src: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(drawnIn(svg))}` }
   }, [header, rows])
   if (!drawn) return null
   return (
@@ -273,12 +292,12 @@ const components: Components = {
 // The default transform blanks data: URLs, which is how generated images arrive.
 const urlTransform = (url: string): string => (/^data:image\/(png|jpe?g|webp|gif);base64,/i.test(url) ? url : defaultUrlTransform(url))
 
-function Markdown({ text, sources }: { text: string; sources?: ResearchSource[] }): React.JSX.Element {
+function Markdown({ text, sources, streaming }: { text: string; sources?: ResearchSource[]; streaming?: boolean }): React.JSX.Element {
   const content = useMemo(() => (sources?.length ? linkCitations(normalizeMath(text), sources) : normalizeMath(text)), [text, sources])
   const withSources = useMemo(() => (sources?.length ? { ...components, a: makeLink(sources) } : components), [sources])
   return (
     <div className="markdown">
-      <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={rehypePlugins} components={withSources} urlTransform={urlTransform}>
+      <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={streaming ? streamingPlugins : rehypePlugins} components={withSources} urlTransform={urlTransform}>
         {content}
       </ReactMarkdown>
     </div>

@@ -40,6 +40,7 @@ const CoursesView = lazy(() => import('./components/courses/CoursesView'))
 const ToolkitView = lazy(() => import('./components/toolkit/ToolkitView'))
 const EyeView = lazy(() => import('./components/eye/EyeView'))
 const CosmosView = lazy(() => import('./components/cosmos/CosmosView'))
+import { setArenaReturn, withTransition } from './lib/motion'
 const ArenaView = lazy(() => import('./components/arena/ArenaView'))
 const F1View = lazy(() => import('./components/f1/F1View'))
 const FootballView = lazy(() => import('./components/football/FootballView'))
@@ -347,7 +348,16 @@ export default function App(): React.JSX.Element {
     conversationsRef, streamsRef
   } = chat
 
-  const closeFeature = useCallback(() => go({ kind: 'chat' }), [])
+  // Opened from an Arena card, a screen folds back into that card; opened from anywhere else it returns to the chat.
+  const fromArena = useRef<'football' | 'f1' | null>(null)
+  const closeFeature = useCallback(() => {
+    const from = fromArena.current
+    if (from) {
+      fromArena.current = null
+      setArenaReturn(from)
+      withTransition(() => go({ kind: 'feature', id: 'arena' }))
+    } else go({ kind: 'chat' })
+  }, [])
   useEffect(() => { artifactChanged() }, [feature])
 
   const [systemDark, setSystemDark] = useState(() => matchMedia('(prefers-color-scheme: dark)').matches)
@@ -423,6 +433,7 @@ export default function App(): React.JSX.Element {
   }, [])
 
   const dark = settings ? settings.theme === 'dark' || (settings.theme === 'system' && systemDark) : true
+
   const effects = settings?.effects !== false
 
   // A theme that expects light surroundings turns on the light Orbis already has, and then refines it; with no theme,
@@ -1108,7 +1119,15 @@ export default function App(): React.JSX.Element {
               {feature === 'toolkit' && <ToolkitView onClose={closeFeature} />}
               {feature === 'eye' && <EyeView onClose={closeFeature} />}
               {feature === 'cosmos' && <CosmosView onClose={closeFeature} />}
-              {feature === 'arena' && <ArenaView onClose={closeFeature} onOpen={(id) => go({ kind: 'feature', id })} />}
+              {feature === 'arena' && (
+                <ArenaView
+                  onClose={closeFeature}
+                  onOpen={(id) => {
+                    fromArena.current = id
+                    go({ kind: 'feature', id })
+                  }}
+                />
+              )}
               {feature === 'f1' && <F1View onClose={closeFeature} />}
               {feature === 'football' && <FootballView onClose={closeFeature} />}
               {feature === 'clipboard' && <ClipboardView onClose={closeFeature} onNotify={notify} />}

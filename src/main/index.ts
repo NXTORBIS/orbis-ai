@@ -83,7 +83,7 @@ import { fetchFavicon } from './favicon'
 import { setupBrowserControl } from './browserControl/setup'
 import { BrowserManager } from './chromium/browserManager'
 import { EmbedController, parseRegion } from './chromium/embedController'
-import { findBrowserWindow, standaloneWindow, type Standalone } from './chromium/embed'
+import { findBrowserWindow, foregroundPid, hideWindow, standaloneWindow, visibleBrowserWindows, type Standalone } from './chromium/embed'
 import { embedSupported, hwndFromHandle } from './chromium/embed'
 import { readSignals } from './browserControl/captchaCapabilities'
 import { StepRun } from './stepRunner'
@@ -583,7 +583,55 @@ function openWaitingLink(): void {
   if (url) void openInBrowser(url)
 }
 
+/**
+ * Which of the two windows the person last asked for, and the guard that keeps it true.
+ *
+ * Orbis and its browser are two windows, and only one of them is meant to be on screen at a time. Several things can
+ * put both there -- the taskbar button of the one that is hidden, a link that makes the browser surface, the browser
+ * opening a window of its own, the wrong window having been remembered as "the browser" -- and the result is a second
+ * title bar, a second address bar and a second market strip stacked over the first.
+ *
+ * So rather than trust that every way of showing one also hid the other, this looks: when both are on screen, the one
+ * the person is working in stays and the other is put away (hidden, never closed, so no tab is lost).
+ */
+let browserWanted = false
+let browserProcess: number | null = null
+let windowGuard: NodeJS.Timeout | null = null
+
+function reconcileWindows(): void {
+  if (embeddedBrowser || browserProcess === null) return
+  const chat = liveWindow()
+  if (!chat || !chat.isVisible() || chat.isMinimized()) return
+  const browsers = visibleBrowserWindows(browserProcess)
+  if (browsers.length === 0) return
+  // Both are on screen. Whichever the person has in front wins; with neither in front, whichever they last asked for.
+  const front = foregroundPid()
+  const browserWins = front === browserProcess || (front !== process.pid && browserWanted)
+  if (browserWins) {
+    browserWanted = true
+    chat.hide()
+  } else {
+    browserWanted = false
+    for (const h of browsers) hideWindow(h)
+    if (browserWindow) browserWindow.setVisible(false)
+  }
+}
+
+function startWindowGuard(pid: number): void {
+  browserProcess = pid
+  if (windowGuard) clearInterval(windowGuard)
+  windowGuard = setInterval(reconcileWindows, 300)
+  windowGuard.unref()
+}
+
+function stopWindowGuard(): void {
+  browserProcess = null
+  if (windowGuard) clearInterval(windowGuard)
+  windowGuard = null
+}
+
 function showBrowserWindow(show: boolean): void {
+  browserWanted = show
   if (browserWindow) browserWindow.setVisible(show)
   if (!mainWindow || mainWindow.isDestroyed()) return
   if (show) mainWindow.hide()
@@ -3356,6 +3404,7 @@ ${page.text}`, { howMany: 6 })
           ],
           onStarted: (pid) => {
             if (embeddedBrowser) return embedController.attach(pid)
+            startWindowGuard(pid)
             /**
              * Its window, once Chromium has made one.
              *
@@ -3388,6 +3437,7 @@ ${page.text}`, { howMany: 6 })
           },
           onClosed: () => {
             browserWindow = null
+            stopWindowGuard()
             embedController.detach()
             browserControl?.windowControl.setState(closedBrowserState())
             if (mainWindow && !mainWindow.isDestroyed()) {

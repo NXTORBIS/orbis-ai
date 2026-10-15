@@ -102,3 +102,32 @@
 .fb-lineup ul { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 4px; }
 .fb-lineup small { color: var(--muted); display: block; font-size: 11px; }
 .fb-table + div, .fb-table + button { margin-top: 10px; }
+
+/* Goal moments: the digit that changed flips like a scoreboard, a ripple leaves it, and a followed team's goal says so. */
+.fb-score { position: relative; display: inline-flex; justify-content: center; align-items: center; gap: 6px; }
+.fb-colon { opacity: .55; }
+.fb-digit { display: inline-block; min-width: .6em; transform-origin: 50% 60%; }
+.fb-digit.is-flip { animation: fb-flip .7s cubic-bezier(.2, .9, .2, 1.2); }
+@keyframes fb-flip { 0% { transform: rotateX(90deg) scale(.7); opacity: 0; } 55% { transform: rotateX(-14deg) scale(1.35); opacity: 1; } 100% { transform: none; } }
+.fb-ripple { position: absolute; inset: -8px -16px; border-radius: 14px; border: 2px solid var(--cyan); opacity: 0; pointer-events: none; animation: fb-ripple 1.5s ease-out 2; }
+@keyframes fb-ripple { 0% { transform: scale(.7); opacity: .9; } 100% { transform: scale(1.9); opacity: 0; } }
+.fb-goal-tag { position: absolute; top: -17px; left: 50%; translate: -50% 0; padding: 1px 8px; border-radius: 999px; font-size: 10px; letter-spacing: .14em; color: #04131a; background: linear-gradient(90deg, #46ffaa, #38e8ff); box-shadow: 0 0 14px rgba(70, 255, 170, .7); animation: fb-tag 3s ease-out both; }
+@keyframes fb-tag { 0% { transform: translateY(8px) scale(.6); opacity: 0; } 12% { transform: none; opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; } }
+.fb-row:has(.fb-score.is-goal) { animation: fb-row-goal 2.4s ease-out; }
+@keyframes fb-row-goal { 0% { box-shadow: 0 0 0 rgba(70, 255, 170, 0); background: rgba(70, 255, 170, .22); } 100% { box-shadow: 0 0 0 rgba(70, 255, 170, 0); background: rgba(255, 255, 255, .03); } }
+@media (prefers-reduced-motion: reduce) { .fb-digit.is-flip, .fb-ripple, .fb-goal-tag, .fb-row:has(.fb-score.is-goal) { animation: none; } }
+
+.fb-track { display: grid; gap: 10px; margin: 8px 0; max-width: 560px; }
+.fb-timeline { position: relative; height: 26px; }
+.fb-timeline-line { position: absolute; left: 3%; right: 3%; top: 12px; height: 2px; background: rgba(255, 255, 255, .2); border-radius: 2px; }
+.fb-tick { position: absolute; top: 6px; width: 3px; height: 14px; margin-left: -1px; border-radius: 2px; background: rgba(255, 255, 255, .35); }
+.fb-tick.is-home { background: #38e8ff; opacity: .45; }
+.fb-tick.is-away { background: #ffb03a; opacity: .45; }
+.fb-tick.is-past { opacity: 1; }
+.fb-ball { position: absolute; top: 4px; width: 18px; height: 18px; margin-left: -9px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff, #cfd8e3 60%, #8a95a3); box-shadow: 0 0 12px rgba(255, 255, 255, .6); transition: left .9s cubic-bezier(.3, .8, .2, 1); }
+.fb-goalmouth { filter: drop-shadow(0 0 2px #46ffaa); animation: fb-mouth .9s ease-out; }
+.fb-goalburst { transform-box: fill-box; transform-origin: 50% 50%; animation: fb-burst 1s ease-out both; }
+@keyframes fb-mouth { 0% { opacity: 0; } 30% { opacity: 1; } }
+@keyframes fb-burst { 0% { transform: scale(.3); opacity: 1; } 100% { transform: scale(3); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .fb-ball { transition: none; } .fb-goalmouth, .fb-goalburst { animation: none; } }
+.fb-full { view-transition-name: arena-open; }

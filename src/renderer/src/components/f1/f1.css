@@ -147,3 +147,4 @@
 .f1-drivers.f1-split { grid-template-columns: minmax(400px, 3fr) minmax(0, 7fr); }
 .f1-drivers .f1-table td:nth-child(3) { white-space: nowrap; }
 .f1-tab { padding: 8px 8px; font-size: 13px; }
+.f1-full { view-transition-name: arena-open; }

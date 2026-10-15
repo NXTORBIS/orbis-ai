@@ -1,7 +1,9 @@
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, BarChart3, Check, Code2, Download, ExternalLink, FileText, FolderOpen, FolderTree, Image as ImageIcon, Loader2, Music, Pencil, Table2, Video, Workflow } from 'lucide-react'
+import { AlertTriangle, BarChart3, Check, Code2, Copy, Download, ExternalLink, FileText, FolderOpen, FolderTree, Image as ImageIcon, Loader2, Music, Pencil, Table2, Video, Workflow } from 'lucide-react'
 import type { ChatArtifact } from '../../../shared/types'
 import type { NoticeKind } from '../lib/notices'
+import { copyText } from '../lib/utils'
+import { restoreEscapedBreaks } from '../../../shared/artifacts/escapes'
 import { ARTIFACT_CHANGED_EVENT, openArtifact, type ArtifactChangedDetail } from '../lib/artifactEvents'
 import Markdown from './Markdown'
 import './artifactCard.css'
@@ -326,12 +328,43 @@ function Preview({ read }: { read: Read }): React.JSX.Element {
     )
   }
 
-  const lines = read.preview.split('\n')
+  const lines = restoreEscapedBreaks(read.preview).text.split('\n')
   return (
     <div className="artifact-card-code" role="region" aria-label={`${record.title}, the start of it`} tabIndex={0}>
       <pre>{lines.slice(0, CARD_CODE_LINES).join('\n')}</pre>
       {(lines.length > CARD_CODE_LINES || read.truncated) && <p className="artifact-card-more">The first {CARD_CODE_LINES} lines. The whole file is saved exactly as written.</p>}
     </div>
+  )
+}
+
+/** What a card holds, as text a person can paste: code and documents as written, a table as tab-separated rows. */
+function copyableText(read: Read, kind: RecordKind): { text: string; partial: boolean } | null {
+  if (kind === 'code') return { text: restoreEscapedBreaks(read.preview).text, partial: read.truncated }
+  if (kind === 'document') return { text: read.preview, partial: read.truncated }
+  if (kind === 'table' && read.grid) {
+    const head = read.columns.map((c) => c.name).join('\t')
+    const body = read.grid.rows.map((row) => row.map((cell) => String(cell ?? '')).join('\t')).join('\n')
+    return { text: `${head}\n${body}`, partial: read.grid.total > read.grid.rows.length }
+  }
+  return null
+}
+
+/** A small copy button for the card's header: it copies what is inside the output, and says when that is only the start. */
+function CopyButton({ read, kind, onNotify }: { read: Read; kind: RecordKind; onNotify(message: string, kind?: NoticeKind): void }): React.JSX.Element | null {
+  const [done, setDone] = useState(false)
+  const what = copyableText(read, kind)
+  if (!what || what.text.trim() === '') return null
+  const copy = (): void => {
+    void copyText(what.text).then(() => {
+      setDone(true)
+      setTimeout(() => setDone(false), 1500)
+      onNotify(what.partial ? 'Copied the part shown here; the saved file has all of it.' : 'Copied.')
+    })
+  }
+  return (
+    <button type="button" className="artifact-card-copy" onClick={copy} title={done ? 'Copied' : 'Copy'} aria-label={`Copy ${NAMES[kind].toLowerCase()}`}>
+      {done ? <Check size={13} /> : <Copy size={13} />}
+    </button>
   )
 }
 
@@ -449,6 +482,7 @@ function ArtifactCard({ artifact, onNotify }: { artifact: ChatArtifact; onNotify
             Checked
           </span>
         )}
+        <CopyButton read={state.read} kind={record.kind} onNotify={onNotify} />
       </header>
 
       {artifact.action !== 'shown' && <Preview read={state.read} />}

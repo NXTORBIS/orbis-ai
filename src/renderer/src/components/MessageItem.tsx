@@ -46,6 +46,7 @@ import ArtifactCard from './ArtifactCard'
 import ResearchSources from './ResearchSources'
 import { OrbisMark } from './Brand'
 import { ThinkingOrb, ThinkingText } from './Thinking'
+import { useOrbMood } from '../lib/useOrbMood'
 
 interface Props {
   message: ChatMessage
@@ -224,6 +225,9 @@ function PendingReply({ status, reasoning }: { status?: string; reasoning?: stri
 function AssistantMessage(props: Props): React.JSX.Element {
   const { message, streaming, status } = props
   const cardRef = useRef<HTMLDivElement>(null)
+  // The ring beside the reply says how this reply is going: glowing while words arrive, a flash when it lands, dim and
+  // flickering if it failed. An old reply that is simply there stays still.
+  const mood = useOrbMood({ streaming, hasContent: Boolean(message.content), failed: Boolean(message.error), key: message.id })
 
   const plainText = (): string => cardRef.current?.querySelector('.markdown')?.textContent ?? message.content
 
@@ -235,7 +239,7 @@ function AssistantMessage(props: Props): React.JSX.Element {
 
   return (
     <div className="msg assistant">
-      <div className="avatar assistant-avatar">
+      <div className="avatar assistant-avatar" data-mood={mood}>
         <OrbisMark size={20} />
       </div>
       <div className="msg-body">
@@ -262,7 +266,7 @@ function AssistantMessage(props: Props): React.JSX.Element {
               onAnswer={(confirmationId, approved) => props.onBrowserConfirm?.(message.id, confirmationId, approved)}
             />
           )}
-          {message.content && <Markdown text={message.content} sources={message.research?.sources} />}
+          {message.content && <Markdown text={message.content} sources={message.research?.sources} streaming={streaming} />}
           {message.artifacts && message.artifacts.length > 0 && (
             <div className="artifact-cards">
               {message.artifacts.map((one) => (

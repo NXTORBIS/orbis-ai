@@ -188,18 +188,25 @@ export function MatchRow({ m, onOpen, pinned, selected }: { m: FbMatch; onOpen: 
   const { data } = useFollows()
   const reduce = useReducedMotion(data.ui.reduceMotion)
   const live = isLive(m.status)
-  const score = m.score.home === null || m.score.away === null ? '–' : `${m.score.home} : ${m.score.away}`
-  // A score that changes while the row is on screen is lightly highlighted; a row that first appears with a score is not.
-  const prev = useRef(score)
-  const [pulse, setPulse] = useState(false)
+  const h = m.score.home
+  const a = m.score.away
+  const score = h === null || a === null ? '–' : `${h} : ${a}`
+  // A score that changes while the row is on screen flips the digit that changed, and a goal sends a ripple out from
+  // it. For a team you follow (or a match you pinned) it also says GOAL. A row that first appears with a score does none
+  // of this: opening the screen on a match at 2-1 is not a goal.
+  const prev = useRef({ h, a })
+  const [flip, setFlip] = useState<{ h: boolean; a: boolean; goal: boolean } | null>(null)
+  const followed = data.teams.some((t) => t.id === m.home.id || t.id === m.away.id) || data.pins.some((p) => p.key === m.key)
   useEffect(() => {
-    if (prev.current === score) return
-    prev.current = score
+    const p = prev.current
+    if (p.h === h && p.a === a) return
+    const goal = (h ?? 0) + (a ?? 0) > (p.h ?? 0) + (p.a ?? 0)
+    prev.current = { h, a }
     if (reduce) return
-    setPulse(true)
-    const t = setTimeout(() => setPulse(false), 1800)
+    setFlip({ h: h !== p.h, a: a !== p.a, goal })
+    const t = setTimeout(() => setFlip(null), 3000)
     return () => clearTimeout(t)
-  }, [score, reduce])
+  }, [h, a, reduce])
   const clock = clockLabel(m, Date.now(), data.ui.timeZone)
   return (
     <li>
@@ -208,7 +215,23 @@ export function MatchRow({ m, onOpen, pinned, selected }: { m: FbMatch; onOpen: 
           {m.home.name}
           <Crest url={m.home.badge} name={m.home.name} />
         </span>
-        <span className={`fb-score${pulse ? ' is-pulse' : ''}`}>{score}</span>
+        <span className={`fb-score${flip ? ' is-pulse' : ''}${flip?.goal && followed ? ' is-goal' : ''}`}>
+          {h === null || a === null ? (
+            '–'
+          ) : (
+            <>
+              <span key={`h${h}`} className={`fb-digit${flip?.h ? ' is-flip' : ''}`}>
+                {h}
+              </span>
+              <span className="fb-colon">:</span>
+              <span key={`a${a}`} className={`fb-digit${flip?.a ? ' is-flip' : ''}`}>
+                {a}
+              </span>
+            </>
+          )}
+          {flip?.goal && <i className="fb-ripple" aria-hidden="true" />}
+          {flip?.goal && followed && <b className="fb-goal-tag">GOAL</b>}
+        </span>
         <span className="fb-team">
           <Crest url={m.away.badge} name={m.away.name} />
           {m.away.name}

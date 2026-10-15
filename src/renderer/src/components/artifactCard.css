@@ -294,3 +294,28 @@
   flex: none;
   color: var(--red);
 }
+
+/* The small copy button at the end of a card's header: it copies what is inside the output. */
+.artifact-card-copy {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  margin-left: auto;
+  padding: 0;
+  border: 1px solid var(--pill-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted-strong);
+  cursor: pointer;
+}
+
+.artifact-card-checked + .artifact-card-copy {
+  margin-left: 0;
+}
+
+.artifact-card-copy:hover,
+.artifact-card-copy:focus-visible {
+  color: var(--text);
+  border-color: var(--cyan);
+}

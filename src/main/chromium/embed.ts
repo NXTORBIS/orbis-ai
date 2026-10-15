@@ -49,6 +49,8 @@ interface Api {
   rect(hwnd: bigint): Rect
   clientRect(hwnd: bigint): Rect
   clientToScreen(hwnd: bigint, x: number, y: number): { x: number; y: number }
+  /** The process that owns the window the person is working in, or 0. */
+  foregroundPid(): number
 }
 
 let cached: Api | null | undefined
@@ -79,6 +81,7 @@ function load(): Api | null {
     const ShowWindow = user32.func('bool __stdcall ShowWindow(void *hwnd, int cmd)')
     const SetFocus = user32.func('void *__stdcall SetFocus(void *hwnd)')
     const AttachThreadInput = user32.func('bool __stdcall AttachThreadInput(uint32 attach, uint32 to, bool join)')
+    const GetForegroundWindow = user32.func('void *__stdcall GetForegroundWindow()')
     const GetCurrentThreadId = koffi.load('kernel32.dll').func('uint32 __stdcall GetCurrentThreadId()')
     const GetWindowRect = user32.func('bool __stdcall GetWindowRect(void *hwnd, _Out_ ORBIS_RECT *r)')
     const GetClientRect = user32.func('bool __stdcall GetClientRect(void *hwnd, _Out_ ORBIS_RECT *r)')
@@ -153,6 +156,13 @@ function load(): Api | null {
         SetWindowPos(ptr(h), null, 0, 0, 0, 0, 0x0001 | 0x0002 | SWP_NOACTIVATE)
         return true
       },
+      foregroundPid() {
+        const fg = GetForegroundWindow()
+        if (!fg) return 0
+        const out = [0]
+        GetWindowThreadProcessId(fg, out)
+        return out[0] as number
+      },
       rect: (h) => rectOf(GetWindowRect as never, h),
       clientRect: (h) => rectOf(GetClientRect as never, h),
       clientToScreen(h, x, y) {
@@ -183,6 +193,34 @@ export function findBrowserWindow(pid: number): bigint | null {
     if (area > (best?.area ?? 0)) best = { hwnd: w.hwnd, area }
   }
   return best?.hwnd ?? null
+}
+
+/**
+ * Every browser window of a process that is on screen: top-level Chromium windows with a title bar and a real size.
+ * A menu, a tooltip or the address bar's dropdown is a window too, but has no title bar and is small, so it is not one.
+ */
+export function visibleBrowserWindows(pid: number): bigint[] {
+  const api = load()
+  if (!api) return []
+  const WS_CAPTION = 0x00c00000
+  const out: bigint[] = []
+  for (const w of api.enumWindows(pid)) {
+    if (w.cls !== 'Chrome_WidgetWin_1' || !w.visible) continue
+    if ((api.getStyles(w.hwnd).style & WS_CAPTION) !== WS_CAPTION) continue
+    const r = api.rect(w.hwnd)
+    if (r.width >= 300 && r.height >= 200) out.push(w.hwnd)
+  }
+  return out
+}
+
+/** Puts a window away without closing it (its tabs are kept). */
+export function hideWindow(hwnd: bigint): void {
+  load()?.show(hwnd, false)
+}
+
+/** The process that owns the foreground window, or 0 when that cannot be told. */
+export function foregroundPid(): number {
+  return load()?.foregroundPid() ?? 0
 }
 
 /** The largest top-level window of one process whose window class is `cls` (Gaia Sky's window is class "GLFW30"). */

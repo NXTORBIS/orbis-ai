@@ -1,3 +1,4 @@
+import { useFlip } from '../lib/motion'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Search } from 'lucide-react'
 import { searchCapabilities, unavailableBecause, type OrbisCapability, type Readiness } from '../../../shared/commandCenter'
@@ -81,6 +82,9 @@ export default function CommandPalette({ open, onClose, onFeature, onBrowser, re
     setAt((was) => (was >= reachable.length ? 0 : was))
   }, [reachable.length])
 
+  // Rows slide to their new place as the list changes while typing, and new rows fade up.
+  useFlip(listRef, hits.map((h) => h.id).join('|'))
+
   if (!open) return null
 
   const take = (hit: (typeof hits)[number]): void => {
@@ -163,6 +167,7 @@ export default function CommandPalette({ open, onClose, onFeature, onBrowser, re
                 aria-selected={marked}
                 aria-disabled={hit.why !== null}
                 data-at={index >= 0 ? index : undefined}
+                data-flip={hit.id}
                 className={`cp-hit${marked ? ' at' : ''}${hit.why ? ' off' : ''}`}
                 onMouseEnter={() => index >= 0 && setAt(index)}
                 onClick={() => take(hit)}

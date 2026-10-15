@@ -159,6 +159,7 @@ export function Replay({ m, reduceMotion }: { m: FbMatch; reduceMotion: boolean 
         {s.label}
         {live ? ' · the match is not over: this replays what has been recorded so far' : ''}
       </p>
+      <ReplayTrack steps={steps} at={Math.min(i, steps.length - 1)} home={m.home.name} away={m.away.name} />
       <div className="fb-sourcebar">
         <button type="button" className="fb-btn" onClick={() => setI(0)} disabled={i === 0}>
           Start
@@ -177,5 +178,38 @@ export function Replay({ m, reduceMotion }: { m: FbMatch; reduceMotion: boolean 
         </button>
       </div>
     </section>
+  )
+}
+
+/**
+ * The replay's picture: a small pitch whose goal lights where the goal was scored (a home goal goes in at the away
+ * end), and a line of minutes along which the marker travels from one goal to the next. Where on the pitch a goal was
+ * scored is not in the data, so nothing is drawn there beyond the goal itself.
+ */
+function ReplayTrack({ steps, at, home, away }: { steps: ReplayStep[]; at: number; home: string; away: string }): React.JSX.Element {
+  const cur = steps[at]
+  const max = Math.max(90, ...steps.map((s) => s.minute ?? 0))
+  const X = (min: number | null): number => 3 + (((min ?? 0) / max) * 94)
+  const side = cur.event?.side ?? null
+  return (
+    <div className="fb-track">
+      <Pitch label="The pitch; the goal that was just scored is lit">
+        {side && (
+          <g key={`goal-${at}`}>
+            <rect x={side === 'home' ? 105 : -1.2} y={30.34} width={1.2} height={7.32} fill="#46ffaa" className="fb-goalmouth" />
+            <circle cx={side === 'home' ? 105 : 0} cy={34} r={4} fill="none" stroke="#46ffaa" strokeWidth={0.5} className="fb-goalburst" />
+          </g>
+        )}
+        <text x={3} y={5} fontSize={3.2} fill="rgba(255,255,255,.7)">{home} attacks →</text>
+        <text x={102} y={66} fontSize={3.2} fill="rgba(255,255,255,.7)" textAnchor="end">← {away}</text>
+      </Pitch>
+      <div className="fb-timeline" role="img" aria-label={`Match minutes; the marker is at ${cur.minute ?? 0} minutes`}>
+        <i className="fb-timeline-line" />
+        {steps.slice(1).map((s) => (
+          <i key={s.index} className={`fb-tick is-${s.event?.side ?? 'none'}${s.index <= at ? ' is-past' : ''}`} style={{ left: `${X(s.minute)}%` }} />
+        ))}
+        <i className="fb-ball" style={{ left: `${X(cur.minute)}%` }} />
+      </div>
+    </div>
   )
 }
