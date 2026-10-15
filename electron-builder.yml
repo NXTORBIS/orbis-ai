@@ -23,6 +23,9 @@ extraResources:
   # The licences of everything Orbis is built from. Most of them require their text to travel with the app.
   - from: resources/notices.json
     to: notices.json
+  # The worker that drives the ACE-Step engine NEUROVA installs on the user's machine (MIT upstream; not bundled).
+  - from: resources/neurova
+    to: neurova
   # ORBIS COSMOS, the Gaia Sky simulation (MPL-2.0): its source and assets, and what `npm run cosmos:build` made.
   - from: cosmos
     to: cosmos

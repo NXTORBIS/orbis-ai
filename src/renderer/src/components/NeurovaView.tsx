@@ -19,13 +19,21 @@ export default function NeurovaView({ onClose, onNotify }: { onClose: () => void
   const [lyricNotes, setLyricNotes] = useState<{ warnings: string[]; notices: { section: string; message: string }[]; sections: number } | null>(null)
   const [wave, setWave] = useState<Record<string, number[]>>({})
   const [tempo, setTempo] = useState<Record<string, string>>({})
+  const [install, setInstall] = useState<{ running: boolean; step: string; log: string[]; error: string | null }>({ running: false, step: 'idle', log: [], error: null })
+  const [jobs, setJobs] = useState<{ id: string; projectId: string; state: string; stage: string; error: string | null; cpuOnly: boolean }[]>([])
+  const [seconds, setSeconds] = useState('30')
+  const [instrumental, setInstrumental] = useState(false)
   const project = projects.find((p) => p.id === openId) ?? null
 
   const load = useCallback(async () => setProjects(await window.api.neurovaList()), [])
   useEffect(() => {
     void load()
-    void window.api.neurovaEngines().then(setEngines).catch(() => setEngines([]))
-    return window.api.onNeurovaChanged(() => void load())
+    const refreshEngines = (): void => { void window.api.neurovaEngines().then(setEngines).catch(() => setEngines([])) }
+    const refreshInstall = (): void => { void window.api.neurovaInstallStatus().then(setInstall).catch(() => undefined); refreshEngines() }
+    const refreshJobs = (): void => { void window.api.neurovaJobs().then(setJobs).catch(() => undefined); void load(); refreshEngines() }
+    refreshEngines(); refreshInstall(); refreshJobs()
+    const offs = [window.api.onNeurovaChanged(() => void load()), window.api.onNeurovaInstall(refreshInstall), window.api.onNeurovaJobs(refreshJobs)]
+    return () => offs.forEach((off) => off())
   }, [load])
 
   const run = async (fn: () => Promise<unknown>, done?: string): Promise<void> => {
@@ -87,7 +95,16 @@ export default function NeurovaView({ onClose, onNotify }: { onClose: () => void
             {engines.map((e) => (
               <p key={e.id}><strong>{e.name}</strong><br /><span>{e.reason}</span></p>
             ))}
-            <p className="nv-faint">NEUROVA cannot create songs on this computer yet. You can keep, check and export audio you already have.</p>
+            {engines.some((e) => e.readiness === 'no-runtime' && e.id === 'ace-step') && (
+              <Button size="small" disabled={install.running} onClick={() => void window.api.neurovaInstallRuntime()}>Install the ACE-Step engine</Button>
+            )}
+            {engines.some((e) => e.readiness === 'no-model' && e.id === 'ace-step') && (
+              <Button size="small" disabled={install.running} onClick={() => void window.api.neurovaInstallModels()}>Download the model files (several GB)</Button>
+            )}
+            {install.running && <Button size="small" kind="danger" onClick={() => void window.api.neurovaInstallCancel()}>Stop</Button>}
+            {install.error && <p className="nv-bad" role="alert">{install.error}</p>}
+            {install.log.length > 0 && <pre className="nv-log" aria-label="Installation output">{install.log.slice(-6).join('\n')}</pre>}
+            <p className="nv-faint">Songs are made on this computer by ACE-Step. Without a GPU it runs on the processor, which is slow.</p>
           </section>
         </aside>
 
@@ -114,6 +131,21 @@ export default function NeurovaView({ onClose, onNotify }: { onClose: () => void
                 </ul>
               )}
 
+              <div className="nv-row">
+                <h3>Make a song</h3>
+                <label className="nv-faint">Length (s) <input style={{ width: 56 }} value={seconds} onChange={(e) => setSeconds(e.target.value)} inputMode="numeric" aria-label="Length in seconds" /></label>
+                <label className="nv-faint"><input type="checkbox" checked={instrumental} onChange={(e) => setInstrumental(e.target.checked)} /> Instrumental</label>
+                <Button size="small" kind="primary" disabled={busy || jobs.some((j) => j.projectId === project.id && !['completed', 'failed', 'cancelled', 'interrupted'].includes(j.state))}
+                  onClick={() => void run(async () => { await window.api.neurovaGenerate(project.id, { prompt: project.brief, lyrics: project.lyrics || undefined, instrumental, durationSec: Number(seconds) || undefined }) })}>Generate</Button>
+              </div>
+              {jobs.filter((j) => j.projectId === project.id).slice(0, 3).map((j) => (
+                <div key={j.id} className="nv-job" role="status">
+                  <strong>{j.state === 'completed' ? 'Finished' : j.state === 'failed' ? 'Failed' : j.state === 'cancelled' ? 'Stopped' : 'Working'}</strong>
+                  <span className="nv-faint"> {['completed', 'failed', 'cancelled'].includes(j.state) ? '' : j.stage}{j.cpuOnly && !['completed', 'failed', 'cancelled'].includes(j.state) ? ' (processor only, this can take a long time)' : ''}</span>
+                  {j.error && <div className="nv-bad">{j.error}</div>}
+                  {!['completed', 'failed', 'cancelled'].includes(j.state) && <Button size="tiny" kind="danger" onClick={() => void window.api.neurovaCancelJob(j.id)}>Cancel</Button>}
+                </div>
+              ))}
               <div className="nv-row">
                 <h3>Versions</h3>
                 <Button size="small" kind="primary" busy={busy} onClick={() => void run(async () => { await window.api.neurovaImportAudio(project.id) })}>Add a WAV file</Button>

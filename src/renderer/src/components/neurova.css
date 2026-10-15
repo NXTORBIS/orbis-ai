@@ -25,3 +25,6 @@
 .nv-note { font-size: 13px; margin-top: 4px; }
 
 .nv-wave { width: 100%; height: 40px; color: var(--cyan); margin-top: 8px; }
+
+.nv-log { font-size: 11px; max-height: 90px; overflow: auto; white-space: pre-wrap; color: var(--faint); }
+.nv-job { padding: 8px 10px; border: 1px solid var(--glass-border); border-radius: 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }

@@ -1,13 +1,15 @@
 import { plainHandle } from '../ipc/handle.ts'
 import type { BrowserWindow } from 'electron'
-import { ENGINES, evaluate, type EngineStatus, type MachineFacts } from '../../shared/neurova/engines.ts'
+import type { EngineStatus, MachineFacts } from '../../shared/neurova/engines.ts'
 import { interpret, type SongRequest } from '../../shared/neurova/intent.ts'
 import { diagnose, parseLyrics } from '../../shared/neurova/lyrics.ts'
 import type { Op } from '../../shared/neurova/process.ts'
 import type { NeurovaStore } from './store.ts'
+import type { NeurovaEngine } from './engine.ts'
 
 export interface NeurovaIpcOptions {
   store: NeurovaStore
+  engine: NeurovaEngine
   getWindow(): BrowserWindow | null
   send(channel: string, ...args: unknown[]): void
   /** Opens the system file dialog. Resolves to the chosen path, or null if the person cancelled. */
@@ -54,8 +56,12 @@ export function registerNeurovaIpc(o: NeurovaIpcOptions): void {
     return { sections: doc.sections.map((s) => ({ id: s.id, label: s.label, type: s.type, lines: s.lines.length })), warnings: doc.warnings, notices: diagnose(doc) }
   })
   handle('neurova:interpret', (_e, req) => interpret((req ?? {}) as SongRequest))
-  handle('neurova:engines', async (): Promise<EngineStatus[]> => {
-    const facts = await o.machineFacts()
-    return ENGINES.map((m) => evaluate(m, facts, false))
-  })
+  handle('neurova:engines', (): Promise<EngineStatus[]> => o.engine.status())
+  handle('neurova:install-status', () => o.engine.installStatus())
+  handle('neurova:install-runtime', () => { void o.engine.installRuntime(); return true })
+  handle('neurova:install-models', () => { void o.engine.installModels(); return true })
+  handle('neurova:install-cancel', () => { o.engine.cancelInstall(); return true })
+  handle('neurova:generate', (_e, id, input) => o.engine.generate(str(id, 80), (input ?? {}) as { prompt: string; lyrics?: string; instrumental?: boolean; durationSec?: number; seed?: number }))
+  handle('neurova:jobs', () => o.engine.listJobs())
+  handle('neurova:cancel-job', (_e, id) => o.engine.cancel(str(id, 80)))
 }

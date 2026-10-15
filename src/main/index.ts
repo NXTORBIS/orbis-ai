@@ -353,6 +353,7 @@ import { registerPersonalIpc } from './personal/ipc'
 import { NeurovaStore } from './neurova/store'
 import { registerNeurovaIpc } from './neurova/ipc'
 import { probeMachine } from './neurova/machine'
+import { NeurovaEngine } from './neurova/engine'
 import { SecretsVault } from './vault/store'
 import { secretsFromVault } from '../helper/secrets'
 import type { SecretsDeps } from '../helper/secrets'
@@ -5239,8 +5240,16 @@ ${page.text}`, { howMany: 6 })
      */
     registerMusicCapabilities({ control: browserControl.control, music: () => music })
 
+    const neurovaEngine = new NeurovaEngine({
+      home: join(app.getPath('userData'), 'neurova'),
+      workerScript: join(app.isPackaged ? process.resourcesPath : join(app.getAppPath(), 'resources'), 'neurova', 'ace_worker.py'),
+      store: neurovaStore,
+      probe: () => probeMachine(app.getPath('userData')),
+      send: sendToWindow
+    })
     registerNeurovaIpc({
       store: neurovaStore,
+      engine: neurovaEngine,
       getWindow: () => liveWindow(),
       send: sendToWindow,
       machineFacts: () => probeMachine(app.getPath('userData')),

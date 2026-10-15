@@ -81,7 +81,7 @@ export class NeurovaStore {
     return true
   }
 
-  async importAudio(projectId: string, sourcePath: string, name?: string, note?: string): Promise<{ project: Project; info: AudioInfo }> {
+  async importAudio(projectId: string, sourcePath: string, name?: string, note?: string, source: 'imported' | 'generated' = 'imported'): Promise<{ project: Project; info: AudioInfo }> {
     const p = await this.need(projectId)
     const st = await stat(sourcePath)
     if (!st.isFile()) throw new Error('That is not a file.')
@@ -103,7 +103,7 @@ export class NeurovaStore {
     const artifact: Artifact = existing ?? {
       id: artifactId, file, sha256, bytes: bytes.length, durationSec: result.info.durationSec,
       sampleRate: result.info.sampleRate, channels: result.info.channels, bitDepth: result.info.bitDepth,
-      source: 'imported', createdAt: Date.now()
+      source, createdAt: Date.now()
     }
     const next = addVersion(p, { versionId: randomUUID(), name: name || basename(sourcePath).replace(/\.[^.]+$/, ''), note, artifact })
     return { project: await this.projects.put(next), info: result.info }

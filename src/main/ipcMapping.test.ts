@@ -20,7 +20,8 @@ const MAP = join(ROOT, '..', 'docs', 'ipc-mapping.md')
 /** How many channels the boundary may have before somebody has to look. Raise it deliberately, with a line saying why. */
 // 540 -> 560: Football (follows, extras, team) and F1 (prefs, circuit records, qualifying, constructor season, team radio, forecast): thirteen channels.
 // 560 -> 580: NEUROVA song projects (versions, WAV checks, processing, export, packages, engine readiness): eighteen channels.
-const CEILING = 580
+// 580 -> 590: NEUROVA engine install and generation (runtime, models, generate, jobs, cancel).
+const CEILING = 590
 
 async function* typescriptFiles(dir: string): AsyncGenerator<string> {
   for (const entry of await readdir(dir, { withFileTypes: true })) {
