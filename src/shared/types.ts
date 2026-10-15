@@ -126,6 +126,10 @@ import type { Note, NoteFilter } from './notes'
 import type { Task, TaskCounts, TaskFilter, TaskList } from './tasks'
 import type { ClipboardSettings, ClipItem, ClipKind } from './clipboardHistory'
 import type { Board } from './whiteboard'
+import type { Project } from './neurova/project'
+import type { AudioInfo } from './neurova/audio'
+import type { EngineStatus } from './neurova/engines'
+import type { Validated } from './neurova/intent'
 import type { Workspace, WorkspaceSummary } from './workspaces'
 import type { Profile } from './profiles'
 import type { ConfigChange, ExperienceConfig, ExperienceExport, ExperienceHealth, ImportCheck } from './experience'
@@ -2240,6 +2244,23 @@ export interface NxtorbisApi {
   exportBoardSvg(id: string): Promise<{ name: string; svg: string }>
   addPageToBoard(id: string, at?: { x: number; y: number }): Promise<Board>
   onBoardsChanged(listener: () => void): () => void
+
+  // NEUROVA
+  neurovaList(): Promise<Project[]>
+  neurovaCreate(title: string, brief?: string, lyrics?: string): Promise<Project>
+  neurovaUpdate(id: string, patch: { title?: string; brief?: string; lyrics?: string }): Promise<Project>
+  neurovaRemove(id: string): Promise<boolean>
+  neurovaImportAudio(id: string, name?: string, note?: string): Promise<{ project: Project; info: AudioInfo } | null>
+  neurovaAnalyse(id: string, artifactId: string): Promise<AudioInfo>
+  neurovaSelectVersion(id: string, versionId: string): Promise<Project>
+  neurovaRestoreVersion(id: string, versionId: string): Promise<Project>
+  neurovaRemoveVersion(id: string, versionId: string): Promise<Project>
+  neurovaExportVersion(id: string, versionId: string): Promise<string | null>
+  neurovaExportPackage(id: string): Promise<string | null>
+  neurovaImportPackage(): Promise<Project | null>
+  neurovaInterpret(req: { prompt: string; lyrics?: string }): Promise<Validated>
+  neurovaEngines(): Promise<EngineStatus[]>
+  onNeurovaChanged(listener: () => void): () => void
 
   // Workspaces
   listWorkspaces(): Promise<{ workspaces: (Workspace & { summary: WorkspaceSummary })[]; currentId: string | null }>

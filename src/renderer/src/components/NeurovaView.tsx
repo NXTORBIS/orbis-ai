@@ -1,0 +1,143 @@
+import { useCallback, useEffect, useState } from 'react'
+import { Button, EmptyState, Surface } from '../ui'
+import type { Project } from '../../../shared/neurova/project'
+import type { AudioInfo } from '../../../shared/neurova/audio'
+import type { EngineStatus } from '../../../shared/neurova/engines'
+import type { NoticeKind } from '../lib/notices'
+import './neurova.css'
+
+const mmss = (s: number): string => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
+const db = (x: number): string => (x > 0 ? `${(20 * Math.log10(x)).toFixed(1)} dBFS` : 'silent')
+
+export default function NeurovaView({ onClose, onNotify }: { onClose: () => void; onNotify: (text: string, kind?: NoticeKind) => void }): React.JSX.Element {
+  const [projects, setProjects] = useState<Project[]>([])
+  const [openId, setOpenId] = useState<string | null>(null)
+  const [engines, setEngines] = useState<EngineStatus[]>([])
+  const [info, setInfo] = useState<Record<string, AudioInfo | string>>({})
+  const [busy, setBusy] = useState(false)
+  const [title, setTitle] = useState('')
+  const project = projects.find((p) => p.id === openId) ?? null
+
+  const load = useCallback(async () => setProjects(await window.api.neurovaList()), [])
+  useEffect(() => {
+    void load()
+    void window.api.neurovaEngines().then(setEngines).catch(() => setEngines([]))
+    return window.api.onNeurovaChanged(() => void load())
+  }, [load])
+
+  const run = async (fn: () => Promise<unknown>, done?: string): Promise<void> => {
+    setBusy(true)
+    try {
+      await fn()
+      if (done) onNotify(done)
+    } catch (err) {
+      onNotify(err instanceof Error ? err.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : 'That did not work.', 'error')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const create = (): Promise<void> =>
+    run(async () => {
+      const p = await window.api.neurovaCreate(title || 'Untitled song')
+      setTitle('')
+      setOpenId(p.id)
+    })
+
+  const selectedVersion = project?.versions.find((v) => v.id === project.selectedVersionId) ?? null
+  const artifactOf = (artifactId: string) => project?.artifacts.find((a) => a.id === artifactId)
+
+  return (
+    <Surface title="NEUROVA" onClose={onClose} className="nv-view">
+      <div className="nv-body">
+        <aside className="nv-side" aria-label="Projects">
+          <div className="nv-new">
+            <input value={title} placeholder="Name a new song" aria-label="Name a new song" onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void create()} />
+            <Button kind="primary" size="small" disabled={busy} onClick={() => void create()}>Create</Button>
+          </div>
+          <Button size="small" disabled={busy} onClick={() => void run(async () => { const p = await window.api.neurovaImportPackage(); if (p) setOpenId(p.id) }, 'Project imported.')}>Import a project folder</Button>
+          <ul className="nv-list">
+            {projects.map((p) => (
+              <li key={p.id}>
+                <button className="nv-item" aria-current={p.id === openId ? 'true' : undefined} onClick={() => setOpenId(p.id)}>
+                  <strong>{p.title}</strong>
+                  <span>{p.versions.length} {p.versions.length === 1 ? 'version' : 'versions'}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          <section className="nv-engines" aria-label="Song generation">
+            <h3>Song generation</h3>
+            {engines.map((e) => (
+              <p key={e.id}><strong>{e.name}</strong><br /><span>{e.reason}</span></p>
+            ))}
+            <p className="nv-faint">NEUROVA cannot create songs on this computer yet. You can keep, check and export audio you already have.</p>
+          </section>
+        </aside>
+
+        <main className="nv-main">
+          {!project ? (
+            <EmptyState>Create a song project, or pick one on the left.</EmptyState>
+          ) : (
+            <>
+              <header className="nv-head">
+                <input className="nv-title" value={project.title} aria-label="Song title" onChange={(e) => void window.api.neurovaUpdate(project.id, { title: e.target.value })} />
+                <Button size="small" kind="danger" disabled={busy} onClick={() => void run(async () => { await window.api.neurovaRemove(project.id); setOpenId(null) }, 'Project deleted.')}>Delete project</Button>
+              </header>
+              <label className="nv-label">What this song is meant to be
+                <textarea defaultValue={project.brief} key={`b-${project.id}`} rows={3} onBlur={(e) => e.target.value !== project.brief && void window.api.neurovaUpdate(project.id, { brief: e.target.value })} />
+              </label>
+              <label className="nv-label">Lyrics
+                <textarea defaultValue={project.lyrics} key={`l-${project.id}`} rows={4} onBlur={(e) => e.target.value !== project.lyrics && void window.api.neurovaUpdate(project.id, { lyrics: e.target.value })} />
+              </label>
+
+              <div className="nv-row">
+                <h3>Versions</h3>
+                <Button size="small" kind="primary" busy={busy} onClick={() => void run(async () => { await window.api.neurovaImportAudio(project.id) })}>Add a WAV file</Button>
+                <Button size="small" disabled={busy} onClick={() => void run(async () => { const p = await window.api.neurovaExportPackage(project.id); if (p) onNotify(`Project folder saved to ${p}`) })}>Save project folder</Button>
+              </div>
+              {project.versions.length === 0 && <EmptyState>No audio yet. Add a WAV file to start a first version.</EmptyState>}
+              <ol className="nv-versions">
+                {[...project.versions].reverse().map((v) => {
+                  const a = artifactOf(v.artifactId)
+                  const res = info[v.artifactId]
+                  const current = v.id === project.selectedVersionId
+                  return (
+                    <li key={v.id} className={current ? 'nv-version current' : 'nv-version'}>
+                      <div>
+                        <strong>{v.name}</strong> {current && <em>current</em>}
+                        <div className="nv-faint">
+                          {v.kind === 'restore' ? 'Restored copy' : v.kind === 'revision' ? 'Added after another version' : 'First version'}
+                          {a ? ` · ${mmss(a.durationSec)} · ${a.sampleRate} Hz · ${a.channels === 1 ? 'mono' : `${a.channels} channels`} · ${a.bitDepth}-bit` : ''}
+                        </div>
+                        {v.note && <div className="nv-note">{v.note}</div>}
+                        {typeof res === 'string' && <div className="nv-bad">{res}</div>}
+                        {res && typeof res !== 'string' && (
+                          <ul className="nv-facts">
+                            <li>Peak {db(res.peak)}</li>
+                            <li>Average level {db(res.rms)}</li>
+                            <li>{res.clippedSamples === 0 ? 'No clipped samples' : `${res.clippedSamples} clipped samples`}</li>
+                            <li>{res.lowEnergy.length === 0 ? 'No long quiet stretches' : `Quiet for a second or more at ${res.lowEnergy.map((x) => `${mmss(x.startSec)}–${mmss(x.endSec)}`).join(', ')}`}</li>
+                            {res.warnings.map((w) => <li key={w} className="nv-bad">{w}</li>)}
+                          </ul>
+                        )}
+                      </div>
+                      <div className="nv-actions">
+                        <Button size="tiny" disabled={busy} onClick={() => void run(async () => { let r: AudioInfo | string; try { r = await window.api.neurovaAnalyse(project.id, v.artifactId) } catch (e) { r = e instanceof Error ? e.message : 'Could not check this file.' } setInfo((m) => ({ ...m, [v.artifactId]: r })) })}>Check audio</Button>
+                        {!current && <Button size="tiny" disabled={busy} onClick={() => void run(async () => { await window.api.neurovaSelectVersion(project.id, v.id) })}>Make current</Button>}
+                        {!current && <Button size="tiny" disabled={busy} onClick={() => void run(async () => { await window.api.neurovaRestoreVersion(project.id, v.id) }, 'Restored as a new version.')}>Restore as new</Button>}
+                        <Button size="tiny" disabled={busy} onClick={() => void run(async () => { const p = await window.api.neurovaExportVersion(project.id, v.id); if (p) onNotify(`Exported to ${p}`) })}>Export</Button>
+                        <Button size="tiny" kind="danger" disabled={busy} onClick={() => void run(async () => { await window.api.neurovaRemoveVersion(project.id, v.id) })}>Remove</Button>
+                      </div>
+                    </li>
+                  )
+                })}
+              </ol>
+              {selectedVersion && <p className="nv-faint">Removing a version never deletes your original file; only this project's own copy goes, and only if no other version uses it.</p>}
+            </>
+          )}
+        </main>
+      </div>
+    </Surface>
+  )
+}

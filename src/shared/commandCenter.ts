@@ -211,6 +211,7 @@ export interface OrbisCapability {
  */
 export type AppFeature =
   | 'create'
+  | 'neurova'
   | 'pages'
   | 'labs'
   | 'markets'
@@ -287,6 +288,7 @@ export const CAPABILITIES: OrbisCapability[] = [
   // Create and Laboratories are screens the Orbis window has had all along and the registry had never heard of, so
   // nothing that reads the registry -- the browser's Command Centre, the window's own palette -- could offer
   // either of them. They open in the window, which is what `app` says and what `kind: 'app'` means.
+  { id: 'neurova', name: 'NEUROVA', lane: 'keep', category: 'workspace', description: 'Song projects: keep versions of your audio, check it, and export it', icon: 'quote', keywords: ['neurova', 'song', 'music', 'project', 'version', 'audio', 'wav', 'export', 'compose'], target: { kind: 'app' }, app: 'neurova', pinnable: false, needs: [] },
   { id: 'create', name: 'Create', lane: 'keep', category: 'workspace', description: 'Tables and documents, kept and saved as real files', icon: 'edit', keywords: ['create', 'make', 'new', 'document', 'table', 'sheet', 'spreadsheet', 'write', 'file'], target: { kind: 'app' }, app: 'create', pinnable: false, needs: [] },
   { id: 'labs', name: 'Laboratories', lane: 'keep', category: 'tools', description: 'Every laboratory Orbis has, by subject', icon: 'calculator', keywords: ['lab', 'laboratory', 'physics', 'chemistry', 'experiment', 'simulate', 'science', 'computing'], target: { kind: 'app' }, app: 'labs', pinnable: false, needs: [] },
   { id: 'recall', name: 'Pages you have read', lane: 'find', category: 'capture', description: 'Find a page again by what was in it', icon: 'book', keywords: ['read', 'history', 'again', 'remember', 'find', 'article', 'recall'], target: { kind: 'panel', view: 'recall' }, pinnable: false, needs: ['helper'] },

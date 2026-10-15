@@ -204,6 +204,7 @@ const BROWSER_LAYER = new Set([
   // The adapters between Orbis's services and however the application talks to its window. Rewritten as Mojo.
   'main/experience/ipc.ts',
   'main/personal/ipc.ts',
+  'main/neurova/ipc.ts',
   'main/workflows/ipc.ts',
   // The Toolkit's lookups (headers, registration, rates, a video's details, a key check, PDF editing) and the two
   // adapters of the integrations that came in with Files and Chance: each is `ipcMain` and a window, nothing else.

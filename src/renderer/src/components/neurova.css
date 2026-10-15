@@ -1,0 +1,25 @@
+.nv-view .nv-body { display: flex; gap: 20px; flex: 1; min-height: 0; padding: 16px 20px; }
+.nv-side { width: 260px; flex: none; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
+.nv-main { flex: 1; min-width: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+.nv-new { display: flex; gap: 8px; }
+.nv-new input, .nv-title, .nv-label textarea { background: transparent; color: inherit; border: 1px solid var(--glass-border); border-radius: 8px; padding: 8px 10px; font: inherit; }
+.nv-new input { flex: 1; min-width: 0; }
+.nv-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.nv-item { width: 100%; text-align: left; background: transparent; color: inherit; border: 1px solid transparent; border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; cursor: pointer; }
+.nv-item:hover, .nv-item[aria-current='true'] { border-color: var(--glass-border); background: rgba(255, 255, 255, 0.04); }
+.nv-item span, .nv-faint { color: var(--faint); font-size: 12px; }
+.nv-engines h3, .nv-row h3 { margin: 0; font-size: 13px; }
+.nv-engines p { margin: 6px 0; font-size: 12px; }
+.nv-head, .nv-row { display: flex; align-items: center; gap: 10px; }
+.nv-row h3 { flex: 1; }
+.nv-title { flex: 1; font-size: 18px; font-weight: 600; }
+.nv-label { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--faint); }
+.nv-label textarea { resize: vertical; color: inherit; }
+.nv-versions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.nv-version { display: flex; justify-content: space-between; gap: 12px; padding: 12px; border: 1px solid var(--glass-border); border-radius: 10px; }
+.nv-version.current { border-color: var(--cyan); }
+.nv-version em { color: var(--cyan); font-style: normal; font-size: 12px; }
+.nv-actions { display: flex; flex-wrap: wrap; gap: 6px; align-content: flex-start; justify-content: flex-end; max-width: 240px; }
+.nv-facts { margin: 8px 0 0; padding-left: 18px; font-size: 12px; }
+.nv-bad { color: #e5736b; font-size: 12px; }
+.nv-note { font-size: 13px; margin-top: 4px; }

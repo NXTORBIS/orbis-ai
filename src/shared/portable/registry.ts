@@ -248,6 +248,21 @@ export const CATEGORIES: readonly PortableCategory[] = Object.freeze([
     mergeable: true
   }),
   category({
+    id: 'neurova',
+    label: 'NEUROVA projects',
+    describe: 'Song projects, their briefs, lyrics and version history. Audio travels in a project package.',
+    portability: 'portable',
+    sensitivity: 'personal',
+    storage: ['personal/neurova-projects.json'],
+    scope: 'profile',
+    schemaVersion: 1,
+    dependsOn: [],
+    requiresReauthentication: false,
+    userAction: null,
+    why: null,
+    mergeable: true
+  }),
+  category({
     id: 'whiteboards',
     label: 'Whiteboards',
     describe: 'Boards, everything on them and where it sits.',

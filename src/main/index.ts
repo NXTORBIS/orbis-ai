@@ -350,6 +350,9 @@ import { registerChooseIpc } from './choose/ipc.ts'
 import { registerExperienceIpc } from './experience/ipc'
 import type { Profile } from '../shared/profiles'
 import { registerPersonalIpc } from './personal/ipc'
+import { NeurovaStore } from './neurova/store'
+import { registerNeurovaIpc } from './neurova/ipc'
+import { probeMachine } from './neurova/machine'
 import { SecretsVault } from './vault/store'
 import { secretsFromVault } from '../helper/secrets'
 import type { SecretsDeps } from '../helper/secrets'
@@ -4186,9 +4189,10 @@ ${page.text}`, { howMany: 6 })
     const tasksStore = new TasksStore(app.getPath('userData'))
     const whiteboardStore = new WhiteboardStore(app.getPath('userData'))
     const workspacesStore = new WorkspacesStore(app.getPath('userData'))
+    const neurovaStore = new NeurovaStore(app.getPath('userData'))
     // Notes, tasks, whiteboards and workspaces belong to the profile in use, like its browsing and its workflows.
     personalForBrowser = { notes: notesStore, tasks: tasksStore }
-    const personalStores = [notesStore, tasksStore, whiteboardStore, workspacesStore]
+    const personalStores = [notesStore, tasksStore, whiteboardStore, workspacesStore, neurovaStore]
     const followProfile = (): Promise<void> =>
       profilesStore
         .active()
@@ -5235,6 +5239,22 @@ ${page.text}`, { howMany: 6 })
      */
     registerMusicCapabilities({ control: browserControl.control, music: () => music })
 
+    registerNeurovaIpc({
+      store: neurovaStore,
+      getWindow: () => liveWindow(),
+      send: sendToWindow,
+      machineFacts: () => probeMachine(app.getPath('userData')),
+      pick: async (kind) => {
+        const win = liveWindow()
+        const options: Electron.OpenDialogOptions =
+          kind === 'audio'
+            ? { title: 'Choose a WAV file', properties: ['openFile'], filters: [{ name: 'WAV audio', extensions: ['wav'] }] }
+            : { title: 'Choose a folder', properties: ['openDirectory', 'createDirectory'] }
+        const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
+        return result.canceled || !result.filePaths[0] ? null : result.filePaths[0]
+      }
+    })
+
     registerPersonalIpc({
       notes: notesStore,
       tasks: tasksStore,
@@ -5428,6 +5448,7 @@ ${page.text}`, { howMany: 6 })
     quitFlush.add('your tasks', () => tasksStore.flush())
     quitFlush.add('your clipboard history', () => clipboardHistory.flush())
     quitFlush.add('your whiteboards', () => whiteboardStore.flush())
+    quitFlush.add('your NEUROVA projects', () => neurovaStore.flush())
     quitFlush.add('your workspaces', () => workspacesStore.flush())
 
     quitFlush.add('your downloads and saved pages', () => browserLibrary?.flush())
