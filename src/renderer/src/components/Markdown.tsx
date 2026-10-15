@@ -12,6 +12,9 @@ import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import rehypeHighlight from 'rehype-highlight'
 import { copyText, hastText, normalizeMath } from '../lib/utils'
+import { rehypeCallouts } from '../../../shared/chatCallout'
+import { tableChart } from '../../../shared/chatTableChart'
+import { plotToSvg } from '../../../shared/artifacts/svg'
 import { Download, Pencil } from 'lucide-react'
 import { useImageEditor } from '../lib/imageEditor'
 import { CheckIcon, CopyIcon } from './Icons'
@@ -19,7 +22,62 @@ import ImageLightbox from './ImageLightbox'
 
 const remarkPlugins: Options['remarkPlugins'] = [remarkGfm, remarkMath]
 // Auto-detection is skipped: it's slow on streaming text and often wrong for short snippets.
-const rehypePlugins: Options['rehypePlugins'] = [rehypeKatex, [rehypeHighlight, { detect: false }]]
+const rehypePlugins: Options['rehypePlugins'] = [rehypeCallouts, rehypeKatex, [rehypeHighlight, { detect: false }]]
+
+interface HastLike {
+  type: string
+  tagName?: string
+  value?: string
+  children?: HastLike[]
+}
+
+/** The header cells and body rows of a table's syntax tree, as the text shown in them. */
+function tableCells(node: HastLike | undefined): { header: string[]; rows: string[][] } | null {
+  if (!node) return null
+  const find = (n: HastLike, tag: string, out: HastLike[] = []): HastLike[] => {
+    if (n.type === 'element' && n.tagName === tag) out.push(n)
+    for (const c of n.children ?? []) find(c, tag, out)
+    return out
+  }
+  const cellsOf = (tr: HastLike): string[] => (tr.children ?? []).filter((c) => c.type === 'element' && (c.tagName === 'th' || c.tagName === 'td')).map((c) => hastText(c).trim())
+  const head = find(node, 'thead')[0]
+  const body = find(node, 'tbody')[0]
+  const headRow = head ? find(head, 'tr')[0] : undefined
+  if (!headRow || !body) return null
+  return { header: cellsOf(headRow), rows: find(body, 'tr').map(cellsOf) }
+}
+
+/**
+ * The chart under a table of numbers. It appears by itself (that is the point), can be hidden, and says what it
+ * left out. The drawing is the plot engine's, shown as an image so nothing from a reply is ever put into the page
+ * as markup.
+ */
+function TableChart({ header, rows }: { header: string[]; rows: string[][] }): React.JSX.Element | null {
+  const [open, setOpen] = useState(true)
+  const drawn = useMemo(() => {
+    const c = tableChart(header, rows)
+    if (!c) return null
+    const { svg } = plotToSvg({ ...c.plot, title: '' }, { width: 760, height: 320 })
+    return { c, src: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}` }
+  }, [header, rows])
+  if (!drawn) return null
+  return (
+    <figure className="table-chart">
+      <figcaption>
+        <span>{drawn.c.title}</span>
+        <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+          {open ? 'Hide chart' : 'Show chart'}
+        </button>
+      </figcaption>
+      {open && (
+        <>
+          <img src={drawn.src} alt={`${drawn.c.kind === 'bar' ? 'Bar' : 'Line'} chart: ${drawn.c.title}`} />
+          <p>Drawn from the table above{drawn.c.notes.length ? `. ${drawn.c.notes.join(' ')}` : '.'}</p>
+        </>
+      )}
+    </figure>
+  )
+}
 
 function CodeBlock({ node, children, ...rest }: React.ComponentProps<'pre'> & ExtraProps): React.JSX.Element {
   const [copied, setCopied] = useState(false)
@@ -199,11 +257,17 @@ const components: Components = {
       </code>
     )
   },
-  table: ({ node: _node, ...props }) => (
-    <div className="table-wrap">
-      <table {...props} />
-    </div>
-  )
+  table: ({ node, ...props }) => {
+    const cells = tableCells(node as HastLike | undefined)
+    return (
+      <>
+        <div className="table-wrap">
+          <table {...props} />
+        </div>
+        {cells && <TableChart header={cells.header} rows={cells.rows} />}
+      </>
+    )
+  }
 }
 
 // The default transform blanks data: URLs, which is how generated images arrive.

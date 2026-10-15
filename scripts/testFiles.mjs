@@ -15,6 +15,7 @@ export const TEST_FILES = [
   'src/main/cosmos/progress.test.ts',
   'src/shared/f1/normalize.test.ts',
   'src/shared/football/football.test.ts',
+  'src/shared/chatCalloutChart.test.ts',
   'src/shared/football/extras.test.ts',
   'src/shared/football/insights.test.ts',
   'src/main/football/service.test.ts',
