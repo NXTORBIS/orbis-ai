@@ -130,6 +130,20 @@ import type { Project } from './neurova/project'
 import type { AudioInfo } from './neurova/audio'
 import type { EngineStatus } from './neurova/engines'
 import type { Validated } from './neurova/intent'
+import type { Plan as NeurovaPlan } from './neurova/plan'
+import type { Memory as NeurovaMemory } from './neurova/memory'
+import type { ApprovalRecord as NeurovaApprovals } from './neurova/approval'
+
+export interface NeurovaWorkspace {
+  id: string
+  plan: NeurovaPlan | null
+  memory: NeurovaMemory
+  feedback: Record<string, { preference: 'strong' | 'prefer' | null; rejected: boolean; finalist: boolean; note: string }>
+  approvals: NeurovaApprovals
+  dismissed: string[]
+  exports: { at: number; versionId: string; path: string; format: string }[]
+  originalLyrics: string | null
+}
 import type { Workspace, WorkspaceSummary } from './workspaces'
 import type { Profile } from './profiles'
 import type { ConfigChange, ExperienceConfig, ExperienceExport, ExperienceHealth, ImportCheck } from './experience'
@@ -2267,6 +2281,25 @@ export interface NxtorbisApi {
   neurovaCancelJob(id: string): Promise<boolean>
   onNeurovaJobs(listener: () => void): () => void
   onNeurovaInstall(listener: () => void): () => void
+  neurovaWorkspace(id: string): Promise<NeurovaWorkspace>
+  neurovaPlanPropose(id: string): Promise<NeurovaWorkspace>
+  neurovaPlanEdit(id: string, e: unknown): Promise<{ workspace: NeurovaWorkspace; reason: string | null }>
+  neurovaPlanUndo(id: string): Promise<NeurovaWorkspace>
+  neurovaPlanFindings(id: string): Promise<{ level: 'error' | 'advice'; section?: string; message: string }[]>
+  neurovaFeedback(id: string, versionId: string, patch: { preference?: 'strong' | 'prefer' | null; rejected?: boolean; finalist?: boolean; note?: string }): Promise<NeurovaWorkspace>
+  neurovaApprove(id: string, versionId: string, to: 'draft' | 'review' | 'approved' | 'exported', note?: string): Promise<NeurovaWorkspace>
+  neurovaDismiss(id: string, diagId: string, on?: boolean): Promise<NeurovaWorkspace>
+  neurovaDeepAnalysis(id: string, artifactId: string): Promise<Record<string, unknown>>
+  neurovaRank(id: string): Promise<{ ranking: { id: string; position: number; met: number; unknown: number; deviations: number; violations: string[]; completeness: number; reasons: string[] }[]; evidence: { candidate: string; criterion: string; status: string }[]; criteria: string[] }>
+  neurovaSearch(query: string, includeLyrics?: boolean): Promise<{ projectId: string; kind: string; versionId?: string; snippet: string; field: string }[]>
+  neurovaUnderstand(text: string, lyrics?: string): Promise<Record<string, unknown>>
+  neurovaCorrectIntent(text: string, correction: string): Promise<Record<string, unknown>>
+  neurovaRevise(id: string, request: string): Promise<{ brief: Record<string, unknown>; diff: { preserved: string[]; changed: string[]; notGuaranteed: string[] } }>
+  neurovaMemory(id: string, op: 'add' | 'correct' | 'reject', a: string, b?: string, c?: string): Promise<NeurovaWorkspace>
+  neurovaAddToMusic(id: string, versionId: string): Promise<{ ok: boolean; reason?: string; trackId?: string; already?: boolean }>
+  neurovaRegisterWithFiles(id: string, versionId: string): Promise<{ ok: boolean; reason?: string }>
+  neurovaBackup(): Promise<{ dir: string; projects: number; files: number; skipped: string[]; verified: boolean } | null>
+  neurovaRestore(): Promise<{ ok: boolean; reason: string | null; missing: string[]; corrupt: string[]; restored: { from: string; to: string }[] } | null>
   neurovaProcess(id: string, versionId: string, op: { kind: 'gain'; db: number } | { kind: 'fade-in' | 'fade-out'; seconds: number } | { kind: 'trim-silence' }): Promise<{ project: Project; note: string; clamped: number }>
   neurovaTempo(id: string, artifactId: string): Promise<{ bpm: number; alternatives: number[]; reliability: 'low' | 'moderate' } | null>
   neurovaWaveform(id: string, artifactId: string): Promise<number[]>

@@ -21,7 +21,8 @@ const MAP = join(ROOT, '..', 'docs', 'ipc-mapping.md')
 // 540 -> 560: Football (follows, extras, team) and F1 (prefs, circuit records, qualifying, constructor season, team radio, forecast): thirteen channels.
 // 560 -> 580: NEUROVA song projects (versions, WAV checks, processing, export, packages, engine readiness): eighteen channels.
 // 580 -> 590: NEUROVA engine install and generation (runtime, models, generate, jobs, cancel).
-const CEILING = 590
+// 590 -> 615: NEUROVA plan, feedback, approvals, deep analysis, ranking, search, revisions, memory, Music/Files and backup.
+const CEILING = 615
 
 async function* typescriptFiles(dir: string): AsyncGenerator<string> {
   for (const entry of await readdir(dir, { withFileTypes: true })) {

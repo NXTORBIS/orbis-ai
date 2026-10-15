@@ -4,6 +4,7 @@ import type { Project } from '../../../shared/neurova/project'
 import type { AudioInfo } from '../../../shared/neurova/audio'
 import type { EngineStatus } from '../../../shared/neurova/engines'
 import type { NoticeKind } from '../lib/notices'
+import { NeurovaStudio } from './neurova/NeurovaStudio'
 import './neurova.css'
 
 const mmss = (s: number): string => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
@@ -200,6 +201,7 @@ export default function NeurovaView({ onClose, onNotify }: { onClose: () => void
                   )
                 })}
               </ol>
+              <NeurovaStudio project={project} onNotify={onNotify} />
               {selectedVersion && <p className="nv-faint">Removing a version never deletes your original file; only this project's own copy goes, and only if no other version uses it.</p>}
             </>
           )}

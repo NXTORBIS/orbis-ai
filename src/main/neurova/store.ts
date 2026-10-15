@@ -45,6 +45,16 @@ export class NeurovaStore {
     return full
   }
 
+  /** Public for the integrations: a project's own folder, and one artifact's file inside it (containment checked). */
+  projectDir(projectId: string): string { return this.dir(projectId) }
+  audioPathFor(projectId: string, artifact: Artifact): string { return this.audioPath(projectId, artifact) }
+  /** Stores a project record that was restored from a verified backup. */
+  async restoreProject(p: Project): Promise<void> {
+    const clean = normalizeProject(p)
+    if (!clean) throw new Error('The project record is not valid.')
+    await this.projects.put(clean)
+  }
+
   async list(): Promise<Project[]> {
     return (await this.projects.all()).sort((a, b) => b.updatedAt - a.updatedAt)
   }

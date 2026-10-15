@@ -11,7 +11,7 @@ import { registerEyeIpc } from './eye/ipc'
 import { registerCosmosIpc } from './cosmos/ipc'
 import { registerF1Ipc } from './f1/ipc'
 import { registerFootballIpc } from './football/ipc'
-import { initFilesIntegration, registerFilesProtocols, registerGeneratedImage, syncBrowserDownloads } from './filesIntegration'
+import { getFilesServices, initFilesIntegration, registerFilesProtocols, registerGeneratedImage, syncBrowserDownloads } from './filesIntegration'
 import { diskCheck, fileCheck, headline, sortChecks, type DoctorCheck } from '../shared/doctor'
 import { randomUUID } from 'node:crypto'
 import { basename, dirname, join } from 'node:path'
@@ -354,6 +354,9 @@ import { NeurovaStore } from './neurova/store'
 import { registerNeurovaIpc } from './neurova/ipc'
 import { probeMachine } from './neurova/machine'
 import { NeurovaEngine } from './neurova/engine'
+import { registerNeurovaIpc2 } from './neurova/ipc2'
+import { WorkspaceStore } from './neurova/workspace'
+import { JobStore } from './neurova/jobStore'
 import { SecretsVault } from './vault/store'
 import { secretsFromVault } from '../helper/secrets'
 import type { SecretsDeps } from '../helper/secrets'
@@ -4191,9 +4194,11 @@ ${page.text}`, { howMany: 6 })
     const whiteboardStore = new WhiteboardStore(app.getPath('userData'))
     const workspacesStore = new WorkspacesStore(app.getPath('userData'))
     const neurovaStore = new NeurovaStore(app.getPath('userData'))
+    const neurovaJobs = new JobStore(app.getPath('userData'), 'default')
+    const neurovaWorkspaces = new WorkspaceStore(app.getPath('userData'))
     // Notes, tasks, whiteboards and workspaces belong to the profile in use, like its browsing and its workflows.
     personalForBrowser = { notes: notesStore, tasks: tasksStore }
-    const personalStores = [notesStore, tasksStore, whiteboardStore, workspacesStore, neurovaStore]
+    const personalStores = [notesStore, tasksStore, whiteboardStore, workspacesStore, neurovaStore, neurovaJobs, neurovaWorkspaces]
     const followProfile = (): Promise<void> =>
       profilesStore
         .active()
@@ -5244,9 +5249,11 @@ ${page.text}`, { howMany: 6 })
       home: join(app.getPath('userData'), 'neurova'),
       workerScript: join(app.isPackaged ? process.resourcesPath : join(app.getAppPath(), 'resources'), 'neurova', 'ace_worker.py'),
       store: neurovaStore,
+      jobs: neurovaJobs,
       probe: () => probeMachine(app.getPath('userData')),
       send: sendToWindow
     })
+    void neurovaEngine.recover().catch((err: unknown) => console.error('[neurova] recovery failed', err))
     registerNeurovaIpc({
       store: neurovaStore,
       engine: neurovaEngine,
@@ -5262,6 +5269,21 @@ ${page.text}`, { howMany: 6 })
         const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
         return result.canceled || !result.filePaths[0] ? null : result.filePaths[0]
       }
+    })
+
+    registerNeurovaIpc2({
+      store: neurovaStore,
+      workspaces: neurovaWorkspaces,
+      getWindow: () => liveWindow(),
+      send: sendToWindow,
+      pick: async (kind) => {
+        const win = liveWindow()
+        const options: Electron.OpenDialogOptions = kind === 'audio' ? { title: 'Choose a WAV file', properties: ['openFile'], filters: [{ name: 'WAV audio', extensions: ['wav'] }] } : { title: 'Choose a folder', properties: ['openDirectory', 'createDirectory'] }
+        const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options)
+        return result.canceled || !result.filePaths[0] ? null : result.filePaths[0]
+      },
+      music: () => (music ? { importFile: (p, prov) => music!.library.importFile(p, prov), allTracks: async () => (await music!.store.all()).map((t) => ({ id: t.id, file: (t as { file?: string }).file })), fingerprint: (p) => music!.library.fingerprint(p) } : null),
+      filesCatalog: () => getFilesServices()?.catalog ?? null
     })
 
     registerPersonalIpc({
@@ -5458,6 +5480,8 @@ ${page.text}`, { howMany: 6 })
     quitFlush.add('your clipboard history', () => clipboardHistory.flush())
     quitFlush.add('your whiteboards', () => whiteboardStore.flush())
     quitFlush.add('your NEUROVA projects', () => neurovaStore.flush())
+    quitFlush.add('your NEUROVA jobs', () => neurovaJobs.flush())
+    quitFlush.add('your NEUROVA plans and decisions', () => neurovaWorkspaces.flush())
     quitFlush.add('your workspaces', () => workspacesStore.flush())
 
     quitFlush.add('your downloads and saved pages', () => browserLibrary?.flush())

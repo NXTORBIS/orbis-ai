@@ -1,0 +1,27 @@
+.nv-plan,.nv-lyrics,.nv-cands,.nv-diag,.nv-timeline,.nv-export{display:flex;flex-direction:column;gap:10px;min-width:0;max-width:100%}
+.nv-x-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px}
+.nv-x-note{color:var(--faint);font-size:12px;margin:0;overflow-wrap:anywhere}
+.nv-x-warn{color:var(--cyan);margin:0}
+.nv-x-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.nv-x-row,.nv-x-card,.nv-x-diag,.nv-x-tl-item{border:1px solid color-mix(in srgb,currentColor 18%,transparent);border-radius:10px;padding:10px;min-width:0;overflow-wrap:anywhere}
+.nv-x-row-top,.nv-x-row-mid,.nv-x-actions,.nv-x-card-head,.nv-x-add{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}
+.nv-x-field{display:flex;flex-direction:column;gap:3px;font-size:12px;min-width:0}
+.nv-x-field input,.nv-x-field select{min-width:0;max-width:100%}
+.nv-x-grow{flex:1 1 140px}
+.nv-x-check{display:inline-flex;gap:6px;align-items:center;font-size:12px}
+.nv-x-badge{font-size:11px;color:var(--faint);border:1px solid currentColor;border-radius:999px;padding:0 6px;margin-inline-start:4px}
+.nv-x-grid{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr));gap:10px}
+.nv-x-card.is-selected,.nv-x-tl-item.is-selected{border-color:var(--cyan)}
+.nv-x-card.is-rejected,.nv-x-diag.is-dismissed{opacity:.6}
+.nv-x-meter{height:6px;border-radius:3px;background:color-mix(in srgb,currentColor 15%,transparent);overflow:hidden}
+.nv-x-meter span{display:block;height:100%;background:var(--cyan);transition:width .2s}
+.nv-x-ev{margin:0;padding-inline-start:16px;font-size:12px}
+.nv-x-tl{list-style:none;margin:0;padding:0 0 0 8px;border-inline-start:2px solid var(--cyan);display:flex;flex-direction:column;gap:8px}
+.nv-x-cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:12px}
+.nv-x-dl{display:grid;grid-template-columns:auto 1fr;gap:2px 8px;margin:0;font-size:12px}
+.nv-x-dl dt{color:var(--faint)}
+.nv-x-dl dd{margin:0}
+.nv-x-fieldset{border:1px solid color-mix(in srgb,currentColor 18%,transparent);border-radius:8px;display:flex;flex-direction:column;gap:6px}
+.nv-plan :focus-visible,.nv-lyrics :focus-visible,.nv-cands :focus-visible,.nv-diag :focus-visible,.nv-timeline :focus-visible,.nv-export :focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){.nv-x-meter span{transition:none}}
+@media (max-width:420px){.nv-x-actions .queue-btn{flex:1 1 40%}}

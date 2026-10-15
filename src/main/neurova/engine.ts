@@ -12,6 +12,7 @@ import { inspectWav } from '../../shared/neurova/audio.ts'
 import type { FailureCode } from '../../shared/neurova/scheduler.ts'
 import { runWorker } from './runner.ts'
 import type { NeurovaStore } from './store.ts'
+import { newRecord, reconcile, type JobStore } from './jobStore.ts'
 import { readFile } from 'node:fs/promises'
 
 const ACE_URL = 'https://github.com/ACE-Step/ACE-Step-1.5.git'
@@ -37,6 +38,7 @@ export interface EngineOptions {
   /** Absolute path of ace_worker.py. */
   workerScript: string
   store: NeurovaStore
+  jobs: JobStore
   probe(): Promise<MachineFacts>
   send(channel: string, ...args: unknown[]): void
 }
@@ -75,7 +77,20 @@ export class NeurovaEngine {
   }
 
   installStatus(): InstallView { return { ...this.install, log: this.install.log.slice(-30) } }
-  listJobs(): JobView[] { return [...this.jobs.values()].map(({ abort: _a, core: _c, seq: _s, ...v }) => v).sort((a, b) => b.startedAt - a.startedAt) }
+  async listJobs(): Promise<JobView[]> {
+    const live = [...this.jobs.values()].map(({ abort: _a, core: _c, seq: _s, ...v }) => v)
+    const liveIds = new Set(live.map((v) => v.id))
+    const saved = (await this.o.jobs.list()).filter((r) => !liveIds.has(r.id)).map((r): JobView => ({
+      id: r.id, projectId: r.projectId, state: r.state, stage: r.stage ?? '', error: r.error, code: r.code, startedAt: r.startedAt ?? r.createdAt, endedAt: r.endedAt, outputs: r.outputSha256 ? 1 : 0, cpuOnly: false
+    }))
+    return [...live, ...saved].sort((a, b) => b.startedAt - a.startedAt).slice(0, 50)
+  }
+
+  /** At startup: anything saved as running with no live worker is marked interrupted. Never restarted automatically. */
+  async recover(): Promise<{ interrupted: number }> {
+    const report = await reconcile(this.o.jobs, { isRunning: (id) => this.jobs.has(id), outputExists: async (p) => existsSync(p) })
+    return { interrupted: report.interrupted.length }
+  }
 
   private note(line: string): void {
     this.install.log.push(line.slice(0, 300))
@@ -147,6 +162,7 @@ export class NeurovaEngine {
     j.state = next.state
     j.error = next.error
     if (isTerminal(next.state)) j.endedAt = Date.now()
+    void this.o.jobs.update(id, { state: next.state, stage: j.stage, error: next.error, code: j.code }, undefined)
     this.emit(id)
   }
 
@@ -170,6 +186,7 @@ export class NeurovaEngine {
     const core = newJob(id)
     const view = { id, projectId, state: core.state, stage: 'queued', error: null, code: null, startedAt: Date.now(), endedAt: null, outputs: 0, cpuOnly: !facts.gpuName, abort: new AbortController(), core, seq: 0 }
     this.jobs.set(id, view)
+    await this.o.jobs.put(newRecord({ id, projectId, request: { prompt: intent.intent.original, lyrics: intent.intent.lyrics ?? '', instrumental, durationSec: input.durationSec ?? 0, seed: input.seed ?? null }, engineId: 'ace-step' }))
     this.emit(id)
     void this.execute(id, projectId, built.value, facts, instrumental)
     return id
