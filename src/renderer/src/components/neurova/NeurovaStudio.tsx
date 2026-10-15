@@ -31,6 +31,15 @@ export function NeurovaStudio({ project, onNotify }: { project: Project; onNotif
   }, [id])
   useEffect(() => { void refresh().catch(() => undefined) }, [refresh, project.versions.length, project.lyrics])
 
+  const [lengths, setLengths] = useState<Record<string, number>>({})
+  useEffect(() => {
+    let dead = false
+    void Promise.all(project.versions.map(async (v) => {
+      try { const i = await window.api.neurovaAnalyse(id, v.artifactId); return [v.id, i.durationSec] as const } catch { return null }
+    })).then((rows) => { if (!dead) setLengths(Object.fromEntries(rows.filter((r): r is readonly [string, number] => r !== null))) })
+    return () => { dead = true }
+  }, [id, project.versions])
+
   const doc = useMemo(() => parseLyrics(project.lyrics ?? ''), [project.lyrics])
   const notices = useMemo(() => diagnose(doc), [doc])
   const plan = ws?.plan as Plan | null | undefined
@@ -39,7 +48,7 @@ export function NeurovaStudio({ project, onNotify }: { project: Project; onNotif
     const f = ws?.feedback[v.id]
     return {
       id: v.id, name: v.name, state: v.id === project.selectedVersionId ? 'current' : 'saved',
-      durationSec: null, engine: String((v as { source?: string }).source ?? 'imported'), changeSummary: v.note,
+      durationSec: lengths[v.id] ?? null, engine: String((v as { source?: string }).source ?? 'imported'), changeSummary: v.note,
       preference: f?.preference ?? null, rejected: f?.rejected ?? false, finalist: f?.finalist ?? false, note: f?.note ?? ''
     }
   })

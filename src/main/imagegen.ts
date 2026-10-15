@@ -1,4 +1,5 @@
 import { GROQ_BASE_URL } from './nim.ts'
+import { sharedEngine } from './fastsd/engine.ts'
 
 export type FetchFn = (url: string, init?: RequestInit) => Promise<Response>
 
@@ -47,41 +48,17 @@ export function detectImageGenRequest(text: string): string | null {
   return null
 }
 
-const SIZE = 768
-// Keyless images carry a watermark in the bottom corner; render taller and crop it off.
-const WATERMARK_STRIP = 64
-
-/** Same seed + a revised prompt keeps the composition, which is how edits stay close to the original. */
 /**
- * A picture, from a prompt.
- *
- * `crop` trims the strip Pollinations can put its mark on. Electron passes one built on nativeImage; the helper runs in
- * plain Node and has none, so it asks for an image the size it wants and takes it as it comes. Rather than crop badly,
- * it does not crop at all.
+ * A picture, from a prompt, made on this computer by FastSDCPU (src/main/fastsd/engine.ts). Nothing is sent to an
+ * online image service, and there is no fallback to one: when the engine cannot make the picture the error says why.
  */
 export async function generateImage(
   prompt: string,
-  fetchFn: FetchFn,
-  seed = Math.floor(Math.random() * 1e6),
-  crop?: (jpeg: Buffer, strip: number) => string
-): Promise<{ dataUrl: string; seed: number }> {
-  // gen.pollinations.ai requires an API key for uncached prompts; this endpoint is still keyless.
-  const strip = crop ? WATERMARK_STRIP : 0
-  const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=${SIZE}&height=${SIZE + strip}&nologo=true&seed=${seed}`
-  let res = await fetchFn(url)
-  // Pollinations sometimes answers 5xx/429 under load; a short retry almost always succeeds.
-  for (let attempt = 1; attempt <= 2 && (res.status >= 500 || res.status === 429); attempt++) {
-    await new Promise((resolve) => setTimeout(resolve, 1500 * attempt))
-    res = await fetchFn(url)
-  }
-  if (!res.ok) throw new Error(`Pollinations returned ${res.status}`)
-  const type = res.headers.get('content-type') ?? ''
-  if (!type.startsWith('image/')) throw new Error(`Pollinations returned ${type || 'no content type'} instead of an image`)
-
-  const bytes = Buffer.from(await res.arrayBuffer())
-  if (bytes.length === 0) throw new Error('Pollinations returned an empty image')
-  if (crop) return { dataUrl: crop(bytes, WATERMARK_STRIP), seed }
-  return { dataUrl: `data:${type.split(';')[0]};base64,${bytes.toString('base64')}`, seed }
+  seed?: number,
+  opts: { signal?: AbortSignal; onStatus?: (message: string) => void } = {}
+): Promise<{ dataUrl: string; seed: number; seconds: number }> {
+  const r = await sharedEngine().generate(prompt, { seed, signal: opts.signal, onStatus: opts.onStatus })
+  return { dataUrl: r.dataUrl, seed: r.seed, seconds: r.seconds.generation }
 }
 
 const REWRITE_INSTRUCTIONS =

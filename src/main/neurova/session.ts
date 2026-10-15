@@ -40,7 +40,6 @@ export class WorkerSession {
   private child: ChildProcess | null = null
   private busy = false
   private idle: ReturnType<typeof setTimeout> | undefined
-  private forceTimer: ReturnType<typeof setTimeout> | undefined
   private handler: ((chunk: Buffer) => void) | null = null
 
   constructor(o: SessionOptions) {

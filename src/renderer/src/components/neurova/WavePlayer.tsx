@@ -2,10 +2,65 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 const mmss = (s: number): string => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
 
+/**
+ * The app's content security policy allows no blob: media, so playback uses Web Audio: the file is decoded once and
+ * played through a buffer source. This small object has the same shape the rest of the component needs.
+ */
+class BufferPlayer {
+  private readonly ctx = new AudioContext()
+  private source: AudioBufferSourceNode | null = null
+  private offset = 0
+  private startedAt = 0
+  paused = true
+  duration = 0
+  onended: (() => void) | null = null
+  private buffer: AudioBuffer | null = null
+
+  async load(bytes: ArrayBuffer): Promise<void> {
+    this.buffer = await this.ctx.decodeAudioData(bytes.slice(0))
+    this.duration = this.buffer.duration
+  }
+
+  get currentTime(): number {
+    if (this.paused) return this.offset
+    return Math.min(this.duration, this.offset + (this.ctx.currentTime - this.startedAt))
+  }
+
+  set currentTime(t: number) {
+    const was = !this.paused
+    this.stop()
+    this.offset = Math.max(0, Math.min(this.duration, t))
+    if (was) void this.play()
+  }
+
+  private stop(): void {
+    if (this.source) { this.source.onended = null; try { this.source.stop() } catch { /* already stopped */ } this.source.disconnect(); this.source = null }
+    if (!this.paused) this.offset = this.currentTime
+    this.paused = true
+  }
+
+  async play(): Promise<void> {
+    if (!this.buffer) throw new Error('not loaded')
+    if (this.ctx.state === 'suspended') await this.ctx.resume()
+    if (this.offset >= this.duration) this.offset = 0
+    const src = this.ctx.createBufferSource()
+    src.buffer = this.buffer
+    src.connect(this.ctx.destination)
+    src.onended = () => { if (this.source === src) { this.source = null; this.paused = true; this.offset = 0; this.onended?.() } }
+    this.startedAt = this.ctx.currentTime
+    src.start(0, this.offset)
+    this.source = src
+    this.paused = false
+  }
+
+  pause(): void { this.stop() }
+  close(): void { this.stop(); void this.ctx.close().catch(() => undefined) }
+}
+
 /** Plays one stored version in the app and draws its real waveform. The file comes from the main process by artifact id. */
 export function WavePlayer({ projectId, artifactId, label }: { projectId: string; artifactId: string; label: string }): React.JSX.Element {
   const canvas = useRef<HTMLCanvasElement>(null)
-  const audio = useRef<HTMLAudioElement | null>(null)
+  const audio = useRef<BufferPlayer | null>(null)
   const peaks = useRef<number[]>([])
   const [ready, setReady] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -39,26 +94,24 @@ export function WavePlayer({ projectId, artifactId, label }: { projectId: string
 
   useEffect(() => {
     let dead = false
-    let url: string | null = null
     setReady(false); setError(null); setPlaying(false); setTime(0)
     void (async () => {
       try {
         const [bytes, wave] = await Promise.all([window.api.neurovaAudioBytes(projectId, artifactId), window.api.neurovaWaveform(projectId, artifactId).catch(() => [] as number[])])
         if (dead) return
         peaks.current = wave
-        url = URL.createObjectURL(new Blob([bytes], { type: 'audio/wav' }))
-        const el = new Audio(url)
-        el.preload = 'auto'
-        el.onloadedmetadata = () => setDuration(el.duration)
+        const el = new BufferPlayer()
+        try { await el.load(bytes) } catch { el.close(); throw new Error('This audio could not be played.') }
+        if (dead) { el.close(); return }
+        setDuration(el.duration)
         el.onended = () => setPlaying(false)
-        el.onerror = () => setError('This audio could not be played.')
         audio.current = el
         setReady(true)
       } catch (e) {
         if (!dead) setError(e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : 'Could not load this audio.')
       }
     })()
-    return () => { dead = true; audio.current?.pause(); audio.current = null; if (url) URL.revokeObjectURL(url) }
+    return () => { dead = true; audio.current?.close(); audio.current = null }
   }, [projectId, artifactId])
 
   useEffect(() => { draw() }, [ready, draw, time])

@@ -71,6 +71,7 @@ import type { ChromiumControl } from './chromium/service'
 import type { BrowserManagerOptions } from './chromium/browserManager'
 import { findSource, latestResearch, sourceNotes } from '../shared/research'
 import { detectImageGenRequest, generateImage, rewriteImagePrompt } from './imagegen'
+import { sharedEngine } from './fastsd/engine'
 import { classifyAutomationMessage, classifyIntent } from './intent'
 import type { ChatIntent } from './intent'
 import { automationProgress } from '../shared/automation'
@@ -729,18 +730,6 @@ function requestBrowserConfirmation(
 }
 
 /** Said when a browser task needs Orbis's browser but no Chromium build is installed. */
-/**
- * Trims the strip Pollinations may mark, using the image support Electron has. The helper has none and asks for an
- * untrimmed image instead (src/main/imagegen.ts).
- */
-const cropWatermark = (jpeg: Buffer, strip: number): string => {
-  const image = nativeImage.createFromBuffer(jpeg)
-  const { width, height } = image.getSize()
-  if (image.isEmpty() || width === 0) throw new Error('Pollinations returned an unreadable image')
-  const keep = Math.max(1, height - Math.round((strip * height) / (1024 + strip)))
-  return `data:image/jpeg;base64,${image.crop({ x: 0, y: 0, width, height: keep }).toJPEG(92).toString('base64')}`
-}
-
 const NO_BROWSER = 'The Orbis browser (Chromium) is not installed on this computer.'
 
 /** Orbis's browser, told each time it (re)starts so the app can follow its tabs. */
@@ -1764,7 +1753,7 @@ ${block}`
         if (intent?.kind === 'image') {
           emit({ type: 'status', message: IMAGE_GEN_STATUS })
           try {
-            const image = await generateImage(intent.prompt, (url, init) => net.fetch(url, init), intent.seed, cropWatermark)
+            const image = await generateImage(intent.prompt, intent.seed, { signal: controller.signal, onStatus: (message) => emit({ type: 'status', message }) })
             if (controller.signal.aborted) return emit({ type: 'aborted' })
             void registerGeneratedImage(image.dataUrl, intent.prompt)
             emit({ type: 'image', url: image.dataUrl, prompt: intent.prompt, seed: image.seed })
@@ -2460,7 +2449,7 @@ ${summaryBlock(summary)}`
     const seed = Number.isSafeInteger(request?.seed) ? request.seed : undefined
     const fetchFn = (url: string, init?: RequestInit): Promise<Response> => net.fetch(url, init)
     const nextPrompt = await rewriteImagePrompt(prompt, instruction, GROQ_API_KEYS, fetchFn)
-    const image = await generateImage(nextPrompt, fetchFn, seed, cropWatermark)
+    const image = await generateImage(nextPrompt, seed)
     void registerGeneratedImage(image.dataUrl, nextPrompt)
     return { url: image.dataUrl, prompt: nextPrompt, seed: image.seed }
   })
@@ -5245,6 +5234,13 @@ ${page.text}`, { howMany: 6 })
      */
     registerMusicCapabilities({ control: browserControl.control, music: () => music })
 
+    // The image engine (FastSDCPU). The env vars let the helper process find the same install and launcher.
+    const imageHome = join(app.getPath('userData'), 'imagegen')
+    const imageServe = join(app.isPackaged ? process.resourcesPath : join(app.getAppPath(), 'resources'), 'fastsd', 'serve_local.py')
+    process.env.ORBIS_IMAGEGEN_HOME = imageHome
+    process.env.ORBIS_FASTSD_SERVE = imageServe
+    const imageEngine = sharedEngine({ home: imageHome, serveScript: imageServe })
+    quitFlush.add('the local image engine', () => imageEngine.stop())
     const neurovaEngine = new NeurovaEngine({
       home: join(app.getPath('userData'), 'neurova'),
       workerScript: join(app.isPackaged ? process.resourcesPath : join(app.getAppPath(), 'resources'), 'neurova', 'ace_worker.py'),

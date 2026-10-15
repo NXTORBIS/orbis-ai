@@ -17,3 +17,30 @@
 .nv-wp-row { display: flex; gap: 8px; align-items: center; font-size: var(--text-sm); color: var(--faint); }
 .nv-wp-btn { border: 1px solid var(--line); background: transparent; color: var(--text); border-radius: 6px; padding: 2px 12px; cursor: pointer; }
 .nv-wp-canvas { width: 100%; height: 64px; display: block; border-radius: 6px; cursor: pointer; color: var(--cyan); }
+
+/* Every field in the composer wears the dark glass look; the browser's white default must not show. */
+.nv-composer textarea,
+.nv-controls input:not([type='checkbox']) {
+  background: transparent;
+  color: inherit;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font: inherit;
+}
+.nv-composer textarea { resize: vertical; min-height: 84px; }
+.nv-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; }
+.nv-controls input[type='checkbox'] { accent-color: var(--cyan); }
+.nv-composer textarea:focus-visible,
+.nv-controls input:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+
+/* Note field on candidate cards and any other text field inside the studio. */
+.nv-studio input:not([type='checkbox']):not([type='radio']),
+.nv-studio textarea {
+  background: transparent;
+  color: inherit;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font: inherit;
+}
