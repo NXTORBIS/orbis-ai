@@ -5,6 +5,7 @@ import type { F1Answer, F1Race, F1RaceResult } from '../../../../shared/f1/types
 import type { StreamEvent } from '../../../../shared/f1/live/stream-types'
 import { placeCars } from '../../../../shared/f1/raceStrip'
 import { peekArenaReturn, setArenaReturn, withTransition } from '../../lib/motion'
+import Tonight from './Tonight'
 import './arena.css'
 
 interface Props {
@@ -290,6 +291,8 @@ export default function ArenaView({ onClose, onOpen }: Props): React.JSX.Element
           <span className="arena-foot">Live timing · replay · telemetry · strategy · championship · history</span>
         </button>
       </div>
+
+      <Tonight />
 
       <div className="arena-next">
         <h2>On the list</h2>

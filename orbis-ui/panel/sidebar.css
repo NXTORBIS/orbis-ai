@@ -1175,3 +1175,12 @@ body::after {
 #view-ask:has(.ask-choices) #ask-form::before { content: none; display: none; }
 #view-ask:has(.ask-choices) .ask-choices-head { display: none; }
 #view-ask:not(:has(.ask-choices)) #ask-form { order: 2; flex: none; }
+
+/* ---- comparing tabs: a small table under the selection bar ---- */
+.rv-compared { margin: 8px 12px; overflow-x: auto; }
+.rv-compare { width: 100%; border-collapse: collapse; font-size: 12px; }
+.rv-compare th, .rv-compare td { text-align: left; vertical-align: top; padding: 6px 8px; border-bottom: 1px solid var(--pv-edge, rgba(255,255,255,.1)); }
+.rv-compare thead th { color: var(--muted); font-weight: 600; white-space: nowrap; }
+.rv-compare tbody th { max-width: 140px; overflow-wrap: anywhere; }
+.ask-before-head { margin: 8px 8px 2px; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; opacity: .6; }
+.ask-again .ask-choice-name { font-weight: 500; }

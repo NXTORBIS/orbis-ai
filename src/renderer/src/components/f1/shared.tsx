@@ -1,5 +1,5 @@
 import { Download, RefreshCw } from 'lucide-react'
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { emptyPrefs, sanitizePrefs, type F1Prefs } from '../../../../shared/f1/extras'
 import { safeFileName, toCsv } from '../../../../shared/f1/csv'
 import type { F1Answer } from '../../../../shared/f1/types'
@@ -162,35 +162,57 @@ export function useWatchlist(): { ids: string[]; has: (id: string) => boolean; t
   return { ids, has: (id) => ids.includes(id), toggle }
 }
 
+/**
+ * A value this profile keeps (a note, saved comparisons, plans). It lives with the profile's F1 preferences, so it
+ * follows the profile and not this window. A value an earlier version left in this window's storage moves in once.
+ */
+export function useKept(key: string, legacyKey?: string): [string, (next: string) => void] {
+  const { prefs } = usePrefs()
+  const [moved, setMoved] = useState(false)
+  const value = prefs.kv[key] ?? ''
+  useEffect(() => {
+    if (moved || !loaded || !legacyKey || prefs.kv[key] !== undefined) return
+    setMoved(true)
+    try {
+      const old = localStorage.getItem(legacyKey)
+      if (old) {
+        localStorage.removeItem(legacyKey)
+        void savePrefs({ ...current, kv: { ...current.kv, [key]: old } })
+      }
+    } catch {
+      // nothing to move
+    }
+  }, [moved, prefs, key, legacyKey])
+  const set = useCallback(
+    (next: string) => {
+      const kv = { ...current.kv }
+      if (next) kv[key] = next
+      else delete kv[key]
+      void savePrefs({ ...current, kv })
+    },
+    [key]
+  )
+  return [value, set]
+}
+
 const NOTE_PREFIX = 'orbis.f1.note.'
 
-/** A private note for one subject (a session, a lap). Stored on this computer only, never sent anywhere. */
+/** A private note for one subject (a session, a lap). Kept with this profile, never sent anywhere. */
 export function Notes({ id, label }: { id: string; label: string }): React.JSX.Element {
-  const key = NOTE_PREFIX + id
-  const read = (): string => {
-    try {
-      return localStorage.getItem(key) ?? ''
-    } catch {
-      return ''
-    }
-  }
-  const [text, setText] = useState(read)
-  useEffect(() => setText(read()), [key]) // eslint-disable-line react-hooks/exhaustive-deps
+  const [saved, keep] = useKept(`note.${id}`, NOTE_PREFIX + id)
+  const [text, setText] = useState(saved)
+  // Follows the stored value when the subject changes or it arrives after the first render.
+  useEffect(() => setText(saved), [saved, id])
   return (
     <label className="f1-notes">
       {label}
       <textarea
         value={text}
-        placeholder="Only you can see this. It is kept on this computer."
+        placeholder="Only you can see this. It is kept with your profile on this computer."
         maxLength={4000}
         onChange={(e) => {
           setText(e.target.value)
-          try {
-            if (e.target.value) localStorage.setItem(key, e.target.value)
-            else localStorage.removeItem(key)
-          } catch {
-            // storage unavailable: the note lasts for this visit only
-          }
+          keep(e.target.value)
         }}
       />
     </label>
@@ -208,23 +230,16 @@ export interface SavedComparison {
 const CMP_KEY = 'orbis.f1.comparisons'
 
 export function useSavedComparisons(): { items: SavedComparison[]; save: (c: SavedComparison) => void; remove: (name: string) => void } {
-  const read = (): SavedComparison[] => {
+  const [raw, keep] = useKept('comparisons', CMP_KEY)
+  const items = useMemo<SavedComparison[]>(() => {
     try {
-      const v = JSON.parse(localStorage.getItem(CMP_KEY) ?? '[]')
-      return Array.isArray(v) ? v.filter((x) => x && typeof x.name === 'string' && Number.isInteger(x.sessionKey)).slice(0, 40) : []
+      const v = JSON.parse(raw || '[]') as unknown
+      return Array.isArray(v) ? (v as SavedComparison[]).filter((x) => x && typeof x.name === 'string' && Number.isInteger(x.sessionKey)).slice(0, 40) : []
     } catch {
       return []
     }
-  }
-  const [items, setItems] = useState<SavedComparison[]>(read)
-  const write = (next: SavedComparison[]): void => {
-    setItems(next)
-    try {
-      localStorage.setItem(CMP_KEY, JSON.stringify(next))
-    } catch {
-      // not kept beyond this visit
-    }
-  }
+  }, [raw])
+  const write = (next: SavedComparison[]): void => keep(next.length ? JSON.stringify(next) : '')
   return {
     items,
     save: (c) => write([c, ...items.filter((x) => x.name !== c.name)].slice(0, 40)),

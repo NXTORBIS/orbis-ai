@@ -2,7 +2,7 @@
 // Layer, the same verbs Orion uses). What is shown is what the browser reports right now; while the view is on screen it is
 // re-read every two seconds, and not at all while it is hidden or the page is not visible.
 import { el, fill, icon, iconButton, labelButton, host, ask, state, favicon, registerView, poller } from './ui.js'
-import { askBrowser } from '../helper.js'
+import { askBrowser, call } from '../helper.js'
 
 const POLL_MS = 2000
 export const GROUP_COLORS = { grey: '#9aa0a6', blue: '#5b9cf5', red: '#f2696b', yellow: '#e6b800', green: '#3fb56b', pink: '#f06db8', purple: '#a878f0', cyan: '#2cb8d0', orange: '#f0913a' }
@@ -127,6 +127,75 @@ registerView('tabs', {
     let note = ''
     const selected = new Set()
     let groupName = ''
+    // Two or three tabs, side by side: the pages are pinned to the comparison tray and compared from what they say.
+    let compared = null
+    let comparing = false
+    // Tabs of one site that are not in a group yet, grouped by that site: only where there are two or more of them.
+    const groupBySite = async () => {
+      const bySite = new Map()
+      for (const t of shared.tabs) {
+        if (groupOf(t) || t.pinned || !/^https?:/i.test(t.url || '')) continue
+        const h = host(t.url)
+        if (!bySite.has(h)) bySite.set(h, [])
+        bySite.get(h).push(t.id)
+      }
+      let made = 0
+      for (const [h, ids] of bySite) {
+        if (ids.length < 2) continue
+        const failed = await act('group-create', { tabIds: ids, name: h.slice(0, 40) })
+        if (failed) break
+        made++
+      }
+      note = made ? `Made ${made} group${made === 1 ? '' : 's'} by site.` : shared.note || 'No site has two or more ungrouped tabs.'
+      draw()
+    }
+    const compareSelected = async () => {
+      const chosen = shared.tabs.filter((t) => selected.has(t.id) && /^https?:/i.test(t.url || ''))
+      if (chosen.length < 2 || chosen.length > 3) {
+        note = 'Select two or three web pages to compare.'
+        return draw()
+      }
+      comparing = true
+      compared = null
+      note = ''
+      draw()
+      try {
+        await call('tray:clear', [])
+        for (const t of chosen) await call('tray:add', [{ url: t.url, title: t.title || t.url, site: host(t.url), vertical: 'web' }])
+        const out = await call('tray:compare', [])
+        compared = { comparison: out.comparison, summary: out.summary || '' }
+      } catch (err) {
+        note = (err && err.message) || 'These could not be compared just now.'
+      }
+      comparing = false
+      draw()
+    }
+    const comparedView = () => {
+      if (comparing) return state('loading', 'Reading the pages and comparing them…')
+      if (!compared) return null
+      const { comparison, summary } = compared
+      const cols = comparison.columns.filter((c) => c.filled > 0)
+      if (!cols.length) return el('p', { class: 'rv-note' }, 'Nothing could be compared with confidence: no page said the same thing twice.')
+      const table = el('table', { class: 'rv-compare' })
+      table.append(el('thead', {}, el('tr', {}, el('th', {}, 'Page'), ...cols.map((c) => el('th', {}, c.label)))))
+      table.append(
+        el(
+          'tbody',
+          {},
+          ...comparison.rows.map((r) =>
+            el('tr', {}, el('th', { title: r.url }, r.title), ...cols.map((c) => el('td', { title: r.cells[c.key]?.quote || '' }, r.cells[c.key]?.value ?? '—')))
+          )
+        )
+      )
+      return el(
+        'div',
+        { class: 'rv-compared' },
+        summary ? el('p', {}, summary) : null,
+        table,
+        comparison.unread.length ? el('p', { class: 'rv-note' }, `Could not read: ${comparison.unread.map((u) => u.title || u.url).join(', ')}`) : null,
+        comparison.rejected ? el('p', { class: 'rv-note' }, `${comparison.rejected} value${comparison.rejected === 1 ? '' : 's'} left out because the page did not say it.`) : null
+      )
+    }
 
     const audioButton = (t) => {
       if (!t.audible && !t.muted) return null
@@ -189,15 +258,22 @@ registerView('tabs', {
               return i
             })(),
             labelButton('tabGroups', 'Group them', () => undefined, { class: 'primary' }),
+            el('button', { type: 'button', class: 'labelbtn', onclick: () => void compareSelected(), ...(comparing ? { disabled: true } : {}) }, 'Compare'),
             iconButton('close', 'Clear the selection', () => (selected.clear(), draw()))
           )
         : null
       // The submit button above is a plain button in a form: make it submit.
-      bar?.querySelector('.labelbtn')?.setAttribute('type', 'submit')
+      bar?.querySelector('.labelbtn.primary')?.setAttribute('type', 'submit')
       keepFocus(body, () =>
         fill(body, 
-          el('div', { class: 'rv-tools' }, filterBox(query, `Search ${shared.tabs.length} tabs`, (v) => ((query = v), draw()))),
+          el(
+            'div',
+            { class: 'rv-tools' },
+            filterBox(query, `Search ${shared.tabs.length} tabs`, (v) => ((query = v), draw())),
+            el('button', { type: 'button', class: 'labelbtn', title: 'Put tabs of the same site together in a group', onclick: () => void groupBySite() }, 'Group by site')
+          ),
           bar,
+          comparedView(),
           shared.note ? el('p', { class: 'rv-note', role: 'alert' }, shared.note) : null,
           !shared.loaded ? state('loading', 'Reading the open tabs…') : shared.error ? state('error', shared.error) : shown.length ? list : state('empty', q ? 'No open tab matches that.' : 'No tabs are open.')
         )

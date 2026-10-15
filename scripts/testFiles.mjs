@@ -16,6 +16,9 @@ export const TEST_FILES = [
   'src/shared/f1/normalize.test.ts',
   'src/shared/football/football.test.ts',
   'src/shared/chatCalloutChart.test.ts',
+  'src/shared/chatExport.test.ts',
+  'src/shared/arenaTonight.test.ts',
+  'src/shared/doctor.test.ts',
   'src/shared/motionLogic.test.ts',
   'src/shared/artifacts/escapes.test.ts',
   'src/shared/football/extras.test.ts',
@@ -166,6 +169,7 @@ export const TEST_FILES = [
   // The Ask Orion screen in the browser panel, run against a stand-in for the page. Beside the two above because it
   // is the other half of the same thing: those check that the rows lead somewhere, this checks what is there.
   'orbis-ui/panel/askView.test.mjs',
+  'orbis-ui/panel/askSuggest.test.mjs',
   'src/shared/contextEngine.test.ts',
   'src/shared/orbReference.test.ts',
   'src/shared/orbSafety.test.ts',

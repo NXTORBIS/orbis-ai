@@ -280,8 +280,14 @@ export interface F1Prefs {
   alerts: { sessions: boolean; results: boolean }
   /** Minutes before a session to say it is starting. */
   leadMinutes: number
+  /** What the person keeps for themselves (session notes, saved lap comparisons, strategy plans), by short key. */
+  kv: Record<string, string>
 }
-export const emptyPrefs = (): F1Prefs => ({ watchlist: [], alerts: { sessions: true, results: true }, leadMinutes: 15 })
+export const emptyPrefs = (): F1Prefs => ({ watchlist: [], alerts: { sessions: true, results: true }, leadMinutes: 15, kv: {} })
+
+const KV_KEY = /^[A-Za-z0-9_.:-]{1,80}$/
+const KV_MAX_VALUE = 60_000
+const KV_MAX_ENTRIES = 300
 
 export function sanitizePrefs(raw: unknown): F1Prefs {
   const r = obj(raw) ?? {}
@@ -290,7 +296,14 @@ export function sanitizePrefs(raw: unknown): F1Prefs {
     .slice(0, 50)
   const a = obj(r.alerts) ?? {}
   const lead = num(r.leadMinutes)
+  const kv: Record<string, string> = {}
+  const rawKv = obj(r.kv) ?? {}
+  for (const [k, v] of Object.entries(rawKv)) {
+    if (Object.keys(kv).length >= KV_MAX_ENTRIES) break
+    if (KV_KEY.test(k) && typeof v === 'string' && v.length > 0 && v.length <= KV_MAX_VALUE) kv[k] = v
+  }
   return {
+    kv,
     watchlist: [...new Set(ids)],
     alerts: { sessions: typeof a.sessions === 'boolean' ? a.sessions : true, results: typeof a.results === 'boolean' ? a.results : true },
     leadMinutes: lead !== null && [5, 15, 30, 60].includes(lead) ? lead : 15

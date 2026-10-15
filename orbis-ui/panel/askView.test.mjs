@@ -163,7 +163,12 @@ async function screen({ answers = {}, stream = [] } = {}) {
 
   // The real panel imports this from omnibox-ui.js; here there is no microphone, which is what it reports.
   const createVoiceSession = () => ({ available: () => false, state: 'idle', start() {}, stop() {} })
-  const context = { createVoiceSession, document, HelperDown, call, $, safeUrl, link, showTab, URL, AbortController, Object, String, Boolean, Array, Promise, console, setTimeout }
+  const suggestionsFor = () => []
+  const historyKey = () => ''
+  const remember = (l) => l
+  const readHistory = () => []
+  const writeHistory = () => undefined
+  const context = { suggestionsFor, historyKey, remember, readHistory, writeHistory, createVoiceSession, document, HelperDown, call, $, safeUrl, link, showTab, URL, AbortController, Object, String, Boolean, Array, Promise, console, setTimeout }
   const api = vm.runInNewContext(`${block}\n;({ runAsk, drawAsk, askShown, readAskPage, clearAskRun, askState })`, context, { filename: 'panel.js (Ask)' })
   return { api, state, asked, went, HelperDown, about: made.get('ask-about'), thread: made.get('ask-thread'), stop: made.get('ask-stop'), send: made.get('ask-send'), input: made.get('ask-input') }
 }
@@ -187,10 +192,10 @@ test('the page it is about is the page Orbis just read', async () => {
   await it.api.readAskPage()
   assert.match(it.about.words(), /A page/)
   assert.match(it.about.words(), /example\.com/)
-  // orb:state and nothing else. The page's own text never crosses to this screen: it is read inside Orbis by the
-  // page.read capability and put into the prompt there, which is what keeps a page from talking to the model through
-  // this panel.
-  assert.deepEqual(it.asked.map((one) => one.channel), ['orb:state'])
+  // orb:state, then a look through the notes for passages saved from this address. The page's own text never crosses
+  // to this screen: it is read inside Orbis by the page.read capability and put into the prompt there, which is what
+  // keeps a page from talking to the model through this panel.
+  assert.deepEqual(it.asked.map((one) => one.channel), ['orb:state', 'notes:list'])
 })
 
 test('all three things this screen does are offered by name', async () => {

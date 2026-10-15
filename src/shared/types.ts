@@ -873,6 +873,8 @@ export interface NxtorbisApi {
   f1Prefs(): Promise<unknown>
   /** F1: replace them; the main process cleans and writes them. */
   f1PrefsSet(next: unknown): Promise<unknown>
+  exportChat(kind: 'md' | 'pdf', title: string, text: string): Promise<{ ok: boolean; path?: string; message?: string }>
+  runDoctor(): Promise<{ headline: string; checks: { id: string; name: string; state: 'ok' | 'warn' | 'bad'; detail: string }[] }>
   f1ReportPdf(title: string, html: string): Promise<unknown>
   /** F1: every season's champion driver, runner-up and champion constructor. */
   f1Champions(season?: number): Promise<unknown>

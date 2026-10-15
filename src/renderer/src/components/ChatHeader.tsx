@@ -1,7 +1,7 @@
 import { lazy, Suspense, useLayoutEffect, useRef, useState } from 'react'
 import ChatProject from './ChatProject'
 import type { NoticeKind } from '../lib/notices'
-import { FlaskConical, Ellipsis, HatGlasses, Pencil, Share2, Trash2 } from 'lucide-react'
+import { FileDown, FlaskConical, Ellipsis, HatGlasses, Pencil, Share2, Trash2 } from 'lucide-react'
 import { useDismiss } from '../lib/useDismiss'
 
 const SearchLabs = lazy(() => import('./native/SearchLabs'))
@@ -21,6 +21,8 @@ interface Props {
   onOpenApp?(appId: string): void
   onRename(title: string): void
   onShare(): void
+  /** Saves the conversation to Downloads. Optional: not drawn where there is nothing to save it from. */
+  onExport?(kind: 'md' | 'pdf'): void
   onDelete(): void
   /** The conversation on screen, so it can be put in a project. Null before anything has been said. */
   conversationId: string | null
@@ -214,6 +216,18 @@ export default function ChatHeader(props: Props): React.JSX.Element {
                 <Pencil size={14} />
                 Rename
               </button>
+              {props.onExport && (
+                <>
+                  <button className="menu-item" disabled={!props.hasConversation} onClick={() => { props.onExport?.('md'); setMoreOpen(false) }}>
+                    <FileDown size={14} />
+                    Save as Markdown
+                  </button>
+                  <button className="menu-item" disabled={!props.hasConversation} onClick={() => { props.onExport?.('pdf'); setMoreOpen(false) }}>
+                    <FileDown size={14} />
+                    Save as PDF
+                  </button>
+                </>
+              )}
               <button
                 className="menu-item danger"
                 disabled={!props.hasConversation}

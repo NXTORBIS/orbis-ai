@@ -606,12 +606,15 @@ export async function testApiKey(apiKeys: string[], fetchFn: FetchFn, mistralKey
     let working = 0
     let dead = 0
     let busy = 0
-    for (const key of keys) {
+    // Eight at a time: a copy with hundreds of keys took minutes one by one, and the answer is the same either way.
+    for (let i = 0; i < keys.length; i += 8) {
       try {
-        const res = await fetchFn(`${base}/models`, { headers: { Authorization: `Bearer ${key}` } })
-        if (res.ok) working++
-        else if (res.status === 429) busy++
-        else dead++
+        const results = await Promise.all(keys.slice(i, i + 8).map((key) => fetchFn(`${base}/models`, { headers: { Authorization: `Bearer ${key}` } })))
+        for (const res of results) {
+          if (res.ok) working++
+          else if (res.status === 429) busy++
+          else dead++
+        }
       } catch (err) {
         return `Couldn't reach ${label}: ${err instanceof Error ? err.message : String(err)}`
       }

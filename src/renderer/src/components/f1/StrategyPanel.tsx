@@ -5,7 +5,7 @@ import { eligibleLaps, evaluatePlan, pitLaneLoss, stintPace, type PlanStint, typ
 import type { F1Answer, F1Session, F1SessionBundle, F1SessionTiming } from '../../../../shared/f1/types'
 import { compoundComparison, pitStopsByTeam, planSensitivity, projectStint, slowStops } from '../../../../shared/f1/analysis'
 import { SessionPicker } from './SessionPicker'
-import { SourceLine, Waiting, useF1 } from './shared'
+import { SourceLine, Waiting, useF1, useKept } from './shared'
 
 export const COMPOUND_COLOUR: Record<string, string> = { SOFT: '#ff4d4d', MEDIUM: '#ffd34d', HARD: '#e8e8e8', INTERMEDIATE: '#4dd36b', WET: '#4d9bff' }
 
@@ -438,23 +438,16 @@ const PLANS_KEY = 'orbis.f1.plans'
 /** Plans kept on this computer so a what-if can be picked up again. */
 function SavedPlans({ plan, pitLoss, onLoad }: { plan: PlanStint[]; pitLoss: number; onLoad: (p: PlanStint[], pitLoss: number) => void }): React.JSX.Element {
   type Saved = { name: string; plan: PlanStint[]; pitLoss: number }
-  const read = (): Saved[] => {
+  const [raw, keep] = useKept('plans', PLANS_KEY)
+  const saved = useMemo<Saved[]>(() => {
     try {
-      const v = JSON.parse(localStorage.getItem(PLANS_KEY) ?? '[]') as unknown
+      const v = JSON.parse(raw || '[]') as unknown
       return Array.isArray(v) ? (v as Saved[]).filter((x) => x && typeof x.name === 'string' && Array.isArray(x.plan)).slice(0, 20) : []
     } catch {
       return []
     }
-  }
-  const [saved, setSaved] = useState<Saved[]>(read)
-  const write = (next: Saved[]): void => {
-    setSaved(next)
-    try {
-      localStorage.setItem(PLANS_KEY, JSON.stringify(next))
-    } catch {
-      // kept for this visit
-    }
-  }
+  }, [raw])
+  const write = (next: Saved[]): void => keep(next.length ? JSON.stringify(next) : '')
   return (
     <div className="f1-controls">
       <button

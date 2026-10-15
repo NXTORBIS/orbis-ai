@@ -1,4 +1,5 @@
 import { askBrowser, call, HelperDown } from './helper.js'
+import { suggestionsFor, historyKey, remember, readHistory, writeHistory } from './askSuggest.js'
 import { mountOmnibox, createVoiceSession } from './omnibox-ui.js'
 import { mountCommandCenter } from './command-center.js'
 import { hasView, showView } from './rail/index.js'
@@ -547,6 +548,17 @@ async function readAskPage() {
     else {
       askState.page = { url: address, title: String(now.page.title ?? '') }
       askState.pageWhy = ''
+      // What was saved from this page before (the selection orb's "Save to notes" ends each note with the address).
+      askState.saved = []
+      try {
+        const found = await call('notes:list', [{ query: address }])
+        if (Array.isArray(found)) {
+          askState.saved = found
+            .filter((n) => n && typeof n.body === 'string' && n.body.split('\n').some((line) => line.trim() === address))
+            .slice(0, 3)
+            .map((n) => String(n.body).split('\n\n— ')[0].slice(0, 160))
+        }
+      } catch { /* notes are not reachable: nothing is listed, which the screen does not need to say */ }
     }
   } catch (err) {
     askState.pageWhy = askProblem(err)
@@ -612,6 +624,38 @@ function askChoices() {
     }
     button.addEventListener('click', choice.chosen)
     box.append(button)
+  }
+  // What this kind of page invites, and what was asked here before. Both only when there is a page to be about.
+  if (havePage) {
+    for (const offer of suggestionsFor(askState.page.url)) {
+      const b = node('button', 'ask-choice ask-offer')
+      b.type = 'button'
+      b.append(node('span', 'ask-choice-name', offer.name), node('span', 'ask-choice-note', 'Starts now, from what the page says.'))
+      b.addEventListener('click', () => void runAsk(offer.prompt))
+      box.append(b)
+    }
+    if (Array.isArray(askState.saved) && askState.saved.length) {
+      box.append(node('div', 'ask-before-head', 'Saved from this page'))
+      for (const text of askState.saved) {
+        const b = node('button', 'ask-choice ask-offer ask-again')
+        b.type = 'button'
+        b.title = 'Ask about this saved passage'
+        b.append(node('span', 'ask-choice-name', text))
+        b.addEventListener('click', () => void runAsk(`About this passage I saved from the page: "${text}". What does it mean here?`))
+        box.append(b)
+      }
+    }
+    const before = typeof localStorage === 'undefined' ? [] : readHistory(localStorage, historyKey(askState.page.url))
+    if (before.length) {
+      box.append(node('div', 'ask-before-head', 'Asked here before'))
+      for (const q of before) {
+        const b = node('button', 'ask-choice ask-offer ask-again')
+        b.type = 'button'
+        b.append(node('span', 'ask-choice-name', q))
+        b.addEventListener('click', () => void runAsk(q))
+        box.append(b)
+      }
+    }
   }
   return box
 }
@@ -764,6 +808,24 @@ function drawAskThread() {
 
   // The way back to the three choices. Without it, the first question hides them for the rest of the session, and
   // "Summarise this page" -- the one of the three that needs nothing typed -- would be reachable only by typing it.
+  // Hear the answer: the computer's own speech voices, so nothing is sent anywhere to be read out.
+  if (askState.phase === 'done' && askState.answer && typeof speechSynthesis !== 'undefined' && typeof SpeechSynthesisUtterance !== 'undefined') {
+    const speaking = speechSynthesis.speaking
+    const listen = node('button', 'ask-again ask-listen', speaking ? 'Stop listening' : 'Listen to this')
+    listen.type = 'button'
+    listen.addEventListener('click', () => {
+      if (speechSynthesis.speaking) {
+        speechSynthesis.cancel()
+      } else {
+        const say = new SpeechSynthesisUtterance(askState.answer.replace(/[*_`#>]+/g, ''))
+        say.onend = () => drawAsk()
+        say.onerror = () => drawAsk()
+        speechSynthesis.speak(say)
+      }
+      drawAsk()
+    })
+    host.append(listen)
+  }
   if (askState.phase !== 'working') {
     const again = node('button', 'ask-again', 'Ask something else')
     again.type = 'button'
@@ -893,6 +955,10 @@ async function runAsk(text) {
   const mine = askRun
   drawAsk()
   try {
+    if (askState.page && typeof localStorage !== 'undefined') {
+      const key = historyKey(askState.page.url)
+      writeHistory(localStorage, key, remember(readHistory(localStorage, key), request))
+    }
     await call('orb:ask', [request], { signal: mine.signal, onEvent: onAskEvent })
     if (askState.phase === 'working') askState.phase = askState.answer || askState.steps.length ? 'done' : 'error'
     // A run that ends having said nothing at all is a failure, and saying nothing about it would be the worst of both.
@@ -1006,9 +1072,27 @@ if ($('view-ask') && $('ask-form')) {
  * The screen was opened. Which page it is about is read every time, because the tab in front can change while the
  * panel sits here, and an answer about the page you were looking at a minute ago is worse than no answer.
  */
+let askFollow = null
 function askShown() {
   void readAskPage()
   $('ask-input')?.focus()
+  // The tab in front can change while this sits open beside the page. Looked at every few seconds, and only while the
+  // Ask screen is the one showing and nothing is being asked, so a running answer is never redrawn from under you.
+  if (askFollow === null && typeof setInterval === 'function') {
+    askFollow = setInterval(async () => {
+      const view = $('view-ask')
+      if (!view || view.hidden || askRun || (typeof document !== 'undefined' && document.hidden)) return
+      try {
+        const now = await call('orb:state')
+        const url = safeUrl(now?.page?.url) ?? ''
+        const had = askState.page?.url ?? ''
+        if (url !== had && askState.phase !== 'working') {
+          clearAskRun()
+          void readAskPage()
+        }
+      } catch { /* Orbis is not answering; the screen already says so */ }
+    }, 2500)
+  }
 }
 
 // Open on whatever the address names, so chrome://orbis#galaxy lands on Galaxy rather than on Ask and a click.

@@ -363,6 +363,8 @@ None of these ever touched Electron beyond the channel itself. They are a servic
 | Channel | Becomes |
 | --- | --- |
 | `chat:send`, `chat:abort`, `chat:complete`, `chat:title`, `chat:suggest` | Mojo, same service |
+| `app:doctor` | Read-only self check (can it save, are its data files readable, disk space, model access, browser present). Mojo, same service |
+| `chat:export` | Writes a conversation to Downloads as Markdown, or prints it to a PDF in a hidden script-free window. Mojo, same service |
 | `automation:classify`, `automation:control`, `automation:steer`, `automation:unfinished`, `automation:forget` | Mojo, same service |
 | `meetings:do` | Notes Orbis took while somebody talked. Mojo, same service |
 | `project-files:do` | The files a project keeps. Mojo, same service |

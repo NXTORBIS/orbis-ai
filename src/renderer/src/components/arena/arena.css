@@ -91,3 +91,18 @@
 ::view-transition-group(arena-open) { animation-duration: .5s; animation-timing-function: cubic-bezier(.2, .8, .2, 1); }
 ::view-transition-old(arena-open), ::view-transition-new(arena-open) { height: 100%; }
 .arena small { font-size: max(10.5px, 1em); }
+
+/* ---- Tonight: the next 24 hours, with a reminder on each ---- */
+.arena-tonight { margin: 18px auto 0; max-width: 760px; padding: 14px 16px; border-radius: 16px; background: rgba(255, 255, 255, .05); border: 1px solid rgba(255, 255, 255, .1); }
+.arena-tonight h2 { margin: 0 0 8px; font-size: 13px; letter-spacing: .1em; text-transform: uppercase; opacity: .75; }
+.arena-tonight ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.arena-tonight li { display: flex; align-items: center; gap: 12px; padding: 6px 0; border-top: 1px solid rgba(255, 255, 255, .06); }
+.arena-tonight li:first-child { border-top: 0; }
+.arena-tonight-time { font-variant-numeric: tabular-nums; font-weight: 700; min-width: 52px; }
+.arena-tonight-what { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.arena-tonight-what b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.arena-tonight-what small { opacity: .6; }
+.arena-tonight-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; border: 1px solid rgba(255, 255, 255, .18); background: transparent; color: inherit; cursor: pointer; font-size: 12px; }
+.arena-tonight-btn:hover:not(:disabled) { border-color: var(--cyan, #3fd8ff); }
+.arena-tonight-btn[aria-pressed='true'] { color: var(--cyan, #3fd8ff); }
+.arena-tonight-said { margin: 8px 0 0; font-size: 12px; opacity: .75; }

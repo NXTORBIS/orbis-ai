@@ -1,3 +1,4 @@
+import { chatHtml, chatMarkdown } from '../../shared/chatExport'
 import { lazy, Suspense, useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { useNotices } from './app/useNotices'
 import { useChat } from './app/useChat'
@@ -1001,6 +1002,13 @@ export default function App(): React.JSX.Element {
             onOpenApp={openNativeApp}
             onRename={(title) => active && renameConversation(active.id, title)}
             onShare={() => active && shareConversation(active.id)}
+            onExport={(kind) => {
+              if (!active || !settings) return
+              const names = { user: settings.userName, assistant: settings.assistantName }
+              const msgs = active.messages.map((m) => ({ role: m.role, content: m.content, attachments: m.attachments?.map((a) => ({ name: a.name })) }))
+              const text = kind === 'md' ? chatMarkdown(active.title, msgs, names) : chatHtml(active.title, msgs, names, new Date().toLocaleString())
+              void window.api.exportChat(kind, active.title, text).then((r) => notify(r.ok ? `Saved to ${r.path}` : r.message ?? 'That could not be saved.', r.ok ? undefined : 'error'))
+            }}
             onDelete={() => active && deleteConversation(active.id)}
           />
           {/*

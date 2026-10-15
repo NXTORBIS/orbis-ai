@@ -1,0 +1,16 @@
+.doctor-body { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.doctor-run {
+  align-self: flex-start; display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px;
+  border: 1px solid var(--cyan); background: transparent; color: var(--cyan); cursor: pointer; font-size: 13px;
+}
+.doctor-run:disabled { opacity: .6; cursor: progress; }
+.doctor-head { margin: 0; font-weight: 600; }
+.doctor-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.doctor-line { display: flex; gap: 10px; align-items: flex-start; }
+.doctor-line svg { flex: none; margin-top: 2px; }
+.doctor-line span { display: flex; flex-direction: column; min-width: 0; }
+.doctor-line b { font-weight: 600; }
+.doctor-line small { color: var(--faint); overflow-wrap: anywhere; }
+.doctor-line.is-ok svg { color: #46d98a; }
+.doctor-line.is-warn svg { color: #f2b84b; }
+.doctor-line.is-bad svg, .doctor-line.is-bad { color: #ff6b6b; }

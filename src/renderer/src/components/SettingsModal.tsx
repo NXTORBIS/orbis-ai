@@ -19,6 +19,7 @@ const AmbientSettings = lazy(() => import('./AmbientSettings'))
 // A megabyte of licence text: read only when someone asks to see it.
 const NoticesPanel = lazy(() => import('./NoticesPanel'))
 const UpdateSettings = lazy(() => import('./UpdateSettings'))
+const OrbisDoctor = lazy(() => import('./OrbisDoctor'))
 const SkillsSettings = lazy(() => import('./SkillsSettings'))
 const MemorySettings = lazy(() => import('./MemorySettings'))
 const ControlSwitches = lazy(() => import('./ControlSwitches'))
@@ -611,6 +612,7 @@ export default function SettingsModal({ settings, onUpdate, onClose, section, on
               <>
                 <Suspense fallback={null}>
                   <UpdateSettings />
+                  <OrbisDoctor />
                 </Suspense>
 
                 <section className="setting row">

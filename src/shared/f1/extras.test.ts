@@ -121,6 +121,11 @@ test('prefs are cleaned: bad ids, duplicates and odd lead times are dropped', ()
   assert.deepEqual(sanitizePrefs('x'), emptyPrefs())
 })
 
+test('what a profile keeps survives cleaning, and only well-formed entries do', () => {
+  const p = sanitizePrefs({ kv: { 'note.s1': 'fast lap', 'bad key!': 'x', plans: '', big: 'y'.repeat(70_000), n: 5, comparisons: '[]' } })
+  assert.deepEqual(p.kv, { 'note.s1': 'fast lap', comparisons: '[]' })
+})
+
 test('a report is one escaped page with no script and no outside resource', () => {
   const html = reportHtml('Race <1>', [{ heading: 'Top "3"', header: ['Pos', 'Driver'], rows: [[1, 'A & B'], [2, null]] }], { source: 'Jolpica-F1', madeAt: '2026-10-15' })
   assert.ok(!/<script|http:\/\/|https:\/\/|src=/i.test(html))

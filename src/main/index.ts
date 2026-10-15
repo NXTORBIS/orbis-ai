@@ -1,6 +1,7 @@
 import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, nativeTheme, net, powerMonitor, protocol, shell, Tray } from 'electron'
 import type { MenuItemConstructorOptions, OpenDialogOptions, TitleBarOverlayOptions } from 'electron'
-import { appendFileSync, existsSync, promises as fs } from 'node:fs'
+import { appendFileSync, constants as fsConstants, existsSync, promises as fs } from 'node:fs'
+import { dataDirFor } from '../shared/profiles'
 import os from 'node:os'
 import { spawn } from 'node:child_process'
 import { ChanceStore } from './chance/store'
@@ -11,6 +12,7 @@ import { registerCosmosIpc } from './cosmos/ipc'
 import { registerF1Ipc } from './f1/ipc'
 import { registerFootballIpc } from './football/ipc'
 import { initFilesIntegration, registerFilesProtocols, registerGeneratedImage, syncBrowserDownloads } from './filesIntegration'
+import { diskCheck, fileCheck, headline, sortChecks, type DoctorCheck } from '../shared/doctor'
 import { randomUUID } from 'node:crypto'
 import { basename, dirname, join } from 'node:path'
 import type {
@@ -2128,6 +2130,99 @@ ${summaryBlock(summary)}`
       (m): m is { role: string; content: string } => !!m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string'
     )
     return completeDraft(draft, valid, GROQ_API_KEYS, (url, init) => net.fetch(url, init))
+  })
+
+  // Orbis looking at itself: what it can read, write and reach, said in plain sentences. Read-only: it changes nothing.
+  handle('app:doctor', async () => {
+    const checks: DoctorCheck[] = []
+    const userData = app.getPath('userData')
+    // Can it write here at all?
+    try {
+      // Asked of the folder itself, so the check leaves no file of its own behind.
+      await fs.access(userData, fsConstants.R_OK | fsConstants.W_OK)
+      checks.push({ id: 'writable', name: 'Saving your data', state: 'ok', detail: 'Orbis can write to its data folder.' })
+    } catch {
+      checks.push({ id: 'writable', name: 'Saving your data', state: 'bad', detail: 'Orbis cannot write to its data folder, so nothing you change will be kept.' })
+    }
+    // Is every data file in this profile readable?
+    try {
+      const results: { file: string; error: string | null }[] = []
+      const dirs = [userData, join(userData, dataDirFor(notifyProfileId))]
+      for (const dir of dirs) {
+        let names: string[] = []
+        try {
+          names = (await fs.readdir(dir)).filter((n) => n.endsWith('.json'))
+        } catch {
+          continue
+        }
+        for (const file of names.slice(0, 200)) {
+          try {
+            const raw = await fs.readFile(join(dir, file), 'utf8')
+            if (raw.trim()) JSON.parse(raw)
+            results.push({ file, error: null })
+          } catch (err) {
+            results.push({ file, error: err instanceof Error ? err.message.slice(0, 80) : 'unreadable' })
+          }
+        }
+      }
+      checks.push(fileCheck('Your data files', results))
+    } catch {
+      checks.push({ id: 'data-files', name: 'Your data files', state: 'warn', detail: 'Orbis could not look through its data folder.' })
+    }
+    try {
+      const st = await fs.statfs(userData)
+      checks.push(diskCheck(Number(st.bavail) * Number(st.bsize)))
+    } catch {
+      checks.push(diskCheck(null))
+    }
+    checks.push(
+      HAVE_KEYS.groq
+        ? { id: 'orion', name: 'Orion', state: 'ok', detail: 'This copy has model access built in.' }
+        : { id: 'orion', name: 'Orion', state: 'bad', detail: 'No model access is built into this copy, so Orion cannot answer.' }
+    )
+    checks.push(
+      HAVE_KEYS.mistral
+        ? { id: 'sight', name: 'Looking at images', state: 'ok', detail: 'Image understanding is available.' }
+        : { id: 'sight', name: 'Looking at images', state: 'warn', detail: 'No image-understanding access, so pictures are ignored.' }
+    )
+    checks.push(
+      net.isOnline()
+        ? { id: 'online', name: 'Internet', state: 'ok', detail: 'This computer reports it is online.' }
+        : { id: 'online', name: 'Internet', state: 'warn', detail: 'This computer reports it is offline. Orion, search and live scores need a connection.' }
+    )
+    const exe = [process.env.ORBIS_CHROMIUM, app.isPackaged ? join(process.resourcesPath, 'chromium', 'chrome.exe') : 'C:/chromium/src/out/Fast/chrome.exe', 'C:/chromium/src/out/Default/chrome.exe'].find(
+      (p): p is string => Boolean(p) && existsSync(p as string)
+    )
+    checks.push(
+      exe
+        ? { id: 'browser', name: 'The Orbis browser', state: chromiumBrowser ? 'ok' : 'warn', detail: chromiumBrowser ? 'The browser is installed and connected.' : 'The browser is installed but not running right now.' }
+        : { id: 'browser', name: 'The Orbis browser', state: 'bad', detail: 'The browser program could not be found.' }
+    )
+    const sorted = sortChecks(checks)
+    return { headline: headline(sorted), checks: sorted }
+  })
+
+  // A conversation written to Downloads, as Markdown or as a PDF Orbis prints itself. The window sends the finished text.
+  handle('chat:export', async (_event, kind: unknown, title: unknown, text: unknown) => {
+    if ((kind !== 'md' && kind !== 'pdf') || typeof title !== 'string' || typeof text !== 'string' || text.length > 5_000_000) return { ok: false, message: 'That could not be saved.' }
+    const base = title.replace(/[^A-Za-z0-9 _-]+/g, '').trim().slice(0, 60) || 'Orbis chat'
+    const file = join(app.getPath('downloads'), `${base} ${new Date().toISOString().slice(0, 10)}.${kind}`)
+    try {
+      if (kind === 'md') {
+        await fs.writeFile(file, text, 'utf8')
+      } else {
+        const win = new BrowserWindow({ show: false, webPreferences: { javascript: false, sandbox: true, contextIsolation: true } })
+        try {
+          await win.loadURL('data:text/html;charset=utf-8;base64,' + Buffer.from(text, 'utf8').toString('base64'))
+          await fs.writeFile(file, await win.webContents.printToPDF({ printBackground: true, pageSize: 'A4' }))
+        } finally {
+          win.destroy()
+        }
+      }
+      return { ok: true, path: file }
+    } catch {
+      return { ok: false, message: 'That could not be saved.' }
+    }
   })
 
   handle('chat:title', (_event, prompt: unknown) => {
