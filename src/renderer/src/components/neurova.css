@@ -23,3 +23,5 @@
 .nv-facts { margin: 8px 0 0; padding-left: 18px; font-size: 12px; }
 .nv-bad { color: #e5736b; font-size: 12px; }
 .nv-note { font-size: 13px; margin-top: 4px; }
+
+.nv-wave { width: 100%; height: 40px; color: var(--cyan); margin-top: 8px; }

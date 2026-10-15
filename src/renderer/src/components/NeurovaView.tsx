@@ -16,6 +16,9 @@ export default function NeurovaView({ onClose, onNotify }: { onClose: () => void
   const [info, setInfo] = useState<Record<string, AudioInfo | string>>({})
   const [busy, setBusy] = useState(false)
   const [title, setTitle] = useState('')
+  const [lyricNotes, setLyricNotes] = useState<{ warnings: string[]; notices: { section: string; message: string }[]; sections: number } | null>(null)
+  const [wave, setWave] = useState<Record<string, number[]>>({})
+  const [tempo, setTempo] = useState<Record<string, string>>({})
   const project = projects.find((p) => p.id === openId) ?? null
 
   const load = useCallback(async () => setProjects(await window.api.neurovaList()), [])
@@ -44,6 +47,19 @@ export default function NeurovaView({ onClose, onNotify }: { onClose: () => void
       setOpenId(p.id)
     })
 
+  const checkLyrics = async (text: string): Promise<void> => {
+    if (!text.trim()) { setLyricNotes(null); return }
+    const r = await window.api.neurovaLyrics(text)
+    setLyricNotes({ warnings: r.warnings, notices: r.notices, sections: r.sections.length })
+  }
+  const showWave = async (projectId: string, artifactId: string): Promise<void> => {
+    const w = await window.api.neurovaWaveform(projectId, artifactId)
+    setWave((m) => ({ ...m, [artifactId]: w }))
+  }
+  const showTempo = async (projectId: string, artifactId: string): Promise<void> => {
+    const t = await window.api.neurovaTempo(projectId, artifactId)
+    setTempo((m) => ({ ...m, [artifactId]: t ? 'About ' + t.bpm + ' BPM (could also read as ' + t.alternatives.join(' or ') + '); reliability ' + t.reliability + '.' : 'There is not enough steady rhythm to estimate a tempo.' }))
+  }
   const selectedVersion = project?.versions.find((v) => v.id === project.selectedVersionId) ?? null
   const artifactOf = (artifactId: string) => project?.artifacts.find((a) => a.id === artifactId)
 
@@ -88,8 +104,15 @@ export default function NeurovaView({ onClose, onNotify }: { onClose: () => void
                 <textarea defaultValue={project.brief} key={`b-${project.id}`} rows={3} onBlur={(e) => e.target.value !== project.brief && void window.api.neurovaUpdate(project.id, { brief: e.target.value })} />
               </label>
               <label className="nv-label">Lyrics
-                <textarea defaultValue={project.lyrics} key={`l-${project.id}`} rows={4} onBlur={(e) => e.target.value !== project.lyrics && void window.api.neurovaUpdate(project.id, { lyrics: e.target.value })} />
+                <textarea defaultValue={project.lyrics} key={`l-${project.id}`} rows={4} onBlur={(e) => { void checkLyrics(e.target.value); if (e.target.value !== project.lyrics) void window.api.neurovaUpdate(project.id, { lyrics: e.target.value }) }} />
               </label>
+              {lyricNotes && (
+                <ul className="nv-facts" aria-live="polite">
+                  <li>{lyricNotes.sections} lyric section{lyricNotes.sections === 1 ? '' : 's'} found. Your text is kept exactly as written.</li>
+                  {lyricNotes.warnings.map((w) => <li key={w}>{w}</li>)}
+                  {lyricNotes.notices.map((n, i) => <li key={i}>{n.section}: {n.message}</li>)}
+                </ul>
+              )}
 
               <div className="nv-row">
                 <h3>Versions</h3>
@@ -112,6 +135,12 @@ export default function NeurovaView({ onClose, onNotify }: { onClose: () => void
                         </div>
                         {v.note && <div className="nv-note">{v.note}</div>}
                         {typeof res === 'string' && <div className="nv-bad">{res}</div>}
+                        {tempo[v.artifactId] && <div className="nv-note">{tempo[v.artifactId]}</div>}
+                        {wave[v.artifactId] && wave[v.artifactId].length > 0 && (
+                          <svg className="nv-wave" viewBox={'0 0 ' + wave[v.artifactId].length + ' 40'} preserveAspectRatio="none" role="img" aria-label="Loudness over the length of this audio">
+                            {wave[v.artifactId].map((p, i) => <line key={i} x1={i + 0.5} x2={i + 0.5} y1={20 - p * 20} y2={20 + p * 20} stroke="currentColor" strokeWidth="0.8" />)}
+                          </svg>
+                        )}
                         {res && typeof res !== 'string' && (
                           <ul className="nv-facts">
                             <li>Peak {db(res.peak)}</li>
@@ -126,6 +155,12 @@ export default function NeurovaView({ onClose, onNotify }: { onClose: () => void
                         <Button size="tiny" disabled={busy} onClick={() => void run(async () => { let r: AudioInfo | string; try { r = await window.api.neurovaAnalyse(project.id, v.artifactId) } catch (e) { r = e instanceof Error ? e.message : 'Could not check this file.' } setInfo((m) => ({ ...m, [v.artifactId]: r })) })}>Check audio</Button>
                         {!current && <Button size="tiny" disabled={busy} onClick={() => void run(async () => { await window.api.neurovaSelectVersion(project.id, v.id) })}>Make current</Button>}
                         {!current && <Button size="tiny" disabled={busy} onClick={() => void run(async () => { await window.api.neurovaRestoreVersion(project.id, v.id) }, 'Restored as a new version.')}>Restore as new</Button>}
+                        <Button size="tiny" disabled={busy} onClick={() => void run(async () => { await showWave(project.id, v.artifactId) })}>Waveform</Button>
+                        <Button size="tiny" disabled={busy} onClick={() => void run(async () => { await showTempo(project.id, v.artifactId) })}>Tempo</Button>
+                        <Button size="tiny" disabled={busy} onClick={() => void run(async () => { await window.api.neurovaProcess(project.id, v.id, { kind: 'fade-in', seconds: 1 }) }, 'Saved as a new version.')}>Fade in 1s</Button>
+                        <Button size="tiny" disabled={busy} onClick={() => void run(async () => { await window.api.neurovaProcess(project.id, v.id, { kind: 'fade-out', seconds: 2 }) }, 'Saved as a new version.')}>Fade out 2s</Button>
+                        <Button size="tiny" disabled={busy} onClick={() => void run(async () => { await window.api.neurovaProcess(project.id, v.id, { kind: 'trim-silence' }) }, 'Saved as a new version.')}>Trim silence</Button>
+                        <Button size="tiny" disabled={busy} onClick={() => void run(async () => { await window.api.neurovaProcess(project.id, v.id, { kind: 'gain', db: -3 }) }, 'Saved as a new version.')}>Quieter 3 dB</Button>
                         <Button size="tiny" disabled={busy} onClick={() => void run(async () => { const p = await window.api.neurovaExportVersion(project.id, v.id); if (p) onNotify(`Exported to ${p}`) })}>Export</Button>
                         <Button size="tiny" kind="danger" disabled={busy} onClick={() => void run(async () => { await window.api.neurovaRemoveVersion(project.id, v.id) })}>Remove</Button>
                       </div>

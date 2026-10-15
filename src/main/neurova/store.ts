@@ -2,6 +2,8 @@ import { createHash, randomUUID } from 'node:crypto'
 import { copyFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { basename, join, resolve, sep } from 'node:path'
 import { inspectWav, MAX_WAV_BYTES, type AudioInfo } from '../../shared/neurova/audio.ts'
+import { applyOp, envelope, estimateTempo, type Op, type Tempo } from '../../shared/neurova/process.ts'
+import { decodeWav, encodeWav16 } from '../../shared/neurova/wav.ts'
 import {
   addVersion, newProject, normalizeProject, removeVersion, restoreVersion, safeFileName, safeRelative, selectVersion,
   type Artifact, type Project
@@ -132,6 +134,55 @@ export class NeurovaStore {
     const saved = await this.projects.put(project)
     for (const a of orphaned) await rm(this.audioPath(projectId, a), { force: true })
     return saved
+  }
+
+  private async loadAudio(projectId: string, artifactId: string): Promise<{ bytes: Buffer; artifact: Artifact; project: Project }> {
+    const project = await this.need(projectId)
+    const artifact = project.artifacts.find((x) => x.id === artifactId)
+    if (!artifact) throw new Error('That audio is not part of this project.')
+    const bytes = await readFile(this.audioPath(projectId, artifact))
+    if (createHash('sha256').update(bytes).digest('hex') !== artifact.sha256) throw new Error('This audio file has changed since it was added.')
+    return { bytes, artifact, project }
+  }
+
+  /** Applies one explicit operation and stores the result as a NEW version; the source version is untouched. */
+  async process(projectId: string, versionId: string, op: Op): Promise<{ project: Project; note: string; clamped: number }> {
+    const p0 = await this.need(projectId)
+    const v = p0.versions.find((x) => x.id === versionId)
+    if (!v) throw new Error('That version no longer exists.')
+    const { bytes, artifact, project } = await this.loadAudio(projectId, v.artifactId)
+    const decoded = decodeWav(bytes)
+    if (!decoded) throw new Error('This file could not be decoded.')
+    const r = applyOp(decoded, op)
+    if (!r.ok) throw new Error(r.reason)
+    const enc = encodeWav16(r.audio)
+    const check = inspectWav(enc.bytes)
+    if (!check.ok) throw new Error('The result did not pass validation, so it was not saved.')
+    const sha256 = createHash('sha256').update(enc.bytes).digest('hex')
+    const id = randomUUID()
+    const file = `audio/${id}.wav`
+    await mkdir(join(this.dir(projectId), 'audio'), { recursive: true })
+    const target = join(this.dir(projectId), file)
+    await writeFile(`${target}.tmp`, enc.bytes)
+    await rename(`${target}.tmp`, target)
+    const derived: Artifact = {
+      id, file, sha256, bytes: enc.bytes.length, durationSec: check.info.durationSec, sampleRate: check.info.sampleRate,
+      channels: check.info.channels, bitDepth: 16, source: 'processed', derivedFrom: { artifactId: artifact.id, operation: r.note }, createdAt: Date.now()
+    }
+    const next = addVersion({ ...project, selectedVersionId: v.id }, { versionId: randomUUID(), name: `${v.name} - ${r.note}`, note: r.note, artifact: derived })
+    return { project: await this.projects.put(next), note: r.note, clamped: enc.clamped }
+  }
+
+  async tempo(projectId: string, artifactId: string): Promise<Tempo | null> {
+    const { bytes } = await this.loadAudio(projectId, artifactId)
+    const d = decodeWav(bytes)
+    return d ? estimateTempo(d) : null
+  }
+
+  async waveform(projectId: string, artifactId: string, buckets = 200): Promise<number[]> {
+    const { bytes } = await this.loadAudio(projectId, artifactId)
+    const d = decodeWav(bytes)
+    return d ? envelope(d, Math.min(1000, Math.max(10, buckets))) : []
   }
 
   /** Copies the version's audio to a folder the person chose. Never overwrites; verifies the copy by hash. */

@@ -2,6 +2,8 @@ import { plainHandle } from '../ipc/handle.ts'
 import type { BrowserWindow } from 'electron'
 import { ENGINES, evaluate, type EngineStatus, type MachineFacts } from '../../shared/neurova/engines.ts'
 import { interpret, type SongRequest } from '../../shared/neurova/intent.ts'
+import { diagnose, parseLyrics } from '../../shared/neurova/lyrics.ts'
+import type { Op } from '../../shared/neurova/process.ts'
 import type { NeurovaStore } from './store.ts'
 
 export interface NeurovaIpcOptions {
@@ -43,6 +45,13 @@ export function registerNeurovaIpc(o: NeurovaIpcOptions): void {
   handle('neurova:import-package', async () => {
     const folder = await o.pick('folder')
     return folder ? o.store.importPackage(folder) : null
+  })
+  handle('neurova:process', (_e, id, versionId, op) => o.store.process(str(id, 80), str(versionId, 80), (op ?? {}) as Op))
+  handle('neurova:tempo', (_e, id, artifactId) => o.store.tempo(str(id, 80), str(artifactId, 80)))
+  handle('neurova:waveform', (_e, id, artifactId) => o.store.waveform(str(id, 80), str(artifactId, 80)))
+  handle('neurova:lyrics', (_e, text) => {
+    const doc = parseLyrics(str(text, 50000))
+    return { sections: doc.sections.map((s) => ({ id: s.id, label: s.label, type: s.type, lines: s.lines.length })), warnings: doc.warnings, notices: diagnose(doc) }
   })
   handle('neurova:interpret', (_e, req) => interpret((req ?? {}) as SongRequest))
   handle('neurova:engines', async (): Promise<EngineStatus[]> => {

@@ -12,7 +12,9 @@ export interface Artifact {
   channels: number
   bitDepth: number
   /** Where the audio came from. `generated` is reserved for an engine that has really produced it. */
-  source: 'imported' | 'generated'
+  source: 'imported' | 'generated' | 'processed'
+  /** For processed audio: the artifact it came from and what was done. */
+  derivedFrom?: { artifactId: string; operation: string }
   createdAt: number
 }
 
@@ -61,7 +63,7 @@ export function normalizeProject(raw: unknown): Project | null {
       const file = str(o.file, 260)
       const aid = str(o.id, 80)
       if (!aid || !safeRelative(file)) return null
-      return { id: aid, file, sha256: str(o.sha256, 64), bytes: num(o.bytes), durationSec: num(o.durationSec), sampleRate: num(o.sampleRate), channels: num(o.channels), bitDepth: num(o.bitDepth), source: o.source === 'generated' ? 'generated' : 'imported', createdAt: num(o.createdAt) }
+      return { id: aid, file, sha256: str(o.sha256, 64), bytes: num(o.bytes), durationSec: num(o.durationSec), sampleRate: num(o.sampleRate), channels: num(o.channels), bitDepth: num(o.bitDepth), source: o.source === 'generated' ? 'generated' : o.source === 'processed' ? 'processed' : 'imported', derivedFrom: o.derivedFrom && typeof (o.derivedFrom as Record<string, unknown>).artifactId === 'string' ? { artifactId: str((o.derivedFrom as Record<string, unknown>).artifactId, 80), operation: str((o.derivedFrom as Record<string, unknown>).operation, 200) } : undefined, createdAt: num(o.createdAt) }
     })
     .filter((a): a is Artifact => a !== null)
   const known = new Set(artifacts.map((a) => a.id))

@@ -6,7 +6,7 @@ import { interpret } from './intent.ts'
 
 const facts = (o: Partial<MachineFacts> = {}): MachineFacts => ({
   pythonVersion: '3.12', gpuName: 'GPU', gpuMemoryGb: 12, freeDiskGb: 100,
-  filesFound: { 'ace-step': ['w'] }, runtimeInstalled: { 'ace-step': true }, ...o
+  filesFound: { 'ace-step': ENGINES[0].requiredFiles, heartmula: ENGINES[1].requiredFiles }, runtimeInstalled: { 'ace-step': true, heartmula: true }, ...o
 })
 const ace = ENGINES[0]
 
@@ -18,7 +18,7 @@ test('files on disk are never enough to be ready', () => {
 test('missing pieces are named truthfully', () => {
   assert.equal(evaluate(ace, facts({ pythonVersion: null }), true).readiness, 'no-runtime')
   assert.equal(evaluate(ace, facts({ filesFound: {} }), true).readiness, 'no-model')
-  assert.equal(evaluate(ace, facts({ gpuName: null }), true).readiness, 'no-accelerator')
+  assert.equal(evaluate(ENGINES[1], facts({ gpuName: null }), true).readiness, 'no-accelerator')
   assert.equal(evaluate(ace, facts({ freeDiskGb: 1 }), true).readiness, 'low-disk')
 })
 

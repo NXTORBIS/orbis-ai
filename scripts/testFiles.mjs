@@ -22,6 +22,8 @@ export const TEST_FILES = [
   'src/shared/downloadSearch.test.ts',
   'src/shared/neurova/neurova.test.ts',
   'src/shared/neurova/project.test.ts',
+  'src/shared/neurova/engine.test.ts',
+  'src/main/neurova/runner.test.ts',
   'src/main/neurova/store.test.ts',
   'src/shared/motionLogic.test.ts',
   'src/shared/artifacts/escapes.test.ts',

@@ -43,3 +43,23 @@ test('import, version, analyse, export and package round-trip on real files', as
   assert.ok((await readdir(out)).length >= 3)
   await store.flush()
 })
+
+test('processing makes a new version from the old one and leaves the source file alone', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'nvp-'))
+  const store = new NeurovaStore(join(root, 'ud'))
+  const a = join(root, 'a.wav')
+  await writeFile(a, wav(3, 0.5))
+  const p = await store.create('Fade test')
+  const first = await store.importAudio(p.id, a)
+  const srcArtifact = first.project.artifacts[0]
+  const r = await store.process(p.id, first.project.versions[0].id, { kind: 'fade-out', seconds: 1 })
+  assert.equal(r.project.versions.length, 2)
+  assert.equal(r.project.artifacts.length, 2)
+  const derived = r.project.artifacts.find((x) => x.source === 'processed')!
+  assert.equal(derived.derivedFrom?.artifactId, srcArtifact.id)
+  const info = await store.analyse(p.id, srcArtifact.id)
+  assert.ok(Math.abs(info.durationSec - 3) < 0.001)
+  await assert.rejects(store.process(p.id, first.project.versions[0].id, { kind: 'fade-in', seconds: 99 }))
+  assert.equal((await store.waveform(p.id, derived.id, 20)).length, 20)
+  await store.flush()
+})

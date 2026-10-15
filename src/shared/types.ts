@@ -2258,6 +2258,10 @@ export interface NxtorbisApi {
   neurovaExportVersion(id: string, versionId: string): Promise<string | null>
   neurovaExportPackage(id: string): Promise<string | null>
   neurovaImportPackage(): Promise<Project | null>
+  neurovaProcess(id: string, versionId: string, op: { kind: 'gain'; db: number } | { kind: 'fade-in' | 'fade-out'; seconds: number } | { kind: 'trim-silence' }): Promise<{ project: Project; note: string; clamped: number }>
+  neurovaTempo(id: string, artifactId: string): Promise<{ bpm: number; alternatives: number[]; reliability: 'low' | 'moderate' } | null>
+  neurovaWaveform(id: string, artifactId: string): Promise<number[]>
+  neurovaLyrics(text: string): Promise<{ sections: { id: string; label: string; type: string; lines: number }[]; warnings: string[]; notices: { section: string; line?: number; message: string }[] }>
   neurovaInterpret(req: { prompt: string; lyrics?: string }): Promise<Validated>
   neurovaEngines(): Promise<EngineStatus[]>
   onNeurovaChanged(listener: () => void): () => void
