@@ -253,7 +253,7 @@ export const CATEGORIES: readonly PortableCategory[] = Object.freeze([
     describe: 'Song projects, their briefs, lyrics and version history. Audio travels in a project package.',
     portability: 'portable',
     sensitivity: 'personal',
-    storage: ['personal/neurova-projects.json'],
+    storage: ['personal/neurova-projects.json', 'personal/neurova-workspaces.json'],
     scope: 'profile',
     schemaVersion: 1,
     dependsOn: [],

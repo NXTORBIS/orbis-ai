@@ -3,6 +3,9 @@ import type { Project } from '../../../../shared/neurova/project'
 import type { Edit, Finding, Plan } from '../../../../shared/neurova/plan'
 import { parseLyrics, diagnose } from '../../../../shared/neurova/lyrics'
 import type { NeurovaWorkspace } from '../../../../shared/types'
+import { safeFileName } from '../../../../shared/neurova/project'
+import { ExportDialog } from './index'
+import type { ExportProgress } from './index'
 import { PlanEditor, LyricsPanel, CandidateBoard, DiagnosticsPanel, VersionTimeline } from './index'
 import type { CandidateCard, DiagnosticItem, EvidenceItem } from './index'
 
@@ -16,7 +19,9 @@ export function NeurovaStudio({ project, onNotify }: { project: Project; onNotif
   const [refusal, setRefusal] = useState<string | null>(null)
   const [rank, setRank] = useState<RankResult | null>(null)
   const [deep, setDeep] = useState<Record<string, unknown> | null>(null)
-  const [tab, setTab] = useState<'plan' | 'lyrics' | 'candidates' | 'checks' | 'timeline'>('plan')
+  const [tab, setTab] = useState<'plan' | 'lyrics' | 'candidates' | 'checks' | 'timeline' | 'export'>('plan')
+  const [exp, setExp] = useState<ExportProgress>({ state: 'idle' })
+  const [src, setSrc] = useState<{ format: string; durationSec: number; sampleRate: number; channels: number; bitDepth: number; bytes: number } | null>(null)
 
   const refresh = useCallback(async () => {
     const w = await window.api.neurovaWorkspace(id)
@@ -53,7 +58,7 @@ export function NeurovaStudio({ project, onNotify }: { project: Project; onNotif
   return (
     <section className="nv-studio" aria-label="Song studio">
       <div role="tablist" className="nv-x-tabs">
-        {(['plan', 'lyrics', 'candidates', 'checks', 'timeline'] as const).map((t) => (
+        {(['plan', 'lyrics', 'candidates', 'checks', 'timeline', 'export'] as const).map((t) => (
           <button key={t} role="tab" aria-selected={tab === t} className="queue-btn ghost" onClick={() => setTab(t)}>{t[0].toUpperCase() + t.slice(1)}</button>
         ))}
       </div>
@@ -79,6 +84,14 @@ export function NeurovaStudio({ project, onNotify }: { project: Project; onNotif
             onDismiss={(d) => void window.api.neurovaDismiss(id, d, true).then(setWs)} onUndismiss={(d) => void window.api.neurovaDismiss(id, d, false).then(setWs)} />
         </>
       )}
+      {tab === 'export' && (() => {
+        const v = project.versions.find((x) => x.id === project.selectedVersionId)
+        if (!v) return <p className="nv-faint">Choose a version first.</p>
+        if (!src) { void window.api.neurovaAnalyse(id, v.artifactId).then((i) => setSrc({ format: 'wav', durationSec: i.durationSec, sampleRate: i.sampleRate, channels: i.channels, bitDepth: i.bitDepth, bytes: Math.round(i.frames * i.channels * (i.bitDepth / 8)) })).catch(() => undefined); return <p className="nv-faint">Reading the file…</p> }
+        return <ExportDialog formats={['wav']} source={src} output={src} defaultName={safeFileName(`${project.title} - ${v.name}`, 'wav')} safeName={(n, f) => safeFileName(n.replace(/\.[^.]*$/, ''), f)} progress={exp}
+          onExport={() => { setExp({ state: 'working', message: 'Choose where to save it.' }); void window.api.neurovaExportVersion(id, v.id).then((path) => setExp(path ? { state: 'done', path } : { state: 'idle' })).catch((e) => setExp({ state: 'failed', message: e instanceof Error ? e.message : 'Export failed.' })) }}
+          onClose={() => setTab('timeline')} />
+      })()}
       {tab === 'timeline' && <VersionTimeline project={project} exportedIds={ws?.exports.map((e) => e.versionId) ?? []}
         onSelect={(vid) => void window.api.neurovaSelectVersion(id, vid)} onRestore={(vid) => void window.api.neurovaRestoreVersion(id, vid)}
         onCompare={() => setTab('candidates')} />}
