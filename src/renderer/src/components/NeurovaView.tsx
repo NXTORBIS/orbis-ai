@@ -5,6 +5,9 @@ import type { AudioInfo } from '../../../shared/neurova/audio'
 import type { EngineStatus } from '../../../shared/neurova/engines'
 import type { NoticeKind } from '../lib/notices'
 import { NeurovaStudio } from './neurova/NeurovaStudio'
+import { Composer, GenerationProgress, WavePlayer } from './neurova'
+import type { Composed } from './neurova'
+import { isTerminal } from '../../../shared/neurova/composer'
 import './neurova.css'
 
 const mmss = (s: number): string => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
@@ -22,8 +25,7 @@ export default function NeurovaView({ onClose, onNotify }: { onClose: () => void
   const [tempo, setTempo] = useState<Record<string, string>>({})
   const [install, setInstall] = useState<{ running: boolean; step: string; log: string[]; error: string | null }>({ running: false, step: 'idle', log: [], error: null })
   const [jobs, setJobs] = useState<{ id: string; projectId: string; state: string; stage: string; error: string | null; cpuOnly: boolean }[]>([])
-  const [seconds, setSeconds] = useState('30')
-  const [instrumental, setInstrumental] = useState(false)
+  const [composed, setComposed] = useState<Composed | null>(null)
   const [engineId, setEngineId] = useState<'ace-step' | 'heartmula'>('ace-step')
   const [tags, setTags] = useState('')
   const project = projects.find((p) => p.id === openId) ?? null
@@ -120,12 +122,8 @@ export default function NeurovaView({ onClose, onNotify }: { onClose: () => void
                 <input className="nv-title" value={project.title} aria-label="Song title" onChange={(e) => void window.api.neurovaUpdate(project.id, { title: e.target.value })} />
                 <Button size="small" kind="danger" disabled={busy} onClick={() => void run(async () => { await window.api.neurovaRemove(project.id); setOpenId(null) }, 'Project deleted.')}>Delete project</Button>
               </header>
-              <label className="nv-label">What this song is meant to be
-                <textarea defaultValue={project.brief} key={`b-${project.id}`} rows={3} onBlur={(e) => e.target.value !== project.brief && void window.api.neurovaUpdate(project.id, { brief: e.target.value })} />
-              </label>
-              <label className="nv-label">Lyrics
-                <textarea defaultValue={project.lyrics} key={`l-${project.id}`} rows={4} onBlur={(e) => { void checkLyrics(e.target.value); if (e.target.value !== project.lyrics) void window.api.neurovaUpdate(project.id, { lyrics: e.target.value }) }} />
-              </label>
+              <Composer projectKey={project.id} brief={project.brief} lyrics={project.lyrics ?? ''} onChange={setComposed}
+                onCommit={(patch) => void window.api.neurovaUpdate(project.id, patch)} onLyricsBlur={(t) => void checkLyrics(t)} />
               {lyricNotes && (
                 <ul className="nv-facts" aria-live="polite">
                   <li>{lyricNotes.sections} lyric section{lyricNotes.sections === 1 ? '' : 's'} found. Your text is kept exactly as written.</li>
@@ -139,18 +137,11 @@ export default function NeurovaView({ onClose, onNotify }: { onClose: () => void
                 <label className="nv-faint">Engine <select value={engineId} onChange={(e) => setEngineId(e.target.value as 'ace-step' | 'heartmula')} aria-label="Engine">
                   <option value="ace-step">ACE-Step 1.5</option><option value="heartmula">HeartMuLa</option></select></label>
                 {engineId === 'heartmula' && <label className="nv-faint">Tags <input style={{ width: 180 }} value={tags} placeholder="piano,calm,romantic" onChange={(e) => setTags(e.target.value)} aria-label="Style tags, comma separated" /></label>}
-                <label className="nv-faint">Length (s) <input style={{ width: 56 }} value={seconds} onChange={(e) => setSeconds(e.target.value)} inputMode="numeric" aria-label="Length in seconds" /></label>
-                <label className="nv-faint"><input type="checkbox" checked={instrumental} onChange={(e) => setInstrumental(e.target.checked)} /> Instrumental</label>
-                <Button size="small" kind="primary" disabled={busy || jobs.some((j) => j.projectId === project.id && !['completed', 'failed', 'cancelled', 'interrupted'].includes(j.state))}
-                  onClick={() => void run(async () => { await window.api.neurovaGenerate(project.id, { prompt: project.brief, lyrics: project.lyrics || undefined, instrumental, durationSec: Number(seconds) || undefined, engine: engineId, tags: tags.split(',').map((t) => t.trim()).filter(Boolean) }) })}>Generate</Button>
+                <Button size="small" kind="primary" disabled={busy || jobs.some((j) => j.projectId === project.id && !isTerminal(j.state))}
+                  onClick={() => void run(async () => { await window.api.neurovaGenerate(project.id, { prompt: composed?.caption ?? project.brief, lyrics: (composed?.instrumental ? undefined : composed?.lyrics || project.lyrics) || undefined, instrumental: composed?.instrumental ?? false, durationSec: composed?.durationSec, engine: engineId, tags: tags.split(',').map((t) => t.trim()).filter(Boolean) }) })}>Generate</Button>
               </div>
               {jobs.filter((j) => j.projectId === project.id).slice(0, 3).map((j) => (
-                <div key={j.id} className="nv-job" role="status">
-                  <strong>{j.state === 'completed' ? 'Finished' : j.state === 'failed' ? 'Failed' : j.state === 'cancelled' ? 'Stopped' : 'Working'}</strong>
-                  <span className="nv-faint"> {['completed', 'failed', 'cancelled'].includes(j.state) ? '' : j.stage}{j.cpuOnly && !['completed', 'failed', 'cancelled'].includes(j.state) ? ' (processor only, this can take a long time)' : ''}</span>
-                  {j.error && <div className="nv-bad">{j.error}</div>}
-                  {!['completed', 'failed', 'cancelled'].includes(j.state) && <Button size="tiny" kind="danger" onClick={() => void window.api.neurovaCancelJob(j.id)}>Cancel</Button>}
-                </div>
+                <GenerationProgress key={j.id} job={j} onCancel={(id) => void window.api.neurovaCancelJob(id)} />
               ))}
               <div className="nv-row">
                 <h3>Versions</h3>
@@ -158,13 +149,13 @@ export default function NeurovaView({ onClose, onNotify }: { onClose: () => void
                 <Button size="small" disabled={busy} onClick={() => void run(async () => { const p = await window.api.neurovaExportPackage(project.id); if (p) onNotify(`Project folder saved to ${p}`) })}>Save project folder</Button>
               </div>
               {project.versions.length === 0 && <EmptyState>No audio yet. Add a WAV file to start a first version.</EmptyState>}
-              <ol className="nv-versions">
-                {[...project.versions].reverse().map((v) => {
+              <ol className="nv-versions nv-stagger">
+                {[...project.versions].reverse().map((v, vi) => {
                   const a = artifactOf(v.artifactId)
                   const res = info[v.artifactId]
                   const current = v.id === project.selectedVersionId
                   return (
-                    <li key={v.id} className={current ? 'nv-version current' : 'nv-version'}>
+                    <li key={v.id} style={{ '--i': Math.min(vi, 8) } as React.CSSProperties} className={current ? 'nv-version current' : 'nv-version'}>
                       <div>
                         <strong>{v.name}</strong> {current && <em>current</em>}
                         <div className="nv-faint">
@@ -173,6 +164,7 @@ export default function NeurovaView({ onClose, onNotify }: { onClose: () => void
                         </div>
                         {v.note && <div className="nv-note">{v.note}</div>}
                         {typeof res === 'string' && <div className="nv-bad">{res}</div>}
+                        {a && <WavePlayer projectId={project.id} artifactId={v.artifactId} label={v.name} />}
                         {tempo[v.artifactId] && <div className="nv-note">{tempo[v.artifactId]}</div>}
                         {wave[v.artifactId] && wave[v.artifactId].length > 0 && (
                           <svg className="nv-wave" viewBox={'0 0 ' + wave[v.artifactId].length + ' 40'} preserveAspectRatio="none" role="img" aria-label="Loudness over the length of this audio">

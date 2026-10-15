@@ -62,6 +62,7 @@ export function NeurovaStudio({ project, onNotify }: { project: Project; onNotif
           <button key={t} role="tab" aria-selected={tab === t} className="queue-btn ghost" onClick={() => setTab(t)}>{t[0].toUpperCase() + t.slice(1)}</button>
         ))}
       </div>
+      <div className="nv-tab-body" key={tab}>
       {tab === 'plan' && (plan
         ? <PlanEditor plan={plan} findings={findings} lastRefusal={refusal}
             onEdit={(e: Edit) => void window.api.neurovaPlanEdit(id, e).then((r) => { setWs(r.workspace); setRefusal(r.reason); void refresh() })}
@@ -88,13 +89,14 @@ export function NeurovaStudio({ project, onNotify }: { project: Project; onNotif
         const v = project.versions.find((x) => x.id === project.selectedVersionId)
         if (!v) return <p className="nv-faint">Choose a version first.</p>
         if (!src) { void window.api.neurovaAnalyse(id, v.artifactId).then((i) => setSrc({ format: 'wav', durationSec: i.durationSec, sampleRate: i.sampleRate, channels: i.channels, bitDepth: i.bitDepth, bytes: Math.round(i.frames * i.channels * (i.bitDepth / 8)) })).catch(() => undefined); return <p className="nv-faint">Reading the file…</p> }
-        return <ExportDialog formats={['wav']} source={src} output={src} defaultName={safeFileName(`${project.title} - ${v.name}`, 'wav')} safeName={(n, f) => safeFileName(n.replace(/\.[^.]*$/, ''), f)} progress={exp}
-          onExport={() => { setExp({ state: 'working', message: 'Choose where to save it.' }); void window.api.neurovaExportVersion(id, v.id).then((path) => setExp(path ? { state: 'done', path } : { state: 'idle' })).catch((e) => setExp({ state: 'failed', message: e instanceof Error ? e.message : 'Export failed.' })) }}
+        return <ExportDialog formats={['wav', 'flac']} source={src} output={src} defaultName={safeFileName(`${project.title} - ${v.name}`, 'wav')} safeName={(n, f) => safeFileName(n.replace(/\.[^.]*$/, ''), f)} progress={exp}
+          onExport={(opt) => { setExp({ state: 'working', message: 'Choose where to save it.' }); void window.api.neurovaExportVersion(id, v.id, opt.format === 'flac' ? 'flac' : 'wav').then((path) => setExp(path ? { state: 'done', path } : { state: 'idle' })).catch((e) => setExp({ state: 'failed', message: e instanceof Error ? e.message : 'Export failed.' })) }}
           onClose={() => setTab('timeline')} />
       })()}
       {tab === 'timeline' && <VersionTimeline project={project} exportedIds={ws?.exports.map((e) => e.versionId) ?? []}
         onSelect={(vid) => void window.api.neurovaSelectVersion(id, vid)} onRestore={(vid) => void window.api.neurovaRestoreVersion(id, vid)}
         onCompare={() => setTab('candidates')} />}
+      </div>
     </section>
   )
 }

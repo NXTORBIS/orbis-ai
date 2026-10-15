@@ -22,7 +22,7 @@ const MAP = join(ROOT, '..', 'docs', 'ipc-mapping.md')
 // 560 -> 580: NEUROVA song projects (versions, WAV checks, processing, export, packages, engine readiness): eighteen channels.
 // 580 -> 590: NEUROVA engine install and generation (runtime, models, generate, jobs, cancel).
 // 590 -> 615: NEUROVA plan, feedback, approvals, deep analysis, ranking, search, revisions, memory, Music/Files and backup.
-const CEILING = 615
+const CEILING = 616
 
 async function* typescriptFiles(dir: string): AsyncGenerator<string> {
   for (const entry of await readdir(dir, { withFileTypes: true })) {

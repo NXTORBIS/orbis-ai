@@ -27,6 +27,9 @@ def main():
     sys.path.insert(0, os.path.join(root, "src"))
     say({"type": "ready"})
     say({"type": "stage", "stage": "loading"})
+    if REQ.get("device", "cpu") == "cpu":
+        # torch.compile needs a C++ compiler (cl) on CPU; eager mode needs none.
+        os.environ["TORCHDYNAMO_DISABLE"] = "1"
     import torch
     from heartlib import HeartMuLaGenPipeline
 

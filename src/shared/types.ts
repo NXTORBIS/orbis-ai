@@ -2269,7 +2269,7 @@ export interface NxtorbisApi {
   neurovaSelectVersion(id: string, versionId: string): Promise<Project>
   neurovaRestoreVersion(id: string, versionId: string): Promise<Project>
   neurovaRemoveVersion(id: string, versionId: string): Promise<Project>
-  neurovaExportVersion(id: string, versionId: string): Promise<string | null>
+  neurovaExportVersion(id: string, versionId: string, format?: 'wav' | 'flac'): Promise<string | null>
   neurovaExportPackage(id: string): Promise<string | null>
   neurovaImportPackage(): Promise<Project | null>
   neurovaInstallStatus(): Promise<{ step: 'idle' | 'runtime' | 'models'; running: boolean; log: string[]; error: string | null }>
@@ -2302,6 +2302,7 @@ export interface NxtorbisApi {
   neurovaRestore(): Promise<{ ok: boolean; reason: string | null; missing: string[]; corrupt: string[]; restored: { from: string; to: string }[] } | null>
   neurovaProcess(id: string, versionId: string, op: { kind: 'gain'; db: number } | { kind: 'fade-in' | 'fade-out'; seconds: number } | { kind: 'trim-silence' }): Promise<{ project: Project; note: string; clamped: number }>
   neurovaTempo(id: string, artifactId: string): Promise<{ bpm: number; alternatives: number[]; reliability: 'low' | 'moderate' } | null>
+  neurovaAudioBytes(id: string, artifactId: string): Promise<ArrayBuffer>
   neurovaWaveform(id: string, artifactId: string): Promise<number[]>
   neurovaLyrics(text: string): Promise<{ sections: { id: string; label: string; type: string; lines: number }[]; warnings: string[]; notices: { section: string; line?: number; message: string }[] }>
   neurovaInterpret(req: { prompt: string; lyrics?: string }): Promise<Validated>

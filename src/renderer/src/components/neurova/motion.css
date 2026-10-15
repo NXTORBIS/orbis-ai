@@ -1,0 +1,30 @@
+/* NEUROVA motion system. Everything here is switched off for people who ask for less movement. */
+.nv-view, .nv-studio, .nv-composer, .nv-gen, .nv-player {
+  --nv-dur-fast: 120ms;
+  --nv-dur: 220ms;
+  --nv-dur-slow: 420ms;
+  --nv-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --nv-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --nv-stagger: 35ms;
+}
+@keyframes nv-tab-enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes nv-item-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes nv-shimmer { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+@keyframes nv-pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .45; transform: scale(.8); } }
+
+.nv-tab-body { animation: nv-tab-enter var(--nv-dur-slow) var(--nv-ease) both; }
+.nv-stagger > * { animation: nv-item-enter var(--nv-dur-slow) var(--nv-ease) both; animation-delay: calc(var(--i, 0) * var(--nv-stagger)); }
+.nv-x-tabs .queue-btn { transition: background-color var(--nv-dur) var(--nv-ease), color var(--nv-dur) var(--nv-ease), border-color var(--nv-dur) var(--nv-ease); }
+.nv-x-tabs .queue-btn[aria-selected="true"] { color: var(--cyan); border-color: var(--cyan); }
+
+.nv-pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--cyan); margin-inline-end: 8px; animation: nv-pulse 1.4s var(--nv-ease-in-out) infinite; }
+.nv-bar { position: relative; height: 6px; border-radius: 3px; overflow: hidden; background: color-mix(in srgb, currentColor 15%, transparent); flex: 1 1 100%; }
+.nv-bar::after { content: ''; position: absolute; inset: 0 auto 0 0; width: 40%; background: linear-gradient(90deg, transparent, var(--cyan), transparent); animation: nv-shimmer 1.6s var(--nv-ease-in-out) infinite; }
+.nv-bar.is-done::after { animation: none; width: 100%; background: var(--cyan); }
+.nv-bar.is-failed::after { animation: none; width: 100%; background: var(--danger); }
+
+@media (prefers-reduced-motion: reduce) {
+  .nv-tab-body, .nv-stagger > *, .nv-pulse, .nv-bar::after { animation: none !important; }
+  .nv-x-tabs .queue-btn { transition: none; }
+  .nv-bar::after { width: 100%; opacity: .5; }
+}

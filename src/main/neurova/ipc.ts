@@ -36,9 +36,9 @@ export function registerNeurovaIpc(o: NeurovaIpcOptions): void {
   handle('neurova:select-version', (_e, id, versionId) => o.store.select(str(id, 80), str(versionId, 80)))
   handle('neurova:restore-version', (_e, id, versionId) => o.store.restore(str(id, 80), str(versionId, 80)))
   handle('neurova:remove-version', (_e, id, versionId) => o.store.removeVersion(str(id, 80), str(versionId, 80)))
-  handle('neurova:export-version', async (_e, id, versionId) => {
+  handle('neurova:export-version', async (_e, id, versionId, format) => {
     const folder = await o.pick('folder')
-    return folder ? o.store.exportVersion(str(id, 80), str(versionId, 80), folder) : null
+    return folder ? o.store.exportVersion(str(id, 80), str(versionId, 80), folder, format === 'flac' ? 'flac' : 'wav') : null
   })
   handle('neurova:export-package', async (_e, id) => {
     const folder = await o.pick('folder')

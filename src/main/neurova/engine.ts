@@ -14,6 +14,12 @@ import { runWorker } from './runner.ts'
 import type { NeurovaStore } from './store.ts'
 import { newRecord, reconcile, type JobStore } from './jobStore.ts'
 import { readFile } from 'node:fs/promises'
+import { totalmem } from 'node:os'
+import { LeaseManager, type Lease, type LeaseSnapshot } from '../../shared/neurova/leases.ts'
+import { SessionHolder, WorkerSession } from './session.ts'
+
+/** Rough memory a generation needs. A guess, capped to the budget so it serialises work instead of refusing it. */
+const MEMORY_GB: Record<'ace-step' | 'heartmula', number> = { 'ace-step': 8, heartmula: 14 }
 
 const HEART_URL = 'https://github.com/HeartMuLa/heartlib.git'
 const ACE_URL = 'https://github.com/ACE-Step/ACE-Step-1.5.git'
@@ -38,6 +44,10 @@ export interface EngineOptions {
   home: string
   /** Absolute path of ace_worker.py. */
   workerScript: string
+  /** Keep the ACE-Step model loaded between songs (default true). If the session fails, the one-shot worker is used. */
+  reuseModel?: boolean
+  /** How long an unused loaded model is kept. Default 10 minutes. */
+  idleMs?: number
   store: NeurovaStore
   jobs: JobStore
   probe(): Promise<MachineFacts>
@@ -57,10 +67,23 @@ export class NeurovaEngine {
   private install: InstallView = { step: 'idle', running: false, log: [], error: null }
   private readonly smoke = new Set<string>()
   private installAbort: AbortController | null = null
+  private readonly leases = new LeaseManager({ memoryBudgetGb: Math.max(2, Math.floor((totalmem() / 2 ** 30) * 0.8)) })
+  private readonly jobLeases = new Map<string, Lease>()
+  private readonly sessions: SessionHolder
 
   constructor(o: EngineOptions) {
     this.o = o
+    this.sessions = new SessionHolder((key) => {
+      const c = JSON.parse(key) as { command: string; args: string[]; cwd: string }
+      return new WorkerSession({ command: c.command, args: c.args, cwd: c.cwd, configKey: key, idleMs: this.o.idleMs })
+    })
   }
+
+  /** Who holds what right now, for the window. */
+  leaseSnapshot(): LeaseSnapshot { return this.leases.snapshot() }
+
+  /** Unloads any kept model (app quit, engine removed). */
+  shutdown(): void { this.sessions.drop() }
 
   private dir(id: 'ace-step' | 'heartmula' = 'ace-step'): string { return join(this.o.home, 'engines', id === 'heartmula' ? 'heartlib' : 'ace-step') }
   private python(id: 'ace-step' | 'heartmula' = 'ace-step'): string { return join(this.dir(id), '.venv', win ? 'Scripts' : 'bin', win ? 'python.exe' : 'python') }
@@ -118,6 +141,9 @@ export class NeurovaEngine {
   /** Clones the upstream repository and builds its own isolated environment. Never touches global Python. */
   async installRuntime(engineId: 'ace-step' | 'heartmula' = 'ace-step'): Promise<void> {
     if (this.install.running) throw new Error('An installation is already running.')
+    const held = this.leases.acquire({ owner: 'the engine installation', resources: ['cpu-heavy'], memoryGb: 1 })
+    if (!held.ok) throw new Error(`The engine cannot be installed right now: ${held.reason}`)
+    this.sessions.drop()
     this.install = { step: 'runtime', running: true, log: [], error: null }
     this.installAbort = new AbortController()
     try {
@@ -136,6 +162,7 @@ export class NeurovaEngine {
     } catch (e) {
       this.install.error = e instanceof Error ? e.message : 'Installation failed.'
     } finally {
+      this.leases.release(held.lease)
       this.install.running = false
       this.o.send('neurova:install-changed')
     }
@@ -145,6 +172,8 @@ export class NeurovaEngine {
   async installModels(engineId: 'ace-step' | 'heartmula' = 'ace-step'): Promise<void> {
     if (this.install.running) throw new Error('An installation is already running.')
     if (!existsSync(this.python(engineId))) throw new Error('Install the engine first.')
+    const held = this.leases.acquire({ owner: 'the model download', resources: ['cpu-heavy'], memoryGb: 1 })
+    if (!held.ok) throw new Error(`The models cannot be downloaded right now: ${held.reason}`)
     this.install = { step: 'models', running: true, log: [], error: null }
     this.installAbort = new AbortController()
     try {
@@ -155,6 +184,7 @@ export class NeurovaEngine {
     } catch (e) {
       this.install.error = e instanceof Error ? e.message : 'Download failed.'
     } finally {
+      this.leases.release(held.lease)
       this.install.running = false
       this.o.send('neurova:install-changed')
     }
@@ -205,11 +235,20 @@ export class NeurovaEngine {
       if (!a.ok) throw new Error(a.error)
       built = { value: a.value as never }
     }
+    const got = this.leases.acquire({ owner: 'a song', resources: facts.gpuName ? ['cpu-heavy', 'gpu'] : ['cpu-heavy'], memoryGb: Math.min(MEMORY_GB[engineId], this.leases.snapshot().memoryBudgetGb) })
+    if (!got.ok) throw new Error(`A song cannot be made right now: ${got.reason}`)
     const id = randomUUID()
+    this.jobLeases.set(id, got.lease)
     const core = newJob(id)
     const view = { id, projectId, state: core.state, stage: 'queued', error: null, code: null, startedAt: Date.now(), endedAt: null, outputs: 0, cpuOnly: !facts.gpuName, abort: new AbortController(), core, seq: 0 }
     this.jobs.set(id, view)
-    await this.o.jobs.put(newRecord({ id, projectId, request: { prompt: intent.intent.original, lyrics: intent.intent.lyrics ?? '', instrumental, durationSec: input.durationSec ?? 0, seed: input.seed ?? null }, engineId }))
+    try {
+      await this.o.jobs.put(newRecord({ id, projectId, request: { prompt: intent.intent.original, lyrics: intent.intent.lyrics ?? '', instrumental, durationSec: input.durationSec ?? 0, seed: input.seed ?? null }, engineId }))
+    } catch (e) {
+      this.freeLease(id)
+      this.jobs.delete(id)
+      throw e
+    }
     this.emit(id)
     void this.execute(id, projectId, built.value, facts, instrumental, engineId)
     return id
@@ -227,7 +266,11 @@ export class NeurovaEngine {
       if (!existsSync(script)) throw new Error('The engine worker script is missing from this installation.')
       this.step(id, 'generating')
       j.stage = 'starting the engine'
-      const result = await runWorker({
+      const onEvent = (e: { msg: { type: string; stage?: string } }): void => {
+        if (e.msg.type === 'stage' && e.msg.stage) j.stage = e.msg.stage
+        this.emit(id)
+      }
+      const oneShot = (): ReturnType<typeof runWorker> => runWorker({
         command: this.python(engineId),
         args: [script, reqFile],
         cwd: this.dir(engineId),
@@ -236,11 +279,32 @@ export class NeurovaEngine {
         startupMs: 10 * 60_000,
         graceMs: 8000,
         signal: j.abort.signal,
-        onEvent: (e) => {
-          if (e.msg.type === 'stage') j.stage = e.msg.stage
-          this.emit(id)
-        }
+        onEvent
       })
+      let result: Awaited<ReturnType<typeof runWorker>>
+      if (engineId === 'ace-step' && this.o.reuseModel !== false) {
+        // Kept-model path. A different setup never shares a process; a failure to start falls back to one-shot.
+        const key = JSON.stringify({ command: this.python(engineId), args: [script, '--serve'], cwd: this.dir(engineId), ckpt: this.checkpoints(engineId), device: facts.gpuName ? 'auto' : 'cpu' })
+        const r = await this.sessions.get(key).run({
+          job: id,
+          outDir,
+          request: JSON.parse(await readFile(reqFile, 'utf8')) as Record<string, unknown>,
+          startupMs: 10 * 60_000,
+          signal: j.abort.signal,
+          onEvent
+        })
+        if (r.startFailure && r.state === 'failed' && !j.abort.signal.aborted) {
+          this.sessions.drop()
+          j.stage = 'starting the engine'
+          result = await oneShot()
+        } else {
+          if (r.state !== 'done') this.sessions.drop()
+          result = r
+        }
+      } else {
+        if (engineId !== 'ace-step') this.sessions.drop() // free the loaded model's memory for the other engine
+        result = await oneShot()
+      }
       if (result.state === 'cancelled') {
         this.step(id, 'cancelling')
         this.step(id, 'cancelled')
@@ -276,8 +340,15 @@ export class NeurovaEngine {
       j.code = 'UNKNOWN'
       this.step(id, 'failed', { error: e instanceof Error ? e.message : 'Generation failed.' })
     } finally {
+      this.freeLease(id)
       await rm(outDir, { recursive: true, force: true }).catch(() => undefined)
     }
+  }
+
+  private freeLease(id: string): void {
+    const l = this.jobLeases.get(id)
+    this.jobLeases.delete(id)
+    if (l) this.leases.release(l)
   }
 
   cancel(id: string): boolean {

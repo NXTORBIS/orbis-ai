@@ -1,10 +1,11 @@
 import { createHash } from 'node:crypto'
-import { readFile } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { plainHandle } from '../ipc/handle.ts'
 import type { BrowserWindow } from 'electron'
 import { inspectWav } from '../../shared/neurova/audio.ts'
 import { cacheKey, endingKind, estimateKey, estimateSections, loudnessLufsApprox, truePeakDb } from '../../shared/neurova/analysis.ts'
+import { bandEnergy } from '../../shared/neurova/bands.ts'
 import { diagnostics } from '../../shared/neurova/audit.ts'
 import { canMove, setApproval, stateOf, type ApprovalState } from '../../shared/neurova/approval.ts'
 import { rank, type Candidate, type Evidence } from '../../shared/neurova/candidates.ts'
@@ -47,6 +48,16 @@ export function registerNeurovaIpc2(o: Ipc2Options): void {
   }
 
   handle('neurova:workspace', (_e, id) => o.workspaces.get(str(id, 80)))
+  /** Raw audio of one stored artifact for the in-app player. Path comes only from the store; capped at 200 MB. */
+  handle('neurova:audio-bytes', async (_e, id, artifactId) => {
+    const p = await project(id)
+    const a = p.artifacts.find((x) => x.id === str(artifactId, 80))
+    if (!a) throw new Error('That audio is not part of this project.')
+    const path = o.store.audioPathFor(p.id, a)
+    if ((await stat(path)).size > 200 * 1024 * 1024) throw new Error('This audio file is larger than 200 MB and cannot be played here.')
+    const b = await readFile(path)
+    return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength)
+  })
 
   handle('neurova:plan-propose', async (_e, id) => {
     const p = await project(id)
@@ -135,6 +146,7 @@ export function registerNeurovaIpc2(o: Ipc2Options): void {
       sections: estimateSections(d),
       truePeak: truePeakDb(d),
       loudness: loudnessLufsApprox(d),
+      bands: bandEnergy(d),
       ending,
       diagnostics: diagnostics(info.info, tempo, 'ok' in ending && ending.ok === false ? null : (ending as never))
     }

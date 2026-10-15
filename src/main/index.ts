@@ -5481,6 +5481,7 @@ ${page.text}`, { howMany: 6 })
     quitFlush.add('your whiteboards', () => whiteboardStore.flush())
     quitFlush.add('your NEUROVA projects', () => neurovaStore.flush())
     quitFlush.add('your NEUROVA jobs', () => neurovaJobs.flush())
+    quitFlush.add('the NEUROVA engine session', () => neurovaEngine.shutdown())
     quitFlush.add('your NEUROVA plans and decisions', () => neurovaWorkspaces.flush())
     quitFlush.add('your workspaces', () => workspacesStore.flush())
 

@@ -4,6 +4,7 @@ import { basename, join, resolve, sep } from 'node:path'
 import { inspectWav, MAX_WAV_BYTES, type AudioInfo } from '../../shared/neurova/audio.ts'
 import { applyOp, envelope, estimateTempo, type Op, type Tempo } from '../../shared/neurova/process.ts'
 import { decodeWav, encodeWav16 } from '../../shared/neurova/wav.ts'
+import { encodeFlac } from '../../shared/neurova/flac.ts'
 import {
   addVersion, newProject, normalizeProject, removeVersion, restoreVersion, safeFileName, safeRelative, selectVersion,
   type Artifact, type Project
@@ -196,15 +197,23 @@ export class NeurovaStore {
   }
 
   /** Copies the version's audio to a folder the person chose. Never overwrites; verifies the copy by hash. */
-  async exportVersion(projectId: string, versionId: string, folder: string): Promise<string> {
+  async exportVersion(projectId: string, versionId: string, folder: string, format: 'wav' | 'flac' = 'wav'): Promise<string> {
     const p = await this.need(projectId)
     const v = p.versions.find((x) => x.id === versionId)
     const a = v && p.artifacts.find((x) => x.id === v.artifactId)
     if (!v || !a) throw new Error('That version has no audio.')
     const from = this.audioPath(projectId, a)
-    const wanted = safeFileName(`${p.title} - ${v.name}`, 'wav')
+    const ext = format === 'flac' ? 'flac' : 'wav'
+    const wanted = safeFileName(`${p.title} - ${v.name}`, ext)
     let dest = join(folder, wanted)
-    for (let n = 2; await stat(dest).then(() => true, () => false); n++) dest = join(folder, wanted.replace(/\.wav$/, ` (${n}).wav`))
+    for (let n = 2; await stat(dest).then(() => true, () => false); n++) dest = join(folder, `${wanted.slice(0, -(ext.length + 1))} (${n}).${ext}`)
+    if (format === 'flac') {
+      const d = decodeWav(await readFile(from))
+      if (!d) throw new Error('This audio could not be decoded for FLAC export.')
+      const enc = encodeFlac(d)
+      await writeFile(dest, enc.bytes, { flag: 'wx' })
+      return dest
+    }
     await copyFile(from, dest)
     const copy = createHash('sha256').update(await readFile(dest)).digest('hex')
     if (copy !== a.sha256) { await rm(dest, { force: true }); throw new Error('The exported copy did not match the original, so it was removed.') }
