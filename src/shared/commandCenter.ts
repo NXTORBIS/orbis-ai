@@ -225,6 +225,7 @@ export type AppFeature =
   | 'eye'
   | 'cosmos'
   | 'f1'
+  | 'arena'
   | 'football'
 
 /**
@@ -337,6 +338,7 @@ export const CAPABILITIES: OrbisCapability[] = [
   { id: 'pages', name: 'Pages', lane: 'elsewhere', category: 'tools', description: 'Orbis\u2019s own tools, each with its own address', icon: 'pages', keywords: ['page', 'tool', 'calculator', 'converter', 'lab', 'build'], target: { kind: 'app' }, app: 'pages', pinnable: false, needs: ['helper'] },
   { id: 'markets', name: 'Markets', lane: 'elsewhere', category: 'tools', description: 'Live prices, charts and watchlists', icon: 'markets', keywords: ['market', 'price', 'chart', 'crypto', 'ticker', 'watchlist', 'trading'], target: { kind: 'app' }, app: 'markets', pinnable: false, needs: ['helper'] },
   { id: 'student', name: 'Student', lane: 'elsewhere', category: 'tools', description: 'Focus sessions, goals, daily learning and Orbi', icon: 'student', keywords: ['student', 'study', 'focus', 'school', 'exam', 'revision', 'homework', 'learn', 'goal', 'pomodoro', 'timer', 'orbi', 'xp'], target: { kind: 'app' }, app: 'student', pinnable: false, needs: [] },
+  { id: 'arena', name: 'Arena', lane: 'elsewhere', category: 'arena', description: 'The Arena’s front door: live football, Formula 1 and what is coming', icon: 'news', keywords: ['arena', 'sport', 'sports', 'live', 'scores', 'football', 'f1', 'formula 1', 'racing', 'stadium', 'orbis arena'], target: { kind: 'app' }, app: 'arena', pinnable: false, needs: [] },
   { id: 'football', name: 'Football', lane: 'elsewhere', category: 'arena', description: 'Football: live scores, fixtures, tables, goals and form from open data', icon: 'game', keywords: ['football', 'soccer', 'live scores', 'fixtures', 'results', 'table', 'standings', 'bundesliga', 'premier league', 'la liga', 'serie a', 'goals', 'match', 'league', 'arena'], target: { kind: 'app' }, app: 'football', pinnable: false, needs: [] },
   { id: 'f1', name: 'F1', lane: 'elsewhere', category: 'arena', description: 'Formula 1: the calendar, results, standings, and lap and sector timing', icon: 'timer', keywords: ['f1', 'formula 1', 'formula one', 'grand prix', 'race', 'racing', 'standings', 'championship', 'lap times', 'sectors', 'drivers', 'constructors', 'arena', 'motorsport'], target: { kind: 'app' }, app: 'f1', pinnable: false, needs: [] },
   { id: 'cosmos', name: 'ORBIS COSMOS', lane: 'elsewhere', category: 'tools', description: 'A real-time 3D universe: the Solar System, nearby stars and the Milky Way, simulated to scale', icon: 'star', keywords: ['cosmos', 'space', 'universe', 'solar system', 'planets', 'stars', 'galaxy', 'astronomy', 'gaia', 'sky', 'orbit'], target: { kind: 'app' }, app: 'cosmos', pinnable: false, needs: [] },

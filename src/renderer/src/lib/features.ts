@@ -1,4 +1,4 @@
-import { CandlestickChart, ClipboardList, FilePlus2, FlaskConical, BookMarked, GraduationCap, LayoutGrid, LayoutTemplate, Mic, PenTool, CalendarClock, Wrench, Globe2, Orbit, Flag, Trophy, type LucideIcon } from 'lucide-react'
+import { CandlestickChart, ClipboardList, FilePlus2, FlaskConical, BookMarked, GraduationCap, LayoutGrid, LayoutTemplate, Mic, PenTool, CalendarClock, Wrench, Globe2, Orbit, Flag, Swords, Trophy, type LucideIcon } from 'lucide-react'
 import { CAPABILITIES, CATEGORIES, type AppFeature, type OrbisCapability } from '../../../shared/commandCenter'
 
 /**
@@ -35,7 +35,8 @@ const ICONS: Readonly<Record<AppFeature, LucideIcon>> = Object.freeze({
   eye: Globe2,
   cosmos: Orbit,
   f1: Flag,
-  football: Trophy
+  football: Trophy,
+  arena: Swords
 })
 
 export interface Feature {
@@ -77,7 +78,10 @@ export const FEATURE_GROUPS: readonly { id: string; label: string; items: readon
     id: category.id,
     label: category.label,
     items: FEATURE_LIST.filter((one) => one.category === category.id)
-  })).filter((group) => group.items.length > 0)
+  }))
+    .filter((group) => group.items.length > 0)
+    // The Arena is the one place new sport lands, so it leads the list rather than trailing off the bottom of it.
+    .sort((x, y) => (x.id === 'arena' ? 0 : 1) - (y.id === 'arena' ? 0 : 1))
 )
 
 export const featureById = (id: string): Feature | undefined => FEATURE_LIST.find((one) => one.id === id)

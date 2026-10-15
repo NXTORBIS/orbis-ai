@@ -22,6 +22,7 @@ export const SLASH_COMMANDS: SlashCommand[] = [
   { name: 'copy', description: 'Copy the last reply' },
   { name: 'courses', description: 'Open Courses, or go to what you were learning' },
   { name: 'toolkit', description: 'Open the Toolkit: calculators, converters and lab tools' },
+  { name: 'arena', description: 'Open the Arena: live football, Formula 1 and more' },
   { name: 'football', description: 'Open Football: live scores, fixtures and tables' },
   { name: 'f1', description: 'Open F1: Orbis Arena’s Formula 1 intelligence' },
   { name: 'cosmos', description: 'Open ORBIS COSMOS: the real-time 3D universe' },

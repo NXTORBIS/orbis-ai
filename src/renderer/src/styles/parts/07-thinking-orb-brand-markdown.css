@@ -151,6 +151,25 @@
   padding: 7px 12px;
   border-bottom: 1px solid var(--table-border);
   text-align: left;
+
+  /* The paragraph rule above lets text break anywhere, which is right for a long URL and wrong for a table cell: the
+     columns shrank to one letter and "operations" became "operation / s". Words stay whole here, and a cell that
+     really cannot fit makes the table scroll sideways inside its wrapper. */
+  overflow-wrap: normal;
+  word-break: normal;
+  vertical-align: top;
+}
+
+.markdown th:first-child,
+.markdown td:first-child {
+  min-width: 9ch;
+}
+
+/* Inline code inside a cell may still break, so one long command cannot push the table off the page. */
+.markdown td code,
+.markdown th code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .markdown tr:last-child td {

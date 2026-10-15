@@ -186,6 +186,19 @@ const components: Components = {
   pre: CodeBlock,
   img: Image,
   a: makeLink(undefined),
+  // A model that writes a line break inside a table cell often wraps it in backticks (`<br>`), because a table row
+  // cannot hold a newline. Shown literally that is noise in the middle of the cell, so an inline code span whose
+  // whole content is a break tag is drawn as the break it meant. Fenced code is untouched (it has a language class
+  // and sits inside <pre>).
+  code: ({ node: _node, className, children, ...props }) => {
+    const only = Array.isArray(children) ? children.join('') : typeof children === 'string' ? children : ''
+    if (!className && /^<br\s*\/?>$/i.test(only.trim())) return <br />
+    return (
+      <code className={className} {...props}>
+        {children}
+      </code>
+    )
+  },
   table: ({ node: _node, ...props }) => (
     <div className="table-wrap">
       <table {...props} />

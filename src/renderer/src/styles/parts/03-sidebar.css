@@ -381,6 +381,11 @@
 .sb-popover.brand {
   right: auto;
   left: 0;
+  /* Never taller than the room there is: the market strip sits below the window's content, and a list that runs behind
+     it hides its last group (the Arena was exactly that). It scrolls instead. */
+  max-height: calc(100vh - var(--mstrip-reserved, 0px) - 170px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .sb-row.confirm {

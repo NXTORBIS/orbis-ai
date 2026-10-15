@@ -40,6 +40,7 @@ const CoursesView = lazy(() => import('./components/courses/CoursesView'))
 const ToolkitView = lazy(() => import('./components/toolkit/ToolkitView'))
 const EyeView = lazy(() => import('./components/eye/EyeView'))
 const CosmosView = lazy(() => import('./components/cosmos/CosmosView'))
+const ArenaView = lazy(() => import('./components/arena/ArenaView'))
 const F1View = lazy(() => import('./components/f1/F1View'))
 const FootballView = lazy(() => import('./components/football/FootballView'))
 const LabsView = lazy(() => import('./components/labs/LabsView'))
@@ -693,6 +694,8 @@ export default function App(): React.JSX.Element {
           return go({ kind: 'feature', id: 'eye' })
         case 'cosmos':
           return go({ kind: 'feature', id: 'cosmos' })
+        case 'arena':
+          return go({ kind: 'feature', id: 'arena' })
         case 'f1':
           return go({ kind: 'feature', id: 'f1' })
         case 'football':
@@ -1105,6 +1108,7 @@ export default function App(): React.JSX.Element {
               {feature === 'toolkit' && <ToolkitView onClose={closeFeature} />}
               {feature === 'eye' && <EyeView onClose={closeFeature} />}
               {feature === 'cosmos' && <CosmosView onClose={closeFeature} />}
+              {feature === 'arena' && <ArenaView onClose={closeFeature} onOpen={(id) => go({ kind: 'feature', id })} />}
               {feature === 'f1' && <F1View onClose={closeFeature} />}
               {feature === 'football' && <FootballView onClose={closeFeature} />}
               {feature === 'clipboard' && <ClipboardView onClose={closeFeature} onNotify={notify} />}
