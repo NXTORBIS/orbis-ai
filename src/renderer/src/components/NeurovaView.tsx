@@ -24,6 +24,8 @@ export default function NeurovaView({ onClose, onNotify }: { onClose: () => void
   const [jobs, setJobs] = useState<{ id: string; projectId: string; state: string; stage: string; error: string | null; cpuOnly: boolean }[]>([])
   const [seconds, setSeconds] = useState('30')
   const [instrumental, setInstrumental] = useState(false)
+  const [engineId, setEngineId] = useState<'ace-step' | 'heartmula'>('ace-step')
+  const [tags, setTags] = useState('')
   const project = projects.find((p) => p.id === openId) ?? null
 
   const load = useCallback(async () => setProjects(await window.api.neurovaList()), [])
@@ -96,12 +98,12 @@ export default function NeurovaView({ onClose, onNotify }: { onClose: () => void
             {engines.map((e) => (
               <p key={e.id}><strong>{e.name}</strong><br /><span>{e.reason}</span></p>
             ))}
-            {engines.some((e) => e.readiness === 'no-runtime' && e.id === 'ace-step') && (
-              <Button size="small" disabled={install.running} onClick={() => void window.api.neurovaInstallRuntime()}>Install the ACE-Step engine</Button>
-            )}
-            {engines.some((e) => e.readiness === 'no-model' && e.id === 'ace-step') && (
-              <Button size="small" disabled={install.running} onClick={() => void window.api.neurovaInstallModels()}>Download the model files (several GB)</Button>
-            )}
+            {engines.filter((e) => e.readiness === 'no-runtime').map((e) => (
+              <Button key={`r-${e.id}`} size="small" disabled={install.running} onClick={() => void window.api.neurovaInstallRuntime(e.id as 'ace-step' | 'heartmula')}>Install {e.name}</Button>
+            ))}
+            {engines.filter((e) => e.readiness === 'no-model').map((e) => (
+              <Button key={`m-${e.id}`} size="small" disabled={install.running} onClick={() => void window.api.neurovaInstallModels(e.id as 'ace-step' | 'heartmula')}>Download {e.name} model files (several GB)</Button>
+            ))}
             {install.running && <Button size="small" kind="danger" onClick={() => void window.api.neurovaInstallCancel()}>Stop</Button>}
             {install.error && <p className="nv-bad" role="alert">{install.error}</p>}
             {install.log.length > 0 && <pre className="nv-log" aria-label="Installation output">{install.log.slice(-6).join('\n')}</pre>}
@@ -134,10 +136,13 @@ export default function NeurovaView({ onClose, onNotify }: { onClose: () => void
 
               <div className="nv-row">
                 <h3>Make a song</h3>
+                <label className="nv-faint">Engine <select value={engineId} onChange={(e) => setEngineId(e.target.value as 'ace-step' | 'heartmula')} aria-label="Engine">
+                  <option value="ace-step">ACE-Step 1.5</option><option value="heartmula">HeartMuLa</option></select></label>
+                {engineId === 'heartmula' && <label className="nv-faint">Tags <input style={{ width: 180 }} value={tags} placeholder="piano,calm,romantic" onChange={(e) => setTags(e.target.value)} aria-label="Style tags, comma separated" /></label>}
                 <label className="nv-faint">Length (s) <input style={{ width: 56 }} value={seconds} onChange={(e) => setSeconds(e.target.value)} inputMode="numeric" aria-label="Length in seconds" /></label>
                 <label className="nv-faint"><input type="checkbox" checked={instrumental} onChange={(e) => setInstrumental(e.target.checked)} /> Instrumental</label>
                 <Button size="small" kind="primary" disabled={busy || jobs.some((j) => j.projectId === project.id && !['completed', 'failed', 'cancelled', 'interrupted'].includes(j.state))}
-                  onClick={() => void run(async () => { await window.api.neurovaGenerate(project.id, { prompt: project.brief, lyrics: project.lyrics || undefined, instrumental, durationSec: Number(seconds) || undefined }) })}>Generate</Button>
+                  onClick={() => void run(async () => { await window.api.neurovaGenerate(project.id, { prompt: project.brief, lyrics: project.lyrics || undefined, instrumental, durationSec: Number(seconds) || undefined, engine: engineId, tags: tags.split(',').map((t) => t.trim()).filter(Boolean) }) })}>Generate</Button>
               </div>
               {jobs.filter((j) => j.projectId === project.id).slice(0, 3).map((j) => (
                 <div key={j.id} className="nv-job" role="status">

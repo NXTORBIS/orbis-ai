@@ -76,7 +76,7 @@ export function evaluate(m: EngineManifest, f: MachineFacts, smokeTestPassed: bo
   const found = f.filesFound[m.id] ?? []
   const missing = m.requiredFiles.filter((x) => !found.includes(x))
   if (missing.length) return { ...base, readiness: 'no-model', reason: `Missing model files: ${missing.join(', ')}.` }
-  if (!f.gpuName && m.cpu !== 'documented-slow') return { ...base, readiness: 'no-accelerator', reason: 'No GPU was found and CPU use is not stated for this engine.' }
+  if (!f.gpuName && m.cpu !== 'documented-slow' && !smokeTestPassed) return { ...base, readiness: 'no-accelerator', reason: 'No GPU was found and CPU use is not stated upstream. You can still try one short song; a success is recorded here.' }
   if (f.freeDiskGb < m.minDiskGb) return { ...base, readiness: 'low-disk', reason: `Needs about ${m.minDiskGb} GB free.` }
   if (!smokeTestPassed) {
     const slow = !f.gpuName ? ' It would run on the processor, which upstream says is significantly slower.' : ''

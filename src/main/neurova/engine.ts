@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto'
 import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { mkdir, readdir, rm, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
-import { buildAceStep } from '../../shared/neurova/adapters.ts'
+import { dirname, join } from 'node:path'
+import { buildAceStep, buildHeartMuLa } from '../../shared/neurova/adapters.ts'
 import { compile } from '../../shared/neurova/compile.ts'
 import { ENGINES, evaluate, type EngineStatus, type MachineFacts } from '../../shared/neurova/engines.ts'
 import { apply, isTerminal, newJob, type Job, type JobEvent, type JobState } from '../../shared/neurova/job.ts'
@@ -15,6 +15,7 @@ import type { NeurovaStore } from './store.ts'
 import { newRecord, reconcile, type JobStore } from './jobStore.ts'
 import { readFile } from 'node:fs/promises'
 
+const HEART_URL = 'https://github.com/HeartMuLa/heartlib.git'
 const ACE_URL = 'https://github.com/ACE-Step/ACE-Step-1.5.git'
 
 export interface JobView {
@@ -54,26 +55,30 @@ export class NeurovaEngine {
   private readonly o: EngineOptions
   private readonly jobs = new Map<string, JobView & { abort: AbortController; core: Job; seq: number }>()
   private install: InstallView = { step: 'idle', running: false, log: [], error: null }
-  private smokePassed = false
+  private readonly smoke = new Set<string>()
   private installAbort: AbortController | null = null
 
   constructor(o: EngineOptions) {
     this.o = o
   }
 
-  private dir(): string { return join(this.o.home, 'engines', 'ace-step') }
-  private python(): string { return join(this.dir(), '.venv', win ? 'Scripts' : 'bin', win ? 'python.exe' : 'python') }
-  private checkpoints(): string { return join(this.dir(), 'checkpoints') }
+  private dir(id: 'ace-step' | 'heartmula' = 'ace-step'): string { return join(this.o.home, 'engines', id === 'heartmula' ? 'heartlib' : 'ace-step') }
+  private python(id: 'ace-step' | 'heartmula' = 'ace-step'): string { return join(this.dir(id), '.venv', win ? 'Scripts' : 'bin', win ? 'python.exe' : 'python') }
+  private checkpoints(id: 'ace-step' | 'heartmula' = 'ace-step'): string { return id === 'heartmula' ? join(this.dir(id), 'ckpt') : join(this.dir(id), 'checkpoints') }
 
   async facts(): Promise<MachineFacts> {
     const base = await this.o.probe()
-    const found = existsSync(this.checkpoints()) ? await readdir(this.checkpoints()).catch(() => [] as string[]) : []
-    return { ...base, filesFound: { 'ace-step': found }, runtimeInstalled: { 'ace-step': existsSync(this.python()) } }
+    const list = async (id: 'ace-step' | 'heartmula'): Promise<string[]> => (existsSync(this.checkpoints(id)) ? readdir(this.checkpoints(id)).catch(() => [] as string[]) : [])
+    return {
+      ...base,
+      filesFound: { 'ace-step': await list('ace-step'), heartmula: await list('heartmula') },
+      runtimeInstalled: { 'ace-step': existsSync(this.python()), heartmula: existsSync(this.python('heartmula')) }
+    }
   }
 
   async status(): Promise<EngineStatus[]> {
     const f = await this.facts()
-    return ENGINES.map((m) => evaluate(m, f, m.id === 'ace-step' && this.smokePassed))
+    return ENGINES.map((m) => evaluate(m, f, this.smoke.has(m.id)))
   }
 
   installStatus(): InstallView { return { ...this.install, log: this.install.log.slice(-30) } }
@@ -111,18 +116,23 @@ export class NeurovaEngine {
   }
 
   /** Clones the upstream repository and builds its own isolated environment. Never touches global Python. */
-  async installRuntime(): Promise<void> {
+  async installRuntime(engineId: 'ace-step' | 'heartmula' = 'ace-step'): Promise<void> {
     if (this.install.running) throw new Error('An installation is already running.')
     this.install = { step: 'runtime', running: true, log: [], error: null }
     this.installAbort = new AbortController()
     try {
       await mkdir(join(this.o.home, 'engines'), { recursive: true })
-      if (!existsSync(join(this.dir(), 'pyproject.toml'))) {
-        const code = await this.run('git', ['clone', '--depth', '1', ACE_URL, 'ace-step'], join(this.o.home, 'engines'), this.installAbort.signal)
+      const heart = engineId === 'heartmula'
+      if (!existsSync(join(this.dir(engineId), 'pyproject.toml'))) {
+        const code = await this.run('git', ['clone', '--depth', '1', heart ? HEART_URL : ACE_URL, heart ? 'heartlib' : 'ace-step'], join(this.o.home, 'engines'), this.installAbort.signal)
         if (code !== 0) throw new Error('Downloading the engine source failed.')
       }
-      const sync = await this.run('uv', ['sync'], this.dir(), this.installAbort.signal)
-      if (sync !== 0) throw new Error('Building the engine environment failed.')
+      const signal = this.installAbort.signal
+      if (heart) {
+        // heartlib documents `pip install -e .` (3.10 recommended; uv's 3.10 build failed here, 3.12 is used) and ships no lock file, so it gets its own venv.
+        if ((await this.run('uv', ['venv', '--python', '3.12'], this.dir(engineId), signal)) !== 0) throw new Error('Creating the HeartMuLa environment failed.')
+        if ((await this.run('uv', ['pip', 'install', '--python', this.python(engineId), '-e', '.', 'huggingface_hub'], this.dir(engineId), signal)) !== 0) throw new Error('Installing HeartMuLa failed.')
+      } else if ((await this.run('uv', ['sync'], this.dir(), signal)) !== 0) throw new Error('Building the engine environment failed.')
     } catch (e) {
       this.install.error = e instanceof Error ? e.message : 'Installation failed.'
     } finally {
@@ -132,13 +142,15 @@ export class NeurovaEngine {
   }
 
   /** Downloads the official model files with the engine's own downloader (several gigabytes). */
-  async installModels(): Promise<void> {
+  async installModels(engineId: 'ace-step' | 'heartmula' = 'ace-step'): Promise<void> {
     if (this.install.running) throw new Error('An installation is already running.')
-    if (!existsSync(this.python())) throw new Error('Install the engine first.')
+    if (!existsSync(this.python(engineId))) throw new Error('Install the engine first.')
     this.install = { step: 'models', running: true, log: [], error: null }
     this.installAbort = new AbortController()
     try {
-      const code = await this.run('uv', ['run', 'acestep-download'], this.dir(), this.installAbort.signal)
+      const code = engineId === 'heartmula'
+        ? await this.run(this.python(engineId), ['-c', "from huggingface_hub import snapshot_download as s; s('HeartMuLa/HeartMuLaGen', local_dir='ckpt'); s('HeartMuLa/HeartMuLa-oss-3B-happy-new-year', local_dir='ckpt/HeartMuLa-oss-3B'); s('HeartMuLa/HeartCodec-oss-20260123', local_dir='ckpt/HeartCodec-oss')"], this.dir(engineId), this.installAbort.signal)
+        : await this.run('uv', ['run', 'acestep-download'], this.dir(), this.installAbort.signal)
       if (code !== 0) throw new Error('Downloading the model files failed or was stopped. Files already downloaded are kept.')
     } catch (e) {
       this.install.error = e instanceof Error ? e.message : 'Download failed.'
@@ -166,48 +178,59 @@ export class NeurovaEngine {
     this.emit(id)
   }
 
-  async generate(projectId: string, input: { prompt: string; lyrics?: string; instrumental?: boolean; durationSec?: number; seed?: number }): Promise<string> {
+  async generate(projectId: string, input: { prompt: string; lyrics?: string; instrumental?: boolean; durationSec?: number; seed?: number; engine?: 'ace-step' | 'heartmula'; tags?: string[] }): Promise<string> {
+    const engineId = input.engine ?? 'ace-step'
+    const manifest = ENGINES.find((m) => m.id === engineId) ?? ENGINES[0]
     const intent = interpret({ prompt: input.prompt, lyrics: input.lyrics })
     if (!intent.ok) throw new Error(intent.error)
     if (intent.intent.conflicts.length) throw new Error(intent.intent.conflicts[0])
     if ([...this.jobs.values()].some((j) => !isTerminal(j.state))) throw new Error('A song is already being made. Wait for it or cancel it.')
     const facts = await this.facts()
-    const st = evaluate(ENGINES[0], facts, this.smokePassed)
-    if (st.readiness === 'no-runtime' || st.readiness === 'no-model' || st.readiness === 'low-disk' || st.readiness === 'no-accelerator') throw new Error(st.reason)
+    const st = evaluate(manifest, facts, this.smoke.has(engineId))
+    if (st.readiness === 'no-runtime' || st.readiness === 'no-model' || st.readiness === 'low-disk') throw new Error(st.reason)
     const instrumental = input.instrumental ?? intent.intent.instrumental === true
     const compiled = compile(
       { prompt: intent.intent.original, instrumental, lyrics: intent.intent.lyrics, avoid: intent.intent.avoid, plan: null },
       { captionMax: 512, lyricsMax: 4096, lyrics: true, instrumentalFlag: true }
     )
     if (compiled.error) throw new Error(compiled.error)
-    const built = buildAceStep({ caption: compiled.caption, lyrics: compiled.lyrics, instrumental, durationSec: input.durationSec, seed: input.seed })
-    if (!built.ok) throw new Error(built.error)
+    let built: { value: { params: Record<string, unknown>; config: Record<string, unknown> } }
+    if (engineId === 'heartmula') {
+      const tags = input.tags ?? []
+      const h = buildHeartMuLa({ caption: compiled.caption, lyrics: compiled.lyrics, instrumental, durationSec: input.durationSec, seed: input.seed }, { modelPath: this.checkpoints('heartmula'), script: '', savePath: '', lyricsPath: '', tagsPath: '', tags })
+      if (!h.ok) throw new Error(h.error)
+      built = { value: { params: { lyrics: compiled.lyrics ?? '', tags: tags.map((t) => t.trim()).join(','), max_audio_length_ms: Math.round((input.durationSec ?? 30) * 1000) }, config: {} } }
+    } else {
+      const a = buildAceStep({ caption: compiled.caption, lyrics: compiled.lyrics, instrumental, durationSec: input.durationSec, seed: input.seed })
+      if (!a.ok) throw new Error(a.error)
+      built = { value: a.value as never }
+    }
     const id = randomUUID()
     const core = newJob(id)
     const view = { id, projectId, state: core.state, stage: 'queued', error: null, code: null, startedAt: Date.now(), endedAt: null, outputs: 0, cpuOnly: !facts.gpuName, abort: new AbortController(), core, seq: 0 }
     this.jobs.set(id, view)
-    await this.o.jobs.put(newRecord({ id, projectId, request: { prompt: intent.intent.original, lyrics: intent.intent.lyrics ?? '', instrumental, durationSec: input.durationSec ?? 0, seed: input.seed ?? null }, engineId: 'ace-step' }))
+    await this.o.jobs.put(newRecord({ id, projectId, request: { prompt: intent.intent.original, lyrics: intent.intent.lyrics ?? '', instrumental, durationSec: input.durationSec ?? 0, seed: input.seed ?? null }, engineId }))
     this.emit(id)
-    void this.execute(id, projectId, built.value, facts, instrumental)
+    void this.execute(id, projectId, built.value, facts, instrumental, engineId)
     return id
   }
 
-  private async execute(id: string, projectId: string, req: { params: Record<string, unknown>; config: Record<string, unknown> }, facts: MachineFacts, instrumental: boolean): Promise<void> {
+  private async execute(id: string, projectId: string, req: { params: Record<string, unknown>; config: Record<string, unknown> }, facts: MachineFacts, instrumental: boolean, engineId: 'ace-step' | 'heartmula'): Promise<void> {
     const j = this.jobs.get(id)!
     const outDir = join(this.o.home, 'jobs', id)
     try {
       this.step(id, 'preparing')
       await mkdir(outDir, { recursive: true })
       const reqFile = join(outDir, 'request.json')
-      await writeFile(reqFile, JSON.stringify({ job: id, engine_dir: this.dir(), out_dir: outDir, device: facts.gpuName ? 'auto' : 'cpu', params: req.params, config: req.config }))
-      const script = this.o.workerScript
+      await writeFile(reqFile, JSON.stringify({ job: id, engine_dir: this.dir(engineId), ckpt_dir: this.checkpoints(engineId), out_dir: outDir, device: facts.gpuName ? 'auto' : 'cpu', params: req.params, config: req.config }))
+      const script = engineId === 'heartmula' ? join(dirname(this.o.workerScript), 'heart_worker.py') : this.o.workerScript
       if (!existsSync(script)) throw new Error('The engine worker script is missing from this installation.')
       this.step(id, 'generating')
       j.stage = 'starting the engine'
       const result = await runWorker({
-        command: this.python(),
+        command: this.python(engineId),
         args: [script, reqFile],
-        cwd: this.dir(),
+        cwd: this.dir(engineId),
         job: id,
         outDir,
         startupMs: 10 * 60_000,
@@ -244,9 +267,9 @@ export class NeurovaEngine {
         this.step(id, 'failed', { error: 'The engine produced silence, so it was not kept as a song.' })
         return
       }
-      const note = `Generated by ACE-Step 1.5 (${facts.gpuName ? 'GPU' : 'CPU only'}). ${instrumental ? 'Instrumental.' : ''}`.trim()
+      const note = `Generated by ${ENGINES.find((m) => m.id === engineId)?.name ?? engineId} (${facts.gpuName ? 'GPU' : 'CPU only'}). ${instrumental ? 'Instrumental.' : ''}`.trim()
       await this.o.store.importAudio(projectId, file, 'Generated song', note, 'generated')
-      this.smokePassed = true
+      this.smoke.add(engineId)
       j.outputs = 1
       this.step(id, 'completed', { outputPath: file })
     } catch (e) {

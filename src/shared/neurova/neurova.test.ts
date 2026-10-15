@@ -18,7 +18,7 @@ test('files on disk are never enough to be ready', () => {
 test('missing pieces are named truthfully', () => {
   assert.equal(evaluate(ace, facts({ pythonVersion: null }), true).readiness, 'no-runtime')
   assert.equal(evaluate(ace, facts({ filesFound: {} }), true).readiness, 'no-model')
-  assert.equal(evaluate(ENGINES[1], facts({ gpuName: null }), true).readiness, 'no-accelerator')
+  assert.equal(evaluate(ENGINES[1], facts({ gpuName: null }), false).readiness, 'no-accelerator')
   assert.equal(evaluate(ace, facts({ freeDiskGb: 1 }), true).readiness, 'low-disk')
 })
 

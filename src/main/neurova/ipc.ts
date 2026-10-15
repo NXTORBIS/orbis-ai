@@ -58,10 +58,10 @@ export function registerNeurovaIpc(o: NeurovaIpcOptions): void {
   handle('neurova:interpret', (_e, req) => interpret((req ?? {}) as SongRequest))
   handle('neurova:engines', (): Promise<EngineStatus[]> => o.engine.status())
   handle('neurova:install-status', () => o.engine.installStatus())
-  handle('neurova:install-runtime', () => { void o.engine.installRuntime(); return true })
-  handle('neurova:install-models', () => { void o.engine.installModels(); return true })
+  handle('neurova:install-runtime', (_e, engine) => { void o.engine.installRuntime(engine === 'heartmula' ? 'heartmula' : 'ace-step'); return true })
+  handle('neurova:install-models', (_e, engine) => { void o.engine.installModels(engine === 'heartmula' ? 'heartmula' : 'ace-step'); return true })
   handle('neurova:install-cancel', () => { o.engine.cancelInstall(); return true })
-  handle('neurova:generate', (_e, id, input) => o.engine.generate(str(id, 80), (input ?? {}) as { prompt: string; lyrics?: string; instrumental?: boolean; durationSec?: number; seed?: number }))
+  handle('neurova:generate', (_e, id, input) => o.engine.generate(str(id, 80), (input ?? {}) as { prompt: string; lyrics?: string; instrumental?: boolean; durationSec?: number; seed?: number; engine?: 'ace-step' | 'heartmula'; tags?: string[] }))
   handle('neurova:jobs', () => o.engine.listJobs())
   handle('neurova:cancel-job', (_e, id) => o.engine.cancel(str(id, 80)))
 }

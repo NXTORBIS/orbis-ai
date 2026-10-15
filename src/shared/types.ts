@@ -2273,10 +2273,10 @@ export interface NxtorbisApi {
   neurovaExportPackage(id: string): Promise<string | null>
   neurovaImportPackage(): Promise<Project | null>
   neurovaInstallStatus(): Promise<{ step: 'idle' | 'runtime' | 'models'; running: boolean; log: string[]; error: string | null }>
-  neurovaInstallRuntime(): Promise<boolean>
-  neurovaInstallModels(): Promise<boolean>
+  neurovaInstallRuntime(engine?: 'ace-step' | 'heartmula'): Promise<boolean>
+  neurovaInstallModels(engine?: 'ace-step' | 'heartmula'): Promise<boolean>
   neurovaInstallCancel(): Promise<boolean>
-  neurovaGenerate(id: string, input: { prompt: string; lyrics?: string; instrumental?: boolean; durationSec?: number; seed?: number }): Promise<string>
+  neurovaGenerate(id: string, input: { prompt: string; lyrics?: string; instrumental?: boolean; durationSec?: number; seed?: number; engine?: 'ace-step' | 'heartmula'; tags?: string[] }): Promise<string>
   neurovaJobs(): Promise<{ id: string; projectId: string; state: string; stage: string; error: string | null; code: string | null; startedAt: number; endedAt: number | null; outputs: number; cpuOnly: boolean }[]>
   neurovaCancelJob(id: string): Promise<boolean>
   onNeurovaJobs(listener: () => void): () => void
