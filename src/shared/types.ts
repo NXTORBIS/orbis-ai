@@ -873,6 +873,7 @@ export interface NxtorbisApi {
   f1Prefs(): Promise<unknown>
   /** F1: replace them; the main process cleans and writes them. */
   f1PrefsSet(next: unknown): Promise<unknown>
+  f1ReportPdf(title: string, html: string): Promise<unknown>
   /** F1: every season's champion driver, runner-up and champion constructor. */
   f1Champions(season?: number): Promise<unknown>
   /** F1: the fastest lap of every race run at a circuit. */

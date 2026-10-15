@@ -323,6 +323,7 @@ read the code instead, and the answer carries `origin: 'predicted'` so a guess c
 | `football:status` | Football: per-provider request, failure and rate-limit counts for the Sources screen. Mojo, same service |
 | `f1:prefs` | F1: the active profile's watchlist and alert switches, from its own file. Mojo, same service |
 | `f1:prefs-set` | F1: replaces them; validated and written by the main process, read by the session and result monitor. Mojo, same service |
+| `f1:report-pdf` | F1: prints a report's HTML to a PDF in a hidden script-free window and saves it to Downloads; returns the path. Mojo, same service |
 | `f1:champions` | F1: one season's champion, runner-up and champion constructor, or (with no season) the champion of every season from 1950, from Jolpica-F1, paced and cached. Mojo, same service |
 | `f1:circuit-records` | F1: the fastest lap of every race run at a circuit, from Jolpica-F1, cached and de-duplicated. Mojo, same service |
 | `f1:qualifying` | F1: one race's qualifying results (Q1, Q2, Q3) from Jolpica-F1. Mojo, same service |

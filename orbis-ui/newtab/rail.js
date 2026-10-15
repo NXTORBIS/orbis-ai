@@ -8,6 +8,7 @@
 // The rail is the person's to hide (Customize → Show the Orbis rail); it is not the only way to any of these.
 
 import { icon } from './orbis-icons.js'
+import { askBrowser, call } from './helper.js'
 
 /** The Orbis panel's own views, in the order the panel lists them. `icon` names an icon in orbis-icons.js. */
 export const RAIL = [
@@ -35,6 +36,15 @@ export function mountRail(host, shown = true) {
     const a = document.createElement('a')
     a.className = 'rail-item'
     a.href = railAddress(item.view)
+    // In the side panel, beside the page, not as a page of its own. Only when the browser can open it and the helper can
+    // say which view; otherwise the link does what a link does.
+    a.addEventListener('click', (event) => {
+      if (event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey) return
+      event.preventDefault()
+      call('panel:request', [item.view])
+        .then(() => askBrowser('orbis.openPanel'))
+        .catch(() => { location.href = a.href })
+    })
     // The name is the accessible name and the tooltip both: the icon beside it is decorative.
     a.title = item.label
     a.setAttribute('aria-label', item.label)

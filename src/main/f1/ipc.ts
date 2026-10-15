@@ -1,5 +1,6 @@
-import { app, net } from 'electron'
+import { app, net, BrowserWindow as Win } from 'electron'
 import type { BrowserWindow } from 'electron'
+import { writeFile } from 'node:fs/promises'
 import { plainHandle } from '../ipc/handle.ts'
 import type { SocketLike } from './live/signalr.ts'
 import { join } from 'node:path'
@@ -119,6 +120,23 @@ export function registerF1Ipc(o: F1IpcOptions): { service: F1Service; stream: St
   handle('f1:career', (_e, id: unknown) => (typeof id === 'string' ? service.career(id) : invalid))
   handle('f1:championship', (_e, key: unknown) => (int(key) !== null ? service.championship(key as number) : invalid))
   handle('f1:archive', (_e, year: unknown) => (int(year) !== null ? service.archive(year as number) : invalid))
+  // A PDF Orbis writes itself: the report's HTML is printed by a hidden, script-free window and saved to Downloads.
+  handle('f1:report-pdf', async (_e, title: unknown, html: unknown) => {
+    if (typeof title !== 'string' || typeof html !== 'string' || html.length > 3_000_000) return invalid
+    const win = new Win({ show: false, webPreferences: { javascript: false, sandbox: true, contextIsolation: true } })
+    try {
+      await win.loadURL('data:text/html;charset=utf-8;base64,' + Buffer.from(html, 'utf8').toString('base64'))
+      const pdf = await win.webContents.printToPDF({ printBackground: true, pageSize: 'A4' })
+      const base = title.replace(/[^A-Za-z0-9 _-]+/g, '').trim().slice(0, 60) || 'F1 report'
+      const file = join(app.getPath('downloads'), `${base} ${new Date().toISOString().slice(0, 10)}.pdf`)
+      await writeFile(file, pdf)
+      return { ok: true, data: { path: file } }
+    } catch {
+      return { ok: false, reason: 'failed', message: 'The PDF could not be written.' }
+    } finally {
+      win.destroy()
+    }
+  })
   handle('f1:status', () => ({ providers: service.status() }))
 
   // ---- live and replay ---------------------------------------------------------------------------------------------------------

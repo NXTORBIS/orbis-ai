@@ -337,7 +337,19 @@ export function createHandlers(deps: HandlerDeps): Record<string, Handler> {
   const specialized = new SearxngProvider({ endpoint: endpointFromEnvironment(), fetchFn: doFetch })
 
   // Named, because the router below runs the task agent and the chat that are defined in this same object.
+  // The view somebody asked the side panel to open (the new tab page's rail asks; the panel takes it when it shows).
+  let panelWanted: { view: string; at: number } | null = null
   const handlers: Record<string, Handler> = {
+    'panel:request': ([view]) => {
+      if (typeof view !== 'string' || !/^[a-zA-Z]{1,24}$/.test(view)) throw new HelperError('bad-request', 'Not a panel view.')
+      panelWanted = { view, at: Date.now() }
+      return { ok: true }
+    },
+    'panel:take': () => {
+      const want = panelWanted && Date.now() - panelWanted.at < 15_000 ? panelWanted.view : null
+      panelWanted = null
+      return { view: want }
+    },
     ...createSearchSessionHandlers({ store: deps.searchSessions, userData: deps.dataDir, profileId: deps.profileId, apiKeys: deps.apiKeys, fetchFn: doFetch }),
     ...createFaviconHandlers({ fetchFn: doFetch }),
     ...createConversationHandlers({ store: deps.conversations, userData: deps.dataDir, profileId: deps.profileId }),

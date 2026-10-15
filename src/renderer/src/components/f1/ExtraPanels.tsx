@@ -21,10 +21,28 @@ export function ReportButton({ title, sections, source }: { title: string; secti
     a.remove()
     setTimeout(() => URL.revokeObjectURL(url), 5000)
   }
+  const [said, setSaid] = useState('')
+  const pdf = (): void => {
+    const html = reportHtml(title, sections, { source, madeAt: new Date().toLocaleString() })
+    setSaid('Writing…')
+    void window.api
+      .f1ReportPdf(title, html)
+      .then((r) => {
+        const x = r as { ok?: boolean; data?: { path?: string }; message?: string }
+        setSaid(x.ok && x.data?.path ? `Saved to ${x.data.path}` : x.message ?? 'The PDF could not be written.')
+      })
+      .catch(() => setSaid('The PDF could not be written.'))
+  }
   return (
-    <button type="button" className="f1-btn" onClick={run} title="Save a shareable report you can open or print to PDF">
-      <Download size={14} /> Report
-    </button>
+    <>
+      <button type="button" className="f1-btn" onClick={run} title="Save a shareable report you can open or print to PDF">
+        <Download size={14} /> Report
+      </button>
+      <button type="button" className="f1-btn" onClick={pdf} title="Write this report as a PDF into Downloads">
+        <Download size={14} /> PDF
+      </button>
+      {said && <span className="f1-note" role="status">{said}</span>}
+    </>
   )
 }
 

@@ -1144,3 +1144,34 @@ body::after {
 #secrets .vault-value { margin-top: 4px; }
 @media (prefers-reduced-motion: reduce) { .vault-lock *, .vault-hero .vault-lock { animation: none !important; } }
 .mic-inject svg.btn-ico { width: 17px; height: 17px; display: block; }
+
+/* ===== Ask Orion, docked like an assistant: the composer sits at the bottom of the panel and the three ways in sit just above it,
+   with the empty space left to a quiet glyph. This replaces the centred-search layout above (it read as a page, not a side panel). ==== */
+#view-ask { justify-content: flex-start !important; padding-bottom: 0 !important; gap: 0 !important; }
+#view-ask:has(.ask-choices) #ask-about { order: 0; margin: 0; }
+#view-ask:has(.ask-choices) #ask-thread {
+  order: 1; flex: 1 1 auto !important; min-height: 0; overflow: auto !important;
+  display: flex; flex-direction: column; padding: 8px 12px 6px;
+}
+#view-ask:has(.ask-choices) #ask-thread::before {
+  content: ''; flex: 1 1 auto; min-height: 90px; margin: 0 auto;
+  width: 64px; opacity: .55;
+  background: no-repeat center / 56px 56px url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2300d4ff' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'><path d='M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z'/><circle cx='9' cy='12' r='.6' fill='%2300d4ff'/><circle cx='15' cy='12' r='.6' fill='%2300d4ff'/></svg>");
+}
+#view-ask:has(.ask-choices) .ask-choices {
+  margin-top: 8px; display: flex; flex-direction: column; gap: 2px; padding: 6px;
+  border-radius: 16px; background: var(--pv-glass, rgba(255,255,255,.04)); border: 1px solid var(--pv-edge, rgba(255,255,255,.08));
+}
+#view-ask:has(.ask-choices) .ask-choice {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px; width: 100%; text-align: left;
+  padding: 9px 10px 9px 62px !important; border-radius: 12px; cursor: pointer;
+  box-shadow: none; transform: none;
+}
+#view-ask:has(.ask-choices) .ask-choice:hover:not(:disabled) { background: color-mix(in srgb, var(--mo-a, #3fd8ff) 10%, transparent); transform: none; }
+#view-ask:has(.ask-choices) .ask-choice:disabled { opacity: .5; cursor: not-allowed; }
+#view-ask:has(.ask-choices) .ask-choice-name { font-size: 13.5px; font-weight: 600; }
+#view-ask:has(.ask-choices) .ask-choice-note { font-size: 11.5px; opacity: .65; }
+#view-ask:has(.ask-choices) #ask-form { order: 2; margin: 6px 10px 10px; flex: none; }
+#view-ask:has(.ask-choices) #ask-form::before { content: none; display: none; }
+#view-ask:has(.ask-choices) .ask-choices-head { display: none; }
+#view-ask:not(:has(.ask-choices)) #ask-form { order: 2; flex: none; }

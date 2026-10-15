@@ -37,6 +37,7 @@ const api: NxtorbisApi = {
   f1Career: (driverId) => ipcRenderer.invoke('f1:career', driverId),
   f1Prefs: () => ipcRenderer.invoke('f1:prefs'),
   f1PrefsSet: (next) => ipcRenderer.invoke('f1:prefs-set', next),
+  f1ReportPdf: (title, html) => ipcRenderer.invoke('f1:report-pdf', title, html),
   f1Champions: (season) => ipcRenderer.invoke('f1:champions', season),
   f1CircuitRecords: (circuitId) => ipcRenderer.invoke('f1:circuit-records', circuitId),
   f1Qualifying: (season, round) => ipcRenderer.invoke('f1:qualifying', season, round),

@@ -5,7 +5,7 @@ import type { SettingsSectionId } from './settingsSections.ts'
  * about where things are, and that must stay testable without React anywhere near it. The window's own `FeatureId`
  * is checked against this list by a test, so the two cannot drift apart silently.
  */
-export type WindowFeature = 'create' | 'pages' | 'markets' | 'whiteboard' | 'clipboard' | 'workspaces' | 'schedules' | 'notes' | 'student'
+export type WindowFeature = 'create' | 'pages' | 'markets' | 'whiteboard' | 'clipboard' | 'workspaces' | 'schedules' | 'notes' | 'student' | 'football' | 'f1'
 
 /**
  * Where pressing a notification takes you.
@@ -63,6 +63,12 @@ export function destinationFor(event: string, subject: Readonly<Record<string, s
     // A file Orbis made. "Open" and "Show in folder" handle the file itself; this is the screen it was made on.
     case 'artifact':
       return { kind: 'feature', id: 'create', focus }
+
+    // A goal or a session is read on the screen that follows it.
+    case 'football':
+      return { kind: 'feature', id: 'football', focus }
+    case 'f1':
+      return { kind: 'feature', id: 'f1', focus }
 
     case 'page':
       return { kind: 'feature', id: 'pages', focus }

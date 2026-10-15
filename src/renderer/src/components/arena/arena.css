@@ -81,7 +81,7 @@
 .arena-scan { position: absolute; top: 4px; bottom: 4px; width: 60px; left: -60px; background: linear-gradient(90deg, transparent, rgba(255, 70, 70, .35), transparent); animation: arena-scan 2.6s ease-in-out infinite; }
 @keyframes arena-scan { to { left: 105%; } }
 .arena-car { position: absolute; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; border: 1.5px solid rgba(255, 255, 255, .85); box-shadow: 0 0 8px currentColor; transition: left 1.1s cubic-bezier(.3, .8, .2, 1), top .6s ease; }
-.arena-car b { position: absolute; left: 50%; top: -14px; translate: -50% 0; font-size: 9.5px; font-weight: 700; letter-spacing: .06em; color: #fff; text-shadow: 0 0 4px #000; }
+.arena-car b { position: absolute; left: 50%; top: -15px; translate: -50% 0; font-size: 10.5px; font-weight: 700; letter-spacing: .06em; color: #fff; text-shadow: 0 0 4px #000; }
 .arena-car.is-lead { width: 17px; height: 17px; margin-left: -8.5px; box-shadow: 0 0 14px rgba(255, 255, 255, .8); animation: arena-lead 1.4s ease-in-out infinite; }
 @keyframes arena-lead { 50% { box-shadow: 0 0 22px rgba(255, 255, 255, 1); } }
 .arena-car.is-lapped { opacity: .45; }
@@ -90,3 +90,4 @@
 /* A screen opened from a card grows out of it and folds back into it (the browser's View Transitions). */
 ::view-transition-group(arena-open) { animation-duration: .5s; animation-timing-function: cubic-bezier(.2, .8, .2, 1); }
 ::view-transition-old(arena-open), ::view-transition-new(arena-open) { height: 100%; }
+.arena small { font-size: max(10.5px, 1em); }

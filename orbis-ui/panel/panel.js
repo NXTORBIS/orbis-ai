@@ -1154,3 +1154,15 @@ setInterval(() => {
   new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true })
   schedule()
 }
+
+// The new tab page's rail asks for a view through the helper and then opens this panel. Asked again whenever the panel
+// is shown, so it lands on that view whether it was just created or had been sitting here.
+async function takePanelRequest() {
+  try {
+    const got = await call('panel:take', [])
+    if (got && typeof got.view === 'string' && got.view) location.hash = `#${got.view}`
+  } catch { /* Orbis is not running: nothing was asked for */ }
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) void takePanelRequest() })
+window.addEventListener('focus', () => void takePanelRequest())
+void takePanelRequest()

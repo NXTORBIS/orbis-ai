@@ -124,7 +124,7 @@ class Thing {
 async function screen({ answers = {}, stream = [] } = {}) {
   const block = await askSource()
   const made = new Map()
-  for (const id of ['ask-about', 'ask-thread', 'ask-stop', 'ask-send', 'ask-input', 'ask-form', 'view-ask']) made.set(id, new Thing('div'))
+  for (const id of ['ask-about', 'ask-thread', 'ask-stop', 'ask-send', 'ask-input', 'ask-form', 'view-ask', 'ask-mic', 'ask-hint', 'ask-reread']) made.set(id, new Thing('div'))
   made.get('ask-input').value = ''
   made.get('ask-input').placeholder = ''
 
@@ -161,7 +161,9 @@ async function screen({ answers = {}, stream = [] } = {}) {
   const went = []
   const showTab = (name) => void went.push(name)
 
-  const context = { document, HelperDown, call, $, safeUrl, link, showTab, URL, AbortController, Object, String, Boolean, Array, Promise, console, setTimeout }
+  // The real panel imports this from omnibox-ui.js; here there is no microphone, which is what it reports.
+  const createVoiceSession = () => ({ available: () => false, state: 'idle', start() {}, stop() {} })
+  const context = { createVoiceSession, document, HelperDown, call, $, safeUrl, link, showTab, URL, AbortController, Object, String, Boolean, Array, Promise, console, setTimeout }
   const api = vm.runInNewContext(`${block}\n;({ runAsk, drawAsk, askShown, readAskPage, clearAskRun, askState })`, context, { filename: 'panel.js (Ask)' })
   return { api, state, asked, went, HelperDown, about: made.get('ask-about'), thread: made.get('ask-thread'), stop: made.get('ask-stop'), send: made.get('ask-send'), input: made.get('ask-input') }
 }
