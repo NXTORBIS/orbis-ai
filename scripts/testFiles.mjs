@@ -20,6 +20,7 @@ export const TEST_FILES = [
   'src/shared/arenaTonight.test.ts',
   'src/shared/doctor.test.ts',
   'src/shared/downloadSearch.test.ts',
+  'src/shared/neurova/neurova.test.ts',
   'src/shared/motionLogic.test.ts',
   'src/shared/artifacts/escapes.test.ts',
   'src/shared/football/extras.test.ts',
