@@ -4,6 +4,7 @@ import { damageNote, openStored } from './storedFile.ts'
 import { nullPlatform } from './platform.ts'
 import type { SecretStorePort } from './platform'
 import { join } from 'node:path'
+import { DEFAULT_IMAGE_PREFERENCES, cleanImagePreferences } from './fastsd/engine.ts'
 import { readBranches } from '../shared/conversationBranch.ts'
 import { DEFAULT_SOURCE_PREFERENCES, readSourcePreferences } from '../shared/researchSources.ts'
 import type { Conversation, ReasoningEffort, Settings, SettingsUpdate, Theme } from '../shared/types'
@@ -37,6 +38,8 @@ const DEFAULTS: Omit<Settings, 'hasApiKey' | 'hasJudge0Key'> = {
   researchSources: DEFAULT_SOURCE_PREFERENCES,
   showResearchPlan: false,
   personalizedSuggestions: true,
+  imageSize: DEFAULT_IMAGE_PREFERENCES.size,
+  imageSteps: DEFAULT_IMAGE_PREFERENCES.steps,
   openBrowserOnLaunch: false,
   keepSchedulesRunning: false,
   wakeForSchedules: false,
@@ -110,6 +113,12 @@ export class Store {
     if (update.researchSources !== undefined) next.researchSources = readSourcePreferences(update.researchSources)
     if (typeof update.showResearchPlan === 'boolean') next.showResearchPlan = update.showResearchPlan
     if (typeof update.personalizedSuggestions === 'boolean') next.personalizedSuggestions = update.personalizedSuggestions
+    if (update.imageSize !== undefined || update.imageSteps !== undefined) {
+      // A value the engine does not offer is not stored.
+      const chosen = cleanImagePreferences({ size: update.imageSize ?? next.imageSize, steps: update.imageSteps ?? next.imageSteps })
+      next.imageSize = chosen.size
+      next.imageSteps = chosen.steps
+    }
     if (typeof update.openBrowserOnLaunch === 'boolean') next.openBrowserOnLaunch = update.openBrowserOnLaunch
     if (typeof update.keepSchedulesRunning === 'boolean') next.keepSchedulesRunning = update.keepSchedulesRunning
     if (typeof update.wakeForSchedules === 'boolean') next.wakeForSchedules = update.wakeForSchedules

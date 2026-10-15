@@ -1,5 +1,5 @@
 import { GROQ_BASE_URL } from './nim.ts'
-import { sharedEngine } from './fastsd/engine.ts'
+import { MAX_BATCH, sharedEngine, type GenerateManyResult } from './fastsd/engine.ts'
 
 export type FetchFn = (url: string, init?: RequestInit) => Promise<Response>
 
@@ -48,6 +48,34 @@ export function detectImageGenRequest(text: string): string | null {
   return null
 }
 
+const COUNT_WORDS: Record<string, number> = { two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, couple: 2 }
+const COUNTED_NOUN = String.raw`(?:images|pictures|pics|photos|photographs|drawings|paintings|illustrations|artworks|variations|versions|options|renders|renderings|logos|posters|wallpapers|portraits|avatars|icons|sketches|designs)`
+const COUNTED = new RegExp(String.raw`\b(\d{1,2}|two|three|four|five|six|seven|eight|nine|ten)\s+(?:[\w-]+\s+){0,2}?${COUNTED_NOUN}\b`, 'i')
+
+/**
+ * How many pictures a message asks for in words ("3 images of a dog", "give me four variations").
+ *
+ * `requested` is what was asked; `count` is what will be made (at most MAX_BATCH). A number that comes after "of",
+ * "showing" or "with" belongs to the picture, not to the request ("a picture of two images on a wall" is one picture).
+ */
+export function detectImageCount(text: string): { count: number; requested: number } {
+  const m = COUNTED.exec(text)
+  if (!m) return { count: 1, requested: 1 }
+  if (/\b(?:of|showing|with|depicting|containing|where|that)\b/i.test(text.slice(0, m.index))) return { count: 1, requested: 1 }
+  const word = m[1].toLowerCase()
+  const requested = /^\d/.test(word) ? Number(word) : COUNT_WORDS[word] ?? 1
+  if (!Number.isFinite(requested) || requested < 2) return { count: 1, requested: 1 }
+  return { count: Math.min(MAX_BATCH, requested), requested }
+}
+
+export interface DrawOptions {
+  signal?: AbortSignal
+  onStatus?: (message: string) => void
+  /** The picture being edited (data URL, JPEG or PNG). Without one the picture is made from the words alone. */
+  initImage?: string
+  strength?: number
+}
+
 /**
  * A picture, from a prompt, made on this computer by FastSDCPU (src/main/fastsd/engine.ts). Nothing is sent to an
  * online image service, and there is no fallback to one: when the engine cannot make the picture the error says why.
@@ -55,10 +83,15 @@ export function detectImageGenRequest(text: string): string | null {
 export async function generateImage(
   prompt: string,
   seed?: number,
-  opts: { signal?: AbortSignal; onStatus?: (message: string) => void } = {}
-): Promise<{ dataUrl: string; seed: number; seconds: number }> {
-  const r = await sharedEngine().generate(prompt, { seed, signal: opts.signal, onStatus: opts.onStatus })
-  return { dataUrl: r.dataUrl, seed: r.seed, seconds: r.seconds.generation }
+  opts: DrawOptions = {}
+): Promise<{ dataUrl: string; seed: number; seconds: number; imageToImage: boolean }> {
+  const r = await sharedEngine().generate(prompt, { seed, signal: opts.signal, onStatus: opts.onStatus, initImage: opts.initImage, strength: opts.strength })
+  return { dataUrl: r.dataUrl, seed: r.seed, seconds: r.seconds.generation, imageToImage: opts.initImage !== undefined }
+}
+
+/** Up to MAX_BATCH pictures of one prompt, in order. Failures are returned beside the pictures that did get made. */
+export async function generateImages(prompt: string, count: number, seed: number | undefined, opts: DrawOptions = {}): Promise<GenerateManyResult> {
+  return sharedEngine().generateMany(prompt, count, { seed, signal: opts.signal, onStatus: opts.onStatus })
 }
 
 const REWRITE_INSTRUCTIONS =

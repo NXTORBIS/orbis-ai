@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AVATARS, DEFAULT_AVATAR, avatarStyle } from '../../../shared/avatars'
 import { Modal } from '../ui'
-import { FolderOpen, Gamepad2, Globe, Info, Lock, Mic, Palette, Search, Sparkles, User, X } from 'lucide-react'
+import { FolderOpen, Gamepad2, Globe, Image as ImageIcon, Info, Lock, Mic, Palette, Search, Sparkles, User, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { DefaultBrowserState, Settings, SettingsUpdate, Theme } from '../../../shared/types'
 import { MODELS } from '../../../shared/models'
@@ -13,6 +13,7 @@ import {
   type SettingsSectionId
 } from '../../../shared/settingsSections'
 
+const ImageGenSettings = lazy(() => import('./ImageGenSettings'))
 const OfflineGamesSettings = lazy(() => import('./OfflineGamesSettings'))
 const NotificationSettings = lazy(() => import('./NotificationSettings'))
 const AmbientSettings = lazy(() => import('./AmbientSettings'))
@@ -70,6 +71,7 @@ const ICONS: Record<string, LucideIcon> = {
   mic: Mic,
   gamepad: Gamepad2,
   folder: FolderOpen,
+  image: ImageIcon,
   info: Info
 }
 
@@ -571,6 +573,13 @@ export default function SettingsModal({ settings, onUpdate, onClose, section, on
                   <VoiceSettings />
                 </Suspense>
               </section>
+            )}
+
+            {/* ---------------------------------------------------------------- Image generation */}
+            {active === 'images' && (
+              <Suspense fallback={null}>
+                <ImageGenSettings settings={settings} onUpdate={onUpdate} />
+              </Suspense>
             )}
 
             {/* ---------------------------------------------------------------- Files */}

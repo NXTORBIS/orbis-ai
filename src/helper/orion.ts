@@ -1,5 +1,5 @@
 import { classifyIntent } from '../main/intent.ts'
-import { detectImageGenRequest, generateImage, rewriteImagePrompt } from '../main/imagegen.ts'
+import { detectImageCount, detectImageGenRequest, generateImages, rewriteImagePrompt } from '../main/imagegen.ts'
 import { answerContext, runResearch } from '../main/research.ts'
 import { HelperError } from './server.ts'
 import type { Handler } from './server.ts'
@@ -112,11 +112,14 @@ export function createOrionHandlers(deps: OrionDeps): Record<string, Handler> {
         const seed = typeof req.seed === 'number' && Number.isFinite(req.seed) ? req.seed : undefined
         // A follow-up ("make it darker") is the earlier prompt with the change folded in, so the picture stays the same picture.
         const prompt = seed === undefined ? drawn : await rewriteImagePrompt(drawn, text, deps.apiKeys, deps.fetchFn as never).catch(() => drawn)
-        const image = await generateImage(prompt, seed, { signal, onStatus: (message) => emit({ type: 'status', message }) })
-        if (signal.aborted) return { routed: 'image', aborted: true }
-        emit({ type: 'image', url: image.dataUrl, prompt, seed: image.seed })
+        const wanted = seed === undefined ? detectImageCount(text).count : 1
+        const made = await generateImages(prompt, wanted, seed, { signal, onStatus: (message) => emit({ type: 'status', message }) })
+        if (signal.aborted || made.cancelled) return { routed: 'image', aborted: true }
+        if (made.results.length === 0) throw new HelperError('failed', made.errors[0]?.message ?? 'The picture could not be made.')
+        for (const image of made.results) emit({ type: 'image', url: image.dataUrl, prompt, seed: image.seed })
+        if (made.errors.length > 0) emit({ type: 'status', message: `Made ${made.results.length} of ${wanted} pictures: ${made.errors[0].message}` })
         emit({ type: 'done', model: null, truncated: false })
-        return { routed: 'image', seed: image.seed }
+        return { routed: 'image', seed: made.results[0].seed }
       }
 
       const page = await currentPage(deps.host())

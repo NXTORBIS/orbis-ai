@@ -277,8 +277,10 @@ export default function ImageEditor({ image, onClose, onSave, onNotify, initialT
     setTool(null)
     setOpenPin(null)
     try {
-      const result = await window.api.editImage({ prompt: current.prompt, instruction: text, seed: current.seed })
+      // The picture on screen is the starting point, so the edit changes it instead of drawing a new one from the words.
+      const result = await window.api.editImage({ prompt: current.prompt, instruction: text, seed: current.seed, image: current.src })
       push({ src: result.url, prompt: result.prompt, seed: result.seed })
+      if (result.fromPicture === false) onNotify('The picture could not be used as a starting point, so this one was made from the words alone.')
       setInstruction('')
       setPins([])
     } catch (err) {

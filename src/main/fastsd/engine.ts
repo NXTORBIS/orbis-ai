@@ -1,6 +1,6 @@
 import { spawn, execFile, type ChildProcess } from 'node:child_process'
 import { request as httpRequest } from 'node:http'
-import { existsSync, mkdirSync, openSync, closeSync, unlinkSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, openSync, closeSync, unlinkSync, readFileSync, writeFileSync } from 'node:fs'
 import { cpus, totalmem, homedir } from 'node:os'
 import { join } from 'node:path'
 
@@ -56,8 +56,89 @@ export interface GenerateOptions {
   height?: number
   steps?: number
   negativePrompt?: string
+  /** A picture to start from (data URL, bare base64, or bytes): JPEG or PNG, at most 8 MB. Turns the request into image-to-image. */
+  initImage?: string | Uint8Array
+  /** How far the result may move away from `initImage`: 0.1 (close) to 0.95 (almost new). Default 0.6, upstream's own. */
+  strength?: number
   signal?: AbortSignal
   onStatus?: (message: string) => void
+}
+
+export const MAX_BATCH = 4
+export const MAX_INIT_IMAGE_BYTES = 8 * 1024 * 1024
+export const IMAGE_SIZES = [512, 640, 768, 1024] as const
+export const IMAGE_STEP_RANGE = { min: 1, max: 4 } as const
+
+export interface ImagePreferences { size: number; steps: number }
+export const DEFAULT_IMAGE_PREFERENCES: ImagePreferences = { size: 512, steps: 1 }
+
+/** Checks a stored or supplied preference; anything unknown becomes the default rather than being passed along. */
+export function cleanImagePreferences(raw: unknown): ImagePreferences {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
+  const size = (IMAGE_SIZES as readonly number[]).includes(r.size as number) ? (r.size as number) : DEFAULT_IMAGE_PREFERENCES.size
+  const stepsRaw = typeof r.steps === 'number' && Number.isFinite(r.steps) ? Math.round(r.steps) : DEFAULT_IMAGE_PREFERENCES.steps
+  return { size, steps: Math.min(IMAGE_STEP_RANGE.max, Math.max(IMAGE_STEP_RANGE.min, stepsRaw)) }
+}
+
+/**
+ * The size and step count the person chose. Kept in a small file beside the engine so that every process that draws
+ * (the window's main process and the helper) uses the same choice without sharing a settings store.
+ */
+export function readImagePreferences(home: string): ImagePreferences {
+  try { return cleanImagePreferences(JSON.parse(readFileSync(join(home, 'preferences.json'), 'utf8'))) } catch { return { ...DEFAULT_IMAGE_PREFERENCES } }
+}
+
+export function writeImagePreferences(home: string, prefs: unknown): ImagePreferences {
+  const clean = cleanImagePreferences(prefs)
+  mkdirSync(home, { recursive: true })
+  writeFileSync(join(home, 'preferences.json'), JSON.stringify(clean))
+  return clean
+}
+
+export interface LastGeneration { seconds: number; at: number; width: number; height: number; steps: number; imageToImage: boolean }
+
+export function readLastGeneration(home: string): LastGeneration | null {
+  try {
+    const j = JSON.parse(readFileSync(join(home, 'last-generation.json'), 'utf8')) as Partial<LastGeneration>
+    return typeof j.seconds === 'number' && Number.isFinite(j.seconds) && typeof j.at === 'number'
+      ? { seconds: j.seconds, at: j.at, width: Number(j.width) || 0, height: Number(j.height) || 0, steps: Number(j.steps) || 0, imageToImage: j.imageToImage === true }
+      : null
+  } catch { return null }
+}
+
+export interface PreparedInitImage { base64: string; mime: 'image/jpeg' | 'image/png'; bytes: number }
+
+/**
+ * Validates a source picture. The type is decided by the bytes, never by what the data URL claims, and a picture over
+ * 8 MB is refused before it is decoded.
+ */
+export function prepareInitImage(input: string | Uint8Array): PreparedInitImage {
+  let base64: string
+  let bytes: Buffer
+  if (typeof input === 'string') {
+    const m = /^data:([^;,]+);base64,/i.exec(input)
+    if (m && !/^image\/(png|jpe?g)$/i.test(m[1])) throw new ImageEngineError('bad-request', 'The source picture must be a JPEG or a PNG.')
+    base64 = (m ? input.slice(m[0].length) : input).replace(/\s+/g, '')
+    if (base64.length > Math.ceil((MAX_INIT_IMAGE_BYTES * 4) / 3) + 8) throw new ImageEngineError('bad-request', 'The source picture is larger than 8 MB.')
+    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(base64)) throw new ImageEngineError('bad-request', 'The source picture is not valid image data.')
+    bytes = Buffer.from(base64, 'base64')
+  } else {
+    if (input.byteLength > MAX_INIT_IMAGE_BYTES) throw new ImageEngineError('bad-request', 'The source picture is larger than 8 MB.')
+    bytes = Buffer.from(input.buffer, input.byteOffset, input.byteLength)
+    base64 = bytes.toString('base64')
+  }
+  if (bytes.length > MAX_INIT_IMAGE_BYTES) throw new ImageEngineError('bad-request', 'The source picture is larger than 8 MB.')
+  const jpeg = bytes.length > 4 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff
+  const png = bytes.length > 8 && bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+  if (!jpeg && !png) throw new ImageEngineError('bad-request', 'The source picture must be a JPEG or a PNG.')
+  return { base64, mime: jpeg ? 'image/jpeg' : 'image/png', bytes: bytes.length }
+}
+
+export interface GenerateManyResult {
+  results: GenerateResult[]
+  errors: { index: number; code: ImageEngineError['code'] | 'unknown'; message: string }[]
+  /** True when the signal fired and the remaining pictures were not attempted. */
+  cancelled: boolean
 }
 
 export interface GenerateResult {
@@ -79,7 +160,7 @@ function findPython(version: string): Promise<string | null> {
 }
 
 export class ImageEngineError extends Error {
-  readonly code: 'not-installed' | 'install-failed' | 'start-failed' | 'bad-request' | 'engine-error' | 'no-output' | 'cancelled' | 'busy'
+  readonly code: 'not-installed' | 'install-failed' | 'start-failed' | 'bad-request' | 'engine-error' | 'no-output' | 'cancelled' | 'not-stopped' | 'busy'
   constructor(code: ImageEngineError['code'], message: string) {
     super(message)
     this.name = 'ImageEngineError'
@@ -97,6 +178,10 @@ export interface EngineOptions {
   fetchFn?: typeof fetch
   spawnFn?: typeof spawn
   machine?: MachineInfo
+  /** Ends the engine process (and its children). Replaceable in tests. */
+  killFn?: (child: ChildProcess) => void
+  /** How long to wait for the process to be gone after killing it. */
+  killTimeoutMs?: number
 }
 
 const clampDim = (v: number | undefined, fallback: number): number => {
@@ -160,6 +245,9 @@ export class FastSdEngine {
       const say = (m: string): void => { this.note(m); onStatus?.(m) }
       this.current = 'stopped'
       try {
+        if (this.busy) throw new ImageEngineError('busy', 'The image engine is drawing a picture. Repair it when that has finished.')
+        // Packages cannot be replaced under a running engine.
+        if (this.child) await this.terminate()
         mkdirSync(this.o.home, { recursive: true })
         if (!existsSync(join(this.src, 'src', 'app.py'))) {
           say('Downloading the image engine source…')
@@ -180,7 +268,6 @@ export class FastSdEngine {
         say('Installing the engine runtime (this is large, first time only)…')
         if ((await this.run('uv', ['pip', 'install', '--python', this.python, 'torch==2.8.0', '--index-url', 'https://download.pytorch.org/whl/cpu'], this.src, signal)) !== 0) throw new Error('Installing the engine runtime failed.')
         if ((await this.run('uv', ['pip', 'install', '--python', this.python, '-r', 'requirements.txt'], this.src, signal)) !== 0) throw new Error('Installing the engine packages failed.')
-        const { writeFileSync } = await import('node:fs')
         writeFileSync(join(this.src, '.orbis-installed'), `${PINNED_COMMIT}\n`)
         this.current = 'stopped'
         say('Image engine installed.')
@@ -264,6 +351,7 @@ export class FastSdEngine {
       return { ok: r.ok, status: r.status, json: r.ok ? await r.json() : null }
     }
     return new Promise((resolve, reject) => {
+      if (signal?.aborted) { reject(new Error('cancelled')); return }
       const req = httpRequest({ host: '127.0.0.1', port: this.port, path, method: 'POST', headers: { 'content-type': 'application/json', 'content-length': Buffer.byteLength(payload) } }, (res) => {
         const chunks: Buffer[] = []
         res.on('data', (c: Buffer) => chunks.push(c))
@@ -281,14 +369,79 @@ export class FastSdEngine {
     }) as Promise<{ ok: boolean; status: number; json: unknown }>
   }
 
+  private kill(c: ChildProcess): void {
+    if (this.o.killFn) { this.o.killFn(c); return }
+    if (win && c.pid !== undefined) execFile('taskkill', ['/PID', String(c.pid), '/T', '/F'], { windowsHide: true }, () => undefined)
+    else c.kill('SIGKILL')
+  }
+
+  /**
+   * Ends the engine process this object started and resolves true only once that process has really exited. False
+   * means there was nothing of ours to end (another Orbis process started the engine) or it did not exit in time.
+   */
+  terminate(): Promise<boolean> {
+    const c = this.child
+    if (!c) return Promise.resolve(false)
+    if (c.exitCode !== null || c.signalCode) { if (this.child === c) this.child = null; this.current = 'stopped'; return Promise.resolve(true) }
+    return new Promise((resolve) => {
+      let done = false
+      const finish = (ok: boolean): void => {
+        if (done) return
+        done = true
+        clearTimeout(timer)
+        if (ok) { if (this.child === c) this.child = null; this.current = 'stopped' }
+        resolve(ok)
+      }
+      const timer = setTimeout(() => finish(c.exitCode !== null || Boolean(c.signalCode)), this.o.killTimeoutMs ?? 10_000)
+      c.once('close', () => finish(true))
+      c.once('exit', () => finish(true))
+      this.kill(c)
+    })
+  }
+
   /** Terminates only the engine process this object started. */
   stop(): void {
-    const c = this.child
-    this.child = null
-    if (!c || c.killed || c.pid === undefined) return
-    if (win) execFile('taskkill', ['/PID', String(c.pid), '/T', '/F'], () => undefined)
-    else c.kill('SIGTERM')
-    this.current = 'stopped'
+    void this.terminate()
+  }
+
+  /** What the engine is doing, checked: a server another Orbis process started is reported as ready, not as stopped. */
+  async status(): Promise<EngineState> {
+    const s = this.state()
+    if (s.state === 'stopped' && (await this.alive())) return { state: 'ready', detail: 'The image engine is running.', backend: s.backend }
+    return s
+  }
+
+  /** Several pictures of one prompt, one after another (the engine draws one at a time). A failure does not lose the others. */
+  async generateMany(prompt: string, count: number, opt: GenerateOptions = {}): Promise<GenerateManyResult> {
+    const n = Math.min(MAX_BATCH, Math.max(1, Math.floor(Number.isFinite(count) ? count : 1)))
+    const out: GenerateManyResult = { results: [], errors: [], cancelled: false }
+    const baseSeed = Number.isSafeInteger(opt.seed) ? (opt.seed as number) : Math.floor(Math.random() * 2 ** 31)
+    for (let i = 0; i < n; i++) {
+      if (opt.signal?.aborted) { out.cancelled = true; break }
+      const label = n > 1 ? `Picture ${i + 1} of ${n}: ` : ''
+      try {
+        // Each picture has its own seed; the same prompt with the same seed would only repeat itself.
+        out.results.push(await this.generate(prompt, { ...opt, seed: (baseSeed + i * 7919) % 2 ** 31, onStatus: opt.onStatus ? (m) => opt.onStatus?.(`${label}${m}`) : undefined }))
+      } catch (e) {
+        const err = e instanceof ImageEngineError ? e : null
+        const code = err?.code ?? 'unknown'
+        out.errors.push({ index: i, code, message: e instanceof Error ? e.message : String(e) })
+        if (code === 'cancelled' || code === 'not-stopped') { out.cancelled = true; break }
+        // The engine is missing or will not start: the remaining pictures would fail the same way.
+        if (code === 'not-installed' || code === 'install-failed' || code === 'start-failed' || code === 'bad-request') break
+      }
+    }
+    return out
+  }
+
+  /** Ends inference for a cancelled request. The error it returns says only what is true. */
+  private async cancelInference(): Promise<ImageEngineError> {
+    const ended = await this.terminate()
+    if (ended) {
+      this.note('Stopped the image engine: the picture was cancelled.')
+      return new ImageEngineError('cancelled', 'Cancelled. The image engine was stopped and starts again on the next picture.')
+    }
+    return new ImageEngineError('not-stopped', 'Stopped waiting, but the image engine could not be stopped and may still be drawing.')
   }
 
   /**
@@ -299,6 +452,9 @@ export class FastSdEngine {
     const text = prompt.trim()
     if (!text) throw new ImageEngineError('bad-request', 'There is no description to draw.')
     if (text.length > 1000) throw new ImageEngineError('bad-request', 'The description is too long for the image engine (limit 1000 characters).')
+    // Checked before anything starts: a bad source picture must not cost an engine start.
+    const init = opt.initImage !== undefined ? prepareInitImage(opt.initImage) : null
+    const strength = Math.min(0.95, Math.max(0.1, Number.isFinite(opt.strength) ? (opt.strength as number) : 0.6))
     const t0 = Date.now()
     const status = opt.onStatus
     if (!this.isInstalled()) {
@@ -316,6 +472,7 @@ export class FastSdEngine {
     this.busy = true
     this.current = 'generating'
     const backend = this.backend()
+    const prefs = readImagePreferences(this.o.home)
     const seed = Number.isSafeInteger(opt.seed) ? (opt.seed as number) : Math.floor(Math.random() * 2 ** 31)
     try {
       status?.('Drawing…')
@@ -323,9 +480,9 @@ export class FastSdEngine {
       const body = {
         prompt: text,
         negative_prompt: (opt.negativePrompt ?? '').slice(0, 500),
-        image_width: clampDim(opt.width, 512),
-        image_height: clampDim(opt.height, 512),
-        inference_steps: Math.min(8, Math.max(1, Math.round(opt.steps ?? 1))),
+        image_width: clampDim(opt.width, prefs.size),
+        image_height: clampDim(opt.height, prefs.size),
+        inference_steps: Math.min(8, Math.max(1, Math.round(opt.steps ?? prefs.steps))),
         guidance_scale: 1,
         number_of_images: 1,
         use_seed: true,
@@ -334,9 +491,17 @@ export class FastSdEngine {
         use_tiny_auto_encoder: backend.tinyAutoEncoder,
         lcm_model_id: backend.modelId,
         openvino_lcm_model_id: backend.openvinoModelId,
-        diffusion_task: 'text_to_image'
+        diffusion_task: init ? 'image_to_image' : 'text_to_image',
+        ...(init ? { init_image: init.base64, strength } : {})
       }
-      const res = await this.post('/api/generate', body, opt.signal)
+      let res: { ok: boolean; status: number; json: unknown }
+      try {
+        res = await this.post('/api/generate', body, opt.signal)
+      } catch (e) {
+        // Stopping the wait does not stop the inference: upstream has no cancel call, so the process is ended.
+        if (opt.signal?.aborted) throw await this.cancelInference()
+        throw e
+      }
       if (!res.ok) throw new ImageEngineError('engine-error', `The image engine answered with status ${res.status}.`)
       const json = res.json as { images?: unknown; error?: unknown; latency?: unknown }
       if (typeof json.error === 'string' && json.error) throw new ImageEngineError('engine-error', `The image engine reported: ${json.error.slice(0, 300)}`)
@@ -348,6 +513,9 @@ export class FastSdEngine {
         throw new ImageEngineError('no-output', 'The image engine returned data that is not a complete picture.')
       }
       const generation = (Date.now() - g0) / 1000
+      try {
+        writeFileSync(join(this.o.home, 'last-generation.json'), JSON.stringify({ seconds: generation, at: Date.now(), width: body.image_width, height: body.image_height, steps: body.inference_steps, imageToImage: init !== null }))
+      } catch { /* a missing measurement is shown as missing */ }
       return { dataUrl: `data:image/jpeg;base64,${first}`, seed, seconds: { total: (Date.now() - t0) / 1000, engineStart, generation }, backend }
     } finally {
       this.busy = false

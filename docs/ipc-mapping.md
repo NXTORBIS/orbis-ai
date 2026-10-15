@@ -372,6 +372,7 @@ None of these ever touched Electron beyond the channel itself. They are a servic
 | `share:export`, `share:import-project` | Taking one conversation or project out of Orbis, and bringing a project back. Mojo, same service |
 | `research:control` | Holding a research run, letting it go, and changing what it is doing. Mojo, same service |
 | `image:edit`, `image:save` | Mojo, same service |
+| `imagegen:status`, `imagegen:install` | The local image engine's real state (read-only) and its install or repair. Mojo, same service |
 | `voice:transcribe`, `voice:cancel`, `voice:hardware` | Mojo, same service |
 | `voice:models-status`, `voice:models-download`, `voice:models-cancel-download`, `voice:models-delete`, `voice:models-verify` | Mojo, same service |
 

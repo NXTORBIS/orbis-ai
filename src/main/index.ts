@@ -23,6 +23,7 @@ import type {
   ChatRequest,
   Conversation,
   ImageEditRequest,
+  ImageGenStatus,
   ImageEditResult,
   PickedFiles,
   Research,
@@ -70,8 +71,8 @@ import { closedBrowserState, followChromiumTabs } from './browserState'
 import type { ChromiumControl } from './chromium/service'
 import type { BrowserManagerOptions } from './chromium/browserManager'
 import { findSource, latestResearch, sourceNotes } from '../shared/research'
-import { detectImageGenRequest, generateImage, rewriteImagePrompt } from './imagegen'
-import { sharedEngine } from './fastsd/engine'
+import { detectImageCount, detectImageGenRequest, generateImage, generateImages, rewriteImagePrompt } from './imagegen'
+import { PINNED_COMMIT, readImagePreferences, readInstalledCommit, readLastGeneration, sharedEngine, writeImagePreferences, prepareInitImage } from './fastsd/engine'
 import { classifyAutomationMessage, classifyIntent } from './intent'
 import type { ChatIntent } from './intent'
 import { automationProgress } from '../shared/automation'
@@ -1166,6 +1167,11 @@ function createWindow(): BrowserWindow {
   return win
 }
 
+/** Where the image engine keeps its files. The same value the helper process is given through the environment. */
+function imageHomeDir(): string {
+  return process.env.ORBIS_IMAGEGEN_HOME ?? join(app.getPath('userData'), 'imagegen')
+}
+
 function registerIpc(): void {
   /*
    * Who is allowed to ask.
@@ -1233,7 +1239,38 @@ function registerIpc(): void {
     const settings = await store.updateSettings(update)
     nativeTheme.themeSource = settings.theme
     settingsForBrowser = { effects: settings.effects !== false }
+    // The helper process draws too and has no settings store, so the choice is mirrored beside the engine.
+    if (update.imageSize !== undefined || update.imageSteps !== undefined) {
+      try { writeImagePreferences(imageHomeDir(), { size: settings.imageSize, steps: settings.imageSteps }) } catch (err) { console.error('[imagegen] could not save the size and steps', err) }
+    }
     return settings
+  })
+
+  /** What the image engine really is right now, for Settings. Nothing here is invented: it is the engine's own state. */
+  handle('imagegen:status', async (): Promise<ImageGenStatus> => {
+    const engine = sharedEngine()
+    const state = await engine.status()
+    const home = imageHomeDir()
+    return {
+      state: state.state,
+      detail: state.detail,
+      backend: state.backend ? { openvino: state.backend.openvino, model: state.backend.openvino ? state.backend.openvinoModelId : state.backend.modelId, reason: state.backend.reason } : null,
+      pinnedCommit: PINNED_COMMIT,
+      installedCommit: readInstalledCommit(home),
+      lastGeneration: readLastGeneration(home),
+      log: engine.log.slice(-12),
+      preferences: readImagePreferences(home)
+    }
+  })
+
+  /** Installs or repairs the engine. Returns at once; the install takes minutes and its progress is read from imagegen:status. */
+  handle('imagegen:install', async (): Promise<{ started: boolean; message: string }> => {
+    const engine = sharedEngine()
+    const now = engine.state().state
+    if (now === 'installing') return { started: false, message: 'The image engine is already being installed.' }
+    if (now === 'generating') return { started: false, message: 'The image engine is drawing a picture. Try again when it has finished.' }
+    void engine.install().catch((err: unknown) => console.error('[imagegen] install failed', err))
+    return { started: true, message: 'Installing the image engine.' }
   })
 
   handle('settings:test-key', () => testApiKey(GROQ_API_KEYS, (url, init) => net.fetch(url, init), MISTRAL_API_KEYS))
@@ -1753,12 +1790,27 @@ ${block}`
         if (intent?.kind === 'image') {
           emit({ type: 'status', message: IMAGE_GEN_STATUS })
           try {
-            const image = await generateImage(intent.prompt, intent.seed, { signal: controller.signal, onStatus: (message) => emit({ type: 'status', message }) })
-            if (controller.signal.aborted) return emit({ type: 'aborted' })
-            void registerGeneratedImage(image.dataUrl, intent.prompt)
-            emit({ type: 'image', url: image.dataUrl, prompt: intent.prompt, seed: image.seed })
+            // "3 images of ..." makes three; an edit of an earlier picture (it carries a seed) stays one.
+            const wanted = intent.seed === undefined ? detectImageCount(last.content) : { count: 1, requested: 1 }
+            if (wanted.requested > wanted.count) emit({ type: 'status', message: `Making ${wanted.count} pictures: that is the most at one time.` })
+            const made = await generateImages(intent.prompt, wanted.count, intent.seed, { signal: controller.signal, onStatus: (message) => emit({ type: 'status', message }) })
+            // A stop from the person: nothing further is shown, and the window leaves its loading state.
+            if (controller.signal.aborted || made.cancelled) {
+              if (made.errors.some((e) => e.code === 'not-stopped')) emit({ type: 'status', message: 'The image engine could not be stopped and may still be drawing in the background.' })
+              return emit({ type: 'aborted' })
+            }
+            for (const image of made.results) {
+              void registerGeneratedImage(image.dataUrl, intent.prompt)
+              emit({ type: 'image', url: image.dataUrl, prompt: intent.prompt, seed: image.seed })
+            }
+            if (made.results.length === 0) {
+              emit({ type: 'error', message: `Couldn't generate the image: ${made.errors[0]?.message ?? 'nothing was produced'}. Try again in a moment.` })
+              return
+            }
+            if (made.errors.length > 0) emit({ type: 'status', message: `Made ${made.results.length} of ${wanted.count} pictures. ${made.errors.length === 1 ? 'One' : made.errors.length} failed: ${made.errors[0].message}` })
             emit({ type: 'done', model: request.model, truncated: false })
           } catch (err) {
+            if (controller.signal.aborted) return emit({ type: 'aborted' })
             // Falling back to the chat model would just get "I can't make images" back.
             emit({ type: 'error', message: `Couldn't generate the image: ${err instanceof Error ? err.message : String(err)}. Try again in a moment.` })
           }
@@ -2449,9 +2501,17 @@ ${summaryBlock(summary)}`
     const seed = Number.isSafeInteger(request?.seed) ? request.seed : undefined
     const fetchFn = (url: string, init?: RequestInit): Promise<Response> => net.fetch(url, init)
     const nextPrompt = await rewriteImagePrompt(prompt, instruction, GROQ_API_KEYS, fetchFn)
-    const image = await generateImage(nextPrompt, seed)
+    // The picture being edited goes to the engine as the starting point. Without a usable one the edit is made from the
+    // words alone, and the result says so.
+    const source = typeof request?.image === 'string' && request.image.length > 0 ? request.image : undefined
+    let usable: string | undefined
+    if (source) {
+      try { prepareInitImage(source); usable = source } catch { usable = undefined }
+    }
+    const strength = typeof request?.strength === 'number' && Number.isFinite(request.strength) ? Math.min(0.95, Math.max(0.1, request.strength)) : undefined
+    const image = await generateImage(nextPrompt, seed, { initImage: usable, strength })
     void registerGeneratedImage(image.dataUrl, nextPrompt)
-    return { url: image.dataUrl, prompt: nextPrompt, seed: image.seed }
+    return { url: image.dataUrl, prompt: nextPrompt, seed: image.seed, fromPicture: image.imageToImage }
   })
 
   /**
@@ -5240,6 +5300,8 @@ ${page.text}`, { howMany: 6 })
     process.env.ORBIS_IMAGEGEN_HOME = imageHome
     process.env.ORBIS_FASTSD_SERVE = imageServe
     const imageEngine = sharedEngine({ home: imageHome, serveScript: imageServe })
+    // The saved size and steps are what every process draws with; written again here so the file always matches.
+    void store.getSettings().then((s) => writeImagePreferences(imageHome, { size: s.imageSize, steps: s.imageSteps })).catch(() => undefined)
     quitFlush.add('the local image engine', () => imageEngine.stop())
     const neurovaEngine = new NeurovaEngine({
       home: join(app.getPath('userData'), 'neurova'),

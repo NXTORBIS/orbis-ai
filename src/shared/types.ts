@@ -502,6 +502,10 @@ export interface Settings {
    * point where the searches themselves can still be changed.
    */
   showResearchPlan: boolean
+  /** Width and height, in pixels, of pictures drawn by the local image engine: 512, 640, 768 or 1024. */
+  imageSize: number
+  /** Inference steps for the local image engine, 1 to 4. More steps take proportionally longer. */
+  imageSteps: number
   /** Orbis opens its browser (at the saved size) as soon as it starts, instead of the chat. */
   openBrowserOnLaunch: boolean
   /**
@@ -673,12 +677,32 @@ export interface ImageEditRequest {
   prompt: string
   instruction: string
   seed?: number
+  /** The picture being edited, as a data URL (JPEG or PNG, at most 8 MB). It is the starting point of the new picture. */
+  image?: string
+  /** How far the new picture may move from `image`, 0.1 to 0.95. */
+  strength?: number
 }
 
 export interface ImageEditResult {
   url: string
   prompt: string
   seed: number
+  /** True when the engine started from the picture that was edited; false when it worked from the words alone. */
+  fromPicture?: boolean
+}
+
+/** What the local image engine really is, as read from the engine. */
+export interface ImageGenStatus {
+  state: 'not-installed' | 'installing' | 'stopped' | 'starting' | 'ready' | 'generating' | 'failed'
+  detail: string
+  backend: { openvino: boolean; model: string; reason: string } | null
+  pinnedCommit: string
+  installedCommit: string | null
+  /** Measured on this computer; null until a picture has been made. */
+  lastGeneration: { seconds: number; at: number; width: number; height: number; steps: number; imageToImage: boolean } | null
+  /** The engine's own recent lines (install progress, start-up, errors). */
+  log: string[]
+  preferences: { size: number; steps: number }
 }
 
 /** Ad blocking strength: Standard (strong, most compatible), Strict (also overlays, uncertain matches, third-party popups), Custom. */
@@ -1962,6 +1986,10 @@ export interface NxtorbisApi {
   saveImage(dataUrl: string, name: string): Promise<boolean>
   /** Re-renders an image with the edit merged into its prompt, keeping the seed. */
   editImage(request: ImageEditRequest): Promise<ImageEditResult>
+  /** The local image engine's real state, last measured generation time and recent log lines. */
+  getImageGenStatus(): Promise<ImageGenStatus>
+  /** Installs or repairs the local image engine. Returns at once; poll getImageGenStatus for progress. */
+  installImageEngine(): Promise<{ started: boolean; message: string }>
   /** Searches the web for an Orbis Search page. Sends the words and nothing about who asked. */
   /**
    * Searching. "all" is web search; every other category goes to the specialized provider, and comes back as a

@@ -25,6 +25,7 @@ export type SettingsSectionId =
   | 'notifications'
   | 'appearance'
   | 'voice'
+  | 'images'
   | 'files'
   | 'games'
   | 'about'
@@ -150,6 +151,14 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = Object.freeze([
     icon: 'mic',
     keywords: ['voice', 'speech', 'dictation', 'microphone', 'pulsar', 'transcribe', 'whisper', 'talk'],
     settings: []
+  },
+  {
+    id: 'images',
+    label: 'Image generation',
+    blurb: 'The picture engine that runs on this computer: its state, size and quality.',
+    icon: 'image',
+    keywords: ['image', 'images', 'picture', 'draw', 'generate image', 'imagine', 'image size', 'resolution', 'steps', 'image engine', 'stable diffusion', 'fastsd'],
+    settings: ['imageSize', 'imageSteps']
   },
   {
     id: 'files',
