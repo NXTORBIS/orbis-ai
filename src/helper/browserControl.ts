@@ -2,6 +2,8 @@ import { HelperError } from './server.ts'
 import type { Handler } from './server.ts'
 import { PendingApprovals } from './browser/host.ts'
 import type { CapabilityDescriptor } from '../shared/browserControl.ts'
+import { readFile, stat } from 'node:fs/promises'
+import { searchDownloads, MAX_SEARCH_BYTES, type DownloadRow } from '../shared/downloadSearch.ts'
 
 /** The Browser Control Layer, as far as the panel may use it: run one capability, get { ok, data } or { ok: false, error }. */
 export interface PanelControl {
@@ -50,6 +52,7 @@ export function createBrowserControlHandlers(get: () => PanelControl | null | un
     close: (a) => ['tabs.close', { tabId: id(a.tabId, 'The tab') }],
     mute: (a) => ['tabs.mute', { tabId: id(a.tabId, 'The tab'), muted: a.muted === true }],
     pin: (a) => ['tabs.pin', { tabId: id(a.tabId, 'The tab'), pinned: a.pinned === true }],
+    sleep: (a) => ['tabs.sleep', { tabId: id(a.tabId, 'The tab') }],
     move: (a) => (Number.isInteger(a.index) && (a.index as number) >= 0 && (a.index as number) < 1000 ? ['tabs.move', { tabId: id(a.tabId, 'The tab'), index: a.index as number }] : bad('The position is not valid.')),
     back: () => ['navigation.back', {}],
     forward: () => ['navigation.forward', {}],
@@ -111,6 +114,40 @@ export function createBrowserControlHandlers(get: () => PanelControl | null | un
      * another program.
      */
     'browser:openExternal': ([target]) => run('navigation.openExternal', { url: address(target) }),
+
+    /**
+     * Finds downloads by what is inside them. Only the browser's own list of finished downloads is read, only files that
+     * still exist, only plain text of a sensible size (see shared/downloadSearch.ts for what is skipped, and why that is
+     * counted in the answer rather than hidden).
+     */
+    /**
+     * The text of the page in front, for the panel to read aloud with the computer's own voices.
+     *
+     * This is the one place page text reaches the panel, and it is never sent to a model from there: it goes to the
+     * speech engine and nowhere else. Only web pages are read; a new tab or an Orbis page says so instead.
+     */
+    'page:listen-text': async () => {
+      const read = (await run('page.read', { maxChars: 30000 })) as { url?: string; title?: string; text?: string }
+      if (!/^https?:\/\//i.test(read.url ?? '')) bad('This tab is not a web page, so there is nothing to read aloud.')
+      const text = typeof read.text === 'string' ? read.text.trim() : ''
+      if (!text) bad('There is no readable text on this page yet. It may still be loading.')
+      return { url: read.url, title: read.title ?? '', text }
+    },
+
+    'downloads:search': async ([query]) => {
+      const text = typeof query === 'string' ? query : ''
+      if (text.trim().length < 2 || text.length > 200) bad('Type at least two characters to search for.')
+      const rows = (await run('downloads.list', { state: 'completed', limit: 500 })) as DownloadRow[]
+      return searchDownloads(rows, text, async (path) => {
+        try {
+          const info = await stat(path)
+          if (!info.isFile() || info.size > MAX_SEARCH_BYTES) return null
+          return await readFile(path, 'utf8')
+        } catch {
+          return null
+        }
+      })
+    },
 
     /**
      * Everything the browser can do, as the control layer reports it. The Orb's menu is this list, so a capability

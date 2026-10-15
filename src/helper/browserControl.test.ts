@@ -71,3 +71,24 @@ test('the Orb asks for the real page, and the amount it may read is bounded', as
   assert.deepEqual(calls.map((c) => (c.params as { maxChars: number }).maxChars), [12_000, 500, 12_000, 12_000])
 
 })
+
+test('putting a tab to sleep maps to its capability with a checked tab id', async () => {
+  const { handlers, calls } = setup()
+  await handlers['browser:do'](['sleep', { tabId: '7' }], ctx)
+  assert.deepEqual(calls[0], { capability: 'tabs.sleep', params: { tabId: '7' } })
+  await assert.rejects(Promise.resolve().then(() => handlers['browser:do'](['sleep', {}], ctx)), /not valid/)
+})
+
+test('listening reads only web pages, and a page with no text says so', async () => {
+  const make = (data: unknown) => createBrowserControlHandlers(() => ({ execute: async () => ({ ok: true, data }) }))
+  const good = await make({ url: 'https://a.test/x', title: 'T', text: 'Hello there.' })['page:listen-text']([], ctx)
+  assert.deepEqual(good, { url: 'https://a.test/x', title: 'T', text: 'Hello there.' })
+  await assert.rejects(Promise.resolve(make({ url: 'chrome://newtab/', text: 'x' })['page:listen-text']([], ctx)), /not a web page/)
+  await assert.rejects(Promise.resolve(make({ url: 'https://a.test/', text: '   ' })['page:listen-text']([], ctx)), /no readable text/)
+})
+
+test('download search refuses a one-letter query before touching the browser', async () => {
+  const { handlers, calls } = setup()
+  await assert.rejects(Promise.resolve(handlers['downloads:search'](['a'], ctx)), /at least two/)
+  assert.equal(calls.length, 0)
+})

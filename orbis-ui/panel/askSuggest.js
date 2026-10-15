@@ -94,3 +94,39 @@ export function writeHistory(storage, key, list) {
     /* storage may be full or denied; history is a convenience */
   }
 }
+
+/**
+ * A page's text cut into pieces a speech engine can read one after another.
+ *
+ * Browsers stop reading a very long utterance part way, so the text is split at sentence ends, never inside a word, into
+ * pieces of at most `max` characters. Blank space is collapsed; nothing else is changed or left out.
+ */
+export function speechChunks(text, max = 380) {
+  const clean = String(text ?? '').replace(/\s+/g, ' ').trim()
+  if (!clean) return []
+  const sentences = clean.match(/[^.!?。！？]+[.!?。！？]+["')\]]*\s*|[^.!?。！？]+$/g) ?? [clean]
+  const out = []
+  let cur = ''
+  const push = () => {
+    if (cur.trim()) out.push(cur.trim())
+    cur = ''
+  }
+  for (const s of sentences) {
+    if (s.length > max) {
+      push()
+      let rest = s
+      while (rest.length > max) {
+        let cut = rest.lastIndexOf(' ', max)
+        if (cut < max / 2) cut = max
+        out.push(rest.slice(0, cut).trim())
+        rest = rest.slice(cut)
+      }
+      cur = rest
+      continue
+    }
+    if ((cur + s).length > max) push()
+    cur += s
+  }
+  push()
+  return out
+}

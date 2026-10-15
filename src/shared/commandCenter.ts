@@ -160,7 +160,7 @@ export const PANEL_VIEWS = ['home', 'ask', 'search', 'block', 'recall', 'schedul
  *
  * Same rule as above: a name here is a claim that one of those files registers it, and the test reads the files.
  */
-export const RAIL_VIEWS = ['tabs', 'tabGroups', 'media', 'controls', 'savedPages', 'screenshots', 'reminders', 'clipboard', 'whiteboard', 'research', 'sources', 'workspaces'] as const
+export const RAIL_VIEWS = ['tabs', 'tabGroups', 'media', 'controls', 'savedPages', 'screenshots', 'reminders', 'clipboard', 'whiteboard', 'research', 'sources', 'workspaces', 'downloads'] as const
 
 export interface OrbisCapability {
   /** Which lane of the panel it is shown in. The category says what it is; the lane says where to look for it. */
@@ -243,7 +243,7 @@ export const CAPABILITIES: OrbisCapability[] = [
   { id: 'copyLink', name: 'Copy link', lane: 'page', category: 'browser', description: "This page's address, on the clipboard", icon: 'copy', keywords: ['copy', 'link', 'url', 'address', 'share', 'clipboard'], target: { kind: 'do', message: 'orbis.page.copyLink' }, pinnable: false, needs: ['browser', 'page'] },
   { id: 'bookmarks', name: 'Bookmarks', lane: 'find', category: 'browser', description: 'Pages kept for later', icon: 'bookmarks', keywords: ['bookmark', 'favourite', 'favorite', 'saved'], target: { kind: 'page', url: 'chrome://bookmarks/' }, pinnable: false, needs: ['browser'] },
   { id: 'history', name: 'History', lane: 'find', category: 'browser', description: 'Where this profile has been', icon: 'history', keywords: ['history', 'visited', 'recent'], target: { kind: 'page', url: 'chrome://history/' }, pinnable: false, needs: ['browser'] },
-  { id: 'downloads', name: 'Downloads', lane: 'find', category: 'browser', description: 'Files Orbis has fetched', icon: 'downloads', keywords: ['download', 'file', 'saved'], target: { kind: 'page', url: 'chrome://downloads/' }, pinnable: false, needs: ['browser'] },
+  { id: 'downloads', name: 'Downloads', lane: 'find', category: 'browser', description: 'Find a downloaded file by what is inside it', icon: 'downloads', keywords: ['download', 'file', 'saved', 'search inside'], target: { kind: 'view', view: 'downloads' }, pinnable: false, needs: ['browser', 'helper'] },
   { id: 'extensions', name: 'Extensions', lane: 'browse', category: 'browser', description: 'What is installed, and whether it is on', icon: 'extensions', keywords: ['extension', 'addon', 'add-on', 'plugin'], target: { kind: 'page', url: 'chrome://extensions/' }, pinnable: false, needs: ['browser'] },
 
   // The description used to read "Everything Orbis can be asked to do, and what it has done". The view behind it

@@ -1,5 +1,5 @@
 import { askBrowser, call, HelperDown } from './helper.js'
-import { suggestionsFor, historyKey, remember, readHistory, writeHistory } from './askSuggest.js'
+import { suggestionsFor, historyKey, remember, readHistory, writeHistory, speechChunks } from './askSuggest.js'
 import { mountOmnibox, createVoiceSession } from './omnibox-ui.js'
 import { mountCommandCenter } from './command-center.js'
 import { hasView, showView } from './rail/index.js'
@@ -596,6 +596,49 @@ function askType(placeholder) {
  * belongs there. A button that claimed to start something it had not been told yet would be the dishonest option, and
  * the summarise button is disabled with the reason on it when there is no page to summarise.
  */
+/** Whether the page in front is being read aloud right now. */
+let pageListening = false
+
+/**
+ * Reads the page in front aloud, one sentence group at a time, with the computer's own voices.
+ *
+ * The text comes from the helper (the same read the Orb uses) and goes only to the speech engine. Pressing the choice
+ * again stops it; leaving the page it was reading does not cut it off mid-sentence but no new text is fetched.
+ */
+async function togglePageListen() {
+  if (typeof speechSynthesis === 'undefined' || typeof SpeechSynthesisUtterance === 'undefined') {
+    askState.error = 'This browser has no speech voices available, so the page cannot be read aloud.'
+    askState.phase = 'error'
+    return drawAsk()
+  }
+  if (pageListening) {
+    pageListening = false
+    speechSynthesis.cancel()
+    return drawAsk()
+  }
+  pageListening = true
+  drawAsk()
+  try {
+    const got = await call('page:listen-text', [])
+    const parts = speechChunks(got && got.text)
+    for (const part of parts) {
+      if (!pageListening) break
+      await new Promise((done) => {
+        const say = new SpeechSynthesisUtterance(part)
+        say.onend = done
+        say.onerror = done
+        speechSynthesis.speak(say)
+      })
+    }
+  } catch (err) {
+    pageListening = false
+    askState.error = askProblem(err)
+    askState.phase = 'error'
+  }
+  pageListening = false
+  drawAsk()
+}
+
 function askChoices() {
   const box = node('div', 'ask-choices')
   box.append(node('h2', 'ask-choices-head', 'Orion, about this page'))
@@ -607,6 +650,12 @@ function askChoices() {
       note: havePage ? 'Starts now, from what the page says.' : askState.pageWhy,
       needsPage: true,
       chosen: () => void runAsk('Summarise this page')
+    },
+    {
+      name: pageListening ? 'Stop reading aloud' : 'Read this page aloud',
+      note: havePage ? 'Uses this computer’s own voices. Nothing is sent anywhere.' : askState.pageWhy,
+      needsPage: true,
+      chosen: () => void togglePageListen()
     },
     {
       name: 'Do something on this page',

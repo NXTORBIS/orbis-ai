@@ -130,6 +130,21 @@ registerView('tabs', {
     // Two or three tabs, side by side: the pages are pinned to the comparison tray and compared from what they say.
     let compared = null
     let comparing = false
+    // Frees the memory of tabs nobody is looking at. Never the tab in front, a pinned tab or one that is playing sound.
+    const sleepBackground = async () => {
+      const idle = shared.tabs.filter((t) => !t.active && !t.pinned && !t.audible && !t.discarded && /^https?:/i.test(t.url || ''))
+      if (!idle.length) {
+        note = 'No background tab is free to sleep.'
+        return draw()
+      }
+      let slept = 0
+      for (const t of idle) {
+        const failed = await act('sleep', { tabId: t.id })
+        if (!failed) slept++
+      }
+      note = slept ? `Put ${slept} tab${slept === 1 ? '' : 's'} to sleep.` : shared.note || 'The browser kept those tabs awake.'
+      draw()
+    }
     // Tabs of one site that are not in a group yet, grouped by that site: only where there are two or more of them.
     const groupBySite = async () => {
       const bySite = new Map()
@@ -270,7 +285,8 @@ registerView('tabs', {
             'div',
             { class: 'rv-tools' },
             filterBox(query, `Search ${shared.tabs.length} tabs`, (v) => ((query = v), draw())),
-            el('button', { type: 'button', class: 'labelbtn', title: 'Put tabs of the same site together in a group', onclick: () => void groupBySite() }, 'Group by site')
+            el('button', { type: 'button', class: 'labelbtn', title: 'Put tabs of the same site together in a group', onclick: () => void groupBySite() }, 'Group by site'),
+            el('button', { type: 'button', class: 'labelbtn', title: 'Free the memory of tabs you are not looking at', onclick: () => void sleepBackground() }, 'Sleep background tabs')
           ),
           bar,
           comparedView(),
@@ -426,6 +442,81 @@ registerView('media', {
     shared.listeners.add(() => ctx.active() && draw())
     ctx.onShow(() => draw())
     poller(ctx, refresh, POLL_MS)
+    draw()
+  }
+})
+
+// ---------------------------------------------------------------- Downloads
+
+/**
+ * Find a download by what is inside it.
+ *
+ * Only finished downloads in the browser's own list are searched, and only plain-text files (notes, code, CSV, subtitles).
+ * The answer says how many files could not be looked inside, so an empty result is not read as "nothing anywhere".
+ */
+registerView('downloads', {
+  title: 'Downloads',
+  iconName: 'downloads',
+  draw(body) {
+    let query = ''
+    let result = null
+    let busy = false
+    let problem = ''
+    const run = async () => {
+      if (query.trim().length < 2 || busy) return
+      busy = true
+      problem = ''
+      draw()
+      try {
+        result = await call('downloads:search', [query.trim()])
+      } catch (err) {
+        result = null
+        problem = (err && err.message) || 'The downloads could not be searched.'
+      }
+      busy = false
+      draw()
+    }
+    const draw = () => {
+      const box = el('input', { type: 'search', name: 'dlquery', class: 'rv-input', placeholder: 'Words inside a downloaded file…', 'aria-label': 'Search inside downloaded files', maxlength: '200' })
+      box.value = query
+      box.addEventListener('input', () => (query = box.value))
+      box.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') void run()
+      })
+      const form = el('div', { class: 'rv-tools' }, box, el('button', { type: 'button', class: 'labelbtn primary', ...(busy ? { disabled: true } : {}), onclick: () => void run() }, busy ? 'Searching…' : 'Search'))
+      let content
+      if (problem) content = state('error', problem)
+      else if (busy) content = state('loading', 'Reading your downloaded files…')
+      else if (!result) content = state('empty', 'Type a few words and press Search. Finished downloads that are plain text are looked through.')
+      else if (!result.hits.length) content = state('empty', `Nothing matched "${result.query}" in ${result.searched} file${result.searched === 1 ? '' : 's'}.`)
+      else {
+        const list = el('ul', { class: 'rv-list', 'aria-label': 'Matching downloads' })
+        for (const hit of result.hits) {
+          list.append(
+            el(
+              'li',
+              { class: 'rv-item' },
+              el(
+                'span',
+                { class: 'rv-text' },
+                el('b', {}, hit.name),
+                el('small', {}, hit.kind === 'content' ? `Line ${hit.line}: ${hit.snippet}` : 'Matched by file name'),
+                el('small', { title: hit.path }, hit.path)
+              ),
+              iconButton('copy', `Copy the location of ${hit.name}`, () => void navigator.clipboard?.writeText(hit.path))
+            )
+          )
+        }
+        content = list
+      }
+      const notes = []
+      if (result && !busy) {
+        if (result.skipped) notes.push(`${result.skipped} file${result.skipped === 1 ? '' : 's'} could not be looked inside (not plain text, or too large).`)
+        if (result.missing) notes.push(`${result.missing} download${result.missing === 1 ? ' is' : 's are'} no longer on this computer.`)
+        if (result.truncated) notes.push('Only the first matches are shown. Narrow the words to see others.')
+      }
+      keepFocus(body, () => fill(body, form, content, ...notes.map((n) => el('p', { class: 'rv-note' }, n))))
+    }
     draw()
   }
 })

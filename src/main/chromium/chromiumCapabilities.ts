@@ -294,6 +294,32 @@ export function registerChromiumCapabilities(d: ChromiumCapabilityDeps): void {
   })
 
   control.register({
+    id: 'tabs.sleep',
+    domain: 'tabs',
+    name: 'Put a tab to sleep',
+    description: 'Frees the memory a background tab is using. The tab stays in the strip and reloads when it is opened again. A tab being looked at cannot be put to sleep.',
+    params: { tabId: TAB_ID },
+    mutates: true,
+    confirmation: 'none',
+    already: async (p) => {
+      const tab = await tabFor(p.tabId)
+      const asleep = await call<boolean>(`chrome.tabs.get(${Number(tab.id)}).then((t) => t.discarded === true)`)
+      return asleep ? 'That tab was already asleep.' : null
+    },
+    run: async (p) => {
+      const tab = await tabFor(p.tabId)
+      if (tab.active) throw new Error('The tab in front cannot be put to sleep. Switch to another tab first.')
+      await call(`chrome.tabs.discard(${Number(tab.id)})`)
+      return { tabId: tab.id }
+    },
+    verify: async (data) => {
+      const { tabId } = data as { tabId: string }
+      const ok = await until(() => call<boolean>(`chrome.tabs.get(${Number(tabId)}).then((t) => t.discarded === true)`), Boolean)
+      return { verified: ok, detail: ok ? 'The tab is asleep.' : 'The browser kept the tab awake (it may be playing sound or in use).' }
+    }
+  })
+
+  control.register({
     id: 'tabs.move',
     domain: 'tabs',
     name: 'Move a tab',

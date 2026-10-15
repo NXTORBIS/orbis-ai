@@ -31,3 +31,14 @@ test('unreadable or full storage never throws', () => {
   assert.deepEqual(readHistory(bad, 'k'), [])
   assert.doesNotThrow(() => writeHistory(bad, 'k', ['a']))
 })
+
+import { speechChunks } from './askSuggest.js'
+
+test('speech pieces stay short, keep every word and break at sentence ends', () => {
+  const text = 'First sentence here. Second one follows! And a third? ' + 'word '.repeat(200)
+  const parts = speechChunks(text, 100)
+  assert.ok(parts.length > 3)
+  assert.ok(parts.every((p) => p.length <= 100))
+  assert.equal(parts.join(' ').replace(/\s+/g, ' '), text.replace(/\s+/g, ' ').trim())
+  assert.deepEqual(speechChunks('   '), [])
+})
