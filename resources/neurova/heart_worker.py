@@ -32,6 +32,14 @@ def main():
         os.environ["TORCHDYNAMO_DISABLE"] = "1"
     import torch
     from heartlib import HeartMuLaGenPipeline
+    import soundfile
+    import torchaudio
+
+    def _save(path, wav, sample_rate, **_ignored):
+        # torchaudio.save needs torchcodec (ffmpeg DLLs on Windows); soundfile writes WAV with no extra runtime.
+        soundfile.write(path, wav.detach().cpu().float().numpy().T, int(sample_rate), subtype="FLOAT")
+
+    torchaudio.save = _save
 
     cpu = REQ.get("device", "cpu") == "cpu"
     device = torch.device("cpu" if cpu else "cuda")
