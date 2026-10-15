@@ -3,6 +3,14 @@ import type { MenuItemConstructorOptions, OpenDialogOptions, TitleBarOverlayOpti
 import { appendFileSync, existsSync, promises as fs } from 'node:fs'
 import os from 'node:os'
 import { spawn } from 'node:child_process'
+import { ChanceStore } from './chance/store'
+import { registerChanceIpc } from './chance/ipc'
+import { registerJarvisIpc } from './jarvis/ipc'
+import { registerEyeIpc } from './eye/ipc'
+import { registerCosmosIpc } from './cosmos/ipc'
+import { registerF1Ipc } from './f1/ipc'
+import { registerFootballIpc } from './football/ipc'
+import { initFilesIntegration, registerFilesProtocols, registerGeneratedImage, syncBrowserDownloads } from './filesIntegration'
 import { randomUUID } from 'node:crypto'
 import { basename, dirname, join } from 'node:path'
 import type {
@@ -979,6 +987,9 @@ function createWindow(): BrowserWindow {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      // The Files screen runs in its own frame so its stylesheet cannot reach the rest of the app; the preload only
+      // exposes itself there (see the file:/localhost check in preload/index.ts).
+      nodeIntegrationInSubFrames: true,
       spellcheck: true,
       webviewTag: false
     }
@@ -1187,6 +1198,8 @@ function registerIpc(): void {
 
   ipcMain.handle('chat:send', async (event, incoming: ChatRequest) => {
     const sender = event.sender
+    // The reply goes back to the frame that asked: the window itself, or Orbis Chance's frame inside it.
+    const askedFrame = event.senderFrame
     /**
      * The project this conversation is kept in, worked out once, before anything else.
      *
@@ -1230,7 +1243,10 @@ function registerIpc(): void {
      */
     let saidDone = false
     const emit = (streamEvent: StreamEvent): void => {
-      if (!sender.isDestroyed()) sender.send('chat:event', request.requestId, streamEvent)
+      if (!sender.isDestroyed()) {
+        if (askedFrame && !askedFrame.isDestroyed() && askedFrame !== sender.mainFrame) askedFrame.send('chat:event', request.requestId, streamEvent)
+        else sender.send('chat:event', request.requestId, streamEvent)
+      }
       if (streamEvent.type === 'done' && !saidDone) {
         saidDone = true
         bus.publish('orion.completed', { requestId: request.requestId, model: streamEvent.model ?? '' }, { source: 'chat', correlationId: request.requestId })
@@ -1693,6 +1709,7 @@ ${block}`
           try {
             const image = await generateImage(intent.prompt, (url, init) => net.fetch(url, init), intent.seed, cropWatermark)
             if (controller.signal.aborted) return emit({ type: 'aborted' })
+            void registerGeneratedImage(image.dataUrl, intent.prompt)
             emit({ type: 'image', url: image.dataUrl, prompt: intent.prompt, seed: image.seed })
             emit({ type: 'done', model: request.model, truncated: false })
           } catch (err) {
@@ -2294,6 +2311,7 @@ ${summaryBlock(summary)}`
     const fetchFn = (url: string, init?: RequestInit): Promise<Response> => net.fetch(url, init)
     const nextPrompt = await rewriteImagePrompt(prompt, instruction, GROQ_API_KEYS, fetchFn)
     const image = await generateImage(nextPrompt, fetchFn, seed, cropWatermark)
+    void registerGeneratedImage(image.dataUrl, nextPrompt)
     return { url: image.dataUrl, prompt: nextPrompt, seed: image.seed }
   })
 
@@ -2403,7 +2421,11 @@ const UPDATE_ENDPOINT = 'https://updates.nxtorbis.ai/manifest'
  * themselves have existed since the host was written; nothing had ever registered them, because nothing had ever
  * constructed the host.
  */
-protocol.registerSchemesAsPrivileged([PAGE_SCHEME_PRIVILEGES])
+protocol.registerSchemesAsPrivileged([
+  PAGE_SCHEME_PRIVILEGES,
+  { scheme: 'orbis-media', privileges: { standard: false, secure: true, supportFetchAPI: true, stream: true, bypassCSP: false, corsEnabled: true } },
+  { scheme: 'orbis-thumb', privileges: { standard: false, secure: true, supportFetchAPI: true, stream: false, bypassCSP: false } }
+])
 
 if (!app.requestSingleInstanceLock()) {
   app.quit()
@@ -2986,7 +3008,7 @@ if (!app.requestSingleInstanceLock()) {
       }
     })
     {
-      const chromeExe = [process.env.ORBIS_CHROMIUM, app.isPackaged ? join(process.resourcesPath, 'chromium', 'chrome.exe') : 'C:/chromium/src/out/Default/chrome.exe'].find((p): p is string => Boolean(p) && existsSync(p as string))
+      const chromeExe = [process.env.ORBIS_CHROMIUM, app.isPackaged ? join(process.resourcesPath, 'chromium', 'chrome.exe') : 'C:/chromium/src/out/Fast/chrome.exe', 'C:/chromium/src/out/Default/chrome.exe'].find((p): p is string => Boolean(p) && existsSync(p as string))
       if (chromeExe) {
         chromiumBrowser = new FollowedBrowser({
           chrome: chromeExe,
@@ -3881,6 +3903,23 @@ ${page.text}`, { howMany: 6 })
         .catch((err: unknown) => console.error('[choose] could not switch profile', err))
     })
 
+    // Orbis Chance: investigations are kept per profile, in the profile's own folder.
+    const chanceStore = new ChanceStore(app.getPath('userData'))
+    await chanceStore.useProfile((await profilesStore.active()).id).catch(() => undefined)
+    registerChanceIpc({ store: chanceStore, getWindow: () => liveWindow() })
+    registerJarvisIpc({ getWindow: () => liveWindow() })
+    registerEyeIpc({ getWindow: () => liveWindow(), groqKeys: GROQ_API_KEYS })
+    registerCosmosIpc({ getWindow: () => liveWindow() })
+    registerF1Ipc({ getWindow: () => liveWindow(), userData: app.getPath('userData'), profileId: () => notifyProfileId, publish: (e) => void notifications?.publish(e) })
+    registerFootballIpc({ getWindow: () => liveWindow(), userData: app.getPath('userData'), profileId: () => notifyProfileId, publish: (e) => void notifications?.publish(e) })
+    quitFlush.add('your Chance investigations', () => chanceStore.flush())
+    profilesStore.onChange(() => {
+      void profilesStore
+        .active()
+        .then((profile) => chanceStore.useProfile(profile.id))
+        .catch((err: unknown) => console.error('[chance] could not switch profile', err))
+    })
+
     ipcMain.handle('physics:ask', (event, prompt, schema) => {
       if (event.sender !== mainWindow?.webContents) throw new Error('Not allowed.')
       return askOrionOnce(String(prompt ?? '').slice(0, 20_000), typeof schema === 'string' ? schema.slice(0, 4_000) : null)
@@ -4616,6 +4655,7 @@ ${page.text}`, { howMany: 6 })
     registerMusicIpc({
       music,
       userData: app.getPath('userData'),
+      dropFolder: join(app.getPath('music'), 'Orbis Music'),
       getWindow: () => liveWindow(),
       pickFiles: async (kind) => {
         const win = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null
@@ -5263,6 +5303,21 @@ ${page.text}`, { howMany: 6 })
     startInBrowser = !embeddedBrowser && (await store.getSettings()).openBrowserOnLaunch === true
 
     mainWindow = openWindow()
+
+    // Orbis Files integration — file manager, universe scanner, and all filesystem tools
+    registerFilesProtocols(join(app.getPath('userData'), 'files'))
+    void initFilesIntegration({
+      profileId: 'default',
+      profileDir: app.getPath('userData'),
+      mainWindow,
+      appVersion: app.getVersion(),
+    })
+      .then(() => {
+        const push = (): void => syncBrowserDownloads(browserLibrary?.snapshot().downloads ?? [])
+        browserLibrary?.addListener(push)
+        push()
+      })
+      .catch((err) => console.error('[files] Failed to initialise Orbis Files:', err))
 
     if (startInBrowser) {
       /**

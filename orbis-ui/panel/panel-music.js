@@ -101,11 +101,302 @@ const availability = (track) => {
   }
 }
 
+
+/* ---- the look: art tiles, the equaliser, icons --------------------------------------------------------------------- */
+const ICONS = {
+ "edit": {"a": {"fill": "none", "stroke": "currentColor", "stroke-width": "2", "stroke-linecap": "round", "stroke-linejoin": "round", "width": "18", "height": "18"}, "k": [{"d": "M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"}]},
+ "list": {"a": {"fill": "none", "stroke": "currentColor", "stroke-width": "2", "stroke-linecap": "round", "width": "18", "height": "18"}, "k": [{"d": "M4 6h12M4 12h12M4 18h8M19 15v6M16 18h6"}]},
+ "prev": {
+  "a": {
+   "width": "20",
+   "height": "20",
+   "fill": "currentColor"
+  },
+  "k": [
+   {
+    "d": "M6 5h2v14H6zM20 5v14L9 12z"
+   }
+  ]
+ },
+ "next": {
+  "a": {
+   "width": "20",
+   "height": "20",
+   "fill": "currentColor"
+  },
+  "k": [
+   {
+    "d": "M16 5h2v14h-2zM4 5v14l11-7z"
+   }
+  ]
+ },
+ "play": {
+  "a": {
+   "width": "26",
+   "height": "26",
+   "fill": "currentColor"
+  },
+  "k": [
+   {
+    "d": "M8 5v14l11-7z"
+   }
+  ]
+ },
+ "pause": {
+  "a": {
+   "width": "26",
+   "height": "26",
+   "fill": "currentColor"
+  },
+  "k": [
+   {
+    "d": "M6 5h4v14H6zM14 5h4v14h-4z"
+   }
+  ]
+ },
+ "shuffle": {
+  "a": {
+   "width": "18",
+   "height": "18",
+   "fill": "none",
+   "stroke": "currentColor",
+   "stroke-width": "2",
+   "stroke-linecap": "round",
+   "stroke-linejoin": "round"
+  },
+  "k": [
+   {
+    "d": "M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"
+   }
+  ]
+ },
+ "repeat": {
+  "a": {
+   "width": "18",
+   "height": "18",
+   "fill": "none",
+   "stroke": "currentColor",
+   "stroke-width": "2",
+   "stroke-linecap": "round",
+   "stroke-linejoin": "round"
+  },
+  "k": [
+   {
+    "d": "m17 2 4 4-4 4"
+   },
+   {
+    "d": "M3 11v-1a4 4 0 0 1 4-4h14M7 22l-4-4 4-4"
+   },
+   {
+    "d": "M21 13v1a4 4 0 0 1-4 4H3"
+   }
+  ]
+ },
+ "heart": {
+  "a": {
+   "width": "18",
+   "height": "18",
+   "fill": "currentColor"
+  },
+  "k": [
+   {
+    "d": "M12 21s-7.5-4.6-9.6-9.2C.9 8.4 3 5 6.4 5c2 0 3.5 1 4.6 2.6C12.1 6 13.6 5 15.6 5 19 5 21.1 8.4 21.6 11.8 19.5 16.4 12 21 12 21z",
+    "transform": "translate(0 -.5)"
+   }
+  ]
+ },
+ "volume": {
+  "a": {
+   "width": "18",
+   "height": "18",
+   "fill": "none",
+   "stroke": "currentColor",
+   "stroke-width": "2",
+   "stroke-linecap": "round",
+   "stroke-linejoin": "round"
+  },
+  "k": [
+   {
+    "d": "M11 5 6 9H2v6h4l5 4zM15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"
+   }
+  ]
+ },
+ "mute": {
+  "a": {
+   "width": "18",
+   "height": "18",
+   "fill": "none",
+   "stroke": "currentColor",
+   "stroke-width": "2",
+   "stroke-linecap": "round",
+   "stroke-linejoin": "round"
+  },
+  "k": [
+   {
+    "d": "M11 5 6 9H2v6h4l5 4zM22 9l-6 6M16 9l6 6"
+   }
+  ]
+ },
+ "plus": {
+  "a": {
+   "width": "18",
+   "height": "18",
+   "fill": "none",
+   "stroke": "currentColor",
+   "stroke-width": "2",
+   "stroke-linecap": "round"
+  },
+  "k": [
+   {
+    "d": "M12 5v14M5 12h14"
+   }
+  ]
+ },
+ "note": {
+  "a": {
+   "width": "22",
+   "height": "22",
+   "fill": "currentColor"
+  },
+  "k": [
+   {
+    "d": "M9 3v11.3A3.5 3.5 0 1 0 11 17.5V8h6V3z"
+   }
+  ]
+ },
+ "file": {
+  "a": {
+   "width": "18",
+   "height": "18",
+   "fill": "none",
+   "stroke": "currentColor",
+   "stroke-width": "2",
+   "stroke-linecap": "round",
+   "stroke-linejoin": "round"
+  },
+  "k": [
+   {
+    "d": "M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"
+   },
+   {
+    "d": "M14 3v5h5"
+   }
+  ]
+ },
+ "folder": {
+  "a": {
+   "width": "18",
+   "height": "18",
+   "fill": "none",
+   "stroke": "currentColor",
+   "stroke-width": "2",
+   "stroke-linecap": "round",
+   "stroke-linejoin": "round"
+  },
+  "k": [
+   {
+    "d": "M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"
+   }
+  ]
+ },
+ "ear": {
+  "a": {
+   "width": "18",
+   "height": "18",
+   "fill": "none",
+   "stroke": "currentColor",
+   "stroke-width": "2",
+   "stroke-linecap": "round",
+   "stroke-linejoin": "round"
+  },
+  "k": [
+   {
+    "d": "M6 8a6 6 0 1 1 12 0c0 3-2 4-3 6s-1 4-3.5 4A3.5 3.5 0 0 1 8 14.5"
+   },
+   {
+    "d": "M10 8a2 2 0 1 1 4 0"
+   }
+  ]
+ }
+}
+const SVG_NS = 'http://www.w3.org/2000/svg'
+/* Built node by node: this page forbids innerHTML and DOMParser (Trusted Types), and an icon is only paths. */
+const icon = (name, extra = '') => {
+  const span = document.createElement('span')
+  span.className = `mu-icon ${extra}`.trim()
+  span.setAttribute('aria-hidden', 'true')
+  const spec = ICONS[name]
+  if (!spec) return span
+  const svg = document.createElementNS(SVG_NS, 'svg')
+  svg.setAttribute('viewBox', '0 0 24 24')
+  for (const [k, v] of Object.entries(spec.a)) svg.setAttribute(k, v)
+  for (const kid of spec.k) {
+    const path = document.createElementNS(SVG_NS, 'path')
+    for (const [k, v] of Object.entries(kid)) path.setAttribute(k, v)
+    svg.append(path)
+  }
+  span.append(svg)
+  return span
+}
+/** The same colours for the same words, so a song keeps its look wherever it appears. */
+const hueOf = (text) => [...String(text || '?')].reduce((n, c) => (n * 31 + c.charCodeAt(0)) % 360, 11)
+const artTile = (track, size = 'm') => {
+  const hue = hueOf(`${track?.album || ''}${track?.artist || ''}${track?.title || ''}`)
+  const tile = el('span', { class: `mu-art ${size}`, style: `--h:${hue}`, 'aria-hidden': 'true' })
+  const picture = track?.id ? art[track.id] : null
+  if (picture) {
+    tile.classList.add('has-picture')
+    tile.append(el('img', { src: picture, alt: '' }))
+    return tile
+  }
+  const letter = (track?.title || '♪').trim().charAt(0).toUpperCase()
+  tile.append(el('b', {}, letter))
+  return tile
+}
+const equaliser = () => el('span', { class: 'mu-eq', 'aria-hidden': 'true' }, el('i'), el('i'), el('i'), el('i'))
+const iconButton = (name, label, onclick, extra = {}) => {
+  const b = el('button', { type: 'button', class: `mu-btn${extra.class ? ` ${extra.class}` : ''}`, title: label, 'aria-label': label, ...(extra.pressed !== undefined ? { 'aria-pressed': String(extra.pressed) } : {}), onclick })
+  b.append(icon(name))
+  return b
+}
+
+let libTab = 'songs'
+let editing = null
+const art = {}
+const artTried = new Set()
+let organisePlan = null
+let openList = null
+let openTracks = []
+let pickFor = null
+let dropNote = ''
+let dragDepth = 0
+let albums = []
+let artists = []
+let genres = []
+let dragging = false
+
+/** Pictures for the tracks now on screen. Asked for once each; a track with none is not asked about again. */
+async function loadArt() {
+  const seen = [library, recent, openTracks, state?.track ? [state.track] : []].flat()
+  const wanted = seen.filter((t) => t && t.id && t.artwork && !(t.id in art) && !artTried.has(t.id)).map((t) => t.id).slice(0, 40)
+  if (wanted.length === 0) return false
+  for (const id of wanted) artTried.add(id)
+  const got = await run('music:do', ['artwork', wanted])
+  if (!got || typeof got !== 'object') return false
+  Object.assign(art, got)
+  return Object.keys(got).length > 0
+}
+
 async function refresh() {
   const next = await run('music:state')
   if (next) state = next
   heard = await run('music:heard')
+  if (view !== 'playlists') playlists = (await run('music:playlists')) ?? playlists
   if (view === 'library' || view === 'now') library = (await run('music:search', [{ search, sort: 'added' }])) ?? library
+  if (view === 'playlists' && openList) openTracks = (await run('music:playlist-tracks', [openList])) ?? []
+  if (view === 'library' && libTab === 'albums') albums = (await run('music:albums')) ?? albums
+  if (view === 'library' && libTab === 'artists') artists = (await run('music:artists')) ?? artists
+  if (view === 'library' && libTab === 'genres') genres = (await run('music:genres')) ?? genres
   if (view === 'playlists') playlists = (await run('music:playlists')) ?? playlists
   if (view === 'recent') recent = (await run('music:recent')) ?? recent
   if (view === 'discover' && explorations.length === 0) explorations = (await ask('explorations')) ?? []
@@ -114,6 +405,7 @@ async function refresh() {
   if (view === 'settings' && sources.length === 0) sources = (await ask('sources')) ?? []
   if (view === 'now' && state?.track?.id) why = (await ask('why', state.track.id)) ?? null
   draw()
+  if (await loadArt()) draw()
 }
 
 /** Does something, then reads the state back. Nothing on screen is ever changed hopefully. */
@@ -384,68 +676,86 @@ function nowPlaying() {
     const names = heard?.recognition?.names
     return el(
       'section',
-      { class: 'music-now website' },
-      el('p', { class: 'music-source' }, 'Playing on a web page'),
+      { class: 'mu-hero website' },
+      el('span', { class: 'mu-chip' }, 'Playing on a web page'),
+      el('div', { class: 'mu-hero-art' }, artTile(names ? { title: names.title, artist: names.artist } : { title: '♪' }, 'xl')),
       el('p', { class: 'music-title' }, names ? `${names.title}${names.artist ? ` — ${names.artist}` : ''}` : 'Something on this page'),
-      el('p', { class: 'music-note' }, 'That player belongs to the page. Orbis leaves it alone.'),
+      el('p', { class: 'music-note' }, 'That player belongs to the page. Orbis leaves it alone, and can add the song to your music.'),
       addButton()
     )
   }
 
-  if (!track) {
-    return el(
-      'section',
-      { class: 'music-now empty' },
-      el('p', { class: 'music-title' }, 'Nothing is playing'),
-      el('p', { class: 'music-note' }, library.length ? 'Pick something from your library.' : 'Import your own music from the Orbis window, or recognise a song while you browse.')
-    )
-  }
+  if (!track) return welcome()
 
+  const total = Math.max(1, Math.round(playback.duration || track.duration || 1))
+  const position = Math.min(total, Math.round(playback.position || 0))
   const bar = el('input', {
     type: 'range',
-    class: 'music-seek',
+    class: 'mu-seek',
     min: '0',
-    max: String(Math.max(1, Math.round(playback.duration || track.duration || 1))),
-    value: String(Math.round(playback.position || 0)),
+    max: String(total),
+    value: String(position),
+    style: `--p:${Math.round((position / total) * 100)}%`,
     'aria-label': 'Where you are in the track',
     oninput: (event) => void act('music:seek', [Number(event.target.value)])
   })
 
   return el(
     'section',
-    { class: 'music-now' },
-    el('p', { class: 'music-source' }, 'Playing from Orbis Music'),
-    el('p', { class: 'music-title' }, track.title),
-    el('p', { class: 'music-artist' }, [track.artist, track.album].filter(Boolean).join(' — ') || 'Unknown artist'),
-    el('div', { class: 'music-times' }, el('span', {}, length(playback.position)), bar, el('span', {}, length(playback.duration || track.duration))),
+    { class: `mu-hero${playback.playing ? ' playing' : ''}` },
+    el('span', { class: 'mu-chip' }, playback.playing ? 'Playing from Orbis Music' : 'Paused'),
+    el('div', { class: 'mu-hero-art' }, artTile(track, 'xl'), playback.playing ? equaliser() : null),
+    el('div', { class: 'mu-hero-text' }, el('p', { class: 'music-title' }, track.title), el('p', { class: 'music-artist' }, [track.artist, track.album].filter(Boolean).join(' — ') || 'Unknown artist')),
+    el('div', { class: 'mu-times' }, el('span', {}, length(playback.position)), bar, el('span', {}, length(playback.duration || track.duration))),
     el(
       'div',
-      { class: 'music-controls' },
-      el('button', { type: 'button', class: 'music-btn', title: 'Shuffle', 'aria-pressed': String(Boolean(playback.shuffle)), onclick: () => void act('music:shuffle', [!playback.shuffle]) }, 'Shuffle'),
-      el('button', { type: 'button', class: 'music-btn', title: 'Previous', onclick: () => void act('music:previous') }, 'Previous'),
-      el('button', { type: 'button', class: 'music-btn primary', onclick: () => void act(playback.playing ? 'music:pause' : 'music:resume') }, playback.playing ? 'Pause' : 'Play'),
-      el('button', { type: 'button', class: 'music-btn', title: 'Next', onclick: () => void act('music:next') }, 'Next'),
-      el(
-        'button',
-        { type: 'button', class: 'music-btn', title: 'Repeat', onclick: () => void act('music:repeat', [playback.repeat === 'off' ? 'all' : playback.repeat === 'all' ? 'one' : 'off']) },
-        playback.repeat === 'one' ? 'Repeat one' : playback.repeat === 'all' ? 'Repeat all' : 'Repeat off'
-      ),
-      el('button', { type: 'button', class: 'music-btn', 'aria-pressed': String(Boolean(track.favourite)), onclick: () => void act('music:favourite', [track.id, !track.favourite]) }, track.favourite ? 'Favourite ✓' : 'Favourite')
-    ),
-    el(
-      'div',
-      { class: 'music-volume' },
-      el('button', { type: 'button', class: 'music-btn', onclick: () => void act('music:mute', [!playback.muted]) }, playback.muted ? 'Unmute' : 'Mute'),
-      el('input', {
-        type: 'range',
-        min: '0',
-        max: '100',
-        value: String(Math.round((playback.volume ?? 1) * 100)),
-        'aria-label': 'Volume',
-        oninput: (event) => void act('music:volume', [Number(event.target.value) / 100])
+      { class: 'mu-transport' },
+      iconButton('shuffle', 'Shuffle', () => void act('music:shuffle', [!playback.shuffle]), { pressed: Boolean(playback.shuffle) }),
+      iconButton('prev', 'Previous', () => void act('music:previous')),
+      iconButton(playback.playing ? 'pause' : 'play', playback.playing ? 'Pause' : 'Play', () => void act(playback.playing ? 'music:pause' : 'music:resume'), { class: 'big' }),
+      iconButton('next', 'Next', () => void act('music:next')),
+      iconButton('repeat', playback.repeat === 'one' ? 'Repeat this track' : playback.repeat === 'all' ? 'Repeat all' : 'Repeat off', () => void act('music:repeat', [playback.repeat === 'off' ? 'all' : playback.repeat === 'all' ? 'one' : 'off']), {
+        pressed: playback.repeat !== 'off',
+        class: playback.repeat === 'one' ? 'one' : ''
       })
     ),
+    el(
+      'div',
+      { class: 'mu-secondary' },
+      iconButton('heart', track.favourite ? 'Remove from favourites' : 'Add to favourites', () => void act('music:favourite', [track.id, !track.favourite]), { pressed: Boolean(track.favourite), class: 'heart' }),
+      iconButton('edit', 'Edit details and artwork', () => { editing = { ...track }; draw() }),
+      el('div', { class: 'mu-vol' }, iconButton(playback.muted ? 'mute' : 'volume', playback.muted ? 'Unmute' : 'Mute', () => void act('music:mute', [!playback.muted])),
+        el('input', {
+          type: 'range', min: '0', max: '100', class: 'mu-slider', value: String(Math.round((playback.volume ?? 1) * 100)),
+          style: `--p:${Math.round((playback.volume ?? 1) * 100)}%`, 'aria-label': 'Volume',
+          oninput: (event) => void act('music:volume', [Number(event.target.value) / 100])
+        })
+      )
+    ),
     playback.problem ? el('p', { class: 'music-problem' }, playback.problem) : null
+  )
+}
+
+/** What a person sees before anything is playing: what this is, and the three ways to start. */
+function welcome() {
+  const have = library.length
+  return el(
+    'section',
+    { class: 'mu-welcome' },
+    el('div', { class: 'mu-orb', 'aria-hidden': 'true' }, icon('note')),
+    el('h2', {}, have ? 'Pick something to play' : 'Your music, inside Orbis'),
+    el('p', { class: 'music-note' }, have
+      ? `${have} ${have === 1 ? 'song is' : 'songs are'} ready in your library.`
+      : 'Orbis Music plays songs you own, keeps them in one library, and can name what is playing on a web page. Nothing is downloaded from a website.'),
+    have
+      ? el('div', { class: 'mu-actions' }, el('button', { type: 'button', class: 'mu-cta', onclick: () => void act('music:play-all', [library.map((t) => t.id), 0]) }, 'Play everything'), el('button', { type: 'button', class: 'mu-ghost', onclick: () => { view = 'library'; void refresh() } }, 'Open the library'))
+      : el(
+          'div',
+          { class: 'mu-steps' },
+          el('button', { type: 'button', class: 'mu-step', onclick: () => void act('music:import', [], 'Choose files in the Orbis window…') }, icon('file'), el('span', {}, el('b', {}, 'Add songs'), el('small', {}, 'Pick audio files, or just drop them anywhere here'))),
+          el('button', { type: 'button', class: 'mu-step', onclick: () => void act('music:scan-folder', [], 'Choose a folder in the Orbis window…') }, icon('folder'), el('span', {}, el('b', {}, 'Add a folder'), el('small', {}, 'Bring in a whole music folder at once'))),
+          el('button', { type: 'button', class: 'mu-step', onclick: () => void act('music:listen', [], 'Listening to the page…') }, icon('ear'), el('span', {}, el('b', {}, 'Name what is playing'), el('small', {}, 'Recognise a song from the page in front of you')))
+        )
   )
 }
 
@@ -488,32 +798,37 @@ function addButton() {
 /** One row of the library. */
 function trackRow(track, index, queue) {
   const where = availability(track)
+  const current = state?.playback?.trackId === track.id
+  const playing = current && state?.playback?.playing
   return el(
     'li',
-    { class: `music-row${state?.playback?.trackId === track.id ? ' playing' : ''}` },
+    { class: `mu-row${current ? ' current' : ''}${where.tone === 'good' ? '' : ' unavailable'}` },
     el(
       'button',
       {
         type: 'button',
-        class: 'music-row-play',
+        class: 'mu-row-main',
         title: where.tone === 'good' ? `Play ${track.title}` : where.label,
-        onclick: () => void act(queue ? 'music:play' : 'music:play', [track.id])
+        onclick: () => void act('music:play', [track.id])
       },
-      el('span', { class: 'music-row-title' }, track.title),
-      el('span', { class: 'music-row-artist' }, [track.artist, track.album].filter(Boolean).join(' — ') || 'Unknown artist')
+      el('span', { class: 'mu-art-wrap' }, artTile(track, 's'), playing ? equaliser() : null),
+      el('span', { class: 'mu-row-text' }, el('span', { class: 'music-row-title' }, track.title), el('span', { class: 'music-row-artist' }, [track.artist, track.album].filter(Boolean).join(' — ') || 'Unknown artist'))
     ),
+    where.tone === 'good' ? null : el('span', { class: `mu-where ${where.tone}` }, where.label),
     el('span', { class: 'music-row-length' }, length(track.duration)),
-    el('span', { class: `music-row-where ${where.tone}` }, where.label),
-    el('button', { type: 'button', class: 'music-row-act', 'aria-pressed': String(Boolean(track.favourite)), title: 'Favourite', onclick: () => void act('music:favourite', [track.id, !track.favourite]) }, '♥'),
-    el('button', { type: 'button', class: 'music-row-act', title: 'Add to the queue', onclick: () => void act('music:queue-end', [[track.id]]) }, '+'),
-    typeof index === 'number' ? el('button', { type: 'button', class: 'music-row-act', title: 'Take out of the queue', onclick: () => void act('music:queue-remove', [index]) }, '×') : null
+    iconButton('heart', track.favourite ? 'Remove from favourites' : 'Add to favourites', () => void act('music:favourite', [track.id, !track.favourite]), { pressed: Boolean(track.favourite), class: 'heart small' }),
+    el('button', { type: 'button', class: 'mu-btn small', title: 'Edit details and artwork', 'aria-label': 'Edit details and artwork', onclick: () => { editing = { ...track }; draw() } }, icon('edit')),
+    el('button', { type: 'button', class: 'mu-btn small', title: 'Add to a playlist', 'aria-label': 'Add to a playlist', onclick: () => { pickFor = track.id; draw() } }, icon('list')),
+    typeof index === 'number'
+      ? iconButton('plus', 'Take out of the queue', () => void act('music:queue-remove', [index]), { class: 'small remove' })
+      : iconButton('plus', 'Add to the queue', () => void act('music:queue-end', [[track.id]]), { class: 'small' })
   )
 }
 
 function libraryView() {
   const box = el('input', {
     type: 'search',
-    class: 'music-search',
+    class: 'mu-search',
     placeholder: 'Search your music',
     value: search,
     'aria-label': 'Search your music',
@@ -531,35 +846,53 @@ function libraryView() {
    */
   const bringIn = el(
     'div',
-    { class: 'music-controls' },
-    el('button', { type: 'button', class: 'music-btn', onclick: () => void act('music:import', [], 'Choose files in the Orbis window…') }, 'Add files'),
-    el('button', { type: 'button', class: 'music-btn', onclick: () => void act('music:scan-folder', [], 'Choose a folder in the Orbis window…') }, 'Add a folder')
+    { class: 'mu-addbar' },
+    el('button', { type: 'button', class: 'mu-cta small', onclick: () => void act('music:import', [], 'Choose files in the Orbis window…') }, icon('file'), 'Add files'),
+    el('button', { type: 'button', class: 'mu-ghost small', onclick: () => void act('music:scan-folder', [], 'Choose a folder in the Orbis window…') }, icon('folder'), 'Add a folder'),
+    library.length ? el('button', { type: 'button', class: 'mu-ghost small', onclick: () => void act('music:play-all', [library.map((t) => t.id), 0]) }, icon('play'), 'Play all') : null
   )
+  const tabs = el(
+    'div',
+    { class: 'mu-subtabs', role: 'tablist' },
+    ...[['songs', 'Songs'], ['albums', 'Albums'], ['artists', 'Artists'], ['genres', 'Genres']].map(([id, label]) =>
+      el('button', { type: 'button', role: 'tab', class: `mu-subtab${libTab === id ? ' on' : ''}`, 'aria-selected': String(libTab === id), onclick: () => { libTab = id; void refresh() } }, label)
+    )
+  )
+  const head = [box, bringIn, tabs]
 
-  if (library.length === 0) {
-    return el(
-      'section',
-      { class: 'music-list' },
-      box,
-      bringIn,
-      el(
-        'p',
-        { class: 'music-note' },
-        search ? `Nothing in your music matches "${search}".` : 'Your music is empty. Recognise a song while you browse, or add your own files.'
+  const group = (list, kind) =>
+    el(
+      'div',
+      { class: 'mu-groups' },
+      ...list.map((g) =>
+        el(
+          'button',
+          { type: 'button', class: 'mu-group', onclick: () => void act('music:play-all', [g.tracks.map((t) => t.id), 0]), title: `Play ${g.name}` },
+          artTile({ title: g.name, artist: g.by ?? '' }, 'l'),
+          el('span', { class: 'mu-group-name' }, g.name),
+          el('span', { class: 'mu-group-sub' }, [kind === 'albums' ? g.by : '', `${g.tracks.length} ${g.tracks.length === 1 ? 'song' : 'songs'}`].filter(Boolean).join(' · '))
+        )
       )
     )
+
+  if (libTab === 'albums') return el('section', { class: 'mu-library' }, ...head, albums.length ? group(albums, 'albums') : el('p', { class: 'music-note' }, 'No albums yet. They appear as soon as songs with album tags are added.'))
+  if (libTab === 'artists') return el('section', { class: 'mu-library' }, ...head, artists.length ? group(artists, 'artists') : el('p', { class: 'music-note' }, 'No artists yet.'))
+  if (libTab === 'genres') return el('section', { class: 'mu-library' }, ...head, genres.length ? group(genres, 'genres') : el('p', { class: 'music-note' }, 'No genres yet. Songs show up here when their files name one.'))
+
+  if (library.length === 0) {
+    return el('section', { class: 'mu-library' }, ...head, search ? el('p', { class: 'music-note' }, `Nothing in your music matches "${search}".`) : welcome())
   }
-  return el('section', { class: 'music-list' }, box, bringIn, el('ul', { class: 'music-rows' }, ...library.map((track) => trackRow(track))))
+  return el('section', { class: 'mu-library' }, ...head, el('ul', { class: 'mu-rows' }, ...library.map((track) => trackRow(track))))
 }
 
 function queueView() {
   const queue = state?.queue ?? []
-  if (queue.length === 0) return el('section', { class: 'music-list' }, el('p', { class: 'music-note' }, 'The queue is empty.'))
+  if (queue.length === 0) return el('section', { class: 'mu-library' }, el('div', { class: 'mu-welcome small' }, el('h2', {}, 'The queue is empty'), el('p', { class: 'music-note' }, 'Press + beside a song to line it up next, or play a whole album from the library.')))
   return el(
     'section',
     { class: 'music-list' },
     el('div', { class: 'music-list-head' }, el('span', {}, `${queue.length} in the queue`), el('button', { type: 'button', class: 'music-btn', onclick: () => void act('music:queue-clear') }, 'Clear')),
-    el('ul', { class: 'music-rows' }, ...queue.map((track, index) => trackRow(track, index, true)))
+    el('ul', { class: 'mu-rows' }, ...queue.map((track, index) => trackRow(track, index, true)))
   )
 }
 
@@ -577,30 +910,116 @@ function playlistsView() {
       }
     },
     el('input', { name: 'name', type: 'text', placeholder: 'New playlist', 'aria-label': 'New playlist name', maxlength: '200' }),
-    el('button', { type: 'submit', class: 'music-btn' }, 'Create')
+    el('button', { type: 'submit', class: 'mu-cta small' }, 'Create')
   )
-  if (playlists.length === 0) return el('section', { class: 'music-list' }, make, el('p', { class: 'music-note' }, 'No playlists yet.'))
-  return el(
-    'section',
-    { class: 'music-list' },
-    make,
+
+  // ---- smart playlists: ready-made questions, and one the person can word themselves
+  const smart = (name, rule) => act('music:do', ['smart-playlist', name, rule], `Making "${name}"…`)
+  const presets = [
+    ['Recently added', { addedWithinDays: 30, order: 'added', limit: 100 }],
+    ['Most played', { order: 'plays', limit: 50 }],
+    ['Played this week', { playedWithinDays: 7, order: 'recent', limit: 100 }],
+    ['Favourites', { favourite: true }],
+    ['Ready offline', { availableOffline: true, order: 'title' }]
+  ]
+  const builder = el(
+    'form',
+    {
+      class: 'mu-smart-form',
+      onsubmit: (event) => {
+        event.preventDefault()
+        const f = event.target.elements
+        const n = (value) => (value.trim() === '' ? undefined : Number(value))
+        const rule = {
+          artist: f.artist.value.trim() || undefined,
+          genre: f.genre.value.trim() || undefined,
+          yearFrom: n(f.yearFrom.value),
+          yearTo: n(f.yearTo.value),
+          favourite: f.favourite.checked || undefined,
+          order: f.order.value || undefined,
+          limit: n(f.limit.value)
+        }
+        const name = f.name.value.trim() || [rule.artist, rule.genre, rule.favourite ? 'Favourites' : ''].filter(Boolean).join(' · ') || 'Smart playlist'
+        event.target.reset()
+        void smart(name, rule)
+      }
+    },
+    el('input', { name: 'name', type: 'text', placeholder: 'Name (optional)', maxlength: '80', 'aria-label': 'Smart playlist name' }),
+    el('input', { name: 'artist', type: 'text', placeholder: 'Artist is…', 'aria-label': 'Artist' }),
+    el('input', { name: 'genre', type: 'text', placeholder: 'Genre is…', 'aria-label': 'Genre' }),
+    el('div', { class: 'mu-smart-years' }, el('input', { name: 'yearFrom', type: 'number', placeholder: 'Year from', 'aria-label': 'Year from' }), el('input', { name: 'yearTo', type: 'number', placeholder: 'Year to', 'aria-label': 'Year to' })),
     el(
-      'ul',
-      { class: 'music-rows' },
-      ...playlists.map((list) =>
-        el(
-          'li',
-          { class: 'music-bring-row' },
-          el('button', { type: 'button', class: 'music-row-play', onclick: () => void act('music:play-playlist', [list.id]) }, el('span', { class: 'music-row-title' }, list.name), el('span', { class: 'music-row-artist' }, `${list.tracks.length} ${list.tracks.length === 1 ? 'track' : 'tracks'}${list.rule ? ' · worked out' : ''}`))
+      'select',
+      { name: 'order', 'aria-label': 'Order' },
+      el('option', { value: '' }, 'Any order'),
+      el('option', { value: 'plays' }, 'Most played first'),
+      el('option', { value: 'recent' }, 'Played most recently'),
+      el('option', { value: 'added' }, 'Newest added'),
+      el('option', { value: 'title' }, 'By title')
+    ),
+    el('input', { name: 'limit', type: 'number', min: '1', max: '500', placeholder: 'At most… songs', 'aria-label': 'At most how many songs' }),
+    el('label', { class: 'mu-check' }, el('input', { name: 'favourite', type: 'checkbox' }), 'Only favourites'),
+    el('button', { type: 'submit', class: 'mu-cta small' }, 'Make smart playlist')
+  )
+  const smartBox = el(
+    'section',
+    { class: 'mu-smart' },
+    el('h3', {}, 'Smart playlists'),
+    el('p', { class: 'music-note' }, 'These answer a question about your library and stay up to date as it changes.'),
+    el('div', { class: 'mu-presets' }, ...presets.map(([name, rule]) => el('button', { type: 'button', class: 'mu-ghost small', onclick: () => void smart(name, rule) }, name))),
+    el('details', { class: 'mu-smart-more' }, el('summary', {}, 'Make your own'), builder)
+  )
+
+  // ---- one open playlist
+  if (openList) {
+    const list = playlists.find((one) => one.id === openList)
+    if (!list) {
+      openList = null
+    } else {
+      return el(
+        'section',
+        { class: 'mu-library' },
+        el('div', { class: 'mu-addbar' },
+          el('button', { type: 'button', class: 'mu-ghost small', onclick: () => { openList = null; void refresh() } }, 'Back'),
+          el('button', { type: 'button', class: 'mu-cta small', onclick: () => void act('music:play-playlist', [list.id]) }, icon('play'), `Play ${list.name}`),
+          el('button', { type: 'button', class: 'mu-ghost small', onclick: async () => { const out = await run('music:do', ['export-m3u', list.id]); if (out && out.ok) { saveText(out.name, out.text, 'audio/x-mpegurl'); said = `Saved ${out.name}.` } else said = out?.why || 'That could not be exported.'; draw() } }, 'Export .m3u')
+        ),
+        el('p', { class: 'music-note' }, list.rule ? 'A smart playlist: it is worked out from your library each time.' : `${openTracks.length} ${openTracks.length === 1 ? 'song' : 'songs'}`),
+        openTracks.length === 0
+          ? el('p', { class: 'music-note' }, list.rule ? 'Nothing in your library matches this yet.' : 'Empty. Use the list button beside any song to add it here.')
+          : el('ul', { class: 'mu-rows' }, ...openTracks.map((track) => {
+              const row = trackRow(track)
+              if (!list.rule) row.append(el('button', { type: 'button', class: 'mu-btn small', title: 'Take out of this playlist', 'aria-label': 'Take out of this playlist', onclick: () => void act('music:remove-from-playlist', [list.id, track.id]) }, '×'))
+              return row
+            })),
+        el('div', { class: 'mu-addbar' },
+          el('button', { type: 'button', class: 'mu-ghost small', onclick: () => { const name = window.prompt('Rename playlist', list.name); if (name && name.trim()) void act('music:do', ['rename-playlist', list.id, name.trim()]) } }, 'Rename'),
+          el('button', { type: 'button', class: 'mu-ghost small', onclick: () => { if (window.confirm(`Delete "${list.name}"? The songs stay in your library.`)) { openList = null; void act('music:do', ['remove-playlist', list.id]) } } }, 'Delete')
         )
       )
-    )
-  )
+    }
+  }
+
+  const rows = playlists.length === 0
+    ? el('p', { class: 'music-note' }, 'No playlists yet. Make one above, or start from a smart playlist.')
+    : el('ul', { class: 'music-rows' }, ...playlists.map((list) =>
+        el('li', { class: 'music-bring-row' },
+          el('button', { type: 'button', class: 'music-row-play', onclick: () => { openList = list.id; void refresh() } },
+            artTile({ title: list.name }, 's'),
+            el('span', { class: 'mu-row-text' },
+              el('span', { class: 'music-row-title' }, list.name),
+              el('span', { class: 'music-row-artist' }, list.rule ? 'Smart playlist' : `${list.tracks.length} ${list.tracks.length === 1 ? 'song' : 'songs'}`)
+            )
+          ),
+          iconButton('play', `Play ${list.name}`, () => void act('music:play-playlist', [list.id]), { class: 'small primary' })
+        )
+      ))
+  return el('section', { class: 'mu-library' }, make, rows, smartBox)
 }
 
 function recentView() {
   if (recent.length === 0) return el('section', { class: 'music-list' }, el('p', { class: 'music-note' }, 'Nothing has been played through Orbis Music yet.'))
-  return el('section', { class: 'music-list' }, el('ul', { class: 'music-rows' }, ...recent.map((track) => trackRow(track))))
+  return el('section', { class: 'mu-library' }, el('ul', { class: 'mu-rows' }, ...recent.map((track) => trackRow(track))))
 }
 
 /**
@@ -1069,15 +1488,193 @@ async function resumeJob(jobId) {
 
 const TABS = [
   { id: 'now', label: 'Now playing' },
-  { id: 'find', label: 'Find' },
-  { id: 'discover', label: 'Discover' },
   { id: 'library', label: 'Library' },
   { id: 'queue', label: 'Queue' },
   { id: 'playlists', label: 'Playlists' },
-  { id: 'recent', label: 'Recently played' },
-  { id: 'bring', label: 'Bring music in' },
+  { id: 'find', label: 'Find' },
+  { id: 'discover', label: 'Discover' },
+  { id: 'recent', label: 'Recent' },
+  { id: 'bring', label: 'Bring in' },
+  { id: 'manage', label: 'Export & tidy' },
   { id: 'settings', label: 'Settings' }
 ]
+
+
+
+/* ---- editing one track: names and picture ---------------------------------------------------------------------------- */
+const MAX_PICTURE = 4 * 1024 * 1024
+
+async function pictureFromFile(file) {
+  if (!file) return
+  if (!/^image\/(png|jpeg|webp|gif)$/.test(file.type)) {
+    said = 'Choose a PNG, JPEG, WebP or GIF picture.'
+    draw()
+    return
+  }
+  if (file.size > MAX_PICTURE) {
+    said = 'That picture is larger than 4 MB. Choose a smaller one.'
+    draw()
+    return
+  }
+  const data = toBase64(await file.arrayBuffer())
+  const answer = await run('music:do', ['set-artwork', editing.id, { data }])
+  if (!answer || answer.ok === false) said = answer?.why || problem || 'That picture could not be used.'
+  else {
+    said = `Artwork changed${answer.width ? ` (${answer.width}×${answer.height})` : ''}.`
+    delete art[editing.id]
+    artTried.delete(editing.id)
+    editing = { ...editing, artwork: answer.artwork }
+  }
+  await refresh()
+}
+
+function editorView() {
+  const t = editing
+  const field = (name, label, value, attrs = {}) =>
+    el('label', { class: 'mu-field' }, el('span', {}, label), el('input', { name, type: attrs.type || 'text', value: value ?? '', maxlength: attrs.maxlength || '200', ...(attrs.min ? { min: attrs.min, max: attrs.max } : {}) }))
+  const picker = el('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp,image/gif', class: 'mu-file', 'aria-label': 'Choose a picture', onchange: (event) => void pictureFromFile(event.target.files[0]) })
+  const form = el(
+    'form',
+    {
+      class: 'mu-edit',
+      onsubmit: async (event) => {
+        event.preventDefault()
+        const f = event.target.elements
+        const patch = {
+          title: f.title.value, artist: f.artist.value, album: f.album.value, albumArtist: f.albumArtist.value, genre: f.genre.value,
+          year: f.year.value.trim() === '' ? null : Number(f.year.value), trackNumber: f.trackNumber.value.trim() === '' ? null : Number(f.trackNumber.value)
+        }
+        const answer = await run('music:do', ['edit', t.id, patch])
+        if (!answer || answer.ok === false) {
+          said = answer?.why || problem || 'Those changes could not be saved.'
+          draw()
+          return
+        }
+        said = 'Saved.'
+        editing = null
+        await refresh()
+      }
+    },
+    el('div', { class: 'mu-edit-art' }, artTile(t, 'l'),
+      el('div', { class: 'mu-edit-art-actions' },
+        el('button', { type: 'button', class: 'mu-cta small', onclick: () => picker.click() }, 'Change artwork'),
+        el('button', { type: 'button', class: 'mu-ghost small', onclick: async () => { await run('music:do', ['set-artwork', t.id, null]); delete art[t.id]; artTried.delete(t.id); said = 'Artwork put back to what the file carries.'; await refresh() } }, 'Use the file’s own'),
+        picker)),
+    field('title', 'Title', t.title),
+    field('artist', 'Artist', t.artist),
+    field('album', 'Album', t.album),
+    field('albumArtist', 'Album artist', t.albumArtist),
+    field('genre', 'Genre', t.genre, { maxlength: '80' }),
+    el('div', { class: 'mu-smart-years' }, field('year', 'Year', t.year, { type: 'number', min: '1000', max: '3000' }), field('trackNumber', 'Track number', t.trackNumber, { type: 'number', min: '1', max: '999' })),
+    el('p', { class: 'music-note' }, 'Changes are kept in your Orbis library. The audio file itself is not touched.'),
+    el('div', { class: 'mu-addbar' },
+      el('button', { type: 'submit', class: 'mu-cta small' }, 'Save'),
+      el('button', { type: 'button', class: 'mu-ghost small', onclick: () => { editing = null; draw() } }, 'Cancel'))
+  )
+  return el('section', { class: 'mu-library' }, el('h3', { class: 'mu-edit-title' }, 'Edit details'), form)
+}
+
+/** "Add to which playlist?", shown over the list the song was chosen from. */
+function chooser() {
+  if (!pickFor) return null
+  const manual = playlists.filter((list) => !list.rule)
+  return el(
+    'section',
+    { class: 'mu-chooser', role: 'dialog', 'aria-label': 'Add to a playlist' },
+    el('p', { class: 'mu-chooser-title' }, 'Add to which playlist?'),
+    manual.length === 0 ? el('p', { class: 'music-note' }, 'You have no playlists yet. Make one in Playlists, then add songs to it from here.') : null,
+    ...manual.map((list) =>
+      el('button', { type: 'button', class: 'mu-ghost small', onclick: () => { const track = pickFor; pickFor = null; void act('music:add-to-playlist', [list.id, [track]], `Added to ${list.name}`) } }, list.name)
+    ),
+    el('button', { type: 'button', class: 'mu-ghost small', onclick: () => { pickFor = null; draw() } }, 'Cancel')
+  )
+}
+
+
+/* ---- keeping, moving and tidying ------------------------------------------------------------------------------------ */
+function saveText(name, text, type = 'text/plain') {
+  const url = URL.createObjectURL(new Blob([text], { type }))
+  const link = el('a', { href: url, download: name })
+  document.body.append(link)
+  link.click()
+  link.remove()
+  window.setTimeout(() => URL.revokeObjectURL(url), 4000)
+}
+
+async function exportKind(kind, withPaths) {
+  const out = await run('music:do', ['export', kind, withPaths])
+  if (!out || out.ok === false) said = out?.why || problem || 'That could not be exported.'
+  else {
+    saveText(out.name, out.text, 'application/json')
+    said = `Saved ${out.name}.`
+  }
+  draw()
+}
+
+async function importPlaylistFile(file) {
+  if (!file) return
+  if (file.size > 2_000_000) {
+    said = 'That file is too large to be a playlist.'
+    draw()
+    return
+  }
+  const out = await run('music:do', ['import-playlist', file.name, await file.text()])
+  if (!out || out.ok === false) said = out?.why || problem || 'That playlist could not be read.'
+  else said = `Playlist "${out.playlist.name}" made with ${out.matched} ${out.matched === 1 ? 'song' : 'songs'}${out.missing ? `. ${out.missing} in the file ${out.missing === 1 ? 'is' : 'are'} not in your library, so ${out.missing === 1 ? 'it was' : 'they were'} left out.` : '.'}`
+  await refresh()
+}
+
+function manageView() {
+  let withPaths = false
+  const filePicker = el('input', { type: 'file', accept: '.m3u,.m3u8,.json,application/json,audio/x-mpegurl', class: 'mu-file', 'aria-label': 'Choose a playlist file', onchange: (event) => void importPlaylistFile(event.target.files[0]) })
+  const card = (title, note, ...kids) => el('section', { class: 'mu-smart' }, el('h3', {}, title), el('p', { class: 'music-note' }, note), ...kids)
+  return el(
+    'section',
+    { class: 'mu-library' },
+    card('Export', 'Save what Orbis knows as a file. Song names and playlists only; your audio files are not included.',
+      el('label', { class: 'mu-check' }, el('input', { type: 'checkbox', onchange: (event) => { withPaths = event.target.checked } }), 'Include where each file is on this computer'),
+      el('div', { class: 'mu-presets' },
+        el('button', { type: 'button', class: 'mu-ghost small', onclick: () => void exportKind('library', withPaths) }, 'Library index'),
+        el('button', { type: 'button', class: 'mu-ghost small', onclick: () => void exportKind('playlists', withPaths) }, 'All playlists'))),
+    card('Import a playlist', 'Read a .m3u or .m3u8 playlist, or one exported from Orbis. Songs are matched to your library; nothing is downloaded.',
+      el('button', { type: 'button', class: 'mu-cta small', onclick: () => filePicker.click() }, 'Choose a playlist file'), filePicker),
+    card('Tidy your files', 'Arrange the music in your watched folders as Artist / Album / Track. Nothing moves until you confirm, and nothing is overwritten.',
+      el('button', { type: 'button', class: 'mu-ghost small', onclick: async () => { organisePlan = await run('music:do', ['organise-plan']); draw() } }, 'Show what would change'),
+      organisePlan && organisePlan.ok
+        ? el('div', { class: 'mu-organise' },
+            organisePlan.count === 0
+              ? el('p', { class: 'music-note' }, 'Everything is already arranged.')
+              : el('div', {},
+                  el('p', { class: 'music-note' }, `${organisePlan.count} ${organisePlan.count === 1 ? 'file' : 'files'} would move. For example:`),
+                  ...organisePlan.examples.map((m) => el('p', { class: 'mu-move' }, el('span', {}, m.from), el('b', {}, '→ ' + m.to))),
+                  el('button', { type: 'button', class: 'mu-cta small', onclick: async () => {
+                    if (!window.confirm(`Move ${organisePlan.count} files into Artist / Album folders? This changes files on your computer.`)) return
+                    const out = await run('music:do', ['organise-apply', organisePlan.ids, true])
+                    organisePlan = null
+                    said = out?.ok ? `Moved ${out.moved} ${out.moved === 1 ? 'file' : 'files'}${out.skipped ? `; ${out.skipped} left where they were` : ''}.` : out?.why || problem || 'Nothing was moved.'
+                    await refresh()
+                  } }, `Move ${organisePlan.count} files`)))
+        : null)
+  )
+}
+
+/** The small player that stays along the bottom while you are anywhere but Now playing. */
+function miniPlayer() {
+  const playback = state?.playback
+  const track = state?.track
+  if (!track || playback?.owner === 'website') return null
+  const total = Math.max(1, Math.round(playback.duration || track.duration || 1))
+  const pct = Math.min(100, Math.round(((playback.position || 0) / total) * 100))
+  return el(
+    'div',
+    { class: 'mu-mini', style: `--p:${pct}%` },
+    el('button', { type: 'button', class: 'mu-mini-main', title: 'Open the player', onclick: () => { view = 'now'; void refresh() } }, artTile(track, 's'), el('span', { class: 'mu-row-text' }, el('span', { class: 'music-row-title' }, track.title), el('span', { class: 'music-row-artist' }, track.artist || 'Unknown artist'))),
+    iconButton('prev', 'Previous', () => void act('music:previous'), { class: 'small' }),
+    iconButton(playback.playing ? 'pause' : 'play', playback.playing ? 'Pause' : 'Play', () => void act(playback.playing ? 'music:pause' : 'music:resume'), { class: 'small primary' }),
+    iconButton('next', 'Next', () => void act('music:next'), { class: 'small' }),
+    el('span', { class: 'mu-mini-bar', 'aria-hidden': 'true' })
+  )
+}
 
 /**
  * The DJ, a station, and why this track.
@@ -1093,16 +1690,17 @@ function djStrip() {
     el(
       'div',
       { class: 'music-dj-row' },
-      el('button', { type: 'button', class: 'music-btn', onclick: () => void act('music:do', ['dj', true], 'Starting the DJ…') }, 'AI DJ on'),
-      el('button', { type: 'button', class: 'music-btn', onclick: () => void act('music:do', ['dj', false], 'Stopping the DJ…') }, 'Off'),
+      el('span', { class: 'mu-dj-label' }, 'AI DJ'),
+      el('button', { type: 'button', class: 'mu-ghost small', onclick: () => void act('music:do', ['dj', true], 'Starting the DJ…') }, 'Start'),
+      el('button', { type: 'button', class: 'mu-ghost small', onclick: () => void act('music:do', ['dj', false], 'Stopping the DJ…') }, 'Stop'),
       el(
         'button',
         {
           type: 'button',
-          class: 'music-btn',
+          class: 'mu-ghost small',
           onclick: () => void act('music:do', ['radio', state?.track?.id ?? null], 'Starting a station…')
         },
-        state?.track?.id ? 'Station from this' : 'Personal station'
+        state?.track?.id ? 'Station from this song' : 'Personal station'
       )
     ),
     reasons.length > 0
@@ -1143,26 +1741,124 @@ function draw() {
     problem ? el('p', { class: 'music-problem' }, problem) : null,
     busy ? el('p', { class: 'music-note' }, busy) : null,
     said ? el('p', { class: 'music-said' }, said) : null,
-    view === 'now' ? nowPlaying() : null,
-    view === 'now' && state?.playback?.owner !== 'website' ? djStrip() : null,
-    view === 'now' && state?.playback?.owner !== 'website' ? addButton() : null,
-    view === 'find' ? findView() : null,
-    view === 'discover' ? discoverView() : null,
-    view === 'library' ? libraryView() : null,
-    view === 'queue' ? queueView() : null,
-    view === 'playlists' ? playlistsView() : null,
-    view === 'recent' ? recentView() : null,
-    view === 'bring' ? bringInView() : null,
-    view === 'settings' ? settingsView() : null,
-    state?.summary
+    dropNote ? el('p', { class: 'music-note mu-progress' }, dropNote) : null,
+    chooser(),
+    editing ? editorView() : null,
+    editing ? null : view === 'now' ? nowPlaying() : null,
+    !editing && view === 'now' && state?.playback?.owner !== 'website' ? djStrip() : null,
+    !editing && view === 'now' && state?.playback?.owner !== 'website' ? addButton() : null,
+    !editing && view === 'find' ? findView() : null,
+    !editing && view === 'discover' ? discoverView() : null,
+    !editing && view === 'library' ? libraryView() : null,
+    !editing && view === 'queue' ? queueView() : null,
+    !editing && view === 'playlists' ? playlistsView() : null,
+    !editing && view === 'recent' ? recentView() : null,
+    !editing && view === 'bring' ? bringInView() : null,
+    !editing && view === 'manage' ? manageView() : null,
+    !editing && view === 'settings' ? settingsView() : null,
+    state?.summary && view !== 'now'
       ? el(
           'p',
           { class: 'music-summary' },
-          `${state.summary.tracks} ${state.summary.tracks === 1 ? 'track' : 'tracks'} · ${state.summary.offline} playable here · ${state.summary.reference} saved by name`
+          `${state.summary.tracks} ${state.summary.tracks === 1 ? 'song' : 'songs'} · ${state.summary.offline} playable here · ${state.summary.reference} saved by name`
         )
-      : null
+      : null,
+    view !== 'now' ? miniPlayer() : null
   ]
   root.replaceChildren(...parts.filter((one) => one !== null && one !== undefined && one !== false))
+}
+
+
+/* ---- dropping songs onto the panel ----------------------------------------------------------------------------------
+ *
+ * A web page is not told where a dropped file lives, so each file is sent across in pieces and put back together on
+ * the Orbis side, where it is read and understood like any other file before it is added.
+ */
+const AUDIO_ENDING = /\.(mp3|m4a|mp4|aac|flac|ogg|oga|opus|wav|wave)$/i
+const PIECE = 3 * 1024 * 1024
+
+const toBase64 = (buffer) => {
+  const bytes = new Uint8Array(buffer)
+  let text = ''
+  for (let i = 0; i < bytes.length; i += 0x8000) text += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+  return btoa(text)
+}
+
+async function sendFile(file, key) {
+  let at = 0
+  do {
+    const end = Math.min(file.size, at + PIECE)
+    const data = toBase64(await file.slice(at, end).arrayBuffer())
+    const last = end >= file.size
+    const answer = await run('music:do', ['drop-chunk', { name: file.name, key, data, last }])
+    if (!answer || answer.ok === false) return { ok: false, why: answer?.why || problem || 'That file could not be added.' }
+    if (last) return answer
+    at = end
+  } while (at < file.size)
+  return { ok: false, why: 'That file could not be added.' }
+}
+
+async function takeDrop(list) {
+  const files = [...list]
+  if (files.length === 0) return
+  const audio = files.filter((file) => AUDIO_ENDING.test(file.name))
+  const skipped = files.length - audio.length
+  if (audio.length === 0) {
+    said = 'Those are not audio files. Orbis plays MP3, FLAC, WAV, M4A, AAC, OGG and Opus.'
+    draw()
+    return
+  }
+  let added = 0
+  let already = 0
+  const failed = []
+  for (let i = 0; i < audio.length; i++) {
+    dropNote = `Adding ${i + 1} of ${audio.length}: ${audio[i].name}`
+    draw()
+    const done = await sendFile(audio[i], `${Date.now().toString(36)}-${i}-${Math.random().toString(36).slice(2, 8)}`)
+    if (done.ok === false) failed.push(`${audio[i].name} (${done.why})`)
+    else {
+      added += done.added || 0
+      already += done.already || 0
+      if ((done.failed || 0) > 0) failed.push(audio[i].name)
+    }
+  }
+  dropNote = ''
+  const parts = []
+  if (added) parts.push(`${added} ${added === 1 ? 'song' : 'songs'} added`)
+  if (already) parts.push(`${already} already in your library`)
+  if (skipped) parts.push(`${skipped} not audio, skipped`)
+  if (failed.length) parts.push(`could not add: ${failed.slice(0, 3).join(', ')}`)
+  said = parts.join(' · ') || 'Nothing was added.'
+  if (added) view = view === 'now' ? 'library' : view
+  await refresh()
+}
+
+function wireDrop() {
+  const hasFiles = (event) => [...(event.dataTransfer?.types || [])].includes('Files')
+  const shell = document.getElementById('view-music') || root
+  shell.addEventListener('dragenter', (event) => {
+    if (!hasFiles(event)) return
+    event.preventDefault()
+    dragDepth++
+    shell.classList.add('mu-dropping')
+  })
+  shell.addEventListener('dragover', (event) => {
+    if (!hasFiles(event)) return
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'copy'
+  })
+  shell.addEventListener('dragleave', (event) => {
+    if (!hasFiles(event)) return
+    dragDepth = Math.max(0, dragDepth - 1)
+    if (dragDepth === 0) shell.classList.remove('mu-dropping')
+  })
+  shell.addEventListener('drop', (event) => {
+    if (!hasFiles(event)) return
+    event.preventDefault()
+    dragDepth = 0
+    shell.classList.remove('mu-dropping')
+    void takeDrop(event.dataTransfer.files)
+  })
 }
 
 /**
@@ -1181,6 +1877,7 @@ function watch() {
   }, 2000)
 }
 
+wireDrop()
 document.addEventListener('orbis:music-shown', () => {
   void refresh()
   watch()

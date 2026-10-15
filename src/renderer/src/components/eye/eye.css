@@ -1,0 +1,7 @@
+/* OrbisEye takes the whole window below the address bar: no header of its own, only a small way back. */
+.eye-wait { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; text-align: center; color: var(--muted); padding: 24px; }
+.eye-wait p { margin: 0; color: var(--text); font-size: 16px; display: inline-flex; align-items: center; gap: 8px; }
+.eye-wait small { max-width: 52ch; line-height: 1.5; }
+.eye-orbit { width: 64px; height: 64px; border-radius: 50%; border: 2px solid transparent; border-top-color: var(--cyan); border-right-color: rgba(124, 92, 255, .8); animation: eye-spin 1.1s linear infinite; box-shadow: 0 0 28px -6px var(--cyan); }
+@keyframes eye-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .eye-orbit { animation-duration: 4s; } }

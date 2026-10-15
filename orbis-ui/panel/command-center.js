@@ -173,6 +173,7 @@ function go(capability) {
   // Dimmed, not removed, and touching it says why. That sentence is the whole of what this panel reports about
   // itself, and it arrives when somebody asked for it rather than sitting on screen all day.
   if (why) return say(`${capability.name}: ${why}`)
+  rememberOpened(capability.id)
 
   /*
    * A panel view and a rail view are both views of this very page, so both are reached by putting the name in the
@@ -358,6 +359,56 @@ function pinRow() {
   return block
 }
 
+
+// ---------------------------------------------------------------- recently opened
+
+const RECENT_KEY = 'orbis.cc.recent'
+const RECENT_MAX = 6
+
+/** The last few things opened, newest first. Kept in this page's own storage; never sent anywhere. */
+function readRecent() {
+  try {
+    const list = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]')
+    return Array.isArray(list) ? list.filter((id) => typeof id === 'string' && capabilityById(id)).slice(0, RECENT_MAX) : []
+  } catch {
+    return []
+  }
+}
+
+function rememberOpened(id) {
+  try {
+    const next = [id, ...readRecent().filter((one) => one !== id)].slice(0, RECENT_MAX)
+    localStorage.setItem(RECENT_KEY, JSON.stringify(next))
+  } catch {
+    // Storage can be unavailable; the strip is a convenience, not a record.
+  }
+}
+
+function recentRow() {
+  const ids = readRecent()
+  if (ids.length === 0) return null
+  const block = el('section', 'cc-group cc-recent')
+  const head = el('h2', 'cc-h', 'Jump back in')
+  const clear = el('button', 'cc-chip-move', 'Clear')
+  clear.type = 'button'
+  clear.title = 'Forget what was opened'
+  clear.addEventListener('click', () => { try { localStorage.removeItem(RECENT_KEY) } catch { /* nothing to forget */ } draw() })
+  const top = el('div', 'cc-recent-head')
+  top.append(head, clear)
+  const row = el('div', 'cc-recent-row')
+  for (const id of ids) {
+    const capability = capabilityById(id)
+    if (!capability) continue
+    const chip = el('button', 'cc-recent-chip')
+    chip.type = 'button'
+    chip.append(icon(capability.icon, 15), el('span', '', capability.name))
+    chip.addEventListener('click', () => go(capability))
+    row.append(chip)
+  }
+  block.append(top, row)
+  return block
+}
+
 /** Everything, as a drawer: short headings, and the things under them. */
 /**
  * One lane: a row you can press, and its contents when it is open.
@@ -423,6 +474,8 @@ function drawDrawer() {
 
   const page = pageRow()
   if (page) main.append(page)
+  const recent = recentRow()
+  if (recent) main.append(recent)
   const pins = pinRow()
   if (pins) main.append(pins)
 

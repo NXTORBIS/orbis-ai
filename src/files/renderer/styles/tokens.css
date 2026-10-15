@@ -1,0 +1,208 @@
+/*
+ * Orbis Files design tokens (design system v1, "Orbis Native").
+ * Every component reads these semantic variables; no component hardcodes a
+ * colour. The colour blocks below are generated from the token registry
+ * (src/shared/customization/tokens.ts); the customization engine overrides
+ * them at run time on :root.
+ */
+
+/* BEGIN GENERATED TOKENS */
+/* Generated from src/shared/customization/tokens.ts by scripts/gen-tokens.mjs — design system 2.0.0. */
+:root,
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  /* Surfaces */
+  --bg-app: #0a0c0f;
+  --bg-sidebar: #0d1014;
+  --bg-surface: #111419;
+  --bg-surface-2: #151920;
+  --bg-raised: #191e25;
+  --bg-toolbar: #111419;
+  --bg-panel: #151920;
+  --bg-dialog: #191e25;
+  /* Overlays and scrollbars */
+  --bg-tooltip: #232a33;
+  --text-tooltip: #f2f5f8;
+  /* Surfaces */
+  --bg-input: #0c0f13;
+  /* Text */
+  --text: #e3e8ee;
+  --text-2: #a4aeb9;
+  --text-3: #8792a0;
+  --text-disabled: #47505a;
+  --text-on-accent: #04111c;
+  --text-on-destructive: #ffffff;
+  /* Lines */
+  --border: #1d232b;
+  --border-strong: #2a323c;
+  /* States */
+  --border-focus: #7cc3f5;
+  /* Accent */
+  --accent: #5caae8;
+  --accent-hover: #78bcf2;
+  --accent-soft: #5caae824;
+  --accent-line: #5caae873;
+  --accent-2: #8fd0c8;
+  /* States */
+  --bg-hover: #a0bedc0f;
+  --bg-active: #a0bedc1c;
+  --bg-selected: #5caae826;
+  --bg-selected-focus: #5caae83d;
+  --bg-drop: #5caae824;
+  --bg-disabled: #a0bedc0a;
+  /* Status */
+  --success: #4cc28f;
+  --warning: #e2b450;
+  --error: #ef6f6f;
+  --info: #5caae8;
+  --destructive: #c9393c;
+  --destructive-hover: #b02f32;
+  /* Progress */
+  --progress: #5caae8;
+  --progress-track: #a0bedc1a;
+  /* Overlays and scrollbars */
+  --scrollbar-thumb: #2a323c;
+  --scrollbar-thumb-hover: #8792a0;
+  --scrim: #0305089e;
+  /* File types */
+  --hue-folder: #6fb2e6;
+  --hue-image: #c79bf0;
+  --hue-video: #f0909f;
+  --hue-audio: #e9b46a;
+  --hue-doc: #8fb7f2;
+  --hue-code: #7fd3b0;
+  --hue-archive: #d6b07a;
+  --hue-exe: #ef8a6f;
+  --hue-other: #8a95a1;
+  --shadow-raised: 0 18px 48px rgba(0, 0, 0, 0.55), 0 0 0 1px var(--border-strong);
+  --shadow-subtle: 0 1px 0 rgba(255, 255, 255, 0.02) inset;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  /* Surfaces */
+  --bg-app: #e9edf1;
+  --bg-sidebar: #eef1f4;
+  --bg-surface: #fafbfc;
+  --bg-surface-2: #f3f5f8;
+  --bg-raised: #ffffff;
+  --bg-toolbar: #fafbfc;
+  --bg-panel: #f3f5f8;
+  --bg-dialog: #ffffff;
+  /* Overlays and scrollbars */
+  --bg-tooltip: #1d242c;
+  --text-tooltip: #f2f5f8;
+  /* Surfaces */
+  --bg-input: #ffffff;
+  /* Text */
+  --text: #12171d;
+  --text-2: #48535f;
+  --text-3: #56616d;
+  --text-disabled: #a9b2bb;
+  --text-on-accent: #ffffff;
+  --text-on-destructive: #ffffff;
+  /* Lines */
+  --border: #dbe1e7;
+  --border-strong: #c7d0d9;
+  /* States */
+  --border-focus: #1c6cb2;
+  /* Accent */
+  --accent: #1c6cb2;
+  --accent-hover: #155a96;
+  --accent-soft: #1c6cb21a;
+  --accent-line: #1c6cb266;
+  --accent-2: #16766e;
+  /* States */
+  --bg-hover: #1432500d;
+  --bg-active: #14325017;
+  --bg-selected: #1c6cb21c;
+  --bg-selected-focus: #1c6cb230;
+  --bg-drop: #1c6cb21a;
+  --bg-disabled: #14325008;
+  /* Status */
+  --success: #1d8a5c;
+  --warning: #875900;
+  --error: #b53434;
+  --info: #1c6cb2;
+  --destructive: #c4383b;
+  --destructive-hover: #a82e31;
+  /* Progress */
+  --progress: #1c6cb2;
+  --progress-track: #1432501a;
+  /* Overlays and scrollbars */
+  --scrollbar-thumb: #c7d0d9;
+  --scrollbar-thumb-hover: #56616d;
+  --scrim: #141c2657;
+  /* File types */
+  --hue-folder: #2f7fc4;
+  --hue-image: #8a52c4;
+  --hue-video: #c4475b;
+  --hue-audio: #b0741c;
+  --hue-doc: #3a6fc4;
+  --hue-code: #1f8a66;
+  --hue-archive: #9a6a2c;
+  --hue-exe: #c45634;
+  --hue-other: #6b7682;
+  --shadow-raised: 0 16px 40px rgba(20, 30, 45, 0.18), 0 0 0 1px var(--border-strong);
+  --shadow-subtle: none;
+}
+/* END GENERATED TOKENS */
+
+:root {
+  /* Derived from the semantic colours, so customization carries through. */
+  --success-soft: color-mix(in srgb, var(--success) 13%, transparent);
+  --warning-soft: color-mix(in srgb, var(--warning) 13%, transparent);
+  --error-soft: color-mix(in srgb, var(--error) 13%, transparent);
+  --info-soft: color-mix(in srgb, var(--info) 13%, transparent);
+
+  /* Typography */
+  --font-ui: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --fs-xs: 11px;   /* captions, badges, metadata */
+  --fs-sm: 12px;   /* toolbar labels, status bar, secondary rows */
+  --fs-md: 13px;   /* body, file names */
+  --fs-lg: 15px;   /* section titles */
+  --fs-xl: 18px;   /* dialog titles */
+  --fs-2xl: 22px;  /* view titles (Home, tools) */
+  --lh-tight: 1.25;
+  --lh-body: 1.45;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+
+  /* Spacing scale (4px base) */
+  --sp-1: 2px;
+  --sp-2: 4px;
+  --sp-3: 6px;
+  --sp-4: 8px;
+  --sp-5: 12px;
+  --sp-6: 16px;
+  --sp-7: 20px;
+  --sp-8: 24px;
+  --sp-9: 32px;
+
+  /* Geometry */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 9px;
+  --titlebar-h: 38px;
+  --toolbar-h: 40px;
+  --statusbar-h: 26px;
+  --tabbar-h: 34px;
+  --row-h: 30px;
+  --resizer-hit: 7px;
+  --control-h: 28px;
+
+  /* Motion */
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --dur-fast: 90ms;
+  --dur-med: 160ms;
+}
+
+:root[data-density='compact'] { --row-h: 24px; --control-h: 26px; --toolbar-h: 36px; }
+:root[data-density='spacious'] { --row-h: 36px; --control-h: 30px; --toolbar-h: 44px; }
+
+:root[data-reduce-motion='true'] { --dur-fast: 0ms; --dur-med: 0ms; }
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-reduce-motion='false']) { --dur-fast: 0ms; --dur-med: 0ms; }
+}

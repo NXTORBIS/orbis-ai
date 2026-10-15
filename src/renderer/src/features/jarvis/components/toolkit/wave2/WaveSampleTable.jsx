@@ -1,0 +1,7 @@
+import { formatNumber } from '@jarvis/components/toolkit/science50/model';
+
+export default function WaveSampleTable({ curve, unit, hasComparison, onApply }) {
+  const stride=Math.max(1,Math.ceil(curve.points.length/12));
+  const points=curve.points.filter((_,index)=>index%stride===0||index===curve.points.length-1);
+  return <details className="rounded-lg border border-border/70 bg-card/40 p-3"><summary className="cursor-pointer text-xs font-semibold">Sampled results · apply a valid point</summary><div className="mt-3 overflow-x-auto"><table className="w-full text-left text-[11px]"><thead className="text-muted-foreground"><tr><th className="p-2">{curve.label}</th><th className="p-2">Current ({unit||'value'})</th>{hasComparison&&<th className="p-2">Captured ({unit||'value'})</th>}<th className="p-2">Setup</th></tr></thead><tbody>{points.map((point,index)=><tr key={index} className="border-t border-border/50"><td className="p-2 font-mono">{formatNumber(point.x)}</td><td className="p-2 font-mono" title={point.error}>{point.error?'Outside model':formatNumber(point.y)}</td>{hasComparison&&<td className="p-2 font-mono">{formatNumber(point.comparison)}</td>}<td className="p-2"><button type="button" disabled={point.y===null} onClick={()=>onApply(point.x)} className="rounded-md border border-border px-2 py-1 text-cyan-j disabled:cursor-not-allowed disabled:opacity-40">Apply</button></td></tr>)}</tbody></table></div></details>;
+}

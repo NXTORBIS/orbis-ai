@@ -1,0 +1,106 @@
+/*
+ * Copyright (c) 2023 Gaia Sky - All rights reserved.
+ *  This file is part of Gaia Sky, which is released under the Mozilla Public License 2.0.
+ *  You may use, distribute and modify this code under the terms of MPL2.
+ *  See the file LICENSE.md in the project root for full license details.
+ */
+
+package gaiasky.scene;
+
+import com.badlogic.ashley.core.Entity;
+import gaiasky.event.Event;
+import gaiasky.event.EventManager;
+import gaiasky.event.IObserver;
+import gaiasky.scene.component.Label.LabelDisplay;
+import gaiasky.scene.system.render.draw.text.LabelEntityRenderSystem;
+import gaiasky.scene.view.FocusView;
+import gaiasky.util.Logger;
+import gaiasky.util.i18n.I18n;
+
+import java.util.Locale;
+
+/**
+ * Observer of the scene state, providing notifications for various scene events.
+ */
+public class SceneObserver implements IObserver {
+    private static final Logger.Log logger = Logger.getLogger(SceneObserver.class);
+
+    private final FocusView view;
+
+    public SceneObserver() {
+        this.view = new FocusView();
+
+        EventManager.instance.subscribe(this,
+                                        Event.PER_OBJECT_VISIBILITY_CMD,
+                                        Event.LABEL_DISPLAY_CMD,
+                                        Event.LABEL_EXCLUDE_REGEX_CMD,
+                                        Event.LABEL_INCLUDE_REGEX_CMD,
+                                        Event.LABEL_CLEAR_FILTER_REGEX_CMD,
+                                        Event.LABEL_COLOR_CMD);
+    }
+
+    @Override
+    public void notify(Event event,
+                       Object source,
+                       Object... data) {
+        switch (event) {
+            case PER_OBJECT_VISIBILITY_CMD -> {
+                if (data[0] instanceof FocusView focusView) {
+                    String name = (String) data[1];
+                    boolean state = (boolean) data[2];
+
+                    focusView.setVisible(state, name.toLowerCase(Locale.ROOT).strip());
+                    logger.info(I18n.msg("notif.visibility.object.set", focusView.getName(), I18n.msg("gui." + state)));
+                } else if (data[0] instanceof Entity entity) {
+                    view.setEntity(entity);
+                    String name = (String) data[1];
+                    boolean state = (boolean) data[2];
+
+                    view.setVisible(state, name.toLowerCase(Locale.ROOT).strip());
+                    logger.info(I18n.msg("notif.visibility.object.set", view.getName(), I18n.msg("gui." + state)));
+                } else {
+                    logger.warn("PER_OBJECT_VISIBILITY_CMD needs a FocusView or an Entity, got " + data[0].getClass().getSimpleName());
+                }
+            }
+            case LABEL_DISPLAY_CMD -> {
+                FocusView focusView = null;
+                if (data[0] instanceof Entity entity) {
+                    view.setEntity(entity);
+                    focusView = view;
+                } else if (data[0] instanceof FocusView fv) {
+                    focusView = fv;
+                }
+                if (focusView != null) {
+                    var name = (String) data[1];
+                    var state = (LabelDisplay) data[2];
+
+                    focusView.setLabelDisplay(state, name);
+                    logger.info(I18n.msg("notif.object.property", "labelDisplay", name, state.localizedName()));
+                }
+            }
+            case LABEL_EXCLUDE_REGEX_CMD -> {
+                String regex = (String) data[0];
+                LabelEntityRenderSystem.setExcludeRegex(regex);
+            }
+            case LABEL_INCLUDE_REGEX_CMD -> {
+                String regex = (String) data[0];
+                LabelEntityRenderSystem.setIncludeRegex(regex);
+            }
+            case LABEL_CLEAR_FILTER_REGEX_CMD -> {
+                LabelEntityRenderSystem.removeExcludeRegex();
+                LabelEntityRenderSystem.removeIncludeRegex();
+            }
+            case LABEL_COLOR_CMD -> {
+                Entity entity = (Entity) data[0];
+                String name = (String) data[1];
+                float[] labelColor = (float[]) data[2];
+
+                synchronized (view) {
+                    view.setEntity(entity);
+                    view.setLabelColor(labelColor, name);
+                }
+            }
+        }
+
+    }
+}

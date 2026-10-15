@@ -1,0 +1,63 @@
+#!/bin/bash
+
+if [[ $# -eq 0 ]] ; then
+    echo "No arguments supplied:"
+    echo "Usage: $0 [tag|latest]"
+    exit 1
+fi
+if [ -z $JAVA_HOME ]; then 
+    echo "JAVA_HOME is unset, please set it"
+    exit 1
+fi
+
+if [[ $1 = "-h" ]] || [[ $1 = "--help" ]] ; then
+    echo "Usage: $0 [tag|latest]"
+    exit 1
+fi
+
+VERSION=$1
+
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null && pwd )"
+SRCDIR=$GS/core/src/
+
+echo "Source location: $SRCDIR"
+
+# Prepare version
+if [[ $VERSION = "latest" ]] ; then
+    echo "Publishing latest version: master"
+    CO=master
+else
+    if cd $DIR ; git rev-list $VERSION.. >/dev/null
+    then
+        echo "Tag: $VERSION"
+        CO=$VERSION
+    else
+        echo "Tag $VERSION does not exist"
+        exit 1
+    fi
+fi
+
+git -C $SRCDIR checkout $CO
+
+# Run Javadoc
+cd $GS
+gradlew core:javadoc
+
+# Rename
+rm -rf "$GS/core/build/docs/$VERSION"
+mv "$GS/core/build/docs/javadoc" "$GS/core/build/docs/$VERSION"
+
+# Copy to server
+echo "Copying directory $GS/core/build/docs/$VERSION to tsagrista@andromeda:/gaiasky/docs/javadoc/$VERSION"
+    
+rsync -avh "$GS/core/build/docs/$VERSION" "tsagrista@andromeda:/gaiasky/docs/javadoc/"
+
+# Update listing
+COMMAND="~/bin/dir2html '/gaiasky/docs/javadoc/' '/javadoc' 'gaia.ari.uni-heidelberg.de/gaiasky' 'Gaia Sky javadoc'"
+echo "Running dir2html in javadoc folder in andromeda"
+ssh tsagrista@andromeda $COMMAND
+
+# Restore
+git -C "$SRCDIR" checkout master
+
+

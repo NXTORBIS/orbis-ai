@@ -1,0 +1,45 @@
+.cosmos-full { position: fixed; inset: 40px 0 var(--mstrip-reserved, 0px) 0; z-index: 400; background: #02040c; display: flex; flex-direction: column; overflow: hidden; }
+.cosmos-bar { flex: 0 0 44px; display: flex; align-items: center; gap: 12px; padding: 0 12px; background: rgba(6, 10, 22, .92); border-bottom: 1px solid var(--glass-border); }
+.cosmos-back { width: 32px; height: 32px; display: grid; place-items: center; padding: 0; border-radius: 50%; cursor: pointer; color: var(--text); background: rgba(255, 255, 255, .05); border: 1px solid var(--glass-border); transition: border-color .2s, transform .15s; }
+.cosmos-back:hover { border-color: var(--cyan); transform: translateX(-1px); }
+.cosmos-bar-title { font-family: 'Orbitron', var(--font, sans-serif); font-weight: 700; letter-spacing: .22em; font-size: 12px; color: var(--text); }
+.cosmos-bar-note { margin-left: auto; font-size: 12px; color: var(--muted); }
+.cosmos-stage { position: relative; flex: 1 1 auto; min-height: 0; background: #02040c; }
+
+.cosmos-loading { position: absolute; inset: 0; overflow: hidden; display: grid; place-items: center; opacity: 1; transition: opacity .85s ease; }
+.cosmos-loading.is-leaving { opacity: 0; }
+.cosmos-sky { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.cosmos-center { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; padding: 24px; }
+
+.cosmos-ring { filter: drop-shadow(0 0 18px rgba(56, 232, 255, .35)); }
+.cosmos-ring-track { fill: none; stroke: rgba(255, 255, 255, .08); stroke-width: 3; }
+.cosmos-ring-fill { fill: none; stroke: url(#cosmos-grad); stroke-width: 4; stroke-linecap: round; transform: rotate(-90deg); transform-origin: 80px 80px; transition: stroke-dashoffset .7s cubic-bezier(.2, .8, .2, 1); }
+.cosmos-ring-inner { fill: rgba(8, 14, 34, .6); stroke: rgba(138, 107, 255, .35); stroke-width: 1; animation: cosmos-breathe 3.2s ease-in-out infinite; transform-origin: 80px 80px; }
+.cosmos-ring.is-bad .cosmos-ring-fill { stroke: #ff6b6b; }
+.cosmos-ring.is-bad { filter: drop-shadow(0 0 18px rgba(255, 107, 107, .35)); }
+@keyframes cosmos-breathe { 0%, 100% { transform: scale(1); opacity: .9; } 50% { transform: scale(1.05); opacity: 1; } }
+
+.cosmos-wordmark { margin: 6px 0 0; font-family: 'Orbitron', var(--font, sans-serif); font-weight: 700; font-size: clamp(22px, 4vw, 40px); letter-spacing: .32em; color: #eaf6ff; text-shadow: 0 0 28px rgba(56, 232, 255, .45); }
+.cosmos-wordmark span { background: linear-gradient(90deg, #38e8ff, #8a6bff); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: none; }
+.cosmos-line { margin: 0; font-size: 15px; color: var(--text); min-height: 1.4em; }
+.cosmos-line-bad { color: #ff9a9a; }
+.cosmos-count { margin: 0; font: 600 12px/1 'JetBrains Mono', monospace; letter-spacing: .08em; color: var(--muted); }
+.cosmos-why { margin: 0; max-width: 56ch; font-size: 13px; line-height: 1.5; color: var(--muted); }
+.cosmos-retry { display: inline-flex; align-items: center; gap: 8px; margin-top: 6px; padding: 8px 16px; border-radius: 999px; cursor: pointer; color: var(--text); background: rgba(255, 255, 255, .06); border: 1px solid var(--glass-border); }
+.cosmos-retry:hover { border-color: var(--cyan); }
+.cosmos-dots::after { content: ''; animation: cosmos-dots 1.4s steps(4, end) infinite; }
+@keyframes cosmos-dots { 0% { content: ''; } 25% { content: '.'; } 50% { content: '..'; } 75%, 100% { content: '...'; } }
+
+.cosmos-steps { position: absolute; z-index: 1; left: 28px; bottom: 24px; margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 7px; max-width: min(46ch, 40vw); }
+.cosmos-step { display: flex; align-items: flex-start; gap: 9px; font-size: 12.5px; color: rgba(190, 205, 230, .45); transition: color .4s; }
+.cosmos-step.is-done { color: rgba(205, 225, 255, .85); }
+.cosmos-step.is-now { color: #fff; }
+.cosmos-tick { flex: 0 0 16px; height: 16px; margin-top: 1px; display: grid; place-items: center; border-radius: 50%; border: 1px solid rgba(255, 255, 255, .22); color: #02040c; transition: background .3s, border-color .3s; }
+.cosmos-step.is-done .cosmos-tick { background: #38e8ff; border-color: #38e8ff; }
+.cosmos-step.is-now .cosmos-tick { border-color: #38e8ff; box-shadow: 0 0 10px rgba(56, 232, 255, .7); animation: cosmos-breathe 1.4s ease-in-out infinite; }
+.cosmos-step-text { display: flex; flex-direction: column; gap: 1px; }
+.cosmos-step-text small { font-size: 11px; color: rgba(160, 185, 220, .65); }
+
+.cosmos-stage { container-type: inline-size; }
+@container (max-width: 760px) { .cosmos-steps { left: 14px; right: 14px; max-width: none; bottom: 14px; } }
+@media (prefers-reduced-motion: reduce) { .cosmos-ring-inner, .cosmos-step.is-now .cosmos-tick, .cosmos-dots::after { animation: none; } .cosmos-loading { transition-duration: .01s; } }

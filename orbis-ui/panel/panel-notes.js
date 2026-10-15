@@ -203,9 +203,8 @@ function draw() {
   if (problem) root.append(el('div', { class: 'problem', role: 'alert' }, problem))
   if (editing === 'new') root.append(editor(null))
   if (!notes.length && editing !== 'new') {
-    root.append(
-      el('p', { class: 'empty' }, query || tag ? 'No notes match.' : showArchived ? 'No archived notes.' : 'No notes yet.')
-    )
+    const [headline, hint] = query || tag ? ['No notes match', 'Try a different word or tag.'] : showArchived ? ['No archived notes', 'Archived notes wait here.'] : ['No notes yet', 'Press New note, or save a thought from any page.']
+    root.append(el('div', { class: 'empty-state' }, el('span', { class: 'es-ico', 'aria-hidden': 'true' }, '✎'), el('strong', {}, headline), el('span', {}, hint)))
   }
 
   for (const n of notes) {
@@ -213,19 +212,23 @@ function draw() {
       root.append(editor(n))
       continue
     }
-    const detail = [n.tags.length ? n.tags.map((t) => `#${t}`).join(' ') : '', cameFrom(n)].filter(Boolean).join(' · ')
+    const origin = cameFrom(n)
+    // A tag keeps one colour wherever it appears, chosen from its own letters, so a topic is recognisable at a glance.
+    const hue = (tag) => [...tag].reduce((sum, ch) => (sum * 31 + ch.charCodeAt(0)) % 360, 7)
+    const tagChips = n.tags.slice(0, 4).map((t) => el('span', { class: 'tag', style: `--hue:${hue(t)}` }, `#${t}`))
+    const snippet = n.body.replace(/\s+/g, ' ').trim().slice(0, 140)
     root.append(
       el(
         'button',
         {
           type: 'button',
-          class: `item note-${n.color ?? 'default'}`,
+          class: `item note-card note-${n.color ?? 'default'}${n.pinned ? ' pinned' : ''}`,
           'aria-label': `Open note ${titleOf(n)}`,
           onclick: () => ((editing = n.id), draw())
         },
-        el('strong', {}, `${n.pinned ? '★ ' : ''}${titleOf(n)}`),
-        el('span', { class: 'muted' }, n.body.replace(/\s+/g, ' ').slice(0, 120)),
-        detail ? el('span', { class: 'muted' }, detail) : null
+        el('strong', {}, titleOf(n)),
+        snippet ? el('span', { class: 'snippet' }, snippet) : null,
+        tagChips.length || origin ? el('span', { class: 'chips' }, ...tagChips, origin ? el('span', { class: 'chip calm' }, origin) : null) : null
       )
     )
   }

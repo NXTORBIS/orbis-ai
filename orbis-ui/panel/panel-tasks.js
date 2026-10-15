@@ -246,6 +246,38 @@ function draw() {
       el('button', { type: 'submit' }, 'Add')
     )
   )
+  // The numbers that matter at a glance, as tiles that are also the way to those lists.
+  const counts = snapshot.counts ?? {}
+  const countOf = (id) => (typeof counts[id] === 'number' ? counts[id] : null)
+  const tiles = el('div', { class: 'stat-row' })
+  for (const [id, label, tone] of [['today', 'Today', 'accent'], ['overdue', 'Overdue', 'danger'], ['upcoming', 'Coming up', 'calm']]) {
+    const n = countOf(id)
+    tiles.append(
+      el(
+        'button',
+        { type: 'button', class: `stat ${tone}${view === id ? ' on' : ''}`, onclick: () => ((view = id), void load()) },
+        el('b', {}, n === null ? '–' : String(n)),
+        el('span', {}, label)
+      )
+    )
+  }
+  {
+    const open = countOf('open')
+    const finished = countOf('done')
+    const total = countOf('total')
+    const share = total ? Math.round((finished / total) * 100) : 0
+    const headline = open === null ? 'Your tasks' : open === 0 ? 'All clear' : `${open} to go`
+    const sub = total === null ? '' : total === 0 ? 'Nothing planned yet' : `${finished} of ${total} done`
+    root.append(
+      el(
+        'div',
+        { class: 'hero-card' },
+        el('div', { class: 'ring', style: `--p:${share}` }, el('b', {}, `${share}%`)),
+        el('div', { class: 'hero-text' }, el('strong', {}, headline), el('span', {}, sub))
+      )
+    )
+  }
+  root.append(tiles)
   const bar = el('div', { class: 'row seg', role: 'group', 'aria-label': 'Show' })
   for (const [id, label] of VIEWS) {
     bar.append(el('button', { type: 'button', 'aria-pressed': String(view === id), onclick: () => ((view = id), void load()) }, label))
@@ -260,7 +292,17 @@ function draw() {
   lists.value = listId
   root.append(lists)
   if (problem) root.append(el('div', { class: 'problem', role: 'alert' }, problem))
-  if (!tasks.length) root.append(el('p', { class: 'empty' }, 'Nothing here.'))
+  if (!tasks.length) {
+    const quiet = {
+      today: ['Nothing due today', 'Enjoy the quiet, or add something above.'],
+      overdue: ['Nothing overdue', 'You are all caught up.'],
+      upcoming: ['Nothing coming up', 'Give a task a date and it shows here.'],
+      completed: ['Nothing finished yet', 'Tick a task and it lands here.']
+    }[view] ?? ['No tasks yet', 'Add your first one above.']
+    root.append(
+      el('div', { class: 'empty-state' }, el('span', { class: 'es-ico', 'aria-hidden': 'true' }, '✓'), el('strong', {}, quiet[0]), el('span', {}, quiet[1]))
+    )
+  }
 
   for (const t of tasks) {
     if (editing === t.id) {
@@ -276,26 +318,43 @@ function draw() {
         await load()
       }
     })
-    const detail = [
-      dueText(t),
-      repeatText(t),
-      t.priority !== 'none' ? `${t.priority} priority` : '',
-      t.subtasks.length ? `${t.subtasks.filter((s) => s.done).length}/${t.subtasks.length} steps` : '',
-      // Which list, but only when the list is not already the one being shown.
-      listId === '' && snapshot.lists.length > 1 ? (snapshot.lists.find((l) => l.id === t.listId)?.name ?? '') : ''
-    ]
-      .filter(Boolean)
-      .join(' · ')
+    // What is said about a task, as small labelled chips whose colour says how it stands.
+    const chips = []
+    const chip = (text, tone) => chips.push(el('span', { class: `chip ${tone}` }, text))
+    const now = Date.now()
+    const startOfDay = new Date(new Date().setHours(0, 0, 0, 0)).getTime()
+    if (t.due !== undefined) {
+      const late = !t.done && t.due < (t.hasTime ? now : startOfDay)
+      const today = !late && t.due >= startOfDay && t.due < startOfDay + 24 * 3600 * 1000
+      chip(dueText(t).replace(/^Due /, ''), t.done ? 'calm' : late ? 'danger' : today ? 'accent' : 'calm')
+    }
+    if (t.repeat) chip(repeatText(t), 'calm')
+    if (t.priority !== 'none') chip(t.priority, t.priority === 'high' ? 'danger' : t.priority === 'medium' ? 'warm' : 'calm')
+    // Which list, but only when the list is not already the one being shown.
+    if (listId === '' && snapshot.lists.length > 1) {
+      const name = snapshot.lists.find((l) => l.id === t.listId)?.name
+      if (name) chip(name, 'calm')
+    }
+    const stepsDone = t.subtasks.filter((s) => s.done).length
+    const progress = t.subtasks.length
+      ? el(
+          'span',
+          { class: 'steps-bar', role: 'img', 'aria-label': `${stepsDone} of ${t.subtasks.length} steps done` },
+          el('i', { style: `width:${Math.round((stepsDone / t.subtasks.length) * 100)}%` }),
+          el('em', {}, `${stepsDone}/${t.subtasks.length}`)
+        )
+      : null
     root.append(
       el(
         'div',
-        { class: `task${t.done ? ' done' : ''}` },
+        { class: `task${t.done ? ' done' : ''}`, 'data-priority': t.priority },
         box,
         el(
           'button',
           { type: 'button', class: 'item', 'aria-label': `Edit task ${t.title}`, onclick: () => ((editing = t.id), draw()) },
           el('strong', {}, t.title || 'Untitled task'),
-          el('span', { class: 'muted' }, detail)
+          chips.length ? el('span', { class: 'chips' }, ...chips) : null,
+          progress
         )
       )
     )

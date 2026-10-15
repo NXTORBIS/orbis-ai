@@ -1,0 +1,544 @@
+/*
+ * Copyright (c) 2023 Gaia Sky - All rights reserved.
+ *  This file is part of Gaia Sky, which is released under the Mozilla Public License 2.0.
+ *  You may use, distribute and modify this code under the terms of MPL2.
+ *  See the file LICENSE.md in the project root for full license details.
+ */
+
+package gaiasky.scene.record;
+
+import com.badlogic.ashley.core.Entity;
+import com.badlogic.gdx.graphics.GL20;
+import com.badlogic.gdx.graphics.VertexAttributes.Usage;
+import com.badlogic.gdx.math.MathUtils;
+import com.badlogic.gdx.math.Matrix4;
+import com.badlogic.gdx.math.Vector3;
+import gaiasky.render.gdx.model.IntModel;
+import gaiasky.render.gdx.model.IntModelInstance;
+import gaiasky.render.gdx.shader.Material;
+import gaiasky.render.gdx.shader.attribute.AtmosphereAttribute;
+import gaiasky.render.gdx.shader.attribute.BlendingAttribute;
+import gaiasky.render.gdx.shader.attribute.Vector3Attribute;
+import gaiasky.scene.Mapper;
+import gaiasky.scene.api.IUpdatable;
+import gaiasky.scene.component.GraphNode;
+import gaiasky.scene.component.ModelScaffolding;
+import gaiasky.util.Bits;
+import gaiasky.util.Constants;
+import gaiasky.util.Logger.Log;
+import gaiasky.util.ModelCache;
+import gaiasky.util.Pair;
+import gaiasky.util.coord.Coordinates;
+import gaiasky.util.math.Vector3D;
+import gaiasky.util.math.Vector3Q;
+import net.jafama.FastMath;
+
+import java.util.Arrays;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Random;
+
+public final class AtmosphereComponent extends NamedComponent implements IUpdatable<AtmosphereComponent> {
+
+    public int quality;
+    public float size;
+    public float planetSize;
+    public ModelComponent mc;
+    public Matrix4 localTransform;
+    public double[] wavelengths;
+    public float m_fInnerRadius;
+    public float m_fOuterRadius;
+    public float m_fAtmosphereHeight;
+    public float m_Kr, m_Km;
+    public float fogDensity = 0.3f;
+    public Vector3 fogColor;
+    public float m_eSun = 20f;
+    public int samples = 6;
+    /** Ozone vertical optical depth at red (Chappuis band, ~600 nm peak). **/
+    public float o3OpticalDepth = 0.025f;
+    /** Mie phase function asymmetry factor g (range: [-1, 1]; positive = forward scattering). **/
+    public float mieAsymmetryG = 0.76f;
+    /** Normalized atmospheric scale depth (fraction of inner radius). Controls density falloff with altitude. **/
+    public float scaleDepth = 0.25f;
+
+    // Model parameters
+    public Map<String, Object> params;
+
+    Vector3 aux;
+    Vector3D aux3, aux1;
+
+    public AtmosphereComponent() {
+        localTransform = new Matrix4();
+        mc = new ModelComponent(false);
+        mc.initialize(null);
+        aux = new Vector3();
+        aux3 = new Vector3D();
+        aux1 = new Vector3D();
+        fogColor = new Vector3();
+    }
+
+    public void doneLoading(Material planetMat,
+                            float planetSize) {
+        this.planetSize = planetSize;
+        setUpAtmosphericScatteringMaterial(planetMat);
+
+        Material atmMat;
+        if (mc.instance == null) {
+            Pair<IntModel, Map<String, Material>> pair = ModelCache.cache.getModel("sphere",
+                                                                                   params,
+                                                                                   Bits.indices(Usage.Position, Usage.Normal),
+                                                                                   GL20.GL_TRIANGLES);
+            IntModel atmosphereModel = pair.getFirst();
+            atmMat = pair.getSecond().get("base");
+
+            setUpAtmosphericScatteringMaterial(atmMat);
+            atmMat.set(new BlendingAttribute(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA));
+            // CREATE ATMOSPHERE MODEL
+            mc.instance = new IntModelInstance(atmosphereModel, this.localTransform);
+        } else {
+            atmMat = mc.instance.materials.get(0);
+            setUpAtmosphericScatteringMaterial(atmMat);
+        }
+    }
+
+    public void update(Vector3Q transform) {
+        transform.setToTranslation(localTransform).scl(size);
+    }
+
+    private void addOzoneUniforms(Material mat,
+                                  float fScale) {
+        // Ozone layer parameters (in normalized units where inner radius = 1.0).
+        // The ozone layer resides in the stratosphere, roughly 15-35 km above the surface,
+        // with peak concentration at ~25 km. Modeled as a Gaussian centered at this altitude.
+        float planetRadiusKm = (planetSize / 2f) * (float) Constants.U_TO_KM;
+        float o3PeakHeightRel = 25.0f / planetRadiusKm;  // ~25 km above surface in normalized units
+        float o3WidthRel = 20.0f / planetRadiusKm;        // ~20 km Gaussian sigma (width) in normalized units
+
+        // Ozone absorption scaling for the Chappuis band (450-750 nm).
+        // Unlike Rayleigh scattering, ozone absorption is NOT proportional to 1/lambda^4.
+        // o3OpticalDepth is the physical vertical optical depth at red (~600 nm peak).
+        // The formula converts this to a per-unit-length extinction coefficient by dividing
+        // by the integrated Gaussian area (width * sqrt(pi)), scaled by m_fScale to match
+        // the shader's integration coordinate system (where sample length = 1/nSamples).
+        // Green and blue are scaled by the Chappuis band cross-section ratios (1.0 : 0.3 : 0.02).
+        float o3Scale = o3OpticalDepth / (2.0f * fScale * o3WidthRel * (float) FastMath.sqrt(FastMath.PI));
+
+        // O3 red, green and blue.
+        var o3RGB = aux.set(o3Scale, o3Scale * 0.3f, o3Scale * 0.02f);
+
+        mat.set(new Vector3Attribute(Vector3Attribute.O3InvWavelength, o3RGB));
+        mat.set(new AtmosphereAttribute(AtmosphereAttribute.O3PeakHeight, o3PeakHeightRel));
+        mat.set(new AtmosphereAttribute(AtmosphereAttribute.O3Width, o3WidthRel));
+    }
+
+    /**
+     * Sets up the atmospheric scattering parameters to the given material
+     *
+     * @param mat The material to set up.
+     */
+    public void setUpAtmosphericScatteringMaterial(Material mat) {
+        float camHeight = 1f;
+        float m_Kr4PI = m_Kr * 4.0f * (float) FastMath.PI;    // Rayleigh extinction coefficient (includes 4π factor from scattering cross-section)
+        float m_Km4PI = m_Km * 4.0f * (float) FastMath.PI;    // Mie extinction coefficient (includes 4π factor)
+        float m_ESun = m_eSun; // Sun brightness scaling factor
+        float m_g = mieAsymmetryG; // Mie phase function asymmetry factor (positive = forward scattering peak)
+
+        // Normalization factor scales the planet so that inner radius = 1.0.
+        float normFactor = 2f / planetSize;
+        m_fInnerRadius = (planetSize / 2f) * normFactor;
+        // Outer radius fixed at 1.025 in normalized units (2.5% above surface).
+        // This sets the atmosphere shell thickness relative to the planet.
+        m_fOuterRadius = 1.025f;
+        m_fAtmosphereHeight = m_fOuterRadius - m_fInnerRadius;
+        // Clamp scale depth to prevent division by zero or near-zero values.
+        float m_fScaleDepth = Math.max(scaleDepth, 0.01f);
+        // Inverse of normalized atmosphere height -- used to normalize sample step lengths
+        // in the shader integration loop (step = ray_length / nSamples * fScale).
+        float m_fScale = 1.0f / (Math.max(m_fAtmosphereHeight, 0.000001f));
+        float m_fScaleOverScaleDepth = m_fScale / m_fScaleDepth;
+
+        // Rayleigh scattering cross-section proportional to 1/wavelength^4. Compute wavelengths to the 4th power
+        // so the shader can use 1/wavelength^4 for the Rayleigh scattering coefficient.
+        double[] m_fWavelength = wavelengths;
+        float[] m_fWavelength4 = new float[3];
+        m_fWavelength4[0] = (float) FastMath.pow(m_fWavelength[0], 4.0);
+        m_fWavelength4[1] = (float) FastMath.pow(m_fWavelength[1], 4.0);
+        m_fWavelength4[2] = (float) FastMath.pow(m_fWavelength[2], 4.0);
+
+        mat.set(new AtmosphereAttribute(AtmosphereAttribute.Alpha, 1f));
+        mat.set(new AtmosphereAttribute(AtmosphereAttribute.ColorOpacity, 1f));
+
+        mat.set(new AtmosphereAttribute(AtmosphereAttribute.CameraHeight, camHeight));
+        mat.set(new AtmosphereAttribute(AtmosphereAttribute.OuterRadius, m_fOuterRadius));
+        mat.set(new AtmosphereAttribute(AtmosphereAttribute.InnerRadius, m_fInnerRadius));
+
+        mat.set(new AtmosphereAttribute(AtmosphereAttribute.KrESun, m_Kr * m_ESun));
+        mat.set(new AtmosphereAttribute(AtmosphereAttribute.KmESun, m_Km * m_ESun));
+
+        mat.set(new AtmosphereAttribute(AtmosphereAttribute.Kr4PI, m_Kr4PI));
+        mat.set(new AtmosphereAttribute(AtmosphereAttribute.Km4PI, m_Km4PI));
+
+        mat.set(new AtmosphereAttribute(AtmosphereAttribute.Scale, m_fScale));
+        mat.set(new AtmosphereAttribute(AtmosphereAttribute.ScaleDepth, m_fScaleDepth));
+        mat.set(new AtmosphereAttribute(AtmosphereAttribute.ScaleOverScaleDepth, m_fScaleOverScaleDepth));
+
+        mat.set(new AtmosphereAttribute(AtmosphereAttribute.nSamples, FastMath.min(6, samples)));
+
+        mat.set(new AtmosphereAttribute(AtmosphereAttribute.FogDensity, fogDensity));
+        mat.set(new Vector3Attribute(Vector3Attribute.FogColor, fogColor));
+
+        mat.set(new AtmosphereAttribute(AtmosphereAttribute.G, m_g));
+
+        mat.set(new Vector3Attribute(Vector3Attribute.PlanetPos, new Vector3()));
+        mat.set(new Vector3Attribute(Vector3Attribute.CameraPos, new Vector3()));
+        mat.set(new Vector3Attribute(Vector3Attribute.LightPos, new Vector3()));
+        mat.set(new Vector3Attribute(Vector3Attribute.InvWavelength,
+                                     new Vector3(1.0f / m_fWavelength4[0], 1.0f / m_fWavelength4[1], 1.0f / m_fWavelength4[2])));
+
+        addOzoneUniforms(mat, m_fScale);
+    }
+
+    public void removeAtmosphericScattering(Material mat) {
+        mat.remove(AtmosphereAttribute.CameraHeight);
+    }
+
+    /**
+     * Updates the atmospheric scattering shader parameters.
+     *
+     * @param mat           The material to update.
+     * @param alpha         The opacity value.
+     * @param ground        Whether it is the ground shader or the atmosphere.
+     * @param graph         The graph node component.
+     * @param rigidRotation The rotation component.
+     * @param scaffolding   The model scaffolding component.
+     * @param vrOffset      The VR offset vector.
+     */
+    public void updateAtmosphericScatteringParams(Material mat,
+                                                  float alpha,
+                                                  boolean ground,
+                                                  GraphNode graph,
+                                                  RotationComponent rigidRotation,
+                                                  ModelScaffolding scaffolding,
+                                                  Vector3D vrOffset) {
+        Vector3Q parentTranslation = null;
+        Entity parent = graph.parent;
+        if (parent != null) {
+            parentTranslation = Mapper.graph.get(parent).translation;
+        }
+        updateAtmosphericScatteringParams(mat,
+                                          alpha,
+                                          ground,
+                                          graph.translation,
+                                          rigidRotation,
+                                          scaffolding.inverseRefPlaneTransform,
+                                          parentTranslation,
+                                          vrOffset);
+    }
+
+    /**
+     * Updates the atmospheric scattering shader parameters.
+     *
+     * @param mat               The material to update.
+     * @param alpha             The opacity value.
+     * @param ground            Whether it is the ground shader or the atmosphere.
+     * @param translation       The translation vector.
+     * @param rc                The rotation component.
+     * @param parentTranslation The parent translation vector.
+     * @param vrOffset          The VR offset vector.
+     */
+    public void updateAtmosphericScatteringParams(Material mat,
+                                                  float alpha,
+                                                  boolean ground,
+                                                  Vector3Q translation,
+                                                  RotationComponent rc,
+                                                  String inverseRefPlaneTransform,
+                                                  Vector3Q parentTranslation,
+                                                  Vector3D vrOffset) {
+
+        translation.put(aux3);
+        if (vrOffset != null) {
+            aux1.set(vrOffset).scl(Constants.U_TO_M);
+            aux3.sub(aux1);
+        }
+
+        // Normalization factor scales camera position to normalized units (inner radius = 1.0).
+        float normFactor = 2f / planetSize;
+        // Normalize planet pos
+        aux3.scl(normFactor);
+        // Distance to planet center in normalized units
+        float camHeight = (float) (aux3.len());
+        float m_ESun = m_eSun;
+        float camHeightGr = camHeight - m_fInnerRadius;
+        float atmFactor = (m_fAtmosphereHeight - camHeightGr) / m_fAtmosphereHeight;
+
+        if (!ground && camHeightGr < m_fAtmosphereHeight) {
+            // Camera inside atmosphere: boost sun brightness to compensate for
+            // missing in-scattered light from the atmosphere dome behind the camera.
+            m_ESun *= (1f + atmFactor);
+        }
+
+        // These are here to get the desired effect inside the atmosphere
+        if (mat.has(AtmosphereAttribute.KrESun))
+            ((AtmosphereAttribute) Objects.requireNonNull(mat.get(AtmosphereAttribute.KrESun))).value = m_Kr * m_ESun;
+        else
+            mat.set(new AtmosphereAttribute(AtmosphereAttribute.KrESun, m_Kr * m_ESun));
+
+        if (mat.has(AtmosphereAttribute.KmESun))
+            ((AtmosphereAttribute) Objects.requireNonNull(mat.get(AtmosphereAttribute.KmESun))).value = m_Km * m_ESun;
+        else
+            mat.set(new AtmosphereAttribute(AtmosphereAttribute.KmESun, m_Km * m_ESun));
+
+        // Camera height
+        if (mat.has(AtmosphereAttribute.CameraHeight))
+            ((AtmosphereAttribute) Objects.requireNonNull(mat.get(AtmosphereAttribute.CameraHeight))).value = camHeight;
+        else
+            mat.set(new AtmosphereAttribute(AtmosphereAttribute.CameraHeight, camHeight));
+
+        // Planet position
+        if (ground && rc != null) {
+            // Camera position must be corrected using the rotation angle of the planet
+            aux3.rotate(-rc.ascendingNode, 0, 1, 0)
+                    .mul(Coordinates.getTransformD(inverseRefPlaneTransform))
+                    .rotate(-rc.inclination - rc.axialTilt, 0, 0, 1)
+                    .rotate(-rc.angle, 0, 1, 0);
+        }
+        ((Vector3Attribute) Objects.requireNonNull(mat.get(Vector3Attribute.PlanetPos))).value.set(aux3.put(aux));
+        // CameraPos = -PlanetPos
+        aux3.scl(-1.0);
+
+        ((Vector3Attribute) Objects.requireNonNull(mat.get(Vector3Attribute.CameraPos))).value.set(aux3.put(aux));
+
+        // Light position respect the earth: LightPos = SunPos - EarthPos
+        if (parentTranslation != null) {
+            var tr = new Vector3Q(parentTranslation).scl(normFactor);
+            aux3.add(tr);
+        }
+        aux3.nor();
+        if (ground && rc != null) {
+            // Camera position must be corrected using the rotation angle of the planet
+            aux3.rotate(-rc.ascendingNode, 0, 1, 0)
+                    .mul(Coordinates.getTransformD(inverseRefPlaneTransform))
+                    .rotate(-rc.inclination - rc.axialTilt, 0, 0, 1)
+                    .rotate(-rc.angle, 0, 1, 0);
+        }
+        ((Vector3Attribute) Objects.requireNonNull(mat.get(Vector3Attribute.LightPos))).value.set(aux3.put(aux));
+
+        // Alpha value
+        ((AtmosphereAttribute) Objects.requireNonNull(mat.get(AtmosphereAttribute.Alpha))).value = alpha;
+        // Number of samples
+        ((AtmosphereAttribute) Objects.requireNonNull(mat.get(AtmosphereAttribute.nSamples))).value = FastMath.min(6, samples);
+
+        // Add ozone
+        addOzoneUniforms(mat, 1.0f / (Math.max(m_fAtmosphereHeight, 0.000001f)));
+    }
+
+    public void setQuality(Long quality) {
+        this.quality = quality.intValue();
+    }
+
+    public void setSize(Double size) {
+        this.size = (float) (size * Constants.KM_TO_U);
+    }
+
+    public void setMc(ModelComponent mc) {
+        this.mc = mc;
+    }
+
+    public void setLocalTransform(Matrix4 localTransform) {
+        this.localTransform = localTransform;
+    }
+
+    public void setFogColor(double[] fogColor) {
+        this.fogColor.set((float) fogColor[0], (float) fogColor[1], (float) fogColor[2]);
+    }
+
+    public void setFogcolor(double[] fogColor) {
+        setFogColor(fogColor);
+    }
+
+    public void setSamples(Long samples) {
+        this.samples = samples.intValue();
+    }
+
+    public void setNumSamples(Long samples) {
+        this.samples = samples.intValue();
+    }
+
+    /**
+     * Sets the ozone vertical optical depth at red (Chappuis band, ~600 nm peak).
+     * Earth reference value: ~0.025.
+     */
+    public void setO3OpticalDepth(Double o3OpticalDepth) {
+        this.o3OpticalDepth = o3OpticalDepth.floatValue();
+    }
+
+    /**
+     * Legacy setter — maps the old 'o3Strength' JSON key to o3OpticalDepth.
+     * In JSON files, use 'o3OpticalDepth' for clarity.
+     *
+     * @deprecated Use {@link #setO3OpticalDepth(Double)} instead.
+     */
+    @Deprecated
+    public void setO3strength(Double o3Strength) {
+        this.setO3OpticalDepth(o3Strength);
+    }
+
+    public void setMieAsymmetryG(Double mieAsymmetryG) {
+        this.mieAsymmetryG = mieAsymmetryG.floatValue();
+    }
+
+    public void setMieasymmetryg(Double mieAsymmetryG) {
+        this.setMieAsymmetryG(mieAsymmetryG);
+    }
+
+    public void setScaleDepth(Double scaleDepth) {
+        this.scaleDepth = scaleDepth.floatValue();
+    }
+
+    public void setScaledepth(Double scaleDepth) {
+        this.setScaleDepth(scaleDepth);
+    }
+
+    public void setFogDensity(Double fogDensity) {
+        this.fogDensity = MathUtils.clamp(fogDensity.floatValue(),
+                                          Constants.MIN_ATM_FOG_DENSITY,
+                                          Constants.MAX_ATM_FOG_DENSITY);
+    }
+
+    public void setFogdensity(Double fogDensity) {
+        this.setFogDensity(fogDensity);
+    }
+
+    public void setM_Kr(Double m_Kr) {
+        this.m_Kr = m_Kr.floatValue();
+    }
+
+    public void setM_Km(Double m_Km) {
+        this.m_Km = m_Km.floatValue();
+    }
+
+    public void setM_eSun(Double m_eSun) {
+        this.m_eSun = m_eSun.floatValue();
+    }
+
+    public double[] getWavelengths() {
+        return wavelengths;
+    }
+
+    public void setWavelengths(double[] wavelengths) {
+        this.wavelengths = wavelengths;
+    }
+
+    public void setParams(Map<String, Object> params) {
+        this.params = params;
+    }
+
+    public void randomizeWhite(long seed,
+                               double bodyRadius) {
+        randomizeAll(seed, bodyRadius);
+
+        // Recompute wavelengths.
+        Random rand = new Random(seed);
+        double r, g, b;
+        var min = 0.4;
+        var max = 1.0;
+        r = MathUtils.clamp(gaussian(rand, 0.5, 0.05), min, max);
+        g = r + gaussian(rand, 0.05, 0.005, 0.0, 0.1);
+        b = r + gaussian(rand, 0.05, 0.005, 0.0, 0.1);;
+        setWavelengths(new double[]{r, g, b});
+    }
+
+    public void randomizeAll(long seed,
+                             double bodyRadius,
+                             boolean regularScattering,
+                             double redMask,
+                             double greenMask,
+                             double blueMask) {
+        Random rand = new Random(seed);
+        // Size
+        double bodyRadiusKm = bodyRadius * Constants.U_TO_KM;
+        double atmosphereHeightKm = Math.min(240, bodyRadiusKm * 0.015);
+        setSize(bodyRadiusKm + atmosphereHeightKm);
+        // Wavelengths: apply scattering coefficient masks
+        double r, g, b;
+        var min = 0.4;
+        var max = 1.0;
+        if (regularScattering) {
+            r = MathUtils.clamp(uniform(rand, 0.6, 1.0) * redMask, min, max);
+            g = MathUtils.clamp(uniform(rand, 0.6, 1.0) * greenMask, min, max);
+            b = MathUtils.clamp(uniform(rand, 0.6, 1.0) * blueMask, min, max);
+        } else {
+            r = MathUtils.clamp(gaussian(rand, 0.5, 0.05) * redMask, min, max);
+            g = MathUtils.clamp(gaussian(rand, 0.5, 0.05) * greenMask, min, max);
+            b = MathUtils.clamp(gaussian(rand, 0.5, 0.05) * blueMask, min, max);
+
+        }
+        setWavelengths(new double[]{r, g, b});
+        // Kr
+        setM_Kr(rand.nextDouble(0.001f, 0.004f));
+        // Km
+        setM_Km(rand.nextDouble(0.001f, 0.0079f));
+        // eSun
+        setM_eSun(gaussian(rand, 11.0, 1.0, 5.0));
+        // Fog density
+        setFogdensity(gaussian(rand, 0.6, 0.3, 0.01));
+        // Fog color
+        setFogcolor(new double[]{0.5 + rand.nextDouble() * 0.5, 0.5 + rand.nextDouble() * 0.5, 0.5 + rand.nextDouble() * 0.5});
+        // O3 optical depth at red (Chappuis band)
+        setO3OpticalDepth(gaussian(rand, 0.05, 0.03, 0.0));
+        // Samples
+        setSamples(6L);
+        // Params
+        setParams(createUVSphereParameters(200L, 2.0, true));
+
+    }
+
+    /**
+     * Creates a random atmosphere component using the given seed and the base
+     * body size.
+     *
+     * @param seed       The seed to use.
+     * @param bodyRadius The body size in internal units.
+     */
+    public void randomizeAll(long seed,
+                             double bodyRadius) {
+        randomizeAll(seed, bodyRadius, false, 1, 1, 1);
+    }
+
+    public void copyFrom(AtmosphereComponent other) {
+        this.params = other.params;
+        this.size = other.size;
+        this.wavelengths = Arrays.copyOf(other.wavelengths, other.wavelengths.length);
+        this.m_Km = other.m_Km;
+        this.m_Kr = other.m_Kr;
+        this.m_eSun = other.m_eSun;
+        this.fogDensity = other.fogDensity;
+        this.fogColor = new Vector3(other.fogColor);
+        this.samples = other.samples;
+        this.o3OpticalDepth = other.o3OpticalDepth;
+        this.mieAsymmetryG = other.mieAsymmetryG;
+        this.scaleDepth = other.scaleDepth;
+    }
+
+    public void print(Log log) {
+        log.debug("Size: " + size);
+        log.debug("Wavelengths: " + Arrays.toString(wavelengths));
+        log.debug("eSun: " + m_eSun);
+        log.debug("Fog density: " + fogDensity);
+        log.debug("Fog color: " + fogColor);
+        log.debug("Samples: " + samples);
+        log.debug("O3 optical depth: " + o3OpticalDepth);
+        log.debug("Mie asymmetry g: " + mieAsymmetryG);
+        log.debug("Scale depth: " + scaleDepth);
+    }
+
+    @Override
+    public void dispose() {
+    }
+
+    @Override
+    public void updateWith(AtmosphereComponent object) {
+        copyFrom(object);
+    }
+}
+

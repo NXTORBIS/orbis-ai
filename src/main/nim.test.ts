@@ -94,7 +94,7 @@ test('without an API key it reports the problem and sends nothing', async () => 
   const h = harness(() => sse([]))
   await h.run({ apiKeys: [] })
   assert.equal(h.calls.length, 0)
-  assert.match(errorMessage(h.events), /no Groq API key/)
+  assert.match(errorMessage(h.events), /no AI service key/)
 })
 
 test('moves to the next API key when Groq rejects one', async () => {
@@ -232,7 +232,7 @@ test('stops when Groq rejects the only API key, without trying other models', as
   const h = harness(() => json(401, { error: { message: 'Invalid API Key' } }))
   await h.run()
   assert.equal(h.calls.length, 1)
-  assert.match(errorMessage(h.events), /Groq rejected the API key/)
+  assert.match(errorMessage(h.events), /service rejected/)
 })
 
 test('reports error when all keys are rate-limited', async () => {
@@ -423,7 +423,7 @@ test('testApiKey checks every key against the models endpoint', async () => {
   assert.equal(one.ok, true)
   // Says how many work, and counts the refused one separately -- a restricted or invalid key does not recover, so it
   // is worth removing rather than retrying, and a bare "accepted 1 of 2" could not tell anybody that.
-  assert.match(one.message, /Groq: 1 of 2 keys working/)
+  assert.match(one.message, /Orion: 1 of 2 keys working/)
   assert.match(one.message, /1 refused outright/)
   assert.equal(urls[0], `${GROQ_BASE_URL}/models`)
   assert.equal((await testApiKey(['bad'], fetchFn)).ok, false)
@@ -448,10 +448,10 @@ test('checking keys says which service, and tells a busy key from a dead one', a
 
   const both = await testApiKey(['groq-good', 'groq-busy', 'groq-dead'], fetchFn, ['mistral-good'])
   assert.equal(both.ok, true)
-  assert.match(both.message, /Groq: 1 of 3 keys working/)
+  assert.match(both.message, /Orion: 1 of 3 keys working/)
   assert.match(both.message, /1 busy/)
   assert.match(both.message, /1 refused outright/)
-  assert.match(both.message, /Mistral: 1 of 1 key working/)
+  assert.match(both.message, /Sight: 1 of 1 key working/)
 })
 
 test('with no Mistral key it says Orbis cannot look at an image', async () => {
@@ -539,4 +539,68 @@ test('a screenshot that is already a data url is not prefixed twice', () => {
   const bareParts = toMessageContent(bare, modelInfo('ministral-8b-2512')) as Record<string, unknown>[]
   const bareImage = bareParts.find((p) => p.type === 'image_url') as { image_url: { url: string } }
   assert.equal(bareImage.image_url.url, 'data:image/png;base64,AAAA')
+})
+
+// ---------------------------------------------------------------- larger-memory overflow
+
+const MISTRAL_BIG = 'ministral-14b-2512'
+
+test('a very long message goes straight to a model with more memory, whichever Orion was chosen', async () => {
+  const h = harness(() => sse([chunk({ content: 'ok' }, 'stop')]))
+  await h.run({ model: ORION_CORE, mistralKeys: ['m-key'], messages: [user('x'.repeat(60_000))] })
+  assert.equal(h.calls[0].model, MISTRAL_BIG)
+  assert.equal(h.calls.length, 1)
+  assert.equal(h.calls[0].headers.Authorization, 'Bearer m-key')
+  assert.equal(h.events[0].type, 'status')
+  assert.equal(text(h.events, 'content'), 'ok')
+})
+
+test('an ordinary message stays on the model that was chosen', async () => {
+  const h = harness(() => sse([chunk({ content: 'ok' }, 'stop')]))
+  await h.run({ model: ORION_CORE, mistralKeys: ['m-key'], messages: [user('hello')] })
+  assert.equal(h.calls[0].model, ORION_CORE)
+})
+
+test('with no second-service key a long message is still tried where it was asked', async () => {
+  const h = harness(() => sse([chunk({ content: 'ok' }, 'stop')]))
+  await h.run({ model: ORION_CORE, messages: [user('x'.repeat(60_000))] })
+  assert.equal(h.calls[0].model, ORION_CORE)
+})
+
+test('when the keys of the first service are spent, the second service takes over with its own keys', async () => {
+  const h = harness((call) => (providerIsMistral(call.model) ? sse([chunk({ content: 'from the other' }, 'stop')]) : json(429, { error: { message: 'Too many requests' } })))
+  await h.run({ model: ORION_CORE, apiKeys: ['g1', 'g2'], mistralKeys: ['m-key'], messages: [user('hello')] })
+  const last = h.calls.at(-1)!
+  assert.equal(last.model, MISTRAL_BIG)
+  assert.equal(last.headers.Authorization, 'Bearer m-key')
+  assert.equal(text(h.events, 'content'), 'from the other')
+  // no provider is named in what a person reads
+  for (const e of h.events) if (e.type === 'status') assert.doesNotMatch(e.message, /groq|mistral/i)
+})
+
+test('a size error that names no unit moves to a model with more memory instead of failing', async () => {
+  const h = harness((call) =>
+    call.model === ORION_CORE ? json(400, { error: { message: 'Please reduce the length of the messages or completion.' } }) : sse([chunk({ content: 'fits' }, 'stop')])
+  )
+  await h.run({ model: ORION_CORE, mistralKeys: ['m-key'], messages: [user('hello')] })
+  assert.equal(text(h.events, 'content'), 'fits')
+  for (const e of h.events) if (e.type === 'error') assert.fail('no error expected')
+})
+
+function providerIsMistral(model: string): boolean {
+  return /ministral|codestral/.test(model)
+}
+
+test('the larger-memory models can be chosen from the picker, and ask the second service with its own keys', async () => {
+  const h = harness(() => sse([chunk({ content: 'ok' }, 'stop')]))
+  await h.run({ model: 'orion/long', mistralKeys: ['m-key'], messages: [user('hello')] })
+  assert.equal(h.calls[0].model, MISTRAL_BIG)
+  assert.equal(h.calls[0].headers.Authorization, 'Bearer m-key')
+  assert.equal(h.events.at(-1)?.type, 'done')
+})
+
+test('a chosen larger-memory model that fails falls back to the main models', async () => {
+  const h = harness((call) => (providerIsMistral(call.model) ? json(503, { error: { message: 'down' } }) : sse([chunk({ content: 'main' }, 'stop')])))
+  await h.run({ model: 'orion/long', apiKeys: ['g'], mistralKeys: ['m'], messages: [user('hello')] })
+  assert.equal(text(h.events, 'content'), 'main')
 })

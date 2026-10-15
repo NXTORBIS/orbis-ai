@@ -1,0 +1,105 @@
+/*
+ * Copyright (c) 2023 Gaia Sky - All rights reserved.
+ *  This file is part of Gaia Sky, which is released under the Mozilla Public License 2.0.
+ *  You may use, distribute and modify this code under the terms of MPL2.
+ *  See the file LICENSE.md in the project root for full license details.
+ */
+
+package gaiasky.scene.system.render.extract;
+
+import com.badlogic.ashley.core.Entity;
+import com.badlogic.ashley.core.Family;
+import com.badlogic.ashley.systems.IteratingSystem;
+import gaiasky.GaiaSky;
+import gaiasky.render.RenderGroup;
+import gaiasky.render.api.IRenderable;
+import gaiasky.render.api.ISceneRenderer;
+import gaiasky.scene.camera.ICamera;
+import gaiasky.scene.component.Base;
+import gaiasky.scene.view.LabelView;
+
+/**
+ * Common utilities to all extract systems. Mostly contains methods that compute
+ * whether a specific entity should be extracted for rendering or not.
+ */
+public abstract class AbstractExtractSystem extends IteratingSystem {
+
+    protected final ICamera camera;
+    protected ISceneRenderer renderer;
+    protected LabelView view;
+
+    public AbstractExtractSystem(Family family, int priority) {
+        super(family, priority);
+        this.camera = GaiaSky.instance.cameraManager;
+        this.view = new LabelView();
+    }
+
+    public void extract(Entity entity) {
+        processEntity(entity, 0f);
+    }
+
+    public void setRenderer(ISceneRenderer renderer) {
+        this.renderer = renderer;
+    }
+
+    /**
+     * Computes whether the entity with the given base component must be rendered.
+     * Entities must be rendered when their opacity is non-zero, they are visible,
+     * they are not a copy, and all of their component types are active. Here is an exhaustive
+     * list of the conditions:
+     * <ul>
+     *     <li>Is initialized</li>
+     *     <li>Is not invisible</li>
+     *     <li>Is not a copy</li>
+     *     <li>Its component types are all visible</li>
+     *     <li>It itself is visible</li>
+     * </ul>
+     *
+     * @param base The base component of the entity.
+     *
+     * @return Whether the entity must be rendered.
+     */
+    protected boolean mustRender(Base base) {
+        return base.initialized && base.opacity > 0 && !base.copy && renderer.allOn(base.ct) && base.isVisible();
+    }
+
+    /**
+     * Adds the given renderable to the given render group list.
+     *
+     * @param renderable The renderable to add.
+     * @param rg         The render group that identifies the renderable list.
+     *
+     * @return True if added, false otherwise.
+     */
+    protected boolean addToRender(IRenderable renderable, RenderGroup rg) {
+        return addToRender(renderable, rg, !renderable.isHalfResolutionBuffer());
+    }
+
+    /**
+     * Adds the given renderable to the given render group of the given list (full or half resolution).
+     *
+     * @param renderable     The renderable to add.
+     * @param rg             The render group that identifies the renderable list.
+     * @param fullResolution Whether the renderable must be rendered to the full or to the half resolution buffer.
+     *
+     * @return True if added, false otherwise.
+     */
+    protected boolean addToRender(IRenderable renderable, RenderGroup rg, boolean fullResolution) {
+        try {
+            return renderer.getRenderLists(fullResolution).get(rg.ordinal()).add(renderable);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    protected boolean isInRender(IRenderable renderable, RenderGroup rg) {
+        return renderer.getRenderLists(!renderable.isHalfResolutionBuffer()).get(rg.ordinal()).contains(renderable);
+    }
+
+    protected boolean isInRender(IRenderable renderable, RenderGroup... rgs) {
+        boolean is = false;
+        for (RenderGroup rg : rgs)
+            is = is || renderer.getRenderLists(!renderable.isHalfResolutionBuffer()).get(rg.ordinal()).contains(renderable);
+        return is;
+    }
+}

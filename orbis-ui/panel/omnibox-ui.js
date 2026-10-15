@@ -1032,5 +1032,6 @@ function mountOmnibox(host) {
   };
 }
 export {
+  createVoiceSession,
   mountOmnibox
 };

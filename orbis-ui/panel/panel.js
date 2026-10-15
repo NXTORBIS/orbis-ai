@@ -1,5 +1,5 @@
 import { askBrowser, call, HelperDown } from './helper.js'
-import { mountOmnibox } from './omnibox-ui.js'
+import { mountOmnibox, createVoiceSession } from './omnibox-ui.js'
 import { mountCommandCenter } from './command-center.js'
 import { hasView, showView } from './rail/index.js'
 import { CAPABILITIES, PANEL_VIEWS, RAIL_VIEWS } from './command-registry.js'
@@ -249,6 +249,7 @@ function markWhere(name) {
   // closed. In the side panel the browser's own chrome is that title, so there it stays empty.
   const surface = document.documentElement.classList.contains('surface')
   if (where) where.textContent = home ? (surface ? 'Orbis' : '') : (VIEW_NAMES[name] ?? titleCase(name))
+  if (bar) bar.dataset.view = name
   if (bar) bar.hidden = home && !surface
 }
 
@@ -949,6 +950,49 @@ if ($('view-ask') && $('ask-form')) {
     void runAsk(text)
   })
 
+  /*
+   * Speaking a question.
+   *
+   * The same recording pipeline the address bar and Orbis chat use, so the words come from the same local speech
+   * model and nothing here is invented: a transcript lands in the box for the person to read, and is sent only when
+   * they press send. The button is not offered at all where this page cannot record.
+   */
+  const mic = $('ask-mic')
+  const voice = createVoiceSession({
+    target: 'browser-orion',
+    call,
+    onUpdate: (update) => {
+      const listening = update.state === 'listening'
+      mic.classList.toggle('on', listening)
+      mic.classList.toggle('busy', update.state === 'requesting-permission' || update.state === 'initializing' || update.state === 'processing')
+      mic.setAttribute('aria-pressed', String(listening))
+      mic.setAttribute('aria-label', listening ? 'Stop and use what I said' : 'Speak your question')
+      mic.title = listening ? 'Stop and use what I said' : 'Speak your question'
+      const hint = $('ask-hint')
+      if (update.error) {
+        hint.textContent = update.error.message
+        return
+      }
+      if (listening) hint.textContent = 'Listening…'
+      else if (update.state === 'processing') hint.textContent = 'Working out what you said…'
+      else hint.textContent = 'Enter to send'
+      if (update.text) {
+        const box = $('ask-input')
+        box.value = (box.value.trim() ? box.value.trim() + ' ' : '') + update.text
+        askDraft = box.value
+        $('ask-send').disabled = askState.phase === 'working' || !askDraft.trim()
+        box.focus()
+      }
+    }
+  })
+  if (voice.available()) mic.hidden = false
+  mic.addEventListener('click', () => {
+    if (voice.state() === 'listening') void voice.stop()
+    else void voice.start()
+  })
+
+  $('ask-reread').addEventListener('click', () => void readAskPage())
+
   $('ask-stop').addEventListener('click', () => {
     askRun?.abort()
     // Ending the stream on its own would leave the browser halfway through a task, so the task is told to stop too.
@@ -982,3 +1026,131 @@ connect()
 setInterval(() => {
   if (!connected) void connect()
 }, 4000)
+
+// The loader (markup in the page, styles in its stylesheet) is taken away once the page has loaded. It is only in
+// Orbis's own pages; it never reaches another website.
+;(() => {
+  const loader = document.getElementById('orbis-loader')
+  if (!loader) return
+  let ended = false
+  const end = () => {
+    if (ended) return
+    ended = true
+    loader.classList.add('done')
+    setTimeout(() => loader.remove(), 520)
+  }
+  if (document.readyState === 'complete') requestAnimationFrame(end)
+  else addEventListener('load', () => setTimeout(end, 180), { once: true })
+  // A page that never finishes loading must not be hidden behind this for ever.
+  setTimeout(end, 5000)
+})()
+
+// ---------------------------------------------------------------- icons on buttons, and a microphone in every box
+//
+// Done once, over the whole panel, rather than screen by screen: a button anywhere in the panel that says "Delete" gets
+// a bin, and a text box anywhere gets a microphone. It watches for what a screen draws later, so a feature written next
+// month looks the same as one written today.
+{
+  const NS = 'http://www.w3.org/2000/svg'
+  const PATH = {
+    plus: 'M12 5v14M5 12h14', search: 'M21 21l-4.3-4.3M11 18a7 7 0 1 1 0-14 7 7 0 0 1 0 14z', refresh: 'M21 12a9 9 0 1 1-3-6.7M21 4v5h-5',
+    trash: 'M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3', copy: 'M9 9h11v11H9zM5 15V4h11', check: 'M5 13l4 4L19 7', x: 'M6 6l12 12M18 6L6 18',
+    lock: 'M6 11h12v10H6zM8 11V8a4 4 0 0 1 8 0v3', unlock: 'M6 11h12v10H6zM8 11V8a4 4 0 0 1 7.5-2',
+    eye: 'M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z', edit: 'M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z',
+    play: 'M8 5v14l11-7z', save: 'M5 3h11l4 4v14H5zM8 3v6h7V3M8 21v-7h8v7', gear: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM4 12h2M18 12h2M12 4v2M12 18v2M6.3 6.3l1.4 1.4M16.3 16.3l1.4 1.4M6.3 17.7l1.4-1.4M16.3 7.7l1.4-1.4',
+    back: 'M15 18l-6-6 6-6', download: 'M12 4v12M6 12l6 6 6-6M5 21h14', star: 'M12 3l2.8 5.7 6.2.9-4.5 4.4 1 6.2L12 17.3 6.5 20.2l1-6.2L3 9.6l6.2-.9z',
+    mic: 'M9 3h6v10a3 3 0 0 1-6 0zM5 11a7 7 0 0 0 14 0M12 18v3', upload: 'M12 20V8M6 12l6-6 6 6M5 3h14', link: 'M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1'
+  }
+  const RULES = [
+    [/^(add|new|create|make|new note|new task)\b/i, 'plus'], [/^(search|find)\b/i, 'search'], [/^(refresh|reload|again|retry|try again|check)\b/i, 'refresh'],
+    [/^(delete|remove|clear|forget|discard)\b/i, 'trash'], [/^copy\b/i, 'copy'], [/^(save|apply|done|keep|confirm|ok)\b/i, 'check'],
+    [/^(cancel|close|stop|dismiss)\b/i, 'x'], [/^unlock\b/i, 'unlock'], [/^lock\b/i, 'lock'], [/^(reveal|show|view|hide)\b/i, 'eye'],
+    [/^(edit|rename)\b/i, 'edit'], [/^(open|go|run|start|play|resume)\b/i, 'play'], [/^(settings|options|preferences)\b/i, 'gear'],
+    [/^back\b/i, 'back'], [/^(export|download)\b/i, 'download'], [/^(import|upload)\b/i, 'upload'], [/^(favourite|favorite|star|pin)\b/i, 'star']
+  ]
+  const icon = (name) => {
+    const svg = document.createElementNS(NS, 'svg')
+    svg.setAttribute('viewBox', '0 0 24 24')
+    svg.setAttribute('class', 'btn-ico')
+    svg.setAttribute('fill', 'none')
+    svg.setAttribute('stroke', 'currentColor')
+    svg.setAttribute('stroke-width', '2')
+    svg.setAttribute('stroke-linecap', 'round')
+    svg.setAttribute('stroke-linejoin', 'round')
+    svg.setAttribute('aria-hidden', 'true')
+    const p = document.createElementNS(NS, 'path')
+    p.setAttribute('d', PATH[name])
+    svg.append(p)
+    return svg
+  }
+
+  let voiceFor = null
+  const speak = (input, button) => {
+    if (!voiceFor) {
+      voiceFor = createVoiceSession({
+        target: 'search',
+        call,
+        onUpdate: (u) => {
+          const b = voiceFor.button
+          const field = voiceFor.field
+          if (!b) return
+          b.classList.toggle('on', u.state === 'listening')
+          b.classList.toggle('busy', u.state === 'requesting-permission' || u.state === 'initializing' || u.state === 'processing')
+          b.setAttribute('aria-pressed', String(u.state === 'listening'))
+          if (u.text && field) {
+            field.value = (field.value.trim() ? field.value.trim() + ' ' : '') + u.text
+            field.dispatchEvent(new Event('input', { bubbles: true }))
+            field.dispatchEvent(new Event('change', { bubbles: true }))
+            field.focus()
+          }
+        }
+      })
+    }
+    if (voiceFor.state() === 'listening') return void voiceFor.stop()
+    voiceFor.button = button
+    voiceFor.field = input
+    void voiceFor.start()
+  }
+
+  const SKIP_TYPES = new Set(['password', 'number', 'checkbox', 'radio', 'range', 'file', 'color', 'date', 'time', 'hidden', 'submit', 'button'])
+  const enhance = () => {
+    for (const button of document.querySelectorAll('.view button:not([data-ico]), #pan-bar button:not([data-ico])')) {
+      button.dataset.ico = '1'
+      if (button.querySelector('svg, img') || button.classList.contains('cc-tile') || button.className.includes('mu-') || button.className.includes('ask-')) continue
+      const text = button.textContent.trim()
+      if (!text || text.length > 24) continue
+      const rule = RULES.find(([re]) => re.test(text))
+      if (!rule) continue
+      button.classList.add('has-ico')
+      button.prepend(icon(rule[1]))
+    }
+    if (!createVoiceSession) return
+    for (const field of document.querySelectorAll('.view input:not([data-mic]), .view textarea:not([data-mic])')) {
+      field.dataset.mic = '1'
+      const type = (field.getAttribute('type') || 'text').toLowerCase()
+      if (field.tagName === 'INPUT' && SKIP_TYPES.has(type)) continue
+      if (field.id === 'ask-input' || field.readOnly || field.disabled || field.closest('.mic-wrap')) continue
+      const wrap = document.createElement('span')
+      wrap.className = 'mic-wrap'
+      field.replaceWith(wrap)
+      const button = document.createElement('button')
+      button.type = 'button'
+      button.className = 'mic-inject'
+      button.dataset.ico = '1'
+      button.title = 'Speak instead of typing'
+      button.setAttribute('aria-label', 'Speak instead of typing')
+      button.setAttribute('aria-pressed', 'false')
+      button.append(icon('mic'))
+      button.addEventListener('click', (e) => { e.preventDefault(); speak(field, button) })
+      wrap.append(field, button)
+    }
+  }
+  let queued = false
+  const schedule = () => {
+    if (queued) return
+    queued = true
+    setTimeout(() => { queued = false; try { enhance() } catch { /* a screen mid-draw is tried again on its next change */ } }, 80)
+  }
+  new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true })
+  schedule()
+}

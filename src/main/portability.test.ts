@@ -205,6 +205,16 @@ const BROWSER_LAYER = new Set([
   'main/experience/ipc.ts',
   'main/personal/ipc.ts',
   'main/workflows/ipc.ts',
+  // The Toolkit's lookups (headers, registration, rates, a video's details, a key check, PDF editing) and the two
+  // adapters of the integrations that came in with Files and Chance: each is `ipcMain` and a window, nothing else.
+  'main/jarvis/ipc.ts',
+  'main/eye/ipc.ts',
+  'main/cosmos/ipc.ts',
+  'main/f1/ipc.ts',
+  'main/football/ipc.ts',
+  'main/chance/ipc.ts',
+  'main/filesIntegration.ts',
+  'main/filesOrionAdapter.ts',
   // Tab Lock's adapter, and the only part of it that knows about Electron: `ipcMain` for the channels, `powerMonitor`
   // for the computer's own lock and sleep, and the window for focus and minimise. In Chromium those become Mojo and
   // Chromium's own session and widget observers. Everything Tab Lock decides is deliberately elsewhere and portable --

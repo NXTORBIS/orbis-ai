@@ -37,7 +37,7 @@ const claimed = (): Set<string> => new Set(CAPABILITIES.filter((one) => one.app)
  */
 async function drawn(): Promise<Set<string>> {
   const source = await readFile(FEATURE_SWITCH, 'utf8')
-  const found = [...source.matchAll(/feature === '([a-zA-Z]+)'/g)].map((one) => one[1])
+  const found = [...source.matchAll(/feature === '([a-zA-Z0-9]+)'/g)].map((one) => one[1])
   assert.ok(found.length > 5, 'the feature switch in App.tsx was not found -- point this test at wherever it moved')
   return new Set(found)
 }

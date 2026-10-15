@@ -1,0 +1,155 @@
+/*
+ * Copyright (c) 2023 Gaia Sky - All rights reserved.
+ *  This file is part of Gaia Sky, which is released under the Mozilla Public License 2.0.
+ *  You may use, distribute and modify this code under the terms of MPL2.
+ *  See the file LICENSE.md in the project root for full license details.
+ */
+
+package gaiasky.scene.system.render.pass;
+
+import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.math.Vector3;
+import gaiasky.GaiaSky;
+import gaiasky.event.Event;
+import gaiasky.event.EventManager;
+import gaiasky.render.RenderGroup;
+import gaiasky.render.api.IRenderable;
+import gaiasky.scene.Mapper;
+import gaiasky.scene.api.IFocus;
+import gaiasky.scene.camera.ICamera;
+import gaiasky.scene.component.Render;
+import gaiasky.scene.entity.EntityUtils;
+import gaiasky.scene.system.render.SceneRenderer;
+import gaiasky.scene.system.render.draw.model.ModelEntityRenderSystem;
+import gaiasky.render.gdx.IntModelBatch;
+import gaiasky.render.gdx.model.gltf.scene3d.lights.DirectionalShadowLight;
+import gaiasky.render.gdx.model.gltf.scene3d.scene.CascadeShadowMap;
+import gaiasky.util.math.Vector3Q;
+
+import java.util.List;
+
+import static gaiasky.render.RenderGroup.MODEL_PBR;
+import static gaiasky.render.RenderGroup.MODEL_PBR_TESS;
+
+public class CascadedShadowMapRenderPass extends RenderPass {
+    /** Number of cascade buffers. */
+    public final static int CASCADE_COUNT = 10;
+    /**
+     * Describe how to split scene camera frustum. . With a value of 4, far cascade covers the
+     * range: 1/4 to 1/1, next cascade, the range 1/16 to 1/4, and so on. The closest one covers
+     * the remaining starting from 0. When used with 2 extra cascades (3 areas), split points are: 0.0, 1/16, 1/4, 1.0.
+     */
+    private final static double SPLIT_DIVISOR = 3.0;
+    /**
+     * Shadow box depth factor, depends on the scene. Must be >= 1. Greater than 1 means more objects cast shadows but
+     * less precision. A value of 1 restricts shadow box depth to the frustum (only visible objects by the scene
+     * camera).
+     */
+    private final static double LIGHT_DEPTH_FACTOR = 1.8;
+    /** Contains the code to render models. **/
+    private final ModelEntityRenderSystem modelRenderer;
+    private final CascadeShadowMap cascadeShadowMap;
+    private DirectionalShadowLight baseLight;
+    private final Vector3Q aux1b = new Vector3Q();
+    private final Vector3Q aux2b = new Vector3Q();
+    private final Vector3 aux = new Vector3();
+    private final Color color = new Color();
+
+    // Display depth textures in an window, for debugging.
+    private static boolean DEBUG_UI_VIEW = false;
+    private static final int NUM_UI_VIEW = 9;
+
+    public CascadedShadowMapRenderPass(SceneRenderer sceneRenderer) {
+        super(sceneRenderer);
+        this.modelRenderer = new ModelEntityRenderSystem(sceneRenderer);
+        this.cascadeShadowMap = new CascadeShadowMap(CASCADE_COUNT);
+    }
+
+    protected void initializeRenderPass() {
+        this.baseLight = new DirectionalShadowLight(
+                GaiaSky.settings().scene.renderer.shadow.resolution,
+                GaiaSky.settings().scene.renderer.shadow.resolution);
+    }
+
+    protected void renderPass(ICamera camera, Object... params) {
+        var renderAssets = sceneRenderer.getRenderAssets();
+
+        // Get models.
+        List<IRenderable> models = sceneRenderer.getRenderListsFull().get(MODEL_PBR.ordinal());
+        List<IRenderable> modelsTess = sceneRenderer.getRenderListsFull().get(MODEL_PBR_TESS.ordinal());
+
+        // Prepare base light camera: direction and up.
+        IFocus l = camera.getCloseLightSource(0);
+        l.getAbsolutePosition(aux1b);
+        if(!models.isEmpty()) {
+            var firstModel = ((Render)models.getFirst()).getEntity();
+            EntityUtils.getAbsolutePosition(firstModel, aux2b);
+            aux1b.sub(aux2b).nor().put(aux).scl(-1);
+            var cameraLight = baseLight.getCamera();
+            baseLight.direction.set(aux);
+            cameraLight.direction.set(aux);
+            // Shadow camera up is perpendicular to dir.
+            if (cameraLight.direction.y != 0 || cameraLight.direction.z != 0)
+                aux.set(1, 0, 0);
+            else
+                aux.set(0, 1, 0);
+            cameraLight.up.set(cameraLight.direction).crs(aux);
+
+            // Color
+            var col = l.getColor();
+            color.set(col[0], col[1], col[2], 1);
+            baseLight.baseColor.set(color);
+            baseLight.color.set(color);
+            // Prepare cascading.
+            cascadeShadowMap.setCascades(camera, baseLight, LIGHT_DEPTH_FACTOR, SPLIT_DIVISOR);
+
+            for (DirectionalShadowLight light : cascadeShadowMap.lights) {
+                light.begin();
+                renderDepth(light, camera, renderAssets.mbPBRDepth, models);
+                renderDepth(light, camera, renderAssets.mbPBRTessellationDepth, modelsTess);
+                light.end();
+            }
+            if (DEBUG_UI_VIEW) {
+                GaiaSky.postRunnable(() -> {
+                    int i = 0;
+                    for (DirectionalShadowLight light : cascadeShadowMap.lights) {
+                        // Create UI view(s)
+                        EventManager.publish(Event.SHOW_TEXTURE_WINDOW_ACTION, this, "CSM " + i, light.getDepthMap().texture, 0.15f);
+                        i++;
+                        if (i >= NUM_UI_VIEW) {
+                            break;
+                        }
+                    }
+                });
+                DEBUG_UI_VIEW = false;
+            }
+        }
+    }
+
+    /**
+     * Render only depth (packed 32 bits) with custom camera.
+     * Useful to render shadow maps.
+     */
+    public void renderDepth(DirectionalShadowLight light, ICamera camera, IntModelBatch batch, List<IRenderable> list) {
+        batch.begin(light.getCamera());
+        for (var r : list) {
+            var entity = ((Render) r).entity;
+            var model = Mapper.model.get(entity);
+            if (model.model.hasPointLight(0)) {
+                modelRenderer.render(entity, batch, camera, 1, 0, null, RenderGroup.MODEL_PBR, false);
+                // Set properties to environment.
+                model.model.env.set(cascadeShadowMap.attribute);
+                model.model.env.shadowMap = light;
+            }
+        }
+        batch.end();
+    }
+
+    public void disposeCachedFrameBuffers() {
+        cascadeShadowMap.dispose();
+    }
+
+    public void dispose() {
+        disposeCachedFrameBuffers();
+    }
+}

@@ -40,6 +40,14 @@ export const MODELS: ModelInfo[] = [
   { id: 'ministral-3b-2512', provider: 'mistral', job: 'vision', label: 'ORION Sight Quick', description: 'Looks quickly, for repeated glances', reasoningEffort: false, echoReasoning: false, vision: true, contextWindow: 131072 },
   { id: 'ministral-14b-2512', provider: 'mistral', job: 'vision', label: 'ORION Sight Deep', description: 'Looks carefully, when the question is hard', reasoningEffort: false, echoReasoning: false, vision: true, contextWindow: 262144 },
   { id: 'codestral-2508', provider: 'mistral', job: 'code', label: 'ORION Build', description: "Writes a Page's code", reasoningEffort: false, echoReasoning: false, contextWindow: 256000 },
+  /*
+   * The same larger-memory models, as choices. They share a model with the three above but are their own entries,
+   * with no `job`, so they appear in the picker and may be chosen like any Orion. They list no `strengths`, so Auto
+   * never picks them by itself: a message too long for the others is sent to them by the overflow routing in
+   * main/nim.ts, which is where that decision belongs.
+   */
+  { id: 'orion/long', apiModel: 'ministral-14b-2512', provider: 'mistral', label: 'ORION Long', description: 'Very long conversations, big files and images', reasoningEffort: false, echoReasoning: false, vision: true, contextWindow: 262144 },
+  { id: 'orion/code', apiModel: 'codestral-2508', provider: 'mistral', label: 'ORION Code', description: 'Writes and reads long code', reasoningEffort: false, echoReasoning: false, contextWindow: 256000 },
   // Not a Groq model: resolved to one of the models above for each message (shared/modelRoute.ts), never sent to Groq.
   { id: 'orion/auto', label: 'ORION Auto', description: 'Picks the right Orion for each message', reasoningEffort: true, echoReasoning: false, contextWindow: 131072, inputTokenLimit: 6000 }
 ]

@@ -37,6 +37,8 @@ import { bindFocusShortcuts, createOmniboxFocus } from './omnibox-focus.ts'
 import { createVoiceSession } from './voice-session.ts'
 import type { VoiceUpdate } from './voice-session.ts'
 
+export { createVoiceSession } from './voice-session.ts'
+
 export interface OmniboxHost {
   /** The input to attach to. */
   input: HTMLInputElement

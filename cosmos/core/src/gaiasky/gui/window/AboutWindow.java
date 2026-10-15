@@ -1,0 +1,757 @@
+/*
+ * Copyright (c) 2023-2024 Gaia Sky - All rights reserved.
+ *  This file is part of Gaia Sky, which is released under the Mozilla Public License 2.0.
+ *  You may use, distribute and modify this code under the terms of MPL2.
+ *  See the file LICENSE.md in the project root for full license details.
+ */
+
+package gaiasky.gui.window;
+
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.files.FileHandle;
+import com.badlogic.gdx.graphics.Color;
+import com.badlogic.gdx.graphics.GL20;
+import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.Texture.TextureFilter;
+import com.badlogic.gdx.graphics.g2d.Sprite;
+import com.badlogic.gdx.scenes.scene2d.Actor;
+import com.badlogic.gdx.scenes.scene2d.Stage;
+import com.badlogic.gdx.scenes.scene2d.ui.*;
+import com.badlogic.gdx.scenes.scene2d.ui.Label.LabelStyle;
+import com.badlogic.gdx.scenes.scene2d.ui.TextField.TextFieldStyle;
+import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener.ChangeEvent;
+import com.badlogic.gdx.scenes.scene2d.utils.SpriteDrawable;
+import com.badlogic.gdx.utils.Align;
+import com.badlogic.gdx.utils.Array;
+import com.badlogic.gdx.utils.BufferUtils;
+import gaiasky.GaiaSky;
+import gaiasky.data.util.GlobalResources;
+import gaiasky.util.*;
+import gaiasky.util.i18n.I18n;
+import gaiasky.util.scene2d.*;
+import gaiasky.util.update.VersionCheckEvent;
+import gaiasky.util.update.VersionChecker;
+import oshi.SystemInfo;
+
+import java.io.IOException;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.time.format.FormatStyle;
+import java.util.Date;
+
+/**
+ * Displays comprehensive information about the Gaia Sky application.
+ *
+ * <p>This window extends {@code GenericDialog} and uses a tabbed layout to organize
+ * content into Help, About, System, and Updates (when applicable). It provides
+ * access to external resources such as the project homepage, documentation,
+ * source repository, and social media channels.</p>
+ *
+ * <p>Key features include:</p>
+ * <ul>
+ *   <li>Displaying the current version, build number, and runtime environment.</li>
+ *   <li>Listing credits and author contact information via {@code Link} components.</li>
+ *   <li>Conditionally showing an Updates tab based on the launch method.</li>
+ * </ul>
+ */
+@SuppressWarnings("ALL")
+public class AboutWindow extends GenericDialog {
+    private static final Logger.Log logger = Logger.getLogger(AboutWindow.class);
+
+    private final LabelStyle linkStyle, linkLargeStyle;
+    private Table checkTable;
+    private OwnLabel checkLabel;
+    private MemInfoWindow memInfoWindow;
+
+    public AboutWindow(Stage stage, Skin skin) {
+        super(I18n.msg("gui.help.help") + " - " + GaiaSky.settings().version.version + " (" + I18n.msg("gui.build",
+                                                                                                      GaiaSky.settings().version.build) + ")",
+              skin,
+              stage);
+        this.linkStyle = skin.get("link", LabelStyle.class);
+        this.linkLargeStyle = skin.get("link-large", LabelStyle.class);
+
+        setCancelText(I18n.msg("gui.close"));
+
+        // Build
+        buildSuper();
+
+    }
+
+    @Override
+    protected void build() {
+        final float contentWidth = 1140f;
+        final float titleWidth = 250f;
+        final float taWidth = 850f;
+        final float taWidth2 = 1280f;
+        final float taHeight = 160f;
+        final float tabWidth = 240f;
+        final float buttonHeight = 40f;
+
+        padLeft(pad18);
+        padRight(pad18);
+
+        // Only show update tab if not launched via install4j.
+        boolean showUpdateTab = false;
+
+        // Create the tab buttons
+        var tabGroup = new HorizontalGroup();
+        tabGroup.left();
+
+        final var tabHelp = new OwnTextButton(I18n.msg("gui.help.help"), skin, "toggle-big");
+        tabHelp.pad(pad10);
+        tabHelp.setWidth(tabWidth);
+        final var tabAbout = new OwnTextButton(I18n.msg("gui.help.about"), skin, "toggle-big");
+        tabAbout.pad(pad10);
+        tabAbout.setWidth(tabWidth);
+        final var tabSystem = new OwnTextButton(I18n.msg("gui.help.system"), skin, "toggle-big");
+        tabSystem.pad(pad10);
+        tabSystem.setWidth(tabWidth);
+        final var tabUpdates = showUpdateTab ? new OwnTextButton(I18n.msg("gui.newversion"), skin, "toggle-big") : null;
+        if (showUpdateTab) {
+            tabUpdates.pad(pad10);
+            tabUpdates.setWidth(tabWidth);
+        }
+
+        tabGroup.addActor(tabHelp);
+        tabGroup.addActor(tabAbout);
+        tabGroup.addActor(tabSystem);
+        if (showUpdateTab)
+            tabGroup.addActor(tabUpdates);
+
+        tabButtons = new Array<>();
+        tabButtons.add(tabHelp);
+        tabButtons.add(tabAbout);
+        tabButtons.add(tabSystem);
+        if (showUpdateTab)
+            tabButtons.add(tabUpdates);
+
+        content.add(tabGroup).left().padLeft(pad10);
+        content.row();
+        content.pad(pad18);
+
+        /* CONTENT 1 - HELP */
+        final var contentHelp = new Table(skin);
+        contentHelp.top();
+
+        var gaiasky = new OwnLabel(GaiaSky.settings().getApplicationTitle(GaiaSky.settings().runtime.openXr), skin, "main-title-s");
+
+        var versionBig = new OwnLabel(GaiaSky.settings().version.version,
+                                      skin,
+                                      "msg-33");
+        var build = new OwnLabel(I18n.msg("gui.build",
+                                          GaiaSky.settings().version.build),
+                                 skin,
+                                 "big");
+
+        // Home page.
+        var homepageTitle = new OwnLabel(I18n.msg("gui.help.homepage"), skin, "header");
+        var homepageLink = new Link(Settings.HOMEPAGE, linkLargeStyle, Settings.HOMEPAGE);
+
+        // Documentation.
+        var docsTitle = new OwnLabel(I18n.msg("gui.help.docs"), skin, "header");
+        var docsLink = new Link(Settings.DOCUMENTATION, linkLargeStyle, Settings.DOCUMENTATION);
+
+        // Repository.
+        var repoTitle = new OwnLabel(I18n.msg("gui.help.repo"), skin, "header");
+        var repoLink = new Link(Settings.REPOSITORY, linkLargeStyle, Settings.REPOSITORY);
+
+        // Icon.
+        var gsIcon = Gdx.files.internal(GaiaSky.settings().runtime.openXr ? "icon/gsvr_round_256.png" : "icon/gs_icon_256.png");
+        var iconTex = new Texture(gsIcon);
+        iconTex.setFilter(TextureFilter.Linear, TextureFilter.Linear);
+        var gaiaSkyIcon = new Image(iconTex);
+        gaiaSkyIcon.setOrigin(Align.center);
+
+        // Add all to content
+        contentHelp.add(gaiaSkyIcon).padTop(pad34 * 2f).align(Align.center).colspan(2);
+        contentHelp.row();
+        contentHelp.add(gaiasky).pad(pad18).colspan(2);
+        contentHelp.row();
+        contentHelp.add(versionBig).padTop(pad10).padBottom(pad10).align(Align.center).colspan(2);
+        contentHelp.row();
+        contentHelp.add(build).padBottom(pad18 * 5f).align(Align.center).colspan(2);
+        contentHelp.row();
+        contentHelp.add(homepageTitle).left().padBottom(pad18).row();
+        contentHelp.add(homepageLink).left().padBottom(pad34);
+        contentHelp.row();
+        contentHelp.add(docsTitle).left().padBottom(pad18).row();
+        contentHelp.add(docsLink).left().padBottom(pad34);
+        contentHelp.row();
+        contentHelp.add(repoTitle).left().padBottom(pad18).row();
+        contentHelp.add(repoLink).left().padBottom(pad34);
+        contentHelp.pack();
+
+        /* CONTENT 2 - ABOUT */
+        final var contentAbout = new Table(skin);
+        contentAbout.top();
+
+        // Intro
+        var intro = new OwnTextArea(I18n.msg("gui.help.gscredits", GaiaSky.settings().version.version), skin.get("regular", TextFieldStyle.class));
+        intro.setDisabled(true);
+        intro.setPrefRows(3);
+        intro.setWidth(contentWidth);
+
+        // Home page
+        var homePageTitle = new OwnLabel(I18n.msg("gui.help.homepage"), skin);
+        var homepage = new Link(Settings.HOMEPAGE, linkStyle, Settings.HOMEPAGE);
+
+        // Dev news
+        var devNewsTitle = new OwnLabel(I18n.msg("gui.help.devnews"), skin);
+        var smMastoIcon = new OwnImage(skin.getDrawable("sm-masto"), false);
+        smMastoIcon.setScale(0.7f);
+        var smMasto = new Link(Settings.SOCIAL_MEDIA_MASTO_NAME, linkStyle, Settings.SOCIAL_MEDIA_MASTO_URL);
+        var smBskyIcon = new OwnImage(skin.getDrawable("sm-bsky"), false);
+        smBskyIcon.setScale(0.7f);
+        var smBsky = new Link(Settings.SOCIAL_MEDIA_BSKY_NAME, linkStyle, Settings.SOCIAL_MEDIA_BSKY_URL);
+        var sm = new Table(skin);
+        sm.add(smMastoIcon);
+        sm.add(smMasto).padRight(pad34);
+        sm.add(smBskyIcon);
+        sm.add(smBsky);
+
+        // Author
+        var authorTitle = new OwnLabel(I18n.msg("gui.help.author"), skin);
+
+        var author = new Table(skin);
+        var authorName = new OwnLabel(Settings.AUTHOR_NAME, skin);
+        var authorMail = new Link(Settings.AUTHOR_EMAIL, linkStyle, "mailto:" + Settings.AUTHOR_EMAIL);
+        var authorPage = new Link(Settings.AUTHOR_WEBSITE_TEXT, linkStyle, Settings.AUTHOR_WEBSITE_FULL);
+        var authorMasto = new Link("@jumpinglangur@mastodon.social", linkStyle, "https://mastodon.social/@jumpinglangur");
+        var authorBs = new Link("@gaiasky.bsky.social", linkStyle, "https://bsky.app/profile/gaiasky.bsky.social");
+        author.add(authorName).left().row();
+        author.add(authorMail).left().row();
+        author.add(authorPage).left().row();
+        author.add(authorMasto).left().row();
+        author.add(authorBs).left().row();
+
+        // Contributor
+        var contribTitle = new OwnLabel(I18n.msg("gui.help.contributors"), skin);
+        var contrib = new Table(skin);
+        try {
+            var contributors = Contributor.parseContributorsFile(Path.of("CONTRIBUTORS.md"));
+
+            contrib.left();
+            for (var contributor : contributors) {
+                var isMail =TextUtils.isValidEmailSimple(contributor.contact());
+                var name = new OwnLabel(contributor.name(), skin);
+                var contact = new Link(contributor.contact(), linkStyle, (isMail ? "mailto:" : "") + contributor.contact());
+                var contribution = new OwnLabel(contributor.contribution(), skin);
+                contrib.add(name).left().padRight(pad10);
+                contrib.add(contact).left().row();
+                contrib.add().padBottom(pad10);
+                contrib.add(contribution).left().padBottom(pad10).row();
+
+            }
+        }catch (IOException e) {
+            logger.error("Could not read CONTRIBUTORS.md file", e);
+        }
+        var contribScroll = new OwnScrollPane(contrib, skin, "minimalist-nobg");
+        contribScroll.setHeight(180f);
+        contribScroll.setFadeScrollBars(false);
+        contribScroll.setScrollingDisabled(true, false);
+        contribScroll.setOverscroll(false, false);
+        contribScroll.setSmoothScrolling(true);
+        scrolls.add(contribScroll);
+
+        // License
+        var licenseTable = new Table(skin);
+        var licenseText = new OwnLabel(I18n.msg("gui.help.license"), skin);
+        var licenseLink = new Link(Settings.LICENSE_URL, linkStyle, Settings.LICENSE_URL);
+
+        licenseTable.add(licenseText).center().row();
+        licenseTable.add(licenseLink).center();
+
+        // Thanks
+        HorizontalGroup thanks = new HorizontalGroup();
+        thanks.space(pad18 * 3f).pad(pad18);
+        Container<Actor> thanksSc = new Container<>(thanks);
+        thanksSc.setBackground(skin.getDrawable("bg-clear"));
+
+        var zah = new OwnImage(getSpriteDrawable(Gdx.files.internal("img/zah.png")), "https://zah.uni-heidelberg.de");
+        zah.setTooltip(Settings.AUTHOR_AFFILIATION, skin);
+        var dlr = new OwnImage(getSpriteDrawable(Gdx.files.internal("img/dlr.png")), "https://dlr.de");
+        dlr.setTooltip(Settings.FUNDING_DLR, skin);
+        var bmftr = new OwnImage(getSpriteDrawable(Gdx.files.internal("img/bmftr.png")), "https://www.bmftr.bund.de");
+        bmftr.setTooltip(Settings.FUNDING_BMFTR, skin);
+        var dpac = new OwnImage(getSpriteDrawable(Gdx.files.internal("img/dpac.png")), "https://www.cosmos.esa.int/web/gaia/dpac/consortium");
+        dpac.setTooltip(Settings.FUNDING_DPAC, skin);
+
+        thanks.addActor(zah);
+        thanks.addActor(dlr);
+        thanks.addActor(bmftr);
+        thanks.addActor(dpac);
+
+        contentAbout.add(intro).colspan(2).left().padTop(pad34);
+        contentAbout.row();
+        contentAbout.add(homePageTitle).left().padRight(pad18).padTop(pad18);
+        contentAbout.add(homepage).left().padTop(pad18);
+        contentAbout.row();
+        contentAbout.add(devNewsTitle).left().padRight(pad18).padTop(pad18);
+        contentAbout.add(sm).left().padTop(pad18);
+        contentAbout.row();
+        contentAbout.add(authorTitle).left().padRight(pad18).padTop(pad18);
+        contentAbout.add(author).left().padTop(pad10).padTop(pad18);
+        contentAbout.row();
+        contentAbout.add(contribTitle).left().padRight(pad18).padTop(pad18);
+        contentAbout.add(contribScroll).left().padTop(pad18);
+        contentAbout.row();
+        contentAbout.add(licenseTable).colspan(2).center().padTop(pad18 * 4f);
+        contentAbout.row();
+        contentAbout.add(thanksSc).colspan(2).center().padTop(pad18 * 3f);
+        contentAbout.pack();
+
+        /* CONTENT 3 - SYSTEM */
+        final Table contentSystem = new Table(skin);
+        contentSystem.top();
+
+        // Build info
+        var buildInfo = new OwnLabel(I18n.msg("gui.help.buildinfo"), skin, "header");
+
+        var versionTitle = new OwnLabel(I18n.msg("gui.help.version", Settings.APPLICATION_NAME), skin);
+        var version = new OwnLabel(GaiaSky.settings().version.version, skin);
+
+        var revisionTitle = new OwnLabel(I18n.msg("gui.help.buildnumber"), skin);
+        var revision = new OwnLabel(GaiaSky.settings().version.build, skin);
+
+        var timeTitle = new OwnLabel(I18n.msg("gui.help.buildtime"), skin);
+        var time = new OwnLabel(GaiaSky.settings().version.buildTime.toString(), skin);
+
+        var systemTitle = new OwnLabel(I18n.msg("gui.help.buildsys"), skin);
+        var system = new OwnTextArea(GaiaSky.settings().version.system, skin.get("regular", TextFieldStyle.class));
+        system.setDisabled(true);
+        system.setPrefRows(3);
+        system.setWidth(taWidth * 2f / 3f);
+
+        var builderTitle = new OwnLabel(I18n.msg("gui.help.builder"), skin);
+        var builder = new OwnLabel(GaiaSky.settings().version.builder, skin);
+
+        // Paths
+        var paths = new OwnLabel(I18n.msg("gui.help.paths"), skin, "header");
+        var pathLength = 48;
+
+        var configTitle = new OwnLabel(I18n.msg("gui.help.paths.config"), skin);
+        var configPath = SysUtils.getConfigDir().toAbsolutePath().toString();
+        var config = new OwnLabel(TextUtils.capString(configPath, pathLength, true), skin);
+        config.addListener(new OwnTextTooltip(configPath, skin, 15));
+
+        var dataTitle = new OwnLabel(I18n.msg("gui.help.paths.data"), skin);
+        var dataPath = SysUtils.getDataDir().toAbsolutePath().toString();
+        var data = new OwnLabel(TextUtils.capString(dataPath, pathLength, true), skin);
+        data.addListener(new OwnTextTooltip(dataPath, skin, 15));
+
+        var screenshotsTitle = new OwnLabel(I18n.msg("gui.help.paths.screenshots"), skin);
+        var screenshotsPath = SysUtils.getDefaultScreenshotsDir().toAbsolutePath().toString();
+        var screenshots = new OwnLabel(TextUtils.capString(screenshotsPath, pathLength, true), skin);
+        screenshots.addListener(new OwnTextTooltip(screenshotsPath, skin, 15));
+
+        var framesTitle = new OwnLabel(I18n.msg("gui.help.paths.frames"), skin);
+        var framesPath = SysUtils.getDefaultFramesDir().toAbsolutePath().toString();
+        var frames = new OwnLabel(TextUtils.capString(framesPath, pathLength, true), skin);
+        frames.addListener(new OwnTextTooltip(framesPath, skin, 15));
+
+        var mappingsTitle = new OwnLabel(I18n.msg("gui.help.paths.mappings"), skin);
+        var mappingsPath = SysUtils.getDefaultMappingsDir().toAbsolutePath().toString();
+        var mappings = new OwnLabel(TextUtils.capString(mappingsPath, pathLength, true), skin);
+        mappings.addListener(new OwnTextTooltip(mappingsPath, skin, 15));
+
+        var cameraTitle = new OwnLabel(I18n.msg("gui.help.paths.camera"), skin);
+        var cameraPath = SysUtils.getDefaultCameraDir().toAbsolutePath().toString();
+        var camera = new OwnLabel(TextUtils.capString(cameraPath, pathLength, true), skin);
+        camera.addListener(new OwnTextTooltip(cameraPath, skin, 15));
+
+        // Java info
+        var javaInfo = new OwnLabel(I18n.msg("gui.help.javainfo"), skin, "header");
+
+        var javaVersionTitle = new OwnLabel(I18n.msg("gui.help.javaversion"), skin);
+        var javaVersion = new OwnLabel(System.getProperty("java.version"), skin);
+
+        var javaRuntimeTitle = new OwnLabel(I18n.msg("gui.help.javaname"), skin);
+        var javaRuntime = new OwnLabel(System.getProperty("java.runtime.name"), skin);
+
+        var javaVMNameTitle = new OwnLabel(I18n.msg("gui.help.javavmname"), skin);
+        var javaVMName = new OwnLabel(System.getProperty("java.vm.name"), skin);
+
+        var javaVMVersionTitle = new OwnLabel(I18n.msg("gui.help.javavmversion"), skin);
+        var javaVMVersion = new OwnLabel(System.getProperty("java.vm.version"), skin);
+
+        var javaVMVendorTitle = new OwnLabel(I18n.msg("gui.help.javavmvendor"), skin);
+        var javaVMVendor = new OwnLabel(System.getProperty("java.vm.vendor"), skin);
+
+        TextButton memInfoButton = new OwnTextButton(I18n.msg("gui.help.meminfo"), skin, "default");
+        memInfoButton.setName("memoryinfo");
+        memInfoButton.pad(0, pad18, 0, pad18);
+        memInfoButton.setHeight(buttonHeight);
+        memInfoButton.addListener(event -> {
+            if (event instanceof ChangeEvent) {
+                if (memInfoWindow == null) {
+                    memInfoWindow = new MemInfoWindow(stage, skin);
+                }
+                if (!memInfoWindow.isVisible() || !memInfoWindow.hasParent())
+                    memInfoWindow.show(stage);
+                return true;
+            }
+            return false;
+        });
+
+        // System info
+        var sysInfo = new OwnLabel(I18n.msg("gui.help.sysinfo"), skin, "header");
+
+        var sysOSTitle = new OwnLabel(I18n.msg("gui.help.os"), skin);
+        OwnLabel sysOS;
+
+        try {
+            var si = new SystemInfo();
+            var os = si.getOperatingSystem();
+            var st = System.getenv("XDG_SESSION_TYPE");
+            sysOS = new OwnLabel(
+                    I18n.msg("gui.help.os.family") + ": " + os.getFamily()
+                            + "\n" + I18n.msg("gui.help.os.name") + ": " + os.getVersionInfo().getCodeName()
+                            + "\n" + I18n.msg("gui.help.os.version") + ": " + os.getVersionInfo().getVersion()
+                            + "\n" + I18n.msg("gui.help.os.build") + ": " + os.getVersionInfo().getBuildNumber()
+                            + "\n" + I18n.msg("gui.help.os.manufacturer") + ": " + os.getManufacturer()
+                            + "\n" + I18n.msg("gui.help.os.arch") + ": " + System.getProperty("os.arch")
+                            + (SysUtils.isLinux() ? ("\n" + I18n.msg("gui.help.os.session") + ": " + st) : ""), skin);
+        } catch (Error e) {
+            sysOS = new OwnLabel(System.getProperty("os.name") + "\n" + System.getProperty("os.version") + "\n" + System.getProperty("os.arch"),
+                                 skin);
+        }
+
+        var glRendererTitle = new OwnLabel(I18n.msg("gui.help.graphicsdevice"), skin);
+        var glRendererStr = Gdx.gl.glGetString(GL20.GL_RENDERER);
+        var glRenderer = new OwnLabel(TextUtils.breakSpaces(glRendererStr, 48), skin);
+
+        var sessionTypeTitle = new OwnLabel(I18n.msg("gui.help.graphicsdevice"), skin);
+
+        // OpenGL info
+        var glInfo = new OwnLabel(I18n.msg("gui.help.openglinfo"), skin, "header");
+
+        var glVendorTitle = new OwnLabel(I18n.msg("gui.help.glvendor"), skin);
+        var glVendor = new OwnLabel(Gdx.gl.glGetString(GL20.GL_VENDOR), skin);
+
+        var glVersionTitle = new OwnLabel(I18n.msg("gui.help.openglversion"), skin);
+        var glVersion = new OwnLabel(Gdx.gl.glGetString(GL20.GL_VERSION), skin);
+
+        var glslVersionTitle = new OwnLabel(I18n.msg("gui.help.glslversion"), skin);
+        var glslVersion = new OwnLabel(Gdx.gl.glGetString(GL20.GL_SHADING_LANGUAGE_VERSION), skin);
+
+        var glExtensionsTitle = new OwnLabel(I18n.msg("gui.help.glextensions"), skin);
+        var extensions = GlobalResources.getGLExtensions();
+
+        var buf = BufferUtils.newIntBuffer(16);
+        Gdx.gl.glGetIntegerv(GL20.GL_MAX_TEXTURE_SIZE, buf);
+        int maxSize = buf.get(0);
+        int lines = GlobalResources.countOccurrences(extensions, '\n');
+        var maxTexSize = new OwnTextArea("Max texture size: " + maxSize + '\n' + extensions, skin, "default");
+        maxTexSize.setDisabled(true);
+        maxTexSize.setPrefRows(lines);
+        maxTexSize.clearListeners();
+
+        var glExtensionsScroll = new OwnScrollPane(maxTexSize, skin, "default-nobg");
+        glExtensionsScroll.setWidth(taWidth);
+        glExtensionsScroll.setHeight(taHeight);
+        glExtensionsScroll.setForceScroll(false, true);
+        glExtensionsScroll.setSmoothScrolling(true);
+        glExtensionsScroll.setFadeScrollBars(false);
+        scrolls.add(glExtensionsScroll);
+
+        // BUILD
+        contentSystem.add(buildInfo).colspan(2).left().padTop(pad34);
+        contentSystem.row();
+        contentSystem.add(new Separator(skin, "small")).colspan(2).bottom().left().expandX().fillX().padBottom(pad20);
+        contentSystem.row();
+        contentSystem.add(versionTitle).left().top().padRight(pad18).width(titleWidth);
+        contentSystem.add(version).left();
+        contentSystem.row();
+        contentSystem.add(revisionTitle).left().top().padRight(pad18).padTop(pad10);
+        contentSystem.add(revision).left().padTop(pad10);
+        contentSystem.row();
+        contentSystem.add(timeTitle).left().top().padRight(pad18).padTop(pad10);
+        contentSystem.add(time).left().padTop(pad10);
+        contentSystem.row();
+        contentSystem.add(builderTitle).left().top().padRight(pad18).padTop(pad10);
+        contentSystem.add(builder).left().padTop(pad10);
+        contentSystem.row();
+        contentSystem.add(systemTitle).left().top().padRight(pad18).padTop(pad10);
+        contentSystem.add(system).left().padTop(pad10);
+        contentSystem.row();
+
+        // PATHS
+        contentSystem.add(paths).colspan(2).left().padTop(pad34);
+        contentSystem.row();
+        contentSystem.add(new Separator(skin, "small")).colspan(2).bottom().left().expandX().fillX().padBottom(pad20);
+        contentSystem.row();
+        contentSystem.add(configTitle).left().top().padRight(pad18);
+        contentSystem.add(config).left();
+        contentSystem.row();
+        contentSystem.add(dataTitle).left().top().padRight(pad18);
+        contentSystem.add(data).left();
+        contentSystem.row();
+        contentSystem.add(screenshotsTitle).left().top().padRight(pad18);
+        contentSystem.add(screenshots).left();
+        contentSystem.row();
+        contentSystem.add(framesTitle).left().top().padRight(pad18);
+        contentSystem.add(frames).left();
+        contentSystem.row();
+        contentSystem.add(cameraTitle).left().top().padRight(pad18);
+        contentSystem.add(camera).left();
+        contentSystem.row();
+        contentSystem.add(mappingsTitle).left().top().padRight(pad18);
+        contentSystem.add(mappings).left();
+        contentSystem.row();
+
+        // JAVA
+        contentSystem.add(javaInfo).colspan(2).left().padTop(pad34 * 2f);
+        contentSystem.row();
+        contentSystem.add(new Separator(skin, "small")).colspan(2).bottom().left().expandX().fillX().padBottom(pad20);
+        contentSystem.row();
+        contentSystem.add(javaVersionTitle).left().top().padRight(pad18);
+        contentSystem.add(javaVersion).left();
+        contentSystem.row();
+        contentSystem.add(javaRuntimeTitle).left().top().padRight(pad18).padTop(pad10);
+        contentSystem.add(javaRuntime).left().padTop(pad10);
+        contentSystem.row();
+        contentSystem.add(javaVMNameTitle).left().top().padRight(pad18).padTop(pad10);
+        contentSystem.add(javaVMName).left().padTop(pad10);
+        contentSystem.row();
+        contentSystem.add(javaVMVersionTitle).left().top().padRight(pad18).padTop(pad10);
+        contentSystem.add(javaVMVersion).left().padTop(pad10);
+        contentSystem.row();
+        contentSystem.add(javaVMVendorTitle).left().top().padRight(pad18).padTop(pad10);
+        contentSystem.add(javaVMVendor).left().padTop(pad10);
+        contentSystem.row();
+        contentSystem.add(memInfoButton).colspan(2).left().padTop(pad18);
+        contentSystem.row();
+
+        // SYSTEM
+        contentSystem.add(sysInfo).colspan(2).left().padTop(pad34 * 2f);
+        contentSystem.row();
+        contentSystem.add(new Separator(skin, "small")).colspan(2).bottom().left().expandX().fillX().padBottom(pad20);
+        contentSystem.row();
+        try {
+            var si = new SystemInfo();
+            var hal = si.getHardware();
+            var cp = hal.getProcessor();
+
+            var cpuTitle = new OwnLabel(I18n.msg("gui.help.cpu"), skin);
+            var cpu = new OwnLabel(cp.toString(), skin);
+
+            contentSystem.add(cpuTitle).left().top().padRight(pad18).padTop(pad10).padBottom(pad18);
+            contentSystem.add(cpu).left().top().padTop(pad10).padBottom(pad18);
+            contentSystem.row();
+        } catch (Exception ignored) {
+            contentSystem.add(new OwnLabel(I18n.msg("gui.help.cpu.no"), skin)).colspan(2).left().padTop(pad18).padBottom(pad18).row();
+        }
+        contentSystem.add(sysOSTitle).left().top().padRight(pad18).padBottom(pad18);
+        contentSystem.add(sysOS).left().top().padBottom(pad18);
+        contentSystem.row();
+
+        contentSystem.add(glRendererTitle).left().top().padRight(pad18);
+        contentSystem.add(glRenderer).left().top();
+        contentSystem.row();
+
+        // GRAPHICs CARDS
+        var gcInfo = new OwnLabel(I18n.msg("gui.help.graphicscards"), skin, "header");
+
+        contentSystem.add(gcInfo).colspan(2).left().padTop(pad34 * 2f);
+        contentSystem.row();
+        contentSystem.add(new Separator(skin, "small")).colspan(2).bottom().left().expandX().fillX().padBottom(pad20);
+        contentSystem.row();
+
+        try {
+            var si = new SystemInfo();
+
+            var gcs = si.getHardware().getGraphicsCards();
+            if (gcs.isEmpty()) {
+                var none = new OwnLabel(I18n.msg("gui.focusinfo.na"), skin);
+                contentSystem.add(none).colspan(2).left().padBottom(pad34).row();
+            } else {
+                for (var gc : gcs) {
+                    var gcName = new OwnLabel(gc.getName(), skin, "header-raw");
+                    var gcVendor = new OwnLabel(gc.getVendor(), skin);
+                    var gcId = new OwnLabel(gc.getDeviceId(), skin);
+                    var gcVers = new OwnLabel(gc.getVersionInfo(), skin);
+                    var gcRam = new OwnLabel(I18n.msg("gui.debug.vram") + ": " + gc.getVRam(), skin);
+                    contentSystem.add(gcName).colspan(2).left().padBottom(pad10).row();
+                    contentSystem.add(gcVendor).colspan(2).left().padBottom(pad10).row();
+                    contentSystem.add(gcId).colspan(2).left().padBottom(pad10).row();
+                    contentSystem.add(gcVers).colspan(2).left().padBottom(pad10).row();
+                    contentSystem.add(gcRam).colspan(2).left().padBottom(pad34).row();
+                }
+            }
+        } catch (Exception ignored) {
+            var none = new OwnLabel(I18n.msg("gui.focusinfo.na"), skin);
+            contentSystem.add(none).colspan(2).left().padBottom(pad34).row();
+        }
+
+        // GL
+        contentSystem.add(glInfo).colspan(2).left().padTop(pad34 * 2f);
+        contentSystem.row();
+        contentSystem.add(new Separator(skin, "small")).colspan(2).bottom().left().expandX().fillX().padBottom(pad20);
+        contentSystem.row();
+        contentSystem.add(glVersionTitle).left().top().padRight(pad18);
+        contentSystem.add(glVersion).left();
+        contentSystem.row();
+        contentSystem.add(glVendorTitle).left().top().padRight(pad18).padTop(pad10);
+        contentSystem.add(glVendor).left().padTop(pad10);
+        contentSystem.row();
+        contentSystem.add(glslVersionTitle).left().top().padRight(pad18).padTop(pad10);
+        contentSystem.add(glslVersion).left().padTop(pad10);
+        contentSystem.row();
+        contentSystem.add(glExtensionsTitle).left().top().padRight(pad18).padTop(pad10);
+        contentSystem.add(glExtensionsScroll).left().padTop(pad10);
+
+        OwnScrollPane systemScroll = new OwnScrollPane(contentSystem, skin, "minimalist-nobg");
+        systemScroll.setFadeScrollBars(false);
+        systemScroll.setScrollingDisabled(true, false);
+        systemScroll.setOverscroll(false, false);
+        systemScroll.setSmoothScrolling(true);
+        systemScroll.setHeight(800f);
+        systemScroll.pack();
+        scrolls.add(systemScroll);
+
+
+        /* CONTENT 4 - UPDATES */
+
+        final var contentUpdates = showUpdateTab ? new Table(skin) : null;
+        if (showUpdateTab) {
+            contentUpdates.top();
+
+            // This is the table that displays it all
+            checkTable = new Table(skin);
+            checkLabel = new OwnLabel("", skin);
+
+            checkTable.add(checkLabel).top().left().padBottom(pad10).row();
+            if (GaiaSky.settings().program.update.lastCheck == null || new Date().getTime() - GaiaSky.settings().program.update.lastCheck.toEpochMilli() > Settings.ProgramSettings.UpdateSettings.VERSION_CHECK_INTERVAL_MS) {
+                // Check!
+                checkLabel.setText(I18n.msg("gui.newversion.checking"));
+                getCheckVersionThread().start();
+            } else {
+                // Inform latest
+                newVersionCheck(GaiaSky.settings().version.version,
+                                GaiaSky.settings().version.versionNumber,
+                                GaiaSky.settings().version.buildTime,
+                                false);
+            }
+            contentUpdates.add(checkTable).left().top().padTop(pad34);
+        }
+
+        /* ADD ALL CONTENT */
+        addTabContent(contentHelp);
+        addTabContent(contentAbout);
+        addTabContent(systemScroll);
+        if (showUpdateTab)
+            addTabContent(contentUpdates);
+
+        content.add(tabStack).expand().fill();
+
+        // Set tab listeners.
+        setUpTabListeners();
+    }
+
+    @Override
+    protected boolean accept() {
+        return true;
+    }
+
+    @Override
+    protected void cancel() {
+    }
+
+    @Override
+    public void dispose() {
+
+    }
+
+    private SpriteDrawable getSpriteDrawable(FileHandle fh) {
+        Texture tex = new Texture(fh);
+        return new SpriteDrawable(new Sprite(tex));
+    }
+
+    /**
+     * Checks the given tag time against the current version time and:
+     * <ul>
+     * <li>Displays a "new version available" message if the given version is
+     * newer than the current.</li>
+     * <li>Display a "you have the latest version" message and a "check now"
+     * button if the given version is older.</li>
+     * </ul>
+     *
+     * @param tagVersion    The version to check
+     * @param versionNumber The version number
+     * @param tagDate       The date
+     */
+    private void newVersionCheck(String tagVersion, Integer versionNumber, Instant tagDate, boolean log) {
+        GaiaSky.settings().program.update.lastCheck = Instant.now();
+        if (versionNumber > GaiaSky.settings().version.versionNumber) {
+            DateTimeFormatter df = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.MEDIUM)
+                    .withLocale(I18n.locale)
+                    .withZone(ZoneOffset.UTC);
+            if (log) {
+                logger.info(I18n.msg("gui.newversion.available", GaiaSky.settings().version.version, tagVersion + " [" + df.format(tagDate) + "]"));
+            }
+            // There's a new version!
+            checkLabel.setText(I18n.msg("gui.newversion.available", GaiaSky.settings().version, tagVersion + " [" + df.format(tagDate) + "]"));
+            final String uri = Settings.HOMEPAGE_DOWNLOADS;
+
+            OwnTextButton getNewVersion = new OwnTextButton(I18n.msg("gui.newversion.getit"), skin);
+            getNewVersion.pad(0, pad18, 0, pad18);
+            getNewVersion.setHeight(40f);
+            getNewVersion.addListener(event -> {
+                if (event instanceof ChangeEvent) {
+                    Gdx.net.openURI(Settings.HOMEPAGE_DOWNLOADS);
+                    return true;
+                }
+                return false;
+            });
+            checkTable.add(getNewVersion).center().padTop(pad18).padBottom(pad10).row();
+
+            Link link = new Link(uri, linkStyle, uri);
+            checkTable.add(link).center();
+
+        } else {
+            if (log)
+                logger.info(I18n.msg("gui.newversion.nonew", GaiaSky.settings().program.update.getLastCheckedString()));
+            checkLabel.setText(I18n.msg("gui.newversion.nonew", GaiaSky.settings().program.update.getLastCheckedString()));
+            // Add check now button
+            OwnTextButton checkNewVersion = new OwnTextButton(I18n.msg("gui.newversion.checknow"), skin);
+            checkNewVersion.pad(pad10, pad18, pad10, pad18);
+            checkNewVersion.addListener(event -> {
+                if (event instanceof ChangeEvent) {
+                    checkLabel.setText(I18n.msg("gui.newversion.checking"));
+                    logger.info(I18n.msg("gui.newversion.checking"));
+                    getCheckVersionThread().start();
+                    return true;
+                }
+                return false;
+            });
+            checkTable.add(checkNewVersion).center().padTop(pad18);
+        }
+    }
+
+    private Thread getCheckVersionThread() {
+        // Start version check
+        VersionChecker vc = new VersionChecker(GaiaSky.settings().program.url.versionCheck);
+        vc.setListener(event -> {
+            if (event instanceof VersionCheckEvent vce) {
+                if (!vce.isFailed()) {
+                    checkTable.clear();
+                    checkTable.add(checkLabel).top().left().padBottom(pad10).row();
+                    // All is fine
+                    newVersionCheck(vce.getTag(), vce.getVersionNumber(), vce.getTagTime(), true);
+
+                } else {
+                    // Handle failed case
+                    logger.info(I18n.msg("gui.newversion.fail"));
+                    checkLabel.setText(I18n.msg("notif.error", "Could not get last version"));
+                    checkLabel.setColor(Color.RED);
+                }
+            }
+            return false;
+        });
+        return new Thread(vc);
+    }
+
+}

@@ -34,8 +34,32 @@ export interface LaunchedChromium {
   exited: Promise<number | null>
 }
 
+/**
+ * What makes the browser quicker, and nothing that changes what it does for the person.
+ *
+ * The network flags (QUIC, TCP fast open) shorten every connection; the graphics flags keep drawing on the GPU even
+ * where Chromium's blocklist is cautious; and the rest stops background work that has nothing to do with the page
+ * somebody is waiting for -- update checks, telemetry pings, translation and cast discovery. Each is a stock Chromium
+ * switch, so none of them is a fork change.
+ */
+export const SPEED_ARGS = [
+  '--enable-quic',
+  '--enable-tcp-fast-open',
+  '--enable-gpu-rasterization',
+  '--enable-zero-copy',
+  '--ignore-gpu-blocklist',
+  '--disable-background-networking',
+  '--disable-default-apps',
+  '--no-pings',
+  '--disable-breakpad',
+  '--disk-cache-size=1073741824',
+  '--disable-features=Translate,MediaRouter,OptimizationHints,InterestFeedContentSuggestions,AutofillServerCommunication,DialMediaRouteProvider',
+  '--enable-features=ParallelDownloading'
+]
+
 export function launchChromium(o: LaunchOptions): LaunchedChromium {
   const args = [
+    ...SPEED_ARGS,
     `--user-data-dir=${o.profileDir}`,
     ...(o.extensionDir ? [`--load-extension=${o.extensionDir}`] : []),
     '--remote-debugging-pipe',

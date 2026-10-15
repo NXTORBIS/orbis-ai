@@ -1,0 +1,9 @@
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceDot } from 'recharts';
+import { formatNumber } from '@jarvis/components/toolkit/science50/model';
+
+export default function WaveChart({ curve, result, params, view, hasComparison }) {
+  const x=params[curve.key],showMarker=x>=curve.low&&x<=curve.high;
+  return <div role="img" aria-label={`${result.primary.label} versus ${curve.label}`} className="h-64 w-full min-w-0 rounded-xl border border-border/60 bg-background/40 p-2">
+    <ResponsiveContainer width="100%" height="100%"><LineChart data={curve.points} margin={{top:12,right:12,bottom:8,left:0}}><CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 5" /><XAxis dataKey="x" type="number" scale={view.scale==='log'?'log':'auto'} domain={['dataMin','dataMax']} tickFormatter={formatNumber} stroke="hsl(var(--muted-foreground))" tick={{fontSize:10}} /><YAxis width={65} domain={['auto','auto']} tickFormatter={formatNumber} stroke="hsl(var(--muted-foreground))" tick={{fontSize:10}} /><Tooltip contentStyle={{background:'hsl(var(--popover))',borderColor:'hsl(var(--border))',borderRadius:12,fontSize:11}} labelFormatter={value=>`${curve.label}: ${formatNumber(value)}`} formatter={(value,name)=>[`${formatNumber(value)} ${result.primary.unit}`,name]} /><Line name="Current setup" dataKey="y" stroke="hsl(var(--cyan))" strokeWidth={2.5} dot={false} isAnimationActive={false} connectNulls={false} />{hasComparison&&<Line name="Captured setup" dataKey="comparison" stroke="hsl(var(--foreground))" strokeDasharray="5 4" strokeWidth={1.5} dot={false} isAnimationActive={false} connectNulls={false} />}{showMarker&&<ReferenceDot x={x} y={result.primary.value} r={4} fill="hsl(var(--cyan))" stroke="hsl(var(--card))" ifOverflow="extendDomain" />}{hasComparison&&<Legend wrapperStyle={{fontSize:11}} />}</LineChart></ResponsiveContainer>
+  </div>;
+}

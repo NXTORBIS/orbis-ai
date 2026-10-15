@@ -1,0 +1,59 @@
+## Main acknowledgements
+
+-  [ZAH](https://www.zah.uni-heidelberg.de/ari/).
+-  [DLR](https://www.dlr.de/).
+-  [BMWi](https://www.bmwi.de).
+
+## Data
+
+-  Dr. Martin Altmann for providing the Gaia orbit data.
+-  [Stefan Payne-Wardenaar](https://twitter.com/StefanPWinc) for the Milky Way model.
+-  [DPAC](https://www.cosmos.esa.int/web/gaia/dpac/consortium) and the Gaia Collaboration.
+-  The available catalogs and datasets have their own acknowledgements in the form of links to the original source and/or papers.
+-  Floor van Leeuwen for the Hipparcos star name files.
+-  Pierre Barbier for the [constellation boundaries data](https://pbarbier.com/constellations/boundaries.html).
+
+## Libraries and code
+
+-  [LWJGL](https://lwjgl.org)
+-  [Libgdx](https://libgdx.badlogicgames.com).
+-  [libgdx-contribs-postprocessing](https://github.com/manuelbua/libgdx-contribs/tree/master/postprocessing).
+-  [gdx-gltf](https://github.com/mgsx-dev/gdx-gltf).
+-  [VisUI](https://github.com/kotcrab/vis-editor/wiki/VisUI) for some widgets (licensed under the Apache license).
+-  Mark Taylor's [STIL](http://www.star.bristol.ac.uk/~mbt/stil/) and [jsamp](http://www.star.bristol.ac.uk/~mbt/jsamp/), available under (at least) the Academic Free License and the BSD License.
+-  Sergei Klioner and Robin Geyer (TU Dresden) for the idea and octave implementation of the gravitational waves effect.
+-  Mikko Tommila for [Apfloat](https://github.com/mtommila/apfloat).
+-  [Py4J](https://www.py4j.org).
+-  [set111](https://www.shadertoy.com/view/tsBXW3) for the original black hole shader code, licensed by default under [CC-BY-NC-SA](https://www.shadertoy.com/view/tsBXW3).
+-  Cedric Beust for [JCommander](https://jcommander.org).
+-  [JTar](https://github.com/kamranzafar/jtar).
+-  [OSHI](https://oshi.ooo).
+-  [Apache Commons IO](https://commons.apache.org/proper/commons-io).
+-  [MCXR](https://github.com/mcxr-org), used as inspiration for the OpenXR abstraction layer on top of LWJGL 3.
+-  [gl-biome](https://github.com/FarazzShaikh/glNoise), for the base implementation of GLSL biome, later modified by us. MIT license.
+- Wolfgang Löffler for the base implementation of the ephemeris based on Chebyshev polynomials.
+- [starnet++](https://www.starnetastro.com), used to remove stars from some of the nebulae images.
+
+
+## Textures, models, music and other assets
+
+-  Nick Risinger for the artist’s conception of the Milky Way (versions lower than `2.2.0`).
+-  Andreas Ressl and Georg Hammershmid for the star glow texture.
+-  [Stefan Payne-Wardenaar](https://twitter.com/StefanPWinc) for the Milky Way mini-map scale background.
+-  [Tom Patterson](www.shadedrelief.com) for some textures.
+-  [Solar System Scope](https://www.solarsystemscope.com/) for some of the planetary and moon textures.
+-  [Phil Stooke and Grant Hutchison](https://www.classe.cornell.edu/~seb/celestia/hutchison/index-125.html) for some of the textures.
+-  David Navas for the [simple spaceship](https://www.blendswap.com/user/DeNapes) model.
+-  [Galaxy Map](https://galaxymap.org/) (Kevin Jardine, [@galaxy_map](https://twitter.com/galaxy_map)) for the isodensity meshes and the solar neighbourhood minimap images.
+-  ESA/Planck/C. North, [www.chromoscope.net/planck](https://www.chromoscope.net/planck) for the Cosmic Microwave Background images.
+-  [USGS](https://astrogeology.usgs.gov) for the Moon LRO LOLA Elevation Model and the Mercury MESSENGER Global Digital Elevation Model.
+-  [Open Iconic](https://github.com/iconic/open-iconic) icon set (MIT licensed).
+
+## Translations
+
+See the [CONTRIBUTORS.md](CONTRIBUTORS.md) file for a full list of contributors.
+
+## Open source licenses
+
+-  [Install4j (multi-platform installer builder)](https://www.ej-technologies.com/products/install4j/overview.html), for providing an open source license.
+-  [JProfiler (Java profiler)](https://www.ej-technologies.com/products/jprofiler/overview.html), for providing an open source license.

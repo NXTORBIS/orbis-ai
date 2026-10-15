@@ -30,7 +30,7 @@ test('every category holds something, so no part of the Command Center opens emp
 test('only capabilities with a real toolbar action are pinnable', () => {
   // These are the ones chrome/browser/ui/browser_actions.cc actually registers. Marking anything else pinnable would
   // offer a pin that could never become a button.
-  const withActions = ['ask', 'search', 'galaxy', 'workflows', 'notes', 'tasks', 'adblock', 'secrets', 'account']
+  const withActions = ['ask', 'search', 'galaxy', 'workflows', 'notes', 'music', 'tasks', 'adblock', 'secrets', 'account']
   for (const c of CAPABILITIES) {
     assert.equal(canPin(c), withActions.includes(c.id), `${c.id} is marked pinnable=${c.pinnable}`)
   }
@@ -183,7 +183,7 @@ test('a saved order drops what is no longer pinnable, and never duplicates', () 
 })
 
 test('a saved order cannot exceed the toolbar', () => {
-  const many = ['ask', 'search', 'galaxy', 'workflows', 'notes', 'tasks', 'adblock', 'secrets', 'account']
+  const many = ['ask', 'search', 'galaxy', 'workflows', 'notes', 'music', 'tasks', 'adblock', 'secrets', 'account']
   assert.equal(normalizePins(many).length, MAX_PINS)
 })
 

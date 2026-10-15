@@ -1,0 +1,8 @@
+{
+  "name": "Gaia Sky",
+  "source": "https://codeberg.org/gaiasky/gaiasky.git",
+  "tag": "3.8.0",
+  "commit": "aa0f9c68c2887788f460f284fd5d636e03169848",
+  "licence": "MPL-2.0",
+  "note": "Copied unmodified, apart from leaving out the packaging and CI folders (.git, .devin, .gitea, .chglog, core/exe, core/installerscripts). Everything Orbis adds lives beside it: orbis-resolve.init.gradle, upstream.json, and ../scripts/cosmos-build.mjs."
+}

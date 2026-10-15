@@ -1,0 +1,48 @@
+#!/bin/bash
+
+#
+# Utility script to run gaia sky through gradle without knowing gradle exists.
+#
+
+print_usage() {
+  echo "$0 launcher script"
+  echo "3D Universe software with support for more than a billion stars"
+  echo
+  echo "Usage: $0 [OPTION]"
+  echo
+  echo "Options:"
+  echo " -v          Print version and exit"
+  echo " -h          Print help"
+  echo " -s          Skip welcome screen"
+  echo " -e          Create an extra window with the view of the scene and no UI"
+  echo " -n          Do not start the scripting server"
+  echo " -d          Start in debug mode"
+  echo " -g          Start OpenGL in debug mode"
+}
+
+while getopts 'hvsiend' flag; do
+  case "${flag}" in
+    h) args="-h " ;;
+    v) args="-v " ;;
+    s) args="-s " ;;
+    e) args="-e " ;;
+    n) args="-n " ;;
+    d) args="-d " ;;
+    *) print_usage
+       exit 1 ;;
+  esac
+done
+
+if [ ! -f ./gradlew ]; then
+    echo "Gradle wrapper not found, please run this from the gaiasky directory"
+    exit 1
+fi
+
+if [ -z "$args" ]; then
+    cmd="./gradlew core:run"
+else
+    cmd="./gradlew core:run --args='$args'"
+fi
+
+eval $cmd
+

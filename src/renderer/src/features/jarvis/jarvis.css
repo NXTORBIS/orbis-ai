@@ -1,0 +1,517 @@
+@tailwind components;
+@tailwind utilities;
+
+/* The Toolkit's tokens: Jarvis's dark palette, held inside the Toolkit and nowhere else. */
+.jarvis-scope {
+  --background: 222 47% 4%; --foreground: 210 40% 98%;
+  --card: 222 40% 7%; --card-foreground: 210 40% 98%;
+  --popover: 222 40% 7%; --popover-foreground: 210 40% 98%;
+  --primary: 210 40% 98%; --primary-foreground: 222 47% 4%;
+  --secondary: 222 30% 14%; --secondary-foreground: 210 40% 98%;
+  --muted: 222 30% 14%; --muted-foreground: 215 20% 65%;
+  --accent: 222 30% 16%; --accent-foreground: 210 40% 98%;
+  --destructive: 0 72% 51%; --destructive-foreground: 0 0% 98%;
+  --border: 222 30% 16%; --input: 222 30% 16%; --ring: 189 100% 50%;
+  --cyan: 189 100% 50%; --amber: 38 100% 50%; --radius: 0.75rem;
+  --font-heading: 'Orbitron', ui-sans-serif, system-ui, sans-serif;
+  --font-body: 'Inter Variable', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Orbitron', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  color: hsl(var(--foreground));
+  font-family: var(--font-body);
+}
+
+/* Tailwind's reset, but only for what is inside the Toolkit (Orbis's own screens are left exactly as they were). */
+.jarvis-scope *, .jarvis-scope *::before, .jarvis-scope *::after { box-sizing: border-box; border-width: 0; border-style: solid; border-color: hsl(var(--border)); }
+.jarvis-scope button, .jarvis-scope input, .jarvis-scope select, .jarvis-scope textarea { font: inherit; color: inherit; margin: 0; }
+.jarvis-scope button { background: transparent; cursor: pointer; }
+.jarvis-scope h1, .jarvis-scope h2, .jarvis-scope h3, .jarvis-scope h4, .jarvis-scope p, .jarvis-scope ul, .jarvis-scope ol,
+.jarvis-scope figure, .jarvis-scope blockquote, .jarvis-scope pre, .jarvis-scope dl, .jarvis-scope dd { margin: 0; }
+.jarvis-scope h1, .jarvis-scope h2, .jarvis-scope h3, .jarvis-scope h4 { font-size: inherit; font-weight: inherit; }
+.jarvis-scope ul, .jarvis-scope ol { list-style: none; padding: 0; }
+.jarvis-scope img, .jarvis-scope svg, .jarvis-scope video, .jarvis-scope canvas, .jarvis-scope audio { display: block; vertical-align: middle; }
+.jarvis-scope img, .jarvis-scope video { max-width: 100%; height: auto; }
+.jarvis-scope table { border-collapse: collapse; text-indent: 0; border-color: inherit; }
+.jarvis-scope a { color: inherit; text-decoration: inherit; }
+
+@layer utilities {
+  .font-display { font-family: var(--font-display); letter-spacing: 0.04em; }
+  .font-mono-j { font-family: var(--font-mono); }
+  .jarvis-scope .glass {
+    background: hsl(var(--card) / 0.72);
+    backdrop-filter: blur(16px) saturate(140%);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+  }
+  .glass-border { border: 1px solid hsl(var(--border) / 0.7); }
+  .neural-grid {
+    background-image:
+      linear-gradient(to right, hsl(var(--border) / 0.25) 1px, transparent 1px),
+      linear-gradient(to bottom, hsl(var(--border) / 0.25) 1px, transparent 1px);
+    background-size: 56px 56px;
+  }
+  .orb-glow { box-shadow: 0 0 60px 4px hsl(var(--cyan) / 0.35); }
+  .text-cyan-j { color: hsl(var(--cyan)); }
+  .bg-cyan-j { background-color: hsl(var(--cyan)); }
+  .border-cyan-j { border-color: hsl(var(--cyan)); }
+  .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 999px; }
+  .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+  .pt-safe { padding-top: env(safe-area-inset-top); }
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+  .h-dvh { height: 100dvh; }
+  .min-h-dvh { min-height: 100dvh; }
+  .touch-target { min-height: 44px; min-width: 44px; }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  .safe-pt { padding-top: env(safe-area-inset-top); }
+  .safe-pb { padding-bottom: env(safe-area-inset-bottom); }
+  .animate-spin-slow, .animate-spin-rev { transform-box: fill-box; transform-origin: center; }
+  .no-bounce { overscroll-behavior: none; }
+}
+
+@keyframes orb-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.85; }
+  50% { transform: scale(1.08); opacity: 1; }
+}
+@keyframes spin-slow { to { transform: rotate(360deg); } }
+@keyframes spin-rev { to { transform: rotate(-360deg); } }
+@keyframes breathe { 0%,100% { opacity: 0.6; } 50% { opacity: 1; } }
+@keyframes dash-flow { to { stroke-dashoffset: -4; } }
+@keyframes orbit-flow { to { stroke-dashoffset: -8; } }
+.animate-orb-pulse { animation: orb-pulse 3s ease-in-out infinite; }
+.animate-spin-slow { animation: spin-slow 14s linear infinite; }
+.animate-spin-rev { animation: spin-rev 22s linear infinite; }
+.animate-breathe { animation: breathe 2.4s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-orb-pulse, .animate-spin-slow, .animate-spin-rev, .animate-breathe { animation: none !important; }
+  .ripple-fx, .animate-shimmer, .animate-shimmer-wave { animation: none !important; }
+  .reveal-init { opacity: 1 !important; transform: none !important; filter: none !important; }
+}
+
+/* ── Extreme Animation System — global utilities ── */
+
+/* Shimmer for skeleton loaders */
+@keyframes shimmer-sweep {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--muted)) 0%,
+    hsl(var(--accent)) 40%,
+    hsl(var(--muted)) 80%
+  );
+  background-size: 200% 100%;
+  animation: shimmer-sweep 1.6s ease-in-out infinite;
+}
+.animate-shimmer-wave {
+  background: linear-gradient(
+    100deg,
+    hsl(var(--muted) / 0.4) 30%,
+    hsl(var(--accent) / 0.7) 50%,
+    hsl(var(--muted) / 0.4) 70%
+  );
+  background-size: 200% 100%;
+  animation: shimmer-sweep 1.8s ease-in-out infinite;
+}
+
+/* Ripple effect */
+@keyframes ripple-grow {
+  from { transform: scale(0); opacity: 0.4; }
+  to { transform: scale(1); opacity: 0; }
+}
+.ripple-fx {
+  position: absolute;
+  border-radius: 9999px;
+  background: currentColor;
+  opacity: 0.35;
+  pointer-events: none;
+  transform: scale(0);
+  animation: ripple-grow 0.6s ease-out forwards;
+}
+
+/* Focus ring glow for inputs */
+.focus-glow:focus-visible {
+  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.25), 0 0 14px hsl(var(--ring) / 0.18);
+}
+
+/* ── Cyber hover treatment for buttons (global) ── */
+.btn-cyber { position: relative; overflow: visible; }
+.jarvis-scope .btn-cyber:hover,
+.jarvis-scope button:not([class~="bg-primary"]):not([class~="bg-destructive"]):not([class~="bg-cyan-j"]):not(.tab-btn):hover,
+.jarvis-scope a[role="button"]:not([class~="bg-primary"]):not([class~="bg-destructive"]):not([class~="bg-cyan-j"]):hover {
+  border-color: hsl(var(--cyan)) !important;
+  background-color: hsl(var(--cyan) / 0.06) !important;
+  color: #ffffff !important;
+  box-shadow: 0 0 0 1px hsl(var(--cyan) / 0.5), 0 0 16px -3px hsl(var(--cyan) / 0.55) !important;
+}
+
+
+/* Button press feedback (GPU-friendly, no layout shift) */
+.btn-press { transition: transform 0.14s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s, box-shadow 0.18s; }
+.btn-press:active { transform: scale(0.97); }
+
+/* Card hover lift */
+.card-lift { transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.22s, border-color 0.22s; will-change: transform; }
+.card-lift:hover { transform: translateY(-3px); }
+
+/* ── Landing page tile hover glow ── */
+.tile-glow {
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+              border-color 0.2s ease,
+              box-shadow 0.2s ease,
+              background-color 0.2s ease;
+  will-change: transform, box-shadow;
+}
+@media (hover: hover) {
+  .tile-glow:hover {
+    transform: translateY(-2px);
+    border-color: hsl(var(--cyan) / 0.35);
+    box-shadow:
+      0 0 0 1px hsl(var(--cyan) / 0.1),
+      0 6px 20px -6px hsl(189 100% 50% / 0.15),
+      inset 0 0 14px -5px hsl(189 100% 50% / 0.05);
+  }
+}
+.tile-glow:active,
+.tile-glow:focus-visible {
+  transform: translateY(-1px);
+  border-color: hsl(var(--cyan) / 0.25);
+  box-shadow:
+    0 0 0 1px hsl(var(--cyan) / 0.08),
+    0 4px 12px -4px hsl(189 100% 50% / 0.1);
+  outline: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .tile-glow { transition: none; }
+  .tile-glow:hover, .tile-glow:active, .tile-glow:focus-visible { transform: none; }
+}
+
+/* Hover underline reveal */
+.hover-underline { background-image: linear-gradient(currentColor, currentColor); background-size: 0% 1px; background-repeat: no-repeat; background-position: left bottom; transition: background-size 0.22s ease; }
+.hover-underline:hover { background-size: 100% 1px; }
+
+/* Smooth theme transition */
+.theme-tween, .theme-tween * {
+  transition: background-color 0.32s ease, border-color 0.32s ease, color 0.32s ease, fill 0.32s ease, stroke 0.32s ease;
+}
+
+/* Ambient gradient drift */
+@keyframes gradient-drift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+.gradient-drift { background-size: 200% 200%; animation: gradient-drift 12s ease infinite; }
+
+/* Soft elevation utility */
+.elevate { transition: box-shadow 0.22s ease, transform 0.22s ease; }
+.elevate:hover { box-shadow: 0 10px 30px -8px hsl(189 100% 50% / 0.18); }
+
+/* ── Global Custom Circular Cursor ── */
+@media (hover: hover) and (pointer: fine) {
+  
+  /* Restore native text I-beam on text inputs so editing isn't obstructed */
+  
+}
+/* Cursor visual styles are now handled by the cursor engine via inline styles */
+
+/* Breadboard canvas — always use the native OS cursor, not the site custom cursor */
+.bb-canvas svg { cursor: default; }
+.bb-canvas.is-pan svg { cursor: grab; }
+.bb-canvas.is-pan.dragging svg { cursor: grabbing; }
+
+
+
+
+/* ── Premium feature glow ── */
+.premium-glow {
+  box-shadow: 0 0 0 1px hsl(var(--cyan) / 0.18), 0 0 10px -3px hsl(var(--cyan) / 0.12);
+  animation: premium-glow-pulse 3s ease-in-out infinite;
+}
+@keyframes premium-glow-pulse {
+  0%, 100% { box-shadow: 0 0 0 1px hsl(var(--cyan) / 0.18), 0 0 10px -3px hsl(var(--cyan) / 0.12); }
+  50% { box-shadow: 0 0 0 1px hsl(var(--cyan) / 0.32), 0 0 16px -2px hsl(var(--cyan) / 0.22); }
+}
+.group-hover\/premium:hover .premium-glow,
+.premium-glow:hover { animation-play-state: paused; }
+@media (prefers-reduced-motion: reduce) {
+  .premium-glow { animation: none !important; }
+}
+
+/* Scratchpad rich-text editor — theme-aware Quill overrides */
+.scratchpad-editor .ql-toolbar.ql-snow {
+  border: none;
+  border-bottom: 1px solid hsl(var(--border));
+  background: transparent;
+  padding: 0 0 0.5rem 0;
+}
+.scratchpad-editor .ql-container.ql-snow {
+  border: none;
+  font-family: hsl(var(--font-body));
+  font-size: 0.95rem;
+  min-height: 320px;
+  background: transparent;
+}
+.scratchpad-editor .ql-editor { min-height: 320px; padding: 0.5rem 0; color: hsl(var(--foreground)); }
+.scratchpad-editor .ql-editor.ql-blank::before { color: hsl(var(--muted-foreground)); opacity: 0.6; }
+.scratchpad-editor .ql-snow .ql-stroke { stroke: hsl(var(--muted-foreground)); }
+.scratchpad-editor .ql-snow .ql-fill { fill: hsl(var(--muted-foreground)); }
+.scratchpad-editor .ql-snow .ql-picker-label { color: hsl(var(--muted-foreground)); }
+.scratchpad-editor .ql-snow.ql-toolbar button:hover .ql-stroke,
+.scratchpad-editor .ql-snow.ql-toolbar button.ql-active .ql-stroke { stroke: hsl(var(--cyan)); }
+.scratchpad-editor .ql-snow.ql-toolbar button:hover .ql-fill,
+.scratchpad-editor .ql-snow.ql-toolbar button.ql-active .ql-fill { fill: hsl(var(--cyan)); }
+.scratchpad-editor .ql-snow.ql-toolbar button.ql-active { color: hsl(var(--cyan)); }
+.scratchpad-editor .ql-editor pre.ql-syntax { background: hsl(var(--secondary)); color: hsl(var(--foreground)); border-radius: 0.5rem; }
+.scratchpad-editor .ql-editor blockquote { border-left-color: hsl(var(--cyan)); }
+
+/* ── Notebook editable blocks ── */
+.editable-block:empty:before {
+  content: attr(data-ph);
+  color: hsl(var(--muted-foreground) / 0.35);
+  pointer-events: none;
+}
+.editable-block:focus { outline: none; }
+
+/* ── Equation rendering ── */
+.equation-inline .frac {
+  display: inline-flex;
+  flex-direction: column;
+  vertical-align: middle;
+  text-align: center;
+  font-size: 0.85em;
+  margin: 0 2px;
+}
+.equation-inline .frac .num {
+  border-bottom: 1px solid currentColor;
+  padding: 0 4px 1px;
+  line-height: 1.2;
+}
+.equation-inline .frac .den {
+  padding: 1px 4px 0;
+  line-height: 1.2;
+}
+.equation-inline .radicand {
+  border-top: 1px solid currentColor;
+  padding-top: 1px;
+}
+.equation-inline sup, .equation-inline sub {
+  font-size: 0.7em;
+  line-height: 0;
+}
+
+/* ── Landing page animations ── */
+@keyframes lp-float {
+  0%, 100% { transform: translateY(0); opacity: 0.15; }
+  50% { transform: translateY(-30px); opacity: 0.45; }
+}
+/* ── Landing page background motion ── */
+@keyframes lp-aurora {
+  0%   { transform: translate(0, 0) scale(1); opacity: 0.55; }
+  50%  { transform: translate(40px, -30px) scale(1.12); opacity: 0.9; }
+  100% { transform: translate(-20px, 20px) scale(1); opacity: 0.55; }
+}
+@keyframes lp-sweep {
+  0%   { transform: translateY(-40vh); opacity: 0; }
+  10%  { opacity: 0.9; }
+  90%  { opacity: 0.9; }
+  100% { transform: translateY(140vh); opacity: 0; }
+}
+.lp-sweep { animation: lp-sweep 11s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .lp-sweep { animation: none !important; }
+  [style*="lp-aurora"] { animation: none !important; }
+  [style*="orbit-flow"], [style*="dash-flow"] { animation: none !important; }
+}
+
+/* ── Toolkit tool surfaces: depth, sheen and motion ── */
+.tk-card {
+  position: relative;
+  transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.22s ease, box-shadow 0.22s ease;
+  will-change: transform;
+}
+.tk-depth {
+  box-shadow:
+    inset 0 1px 0 hsl(var(--foreground) / 0.04),
+    0 12px 30px -20px hsl(var(--cyan) / 0.4),
+    0 2px 10px -6px rgb(0 0 0 / 0.35);
+}
+.tk-topline::before {
+  content: '';
+  position: absolute;
+  left: 14%;
+  right: 14%;
+  top: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, hsl(var(--cyan) / 0.55), transparent);
+  pointer-events: none;
+}
+.tk-glow-ring {
+  box-shadow: 0 0 0 1px hsl(var(--cyan) / 0.3), 0 0 26px -8px hsl(var(--cyan) / 0.6);
+}
+.tk-shine {
+  background: linear-gradient(105deg, transparent 32%, hsl(var(--cyan) / 0.18) 50%, transparent 68%);
+  transform: translateX(-130%);
+}
+.tk-title-glow { text-shadow: 0 0 26px hsl(var(--cyan) / 0.35); }
+@media (hover: hover) {
+  .tk-card:hover {
+    transform: translateY(-2px);
+    border-color: hsl(var(--cyan) / 0.38);
+    box-shadow:
+      inset 0 1px 0 hsl(var(--foreground) / 0.05),
+      0 20px 42px -22px hsl(var(--cyan) / 0.55),
+      0 3px 12px -6px rgb(0 0 0 / 0.4);
+  }
+  .tk-card:hover .tk-shine { animation: tk-sheen 0.95s ease-out; }
+}
+@keyframes tk-sheen {
+  from { transform: translateX(-130%); }
+  to { transform: translateX(130%); }
+}
+@keyframes tk-rise {
+  from { opacity: 0; transform: translateY(12px) scale(0.99); }
+  to { opacity: 1; transform: none; }
+}
+.tk-rise { animation: tk-rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.tk-rise > * { animation: tk-rise 0.48s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.tk-rise > *:nth-child(1) { animation-delay: 0.02s; }
+.tk-rise > *:nth-child(2) { animation-delay: 0.06s; }
+.tk-rise > *:nth-child(3) { animation-delay: 0.1s; }
+.tk-rise > *:nth-child(4) { animation-delay: 0.14s; }
+.tk-rise > *:nth-child(5) { animation-delay: 0.18s; }
+.tk-rise > *:nth-child(n + 6) { animation-delay: 0.22s; }
+@keyframes tk-aurora {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); opacity: 0.45; }
+  50% { transform: translate3d(4%, -5%, 0) scale(1.12); opacity: 0.8; }
+}
+.tk-aurora {
+  position: absolute;
+  inset: -14% -8% auto -8%;
+  height: 62%;
+  pointer-events: none;
+  z-index: 0;
+  filter: blur(58px);
+  opacity: 0.55;
+  background:
+    radial-gradient(38% 55% at 18% 30%, hsl(var(--cyan) / 0.3), transparent 70%),
+    radial-gradient(34% 50% at 78% 12%, hsl(265 80% 60% / 0.22), transparent 72%),
+    radial-gradient(30% 45% at 52% 68%, hsl(189 100% 60% / 0.16), transparent 70%);
+  animation: tk-aurora 16s ease-in-out infinite;
+}
+.tk-shell { position: relative; }
+.tk-shell > *:not(.tk-aurora) { position: relative; z-index: 1; }
+.tk-actions { backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .tk-rise, .tk-rise > *, .tk-aurora { animation: none !important; }
+  .tk-card, .tk-card:hover { transform: none !important; }
+  .tk-card:hover .tk-shine { animation: none !important; }
+}
+
+/* ── Toolkit tiles: keep long descriptions to two lines on small screens ── */
+.tk-desc {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ── Print: a clean copy of the tool you are using, nothing else ── */
+@media print {
+  body * { visibility: hidden !important; }
+  .tk-print-area, .tk-print-area * { visibility: visible !important; }
+  .tk-print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 0;
+  }
+  .tk-hide-print, .tk-actions, .tk-aurora, .tk-shine { display: none !important; }
+  .tk-print-area .tk-card,
+  .tk-print-area .tk-shell,
+  .tk-print-area .tk-depth,
+  .tk-print-area .glass {
+    box-shadow: none !important;
+    background: #fff !important;
+    border-color: #d4d4d4 !important;
+  }
+  .tk-print-area .tk-title-glow { text-shadow: none !important; }
+  .tk-print-area, .tk-print-area * { color: #000 !important; }
+  .tk-desc { -webkit-line-clamp: unset !important; }
+  @page { margin: 14mm; }
+}
+
+/* ── Premium toolkit surfaces: glass, gradient hairlines, soft glow ── */
+.tk-frame {
+  position: relative;
+  background:
+    radial-gradient(115% 80% at 10% 0%, hsl(var(--cyan) / 0.1), transparent 60%),
+    linear-gradient(180deg, hsl(var(--card) / 0.85), hsl(var(--card) / 0.55));
+  backdrop-filter: blur(18px) saturate(150%);
+  -webkit-backdrop-filter: blur(18px) saturate(150%);
+  border: 1px solid hsl(var(--border) / 0.8);
+  box-shadow:
+    inset 0 1px 0 hsl(var(--foreground) / 0.05),
+    0 24px 60px -34px hsl(var(--cyan) / 0.5),
+    0 2px 14px -8px rgb(0 0 0 / 0.55);
+}
+.tk-frame::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(140deg, hsl(var(--cyan) / 0.5), transparent 36%, transparent 64%, hsl(265 85% 68% / 0.3));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 3;
+}
+.tk-shell > .tk-grain {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.4;
+  background-image:
+    radial-gradient(hsl(var(--foreground) / 0.06) 0.5px, transparent 0.5px),
+    radial-gradient(hsl(var(--foreground) / 0.05) 0.5px, transparent 0.5px);
+  background-size: 18px 18px, 26px 26px;
+  background-position: 0 0, 9px 13px;
+}
+.tk-glass-panel {
+  background: linear-gradient(180deg, hsl(var(--card) / 0.72), hsl(var(--card) / 0.4));
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  border: 1px solid hsl(var(--border) / 0.7);
+  box-shadow: inset 0 1px 0 hsl(var(--foreground) / 0.045);
+}
+
+/* Fields inside a tool pick up the same glass and glow, wherever they came from. */
+.tk-frame input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+.tk-frame textarea,
+.tk-frame select {
+  background-color: hsl(var(--card) / 0.5);
+  border-color: hsl(var(--border) / 0.85);
+  transition: background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+.tk-frame input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):focus,
+.tk-frame textarea:focus,
+.tk-frame select:focus {
+  background-color: hsl(var(--card) / 0.8);
+  border-color: hsl(var(--cyan) / 0.55);
+  box-shadow: 0 0 0 3px hsl(var(--cyan) / 0.12), 0 0 16px -6px hsl(var(--cyan) / 0.55);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tk-frame, .tk-glass-panel { backdrop-filter: none; -webkit-backdrop-filter: none; }
+}

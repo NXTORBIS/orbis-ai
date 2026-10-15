@@ -1,0 +1,736 @@
+/*
+ * Copyright (c) 2023 Gaia Sky - All rights reserved.
+ *  This file is part of Gaia Sky, which is released under the Mozilla Public License 2.0.
+ *  You may use, distribute and modify this code under the terms of MPL2.
+ *  See the file LICENSE.md in the project root for full license details.
+ */
+
+package gaiasky.render.system;
+
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.graphics.GL20;
+import com.badlogic.gdx.graphics.GL30;
+import com.badlogic.gdx.graphics.TextureArray;
+import com.badlogic.gdx.graphics.VertexAttribute;
+import com.badlogic.gdx.graphics.VertexAttributes.Usage;
+import com.badlogic.gdx.math.MathUtils;
+import com.badlogic.gdx.math.Matrix4;
+import com.badlogic.gdx.utils.Array;
+import gaiasky.GaiaSky;
+import gaiasky.event.IObserver;
+import gaiasky.render.RenderGroup;
+import gaiasky.render.api.IRenderable;
+import gaiasky.scene.Mapper;
+import gaiasky.scene.api.IParticleRecord;
+import gaiasky.scene.camera.ICamera;
+import gaiasky.scene.component.GraphNode;
+import gaiasky.scene.component.Highlight;
+import gaiasky.scene.component.ParticleSet;
+import gaiasky.scene.entity.ParticleUtils;
+import gaiasky.scene.system.render.SceneRenderer;
+import gaiasky.util.Bits;
+import gaiasky.util.ModelCache;
+import gaiasky.util.camera.Proximity;
+import gaiasky.render.gdx.creators.IcoSphereCreator;
+import gaiasky.render.gdx.creators.ModelCreator.IFace;
+import gaiasky.render.gdx.mesh.IntMesh;
+import gaiasky.render.gdx.model.IntModel;
+import gaiasky.render.gdx.shader.ExtShaderProgram;
+import gaiasky.util.math.Matrix4D;
+import gaiasky.util.math.StdRandom;
+import gaiasky.util.parse.Parser;
+import org.lwjgl.opengl.GL40;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+
+public abstract class InstancedRenderSystem extends ImmediateModeRenderSystem implements IObserver {
+
+    /**
+     * Instanced model list, one per particle group.
+     */
+    protected Array<InstancedModel> models = new Array<>(50);
+    /** Particle utils instance. **/
+    protected final ParticleUtils utils;
+    /** Auxiliary matrix. **/
+    protected final Matrix4 aux;
+    /** Auxiliary reference system transform matrix. **/
+    protected final Matrix4 refSysTransformF;
+
+    /**
+     * Holds temporary instanced model data.
+     */
+    public static class InstancedModel {
+        // Attribute offsets.
+        public int sizeOffset, particlePosOffset, properMotionOffset, textureIndexOffset, additionalOffset,
+                nVariOffset, varIndexOffset, elems01Offset, elems02Offset;
+        /** Number of vertices. **/
+        public int numVertices;
+        /** Vertex size in floats (4-bytes). **/
+        public int modelVertexSize;
+        /** Number of indices. **/
+        public int numIndices;
+        public float[] vertices;
+        public int[] indices;
+        public float[] instanceAttributes;
+
+        public InstancedModel(IntMesh mesh) {
+            this(mesh.getNumVertices(), mesh.getVertexSize() / 4, mesh.getNumIndices());
+            if (numVertices > 0)
+                mesh.getVertices(vertices);
+            if (numIndices > 0)
+                mesh.getIndices(indices);
+        }
+
+        public InstancedModel(int numModelVertices,
+                              int modelVertexSize,
+                              int numIndices) {
+            this.numVertices = numModelVertices;
+            this.modelVertexSize = modelVertexSize;
+            this.numIndices = numIndices;
+            initializeLists();
+        }
+
+        public InstancedModel(int numModelVertices,
+                              int modelVertexSize) {
+            this.numVertices = numModelVertices;
+            this.modelVertexSize = modelVertexSize;
+            initializeLists();
+        }
+
+        public void ensureInstanceAttribsSize(int size) {
+            if (instanceAttributes == null || instanceAttributes.length < size) {
+                instanceAttributes = new float[size];
+            }
+        }
+
+        protected void initializeLists() {
+            int size = numVertices * modelVertexSize;
+            if (vertices == null || vertices.length < size) {
+                vertices = new float[size];
+            }
+            if (numIndices > 0 && (indices == null || indices.length < numIndices)) {
+                indices = new int[numIndices];
+            }
+        }
+    }
+
+    protected InstancedRenderSystem(SceneRenderer sceneRenderer,
+                                    RenderGroup rg,
+                                    float[] alphas,
+                                    ExtShaderProgram[] shaders) {
+        super(sceneRenderer, rg, alphas, shaders);
+        meshes = new Array<>(20);
+        utils = new ParticleUtils();
+        aux = new Matrix4();
+        refSysTransformF = new Matrix4();
+    }
+
+    @Override
+    protected void initVertices() {
+        // Empty.
+    }
+
+    public boolean isWireframe(int primitive) {
+        return primitive >= GL30.GL_LINES && primitive <= GL30.GL_LINE_STRIP;
+    }
+
+    protected void setModel(int offset,
+                            InstancedModel model) {
+        if (offset >= 0) {
+            models.insert(offset, model);
+        }
+    }
+
+    protected InstancedModel getModel(ParticleSet set,
+                                      int offset) {
+        return getModel(set.model, set.modelType, set.modelParams, set.modelPrimitive, offset);
+    }
+
+    protected InstancedModel getModelQuad(int primitive,
+                                          int offset) {
+        return getModel(null, "quad", null, primitive, offset);
+    }
+
+    protected InstancedModel getModel(IntModel modelFile,
+                                      String modelType,
+                                      Map<String, Object> modelParams,
+                                      int primitive,
+                                      int offset) {
+        if (offset >= 0 && models.size > offset && models.get(offset) != null) {
+            return models.get(offset);
+        }
+
+        boolean wireframe = isWireframe(primitive);
+        int primitivePlus = wireframe ? 0 : 2;
+        InstancedModel model;
+
+        // Perhaps model is already loaded?
+        if (modelFile != null) {
+            var mesh = modelFile.meshes.get(0);
+            model = new InstancedModel(mesh);
+
+        } else if (modelType.equalsIgnoreCase("sphere")) {
+            // UV-sphere.
+            final float width = 1f;
+            final float height = 1f;
+            final float depth = 1f;
+            final int quality = 30;
+            if (wireframe) {
+                final float angleUFrom = 0f;
+                final float angleUTo = 360f;
+                final float angleVFrom = 0f;
+                final float angleVTo = 180f;
+                final float hw = width * 0.5f;
+                final float hh = height * 0.5f;
+                final float hd = depth * 0.5f;
+                final float auo = MathUtils.degreesToRadians * angleUFrom;
+                final float stepU = (MathUtils.degreesToRadians * (angleUTo - angleUFrom)) / quality;
+                final float avo = MathUtils.degreesToRadians * angleVFrom;
+                final float stepV = (MathUtils.degreesToRadians * (angleVTo - angleVFrom)) / quality;
+                final float us = 1f / quality;
+                final float vs = 1f / quality;
+                float angleU;
+                float angleV;
+                model = new InstancedModel(quality * quality * 4, 3);
+
+                int i = 0;
+                // Horizontal.
+                for (int iv = 0; iv < quality; iv++) {
+                    angleV = avo + stepV * iv;
+                    float t = MathUtils.sin(angleV);
+                    float h = MathUtils.cos(angleV) * hh;
+                    for (int iu = 0; iu < quality; iu++) {
+                        // ORIGINAL
+                        angleU = auo + stepU * iu;
+                        // Position.
+                        model.vertices[i++] = MathUtils.cos(angleU) * hw * t;
+                        model.vertices[i++] = h;
+                        model.vertices[i++] = MathUtils.sin(angleU) * hd * t;
+
+                        // RIGHT
+                        angleU = auo + stepU * (iu + 1);
+                        // Position.
+                        model.vertices[i++] = MathUtils.cos(angleU) * hw * t;
+                        model.vertices[i++] = h;
+                        model.vertices[i++] = MathUtils.sin(angleU) * hd * t;
+                    }
+                }
+
+                // Vertical.
+                for (int iv = 0; iv < quality; iv++) {
+                    for (int iu = 0; iu < quality; iu++) {
+                        // ORIGINAL
+                        angleV = avo + stepV * iv;
+                        float t = MathUtils.sin(angleV);
+                        float h = MathUtils.cos(angleV) * hh;
+                        angleU = auo + stepU * iu;
+                        // Position.
+                        model.vertices[i++] = MathUtils.cos(angleU) * hw * t;
+                        model.vertices[i++] = h;
+                        model.vertices[i++] = MathUtils.sin(angleU) * hd * t;
+
+                        // RIGHT
+                        angleV = avo + stepV * (iv + 1);
+                        t = MathUtils.sin(angleV);
+                        h = MathUtils.cos(angleV) * hh;
+                        angleU = auo + stepU * (iu);
+                        // Position.
+                        model.vertices[i++] = MathUtils.cos(angleU) * hw * t;
+                        model.vertices[i++] = h;
+                        model.vertices[i++] = MathUtils.sin(angleU) * hd * t;
+                    }
+                }
+            } else {
+                if (modelParams == null) {
+                    modelParams = new HashMap<>();
+                    modelParams.put("diameter", (double) width);
+                    modelParams.put("quality", (long) quality);
+                }
+                var modelPair = ModelCache.cache.getModel(modelType, modelParams, Bits.indices(Usage.Position, Usage.TextureCoordinates), primitive);
+                var intModel = modelPair.getFirst();
+                var mesh = intModel.meshes.get(0);
+                model = new InstancedModel(mesh);
+            }
+
+        } else if (modelType.equalsIgnoreCase("icosphere")) {
+            final long recursion = 3;
+            final double diameter = 1.0;
+            if (wireframe) {
+                // ICO-sphere.
+                var ico = new IcoSphereCreator();
+                ico.create((float) (diameter / 2.0), (int) recursion);
+                int nFaces = ico.faces.size();
+                var v = ico.vertices;
+
+                model = new InstancedModel(nFaces * 6, 3);
+
+                int i = 0;
+                for (IFace face : ico.faces) {
+                    // Get vertices.
+                    var v1 = v.get(face.v()[0] - 1);
+                    var v2 = v.get(face.v()[1] - 1);
+                    var v3 = v.get(face.v()[2] - 1);
+
+                    // V1-V2
+                    model.vertices[i++] = v1.x;
+                    model.vertices[i++] = v1.y;
+                    model.vertices[i++] = v1.z;
+                    model.vertices[i++] = v2.x;
+                    model.vertices[i++] = v2.y;
+                    model.vertices[i++] = v2.z;
+
+                    // V2-V3
+                    model.vertices[i++] = v2.x;
+                    model.vertices[i++] = v2.y;
+                    model.vertices[i++] = v2.z;
+                    model.vertices[i++] = v3.x;
+                    model.vertices[i++] = v3.y;
+                    model.vertices[i++] = v3.z;
+
+                    // V3-V1
+                    model.vertices[i++] = v3.x;
+                    model.vertices[i++] = v3.y;
+                    model.vertices[i++] = v3.z;
+                    model.vertices[i++] = v1.x;
+                    model.vertices[i++] = v1.y;
+                    model.vertices[i++] = v1.z;
+                }
+            } else {
+                if (modelParams == null) {
+                    modelParams = new HashMap<>();
+                    modelParams.put("recursion", recursion);
+                    modelParams.put("diameter", diameter);
+                }
+                var modelPair = ModelCache.cache.getModel(modelType, modelParams, Bits.indices(Usage.Position, Usage.TextureCoordinates), primitive);
+                var intModel = modelPair.getFirst();
+                var mesh = intModel.meshes.get(0);
+                model = new InstancedModel(mesh);
+            }
+        } else if (modelType.equalsIgnoreCase("quad")) {
+            // Regular quad.
+            // Construct custom billboard with two triangles.
+
+            model = new InstancedModel(6, 2 + primitivePlus);
+            int i = 0;
+            // 0 (0)
+            model.vertices[i++] = 1; // pos
+            model.vertices[i++] = 1;
+            if (!wireframe) {
+                model.vertices[i++] = 1; // uv
+                model.vertices[i++] = 1;
+            }
+            // 1 (1)
+            model.vertices[i++] = 1; // pos
+            model.vertices[i++] = -1;
+            if (!wireframe) {
+                model.vertices[i++] = 1; // uv
+                model.vertices[i++] = 0;
+            }
+            // 2 (2)
+            model.vertices[i++] = -1; // pos
+            model.vertices[i++] = -1;
+            if (!wireframe) {
+                model.vertices[i++] = 0; // uv
+                model.vertices[i++] = 0;
+            }
+            // 3 (2)
+            model.vertices[i++] = -1; // pos
+            model.vertices[i++] = -1;
+            if (!wireframe) {
+                model.vertices[i++] = 0; // uv
+                model.vertices[i++] = 0;
+            }
+            // 4 (3)
+            model.vertices[i++] = -1; // pos
+            model.vertices[i++] = 1;
+            if (!wireframe) {
+                model.vertices[i++] = 0; // uv
+                model.vertices[i++] = 1;
+            }
+            // 5 (0)
+            model.vertices[i++] = 1; // pos
+            model.vertices[i++] = 1;
+            if (!wireframe) {
+                model.vertices[i++] = 1; // uv
+                model.vertices[i] = 1;
+            }
+
+        } else {
+            // Load custom model.
+            var modelPair = ModelCache.cache.getModel(modelType, modelParams, Bits.indices(Usage.Position, Usage.TextureCoordinates), primitive);
+            var intModel = modelPair.getFirst();
+            var mesh = intModel.meshes.get(0);
+
+            model = new InstancedModel(mesh);
+        }
+        setModel(offset, model);
+        return model;
+
+    }
+
+    /**
+     * Adds the required vertex attributes for this renderer to the given list. These
+     * attributes are added only once for all instances (divisor=0)
+     *
+     * @param attributes   The list of attributes with divisor=0
+     * @param posArraySize Size of the position array (2 or 3).
+     * @param useNormals   Add normal attributes as a vector-3.
+     * @param useTexCoords Add texture coordinates attribute as a vector-2.
+     */
+    protected void addAttributesDivisor0(Array<VertexAttribute> attributes,
+                                         int posArraySize,
+                                         boolean useNormals,
+                                         boolean useTexCoords) {
+        // Vertex position and texture coordinates are global
+        attributes.add(new VertexAttribute(Usage.Position, posArraySize, ExtShaderProgram.POSITION_ATTRIBUTE));
+        if (useNormals) {
+            attributes.add(new VertexAttribute(Usage.Normal, 3, ExtShaderProgram.NORMAL_ATTRIBUTE));
+        }
+        if (useTexCoords) {
+            attributes.add(new VertexAttribute(Usage.TextureCoordinates, 2, ExtShaderProgram.TEXCOORD_ATTRIBUTE + "0"));
+        }
+    }
+
+    /**
+     * Adds the required vertex attributes for this renderer to the given list. These
+     * attributes are added for every instance (divisor=1)
+     *
+     * @param attributes The list of attributes with divisor=1
+     * @param primitive  The rendering primitive.
+     */
+    protected abstract void addAttributesDivisor1(Array<VertexAttribute> attributes,
+                                                  int primitive);
+
+    /**
+     * Builds the vertex attributes with divisor=0 array and returns it.
+     * The content of divisor-0 attributes is updated in each iteration of the vertex shader.
+     *
+     * @param posArraySize Size of the position array (2 or 3).
+     * @param useNormals   Add normal attributes as a vector-3.
+     * @param useTexCoords Add texture coordinates attribute as a vector-2.
+     *
+     * @return The vertex attributes array
+     */
+    protected VertexAttribute[] buildAttributesDivisor0(int posArraySize,
+                                                        boolean useNormals,
+                                                        boolean useTexCoords) {
+        Array<VertexAttribute> attributes = new Array<>();
+        addAttributesDivisor0(attributes, posArraySize, useNormals, useTexCoords);
+
+        VertexAttribute[] array = new VertexAttribute[attributes.size];
+        for (int i = 0; i < attributes.size; i++)
+            array[i] = attributes.get(i);
+        return array;
+    }
+
+    /**
+     * Builds the vertex attributes with divisor=1 array and returns it
+     * The content of divisor-1 attributes is updated for each instance.
+     *
+     * @param primitive The rendering primitive.
+     *
+     * @return The vertex attributes array.
+     */
+    protected VertexAttribute[] buildAttributesDivisor1(int primitive) {
+        Array<VertexAttribute> attributes = new Array<>();
+        addAttributesDivisor1(attributes, primitive);
+
+        VertexAttribute[] array = new VertexAttribute[attributes.size];
+        for (int i = 0; i < attributes.size; i++)
+            array[i] = attributes.get(i);
+        return array;
+    }
+
+    /**
+     * Computes the offset for each vertex attribute. The offsets will be
+     * used later in the render stage.
+     *
+     * @param curr  The current mesh data.
+     * @param model The instanced model.
+     */
+    protected abstract void offsets0(MeshData curr,
+                                     InstancedModel model);
+
+    /**
+     * Computes the offset for each vertex attribute in the instanced array. The offsets will be
+     * used later in the render stage.
+     *
+     * @param curr  The current mesh data.
+     * @param model The instanced model.
+     */
+    protected abstract void offsets1(MeshData curr,
+                                     InstancedModel model);
+
+    /**
+     * Adds a new mesh data to the meshes list and increases the mesh data index.
+     *
+     * @param model        The instanced model instance.
+     * @param maxVerts     The max number of vertices the divisor 0 mesh data can hold.
+     * @param maxInstances The max number of vertices the divisor 1 mesh data can hold.
+     * @param modelType    The model type string.
+     * @param primitive    The rendering primitive.
+     *
+     * @return The index of the new mesh data.
+     */
+    protected int addMeshData(InstancedModel model,
+                              int maxVerts,
+                              int maxInstances,
+                              int maxIndices,
+                              String modelType,
+                              int primitive) {
+        return addMeshData(model, maxVerts, maxInstances, maxIndices, null, modelType, primitive);
+    }
+
+    /**
+     * Adds a new mesh data to the meshes list and increases the mesh data index.
+     *
+     * @param model        The instanced model instance.
+     * @param maxVerts     The max number of vertices the divisor 0 mesh data can hold.
+     * @param maxInstances The max number of vertices the divisor 1 mesh data can hold.
+     * @param modelFile    The model file, if any.
+     * @param modelType    The model type string.
+     * @param primitive    The rendering primitive.
+     *
+     * @return The index of the new mesh data.
+     */
+    protected int addMeshData(InstancedModel model,
+                              int maxVerts,
+                              int maxInstances,
+                              int maxIndices,
+                              String modelFile,
+                              String modelType,
+                              int primitive) {
+        int mdi = createMeshData();
+        curr = meshes.get(mdi);
+
+        VertexAttribute[] attributes0 = buildAttributesDivisor0(modelFile == null && modelType.equalsIgnoreCase("quad") ? 2 : 3, modelFile != null,
+                                                                !isWireframe(primitive));
+        VertexAttribute[] attributes1 = buildAttributesDivisor1(primitive);
+        curr.mesh = new IntMesh(true, maxVerts, maxInstances, maxIndices, attributes0, attributes1);
+
+        curr.vertexSize = curr.mesh.getVertexAttributes().vertexSize / 4;
+        curr.instanceSize = curr.mesh.getInstanceAttributes().vertexSize / 4;
+
+        offsets0(curr, model);
+        offsets1(curr, model);
+
+        return mdi;
+    }
+
+    protected void preRenderObjects(ExtShaderProgram shaderProgram,
+                                    ICamera camera) {
+        // Empty, override if needed
+    }
+
+    protected void renderObject(ExtShaderProgram shaderProgram,
+                                ICamera camera,
+                                IRenderable renderable) {
+        // Empty, override if needed
+    }
+
+    protected void postRenderObjects(ExtShaderProgram shaderProgram,
+                                     ICamera camera) {
+        // Empty, override if needed
+    }
+
+    @Override
+    public void renderStud(List<IRenderable> renderables,
+                           ICamera camera,
+                           double t) {
+        if (!renderables.isEmpty()) {
+            ExtShaderProgram shaderProgram = getShaderProgram();
+
+            shaderProgram.begin();
+            // Pre-render
+            preRenderObjects(shaderProgram, camera);
+            // Render
+            renderables.forEach((r) -> renderObject(shaderProgram, camera, r));
+            // Post-render
+            postRenderObjects(shaderProgram, camera);
+            shaderProgram.end();
+        }
+    }
+
+    /**
+     * Generates color noise per channel, given a seed and an (n).
+     *
+     * @param seed   The seed for the RNG.
+     * @param noise  The noise value in [0,1].
+     * @param result The result array.
+     */
+    protected void generateChannelNoise(long seed, double noise, float[] result) {
+        StdRandom.setSeed(seed);
+        if (noise > 0 && noise <= 1) {
+            result[0] = (float) ((StdRandom.uniform() - 0.5) * 2.0 * noise);
+            result[1] = (float) ((StdRandom.uniform() - 0.5) * 2.0 * noise);
+            result[2] = (float) ((StdRandom.uniform() - 0.5) * 2.0 * noise);
+        } else {
+            result[0] = 0;
+            result[1] = 0;
+            result[2] = 0;
+
+        }
+    }
+
+    /**
+     * Apply blending mode and depth mask depending on the  highlight component and shading type.
+     *
+     * @param hl          The highlight component.
+     * @param shadingType The shading type.
+     *
+     * @return The ordinal shading type.
+     */
+    protected int preShadingType(Highlight hl, ParticleSet.ShadingType shadingType) {
+        int st = hl.isHighlighted() ? 0 : shadingType.ordinal();
+        Gdx.gl.glEnable(GL20.GL_BLEND);
+        Gdx.gl.glEnable(GL20.GL_DEPTH_TEST);
+        if (st >= 1) {
+            // Lighting is in effect.
+            // Regular blending.
+            GL40.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+            // Depth test, write.
+            Gdx.gl.glDepthMask(true);
+        } else {
+            // No lighting.
+            // Additive blending.
+            GL40.glBlendFunc(GL20.GL_ONE, GL20.GL_ONE);
+            // Depth test, no writes.
+            Gdx.gl.glDepthMask(false);
+        }
+        return st;
+    }
+
+    /**
+     * Restore regular blending and depth writes.
+     */
+    protected void postShadingType() {
+        GL40.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
+        Gdx.gl.glDepthMask(true);
+
+    }
+
+    /**
+     * Returns the profile decay for the given shading type.
+     *
+     * @param shadingType  The shading type.
+     * @param profileDecay The profile decay.
+     *
+     * @return The effective profile decay.
+     */
+    protected float getProfileDecay(int shadingType, float profileDecay) {
+        return shadingType >= 1 ? 1e5f : profileDecay;
+    }
+
+    /**
+     * Sets uniforms pertaining to the shading type.
+     *
+     * @param shaderProgram  The program.
+     * @param shadingType    The shading type ordinal.
+     * @param sphericalPower The spherical power value.
+     */
+    protected void setShadingTypeUniforms(ExtShaderProgram shaderProgram,
+                                          ICamera camera,
+                                          int shadingType,
+                                          float sphericalPower,
+                                          float ambient,
+                                          GraphNode graph) {
+        // Get nearest light source (our star).
+        var light = (Proximity.NearbyRecord) camera.getCloseLightSource(0);
+        shaderProgram.setUniformf("u_lightPos", light.pos);
+
+        shaderProgram.setUniformf("u_ambientLight", (float) GaiaSky.settings().scene.renderer.ambient);
+        shaderProgram.setUniformf("u_diffuseScattering", MathUtils.clamp(ambient, 0, 1));
+        shaderProgram.setUniformi("u_shadingType", shadingType);
+        shaderProgram.setUniformf("u_lightIntensity", 1f);
+        shaderProgram.setUniformf("u_sphericalPower", sphericalPower);
+
+        // Occlusion in ringed planets.
+        if (graph != null && graph.parent != null && Mapper.model.has(graph.parent)) {
+            shaderProgram.setUniformi("u_occlusion", 1);
+            var parentBody = Mapper.body.get(graph.parent);
+            shaderProgram.setUniformf("u_planetRadius", parentBody.size / 2f);
+        } else {
+            shaderProgram.setUniformi("u_occlusion", 0);
+        }
+
+    }
+
+    protected void setRefSysTransformAndDatasetPosUniforms(ExtShaderProgram shaderProgram, GraphNode graph, ParticleSet set) {
+        // Reference system transform
+        if (graph.children != null && graph.children.size > 0) {
+            // USING CHILDREN OBJECTS.
+            Matrix4D refSysTransform = null;
+            if (Mapper.transform.has(graph.children.get(0))) {
+                // Use transform matrix of first children.
+                refSysTransform = Mapper.transform.get(graph.children.get(0)).matrix;
+            }
+            if (refSysTransform != null
+                    && Mapper.trajectory.has(graph.children.get(0))
+                    && Mapper.trajectory.get(graph.children.get(0)).model.isExtrasolar()) {
+                // Extrasolar elements require phase around Y.
+                refSysTransform.putIn(aux).inv();
+                refSysTransformF.setToRotation(0, 1, 0, -90).mul(aux);
+            } else if (refSysTransform != null) {
+                refSysTransform.putIn(refSysTransformF).inv();
+            }
+        } else if (set != null && set.pointData != null && !set.pointData.isEmpty() && graph.parent != null) {
+            // USING DATASET.
+            var pOri = Mapper.graph.get(graph.parent);
+            if (pOri != null && pOri.orientation != null) {
+                var refSysTransform = pOri.orientation;
+                refSysTransform.putIn(refSysTransformF).inv();
+            } else {
+                refSysTransformF.idt();
+            }
+        } else {
+            refSysTransformF.idt();
+        }
+        shaderProgram.setUniformMatrix("u_refSysTransform", refSysTransformF);
+
+        // Dataset position (in camera refsys).
+        var dsPos = graph.translation.put(aux3f);
+        shaderProgram.setUniformf("u_datasetPos", dsPos);
+    }
+
+    /**
+     * Computes the texture index for a given particle, for particle and orbital elements sets, given their texture array and texture attribute.
+     *
+     * @param pr               The particle record
+     * @param rand             The RNG.
+     * @param textureArray     The texture array. May be null.
+     * @param textureAttribute The texture attribute. May be null.
+     *
+     * @return The texture index for the given particle.
+     */
+    public static int computeTextureIndex(IParticleRecord pr, Random rand, TextureArray textureArray, String textureAttribute) {
+        int textureIndex = -1;
+        if (textureArray != null) {
+            int nTextures = textureArray.getDepth();
+            if (textureAttribute != null && pr != null && pr.hasExtra(textureAttribute)) {
+                var value = pr.getExtra(textureAttribute);
+                if (value instanceof Number num) {
+                    textureIndex = MathUtils.clamp(num.intValue() - 1, 0, nTextures - 1);
+                } else if (value instanceof String str) {
+                    // Try to parse it as integer, otherwise, use hash code.
+                    try {
+                        textureIndex = MathUtils.clamp((int) Parser.parseDoubleException(str) - 1, 0,
+                                                       nTextures - 1);
+                    } catch (NumberFormatException ignored) {
+                        textureIndex = value.hashCode() % nTextures;
+                    }
+                } else {
+                    // Any other type, use hash code.
+                    textureIndex = value.hashCode() % nTextures;
+                }
+            } else {
+                // Random index.
+                textureIndex = rand.nextInt(nTextures);
+            }
+        }
+        return textureIndex;
+    }
+
+}

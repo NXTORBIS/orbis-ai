@@ -61,20 +61,51 @@ interface Attempt {
   variant: Variant
 }
 
+/**
+ * Models with a far larger window, tried when a message is too long for the one chosen, and when the chosen
+ * service has no keys left. Largest first.
+ */
+const OVERFLOW_MODELS = ['ministral-14b-2512', 'ministral-8b-2512', 'codestral-2508']
+
+/** Whether this request is more than the chosen model takes in one go, by the same measure used to trim history. */
+function exceedsInput(model: string, opts: ChatOptions): boolean {
+  const info = modelInfo(model)
+  if (info.inputTokenLimit === undefined) return false
+  const sent = opts.systemPrompt.length + opts.messages.slice(-15).reduce((n, m) => n + messageSize(m), 0)
+  return sent > inputCharBudget(info)
+}
+
 export async function streamChat(opts: ChatOptions): Promise<void> {
-  if ((providerOf(opts.model) === 'mistral' ? (opts.mistralKeys ?? []).length : opts.apiKeys.length) === 0) {
-    return opts.emit({ type: 'error', message: 'This copy of Orbis has no Groq API key. Add it to .env.local and rebuild.' })
+  const second = opts.mistralKeys ?? []
+  const ownKeys = providerOf(opts.model) === 'mistral' ? second.length : opts.apiKeys.length
+  if (ownKeys === 0 && second.length === 0) {
+    return opts.emit({ type: 'error', message: 'This copy of Orbis has no AI service key. Add one to .env.local and rebuild.' })
   }
-  // Auto is never a model Groq knows; it is resolved before this point, and is never a fallback.
-  const chain: Attempt[] = [opts.model, ...(opts.autoFallback ? CHAT_MODELS.map((m) => m.id).filter((id) => id !== opts.model && id !== AUTO_MODEL) : [])].map((model) => ({
-    model,
-    variant: 'normal'
-  }))
+  // Auto is never a model the service knows; it is resolved before this point, and is never a fallback.
+  // The ordinary fallbacks are the other models of the chosen service; the larger-memory ones come from `roomy`.
+  const same = opts.autoFallback
+    ? CHAT_MODELS.filter((m) => m.id !== opts.model && m.id !== AUTO_MODEL && providerOf(m.id) === providerOf(opts.model)).map((m) => m.id)
+    : []
+  // Larger-memory models, for a long message (first) and for when every key of the chosen service is spent (last).
+  const roomy = second.length > 0 ? OVERFLOW_MODELS.filter((id) => id !== opts.model) : []
+  const long = providerOf(opts.model) !== 'mistral' && roomy.length > 0 && exceedsInput(opts.model, opts)
+  // The other service's ordinary models come last, so a chosen larger-memory model can still fall back to the others.
+  const other = opts.autoFallback
+    ? CHAT_MODELS.filter((m) => m.id !== AUTO_MODEL && providerOf(m.id) !== providerOf(opts.model)).map((m) => m.id)
+    : []
+  const order = long ? [...roomy, opts.model, ...same, ...other] : [opts.model, ...same, ...roomy, ...other]
+  const chain: Attempt[] = [...new Set(order)].map((model) => ({ model, variant: 'normal' }))
+  if (long) opts.emit({ type: 'status', message: 'That is a long message, so a model with more memory is answering.' })
+
   let lastError: unknown = new Error('All keys exhausted')
   let lastModel = opts.model
+  /** Services whose every key has been refused or has run out: nothing else of theirs is worth trying. */
+  const spent = new Set<string>()
+  let busy = 0
 
   for (let i = 0; i < chain.length; i++) {
     const { model, variant } = chain[i]
+    if (spent.has(providerOf(model)) && i < chain.length - 1) continue
     try {
       await streamWithKeys(model, opts, variant)
       return
@@ -82,12 +113,20 @@ export async function streamChat(opts: ChatOptions): Promise<void> {
       if (opts.signal.aborted) return opts.emit({ type: 'aborted' })
       lastError = err
       lastModel = model
-      if (!(err instanceof HttpError) || !FALLBACK_STATUSES.has(err.status)) {
+      const refusedKey = err instanceof HttpError && (err.status === 401 || err.reason === 'key')
+      if (!(err instanceof HttpError) || !(FALLBACK_STATUSES.has(err.status) || refusedKey)) {
         return opts.emit({ type: 'error', message: describeError(err, model) })
       }
-      const next = chain[i + 1]
+      // Keys this service refused, or that it keeps answering "busy" to, are not worth asking again for other models.
+      if (refusedKey) spent.add(providerOf(model))
+      else if (err.status === 429 && ++busy >= 2) spent.add(providerOf(model))
+      if (refusedKey && !chain.slice(i + 1).some((a) => !spent.has(providerOf(a.model)))) {
+        return opts.emit({ type: 'error', message: describeError(err, model) })
+      }
+      const next = chain.slice(i + 1).find((a) => !spent.has(providerOf(a.model)))
       if (next) {
-        const reason = err.status === 429 ? 'is rate-limited' : err.status === 413 ? "can't take a message this long" : 'is unavailable right now'
+        const reason =
+          err.status === 429 ? 'is busy' : err.status === 413 ? "can't take a message this long" : 'is unavailable right now'
         opts.emit({ type: 'status', message: `${modelLabel(model)} ${reason}. Switching to ${modelLabel(next.model)}…` })
       }
     }
@@ -110,11 +149,11 @@ interface StreamResult {
 /** Streams a reply, then silently retries once at low effort if reasoning left no answer. */
 async function streamWithKeys(model: string, opts: ChatOptions, variant: Variant = 'normal'): Promise<void> {
   const info = modelInfo(model)
-  let result = await withKeyRotation(opts, (key) => streamOnce(model, opts, key, variant))
+  let result = await withKeyRotation(model, opts, (key) => streamOnce(model, opts, key, variant))
   if (!result.hasContent && info.reasoningEffort && !opts.signal.aborted) {
     console.warn(`[chat] ${model} finished with no answer (finish_reason=${result.finishReason}); retrying at low reasoning effort`)
     try {
-      result = await withKeyRotation(opts, (key) => streamOnce(model, opts, key, 'rescue'))
+      result = await withKeyRotation(model, opts, (key) => streamOnce(model, opts, key, 'rescue'))
     } catch (err) {
       // Nothing new was shown, so keep the reply as it is rather than switching models.
       if (!(err instanceof HttpError) || opts.signal.aborted) throw err
@@ -133,12 +172,15 @@ let preferredKey: string | null = null
  * `skipPreferred` starts one key further along, for when the last key's per-minute allowance ran out mid-reply.
  */
 async function withKeyRotation(
+  model: string,
   opts: ChatOptions,
   attempt: (apiKey: string) => Promise<StreamResult>,
   skipPreferred = false
 ): Promise<StreamResult> {
-  // The keys of whichever service serves this model. A key is not a credential for "the API"; it is for one service.
-  const forThisModel = providerOf(opts.model) === 'mistral' ? (opts.mistralKeys ?? []) : opts.apiKeys
+  // The keys of whichever service serves THIS model (the one being tried, which a fallback may have changed). A key
+  // is not a credential for "the API"; it is for one service.
+  const forThisModel = providerOf(model) === 'mistral' ? (opts.mistralKeys ?? []) : opts.apiKeys
+  if (forThisModel.length === 0) throw new HttpError(401, 'No key for this service.')
   const usable = forThisModel.filter((key) => !unusableKeys.has(key))
   // If every key has been refused before, ask again rather than giving up without trying.
   const keys = usable.length > 0 ? usable : forThisModel
@@ -237,6 +279,13 @@ async function streamOnce(
       if (limits && limits.requested > limits.limit) return streamOnce(model, opts, apiKey, variant, limits.limit, charBudget)
     }
 
+    // Some answers say only "reduce the length of the messages or completion": a size error with no unit in it.
+    // The history is already trimmed to what the model takes, so what is left is a message that will not fit here;
+    // a model with more room can take it.
+    if (res.status === 400 && /reduce the length|too long|context length|maximum context|exceeds? the (?:model|context)/i.test(errorMsg)) {
+      throw new HttpError(413, errorMsg, retryAfterMs)
+    }
+
     if ((res.status === 413 || res.status === 400) && errorMsg.toLowerCase().includes('token')) {
       // Groq counts the output budget against the per-minute token limit; shrink it to fit.
       const inputOnly = /\bITPM\b|input tokens/i.test(errorMsg)
@@ -265,7 +314,7 @@ async function streamOnce(
     if (res.status === 400 && variant === 'normal') return streamOnce(model, opts, apiKey, 'lean', undefined, charBudget)
     throw new HttpError(res.status, errorMsg, retryAfterMs)
   }
-  if (!res.body) throw new HttpError(502, 'Empty response from Groq')
+  if (!res.body) throw new HttpError(502, 'The AI service sent an empty response.')
 
   // The rescue continues the reply that already started.
   if (variant !== 'rescue') opts.emit({ type: 'start', model })
@@ -521,21 +570,21 @@ function describeError(err: unknown, model: string): string {
   if (err instanceof HttpError) {
     switch (err.status) {
       case 401:
-        return 'Groq rejected the API key. Put a valid key in .env.local and rebuild.'
+        return 'The AI service rejected this copy of Orbis\u2019s key. Put a valid key in .env.local and rebuild.'
       case 403:
-        return `The Groq API key doesn't have access to ${modelLabel(model)}. (${err.message})`
+        return `This key doesn't have access to ${modelLabel(model)}.`
       case 404:
-        return `${modelLabel(model)} isn't available on Groq right now.`
+        return `${modelLabel(model)} isn't available right now.`
       case 413:
-        return `This message is too long for ${modelLabel(model)} on Groq's free tier. Try a shorter message, or start a new chat.`
+        return `This message is too long for ${modelLabel(model)}. Try a shorter message, or start a new chat.`
       case 429:
-        return "Groq's rate limit is reached. Wait a minute and try again."
+        return 'Every model is busy at the moment. Wait a minute and try again.'
       default:
-        return `Groq returned ${err.status}: ${err.message}`
+        return `The AI service answered with an error (${err.status}). ${err.message}`
     }
   }
   if (err instanceof StreamError) return err.message
-  if (err instanceof Error) return `Couldn't reach Groq: ${err.message}`
+  if (err instanceof Error) return `Couldn't reach the AI service: ${err.message}`
   return 'Something went wrong.'
 }
 
@@ -578,11 +627,11 @@ export async function testApiKey(apiKeys: string[], fetchFn: FetchFn, mistralKey
     return { ok: false, message: 'No API key is built into this copy of Orbis.' }
   }
 
-  const lines = [await check('Groq', PROVIDERS.groq.baseUrl, apiKeys), await check('Mistral', PROVIDERS.mistral.baseUrl, mistralKeys)].filter(
+  const lines = [await check('Orion', PROVIDERS.groq.baseUrl, apiKeys), await check('Sight', PROVIDERS.mistral.baseUrl, mistralKeys)].filter(
     (line): line is string => line !== null
   )
   if (!mistralKeys.length) {
-    lines.push('No Mistral key, so Orbis cannot look at an image: nothing on Groq can see.')
+    lines.push('No Sight key, so Orbis cannot look at an image: none of the Orion models can see.')
   }
   const ok = lines.some((line) => /[1-9]\d* of \d+ keys? working/.test(line))
   return { ok, message: lines.join(String.fromCharCode(10)) }

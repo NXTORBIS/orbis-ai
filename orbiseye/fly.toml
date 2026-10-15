@@ -1,0 +1,32 @@
+# OrbisEye — Fly.io deployment.
+#
+# `fly launch` will rewrite `app` to the name you choose and set `primary_region`
+# to your nearest edge. Everything else here is tuned for this project.
+
+app = "orbiseye"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  HOST = "0.0.0.0"
+  PORT = "4173"
+  # OpenSky works fully anonymously; without this the proxy tries an OAuth
+  # handshake it has no credentials for.
+  OPENSKY_AUTH_MODE = "anon"
+
+[http_service]
+  internal_port = 4173
+  force_https = true
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  # Keep one machine warm. Cesium's first paint is heavy; a cold start makes the
+  # globe feel broken to a first-time visitor arriving from your website button.
+  min_machines_running = 1
+
+[[vm]]
+  # Cesium plus the Vite server needs real headroom. 256MB shared OOMs on load.
+  memory = "1gb"
+  cpu_kind = "shared"
+  cpus = 1

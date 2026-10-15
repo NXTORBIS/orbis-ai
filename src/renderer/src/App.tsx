@@ -15,7 +15,8 @@ import ContextChip from './components/ContextChip'
 import ChatView from './components/ChatView'
 import BrowserView from './components/BrowserView'
 import MarketStrip from './components/MarketStrip'
-import ImagesView from './components/ImagesView'
+import ImagesAndFilesView from './components/ImagesAndFilesView'
+import ChanceView from './components/ChanceView'
 import { useExperience } from './lib/experience'
 import HudBackground from './components/HudBackground'
 import Sidebar from './components/Sidebar'
@@ -36,6 +37,11 @@ const PagesView = lazy(() => import('./components/PagesView'))
 const CreateView = lazy(() => import('./components/CreateView'))
 const ClipboardView = lazy(() => import('./components/ClipboardView'))
 const CoursesView = lazy(() => import('./components/courses/CoursesView'))
+const ToolkitView = lazy(() => import('./components/toolkit/ToolkitView'))
+const EyeView = lazy(() => import('./components/eye/EyeView'))
+const CosmosView = lazy(() => import('./components/cosmos/CosmosView'))
+const F1View = lazy(() => import('./components/f1/F1View'))
+const FootballView = lazy(() => import('./components/football/FootballView'))
 const LabsView = lazy(() => import('./components/labs/LabsView'))
 const WorkspacesView = lazy(() => import('./components/WorkspacesView'))
 const SchedulesView = lazy(() => import('./components/SchedulesView'))
@@ -139,6 +145,8 @@ export default function App(): React.JSX.Element {
    * scroll at the top and leave you to find what you came for.
    */
   const [settingsAt, setSettingsAt] = useState<SettingsSectionId | null>(null)
+  const [filesTool, setFilesTool] = useState<string | undefined>(undefined)
+  const [chanceOpen, setChanceOpen] = useState(false)
   const settingsOpen = settingsAt !== null
   const setSettingsOpen = (open: boolean | SettingsSectionId): void =>
     setSettingsAt(open === false ? null : open === true ? DEFAULT_SETTINGS_SECTION : open)
@@ -344,11 +352,19 @@ export default function App(): React.JSX.Element {
   const [systemDark, setSystemDark] = useState(() => matchMedia('(prefers-color-scheme: dark)').matches)
 
 
+  /*
+   * Loaded once, and again only when asked.
+   *
+   * `chat` is a new object on every render, so depending on it made this effect run after every render: each time it
+   * read the conversations back from disk and replaced what was in memory -- which is exactly the reply that was
+   * still streaming in. The function itself is stable, and that is all this needs.
+   */
+  const { loadConversations } = chat
   const load = useCallback(() => {
     window.api.getSettings().then(
       (s) => {
         setSettings(s)
-        chat.loadConversations(s)
+        loadConversations(s)
         setNeedsName(!s.welcomeCompleted || !s.userName.trim())
         void window.api
           .accountStatus()
@@ -361,7 +377,7 @@ export default function App(): React.JSX.Element {
       },
       () => setLoadError(true)
     )
-  }, [chat])
+  }, [loadConversations])
 
   useEffect(load, [load])
   // Settings changed through the Browser Control Layer show up straight away.
@@ -671,6 +687,16 @@ export default function App(): React.JSX.Element {
           return go({ kind: 'feature', id: 'student' })
         case 'courses':
           return go({ kind: 'feature', id: 'courses' })
+        case 'toolkit':
+          return go({ kind: 'feature', id: 'toolkit' })
+        case 'eye':
+          return go({ kind: 'feature', id: 'eye' })
+        case 'cosmos':
+          return go({ kind: 'feature', id: 'cosmos' })
+        case 'f1':
+          return go({ kind: 'feature', id: 'f1' })
+        case 'football':
+          return go({ kind: 'feature', id: 'football' })
         case 'focus': {
           /*
            * `/focus` opens Student; `/focus 25` starts twenty-five minutes there and then.
@@ -932,7 +958,8 @@ export default function App(): React.JSX.Element {
           onOpenWorkflows={() => openOrbisView('workflows')}
         />
       )}
-      {!browserShowing && (
+      {/* The strip belongs to the chat. Files, Chance and the feature screens bring their own header and their own way back. */}
+      {!browserShowing && !imagesOpen && !chanceOpen && !feature && (
         <SystemBar
           browserRunning={browserRunning}
           onShowBrowser={() => openChromium('', { newTab: false })}
@@ -989,6 +1016,8 @@ export default function App(): React.JSX.Element {
           streams={streams}
           imageCount={galleryImages.length}
           imagesOpen={imagesOpen}
+          chanceOpen={chanceOpen}
+          onChance={() => setChanceOpen((open) => !open)}
           feature={feature}
           onFeature={(id) => go({ kind: 'toggleFeature', id })}
           searchToken={searchToken}
@@ -998,7 +1027,7 @@ export default function App(): React.JSX.Element {
           onNewChat={newChat}
           onIncognito={toggleIncognito}
           onSearch={openSearch}
-          onImages={() => go({ kind: 'toggleImages' })}
+          onImages={() => { setChanceOpen(false); setFilesTool(undefined); go({ kind: 'toggleImages' }) }}
           onBrowser={toggleBrowser}
           onSelect={selectChat}
           onRename={renameConversation}
@@ -1047,7 +1076,7 @@ export default function App(): React.JSX.Element {
             onForgetBranch={(branchId) => active && forgetBranch(active.id, branchId)}
           />
           {imagesOpen && (
-            <ImagesView images={galleryImages} onClose={() => go({ kind: 'chat' })} onOpenChat={selectChat} onEdit={editGalleryImage} onNotify={notify} />
+            <ImagesAndFilesView images={galleryImages} openTool={filesTool} onClose={() => { setFilesTool(undefined); go({ kind: 'chat' }) }} onOpenChat={selectChat} onEdit={editGalleryImage} onNotify={notify} />
           )}
           {feature && (
             <Suspense fallback={<div className="feature-loading" role="status">Opening…</div>}>
@@ -1073,6 +1102,11 @@ export default function App(): React.JSX.Element {
               )}
               {feature === 'labs' && <LabsView onClose={closeFeature} onNotify={notify} onOpenApp={openNativeApp} />}
               {feature === 'courses' && <CoursesView onClose={closeFeature} onNotify={notify} onOpenApp={openNativeApp} />}
+              {feature === 'toolkit' && <ToolkitView onClose={closeFeature} />}
+              {feature === 'eye' && <EyeView onClose={closeFeature} />}
+              {feature === 'cosmos' && <CosmosView onClose={closeFeature} />}
+              {feature === 'f1' && <F1View onClose={closeFeature} />}
+              {feature === 'football' && <FootballView onClose={closeFeature} />}
               {feature === 'clipboard' && <ClipboardView onClose={closeFeature} onNotify={notify} />}
               {feature === 'workspaces' && <WorkspacesView onClose={closeFeature} onNotify={notify} />}
               {feature === 'schedules' && <SchedulesView onClose={closeFeature} onNotify={notify} />}
@@ -1111,8 +1145,9 @@ export default function App(): React.JSX.Element {
       <ToastStack toasts={toasts} onDismiss={(id) => setToasts((current) => current.filter((t) => t.id !== id))} />
       <ControlPrompts />
       {settingsAt && settings && (
-        <SettingsModal settings={settings} section={settingsAt} onUpdate={updateSettings} onClose={() => setSettingsAt(null)} />
+        <SettingsModal settings={settings} section={settingsAt} onUpdate={updateSettings} onClose={() => setSettingsAt(null)} onOpenFiles={(tool) => { setSettingsAt(null); setFilesTool(tool); go({ kind: 'images' }) }} />
       )}
+      {chanceOpen && <ChanceView onClose={() => setChanceOpen(false)} />}
       {shortcutsOpen && <ShortcutsModal onClose={() => setShortcutsOpen(false)} />}
       <CommandPalette
         open={paletteOpen}

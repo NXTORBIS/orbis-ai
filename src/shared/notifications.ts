@@ -47,10 +47,12 @@ export type NotificationSource =
   | 'update'
   | 'rules'
   | 'student'
+  | 'football'
+  | 'f1'
   | 'system'
 
 /** What the person can switch on and off. Deliberately coarser than the source. */
-export type NotificationCategory = 'workflows' | 'schedules' | 'downloads' | 'orion' | 'research' | 'pages' | 'artifacts' | 'security' | 'updates' | 'attention' | 'study' | 'system'
+export type NotificationCategory = 'workflows' | 'schedules' | 'downloads' | 'orion' | 'research' | 'pages' | 'artifacts' | 'security' | 'updates' | 'attention' | 'football' | 'f1' | 'study' | 'system'
 
 /**
  * How much it matters.
@@ -296,6 +298,72 @@ export const NOTIFICATION_TEMPLATES: Readonly<Record<string, Template>> = Object
     title: () => 'Session complete',
     body: (f) => named(f, 'summary', 'You finished what you planned.'),
     group: () => 'study'
+  },
+  'f1.session': {
+    source: 'f1',
+    category: 'f1',
+    priority: 'normal',
+    ttl: 3 * HOUR,
+    actions: OPEN,
+    title: (f) => `${named(f, 'session', 'Session')} · ${named(f, 'race', 'F1')}`,
+    body: (f) => `Starts in about ${named(f, 'minutes', 'a few')} minutes at ${named(f, 'circuit', 'the circuit')}.`,
+    group: () => 'f1',
+    dedupe: (f) => `f1.session:${named(f, 'id', '')}`
+  },
+  'f1.results': {
+    source: 'f1',
+    category: 'f1',
+    priority: 'normal',
+    ttl: 24 * HOUR,
+    actions: OPEN,
+    title: (f) => `Results · ${named(f, 'race', 'F1')}`,
+    body: (f) => named(f, 'summary', 'The classification is out.'),
+    group: () => 'f1',
+    dedupe: (f) => `f1.results:${named(f, 'id', '')}`
+  },
+  'football.goal': {
+    source: 'football',
+    category: 'football',
+    priority: 'normal',
+    ttl: 6 * HOUR,
+    actions: OPEN,
+    title: (f) => `Goal · ${named(f, 'match', 'a match you follow')}`,
+    body: (f) => named(f, 'summary', 'The score changed.'),
+    group: () => 'football',
+    dedupe: (f) => `football.goal:${named(f, 'id', '')}`
+  },
+  'football.kickoff': {
+    source: 'football',
+    category: 'football',
+    priority: 'low',
+    ttl: 3 * HOUR,
+    actions: OPEN,
+    title: (f) => `Kick-off · ${named(f, 'match', 'a match you follow')}`,
+    body: () => 'The match has started.',
+    group: () => 'football',
+    dedupe: (f) => `football.kickoff:${named(f, 'id', '')}`
+  },
+  'football.fulltime': {
+    source: 'football',
+    category: 'football',
+    priority: 'normal',
+    ttl: 12 * HOUR,
+    actions: OPEN,
+    title: (f) => `Full-time · ${named(f, 'match', 'a match you follow')}`,
+    body: (f) => named(f, 'summary', 'The match has finished.'),
+    group: () => 'football',
+    dedupe: (f) => `football.fulltime:${named(f, 'id', '')}`
+  },
+  'football.reminder': {
+    source: 'football',
+    category: 'football',
+    priority: 'normal',
+    ttl: 3 * HOUR,
+    actions: OPEN,
+    title: (f) => `Starting soon · ${named(f, 'match', 'a match')}`,
+    body: (f) => `Kick-off is in about ${named(f, 'minutes', 'a few')} minutes.`,
+    group: () => 'football',
+    dedupe: (f) => `football.reminder:${named(f, 'id', '')}`
   },
   'study.due': {
     source: 'student',

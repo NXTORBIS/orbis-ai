@@ -103,6 +103,16 @@ export class MusicLibrary {
     return { facts, size: stat.size, modified: stat.mtimeMs }
   }
 
+  /** Reads a file again for the artwork it carries, so a chosen picture can be put back to the original. */
+  async ownArtwork(trackId: string, file: string): Promise<string | undefined> {
+    try {
+      const facts = readAudioFacts(new Uint8Array(await fs.readFile(file)))
+      return await this.keepArtwork(trackId, facts)
+    } catch {
+      return undefined
+    }
+  }
+
   /** Writes a file's own artwork into the profile, and says where it went. Null when there was none. */
   private async keepArtwork(trackId: string, facts: AudioFacts): Promise<string | undefined> {
     if (!facts.artwork || facts.artwork.bytes.length === 0) return undefined
@@ -153,9 +163,12 @@ export class MusicLibrary {
       return { kind: 'already', file: full, track: refreshed ?? sameFile }
     }
 
+    // With no tags, "Artist - Title" in the file name is the best honest source for both.
+    const fromName = nameFromFile(full)
+    const split = /^(.{1,80}?)\s+[-–]\s+(.{1,120})$/.exec(fromName)
     const names: TrackNames = {
-      title: facts.tags.title ?? nameFromFile(full),
-      artist: facts.tags.artist ?? '',
+      title: facts.tags.title ?? (split ? split[2].trim() : fromName),
+      artist: facts.tags.artist ?? (!facts.tags.title && split ? split[1].trim() : ''),
       album: facts.tags.album ?? '',
       albumArtist: facts.tags.albumArtist,
       genre: facts.tags.genre,

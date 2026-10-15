@@ -116,6 +116,75 @@ const others = [
   }
 ]
 
+/**
+ * ORBIS COSMOS: Gaia Sky is MPL-2.0, a file-level copyleft: its source (cosmos/) travels with Orbis and stays under
+ * that licence, with its licence, authors and acknowledgements kept beside it. The libraries it runs on are listed
+ * from the build's own record; each carries its licence inside its jar.
+ */
+const cosmosText = (name) => {
+  try {
+    return readFileSync(join(root, 'cosmos', name), 'utf8').trim()
+  } catch {
+    return ''
+  }
+}
+if (existsSync(join(root, 'cosmos', 'LICENSE.md'))) {
+  const up = JSON.parse(cosmosText('upstream.json') || '{}')
+  others.push({
+    name: 'Gaia Sky (ORBIS COSMOS)',
+    version: up.tag || '',
+    license: 'MPL-2.0',
+    homepage: 'https://codeberg.org/gaiasky/gaiasky',
+    text:
+      'ORBIS COSMOS is the Gaia Sky simulation, by the Gaia Sky authors (developed at the Astronomisches Rechen-Institut, Heidelberg University, and by contributors), included in the cosmos folder of Orbis together with its source code. It is distributed under the Mozilla Public License 2.0; its source is available in that folder and at the address above.\n\n' +
+      cosmosText('LICENSE.md') +
+      '\n\n--- AUTHORS ---\n' +
+      cosmosText('AUTHORS.md') +
+      '\n\n--- ACKNOWLEDGEMENTS ---\n' +
+      cosmosText('ACKNOWLEDGEMENTS.md')
+  })
+  let libs = []
+  try {
+    libs = JSON.parse(readFileSync(join(root, 'cosmos', '.build', 'build.json'), 'utf8')).libraries.map((l) => l.file)
+  } catch {
+    // not built on this computer: nothing to list
+  }
+  others.push({
+    name: 'Libraries ORBIS COSMOS runs on',
+    version: up.tag || '',
+    license: 'Apache-2.0, BSD-3-Clause, MIT, EPL and others: see each library',
+    homepage: 'https://codeberg.org/gaiasky/gaiasky',
+    text:
+      'Fetched from Maven Central by npm run cosmos:build, each checked against its published SHA-1, and used to run ORBIS COSMOS. Each library carries its own licence and notices inside its jar.' +
+      (libs.length ? '\n\n' + libs.join('\n') : '')
+  })
+}
+
+/** Where F1 (Orbis Arena) gets its data. Both are free to use without an account or key. */
+others.push(
+  {
+    name: 'Jolpica-F1 (F1 calendar, results and standings)',
+    version: 'live service',
+    license: 'Data service; see the project for its terms',
+    homepage: 'https://github.com/jolpica/jolpica-f1',
+    text: 'The calendar, race results and championship standings shown in F1 come from the Jolpica-F1 API (an Ergast-compatible service), fetched from api.jolpi.ca when you open F1. Orbis keeps recent answers in memory only and shows where each came from.'
+  },
+  {
+    name: 'OpenF1 (F1 sessions, drivers and lap timing)',
+    version: 'live service',
+    license: 'Data service; see the project for its terms',
+    homepage: 'https://openf1.org',
+    text: 'Session lists, drivers, lap times, sector times, car telemetry, tyre stints, pit stops, weather and race-control messages shown in F1 come from the OpenF1 API (api.openf1.org), used without an account for finished sessions. Orbis does not use its paid live-streaming plan.'
+  },
+  {
+    name: 'Formula 1 live-timing stream and archive (F1 live timing and replay)',
+    version: 'live service',
+    license: 'Unofficial public data service; no licence is granted by this notice',
+    homepage: 'https://livetiming.formula1.com',
+    text: 'F1 live timing and session replay read the public live-timing stream and static archive at livetiming.formula1.com, the same feeds used by the sport\'s own pages and by the FastF1 project. It is an unofficial interface that can change or stop without notice; Orbis stores none of it. FORMULA 1 and related marks are trade marks of Formula One Licensing B.V.; Orbis is not affiliated with or endorsed by them.'
+  }
+)
+
 const out = {
   generatedAt: new Date().toISOString(),
   orbis: JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version,

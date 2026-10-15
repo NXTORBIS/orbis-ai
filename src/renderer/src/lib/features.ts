@@ -1,4 +1,4 @@
-import { CandlestickChart, ClipboardList, FilePlus2, FlaskConical, BookMarked, GraduationCap, LayoutGrid, LayoutTemplate, Mic, PenTool, CalendarClock, type LucideIcon } from 'lucide-react'
+import { CandlestickChart, ClipboardList, FilePlus2, FlaskConical, BookMarked, GraduationCap, LayoutGrid, LayoutTemplate, Mic, PenTool, CalendarClock, Wrench, Globe2, Orbit, Flag, Trophy, type LucideIcon } from 'lucide-react'
 import { CAPABILITIES, CATEGORIES, type AppFeature, type OrbisCapability } from '../../../shared/commandCenter'
 
 /**
@@ -30,7 +30,12 @@ const ICONS: Readonly<Record<AppFeature, LucideIcon>> = Object.freeze({
   schedules: CalendarClock,
   notes: Mic,
   student: GraduationCap,
-  courses: BookMarked
+  courses: BookMarked,
+  toolkit: Wrench,
+  eye: Globe2,
+  cosmos: Orbit,
+  f1: Flag,
+  football: Trophy
 })
 
 export interface Feature {

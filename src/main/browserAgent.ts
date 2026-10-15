@@ -313,7 +313,7 @@ async function callModel(
         const json = (await res.json()) as { choices?: { message?: { content?: string | null; tool_calls?: ToolCall[] } }[] }
         const message = json.choices?.[0]?.message
         if (message) return { content: message.content ?? null, tool_calls: message.tool_calls }
-        lastError = 'Groq returned an empty reply.'
+        lastError = 'The AI service returned an empty reply.'
         break
       }
       const body = await res.text().catch(() => '')

@@ -2,6 +2,7 @@ import { resolve } from 'node:path'
 import { defineConfig } from 'electron-vite'
 import { loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
+import tailwindcss from 'tailwindcss'
 
 export default defineConfig(({ mode }) => {
   /*
@@ -16,7 +17,12 @@ export default defineConfig(({ mode }) => {
   const list = (value: string | undefined): string[] => (value ?? '').split(/[\s,]+/).filter(Boolean)
   return {
     main: {
-      define: { __GROQ_API_KEYS__: JSON.stringify(list(env.GROQ_API_KEY)), __MISTRAL_API_KEYS__: JSON.stringify(list(env.MISTRAL_API_KEY)) }
+      define: { __GROQ_API_KEYS__: JSON.stringify(list(env.GROQ_API_KEY)), __MISTRAL_API_KEYS__: JSON.stringify(list(env.MISTRAL_API_KEY)) },
+      build: {
+        rollupOptions: {
+          external: ['ssh2', 'node-pty', 'cpu-features', 'basic-ftp']
+        }
+      }
     },
     preload: {
       build: {
@@ -30,12 +36,14 @@ export default defineConfig(({ mode }) => {
     },
     renderer: {
       plugins: [react()],
+      resolve: { alias: { '@jarvis': resolve('src/renderer/src/features/jarvis') } },
+      css: { postcss: { plugins: [tailwindcss({ config: resolve('src/renderer/src/features/jarvis/tailwind.config.cjs') })] } },
       build: {
         rollupOptions: {
           // Two pages: the app itself, and the window nobody sees that holds the one <audio> element Orbis Music
           // plays through. It is a page rather than something generated at runtime so it is built, typed and checked
           // like everything else.
-          input: { index: resolve('src/renderer/index.html'), player: resolve('src/renderer/player.html') }
+          input: { index: resolve('src/renderer/index.html'), player: resolve('src/renderer/player.html'), files: resolve('src/renderer/files.html') }
         }
       }
     }

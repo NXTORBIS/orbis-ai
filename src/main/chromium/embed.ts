@@ -40,7 +40,11 @@ interface Api {
   setPos(hwnd: bigint, r: Rect, show: boolean): void
   show(hwnd: bigint, visible: boolean): void
   focus(hwnd: bigint): void
+  /** Un-maximizes a window (a maximized window cannot become a child of another). */
+  restoreIfMaximized(hwnd: bigint): void
   holdInput(hwnd: bigint, join: boolean): boolean
+  /** Posts a key press (down and up) to a window's own message queue, whether or not it has the focus. */
+  postKey(hwnd: bigint, vk: number): void
   raise(hwnd: bigint): boolean
   rect(hwnd: bigint): Rect
   clientRect(hwnd: bigint): Rect
@@ -68,6 +72,9 @@ function load(): Api | null {
     const GetWindowLongPtrW = user32.func('intptr_t __stdcall GetWindowLongPtrW(void *hwnd, int idx)')
     const SetWindowLongPtrW = user32.func('intptr_t __stdcall SetWindowLongPtrW(void *hwnd, int idx, intptr_t v)')
     const SetWindowPos = user32.func('bool __stdcall SetWindowPos(void *hwnd, void *after, int x, int y, int cx, int cy, uint32 flags)')
+    const PostMessageW = user32.func('bool __stdcall PostMessageW(void *hwnd, uint32 msg, uintptr_t w, intptr_t l)')
+    const MapVirtualKeyW = user32.func('uint32 __stdcall MapVirtualKeyW(uint32 code, uint32 mapType)')
+    const IsZoomed = user32.func('bool __stdcall IsZoomed(void *hwnd)')
     const GetWindow = user32.func('void *__stdcall GetWindow(void *hwnd, uint32 cmd)')
     const ShowWindow = user32.func('bool __stdcall ShowWindow(void *hwnd, int cmd)')
     const SetFocus = user32.func('void *__stdcall SetFocus(void *hwnd)')
@@ -116,6 +123,15 @@ function load(): Api | null {
       setPos: (h, r, show) => void SetWindowPos(ptr(h), null, r.x, r.y, r.width, r.height, SWP_NOACTIVATE | SWP_FRAMECHANGED | (show ? SWP_SHOWWINDOW : 0)),
       show: (h, v) => void ShowWindow(ptr(h), v ? SW_SHOWNA : SW_HIDE),
       focus: (h) => void SetFocus(ptr(h)),
+      postKey(h, vk) {
+        // The scan code matters: the windowing library under Gaia Sky identifies the key from it, not from the virtual key.
+        const scan = (MapVirtualKeyW(vk, 0) as number) & 0xff
+        PostMessageW(ptr(h), 0x0100, vk, 0x00000001 | (scan << 16))
+        PostMessageW(ptr(h), 0x0101, vk, (0xc0000001 | (scan << 16)) | 0)
+      },
+      restoreIfMaximized(h) {
+        if (IsZoomed(ptr(h))) ShowWindow(ptr(h), 9)
+      },
       /**
        * Joins this process's input queue to the browser's, or parts them again.
        *
@@ -169,6 +185,20 @@ export function findBrowserWindow(pid: number): bigint | null {
   return best?.hwnd ?? null
 }
 
+/** The largest top-level window of one process whose window class is `cls` (Gaia Sky's window is class "GLFW30"). */
+export function findWindowByClass(pid: number, cls: string): bigint | null {
+  const api = load()
+  if (!api) return null
+  let best: { hwnd: bigint; area: number } | null = null
+  for (const w of api.enumWindows(pid)) {
+    if (w.cls !== cls) continue
+    const r = api.rect(w.hwnd)
+    const area = r.width * r.height
+    if (area > (best?.area ?? 0)) best = { hwnd: w.hwnd, area }
+  }
+  return best?.hwnd ?? null
+}
+
 /** The size of a window's client area in physical pixels. */
 export function clientSize(hwnd: bigint): { width: number; height: number } | null {
   const r = load()?.clientRect(hwnd)
@@ -183,6 +213,7 @@ export interface Embedded {
   /** Puts the window back on top of its siblings if something covered it. Returns whether it had to. */
   raise(): boolean
   focus(): void
+  postKey(vk: number): void
   /** Joins this process's input queue to the browser's (or parts them), so the keyboard reaches the embedded window. */
   holdInput(join: boolean): boolean
   isVisible(): boolean
@@ -194,6 +225,7 @@ export interface Embedded {
 export function embedWindow(parent: bigint, child: bigint): Embedded {
   const api = load()
   if (!api) throw new Error('Embedding is not available on this computer.')
+  api.restoreIfMaximized(child)
   const { style, ex } = api.getStyles(child)
   api.setStyles(child, ((style & ~STYLE_STRIP) | WS_CHILD | WS_CLIPSIBLINGS | WS_CLIPCHILDREN) >>> 0, (ex & ~EX_STRIP) >>> 0)
   api.setParent(child, parent)
@@ -205,6 +237,7 @@ export function embedWindow(parent: bigint, child: bigint): Embedded {
     hide: () => api.show(child, false),
     raise: () => api.raise(child),
     focus: () => api.focus(child),
+    postKey: (vk) => api.postKey(child, vk),
     holdInput: (join) => api.holdInput(child, join),
     isVisible: () => api.isVisible(child),
     parent: () => api.getParent(child),

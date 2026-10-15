@@ -1,0 +1,124 @@
+/*
+ * Copyright (c) 2023 Gaia Sky - All rights reserved.
+ *  This file is part of Gaia Sky, which is released under the Mozilla Public License 2.0.
+ *  You may use, distribute and modify this code under the terms of MPL2.
+ *  See the file LICENSE.md in the project root for full license details.
+ */
+
+package gaiasky.scene.entity;
+
+import com.badlogic.ashley.core.Entity;
+import com.badlogic.gdx.graphics.GL20;
+import gaiasky.render.ComponentTypes;
+import gaiasky.render.RenderGroup;
+import gaiasky.scene.Mapper;
+import gaiasky.scene.Scene;
+import gaiasky.scene.component.tag.TagNoProcess;
+import gaiasky.scene.view.VertsView;
+import gaiasky.util.math.MathUtilsDouble;
+import gaiasky.util.math.Vector3Q;
+
+/**
+ * Utilities to construct verts objects to function as part of keyframe visuals (points, lines, etc.).
+ */
+public class KeyframeUtils {
+
+    final VertsView vertsView;
+    public KeyframeUtils() {
+        vertsView = new VertsView();
+    }
+
+    public Entity newVerts(Scene scene,
+                           String name,
+                           ComponentTypes ct,
+                           String archetypeName,
+                           float[] color,
+                           RenderGroup rg,
+                           boolean closedLoop,
+                           float primitiveSize,
+                           boolean arrowCaps,
+                           double trailMap) {
+        var entity = scene.archetypes().get(archetypeName).createEntity();
+
+        var base = Mapper.base.get(entity);
+        base.setName(name);
+        base.ct = ct;
+        base.initialized = true;
+
+        var body = Mapper.body.get(entity);
+        body.setColor(color);
+        body.setLabelColor(color);
+        body.setSizeKm(50.0);
+
+        synchronized (vertsView) {
+            vertsView.setEntity(entity);
+            vertsView.setPrimitiveSize(primitiveSize);
+            vertsView.setRenderGroup(rg);
+            vertsView.setClosedLoop(closedLoop);
+            vertsView.setGlPrimitive(rg.isPoint() ? GL20.GL_POINTS : GL20.GL_LINE_STRIP);
+        }
+
+        var trajectory = Mapper.trajectory.get(entity);
+        if (trajectory != null) {
+            if (trailMap < 0) {
+                // Trail disabled.
+                trajectory.orbitTrail = false;
+                trajectory.setTrailMap(trailMap);
+            } else {
+                trailMap = MathUtilsDouble.clamp(trailMap, 0.0, 1.0);
+                trajectory.orbitTrail = true;
+                trajectory.setTrailMap(trailMap);
+            }
+        }
+
+        var arrow = Mapper.arrow.get(entity);
+        if (arrow != null) {
+            arrow.arrowCap = arrowCaps;
+        }
+
+        var graph = Mapper.graph.get(entity);
+        graph.translation = new Vector3Q();
+
+        // First, initialize it.
+        scene.initializeEntity(entity);
+        // Then, add no-process tag.
+        entity.add(scene.engine.createComponent(TagNoProcess.class));
+
+        return entity;
+    }
+
+    public Entity newVerts(Scene scene,
+                           String name,
+                           ComponentTypes ct,
+                           String archetypeName,
+                           float[] color,
+                           RenderGroup rg,
+                           boolean closedLoop,
+                           float primitiveSize,
+                           boolean arrowCaps) {
+        return newVerts(scene, name, ct, archetypeName, color, rg, closedLoop, primitiveSize, arrowCaps, -1);
+
+    }
+
+    public Entity newVerts(Scene scene,
+                           String name,
+                           ComponentTypes ct,
+                           String archetypeName,
+                           float[] color,
+                           RenderGroup rg,
+                           boolean closedLoop,
+                           float primitiveSize) {
+        return newVerts(scene, name, ct, archetypeName, color, rg, closedLoop, primitiveSize, false);
+    }
+
+    public Entity newVerts(Scene scene, String name, ComponentTypes ct, String className, float[] color, RenderGroup rg, boolean closedLoop, float primitiveSize, boolean blend, boolean depth) {
+        var entity = newVerts(scene, name, ct, className, color, rg, closedLoop, primitiveSize);
+
+        var verts = Mapper.verts.get(entity);
+        verts.blend = blend;
+        verts.depth = depth;
+
+        return entity;
+    }
+
+}

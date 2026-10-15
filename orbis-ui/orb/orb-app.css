@@ -140,7 +140,7 @@ body { font: 400 13px/1.45 var(--font-sans); color: var(--text); }
 /* Everything inside the ball shares the two angles, so one timeline turns the light on every layer at once rather
    than each layer keeping its own clock and slowly drifting out of step with the others. */
 .orb-body {
-  animation: orb-light 14s linear infinite;
+  /* No animated custom property: it repainted every gradient in the ball on every frame. */
 }
 
 /* The lit face: light from the upper left, falling away to a dark limb, and slowly going round. */
@@ -1084,3 +1084,13 @@ body { font: 400 13px/1.45 var(--font-sans); color: var(--text); }
 .orb-mic.transcribing {
   color: var(--accent);
 }
+
+
+/* ===== speed: only transform and opacity move, so nothing in the ball is repainted while it idles ===================== */
+.orb-rim, .orb-refract { animation: orb-turn 14s linear infinite; will-change: transform; }
+.orb-refract { mix-blend-mode: normal; opacity: .5; }
+@keyframes orb-turn { to { transform: rotate(360deg); } }
+
+.browser-orb img.orbis-mark { display: block; width: 60%; height: auto; pointer-events: none; -webkit-user-drag: none; filter: drop-shadow(0 0 6px rgba(63, 216, 255, .45)); }
+.orb-panel-head img.orbis-mark { width: 20px; height: auto; }
+@media (prefers-reduced-motion: reduce) { .orb-rim, .orb-refract { animation: none; } }

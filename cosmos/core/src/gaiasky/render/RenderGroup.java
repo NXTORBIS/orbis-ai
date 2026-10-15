@@ -1,0 +1,237 @@
+/*
+ * Copyright (c) 2023 Gaia Sky - All rights reserved.
+ *  This file is part of Gaia Sky, which is released under the Mozilla Public License 2.0.
+ *  You may use, distribute and modify this code under the terms of MPL2.
+ *  See the file LICENSE.md in the project root for full license details.
+ */
+
+package gaiasky.render;
+
+import com.badlogic.gdx.utils.Bits;
+
+public enum RenderGroup {
+    /**
+     * None.
+     **/
+    NONE(-100),
+    /**
+     * A skybox rendered with a cubemap.
+     */
+    SKYBOX(0),
+    /**
+     * Using default shader, no normal map.
+     **/
+    MODEL_BG(100),
+    /**
+     * Grids shader.
+     **/
+    MODEL_VERT_GRID(200),
+    /**
+     * Single pixel.
+     **/
+    POINT_STAR(300),
+    /**
+     * Annotations.
+     **/
+    FONT_ANNOTATION(400),
+    /**
+     * Opaque meshes (dust, etc.).
+     **/
+    MODEL_PIX_DUST(500),
+    /**
+     * PBR, per-pixel lighting (early in the rendering pipeline).
+     **/
+    MODEL_PBR_EARLY(600),
+    /**
+     * Per-vertex lighting (early in the rendering pipeline).
+     **/
+    MODEL_VERT_EARLY(700),
+    /**
+     * Group of billboard datasets.
+     **/
+    BILLBOARD_GROUP(900),
+    /**
+     * Group of billboard datasets, using procedural generation.
+     **/
+    BILLBOARD_GROUP_PROCEDURAL(901),
+    /**
+     * Fallback to procedural generation in the CPU.
+     */
+    BILLBOARD_GROUP_PROCEDURAL_CPU(902),
+    /**
+     * Particle group.
+     **/
+    PARTICLE_GROUP(1000),
+    /**
+     * Particle group (extended, billboards).
+     **/
+    PARTICLE_GROUP_EXT_BILLBOARD(1100),
+    /**
+     * Particle group (extended, wireframes).
+     **/
+    PARTICLE_GROUP_EXT_MODEL(1110),
+    /**
+     * Star group.
+     **/
+    STAR_GROUP(1300),
+    /**
+     * Variable star group.
+     **/
+    VARIABLE_GROUP(1400),
+    /**
+     * A particle defined by orbital elements.
+     **/
+    ORBITAL_ELEMENTS_PARTICLE(1500),
+    /**
+     * Models with only diffuse lighting.
+     **/
+    MODEL_DIFFUSE(1700),
+    /**
+     * PBR, per-pixel lighting.
+     **/
+    MODEL_PBR(1800),
+    /**
+     * Tessellated model.
+     **/
+    MODEL_PBR_TESS(1900),
+    /**
+     * Procedural generation with tessellation.
+     */
+    MODEL_PROCEDURAL_TESS(1910),
+    /**
+     * Model star.
+     **/
+    MODEL_VERT_STAR(2100),
+    /**
+     * A particle group defined by orbital elements.
+     **/
+    ORBITAL_ELEMENTS_GROUP(2105),
+    /**
+     * Volume models.
+     **/
+    VOLUME(2110),
+    /**
+     * Using normal shader for per-pixel lighting, rendered late for items with transparency.
+     **/
+    MODEL_PBR_TRANSPARENT(2120),
+    /**
+     * Label.
+     **/
+    FONT_LABEL(2200),
+    /**
+     * Recursive grid.
+     */
+    MODEL_VERT_RECGRID(2500),
+    /**
+     * Point.
+     **/
+    POINT(3000),
+    /**
+     * Point GPU.
+     **/
+    POINT_GPU(3100),
+    /**
+     * Line.
+     **/
+    LINE(4000),
+    /**
+     * Line GPU.
+     **/
+    LINE_GPU(4100),
+    /**
+     * IntShader - front (planets, satellites...).
+     **/
+    BILLBOARD_SSO(5000),
+    /**
+     * Regular billboard sprite.
+     **/
+    BILLBOARD_SPRITE(5300),
+    /**
+     * IntShader - galaxies.
+     **/
+    BILLBOARD_GAL(5400),
+    /**
+     * Star billboards.
+     **/
+    BILLBOARD_STAR(5500),
+    /**
+     * Atmospheres of planets.
+     **/
+    MODEL_ATM(6000),
+    /**
+     * Clouds.
+     **/
+    MODEL_CLOUD(6500),
+    /**
+     * Line late.
+     **/
+    LINE_LATE(8000),
+    /**
+     * Shapes.
+     **/
+    SHAPE(9000),
+    /**
+     * Particle effects.
+     */
+    PARTICLE_EFFECTS(10000),
+    /**
+     * Transparent additive-blended meshes.
+     **/
+    MODEL_VERT_ADDITIVE(11000),
+    /**
+     * In-scene UI, for VR.
+     **/
+    MODEL_SCENE_UI(12000),
+    /**
+     * Single sprite.
+     */
+    SPRITE(13000);
+
+    /** Render priority, to establish a rendering order among the groups. **/
+    public final int priority;
+
+    RenderGroup(int priority) {
+        this.priority = priority;
+    }
+
+    /**
+     * Adds the given render groups to the given Bits mask
+     *
+     * @param renderGroupMask The bit mask
+     * @param rgs             The render groups
+     *
+     * @return The bits instance
+     */
+    public static Bits add(Bits renderGroupMask, RenderGroup... rgs) {
+        for (RenderGroup rg : rgs) {
+            renderGroupMask.set(rg.ordinal());
+        }
+        return renderGroupMask;
+    }
+
+    /**
+     * Sets the given Bits mask to the given render groups
+     *
+     * @param renderGroupMask The bit mask
+     * @param rgs             The render groups
+     *
+     * @return The bits instance
+     */
+    public static Bits set(Bits renderGroupMask, RenderGroup... rgs) {
+        renderGroupMask.clear();
+        return add(renderGroupMask, rgs);
+    }
+
+    public boolean is(Bits renderGroupMask) {
+        return renderGroupMask.get(ordinal());
+    }
+
+    public boolean isPoint() {
+        return this.equals(POINT) || this.equals(POINT_GPU);
+    }
+
+    public boolean isLine() {
+        return this.equals(LINE) || this.equals(LINE_GPU) || this.equals(LINE_LATE);
+    }
+
+}

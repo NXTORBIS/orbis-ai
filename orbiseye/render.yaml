@@ -1,0 +1,28 @@
+# OrbisEye — Render Blueprint.
+#
+# Render reads this when you connect the repo, so the service is configured
+# without filling in a form. Free plan: no credit card, but the instance sleeps
+# after ~15 minutes idle and takes ~50s to wake on the next request.
+#
+# Every data layer works here because this runs a Node process serving the
+# /api/* proxies. A static host cannot do that — see DEPLOY.md.
+
+services:
+  - type: web
+    name: orbiseye
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /
+    envVars:
+      # OpenSky works fully anonymously; the default oauth mode would attempt a
+      # handshake with credentials that are not set.
+      - key: OPENSKY_AUTH_MODE
+        value: anon
+      # Optional keys — set them in the Render dashboard, never in this file:
+      #   GOOGLE_MAPS_API_KEY  photorealistic 3D tiles (metered; restrict it)
+      #   OPENAI_API_KEY       voice control (currently unmounted in the UI)
+      #   AISSTREAM_API_KEY    live ships
+      #   FIRMS_MAP_KEY        active fires
+      #   TOMTOM_API_KEY       real traffic instead of the simulation
+      #   ORBISEYE_ACCESS_PASSWORD  puts HTTP Basic auth in front of everything

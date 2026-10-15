@@ -1,0 +1,86 @@
+/*
+ * Appearance: Theme, Customize and Visual effects, laid out as one screen.
+ *
+ * It had grown as three unrelated blocks whose rows were each laid out by a different rule -- labels wrapping under
+ * their switches, swatches crowding the heading above them, a select drawn in the browser's default white. This
+ * gives them one frame: sections are cards, a row is a name on the left and its control on the right, and every
+ * control is the same size.
+ */
+.customize-view.is-embedded { display: flex; flex-direction: column; gap: 16px; padding: 0; }
+.customize-view.is-embedded > .view-head { padding: 0; min-height: 0; }
+.customize-view.is-embedded .cz-body, .customize-view.is-embedded .cz-panel { display: flex; flex-direction: column; gap: 14px; }
+
+/* A section: a card with a mark on its heading. */
+.customize-view .cz-section-head {
+  display: flex; align-items: center; gap: 10px; margin: 18px 0 8px; padding: 0 2px;
+  font-size: 11px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--muted);
+}
+.customize-view .cz-section-head::before {
+  content: ''; width: 3px; height: 14px; border-radius: 2px; background: linear-gradient(180deg, var(--cyan, #38bdd8), #7c5cff);
+}
+.customize-view .cz-section-head:first-child { margin-top: 4px; }
+
+/* A row: name and note on the left, the control on the right, and a hairline between rows. */
+.customize-view .cz-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 12px 14px; margin: 0;
+  border: 1px solid var(--glass-border, rgba(255,255,255,.08)); border-radius: 14px;
+  background: color-mix(in srgb, var(--panel, #11161d) 70%, transparent); transition: border-color .2s, background .2s;
+}
+.customize-view .cz-row + .cz-row { margin-top: 8px; }
+.customize-view .cz-row:hover { border-color: color-mix(in srgb, var(--cyan, #38bdd8) 40%, transparent); }
+.customize-view .cz-row > span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.customize-view .cz-row small { font-size: 12px; line-height: 1.45; opacity: .7; }
+
+/* Every checkbox in this screen is a switch. */
+.customize-view .cz-row input[type='checkbox'] {
+  appearance: none; flex: none; position: relative; width: 40px; height: 22px; margin: 0; cursor: pointer; border-radius: 999px;
+  background: color-mix(in srgb, var(--muted, #7a8794) 30%, transparent); border: 1px solid var(--glass-border, rgba(255,255,255,.1));
+  transition: background .2s, border-color .2s;
+}
+.customize-view .cz-row input[type='checkbox']::after {
+  content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff;
+  transition: transform .22s cubic-bezier(.22, 1, .36, 1);
+}
+.customize-view .cz-row input[type='checkbox']:checked { background: var(--cyan, #38bdd8); border-color: var(--cyan, #38bdd8); }
+.customize-view .cz-row input[type='checkbox']:checked::after { transform: translateX(18px); background: #04141a; }
+.customize-view .cz-row input[type='checkbox']:focus-visible { outline: 2px solid var(--cyan, #38bdd8); outline-offset: 2px; }
+
+/* Themes and wallpapers: a grid of cards that never overlap. */
+.customize-view .cz-theme-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 6px 0 10px; }
+.customize-view .cz-theme { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 10px; text-align: left; border-radius: 14px; cursor: pointer;
+  background: color-mix(in srgb, var(--panel, #11161d) 70%, transparent); border: 1px solid var(--glass-border, rgba(255,255,255,.08));
+  transition: transform .2s cubic-bezier(.22, 1, .36, 1), border-color .2s, box-shadow .2s; }
+.customize-view .cz-theme:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--cyan, #38bdd8) 45%, transparent); }
+.customize-view .cz-theme.on { border-color: var(--cyan, #38bdd8); box-shadow: 0 0 0 1px var(--cyan, #38bdd8), 0 12px 28px -16px var(--cyan, #38bdd8); }
+.customize-view .cz-theme-swatches { display: flex; gap: 4px; }
+.customize-view .cz-chips, .customize-view .cz-accents { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; }
+.customize-view .cz-presets { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; }
+.customize-view .cz-preset { padding: 12px; border-radius: 14px; border: 1px solid var(--glass-border, rgba(255,255,255,.08)); }
+.customize-view .cz-preset.on { border-color: var(--cyan, #38bdd8); }
+.customize-view .cz-note { margin: 4px 2px 10px; line-height: 1.5; }
+
+/* The segmented theme picker and the Visual effects row above and below it share the rows' frame. */
+.setting.row { gap: 18px; }
+
+/* Categories: a row of pills across the top, not a column that pushes the real controls below the fold. */
+.customize-view .cz-body { display: flex; flex-direction: column; gap: 14px; }
+.customize-view .cz-nav { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 0; margin: 0; }
+.customize-view .cz-nav .tasks-nav {
+  width: auto; display: inline-flex; align-items: center; gap: 7px; padding: 7px 13px; border-radius: 999px; font-size: 12.5px;
+  background: color-mix(in srgb, var(--panel, #11161d) 70%, transparent); border: 1px solid var(--glass-border, rgba(255,255,255,.1));
+  transition: transform .18s cubic-bezier(.22, 1, .36, 1), border-color .2s, background .2s, color .2s;
+}
+.customize-view .cz-nav .tasks-nav:hover { transform: translateY(-1px); border-color: color-mix(in srgb, var(--cyan, #38bdd8) 45%, transparent); }
+.customize-view .cz-nav .tasks-nav.on { background: color-mix(in srgb, var(--cyan, #38bdd8) 16%, transparent); border-color: var(--cyan, #38bdd8); color: var(--cyan, #38bdd8); }
+.customize-view .cz-state { flex: 1 0 100%; order: 99; padding: 8px 12px; border-radius: 12px; font-size: 12px;
+  background: color-mix(in srgb, var(--panel, #11161d) 55%, transparent); border: 1px dashed var(--glass-border, rgba(255,255,255,.1)); }
+.customize-view .cz-state p { margin: 0; }
+.customize-view .cz-panel { padding: 16px; border-radius: 18px; border: 1px solid var(--glass-border, rgba(255,255,255,.08));
+  background: color-mix(in srgb, var(--panel, #11161d) 50%, transparent); }
+.customize-view .cz-panel > header, .customize-view .cz-panel .cz-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.customize-view .cz-nav { flex-direction: row !important; overflow: visible !important; }
+.customize-view .cz-body { display: flex !important; flex-direction: column !important; grid-template-columns: none; }
+.customize-view .cz-panel { overflow: visible !important; }
+.customize-view .cz-nav { width: 100%; align-self: stretch; justify-content: flex-start; }
+.customize-view .cz-body { align-items: stretch !important; }
+.customize-view .cz-state { text-align: left; }

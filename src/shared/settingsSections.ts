@@ -25,6 +25,7 @@ export type SettingsSectionId =
   | 'notifications'
   | 'appearance'
   | 'voice'
+  | 'files'
   | 'games'
   | 'about'
 
@@ -148,6 +149,14 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = Object.freeze([
     blurb: 'Speech to text, running on this computer.',
     icon: 'mic',
     keywords: ['voice', 'speech', 'dictation', 'microphone', 'pulsar', 'transcribe', 'whisper', 'talk'],
+    settings: []
+  },
+  {
+    id: 'files',
+    label: 'Files',
+    blurb: 'The file manager and the filesystem map: what is indexed, archives, the terminal.',
+    icon: 'folder',
+    keywords: ['files', 'file manager', 'universe', 'index', 'archives', 'terminal', 'folders', 'search index', 'thumbnails'],
     settings: []
   },
   {

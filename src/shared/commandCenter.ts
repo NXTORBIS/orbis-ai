@@ -23,6 +23,7 @@ export type CommandCategory =
   | 'protection'
   | 'workspace'
   | 'tools'
+  | 'arena'
   | 'customize'
   | 'settings'
 
@@ -67,6 +68,9 @@ export const CATEGORIES: { id: CommandCategory; label: string; icon: string; blu
   // that work something out. A category of two is worth having when the alternative is filing them somewhere they
   // do not belong, which is how a list stops meaning anything.
   { id: 'tools', label: 'Tools', icon: 'pages', blurb: 'Things that work something out' },
+  // Arena: sport and competition intelligence. F1 is its first member, and it sits apart from Tools because what it
+  // holds is a subject to follow, not a thing that works something out.
+  { id: 'arena', label: 'Arena', icon: 'chart', blurb: 'Sport and competition intelligence' },
   { id: 'customize', label: 'Customize', icon: 'customize', blurb: 'How Orbis looks and what sits on the toolbar' },
   { id: 'settings', label: 'Settings', icon: 'settings', blurb: 'Every setting, found by name instead of hunted for' }
 ]
@@ -217,6 +221,11 @@ export type AppFeature =
   | 'notes'
   | 'student'
   | 'courses'
+  | 'toolkit'
+  | 'eye'
+  | 'cosmos'
+  | 'f1'
+  | 'football'
 
 /**
  * The capabilities Orbis has.
@@ -296,7 +305,7 @@ export const CAPABILITIES: OrbisCapability[] = [
     // Not pinnable: a pin needs a toolbar action registered in the fork, and there is no Focus button there yet.
     pinnable: false,
     needs: ['helper'] },
-  { id: 'music', name: 'Music', lane: 'keep', category: 'media', description: 'What is playing, your own music, and songs you hear while browsing', icon: 'volume', keywords: ['music', 'song', 'track', 'playlist', 'album', 'artist', 'play', 'pause', 'listen', 'library', 'audio', 'now playing', 'shazam', 'identify', 'recognise', 'recognize'], target: { kind: 'panel', view: 'music' }, pinnable: false, needs: ['helper'] },
+  { id: 'music', name: 'Music', lane: 'keep', category: 'media', description: 'What is playing, your own music, and songs you hear while browsing', icon: 'volume', keywords: ['music', 'song', 'track', 'playlist', 'album', 'artist', 'play', 'pause', 'listen', 'library', 'audio', 'now playing', 'shazam', 'identify', 'recognise', 'recognize'], target: { kind: 'panel', view: 'music' }, pinnable: true, needs: ['helper'] },
   { id: 'savedPages', name: 'Saved pages', lane: 'page', category: 'capture', description: 'Pages kept on this computer, readable offline', icon: 'savedPages', keywords: ['saved', 'offline', 'archive', 'keep'], target: { kind: 'view', view: 'savedPages' }, pinnable: false, needs: ['helper'] },
 
   // ---- Media
@@ -328,6 +337,11 @@ export const CAPABILITIES: OrbisCapability[] = [
   { id: 'pages', name: 'Pages', lane: 'elsewhere', category: 'tools', description: 'Orbis\u2019s own tools, each with its own address', icon: 'pages', keywords: ['page', 'tool', 'calculator', 'converter', 'lab', 'build'], target: { kind: 'app' }, app: 'pages', pinnable: false, needs: ['helper'] },
   { id: 'markets', name: 'Markets', lane: 'elsewhere', category: 'tools', description: 'Live prices, charts and watchlists', icon: 'markets', keywords: ['market', 'price', 'chart', 'crypto', 'ticker', 'watchlist', 'trading'], target: { kind: 'app' }, app: 'markets', pinnable: false, needs: ['helper'] },
   { id: 'student', name: 'Student', lane: 'elsewhere', category: 'tools', description: 'Focus sessions, goals, daily learning and Orbi', icon: 'student', keywords: ['student', 'study', 'focus', 'school', 'exam', 'revision', 'homework', 'learn', 'goal', 'pomodoro', 'timer', 'orbi', 'xp'], target: { kind: 'app' }, app: 'student', pinnable: false, needs: [] },
+  { id: 'football', name: 'Football', lane: 'elsewhere', category: 'arena', description: 'Football: live scores, fixtures, tables, goals and form from open data', icon: 'game', keywords: ['football', 'soccer', 'live scores', 'fixtures', 'results', 'table', 'standings', 'bundesliga', 'premier league', 'la liga', 'serie a', 'goals', 'match', 'league', 'arena'], target: { kind: 'app' }, app: 'football', pinnable: false, needs: [] },
+  { id: 'f1', name: 'F1', lane: 'elsewhere', category: 'arena', description: 'Formula 1: the calendar, results, standings, and lap and sector timing', icon: 'timer', keywords: ['f1', 'formula 1', 'formula one', 'grand prix', 'race', 'racing', 'standings', 'championship', 'lap times', 'sectors', 'drivers', 'constructors', 'arena', 'motorsport'], target: { kind: 'app' }, app: 'f1', pinnable: false, needs: [] },
+  { id: 'cosmos', name: 'ORBIS COSMOS', lane: 'elsewhere', category: 'tools', description: 'A real-time 3D universe: the Solar System, nearby stars and the Milky Way, simulated to scale', icon: 'star', keywords: ['cosmos', 'space', 'universe', 'solar system', 'planets', 'stars', 'galaxy', 'astronomy', 'gaia', 'sky', 'orbit'], target: { kind: 'app' }, app: 'cosmos', pinnable: false, needs: [] },
+  { id: 'eye', name: 'OrbisEye', lane: 'elsewhere', category: 'tools', description: 'A live 3D Earth: aircraft, ships, satellites, earthquakes and cameras, with voice control', icon: 'sun', keywords: ['eye', 'orbiseye', 'earth', 'globe', 'map', 'flights', 'aircraft', 'planes', 'ships', 'satellites', 'earthquakes', 'cctv', 'cameras', 'radio', 'live', 'osint', 'world'], target: { kind: 'app' }, app: 'eye', pinnable: false, needs: [] },
+  { id: 'toolkit', name: 'Toolkit', lane: 'elsewhere', category: 'tools', description: 'Over two thousand calculators, converters and lab tools that work on this computer', icon: 'grid', keywords: ['toolkit', 'tool', 'tools', 'calculator', 'converter', 'calculate', 'convert', 'formula', 'engineering', 'physics', 'chemistry', 'science', 'lab'], target: { kind: 'app' }, app: 'toolkit', pinnable: false, needs: [] },
   { id: 'courses', name: 'Courses', lane: 'elsewhere', category: 'tools', description: 'Structured learning, with what you know actually measured', icon: 'board', keywords: ['course', 'courses', 'lesson', 'module', 'curriculum', 'learn', 'learning', 'certificate', 'quiz', 'syllabus', 'tutorial', 'training'], target: { kind: 'app' }, app: 'courses', pinnable: false, needs: [] },
   /*
    * There is no Profiles row here, and that is deliberate.

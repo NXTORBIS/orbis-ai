@@ -23,6 +23,22 @@ extraResources:
   # The licences of everything Orbis is built from. Most of them require their text to travel with the app.
   - from: resources/notices.json
     to: notices.json
+  # ORBIS COSMOS, the Gaia Sky simulation (MPL-2.0): its source and assets, and what `npm run cosmos:build` made.
+  - from: cosmos
+    to: cosmos
+    filter:
+      - '**/*'
+      - '!build/**'
+      - '!core/build/**'
+      - '!.gradle/**'
+      - '!.build/runtime.txt'
+  # OrbisEye, the live Earth console: its own small server (started on demand) with the packages it needs.
+  - from: orbiseye
+    to: orbiseye
+    filter:
+      - '**/*'
+      - '!docs/**'
+      - '!.env'
   # Orbis's own Chromium build (its resources/orbis_extension is the built-in component extension), plus the extension sources the app copies to a writable folder so ad-block filter lists can be updated (built by `npm run stage:browser`).
   - from: resources/chromium
     to: chromium

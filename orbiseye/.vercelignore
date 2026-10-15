@@ -1,0 +1,15 @@
+# Vercel installs dependencies and runs the build itself, so none of this needs
+# uploading. Without these exclusions the CLI would push node_modules, the git
+# history, and ~80MB of README screen recordings on every deploy.
+node_modules
+dist
+.git
+docs
+.gev-cache
+.gev-logs
+*.log
+
+# Never upload real keys. Vercel reads them from project environment variables.
+.env
+.env.*
+!.env.example

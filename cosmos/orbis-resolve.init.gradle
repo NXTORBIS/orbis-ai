@@ -1,0 +1,32 @@
+// Used by Orbis's scripts/cosmos-build.mjs. Gaia Sky itself is not changed.
+//
+// Asks Gradle which libraries the simulation runs on and writes their coordinates (group:name:version) to the file
+// named by -Dorbis.out. It reads dependency metadata only: no library jar is downloaded by this task, which lets Orbis
+// fetch just the ones it needs for this computer (see scripts/cosmos-build.mjs) rather than every platform's.
+allprojects { p ->
+    if (p.path == ':core') {
+        p.tasks.register('orbisRuntimeCoordinates') {
+            doLast {
+                def out = new File(p.rootDir, System.getProperty('orbis.out'))
+                def seen = new TreeSet<String>()
+                p.configurations.runtimeClasspath.incoming.resolutionResult.allComponents.each { c ->
+                    if (c.id instanceof org.gradle.api.artifacts.component.ModuleComponentIdentifier) {
+                        seen.add("${c.moduleVersion.group}:${c.moduleVersion.name}:${c.moduleVersion.version}".toString())
+                    }
+                }
+                out.parentFile.mkdirs()
+                out.text = seen.join('\n') + '\n'
+            }
+        }
+    }
+}
+
+// Gaia Sky names its version from `git describe`, which inside Orbis's repository would read Orbis's tags. The real
+// release it is, from cosmos/upstream.json, is handed in instead, so the simulation reports its own version.
+gradle.beforeProject { p ->
+    if (p.path == ':core' && System.getProperty('orbis.tag')) {
+        p.extensions.extraProperties.set('tag', System.getProperty('orbis.tag'))
+        p.extensions.extraProperties.set('rev', System.getProperty('orbis.rev') ?: '???')
+        p.version = System.getProperty('orbis.tag')
+    }
+}

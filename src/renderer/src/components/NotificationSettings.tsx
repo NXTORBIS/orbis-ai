@@ -23,6 +23,8 @@ const CATEGORIES: readonly { id: NotificationCategory; label: string; what: stri
   { id: 'research', label: 'Research', what: 'When research you asked for is finished.' },
   { id: 'pages', label: 'Pages', what: 'When a Page has been built.' },
   { id: 'orion', label: 'Orion', what: 'When a long answer is ready while you are elsewhere.' },
+  { id: 'f1', label: 'F1', what: 'When a session is about to start and when a race result is published.' },
+  { id: 'football', label: 'Football', what: 'Goals, kick-off, full-time and reminders for the teams and matches you follow.' },
   { id: 'updates', label: 'Updates', what: 'When an Orbis update is ready to install.' },
   { id: 'security', label: 'Security', what: 'When Orbis stops something. These get through quiet hours.' },
   { id: 'system', label: 'Everything else', what: 'Rules you set up, and problems Orbis hits in the background.' }

@@ -18,7 +18,8 @@ const ROOT = join(import.meta.dirname, '..')
 const MAP = join(ROOT, '..', 'docs', 'ipc-mapping.md')
 
 /** How many channels the boundary may have before somebody has to look. Raise it deliberately, with a line saying why. */
-const CEILING = 540
+// 540 -> 560: Football (follows, extras, team) and F1 (prefs, circuit records, qualifying, constructor season, team radio, forecast): thirteen channels.
+const CEILING = 560
 
 async function* typescriptFiles(dir: string): AsyncGenerator<string> {
   for (const entry of await readdir(dir, { withFileTypes: true })) {

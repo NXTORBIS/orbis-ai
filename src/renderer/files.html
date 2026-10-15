@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: orbis-media: orbis-thumb:; media-src 'self' blob: orbis-media:; frame-src orbis-media:; font-src 'self' data: orbis-media:; connect-src 'self' ws://localhost:* http://localhost:*; worker-src 'self' blob:; object-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Orbis Files</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/filesMain.tsx"></script>
+  </body>
+</html>

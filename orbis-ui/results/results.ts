@@ -1484,3 +1484,21 @@ window.addEventListener('online', () => {
 })
 
 void search()
+
+// The loader (markup in the page, styles in its stylesheet) is taken away once the page has loaded. It is only in
+// Orbis's own pages; it never reaches another website.
+;(() => {
+  const loader = document.getElementById('orbis-loader')
+  if (!loader) return
+  let ended = false
+  const end = () => {
+    if (ended) return
+    ended = true
+    loader.classList.add('done')
+    setTimeout(() => loader.remove(), 520)
+  }
+  if (document.readyState === 'complete') requestAnimationFrame(end)
+  else addEventListener('load', () => setTimeout(end, 180), { once: true })
+  // A page that never finishes loading must not be hidden behind this for ever.
+  setTimeout(end, 5000)
+})()

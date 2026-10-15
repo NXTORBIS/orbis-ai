@@ -36,6 +36,7 @@ export class EmbedController {
   private child: Embedded | null = null
   private timer: NodeJS.Timeout | null = null
   private keepOnTop: NodeJS.Timeout | null = null
+  private watch: NodeJS.Timeout | null = null
   /** Whether the browser is currently showing, so the keyboard is handed over once on the way in rather than on every region update. */
   private shown = false
   private readonly parent: () => bigint | null
@@ -54,22 +55,36 @@ export class EmbedController {
   }
 
   /** The browser process started: wait for its window (it appears a moment after the process), then embed it. */
-  attach(pid: number, timeoutMs = 60_000): void {
+  attach(pid: number, timeoutMs = 60_000, find: (pid: number) => bigint | null = findBrowserWindow, supervise = false): void {
     this.detach()
     const deadline = Date.now() + timeoutMs
     const tick = (): void => {
       const parent = this.parent()
-      const hwnd = parent ? findBrowserWindow(pid) : null
+      const hwnd = parent ? find(pid) : null
       if (parent && hwnd) {
         this.child = embedWindow(parent, hwnd)
         this.timer = null
         this.keepOnTop = setInterval(() => {
           if (this.child && this.region?.visible) this.child.raise()
         }, 250)
+        // A program that makes its own window (and may make another, or put its frame back, when it changes mode) is
+        // watched: whenever its window is not a child of this one, it is made one again.
+        if (supervise) {
+          this.watch = setInterval(() => {
+            const p = this.parent()
+            const h = p ? find(pid) : null
+            if (!p || !h) return
+            if (!this.child || this.child.hwnd !== h || this.child.parent() !== p) {
+              this.child = embedWindow(p, h)
+              this.shown = false
+              this.apply()
+            }
+          }, 60)
+        }
         this.apply()
         return
       }
-      if (Date.now() < deadline) this.timer = setTimeout(tick, 50)
+      if (Date.now() < deadline) this.timer = setTimeout(tick, 15)
     }
     tick()
   }
@@ -79,6 +94,8 @@ export class EmbedController {
     this.timer = null
     if (this.keepOnTop) clearInterval(this.keepOnTop)
     this.keepOnTop = null
+    if (this.watch) clearInterval(this.watch)
+    this.watch = null
     if (this.shown) this.child?.holdInput(false)
     this.child = null
     this.shown = false

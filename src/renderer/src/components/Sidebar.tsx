@@ -5,7 +5,7 @@ import { avatarFor, avatarStyle } from '../../../shared/avatars'
 import type { LucideIcon } from 'lucide-react'
 import type { SettingsSectionId } from '../../../shared/settingsSections'
 import type { NoticeKind } from '../lib/notices'
-import { Archive, ArchiveRestore, ChevronDown, ChevronRight, CircleHelp, Download, Globe, Images, Keyboard, Pencil, Pin, PinOff, Search, SquarePen, Trash2, X } from 'lucide-react'
+import { Archive, ArchiveRestore, ChevronDown, ChevronRight, CircleHelp, Download, Dices, FolderOpen, Globe, Keyboard, Pencil, Pin, PinOff, Search, SquarePen, Trash2, X } from 'lucide-react'
 import type { Conversation } from '../../../shared/types'
 import type { StreamState } from '../lib/notices'
 import { groupConversations } from '../lib/utils'
@@ -22,6 +22,7 @@ interface Props {
   streams: Record<string, StreamState>
   imageCount: number
   imagesOpen: boolean
+  chanceOpen: boolean
   /** Changes whenever the search box should open and take focus. */
   searchToken: number
   userName: string
@@ -32,6 +33,7 @@ interface Props {
   onIncognito(): void
   onSearch(): void
   onImages(): void
+  onChance(): void
   onBrowser(): void
   onSelect(id: string): void
   onRename(id: string, title: string): void
@@ -153,7 +155,8 @@ export default function Sidebar(props: Props): React.JSX.Element {
       that is incognito still says so -- what has gone is the standing invitation.
     */
     { label: 'Search chats', icon: Search, onClick: props.onSearch },
-    { label: 'Images', icon: Images, onClick: props.onImages, active: props.imagesOpen, badge: props.imageCount },
+    { label: 'Files', icon: FolderOpen, onClick: props.onImages, active: props.imagesOpen, badge: props.imageCount },
+    { label: 'Chance', icon: Dices, onClick: props.onChance, active: props.chanceOpen },
     // Everything that manages browsing lives in the browser's own sidebar now. This is the way to it.
     { label: 'Browser', icon: Globe, onClick: props.onBrowser, shortcut: 'Ctrl+Shift+B' }
   ]

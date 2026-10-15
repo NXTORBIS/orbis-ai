@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import './appearance.css'
 import { Bell, Check, Copy, Download, FileUp, History, Image, LayoutGrid, Paintbrush, Palette, Plus, RotateCcw, ShieldCheck, Sparkles, Trash2, Undo2, Zap } from 'lucide-react'
 import type { AppearanceConfig, ExperienceConfig } from '../../../shared/experience'
 import { defaultConfig, describeConfig, diffConfig, isDefaultConfig } from '../../../shared/experience'

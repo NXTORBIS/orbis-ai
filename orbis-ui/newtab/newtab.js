@@ -10,6 +10,7 @@
 // personal, in Orbis's own store, and this page asks for them (widgets/main.ts). So the same widgets are there in every
 // window, Orion can change them, and the gallery shows exactly what a widget will look like before it is added.
 
+import { createVoiceSession } from './omnibox-ui.js'
 import { GRADIENTS, MAX_IMAGE_BYTES, MAX_SHORTCUTS, MAX_TILES, clockText, countdownText, normalizeSettings, removeShortcut, saveShortcut, siteUrl } from './newtab-logic.js'
 import * as store from './newtab-store.js'
 import { askBrowser, call } from './helper.js'
@@ -59,12 +60,166 @@ function looksLikeUrl(text) {
   if (/^[^\s/]+\.[a-z]{2,}(:\d+)?(\/.*)?$/i.test(text)) return `https://${text}`
   return null
 }
-// Two search boxes would be two places to type, and only one of them is where what you type goes. Touching the one on
-// the page hands the caret to the window's own address bar, exactly as the Electron browser did. The page's box is kept
-// because it is where the eye lands on a new tab; it is a way in to the real one, not a second one.
-const toOmnibox = (e) => { e.preventDefault(); $('q').blur(); askBrowser('orbis.focusOmnibox').catch(() => { /* not in a browser window: the box below stays usable */ }) }
-$('q').addEventListener('pointerdown', toOmnibox)
-$('q').addEventListener('focus', toOmnibox)
+// The box predicts for itself. It used to hand the caret to the window's own address bar, which left a new tab with a
+// box that predicted nothing whenever that bar was not showing; it is one box now, with the same three answers the
+// Orbis window's address bar draws on.
+// Predictions for the new tab's search box.
+//
+// The browser's own address bar finds history and search suggestions by itself. This page's box used to hand the caret
+// to it, which left a new tab with a box that predicted nothing whenever that bar was not showing. So the box predicts
+// for itself, from the same three answers the Orbis window's address bar draws on: the search engine's suggestions
+// (omnibox:web), Orion's predictions (omnibox:predict), and what only Orbis knows -- workspaces and saved research
+// (omnibox:orbis). Nothing is ranked by a model; the order is fixed and written down below.
+
+const SG_MAX_ROWS = 8
+const SG_WAIT_MS = 90
+
+const asRows = (value) => (Array.isArray(value) ? value : Array.isArray(value?.rows) ? value.rows : [])
+
+/**
+ * Order: what was typed (as an address if it is one, and as a search), then Orbis's own rows, then the search
+ * engine's suggestions, then Orion's. A row already offered under another heading is dropped.
+ */
+function buildRows(text, { web = [], orion = [], orbis = [] }) {
+  const rows = []
+  const seen = new Set()
+  const add = (row) => {
+    const key = `${row.action}:${(row.query ?? row.url ?? row.workspaceId ?? row.text).toLowerCase()}`
+    if (seen.has(key) || rows.length >= SG_MAX_ROWS) return
+    seen.add(key)
+    rows.push(row)
+  }
+  const url = looksLikeUrl(text)
+  if (url) add({ action: 'go', text: text, detail: 'Open this address', url })
+  add({ action: 'search', text, detail: 'Search with Orbis', query: text })
+  for (const r of orbis) {
+    if (!r || typeof r.text !== 'string') continue
+    if (r.workspaceId) add({ action: 'workspace', text: r.text, detail: r.detail || 'Workspace', workspaceId: r.workspaceId })
+    else if (r.url) add({ action: 'go', text: r.text, detail: r.detail || 'Saved', url: r.url })
+    else add({ action: 'search', text: r.text, detail: r.detail || 'Saved research', query: r.query || r.text })
+  }
+  for (const s of web) if (typeof s === 'string') add({ action: 'search', text: s, detail: 'Suggestion', query: s })
+  for (const s of orion) if (typeof s === 'string') add({ action: 'search', text: s, detail: 'Orion suggests', query: s })
+  return rows
+}
+
+function mountSuggest(input, form, { onPick }) {
+  const list = document.createElement('ul')
+  list.className = 'sg'
+  list.id = 'sg-list'
+  list.setAttribute('role', 'listbox')
+  list.hidden = true
+  form.appendChild(list)
+  input.setAttribute('role', 'combobox')
+  input.setAttribute('aria-expanded', 'false')
+  input.setAttribute('aria-controls', 'sg-list')
+  input.setAttribute('aria-autocomplete', 'list')
+
+  let rows = []
+  let active = -1
+  let generation = 0
+  let timer = null
+
+  const close = () => {
+    list.hidden = true
+    list.textContent = ''
+    rows = []
+    active = -1
+    input.setAttribute('aria-expanded', 'false')
+    input.removeAttribute('aria-activedescendant')
+  }
+
+  const paint = () => {
+    list.textContent = ''
+    rows.forEach((row, i) => {
+      const li = document.createElement('li')
+      li.id = `sg-${i}`
+      li.setAttribute('role', 'option')
+      li.setAttribute('aria-selected', String(i === active))
+      if (i === active) li.className = 'on'
+      const main = document.createElement('span')
+      main.className = 'sg-text'
+      main.textContent = row.text
+      const sub = document.createElement('span')
+      sub.className = 'sg-detail'
+      sub.textContent = row.detail
+      li.append(main, sub)
+      li.addEventListener('pointerdown', (e) => {
+        e.preventDefault()
+        choose(i)
+      })
+      list.appendChild(li)
+    })
+    list.hidden = rows.length === 0
+    input.setAttribute('aria-expanded', String(rows.length > 0))
+    if (active >= 0) input.setAttribute('aria-activedescendant', `sg-${active}`)
+    else input.removeAttribute('aria-activedescendant')
+  }
+
+  const choose = (i) => {
+    const row = rows[i]
+    if (!row) return
+    close()
+    onPick(row)
+  }
+
+  const refresh = async () => {
+    const text = input.value.replace(/\s+/g, ' ').trim()
+    const mine = ++generation
+    if (!text) return close()
+    // What was typed is shown at once; the answers fill in beneath it as they arrive.
+    rows = buildRows(text, {})
+    active = -1
+    paint()
+    const ask = (channel, args) => call(channel, args).catch(() => null)
+    const answers = { web: [], orion: [], orbis: [] }
+    const settle = (key, value) => {
+      if (mine !== generation) return
+      answers[key] = key === 'orbis' ? asRows(value) : Array.isArray(value) ? value : []
+      const keep = active >= 0 ? rows[active] : null
+      rows = buildRows(text, answers)
+      active = keep ? rows.findIndex((r) => r.action === keep.action && r.text === keep.text) : -1
+      paint()
+    }
+    void ask('omnibox:orbis', [text, 4]).then((v) => settle('orbis', v))
+    void ask('omnibox:web', [text]).then((v) => settle('web', v))
+    void ask('omnibox:predict', [text]).then((v) => settle('orion', v))
+  }
+
+  input.addEventListener('input', () => {
+    clearTimeout(timer)
+    timer = setTimeout(refresh, SG_WAIT_MS)
+  })
+  input.addEventListener('keydown', (e) => {
+    if (list.hidden || rows.length === 0) return
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      active = (active + 1) % rows.length
+      paint()
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      active = active <= 0 ? rows.length - 1 : active - 1
+      paint()
+    } else if (e.key === 'Enter' && active >= 0 && !e.ctrlKey && !e.metaKey) {
+      e.preventDefault()
+      choose(active)
+    } else if (e.key === 'Escape') {
+      close()
+    }
+  })
+  input.addEventListener('blur', () => setTimeout(close, 120))
+  form.addEventListener('submit', close)
+  return { close }
+}
+
+mountSuggest($('q'), $('search'), {
+  onPick: (row) => {
+    if (row.action === 'go') { location.href = row.url; return }
+    if (row.action === 'workspace') { call('workspaces:open', [row.workspaceId]).catch(() => { /* not available */ }); return }
+    const text = row.query
+    askBrowser('orbis.search', text).catch(() => { location.href = `chrome://orbis-search/#q=${encodeURIComponent(text)}` })
+  }
+})
 
 /**
  * Ctrl+Enter asks Orion instead of searching.
@@ -247,3 +402,66 @@ async function init() {
   })
 }
 void init()
+
+// The loader (markup in the page, styles in its stylesheet) is taken away once the page has loaded. It is only in
+// Orbis's own pages; it never reaches another website.
+;(() => {
+  const loader = document.getElementById('orbis-loader')
+  if (!loader) return
+  let ended = false
+  const end = () => {
+    if (ended) return
+    ended = true
+    loader.classList.add('done')
+    setTimeout(() => loader.remove(), 520)
+  }
+  if (document.readyState === 'complete') requestAnimationFrame(end)
+  else addEventListener('load', () => setTimeout(end, 180), { once: true })
+  // A page that never finishes loading must not be hidden behind this for ever.
+  setTimeout(end, 5000)
+})()
+
+
+// ---------------------------------------------------------------- speaking a search
+//
+// The same recording pipeline as the address bar. The transcript lands in the box for the person to read; nothing is
+// searched until they press Enter.
+{
+  const input = $('q')
+  const form = $('search')
+  if (input && form) {
+    const NS = 'http://www.w3.org/2000/svg'
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.className = 'nt-mic'
+    button.title = 'Search by voice'
+    button.setAttribute('aria-label', 'Search by voice')
+    button.setAttribute('aria-pressed', 'false')
+    const svg = document.createElementNS(NS, 'svg')
+    for (const [k, v] of Object.entries({ viewBox: '0 0 24 24', width: '20', height: '20', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true' })) svg.setAttribute(k, v)
+    const path = document.createElementNS(NS, 'path')
+    path.setAttribute('d', 'M9 3h6v10a3 3 0 0 1-6 0zM5 11a7 7 0 0 0 14 0M12 18v3')
+    svg.append(path)
+    button.append(svg)
+    const voice = createVoiceSession({
+      target: 'search',
+      call,
+      onUpdate: (u) => {
+        button.classList.toggle('on', u.state === 'listening')
+        button.classList.toggle('busy', u.state === 'requesting-permission' || u.state === 'initializing' || u.state === 'processing')
+        button.setAttribute('aria-pressed', String(u.state === 'listening'))
+        if (u.error) input.placeholder = u.error.message
+        if (u.text) {
+          input.value = u.text
+          input.dispatchEvent(new Event('input', { bubbles: true }))
+          input.focus()
+        }
+      }
+    })
+    if (voice.available()) {
+      form.classList.add('has-mic')
+      form.append(button)
+      button.addEventListener('click', () => (voice.state() === 'listening' ? void voice.stop() : void voice.start()))
+    }
+  }
+}

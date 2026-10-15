@@ -1,4 +1,6 @@
-import { ipcMain } from 'electron'
+import { ipcMain, nativeImage } from 'electron'
+import { promises as fsp, watch as fsWatch, type FSWatcher } from 'node:fs'
+import { join as joinPath, basename as baseName, extname as extName } from 'node:path'
 import type { WebContents } from 'electron'
 import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
 import { MusicLibrary, type ImportResult, type ScanProgress } from './library.ts'
@@ -380,6 +382,7 @@ export function createMusic(options: MusicServiceOptions): MusicHandle {
       if (chosen.length === 0) return { done: 0, total: 0, added: 0, already: 0, failed: 0 }
       const settings = await store.settings()
       if (!settings.folders.includes(chosen[0])) await store.saveSettings({ folders: [...settings.folders, chosen[0]].slice(0, 20) })
+        rewatch?.()
       return library.scanFolder(chosen[0], options.onProgress)
     },
     settings: () => store.settings(),
@@ -445,6 +448,84 @@ export function createMusic(options: MusicServiceOptions): MusicHandle {
   }
 }
 
+
+/** Looks at the folder list again now: called when a folder is added, so it is watched at once. */
+let rewatch: (() => void) | null = null
+const AUDIO_ENDS = new Set(['.mp3', '.m4a', '.mp4', '.aac', '.flac', '.ogg', '.oga', '.opus', '.wav', '.wave'])
+
+/**
+ * Watching the folders somebody asked Orbis to keep an eye on.
+ *
+ * One watcher per folder, with the changes gathered for a couple of seconds before anything is read: copying an album
+ * in fires hundreds of events, and one scan after they settle is cheaper than hundreds. A removed file only marks its
+ * track missing -- nothing is deleted, because an unplugged drive looks exactly the same.
+ */
+function watchMusicFolders(o: { music: MusicHandle; userData: string; onProgress(progress: ScanProgress): void }): void {
+  const watchers = new Map<string, FSWatcher>()
+  const timers = new Map<string, ReturnType<typeof setTimeout>>()
+  const settle = (folder: string): void => {
+    clearTimeout(timers.get(folder))
+    timers.set(
+      folder,
+      setTimeout(async () => {
+        timers.delete(folder)
+        try {
+          await o.music.library.scanFolder(folder, o.onProgress)
+          await o.music.library.checkFiles()
+        } catch {
+          // A folder that cannot be read right now is tried again at the next change.
+        }
+      }, 2500)
+    )
+  }
+  const reconcile = async (): Promise<void> => {
+    let folders: string[] = []
+    try {
+      folders = (await o.music.store.settings()).folders
+    } catch {
+      return
+    }
+    for (const [folder, watcher] of watchers) {
+      if (!folders.includes(folder)) {
+        watcher.close()
+        watchers.delete(folder)
+      }
+    }
+    for (const folder of folders) {
+      if (watchers.has(folder)) continue
+      try {
+        const watcher = fsWatch(folder, { recursive: true, persistent: false }, (_event, name) => {
+          const ending = typeof name === 'string' ? extName(name).toLowerCase() : ''
+          // A file with an audio ending, or no ending at all (a folder moved or removed), is worth a look.
+          if (ending !== '' && !AUDIO_ENDS.has(ending)) return
+          settle(folder)
+        })
+        watcher.on('error', () => {
+          watcher.close()
+          watchers.delete(folder)
+        })
+        watchers.set(folder, watcher)
+      } catch {
+        // Not there (an unplugged drive, a deleted folder): tried again on the next pass.
+      }
+    }
+  }
+  rewatch = () => void reconcile()
+  void reconcile()
+  // The folder list can change while Orbis runs; a once-a-minute look is all that needs.
+  const timer = setInterval(() => void reconcile(), 60_000)
+  timer.unref?.()
+}
+
+/** Pieces of a dragged-in file, kept until the last one arrives. */
+const dropping = new Map<string, { path: string; bytes: number }>()
+const DROP_LIMIT = 400 * 1024 * 1024
+const safeName = (name: unknown): string => {
+  const raw = typeof name === 'string' ? baseName(name.replace(/\\/g, '/')) : ''
+  const clean = raw.replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').trim().slice(0, 150)
+  return clean && clean !== '.' && clean !== '..' ? clean : 'track'
+}
+
 /**
  * The window's one way in.
  *
@@ -460,8 +541,11 @@ export function registerMusicIpc(o: {
   /** Asks the operating system for files, through the picker Orbis already uses. */
   pickFiles(kind: 'files' | 'folder'): Promise<string[]>
   onProgress(progress: ScanProgress): void
+  /** Where dragged-in songs are kept: a folder the person can see, never Orbis's own data folder. */
+  dropFolder?: string
 }): void {
   const { music } = o
+  watchMusicFolders(o)
   const mine = (event: IpcMainInvokeEvent): boolean => event.sender === o.getWindow()?.webContents
 
   /**
@@ -607,8 +691,239 @@ export function registerMusicIpc(o: {
       // ---------------------------------------------------------------- the library
       case 'favourite':
         return id(a) ? port.favourite(id(a)!, b === true) : null
-      case 'edit':
-        return id(a) && b && typeof b === 'object' ? store.update(id(a)!, b as Partial<OrbisTrack>, true) : null
+      case 'edit': {
+        /*
+         * Changing a track's names, kept in the library -- the audio file itself is never rewritten.
+         *
+         * Only these fields can be set from here, and each is checked: a patch that could also name a file or flip
+         * a track to "playable" would let a request point the player at any path on the disk.
+         */
+        const trackId = id(a)
+        if (!trackId || !b || typeof b !== 'object') return { ok: false, why: 'That is not a track.' }
+        const r = b as Record<string, unknown>
+        const patch: Partial<OrbisTrack> = {}
+        const word = (key: 'title' | 'artist' | 'album' | 'albumArtist' | 'genre', max: number): void => {
+          if (typeof r[key] === 'string') patch[key] = (r[key] as string).replace(/\s+/g, ' ').trim().slice(0, max)
+        }
+        word('title', 200)
+        word('artist', 200)
+        word('album', 200)
+        word('albumArtist', 200)
+        word('genre', 80)
+        const whole = (key: 'year' | 'trackNumber' | 'discNumber', lo: number, hi: number): string | null => {
+          if (!(key in r)) return null
+          const v = r[key]
+          if (v === null || v === '' || v === undefined) {
+            patch[key] = undefined
+            return null
+          }
+          const n = typeof v === 'number' ? v : Number(v)
+          if (!Number.isInteger(n) || n < lo || n > hi) return `${key === 'year' ? 'The year' : key === 'trackNumber' ? 'The track number' : 'The disc number'} must be a whole number from ${lo} to ${hi}.`
+          patch[key] = n
+          return null
+        }
+        const bad = whole('year', 1000, 3000) ?? whole('trackNumber', 1, 999) ?? whole('discNumber', 1, 99)
+        if (bad) return { ok: false, why: bad }
+        if (patch.title !== undefined && patch.title === '') return { ok: false, why: 'A song needs a title.' }
+        const next = await store.update(trackId, patch, true)
+        return next ? { ok: true, track: next } : { ok: false, why: 'That track is not in your library any more.' }
+      }
+      case 'set-artwork': {
+        /*
+         * A picture chosen by the person for one track.
+         *
+         * It is checked as a picture (the format by its first bytes, then decoded to read its real size), kept
+         * inside the profile, and never fetched from an address. Passing `null` puts back the file's own artwork.
+         */
+        const trackId = id(a)
+        const held = trackId ? await store.track(trackId) : null
+        if (!trackId || !held) return { ok: false, why: 'That is not a track.' }
+        const given = b && typeof b === 'object' ? (b as { data?: unknown }) : null
+        await store.prepare()
+        const folder = store.artworkFolder()
+        if (!given || given.data === null || given.data === undefined) {
+          // Back to what the file carried, if it carried anything; otherwise to no picture.
+          const own = held.file ? await library.ownArtwork(trackId, held.file) : undefined
+          const next = await store.update(trackId, { artwork: own }, true)
+          if (next) await store.put({ ...next, artworkChosen: false })
+          return { ok: true, artwork: own ?? null }
+        }
+        if (typeof given.data !== 'string' || given.data.length > 7 * 1024 * 1024) return { ok: false, why: 'That picture is too large. Choose one under 5 MB.' }
+        const bytes = Buffer.from(given.data, 'base64')
+        if (bytes.length === 0 || bytes.length > 5 * 1024 * 1024) return { ok: false, why: 'That picture is too large. Choose one under 5 MB.' }
+        const kind =
+          bytes[0] === 0xff && bytes[1] === 0xd8 ? '.jpg'
+          : bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47 ? '.png'
+          : bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46 ? '.gif'
+          : bytes[0] === 0x52 && bytes[1] === 0x49 && bytes.subarray(8, 12).toString('ascii') === 'WEBP' ? '.webp'
+          : null
+        if (!kind) return { ok: false, why: 'Orbis can use PNG, JPEG, WebP or GIF pictures.' }
+        const image = nativeImage.createFromBuffer(bytes)
+        if (image.isEmpty()) return { ok: false, why: 'That file could not be read as a picture.' }
+        const size = image.getSize()
+        if (size.width < 64 || size.height < 64) return { ok: false, why: `That picture is ${size.width}×${size.height}. Artwork needs to be at least 64×64.` }
+        if (size.width > 6000 || size.height > 6000) return { ok: false, why: `That picture is ${size.width}×${size.height}, which is larger than Orbis keeps (6000×6000).` }
+        const path = joinPath(folder, `${trackId}-custom${kind}`)
+        await fsp.writeFile(path, bytes, { mode: 0o600 })
+        const next = await store.update(trackId, { artwork: path }, true)
+        return next ? { ok: true, artwork: path, width: size.width, height: size.height } : { ok: false, why: 'That track is not in your library any more.' }
+      }
+      case 'artwork': {
+        // Small pictures for a list of tracks: a thumbnail each, read from the profile, never from the web.
+        const wanted = Array.isArray(a) ? a.filter((one): one is string => typeof one === 'string').slice(0, 60) : []
+        const out: Record<string, string> = {}
+        for (const trackId of wanted) {
+          const held = await store.track(trackId)
+          if (!held?.artwork) continue
+          try {
+            const image = nativeImage.createFromPath(held.artwork)
+            if (image.isEmpty()) continue
+            const { width, height } = image.getSize()
+            const scale = 160 / Math.max(width, height)
+            const small = scale < 1 ? image.resize({ width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)), quality: 'good' }) : image
+            out[trackId] = small.toDataURL()
+          } catch {
+            // A picture that cannot be read is a track without one.
+          }
+        }
+        return out
+      }
+      case 'export': {
+        /*
+         * A copy of what Orbis knows, as a file the person saves.
+         *
+         * Names and playlists only. File locations are left out unless asked for: a path says a good deal about a
+         * computer, and an export is something people send to other people.
+         */
+        const kind = a === 'playlists' ? 'playlists' : a === 'library' ? 'library' : null
+        if (!kind) return { ok: false, why: 'Choose what to export.' }
+        const withPaths = b === true
+        const tracks = await store.all()
+        const row = (t: OrbisTrack): Record<string, unknown> => ({
+          title: t.title, artist: t.artist, album: t.album, albumArtist: t.albumArtist, genre: t.genre, year: t.year,
+          trackNumber: t.trackNumber, duration: t.duration, favourite: t.favourite || undefined, playCount: t.playCount || undefined,
+          file: withPaths ? t.file : t.file ? baseName(t.file) : undefined
+        })
+        if (kind === 'library') return { ok: true, name: 'orbis-music-library.json', text: JSON.stringify({ orbisMusic: 1, kind, tracks: tracks.map(row) }, null, 2) }
+        const lists = await store.lists()
+        const byId = new Map(tracks.map((t) => [t.id, t]))
+        const rows = []
+        for (const list of lists) {
+          const members = list.rule ? await port.playlistTracks(list.id) : list.tracks.map((one) => byId.get(one)).filter((one): one is OrbisTrack => Boolean(one))
+          rows.push({ name: list.name, smart: list.rule ?? undefined, tracks: members.map(row) })
+        }
+        return { ok: true, name: 'orbis-music-playlists.json', text: JSON.stringify({ orbisMusic: 1, kind, playlists: rows }, null, 2) }
+      }
+      case 'export-m3u': {
+        const listId = id(a)
+        const list = listId ? (await store.lists()).find((one) => one.id === listId) : null
+        if (!list) return { ok: false, why: 'That is not a playlist.' }
+        const members = await port.playlistTracks(list.id)
+        const lines = ['#EXTM3U']
+        for (const t of members) {
+          lines.push(`#EXTINF:${Math.round(t.duration || 0)},${[t.artist, t.title].filter(Boolean).join(' - ')}`)
+          lines.push(t.file ? baseName(t.file) : `${t.artist} - ${t.title}`)
+        }
+        return { ok: true, name: `${safeName(list.name).replace(/\.[^.]*$/, '')}.m3u`, text: lines.join('\n') + '\n' }
+      }
+      case 'import-playlist': {
+        /*
+         * A playlist read from a file somebody already has (.m3u, .m3u8, or an Orbis export).
+         *
+         * Entries are matched to songs already in the library by file name, then by artist and title. Nothing is
+         * downloaded for an entry that is not there: it is counted and reported.
+         */
+        const text = typeof b === 'string' ? b.slice(0, 2_000_000) : ''
+        const given = typeof a === 'string' ? a.replace(/\.[^.]*$/, '').trim().slice(0, 80) : ''
+        if (!text.trim()) return { ok: false, why: 'That file is empty.' }
+        const tracks = await store.all()
+        const flat = (v: string): string => v.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()
+        const byFile = new Map<string, OrbisTrack>()
+        const byName = new Map<string, OrbisTrack>()
+        for (const t of tracks) {
+          if (t.file) byFile.set(baseName(t.file).toLowerCase(), t)
+          byName.set(`${flat(t.artist)}|${flat(t.title)}`, t)
+          if (!byName.has(`|${flat(t.title)}`)) byName.set(`|${flat(t.title)}`, t)
+        }
+        const wanted: { file?: string; artist?: string; title?: string }[] = []
+        let title = given
+        if (text.trimStart().startsWith('{')) {
+          try {
+            const parsed = JSON.parse(text) as { playlists?: { name?: string; tracks?: { file?: string; artist?: string; title?: string }[] }[]; tracks?: { file?: string; artist?: string; title?: string }[] }
+            const first = parsed.playlists?.[0]
+            if (first?.name && !title) title = String(first.name).slice(0, 80)
+            for (const e of first?.tracks ?? parsed.tracks ?? []) wanted.push({ file: typeof e.file === 'string' ? baseName(e.file) : undefined, artist: e.artist, title: e.title })
+          } catch {
+            return { ok: false, why: 'That file is not a playlist Orbis can read.' }
+          }
+        } else {
+          let pending: { artist?: string; title?: string } = {}
+          for (const raw of text.split(/\r?\n/)) {
+            const line = raw.trim()
+            if (!line) continue
+            if (line.startsWith('#EXTINF')) {
+              const label = line.slice(line.indexOf(',') + 1)
+              const cut = label.indexOf(' - ')
+              pending = cut > 0 ? { artist: label.slice(0, cut).trim(), title: label.slice(cut + 3).trim() } : { title: label.trim() }
+            } else if (!line.startsWith('#')) {
+              wanted.push({ file: baseName(line.replace(/\\/g, '/')), ...pending })
+              pending = {}
+            }
+          }
+        }
+        if (wanted.length === 0) return { ok: false, why: 'There are no songs listed in that file.' }
+        const ids: string[] = []
+        let missing = 0
+        for (const w of wanted) {
+          const hit = (w.file && byFile.get(w.file.toLowerCase())) || byName.get(`${flat(w.artist ?? '')}|${flat(w.title ?? '')}`) || (w.title ? byName.get(`|${flat(w.title)}`) : undefined)
+          if (hit) {
+            if (!ids.includes(hit.id)) ids.push(hit.id)
+          } else missing++
+        }
+        if (ids.length === 0) return { ok: false, why: `None of the ${wanted.length} songs in that file are in your library yet.`, missing }
+        const made = await store.createList(title || 'Imported playlist', ids)
+        return { ok: true, playlist: made, matched: ids.length, missing }
+      }
+      case 'organise-plan': {
+        // What tidying would do, as a list. Nothing is moved by asking.
+        const roots = (await store.settings()).folders
+        const moves: { id: string; from: string; to: string }[] = []
+        for (const t of await store.all()) {
+          if (!t.file || t.availability !== 'local') continue
+          const root = roots.find((r) => t.file!.toLowerCase().startsWith(joinPath(r, '').toLowerCase()))
+          if (!root) continue
+          const clean = (v: string, fallback: string): string => safeName(v || fallback).replace(/\.+$/, '') || fallback
+          const to = joinPath(root, clean(t.albumArtist || t.artist, 'Unknown artist'), clean(t.album, 'Unknown album'), `${clean(t.trackNumber ? `${String(t.trackNumber).padStart(2, '0')} ${t.title}` : t.title, 'Track')}${extName(t.file)}`)
+          if (to.toLowerCase() !== t.file.toLowerCase()) moves.push({ id: t.id, from: t.file, to })
+        }
+        return { ok: true, count: moves.length, examples: moves.slice(0, 5).map((m) => ({ from: m.from, to: m.to })), ids: moves.map((m) => m.id) }
+      }
+      case 'organise-apply': {
+        // Moves only the files named by an explicit confirmation, never over an existing file.
+        if (b !== true) return { ok: false, why: 'Organising moves files, so it needs to be confirmed.' }
+        const roots = (await store.settings()).folders
+        let moved = 0
+        let skipped = 0
+        for (const trackId of Array.isArray(a) ? a.filter((one): one is string => typeof one === 'string').slice(0, 5000) : []) {
+          const t = await store.track(trackId)
+          if (!t?.file) continue
+          const root = roots.find((r) => t.file!.toLowerCase().startsWith(joinPath(r, '').toLowerCase()))
+          if (!root) { skipped++; continue }
+          const clean = (v: string, fallback: string): string => safeName(v || fallback).replace(/\.+$/, '') || fallback
+          const to = joinPath(root, clean(t.albumArtist || t.artist, 'Unknown artist'), clean(t.album, 'Unknown album'), `${clean(t.trackNumber ? `${String(t.trackNumber).padStart(2, '0')} ${t.title}` : t.title, 'Track')}${extName(t.file)}`)
+          if (to.toLowerCase() === t.file.toLowerCase()) continue
+          try {
+            if (await fsp.stat(to).then(() => true, () => false)) { skipped++; continue }
+            await fsp.mkdir(joinPath(to, '..'), { recursive: true })
+            await fsp.rename(t.file, to)
+            await store.update(trackId, { file: to })
+            moved++
+          } catch {
+            skipped++
+          }
+        }
+        return { ok: true, moved, skipped }
+      }
       case 'remove':
         // Out of the library. The file is left exactly where it is.
         return id(a) ? store.remove(id(a)!) : false
@@ -655,7 +970,77 @@ export function registerMusicIpc(o: {
         if (chosen.length === 0) return null
         const settings = await store.settings()
         if (!settings.folders.includes(chosen[0])) await store.saveSettings({ folders: [...settings.folders, chosen[0]].slice(0, 20) })
+        rewatch?.()
         return library.scanFolder(chosen[0], o.onProgress)
+      }
+      case 'drop-chunk': {
+        /*
+         * A song dragged onto the panel.
+         *
+         * A web page is never told where a dropped file lives, so the file arrives in pieces and is put together in
+         * a folder the person can see. Only when the last piece is in is it read and added, like any other file.
+         */
+        const piece = a && typeof a === 'object' ? (a as { name?: unknown; key?: unknown; data?: unknown; last?: unknown }) : null
+        const folder = o.dropFolder
+        if (!piece || !folder) return { ok: false, why: 'Dropping files is not available here.' }
+        const key = typeof piece.key === 'string' ? piece.key.slice(0, 80) : ''
+        const name = safeName(piece.name)
+        if (!key || typeof piece.data !== 'string') return { ok: false, why: 'That file did not arrive properly.' }
+        if (!AUDIO_ENDS.has(extName(name).toLowerCase())) return { ok: false, why: `${name} is not an audio file Orbis can play.` }
+        const bytes = Buffer.from(piece.data, 'base64')
+        let held = dropping.get(key)
+        if (!held) {
+          await fsp.mkdir(folder, { recursive: true })
+          let target = joinPath(folder, name)
+          for (let n = 2; await fsp.stat(target).then(() => true, () => false); n++) {
+            target = joinPath(folder, `${baseName(name, extName(name))} (${n})${extName(name)}`)
+          }
+          await fsp.writeFile(target, Buffer.alloc(0))
+          held = { path: target, bytes: 0 }
+          dropping.set(key, held)
+        }
+        held.bytes += bytes.length
+        if (held.bytes > DROP_LIMIT) {
+          dropping.delete(key)
+          await fsp.rm(held.path, { force: true })
+          return { ok: false, why: `${name} is larger than Orbis will take in one drop.` }
+        }
+        await fsp.appendFile(held.path, bytes)
+        if (piece.last !== true) return { ok: true, finished: false }
+        dropping.delete(key)
+        const outcome = await library.importFiles([held.path], o.onProgress)
+        if (outcome.added === 0 && outcome.already === 0) await fsp.rm(held.path, { force: true })
+        const settings = await store.settings()
+        if (!settings.folders.includes(folder) && outcome.added > 0) await store.saveSettings({ folders: [...settings.folders, folder].slice(0, 20) })
+        rewatch?.()
+        return { ok: true, finished: true, ...outcome }
+      }
+      case 'smart-playlist': {
+        // A playlist that is a question about the library, answered afresh each time it is opened.
+        const name = typeof a === 'string' ? a.trim().slice(0, 80) : ''
+        if (!name) return { ok: false, why: 'Give the playlist a name.' }
+        const r = b && typeof b === 'object' ? (b as Record<string, unknown>) : {}
+        const text = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.trim().slice(0, 120) : undefined)
+        const num = (v: unknown, lo: number, hi: number): number | undefined =>
+          typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, Math.round(v))) : undefined
+        const rule: import('../../shared/music.ts').PlaylistRule = {
+          favourite: r.favourite === true ? true : undefined,
+          artist: text(r.artist),
+          album: text(r.album),
+          genre: text(r.genre),
+          yearFrom: num(r.yearFrom, 1000, 3000),
+          yearTo: num(r.yearTo, 1000, 3000),
+          addedWithinDays: num(r.addedWithinDays, 1, 3650),
+          playedWithinDays: num(r.playedWithinDays, 1, 3650),
+          availableOffline: r.availableOffline === true ? true : undefined,
+          order: r.order === 'plays' || r.order === 'recent' || r.order === 'added' || r.order === 'title' ? r.order : undefined,
+          limit: num(r.limit, 1, 500)
+        }
+        const hasRule = [rule.favourite, rule.artist, rule.album, rule.genre, rule.yearFrom, rule.yearTo, rule.addedWithinDays, rule.playedWithinDays, rule.availableOffline].some((v) => v !== undefined)
+        if (!hasRule) return { ok: false, why: 'Pick at least one rule for the playlist.' }
+        const made = await store.createList(name, [], rule)
+        const rows = await port.playlistTracks(made.id)
+        return { ok: true, playlist: made, count: rows.length }
       }
       case 'stop-scan':
         return library.stopScan()

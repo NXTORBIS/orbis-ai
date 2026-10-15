@@ -1,7 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AVATARS, DEFAULT_AVATAR, avatarStyle } from '../../../shared/avatars'
 import { Modal } from '../ui'
-import { Gamepad2, Globe, Info, Lock, Mic, Palette, Search, Sparkles, User, X } from 'lucide-react'
+import { FolderOpen, Gamepad2, Globe, Info, Lock, Mic, Palette, Search, Sparkles, User, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import type { DefaultBrowserState, Settings, SettingsUpdate, Theme } from '../../../shared/types'
 import { MODELS } from '../../../shared/models'
@@ -47,6 +47,8 @@ interface Props {
    * wanted from there.
    */
   section?: SettingsSectionId
+  /** Opens the Files screen on one of its own pages, closing Settings. */
+  onOpenFiles?(tool: string): void
 }
 
 const THEME_OPTIONS: [Theme, string][] = [
@@ -66,10 +68,11 @@ const ICONS: Record<string, LucideIcon> = {
   palette: Palette,
   mic: Mic,
   gamepad: Gamepad2,
+  folder: FolderOpen,
   info: Info
 }
 
-export default function SettingsModal({ settings, onUpdate, onClose, section }: Props): React.JSX.Element {
+export default function SettingsModal({ settings, onUpdate, onClose, section, onOpenFiles }: Props): React.JSX.Element {
   // The keyboard stays in the dialog while it is open, and goes back where it was afterwards. That used to be a
   // `useFocusTrap(settingsRef, true)` written here; the dialog does it now, with the same hook and the same `true`,
   // so the panel no longer needs a ref of its own. Settings was the only screen that had this. Now all of them do.
@@ -566,6 +569,27 @@ export default function SettingsModal({ settings, onUpdate, onClose, section }: 
                 <Suspense fallback={null}>
                   <VoiceSettings />
                 </Suspense>
+              </section>
+            )}
+
+            {/* ---------------------------------------------------------------- Files */}
+            {active === 'files' && (
+              <section className="setting">
+                <div className="setting-label">
+                  <h3>File manager and Universe</h3>
+                  <p>
+                    Files has options of its own: what is indexed for search, how archives open, the built-in terminal and
+                    where templates live. Appearance, shortcuts, profiles and AI use the settings you already have here.
+                  </p>
+                </div>
+                <div className="field-grid">
+                  <button type="button" className="btn" onClick={() => onOpenFiles?.('settings')}>
+                    Open file manager options
+                  </button>
+                  <button type="button" className="btn" onClick={() => onOpenFiles?.('universeExplorer')}>
+                    Open Universe
+                  </button>
+                </div>
               </section>
             )}
 

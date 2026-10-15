@@ -57,7 +57,7 @@ function draw() {
   const on = settings.enabled
 
   root.append(
-    el('section', {}, el('div', { class: 'row' }, el('strong', { class: 'grow' }, on ? 'Ad blocking is on' : 'Ad blocking is off'), el('button', { onclick: () => act({ type: 'adblock:settings', update: { enabled: !on } }) }, on ? 'Turn off' : 'Turn on')),
+    el('section', { class: `shield-hero ${on ? 'on' : 'off'}` }, el('div', { class: 'row' }, el('span', { class: 'shield', 'aria-hidden': 'true' }, on ? '✓' : '–'), el('strong', { class: 'grow' }, on ? 'Ad blocking is on' : 'Ad blocking is off'), el('button', { onclick: () => act({ type: 'adblock:settings', update: { enabled: !on } }) }, on ? 'Turn off' : 'Turn on')),
       state.ready ? null : el('div', { class: 'muted' }, 'The filter lists are not built yet, so pages are not being filtered. Use “Update filters” below.'))
   )
 

@@ -1,0 +1,1053 @@
+/**
+ * Random graph models, each paired with the analytic properties it is known
+ * for. The point of generating a random graph in a risk tool is not the graph
+ * but the comparison: a measured quantity next to the value theory predicts,
+ * so that a surprising measurement can be told apart from a bug.
+ */
+import { brentRoot } from '../core/numeric';
+import { EngineError, Validator } from '../core/result';
+import { Random } from '../random/rng';
+import { graphFromPairs } from './graph';
+import { degreeSummary } from './measures';
+import type { Graph, NetworkQuantity } from './types';
+import { CONDITIONAL_ON_STRUCTURE, NETWORK_LIMITS, nq } from './types';
+
+export interface GeneratedGraph {
+  graph: Graph;
+  model: string;
+  parameters: Record<string, number>;
+  /** What theory says about a graph drawn from this model. */
+  analytic: NetworkQuantity[];
+  notes: string[];
+  conditionalOn: string;
+}
+
+function checkN(n: number, v: Validator, field = 'n'): void {
+  v.integer(n, field, 'Number of nodes n', 1, NETWORK_LIMITS.maxNodes);
+}
+
+/* --------------------------------------------------------- Erdős–Rényi */
+
+/**
+ * The analytic giant-component fraction of G(n,p) at mean degree c: the
+ * non-zero root of S = 1 - exp(-cS).
+ *
+ * For c <= 1 the only root is S = 0 and the model has no giant component — the
+ * largest component is O(log n). For c > 1 the root is positive and is
+ * returned. This is the phase transition, and it is why a list-of-exposures
+ * intuition fails on a network: nothing about mean degree 0.9 hints at the
+ * behaviour at 1.1.
+ */
+export function erdosRenyiGiantFraction(meanDegree: number): NetworkQuantity {
+  const v = new Validator();
+  v.nonNegative(meanDegree, 'meanDegree', 'Mean degree c');
+  v.throwIfInvalid();
+  if (meanDegree <= 1) {
+    return nq('Analytic giant component fraction S', 0, 'exact', {
+      formula: 'S = 1 - exp(-cS); for c <= 1 the only root is S = 0',
+      note: `At mean degree c = ${meanDegree} <= 1 there is no giant component in the large-n limit: the largest ` +
+        'component is O(log n), not a constant fraction of n. This is exact, not an approximation.',
+    });
+  }
+  const f = (s: number) => 1 - Math.exp(-meanDegree * s) - s;
+  // S = 0 is always a root; the non-trivial one is bracketed between a small
+  // positive S where f > 0 (because f'(0) = c - 1 > 0) and S = 1, where
+  // f(1) = -exp(-c) < 0. The lower end has to be searched for rather than
+  // fixed: just above c = 1 the function is positive only on a tiny interval,
+  // and far above it a fixed small S underflows.
+  let lo = 0;
+  for (const candidate of [1e-12, 1e-9, 1e-6, 1e-4, 1e-3, 1e-2, 0.1]) {
+    if (f(candidate) > 0) {
+      lo = candidate;
+      break;
+    }
+  }
+  let root: number;
+  try {
+    if (lo === 0) throw new EngineError('no bracket', 'numerical');
+    root = brentRoot(f, lo, 1, { tol: 1e-15, maxIter: 400 });
+  } catch {
+    throw new EngineError(
+      `Could not bracket the non-trivial root of S = 1 - exp(-cS) at c = ${meanDegree}. No giant-component fraction ` +
+        'is reported rather than a guessed one.',
+      'nonconvergent',
+    );
+  }
+  if (!(root > 0) || !Number.isFinite(root)) {
+    throw new EngineError(
+      `Root finding for S = 1 - exp(-cS) at c = ${meanDegree} returned ${root}, which is not a valid giant-component fraction.`,
+      'nonconvergent',
+    );
+  }
+  return nq('Analytic giant component fraction S', root, 'numerical', {
+    formula: 'S = 1 - exp(-cS), non-zero root',
+    note: 'The large-n limit for the Poisson (Erdős–Rényi / configuration-with-Poisson-degrees) case. A finite graph ' +
+      'scatters around it by O(n^-1/2) away from the threshold, and by much more close to it.',
+  });
+}
+
+function erdosRenyiAnalytics(n: number, p: number): NetworkQuantity[] {
+  const c = p * (n - 1);
+  return [
+    nq('Expected mean degree', c, 'exact', { formula: '<k> = p(n-1)' }),
+    nq('Expected edge count', (p * n * (n - 1)) / 2, 'exact', { formula: 'E[m] = p C(n,2)' }),
+    nq('Giant-component threshold (mean degree)', 1, 'exact', {
+      formula: 'c_c = 1, i.e. p_c = 1/(n-1)',
+      note: 'Below it the largest component is O(log n); above it a constant fraction of the graph. The transition is ' +
+        'the headline fact about this model.',
+    }),
+    erdosRenyiGiantFraction(c),
+    nq('Expected clustering', p, 'exact', {
+      formula: 'C = p',
+      note: 'Vanishes as 1/n at fixed mean degree, which is why G(n,p) is a poor model of social contact networks: ' +
+        'real ones are strongly clustered and clustering suppresses spread.',
+    }),
+    nq('Connectivity threshold (sharp)', (Math.log(n) / n) * (n - 1), 'exact', {
+      formula: 'p = ln n / n, i.e. c = ln n',
+      note: 'Above it the graph is almost surely fully connected with no isolated nodes — a different and much later ' +
+        'threshold than the giant-component one.',
+    }),
+  ];
+}
+
+/**
+ * G(n,p): every pair of nodes joined independently with probability p.
+ *
+ * Generated by the Batagelj–Brandes geometric-skip method, which costs
+ * O(n + m) rather than O(n^2), so a sparse graph on 10^5 nodes is feasible.
+ */
+export function erdosRenyiGnp(n: number, p: number, seed: string | number): GeneratedGraph {
+  const v = new Validator();
+  checkN(n, v);
+  v.probability(p, 'p', 'Edge probability p');
+  v.throwIfInvalid();
+  const expectedEdges = (p * n * (n - 1)) / 2;
+  if (expectedEdges > NETWORK_LIMITS.maxEdges) {
+    throw new EngineError(
+      `G(${n}, ${p}) has about ${Math.round(expectedEdges)} expected edges, above the limit of ${NETWORK_LIMITS.maxEdges}. ` +
+        'Lower p or n.',
+      'limit',
+    );
+  }
+  const rng = new Random(seed);
+  const pairs: [number, number][] = [];
+  if (p > 0) {
+    if (p >= 1) {
+      for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) pairs.push([i, j]);
+    } else {
+      const logQ = Math.log1p(-p);
+      let w = 1;
+      let i = 1;
+      let j = -1;
+      while (i < n) {
+        const lr = Math.log1p(-rng.uniformOpen());
+        j += 1 + Math.floor(lr / logQ);
+        while (j >= i && i < n) {
+          j -= i;
+          i += 1;
+        }
+        if (i < n) pairs.push([i, j]);
+        w++;
+        if (w > NETWORK_LIMITS.maxEdges + n + 10) break;
+      }
+    }
+  }
+  return {
+    graph: graphFromPairs(n, pairs),
+    model: 'erdos-renyi-gnp',
+    parameters: { n, p },
+    analytic: erdosRenyiAnalytics(n, p),
+    notes: [
+      'G(n,p): edges independent, degrees Binomial(n-1, p), tending to Poisson(c) at large n and fixed c.',
+      'Assumes independence between every pair — exactly the assumption real dependency networks violate.',
+    ],
+    conditionalOn: CONDITIONAL_ON_STRUCTURE,
+  };
+}
+
+/** G(n,m): a uniformly random graph with exactly m edges. */
+export function erdosRenyiGnm(n: number, m: number, seed: string | number): GeneratedGraph {
+  const v = new Validator();
+  checkN(n, v);
+  const maxEdges = (n * (n - 1)) / 2;
+  v.integer(m, 'm', 'Number of edges m', 0, Math.min(maxEdges, NETWORK_LIMITS.maxEdges));
+  v.throwIfInvalid();
+  if (m > maxEdges) {
+    throw new EngineError(
+      `A simple graph on ${n} nodes has at most ${maxEdges} edges; ${m} were requested.`,
+      'range',
+    );
+  }
+  const rng = new Random(seed);
+  const seen = new Set<number>();
+  const pairs: [number, number][] = [];
+  let guard = 0;
+  while (pairs.length < m) {
+    const i = rng.int(0, n - 1);
+    const j = rng.int(0, n - 1);
+    if (i === j) continue;
+    const a = Math.min(i, j);
+    const b = Math.max(i, j);
+    const key = a * n + b;
+    if (seen.has(key)) {
+      if (++guard > 200 * (m + 1) + 10_000) {
+        throw new EngineError(
+          `Could not place ${m} distinct edges on ${n} nodes by rejection sampling (the graph is too dense for this ` +
+            'method). Use G(n,p) with p = 2m/(n(n-1)) instead.',
+          'nonconvergent',
+        );
+      }
+      continue;
+    }
+    seen.add(key);
+    pairs.push([a, b]);
+  }
+  const p = maxEdges > 0 ? m / maxEdges : 0;
+  return {
+    graph: graphFromPairs(n, pairs),
+    model: 'erdos-renyi-gnm',
+    parameters: { n, m },
+    analytic: erdosRenyiAnalytics(n, p),
+    notes: [
+      'G(n,m) fixes the edge count exactly; G(n,p) fixes it in expectation. They agree for large n at p = m/C(n,2).',
+    ],
+    conditionalOn: CONDITIONAL_ON_STRUCTURE,
+  };
+}
+
+/* ------------------------------------------------- degree-sequence models */
+
+export interface ErdosGallaiResult {
+  realisable: boolean;
+  /** The first k at which the Erdős–Gallai inequality fails, if any. */
+  failedAt: number | null;
+  reason: string;
+}
+
+/**
+ * Erdős–Gallai realisability test for a degree sequence.
+ *
+ * A non-increasing sequence d_1 >= ... >= d_n of non-negative integers is the
+ * degree sequence of some simple graph iff the sum is even and, for every k,
+ *   sum_{i<=k} d_i <= k(k-1) + sum_{i>k} min(d_i, k).
+ * A sequence that fails this cannot be realised by any simple graph, so a
+ * generator must refuse it rather than quietly return something with the wrong
+ * degrees.
+ */
+export function erdosGallaiCheck(degrees: ReadonlyArray<number>): ErdosGallaiResult {
+  const n = degrees.length;
+  if (n === 0) return { realisable: false, failedAt: null, reason: 'The degree sequence is empty.' };
+  for (let i = 0; i < n; i++) {
+    const d = degrees[i];
+    if (!Number.isInteger(d) || d < 0) {
+      return {
+        realisable: false,
+        failedAt: i,
+        reason: `Entry ${i} is ${d}; degrees must be non-negative integers.`,
+      };
+    }
+    if (d > n - 1) {
+      return {
+        realisable: false,
+        failedAt: i,
+        reason: `Entry ${i} is ${d}, but a simple graph on ${n} nodes has maximum degree ${n - 1}. No simple graph ` +
+          'can realise this sequence.',
+      };
+    }
+  }
+  const sorted = [...degrees].sort((a, b) => b - a);
+  let sum = 0;
+  for (const d of sorted) sum += d;
+  if (sum % 2 !== 0) {
+    return {
+      realisable: false,
+      failedAt: null,
+      reason: `The degree sum is ${sum}, which is odd. Every edge contributes 2 to the degree sum, so an odd sum is ` +
+        'impossible for any graph (the handshake lemma).',
+    };
+  }
+  const prefix = new Array<number>(n + 1).fill(0);
+  for (let i = 0; i < n; i++) prefix[i + 1] = prefix[i] + sorted[i];
+  for (let k = 1; k <= n; k++) {
+    let right = k * (k - 1);
+    for (let i = k; i < n; i++) right += Math.min(sorted[i], k);
+    if (prefix[k] > right) {
+      return {
+        realisable: false,
+        failedAt: k,
+        reason: `The Erdős–Gallai inequality fails at k = ${k}: the ${k} largest degrees sum to ${prefix[k]}, but can ` +
+          `absorb at most ${right} edge endpoints (${k * (k - 1)} among themselves plus ${right - k * (k - 1)} from ` +
+          'the rest). No simple graph has this degree sequence.',
+      };
+    }
+  }
+  return { realisable: true, failedAt: null, reason: 'The sequence satisfies Erdős–Gallai and is realisable by a simple graph.' };
+}
+
+/** Molloy–Reed criterion: a giant component exists iff <k^2>/<k> > 2. */
+export function molloyReed(degrees: ReadonlyArray<number>): {
+  criterion: NetworkQuantity;
+  giantComponentExpected: boolean;
+  meanDegree: NetworkQuantity;
+  secondMoment: NetworkQuantity;
+  notes: string[];
+} {
+  if (degrees.length === 0) throw new EngineError('The degree sequence is empty.', 'empty');
+  let s1 = 0;
+  let s2 = 0;
+  for (const d of degrees) {
+    if (!Number.isFinite(d) || d < 0) throw new EngineError(`Degree ${d} is not a non-negative number.`, 'range');
+    s1 += d;
+    s2 += d * d;
+  }
+  const n = degrees.length;
+  const k1 = s1 / n;
+  const k2 = s2 / n;
+  if (k1 === 0) {
+    throw new EngineError(
+      'The mean degree is 0 (every node isolated), so the Molloy–Reed ratio <k^2>/<k> is undefined. There is ' +
+        'trivially no giant component, but the criterion itself cannot be evaluated.',
+      'undefined',
+    );
+  }
+  const kappa = k2 / k1;
+  return {
+    criterion: nq('Molloy–Reed ratio <k^2>/<k>', kappa, 'exact', {
+      formula: 'kappa = <k^2>/<k>; giant component iff kappa > 2',
+      note: 'Equivalently the mean excess degree <k^2>/<k> - 1 must exceed 1: a typical edge must lead, on average, ' +
+        'to more than one further edge.',
+    }),
+    giantComponentExpected: kappa > 2,
+    meanDegree: nq('Mean degree <k>', k1, 'exact'),
+    secondMoment: nq('Second moment <k^2>', k2, 'exact'),
+    notes: [
+      'The criterion is a configuration-model result: it assumes degrees are otherwise random, with no clustering ' +
+        'and no degree correlation. A clustered or disassortative real network with the same degree sequence can ' +
+        'behave differently.',
+      kappa > 2
+        ? `kappa = ${kappa.toPrecision(5)} > 2: a giant component is expected.`
+        : `kappa = ${kappa.toPrecision(5)} <= 2: no giant component is expected.`,
+    ],
+  };
+}
+
+/** Havel–Hakimi: deterministic simple-graph realisation of a degree sequence. */
+function havelHakimiPairs(degrees: ReadonlyArray<number>): [number, number][] {
+  const residual = degrees.map((d, i) => ({ d, i }));
+  const pairs: [number, number][] = [];
+  for (;;) {
+    residual.sort((a, b) => b.d - a.d || a.i - b.i);
+    if (residual.length === 0 || residual[0].d === 0) break;
+    const head = residual[0];
+    const k = head.d;
+    if (k > residual.length - 1) {
+      throw new EngineError(
+        `Havel–Hakimi failed: a node still needs ${k} further edges but only ${residual.length - 1} other nodes have ` +
+          'remaining capacity. The sequence is not realisable (this should have been caught by Erdős–Gallai).',
+        'unrealisable',
+      );
+    }
+    head.d = 0;
+    for (let t = 1; t <= k; t++) {
+      const other = residual[t];
+      if (other.d <= 0) {
+        throw new EngineError('Havel–Hakimi failed: ran out of capacity. The sequence is not realisable.', 'unrealisable');
+      }
+      other.d--;
+      pairs.push([head.i, other.i]);
+    }
+  }
+  return pairs;
+}
+
+/**
+ * Configuration model for an arbitrary degree sequence.
+ *
+ * Plain stub matching produces self-loops and multi-edges, and deleting those
+ * silently changes the degree sequence — which defeats the purpose of asking
+ * for a degree sequence. So the default here is a Havel–Hakimi realisation
+ * (which realises the sequence *exactly*) randomised by degree-preserving
+ * double-edge swaps, giving a sample from (approximately) the space of simple
+ * graphs with that exact degree sequence.
+ *
+ * `method: 'stub-matching'` is also available and reports honestly how many
+ * self-loops and multi-edges it had to discard and what that did to the
+ * degrees, rather than hiding it.
+ */
+export function configurationModel(
+  degrees: ReadonlyArray<number>,
+  seed: string | number,
+  options: { method?: 'havel-hakimi-swaps' | 'stub-matching'; swapsPerEdge?: number } = {},
+): GeneratedGraph & { exactDegrees: boolean; discardedStubs: number } {
+  const check = erdosGallaiCheck(degrees);
+  if (!check.realisable) {
+    throw new EngineError(
+      `This degree sequence cannot be realised by any simple graph. ${check.reason}`,
+      'unrealisable',
+    );
+  }
+  const n = degrees.length;
+  if (n > NETWORK_LIMITS.maxNodes) throw new EngineError(`Degree sequence length ${n} exceeds the node limit.`, 'limit');
+  const rng = new Random(seed);
+  const method = options.method ?? 'havel-hakimi-swaps';
+  const mr = molloyReed(degrees);
+  const analytic = [
+    mr.meanDegree,
+    mr.secondMoment,
+    mr.criterion,
+    nq('Expected clustering (configuration model)', expectedConfigClustering(degrees, n), 'exact', {
+      formula: 'C = (1/n) (<k^2> - <k>)^2 / <k>^3',
+      note: 'The clustering a configuration-model graph has by accident. A real network whose clustering greatly ' +
+        'exceeds this is genuinely clustered, and spreading on it is slower than the configuration model predicts.',
+    }),
+  ];
+
+  if (method === 'stub-matching') {
+    const stubs: number[] = [];
+    for (let i = 0; i < n; i++) for (let t = 0; t < degrees[i]; t++) stubs.push(i);
+    for (let i = stubs.length - 1; i > 0; i--) {
+      const j = rng.int(0, i);
+      const tmp = stubs[i];
+      stubs[i] = stubs[j];
+      stubs[j] = tmp;
+    }
+    const seen = new Set<number>();
+    const pairs: [number, number][] = [];
+    let discarded = 0;
+    for (let t = 0; t + 1 < stubs.length; t += 2) {
+      const a = stubs[t];
+      const b = stubs[t + 1];
+      if (a === b) {
+        discarded += 2;
+        continue;
+      }
+      const key = Math.min(a, b) * n + Math.max(a, b);
+      if (seen.has(key)) {
+        discarded += 2;
+        continue;
+      }
+      seen.add(key);
+      pairs.push([a, b]);
+    }
+    const graph = graphFromPairs(n, pairs);
+    const realised = degreeSummary(graph).degree;
+    let mismatched = 0;
+    for (let i = 0; i < n; i++) if (realised[i] !== degrees[i]) mismatched++;
+    return {
+      graph,
+      model: 'configuration-model-stub-matching',
+      parameters: { n, discardedStubs: discarded },
+      analytic,
+      exactDegrees: mismatched === 0,
+      discardedStubs: discarded,
+      notes: [
+        `Stub matching discarded ${discarded} stubs that formed self-loops or repeated pairs, so ${mismatched} of ${n} ` +
+          'nodes have a degree below the one requested. The requested sequence was NOT realised exactly. Use the ' +
+          'default havel-hakimi-swaps method when the degrees must be exact.',
+        ...mr.notes,
+      ],
+      conditionalOn: CONDITIONAL_ON_STRUCTURE,
+    };
+  }
+
+  const pairs = havelHakimiPairs(degrees);
+  // Degree-preserving double-edge swaps: remove (a,b),(c,d), add (a,d),(c,b).
+  const edgeSet = new Set<number>();
+  const key = (x: number, y: number) => Math.min(x, y) * n + Math.max(x, y);
+  for (const [a, b] of pairs) edgeSet.add(key(a, b));
+  const attempts = Math.max(0, Math.round((options.swapsPerEdge ?? 10) * pairs.length));
+  for (let t = 0; t < attempts && pairs.length >= 2; t++) {
+    const e1 = rng.int(0, pairs.length - 1);
+    const e2 = rng.int(0, pairs.length - 1);
+    if (e1 === e2) continue;
+    const [a, b] = pairs[e1];
+    const [c, d] = rng.uniform() < 0.5 ? pairs[e2] : [pairs[e2][1], pairs[e2][0]];
+    if (a === d || c === b || a === c || b === d) continue;
+    if (edgeSet.has(key(a, d)) || edgeSet.has(key(c, b))) continue;
+    edgeSet.delete(key(a, b));
+    edgeSet.delete(key(c, d));
+    edgeSet.add(key(a, d));
+    edgeSet.add(key(c, b));
+    pairs[e1] = [a, d];
+    pairs[e2] = [c, b];
+  }
+  const graph = graphFromPairs(n, pairs);
+  const realised = degreeSummary(graph).degree;
+  for (let i = 0; i < n; i++) {
+    if (realised[i] !== degrees[i]) {
+      throw new EngineError(
+        `Internal: node ${i} was realised with degree ${realised[i]} but ${degrees[i]} was requested. The ` +
+          'configuration model refuses to return a graph with the wrong degrees.',
+        'internal',
+      );
+    }
+  }
+  return {
+    graph,
+    model: 'configuration-model',
+    parameters: { n, swaps: attempts },
+    analytic,
+    exactDegrees: true,
+    discardedStubs: 0,
+    notes: [
+      `Havel–Hakimi realisation randomised by ${attempts} attempted degree-preserving double-edge swaps. Every node's ` +
+        'degree equals the one requested, exactly.',
+      'Double-edge swaps preserve degrees and simplicity but mix slowly; this is a randomised realisation, not a ' +
+        'uniform draw from the space of graphs with this degree sequence.',
+      ...mr.notes,
+    ],
+    conditionalOn: CONDITIONAL_ON_STRUCTURE,
+  };
+}
+
+function expectedConfigClustering(degrees: ReadonlyArray<number>, n: number): number {
+  let s1 = 0;
+  let s2 = 0;
+  for (const d of degrees) {
+    s1 += d;
+    s2 += d * d;
+  }
+  const k1 = s1 / n;
+  const k2 = s2 / n;
+  if (k1 <= 0) return 0;
+  return (1 / n) * ((k2 - k1) * (k2 - k1)) / (k1 * k1 * k1);
+}
+
+/* ----------------------------------------------- preferential attachment */
+
+/**
+ * Barabási–Albert preferential attachment: each new node attaches m edges to
+ * existing nodes chosen with probability proportional to current degree.
+ *
+ * The resulting degree distribution is a power law with exponent exactly 3 in
+ * the large-n limit, independent of m — which is the model's claim to fame and
+ * the thing to test an exponent estimator against.
+ */
+export function barabasiAlbert(n: number, m: number, seed: string | number): GeneratedGraph {
+  const v = new Validator();
+  checkN(n, v);
+  v.integer(m, 'm', 'Edges added per new node m', 1, Math.max(1, n - 1));
+  v.throwIfInvalid();
+  if (m >= n) {
+    throw new EngineError(`Each new node attaches m = ${m} edges, which needs more than ${m} existing nodes; n = ${n}.`, 'range');
+  }
+  const rng = new Random(seed);
+  const pairs: [number, number][] = [];
+  // Seed with a complete graph on m+1 nodes so every node has degree >= m.
+  const start = m + 1;
+  for (let i = 0; i < start; i++) for (let j = i + 1; j < start; j++) pairs.push([i, j]);
+  // Repeated-node list: each node appears once per incident edge endpoint.
+  const targets: number[] = [];
+  for (const [a, b] of pairs) {
+    targets.push(a);
+    targets.push(b);
+  }
+  for (let newNode = start; newNode < n; newNode++) {
+    const chosen = new Set<number>();
+    let guard = 0;
+    while (chosen.size < m) {
+      const pick = targets[rng.int(0, targets.length - 1)];
+      if (!chosen.has(pick)) chosen.add(pick);
+      if (++guard > 1000 * m + 1000) {
+        throw new EngineError(
+          `Preferential attachment could not find ${m} distinct targets for node ${newNode}. This indicates a ` +
+            'degenerate degree distribution; no graph is returned.',
+          'nonconvergent',
+        );
+      }
+    }
+    for (const t of chosen) {
+      pairs.push([newNode, t]);
+      targets.push(newNode);
+      targets.push(t);
+    }
+  }
+  return {
+    graph: graphFromPairs(n, pairs),
+    model: 'barabasi-albert',
+    parameters: { n, m },
+    analytic: [
+      nq('Analytic power-law exponent', 3, 'exact', {
+        formula: 'P(k) ~ k^-3',
+        note: 'Exact in the large-n limit and independent of m. A finite graph gives a noticeably different ' +
+          'estimate, and an estimator fitted by log-log regression is biased on top of that.',
+      }),
+      nq('Mean degree', (2 * ((m * (m + 1)) / 2 + m * (n - m - 1))) / n, 'exact', { formula: '<k> ~ 2m' }),
+      nq('Epidemic threshold', 0, 'numerical', {
+        formula: 'beta_c = <k>/<k^2> -> 0 as n -> infinity for exponent <= 3',
+        note: 'At exponent 3 the second moment of the degree distribution diverges logarithmically with n, so the ' +
+          'epidemic threshold goes to zero: a scale-free network has no finite threshold in the limit. Reporting a ' +
+          'finite threshold measured on one finite sample would be misleading.',
+      }),
+    ],
+    notes: [
+      'Growth plus preferential attachment. Both ingredients are needed: growth alone, or attachment to uniformly ' +
+        'chosen nodes, gives an exponential degree distribution instead.',
+      'Hubs here arise from the generative process, not from any node being intrinsically special.',
+    ],
+    conditionalOn: CONDITIONAL_ON_STRUCTURE,
+  };
+}
+
+/* ------------------------------------------------------- Watts–Strogatz */
+
+/** A ring lattice: n nodes, each joined to its k/2 nearest neighbours each side. */
+export function ringLattice(n: number, k: number): Graph {
+  const v = new Validator();
+  checkN(n, v);
+  v.integer(k, 'k', 'Degree k', 2, Math.max(2, n - 1));
+  v.throwIfInvalid();
+  if (k % 2 !== 0) {
+    throw new EngineError(`A ring lattice needs an even degree k so it can be split either side of each node; k = ${k}.`, 'range');
+  }
+  if (k >= n) throw new EngineError(`Degree k = ${k} needs more than ${k} nodes; n = ${n}.`, 'range');
+  const pairs: [number, number][] = [];
+  const half = k / 2;
+  for (let i = 0; i < n; i++) for (let d = 1; d <= half; d++) {
+    const j = (i + d) % n;
+    if (i !== j) pairs.push([Math.min(i, j), Math.max(i, j)]);
+  }
+  const uniq = new Map<number, [number, number]>();
+  for (const [a, b] of pairs) uniq.set(a * n + b, [a, b]);
+  return graphFromPairs(n, [...uniq.values()]);
+}
+
+/**
+ * Watts–Strogatz small world: a ring lattice with each edge rewired with
+ * probability p.
+ *
+ * The original point of the model is the *trade-off across p*: at p = 0
+ * clustering is high and path length is long (order n/2k); at p = 1 both are
+ * Erdős–Rényi-like (low clustering, log n paths); and in between there is a
+ * broad region where clustering is still near its lattice value while path
+ * length has already collapsed. That region is why a highly clustered social
+ * network can still have short paths, and why an epidemic on one is not slow.
+ */
+export function wattsStrogatz(n: number, k: number, p: number, seed: string | number): GeneratedGraph {
+  const v = new Validator();
+  v.probability(p, 'p', 'Rewiring probability p');
+  v.throwIfInvalid();
+  // Validates n and k (and rejects an odd k) before any sampling.
+  ringLattice(n, k);
+  const rng = new Random(seed);
+  const half = k / 2;
+  const edgeKey = (a: number, b: number) => Math.min(a, b) * n + Math.max(a, b);
+  const set = new Set<number>();
+  const edges: [number, number][] = [];
+  for (let i = 0; i < n; i++) for (let d = 1; d <= half; d++) {
+    const j = (i + d) % n;
+    const key = edgeKey(i, j);
+    if (!set.has(key)) {
+      set.add(key);
+      edges.push([i, j]);
+    }
+  }
+  for (let e = 0; e < edges.length; e++) {
+    if (rng.uniform() >= p) continue;
+    const [a, b] = edges[e];
+    let guard = 0;
+    for (;;) {
+      const c = rng.int(0, n - 1);
+      if (c !== a && !set.has(edgeKey(a, c))) {
+        set.delete(edgeKey(a, b));
+        set.add(edgeKey(a, c));
+        edges[e] = [a, c];
+        break;
+      }
+      if (++guard > 200) break; // keep the original edge; the graph is near-complete
+    }
+  }
+  const latticePath = k > 0 ? n / (2 * k) : 0;
+  return {
+    graph: graphFromPairs(n, edges),
+    model: 'watts-strogatz',
+    parameters: { n, k, p },
+    analytic: [
+      nq('Lattice clustering at p = 0', (3 * (k - 2)) / (4 * (k - 1)), 'exact', {
+        formula: 'C(0) = 3(k-2)/(4(k-1))',
+        note: 'Tends to 3/4 for large k. Independent of n.',
+      }),
+      nq('Lattice mean path length at p = 0 (order)', latticePath, 'numerical', {
+        formula: 'L(0) ~ n/(2k)',
+        note: 'Linear in n — the lattice is a "large world". Rewiring a few per cent of edges collapses this to ~log n ' +
+          'while barely touching clustering; that is the small-world effect.',
+      }),
+      nq('Expected clustering decay factor', (1 - p) ** 3, 'exact', {
+        formula: 'C(p)/C(0) ~ (1-p)^3',
+        note: 'Each of the three edges of a triangle must survive rewiring, hence the cube — so clustering decays ' +
+          'slowly in p while path length decays fast. The gap between the two rates is the model.',
+      }),
+    ],
+    notes: [
+      'Rewiring is one-ended (the source node is kept), self-loops and duplicate edges are rejected, so the degree ' +
+        'sum is preserved exactly even though individual degrees change.',
+    ],
+    conditionalOn: CONDITIONAL_ON_STRUCTURE,
+  };
+}
+
+/* ------------------------------------------------- stochastic block model */
+
+export interface BlockModelResult extends GeneratedGraph {
+  /** The true block of each node — the ground truth for a recovery test. */
+  block: number[];
+}
+
+/**
+ * Stochastic block model: node i in block b_i, and i~j with probability
+ * P[b_i][b_j].
+ */
+export function stochasticBlockModel(
+  blockSizes: ReadonlyArray<number>,
+  probabilities: ReadonlyArray<ReadonlyArray<number>>,
+  seed: string | number,
+): BlockModelResult {
+  const v = new Validator();
+  const b = blockSizes.length;
+  if (b === 0) throw new EngineError('At least one block is needed.', 'empty');
+  for (let i = 0; i < b; i++) v.integer(blockSizes[i], `blockSizes[${i}]`, `Size of block ${i}`, 1);
+  if (probabilities.length !== b) {
+    throw new EngineError(`The probability matrix has ${probabilities.length} rows but there are ${b} blocks.`, 'shape');
+  }
+  for (let i = 0; i < b; i++) {
+    if (probabilities[i].length !== b) {
+      throw new EngineError(`Probability-matrix row ${i} has ${probabilities[i].length} entries but there are ${b} blocks.`, 'shape');
+    }
+    for (let j = 0; j < b; j++) {
+      v.probability(probabilities[i][j], `probabilities[${i}][${j}]`, `P(block ${i}, block ${j})`);
+      if (Math.abs(probabilities[i][j] - probabilities[j][i]) > 1e-15) {
+        v.add(
+          `The probability matrix must be symmetric for an undirected block model; P[${i}][${j}] = ${probabilities[i][j]} ` +
+            `but P[${j}][${i}] = ${probabilities[j][i]}.`,
+          'probabilities',
+          'not-symmetric',
+        );
+      }
+    }
+  }
+  v.throwIfInvalid();
+  const block: number[] = [];
+  for (let k = 0; k < b; k++) for (let t = 0; t < blockSizes[k]; t++) block.push(k);
+  const n = block.length;
+  checkN(n, v);
+  v.throwIfInvalid();
+  const rng = new Random(seed);
+  const pairs: [number, number][] = [];
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+    if (rng.uniform() < probabilities[block[i]][block[j]]) pairs.push([i, j]);
+  }
+  let within = 0;
+  let between = 0;
+  for (let k = 0; k < b; k++) {
+    within += probabilities[k][k] * ((blockSizes[k] * (blockSizes[k] - 1)) / 2);
+    for (let l = k + 1; l < b; l++) between += probabilities[k][l] * blockSizes[k] * blockSizes[l];
+  }
+  return {
+    graph: graphFromPairs(n, pairs),
+    block,
+    model: 'stochastic-block-model',
+    parameters: { n, blocks: b },
+    analytic: [
+      nq('Expected within-block edges', within, 'exact'),
+      nq('Expected between-block edges', between, 'exact'),
+    ],
+    notes: [
+      'Communities here are planted by construction, so a recovery method can be scored against ground truth. On a ' +
+        'real network there is no ground truth and a partition is always a hypothesis.',
+    ],
+    conditionalOn: CONDITIONAL_ON_STRUCTURE,
+  };
+}
+
+/** Planted partition: equal blocks, within-probability pIn, between pOut. */
+export function plantedPartition(
+  blocks: number,
+  sizePerBlock: number,
+  pIn: number,
+  pOut: number,
+  seed: string | number,
+): BlockModelResult & { detectabilityThreshold: NetworkQuantity; aboveDetectability: boolean } {
+  const v = new Validator();
+  v.integer(blocks, 'blocks', 'Number of blocks', 2);
+  v.integer(sizePerBlock, 'sizePerBlock', 'Nodes per block', 1);
+  v.probability(pIn, 'pIn', 'Within-block probability');
+  v.probability(pOut, 'pOut', 'Between-block probability');
+  v.throwIfInvalid();
+  const sizes = new Array<number>(blocks).fill(sizePerBlock);
+  const probs = Array.from({ length: blocks }, (_, i) =>
+    Array.from({ length: blocks }, (_, j) => (i === j ? pIn : pOut)),
+  );
+  const base = stochasticBlockModel(sizes, probs, seed);
+  const n = blocks * sizePerBlock;
+  const cIn = pIn * (sizePerBlock - 1);
+  const cOut = pOut * sizePerBlock * (blocks - 1);
+  const c = cIn + cOut;
+  // Sparse detectability threshold (Decelle et al.): |c_in - c_out| > q sqrt(c).
+  const gap = Math.abs(pIn * n / blocks - pOut * n / blocks);
+  const threshold = blocks * Math.sqrt(c);
+  return {
+    ...base,
+    model: 'planted-partition',
+    parameters: { blocks, sizePerBlock, pIn, pOut },
+    detectabilityThreshold: nq('Detectability gap required', threshold, 'numerical', {
+      formula: '|c_in - c_out| > q sqrt(<k>)',
+      note: 'Below this gap the planted partition is information-theoretically undetectable by any algorithm on a ' +
+        'sparse graph, however good: the communities are present by construction but leave no recoverable signal. ' +
+        'An algorithm that returns a partition anyway is returning noise.',
+    }),
+    aboveDetectability: gap > threshold,
+    notes: [...base.notes, `Degree gap ${gap.toPrecision(4)} against the detectability threshold ${threshold.toPrecision(4)}.`],
+  };
+}
+
+/**
+ * Community recovery by spectral bisection of the planted partition, scored
+ * against the known blocks. Only meaningful for two blocks.
+ */
+export function recoverTwoBlocks(g: Graph, trueBlock: ReadonlyArray<number>): {
+  accuracy: NetworkQuantity;
+  assignment: number[];
+  notes: string[];
+} {
+  if (trueBlock.length !== g.n) {
+    throw new EngineError(`The ground-truth labelling has ${trueBlock.length} entries but the graph has ${g.n} nodes.`, 'shape');
+  }
+  const labels = new Set(trueBlock);
+  if (labels.size !== 2) {
+    throw new EngineError(
+      `Spectral bisection recovery handles exactly two blocks; the ground truth has ${labels.size}.`,
+      'unsupported',
+    );
+  }
+  // Lazily imported to keep the module graph acyclic at the type level.
+  const { spectralPartition } = moduleSpectral();
+  const part = spectralPartition(g);
+  let agree = 0;
+  for (let i = 0; i < g.n; i++) if (part.side[i] === trueBlock[i]) agree++;
+  // A bisection has no canonical orientation, so take the better labelling.
+  const accuracy = Math.max(agree, g.n - agree) / g.n;
+  return {
+    accuracy: nq('Community recovery accuracy', accuracy, 'numerical', {
+      note: 'Best of the two label orientations, since a bisection carries no canonical labelling. Chance level is 0.5.',
+    }),
+    assignment: part.side,
+    notes: [
+      'Recovery is scored against a planted ground truth. No such score exists for a real network, where a ' +
+        'partition is a hypothesis about structure rather than a measurement of it.',
+    ],
+  };
+}
+
+// Indirection so `models` does not import `spectral` at module-evaluation time.
+import * as spectralModule from './spectral';
+function moduleSpectral(): typeof spectralModule {
+  return spectralModule;
+}
+
+/* --------------------------------------------- geometric and Chung–Lu */
+
+/**
+ * Random geometric graph: n uniform points in the unit square, joined when
+ * within distance r. Clustered by construction, which makes it the natural
+ * counter-example to mean-field spreading predictions.
+ */
+export function randomGeometricGraph(
+  n: number,
+  radius: number,
+  seed: string | number,
+  options: { torus?: boolean } = {},
+): GeneratedGraph & { positions: { x: number; y: number }[] } {
+  const v = new Validator();
+  checkN(n, v);
+  v.positive(radius, 'radius', 'Connection radius r');
+  v.throwIfInvalid();
+  if (radius > Math.SQRT2) {
+    throw new EngineError(
+      `A radius of ${radius} exceeds the diameter of the unit square (sqrt 2), so the graph would be complete. Use a radius below ${Math.SQRT2.toPrecision(4)}.`,
+      'range',
+    );
+  }
+  const rng = new Random(seed);
+  const xs = new Float64Array(n);
+  const ys = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    xs[i] = rng.uniform();
+    ys[i] = rng.uniform();
+  }
+  const torus = options.torus ?? false;
+  // Bucket grid so the search is O(n) in the sparse regime rather than O(n^2).
+  const cells = Math.max(1, Math.floor(1 / radius));
+  const buckets = new Map<number, number[]>();
+  const cellOf = (x: number) => Math.min(cells - 1, Math.floor(x * cells));
+  for (let i = 0; i < n; i++) {
+    const key = cellOf(xs[i]) * cells + cellOf(ys[i]);
+    const arr = buckets.get(key);
+    if (arr) arr.push(i);
+    else buckets.set(key, [i]);
+  }
+  const r2 = radius * radius;
+  const pairs: [number, number][] = [];
+  for (let cx = 0; cx < cells; cx++) {
+    for (let cy = 0; cy < cells; cy++) {
+      const here = buckets.get(cx * cells + cy);
+      if (!here) continue;
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          let nx = cx + dx;
+          let ny = cy + dy;
+          if (torus) {
+            nx = (nx + cells) % cells;
+            ny = (ny + cells) % cells;
+          } else if (nx < 0 || ny < 0 || nx >= cells || ny >= cells) continue;
+          const there = buckets.get(nx * cells + ny);
+          if (!there) continue;
+          for (const i of here) {
+            for (const j of there) {
+              if (i >= j) continue;
+              let ddx = Math.abs(xs[i] - xs[j]);
+              let ddy = Math.abs(ys[i] - ys[j]);
+              if (torus) {
+                ddx = Math.min(ddx, 1 - ddx);
+                ddy = Math.min(ddy, 1 - ddy);
+              }
+              if (ddx * ddx + ddy * ddy <= r2) pairs.push([i, j]);
+            }
+          }
+        }
+      }
+    }
+  }
+  const uniq = new Map<number, [number, number]>();
+  for (const [a, b] of pairs) uniq.set(a * n + b, [a, b]);
+  const expectedDegree = (n - 1) * Math.PI * r2;
+  return {
+    graph: graphFromPairs(n, [...uniq.values()]),
+    positions: Array.from({ length: n }, (_, i) => ({ x: xs[i], y: ys[i] })),
+    model: 'random-geometric',
+    parameters: { n, radius },
+    analytic: [
+      nq('Expected mean degree', expectedDegree, torus ? 'exact' : 'numerical', {
+        formula: '<k> = (n-1) pi r^2',
+        note: torus
+          ? 'Exact on the torus; on the unit square boundary effects reduce it.'
+          : 'An upper bound on the square: points near the boundary have less area within r, so the measured mean degree is lower.',
+      }),
+      nq('Expected clustering (2-D, large n)', 1 - (3 * Math.sqrt(3)) / (4 * Math.PI), 'exact', {
+        formula: 'C -> 1 - 3sqrt(3)/(4 pi) ~ 0.5865',
+        note: 'High and independent of r — the opposite of Erdős–Rényi, whose clustering vanishes. This is why a ' +
+          'geometric graph is the right stress test for a mean-field epidemic model.',
+      }),
+    ],
+    notes: ['Edges follow from positions, so the graph is strongly clustered and has long paths: a "large world".'],
+    conditionalOn: CONDITIONAL_ON_STRUCTURE,
+  };
+}
+
+/**
+ * Chung–Lu expected-degree model: i~j with probability w_i w_j / sum(w),
+ * capped at 1. Gives an arbitrary *expected* degree sequence with independent
+ * edges — unlike the configuration model, which fixes degrees exactly.
+ */
+export function chungLu(weights: ReadonlyArray<number>, seed: string | number): GeneratedGraph {
+  const n = weights.length;
+  const v = new Validator();
+  checkN(n, v, 'weights.length');
+  let total = 0;
+  for (let i = 0; i < n; i++) {
+    v.nonNegative(weights[i], `weights[${i}]`, `Expected degree of node ${i}`);
+    total += weights[i];
+  }
+  v.throwIfInvalid();
+  if (total <= 0) {
+    throw new EngineError('All expected degrees are 0, so the Chung–Lu model produces an empty graph; nothing to generate.', 'range');
+  }
+  let maxW = 0;
+  for (const w of weights) maxW = Math.max(maxW, w);
+  const rng = new Random(seed);
+  const pairs: [number, number][] = [];
+  let capped = 0;
+  for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+    const raw = (weights[i] * weights[j]) / total;
+    const p = raw > 1 ? 1 : raw;
+    if (raw > 1) capped++;
+    if (rng.uniform() < p) pairs.push([i, j]);
+  }
+  const notes = [
+    'Edges are independent given the weights, so the realised degrees fluctuate around the requested ones (roughly ' +
+      'Poisson). Use the configuration model when the degrees must be exact.',
+  ];
+  if (capped > 0) {
+    notes.push(
+      `${capped} node pairs had w_i w_j / sum(w) above 1 and were capped at probability 1. Those nodes' realised ` +
+        'expected degrees are therefore BELOW the requested ones: the model cannot deliver the requested weights ' +
+        `when max(w)^2 > sum(w) (here max w = ${maxW.toPrecision(4)}, sum w = ${total.toPrecision(4)}).`,
+    );
+  }
+  return {
+    graph: graphFromPairs(n, pairs),
+    model: 'chung-lu',
+    parameters: { n, sumWeights: total, cappedPairs: capped },
+    analytic: [nq('Target mean degree', total / n, 'exact', { formula: '<k> = sum(w)/n' })],
+    notes,
+    conditionalOn: CONDITIONAL_ON_STRUCTURE,
+  };
+}
+
+/* -------------------------------------------------------- lattices, misc */
+
+/**
+ * A 2-D square lattice, optionally periodic (a torus).
+ *
+ * Needed because the bond-percolation threshold on the square lattice is
+ * exactly 1/2 — one of the few exactly known percolation thresholds, and
+ * therefore the only honest way to validate a numerical threshold locator.
+ */
+export function squareLattice(rows: number, cols: number, options: { periodic?: boolean } = {}): GeneratedGraph {
+  const v = new Validator();
+  v.integer(rows, 'rows', 'Lattice rows', 2);
+  v.integer(cols, 'cols', 'Lattice columns', 2);
+  v.throwIfInvalid();
+  const periodic = options.periodic ?? false;
+  const n = rows * cols;
+  if (n > NETWORK_LIMITS.maxNodes) throw new EngineError(`A ${rows}x${cols} lattice has ${n} nodes, above the limit.`, 'limit');
+  const id = (r: number, c: number) => r * cols + c;
+  const set = new Set<number>();
+  const pairs: [number, number][] = [];
+  const push = (a: number, b: number) => {
+    if (a === b) return;
+    const key = Math.min(a, b) * n + Math.max(a, b);
+    if (set.has(key)) return;
+    set.add(key);
+    pairs.push([Math.min(a, b), Math.max(a, b)]);
+  };
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    if (periodic || c + 1 < cols) push(id(r, c), id(r, (c + 1) % cols));
+    if (periodic || r + 1 < rows) push(id(r, c), id((r + 1) % rows, c));
+  }
+  return {
+    graph: graphFromPairs(n, pairs),
+    model: 'square-lattice',
+    parameters: { rows, cols, periodic: periodic ? 1 : 0 },
+    analytic: [
+      nq('Exact bond-percolation threshold', 0.5, 'exact', {
+        formula: 'p_c = 1/2 for bond percolation on the 2-D square lattice',
+        note: 'One of the few exactly known thresholds (Kesten). Any numerical threshold locator should reproduce it ' +
+          'to within finite-size error, and that is how this module validates its own locator.',
+      }),
+      nq('Site-percolation threshold (numerical literature value)', 0.592746, 'numerical', {
+        formula: 'p_c ~ 0.5927460',
+        note: 'Not known in closed form, unlike the bond threshold.',
+      }),
+      nq('Degree (interior)', 4, 'exact'),
+    ],
+    notes: [
+      periodic
+        ? 'Periodic boundary (a torus): every node has degree exactly 4, which removes boundary bias from a ' +
+          'finite-size threshold estimate.'
+        : 'Open boundary: edge and corner nodes have degree 3 and 2, which biases a finite-size threshold estimate ' +
+          'upward. Use periodic: true when estimating a threshold.',
+      'A lattice has no small-world shortcuts: paths scale as sqrt(n), and clustering is 0 (no triangles).',
+    ],
+    conditionalOn: CONDITIONAL_ON_STRUCTURE,
+  };
+}

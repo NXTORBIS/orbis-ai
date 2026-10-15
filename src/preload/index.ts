@@ -10,6 +10,58 @@ const api: NxtorbisApi = {
   saveConversation: (conversation) => ipcRenderer.invoke('conversations:save', conversation),
   deleteConversation: (id) => ipcRenderer.invoke('conversations:delete', id),
   sendChat: (request) => ipcRenderer.invoke('chat:send', request),
+  chanceStore: (operation, document) => ipcRenderer.invoke('chance:store', operation, document),
+  jarvisInvoke: (name, payload) => ipcRenderer.invoke('jarvis:invoke', name, payload),
+  eyeStart: () => ipcRenderer.invoke('eye:start'),
+  footballLeagues: () => ipcRenderer.invoke('football:leagues'),
+  footballLive: () => ipcRenderer.invoke('football:live'),
+  footballSeason: (league, season) => ipcRenderer.invoke('football:season', league, season),
+  footballTable: (league, season) => ipcRenderer.invoke('football:table', league, season),
+  footballMatch: (key) => ipcRenderer.invoke('football:match', key),
+  footballExtras: (key) => ipcRenderer.invoke('football:extras', key),
+  footballTeam: (key) => ipcRenderer.invoke('football:team', key),
+  footballStatus: () => ipcRenderer.invoke('football:status'),
+  footballFollows: () => ipcRenderer.invoke('football:follows'),
+  footballFollowsSet: (next) => ipcRenderer.invoke('football:follows-set', next),
+  f1Schedule: (season) => ipcRenderer.invoke('f1:schedule', season),
+  f1Results: (season, round) => ipcRenderer.invoke('f1:results', season, round),
+  f1Standings: (season, round) => ipcRenderer.invoke('f1:standings', season, round),
+  f1Sessions: (year) => ipcRenderer.invoke('f1:sessions', year),
+  f1Timing: (sessionKey, endsAt) => ipcRenderer.invoke('f1:timing', sessionKey, endsAt),
+  f1Status: () => ipcRenderer.invoke('f1:status'),
+  f1Bundle: (sessionKey, endsAt) => ipcRenderer.invoke('f1:bundle', sessionKey, endsAt),
+  f1Intervals: (sessionKey, endsAt) => ipcRenderer.invoke('f1:intervals', sessionKey, endsAt),
+  f1Telemetry: (sessionKey, driver, from, to) => ipcRenderer.invoke('f1:telemetry', sessionKey, driver, from, to),
+  f1Championship: (sessionKey) => ipcRenderer.invoke('f1:championship', sessionKey),
+  f1SeasonData: (season) => ipcRenderer.invoke('f1:season-data', season),
+  f1Career: (driverId) => ipcRenderer.invoke('f1:career', driverId),
+  f1Prefs: () => ipcRenderer.invoke('f1:prefs'),
+  f1PrefsSet: (next) => ipcRenderer.invoke('f1:prefs-set', next),
+  f1Champions: (season) => ipcRenderer.invoke('f1:champions', season),
+  f1CircuitRecords: (circuitId) => ipcRenderer.invoke('f1:circuit-records', circuitId),
+  f1Qualifying: (season, round) => ipcRenderer.invoke('f1:qualifying', season, round),
+  f1ConstructorSeason: (season, id) => ipcRenderer.invoke('f1:constructor-season', season, id),
+  f1TeamRadio: (sessionKey) => ipcRenderer.invoke('f1:team-radio', sessionKey),
+  f1Forecast: (lat, long, at) => ipcRenderer.invoke('f1:forecast', lat, long, at),
+  f1Archive: (year) => ipcRenderer.invoke('f1:archive', year),
+  f1StreamLive: () => ipcRenderer.invoke('f1:stream-live'),
+  f1StreamReplay: (path) => ipcRenderer.invoke('f1:stream-replay', path),
+  f1StreamControl: (action, value) => ipcRenderer.invoke('f1:stream-control', action, value),
+  f1StreamStop: () => ipcRenderer.invoke('f1:stream-stop'),
+  f1StreamState: () => ipcRenderer.invoke('f1:stream-state'),
+  onF1Stream: (listener) => {
+    const handler = (_e: unknown, event: unknown): void => listener(event)
+    ipcRenderer.on('f1:stream', handler)
+    return () => ipcRenderer.removeListener('f1:stream', handler)
+  },
+  cosmosStart: () => ipcRenderer.invoke('cosmos:start'),
+  cosmosStop: () => ipcRenderer.invoke('cosmos:stop'),
+  cosmosRegion: (region) => ipcRenderer.send('cosmos:region', region),
+  onCosmosEvent: (listener) => {
+    const handler = (_e: unknown, event: unknown): void => listener(event)
+    ipcRenderer.on('cosmos:event', handler)
+    return () => ipcRenderer.removeListener('cosmos:event', handler)
+  },
   abortChat: (requestId) => ipcRenderer.invoke('chat:abort', requestId),
   onChatEvent: (requestId, listener) => {
     const handler = (_event: IpcRendererEvent, id: string, streamEvent: StreamEvent): void => {
@@ -739,4 +791,21 @@ function subscribe<T>(channel: string, listener: (value: T) => void): () => void
   }
 }
 
-contextBridge.exposeInMainWorld('api', api)
+// The Files frame is a subframe of the app itself; no web page loaded into a frame may receive the bridge.
+const where = (globalThis as unknown as { location: { protocol: string; hostname: string } }).location
+const ownPage = process.isMainFrame || where.protocol === 'file:' || ['localhost', '127.0.0.1'].includes(where.hostname)
+if (ownPage) contextBridge.exposeInMainWorld('api', api)
+
+// Orbis Files bridge — the Files renderer calls window.orbis.invoke / window.orbis.on
+const orbis = {
+  invoke: (channel: string, payload?: unknown): Promise<unknown> => ipcRenderer.invoke(`files:${channel}`, payload),
+  on: (channel: string, listener: (payload: unknown) => void): (() => void) => {
+    const handler = (_event: IpcRendererEvent, value: unknown): void => listener(value)
+    ipcRenderer.on(`files:${channel}`, handler)
+    return () => ipcRenderer.removeListener(`files:${channel}`, handler)
+  },
+  getPathForFile: (file: File): string => webUtils.getPathForFile(file),
+  platform: process.platform,
+  initialPath: undefined as string | undefined
+}
+if (ownPage) contextBridge.exposeInMainWorld('orbis', orbis)

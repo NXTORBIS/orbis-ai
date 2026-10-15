@@ -1,0 +1,1423 @@
+/*
+ * Copyright (c) 2023 Gaia Sky - All rights reserved.
+ *  This file is part of Gaia Sky, which is released under the Mozilla Public License 2.0.
+ *  You may use, distribute and modify this code under the terms of MPL2.
+ *  See the file LICENSE.md in the project root for full license details.
+ */
+
+package gaiasky.scene.component;
+
+import com.badlogic.ashley.core.Component;
+import com.badlogic.ashley.core.Entity;
+import com.badlogic.gdx.graphics.GL30;
+import com.badlogic.gdx.graphics.TextureArray;
+import com.badlogic.gdx.math.MathUtils;
+import com.badlogic.gdx.utils.IntMap;
+import com.badlogic.gdx.utils.IntSet;
+import gaiasky.GaiaSky;
+import gaiasky.data.util.GlobalResources;
+import gaiasky.event.Event;
+import gaiasky.event.EventManager;
+import gaiasky.scene.Mapper;
+import gaiasky.scene.api.IParticleRecord;
+import gaiasky.scene.camera.ICamera;
+import gaiasky.scene.component.Label.LabelDisplay;
+import gaiasky.scene.record.ParticleKepler;
+import gaiasky.scene.task.ParticleSetUpdaterTask;
+import gaiasky.scene.view.FilterView;
+import gaiasky.util.*;
+import gaiasky.util.camera.Proximity;
+import gaiasky.util.coord.AstroUtils;
+import gaiasky.util.coord.Coordinates;
+import gaiasky.util.coord.KeplerianElements;
+import gaiasky.render.gdx.model.IntModel;
+import gaiasky.util.i18n.I18n;
+import gaiasky.util.math.*;
+import net.jafama.FastMath;
+import uk.ac.starlink.table.ColumnInfo;
+
+import java.nio.file.Path;
+import java.time.Instant;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+
+/**
+ * Contains the parameters for particle sets. These are groups of point particles with optional additional
+ * attributes.
+ */
+public class ParticleSet implements Component, IDisposable {
+
+    private static long idSeq = 0;
+
+    public static synchronized long getNextSequence() {
+        return idSeq++;
+    }
+
+    // Auxiliary vectors.
+    protected final Vector3Q B31 = new Vector3Q();
+    protected final Vector3Q B32 = new Vector3Q();
+    protected final Vector3D D31 = new Vector3D();
+    protected final Vector3D D32 = new Vector3D();
+
+    /**
+     * List that contains the point data. It contains only [x y z].
+     */
+    public List<IParticleRecord> pointData;
+
+    /**
+     * List of {@link uk.ac.starlink.table.ColumnInfo} objects for the data in this set.
+     */
+    public List<ColumnInfo> columnInfoList;
+
+    /**
+     * This flag enables muting particle rendering.
+     **/
+    public boolean renderParticles = true;
+
+    /**
+     * Flag indicating whether the particle set holds stars or particles (extended or not).
+     **/
+    public boolean isStars;
+
+    /**
+     * Flag indicating whether the particle set holds extended particles.
+     **/
+    public boolean isExtended;
+
+    /**
+     * Flag indicating whether the particle set holds Keplerian elements particles (type {@link ParticleKepler}).
+     */
+    public boolean isElements;
+
+    /**
+     * Whether to render the global set label or not.
+     **/
+    public boolean renderSetLabel = true;
+
+    /**
+     * Whether to render particle labels at all for this set.
+     **/
+    public boolean renderParticleLabels = true;
+
+    /**
+     * Number of labels to render for this group.
+     **/
+    public int numLabels = -1;
+
+    /**
+     * Fully qualified name of data provider class.
+     */
+    public String provider;
+
+    /** Parameters for the data provider. **/
+    public Map<String, Object> providerParams;
+
+    /**
+     * Path of data file.
+     */
+    public String datafile;
+
+
+    /**
+     * Model file to use (<code>obj</code>, <code>g3db</code>, <code>g3dj</code>, <code>gltf</code>, <code>glb</code>). If present, modelType and
+     * modelParams are ignored.
+     * The model should have only positions (vector-3), normals (vector-3) and texture coordinates (vector-2) as vertex
+     * attributes.
+     * Only the first mesh of the model is used. Textures, lighting and material are ignored.
+     */
+    public String modelFile;
+
+    /**
+     * The loaded model pointed by modelFile.
+     */
+    public IntModel model;
+
+    /**
+     * Default model type to use for the particles of this set.
+     * Typically, this should be set to quad, but allows for other model types.
+     **/
+    public String modelType = "quad";
+
+    /**
+     * Parameters for the model, in case 'modelType' is used.
+     */
+    public Map<String, Object> modelParams;
+
+    /**
+     * Render primitive. Triangles by default.
+     */
+    public int modelPrimitive = GL30.GL_TRIANGLES;
+
+    /**
+     * Proximity loading location, the location of the directory that contains descriptor JSON files with the
+     * name of objects in the dataset. These get loaded whenever the camera gets close to a particle with the
+     * given name.
+     */
+    public String proximityDescriptorsLocation;
+    /** The path for proximity loading. **/
+    public Path proximityDescriptorsPath;
+    /** Flag that indicates whether this particle set has proximity loading. **/
+    public boolean proximityLoadingFlag = false;
+    /** Flag that indicates whether loading should also happen on focus. **/
+    public boolean proximityLoadOnFocus = true;
+    /** Threshold solid angle when loading happens. About 4 degrees (0.064 rad). **/
+    public double proximityThreshold = 0.064;
+    /** Set that contains the indexes of the particles whose descriptors have already been loaded. **/
+    public IntSet proximityLoaded;
+    /** Contains the indices of the particles whose descriptors are not present. **/
+    public IntSet proximityMissing;
+
+    public enum RenderTarget {
+        SCENE_LAYER(0),
+        EXTRA_LAYER(1);
+
+        public final int layerId;
+
+        RenderTarget(int layerId) {
+            this.layerId = layerId;
+        }
+    }
+
+    /**
+     * Render target for the particles of this set.
+     * <ol start=0>
+     * <li>The default scene buffer, affected by post-processing effects.</li>
+     * <li>The layer buffer, which contains labels and lines, unaffected by post-processing effects.</li>
+     * </ol>
+     */
+    public RenderTarget renderTarget = RenderTarget.SCENE_LAYER;
+
+    /**
+     * Profile decay of the particles in the shader, when using quads and plain {@link ShadingType}.
+     */
+    public float profileDecay = 0.2f;
+
+    /**
+     * Noise factor for the color in [0,1].
+     */
+    public float colorNoise = 0;
+
+    /**
+     * Assign a different color to each texture. Only used when textures are active.
+     */
+    public boolean colorFromTexture = false;
+
+    /**
+     * The noise in the size determination for particles. This only has effect if particles themselves do not provide a size.
+     * In that case, the final size is computed as <code>clamp(body.size + rand.gaussian() * body.size * sizeNoise)</code>.
+     */
+    public double sizeNoise = 1.0 / 5.0;
+
+    /**
+     * Fixed angular size for all particles in this set, in radians. Applies only to quads. Negative to disable.
+     */
+    public double fixedAngularSize = -1;
+
+    /**
+     * Particle size limits for the quad renderer (using quads as GL_TRIANGLES). This will be multiplied by
+     * the distance to the particle in the shader, so that <code>size = tan(angle) * dist</code>.
+     */
+    public double[] particleSizeLimits = new double[]{Math.tan(Math.toRadians(0.05)), FastMath.tan(Math.toRadians(10.0))};
+
+    /**
+     * The texture attribute is an attribute in the original table that points to the texture to use. Ideally, it should
+     * be an integer value from 1 to n, where n is the number of textures.
+     */
+    public String textureAttribute;
+
+    /**
+     * Texture files to use for rendering the particles, at random. Applies only to quads.
+     **/
+    public String[] textureFiles = null;
+
+    /**
+     * Reference to the texture array containing the textures for this set, if any. Applies only to quads.
+     **/
+    public TextureArray textureArray;
+
+    /**
+     * Shading type, for lighting the particles.
+     */
+    public enum ShadingType {
+        /** Plain lighting. **/
+        PLAIN,
+        BILLBOARD_LIGHTING,
+        SPHERICAL_LIGHTING
+    }
+
+    /** The shading type, for lighting the particles. **/
+    public ShadingType shadingType = ShadingType.PLAIN;
+    /** Controls how sharply the sphere edges darken (higher values = more pronounced sphere appearance with darker edges). **/
+    public float sphericalPower = 3f;
+    /**
+     * Ambient light for billboard and spherical lighting. If this is set, the final ambient light used is this plus the global setting.
+     */
+    public float ambientLight = -1;
+
+    /** Controls whether the brightness twinkles. **/
+    public enum ShadingStyle {
+        /** No special shading, only default color determination. **/
+        DEFAULT,
+        /** Apply random twinkling of particles in (app) time. **/
+        TWINKLE
+    }
+
+    /** Shading style to use for this set. **/
+    public ShadingStyle shadingStyle = ShadingStyle.DEFAULT;
+
+    /**
+     * Temporary storage for the mean position of this particle set, if it is given externally.
+     * If this is set, the mean position is not computed from the positions of all the particles automatically.
+     **/
+    public Vector3D meanPosition;
+
+    /**
+     * Factor to apply to the data points, usually to normalize distances.
+     */
+    public Double factor = null;
+
+    /**
+     * Mapping colors.
+     */
+    public float[] ccMin = null, ccMax = null;
+
+    /**
+     * Indices of particles for which <code>labelDisplay</code> is set to {@link LabelDisplay#ALWAYS}.
+     **/
+    public IntSet labelDisplayAlways;
+    /**
+     * Indices of particles for which <code>labelDisplay</code> is set to {@link LabelDisplay#NEVER}.
+     */
+    public IntSet labelDisplayNever;
+
+    /**
+     * Particles with special label colors.
+     **/
+    public IntMap<float[]> labelColors;
+
+    /**
+     * Stores the time when the last sort operation finished, in seconds.
+     */
+    public double lastSortTime;
+
+    /** Whether to generate an index or not. Defaults to false for particle sets. Unused in star sets. **/
+    public boolean generateIndex;
+
+    /** Whether to allow the star streaks effect, where particles get stretched in the direction of motion when the camera moves. **/
+    public boolean allowStreaks = true;
+
+    /**
+     * The mean distance from the origin of all points in this group.
+     * Gives a sense of the scale.
+     */
+    public double meanDistance;
+    public double maxDistance, minDistance;
+
+    /**
+     * Epoch for positions/proper motions in julian days.
+     **/
+    public double epochJd = AstroUtils.JD_J2015;
+
+    /**
+     * Flag indicating if all particles in the group share the same epoch.
+     */
+    private boolean uniformEpoch = true;
+
+    /**
+     * Current computed epoch time.
+     **/
+    public double currDeltaYears = 0;
+
+    /**
+     * Reference to the current focus.
+     */
+    public IParticleRecord focus;
+
+    /**
+     * Index of the particle acting as focus. Negative if we have no focus here.
+     */
+    public int focusIndex = -1;
+
+    /**
+     * Candidate to focus.
+     */
+    public int candidateFocusIndex = -1;
+
+    /**
+     * Position of the current focus.
+     */
+    public Vector3Q focusPosition;
+
+    /**
+     * Position in equatorial coordinates of the current focus in radians.
+     */
+    public Vector2D focusPositionSph;
+
+    /**
+     * FOCUS_MODE attributes.
+     */
+    public double focusDistToCamera, focusSolidAngle, focusSolidAngleApparent, focusSize;
+
+    /**
+     * Proximity particles.
+     */
+    public Proximity proximity;
+    /** Set has been disposed. **/
+    public boolean disposed;
+    /** Name to array index. **/
+    public FastObjectIntMap<String> index;
+    /** Flag that flips when the particle set has been added to the main index. **/
+    public boolean addedToMainIndex;
+    /** Index synchronization object. **/
+    private final Object indexSync = new Object();
+    /** Metadata, for sorting - holds distances from each particle to the camera, squared. **/
+    public double[] metadata;
+    /** Indices buffer. **/
+    public int[] indices;
+
+    /** Indices of stars that are not visible. **/
+    public IntSet invisibilityArray;
+
+    /** Reference to the entity. **/
+    public Entity entity;
+
+    /** Updater task. **/
+    public ParticleSetUpdaterTask updaterTask;
+
+    /** Last sort position. **/
+    public Vector3Q lastSortCameraPos, cPosD;
+    /** Auxiliary matrix. **/
+    protected final Matrix4D mat = new Matrix4D();
+
+    public float[] getColorMin() {
+        return ccMin;
+    }
+
+    public void setColorMin(double[] colorMin) {
+        this.ccMin = GlobalResources.toFloatArray(colorMin);
+    }
+
+    public void setColorMin(float[] colorMin) {
+        this.ccMin = colorMin;
+    }
+
+    public float[] getColorMax() {
+        return ccMax;
+    }
+
+    public void setColorMax(double[] colorMax) {
+        this.ccMax = GlobalResources.toFloatArray(colorMax);
+    }
+
+    public void setColorMax(float[] colorMax) {
+        this.ccMax = colorMax;
+    }
+
+    public double getMeanDistance() {
+        return meanDistance;
+    }
+
+    public double getMinDistance() {
+        return minDistance;
+    }
+
+    public double getMaxDistance() {
+        return maxDistance;
+    }
+
+    /**
+     * Returns the list of particles.
+     */
+    public List<IParticleRecord> data() {
+        return pointData;
+    }
+
+    public void setData(List<IParticleRecord> pointData) {
+        setData(pointData, this.generateIndex);
+    }
+
+    public void setData(List<IParticleRecord> pointData,
+                        boolean regenerateIndex) {
+        this.pointData = pointData;
+
+        // Regenerate index.
+        if (regenerateIndex)
+            regenerateIndex();
+
+        // Initialize visibility - all visible.
+        this.invisibilityArray = new IntSet();
+    }
+
+    public void setColumnInfoList(List<ColumnInfo> columnInfoList) {
+        this.columnInfoList = columnInfoList;
+    }
+
+    /**
+     * Regenerates the name index
+     */
+    public void regenerateIndex() {
+        index = generateIndex(data());
+    }
+
+    /**
+     * Generates the index (maps name to array index)
+     * and computes the geometric center of this group
+     *
+     * @param pointData The data
+     *
+     * @return A map{string,int} mapping names to indices
+     */
+    public FastObjectIntMap<String> generateIndex(List<IParticleRecord> pointData) {
+        var update = new UpdaterHelper("Index", pointData.size());
+        FastObjectIntMap<String> index = new FastObjectIntMap<>((int) (pointData.size() * 1.25f), String.class);
+        synchronized (indexSync) {
+            update.start();
+            int n = pointData.size();
+
+            for (int idx = 0; idx < n; idx++) {
+                IParticleRecord pb = pointData.get(idx);
+                if (pb.names() != null) {
+                    for (var name : pb.names()) {
+                        var nameLC = name.toLowerCase(Locale.ROOT);
+                        index.put(nameLC, idx);
+
+                        var loc = I18n.localizeIfExists(nameLC);
+                        if (loc != null && !loc.equals(nameLC)) {
+                            index.put(loc.toLowerCase(Locale.ROOT), idx);
+                        }
+                    }
+                }
+                update.update(idx);
+            }
+            update.end();
+        }
+        return index;
+    }
+
+
+    public void setMeanPosition(double[] pos) {
+        this.meanPosition = new Vector3D(pos[0], pos[1], pos[2]);
+    }
+
+    public void setPosition(double[] pos) {
+        setMeanPosition(pos);
+    }
+
+    public void setPosKm(double[] pos) {
+        setPositionKm(pos);
+    }
+
+    public void setMeanPositionKm(double[] pos) {
+        this.meanPosition = new Vector3D(pos[0] * Constants.KM_TO_U, pos[1] * Constants.KM_TO_U, pos[2] * Constants.KM_TO_U);
+    }
+
+    public void setPositionKm(double[] pos) {
+        setMeanPositionKm(pos);
+    }
+
+    public void setPosPc(double[] pos) {
+        setPositionPc(pos);
+    }
+
+    public void setMeanPositionPc(double[] pos) {
+        this.meanPosition = new Vector3D(pos[0] * Constants.PC_TO_U, pos[1] * Constants.PC_TO_U, pos[2] * Constants.PC_TO_U);
+    }
+
+    public void setPositionPc(double[] pos) {
+        setMeanPositionPc(pos);
+    }
+
+    public void setPosition(int[] pos) {
+        setPosition(new double[]{pos[0], pos[1], pos[2]});
+    }
+
+    public void setDataFile(String dataFile) {
+        this.datafile = dataFile;
+    }
+
+    public void setDatafile(String dataFile) {
+        setDataFile(dataFile);
+    }
+
+    public void setProviderParams(Map<String, Object> params) {
+        this.providerParams = params;
+    }
+
+    public void setProviderparams(Map<String, Object> params) {
+        setProviderParams(params);
+    }
+
+    public void setFactor(Double factor) {
+        this.factor = factor * Constants.DISTANCE_SCALE_FACTOR;
+    }
+
+    /**
+     * @deprecated Use {@link #setProfileDecay(Double)}.
+     */
+    @Deprecated
+    public void setProfiledecay(Double profiledecay) {
+        setProfileDecay(profiledecay);
+    }
+
+    public void setProfileDecay(Double profileDecay) {
+        this.profileDecay = profileDecay.floatValue();
+    }
+
+    public void setRenderTarget(String renderTarget) {
+        try {
+            var rt = renderTarget.toUpperCase(Locale.ROOT).replace(" ", "_");
+            this.renderTarget = RenderTarget.valueOf(rt);
+        } catch (IllegalArgumentException e) {
+            Logger.getLogger(this.getClass()
+                                     .getSimpleName())
+                    .error("Error setting render target: " + renderTarget, e);
+        }
+    }
+
+    public void setRenderTarget(Long renderTarget) {
+       try {
+          this.renderTarget = RenderTarget.values()[Math.toIntExact(renderTarget)];
+       } catch (IllegalArgumentException e) {
+           Logger.getLogger(this.getClass()
+                                    .getSimpleName())
+                   .error("Error setting render target: " + renderTarget, e);
+       }
+    }
+
+    /**
+     * @deprecated Use {@link #setColorNoise(Double)}.
+     */
+    @Deprecated
+    public void setColornoise(Double colorNoise) {
+        setColorNoise(colorNoise);
+    }
+
+    public void setColorNoise(Double colorNoise) {
+        this.colorNoise = colorNoise.floatValue();
+    }
+
+    public void setColorFromTexture(boolean colorFromTexture) {
+        this.colorFromTexture = colorFromTexture;
+    }
+
+    public void setGenerateIndex(boolean generateIndex) {
+        this.generateIndex = generateIndex;
+    }
+
+    /**
+     * Set fixed angular size, in radians.
+     */
+    public void setFixedAngularSize(Double fixedAngularSize) {
+        setFixedAngularSizeRad(fixedAngularSize);
+    }
+
+    /**
+     * Set the size noise.
+     */
+    public void setSizeNoise(Double sizeNoise) {
+        this.sizeNoise = sizeNoise;
+    }
+
+    /**
+     * Set fixed angular size, in radians.
+     */
+    public void setFixedAngularSizeRad(Double fixedAngularSizeRad) {
+        this.fixedAngularSize = fixedAngularSizeRad;
+    }
+
+    /**
+     * Set fixed angular size, in degrees.
+     */
+    public void setFixedAngularSizeDeg(Double fixedAngularSizeDeg) {
+        setFixedAngularSizeRad(Math.toRadians(fixedAngularSizeDeg));
+    }
+
+    public void setParticleSizeLimitsDeg(double[] sizeLimits) {
+        sizeLimits[0] = MathUtilsDouble.clamp(sizeLimits[0], 0, 90.0);
+        sizeLimits[1] = MathUtilsDouble.clamp(sizeLimits[1], 0, 90.0);
+        if (sizeLimits[0] > sizeLimits[1])
+            sizeLimits[0] = sizeLimits[1];
+
+        sizeLimits[0] = FastMath.toRadians(sizeLimits[0]);
+        sizeLimits[1] = FastMath.toRadians(sizeLimits[1]);
+        this.particleSizeLimits = sizeLimits;
+    }
+
+    public void setParticleSizeLimits(double[] sizeLimits) {
+        sizeLimits[0] = MathUtilsDouble.clamp(sizeLimits[0], 0, 1.57);
+        sizeLimits[1] = MathUtilsDouble.clamp(sizeLimits[1], 0, 1.57);
+        if (sizeLimits[0] > sizeLimits[1])
+            sizeLimits[0] = sizeLimits[1];
+        this.particleSizeLimits = sizeLimits;
+    }
+
+    public void setParticlesizelimits(double[] sizeLimits) {
+        setParticleSizeLimits(sizeLimits);
+    }
+
+    public void setTextureAttribute(String textureAttribute) {
+        this.textureAttribute = textureAttribute;
+    }
+
+    public void setTexture(String texture) {
+        this.textureFiles = new String[]{texture};
+    }
+
+    public void setTextures(String[] textures) {
+        this.textureFiles = textures;
+    }
+
+    public void setShadingType(int type) {
+        type = MathUtils.clamp(type, 0, ShadingType.values().length - 1);
+        this.shadingType = ShadingType.values()[type];
+    }
+
+    public void setShadingType(String type) {
+        try {
+            this.shadingType = ShadingType.valueOf(type.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            Logger.getLogger(this.getClass()
+                                     .getSimpleName())
+                    .error("Error setting shading type: " + type, e);
+        }
+    }
+
+    public void setSphericalPower(Double power) {
+        this.sphericalPower = (float) MathUtilsDouble.clamp(power, 0.1, 20.0);
+    }
+
+    public void setAmbientLight(Double ambient) {
+        this.ambientLight = ambient.floatValue();
+    }
+
+    public void setShadingStyle(String style) {
+        try {
+            this.shadingStyle = ShadingStyle.valueOf(style.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            Logger.getLogger(this.getClass()
+                                     .getSimpleName())
+                    .error("Error setting shading style: " + style, e);
+        }
+    }
+
+    public void setRenderParticles(Boolean renderParticles) {
+        this.renderParticles = renderParticles;
+    }
+
+    public void setRenderSetLabel(Boolean renderSetLabel) {
+        this.renderSetLabel = renderSetLabel;
+    }
+
+    public void setExtended(Boolean extended) {
+        this.isExtended = extended;
+    }
+
+    public void setNumLabels(Long numLabels) {
+        this.numLabels = FastMath.toIntExact(numLabels);
+    }
+
+    public void updateNumLabelsValue(int n,
+                                     Entity e) {
+        int newNumLabels = FastMath.min(n, pointData.size());
+        if (newNumLabels != numLabels) {
+            setNumLabels((long) newNumLabels);
+            // Update indices array with new length.
+            indices = new int[newNumLabels];
+            // Re-initialize updater task so that the new size is picked up.
+            updaterTask = new ParticleSetUpdaterTask(e, this);
+        }
+    }
+
+    public IParticleRecord get(int index) {
+        return pointData.get(index);
+    }
+
+    /**
+     * Gets the name of a random particle in this group
+     *
+     * @return The name of a random particle
+     */
+    public String getFirstParticleName() {
+        if (pointData != null)
+            for (IParticleRecord pb : pointData) {
+                if (pb.names() != null && pb.names().length > 0)
+                    return pb.names()[0];
+            }
+        return null;
+    }
+
+    public void setModelType(String modelType) {
+        this.modelType = modelType;
+    }
+
+    public void setModelParams(Map<String, Object> params) {
+        this.modelParams = params;
+    }
+
+    public void setModelPrimitive(String modelPrimitive) {
+        this.modelPrimitive = switch (modelPrimitive) {
+            case "GL_TRIANGLE_STRIP", "gl_triangle_strip" -> GL30.GL_TRIANGLE_STRIP;
+            case "GL_LINES", "gl_lines" -> GL30.GL_LINES;
+            case "GL_LINE_LOOP", "gl_line_loop" -> GL30.GL_LINE_LOOP;
+            case "GL_LINE_STRIP", "gl_line_strip" -> GL30.GL_LINE_STRIP;
+            default -> GL30.GL_TRIANGLES;
+        };
+    }
+
+    public void setProximityDescriptorsLocation(String loc) {
+        this.proximityDescriptorsLocation = loc;
+    }
+
+    public void setProximityDescriptors(String loc) {
+        setProximityDescriptorsLocation(loc);
+    }
+
+    public void setDescriptorsLocation(String loc) {
+        setProximityDescriptorsLocation(loc);
+    }
+
+    public void setProximityLoadOnFocus(Boolean proxLoadOnFocus) {
+        this.proximityLoadOnFocus = proxLoadOnFocus;
+    }
+
+    public void setProximityThreshold(Double thRadians) {
+        this.proximityThreshold = thRadians;
+    }
+
+    public void setProximityThresholdRad(Double thRadians) {
+        setProximityThreshold(thRadians);
+    }
+
+    public void setProximityThresholdDeg(Double thDegrees) {
+        setProximityThreshold(Math.toRadians(thDegrees));
+    }
+
+    // FOCUS_MODE size
+    public double getSize() {
+        return focusSize;
+    }
+
+    /**
+     * Returns the size of the particle at index i
+     *
+     * @param i The index
+     *
+     * @return The size
+     */
+    public double getSize(int i) {
+        return pointData.get(i)
+                .size();
+    }
+
+    /**
+     * Default size if not in data, 1e5 km
+     *
+     * @return The size
+     */
+    public double getFocusSize() {
+        return isStars || isExtended ? focus.size() : 1e5 * Constants.KM_TO_U;
+    }
+
+    public void setFocusIndex(String name) {
+        synchronized (indexSync) {
+            if (index != null) {
+                candidateFocusIndex = index.get(name.toLowerCase(Locale.ROOT)
+                                                        .trim());
+            }
+        }
+    }
+
+    public IParticleRecord getCandidateBean() {
+        if (candidateFocusIndex >= 0)
+            return pointData.get(candidateFocusIndex);
+        else
+            return null;
+    }
+
+    // Radius in stars is different!
+    public double getRadius() {
+        return isStars ? getSize() * Constants.STAR_SIZE_FACTOR : getSize();
+    }
+
+    // Radius in stars is different!
+    public double getRadius(int i) {
+        return isStars ? getSize(i) * Constants.STAR_SIZE_FACTOR : isExtended ? getSize(i) : getRadius();
+    }
+
+    public double getTEff() {
+        return isStars ? focus.tEff() : -1;
+    }
+
+    /**
+     * Updates the parameters of the focus, if the focus is active in this group
+     *
+     * @param camera The current camera
+     */
+    public void updateFocus(ICamera camera) {
+        IParticleRecord focus = pointData.get(focusIndex);
+        Vector3Q aux = this.fetchPosition(focus, cPosD, B31, currDeltaYears);
+        this.focusPosition.set(aux)
+                .add(camera.getPos());
+        this.focusSize = getFocusSize();
+        this.focusDistToCamera = aux.lenDouble() - this.focusSize;
+        this.focusSolidAngle = (float) ((getRadius() / this.focusDistToCamera) / camera.getFovFactor());
+        this.focusSolidAngleApparent = this.focusSolidAngle;
+    }
+
+    public void updateFocusDataPos() {
+        if (focusIndex < 0) {
+            focus = null;
+        } else {
+            focus = pointData.get(focusIndex);
+            updateFocus(GaiaSky.instance.getICamera());
+            Vector3D posSph = Coordinates.cartesianToSpherical(focusPosition, D31);
+            focusPositionSph.set((float) (MathUtilsDouble.radDeg * posSph.x), (float) (MathUtilsDouble.radDeg * posSph.y));
+        }
+    }
+
+    public void setFocusIndex(int index) {
+        if (index >= 0 && index < pointData.size()) {
+            candidateFocusIndex = index;
+            makeFocus();
+        }
+    }
+
+    public void makeFocus() {
+        focusIndex = candidateFocusIndex;
+        updateFocusDataPos();
+    }
+
+    /**
+     * Checks whether the particle with the given index is visible
+     *
+     * @param index The index of the particle
+     *
+     * @return The visibility of the particle
+     */
+    public boolean isVisible(int index) {
+        return !invisibilityArray.contains(index);
+    }
+
+    public void setVisible(boolean visible,
+                           String name,
+                           Render render) {
+        synchronized (indexSync) {
+            if (index != null && index.containsKey(name)) {
+                this.setVisible(index.get(name), visible, render);
+            }
+        }
+    }
+
+    /**
+     * Sets the visibility of the particle with the given index. If the visibility
+     * has changed, it marks the particle group for update.
+     *
+     * @param index   The index of the particle
+     * @param visible Visibility flag
+     */
+    public void setVisible(int index,
+                           boolean visible,
+                           Render render) {
+        if (index >= 0 && index < pointData.size()) {
+            boolean changed;
+            if (visible) {
+                changed = this.invisibilityArray.remove(index);
+            } else {
+                changed = this.invisibilityArray.add(index);
+            }
+            if (changed) {
+                markForUpdate(render);
+            }
+        }
+    }
+
+    public void markForUpdate(Render render) {
+        if (render != null) {
+            if (isElements) {
+                GaiaSky.postRunnable(() -> EventManager.publish(Event.GPU_DISPOSE_ORBITAL_ELEMENTS, render));
+            } else {
+                GaiaSky.postRunnable(() -> EventManager.publish(Event.GPU_DISPOSE_PARTICLE_GROUP, render));
+            }
+        }
+    }
+
+    /**
+     * Returns the position of the object with the given name at the given date, if any, in the out vector.
+     *
+     * @param date The date at which to get the position. If null, the position is given at the current simulation date.
+     * @param out  The out vector.
+     **/
+    public Vector3Q getAbsolutePosition(String name,
+                                        Instant date,
+                                        Vector3Q out) {
+        name = name.toLowerCase(Locale.ROOT)
+                .trim();
+        synchronized (indexSync) {
+            if (index != null && index.containsKey(name)) {
+                int idx = index.get(name);
+                if (idx >= 0 && idx < pointData.size()) {
+                    IParticleRecord pb = pointData.get(idx);
+                    return getAbsolutePosition(pb, date, out);
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Returns the position of the given object at the given date, if any, in the out vector.
+     *
+     * @param object The particle record object.
+     * @param date   The date at which to get the position. If null, the position is given at the current simulation
+     *               date.
+     * @param out    The out vector.
+     **/
+    public Vector3Q getAbsolutePosition(IParticleRecord object,
+                                        Instant date,
+                                        Vector3Q out) {
+        if (object.hasProperMotion() || object.getType().isKeplerElements()) {
+            double deltaYears = AstroUtils.getMsSince(date == null ? GaiaSky.instance.time.getTime() : date, epochJd) * Nature.MS_TO_Y;
+            Vector3Q aux = this.fetchPosition(object, null, B31, deltaYears);
+            return out.set(aux);
+        } else {
+            return getAbsolutePosition(out);
+        }
+    }
+
+    /**
+     * Returns the current focus position at the given date, if any, in the out vector.
+     *
+     * @param date The date at which to get the position. If null, the position is given at the current simulation date.
+     * @param out  The out vector.
+     **/
+    public Vector3Q getAbsolutePosition(Instant date,
+                                        Vector3Q out) {
+        IParticleRecord focus = pointData.get(focusIndex);
+        return getAbsolutePosition(focus, date, out);
+    }
+
+    /**
+     * Returns the current focus position, if any, in the out vector.
+     **/
+    public Vector3Q getAbsolutePosition(Vector3Q out) {
+        if (entity != null && Mapper.affine.has(entity) && focusIndex >= 0 && focusIndex < pointData.size()) {
+            IParticleRecord focus = pointData.get(focusIndex);
+            return fetchPosition(focus, null, out, currDeltaYears);
+        } else {
+            return out.set(focusPosition);
+        }
+    }
+
+    /**
+     * Returns the absolute position of the particle with the given name.
+     *
+     * @param name The name.
+     * @param out  The out vector.
+     *
+     * @return The absolute position in the out vector.
+     */
+    public Vector3Q getAbsolutePosition(String name,
+                                        Vector3Q out) {
+        name = name.toLowerCase(Locale.ROOT)
+                .trim();
+        synchronized (indexSync) {
+            if (index != null && index.containsKey(name)) {
+                int idx = index.get(name);
+                IParticleRecord pb = pointData.get(idx);
+                fetchPosition(pb, null, out, currDeltaYears);
+                return out;
+            } else {
+                return null;
+            }
+        }
+    }
+
+    /**
+     * Returns the absolute position of the particle with the given name.
+     *
+     * @param name The name.
+     * @param out  The out vector.
+     *
+     * @return The absolute position in the out vector.
+     */
+    public Vector3D getAbsolutePosition(String name,
+                                        Vector3D out) {
+        var result = getAbsolutePosition(name, B32);
+        if (result != null) {
+            out.set(result);
+            return out;
+        } else {
+            return null;
+        }
+
+    }
+
+    /**
+     * Fetches the real position of the particle. It will apply the necessary
+     * integrations (i.e. proper motion). Double-precision version.
+     *
+     * @param pb         The particle bean
+     * @param camPos     The position of the camera. If null, the camera position is
+     *                   not subtracted so that the coordinates are given in the global
+     *                   reference system instead of the camera reference system.
+     * @param out        The output vector
+     * @param deltaYears The delta years
+     *
+     * @return The vector for chaining
+     */
+    public Vector3D fetchPositionDouble(IParticleRecord pb,
+                                        Vector3Q camPos,
+                                        Vector3D out,
+                                        double deltaYears) {
+        synchronized (D32) {
+            Vector3D pm = D32.setZero();
+            if (pb instanceof ParticleKepler k) {
+                // KEPLER ELEMENTS.
+                double dtDays;
+                if (uniformEpoch) {
+                    // Epoch is the same for all particles. Use incoming deltaYears.
+                    dtDays = deltaYears * Nature.Y_TO_D;
+                } else {
+                    // Epoch is not the same for all particles, compute dtDays.
+                    dtDays = AstroUtils.getDaysSince(GaiaSky.instance.time.getTime(), k.epoch());
+                }
+                KeplerianElements.keplerianToCartesianTime(out,
+                                                           dtDays,
+                                                           k.period(),
+                                                           k.inclination(),
+                                                           k.eccentricity(),
+                                                           k.ascendingNode(),
+                                                           k.argOfPericenter(),
+                                                           k.semiMajorAxis(),
+                                                           k.meanAnomaly());
+            } else {
+                // REGULAR PARTICLE.
+                if (pb.hasProperMotion()) {
+                    pm.set(pb.vx(),
+                           pb.vy(),
+                           pb.vz())
+                            .scl(deltaYears);
+                } else {
+                    pm.set(0, 0, 0);
+                }
+                out.set(pb.x(), pb.y(), pb.z());
+            }
+            // Apply affine transformations, if any.
+            if (entity != null && Mapper.affine.has(entity)) {
+                var affine = Mapper.affine.get(entity);
+                if (affine != null && !affine.isEmpty()) {
+                    synchronized (mat) {
+                        affine.apply(mat.idt());
+                        out.mul(mat);
+                    }
+                }
+            }
+            if (camPos != null && !camPos.hasNaN()) {
+                out.sub(camPos);
+            }
+            if (!pm.isZero()) {
+                out.add(pm);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Fetches the real position of the particle. It will apply the necessary
+     * integrations (i.e. proper motion). Arbitrary-precision version.
+     *
+     * @param pb         The particle bean.
+     * @param camPos     The position of the camera. If null, the camera position is
+     *                   not subtracted so that the coordinates are given in the global
+     *                   reference system instead of the camera reference system.
+     * @param out        The output vector.
+     * @param deltaYears The delta years.
+     *
+     * @return The vector for chaining.
+     */
+    public Vector3Q fetchPosition(IParticleRecord pb,
+                                  Vector3Q camPos,
+                                  Vector3Q out,
+                                  double deltaYears) {
+        if (pb instanceof ParticleKepler k) {
+            fetchPositionDouble(k, camPos, D31, deltaYears);
+            out.set(D31);
+        } else {
+            Vector3D pm = D32;
+            if (pb.hasProperMotion()) {
+                pm.set(pb.vx(),
+                       pb.vy(),
+                       pb.vz())
+                        .scl(deltaYears);
+            } else {
+                pm.set(0, 0, 0);
+            }
+            out.set(pb.x(), pb.y(), pb.z());
+            // Apply affine transformations, if any.
+            if (entity != null && Mapper.affine.has(entity)) {
+                var affine = Mapper.affine.get(entity);
+                if (affine != null && !affine.isEmpty()) {
+                    synchronized (mat) {
+                        affine.apply(mat.idt());
+                        out.mul(mat);
+                    }
+                }
+            }
+            if (camPos != null && !camPos.hasNaN()) {
+                out.sub(camPos);
+            }
+            if (!pm.isZero()) {
+                out.add(pm);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Sets the epoch to use for the stars in this set.
+     *
+     * @param epochJd The epoch in julian days (days since January 1, 4713, BCE).
+     */
+    public void setEpoch(Double epochJd) {
+        setEpochJd(epochJd);
+    }
+
+    /**
+     * Sets the epoch to use for the stars in this set.
+     *
+     * @param epochJd The epoch in julian days (days since January 1, 4713 BCE).
+     */
+    public void setEpochJd(Double epochJd) {
+        this.epochJd = epochJd;
+    }
+
+    /**
+     * Returns the delta years to integrate the proper motion.
+     *
+     * @return The current delta years.
+     */
+    public double getDeltaYears() {
+        return currDeltaYears;
+    }
+
+    public long getId() {
+        if (focus != null)
+            return focus.id();
+        else
+            return -1;
+    }
+
+    public String getName() {
+        if (focus != null && focus.names() != null)
+            return focus.names()[0];
+        return null;
+    }
+
+    public String[] getNames() {
+        if (focus != null && focus.names() != null)
+            return focus.names();
+        return null;
+    }
+
+    public boolean hasName(String candidate) {
+        return hasName(candidate, false);
+    }
+
+    public boolean hasName(String candidate,
+                           boolean matchCase) {
+        if (focus == null || focus.names() == null) {
+            return false;
+        } else {
+            var names = focus.names();
+            for (String name : names) {
+                if (matchCase) {
+                    if (name.equals(candidate))
+                        return true;
+                } else {
+                    if (name.equalsIgnoreCase(candidate))
+                        return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    public String getLocalizedName() {
+        var name = getName();
+        return I18n.localize(name.toLowerCase(Locale.ROOT), name);
+    }
+
+    public long getCandidateId() {
+        return candidateFocusIndex >= 0 ? pointData.get(candidateFocusIndex).id() : -1L;
+    }
+
+    public String getCandidateName() {
+        if (candidateFocusIndex >= 0) {
+            return pointData.get(candidateFocusIndex)
+                    .names() != null ?
+                    pointData.get(candidateFocusIndex)
+                            .names()[0] : getName();
+        } else {
+            return null;
+        }
+    }
+
+    public double getCandidateSolidAngleApparent() {
+        return getSolidAngleApparent(candidateFocusIndex);
+    }
+
+    public double getSolidAngleApparent(int idx) {
+        if (idx >= 0 && idx < pointData.size()) {
+            ICamera camera = GaiaSky.instance.getICamera();
+            IParticleRecord candidate = pointData.get(idx);
+            float size = candidate.hasSize() ? candidate.size() : 0.5e2f;
+            Vector3Q pos = this.fetchPosition(candidate, cPosD, B31, currDeltaYears);
+            var distance = pos.lenDouble() - size;
+            return (float) ((size / distance) / camera.getFovFactor());
+        } else {
+            return -1;
+        }
+    }
+
+    public String getClosestName() {
+        return this.proximity.updating[0].name;
+    }
+
+    public String getClosestLocalizedName() {
+        var name = getClosestName();
+        return I18n.localize(name.toLowerCase(Locale.ROOT), name);
+    }
+
+    public boolean canSelect(FilterView view) {
+        return candidateFocusIndex < 0 || candidateFocusIndex >= pointData.size() || view.filter(candidateFocusIndex);
+    }
+
+    public Vector2D getPosSph() {
+        return focusPositionSph;
+    }
+
+    public double getAlpha() {
+        return focusPositionSph.x;
+    }
+
+    public double getDelta() {
+        return focusPositionSph.y;
+    }
+
+    public double getDistToCamera() {
+        return focusDistToCamera;
+    }
+
+    public double getSolidAngle() {
+        return focusSolidAngle;
+    }
+
+    // FOCUS_MODE apparent view angle
+    public double getSolidAngleApparent() {
+        return focusSolidAngleApparent;
+    }
+
+    public boolean isWireframe() {
+        return modelPrimitive >= GL30.GL_LINES && modelPrimitive <= GL30.GL_LINE_STRIP;
+    }
+
+    public boolean isBillboard() {
+        return model == null && modelType.equalsIgnoreCase("quad");
+    }
+
+    public boolean isModel() {
+        return model != null || !modelType.equalsIgnoreCase("quad");
+    }
+
+    public void setLabelDisplay(LabelDisplay state,
+                                String name) {
+        name = name.toLowerCase(Locale.ROOT)
+                .trim();
+        synchronized (indexSync) {
+            if (index != null && index.containsKey(name)) {
+                int idx = index.get(name);
+                switch (state) {
+                    case ALWAYS -> {
+                        this.labelDisplayAlways.add(idx);
+                        this.labelDisplayNever.remove(idx);
+                    }
+                    case NEVER -> {
+                        this.labelDisplayAlways.remove(idx);
+                        this.labelDisplayNever.add(idx);
+                    }
+                    case AUTO -> {
+                        this.labelDisplayAlways.remove(idx);
+                        this.labelDisplayNever.remove(idx);
+                    }
+                }
+            }
+        }
+    }
+
+    public void setForceLabel(Boolean forceLabel,
+                              String name) {
+        setLabelDisplay(forceLabel ? LabelDisplay.ALWAYS : LabelDisplay.AUTO, name);
+    }
+
+    public boolean isForceLabel(String name) {
+        name = name.toLowerCase(Locale.ROOT)
+                .trim();
+        synchronized (indexSync) {
+            if (index != null && index.containsKey(name)) {
+                int idx = index.get(name);
+                return labelDisplayAlways.contains(idx);
+            }
+        }
+        return false;
+    }
+
+    public void setRenderLabel(Boolean renderLabel,
+                               String name) {
+        setLabelDisplay(renderLabel ? LabelDisplay.AUTO : LabelDisplay.NEVER, name);
+    }
+
+    public boolean isRenderLabel(String name) {
+        name = name.toLowerCase(Locale.ROOT)
+                .trim();
+        synchronized (indexSync) {
+            if (index != null && index.containsKey(name)) {
+                int idx = index.get(name);
+                return isRenderLabel(idx);
+            }
+        }
+        return false;
+    }
+
+    public boolean isRenderLabel(int idx) {
+        return !labelDisplayNever.contains(idx);
+    }
+
+    public void setLabelColor(float[] color,
+                              String name) {
+        name = name.toLowerCase(Locale.ROOT)
+                .trim();
+        synchronized (indexSync) {
+            if (index != null && index.containsKey(name)) {
+                int idx = index.get(name);
+                labelColors.put(idx, color);
+            }
+        }
+    }
+
+    public void setUniformEpoch(boolean uniformEpoch) {
+        this.uniformEpoch = uniformEpoch;
+    }
+
+    @Override
+    public void dispose(Entity entity) {
+        if (updaterTask != null) {
+            updaterTask.dispose();
+        }
+
+        this.disposed = true;
+        markForUpdate(Mapper.render.get(entity));
+        // Data -> null, to be garbage collected.
+        this.pointData = null;
+    }
+}

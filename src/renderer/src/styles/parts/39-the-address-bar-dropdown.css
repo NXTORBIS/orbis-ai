@@ -242,3 +242,33 @@
 .omni {
   -webkit-app-region: no-drag;
 }
+
+
+/*
+ * Every <select> in the window, in the window's own colours.
+ *
+ * It had the browser's default white face on the dark surfaces (the Update channel menu was a white box with
+ * near-invisible text), and its list opened as a white sheet. `color-scheme` is what makes the list follow.
+ */
+select {
+  color-scheme: dark;
+  appearance: none;
+  min-height: 34px;
+  padding: 6px 30px 6px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.12));
+  background-color: color-mix(in srgb, var(--panel, #11161d) 85%, transparent);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239fb3c0' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  color: var(--text, #e8eef3);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+select:hover { border-color: color-mix(in srgb, var(--cyan, #38bdd8) 45%, transparent); }
+select:focus-visible { outline: none; border-color: var(--cyan, #38bdd8); box-shadow: 0 0 0 3px color-mix(in srgb, var(--cyan, #38bdd8) 25%, transparent); }
+select option { background: #0e141b; color: #e8eef3; }
+:root[data-theme='light'] select { color-scheme: light; }
+:root[data-theme='light'] select option { background: #ffffff; color: #101820; }

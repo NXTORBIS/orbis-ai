@@ -63,7 +63,13 @@ export async function ask(channel, args = []) {
 
 /** A loading / empty / error block. */
 export const state = (kind, text, action) =>
-  el('div', { class: `rv-state ${kind}`, role: kind === 'error' ? 'alert' : 'status' }, el('p', {}, text), action ?? null)
+  el(
+    'div',
+    { class: `rv-state ${kind}`, role: kind === 'error' ? 'alert' : 'status' },
+    el('span', { class: 'es-ico', 'aria-hidden': 'true' }, kind === 'error' ? '!' : kind === 'loading' ? '◌' : '✦'),
+    el('p', {}, text),
+    action ?? null
+  )
 
 /** A site's own icon from the browser's favicon service, falling back to a globe. Only inside the built-in page; anywhere else it is the globe. */
 export function favicon(url) {

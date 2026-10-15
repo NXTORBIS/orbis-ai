@@ -839,6 +839,94 @@ export interface NxtorbisApi {
   saveConversation(conversation: Conversation): Promise<void>
   deleteConversation(id: string): Promise<void>
   sendChat(request: ChatRequest): Promise<void>
+  /** Orbis Chance's saved work for the active profile: 'load' reads it, 'save' replaces it. */
+  chanceStore(operation: 'load' | 'save', document?: unknown): Promise<unknown>
+  /** A lookup the Toolkit's tools make (headers, registration, rates, ...), answered on this computer. */
+  jarvisInvoke(name: string, payload?: unknown): Promise<unknown>
+  /** Starts OrbisEye's local server if it is not running, and says where it is. */
+  eyeStart(): Promise<unknown>
+  /** F1 (Orbis Arena): the calendar of a season, from Jolpica-F1. */
+  f1Schedule(season: number | 'current'): Promise<unknown>
+  /** F1: one race's classification ('last' = the most recent). */
+  f1Results(season: number | 'current', round: number | 'last'): Promise<unknown>
+  /** F1: driver and constructor standings, as they stood after `round` or now. */
+  f1Standings(season: number | 'current', round?: number): Promise<unknown>
+  /** F1: the sessions of a year, from OpenF1. */
+  f1Sessions(year: number): Promise<unknown>
+  /** F1: drivers and laps of one session, from OpenF1. */
+  f1Timing(sessionKey: number, endsAt: string | null): Promise<unknown>
+  /** F1: what each data provider has done for this run, for the Sources panel. */
+  f1Status(): Promise<unknown>
+  /** F1: stints, pit stops, weather, race control, positions, overtakes and results of a finished session. */
+  f1Bundle(sessionKey: number, endsAt: string | null): Promise<unknown>
+  /** F1: gap and interval readings of a session, thinned. */
+  f1Intervals(sessionKey: number, endsAt: string | null): Promise<unknown>
+  /** F1: one driver's car readings and positions between two instants (a lap). */
+  f1Telemetry(sessionKey: number, driver: number, from: string, to: string): Promise<unknown>
+  /** F1: the drivers' championship as OpenF1 keeps it for a session's meeting. */
+  f1Championship(sessionKey: number): Promise<unknown>
+  /** F1: every race, sprint and qualifying result of a season. */
+  f1SeasonData(season: number): Promise<unknown>
+  /** F1: one driver's final standing in every season they raced. */
+  f1Career(driverId: string): Promise<unknown>
+  /** F1: this profile's watchlist and alert switches. */
+  f1Prefs(): Promise<unknown>
+  /** F1: replace them; the main process cleans and writes them. */
+  f1PrefsSet(next: unknown): Promise<unknown>
+  /** F1: every season's champion driver, runner-up and champion constructor. */
+  f1Champions(season?: number): Promise<unknown>
+  /** F1: the fastest lap of every race run at a circuit. */
+  f1CircuitRecords(circuitId: string): Promise<unknown>
+  /** F1: one race's qualifying (Q1, Q2, Q3). */
+  f1Qualifying(season: number, round: number): Promise<unknown>
+  /** F1: one constructor's season, round by round. */
+  f1ConstructorSeason(season: number, constructorId: string): Promise<unknown>
+  /** F1: the team-radio clips listed for a session. */
+  f1TeamRadio(sessionKey: number): Promise<unknown>
+  /** F1: the weather forecast at a circuit for a session start. */
+  f1Forecast(lat: number, long: number, startsAt: string): Promise<unknown>
+  /** F1: the recorded sessions of a year that can be replayed. */
+  f1Archive(year: number): Promise<unknown>
+  /** F1: connect to the live-timing service. */
+  f1StreamLive(): Promise<unknown>
+  /** Football: the competitions Orbis has data for, with what each provider really supplies. */
+  footballLeagues(): Promise<unknown>
+  /** Football: matches live now (reported or inferred) and the current German rounds. */
+  footballLive(): Promise<unknown>
+  /** Football: every match of one competition's season. */
+  footballSeason(league: string, season: string): Promise<unknown>
+  /** Football: a competition's table for a season. */
+  footballTable(league: string, season: string): Promise<unknown>
+  /** Football: one match by its namespaced key. */
+  footballMatch(key: string): Promise<unknown>
+  /** Football: lineup, timeline and statistics of a match (TheSportsDB matches only). */
+  footballExtras(key: string): Promise<unknown>
+  /** Football: a team's profile and the first of its squad. */
+  footballTeam(key: string): Promise<unknown>
+  /** Football: per-provider request counts and failures. */
+  footballStatus(): Promise<unknown>
+  /** Football: what this profile follows (teams, pinned matches, reminders, alerts, saved views). */
+  footballFollows(): Promise<unknown>
+  /** Football: replace what this profile follows; the main process cleans it. */
+  footballFollowsSet(next: unknown): Promise<unknown>
+  /** F1: load a recorded session by its archive path for replay. */
+  f1StreamReplay(path: string): Promise<unknown>
+  /** F1: replay controls: play, pause, seek (ms) or speed (1, 2, 4, 8, 16, 32). */
+  f1StreamControl(action: 'play' | 'pause' | 'seek' | 'speed', value?: number): Promise<unknown>
+  /** F1: disconnect and release the live or replay stream. */
+  f1StreamStop(): Promise<unknown>
+  /** F1: the current stream picture, for a screen that has just opened. */
+  f1StreamState(): Promise<unknown>
+  /** F1: pushed pictures of the live or replay stream. */
+  onF1Stream(listener: (event: unknown) => void): () => void
+  /** Starts ORBIS COSMOS (the Gaia Sky simulation) if it is not running, and answers what it has done so far. */
+  cosmosStart(): Promise<unknown>
+  /** Stops the simulation and gives its memory back. */
+  cosmosStop(): Promise<unknown>
+  /** Where the simulation's window goes inside Orbis (CSS pixels of the window), or that it is hidden. */
+  cosmosRegion(region: { x: number; y: number; width: number; height: number; dpr: number; visible: boolean; viewportWidth?: number }): void
+  /** What the simulation reports as it starts: a finished step, ready, or why it could not. */
+  onCosmosEvent(listener: (event: unknown) => void): () => void
   abortChat(requestId: string): Promise<void>
   onChatEvent(requestId: string, listener: (event: StreamEvent) => void): () => void
   openExternal(url: string): Promise<void>

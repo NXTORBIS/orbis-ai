@@ -1,0 +1,710 @@
+/*
+ * Copyright (c) 2023 Gaia Sky - All rights reserved.
+ *  This file is part of Gaia Sky, which is released under the Mozilla Public License 2.0.
+ *  You may use, distribute and modify this code under the terms of MPL2.
+ *  See the file LICENSE.md in the project root for full license details.
+ */
+
+package gaiasky.desktop;
+
+import com.badlogic.gdx.Files.FileType;
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.Graphics.DisplayMode;
+import com.badlogic.gdx.backends.lwjgl3.Lwjgl3Application;
+import com.badlogic.gdx.backends.lwjgl3.Lwjgl3ApplicationConfiguration;
+import com.badlogic.gdx.backends.lwjgl3.Lwjgl3ApplicationConfiguration.GLEmulation;
+import com.badlogic.gdx.backends.lwjgl3.Lwjgl3Files;
+import com.badlogic.gdx.graphics.glutils.HdpiMode;
+import com.badlogic.gdx.utils.Array;
+import com.beust.jcommander.JCommander;
+import com.beust.jcommander.Parameter;
+import gaiasky.ErrorDialog;
+import gaiasky.GaiaSky;
+import gaiasky.data.util.GlobalResources;
+import gaiasky.event.Event;
+import gaiasky.event.EventManager;
+import gaiasky.event.IObserver;
+import gaiasky.gui.main.ConsoleLogger;
+import gaiasky.gui.main.KeyBindings;
+import gaiasky.render.ScreenModeCmd;
+import gaiasky.rest.RESTServer;
+import gaiasky.util.*;
+import gaiasky.util.Logger.Log;
+import gaiasky.util.Logger.LoggerLevel;
+import gaiasky.util.Settings.ElevationType;
+import gaiasky.util.camera.rec.Camcorder;
+import gaiasky.util.i18n.I18n;
+import net.jafama.FastMath;
+import org.lwjgl.system.Configuration;
+import org.yaml.snakeyaml.Yaml;
+
+import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.LocalDateTime;
+import java.util.Map;
+
+/**
+ * Main entry point for Gaia Sky. This class takes care of initializing the settings and logging system, parsing
+ * the CLI arguments, setting up the GDX configuration and starting the application.
+ */
+public class GaiaSkyDesktop implements IObserver {
+    private static final Log logger = Logger.getLogger(GaiaSkyDesktop.class);
+    /**
+     * Minimum Java version required to run Gaia Sky.
+     * Remember to keep this in sync with attribute <code>minJavaVersion</code> in <code>core/build.gradle</code>.
+     **/
+    private static final int MIN_JAVA_VERSION = 21;
+    /**
+     * Default major OpenGL version.
+     **/
+    private static final int DEFAULT_OPENGL_MAJOR = 4;
+    /**
+     * Default minor OpenGL version.
+     **/
+    private static final int DEFAULT_OPENGL_MINOR = 1;
+    /**
+     * Default minor OpenGL version in VR mode.
+     **/
+    private static final int XR_OPENGL_MINOR = 5;
+    /**
+     * Minimum required OpenGL major version for Gaia Sky to run.
+     **/
+    private static final int MIN_OPENGL_MAJOR = 3;
+    /**
+     * Minimum required OpenGL minor version for Gaia Sky to run.
+     **/
+    private static final int MIN_OPENGL_MINOR = 3;
+    /**
+     * Minimum required OpenGL version string.
+     **/
+    private static final String MIN_OPENGL = MIN_OPENGL_MAJOR + "." + MIN_OPENGL_MINOR;
+    /**
+     * Minimum GLSL major version.
+     **/
+    private static final int MIN_GLSL_MAJOR = 3;
+    /**
+     * Minimum GLSL minor version.
+     **/
+    private static final int MIN_GLSL_MINOR = 3;
+    /**
+     * Minimum GLSL version string.
+     **/
+    private static final String MIN_GLSL = MIN_GLSL_MAJOR + "." + MIN_GLSL_MINOR;
+    /**
+     * Whether the REST server is enabled or not.
+     **/
+    private static boolean REST_ENABLED;
+    /**
+     * CLI arguments.
+     **/
+    private static CLIArgs cliArgs;
+    /**
+     * Settings object.
+     */
+    private Settings settings;
+    /**
+     * UTF-8 output stream printer.
+     **/
+    private static PrintStream out;
+    /**
+     * The Gaia Sky application instance.
+     **/
+    private GaiaSky gs;
+
+    public GaiaSkyDesktop() {
+        super();
+        EventManager.instance.subscribe(this, Event.SCENE_LOADED, Event.DISPOSE);
+    }
+
+    /**
+     * Formats the regular usage so that it removes the left padding characters.
+     * This is necessary so that <code>help2man</code> recognizes the OPTIONS block.
+     *
+     * @param jc The JCommander object.
+     */
+    private static void printUsage(JCommander jc) {
+        jc.usage();
+    }
+
+    /**
+     * Main method.
+     *
+     * @param args CLI arguments (see {@link CLIArgs}).
+     */
+    public static void main(String[] args) {
+        // Set main thread name.
+        Thread.currentThread().setName(Constants.MAIN_THREAD_NAME);
+
+        out = new PrintStream(System.out, true, StandardCharsets.UTF_8);
+        cliArgs = new CLIArgs();
+        JCommander jc = JCommander.newBuilder().addObject(cliArgs).build();
+        jc.setProgramName("gaiasky");
+        try {
+            jc.parse(args);
+
+            if (cliArgs.help) {
+                printUsage(jc);
+                return;
+            }
+        } catch (Exception e) {
+            out.print("gaiasky: bad program arguments\n\n");
+            printUsage(jc);
+            return;
+        }
+
+        int statusCode = 0;
+        try {
+            // Check java version.
+            javaVersionCheck();
+
+            // Experimental features.
+            experimentalCheck();
+
+            GaiaSkyDesktop gsd = new GaiaSkyDesktop();
+
+            // Set properties file from arguments to VM params if needed.
+            if (cliArgs.propertiesFile != null && !cliArgs.propertiesFile.isEmpty()) {
+                System.setProperty("properties.file", cliArgs.propertiesFile);
+            }
+
+            // Set assets location to VM params if needed.
+            if (cliArgs.assetsLocation != null && !cliArgs.assetsLocation.isEmpty()) {
+                System.setProperty("assets.location", cliArgs.assetsLocation);
+            }
+
+            if (cliArgs.vr) {
+                Settings.APPLICATION_NAME += " VR";
+            }
+
+            Gdx.files = new Lwjgl3Files();
+
+            // Init Gaia Sky directories.
+            SysUtils.mkdirs();
+
+            // Init constants.
+            // Init properties file.
+            String props = System.getProperty("properties.file");
+            if (props == null || props.isEmpty()) {
+                boolean ignored = initConfigFile(cliArgs.vr);
+            }
+
+            // Init global configuration.
+            var settingsManager = new SettingsManager();
+            gsd.settings = settingsManager.loadSettings(cliArgs.vr);
+
+            // Safe mode active if specified in CLI arg, or in config.
+            if (cliArgs.safeMode && !gsd.settings.program.safeMode) {
+                gsd.settings.program.safeMode = true;
+                gsd.settings.program.safeModeFlag = true;
+            }
+
+            // Force deactivation of safe graphics mode.
+            if (cliArgs.noSafeMode) {
+                gsd.settings.program.safeMode = false;
+            }
+
+            // Initialize I18n.
+            I18n.initialize(gsd.settings,
+                            Gdx.files.absolute(Settings.ASSETS_LOC + File.separator + "i18n/gsbundle"),
+                            Gdx.files.absolute(Settings.ASSETS_LOC + File.separator + "i18n/objects"));
+
+            // -v or --version
+            if (cliArgs.version) {
+                out.println(gsd.settings.getShortApplicationName());
+                if (cliArgs.asciiArt) {
+                    BufferedReader ascii = new BufferedReader(new InputStreamReader(Gdx.files.internal("icon/gsascii.txt").read()));
+                    out.println();
+                    String line;
+                    while ((line = ascii.readLine()) != null) {
+                        out.println(line);
+                    }
+                }
+                out.println();
+                out.println(I18n.msg("gui.help.license"));
+                out.println(I18n.msg("gui.help.writtenby", Settings.AUTHOR_NAME, Settings.AUTHOR_EMAIL));
+                out.println();
+                out.println(I18n.msg("gui.help.homepage") + "\t<" + Settings.HOMEPAGE + ">");
+                out.println(I18n.msg("gui.help.docs") + "\t\t<" + Settings.DOCUMENTATION + ">");
+                out.println(I18n.msg("gui.help.repo") + "\t<" + Settings.REPOSITORY + ">");
+                out.println();
+                out.println(I18n.msg("gui.help.javaversion") + " " + System.getProperty("java.vm.version"));
+                out.println();
+                out.println("ZAH/DLR/BWT/DPAC");
+                return;
+            }
+
+            // Set log level
+            Logger.level = cliArgs.debug ? LoggerLevel.DEBUG : LoggerLevel.INFO;
+            // Create logger
+            ConsoleLogger consoleLogger = new ConsoleLogger();
+
+            // Slave manager.
+            SlaveManager.initialize(gsd.settings);
+
+            // Full screen command.
+            ScreenModeCmd.initialize();
+
+            // Init cam recorder.
+            Camcorder.initialize();
+
+            // Key mappings.
+            KeyBindings.initialize();
+
+            // REST API server.
+            REST_ENABLED = gsd.settings.program.net.restPort >= 0;
+            if (REST_ENABLED) {
+                RESTServer.initialize(gsd.settings.program.net.restPort);
+            }
+
+            consoleLogger.dispose();
+
+            gsd.init();
+
+            // Write session log.
+            CrashReporter.writeLastSessionLog(logger);
+        } catch (Exception e) {
+            CrashReporter.reportCrash(e, logger);
+            statusCode = 1;
+        }
+
+        // Shutdown JVM gracefully.
+        System.exit(statusCode);
+    }
+
+    private static void checkLogger(ConsoleLogger consoleLogger) {
+        EventManager.instance.clearAllSubscriptions();
+        consoleLogger.subscribe();
+    }
+
+    /**
+     * Initialises the configuration file. Tries to load first the file in
+     * <code>$GS_CONFIG_DIR/config.yaml</code>. Checks the
+     * <code>version</code> key and compares it with the version in
+     * the default configuration file of this release
+     * to determine whether the config file must be overwritten.
+     *
+     * @return True if the configuration file has been initialized or
+     * overwritten with the default one, false otherwise.
+     *
+     * @throws IOException If the file fails to be written successfully.
+     */
+    private static boolean initConfigFile(boolean vr) throws IOException {
+        // Use user folder
+        Path userFolderConfFile = SysUtils.getConfigDir().resolve(SettingsManager.getConfigFileName(vr));
+
+        // Internal config
+        Path confFolder = Settings.assetsPath("conf");
+        Path internalFolderConfFile = confFolder.resolve(SettingsManager.getConfigFileName(vr));
+
+        boolean overwrite = false;
+        boolean userConfExists = Files.exists(userFolderConfFile);
+        if (userConfExists) {
+            Yaml yaml = new Yaml();
+            Map<String, Object> userProps = yaml.load(Files.newInputStream(userFolderConfFile));
+            int internalVersion = 0;
+            if (Files.exists(internalFolderConfFile)) {
+                Map<String, Object> internalProps = yaml.load(Files.newInputStream(internalFolderConfFile));
+                internalVersion = (Integer) internalProps.get("configVersion");
+            }
+
+            // Check latest version.
+            if (userProps == null) {
+                out.println("Your current configuration file is corrupted! Overwriting...");
+                userConfExists = false;
+                overwrite = true;
+            } else if (!userProps.containsKey("configVersion")) {
+                out.println("Configuration file version not found, overwriting with new version (" + internalVersion + ")");
+                overwrite = true;
+            } else if ((Integer) userProps.get("configVersion") < internalVersion) {
+                out.println("Configuration file version mismatch, overwriting with new version: found " + userProps.get("version") + ", required " + internalVersion);
+                overwrite = true;
+            }
+        } else {
+            // No user configuration exists, try to morph the old configuration into the new one.
+            try {
+                Path propertiesFile = SysUtils.getConfigDir().resolve(vr ? "global.vr.properties" : "global.properties");
+                if (Files.exists(propertiesFile)) {
+                    out.println("Old configuration file detected!");
+                    out.println("    -> Converting " + propertiesFile + " to " + userFolderConfFile);
+                    SettingsMorph.morphSettings(propertiesFile, userFolderConfFile);
+                    // Move old properties file so that they are not converted on the next run.
+                    Files.move(propertiesFile, SysUtils.getConfigDir().resolve(vr ? "global.vr.properties.old" : "global.properties.old"));
+                    userConfExists = true;
+                }
+            } catch (Exception e) {
+                // Failed!
+            }
+        }
+
+        if (overwrite || !userConfExists) {
+            // Copy file
+            if (Files.exists(confFolder) && Files.isDirectory(confFolder)) {
+                // Back up user configuration, if it exists and contains data.
+                if (Files.exists(userFolderConfFile) && userFolderConfFile.toFile().length() > 0) {
+                    Path backup = userFolderConfFile.getParent().resolve(
+                            userFolderConfFile.getFileName() + "." + LocalDateTime.now().toString().replaceAll("[^a-zA-Z0-9_.\\-]", "_"));
+                    GlobalResources.copyFile(userFolderConfFile, backup, true);
+                }
+                // Overwrite user configuration with internal configuration.
+                GlobalResources.copyFile(internalFolderConfFile, userFolderConfFile, overwrite);
+            } else {
+                logger.warn("Configuration folder does not exist: " + confFolder);
+            }
+        }
+        String props = userFolderConfFile.toAbsolutePath().toString();
+        System.setProperty("properties.file", props);
+
+        return overwrite || !userConfExists;
+    }
+
+    /**
+     * Checks for incompatibilities between the java version and the OS. Prints the necessary warnings for known issues.
+     */
+    private static void javaVersionCheck() {
+        double jv = SysUtils.getJavaVersion();
+
+        if (jv < MIN_JAVA_VERSION) {
+            out.println("========================== ERROR ==============================");
+            out.println("You are using Java " + jv + ", which is unsupported by ORBIS COSMOS");
+            out.println("             Please, use at least Java " + MIN_JAVA_VERSION);
+            out.println("===============================================================");
+        }
+    }
+
+    /**
+     * Checks for experimental features and issues warnings
+     */
+    private static void experimentalCheck() {
+        if (cliArgs.externalView) {
+            out.println("============================ WARNING ================================");
+            out.println("The -e/--externalview feature is experimental and may cause problems!");
+            out.println("=====================================================================");
+            out.println();
+        }
+    }
+
+    private static boolean needsX11Workaround() {
+        String sessionType = System.getenv("XDG_SESSION_TYPE");
+        String waylandDisplay = System.getenv("WAYLAND_DISPLAY");
+        boolean wayland = "wayland".equalsIgnoreCase(sessionType)
+                || (waylandDisplay != null && !waylandDisplay.isEmpty());
+        if (!wayland) {
+            return false;
+        }
+        return "nvidia".equalsIgnoreCase(System.getenv("__GLX_VENDOR_LIBRARY_NAME"))
+                || Files.exists(Path.of("/proc/driver/nvidia/version"));
+    }
+
+    private void init() {
+        if (SysUtils.isLinux() && needsX11Workaround()) {
+            org.lwjgl.glfw.GLFW.glfwInitHint(
+                    org.lwjgl.glfw.GLFW.GLFW_PLATFORM,
+                    org.lwjgl.glfw.GLFW.GLFW_PLATFORM_X11
+            );
+        }
+        launchMainApp();
+    }
+
+    public void launchMainApp() {
+        ConsoleLogger consoleLogger = new ConsoleLogger();
+        Lwjgl3ApplicationConfiguration cfg = new Lwjgl3ApplicationConfiguration();
+        cfg.setTitle(Settings.APPLICATION_NAME);
+        cfg.setPauseWhenMinimized(false);
+        cfg.disableAudio(true);
+        if (!cliArgs.vr) {
+            // We also default to full screen in small displays (around 720p, or a bit larger).
+            // To that effect, we check the length of the diagonal:
+            // 1280x720  -> 1468.6
+            // 1280x800  -> 1509.5
+            // 1600x900  -> 1835.7
+            // 1920x1080 -> 2202.9
+            // 2560x1440 -> 2937.2
+            // 3840x2160 -> 4405.8
+            int[] resolution = SysUtils.getDisplayResolution();
+            if (resolution != null && resolution.length == 2 && resolution[0] > 0 && resolution[1] > 0) {
+                double screenDiagonalPixels = FastMath.sqrt(Math.pow(resolution[0], 2) + FastMath.pow(resolution[1], 2));
+                if (screenDiagonalPixels < 1600) {
+                    // Set full screen.
+                    settings.graphics.fullScreen.active = true;
+                    settings.graphics.fullScreen.resolution[0] = resolution[0];
+                    settings.graphics.fullScreen.resolution[1] = resolution[1];
+                }
+            }
+
+            if (settings.graphics.fullScreen.active) {
+                int[] fullScreenResolution = settings.graphics.fullScreen.resolution;
+                // Full screen mode.
+                DisplayMode[] modes = Lwjgl3ApplicationConfiguration.getDisplayModes();
+                if (cliArgs.debug) {
+                    logger.debug("Full screen resolution in config file: " + fullScreenResolution[0] + "x" + fullScreenResolution[1]);
+                    logger.debug("Supported full screen modes:");
+                    int modeIndex = 1;
+                    for (DisplayMode displayMode : modes) {
+                        logger.debug("  " + modeIndex++ + ". " + displayMode.toString());
+                    }
+                }
+                DisplayMode myMode = null;
+
+                // Find out modes with the same resolution.
+                Array<DisplayMode> fittingModes = new Array<>();
+                for (DisplayMode mode : modes) {
+                    if (mode.height == fullScreenResolution[1] && mode.width == fullScreenResolution[0]) {
+                        fittingModes.add(mode);
+                    }
+                }
+                if (fittingModes.size == 1) {
+                    // Only one available, use it.
+                    myMode = fittingModes.get(0);
+                } else if (fittingModes.size > 1) {
+                    // Check if the bit depth and refresh rate are set.
+                    for (DisplayMode fittingMode : fittingModes) {
+                        if (myMode == null) {
+                            myMode = fittingMode;
+                        } else {
+                            if (settings.graphics.fullScreen.bitDepth > 0
+                                    && fittingMode.bitsPerPixel == settings.graphics.fullScreen.bitDepth
+                                    && settings.graphics.fullScreen.refreshRate > 0
+                                    && fittingMode.refreshRate == settings.graphics.fullScreen.refreshRate) {
+                                myMode = fittingMode;
+                                break;
+                            } else {
+                                if (fittingMode.refreshRate > myMode.refreshRate) {
+                                    myMode = fittingMode;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                logger.debug("Using full screen mode: " + myMode);
+
+                if (myMode == null) {
+                    // Fall back to windowed mode.
+                    logger.warn(I18n.msg("error.fullscreen.notfound", fullScreenResolution[0], fullScreenResolution[1]));
+                    cfg.setWindowedMode(settings.graphics.getApplicationWidth(), settings.graphics.getApplicationHeight());
+                    cfg.setResizable(settings.graphics.resizable);
+                } else {
+                    cfg.setFullscreenMode(myMode);
+                    settings.graphics.fullScreen.resolution[0] = myMode.width;
+                    settings.graphics.fullScreen.resolution[1] = myMode.height;
+                    settings.graphics.fullScreen.bitDepth = myMode.bitsPerPixel;
+                    settings.graphics.fullScreen.refreshRate = myMode.refreshRate;
+                }
+            } else {
+                // Windowed mode. Compute window size.
+                configureWindowSize(cfg);
+                cfg.setResizable(settings.graphics.resizable);
+            }
+            cfg.useVsync(settings.graphics.vsync);
+        } else {
+            // Note that we disable VSync! The VRContext manages vsync with respect to the HMD.
+            cfg.useVsync(false);
+            // Always windowed, actual render sent to headset.
+            configureWindowSize(cfg);
+            cfg.setResizable(true);
+        }
+        // Wayland does not support window icons.
+        if (!SysUtils.isWayland()) {
+            if (cliArgs.vr) {
+                cfg.setWindowIcon(FileType.Internal, "icon/gsvr_round_256.png");
+            } else {
+                cfg.setWindowIcon(FileType.Internal, "icon/gs_round_256.png");
+            }
+        }
+        // OpenXR requires OpenGL 4.5.
+        int minor = cliArgs.vr ? XR_OPENGL_MINOR : DEFAULT_OPENGL_MINOR;
+        cfg.setOpenGLEmulation(GLEmulation.GL30, DEFAULT_OPENGL_MAJOR, minor);
+        // Disable logical DPI modes (macOS, Windows).
+        cfg.setHdpiMode(cliArgs.hdpiMode);
+        // Headless mode.
+        cfg.setInitialVisible(!cliArgs.headless);
+        // OpenGL debug.
+        if (cliArgs.debugGpu) {
+            cfg.enableGLDebugOutput(true, System.out);
+        }
+        // Color, Depth, stencil buffers, MSAA.
+        cfg.setBackBufferConfig(8, 8, 8, 8, 24, 8, 0);
+
+        // Launch app.
+        try {
+            if (settings.program.safeMode) {
+                setSafeMode(cfg);
+            }
+            consoleLogger.unsubscribe();
+
+            runGaiaSky(cfg);
+        } catch (Exception e) {
+            checkLogger(consoleLogger);
+            logger.error(e);
+            if (gs != null) {
+                gs.setCrashed(true);
+                try {
+                    gs.dispose();
+                } catch (Exception e1) {
+                    logger.error(I18n.msg("error.dispose"), e1);
+                }
+            }
+            showDialogOGL(e, I18n.msg("error.crash.title"));
+        }
+    }
+
+    private void configureWindowSize(Lwjgl3ApplicationConfiguration cfg) {
+        configureWindowSize(cfg, 1f, 1f);
+    }
+
+    private void configureWindowSize(Lwjgl3ApplicationConfiguration cfg,
+                                     float widthFactor,
+                                     float heightFactor) {
+        int w = settings.graphics.getApplicationWidth();
+        int h = settings.graphics.getApplicationHeight();
+        int[] displayResolution = SysUtils.getDisplayResolution();
+        if (w <= 0 || h <= 0) {
+            // Default values.
+            w = Constants.DEFAULT_RESOLUTION_WIDTH;
+            h = Constants.DEFAULT_RESOLUTION_HEIGHT;
+            if (displayResolution != null && displayResolution.length == 2 && displayResolution[0] > 0 && displayResolution[1] > 0) {
+                // Use retrieved resolution.
+                w = (int) FastMath.max(w, displayResolution[0] * 0.85f);
+                h = (int) FastMath.max(h, displayResolution[1] * 0.85f);
+            } else {
+                // Default.
+                logger.warn(I18n.msg("error.screensize.default", w, h));
+            }
+            settings.graphics.resolution[0] = w;
+            settings.graphics.resolution[1] = h;
+        }
+
+        // Apply factors.
+        settings.graphics.resolution[0] = (int) (settings.graphics.resolution[0] * widthFactor);
+        settings.graphics.resolution[1] = (int) (settings.graphics.resolution[1] * heightFactor);
+        w = (int) (w * widthFactor);
+        h = (int) (h * heightFactor);
+
+        // Set to config.
+        if (cfg != null) {
+            cfg.setWindowedMode(w, h);
+        }
+    }
+
+    private void runGaiaSky(Lwjgl3ApplicationConfiguration cfg) {
+        gs = new GaiaSky(cliArgs, settings);
+        new Lwjgl3Application(gs, cfg);
+    }
+
+    private void setSafeMode(Lwjgl3ApplicationConfiguration cfg) {
+        logger.info(I18n.msg("startup.safe.enable", MIN_OPENGL, MIN_GLSL));
+        settings.scene.renderer.elevation.type = ElevationType.NONE;
+        settings.program.safeMode = true;
+        cfg.setOpenGLEmulation(GLEmulation.GL30, MIN_OPENGL_MAJOR, MIN_OPENGL_MINOR);
+    }
+
+    private void showDialogOGL(Exception ex,
+                               String title) {
+        Lwjgl3ApplicationConfiguration cfg = new Lwjgl3ApplicationConfiguration();
+        cfg.setHdpiMode(HdpiMode.Pixels);
+        cfg.useVsync(true);
+        configureWindowSize(cfg, 0.8f, 0.9f);
+        cfg.setResizable(true);
+        cfg.setTitle(title);
+
+        new Lwjgl3Application(new ErrorDialog(ex), cfg);
+    }
+
+    @Override
+    public void notify(Event event,
+                       Object source,
+                       Object... data) {
+        switch (event) {
+            case SCENE_LOADED -> {
+                if (REST_ENABLED) {
+                    /*
+                     * Notify REST server that GUI is loaded and everything should be in a
+                     * well-defined state
+                     */
+                    try {
+                        RESTServer.activate();
+                    } catch (SecurityException | IllegalArgumentException e) {
+                        logger.error(e);
+                    }
+                }
+            }
+            case DISPOSE -> {
+                if (REST_ENABLED) {
+                    /* Shutdown REST server thread on termination */
+                    try {
+                        RESTServer.dispose();
+                    } catch (SecurityException | IllegalArgumentException e) {
+                        logger.error(e);
+                    }
+                }
+            }
+            default -> {
+            }
+        }
+    }
+
+    /**
+     * Program CLI arguments.
+     */
+    public static class CLIArgs {
+        @Parameter(names = {"-h", "--help"}, description = "Show program options and usage information.", help = true, order = 0)
+        public boolean help;
+
+        @Parameter(names = {"-v", "--version"}, description = "List ORBIS COSMOS version and relevant information.", order = 1)
+        public boolean version;
+
+        @Parameter(names = {"-i", "--ascii-art"}, description = "Add nice ascii art to --version information.", order = 1)
+        public boolean asciiArt;
+
+        @Parameter(names = {"-s", "--skip-welcome"}, description = "Skip the welcome screen if possible (base-data package must be present).", order = 2)
+        public boolean skipWelcome;
+
+        @Parameter(names = {"-p", "--properties"}, description = "Specify the location of the properties file.", order = 4)
+        public String propertiesFile;
+
+        @Parameter(names = {"-a",
+                "--assets"}, description = "Specify the location of the assets folder. If not present, the default assets location (in the installation folder) is used.", order = 5)
+        public String assetsLocation;
+
+        @Parameter(names = {"-vr",
+                "--openxr"}, description = "Launch in Virtual Reality mode. ORBIS COSMOS will attempt to create a VR context through OpenXR. Make sure your OpenXR runtime is running.", order = 6)
+        public boolean vr;
+
+        @Parameter(names = {"-e", "--externalview"}, description = "Create a window with a view of the scene and no UI.", order = 7)
+        public boolean externalView;
+
+        @Parameter(names = {"-n",
+                "--no-script"}, description = "Do not start the scripting server. Useful to run more than one ORBIS COSMOS instance at once in the same machine.", order = 8)
+        public boolean noScriptingServer;
+
+        @Parameter(names = {"-d", "--debug"}, description = "Launch in debug mode. Prints out debug information from ORBIS COSMOS to the logs.", order = 9)
+        public boolean debug;
+
+        @Parameter(names = {"-g",
+                "--debug-gpu"}, description = "Activate OpenGL debug mode. Prints out debug information from OpenGL to the standard output.", order = 10)
+        public boolean debugGpu;
+
+        @Parameter(names = {
+                "--debug-input"}, description = "Activate input debug mode. Prints out debug information for all input events (keyboard/mouse/controllers).", order = 10)
+        public boolean debugInput;
+
+        @Parameter(names = {"-l", "--headless"}, description = "Use headless (windowless) mode, for servers.", order = 11)
+        public boolean headless;
+
+        @Parameter(names = {
+                "--safe-mode"}, description = "Activate safe graphics mode. This forces the creation of an OpenGL 3.2 context, and disables float buffers and tessellation.", order = 12)
+        public boolean safeMode;
+
+        @Parameter(names = {
+                "--no-safe-mode"}, description = "Force deactivation of safe graphics mode. Warning: this bypasses internal checks and may break things! Useful to get rid of safe graphics mode in the settings.", order = 13)
+        public boolean noSafeMode;
+
+        @Parameter(names = {"--hdpi-mode"}, description =
+                "The HDPI mode to use. Defines how HiDPI monitors are handled. Operating systems may have a per-monitor HiDPI scale setting. The operating system " +
+                        "may report window width/height and mouse coordinates in a logical coordinate system at a lower resolution than the actual " +
+                        "physical resolution. This setting allows you to specify whether you want to work in logical or raw pixel units.", order = 14)
+        public HdpiMode hdpiMode = HdpiMode.Pixels;
+    }
+}

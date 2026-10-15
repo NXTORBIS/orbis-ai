@@ -26,6 +26,7 @@ const KINDS = [['apiKey', 'API key'], ['password', 'Password'], ['login', 'Login
 const KIND = Object.fromEntries(KINDS)
 const AUTO_LOCK = [[0, 'Immediately'], [60000, '1 minute'], [300000, '5 minutes'], [900000, '15 minutes'], [1800000, '30 minutes'], [3600000, '1 hour'], [-1, 'Never']]
 const REVEAL_MS = 20_000
+const MARK = { apiKey: '\u2328', password: '\u2022\u2022', login: '\u263A', note: '\u270E', recoveryCode: '\u21BB', custom: '\u2726' }
 const MASKED = '•'.repeat(16)
 
 let status = null
@@ -58,6 +59,38 @@ async function run(channel, args) {
   }
 }
 
+
+// ---------------------------------------------------------------- the lock, drawn
+//
+// One drawing for every state of the vault: shut and dim when there is none yet, shut and breathing while it waits
+// for the master password, and with its shackle lifted when it is open. Built node by node -- the page does not
+// allow markup strings -- and styled in sidebar.css, where the movement lives.
+const SVG = 'http://www.w3.org/2000/svg'
+const sv = (tag, attrs = {}, ...kids) => {
+  const n = document.createElementNS(SVG, tag)
+  for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v)
+  n.append(...kids)
+  return n
+}
+function lockArt(mode) {
+  const svg = sv('svg', { viewBox: '0 0 120 140', class: `vault-lock ${mode}`, 'aria-hidden': 'true' })
+  const defs = sv('defs')
+  const body = sv('linearGradient', { id: `vl-body-${mode}`, x1: '0', y1: '0', x2: '1', y2: '1' })
+  body.append(sv('stop', { offset: '0', 'stop-color': '#22d3ee' }), sv('stop', { offset: '1', 'stop-color': '#7c5cff' }))
+  defs.append(body)
+  const halo = sv('circle', { class: 'vl-halo', cx: '60', cy: '78', r: '52' })
+  const ring1 = sv('circle', { class: 'vl-ring r1', cx: '60', cy: '78', r: '58', fill: 'none' })
+  const ring2 = sv('circle', { class: 'vl-ring r2', cx: '60', cy: '78', r: '66', fill: 'none' })
+  const shackle = sv('g', { class: 'vl-shackle' }, sv('path', { d: 'M38 66 V46 a22 22 0 0 1 44 0 V66', fill: 'none', 'stroke-width': '9', 'stroke-linecap': 'round' }))
+  const bodyRect = sv('rect', { class: 'vl-body', x: '24', y: '64', width: '72', height: '58', rx: '14', fill: `url(#vl-body-${mode})` })
+  const gloss = sv('path', { class: 'vl-gloss', d: 'M30 74 h60', stroke: 'rgba(255,255,255,.35)', 'stroke-width': '3', 'stroke-linecap': 'round' })
+  const keyhole = sv('g', { class: 'vl-key' }, sv('circle', { cx: '60', cy: '88', r: '7' }), sv('path', { d: 'M56.5 92 h7 l2 16 h-11 z' }))
+  svg.append(defs, halo, ring1, ring2, shackle, bodyRect, gloss, keyhole)
+  return svg
+}
+const hero = (mode, title, line) =>
+  el('div', { class: `vault-hero ${mode}` }, lockArt(mode), el('h2', { class: 'vault-title' }, title), el('p', { class: 'vault-line' }, line))
+
 async function load() {
   const keepProblem = problem
   const s = await run('secrets:status')
@@ -83,7 +116,7 @@ function setupForm() {
   const again = password('Master password again', { autocomplete: 'new-password' })
   const q = el('input', { type: 'text', 'aria-label': 'Recovery question', placeholder: 'Recovery question (optional)', maxlength: '300', autocomplete: 'off' })
   const a = password('Recovery answer')
-  return el('form', { class: 'editor', 'aria-label': 'Make a vault', onsubmit: async (e) => {
+  return el('form', { class: 'editor vault-card', 'aria-label': 'Make a vault', onsubmit: async (e) => {
     e.preventDefault()
     const first = take(pw)
     const second = take(again)
@@ -93,21 +126,34 @@ function setupForm() {
     status2(await run('secrets:create', [first, q.value.trim() && answer ? { question: q.value.trim(), answer } : undefined]))
     await load()
   } },
-  el('strong', {}, 'Make a vault'),
-  el('p', { class: 'muted' }, 'The master password is the only way in. It is never stored; if it is lost, the recovery question is the one other way back in.'),
-  pw, again, q, a, el('div', { class: 'row' }, el('button', { type: 'submit' }, 'Make the vault')))
+  hero('none', 'Make your vault', 'The master password is the only way in. It is never stored; if it is lost, the recovery question is the one other way back in.'),
+  pw, again, q, a, el('div', { class: 'row' }, el('button', { type: 'submit', class: 'vault-go' }, 'Make the vault')))
 }
 
 function unlockForm() {
   const pw = password('Master password', { autocomplete: 'current-password', required: '' })
-  return el('form', { class: 'editor', 'aria-label': 'Unlock the vault', onsubmit: async (e) => {
+  const art = hero('locked', 'Vault locked', 'Your keys, passwords and notes are sealed. Enter the master password to open it.')
+  return el('form', { class: 'editor vault-card', 'aria-label': 'Unlock the vault', onsubmit: async (e) => {
     e.preventDefault()
     const typed = take(pw)
     if (!typed) return
+    art.classList.add('working')
     status2(await run('secrets:unlock', [typed]))
+    if (status?.unlocked) {
+      // The shackle lifts and the lock goes green before the list replaces it.
+      art.className = 'vault-hero open'
+      art.querySelector('.vault-lock').setAttribute('class', 'vault-lock open')
+      art.querySelector('.vault-title').textContent = 'Vault open'
+      art.querySelector('.vault-line').textContent = 'Welcome back.'
+      await new Promise((r) => setTimeout(r, 900))
+    } else {
+      art.classList.remove('working')
+      art.classList.add('denied')
+      setTimeout(() => art.classList.remove('denied'), 600)
+    }
     await load()
-  } }, el('strong', {}, 'Vault locked'), pw,
-  el('div', { class: 'row' }, el('button', { type: 'submit' }, 'Unlock'), el('button', { type: 'button', onclick: async () => {
+  } }, art, pw,
+  el('div', { class: 'row' }, el('button', { type: 'submit', class: 'vault-go' }, 'Unlock'), el('button', { type: 'button', onclick: async () => {
     const r = await run('secrets:question')
     question = r ? r.question : null
     screen = 'recover'
@@ -276,8 +322,9 @@ function row(s) {
     draw()
   } }, 'Copy')
   const detail = [KIND[s.kind] || s.kind, s.provider, s.username, s.website].filter(Boolean).join(' · ')
-  return el('div', { class: 'secret' },
-    el('div', { class: 'item' }, el('strong', {}, (s.favorite ? '★ ' : '') + s.name), el('span', { class: 'muted' }, detail), cell),
+  return el('div', { class: `secret kind-${s.kind}` },
+    el('span', { class: 'secret-mark', 'aria-hidden': 'true' }, MARK[s.kind] || '\u26BF'),
+    el('div', { class: 'item' }, el('strong', {}, (s.favorite ? '\u2605 ' : '') + s.name), el('span', { class: 'muted' }, detail), cell),
     el('div', { class: 'row' }, reveal, copy, el('button', { type: 'button', 'aria-label': `Edit ${s.name}`, onclick: () => { wipeAll(); screen = 'edit'; editing = s.id; draw() } }, 'Edit')))
 }
 
@@ -292,7 +339,9 @@ function draw() {
   if (screen === 'settings') return void root.append(settingsForm())
 
   const search = el('input', { type: 'search', 'aria-label': 'Search secrets', placeholder: `Search ${status.count ?? secrets.length} secrets`, autocomplete: 'off', value: query, onchange: (e) => { query = e.target.value; void load() } })
-  root.append(el('div', { class: 'row' }, search,
+  const count = status.count ?? secrets.length
+  root.append(el('div', { class: 'vault-open-head' }, lockArt('open'), el('div', {}, el('strong', { class: 'vault-title' }, 'Vault open'), el('span', { class: 'vault-line' }, `${count} ${count === 1 ? 'secret' : 'secrets'} kept safe`))))
+  root.append(el('div', { class: 'row vault-tools' }, search,
     el('button', { type: 'button', onclick: () => { screen = screen === 'add' ? 'list' : 'add'; editing = null; draw() } }, 'Add'),
     el('button', { type: 'button', onclick: () => { screen = 'settings'; draw() } }, 'Settings'),
     el('button', { type: 'button', onclick: async () => { const s = await run('secrets:lock'); status2(s); await load() } }, 'Lock')))

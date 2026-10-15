@@ -1,0 +1,625 @@
+/*
+ * Copyright (c) 2023 Gaia Sky - All rights reserved.
+ *  This file is part of Gaia Sky, which is released under the Mozilla Public License 2.0.
+ *  You may use, distribute and modify this code under the terms of MPL2.
+ *  See the file LICENSE.md in the project root for full license details.
+ */
+
+package gaiasky.scene.record;
+
+import com.badlogic.gdx.assets.AssetManager;
+import com.badlogic.gdx.files.FileHandle;
+import com.badlogic.gdx.graphics.GL20;
+import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.graphics.Texture.TextureFilter;
+import com.badlogic.gdx.graphics.VertexAttributes.Usage;
+import com.badlogic.gdx.graphics.glutils.FrameBuffer;
+import com.badlogic.gdx.math.MathUtils;
+import com.badlogic.gdx.math.Matrix4;
+import com.badlogic.gdx.math.Vector2;
+import com.badlogic.gdx.math.Vector3;
+import com.badlogic.gdx.utils.TimeUtils;
+import gaiasky.GaiaSky;
+import gaiasky.data.AssetBean;
+import gaiasky.data.util.GlobalResources;
+import gaiasky.event.Event;
+import gaiasky.event.EventManager;
+import gaiasky.render.BlendMode;
+import gaiasky.render.ComponentTypes;
+import gaiasky.render.gdx.loader.OwnTextureLoader.OwnTextureParameter;
+import gaiasky.render.gdx.model.IntModel;
+import gaiasky.render.gdx.model.IntModelInstance;
+import gaiasky.render.gdx.shader.Material;
+import gaiasky.render.gdx.shader.attribute.*;
+import gaiasky.scene.api.IUpdatable;
+import gaiasky.scene.component.Model;
+import gaiasky.util.*;
+import gaiasky.util.Logger.Log;
+import gaiasky.util.i18n.I18n;
+import gaiasky.util.math.Vector3D;
+import gaiasky.util.math.Vector3Q;
+import gaiasky.util.svt.SVTManager;
+import net.jafama.FastMath;
+import org.apache.commons.io.FilenameUtils;
+
+import java.net.URI;
+import java.net.URL;
+import java.util.Arrays;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Random;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import static gaiasky.scene.record.MaterialComponent.convertToComponent;
+
+public final class CloudComponent extends NamedComponent implements IMaterialProvider, IUpdatable<CloudComponent> {
+    /**
+     * Default texture parameters
+     **/
+    private static final OwnTextureParameter textureParams;
+    private static final Log logger = Logger.getLogger(CloudComponent.class);
+
+    static {
+        textureParams = new OwnTextureParameter();
+        textureParams.genMipMaps = true;
+        textureParams.magFilter = TextureFilter.Linear;
+        textureParams.minFilter = TextureFilter.MipMapLinearNearest;
+    }
+
+    public int quality;
+    public float size;
+    public NoiseComponent nc;
+    public ModelComponent mc;
+    public Matrix4 localTransform;
+    /**
+     * RGB color of generated clouds
+     **/
+    public float[] color = new float[]{1f, 1f, 1f, 0.7f};
+    public String diffuse, diffuseUnpacked;
+
+    /** URL To pull cloud texture from. Only regular diffuse texture supported (no cubemap, no SVT). **/
+    public String url;
+    /** URL representation of the string. **/
+    private URL urlObject;
+    /** The URL is valid. **/
+    public boolean urlValid = false;
+    /** Path to the downloaded file. **/
+    public String urlUnpacked;
+    /** The download has been triggered. **/
+    public boolean downloadTriggered = false;
+    /** The download has been finished. **/
+    public boolean downloadFinished = false;
+    /** Location of the file pointed at by the URL on disk. **/
+    public String urlLocation;
+
+    /**
+     * The material component associated to the same model.
+     **/
+    public MaterialComponent materialComponent;
+    // Cubemap.
+    public CubemapComponent diffuseCubemap;
+    // Virtual texture.
+    public VirtualTextureComponent diffuseSvt;
+    public Map<Object, Object> svtParams;
+    /** Mode type. **/
+    public String modelType = "sphere";
+    /** Model parameters. **/
+    public Map<String, Object> modelParams;
+    Vector3 aux;
+    Vector3D aux3;
+    private AssetManager manager;
+    private final AtomicBoolean generated = new AtomicBoolean(false);
+    private Texture cloudTex;
+    private Material material;
+    private boolean texLoading;
+
+    public CloudComponent() {
+        localTransform = new Matrix4();
+        mc = new ModelComponent(false);
+        mc.setBlendMode(BlendMode.COLOR);
+        mc.initialize(null);
+        aux = new Vector3();
+        aux3 = new Vector3D();
+    }
+
+    public void initialize(String name,
+                           boolean force) {
+        super.initialize(name);
+        this.initialize(force);
+    }
+
+    private void initialize(boolean force) {
+        if (!GaiaSky.settings().scene.initialization.lazyTexture || force) {
+            this.generated.set(false);
+            if (TextUtils.isValidURL(url) && GaiaSky.settings().data.pullCloudData) {
+                try {
+                    urlObject = new URI(url).toURL();
+                    // Pull from URL, later.
+                    urlValid = true;
+                } catch (Exception ignored) {
+                }
+                // Mute diffuse and diffuse cubemap channels.
+                diffuse = null;
+                diffuseCubemap = null;
+                diffuseSvt = null;
+                return;
+            }
+            if (diffuse != null
+                    && !diffuse.endsWith(Constants.GEN_KEYWORD)
+                    && !isLoaded(diffuse)) {
+                // Add textures to load
+                diffuseUnpacked = addToLoad(diffuse);
+                if (diffuseUnpacked != null) logger.info(I18n.msg("notif.loading", diffuseUnpacked));
+            }
+            if (diffuseCubemap != null) diffuseCubemap.initialize(manager);
+            if (diffuseSvt != null) diffuseSvt.initialize("diffuseSvt", this, TextureAttribute.SvtIndirectionDiffuse);
+        }
+    }
+
+    public boolean isFinishedLoading(AssetManager manager) {
+        return ComponentUtils.isLoaded(diffuseUnpacked, manager) && ComponentUtils.isLoaded(diffuseCubemap, manager);
+    }
+
+    /**
+     * Adds the texture to load and unpacks any star (*) with the current
+     * quality setting.
+     */
+    private String addToLoad(String tex) {
+        if (tex == null) return null;
+        tex = GlobalResources.unpackAssetPath(tex);
+        AssetBean.addAsset(tex, Texture.class, textureParams);
+        return tex;
+    }
+
+    private boolean isLoaded(String tex) {
+        if (tex == null) return true;
+        tex = GlobalResources.unpackAssetPath(tex);
+        return AssetBean.manager().isLoaded(tex);
+    }
+
+    public void doneLoading(AssetManager manager) {
+        this.manager = manager;
+        Pair<IntModel, Map<String, Material>> pair = ModelCache.cache.getModel(modelType,
+                                                                               modelParams,
+                                                                               Bits.indices(Usage.Position,
+                                                                                            Usage.Normal,
+                                                                                            Usage.Tangent,
+                                                                                            Usage.BiNormal,
+                                                                                            Usage.TextureCoordinates),
+                                                                               GL20.GL_TRIANGLES);
+        IntModel cloudModel = pair.getFirst();
+        Material material = pair.getSecond().get("base");
+        material.clear();
+
+        // CREATE CLOUD MODEL
+        mc.instance = new IntModelInstance(cloudModel, this.localTransform);
+
+        if (!GaiaSky.settings().scene.initialization.lazyTexture) {
+            initMaterial(null);
+        }
+
+        // Loading
+        texLoading = false;
+    }
+
+    public void touch(Model model) {
+        if (GaiaSky.settings().scene.initialization.lazyTexture) {
+
+            if (!texLoading) {
+                initialize(true);
+                // Set to loading
+                texLoading = true;
+            } else if (GaiaSky.settings().data.pullCloudData && urlValid) {
+                if (!downloadTriggered) {
+                    // Send request.
+                    var fileName = FilenameUtils.getName(urlObject.getPath());
+                    fileName = TextUtils.sanitizeFilename(name + "-" + fileName);
+                    var cacheDir = SysUtils.getDataCacheDir(GaiaSky.settings().data.location);
+                    var ignored = cacheDir.toFile().mkdirs();
+                    var filePath = cacheDir.resolve(fileName);
+                    var f = new FileHandle(filePath.toFile());
+
+                    DownloadHelper.downloadFile(url, f, GaiaSky.settings().program.offlineMode, null, null, (digest) -> {
+                        // Download successful.
+                        diffuse = f.path();
+                        diffuseUnpacked = f.path();
+                        urlUnpacked = f.path();
+                        addToLoad(diffuse);
+                        downloadFinished = true;
+                    }, () -> {
+                        // Fail, revert to local file.
+                        downloadFinished = true;
+                    }, null);
+                    downloadTriggered = true;
+
+                } else if (downloadFinished && isFinishedLoading(manager)) {
+                    // Update material.
+                    GaiaSky.postRunnable(() -> this.initMaterial(model));
+                }
+            } else if (isFinishedLoading(manager)) {
+                // Update material.
+                GaiaSky.postRunnable(() -> this.initMaterial(model));
+
+                // Not loading anymore
+                texLoading = false;
+            }
+
+        }
+
+    }
+
+    public void update(Vector3Q transform) {
+        transform.setToTranslation(localTransform).scl(size);
+    }
+
+    /**
+     * Updates the cull face strategy depending on the distance to the camera.
+     *
+     * @param distToCamera The distance to the camera in internal units.
+     */
+    public void updateCullFace(double distToCamera) {
+        if (material != null) {
+            if (distToCamera > size) {
+                // Outside. Cull back faces.
+                ((IntAttribute) Objects.requireNonNull(material.get(IntAttribute.CullFace))).value = GL20.GL_BACK;
+            } else {
+                // Inside. Do not cull faces.
+                ((IntAttribute) Objects.requireNonNull(material.get(IntAttribute.CullFace))).value = GL20.GL_NONE;
+            }
+        }
+    }
+
+    public void initMaterial(Model model) {
+        material = mc.instance.materials.first();
+
+        if (diffuse != null && material.get(TextureAttribute.Diffuse) == null) {
+            if (!diffuse.endsWith(Constants.GEN_KEYWORD)) {
+                Texture tex = manager.get(diffuseUnpacked, Texture.class);
+                material.set(new TextureAttribute(TextureAttribute.Diffuse, tex));
+
+                // Add occlusion clouds attributes if we pulled the texture from URL.
+                if (urlValid && downloadFinished) {
+                    // If we just downloaded current cloud data, remove diffuse cubemap if it is there.
+                    material.remove(CubemapAttribute.DiffuseCubemap);
+                    if (model != null && model.model != null && model.model.mtc != null && GaiaSky.instance.sceneRenderer.visible.get(ComponentTypes.ComponentType.Clouds.ordinal())) {
+                        var mat = model.model.mtc.getMaterial();
+                        mat.remove(OcclusionCloudsAttribute.Type);
+                        mat.remove(TextureAttribute.AO);
+                        mat.remove(CubemapAttribute.AmbientOcclusionCubemap);
+                        model.model.mtc.aoTexture = tex;
+                        mat.set(new TextureAttribute(TextureAttribute.AO, model.model.mtc.aoTexture));
+                        mat.set(new OcclusionCloudsAttribute(true));
+                        model.model.mtc.setOcclusionClouds(true);
+                    }
+                }
+            } else {
+                initializeGenCloudData(model);
+            }
+        }
+        if (diffuseCubemap != null) {
+            diffuseCubemap.prepareCubemap(manager);
+            material.set(new CubemapAttribute(CubemapAttribute.DiffuseCubemap, diffuseCubemap.cubemap));
+        }
+        if (diffuseSvt != null && materialComponent != null && materialComponent.svts != null) {
+            if (materialComponent.diffuseSvt != null) {
+                // Use the ID of the main material.
+                addSVTAttributes(material, diffuseSvt, materialComponent.diffuseSvt.id);
+                materialComponent.svts.add(diffuseSvt);
+            } else {
+                // We have no diffuse SVT in the main material!
+                int svtId = SVTManager.nextSvtId();
+                addSVTAttributes(material, diffuseSvt, svtId);
+                materialComponent.svts.add(diffuseSvt);
+            }
+            if (diffuseSvt.id > 0) {
+                // Broadcast this material for SVT manager.
+                EventManager.publish(Event.SVT_MATERIAL_INFO, this, diffuseSvt.id, this);
+            }
+        }
+        material.set(new BlendingAttribute(1.0f));
+        // Do not cull, only when below the clouds!
+        material.set(new IntAttribute(IntAttribute.CullFace, GL20.GL_BACK));
+
+    }
+
+    private void addSVTAttributes(Material material,
+                                  VirtualTextureComponent svt,
+                                  int id) {
+        svt.doneLoading(null);
+        // Set ID.
+        svt.id = id;
+        // Set attributes.
+        double svtResolution = svt.tileSize * FastMath.pow(2.0, svt.tree.depth);
+        material.set(new Vector2Attribute(Vector2Attribute.SvtResolution,
+                                          new Vector2((float) (svtResolution * svt.tree.root.length), (float) svtResolution)));
+        material.set(new FloatAttribute(FloatAttribute.SvtTileSize, svt.tileSize));
+        material.set(new FloatAttribute(FloatAttribute.SvtDepth, svt.tree.depth));
+        material.set(new FloatAttribute(FloatAttribute.SvtId, svt.id));
+        material.set(new FloatAttribute(FloatAttribute.SvtDetectionFactor,
+                                        (float) GaiaSky.settings().scene.renderer.virtualTextures.detectionBufferFactor));
+    }
+
+    public void setGenerated(boolean generated) {
+        this.generated.set(generated);
+    }
+
+    private synchronized void initializeGenCloudData(Model model) {
+        if (!generated.get()) {
+            generated.set(true);
+            GaiaSky.postRunnable(() -> {
+
+                int N = GaiaSky.settings().graphics.proceduralGenerationResolution[0];
+                int M = GaiaSky.settings().graphics.proceduralGenerationResolution[1];
+                long start = TimeUtils.millis();
+                logger.info(I18n.msg("gui.procedural.info.generate", I18n.msg("gui.procedural.cloud"), N, M));
+
+                if (nc == null) {
+                    nc = new NoiseComponent();
+                    Random noiseRandom = new Random();
+                    nc.randomizeForClouds(noiseRandom);
+                }
+                FrameBuffer cloudFb = nc.generateClouds(N, M, color);
+                // Write to disk if necessary.
+                if (GaiaSky.settings().program.saveProceduralTextures) {
+                    SysUtils.saveProceduralGLTexture(cloudFb.getColorBufferTexture(), this.name + "-cloud", Settings.ImageFormat.JPG);
+                }
+                if (cloudFb != null) {
+                    cloudTex = cloudFb.getColorBufferTexture();
+                    material.set(new TextureAttribute(TextureAttribute.Diffuse, cloudTex));
+                    // Add to material of main body as ambient occlusion.
+                    if (model != null
+                            && model.model != null
+                            && model.model.mtc != null
+                            && model.model.mtc.getMaterial() != null
+                            && GaiaSky.instance.sceneRenderer.visible.get(ComponentTypes.ComponentType.Clouds.ordinal())) {
+                        // Add occlusion clouds attributes.
+                        model.model.mtc.getMaterial().remove(OcclusionCloudsAttribute.Type);
+                        model.model.mtc.getMaterial().remove(TextureAttribute.AO);
+                        model.model.mtc.aoTexture = cloudTex;
+                        model.model.mtc.getMaterial().set(new TextureAttribute(TextureAttribute.AO, model.model.mtc.aoTexture));
+                        model.model.mtc.getMaterial().set(new OcclusionCloudsAttribute(true));
+                        model.model.mtc.setOcclusionClouds(true);
+                    }
+                }
+                long elapsed = TimeUtils.millis() - start;
+                logger.info(I18n.msg("gui.procedural.info.done", I18n.msg("gui.procedural.cloud"), elapsed / 1000d));
+
+            });
+        }
+    }
+
+    public void disposeTexture(AssetManager manager,
+                               Material material,
+                               String name,
+                               String nameUnpacked,
+                               int texAttributeIndex,
+                               Texture tex) {
+        if (name != null && manager != null && manager.isLoaded(nameUnpacked)) {
+            unload(material, texAttributeIndex);
+            manager.unload(nameUnpacked);
+        }
+        if (tex != null) {
+            unload(material, texAttributeIndex);
+            tex.dispose();
+        }
+    }
+
+    public void disposeCubemap(AssetManager manager,
+                               Material mat,
+                               int attributeIndex,
+                               CubemapComponent cubemap) {
+        if (cubemap != null && cubemap.isLoaded(manager)) {
+            unload(material, attributeIndex);
+            manager.unload(cubemap.cmBack);
+            manager.unload(cubemap.cmFront);
+            manager.unload(cubemap.cmUp);
+            manager.unload(cubemap.cmDown);
+            manager.unload(cubemap.cmRight);
+            manager.unload(cubemap.cmLeft);
+            cubemap.dispose();
+        }
+    }
+
+    /**
+     * Disposes and unloads all currently loaded textures immediately
+     *
+     * @param manager The asset manager
+     **/
+    public void disposeTextures(AssetManager manager) {
+        disposeTexture(manager, material, diffuse, diffuseUnpacked, TextureAttribute.Diffuse, cloudTex);
+        disposeCubemap(manager, material, CubemapAttribute.DiffuseCubemap, diffuseCubemap);
+        texLoading = false;
+    }
+
+    public void disposeNoiseBuffers() {
+        if (nc != null) {
+            nc.dispose();
+        }
+    }
+
+    private void unload(Material mat,
+                        int attrIndex) {
+        if (mat != null) {
+            Attribute attr = mat.get(attrIndex);
+            mat.remove(attrIndex);
+            if (attr instanceof TextureAttribute) {
+                Texture tex = ((TextureAttribute) attr).textureDescription.texture;
+                tex.dispose();
+            }
+        }
+    }
+
+    public void removeAtmosphericScattering(Material mat) {
+        mat.remove(AtmosphereAttribute.CameraHeight);
+    }
+
+    public void setQuality(Long quality) {
+        this.quality = quality.intValue();
+    }
+
+    public void setSize(Double size) {
+        this.size = (float) (size * Constants.KM_TO_U);
+    }
+
+    public void setMc(ModelComponent mc) {
+        this.mc = mc;
+    }
+
+    public void setLocalTransform(Matrix4 localTransform) {
+        this.localTransform = localTransform;
+    }
+
+    public void setType(String type) {
+        setModelType(type);
+    }
+
+    public void setModelType(String type) {
+        this.modelType = type;
+    }
+
+    public void setParams(Map<String, Object> modelParams) {
+        this.modelParams = modelParams;
+    }
+
+    public void setCloud(String diffuse) {
+        setDiffuse(diffuse);
+    }
+
+    public void setDiffuse(String diffuse) {
+        this.diffuse = GaiaSky.settings().data.dataFile(diffuse);
+    }
+
+    public void setUrl(String url) {
+        this.url = url;
+    }
+
+    public void setNoise(NoiseComponent noise) {
+        this.nc = noise;
+    }
+
+    public void setDiffuseCubemap(String diffuseCubemap) {
+        this.diffuseCubemap = new CubemapComponent();
+        this.diffuseCubemap.setLocation(diffuseCubemap);
+    }
+
+    public void setDiffuseSVT(VirtualTextureComponent virtualTextureComponent) {
+        this.diffuseSvt = virtualTextureComponent;
+    }
+
+    public void setDiffuseSVT(Map<Object, Object> virtualTexture) {
+        this.svtParams = virtualTexture;
+        setDiffuseSVT(convertToComponent(virtualTexture));
+    }
+
+    @Override
+    public Material getMaterial() {
+        return material;
+    }
+
+    public boolean hasSVT() {
+        return diffuseSvt != null;
+    }
+
+    /**
+     * Creates a random cloud component using the given seed and the base
+     * body size. Generates a random cloud texture.
+     *
+     * @param seed       The seed to use.
+     * @param bodyRadius The body radius in internal units.
+     */
+    public void randomizeAll(long seed,
+                             double bodyRadius) {
+        Random rand = new Random(seed);
+
+        // Size
+        double bodyRadiusKm = bodyRadius * Constants.U_TO_KM;
+        double cloudsHeightKm = Math.min(100, bodyRadiusKm * 0.009);
+        // Diameter!
+        setSize((bodyRadiusKm + cloudsHeightKm) * 2.0);
+        // Cloud
+        setDiffuse("generate");
+        // Color
+        if (rand.nextDouble() > 0.4) {
+            // White.
+            color[0] = 1f;
+            color[1] = 1f;
+            color[2] = 1f;
+            color[3] = 1f;
+        } else {
+            // Gaussian around white-ish.
+            color[0] = (float) MathUtils.clamp(rand.nextGaussian(0.95, 0.05), 0.0, 1.0);
+            color[1] = (float) MathUtils.clamp(rand.nextGaussian(0.95, 0.05), 0.0, 1.0);
+            color[2] = (float) MathUtils.clamp(rand.nextGaussian(0.95, 0.05), 0.0, 1.0);
+            color[3] = 1f;
+        }
+        // Type
+        setType("cubesphere");
+        // Params
+        switch (modelType) {
+            case "icosphere" -> setParams(createIcoSphereParameters(7, 1.0, false));
+            case "cubesphere" -> setParams(createCubeSphereParameters(100, 1.0, false));
+            case "octahedronsphere" -> setParams(createOctahedronSphereParameters(7, 1.0, false));
+            default -> setParams(createUVSphereParameters(400, 1.0, false));
+        }
+        // Noise
+        if (nc != null) {
+            nc.dispose();
+        }
+        NoiseComponent nc = new NoiseComponent();
+        nc.randomizeForClouds(rand);
+        setNoise(nc);
+    }
+
+    public void copyFrom(CloudComponent other) {
+        this.size = other.size;
+        this.diffuse = other.diffuse;
+        this.modelParams = other.modelParams;
+        this.diffuseCubemap = other.diffuseCubemap;
+        this.diffuseSvt = other.diffuseSvt;
+        this.svtParams = other.svtParams;
+        this.nc = new NoiseComponent();
+        if (other.color != null) {
+            this.color = Arrays.copyOf(other.color, other.color.length);
+        }
+        if (other.nc != null)
+            this.nc.copyFrom(other.nc);
+        else
+            this.nc.randomizeForClouds(new Random());
+    }
+
+    public void print(Log log) {
+        log.debug("Size: " + size);
+        log.debug("---Noise---");
+        if (nc != null) {
+            nc.print(log);
+        }
+    }
+
+    @Override
+    public void dispose() {
+        disposeTextures(manager);
+    }
+
+    @Override
+    public void updateWith(CloudComponent object) {
+        // Random attributes.
+        if (object.size > 0) {
+            this.size = object.size;
+        }
+        // Regular texture.
+        if (object.diffuse != null) {
+            this.diffuse = object.diffuse;
+        }
+        // Cubemap.
+        if (object.diffuseCubemap != null) {
+            this.diffuseCubemap = object.diffuseCubemap;
+        }
+        // SVT.
+        if (object.diffuseSvt != null) {
+            this.diffuseSvt = object.diffuseSvt;
+        }
+        if (object.svtParams != null) {
+            this.svtParams = object.svtParams;
+        }
+    }
+}

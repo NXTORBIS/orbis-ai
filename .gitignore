@@ -39,3 +39,9 @@ physlab*/
 every*/
 cslabs/
 jarvis-file-list.txt
+
+# ORBIS COSMOS: what Gradle and scripts/cosmos-build.mjs make
+cosmos/.build/
+cosmos/build/
+cosmos/core/build/
+cosmos/.gradle/

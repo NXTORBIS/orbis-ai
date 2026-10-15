@@ -1,0 +1,230 @@
+/*
+ * Copyright (c) 2023-2024 Gaia Sky - All rights reserved.
+ *  This file is part of Gaia Sky, which is released under the Mozilla Public License 2.0.
+ *  You may use, distribute and modify this code under the terms of MPL2.
+ *  See the file LICENSE.md in the project root for full license details.
+ */
+
+package gaiasky.gui.window;
+
+import com.badlogic.gdx.Gdx;
+import com.badlogic.gdx.scenes.scene2d.Stage;
+import com.badlogic.gdx.scenes.scene2d.ui.*;
+import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener;
+import com.badlogic.gdx.scenes.scene2d.utils.ChangeListener.ChangeEvent;
+import com.badlogic.gdx.utils.Align;
+import gaiasky.event.Event;
+import gaiasky.event.EventManager;
+import gaiasky.gui.main.ConsoleLogger;
+import gaiasky.gui.main.MessageBean;
+import gaiasky.util.Logger;
+import gaiasky.util.SysUtils;
+import gaiasky.util.i18n.I18n;
+import gaiasky.util.scene2d.OwnLabel;
+import gaiasky.util.scene2d.OwnScrollPane;
+import gaiasky.util.scene2d.OwnTextIconButton;
+import net.jafama.FastMath;
+
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.time.format.FormatStyle;
+import java.util.List;
+
+public class LogWindow extends GenericDialog {
+
+    private final DateTimeFormatter format;
+    private Table logs;
+    private ScrollPane scroll;
+
+    // Current number of messages in window
+    private int numMessages;
+
+    private float w, h, pad;
+
+    public LogWindow(Stage stage, Skin skin) {
+        super(I18n.msg("gui.log.title"), skin, stage);
+
+        this.format = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.MEDIUM).withLocale(I18n.locale).withZone(ZoneOffset.UTC);
+        this.setResizable(true);
+        this.setModal(false);
+        setCancelText(I18n.msg("gui.close"));
+
+        // Build
+        buildSuper();
+
+    }
+
+    @Override
+    protected void build() {
+        w = FastMath.min(1200f, Gdx.graphics.getWidth() - 200);
+        h = FastMath.min(750f, Gdx.graphics.getHeight() - 150);
+        pad = 16f;
+
+        logs = new Table(skin);
+        List<MessageBean> list = ConsoleLogger.getHistory();
+        for (MessageBean mb : list) {
+            addMessage(mb);
+        }
+
+        scroll = new OwnScrollPane(logs, skin, "minimalist-nobg");
+        scroll.setFadeScrollBars(false);
+        scroll.setScrollingDisabled(false, false);
+        scroll.setSmoothScrolling(true);
+        scroll.setHeight(h);
+        scroll.setWidth(w);
+        scroll.pack();
+        updateScroll();
+
+        HorizontalGroup buttons = new HorizontalGroup();
+        buttons.pad(pad);
+        buttons.space(pad);
+
+        var bw = 320;
+        var bh = 50;
+
+        var reload = new OwnTextIconButton(I18n.msg("gui.log.update"), skin, "reload");
+        reload.setName("update log");
+        reload.setSize(bw, bh);
+        reload.pad(pad10);
+        reload.setTooltip(I18n.msg("gui.log.update"));
+        reload.addListener((event) -> {
+            if (event instanceof ChangeEvent) {
+                update();
+            }
+            return false;
+        });
+        buttons.addActor(reload);
+
+        var copy = new OwnTextIconButton(I18n.msg("gui.clipboard.copy"), skin, "clipboard");
+        copy.setName("copy to clipboard");
+        copy.setSize(bw, bh);
+        copy.pad(pad10);
+        copy.setTooltip(I18n.msg("gui.clipboard.copy"));
+        copy.addListener(event -> {
+            if (event instanceof ChangeListener.ChangeEvent) {
+                copyToClipboard();
+
+            }
+            return false;
+        });
+        buttons.addActor(copy);
+
+        var export = new OwnTextIconButton(I18n.msg("gui.log.export"), skin, "export");
+        export.setName("export log");
+        export.setSize(bw, bh);
+        export.pad(pad10);
+        export.setTooltip(I18n.msg("gui.log.export"));
+        export.addListener((event) -> {
+            if (event instanceof ChangeEvent) {
+                export();
+            }
+            return false;
+        });
+        buttons.addActor(export);
+
+        content.add(scroll).left().top().padBottom(pad).row();
+        content.add(buttons).align(Align.center);
+    }
+
+    public void update() {
+        if (logs != null) {
+            List<MessageBean> list = ConsoleLogger.getHistory();
+            if (list.size() > numMessages) {
+                for (int i = numMessages; i < list.size(); i++) {
+                    addMessage(list.get(i));
+                }
+            }
+            updateScroll();
+        }
+    }
+
+    /**
+     * Puts the current log contents in the system clipboard.
+     */
+    private void copyToClipboard() {
+        var clipboard = Gdx.app.getClipboard();
+        var sb = new StringBuilder();
+        for (MessageBean mb : ConsoleLogger.getHistory()) {
+            sb.append(format.format(mb.date())).append(" - ").append(mb.msg()).append('\n');
+        }
+        clipboard.setContents(sb.toString());
+    }
+
+    /**
+     * Exports the log to a file in the data directory.
+     */
+    private void export() {
+        String filename = Instant.now().toString() + "_gaiasky.log";
+        filename = filename.replace(":", "-");
+        Path gsHome = SysUtils.getDataDir();
+        Path log = gsHome.resolve(filename);
+
+        try {
+            FileWriter fw = new FileWriter(log.toFile());
+            BufferedWriter bw = new BufferedWriter(fw);
+            for (MessageBean mb : ConsoleLogger.getHistory()) {
+                fw.write(format.format(mb.date()) + " - " + mb.msg() + '\n');
+            }
+            bw.flush();
+            bw.close();
+            EventManager.publish(Event.POST_POPUP_NOTIFICATION, this, I18n.msg("gui.log.export.ok", log.toAbsolutePath()), -1f);
+        } catch (Exception e) {
+            Logger.getLogger(this.getClass()).error(e);
+        }
+
+    }
+
+    public void updateScroll() {
+        if (scroll == null) {
+            return;
+        }
+        scroll.setScrollPercentX(0);
+        scroll.setScrollPercentY(1);
+        scroll.invalidate();
+    }
+
+    private void addMessage(MessageBean mb) {
+        Label date = new OwnLabel(format.format(mb.date()), skin);
+        Label msg = new OwnLabel(mb.msg(), skin);
+        logs.add(date).left().padRight(pad);
+        logs.add(msg).left().row();
+        numMessages++;
+    }
+
+    @Override
+    protected boolean accept() {
+        return true;
+    }
+
+    @Override
+    protected void cancel() {
+    }
+
+    @Override
+    public void dispose() {
+
+    }
+
+
+    @Override
+    protected void sizeChanged() {
+        // The size of the actor changed (dialog has been resized).
+        // Update size of scroll pane.
+        if (scroll == null) {
+            return;
+        }
+        w = this.getWidth();
+        h = this.getHeight();
+
+        scroll.setWidth(w);
+        scroll.setHeight(h);
+        content.setWidth(w);
+        content.setHeight(h);
+        updateScroll();
+        invalidate();
+    }
+}

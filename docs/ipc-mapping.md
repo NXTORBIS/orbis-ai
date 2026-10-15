@@ -311,6 +311,48 @@ read the code instead, and the answer carries `origin: 'predicted'` so a guess c
 | `physics:ask` | One question to Orion, answered whole, for the Physics Studio's research panels. Mojo, same service |
 | `quiz:write` | `writeQuiz` | Asks Orion for a quiz about a subject or a piece of text, and returns only the questions that passed every check. |
 | `choose:do` | Orbis Choose: lays a decision out, scores it, answers follow-ups and what-ifs, and keeps it. One channel, named operations. The scoring is arithmetic in `src/shared/choose/engine.ts`; Orion only structures and explains. Mojo, same service |
+| `football:leagues` | Football (Orbis Arena): the competitions Orbis has data for and what each provider supplies. Mojo, same service |
+| `football:live` | Football: matches live now (reported by TheSportsDB, or inferred from OpenLigaDB rounds and labelled so), cached and de-duplicated. Mojo, same service |
+| `football:season` | Football: every match of a competition's season, with goal lists where the provider has them. Mojo, same service |
+| `football:table` | Football: a competition's table for a season from its provider. Mojo, same service |
+| `football:match` | Football: one match by its namespaced key from its own provider. Mojo, same service |
+| `football:follows` | Football: what the active profile follows (teams, pinned matches, reminders, alert switches, saved views), from its own file. Mojo, same service |
+| `football:follows-set` | Football: replaces what the active profile follows; the main process validates and writes it, and the background monitor reads it. Mojo, same service |
+| `football:extras` | Football: lineup, timeline and statistics of a TheSportsDB match (first few entries per the public key), cached and de-duplicated. Mojo, same service |
+| `football:team` | Football: a team's profile and the first of its squad from TheSportsDB. Mojo, same service |
+| `football:status` | Football: per-provider request, failure and rate-limit counts for the Sources screen. Mojo, same service |
+| `f1:prefs` | F1: the active profile's watchlist and alert switches, from its own file. Mojo, same service |
+| `f1:prefs-set` | F1: replaces them; validated and written by the main process, read by the session and result monitor. Mojo, same service |
+| `f1:champions` | F1: one season's champion, runner-up and champion constructor, or (with no season) the champion of every season from 1950, from Jolpica-F1, paced and cached. Mojo, same service |
+| `f1:circuit-records` | F1: the fastest lap of every race run at a circuit, from Jolpica-F1, cached and de-duplicated. Mojo, same service |
+| `f1:qualifying` | F1: one race's qualifying results (Q1, Q2, Q3) from Jolpica-F1. Mojo, same service |
+| `f1:constructor-season` | F1: one constructor's season, round by round, from Jolpica-F1. Mojo, same service |
+| `f1:team-radio` | F1: the team-radio clips OpenF1 lists for a session (the clips stay on F1's own host). Mojo, same service |
+| `f1:forecast` | F1: the Open-Meteo weather forecast at a circuit for a session start, refused beyond about two weeks. Mojo, same service |
+| `f1:schedule` | F1 (Orbis Arena): a season's calendar from Jolpica-F1, cached and de-duplicated, with its freshness. Mojo, same service |
+| `f1:results` | F1: one race's classification from Jolpica-F1. Mojo, same service |
+| `f1:standings` | F1: driver and constructor standings from Jolpica-F1, as they stood after a round or now. Mojo, same service |
+| `f1:sessions` | F1: the sessions of a year from OpenF1. Mojo, same service |
+| `f1:timing` | F1: the drivers and laps (with sector times) of one session from OpenF1. Mojo, same service |
+| `f1:bundle` | F1: stints, pit stops, weather, race control, positions, overtakes, results and grid of a finished session from OpenF1. Mojo, same service |
+| `f1:intervals` | F1: gap and interval readings of a session from OpenF1, thinned. Mojo, same service |
+| `f1:telemetry` | F1: one driver's car readings and positions between two instants from OpenF1 (one lap). Mojo, same service |
+| `f1:season-data` | F1: every race, sprint and qualifying result of a season from Jolpica-F1 (paged), for driver profiles and championship progression. Mojo, same service |
+| `f1:career` | F1: one driver's final standing in every season from Jolpica-F1. Mojo, same service |
+| `f1:championship` | F1: OpenF1's drivers' championship for a session's meeting. Mojo, same service |
+| `f1:archive` | F1: the recorded sessions of a year (the live-timing archive's index) that can be replayed. Mojo, same service |
+| `f1:stream-live` | F1: connect to the live-timing service and begin streaming (idempotent). Mojo, same service |
+| `f1:stream-replay` | F1: load a recorded session by archive path for replay through the live code path. Mojo, same service |
+| `f1:stream-control` | F1: replay controls (play, pause, seek, speed). Mojo, same service |
+| `f1:stream-stop` | F1: disconnect or unload the live or replay stream and free it. Mojo, same service |
+| `f1:stream-state` | F1: the stream's current picture, for a screen that just opened. Mojo, same service |
+| `f1:status` | F1: per-provider request counts, last success, last error and rate-limit state. Mojo, same service |
+| `cosmos:start` | Starts ORBIS COSMOS (the Gaia Sky simulation) as a Java child process if it is not running, and answers its progress so far, read from the program's own log. Mojo, same service |
+| `cosmos:stop` | Stops the simulation process and gives its memory back. Mojo, same service |
+| `cosmos:region` | One-way: where the simulation's window goes inside the Orbis window (or that it is hidden). Mojo, same service |
+| `eye:start` | Starts OrbisEye's own local server (once, on a free loopback port, as a child process) and answers its address, or why it could not start. Mojo, same service |
+| `jarvis:invoke` | The few lookups Toolkit tools make (response headers, a domain's registration, exchange rates, a video's details, a key check, PDF editing), by name from a fixed list; the same code the tools' original backend ran, now in this process. Mojo, same service |
+| `chance:store` | Orbis Chance's saved work for the active profile. One channel, two operations (`load`, `save`): the whole document is read once when Chance opens and written back after changes. Mojo, same service |
 | `physics:look` | The same question with a photograph of the simulation attached, for what the numbers do not say. Mojo, same service |
 
 ### Orion — unchanged
