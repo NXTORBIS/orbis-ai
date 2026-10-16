@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   START_FEN, applyMove, boardSquares, buildFen, checkFen, destinationsFrom, legalMoves, moveNumber, needsPromotion,
-  outcome, positionKey, sanToUci, sideToMove, uciLineToSan
+  outcome, playable, positionKey, sanToUci, sideToMove, uciLineToSan
 } from './rules.ts'
 
 /** The rules are the foundation: if these are wrong, everything above them is wrong and looks right. */
@@ -177,4 +177,18 @@ test('the board can be read and a position can be built by hand', () => {
   const noKing = buildFen({ pieces: [{ square: 'e1', type: 'k', color: 'w' }], turn: 'w' })
   assert.equal(noKing.check.ok, false)
   assert.equal(noKing.check.problem, 'kings')
+})
+
+test('a position the game could never reach is refused, and asking about it does not crash', () => {
+  // Black is to move, but White's king is in check: the last move would have left a king attacked.
+  const impossible = '4k3/8/8/8/8/8/4r3/4K3 b - - 0 1'
+  assert.equal(checkFen(impossible).ok, true, 'it is well formed')
+  const verdict = playable(impossible)
+  assert.equal(verdict.ok, false)
+  assert.match(verdict.reason ?? '', /could not have been reached/)
+  // It used to throw from here, taking the caller with it.
+  assert.doesNotThrow(() => legalMoves(impossible))
+  assert.doesNotThrow(() => outcome(impossible))
+  assert.equal(playable(START_FEN).ok, true)
+  assert.equal(playable('nonsense').ok, false)
 })

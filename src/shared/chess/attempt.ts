@@ -168,7 +168,14 @@ export type AttemptEvent =
   | { kind: 'resume' }
   | { kind: 'submit' }
   | { kind: 'verdict'; verdict: Verdict }
-  | { kind: 'opponent-moved'; move: ChessMove }
+  /**
+   * The opponent's reply.
+   *
+   * `exercise` is optional and worth passing: with it, the machine can see that the reply was the last move of the
+   * line -- which happens in a line somebody is playing out rather than solving -- and finish the attempt instead
+   * of leaving it waiting for a move that does not exist.
+   */
+  | { kind: 'opponent-moved'; move: ChessMove; exercise?: Exercise }
   | { kind: 'feedback-done' }
   | { kind: 'give-up' }
   | { kind: 'abandon' }
@@ -249,6 +256,11 @@ export function advance(session: AttemptSession, event: AttemptEvent, now: numbe
         fen: move.after,
         played: [...session.played, { san: move.san, uci: move.uci, before: move.before, after: move.after, by: 'opponent', at: now, tookMs: 0 }]
       }
+      // A line that ends on the opponent's move is finished here. Without this the attempt would sit in `active`
+      // waiting for a move the exercise does not have, which is how a lesson task becomes impossible to finish.
+      if (event.exercise && lineFinished(event.exercise, withMove)) {
+        return go({ ...withMove, pending: 'solved' }, 'awaiting-feedback', now, 'That is the whole line.')
+      }
       return go(withMove, 'active', now)
     }
     case 'feedback-done': {
@@ -272,6 +284,17 @@ export function advance(session: AttemptSession, event: AttemptEvent, now: numbe
     case 'restore':
       return go(session, 'loading', now)
   }
+}
+
+/**
+ * Whether the recorded line has run out, with nothing left for either side to play.
+ *
+ * True at the end of a line somebody was playing out, and false whenever the solver still has a move the exercise
+ * accepts. It is the one thing a session cannot work out on its own, because a session does not carry the solution.
+ */
+export function lineFinished(exercise: Exercise, session: AttemptSession): boolean {
+  const walk = follow(exercise, session.played.map((m) => m.uci))
+  return walk.illegalAt === null && walk.divergedAt === null && walk.lineComplete
 }
 
 /** What the failure conditions say about the attempt as it stands. Null when nothing has gone over a limit. */
@@ -647,4 +670,35 @@ export function playMove(session: AttemptSession, exercise: Exercise, move: stri
     if (failed.ok) return { session: { ...failed.session, outcome: 'failed' }, verdict, ok: true }
   }
   return { session: after.session, verdict, ok: true }
+}
+
+export interface Replied {
+  session: AttemptSession
+  /** The reply that was played, or null when there was none to play. */
+  reply: ChessMove | null
+  ok: boolean
+  says: string
+}
+
+/**
+ * The opponent's turn, played from the exercise's own recorded defences.
+ *
+ * The other half of `playMove`, and the one that knows when there is nothing left: a line that ends on the
+ * opponent's move finishes the attempt here rather than leaving it waiting.
+ */
+export function playOpponent(session: AttemptSession, exercise: Exercise, now: number, pick = 0): Replied {
+  if (session.state !== 'awaiting-opponent') {
+    return { session, reply: null, ok: false, says: `There is no reply to play: the attempt is ${session.state}.` }
+  }
+  const reply = opponentReply(exercise, session.played.map((m) => m.uci), pick)
+  if (!reply) {
+    return { session, reply: null, ok: false, says: 'The exercise has no reply recorded here.' }
+  }
+  const stepped = advance(session, { kind: 'opponent-moved', move: reply, exercise }, now)
+  return {
+    session: stepped.session,
+    reply,
+    ok: stepped.ok,
+    says: stepped.ok ? `${reply.san}.` : stepped.says ?? 'The machine refused the reply.'
+  }
 }

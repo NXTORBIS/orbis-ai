@@ -46,6 +46,7 @@ export type LessonBlock =
   | { kind: 'heading'; text: string }
   | { kind: 'list'; items: string[]; ordered?: boolean }
   | { kind: 'callout'; tone: 'note' | 'warning' | 'tip'; text: string }
+  | { kind: 'table'; headers: string[]; rows: string[][] }
   /** A position to look at. `highlight` and `arrows` are drawn over it. */
   | { kind: 'board'; fen: string; caption?: string; highlight?: string[]; arrows?: BoardArrow[] }
   /** A line to step through, from a position. The moves are checked by the validator like any others. */
@@ -382,8 +383,11 @@ export function validateLesson(lesson: AcademyLesson, now?: number): LessonCheck
           },
           now
         )
-        const illegal = asExercise.problems.find((p) => p.code === 'illegal-move')
-        if (illegal) fault('bad-line', `A line in this lesson cannot be played: ${illegal.says}`)
+        // Only the problems about the moves themselves: the stand-in exercise has no answer to check against, and
+        // would complain about that too.
+        const aboutTheMoves = new Set(['illegal-move', 'line-continues-after-end', 'opponent-ends-line', 'already-over', 'bad-position'])
+        const broken = asExercise.problems.find((p) => aboutTheMoves.has(p.code))
+        if (broken) fault('bad-line', `A line in this lesson cannot be played: ${broken.says}`)
       }
     }
     if (block.kind === 'task' && !lesson.tasks.some((task) => task.id === block.taskId)) {

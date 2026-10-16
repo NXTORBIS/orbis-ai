@@ -95,6 +95,29 @@ export function checkFen(fen: string): FenCheck {
   return { ok: true }
 }
 
+/**
+ * Whether a position is one a game could actually be in.
+ *
+ * `checkFen` answers whether a position is well formed. This answers something stricter and more useful before a
+ * position is used for training or analysis: that the side NOT to move is not standing in check. Such a position is
+ * well formed and still impossible -- it would mean the last move left a king attacked -- and asking the rules about
+ * it gets answers nobody can use, because the reply to it is the capture of a king.
+ */
+export function playable(fen: string): { ok: boolean; reason?: string } {
+  const check = checkFen(fen)
+  if (!check.ok) return { ok: false, ...(check.reason ? { reason: check.reason } : {}) }
+  const fields = fen.trim().split(/\s+/)
+  const flipped = [...fields]
+  flipped[1] = fields[1] === 'w' ? 'b' : 'w'
+  // En passant only makes sense for the side to move, so it goes when the side is flipped.
+  flipped[3] = '-'
+  const other = loadFen(flipped.join(' '))
+  if (other?.inCheck()) {
+    return { ok: false, reason: `${fields[1] === 'w' ? 'Black' : 'White'} is in check but it is not their move, so this position could not have been reached.` }
+  }
+  return { ok: true }
+}
+
 /** A position that can be loaded, or null. Nothing else in Orbis loads a FEN without coming through here. */
 export function loadFen(fen: string): Chess | null {
   if (!checkFen(fen).ok) return null
@@ -109,7 +132,15 @@ const describe = (m: {
   from: string; to: string; promotion?: string; san: string; piece: string; captured?: string; color: string;
   before: string; after: string; flags: string; lan?: string
 }): ChessMove => {
-  const board = new Chess(m.after)
+  /*
+   * The position after the move, when there is one.
+   *
+   * There is not always one. A FEN can be well formed and still be a position no game could reach -- the clearest
+   * case is the side NOT to move standing in check, where the rules then offer the capture of a king, and the
+   * position after that capture has only one king and cannot be loaded at all. That used to throw from here and take
+   * the caller with it. Such a position has no check and no mate to report, which is what `null` says.
+   */
+  const board = loadFen(m.after)
   return {
     from: m.from,
     to: m.to,
@@ -122,8 +153,8 @@ const describe = (m: {
     before: m.before,
     after: m.after,
     ...(m.flags.includes('k') ? { special: 'k' as const } : m.flags.includes('q') ? { special: 'q' as const } : m.flags.includes('e') ? { special: 'e' as const } : {}),
-    check: board.inCheck(),
-    checkmate: board.isCheckmate()
+    check: board?.inCheck() ?? false,
+    checkmate: board?.isCheckmate() ?? false
   }
 }
 

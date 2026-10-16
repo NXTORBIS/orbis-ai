@@ -190,6 +190,17 @@ export const TEST_FILES = [
   'src/main/workflows/orion.test.ts',
   'src/shared/calculate.test.ts',
   'src/shared/chess/rules.test.ts',
+  // Learning and training, in the order they are built on each other: the exercise contract and its validator
+  // first, because everything below is worthless if a position can be wrong; then the attempt machine and the
+  // judge, the review schedule, line entry, and the blindfold trainer. `curriculum.test.ts` is last of the group
+  // and re-validates every authored position in the Academy from scratch.
+  'src/shared/chess/exercise.test.ts',
+  'src/shared/chess/attempt.test.ts',
+  'src/shared/chess/spaced.test.ts',
+  'src/shared/chess/calculation.test.ts',
+  'src/shared/chess/blindfold.test.ts',
+  'src/shared/chess/lessons.test.ts',
+  'src/shared/chess/curriculum.test.ts',
   // The local chess engine: getting it onto the machine, and the whole conversation with it driven against a
   // scripted engine process. They sit together because the second one cannot run until the first has decided what
   // "installed" means.

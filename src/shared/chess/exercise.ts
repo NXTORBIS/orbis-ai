@@ -598,6 +598,11 @@ export function validateExercise(ex: Exercise, now?: number): ExerciseCheck {
       return
     }
     if (kids.length === 0) {
+      // A line to play out may stop on either side's move: the answer is the position the whole line reaches.
+      if (ex.objective === 'reconstruct') {
+        terminal(made.after, next, solverMoves)
+        return
+      }
       fault('dead-end', `The solution stops after the defence ${next.san.join(' ')}, with the solver to move and nothing recorded for them to play.`, {
         ply: depth + 1, move: made.san, fen: made.after, line: [...next.san]
       })
@@ -692,9 +697,9 @@ export function isVerified(ex: Exercise): boolean {
 /** What to say about an exercise's status, for a screen that must never imply more than is known. */
 export function sayVerification(v: Verification): string {
   if (v.status === 'verified') {
-    return v.coverage === 'partial'
-      ? 'Checked: every move is legal and the lines given do what the exercise says. Only those lines were checked.'
-      : 'Checked: legal, and it does what it says against every defence.'
+    if (v.coverage === 'partial') return 'Checked: every move is legal and the lines given do what the exercise says. Only those lines were checked.'
+    if (v.coverage === 'none') return 'Checked against the position itself.'
+    return 'Checked: legal, and it does what it says against every defence.'
   }
   if (v.status === 'rejected') return `Not usable: ${v.problems?.[0] ?? 'it did not pass the check.'}`
   if (v.needs === 'engine') return 'Not checked: settling this one needs an engine.'

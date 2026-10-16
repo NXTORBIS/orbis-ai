@@ -367,7 +367,7 @@ export function filterGames(games: readonly StoredGame[], filter: LibraryFilter)
 /** What a filter is asking, in plain words, so a screen can show it and a person can take one part of it off. */
 export function describeFilter(filter: LibraryFilter): { key: keyof LibraryFilter; words: string }[] {
   const out: { key: keyof LibraryFilter; words: string }[] = []
-  const say = (key: keyof LibraryFilter, words: string): void => out.push({ key, words })
+  const say = (key: keyof LibraryFilter, words: string): void => { out.push({ key, words }) }
   if (filter.text?.trim()) say('text', `matching "${filter.text.trim()}"`)
   if (filter.player?.trim()) say('player', `either side is ${filter.player.trim()}`)
   if (filter.white?.trim()) say('white', `White is ${filter.white.trim()}`)
@@ -598,16 +598,71 @@ export interface RecordComparison {
 
 const fp = (game: StoredGame): string => game.fingerprint || fingerprintOf(game.startFen, game.moves)
 
-/** The fields that say *which* game a record is, as opposed to describing it. */
-const IDENTIFYING: { field: string; of: (g: StoredGame) => string | undefined; same?: (a: string, b: string) => boolean }[] = [
-  { field: 'White', of: (g) => g.meta.white.name, same: (a, b) => nameKey(a) === nameKey(b) },
-  { field: 'Black', of: (g) => g.meta.black.name, same: (a, b) => nameKey(a) === nameKey(b) },
-  { field: 'Event', of: (g) => g.meta.event, same: (a, b) => fold(a) === fold(b) },
-  { field: 'Place', of: (g) => g.meta.site, same: (a, b) => fold(a) === fold(b) },
-  { field: 'Round', of: (g) => g.meta.round, same: (a, b) => fold(a) === fold(b) },
+/**
+ * The fields that say *which* game a record is, as opposed to describing it.
+ *
+ * `key` is what two records are compared on and `raw` is what a person is shown. They are not the same thing:
+ * "Carlsen, Magnus" and "Magnus Carlsen" compare equal because `nameKey` sorts the words, but a conflict has to be
+ * reported in the spelling each file really used, or the person is being asked to choose between two identical
+ * strings.
+ */
+const IDENTIFYING: { field: string; of: (g: StoredGame) => string | undefined; keyOf?: (value: string) => string }[] = [
+  { field: 'White', of: (g) => g.meta.white.name, keyOf: nameKey },
+  { field: 'Black', of: (g) => g.meta.black.name, keyOf: nameKey },
+  { field: 'Event', of: (g) => g.meta.event, keyOf: fold },
+  { field: 'Place', of: (g) => g.meta.site, keyOf: fold },
+  { field: 'Round', of: (g) => g.meta.round, keyOf: fold },
   { field: 'Result', of: (g) => (g.meta.result === '*' ? undefined : g.meta.result) },
-  { field: 'Date', of: (g) => g.meta.date, same: (a, b) => sameDate(a, b) }
+  { field: 'Date', of: (g) => g.meta.date }
 ]
+
+interface IdentityField { field: string; raw: string | null; key: string | null; date?: GameDate }
+
+/**
+ * A record's identity, worked out once.
+ *
+ * Duplicate finding compares every record in a bucket against the others, so the number of comparisons grows with
+ * the square of how many copies of one game somebody has. Folding a name inside the comparison made that cost real:
+ * finding duplicates in five thousand games took a second and a half, almost all of it re-folding the same eight
+ * names. Worked out once per record and cached, the same search is a few tens of milliseconds, and a comparison is
+ * seven string checks.
+ */
+const identities = new WeakMap<object, { at: number; fields: IdentityField[] }>()
+
+function identityOf(game: StoredGame): IdentityField[] {
+  const had = identities.get(game)
+  if (had && had.at === game.updatedAt) return had.fields
+  const fields = IDENTIFYING.map((one): IdentityField => {
+    const raw = one.of(game)
+    if (raw === undefined || raw === '') return { field: one.field, raw: null, key: null }
+    return {
+      field: one.field,
+      raw,
+      key: one.keyOf ? one.keyOf(raw) : raw,
+      ...(one.field === 'Date' ? { date: parseGameDate(raw) } : {})
+    }
+  })
+  identities.set(game, { at: game.updatedAt, fields })
+  return fields
+}
+
+/** Where two records disagree, and where one of them simply knows more. */
+function identityDifferences(a: StoredGame, b: StoredGame): Pick<RecordComparison, 'conflicts' | 'onlyOne'> {
+  const left = identityOf(a)
+  const right = identityOf(b)
+  const conflicts: RecordComparison['conflicts'] = []
+  const onlyOne: RecordComparison['onlyOne'] = []
+  for (let i = 0; i < left.length; i++) {
+    const x = left[i]
+    const y = right[i]
+    if (x.raw === null && y.raw === null) continue
+    if (x.raw === null) { onlyOne.push({ field: y.field, which: 'b', value: y.raw as string }); continue }
+    if (y.raw === null) { onlyOne.push({ field: x.field, which: 'a', value: x.raw }); continue }
+    const same = x.date && y.date ? sameParsedDate(x.date, y.date) : x.key === y.key
+    if (!same) conflicts.push({ field: x.field, a: x.raw, b: y.raw })
+  }
+  return { conflicts, onlyOne }
+}
 
 /**
  * Two written dates that do not contradict each other.
@@ -617,8 +672,10 @@ const IDENTIFYING: { field: string; of: (g: StoredGame) => string | undefined; s
  * insists two copies of the same game are different because one file was more careful.
  */
 export function sameDate(a: string, b: string): boolean {
-  const x = parseGameDate(a)
-  const y = parseGameDate(b)
+  return sameParsedDate(parseGameDate(a), parseGameDate(b))
+}
+
+function sameParsedDate(x: GameDate, y: GameDate): boolean {
   if (x.year === undefined || y.year === undefined) return true
   if (x.year !== y.year) return false
   if (x.month !== undefined && y.month !== undefined && x.month !== y.month) return false
@@ -666,18 +723,7 @@ export function compareRecords(a: StoredGame, b: StoredGame): RecordComparison {
     return { verdict: 'different', because: [why], conflicts: [], onlyOne: [] }
   }
 
-  const conflicts: RecordComparison['conflicts'] = []
-  const onlyOne: RecordComparison['onlyOne'] = []
-  for (const field of IDENTIFYING) {
-    const left = field.of(a)
-    const right = field.of(b)
-    if (left === undefined && right === undefined) continue
-    if (left === undefined) { onlyOne.push({ field: field.field, which: 'b', value: right as string }); continue }
-    if (right === undefined) { onlyOne.push({ field: field.field, which: 'a', value: left }); continue }
-    const same = field.same ? field.same(left, right) : left === right
-    if (!same) conflicts.push({ field: field.field, a: left, b: right })
-  }
-
+  const { conflicts, onlyOne } = identityDifferences(a, b)
   if (conflicts.length) {
     return {
       verdict: 'same-moves',
@@ -701,7 +747,13 @@ export function compareRecords(a: StoredGame, b: StoredGame): RecordComparison {
 }
 
 export interface DuplicateGroup {
-  /** The games that share these moves, in the order they were given. */
+  /**
+   * The records this group is about, in the order they were given.
+   *
+   * For 'same-game' these are copies of one game, so all but one could go. For 'same-moves' they are one record
+   * from each set that disagrees -- the records that are genuinely in question -- because listing the copies again
+   * inside that group would say "these four are the same" about four records where only two are.
+   */
   ids: string[]
   verdict: Exclude<DuplicateVerdict, 'different'>
   because: string[]
@@ -715,9 +767,9 @@ export interface DuplicateGroup {
  * than every game against every other. On a library of a few thousand that is the difference between instant and
  * several seconds.
  *
- * A bucket with a mixture -- two copies of one game, and a third that only shares the moves -- comes back as
- * separate groups, because telling a person "these three are duplicates" when one of them is not is how a real game
- * gets deleted.
+ * A bucket with a mixture -- two copies of one game, and a third that only shares the moves -- comes back as two
+ * groups and says which is which, because telling a person "these three are duplicates" when one of them is a
+ * different game is how a real game gets deleted.
  */
 export function duplicateGroups(games: readonly StoredGame[]): DuplicateGroup[] {
   const buckets = new Map<string, StoredGame[]>()
@@ -732,26 +784,35 @@ export function duplicateGroups(games: readonly StoredGame[]): DuplicateGroup[] 
   const out: DuplicateGroup[] = []
   for (const bucket of buckets.values()) {
     if (bucket.length < 2) continue
+    // The bucket split into sets that each really are one game, by agreement rather than by looks.
+    const clusters: StoredGame[][] = []
     const placed = new Set<string>()
     for (const game of bucket) {
       if (placed.has(game.id)) continue
-      // Everything that is the same game as this one, by agreement rather than by looks.
-      const sameGame: StoredGame[] = [game]
+      const cluster: StoredGame[] = [game]
+      placed.add(game.id)
       for (const other of bucket) {
-        if (other.id === game.id || placed.has(other.id)) continue
-        if (compareRecords(game, other).verdict === 'same-game') sameGame.push(other)
+        if (placed.has(other.id)) continue
+        if (compareRecords(game, other).verdict !== 'same-game') continue
+        cluster.push(other)
+        placed.add(other.id)
       }
-      if (sameGame.length > 1) {
-        for (const one of sameGame) placed.add(one.id)
-        const comparison = compareRecords(sameGame[0], sameGame[1])
-        out.push({ ids: sameGame.map((one) => one.id), verdict: 'same-game', because: comparison.because, conflicts: [] })
-      }
+      clusters.push(cluster)
     }
-    // Whatever is left shares the moves without agreeing about the game.
-    const rest = bucket.filter((one) => !placed.has(one.id))
-    if (rest.length > 1) {
-      const comparison = compareRecords(rest[0], rest[1])
-      out.push({ ids: rest.map((one) => one.id), verdict: 'same-moves', because: comparison.because, conflicts: comparison.conflicts })
+    for (const cluster of clusters) {
+      if (cluster.length < 2) continue
+      const comparison = compareRecords(cluster[0], cluster[1])
+      out.push({ ids: cluster.map((one) => one.id), verdict: 'same-game', because: comparison.because, conflicts: [] })
+    }
+    if (clusters.length > 1) {
+      const representatives = clusters.map((cluster) => cluster[0])
+      const comparison = compareRecords(representatives[0], representatives[1])
+      out.push({
+        ids: representatives.map((one) => one.id),
+        verdict: 'same-moves',
+        because: comparison.because,
+        conflicts: comparison.conflicts
+      })
     }
   }
   return out
