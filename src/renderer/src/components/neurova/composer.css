@@ -33,14 +33,3 @@
 .nv-controls input[type='checkbox'] { accent-color: var(--cyan); }
 .nv-composer textarea:focus-visible,
 .nv-controls input:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
-
-/* Note field on candidate cards and any other text field inside the studio. */
-.nv-studio input:not([type='checkbox']):not([type='radio']),
-.nv-studio textarea {
-  background: transparent;
-  color: inherit;
-  border: 1px solid var(--glass-border);
-  border-radius: 8px;
-  padding: 6px 8px;
-  font: inherit;
-}

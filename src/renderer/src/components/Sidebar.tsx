@@ -304,6 +304,21 @@ export default function Sidebar(props: Props): React.JSX.Element {
                       ))}
                     </div>
                   ))}
+                  <div className="sb-menu-group" role="group" aria-label="Chance">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className={`menu-item${props.chanceOpen ? ' selected' : ''}`}
+                      title="Probability and statistics tools"
+                      onClick={() => {
+                        props.onChance()
+                        setBrandOpen(false)
+                      }}
+                    >
+                      <Dices size={14} />
+                      Chance
+                    </button>
+                  </div>
                   {/*
                     Settings is not a row here.
 

@@ -1,12 +1,5 @@
 /* NEUROVA motion system. Everything here is switched off for people who ask for less movement. */
-.nv-view, .nv-studio, .nv-composer, .nv-gen, .nv-player {
-  --nv-dur-fast: 120ms;
-  --nv-dur: 220ms;
-  --nv-dur-slow: 420ms;
-  --nv-ease: cubic-bezier(0.2, 0.7, 0.2, 1);
-  --nv-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
-  --nv-stagger: 35ms;
-}
+/* The timing variables live on .nv-view in neurova.css, where that class is defined. */
 @keyframes nv-tab-enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes nv-item-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes nv-shimmer { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
@@ -27,4 +20,15 @@
   .nv-tab-body, .nv-stagger > *, .nv-pulse, .nv-bar::after { animation: none !important; }
   .nv-x-tabs .queue-btn { transition: none; }
   .nv-bar::after { width: 100%; opacity: .5; }
+}
+
+/* Note field on candidate cards and any other text field inside the studio. */
+.nv-studio input:not([type='checkbox']):not([type='radio']),
+.nv-studio textarea {
+  background: transparent;
+  color: inherit;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font: inherit;
 }

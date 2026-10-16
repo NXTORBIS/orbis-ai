@@ -24,4 +24,4 @@
 .nv-x-fieldset{border:1px solid color-mix(in srgb,currentColor 18%,transparent);border-radius:8px;display:flex;flex-direction:column;gap:6px}
 .nv-plan :focus-visible,.nv-lyrics :focus-visible,.nv-cands :focus-visible,.nv-diag :focus-visible,.nv-timeline :focus-visible,.nv-export :focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
 @media (prefers-reduced-motion:reduce){.nv-x-meter span{transition:none}}
-@media (max-width:420px){.nv-x-actions .queue-btn{flex:1 1 40%}}
+@container nv-screen (max-width:420px){.nv-x-actions .queue-btn{flex:1 1 40%}}

@@ -1,4 +1,5 @@
-import { resolve } from 'node:path'
+import { createReadStream, existsSync, statSync } from 'node:fs'
+import { extname, resolve } from 'node:path'
 import { defineConfig } from 'electron-vite'
 import { loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
@@ -35,7 +36,26 @@ export default defineConfig(({ mode }) => {
       }
     },
     renderer: {
-      plugins: [react()],
+      plugins: [
+        react(),
+        {
+          // Orbis Chance is a separate project built to out/renderer/chance (npm run build:chance). The packaged app loads it
+          // beside index.html; in dev the app is served by Vite, which knows nothing about that folder, so serve it here.
+          name: 'orbis-chance-dev',
+          configureServer(server) {
+            const types: Record<string, string> = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.woff2': 'font/woff2', '.wasm': 'application/wasm', '.map': 'application/json' }
+            const root = resolve('out/renderer/chance')
+            server.middlewares.use('/chance', (req, res, next) => {
+              const url = (req.url ?? '/').split('?')[0]
+              const rel = decodeURIComponent(url === '/' ? '/index.html' : url)
+              const file = resolve(root, '.' + rel)
+              if (!file.startsWith(root) || !existsSync(file) || !statSync(file).isFile()) return next()
+              res.setHeader('content-type', types[extname(file)] ?? 'application/octet-stream')
+              createReadStream(file).pipe(res)
+            })
+          }
+        }
+      ],
       resolve: { alias: { '@jarvis': resolve('src/renderer/src/features/jarvis') } },
       css: { postcss: { plugins: [tailwindcss({ config: resolve('src/renderer/src/features/jarvis/tailwind.config.cjs') })] } },
       build: {
