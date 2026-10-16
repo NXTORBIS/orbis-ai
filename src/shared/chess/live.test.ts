@@ -198,6 +198,7 @@ test('a snapshot that is behind what we hold is thrown away rather than rewindin
   assert.equal(stale.added, 0)
   assert.equal(stale.state.record.moves.length, 8)
   assert.equal(stale.state.record.result, '1/2-1/2', 'an older copy must not un-finish a finished game')
+  assert.ok(stale.note)
   assert.match(stale.note, /older copy/)
 })
 
@@ -210,6 +211,7 @@ test('a provider correcting a move it already published is taken, and reported a
   assert.equal(result.divergedAt, 6, 'the seventh ply is where the two lines stop agreeing')
   assert.equal(result.state.record.moves.length, 8)
   assert.equal(result.state.record.moves[6].san, 'c4')
+  assert.ok(result.note)
   assert.match(result.note, /changed move 4/)
 })
 
@@ -223,6 +225,7 @@ test('a result being corrected is a correction; a game merely finishing is not',
   assert.equal(overruled.outcome, 'corrected')
   assert.equal(overruled.added, 0)
   assert.equal(overruled.state.record.result, '1/2-1/2')
+  assert.ok(overruled.note)
   assert.match(overruled.note, /corrected from 1-0 to 1\/2-1\/2/)
 })
 
@@ -255,6 +258,7 @@ test('a delivery older than one already accepted is rejected on its sequence alo
   const old = reconcileSnapshot(first.state, payload({ moves: written(RECORDED_SAN), sequence: 11 }))
   assert.equal(old.outcome, 'out-of-order')
   assert.equal(old.state.record.moves.length, 6)
+  assert.ok(old.note)
   assert.match(old.note, /older than what is already shown/)
 
   // The next one in order is accepted, and the sequence moves with it.
@@ -311,6 +315,7 @@ test('a delta that cannot be played from the current position is refused, and sa
   assert.equal(bad.outcome, 'refused')
   assert.equal(bad.problem, 'illegal-move')
   assert.deepEqual(bad.state, state)
+  assert.ok(bad.note)
   assert.match(bad.note, /full update will settle it/)
 })
 

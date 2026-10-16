@@ -289,6 +289,7 @@ test('the recorded game becomes a snapshot payload with only what its PGN actual
   assert.equal(p.round, '7.39')
   assert.equal(p.result, '1/2-1/2')
   assert.equal(p.status, 'finished')
+  assert.ok(p.white)
   assert.equal(p.white.name, 'Wagenaar, Harm Theo')
   assert.equal(p.white.rating, 1860)
   // This recording carries no title tags, and none is invented.
@@ -657,7 +658,7 @@ test('a byte-encoded stream reads the same as a text one, including across a spl
   const sink = collect()
   await adapter(r).subscribeRound('Cd33Pm6w', sink.handlers, { maxReconnects: 0 }).done
   assert.equal(sink.payloads.length, 1)
-  assert.equal(sink.payloads[0].black.name, 'Almería, José')
+  assert.equal(sink.payloads[0].black?.name, 'Almería, José')
 })
 
 test('a refusal arriving inside the stream body stops it and is reported as a rate limit', async () => {

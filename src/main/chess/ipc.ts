@@ -16,12 +16,20 @@ import type { GameMeta, GameMove, GameSource, StoredGame } from '../../shared/ch
  * Every channel takes `unknown` and checks it. A renderer is not trusted to send the right shape.
  */
 
+/** What this file needs of the engine. The real one (src/main/chess/engine.ts) satisfies it. */
 export interface EngineService {
-  status(): Promise<{ state: string; detail: string; name?: string; version?: string; path?: string }>
-  install(onStatus: (message: string) => void, signal?: AbortSignal): Promise<void>
-  analyse(request: { id: string; fen: string; multipv?: number; movetime?: number; depth?: number; nodes?: number }, onUpdate: (update: unknown) => void): Promise<void>
-  stop(id?: string): void
-  shutdown(): void
+  status(): Promise<unknown>
+  install(onStatus?: (message: string) => void, signal?: AbortSignal): Promise<unknown>
+  analyse(request: {
+    fen: string
+    limits: { movetime?: number; depth?: number; nodes?: number }
+    multipv?: number
+    requestId?: string
+    priority?: 'interactive' | 'batch'
+    onUpdate?: (update: unknown) => void
+  }): Promise<unknown>
+  stop(requestId?: string): Promise<void>
+  shutdown(): Promise<void>
 }
 
 export interface ChessIpcOptions {
@@ -172,19 +180,33 @@ export function registerChessIpc(o: ChessIpcOptions): void {
     if (!check.ok) throw new Error(check.reason ?? 'That position cannot be analysed.')
     const id = str(r.id, 80) || `an-${Date.now()}`
     const limits = {
-      id,
-      fen,
-      ...(typeof r.multipv === 'number' ? { multipv: Math.max(1, Math.min(5, Math.round(r.multipv))) } : {}),
       ...(typeof r.movetime === 'number' ? { movetime: Math.max(50, Math.min(600_000, Math.round(r.movetime))) } : {}),
       ...(typeof r.depth === 'number' ? { depth: Math.max(1, Math.min(40, Math.round(r.depth))) } : {}),
       ...(typeof r.nodes === 'number' ? { nodes: Math.max(1000, Math.min(1e10, Math.round(r.nodes))) } : {})
     }
-    await engine.analyse(limits, (update) => o.send('chess:analysis', update))
+    // A search with no limit at all would run until something stopped it, so there is always one.
+    if (!('movetime' in limits) && !('depth' in limits) && !('nodes' in limits)) limits.movetime = 2000
+    /*
+     * The search runs on; its updates are sent as they come.
+     *
+     * Each one carries the request it belongs to and the position it was about, so the window can throw away an
+     * answer that arrives after the board has moved on rather than show it against the wrong position.
+     */
+    void engine
+      .analyse({
+        fen,
+        limits,
+        requestId: id,
+        priority: 'interactive',
+        ...(typeof r.multipv === 'number' ? { multipv: Math.max(1, Math.min(5, Math.round(r.multipv))) } : {}),
+        onUpdate: (update) => o.send('chess:analysis', update)
+      })
+      .catch((err: unknown) => o.send('chess:analysis-failed', { id, fen, message: err instanceof Error ? err.message : 'The engine stopped.' }))
     return id
   })
 
-  handle('chess:stop-analysis', (_e, id: unknown) => {
-    o.engine()?.stop(str(id, 80) || undefined)
+  handle('chess:stop-analysis', async (_e, id: unknown) => {
+    await o.engine()?.stop(str(id, 80) || undefined)
     return true
   })
 }

@@ -195,6 +195,12 @@ export const TEST_FILES = [
   // "installed" means.
   'src/main/chess/install.test.ts',
   'src/main/chess/engine.test.ts',
+  // Live broadcast ingestion, in the order the layers depend on each other: the pure model first, because the two
+  // below are only worth anything if it holds; then the Lichess adapter against recorded responses and an injected
+  // fetch; then the manager against a stand-in provider. None of the three touches the network.
+  'src/shared/chess/live.test.ts',
+  'src/main/chess/live/lichess.test.ts',
+  'src/main/chess/live/manager.test.ts',
   'src/shared/commandCenter.test.ts',
   'src/shared/commandCenterDestinations.test.ts',
   // The Ask Orion screen in the browser panel, run against a stand-in for the page. Beside the two above because it

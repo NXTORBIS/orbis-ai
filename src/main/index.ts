@@ -358,6 +358,7 @@ import { NeurovaStore } from './neurova/store'
 import { registerNeurovaIpc } from './neurova/ipc'
 import { probeMachine } from './neurova/machine'
 import { ChessStore } from './chess/store'
+import { ChessEngine } from './chess/engine'
 import { registerChessIpc } from './chess/ipc'
 import { NeurovaEngine } from './neurova/engine'
 import { registerNeurovaIpc2 } from './neurova/ipc2'
@@ -4320,6 +4321,14 @@ ${page.text}`, { howMany: 6 })
     const workspacesStore = new WorkspacesStore(app.getPath('userData'))
     const neurovaStore = new NeurovaStore(app.getPath('userData'))
     const chessStore = new ChessStore(app.getPath('userData'), 'default')
+    /*
+     * The chess engine.
+     *
+     * Stockfish is a separate free program under the GPL, so Orbis does not carry a copy of it. This object knows
+     * where one would live and can fetch it when the person asks; until then it honestly reports that there is no
+     * engine, and the screen says so rather than offering an opponent that cannot play.
+     */
+    const chessEngine = new ChessEngine({ home: join(app.getPath('userData'), 'chess') })
     const neurovaJobs = new JobStore(app.getPath('userData'), 'default')
     const neurovaWorkspaces = new WorkspaceStore(app.getPath('userData'))
     // Notes, tasks, whiteboards and workspaces belong to the profile in use, like its browsing and its workflows.
@@ -5411,9 +5420,7 @@ ${page.text}`, { howMany: 6 })
 
     registerChessIpc({
       store: chessStore,
-      // Stockfish is GPL and is not part of Orbis's own download; it is set up on demand, and until it is the
-      // screen says so rather than offering an opponent that cannot play.
-      engine: () => null,
+      engine: () => chessEngine,
       getWindow: () => liveWindow(),
       send: sendToWindow,
       handle
@@ -5629,6 +5636,7 @@ ${page.text}`, { howMany: 6 })
     quitFlush.add('your whiteboards', () => whiteboardStore.flush())
     quitFlush.add('your NEUROVA projects', () => neurovaStore.flush())
     quitFlush.add('your chess games', () => chessStore.flush())
+    quitFlush.add('the chess engine', () => chessEngine.shutdown())
     quitFlush.add('your NEUROVA jobs', () => neurovaJobs.flush())
     quitFlush.add('the NEUROVA engine session', () => neurovaEngine.shutdown())
     quitFlush.add('your NEUROVA plans and decisions', () => neurovaWorkspaces.flush())
