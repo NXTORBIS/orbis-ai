@@ -4,7 +4,7 @@ import { basename, join } from 'node:path'
 import type { ChessStore } from './store.ts'
 import { checkFen } from '../../shared/chess/rules.ts'
 import { writePgn } from '../../shared/chess/pgn.ts'
-import type { GameMeta, GameMove, GameSource, StoredGame } from '../../shared/chess/model.ts'
+import type { GameMeta, GameMove, GameResult, GameSource, PlayerInfo, StoredGame } from '../../shared/chess/model.ts'
 
 /**
  * The window's way in to Chess World.
@@ -32,10 +32,24 @@ export interface EngineService {
   shutdown(): Promise<void>
 }
 
+/** What this file needs of the live-broadcast manager. The real one (src/main/chess/live/manager.ts) satisfies it. */
+export interface LiveService {
+  refresh(provider: string, o: { max?: number; onlyLive?: boolean; force?: boolean }): Promise<unknown>
+  listGames(provider: string, eventId: string): Promise<unknown>
+  follow(provider: string, eventId: string): unknown
+  unfollow(keepGames?: boolean): void
+  all(): { id: string; provider: string; providerGameId: string; eventId?: string; eventName?: string; round?: string; url?: string; startFen: string; moves: GameMove[]; white: PlayerInfo; black: PlayerInfo; result?: GameResult }[]
+  view(gameId: string): unknown
+  following(): unknown
+  health(): unknown
+}
+
 export interface ChessIpcOptions {
   store: ChessStore
   /** Absent until the engine service is installed and wired; the screen then says the engine is not there. */
   engine: () => EngineService | null
+  /** Absent when no broadcast provider is configured. */
+  live: () => LiveService | null
   getWindow(): BrowserWindow | null
   send(channel: string, ...args: unknown[]): void
   handle: <A extends unknown[]>(channel: string, handler: (event: Electron.IpcMainInvokeEvent, ...args: A) => unknown) => void
@@ -145,6 +159,68 @@ export function registerChessIpc(o: ChessIpcOptions): void {
   handle('chess:to-pgn', async (_e, id: unknown) => {
     const game = await store.get(str(id, 80))
     return game ? writePgn(game) : null
+  })
+
+
+  // ---- live broadcasts
+  //
+  // Watching is not playing: none of these can change a game, and the window is told where every record came from and
+  // how fresh it is, so a position that has stopped arriving is never shown as the current one.
+
+  handle('chess:live-events', async (_e, provider: unknown, options: unknown) => {
+    const live = o.live()
+    if (!live) return { ok: false, reason: 'Live broadcasts are not available in this build.' }
+    const opts = (options ?? {}) as { max?: unknown; onlyLive?: unknown; force?: unknown }
+    const outcome = await live.refresh(str(provider, 40) || 'lichess', {
+      ...(typeof opts.max === 'number' ? { max: Math.max(1, Math.min(100, Math.round(opts.max))) } : {}),
+      ...(typeof opts.onlyLive === 'boolean' ? { onlyLive: opts.onlyLive } : {}),
+      ...(opts.force === true ? { force: true } : {})
+    })
+    return outcome
+  })
+
+  handle('chess:live-games', async (_e, provider: unknown, eventId: unknown) => {
+    const live = o.live()
+    if (!live) return { ok: false, reason: 'Live broadcasts are not available in this build.' }
+    return live.listGames(str(provider, 40) || 'lichess', str(eventId, 120))
+  })
+
+  handle('chess:live-follow', (_e, provider: unknown, eventId: unknown) => {
+    const live = o.live()
+    if (!live) return { ok: false, reason: 'Live broadcasts are not available in this build.' }
+    return live.follow(str(provider, 40) || 'lichess', str(eventId, 120))
+  })
+
+  handle('chess:live-unfollow', () => {
+    o.live()?.unfollow()
+    return true
+  })
+
+  /** Every game currently held, with its freshness worked out as at now. */
+  handle('chess:live-state', () => {
+    const live = o.live()
+    if (!live) return { following: null, games: [], health: null }
+    return {
+      following: live.following(),
+      games: live.all().map((game) => live.view(game.id) ?? game),
+      health: live.health()
+    }
+  })
+
+  /** A broadcast game kept as the person's own, when its record is complete enough to keep. */
+  handle('chess:live-save', async (_e, gameId: unknown) => {
+    const live = o.live()
+    if (!live) throw new Error('Live broadcasts are not available in this build.')
+    const record = live.all().find((g) => g.id === str(gameId, 120))
+    if (!record) throw new Error('That game is no longer being followed.')
+    const saved = await store.create({
+      source: { kind: 'broadcast', provider: record.provider, providerGameId: record.providerGameId, ...(record.eventId ? { eventId: record.eventId } : {}), retrievedAt: Date.now(), ...(record.url ? { url: record.url } : {}) },
+      startFen: record.startFen,
+      meta: { white: record.white, black: record.black, result: record.result ?? '*', ...(record.eventName ? { event: record.eventName } : {}), ...(record.round ? { round: record.round } : {}) }
+    })
+    const withMoves = await store.save({ ...saved, moves: record.moves })
+    o.send('chess:games-changed')
+    return withMoves
   })
 
   // ---- the engine

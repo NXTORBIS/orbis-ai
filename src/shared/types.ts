@@ -2328,6 +2328,19 @@ export interface NxtorbisApi {
   neurovaCancelJob(id: string): Promise<boolean>
   onNeurovaJobs(listener: () => void): () => void
   onNeurovaInstall(listener: () => void): () => void
+  chessLiveEvents(provider?: string, options?: { max?: number; onlyLive?: boolean; force?: boolean }): Promise<unknown>
+  chessLiveGames(provider: string, eventId: string): Promise<unknown>
+  chessLiveFollow(provider: string, eventId: string): Promise<unknown>
+  chessLiveUnfollow(): Promise<boolean>
+  chessLiveState(): Promise<{ following: unknown; games: unknown[]; health: unknown }>
+  chessLiveSave(gameId: string): Promise<ChessStoredGame>
+  onChessAnalysis(listener: (update: unknown) => void): () => void
+  onChessAnalysisFailed(listener: (failure: { id: string; fen: string; message: string }) => void): () => void
+  onChessEngineProgress(listener: (message: string) => void): () => void
+  onChessEngineChanged(listener: () => void): () => void
+  onChessGamesChanged(listener: () => void): () => void
+  onChessLiveChanged(listener: (change: unknown) => void): () => void
+  onChessLiveDiagnostic(listener: (diagnostic: unknown) => void): () => void
   chessGames(): Promise<ChessStoredGame[]>
   chessGame(id: string): Promise<ChessStoredGame | null>
   chessSearch(query: string): Promise<ChessStoredGame[]>

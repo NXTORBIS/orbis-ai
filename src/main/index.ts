@@ -359,6 +359,8 @@ import { registerNeurovaIpc } from './neurova/ipc'
 import { probeMachine } from './neurova/machine'
 import { ChessStore } from './chess/store'
 import { ChessEngine } from './chess/engine'
+import { createLiveChessManager } from './chess/live/manager'
+import { createLichessBroadcasts, lichessProviderPort } from './chess/live/lichess'
 import { registerChessIpc } from './chess/ipc'
 import { NeurovaEngine } from './neurova/engine'
 import { registerNeurovaIpc2 } from './neurova/ipc2'
@@ -4328,7 +4330,19 @@ ${page.text}`, { howMany: 6 })
      * where one would live and can fetch it when the person asks; until then it honestly reports that there is no
      * engine, and the screen says so rather than offering an opponent that cannot play.
      */
-    const chessEngine = new ChessEngine({ home: join(app.getPath('userData'), 'chess') })
+    // ORBIS_CHESS_ENGINE_HOME lets one installed engine be shared between runs, which is also how it is tested.
+    const chessEngine = new ChessEngine({ home: process.env.ORBIS_CHESS_ENGINE_HOME || join(app.getPath('userData'), 'chess') })
+    /*
+     * Tournaments being broadcast publicly.
+     *
+     * Lichess is the one provider with a documented live interface, so it is the one adapter there is. Nothing is
+     * fetched until somebody opens the Live tab, and the window is told when a game changes rather than asking.
+     */
+    const chessLive = createLiveChessManager({
+      onChange: (change) => sendToWindow('chess:live-changed', change),
+      onDiagnostic: (diagnostic) => sendToWindow('chess:live-diagnostic', diagnostic)
+    })
+    chessLive.register(lichessProviderPort(createLichessBroadcasts({ fetchFn: (url, init) => net.fetch(url as string, init as never) })))
     const neurovaJobs = new JobStore(app.getPath('userData'), 'default')
     const neurovaWorkspaces = new WorkspaceStore(app.getPath('userData'))
     // Notes, tasks, whiteboards and workspaces belong to the profile in use, like its browsing and its workflows.
@@ -5421,6 +5435,7 @@ ${page.text}`, { howMany: 6 })
     registerChessIpc({
       store: chessStore,
       engine: () => chessEngine,
+      live: () => chessLive,
       getWindow: () => liveWindow(),
       send: sendToWindow,
       handle
@@ -5637,6 +5652,7 @@ ${page.text}`, { howMany: 6 })
     quitFlush.add('your NEUROVA projects', () => neurovaStore.flush())
     quitFlush.add('your chess games', () => chessStore.flush())
     quitFlush.add('the chess engine', () => chessEngine.shutdown())
+    quitFlush.add('the chess broadcasts', () => { chessLive.unfollow(); return Promise.resolve() })
     quitFlush.add('your NEUROVA jobs', () => neurovaJobs.flush())
     quitFlush.add('the NEUROVA engine session', () => neurovaEngine.shutdown())
     quitFlush.add('your NEUROVA plans and decisions', () => neurovaWorkspaces.flush())

@@ -25,7 +25,8 @@ const MAP = join(ROOT, '..', 'docs', 'ipc-mapping.md')
 // 616 -> 618: the local image engine's status and install channels (imagegen:status, imagegen:install).
 // 618 -> 619: files-host:ready, so the Files screen waits for its services instead of racing them.
 // 619 -> 634: Chess World's games, PGN and engine.
-const CEILING = 634
+// 634 -> 640: its live broadcasts.
+const CEILING = 640
 
 async function* typescriptFiles(dir: string): AsyncGenerator<string> {
   for (const entry of await readdir(dir, { withFileTypes: true })) {
