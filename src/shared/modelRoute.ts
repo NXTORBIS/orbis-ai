@@ -81,13 +81,56 @@ export function bestFor(need: ModelStrength, roomNeeded: number, models: readonl
   return pool.reduce((best, one) => (inputRoomOf(one) > inputRoomOf(best) ? one : best))
 }
 
+/**
+ * How hard a message looks, from 0 (a greeting) up. No model call: only what is plainly on the page.
+ *
+ * It exists for the messages the keyword needs above miss: "why does my sourdough collapse and what should I change
+ * on the next bake" has no code, no maths and no verb like "analyse", yet it is a two-part, why-and-how question that
+ * a quick model answers thinly. Each signal below is something a careful reader would also count.
+ */
+export function difficulty(text: string, turns = 0): number {
+  const t = text.trim()
+  if (!t) return 0
+  let score = 0
+  const words = t.split(/\s+/).length
+  if (words >= 40) score += 1
+  if (words >= 120) score += 1
+  // Several questions in one message, or an explicit numbered/bulleted list of things to do.
+  if ((t.match(/\?/g) ?? []).length >= 2) score += 1
+  if ((t.match(/^\s*(?:\d+[.)]|[-*•])\s+/gm) ?? []).length >= 3) score += 1
+  // Causal and procedural asks need more than a lookup.
+  if (/\b(why (?:does|do|is|are|did|would|can't|cannot)|how (?:does|do|would|should|can|could) (?:i|we|you|it|one|this|that)\b.*\b(?:and|then|so that|while)\b|what(?:'s| is) the difference|pros and cons|should i|which is better|root cause|best way to)\b/i.test(t)) score += 1
+  /*
+   * Two different things asked in one message: "why does X ... and how should I Y".
+   *
+   * Only once the message is long enough to really be two asks. "And what about the second one? Does that change it?"
+   * has two question words and is a cheap follow-up, which is why the length guard is here rather than the count alone.
+   */
+  if (words >= 12) {
+    const asked = new Set((t.toLowerCase().match(/\b(why|how|what|which|when|where|should|can|could|would)\b/g) ?? []))
+    if (asked.size >= 2) score += 1
+  }
+  // Constraints stacked on a request ("under 100 words, for beginners, with an example, in a table").
+  if ((t.match(/\b(?:under|within|at most|at least|exactly|only|without|must|should not|don't|do not)\b/gi) ?? []).length >= 3) score += 1
+  // A long running conversation usually means the question leans on what came before.
+  if (turns >= 8) score += 1
+  // A greeting or a thanks is never hard, whatever else is true.
+  if (words <= 4 && /^(hi|hello|hey|thanks|thank you|ok|okay|yes|no|cool|great)\b/i.test(t)) return 0
+  return score
+}
+
+/** From this score a message with no keyword need is still treated as needing careful reasoning. */
+export const HARD_FROM = 2
+
 /** The model for one message, and why. */
 export function routeModel(input: RouteInput, models: readonly ModelInfo[] = CHAT_MODELS): Route {
   const text = input.text.trim()
   const roomNeeded = text.length + (input.attachmentChars ?? 0)
   const long = text.length > 700 || (input.attachmentChars ?? 0) > 6000
 
-  const wanted = NEEDS.find((one) => one.matches(text))
+  const matched = NEEDS.find((one) => one.matches(text))
+  const hard = !matched && difficulty(text, input.turns ?? 0) >= HARD_FROM
+  const wanted = matched ?? (hard ? { need: 'reasoning' as ModelStrength, reason: 'a hard, multi-part question' } : undefined)
   const order: { need: ModelStrength; reason: string }[] = [
     ...(wanted ? [{ need: wanted.need, reason: wanted.reason }] : []),
     ...(long ? [{ need: 'long' as ModelStrength, reason: 'long material' }] : []),
