@@ -1,4 +1,4 @@
-import { Suspense, lazy, memo, useEffect, useId, useRef, useState } from 'react'
+import { Suspense, lazy, memo, useCallback, useEffect, useId, useRef, useState } from 'react'
 import { speech } from '../lib/speak'
 import {
   Ban,
@@ -225,6 +225,9 @@ function PendingReply({ status, reasoning }: { status?: string; reasoning?: stri
 function AssistantMessage(props: Props): React.JSX.Element {
   const { message, streaming, status } = props
   const cardRef = useRef<HTMLDivElement>(null)
+  // A citation clicked in the answer opens this reply's source list and points at that source.
+  const [citeFocus, setCiteFocus] = useState<{ n: number; tick: number } | null>(null)
+  const onCite = useCallback((n: number) => setCiteFocus((was) => ({ n, tick: (was?.tick ?? 0) + 1 })), [])
   // The ring beside the reply says how this reply is going: glowing while words arrive, a flash when it lands, dim and
   // flickering if it failed. An old reply that is simply there stays still.
   const mood = useOrbMood({ streaming, hasContent: Boolean(message.content), failed: Boolean(message.error), key: message.id })
@@ -266,7 +269,7 @@ function AssistantMessage(props: Props): React.JSX.Element {
               onAnswer={(confirmationId, approved) => props.onBrowserConfirm?.(message.id, confirmationId, approved)}
             />
           )}
-          {message.content && <Markdown text={message.content} sources={message.research?.sources} streaming={streaming} />}
+          {message.content && <Markdown text={message.content} sources={message.research?.sources} streaming={streaming} onCite={onCite} />}
           {message.artifacts && message.artifacts.length > 0 && (
             <div className="artifact-cards">
               {message.artifacts.map((one) => (
@@ -300,7 +303,7 @@ function AssistantMessage(props: Props): React.JSX.Element {
               ))}
             </div>
           )}
-          {message.research && message.research.sources.length > 0 && <ResearchSources research={message.research} content={message.content} streaming={streaming} />}
+          {message.research && message.research.sources.length > 0 && <ResearchSources research={message.research} content={message.content} streaming={streaming} focus={citeFocus} />}
           {streaming && <span className="stream-caret" />}
           {message.error && <div className="message-error">{message.error}</div>}
         </div>

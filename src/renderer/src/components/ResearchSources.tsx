@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import './research-sources.css'
 import { AlertTriangle, ChevronDown, Globe, PanelTop } from 'lucide-react'
 import type { Research, ResearchSource } from '../../../shared/types'
 import { citedNumbers } from '../../../shared/research'
@@ -10,6 +11,21 @@ interface Props {
   research: Research
   content: string
   streaming: boolean
+  /** A citation the reader clicked in the answer: open the list and point at that source. `tick` makes a repeat click count. */
+  focus?: { n: number; tick: number } | null
+}
+
+/** The conversation column is this wide or wider before the list may sit beside the answer instead of under it. */
+const WIDE_COLUMN = 860
+
+/** A small round mark for a source: its site's own icon when it loads, otherwise the first letter of its name. */
+function SourceMark({ source }: { source: ResearchSource }): React.JSX.Element {
+  const [failed, setFailed] = useState(false)
+  const letter = (source.publisher ?? source.domain ?? '?').trim().charAt(0).toUpperCase() || '?'
+  let origin: string | null = null
+  try { origin = new URL(source.url).origin } catch { origin = null }
+  if (failed || !origin || !/^https:/.test(origin)) return <span className="research-fav research-fav-letter" aria-hidden="true">{letter}</span>
+  return <img className="research-fav" src={`${origin}/favicon.ico`} alt="" width={16} height={16} loading="lazy" onError={() => setFailed(true)} />
 }
 
 const formatDate = (iso: string): string => new Date(`${iso}T00:00:00Z`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
@@ -24,8 +40,40 @@ const formatRetrieved = (time: number): string => {
  * The pages an answer is based on. Sources the answer cites come first (they support its claims); the rest are listed
  * as also read. Each opens the exact page in the Orbis browser.
  */
-export default function ResearchSources({ research, content, streaming }: Props): React.JSX.Element | null {
+export default function ResearchSources({ research, content, streaming, focus }: Props): React.JSX.Element | null {
   const [showOthers, setShowOthers] = useState(false)
+  // One line under the answer until asked for: the list is long and most answers are read without it.
+  const [open, setOpen] = useState(false)
+  const [wide, setWide] = useState(false)
+  const root = useRef<HTMLElement>(null)
+  const focused = focus?.n ?? null
+  useEffect(() => {
+    if (!focus) return
+    setOpen(true)
+    // Wait for the list to exist, then bring the chosen source into view.
+    const id = window.setTimeout(() => root.current?.querySelector(`[data-source="${focus.n}"]`)?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 60)
+    return () => window.clearTimeout(id)
+  }, [focus])
+  // Whether the conversation column has room for the list beside the answer. Measured, not guessed from the window.
+  useEffect(() => {
+    const column = root.current?.closest('.messages-inner')
+    if (!column || typeof ResizeObserver === 'undefined') return
+    const measure = (): void => setWide(column.clientWidth >= WIDE_COLUMN)
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(column)
+    return () => observer.disconnect()
+  }, [])
+  // The answer is widened and given the side-column layout only while the list is open and there is room for it.
+  const side = open && wide
+  useEffect(() => {
+    const card = root.current?.closest('.msg-card')
+    const body = root.current?.closest('.msg-body')
+    if (!card || !body) return
+    card.classList.toggle('research-card-wide', side)
+    body.classList.toggle('research-body-wide', side)
+    return () => { card.classList.remove('research-card-wide'); body.classList.remove('research-body-wide') }
+  }, [side])
   const cited = citedNumbers(content, research.sources)
   const citedSources = cited.map((n) => research.sources.find((s) => s.n === n)).filter((s): s is ResearchSource => Boolean(s))
   const others = research.sources.filter((s) => !cited.includes(s.n))
@@ -45,8 +93,19 @@ export default function ResearchSources({ research, content, streaming }: Props)
   const heading = streaming ? 'Reading sources' : citedSources.length ? 'Sources' : 'Pages researched'
   const openable = (citedSources.length ? citedSources : research.sources).map((s) => s.url)
 
+  const marks = primary.slice(0, 5)
+  const summary = streaming ? 'Reading sources' : citedSources.length ? 'Sources' : 'Pages researched'
+
   return (
-    <section className="research-sources" aria-label="Sources">
+    <section ref={root} className={`research-sources${side ? ' research-side' : ''}`} aria-label="Sources">
+      <button type="button" className="research-summary" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        <span className="research-favs" aria-hidden="true">
+          {marks.map((s) => <SourceMark key={s.n} source={s} />)}
+        </span>
+        <b>{summary} · {primary.length}</b>
+        <ChevronDown size={13} className={open ? 'open' : undefined} aria-hidden="true" />
+      </button>
+      {open && <div className="research-body">
       <div className="research-head">
         <Globe size={13} aria-hidden="true" />
         <b>{heading}</b>
@@ -84,7 +143,7 @@ export default function ResearchSources({ research, content, streaming }: Props)
       )}
       <ol className="research-list">
         {primary.map((source) => (
-          <SourceRow key={source.n} source={source} />
+          <SourceRow key={source.n} source={source} focused={focused === source.n} />
         ))}
       </ol>
       {/*
@@ -126,20 +185,21 @@ export default function ResearchSources({ research, content, streaming }: Props)
           {showOthers && (
             <ol className="research-list">
               {others.map((source) => (
-                <SourceRow key={source.n} source={source} />
+                <SourceRow key={source.n} source={source} focused={focused === source.n} />
               ))}
             </ol>
           )}
         </>
       )}
+      </div>}
     </section>
   )
 }
 
-function SourceRow({ source }: { source: ResearchSource }): React.JSX.Element {
+function SourceRow({ source, focused }: { source: ResearchSource; focused: boolean }): React.JSX.Element {
   const date = source.published ? formatDate(source.published) : source.updated ? `updated ${formatDate(source.updated)}` : null
   return (
-    <li>
+    <li data-source={source.n} className={focused ? 'research-row-focused' : undefined}>
       <button type="button" className="research-source" title={`Open in Orbis browser: ${source.url}`} onClick={() => openInOrbisBrowser(source.url)}>
         <span className="research-n">{source.n}</span>
         <span className="research-main">

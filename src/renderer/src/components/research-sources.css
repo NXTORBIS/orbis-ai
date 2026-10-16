@@ -1,0 +1,70 @@
+/* The sources under an answer: one line until opened, favicons first, and a side column when the card is wide. */
+.research-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px 4px 6px;
+  border: 1px solid var(--glass-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-sm, 13px);
+  cursor: pointer;
+}
+.research-summary:hover { border-color: var(--cyan); }
+.research-summary:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.research-summary .open { transform: rotate(180deg); }
+.research-favs { display: inline-flex; }
+.research-fav {
+  width: 18px;
+  height: 18px;
+  margin-left: -5px;
+  border-radius: 50%;
+  border: 2px solid var(--bg-mid, #0b0d10);
+  background: var(--bg-mid, #0b0d10);
+  object-fit: cover;
+}
+.research-fav:first-child { margin-left: 0; }
+.research-fav-letter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--faint);
+  background: color-mix(in srgb, var(--cyan) 14%, transparent);
+}
+.research-body { margin-top: 10px; }
+.research-row-focused > button {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--cyan) 35%, transparent);
+  border-radius: 8px;
+}
+/* The answer takes the whole column while its list sits beside it. */
+.research-body-wide { max-width: 100%; width: 100%; }
+/* Wide card: the open list moves beside the answer. The card measures itself and is given the class below. */
+.research-card-wide {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 300px);
+  column-gap: 20px;
+  align-items: start;
+}
+.research-card-wide > * { grid-column: 1; }
+.research-card-wide > .research-side {
+  grid-column: 2;
+  grid-row: 1 / span 12;
+  margin-top: 0;
+  border-top: 0;
+  padding-top: 0;
+  padding-left: 14px;
+  border-left: 1px solid var(--line-strong);
+  position: sticky;
+  top: 8px;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .research-summary { transition: border-color 0.15s ease; }
+  .research-row-focused > button { transition: box-shadow 0.15s ease; }
+}

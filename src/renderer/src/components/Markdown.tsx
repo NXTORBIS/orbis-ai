@@ -225,13 +225,14 @@ function Image({ node: _node, src, alt, title, ...props }: React.ComponentProps<
 const SOURCE_LINK = '#orbis-source-'
 
 /** Links open in the Orbis browser; a citation like [2] becomes a chip that opens that source's exact page. */
-function makeLink(sources: ResearchSource[] | undefined): Components['a'] {
+function makeLink(sources: ResearchSource[] | undefined, onCite?: (n: number) => void): Components['a'] {
   return function Link({ node: _node, href, children, ...props }) {
     if (href?.startsWith(SOURCE_LINK)) {
       const source = sources?.find((s) => s.n === Number(href.slice(SOURCE_LINK.length)))
       if (!source) return <>{children}</>
       return (
-        <button type="button" className="source-cite" title={`${source.title} — ${source.publisher ?? source.domain}. Open in Orbis browser`} onClick={() => openInOrbisBrowser(source.url)}>
+        <button type="button" className="source-cite" title={`${source.title} — ${source.publisher ?? source.domain}. ${onCite ? 'Click to see it in the sources; Ctrl+click opens the page' : 'Open in Orbis browser'}`}
+          onClick={(e) => (onCite && !e.ctrlKey && !e.metaKey && !e.shiftKey ? onCite(source.n) : openInOrbisBrowser(source.url))}>
           {source.n}
         </button>
       )
@@ -292,9 +293,9 @@ const components: Components = {
 // The default transform blanks data: URLs, which is how generated images arrive.
 const urlTransform = (url: string): string => (/^data:image\/(png|jpe?g|webp|gif);base64,/i.test(url) ? url : defaultUrlTransform(url))
 
-function Markdown({ text, sources, streaming }: { text: string; sources?: ResearchSource[]; streaming?: boolean }): React.JSX.Element {
+function Markdown({ text, sources, streaming, onCite }: { text: string; sources?: ResearchSource[]; streaming?: boolean; onCite?: (n: number) => void }): React.JSX.Element {
   const content = useMemo(() => (sources?.length ? linkCitations(normalizeMath(text), sources) : normalizeMath(text)), [text, sources])
-  const withSources = useMemo(() => (sources?.length ? { ...components, a: makeLink(sources) } : components), [sources])
+  const withSources = useMemo(() => (sources?.length ? { ...components, a: makeLink(sources, onCite) } : components), [sources, onCite])
   return (
     <div className="markdown">
       <ReactMarkdown remarkPlugins={remarkPlugins} rehypePlugins={streaming ? streamingPlugins : rehypePlugins} components={withSources} urlTransform={urlTransform}>
