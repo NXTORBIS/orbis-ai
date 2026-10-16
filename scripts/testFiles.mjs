@@ -59,6 +59,7 @@ export const TEST_FILES = [
   'src/main/browserSafety.test.ts',
   'src/main/research.test.ts',
   'src/main/adblock/adblock.test.ts',
+  'src/main/adblock/extensionFiles.test.ts',
   'src/helper/adblock/dnr.test.ts',
   'src/main/chromium/chromiumControl.test.ts',
   'src/main/chromium/capabilityCatalogue.test.ts',
