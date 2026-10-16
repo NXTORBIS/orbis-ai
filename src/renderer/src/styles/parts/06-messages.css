@@ -7,10 +7,11 @@
   overflow-y: auto;
 }
 
+/* The same column as the composer: see --chat-line-max in the composer part. */
 .messages-inner {
-  max-width: 900px;
+  max-width: calc(var(--chat-line-max) + var(--chat-inset) * 2);
   margin: 0 auto;
-  padding: 32px 24px 40px;
+  padding: 32px var(--chat-inset) 40px;
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -35,6 +36,8 @@
 }
 
 .msg {
+  /* The avatar (28px) plus this gap: how far a reply's name and time sit in from the edge of the column. */
+  --msg-indent: 40px;
   display: flex;
   align-items: flex-start;
   gap: 12px;
@@ -56,8 +59,19 @@
   align-items: flex-end;
 }
 
+/*
+ * A reply is exactly as wide as the composer below it.
+ *
+ * The avatar still sits in the margin beside the name and the time; the card itself is pulled back over that indent so
+ * its two edges line up with the box you type in. `--msg-indent` is the avatar plus the row's gap.
+ */
 .msg.assistant:not(.pending) > .msg-body {
-  width: min(820px, 100%);
+  width: 100%;
+  max-width: none;
+}
+
+.msg.assistant:not(.pending) > .msg-body > .msg-card {
+  margin-left: calc(-1 * var(--msg-indent));
 }
 
 .msg.assistant > .avatar {

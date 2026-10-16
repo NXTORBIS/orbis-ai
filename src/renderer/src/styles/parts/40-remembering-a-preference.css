@@ -1,0 +1,29 @@
+/* ======================================================================================================
+   REMEMBERING A PREFERENCE
+
+   The chip that appears when somebody states a standing way of working -- "always answer in short bullet
+   points", "call me Sam", "I use TypeScript and pnpm". It is the memory chip (`.memory-offer`, part 18)
+   with two things added: a tag saying this is a preference rather than a fact, and a worded "Not now"
+   instead of a bare cross, because turning a standing preference down is a sentence, not a dismissal.
+
+   Its own file with its own names, so nothing here can collide with the chip it sits inside.
+   ====================================================================================================== */
+
+.pref-offer-tag {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border: 1px solid var(--cyan-dim);
+  border-radius: 999px;
+  color: var(--cyan);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.memory-offer .pref-offer-no {
+  color: var(--faint);
+}
+
+.memory-offer .pref-offer-no:hover {
+  color: var(--text);
+}

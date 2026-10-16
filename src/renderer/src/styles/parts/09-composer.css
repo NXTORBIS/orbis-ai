@@ -1,5 +1,19 @@
 /* ================= Composer ================= */
 
+/*
+ * One line width for the conversation.
+ *
+ * The composer and the replies above it are the same column of text, so they are the same width, set here once.
+ * Both spend `--chat-inset` as padding on each side and then take what is left, up to `--chat-line-max`, which makes
+ * them the same width at every window size and for any value of the inset. A narrow window lowers the inset (see the
+ * 900px rule in the workflows part) and both follow it together.
+ */
+:root {
+  --chat-line-max: 950px;
+  /* The space outside that column on each side. The dock spends it as padding; the messages column does the same. */
+  --chat-inset: 32px;
+}
+
 .composer-dock {
   position: relative;
   z-index: 5;
@@ -9,7 +23,7 @@
   align-items: center;
   width: 100%;
   margin: 0 auto;
-  padding: 24px 16px 48px;
+  padding: 24px var(--chat-inset) 48px;
   gap: 12px;
   background: transparent;
 }
@@ -23,7 +37,7 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  width: min(950px, calc(100% - 32px));
+  width: min(var(--chat-line-max), 100%);
   max-width: 95vw;
   border: 1px solid var(--composer-border);
   border-radius: 50px;
@@ -615,7 +629,7 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  width: min(950px, calc(100% - 32px));
+  width: min(var(--chat-line-max), 100%);
   max-width: 95vw;
   padding: 8px 10px;
   border: 1px solid var(--pill-border);

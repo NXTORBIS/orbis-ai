@@ -538,9 +538,9 @@
     display: none;
   }
 
-  .messages-inner {
-    padding-left: 16px;
-    padding-right: 16px;
+  /* Narrower edges on a narrow window. The composer follows the same value, so the two stay the same width. */
+  :root {
+    --chat-inset: 16px;
   }
 
   .field-grid {

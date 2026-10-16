@@ -233,7 +233,8 @@
   left: 50%;
   transform: translate(-50%, -50%);
   width: 100%;
-  padding: 0 24px;
+  /* The edges come from --chat-inset so the box stays exactly as wide as the replies. */
+  padding: 0 var(--chat-inset);
 }
 
 /* Move to bottom when messages appear */
@@ -244,7 +245,7 @@
   left: auto;
   transform: none;
   gap: 4px;
-  padding: 6px 16px 8px;
+  padding: 6px var(--chat-inset) 8px;
 }
 
 .stage-content:not(:has(.empty-state)) .disclaimer {
