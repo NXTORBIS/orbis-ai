@@ -1,0 +1,96 @@
+/* Chess World's own screen. Everything starts cw- so no other stylesheet can reach it, or it this one. */
+.cw-view { container-type: inline-size; container-name: cw-screen; }
+
+.cw-body { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+
+.cw-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 10px 20px 0;
+  border-bottom: 1px solid var(--line);
+}
+.cw-tab {
+  padding: 7px 14px;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 10px 10px 0 0;
+  background: transparent;
+  color: var(--faint);
+  font: inherit;
+  cursor: pointer;
+}
+.cw-tab[aria-selected='true'] { color: var(--text); border-color: var(--line); background: color-mix(in srgb, var(--cyan) 10%, transparent); }
+.cw-tab:focus-visible { outline: 2px solid var(--cyan); outline-offset: -2px; }
+
+.cw-main {
+  display: flex;
+  gap: 20px;
+  flex: 1;
+  min-height: 0;
+  padding: 16px 20px;
+  overflow: auto;
+}
+.cw-boardside { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.cw-under { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cw-nav { display: flex; gap: 4px; }
+.cw-state { color: var(--faint); font-size: var(--text-sm, 13px); }
+
+.cw-panel { flex: 1; min-width: 260px; max-width: 420px; overflow-y: auto; }
+.cw-pane { display: flex; flex-direction: column; gap: 10px; }
+.cw-pane h3 { margin: 0; font-size: var(--text-md, 15px); }
+.cw-faint { margin: 0; color: var(--faint); font-size: var(--text-sm, 13px); line-height: 1.5; }
+.cw-engine { margin: 0; color: var(--text); font-size: var(--text-sm, 13px); }
+.cw-row { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.cw-moves {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 46vh;
+  overflow-y: auto;
+  font-family: var(--mono, monospace);
+  font-size: var(--text-sm, 13px);
+}
+.cw-moves li { display: flex; align-items: baseline; gap: 6px; }
+.cw-num { width: 32px; color: var(--faint); text-align: right; }
+.cw-move {
+  min-width: 56px;
+  padding: 2px 6px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cw-move:hover { border-color: var(--glass-border); }
+.cw-move.is-now { background: color-mix(in srgb, var(--cyan) 22%, transparent); border-color: var(--cyan); }
+
+.cw-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.cw-item {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cw-item small { color: var(--faint); font-size: var(--text-xs, 11px); }
+.cw-item:hover { border-color: var(--cyan); }
+.cw-item.is-open { border-color: var(--cyan); background: color-mix(in srgb, var(--cyan) 10%, transparent); }
+
+/* A narrow screen stacks the panel under the board rather than squeezing the board. */
+@container cw-screen (max-width: 880px) {
+  .cw-main { flex-direction: column; }
+  .cw-panel { max-width: none; }
+}

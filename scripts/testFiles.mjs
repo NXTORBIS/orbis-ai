@@ -166,12 +166,14 @@ export const TEST_FILES = [
   'src/main/personal/projects.test.ts',
   'src/main/conversationsProfile.test.ts',
   'src/main/researchPlan.test.ts',
-  'src/main/compress.test.ts',
   'src/main/security.test.ts',
   'src/main/pulsarModels.test.ts',
   'src/main/pulsar/modelManager.test.ts',
   'src/main/pulsar/runtime.test.ts',
   'src/main/longGeneration.test.ts',
+  'src/main/replyGuard.test.ts',
+  'src/shared/replyQuality.test.ts',
+  'src/shared/researchVerify.test.ts',
   'src/main/longGeneration-shared.test.ts',
   'src/main/helper.test.ts',
   'src/helper/appServices.test.ts',
@@ -187,6 +189,12 @@ export const TEST_FILES = [
   'src/main/context/engine.test.ts',
   'src/main/workflows/orion.test.ts',
   'src/shared/calculate.test.ts',
+  'src/shared/chess/rules.test.ts',
+  // The local chess engine: getting it onto the machine, and the whole conversation with it driven against a
+  // scripted engine process. They sit together because the second one cannot run until the first has decided what
+  // "installed" means.
+  'src/main/chess/install.test.ts',
+  'src/main/chess/engine.test.ts',
   'src/shared/commandCenter.test.ts',
   'src/shared/commandCenterDestinations.test.ts',
   // The Ask Orion screen in the browser panel, run against a stand-in for the page. Beside the two above because it

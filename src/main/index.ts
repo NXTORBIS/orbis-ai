@@ -34,6 +34,7 @@ import { IMAGE_GEN_STATUS } from '../shared/types'
 import { requestBodyFor, streamChat, testApiKey } from './nim'
 import { cannotDo, keyFor, modelFor, PROVIDERS, refusalKind } from '../shared/providers'
 import { generateWithContinuation } from './longGeneration.ts'
+import { createReplyGuard } from './replyGuard.ts'
 import { buildSystemPrompt } from './prompt'
 import { UpdateManager } from './update/manager'
 import { electronPlatform, imageSize } from './platformElectron'
@@ -95,7 +96,8 @@ import { SkillManager } from './skillManager'
 import { registerSkillsIpc } from './skills/ipc.ts'
 import { resolveModel } from '../shared/modelRoute'
 import { isKnownModel, modelLabel } from '../shared/models'
-import { planCompression, summarise, summaryBlock } from './compress'
+import { groqSummaryCall, heldSummary, holdSummary, prepareHistory } from './historySummaryRun'
+import { roomCharsFor } from '../shared/historySummary'
 import { parseSchedule, scheduleRequest } from '../shared/schedulePhrase'
 import { MemoryFull, MemoryRefused, MemoryStore } from './knowledge/memory'
 import { SearchSessionStore } from './knowledge/searchSessions'
@@ -355,6 +357,8 @@ import { registerPersonalIpc } from './personal/ipc'
 import { NeurovaStore } from './neurova/store'
 import { registerNeurovaIpc } from './neurova/ipc'
 import { probeMachine } from './neurova/machine'
+import { ChessStore } from './chess/store'
+import { registerChessIpc } from './chess/ipc'
 import { NeurovaEngine } from './neurova/engine'
 import { registerNeurovaIpc2 } from './neurova/ipc2'
 import { WorkspaceStore } from './neurova/workspace'
@@ -1888,41 +1892,113 @@ ${block}`
         const asked = messages.at(-1)
         if (asked) messages = [...messages.slice(0, -1), { ...asked, content: `${artifactContext}\n\n${asked.content.includes('Question: ') ? asked.content : `Question: ${asked.content}`}` }]
       }
-      // A long conversation: its older part goes to Orion as a short summary rather than being silently left out.
-      const compression = request.ask ? null : planCompression(messages)
-      if (compression) {
-        const summary = await summarise(compression.older, GROQ_API_KEYS, (url, init) => net.fetch(url, init)).catch(() => null)
+      /*
+       * A long conversation: its older part goes to Orion as a short summary rather than being silently left out.
+       *
+       * Whether one is needed is decided by size against the model actually answering, the summary is kept on disk
+       * beside the conversation, and it is EXTENDED with the turns that newly fell out of the window rather than
+       * written again every message. A failure of any kind leaves `messages` exactly as they were, so the sender's
+       * own trimming applies as it always did and nothing claims a summary that was never made.
+       */
+      if (!request.ask) {
+        // An incognito chat is not written to disk, so its summary is held in memory for as long as Orbis is open.
+        const keepId = request.conversationId && !request.incognito ? request.conversationId : null
+        const liveKey = !keepId && request.conversationId ? request.conversationId : null
+        const prepared = await prepareHistory({
+          messages,
+          systemChars: systemPrompt.length,
+          roomChars: roomCharsFor(request.model),
+          stored: keepId ? await store.getHistorySummary(keepId).catch(() => null) : liveKey ? heldSummary(liveKey) : null,
+          call: groqSummaryCall(GROQ_API_KEYS, (url, init) => net.fetch(url, init), controller.signal),
+          now: Date.now()
+        }).catch(() => null)
         if (controller.signal.aborted) return emit({ type: 'aborted' })
-        if (summary) {
-          systemPrompt = `${systemPrompt}
-
-${summaryBlock(summary)}`
-          messages = compression.recent
+        if (prepared?.summaryMessage) {
+          systemPrompt = `${systemPrompt}\n\n${prepared.summaryMessage}`
+          messages = prepared.messages
+          if (prepared.toStore) {
+            if (keepId) await store.saveHistorySummary(keepId, prepared.toStore).catch(() => undefined)
+            else if (liveKey) holdSummary(liveKey, prepared.toStore)
+          }
         }
       }
       // A message asking for something long — "write 10,000 words" — can take more than one call to a model that
       // stops well short of that on its own. generateWithContinuation notices only a real output-limit stop
       // (never a normal finish, a refusal or an error) and, when more was actually asked for, carries on
       // automatically: the person sees one continuous answer, never a prompt to say "continue".
-      await generateWithContinuation({
-        messages,
+      const runStream = (model: string, fallback: boolean) => (segmentMessages: ChatMessage[], segmentEmit: (e: StreamEvent) => void): Promise<void> =>
+        streamChat({
+          apiKeys: GROQ_API_KEYS,
+          // The other service's keys, used when the chosen model is one of theirs — which is every model that can see.
+          mistralKeys: MISTRAL_API_KEYS,
+          model,
+          messages: segmentMessages,
+          systemPrompt,
+          reasoningEffort: request.reasoningEffort ?? settings.reasoningEffort,
+          autoFallback: fallback && settings.autoFallback,
+          signal: controller.signal,
+          emit: segmentEmit,
+          fetchFn: (url, init) => net.fetch(url, init)
+        })
+      /*
+       * The checks after the answer: a weak reply is generated once more by a stronger model, and a research answer
+       * whose claims its sources do not carry is rewritten once. The answer itself still streams as it always did;
+       * only the closing `done` waits for the checks (see replyGuard.ts).
+       */
+      const attachmentsSeen = messages.flatMap((m) => m.attachments ?? [])
+      const guard = createReplyGuard({
         emit,
         signal: controller.signal,
-        runSegment: (segmentMessages, segmentEmit) =>
-          streamChat({
-            apiKeys: GROQ_API_KEYS,
-            // The other service's keys, used when the chosen model is one of theirs — which is every model that can see.
-            mistralKeys: MISTRAL_API_KEYS,
-            model: request.model,
-            messages: segmentMessages,
-            systemPrompt,
-            reasoningEffort: request.reasoningEffort ?? settings.reasoningEffort,
-            autoFallback: settings.autoFallback,
+        model: request.model,
+        question: lastIncoming?.content ?? '',
+        hasAttachments: attachmentsSeen.length > 0,
+        hasPageContext: Boolean(openPage) || artifactContext !== null || messages.some((m) => typeof m.content === 'string' && m.content.includes('Question: ')),
+        hasImages: attachmentsSeen.some((one) => one.type === 'image'),
+        roomNeeded: (lastIncoming?.content.length ?? 0) + attachmentsSeen.reduce((n, a) => n + (typeof a.content === 'string' ? a.content.length : 0), 0),
+        log: (line) => console.log('[chat] ' + line),
+        // One more full answer, collected quietly. Fallback is off so the retry cannot land back on the model that failed.
+        generateAgain: async (model) => {
+          let again = ''
+          let failed = false
+          await generateWithContinuation({
+            messages,
             signal: controller.signal,
-            emit: segmentEmit,
+            runSegment: runStream(model, false),
+            emit: (e) => {
+              if (e.type === 'delta' && typeof e.content === 'string') again += e.content
+              else if (e.type === 'error' || e.type === 'aborted') failed = true
+            }
+          })
+          return failed ? null : again
+        },
+        revise: async (model, prompt) => {
+          let out = ''
+          let failed = false
+          await streamChat({
+            apiKeys: GROQ_API_KEYS,
+            mistralKeys: MISTRAL_API_KEYS,
+            model,
+            messages: [{ id: 'verify-draft', role: 'user', content: prompt.user, createdAt: Date.now() }],
+            systemPrompt: prompt.system,
+            reasoningEffort: request.reasoningEffort ?? settings.reasoningEffort,
+            autoFallback: false,
+            signal: controller.signal,
+            emit: (e) => {
+              if (e.type === 'delta' && typeof e.content === 'string') out += e.content
+              else if (e.type === 'error' || e.type === 'aborted') failed = true
+            },
             fetchFn: (url, init) => net.fetch(url, init)
           })
+          return failed ? null : out
+        }
       })
+      await generateWithContinuation({
+        messages,
+        emit: guard.emit,
+        signal: controller.signal,
+        runSegment: runStream(request.model, true)
+      })
+      await guard.settle()
     } finally {
       activeRequests.delete(request.requestId)
     }
@@ -4243,11 +4319,12 @@ ${page.text}`, { howMany: 6 })
     const whiteboardStore = new WhiteboardStore(app.getPath('userData'))
     const workspacesStore = new WorkspacesStore(app.getPath('userData'))
     const neurovaStore = new NeurovaStore(app.getPath('userData'))
+    const chessStore = new ChessStore(app.getPath('userData'), 'default')
     const neurovaJobs = new JobStore(app.getPath('userData'), 'default')
     const neurovaWorkspaces = new WorkspaceStore(app.getPath('userData'))
     // Notes, tasks, whiteboards and workspaces belong to the profile in use, like its browsing and its workflows.
     personalForBrowser = { notes: notesStore, tasks: tasksStore }
-    const personalStores = [notesStore, tasksStore, whiteboardStore, workspacesStore, neurovaStore, neurovaJobs, neurovaWorkspaces]
+    const personalStores = [notesStore, tasksStore, whiteboardStore, workspacesStore, neurovaStore, neurovaJobs, neurovaWorkspaces, chessStore]
     const followProfile = (): Promise<void> =>
       profilesStore
         .active()
@@ -5329,6 +5406,19 @@ ${page.text}`, { howMany: 6 })
       }
     })
 
+    // One sender-checked wrapper for the channels registered here, so each one answers the Orbis window only.
+    const handle = plainHandle({ getWindow: liveWindow })
+
+    registerChessIpc({
+      store: chessStore,
+      // Stockfish is GPL and is not part of Orbis's own download; it is set up on demand, and until it is the
+      // screen says so rather than offering an opponent that cannot play.
+      engine: () => null,
+      getWindow: () => liveWindow(),
+      send: sendToWindow,
+      handle
+    })
+
     registerNeurovaIpc2({
       store: neurovaStore,
       workspaces: neurovaWorkspaces,
@@ -5538,6 +5628,7 @@ ${page.text}`, { howMany: 6 })
     quitFlush.add('your clipboard history', () => clipboardHistory.flush())
     quitFlush.add('your whiteboards', () => whiteboardStore.flush())
     quitFlush.add('your NEUROVA projects', () => neurovaStore.flush())
+    quitFlush.add('your chess games', () => chessStore.flush())
     quitFlush.add('your NEUROVA jobs', () => neurovaJobs.flush())
     quitFlush.add('the NEUROVA engine session', () => neurovaEngine.shutdown())
     quitFlush.add('your NEUROVA plans and decisions', () => neurovaWorkspaces.flush())
@@ -5561,7 +5652,7 @@ ${page.text}`, { howMany: 6 })
     startInBrowser = !embeddedBrowser && (await store.getSettings()).openBrowserOnLaunch === true
 
     // The Files screen asks this before it loads its frame: it answers when Files' services are really up.
-    ipcMain.handle('files-host:ready', async () => {
+    handle('files-host:ready', async () => {
       const slow = new Promise<'slow'>((resolve) => setTimeout(() => resolve('slow'), 45_000))
       try {
         const outcome = await Promise.race([filesReady().then(() => 'ready' as const), slow])

@@ -204,6 +204,7 @@ const BROWSER_LAYER = new Set([
   // The adapters between Orbis's services and however the application talks to its window. Rewritten as Mojo.
   'main/experience/ipc.ts',
   'main/personal/ipc.ts',
+  'main/chess/ipc.ts',
   'main/neurova/ipc.ts',
   'main/neurova/ipc2.ts',
   'main/workflows/ipc.ts',

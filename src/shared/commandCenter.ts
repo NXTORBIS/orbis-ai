@@ -211,6 +211,7 @@ export interface OrbisCapability {
  */
 export type AppFeature =
   | 'create'
+  | 'chess'
   | 'neurova'
   | 'pages'
   | 'labs'
@@ -288,6 +289,7 @@ export const CAPABILITIES: OrbisCapability[] = [
   // Create and Laboratories are screens the Orbis window has had all along and the registry had never heard of, so
   // nothing that reads the registry -- the browser's Command Centre, the window's own palette -- could offer
   // either of them. They open in the window, which is what `app` says and what `kind: 'app'` means.
+  { id: 'chess', name: 'Chess World', lane: 'keep', category: 'workspace', description: 'Play the engine, study your games, train, and follow live tournaments', icon: 'grip', keywords: ['chess', 'chessboard', 'stockfish', 'pgn', 'opening', 'endgame', 'puzzle', 'tactics', 'game', 'board', 'play'], target: { kind: 'app' }, app: 'chess', pinnable: false, needs: [] },
   { id: 'neurova', name: 'NEUROVA', lane: 'keep', category: 'workspace', description: 'Song projects: keep versions of your audio, check it, and export it', icon: 'quote', keywords: ['neurova', 'song', 'music', 'project', 'version', 'audio', 'wav', 'export', 'compose'], target: { kind: 'app' }, app: 'neurova', pinnable: false, needs: [] },
   { id: 'create', name: 'Create', lane: 'keep', category: 'workspace', description: 'Tables and documents, kept and saved as real files', icon: 'edit', keywords: ['create', 'make', 'new', 'document', 'table', 'sheet', 'spreadsheet', 'write', 'file'], target: { kind: 'app' }, app: 'create', pinnable: false, needs: [] },
   { id: 'labs', name: 'Laboratories', lane: 'keep', category: 'tools', description: 'Every laboratory Orbis has, by subject', icon: 'calculator', keywords: ['lab', 'laboratory', 'physics', 'chemistry', 'experiment', 'simulate', 'science', 'computing'], target: { kind: 'app' }, app: 'labs', pinnable: false, needs: [] },

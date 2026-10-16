@@ -313,7 +313,9 @@ describe('the audit against what is actually on disk', () => {
   ]
 
   /** Not a store of the user's: a folder Orbis reads from or stages into, which has nothing to carry. */
-  const NOT_A_STORE: Readonly<Record<string, string>> = Object.freeze({})
+  const NOT_A_STORE: Readonly<Record<string, string>> = Object.freeze({
+    chess: 'where the downloaded chess engine and its licence live. It is a program, not the person\'s work, and a\n      profile taken to another computer fetches it again rather than carrying it.'
+  })
 
   test('every store the code writes is in the table', async () => {
     const { profile, app } = await storesInCode()

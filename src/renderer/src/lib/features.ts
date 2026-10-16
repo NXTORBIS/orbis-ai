@@ -1,4 +1,4 @@
-import { Music2, CandlestickChart, ClipboardList, FilePlus2, FlaskConical, BookMarked, GraduationCap, LayoutGrid, LayoutTemplate, Mic, PenTool, CalendarClock, Wrench, Globe2, Orbit, Flag, Swords, Trophy, type LucideIcon } from 'lucide-react'
+import { Crown, Music2, CandlestickChart, ClipboardList, FilePlus2, FlaskConical, BookMarked, GraduationCap, LayoutGrid, LayoutTemplate, Mic, PenTool, CalendarClock, Wrench, Globe2, Orbit, Flag, Swords, Trophy, type LucideIcon } from 'lucide-react'
 import { CAPABILITIES, CATEGORIES, type AppFeature, type OrbisCapability } from '../../../shared/commandCenter'
 
 /**
@@ -20,6 +20,7 @@ import { CAPABILITIES, CATEGORIES, type AppFeature, type OrbisCapability } from 
  */
 
 const ICONS: Readonly<Record<AppFeature, LucideIcon>> = Object.freeze({
+  chess: Crown,
   create: FilePlus2,
   neurova: Music2,
   pages: LayoutTemplate,

@@ -144,7 +144,18 @@ export interface NeurovaWorkspace {
   exports: { at: number; versionId: string; path: string; format: string }[]
   originalLyrics: string | null
 }
+import type { StoredGame as ChessStoredGame } from './chess/model'
 import type { Workspace, WorkspaceSummary } from './workspaces'
+
+/** What came of bringing a PGN file in: every game accounted for, including the ones that could not be read. */
+export interface ChessImportSummary {
+  imported: number
+  skippedDuplicates: number
+  failed: { index: number; reason: string; white?: string; black?: string }[]
+  warnings: string[]
+  ids: string[]
+}
+export type { ChessStoredGame }
 import type { Profile } from './profiles'
 import type { ConfigChange, ExperienceConfig, ExperienceExport, ExperienceHealth, ImportCheck } from './experience'
 import type { ArtifactRef } from './artifacts/model'
@@ -663,6 +674,12 @@ export type StreamEvent =
    * then failed to start.
    */
   | { type: 'app'; app: ChatNativeApp }
+  /**
+   * The finished reply is swapped for a better one, sent just before `done`. Either a weak reply was generated again
+   * by a stronger model (`retried`) or a research answer was rewritten to match its sources. The text replaces the
+   * whole answer; `model` is the one that wrote it, when that changed.
+   */
+  | { type: 'replace'; content: string; model?: string; retried?: boolean }
 
 export interface PickedFiles {
   attachments: Attachment[]
@@ -1025,7 +1042,8 @@ export interface NxtorbisApi {
   onSkillsChanged(listener: () => void): () => void
   /** Memory for the profile in use: only what the person asked Orbis to remember, kept on this computer. */
   listMemories(options?: { query?: string; includeArchived?: boolean; category?: MemoryCategory }): Promise<MemoryEntry[]>
-  addMemory(text: string, options?: { category?: MemoryCategory; pinned?: boolean }): Promise<MemoryEntry>
+  /** `fromSuggestion` marks one the person approved from a chip in the chat rather than typing into Settings. */
+  addMemory(text: string, options?: { category?: MemoryCategory; pinned?: boolean; fromSuggestion?: boolean }): Promise<MemoryEntry>
   updateMemory(id: string, patch: { text?: string; category?: MemoryCategory; pinned?: boolean; archived?: boolean }): Promise<MemoryEntry>
   removeMemory(id: string): Promise<boolean>
   clearMemories(): Promise<number>
@@ -2310,6 +2328,21 @@ export interface NxtorbisApi {
   neurovaCancelJob(id: string): Promise<boolean>
   onNeurovaJobs(listener: () => void): () => void
   onNeurovaInstall(listener: () => void): () => void
+  chessGames(): Promise<ChessStoredGame[]>
+  chessGame(id: string): Promise<ChessStoredGame | null>
+  chessSearch(query: string): Promise<ChessStoredGame[]>
+  chessCreate(input: { source?: unknown; startFen?: string; meta?: Record<string, unknown>; variant?: string }): Promise<ChessStoredGame>
+  chessSaveMoves(id: string, moves: unknown[], meta?: Record<string, unknown>): Promise<ChessStoredGame>
+  chessUpdate(id: string, patch: { meta?: Record<string, unknown>; tags?: string[]; favourite?: boolean }): Promise<ChessStoredGame | null>
+  chessRemove(id: string): Promise<boolean>
+  chessImportPgn(): Promise<ChessImportSummary | null>
+  chessImportPgnText(text: string, name?: string): Promise<ChessImportSummary>
+  chessExportPgn(ids: string[]): Promise<string | null>
+  chessToPgn(id: string): Promise<string | null>
+  chessEngineStatus(): Promise<{ state: string; detail: string; name?: string; version?: string }>
+  chessEngineInstall(): Promise<boolean>
+  chessAnalyse(request: { id: string; fen: string; multipv?: number; movetime?: number; depth?: number; nodes?: number }): Promise<string>
+  chessStopAnalysis(id?: string): Promise<boolean>
   neurovaWorkspace(id: string): Promise<NeurovaWorkspace>
   neurovaPlanPropose(id: string): Promise<NeurovaWorkspace>
   neurovaPlanEdit(id: string, e: unknown): Promise<{ workspace: NeurovaWorkspace; reason: string | null }>

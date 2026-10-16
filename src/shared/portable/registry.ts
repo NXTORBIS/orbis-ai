@@ -248,6 +248,21 @@ export const CATEGORIES: readonly PortableCategory[] = Object.freeze([
     mergeable: true
   }),
   category({
+    id: 'chess',
+    label: 'Chess games',
+    describe: 'Games played against the engine, games brought in from files, and what you wrote about them.',
+    portability: 'portable',
+    sensitivity: 'personal',
+    storage: ['personal/chess-games.json'],
+    scope: 'profile',
+    schemaVersion: 1,
+    dependsOn: [],
+    requiresReauthentication: false,
+    userAction: null,
+    why: null,
+    mergeable: true
+  }),
+  category({
     id: 'neurova',
     label: 'NEUROVA projects',
     describe: 'Song projects, their briefs, lyrics and version history. Audio travels in a project package.',

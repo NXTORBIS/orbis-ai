@@ -33,6 +33,7 @@ import { watchingGroup } from '../../shared/watching'
 const MarketsView = lazy(() => import('./components/MarketsView'))
 const PulsarSetup = lazy(() => import('./components/PulsarSetup'))
 const WhiteboardView = lazy(() => import('./components/WhiteboardView'))
+const ChessView = lazy(() => import('./components/chess/ChessView'))
 const NeurovaView = lazy(() => import('./components/NeurovaView'))
 const StudentView = lazy(() => import('./components/student/StudentView'))
 const PagesView = lazy(() => import('./components/PagesView'))
@@ -1106,6 +1107,7 @@ export default function App(): React.JSX.Element {
               {feature === 'pages' && <PagesView onClose={closeFeature} onNotify={notify} landOn={scheduledPage} />}
               {feature === 'markets' && <MarketsView onClose={closeFeature} onNotify={notify} />}
               {feature === 'whiteboard' && <WhiteboardView onClose={closeFeature} onNotify={notify} />}
+              {feature === 'chess' && <ChessView onClose={closeFeature} onNotify={notify} />}
               {feature === 'neurova' && <NeurovaView onClose={closeFeature} onNotify={notify} />}
               {/*
                 * Orbis Student.
