@@ -23,7 +23,8 @@ const MAP = join(ROOT, '..', 'docs', 'ipc-mapping.md')
 // 580 -> 590: NEUROVA engine install and generation (runtime, models, generate, jobs, cancel).
 // 590 -> 615: NEUROVA plan, feedback, approvals, deep analysis, ranking, search, revisions, memory, Music/Files and backup.
 // 616 -> 618: the local image engine's status and install channels (imagegen:status, imagegen:install).
-const CEILING = 618
+// 618 -> 619: files-host:ready, so the Files screen waits for its services instead of racing them.
+const CEILING = 619
 
 async function* typescriptFiles(dir: string): AsyncGenerator<string> {
   for (const entry of await readdir(dir, { withFileTypes: true })) {

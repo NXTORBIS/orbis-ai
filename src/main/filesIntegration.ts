@@ -27,7 +27,29 @@ export interface FilesIntegrationOptions {
   appVersion: string
 }
 
+let settleReady: { resolve(): void; reject(e: unknown): void } | null = null
+const readyPromise = new Promise<void>((resolve, reject) => { settleReady = { resolve, reject } })
+// A rejection nobody is waiting on yet must not become an unhandled-rejection report.
+readyPromise.catch(() => undefined)
+
+/**
+ * Settles when Files' services are up and its handlers are registered, or rejects with why they could not start.
+ * The Files screen waits on this before it loads, so it never asks for something that is not registered yet.
+ */
+export function filesReady(): Promise<void> { return readyPromise }
+
 export async function initFilesIntegration(opts: FilesIntegrationOptions): Promise<Services> {
+  try {
+    const services = await startFilesIntegration(opts)
+    settleReady?.resolve()
+    return services
+  } catch (err) {
+    settleReady?.reject(err)
+    throw err
+  }
+}
+
+async function startFilesIntegration(opts: FilesIntegrationOptions): Promise<Services> {
   const filesDir = path.join(opts.profileDir, 'files')
   const wasmDir = path.join(app.isPackaged ? process.resourcesPath : path.resolve('dist'), 'files', 'wasm')
   const logDir = path.join(filesDir, 'log')

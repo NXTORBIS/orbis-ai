@@ -11,7 +11,7 @@ import { registerEyeIpc } from './eye/ipc'
 import { registerCosmosIpc } from './cosmos/ipc'
 import { registerF1Ipc } from './f1/ipc'
 import { registerFootballIpc } from './football/ipc'
-import { getFilesServices, initFilesIntegration, registerFilesProtocols, registerGeneratedImage, syncBrowserDownloads } from './filesIntegration'
+import { filesReady, getFilesServices, initFilesIntegration, registerFilesProtocols, registerGeneratedImage, syncBrowserDownloads } from './filesIntegration'
 import { diskCheck, fileCheck, headline, sortChecks, type DoctorCheck } from '../shared/doctor'
 import { randomUUID } from 'node:crypto'
 import { basename, dirname, join } from 'node:path'
@@ -5559,6 +5559,17 @@ ${page.text}`, { howMany: 6 })
      * answered in the renderer there, exactly as before.
      */
     startInBrowser = !embeddedBrowser && (await store.getSettings()).openBrowserOnLaunch === true
+
+    // The Files screen asks this before it loads its frame: it answers when Files' services are really up.
+    ipcMain.handle('files-host:ready', async () => {
+      const slow = new Promise<'slow'>((resolve) => setTimeout(() => resolve('slow'), 45_000))
+      try {
+        const outcome = await Promise.race([filesReady().then(() => 'ready' as const), slow])
+        return outcome === 'ready' ? { ok: true } : { ok: false, why: 'Files is taking longer than expected to start.' }
+      } catch (err) {
+        return { ok: false, why: err instanceof Error ? err.message : 'Files could not start.' }
+      }
+    })
 
     mainWindow = openWindow()
 

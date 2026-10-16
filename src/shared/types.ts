@@ -887,6 +887,7 @@ export interface NxtorbisApi {
   jarvisInvoke(name: string, payload?: unknown): Promise<unknown>
   /** Starts OrbisEye's local server if it is not running, and says where it is. */
   eyeStart(): Promise<unknown>
+  filesHostReady(): Promise<{ ok: boolean; why?: string }>
   /** F1 (Orbis Arena): the calendar of a season, from Jolpica-F1. */
   f1Schedule(season: number | 'current'): Promise<unknown>
   /** F1: one race's classification ('last' = the most recent). */

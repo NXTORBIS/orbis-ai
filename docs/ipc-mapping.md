@@ -352,6 +352,7 @@ read the code instead, and the answer carries `origin: 'predicted'` so a guess c
 | `cosmos:start` | Starts ORBIS COSMOS (the Gaia Sky simulation) as a Java child process if it is not running, and answers its progress so far, read from the program's own log. Mojo, same service |
 | `cosmos:stop` | Stops the simulation process and gives its memory back. Mojo, same service |
 | `cosmos:region` | One-way: where the simulation's window goes inside the Orbis window (or that it is hidden). Mojo, same service |
+| `files-host:ready` | Answers when Orbis Files' services are up and its handlers registered (or why they could not start, or that they are slow after 45 seconds), so the Files screen loads only once it can be answered. Mojo, same service |
 | `eye:start` | Starts OrbisEye's own local server (once, on a free loopback port, as a child process) and answers its address, or why it could not start. Mojo, same service |
 | `jarvis:invoke` | The few lookups Toolkit tools make (response headers, a domain's registration, exchange rates, a video's details, a key check, PDF editing), by name from a fixed list; the same code the tools' original backend ran, now in this process. Mojo, same service |
 | `chance:store` | Orbis Chance's saved work for the active profile. One channel, two operations (`load`, `save`): the whole document is read once when Chance opens and written back after changes. Mojo, same service |

@@ -13,6 +13,7 @@ const api: NxtorbisApi = {
   chanceStore: (operation, document) => ipcRenderer.invoke('chance:store', operation, document),
   jarvisInvoke: (name, payload) => ipcRenderer.invoke('jarvis:invoke', name, payload),
   eyeStart: () => ipcRenderer.invoke('eye:start'),
+  filesHostReady: () => ipcRenderer.invoke('files-host:ready'),
   footballLeagues: () => ipcRenderer.invoke('football:leagues'),
   footballLive: () => ipcRenderer.invoke('football:live'),
   footballSeason: (league, season) => ipcRenderer.invoke('football:season', league, season),
