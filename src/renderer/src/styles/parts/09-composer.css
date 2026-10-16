@@ -8,7 +8,8 @@
  * them the same width at every window size and for any value of the inset. A narrow window lowers the inset (see the
  * 900px rule in the workflows part) and both follow it together.
  */
-:root {
+/* Set on the stage rather than :root: the palette is generated, and this hand-written sheet keeps no :root block. */
+.stage-content {
   --chat-line-max: 950px;
   /* The space outside that column on each side. The dock spends it as padding; the messages column does the same. */
   --chat-inset: 32px;

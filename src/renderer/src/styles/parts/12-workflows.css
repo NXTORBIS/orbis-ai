@@ -539,7 +539,7 @@
   }
 
   /* Narrower edges on a narrow window. The composer follows the same value, so the two stay the same width. */
-  :root {
+  .stage-content {
     --chat-inset: 16px;
   }
 
