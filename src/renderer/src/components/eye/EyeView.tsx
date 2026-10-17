@@ -1,4 +1,4 @@
-import { ArrowLeft, Globe2, RefreshCw } from 'lucide-react'
+import { ArrowLeft, Globe2 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import './eye.css'
 
@@ -60,7 +60,7 @@ export default function EyeView({ onClose }: Props): React.JSX.Element {
           <p>OrbisEye could not start.</p>
           <small>{phase.why}</small>
           <button type="button" className="files-back" onClick={start}>
-            <RefreshCw size={15} /> Try again
+            Try again
           </button>
         </div>
       )}
