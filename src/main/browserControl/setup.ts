@@ -17,8 +17,18 @@ import type { AppCapabilityDeps } from './appCapabilities.ts'
 import { registerUiCapabilities } from './uiCapabilities.ts'
 import { registerCaptchaCapabilities } from './captchaCapabilities.ts'
 import { registerFeedCapabilities } from './feedCapabilities.ts'
+import { registerSurfaceCapabilities } from './surfaceCapabilities.ts'
 
-export type BrowserControlDeps = Omit<AppCapabilityDeps, 'control' | 'windowControl'>
+export type BrowserControlDeps = Omit<AppCapabilityDeps, 'control' | 'windowControl'> & {
+  /**
+   * Why a screen is not in this person's menu, in words, or null when it is.
+   *
+   * Handed in rather than read here, because which features somebody sees is a per-profile file that
+   * `src/main/features/store.ts` owns, and a second reader of it would be a second answer to a question that
+   * already has one. Optional: without it a hidden screen is reported the way it always was rather than wrongly.
+   */
+  featureHidden?(path: string): Promise<string | null>
+}
 
 const LOG_LIMIT = 5 * 1024 * 1024
 
@@ -62,6 +72,26 @@ export function setupBrowserControl(deps: BrowserControlDeps): { control: Browse
   registerFeedCapabilities(control, { tab: (ctx) => noBrowser(ctx) })
   registerAppCapabilities({ ...deps, control, windowControl })
   registerUiCapabilities(control, deps.getWindow)
+  /*
+   * Inside the window's own screens.
+   *
+   * `registerUiCapabilities` above operates the window the way a person does -- find a control by what it is called,
+   * click it, read what it says. That works anywhere and knows nothing: it cannot tell a slider's range, it cannot
+   * tell whether setting something worked, and it has no idea what is inside a panel that is not open. These six ask
+   * the screens themselves instead, so what comes back is declared rather than guessed at. Both are registered: the
+   * screens that have said what they can do are reached this way, and everything else is still reachable the blind
+   * way.
+   */
+  registerSurfaceCapabilities(control, {
+    ask: (call, params, ctx) => windowControl.ask(call, params, ctx),
+    open: () => {
+      const win = deps.getWindow()
+      return Boolean(win && !win.isDestroyed())
+    },
+    // So "open Markets" with Markets switched off is answered as switched off -- with the way to turn it on --
+    // rather than as a screen Orbis cannot find.
+    hidden: deps.featureHidden ? (path) => deps.featureHidden!(path) : undefined
+  })
 
   const fromWindow = (event: IpcMainEvent | IpcMainInvokeEvent): boolean => {
     const win: BrowserWindow | null = deps.getWindow()

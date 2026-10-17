@@ -181,7 +181,19 @@ export class WindowControl {
     this.scopes.set(scope, ids)
   }
 
-  private invoke(capability: string, params: Record<string, unknown>, ctx: ControlContext): Promise<WindowRunResult> {
+  /**
+   * Asks the window something that is not a capability of its own.
+   *
+   * The screens bridge: the capabilities that reach inside the window's own screens are registered in the main
+   * process (`surfaceCapabilities.ts`) and carried out in the window, which is the same shape as everything below --
+   * so it goes down the same channel, with the same call bookkeeping, the same deadline and the same answer to being
+   * stopped. A second route to the window would be a second thing to get right.
+   */
+  ask(call: string, params: Record<string, unknown>, ctx: Pick<ControlContext, 'source' | 'target' | 'signal'>): Promise<WindowRunResult> {
+    return this.invoke(call, params, ctx)
+  }
+
+  private invoke(capability: string, params: Record<string, unknown>, ctx: Pick<ControlContext, 'source' | 'target' | 'signal'>): Promise<WindowRunResult> {
     return new Promise((resolve) => {
       const callId = crypto.randomUUID()
       const finish = (result: WindowRunResult): void => {

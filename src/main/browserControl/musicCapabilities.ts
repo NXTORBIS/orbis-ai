@@ -3,6 +3,9 @@ import { fail } from './registry.ts'
 import type { ParamSpec } from '../../shared/browserControl.ts'
 import type { MusicHandle } from '../music/service.ts'
 import { playableOffline, whyNotPlayable, type OrbisTrack } from '../../shared/music.ts'
+import { DEFAULT_MUSIC_SETTINGS, MUSIC_SETTING_VALUES, type MusicSettings } from '../music/store.ts'
+import { MODE_SHAPE } from '../../shared/music/intent.ts'
+import { DISCOVERY_LEVELS } from '../../shared/music/config.ts'
 
 /**
  * What Orion, the Orb, a workflow or a spoken command may do about music.
@@ -23,11 +26,70 @@ import { playableOffline, whyNotPlayable, type OrbisTrack } from '../../shared/m
  *
  * **Every action is checked afterwards.** `verify` asks the player what actually happened, so Orion cannot report a
  * pause that did not take -- which matters most for the one case that really can refuse, a track with no audio.
+ *
+ * ## Why this is Music's whole controllable surface
+ *
+ * Orbis's other modules are now reachable down to a parameter through the `screens` protocol
+ * (`docs/orbis-control.md`), where a screen in the Orbis window declares what can be read, set and done on it. Music
+ * has no screen in that window: its one screen is the browser's own panel, a different document in a different
+ * program. A surface registered here would describe nothing that is on screen, and every setter on it would be a
+ * second code path beside the one the panel's own controls use.
+ *
+ * So Music goes as deep through its own domain instead, and keeps the same rules the protocol enforces. What makes
+ * that possible is that nothing below describes a parameter twice: the preferences, their types and their allowed
+ * values come from the music store's own `DEFAULT_MUSIC_SETTINGS` and `MUSIC_SETTING_VALUES`, and the listening modes
+ * and discovery levels from the ranker's own `MODE_SHAPE` and `DISCOVERY_LEVELS`. Something added to those is
+ * something Orion can use with no edit here.
+ *
+ * And one habit of the service to keep in mind: **it does not check what it is given.** An unrecognised repeat mode
+ * quietly becomes `off`, an unrecognised listening mode goes to the ranker anyway, and a queue position it cannot use
+ * is ignored with nothing said. Every refusal below is here because of that.
  */
 
 const str = (description: string, required = false): ParamSpec => ({ type: 'string', description, required })
 const num = (description: string, required = false, range?: { min?: number; max?: number }): ParamSpec => ({ type: 'number', description, required, ...range })
 const bool = (description: string, required = false): ParamSpec => ({ type: 'boolean', description, required })
+
+/** What kind of value a music preference holds, and whether it can be set from here at all. */
+interface SettingKind {
+  type: 'boolean' | 'number' | 'string'
+  values?: readonly string[]
+  min?: number
+  max?: number
+  /** True, or the sentence saying what would have to change first. */
+  settable: true | string
+}
+/**
+ * Reading a preference's value out of what was asked, against the kind the music store gives it.
+ *
+ * Everything arrives as text from a spoken or written request, and a switch set to the word "maybe" has to be refused
+ * with the two words it takes rather than becoming false -- being told "done" about a preference nobody asked for is
+ * the fault this avoids.
+ */
+const readValue = (
+  kind: { type: 'boolean' | 'number' | 'string'; values?: readonly string[]; min?: number; max?: number },
+  given: unknown
+): { ok: true; value: unknown } | { ok: false; why: string } => {
+  if (kind.type === 'boolean') {
+    if (typeof given === 'boolean') return { ok: true, value: given }
+    const word = String(given ?? '').trim().toLowerCase()
+    if (['true', 'on', 'yes'].includes(word)) return { ok: true, value: true }
+    if (['false', 'off', 'no'].includes(word)) return { ok: true, value: false }
+    return { ok: false, why: `This one is a switch: it takes true or false. "${String(given).slice(0, 40)}" was given.` }
+  }
+  if (kind.type === 'number') {
+    const value = typeof given === 'number' ? given : Number(String(given ?? '').trim())
+    if (!Number.isFinite(value)) return { ok: false, why: `This one is a number from ${kind.min ?? 0} to ${kind.max ?? 1}. "${String(given).slice(0, 40)}" was given.` }
+    // Refused with the range rather than clamped: 400 silently becoming 1 is an automation told it got what it asked for.
+    if (value < (kind.min ?? 0) || value > (kind.max ?? 1)) return { ok: false, why: `This one goes from ${kind.min ?? 0} to ${kind.max ?? 1}. ${value} is outside that.` }
+    return { ok: true, value }
+  }
+  const word = String(given ?? '').trim().toLowerCase()
+  if (kind.values && !kind.values.includes(word)) {
+    return { ok: false, why: `This one takes one of: ${kind.values.join(', ')}. "${String(given).slice(0, 40)}" was given.` }
+  }
+  return { ok: true, value: word }
+}
 
 /** A track as Orion is shown it: the names, how long, whether it can actually be played, and nothing about the disk. */
 const forOrion = (track: OrbisTrack): Record<string, unknown> => ({
@@ -323,6 +385,58 @@ export function registerMusicCapabilities(o: { control: BrowserControl; music: (
     }
   })
 
+  /*
+   * Shuffle and repeat: read by `music.current` since the beginning, and settable by nothing.
+   *
+   * The gap was real rather than cosmetic. "What is playing?" answered with `shuffle` and `repeat` in it, so anything
+   * reading that answer could see them -- and there was no capability that could change either, which means a spoken
+   * "shuffle my music" had no way through at all. Both go through `handle.ask`, the one operation runner the window
+   * and the browser's own panel both use, so this is the same door rather than a second one.
+   */
+  o.control.register({
+    ...common,
+    id: 'music.shuffle',
+    name: 'Shuffle the music',
+    description: 'Turns shuffling on or off for Orbis Music. Shuffling changes the order the queue is played in; it never changes what is in the queue.',
+    params: { on: bool('True to shuffle, false to play in order.', true) },
+    mutates: true,
+    effects: ['execute'],
+    confirmation: 'none',
+    run: async (p) => {
+      await music().ask('shuffle', p.on === true)
+      return { shuffle: p.on === true }
+    },
+    verify: async (_data, p) => {
+      const state = await music().snapshot()
+      const wanted = (p as { on?: boolean }).on === true
+      return { verified: state.playback.shuffle === wanted, detail: state.playback.shuffle ? 'Shuffling is on.' : 'Shuffling is off.' }
+    }
+  })
+
+  o.control.register({
+    ...common,
+    id: 'music.repeat',
+    name: 'Repeat the music',
+    description: 'Sets what happens at the end: off stops, all starts the queue again, one plays the same track over.',
+    params: { mode: str('off, all, or one.', true) },
+    mutates: true,
+    effects: ['execute'],
+    confirmation: 'none',
+    run: async (p) => {
+      const mode = String(p.mode ?? '').trim().toLowerCase()
+      // Refused with the three words rather than quietly becoming "off", which is what the operation runner does with
+      // anything it does not recognise -- and being told "done" about a mode nobody asked for is the worse answer.
+      if (!['off', 'all', 'one'].includes(mode)) fail('invalid-params', `"mode" must be one of: off, all, one. "${String(p.mode).slice(0, 40)}" was given.`, true)
+      await music().ask('repeat', mode)
+      return { repeat: mode }
+    },
+    verify: async (_data, p) => {
+      const state = await music().snapshot()
+      const wanted = String((p as { mode?: string }).mode ?? '').trim().toLowerCase()
+      return { verified: state.playback.repeat === wanted, detail: `Repeat is ${state.playback.repeat}.` }
+    }
+  })
+
   o.control.register({
     ...common,
     id: 'music.queue',
@@ -428,6 +542,457 @@ export function registerMusicCapabilities(o: { control: BrowserControl; music: (
       if (!answer?.kept || !answer.track?.id) return { verified: false, detail: 'Nothing was added.' }
       const track = await music().store.track(String(answer.track.id))
       return { verified: Boolean(track), detail: track ? `"${track.title}" is in your music.` : 'It is not in the library.' }
+    }
+  })
+  // ---------------------------------------------------------------- stopping, and the queue itself
+
+  o.control.register({
+    ...common,
+    id: 'music.stop',
+    name: 'Stop the music',
+    description: 'Stops Orbis Music and lets go of the track. Different from pausing: pausing keeps the place, this does not.',
+    params: {},
+    mutates: true,
+    effects: ['execute'],
+    confirmation: 'none',
+    already: async () => {
+      const state = await music().snapshot()
+      // Stopping what is already stopped is harmless, but reported as done it hides that nothing was playing.
+      return state.playback.owner === 'orbis-music' && state.playback.trackId ? null : 'Orbis Music is not playing anything.'
+    },
+    run: async () => {
+      await music().ask('stop')
+      return { stopped: true }
+    },
+    verify: async () => {
+      const state = await music().snapshot()
+      const quiet = !state.playback.playing && !state.playback.trackId
+      return { verified: quiet, detail: quiet ? 'Orbis Music has stopped.' : 'Something is still playing.' }
+    }
+  })
+
+  o.control.register({
+    ...common,
+    id: 'music.queueChange',
+    name: 'Change the queue',
+    description:
+      'Takes a track out of the queue, moves one up or down it, or empties it. Positions are counted from 1, as they are on screen. Emptying the queue never stops what is playing and never touches the library.',
+    params: {
+      what: { type: 'string', description: 'remove, move, or clear.', required: true, enum: ['remove', 'move', 'clear'] },
+      position: num('Which one, counting from 1. Needed for remove and move.', false, { min: 1 }),
+      to: num('Where it should end up, counting from 1. Needed for move.', false, { min: 1 })
+    },
+    mutates: true,
+    effects: ['execute'],
+    confirmation: 'none',
+    // The length before, so afterwards there is something real to compare with rather than a guess at what happened.
+    observe: async () => (await music().snapshot()).queue.length,
+    run: async (p, _ctx, before) => {
+      const handle = music()
+      const what = String(p.what)
+      if (what === 'clear') {
+        if (before === 0) return { what, emptied: 0 }
+        await handle.ask('queue-clear')
+        return { what, emptied: before }
+      }
+      const position = Number(p.position)
+      if (!Number.isInteger(position) || position < 1) fail('invalid-params', '"position" is which one in the queue, counting from 1.', true)
+      /*
+       * Refused with the real length rather than quietly doing nothing.
+       *
+       * The runner below takes an index and ignores one it cannot use, so without this a request for the eleventh of
+       * three would come back having done nothing at all and be reported as a queue that was changed.
+       */
+      if (position > before) {
+        fail('invalid-params', before === 0 ? 'There is nothing in the queue.' : `The queue has ${before} in it, so there is no number ${position}.`, true)
+      }
+      if (what === 'remove') {
+        await handle.ask('queue-remove', position - 1)
+        return { what, position, wasInQueue: before }
+      }
+      const to = Number(p.to)
+      if (!Number.isInteger(to) || to < 1 || to > before) {
+        fail('invalid-params', `"to" is where it should end up, from 1 to ${before}.`, true)
+      }
+      await handle.ask('queue-reorder', position - 1, to - 1)
+      return { what, position, to, wasInQueue: before }
+    },
+    verify: async (data, _p, _ctx, before) => {
+      const answer = data as { what?: string }
+      const now = (await music().snapshot()).queue.length
+      if (answer.what === 'clear') return { verified: now === 0, detail: now === 0 ? 'The queue is empty.' : `${now} are still in the queue.` }
+      if (answer.what === 'remove') {
+        return { verified: now === before - 1, detail: now === before - 1 ? `${now} left in the queue.` : `The queue still has ${now} in it.` }
+      }
+      // A move changes the order, not the count -- which is all the queue's own reading can confirm from here.
+      return { verified: now === before, detail: `${now} in the queue, in a different order.` }
+    }
+  })
+
+  // ---------------------------------------------------------------- playlists
+
+  o.control.register({
+    ...common,
+    id: 'music.playlist',
+    name: 'Make and change playlists',
+    description:
+      'Makes a playlist, renames one, puts tracks in or takes them out, or deletes one. Deleting a playlist never deletes the songs in it -- a playlist holds references, not copies -- and that is said when it is deleted.',
+    keywords: ['playlist', 'collection', 'mix', 'rename', 'delete'],
+    params: {
+      what: { type: 'string', description: 'create, rename, add, remove, or delete.', required: true, enum: ['create', 'rename', 'add', 'remove', 'delete'] },
+      playlist: str('Which playlist, by name or id. Needed for everything but create.'),
+      name: str('The name. Needed for create and rename.'),
+      query: str('Words finding the tracks to put in or take out.')
+    },
+    mutates: true,
+    /*
+     * A delete declared as a delete.
+     *
+     * `effects` is what the policy and the approval prompt read, and this capability can delete, so it declares it for
+     * every call rather than being the quiet one. Which call is actually consequential is decided in `assess` below,
+     * so renaming a playlist does not ask the person about a deletion.
+     */
+    effects: ['write', 'delete'],
+    confirmation: 'when-consequential',
+    assess: (p) =>
+      String(p.what) === 'delete'
+        ? { decision: 'confirm' as const, reason: 'Deleting a playlist cannot be undone from here. The songs in it stay in your music.' }
+        : { decision: 'run' as const, reason: 'This changes a playlist, and deletes nothing.' },
+    describe: (p) => {
+      const what = String(p.what)
+      const which = typeof p.playlist === 'string' ? `"${p.playlist}"` : 'a playlist'
+      if (what === 'create') return `Make a playlist called "${String(p.name ?? '')}"`
+      if (what === 'rename') return `Rename ${which} to "${String(p.name ?? '')}"`
+      if (what === 'delete') return `Delete ${which}. The songs in it stay in your music.`
+      return `${what === 'add' ? 'Put' : 'Take'} tracks matching "${String(p.query ?? '')}" ${what === 'add' ? 'into' : 'out of'} ${which}`
+    },
+    run: async (p) => {
+      const handle = music()
+      const what = String(p.what)
+      const name = typeof p.name === 'string' ? p.name.trim() : ''
+
+      if (what === 'create') {
+        if (!name) fail('invalid-params', 'A playlist needs a name.', true)
+        const made = (await handle.ask('create-playlist', name, [])) as { id?: string; name?: string } | null
+        if (!made?.id) fail('failed', 'Orbis Music could not make that playlist.', true)
+        return { what, playlist: { id: made!.id, name: made!.name ?? name }, tracks: 0 }
+      }
+
+      // Found by the name it has on screen, because that is what somebody says. Two of the same name is never guessed at.
+      const lists = await handle.store.lists()
+      const asked = typeof p.playlist === 'string' ? p.playlist.trim() : ''
+      if (!asked) fail('invalid-params', 'Say which playlist.', true)
+      const exact = lists.filter((one) => one.id === asked || one.name.toLowerCase() === asked.toLowerCase())
+      const loose = exact.length ? exact : lists.filter((one) => one.name.toLowerCase().includes(asked.toLowerCase()))
+      if (loose.length === 0) {
+        fail(
+          'not-found',
+          lists.length === 0
+            ? 'You have no playlists yet.'
+            : `You have no playlist called "${asked.slice(0, 60)}". You have: ${lists.map((one) => one.name).join(', ')}.`,
+          true
+        )
+      }
+      if (loose.length > 1) {
+        fail('invalid-params', `"${asked.slice(0, 60)}" matches ${loose.length} of your playlists: ${loose.map((one) => one.name).join(', ')}. Say which.`, true)
+      }
+      const list = loose[0]
+
+      if (what === 'rename') {
+        if (!name) fail('invalid-params', 'Say what to call it.', true)
+        await handle.ask('rename-playlist', list.id, name)
+        return { what, playlist: { id: list.id, name }, wasCalled: list.name }
+      }
+      if (what === 'delete') {
+        const held = await handle.store.listTracks(list.id)
+        await handle.ask('remove-playlist', list.id)
+        return {
+          what,
+          playlist: { id: list.id, name: list.name },
+          held: held.length,
+          detail: `The ${held.length} ${held.length === 1 ? 'song' : 'songs'} in it are still in your music.`
+        }
+      }
+
+      const query = typeof p.query === 'string' ? p.query.trim() : ''
+      if (!query) fail('invalid-params', 'Say which tracks.', true)
+      const before = await handle.store.listTracks(list.id)
+      if (what === 'add') {
+        const found = await handle.store.search({ search: query })
+        if (found.length === 0) fail('not-found', `There is nothing in your music matching "${query.slice(0, 60)}".`, true)
+        const ids = found.slice(0, 200).map((one) => one.id)
+        await handle.ask('add-to-playlist', list.id, ids)
+        const after = await handle.store.listTracks(list.id)
+        return { what, playlist: { id: list.id, name: list.name }, matched: ids.length, added: after.length - before.length, tracks: after.length }
+      }
+      const inList = before.filter((one) => [one.title, one.artist, one.album].some((field) => (field ?? '').toLowerCase().includes(query.toLowerCase())))
+      if (inList.length === 0) fail('not-found', `There is nothing in "${list.name}" matching "${query.slice(0, 60)}".`, true)
+      for (const one of inList) await handle.ask('remove-from-playlist', list.id, one.id)
+      const after = await handle.store.listTracks(list.id)
+      return { what, playlist: { id: list.id, name: list.name }, removed: before.length - after.length, tracks: after.length }
+    },
+    verify: async (data) => {
+      const answer = data as { what?: string; playlist?: { id?: string; name?: string }; tracks?: number }
+      const id = answer.playlist?.id
+      if (!id) return { verified: false, detail: 'Orbis Music did not say which playlist that was.' }
+      const held = await music().store.list(id)
+      if (answer.what === 'delete') {
+        return { verified: !held, detail: held ? `"${held.name}" is still there.` : `"${answer.playlist?.name}" is gone. The songs in it are still in your music.` }
+      }
+      if (!held) return { verified: false, detail: 'That playlist is not there.' }
+      if (answer.what === 'rename') return { verified: held.name === answer.playlist?.name, detail: `It is called "${held.name}".` }
+      if (answer.what === 'create') return { verified: true, detail: `"${held.name}" is in your playlists, with nothing in it yet.` }
+      return { verified: held.tracks.length === answer.tracks, detail: `"${held.name}" has ${held.tracks.length} in it.` }
+    }
+  })
+
+  // ---------------------------------------------------------------- the preferences
+
+  /**
+   * Every music preference, with the type and the values the music store itself gives it.
+   *
+   * Built from `DEFAULT_MUSIC_SETTINGS` and `MUSIC_SETTING_VALUES` rather than written out, so a preference added to
+   * the store is one Orion can read and set with no edit here -- and one that could never be offered with a type or a
+   * list of values the store would then refuse.
+   */
+  const settingKinds = (): Record<string, SettingKind> => {
+    const out: Record<string, SettingKind> = {}
+    for (const [key, value] of Object.entries(DEFAULT_MUSIC_SETTINGS)) {
+      const choices = (MUSIC_SETTING_VALUES as Record<string, readonly string[] | undefined>)[key]
+      if (choices) out[key] = { type: 'string', values: choices, settable: true }
+      else if (typeof value === 'boolean') out[key] = { type: 'boolean', settable: true }
+      else if (typeof value === 'number') out[key] = { type: 'number', min: 0, max: 1, settable: true }
+      // A list of folders needs a person at a file picker, so it is a reading here and says what to do instead.
+      else if (Array.isArray(value)) out[key] = { type: 'string', settable: 'Folders are chosen at a file picker in the Orbis window, so they cannot be set from here.' }
+      else out[key] = { type: 'string', settable: 'Orbis does not know what kind of value this is, so it will not set it.' }
+    }
+    return out
+  }
+
+  o.control.register({
+    ...common,
+    id: 'music.settings',
+    name: 'Your music preferences',
+    description:
+      'Every Orbis Music preference as it is now, with what each one may be set to and which cannot be set from here. Reads the stored preferences; it never guesses a default for one it could not read.',
+    keywords: ['preference', 'setting', 'recognition', 'resume', 'mini player', 'folders', 'sort', 'view'],
+    params: {},
+    mutates: false,
+    confirmation: 'none',
+    run: async () => {
+      const held = (await music().store.settings()) as unknown as Record<string, unknown>
+      const kinds = settingKinds()
+      return {
+        preferences: Object.entries(kinds).map(([name, kind]) => ({
+          name,
+          value: held[name],
+          type: kind.type,
+          values: kind.values,
+          min: kind.min,
+          max: kind.max,
+          settable: kind.settable === true,
+          whyNot: kind.settable === true ? undefined : kind.settable,
+          default: (DEFAULT_MUSIC_SETTINGS as unknown as Record<string, unknown>)[name]
+        })),
+        watchingFolders: Array.isArray(held.folders) ? held.folders.length : 0
+      }
+    }
+  })
+
+  o.control.register({
+    ...common,
+    id: 'music.setPreference',
+    name: 'Change a music preference',
+    description:
+      'Changes one Orbis Music preference. The name and the value are checked against what the music store itself allows, and anything else is refused with the list rather than quietly becoming the default.',
+    keywords: ['preference', 'setting', 'recognition', 'resume', 'mini player', 'sort', 'view', 'play on start'],
+    params: {
+      name: str('Which preference. music.settings lists them.', true),
+      value: { type: 'string', description: 'What to set it to. A switch takes true or false; a volume takes 0 to 1.', required: true }
+    },
+    mutates: true,
+    effects: ['write'],
+    confirmation: 'none',
+    describe: (p) => `Set the music preference "${String(p.name)}" to ${String(p.value)}`,
+    // What it held before, so an undo puts back what was really there rather than the default.
+    observe: async () => music().store.settings(),
+    already: async (p) => {
+      const kinds = settingKinds()
+      const name = String(p.name ?? '')
+      const kind = kinds[name]
+      if (!kind || kind.settable !== true) return null
+      const held = (await music().store.settings()) as unknown as Record<string, unknown>
+      const wanted = readValue(kind, p.value)
+      // A value that cannot even be read is not "already set": it goes on to be refused with what it should have been.
+      if (!wanted.ok) return null
+      return held[name] === wanted.value ? `"${name}" is already ${String(wanted.value)}.` : null
+    },
+    run: async (p) => {
+      const kinds = settingKinds()
+      const name = String(p.name ?? '')
+      const kind = kinds[name]
+      if (!kind) fail('invalid-params', `There is no music preference called "${name.slice(0, 40)}". There is: ${Object.keys(kinds).join(', ')}.`, true)
+      if (kind!.settable !== true) fail('invalid-params', kind!.settable as string, true)
+      const wanted = readValue(kind!, p.value)
+      // Refused with what it should have been, rather than written as whatever the value happened to turn into.
+      if (!wanted.ok) return fail('invalid-params', wanted.why, true)
+      const saved = (await music().ask('save-settings', { [name]: wanted.value })) as MusicSettings | null
+      const got = saved ? (saved as unknown as Record<string, unknown>)[name] : undefined
+      return { name, value: got, asked: wanted.value }
+    },
+    verify: async (data) => {
+      const answer = data as { name?: string; asked?: unknown }
+      // Asked of the store again rather than trusting what the save handed back.
+      const held = (await music().store.settings()) as unknown as Record<string, unknown>
+      const now = held[String(answer.name)]
+      return { verified: now === answer.asked, detail: `"${answer.name}" is ${String(now)}.` }
+    },
+    undo: ({ params, before }) => {
+      const name = String(params.name ?? '')
+      const was = (before as unknown as Record<string, unknown>)[name]
+      return was === undefined ? null : { capability: 'music.setPreference', params: { name, value: String(was) } }
+    }
+  })
+
+  // ---------------------------------------------------------------- how Orbis chooses
+
+  o.control.register({
+    ...common,
+    id: 'music.listening',
+    name: 'How Orbis should choose music',
+    description:
+      'Sets what the listening is for -- focus, workout, sleep and the rest -- and how far from the familiar Orbis may go. Neither one plays anything; they change what Orbis would choose next.',
+    keywords: ['mode', 'mood', 'focus', 'workout', 'sleep', 'discovery', 'adventurous', 'familiar', 'taste'],
+    params: {
+      mode: { type: 'string', description: 'What the listening is for, or "none" to stop asking for one.', enum: [...Object.keys(MODE_SHAPE), 'none'] },
+      discovery: { type: 'string', description: 'How far from the familiar.', enum: Object.keys(DISCOVERY_LEVELS) }
+    },
+    mutates: true,
+    effects: ['write'],
+    confirmation: 'none',
+    run: async (p) => {
+      const handle = music()
+      const mode = typeof p.mode === 'string' ? p.mode.trim().toLowerCase() : ''
+      const discovery = typeof p.discovery === 'string' ? p.discovery.trim().toLowerCase() : ''
+      if (!mode && !discovery) fail('invalid-params', 'Say a mode, a discovery level, or both.', true)
+      const out: Record<string, unknown> = {}
+      if (mode) {
+        /*
+         * Nothing checks the two names here, and that is deliberate.
+         *
+         * Declaring them as a `ParamSpec` enum is what refuses an unknown one, before `run` is reached and with the
+         * whole list in the refusal -- the same check and the same wording as every other capability's parameters.
+         * A second check written here would be unreachable, and the day somebody changed one of the two lists it
+         * would be unreachable and wrong. The thing that matters is that the operation runner itself does *not*
+         * check: it hands an unknown mode to the ranker, which then chooses by a shape nobody asked for.
+         */
+        await handle.ask('mode', mode === 'none' ? null : mode)
+        out.mode = mode === 'none' ? null : mode
+      }
+      if (discovery) {
+        // What came back is the tuning as it now is, in numbers -- the level is a name for one of them.
+        out.tuning = await handle.ask('discovery-level', discovery)
+        out.discovery = discovery
+      }
+      return out
+    },
+    /*
+     * Only half of this can be confirmed, and the words say which half.
+     *
+     * Setting a discovery level comes back with the ranker's tuning as it now is, so the number the level stands for
+     * can be compared with the number the ranker really holds -- a reading, and a wrong one fails. The listening mode
+     * is held inside the ranker and nothing reads it back, so there is nothing to compare it with. Said as unverified
+     * it would be retried and then reported as a failure, which is wrong about something that worked; said with the
+     * registry's own wording for no check at all -- "Confirmed by the action itself" -- it would claim a reading that
+     * nobody took. So it passes, and the sentence a person is shown says it is what was asked for rather than what
+     * was read. The way to make it a real reading is for the engine to answer what mode it is in.
+     */
+    verify: (data) => {
+      const answer = data as { mode?: string | null; discovery?: string; tuning?: { discovery?: number } }
+      const aboutMode = 'mode' in answer ? ` The mode was set to ${String(answer.mode)}; nothing reads a mode back, so that part is what was asked for rather than what was read.` : ''
+      if (answer.discovery) {
+        const wanted = DISCOVERY_LEVELS[answer.discovery as keyof typeof DISCOVERY_LEVELS]
+        const got = answer.tuning?.discovery
+        const right = typeof got === 'number' && Math.abs(got - wanted) < 0.001
+        return {
+          verified: right,
+          detail: right ? `Orbis is choosing at ${answer.discovery} (${got}).${aboutMode}` : `Orbis is choosing at ${String(got)}, which is not the ${wanted} that ${answer.discovery} means.`
+        }
+      }
+      return { verified: true, detail: aboutMode.trim() }
+    }
+  })
+
+  o.control.register({
+    ...common,
+    id: 'music.dj',
+    name: 'Let Orbis keep the music going',
+    description:
+      "Turns the DJ on or off. With it on, Orbis keeps the queue filled from the person's own music as it empties. It only ever plays what they already have.",
+    keywords: ['dj', 'autoplay', 'keep playing', 'carry on', 'endless'],
+    params: { on: bool('True to let Orbis keep it going, false to stop.', true) },
+    mutates: true,
+    effects: ['execute'],
+    confirmation: 'none',
+    run: async (p) => {
+      const answer = (await music().ask('dj', p.on === true)) as { ok?: boolean; dj?: boolean; why?: string } | null
+      // The runner refuses this when there is too little music to choose from, and says why. That reason is the answer.
+      if (answer && answer.ok === false) fail('unavailable', answer.why ?? 'Orbis cannot keep the music going yet.', true)
+      return { dj: answer?.dj ?? p.on === true }
+    }
+  })
+
+  o.control.register({
+    ...common,
+    id: 'music.radio',
+    name: 'Start a station',
+    description:
+      "Starts a station that keeps going: from a track in the person's music when one is named, or from what Orbis knows of their taste when none is. Everything it plays is music they already have.",
+    keywords: ['radio', 'station', 'more like this', 'similar'],
+    params: { query: str('A track to build it around. Left out, Orbis builds it from what it knows.') },
+    mutates: true,
+    effects: ['execute'],
+    confirmation: 'none',
+    run: async (p) => {
+      const handle = music()
+      let seed: string | undefined
+      const query = typeof p.query === 'string' ? p.query.trim() : ''
+      if (query) {
+        const found = await handle.store.search({ search: query, offlineOnly: true })
+        if (found.length === 0) fail('not-found', `There is nothing playable in your music matching "${query.slice(0, 60)}".`, true)
+        seed = found[0].id
+      }
+      const answer = (await handle.ask('radio', seed)) as { ok?: boolean; why?: string } | null
+      if (answer && answer.ok === false) fail('unavailable', answer.why ?? 'Orbis could not start a station.', true)
+      const after = await handle.snapshot()
+      const from = seed ? await handle.store.track(seed) : null
+      return { startedFrom: from ? forOrion(from) : null, playing: after.track ? forOrion(after.track) : null, queued: after.queue.length }
+    },
+    verify: async () => {
+      const state = await music().snapshot()
+      const going = state.playback.owner === 'orbis-music' && Boolean(state.playback.trackId)
+      return { verified: going, detail: going ? `The station is playing "${state.track?.title ?? 'something'}".` : 'Nothing is playing.' }
+    }
+  })
+
+  o.control.register({
+    ...common,
+    id: 'music.why',
+    name: 'Why this track',
+    description:
+      "What made Orbis choose the track playing, or a named one: what in the person's listening it leans on, and how sure Orbis is. Answers \"not sure yet\" rather than inventing a reason.",
+    keywords: ['why', 'reason', 'chosen', 'taste'],
+    params: { trackId: str('Which track (default: the one playing).') },
+    mutates: false,
+    confirmation: 'none',
+    run: async (p) => {
+      const handle = music()
+      const trackId = typeof p.trackId === 'string' && p.trackId ? p.trackId : handle.player.current().trackId
+      if (!trackId) fail('not-found', 'Nothing is playing, so there is nothing to explain.', true)
+      const answer = await handle.ask('why', trackId)
+      // Nothing measured yet is said as that. A made-up reason about somebody's own taste is the worst answer here.
+      if (!answer) return { trackId, known: false, detail: 'Orbis has not listened with you long enough to say why.' }
+      return { trackId, known: true, affinity: answer }
     }
   })
 }
