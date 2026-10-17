@@ -192,10 +192,10 @@
 
 .jx .text-\[10px\] { font-size: 10px; }
 .jx .text-\[11px\] { font-size: 11px; }
-.jx .text-xs { font-size: 11.5px; }
-.jx .text-sm { font-size: 12.5px; }
-.jx .text-base { font-size: 14px; }
-.jx .text-lg { font-size: 16px; }
+.jx .text-xs { font-size: 11px; }
+.jx .text-sm { font-size: 13px; }
+.jx .text-base { font-size: 13px; }
+.jx .text-lg { font-size: 15px; }
 .jx .text-xl { font-size: 18px; }
 .jx .text-2xl { font-size: 22px; }
 .jx .font-mono { font-family: ui-monospace, 'Cascadia Code', Consolas, monospace; }
@@ -251,12 +251,12 @@
 .jx .border-dashed { border-style: dashed; }
 
 .jx .rounded-md { border-radius: 6px; }
-.jx .rounded-lg { border-radius: 9px; }
-.jx .rounded-xl { border-radius: 12px; }
-.jx .rounded-2xl { border-radius: 16px; }
+.jx .rounded-lg { border-radius: 10px; }
+.jx .rounded-xl { border-radius: 10px; }
+.jx .rounded-2xl { border-radius: 10px; }
 .jx .rounded-full { border-radius: 999px; }
 
-.jx .shadow, .jx .shadow-sm { box-shadow: 0 1px 2px rgb(0 0 0 / 0.25); }
+.jx .shadow, .jx .shadow-sm { box-shadow: 0 1px 2px var(--shadow-soft); }
 .jx .opacity-50 { opacity: 0.5; }
 .jx .opacity-70 { opacity: 0.7; }
 
@@ -312,7 +312,7 @@
   background: var(--jx-bg);
   color: var(--jx-fore);
   font: inherit;
-  padding: 4px 7px;
+  padding: 4px 8px;
 }
 
 .jx select:focus-visible,
@@ -327,14 +327,14 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 4px;
   white-space: nowrap;
   border: 1px solid transparent;
-  border-radius: 7px;
+  border-radius: 6px;
   background: transparent;
   color: var(--jx-fore);
   font: inherit;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   transition: background 0.14s ease, border-color 0.14s ease;
@@ -343,8 +343,11 @@
 .jx-btn:disabled { opacity: 0.5; pointer-events: none; }
 .jx-btn svg { width: 1rem; height: 1rem; }
 
-.jx-btn-default { background: var(--jx-cyan); color: var(--bg-deep); }
-.jx-btn-default:hover { background: color-mix(in srgb, var(--jx-cyan) 88%, #fff); }
+/* The label on the accent is the colour made to go on the accent, not the page colour: as --bg-deep it
+   measured 4.4:1 on the light theme. Hover mixes towards --text, which is brighter on the dark theme and
+   darker on the light one -- mixing towards white only ever reads as a press on dark glass. */
+.jx-btn-default { background: var(--jx-cyan); color: var(--on-accent); }
+.jx-btn-default:hover { background: color-mix(in srgb, var(--jx-cyan) 88%, var(--text)); }
 .jx-btn-outline { border-color: var(--jx-border); }
 .jx-btn-outline:hover { background: var(--bg-mid); }
 .jx-btn-secondary { background: var(--bg-mid); border-color: var(--jx-border); }
@@ -353,7 +356,7 @@
 .jx-btn-link { color: var(--jx-cyan); text-decoration: underline; text-underline-offset: 4px; }
 
 .jx-btn-size-default { height: 2.1rem; padding: 0 0.85rem; }
-.jx-btn-size-sm { height: 1.8rem; padding: 0 0.6rem; font-size: 11.5px; }
+.jx-btn-size-sm { height: 1.8rem; padding: 0 0.6rem; font-size: 11px; }
 .jx-btn-size-lg { height: 2.4rem; padding: 0 1.6rem; }
 .jx-btn-size-icon { height: 2.1rem; width: 2.1rem; padding: 0; }
 
@@ -392,7 +395,7 @@
 
 .jx-pagetitle p {
   margin: 3px 0 0;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
   color: var(--jx-muted);
   max-width: 70ch;
@@ -407,23 +410,23 @@
 .jx-input {
   width: 100%;
   border: 1px solid var(--jx-border);
-  border-radius: 7px;
+  border-radius: 6px;
   background: var(--jx-bg);
   color: var(--jx-fore);
   font: inherit;
-  font-size: 12.5px;
-  padding: 5px 8px;
+  font-size: 13px;
+  padding: 4px 8px;
 }
 
 .jx-select {
   width: 100%;
   border: 1px solid var(--jx-border);
-  border-radius: 7px;
+  border-radius: 6px;
   background: var(--jx-bg);
   color: var(--jx-fore);
   font: inherit;
-  font-size: 12.5px;
-  padding: 5px 8px;
+  font-size: 13px;
+  padding: 4px 8px;
 }
 
 /*
@@ -541,13 +544,13 @@
 }
 
 .jx:has(h2) .flex.flex-wrap.gap-1\.5 > button {
-  padding: 3px 9px;
+  padding: 3px 8px;
   font-size: 11px;
 }
 
 /* The heading block above a simulation: the name and one line, not a paragraph. */
 .jx:has(h2) .mb-4.flex.flex-wrap.items-center.gap-3 {
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 /*
@@ -692,7 +695,7 @@
 .jx .font-display { font-family: var(--font); font-weight: 700; }
 .jx .font-mono-j { font-family: ui-monospace, 'Cascadia Code', Consolas, monospace; }
 .jx .gap-0\.5 { gap: 2px; }
-.jx .gap-2\.5 { gap: 10px; }
+.jx .gap-2\.5 { gap: 8px; }
 .jx .gap-5 { gap: 20px; }
 .jx .glass { background: color-mix(in srgb, var(--jx-card) 72%, transparent); backdrop-filter: blur(12px); }
 .jx .glass-border { border: 1px solid var(--jx-border); }
@@ -737,14 +740,14 @@
 .jx .max-w-\[200px\] { max-width: 200px; }
 .jx .max-w-\[60\%\] { max-width: 60%; }
 .jx .max-w-none { max-width: none; }
-.jx .mb-1\.5 { margin-bottom: 6px; }
+.jx .mb-1\.5 { margin-bottom: 4px; }
 .jx .mb-5 { margin-bottom: 20px; }
 .jx .mb-6 { margin-bottom: 24px; }
 .jx .mb-8 { margin-bottom: 32px; }
 .jx .min-h-\[3rem\] { min-height: 3rem; }
 .jx .ml-0\.5 { margin-left: 2px; }
 .jx .mt-0\.5 { margin-top: 2px; }
-.jx .mt-1\.5 { margin-top: 6px; }
+.jx .mt-1\.5 { margin-top: 4px; }
 .jx .mt-5 { margin-top: 20px; }
 .jx .mt-6 { margin-top: 24px; }
 .jx .mx-1 { margin-left: 4px; margin-right: 4px; }
@@ -759,7 +762,7 @@
 .jx .outline-none { outline: none; }
 .jx .p-0\.5 { padding: 2px; }
 .jx .p-10 { padding: 40px; }
-.jx .p-1\.5 { padding: 6px; }
+.jx .p-1\.5 { padding: 4px; }
 .jx .p-5 { padding: 20px; }
 .jx .p-6 { padding: 24px; }
 .jx .pb-2 { padding-bottom: 8px; }
@@ -772,28 +775,28 @@
 .jx .pr-1 { padding-right: 4px; }
 .jx .pr-3 { padding-right: 12px; }
 .jx .prose { line-height: 1.6; }
-.jx .prose-sm { font-size: 12.5px; line-height: 1.6; }
-.jx .px-1\.5 { padding-left: 6px; padding-right: 6px; }
+.jx .prose-sm { font-size: 13px; line-height: 1.6; }
+.jx .px-1\.5 { padding-left: 4px; padding-right: 4px; }
 .jx .px-5 { padding-left: 20px; padding-right: 20px; }
 .jx .px-6 { padding-left: 24px; padding-right: 24px; }
 .jx .py-12 { padding-top: 48px; padding-bottom: 48px; }
 .jx .py-20 { padding-top: 80px; padding-bottom: 80px; }
-.jx .py-2\.5 { padding-top: 10px; padding-bottom: 10px; }
+.jx .py-2\.5 { padding-top: 8px; padding-bottom: 8px; }
 .jx .py-6 { padding-top: 24px; padding-bottom: 24px; }
 .jx .py-8 { padding-top: 32px; padding-bottom: 32px; }
-.jx .rounded-\[5px\] { border-radius: 5px; }
-.jx .rounded-sm { border-radius: 4px; }
+.jx .rounded-\[5px\] { border-radius: 6px; }
+.jx .rounded-sm { border-radius: 6px; }
 .jx .scrollbar-thin { scrollbar-width: thin; }
 .jx .self-center { align-self: center; }
 .jx .space-y-0\.5 > * + * { margin-top: 2px; }
-.jx .space-y-1\.5 > * + * { margin-top: 6px; }
-.jx .text-3xl { font-size: 25px; }
-.jx .text-4xl { font-size: 31px; }
-.jx .text-\[5\.5px\] { font-size: 5.5px; }
-.jx .text-\[6px\] { font-size: 6px; }
-.jx .text-\[7px\] { font-size: 7px; }
-.jx .text-\[8px\] { font-size: 8px; }
-.jx .text-\[9px\] { font-size: 9px; }
+.jx .space-y-1\.5 > * + * { margin-top: 4px; }
+.jx .text-3xl { font-size: 22px; }
+.jx .text-4xl { font-size: 30px; }
+.jx .text-\[5\.5px\] { font-size: 10px; }
+.jx .text-\[6px\] { font-size: 10px; }
+.jx .text-\[7px\] { font-size: 10px; }
+.jx .text-\[8px\] { font-size: 10px; }
+.jx .text-\[9px\] { font-size: 10px; }
 .jx .text-amber-200\/90 { color: color-mix(in srgb, #fde68a 90%, transparent); }
 .jx .text-amber-500 { color: #f59e0b; }
 .jx .text-background { color: var(--jx-bg); }
@@ -833,7 +836,7 @@
 @container (min-width: 620px) { .jx .sm\:grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @container (min-width: 620px) { .jx .sm\:px-6 { padding-left: 24px; padding-right: 24px; } }
 @container (min-width: 620px) { .jx .sm\:py-8 { padding-top: 32px; padding-bottom: 32px; } }
-@container (min-width: 620px) { .jx .sm\:text-4xl { font-size: 31px; } }
+@container (min-width: 620px) { .jx .sm\:text-4xl { font-size: 30px; } }
 @container (min-width: 768px) { .jx .md\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
 /*
@@ -920,7 +923,7 @@
 .jx .cursor-crosshair { cursor: crosshair; }
 .jx .cursor-grab { cursor: grab; }
 .jx .divide-border > * + * { border-top: 1px solid var(--jx-border); }
-.jx .drop-shadow { filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.4)); }
+.jx .drop-shadow { filter: drop-shadow(0 1px 2px var(--shadow-color)); }
 .jx .duration-150 { transition-duration: 0.15s; }
 .jx .fill-cyan-j { fill: var(--jx-cyan); }
 .jx .fill-emerald-400 { fill: #34d399; }
@@ -993,11 +996,11 @@
 .jx .resize-none { resize: none; }
 .jx .right-6 { right: 24px; }
 .jx .rotate-180 { transform: rotate(180deg); }
-.jx .rounded-\[3px\] { border-radius: 3px; }
+.jx .rounded-\[3px\] { border-radius: 6px; }
 .jx .rounded-t { border-radius: 6px 6px 0 0; }
 .jx .scroll-mt-4 { scroll-margin-top: 16px; }
-.jx .shadow-lg { box-shadow: 0 10px 20px rgb(0 0 0 / 0.35); }
-.jx .shadow-xl { box-shadow: 0 16px 34px rgb(0 0 0 / 0.45); }
+.jx .shadow-lg { box-shadow: 0 10px 20px var(--shadow-color); }
+.jx .shadow-xl { box-shadow: 0 16px 34px var(--shadow-deep); }
 .jx .size-2 { width: 8px; height: 8px; }
 .jx .size-20 { width: 80px; height: 80px; }
 .jx .size-2\.5 { width: 10px; height: 10px; }
@@ -1105,7 +1108,7 @@
   border-radius: 10px;
   background: var(--bg-deep, #0b1220);
   font-family: ui-monospace, 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.55;
   tab-size: 4;
 }
@@ -1114,7 +1117,7 @@
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
-  padding: 8px 8px 8px 10px;
+  padding: 8px 8px 8px 8px;
   overflow: hidden;
   border-right: 1px solid var(--glass-border);
   color: var(--faint);
@@ -1132,7 +1135,7 @@
 .cse-shown,
 .cse-box {
   margin: 0;
-  padding: 8px 10px;
+  padding: 8px 8px;
   border: 0;
   font: inherit;
   line-height: inherit;
@@ -1174,12 +1177,12 @@
   left: 0;
   display: flex;
   justify-content: space-between;
-  gap: 10px;
-  padding: 2px 10px;
+  gap: 8px;
+  padding: 2px 8px;
   background: color-mix(in srgb, var(--panel) 88%, transparent);
   border-top: 1px solid var(--glass-border);
   color: var(--faint);
-  font-size: 10.5px;
+  font-size: 10px;
   pointer-events: none;
 }
 
@@ -1188,21 +1191,29 @@
   padding-bottom: 24px;
 }
 
-/* highlight.js, in Orbis's own colours rather than the theme it ships. */
-.cse .hljs-keyword, .cse .hljs-selector-tag, .cse .hljs-literal, .cse .hljs-section { color: #c084fc; }
-.cse .hljs-string, .cse .hljs-regexp, .cse .hljs-addition { color: #4ade80; }
-.cse .hljs-number, .cse .hljs-symbol, .cse .hljs-bullet { color: #fbbf24; }
-.cse .hljs-comment, .cse .hljs-quote { color: var(--faint); font-style: italic; }
-.cse .hljs-function .hljs-title, .cse .hljs-title.function_ { color: #60a5fa; }
-.cse .hljs-title, .cse .hljs-title.class_, .cse .hljs-type { color: #22d3ee; }
-.cse .hljs-attr, .cse .hljs-attribute, .cse .hljs-variable, .cse .hljs-params { color: #e2e8f0; }
-.cse .hljs-built_in, .cse .hljs-class .hljs-title { color: #38bdf8; }
-.cse .hljs-meta, .cse .hljs-doctag { color: #f0a33a; }
-.cse .hljs-deletion { color: #f0564a; }
-
-.cse.light { background: #f8fafc; }
-.cse.light .cse-box { caret-color: #0f172a; }
-.cse.light .hljs-comment { color: #64748b; }
+/*
+ * highlight.js, in Orbis's own colours rather than the theme it ships.
+ *
+ * These nine colours used to be written out here as the pastels a dark editor wants -- a lilac keyword, a mint
+ * string, a pale amber number. The editor's plate follows the theme, so on the light theme those pastels were
+ * being laid on a near-white page: the lilac measured 2.4:1 and the mint 1.9:1, which is code you cannot read.
+ * There was also a `.cse.light` block underneath trying to patch it, and nothing in Orbis has ever put that class
+ * on the editor, so it never ran.
+ *
+ * They are tokens now, with a value per theme, so the one rule is right in all four theme combinations. Measured
+ * on the plate behind them, the light set runs from 5.3:1 (the type colour) to 9.0:1 and the dark set from 5.9:1
+ * to 16.4:1.
+ */
+.cse .hljs-keyword, .cse .hljs-selector-tag, .cse .hljs-literal, .cse .hljs-section { color: var(--code-keyword); }
+.cse .hljs-string, .cse .hljs-regexp, .cse .hljs-addition { color: var(--code-string); }
+.cse .hljs-number, .cse .hljs-symbol, .cse .hljs-bullet { color: var(--code-number); }
+.cse .hljs-comment, .cse .hljs-quote { color: var(--muted); font-style: italic; }
+.cse .hljs-function .hljs-title, .cse .hljs-title.function_ { color: var(--code-function); }
+.cse .hljs-title, .cse .hljs-title.class_, .cse .hljs-type { color: var(--code-type); }
+.cse .hljs-attr, .cse .hljs-attribute, .cse .hljs-variable, .cse .hljs-params { color: var(--code-attr); }
+.cse .hljs-built_in, .cse .hljs-class .hljs-title { color: var(--code-builtin); }
+.cse .hljs-meta, .cse .hljs-doctag { color: var(--code-meta); }
+.cse .hljs-deletion { color: var(--code-deletion); }
 
 /* ---------------------------------------------------------------- split panes */
 
@@ -1317,12 +1328,14 @@
 
 .jx {
   /*
-   * Secondary text, light enough to read.
+   * Secondary text, readable on the card behind it.
    *
-   * `--faint` is #6e727b, which is about 3.6:1 on the card behind it -- under the 4.5:1 that small text needs.
-   * This is the studio's own value, so nothing outside it changes.
+   * The ported pages ask for `--faint`, which is about 3.6:1 on that card -- under the 4.5:1 that small text
+   * needs. This used to answer with one hard-coded pale grey, which cleared the bar on the dark theme and then
+   * sat at about 2.3:1 on the light theme's near-white card. `--muted` is the token for exactly this job and has
+   * a value per theme: 6.9:1 on dark, 5.4:1 on light.
    */
-  --jx-muted: #9aa1ad;
+  --jx-muted: var(--muted);
 }
 
 /*
@@ -1344,7 +1357,7 @@
  */
 .cse-status,
 .cse-status * {
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--jx-muted);
 }
 
