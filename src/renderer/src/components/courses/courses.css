@@ -14,7 +14,7 @@
   z-index: 15;
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 20px;
   padding: 24px 28px 60px;
   overflow: auto;
   background: var(--bg-mid);
@@ -28,22 +28,18 @@
   margin-inline: auto;
 }
 
+/*
+ * The bar at the top of a course and of a lesson: the way back, and sometimes one dim line about what you are
+ * looking at.
+ *
+ * The shelf's own header is the window's shared three-part header now and no longer uses this, which is why there
+ * is no title rule left here -- the title is drawn the size every screen's title is drawn.
+ */
 .co-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
-}
-
-.co-head h2 {
-  margin: 0;
-  font-size: 1.6rem;
-}
-
-.co-head-right {
-  display: flex;
-  align-items: center;
-  gap: 10px;
 }
 
 .co-faint {
@@ -52,17 +48,17 @@
 }
 
 .co-good {
-  color: #3ee58a;
+  color: var(--green);
 }
 
 .co-warn {
-  color: #ffbe4d;
+  color: var(--amber);
 }
 
 .co-view h3 {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   margin: 0 0 12px;
   font-size: 0.78rem;
   font-weight: 600;
@@ -71,33 +67,13 @@
   color: var(--faint);
 }
 
-.co-search {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 6px 11px;
-  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.12));
-  border-radius: 999px;
-  color: var(--faint);
-}
-
-.co-search input {
-  width: 180px;
-  border: 0;
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  font-size: 0.86rem;
-  outline: none;
-}
-
 .co-back {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 10px;
+  gap: 4px;
+  padding: 4px 8px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
   color: var(--faint);
   font: inherit;
@@ -112,7 +88,7 @@
 
 .co-grid {
   display: grid;
-  gap: 14px;
+  gap: 12px;
   grid-template-columns: repeat(auto-fill, minmax(236px, 1fr));
 }
 
@@ -122,8 +98,8 @@
   gap: 0;
   padding: 0;
   overflow: hidden;
-  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
-  border-radius: 14px;
+  border: 1px solid var(--glass-border, var(--line));
+  border-radius: 10px;
   background: var(--surface);
   color: inherit;
   font: inherit;
@@ -134,7 +110,7 @@
 
 .co-card:hover {
   transform: translateY(-2px);
-  border-color: var(--cyan);
+  border-color: var(--glass-border);
 }
 
 .co-card:focus-visible {
@@ -147,21 +123,21 @@
   align-items: center;
   justify-content: center;
   height: 76px;
-  color: rgba(255, 255, 255, 0.9);
+  color: color-mix(in srgb, var(--text) 90%, transparent);
 }
 
 .co-cover.wide {
   width: 86px;
   height: 66px;
   flex: 0 0 auto;
-  border-radius: 11px;
+  border-radius: 10px;
 }
 
 .co-card-body {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 12px 13px 14px;
+  gap: 4px;
+  padding: 12px 12px 12px;
 }
 
 .co-card-body strong {
@@ -183,11 +159,11 @@
 .co-continue {
   display: flex;
   align-items: center;
-  gap: 15px;
+  gap: 16px;
   width: 100%;
-  padding: 13px 15px;
-  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
-  border-radius: 15px;
+  padding: 12px 16px;
+  border: 1px solid var(--glass-border, var(--line));
+  border-radius: 10px;
   background: var(--surface);
   color: inherit;
   font: inherit;
@@ -202,7 +178,7 @@
 .co-continue > div {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   flex: 1 1 auto;
   min-width: 0;
 }
@@ -210,12 +186,12 @@
 .co-go {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   flex: 0 0 auto;
-  padding: 7px 13px;
+  padding: 8px 12px;
   border-radius: 999px;
   background: var(--cyan);
-  color: #04202b;
+  color: var(--surface);
   font-size: 0.86rem;
   font-weight: 600;
 }
@@ -224,7 +200,7 @@
   display: block;
   height: 4px;
   border-radius: 999px;
-  background: var(--glass-border, rgba(255, 255, 255, 0.12));
+  background: var(--glass-border, color-mix(in srgb, var(--text) 12%, transparent));
   overflow: hidden;
 }
 
@@ -252,13 +228,13 @@
   width: 180px;
   height: 130px;
   flex: 0 0 auto;
-  border-radius: 15px;
+  border-radius: 10px;
 }
 
 .co-hero-body {
   display: flex;
   flex-direction: column;
-  gap: 11px;
+  gap: 12px;
   min-width: 0;
 }
 
@@ -281,12 +257,12 @@
 .co-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 7px;
+  gap: 8px;
 }
 
 .co-chip {
-  padding: 3px 10px;
-  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.12));
+  padding: 3px 8px;
+  border: 1px solid var(--glass-border, var(--line-strong));
   border-radius: 999px;
   font-size: 0.76rem;
   color: var(--faint);
@@ -296,16 +272,16 @@
 .co-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
 }
 
 .co-btn {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 8px 15px;
-  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.14));
+  gap: 8px;
+  padding: 8px 16px;
+  border: 1px solid var(--glass-border, var(--line-strong));
   border-radius: 10px;
   background: transparent;
   color: var(--text);
@@ -316,18 +292,18 @@
 }
 
 .co-btn:hover:not([disabled]) {
-  border-color: var(--cyan);
+  border-color: var(--glass-border);
 }
 
 .co-btn.primary {
   background: var(--cyan);
   border-color: var(--cyan);
-  color: #04202b;
+  color: var(--surface);
   font-weight: 600;
 }
 
 .co-btn.small {
-  padding: 5px 11px;
+  padding: 4px 12px;
   font-size: 0.8rem;
 }
 
@@ -348,7 +324,7 @@
 .co-list {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 8px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -373,11 +349,11 @@
 .co-module {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
-  padding: 11px 13px;
-  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
-  border-radius: 11px;
+  padding: 12px 12px;
+  border: 1px solid var(--glass-border, var(--line));
+  border-radius: 10px;
   background: transparent;
   color: inherit;
   font: inherit;
@@ -386,7 +362,7 @@
 }
 
 .co-module:hover {
-  border-color: var(--cyan);
+  border-color: var(--glass-border);
 }
 
 .co-module-name {
@@ -402,20 +378,20 @@
 .co-lessons {
   display: flex;
   flex-direction: column;
-  margin: 4px 0 0 14px;
-  padding: 0 0 0 10px;
+  margin: 4px 0 0 12px;
+  padding: 0 0 0 8px;
   list-style: none;
-  border-left: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
+  border-left: 1px solid var(--glass-border, var(--line));
 }
 
 .co-lesson {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
-  padding: 8px 10px;
+  padding: 8px 8px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
   color: inherit;
   font: inherit;
@@ -424,7 +400,7 @@
 }
 
 .co-lesson:hover {
-  background: var(--glass-border, rgba(255, 255, 255, 0.06));
+  background: var(--glass-border, color-mix(in srgb, var(--text) 6%, transparent));
 }
 
 .co-lesson-name {
@@ -439,14 +415,14 @@
   width: 16px;
   height: 16px;
   flex: 0 0 auto;
-  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.2));
+  border: 1px solid var(--glass-border, var(--line-strong));
   border-radius: 50%;
-  color: #04202b;
+  color: var(--surface);
 }
 
 .co-tick.done {
-  background: var(--cyan);
-  border-color: var(--cyan);
+  background: var(--panel);
+  border-color: var(--glass-border);
 }
 
 /* ---------------------------------------------------------------- a lesson */
@@ -465,12 +441,12 @@
 }
 
 .co-lesson-body h2 {
-  margin: 0 0 10px;
+  margin: 0 0 8px;
   font-size: 1.55rem;
 }
 
 .co-intro {
-  margin: 0 0 18px;
+  margin: 0 0 16px;
   color: var(--faint);
   font-size: 1rem;
   line-height: 1.6;
@@ -479,17 +455,17 @@
 .co-objectives {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  margin: 0 0 22px;
+  gap: 4px;
+  margin: 0 0 20px;
   padding: 12px 16px;
-  border-left: 2px solid var(--cyan);
+  border-left: 2px solid var(--line-strong);
   list-style: none;
   color: var(--faint);
   font-size: 0.88rem;
 }
 
 .co-h {
-  margin: 28px 0 10px;
+  margin: 28px 0 8px;
   font-size: 1.12rem;
   font-weight: 650;
   letter-spacing: 0;
@@ -499,7 +475,7 @@
 
 .co-p {
   /* The one measurement that matters most here: a comfortable line for forty minutes of reading. */
-  margin: 0 0 15px;
+  margin: 0 0 16px;
   font-size: 1rem;
   line-height: 1.72;
 }
@@ -507,31 +483,31 @@
 .co-ul,
 .co-ol {
   margin: 0 0 16px;
-  padding-left: 22px;
+  padding-left: 20px;
   line-height: 1.7;
 }
 
 .co-ul li,
 .co-ol li {
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .co-callout {
   margin: 0 0 16px;
-  padding: 12px 15px;
-  border-left: 3px solid var(--cyan);
+  padding: 12px 16px;
+  border-left: 3px solid var(--line-strong);
   border-radius: 0 10px 10px 0;
-  background: color-mix(in srgb, var(--cyan) 7%, transparent);
+  background: var(--panel);
 }
 
 .co-callout.warning {
-  border-left-color: #ffbe4d;
-  background: color-mix(in srgb, #ffbe4d 8%, transparent);
+  border-left-color: var(--amber);
+  background: color-mix(in srgb, var(--amber) 8%, transparent);
 }
 
 .co-callout.tip {
-  border-left-color: #3ee58a;
-  background: color-mix(in srgb, #3ee58a 8%, transparent);
+  border-left-color: var(--green);
+  background: color-mix(in srgb, var(--green) 8%, transparent);
 }
 
 .co-callout p {
@@ -541,13 +517,13 @@
 
 .co-example {
   margin: 0 0 16px;
-  padding: 13px 16px;
-  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
-  border-radius: 11px;
+  padding: 12px 16px;
+  border: 1px solid var(--glass-border, var(--line));
+  border-radius: 10px;
 }
 
 .co-example figcaption {
-  margin-bottom: 6px;
+  margin-bottom: 4px;
   font-size: 0.78rem;
   font-weight: 600;
   letter-spacing: 0.8px;
@@ -566,11 +542,10 @@
 
 .co-code pre {
   margin: 0;
-  padding: 14px 16px;
+  padding: 12px 16px;
   overflow-x: auto;
-  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
-  border-radius: 11px;
-  background: var(--bg-deep, #05080c);
+  border-radius: 10px;
+  background: var(--bg-deep, var(--bg));
   font-size: 0.86rem;
   line-height: 1.6;
 }
@@ -578,16 +553,16 @@
 .co-code figcaption,
 .co-figure figcaption,
 .co-formula figcaption {
-  margin-top: 6px;
+  margin-top: 4px;
   font-size: 0.8rem;
   color: var(--faint);
 }
 
 .co-formula {
   margin: 0 0 16px;
-  padding: 14px;
-  border-radius: 11px;
-  background: var(--bg-deep, #05080c);
+  padding: 12px;
+  border-radius: 10px;
+  background: var(--bg-deep, var(--bg));
   text-align: center;
 }
 
@@ -609,9 +584,9 @@
 
 .co-table th,
 .co-table td {
-  padding: 8px 11px;
+  padding: 8px 12px;
   text-align: left;
-  border-bottom: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
+  border-bottom: 1px solid var(--glass-border, var(--line));
 }
 
 .co-table th {
@@ -625,43 +600,43 @@
 
 .co-figure img {
   max-width: 100%;
-  border-radius: 11px;
+  border-radius: 10px;
 }
 
 .co-quote {
   margin: 0 0 16px;
   padding-left: 16px;
-  border-left: 2px solid var(--glass-border, rgba(255, 255, 255, 0.2));
+  border-left: 2px solid var(--glass-border, var(--line-strong));
   color: var(--faint);
 }
 
 .co-quote cite {
   display: block;
-  margin-top: 6px;
+  margin-top: 4px;
   font-size: 0.82rem;
 }
 
 .co-orion {
-  margin: 30px 0 0;
+  margin: 28px 0 0;
   padding: 16px 0 0;
-  border-top: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
+  border-top: 1px solid var(--glass-border, var(--line));
 }
 
 .co-teach {
   display: flex;
   flex-wrap: wrap;
-  gap: 7px;
+  gap: 8px;
   margin-bottom: 8px;
 }
 
 .co-checkpoint {
-  margin-top: 26px;
+  margin-top: 24px;
 }
 
 .co-lesson-foot {
   display: flex;
   justify-content: center;
-  margin: 34px 0 0;
+  margin: 32px 0 0;
 }
 
 /* ---------------------------------------------------------------- questions */
@@ -669,8 +644,8 @@
 .co-quiz {
   display: flex;
   flex-direction: column;
-  gap: 15px;
-  margin: 18px 0;
+  gap: 16px;
+  margin: 16px 0;
 }
 
 .co-question {
@@ -678,9 +653,9 @@
   flex-direction: column;
   gap: 8px;
   margin: 0;
-  padding: 14px 16px;
-  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
-  border-radius: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--glass-border, var(--line));
+  border-radius: 10px;
 }
 
 .co-question legend {
@@ -693,15 +668,15 @@
 .co-option {
   display: flex;
   align-items: flex-start;
-  gap: 9px;
-  padding: 7px 9px;
-  border-radius: 8px;
+  gap: 8px;
+  padding: 8px 8px;
+  border-radius: 6px;
   cursor: pointer;
   line-height: 1.5;
 }
 
 .co-option:hover {
-  background: var(--glass-border, rgba(255, 255, 255, 0.05));
+  background: var(--glass-border, color-mix(in srgb, var(--text) 5%, transparent));
 }
 
 .co-option input {
@@ -712,9 +687,9 @@
 .co-input {
   width: 100%;
   box-sizing: border-box;
-  padding: 9px 11px;
-  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.14));
-  border-radius: 9px;
+  padding: 8px 12px;
+  border: 1px solid var(--glass-border, var(--line-strong));
+  border-radius: 10px;
   background: transparent;
   color: var(--text);
   font: inherit;
@@ -729,11 +704,11 @@
 .co-hint {
   display: flex;
   align-items: flex-start;
-  gap: 7px;
+  gap: 8px;
   margin: 0;
-  padding: 8px 11px;
-  border-radius: 8px;
-  background: color-mix(in srgb, #ffbe4d 9%, transparent);
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--amber) 9%, transparent);
   font-size: 0.86rem;
   line-height: 1.5;
 }
@@ -748,7 +723,7 @@
 .co-marked {
   display: flex;
   flex-direction: column;
-  gap: 11px;
+  gap: 12px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -756,10 +731,10 @@
 
 .co-marked li {
   display: flex;
-  gap: 10px;
-  padding: 11px 13px;
-  border-radius: 11px;
-  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
+  gap: 8px;
+  padding: 12px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--glass-border, var(--line));
 }
 
 .co-marked li > div {
@@ -782,16 +757,16 @@
   height: 20px;
   flex: 0 0 auto;
   border-radius: 50%;
-  color: #04202b;
+  color: var(--surface);
 }
 
 .co-marked li.right .co-mark {
-  background: #3ee58a;
+  background: var(--green);
 }
 
 /* Not red. A wrong answer is something to go back over, not an alarm. */
 .co-marked li.wrong .co-mark {
-  background: #ffbe4d;
+  background: var(--amber);
 }
 
 .co-result h3 {
@@ -803,7 +778,7 @@
 
 .co-empty {
   max-width: 58ch;
-  margin: 10px 0;
+  margin: 8px 0;
   color: var(--faint);
   line-height: 1.6;
 }
@@ -845,10 +820,6 @@
     width: 100%;
     height: 96px;
   }
-
-  .co-search input {
-    width: 110px;
-  }
 }
 
 /*
@@ -861,13 +832,13 @@
 .co-lab {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   flex-wrap: wrap;
-  margin: 14px 0;
-  padding: 13px 15px;
-  border: 1px solid color-mix(in srgb, var(--cyan) 35%, transparent);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--cyan) 7%, transparent);
+  margin: 12px 0;
+  padding: 12px 16px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--panel);
 }
 
 .co-lab.is-optional {
@@ -884,7 +855,7 @@
 }
 
 .co-lab-says strong {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -896,22 +867,22 @@
 
 .co-lab-says em {
   color: var(--faint);
-  font-size: 11.5px;
+  font-size: 11px;
   font-style: normal;
 }
 
 .co-lab-go {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   flex: 0 0 auto;
-  padding: 8px 13px;
+  padding: 8px 12px;
   border: 1px solid color-mix(in srgb, var(--cyan) 55%, transparent);
-  border-radius: 9px;
+  border-radius: 10px;
   background: color-mix(in srgb, var(--cyan) 14%, transparent);
   color: var(--cyan);
   font: inherit;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
 }

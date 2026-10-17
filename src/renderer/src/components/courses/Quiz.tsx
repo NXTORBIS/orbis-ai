@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ArrowLeft, Check, Lightbulb, RotateCcw, X } from 'lucide-react'
+import { ArrowLeft, Check, Lightbulb, X } from 'lucide-react'
 import type { Question } from '../../../../shared/courses/types'
 import type { NoticeKind } from '../../lib/notices'
+import { useSurface } from '../../lib/surfaces'
+import { quizSurface, type QuizScreen } from './coursesSurfaces'
 
 /**
  * Questions, marked.
@@ -23,6 +25,19 @@ import type { NoticeKind } from '../../lib/notices'
  */
 
 type Kind = 'quiz' | 'assessment' | 'practice' | 'check'
+
+/**
+ * Registers the quiz as something Orbis can work.
+ *
+ * A component rather than a `useSurface` call inside `Quiz` itself, and for a real reason: the checks inside a lesson
+ * are Quizzes too, and several of them are on screen at once. One `useSurface` in `Quiz` would be five screens all
+ * claiming `courses/lesson/quiz`, which the register would report as a fault -- correctly. So only the quiz with a
+ * "Mark it" button renders this, and mounting it is what registers.
+ */
+function QuizSurface({ screen }: { screen: QuizScreen }): null {
+  useSurface(quizSurface(screen))
+  return null
+}
 
 interface Marked {
   questionId: string
@@ -115,7 +130,14 @@ export default function Quiz({
     setAnswers((held) => ({ ...held, [question.id]: { ...held[question.id], checked: out } }))
   }
 
-  const submit = async (): Promise<void> => {
+  /**
+   * Marks the paper, and answers with the mark.
+   *
+   * The mark is returned as well as put on screen so that whatever asked for the marking can be told what the course's
+   * own answers made of it. Reading it back off this screen straight afterwards would read the mark from before the
+   * marking, because React has not redrawn.
+   */
+  const submit = async (): Promise<Result | null> => {
     setBusy(true)
     const payload = questions.map((one) => ({
       questionId: one.id,
@@ -129,10 +151,11 @@ export default function Quiz({
     setBusy(false)
     if (!out) {
       onNotify('That could not be marked. Nothing was lost — try again.', 'warn')
-      return
+      return null
     }
     setResult(out.result)
     if (out.result.passed) onNotify(out.xp > 0 ? `Passed — ${out.xp} XP.` : 'Passed.')
+    return out.result
   }
 
   const retry = (): void => {
@@ -141,10 +164,35 @@ export default function Quiz({
     void load()
   }
 
+  /*
+   * Whether this is a check inside a lesson rather than a quiz with a "Mark it" button.
+   *
+   * Worked out here rather than further down, because the register needs it: only the real quiz is registered, and
+   * the first thing drawn is the result, which is above where this used to be worked out.
+   */
+  const inline = kind === 'check'
+
+  /** What `QuizSurface` hands to the register: this screen's own state and its own handlers, nothing else. */
+  const controllable: QuizScreen = {
+    title: () => title,
+    questions: () => questions,
+    answer: (questionId) => answers[questionId]?.value ?? null,
+    put: (questionId, value) => set(questionId, value),
+    hintsUsed: (questionId) => answers[questionId]?.hintsUsed ?? 0,
+    hint,
+    busy: () => busy,
+    result: () => result,
+    submit,
+    retry,
+    done: () => onDone(result?.passed ?? false)
+  }
+
   // ---------------------------------------------------------------- after marking
   if (result) {
     return (
       <section className="co-quiz co-result" aria-label="Result">
+        {/* Still controllable after marking: retry and carry on are the two things left to do. */}
+        {!inline ? <QuizSurface screen={controllable} /> : null}
         <h3 className={result.passed ? 'co-good' : undefined}>{result.says}</h3>
         <span className="co-bar big" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(result.score * 100)}>
           <span style={{ width: `${Math.round(result.score * 100)}%` }} />
@@ -173,7 +221,7 @@ export default function Quiz({
         <div className="co-actions">
           {!result.passed ? (
             <button type="button" className="co-btn primary" onClick={retry}>
-              <RotateCcw size={15} aria-hidden /> Try again
+              Try again
             </button>
           ) : null}
           <button type="button" className="co-btn" onClick={() => onDone(result.passed)}>
@@ -198,10 +246,10 @@ export default function Quiz({
   }
 
   const answeredAll = questions.every((one) => answers[one.id]?.value !== undefined && answers[one.id]?.value !== null)
-  const inline = kind === 'check'
 
   return (
     <section className="co-quiz" aria-label={title || 'Questions'}>
+      {!inline ? <QuizSurface screen={controllable} /> : null}
       {title ? <h3>{title}</h3> : null}
       {!inline ? (
         <p className="co-faint">
@@ -283,7 +331,7 @@ export default function Quiz({
             <div className="co-question-foot">
               {question.hints.length > one.hintsUsed && !one.checked ? (
                 <button type="button" className="co-btn small quiet" onClick={() => hint(question.id)}>
-                  <Lightbulb size={13} aria-hidden /> Hint
+                  Hint
                   {/* Said out loud: a hint is allowed and it counts for something. */}
                   <span className="co-faint"> (counts for less)</span>
                 </button>

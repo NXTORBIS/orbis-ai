@@ -1,7 +1,10 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
-import { GraduationCap, Play, Search, X } from 'lucide-react'
+import { GraduationCap, Play } from 'lucide-react'
 import type { CourseCard } from '../../../../shared/courses/types'
 import type { NoticeKind } from '../../lib/notices'
+import { useSurface } from '../../lib/surfaces'
+import { SearchBox, ViewHeader } from '../../ui'
+import { coursesSurface } from './coursesSurfaces'
 import './courses.css'
 
 const CourseDetail = lazy(() => import('./CourseDetail'))
@@ -105,6 +108,33 @@ export default function CoursesView({
     return () => window.removeEventListener('keydown', onKey, true)
   }, [where, onClose])
 
+  /*
+   * What the shelf lets Orbis read and do.
+   *
+   * Above the three early returns below, because a hook has to be called on every draw, and there is a real reason
+   * here rather than only the rule: while a lesson is open this component is still the shelf, so Orbis can still read
+   * what is installed and still open another course.
+   *
+   * `all` throws while the shelf has not answered, so "no courses are installed" is never said about a shelf nobody
+   * has read yet. What it offers is in `coursesSurfaces.ts`.
+   */
+  useSurface(
+    coursesSurface({
+      search: () => query,
+      setSearch: setQuery,
+      all: () => shelf?.all ?? [],
+      continuing: () => shelf?.continuing ?? [],
+      loading: () => shelf === null,
+      open: (courseId) => setWhere({ kind: 'course', courseId }),
+      close: onClose,
+      // Asked of Orbis again rather than read off this screen: the shelf is what the main process says is installed.
+      check: async () => {
+        const out = (await window.api.courses('shelf').catch(() => null)) as Shelf | null
+        return out?.all ?? null
+      }
+    })
+  )
+
   if (where.kind === 'lesson') {
     return (
       <Suspense fallback={<div className="co-loading" />}>
@@ -155,26 +185,13 @@ export default function CoursesView({
 
   return (
     <div className="view co-view" role="region" aria-label="Courses">
-      <header className="co-head">
-        <div>
-          <h2>Courses</h2>
-          <p className="co-faint">Structured learning, with everything you do actually measured.</p>
-        </div>
-        <div className="co-head-right">
-          <label className="co-search">
-            <Search size={15} aria-hidden />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value.slice(0, 120))}
-              placeholder="Find a course"
-              aria-label="Find a course"
-            />
-          </label>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close Courses">
-            <X size={16} aria-hidden />
-          </button>
-        </div>
-      </header>
+      <ViewHeader
+        title="Courses"
+        note="Structured learning, with everything you do actually measured."
+        search={<SearchBox value={query} onChange={(next) => setQuery(next.slice(0, 120))} label="Find a course" maxLength={120} />}
+        onClose={onClose}
+        closeLabel="Close Courses"
+      />
 
       {shelf === null ? <div className="co-loading" aria-label="Loading" /> : null}
 

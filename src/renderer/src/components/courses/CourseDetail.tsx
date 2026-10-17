@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 import { ArrowLeft, Award, Check, ChevronRight, Lock, Play } from 'lucide-react'
 import type { Course, Enrollment } from '../../../../shared/courses/types'
 import type { NoticeKind } from '../../lib/notices'
+import { useSurface } from '../../lib/surfaces'
+import { courseSurface } from './coursesSurfaces'
 
 /**
  * One course.
@@ -52,11 +54,20 @@ export default function CourseDetail({
   onNotify(message: string, kind?: NoticeKind): void
 }): React.JSX.Element {
   const [detail, setDetail] = useState<Detail | null>(null)
+  /*
+   * Whether the course has been asked for yet, and what came back.
+   *
+   * "Still reading it" and "it could not be read" are different things to be looking at, and a screen that drew the
+   * same thin loading line for both left somebody in front of a page that would never fill in and said nothing. So
+   * `missing` is set only once Orbis has actually answered with no course, and the sentence below is shown then.
+   */
+  const [missing, setMissing] = useState(false)
   const [openModule, setOpenModule] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     const out = (await window.api.courses('detail', courseId).catch(() => null)) as Detail | null
     setDetail(out)
+    setMissing(out === null)
     // A course updated under somebody mid-way says so once, rather than silently changing beneath them.
     if (out?.says) onNotify(out.says)
     if (out && !openModule) setOpenModule(out.course.modules[0]?.id ?? null)
@@ -74,7 +85,58 @@ export default function CourseDetail({
     else await load()
   }
 
-  if (!detail) return <div className="co-loading" aria-label="Loading" />
+  /*
+   * What this course lets Orbis read and do.
+   *
+   * Above the early return, because a hook runs on every draw -- and `course` below throws until the course has
+   * arrived, so a question asked in that moment comes back "could not be read" rather than as an empty course.
+   */
+  useSurface(
+    courseSurface({
+      course: () => {
+        if (!detail) throw new Error('This course has not finished loading.')
+        return detail.course
+      },
+      progress: () => detail?.progress ?? 0,
+      enrolled: () => detail?.enrollment !== null && detail?.enrollment !== undefined,
+      modules: () => detail?.modules ?? [],
+      next: () => detail?.next ?? null,
+      certificate: () => detail?.certificate ?? null,
+      openModule: () => openModule,
+      expand: setOpenModule,
+      start,
+      lesson: onLesson,
+      back: onBack,
+      // Asked of Orbis again: whether somebody is on a course is what the main process has recorded, not what this
+      // screen last drew.
+      check: async () => {
+        const out = (await window.api.courses('detail', courseId).catch(() => null)) as Detail | null
+        return out ? { progress: out.progress, enrolled: out.enrollment !== null } : null
+      }
+    })
+  )
+
+  if (!detail) {
+    // Never nothing: either the line that says it is coming, or a sentence and the way back to the shelf.
+    return (
+      <div className="view co-view" role="region" aria-label="Course">
+        <header className="co-head">
+          <button type="button" className="co-back" onClick={onBack}>
+            <ArrowLeft size={15} aria-hidden /> Courses
+          </button>
+        </header>
+        {missing ? (
+          <p className="co-empty">
+            This course could not be opened. Its file is either missing or could not be read, so there is nothing to
+            show — the course has to be installed again before it can be taught. Nothing you have done on it has been
+            lost.
+          </p>
+        ) : (
+          <div className="co-loading" aria-label="Loading" />
+        )}
+      </div>
+    )
+  }
 
   const { course, enrollment, modules } = detail
   const done = Math.round(detail.progress * 100)
