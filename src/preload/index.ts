@@ -205,6 +205,11 @@ const api: NxtorbisApi = {
     ipcRenderer.invoke('markets:compare', instrumentIds, interval, limit),
   marketsWalkForward: (strategyId, options) => ipcRenderer.invoke('markets:walk-forward', strategyId, options),
   marketsMonteCarlo: (strategyId, options) => ipcRenderer.invoke('markets:monte-carlo', strategyId, options),
+  // ---- Which features this profile sees
+  featureVisibility: () => ipcRenderer.invoke('features:visibility'),
+  setFeatureVisible: (feature, on) => ipcRenderer.invoke('features:set-visible', feature, on),
+  chooseVisibleFeatures: (features) => ipcRenderer.invoke('features:choose-visible', features),
+
   // ---- Orbis Pages
   pagesState: () => ipcRenderer.invoke('pages:state'),
   pagesList: (filter) => ipcRenderer.invoke('pages:list', filter),
@@ -342,6 +347,14 @@ const api: NxtorbisApi = {
   native: (op: string, a?: unknown, b?: unknown, c?: unknown) => ipcRenderer.invoke('native:do', op, a, b, c),
   /** Orbis Choose: one channel, named operations. See `src/main/choose/ipc.ts` for the list. */
   choose: (op: string, asked?: unknown) => ipcRenderer.invoke('choose:do', op, asked),
+  /**
+   * "Do this on my screens", said in words.
+   *
+   * One sentence in, and what really happened out. Nothing is granted by asking this way: every step goes through
+   * the control layer as Orion, so the switches in Settings → What Orion may do, the approval prompts and the log
+   * all apply. See `src/main/screenAgent.ts`.
+   */
+  screens: (request: string, context?: { recent?: { role: 'user' | 'assistant'; text: string }[]; lastPath?: string }) => ipcRenderer.invoke('screens:ask', request, context),
   // Told when an app's instance changes, so a card on screen can re-read rather than drift out of date.
   onNativeChanged: (listen: (instanceId: string) => void) => {
     const handler = (_event: unknown, instanceId: string): void => listen(instanceId)
@@ -802,6 +815,21 @@ const api: NxtorbisApi = {
   chessEngineInstall: () => ipcRenderer.invoke('chess:engine-install'),
   chessAnalyse: (request) => ipcRenderer.invoke('chess:analyse', request),
   chessStopAnalysis: (id) => ipcRenderer.invoke('chess:stop-analysis', id),
+  chessAnalysisCache: (op, a, b) => ipcRenderer.invoke('chess:analysis-cache', op, a, b),
+  chessSettings: () => ipcRenderer.invoke('chess:settings'),
+  chessSaveSettings: (settings) => ipcRenderer.invoke('chess:save-settings', settings),
+  chessTraining: () => ipcRenderer.invoke('chess:training'),
+  chessSaveTraining: (training) => ipcRenderer.invoke('chess:save-training', training),
+  chessOpenings: () => ipcRenderer.invoke('chess:openings'),
+  chessSaveOpenings: (openings) => ipcRenderer.invoke('chess:save-openings', openings),
+  chessAcademy: () => ipcRenderer.invoke('chess:academy'),
+  chessSaveAcademy: (progress) => ipcRenderer.invoke('chess:save-academy', progress),
+  chessProgress: () => ipcRenderer.invoke('chess:progress'),
+  chessSaveProgress: (progress) => ipcRenderer.invoke('chess:save-progress', progress),
+  chessStudy: (gameId) => ipcRenderer.invoke('chess:study', gameId),
+  chessSaveStudy: (study) => ipcRenderer.invoke('chess:save-study', study),
+  arcadeRecord: () => ipcRenderer.invoke('arcade:record'),
+  arcadeSave: (record) => ipcRenderer.invoke('arcade:save', record),
   neurovaWorkspace: (id) => ipcRenderer.invoke('neurova:workspace', id),
   neurovaPlanPropose: (id) => ipcRenderer.invoke('neurova:plan-propose', id),
   neurovaPlanEdit: (id, e) => ipcRenderer.invoke('neurova:plan-edit', id, e),
