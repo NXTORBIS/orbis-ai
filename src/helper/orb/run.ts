@@ -21,7 +21,7 @@ import { isFollowUp, needsContext, resolve } from '../../shared/orbReference.ts'
 import { looksLikeScheduleRequest, readRequest } from '../../shared/temporal/phrase.ts'
 import { describeWanted, readChoice, visionQuestion, wantsEyes, WORTH_LOOKING_KINDS } from '../../shared/orbVision.ts'
 import type { SeenElement } from '../../shared/orbVision.ts'
-import { asEvidence, holdsSecret, isConsequential, redact, refusedProtection, wallInTheWay } from '../../shared/orbSafety.ts'
+import { describePageInFront, holdsSecret, isConsequential, redact, refusedProtection, wallInTheWay } from '../../shared/orbSafety.ts'
 
 /**
  * The Orb's control loop.
@@ -534,7 +534,12 @@ export function createOrbHandlers(deps: OrbDeps): Record<string, Handler> {
         if (!deps.has('orion:ask')) {
           // No router in this build. Answering directly is the honest fallback, not a second router.
           const page = task.perception.page
-          const evidence = page?.text ? asEvidence({ url: page.url, title: page.title }, page.text) : ''
+          /*
+           * The page, said in words -- including when there was no page text to say. `page?.text ? ... : ''` left the
+           * page out of the message entirely when it could not be read, so the model was asked a question about "this
+           * page" with nothing to connect it to and no reason to admit that. Now the unreadable case is stated.
+           */
+          const evidence = page ? describePageInFront(page).prompt : ''
           const answer = await deps.ask([evidence, `The person asked: ${request}`].filter(Boolean).join(NEWLINE), signal)
           task.status = 'done'
           task.outcome = 'Answered.'

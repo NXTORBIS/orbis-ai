@@ -1,6 +1,7 @@
 import { classifyIntent } from '../main/intent.ts'
 import { detectImageCount, detectImageGenRequest, generateImages, rewriteImagePrompt } from '../main/imagegen.ts'
 import { answerContext, runResearch } from '../main/research.ts'
+import { describePageInFront } from '../shared/orbSafety.ts'
 import { HelperError } from './server.ts'
 import type { Handler } from './server.ts'
 import type { BrowserHost } from './browser/host.ts'
@@ -200,12 +201,21 @@ export function createOrionHandlers(deps: OrionDeps): Record<string, Handler> {
         if (assembled?.summary && assembled.text) emit({ type: 'status', message: `Using ${assembled.summary}.` })
       }
 
-      // Without the engine, or with nothing it could say, the page alone -- the behaviour from before it existed.
-      const about = assembled?.text
-        ? `${assembled.text}${NEWLINE}${NEWLINE}`
-        : usePage && page
-        ? `This is the page the person is looking at.\nAddress: ${page.url}\nTitle: ${page.title}\n${page.selection.trim() ? `They have selected:\n${page.selection.trim().slice(0, 5000)}` : `The page reads:\n${page.text.slice(0, 12_000)}`}\n\n`
-          : ''
+      /*
+       * Without the engine, or with nothing it could say, the page alone.
+       *
+       * `describePageInFront` rather than a sentence built here, because the sentence built here could not tell the
+       * difference between a page with words in it and a page with none. Reading a PDF, a site that blocks reading or
+       * a page that has not loaded gives back an address and a title and no text, and the old line put that into the
+       * prompt as "The page reads:" with nothing after it -- so the model answered from the address and the answer
+       * looked like one from having read the page. It now says, in the prompt, that the page could not be read, and
+       * the person is told the same thing on screen rather than having to notice it in the answer.
+       */
+      const described = usePage && page ? describePageInFront(page) : null
+      if (described && !described.readable) {
+        emit({ type: 'status', message: 'This page could not be read, so the answer cannot be about what it says.' })
+      }
+      const about = assembled?.text ? `${assembled.text}${NEWLINE}${NEWLINE}` : described?.prompt ? `${described.prompt}${NEWLINE}${NEWLINE}` : ''
       await deps.chat({ messages: [...history, { role: 'user', content: about ? `${about}Question: ${text}` : text }] }, { emit, signal })
       return { routed: about ? (assembled?.text ? 'context' : 'page') : 'chat' }
     }
