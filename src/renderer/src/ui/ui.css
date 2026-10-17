@@ -15,9 +15,9 @@
 .ui-search {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
-  padding: 4px 10px;
+  padding: 4px 8px;
   border: 1px solid var(--pill-border);
   border-radius: 999px;
   background: var(--pill-bg);
@@ -48,13 +48,85 @@
   appearance: none;
 }
 
+/*
+ * The clear button, when the screen asks for one.
+ *
+ * Six screens drew this and all six drew it differently -- 18px, 28px, a circle, a square, one with no hover at
+ * all. One size, and it is a real button, so Tab reaches it and `:focus-visible` shows where you are.
+ */
+.ui-search button {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--faint);
+  cursor: pointer;
+}
+
+.ui-search button:hover {
+  color: var(--text);
+}
+
 .ui-search.small {
   padding: 2px 8px;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .ui-search.small input {
   flex-basis: 140px;
+}
+
+/* ---------------------------------------------------------------- a screen's header, when it has three parts */
+
+/*
+ * The row itself is `.view-head`, which the window has always had. All this adds is the two things that were
+ * missing and which three screens each invented: a line under the title, and a place for the search box.
+ *
+ * Every selector here starts with two classes on one element, so this file never claims a name the global
+ * stylesheet also claims -- which is what the collision guard checks and what once turned Student's row of tabs
+ * into a full-width stack.
+ */
+.view-head.ui-head {
+  flex-wrap: wrap;
+}
+
+.ui-head-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ui-head-name > div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* The line under the title: a count, or what the screen is for. Quiet, because the title is the loud part. */
+.ui-head-name p {
+  margin: 0;
+  color: var(--faint);
+  font-size: 12px;
+}
+
+/*
+ * The search box takes whatever room is left, so the title keeps its size and the buttons keep theirs.
+ *
+ * 240px is the size it prefers rather than a fixed width: in a narrow window the row wraps and this takes a line
+ * of its own instead of squeezing the title into two words.
+ */
+.ui-head-find {
+  flex: 1 1 240px;
+  min-width: 180px;
+}
+
+.ui-head-find .ui-search {
+  width: 100%;
 }
 
 /* ---------------------------------------------------------------- the toggle chip */
@@ -62,13 +134,13 @@
 .ui-chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
+  gap: 4px;
+  padding: 4px 8px;
   border: 1px solid var(--pill-border);
   border-radius: 999px;
   background: var(--pill-bg);
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
   cursor: pointer;
   transition:
     border-color 110ms ease,
@@ -77,7 +149,7 @@
 
 .ui-chip:hover {
   color: var(--text);
-  border-color: color-mix(in srgb, var(--cyan) 40%, transparent);
+  border-color: var(--glass-border);
 }
 
 .ui-chip:focus-visible {

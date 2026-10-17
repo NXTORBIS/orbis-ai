@@ -13,6 +13,8 @@
  */
 export { Surface } from './Surface'
 export type { SurfaceProps } from './Surface'
+export { ViewHeader } from './ViewHeader'
+export type { ViewHeaderProps } from './ViewHeader'
 export { IconButton } from './IconButton'
 export type { IconButtonProps } from './IconButton'
 export { EmptyState } from './EmptyState'

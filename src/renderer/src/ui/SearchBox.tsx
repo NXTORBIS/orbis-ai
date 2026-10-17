@@ -1,5 +1,5 @@
-import { Search } from 'lucide-react'
-import { useId } from 'react'
+import { Search, X } from 'lucide-react'
+import { useId, type Ref } from 'react'
 import './ui.css'
 
 /**
@@ -26,17 +26,55 @@ export interface SearchBoxProps {
   /** Narrower, for a toolbar. */
   small?: boolean
   autoFocus?: boolean
+  /**
+   * The screen's own rule for *where this box sits* — how much room it takes in the row it is in.
+   *
+   * Nothing else. The border, the corner, the colours, the font, the focus ring, the placeholder and the clear
+   * button all come from `.ui-search`, which is the whole point; six screens had written all of that out again
+   * and disagreed about every line of it. What a screen genuinely owns is its own layout, so that stays with the
+   * screen — written against the row it is in, never as a class of its own, so no two screens can collide.
+   */
+  className?: string
+  /**
+   * A clear button beside the field, for the screens that already had one.
+   *
+   * Escape clears the box whether this is set or not. This is the *visible* way to do it, which several screens
+   * had and which would be a control taken away if it went.
+   */
+  clearable?: boolean
+  /** A handle on the field, for a screen that focuses it from a keyboard shortcut of its own. */
+  inputRef?: Ref<HTMLInputElement>
+  /** A tooltip on the field — worth it only when the screen has keys of its own worth saying out loud. */
+  title?: string
+  /**
+   * A cap on how much can be typed.
+   *
+   * Several of the boxes this replaced had one, and it is not decoration: the query goes to a provider, and a box
+   * with no limit lets somebody paste a novel into a web request.
+   */
+  maxLength?: number
+  /**
+   * The id of the list this box is driving, when there is one on screen under it.
+   *
+   * It becomes `aria-controls`, which is what tells somebody using a screen reader that typing here changes that
+   * list rather than something they cannot see.
+   */
+  controls?: string
 }
 
-export function SearchBox({ value, onChange, label, placeholder, small, autoFocus }: SearchBoxProps): React.JSX.Element {
+export function SearchBox({ value, onChange, label, placeholder, small, autoFocus, className, clearable, inputRef, title, maxLength, controls }: SearchBoxProps): React.JSX.Element {
   const id = useId()
   return (
-    <div className={['ui-search', small ? 'small' : ''].filter((one) => one !== '').join(' ')}>
+    <div className={['ui-search', small ? 'small' : '', className ?? ''].filter((one) => one !== '').join(' ')}>
       <Search size={14} aria-hidden="true" />
       <input
         id={id}
+        ref={inputRef}
         type="search"
         aria-label={label}
+        title={title}
+        maxLength={maxLength}
+        aria-controls={controls}
         value={value}
         placeholder={placeholder ?? label}
         autoFocus={autoFocus}
@@ -52,6 +90,11 @@ export function SearchBox({ value, onChange, label, placeholder, small, autoFocu
           onChange('')
         }}
       />
+      {clearable && value !== '' && (
+        <button type="button" aria-label="Clear the search" onClick={() => onChange('')}>
+          <X size={13} aria-hidden="true" />
+        </button>
+      )}
     </div>
   )
 }

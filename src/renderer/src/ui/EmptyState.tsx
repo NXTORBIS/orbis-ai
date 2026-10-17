@@ -4,13 +4,13 @@ import './ui.css'
 /**
  * What a screen says when there is nothing in it yet.
  *
- * There are twenty-one of these in the window — `.view-empty`, `.images-empty`, `.mk-empty`, `.st-empty`,
- * `.notify-none`, `.labs-none` and the rest — which is twenty-one chances for one of them to say nothing useful.
- * The shape that works is the same every time: say what would be here, and say the one thing that would put
- * something here.
+ * One line of dim text, centred in the space. No border, no card, no icon: a drawn box full of nothing is louder
+ * than the nothing it describes, and six screens each drawing their own was the clutter. `.view-empty` in the
+ * global stylesheet is the one rule behind this, and every screen that used to roll its own now points at it.
  *
- * `.view-empty` already exists and is the one this uses. The component's value is the second prop: a blank screen
- * that only says "Nothing yet" leaves somebody looking for the button, and `action` is the place to put it.
+ * Say what would be here, and — where it genuinely helps — put the one thing that would put something here in
+ * `action`. One plain button, not three. A blank screen that only says "Nothing yet" leaves somebody looking for
+ * the button.
  */
 export interface EmptyStateProps {
   /** What would be here. A sentence, not a word. */
