@@ -1,4 +1,4 @@
-import { ArrowLeft, Check, RefreshCw } from 'lucide-react'
+import { ArrowLeft, Check } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import './cosmos.css'
 
@@ -134,7 +134,7 @@ export default function CosmosView({ onClose }: Props): React.JSX.Element {
                   <p className="cosmos-line cosmos-line-bad">The simulation could not start.</p>
                   <p className="cosmos-why">{snap?.why}</p>
                   <button type="button" className="cosmos-retry" onClick={begin}>
-                    <RefreshCw size={15} /> Try again
+                    Try again
                   </button>
                 </>
               ) : (
