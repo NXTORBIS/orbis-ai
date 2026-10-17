@@ -21,6 +21,7 @@ import { statShare, type FbMatchExtras, type FbTeamProfile } from '../../../../s
 import { isLive, type FbLeague, type FbMatch, type FbStandingRow } from '../../../../shared/football/types'
 import { EventStrip, LineupPitch, Replay, useReducedMotion } from './MatchViews'
 import { Crest, Fresh, MatchRow, SourceLine, Waiting, useFb, useFollows, type Load } from './shared'
+import { SearchBox } from '../../ui'
 
 const DAY = 86_400_000
 /** The newest row of each match the Now list has shown: a single-match lookup can lack the minute a live list carried. */
@@ -100,7 +101,7 @@ export function NowPanel({ onOpen, selected }: { onOpen: (key: string) => void; 
   return (
     <div>
       <div className="fb-sourcebar">
-        <input className="fb-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search a team or competition" aria-label="Search matches" />
+        <SearchBox value={q} onChange={setQ} label="Search matches" placeholder="Search a team or competition" className="fb-find" />
         <label className="fb-check">
           <input type="checkbox" checked={onlyFollowed} onChange={(e) => setOnlyFollowed(e.target.checked)} /> Followed teams and pinned matches only
         </label>

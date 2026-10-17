@@ -1,11 +1,14 @@
-import { RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { useReducedMotion } from './MatchViews'
 import { emptyFollows, sanitizeFollows, type FbFollows, type FbSavedView, type FbUi } from '../../../../shared/football/follows'
 import { clockLabel, freshnessLabel, reconcileScore } from '../../../../shared/football/logic'
 import { isLive, type FbAnswer, type FbMatch, type FbSource } from '../../../../shared/football/types'
 
-export type Load<T> = { state: 'loading' } | { state: 'error'; message: string; reason: string } | { state: 'ready'; answer: Extract<FbAnswer<T>, { ok: true }>; at: number }
+export type Load<T> =
+  | { state: 'loading' }
+  | { state: 'error'; message: string; reason: string }
+  /** `at` is when this answer reached the window, and `busy` says a fresh ask is in flight right now. */
+  | { state: 'ready'; answer: Extract<FbAnswer<T>, { ok: true }>; at: number; busy?: boolean }
 
 /** Asks the main process; keeps the answer, a marker, or the reason it failed. `everyMs` re-asks quietly (the old answer stays on screen). */
 export function useFb<T>(ask: (() => Promise<unknown>) | null, deps: unknown[], everyMs = 0): [Load<T>, () => void] {
@@ -18,6 +21,9 @@ export function useFb<T>(ask: (() => Promise<unknown>) | null, deps: unknown[], 
     if (first.current || tick === 0) setLoad({ state: 'loading' })
     first.current = false
     const run = (): void => {
+      // A refresh of something already on screen keeps the old answer visible, so the only way a person can tell the
+      // ask is happening is this marker: the provider's answer may be identical, and then nothing else would change.
+      setLoad((cur) => (cur.state === 'ready' ? { ...cur, busy: true } : cur))
       ask()
         .then((raw) => {
           if (!live) return
@@ -40,17 +46,27 @@ export function useFb<T>(ask: (() => Promise<unknown>) | null, deps: unknown[], 
 
 const PROVIDER_NAME = { openligadb: 'OpenLigaDB', thesportsdb: 'TheSportsDB' } as const
 
+/**
+ * Where this screen's data came from, and when Orbis last asked for it.
+ *
+ * Two different times, because they answer two different questions. "Received" is the provider's own answer time, which
+ * does not move while the answer is being served from the short cache. "Checked" is when Refresh last finished, which
+ * moves every time. Without the second one, a Refresh that fetched perfectly and got back the same numbers looks
+ * exactly like a button that is not wired to anything.
+ */
 export function SourceLine({ load, retry }: { load: Load<unknown>; retry: () => void }): React.JSX.Element | null {
   if (load.state !== 'ready') return null
   const { sources, freshness, notes } = load.answer
+  const busy = load.busy === true
   const names = [...new Set(sources.map((s: FbSource) => PROVIDER_NAME[s.provider]))].join(' + ')
   const newest = sources.map((s: FbSource) => s.retrievedAt).sort().pop() ?? ''
   const words = { fresh: 'just fetched', cached: 'from this session’s cache', stale: 'OLD: the provider could not be reached, showing the last answer' }[freshness]
   return (
     <p className={`fb-source is-${freshness}`}>
-      {names} · {words} · received {newest ? new Date(newest).toLocaleTimeString() : '–'}
-      <button type="button" className="fb-link" onClick={retry}>
-        <RefreshCw size={12} /> Refresh
+      {names} · {words} · received {newest ? new Date(newest).toLocaleTimeString() : '–'} · checked{' '}
+      {new Date(load.at).toLocaleTimeString()}
+      <button type="button" className="fb-link" onClick={retry} disabled={busy} aria-busy={busy}>
+        {busy ? 'Checking…' : 'Refresh'}
       </button>
       {notes.map((n) => (
         <small key={n}>{n}</small>
@@ -67,7 +83,7 @@ export function Waiting({ load, retry, what }: { load: Load<unknown>; retry: () 
         <p>{load.reason === 'unsupported' ? load.message : `Could not load ${what}.`}</p>
         {load.reason !== 'unsupported' && <small>{load.message}</small>}
         <button type="button" className="fb-btn" onClick={retry}>
-          <RefreshCw size={14} /> Try again
+          Try again
         </button>
       </div>
     )
