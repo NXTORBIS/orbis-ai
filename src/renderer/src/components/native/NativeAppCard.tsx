@@ -2,6 +2,9 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { AlertTriangle, ChevronLeft, Expand, Maximize2, Minimize2, Pause, Play, RotateCcw, X } from 'lucide-react'
 import type { NoticeKind } from '../../lib/notices'
+import { APP_SIZES } from '../../../../shared/native/manifest'
+import { useSurface } from '../../lib/surfaces'
+import { nativeAppSurface } from './labSurfaces'
 import { Surface, hasSurface, type LiveInstance } from './surfaces'
 import { appIcon } from './icons'
 import AskBar from './AskBar'
@@ -229,6 +232,32 @@ function NativeAppCard({
       onNotify(made?.says ?? 'That app could not be opened.', 'warn')
     }
   }, [reference.appId, onNotify, load])
+
+  /*
+   * What Orbis itself may do with this laboratory, said by the card rather than by anything that holds a list of
+   * laboratories.
+   *
+   * Every control comes from the app's own declared parameters -- with their units, their ranges and their options --
+   * and every write goes through `configure`, the same function the panel's own fields call. So a laboratory is
+   * controllable down to the parameter the day it registers, and none of it is written down twice.
+   *
+   * Above the early returns, because a hook that runs only sometimes is React error #310: a card that is loading,
+   * closed or failed returns before this point, and the getters below say so rather than guessing.
+   */
+  useSurface(
+    nativeAppSurface({
+      appId: reference.appId,
+      name: () => card?.name ?? reference.appId,
+      instance: () => instance,
+      why: () => (card === null ? 'This card has not finished loading.' : card.state.show === 'app' ? null : card.state.says),
+      busy: () => busy,
+      configure,
+      act: (operation, argument) => act(operation, argument),
+      fullPage: () => fullPage,
+      setFullPage,
+      sizes: APP_SIZES
+    })
+  )
 
   if (!card) return <div className="na-card na-loading" aria-label="Loading" ref={frame} />
 

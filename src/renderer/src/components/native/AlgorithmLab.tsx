@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ChevronLeft, ChevronRight, Code2, Pause, Play, RotateCcw, SkipForward, Sparkles, Variable } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Pause, Play, RotateCcw, SkipForward, Sparkles } from 'lucide-react'
 import type { SurfaceProps } from './surfaces'
 import { Segmented } from '../../ui'
 import Parameters from './Parameters'
@@ -262,7 +262,7 @@ export default function AlgorithmLab({ instance, onNotify, onConfigure }: Surfac
           disabled={code === null}
           title={code === null ? 'There is no listing for this algorithm' : onLine === null ? 'Read the code — this one does not mark its line yet' : 'Follow the code'}
         >
-          <Code2 size={14} aria-hidden /> Code
+          Code
         </button>
         <button
           type="button"
@@ -272,7 +272,7 @@ export default function AlgorithmLab({ instance, onNotify, onConfigure }: Surfac
           disabled={Object.keys(vars).length === 0}
           title={Object.keys(vars).length === 0 ? 'This algorithm does not report its variables yet' : 'Watch the variables'}
         >
-          <Variable size={14} aria-hidden /> Variables
+          Variables
         </button>
       </div>
 

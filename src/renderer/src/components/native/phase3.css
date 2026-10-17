@@ -26,7 +26,7 @@
 .p3-split {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 260px;
-  gap: 14px;
+  gap: 12px;
   align-items: start;
 }
 
@@ -44,15 +44,14 @@
 .p3-side {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
 
 .p3-panel {
-  padding: 10px 12px;
-  border: 1px solid var(--glass-border);
-  border-radius: 11px;
-  background: rgba(255, 255, 255, 0.025);
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--text) 2.5%, transparent);
 }
 
 .p3-panel h4 {
@@ -67,9 +66,9 @@
 }
 
 .p3-close {
-  padding: 0 5px;
+  padding: 0 4px;
   border: 0;
-  border-radius: 5px;
+  border-radius: 6px;
   background: transparent;
   color: var(--faint);
   font-size: 15px;
@@ -86,7 +85,7 @@
   grid-template-columns: max-content minmax(0, 1fr);
   gap: 3px 12px;
   margin: 0 0 8px;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .p3-facts dt {
@@ -101,8 +100,8 @@
 
 /* The engine's own statement about what a picture is. Quiet, and always present. */
 .p3-note {
-  margin: 6px 0 0;
-  padding: 7px 10px;
+  margin: 4px 0 0;
+  padding: 8px 8px;
   border-left: 2px solid var(--glass-border);
   font-size: 11px;
   line-height: 1.55;
@@ -124,7 +123,7 @@
 }
 
 .p3-bond {
-  stroke: rgba(255, 255, 255, 0.55);
+  stroke: color-mix(in srgb, var(--text) 55%, transparent);
   stroke-width: 0.075;
   stroke-linecap: round;
 }
@@ -135,7 +134,7 @@
 }
 
 .p3-atom circle {
-  stroke: rgba(0, 0, 0, 0.45);
+  stroke: var(--shadow-color);
   stroke-width: 0.03;
   cursor: pointer;
 }
@@ -159,7 +158,7 @@
 }
 
 .p3-lone {
-  fill: rgba(140, 200, 255, 0.85);
+  fill: color-mix(in srgb, var(--cyan) 85%, transparent);
 }
 
 .p3-charge {
@@ -177,13 +176,13 @@
 }
 
 .p3-arrow {
-  stroke: rgba(255, 255, 255, 0.6);
+  stroke: color-mix(in srgb, var(--text) 60%, transparent);
   stroke-width: 0.045;
   stroke-linecap: round;
 }
 
 .p3-arrow-head {
-  fill: rgba(255, 255, 255, 0.6);
+  fill: color-mix(in srgb, var(--text) 60%, transparent);
 }
 
 .p3-source circle {
@@ -191,13 +190,13 @@
 }
 
 .p3-source.positive circle {
-  fill: rgba(226, 72, 60, 0.85);
-  stroke: rgba(255, 150, 140, 0.9);
+  fill: color-mix(in srgb, var(--red) 85%, transparent);
+  stroke: color-mix(in srgb, var(--red) 90%, transparent);
 }
 
 .p3-source.negative circle {
-  fill: rgba(58, 99, 216, 0.85);
-  stroke: rgba(150, 180, 255, 0.9);
+  fill: color-mix(in srgb, var(--cyan) 85%, transparent);
+  stroke: color-mix(in srgb, var(--cyan) 90%, transparent);
 }
 
 /* A sign as well as a colour, so the two kinds of source are told apart without it. */
@@ -236,7 +235,7 @@
 }
 
 .p3-curve.prey {
-  stroke: rgba(120, 220, 160, 0.95);
+  stroke: color-mix(in srgb, var(--green) 95%, transparent);
 }
 
 .p3-curve.predator {
@@ -250,16 +249,16 @@
 
 .p3-legend {
   display: flex;
-  gap: 14px;
+  gap: 12px;
   flex-wrap: wrap;
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--faint);
 }
 
 .p3-legend span {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
 }
 
 .p3-swatch {
@@ -270,7 +269,7 @@
 }
 
 .p3-swatch.prey {
-  border-top-color: rgba(120, 220, 160, 0.95);
+  border-top-color: color-mix(in srgb, var(--green) 95%, transparent);
 }
 
 .p3-swatch.predator {
@@ -288,9 +287,9 @@
   overflow: auto;
   padding: 8px;
   border: 1px solid var(--glass-border);
-  border-radius: 9px;
+  border-radius: 10px;
   font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .p3-codon {
@@ -300,21 +299,21 @@
   gap: 1px;
   padding: 2px 4px;
   border: 1px solid transparent;
-  border-radius: 5px;
-  background: rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--text) 4%, transparent);
 }
 
 .p3-codon.changed {
   border-color: var(--cyan);
-  background: rgba(0, 200, 255, 0.12);
+  background: color-mix(in srgb, var(--cyan) 12%, transparent);
 }
 
 .p3-codon.stop {
-  border-color: rgba(240, 140, 120, 0.7);
+  border-color: color-mix(in srgb, var(--red) 70%, transparent);
 }
 
 .p3-codon small {
-  font-size: 9.5px;
+  font-size: 10px;
   color: var(--faint);
 }
 
@@ -323,32 +322,32 @@
 }
 
 /* Each base gets a letter as well as a shade; the letter is the identification. */
-.p3-base.A { color: #7adf9a }
-.p3-base.T { color: #e2746a }
-.p3-base.G { color: #e6c05a }
-.p3-base.C { color: #74b4e8 }
+.p3-base.A { color: var(--green) }
+.p3-base.T { color: var(--red) }
+.p3-base.G { color: var(--amber) }
+.p3-base.C { color: var(--cyan) }
 
 .p3-protein {
   display: flex;
   flex-wrap: wrap;
   gap: 3px;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .p3-amino {
-  padding: 2px 6px;
+  padding: 2px 4px;
   border: 1px solid var(--glass-border);
-  border-radius: 5px;
+  border-radius: 6px;
 }
 
 .p3-amino.changed {
   border-color: var(--cyan);
-  background: rgba(0, 200, 255, 0.12);
+  background: color-mix(in srgb, var(--cyan) 12%, transparent);
 }
 
 .p3-amino.stop {
-  border-color: rgba(240, 140, 120, 0.7);
-  color: rgba(240, 160, 140, 0.95);
+  border-color: color-mix(in srgb, var(--red) 70%, transparent);
+  color: color-mix(in srgb, var(--red) 95%, transparent);
 }
 
 /* ---------------------------------------------------------------- diagnostics */
@@ -363,20 +362,20 @@
 .p3-stat {
   display: inline-flex;
   align-items: baseline;
-  gap: 5px;
-  padding: 4px 9px;
+  gap: 4px;
+  padding: 4px 8px;
   border: 1px solid var(--glass-border);
-  border-radius: 8px;
+  border-radius: 6px;
   font-size: 11px;
   color: var(--faint);
 }
 
 .p3-stat strong {
   color: var(--text);
-  font-size: 12.5px;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
 
 .p3-stat.warn {
-  border-color: rgba(240, 170, 90, 0.55);
+  border-color: color-mix(in srgb, var(--amber) 55%, transparent);
 }

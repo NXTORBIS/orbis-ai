@@ -3,23 +3,23 @@
 .p9-bar {
   display: flex;
   align-items: flex-end;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .p9-pick {
   display: flex;
   flex-direction: column;
   gap: 3px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--faint);
 }
 
 .p9-pick select {
-  padding: 6px 9px;
+  padding: 4px 8px;
   border: 1px solid var(--glass-border);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--bg-deep);
   color: var(--text);
   font: inherit;
@@ -29,9 +29,9 @@
 
 .p9-run,
 .p9-predict {
-  padding: 7px 14px;
+  padding: 8px 12px;
   border: 1px solid var(--glass-border);
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
   color: var(--text);
   font: inherit;
@@ -63,7 +63,7 @@
 /* Whether a sandbox is set up, said before anybody presses anything. */
 .p9-where {
   margin: 0 0 12px;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
   color: var(--faint);
 }
@@ -78,9 +78,9 @@
  * an error — the result may well be right, and nothing verified it.
  */
 .p9-origin {
-  margin-bottom: 10px;
-  padding: 9px 12px;
-  border-radius: 9px;
+  margin-bottom: 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
   border: 1px solid var(--glass-border);
   font-size: 13px;
   line-height: 1.5;
@@ -92,18 +92,18 @@
 }
 
 .p9-origin.predicted {
-  border-color: color-mix(in srgb, #f0a33a 55%, var(--glass-border));
-  background: color-mix(in srgb, #f0a33a 8%, transparent);
-  color: #f0a33a;
+  border-color: color-mix(in srgb, var(--amber) 55%, var(--glass-border));
+  background: color-mix(in srgb, var(--amber) 8%, transparent);
+  color: var(--amber);
 }
 
 .p9-verdict {
   display: inline-block;
-  margin-bottom: 10px;
-  padding: 4px 10px;
+  margin-bottom: 8px;
+  padding: 4px 8px;
   border-radius: 999px;
   border: 1px solid var(--glass-border);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -118,18 +118,18 @@
 .p9-verdict.memory,
 .p9-verdict.wrong-output,
 .p9-verdict.provider-error {
-  border-color: color-mix(in srgb, #f0a33a 55%, var(--glass-border));
-  color: #f0a33a;
+  border-color: color-mix(in srgb, var(--amber) 55%, var(--glass-border));
+  color: var(--amber);
 }
 
 .p9-stream {
   margin: 0 0 12px;
-  padding: 10px 12px;
-  border-radius: 9px;
+  padding: 8px 12px;
+  border-radius: 10px;
   background: var(--bg-deep);
   border: 1px solid var(--glass-border);
   font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.55;
   white-space: pre-wrap;
   word-break: break-word;
@@ -138,7 +138,7 @@
 }
 
 .p9-stream.error {
-  border-color: color-mix(in srgb, #f0a33a 40%, var(--glass-border));
+  border-color: color-mix(in srgb, var(--amber) 40%, var(--glass-border));
 }
 
 /* ---------------------------------------------------------------- the editor */
@@ -147,8 +147,8 @@
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  margin-bottom: 5px;
-  font-size: 12px;
+  margin-bottom: 4px;
+  font-size: 13px;
 }
 
 .p9-editor-head code {
@@ -158,8 +158,7 @@
 
 .p9-code {
   display: flex;
-  border: 1px solid var(--glass-border);
-  border-radius: 9px;
+  border-radius: 10px;
   background: var(--bg-deep);
   overflow: hidden;
 }
@@ -171,12 +170,12 @@
 .p9-gutter {
   display: flex;
   flex-direction: column;
-  padding: 10px 8px 10px 10px;
+  padding: 8px 8px 8px 8px;
   border-right: 1px solid var(--glass-border);
   background: var(--bg-mid);
   color: var(--faint);
   font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.55;
   text-align: right;
   user-select: none;
@@ -187,12 +186,12 @@
   flex: 1;
   min-width: 0;
   min-height: 300px;
-  padding: 10px 12px;
+  padding: 8px 12px;
   border: 0;
   background: transparent;
   color: var(--text);
   font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.55;
   resize: vertical;
   /* Off, so the gutter can stay aligned: a wrapped line would need a number that is not there. */
@@ -211,18 +210,18 @@
   flex-direction: column;
   gap: 4px;
   margin-top: 12px;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .p9-stdin textarea {
   min-height: 70px;
-  padding: 9px 11px;
+  padding: 8px 12px;
   border: 1px solid var(--glass-border);
-  border-radius: 9px;
+  border-radius: 10px;
   background: var(--bg-deep);
   color: var(--text);
   font-family: ui-monospace, 'Cascadia Code', Consolas, monospace;
-  font-size: 12.5px;
+  font-size: 13px;
   resize: vertical;
 }
 
@@ -234,12 +233,12 @@
 /* ------------------------------------------------------------- the languages */
 
 .p9-group {
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .p9-group-head {
-  margin-bottom: 6px;
-  font-size: 12px;
+  margin-bottom: 4px;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -249,16 +248,16 @@
 .p9-langs {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 7px;
+  gap: 8px;
 }
 
 .p9-lang {
   display: flex;
   flex-direction: column;
   gap: 1px;
-  padding: 7px 10px;
+  padding: 8px 8px;
   border: 1px solid var(--glass-border);
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
   color: var(--text);
   font: inherit;
@@ -282,7 +281,7 @@
 }
 
 .p9-about {
-  margin: 0 0 10px;
+  margin: 0 0 8px;
   font-size: 13px;
   line-height: 1.55;
 }
@@ -294,9 +293,9 @@
 
 /* Why it fell back, and what that costs. Under the headline rather than hidden behind a tab. */
 .p9-why {
-  margin: 7px 0 0;
-  padding-left: 18px;
-  font-size: 12px;
+  margin: 8px 0 0;
+  padding-left: 16px;
+  font-size: 13px;
   line-height: 1.55;
   font-weight: 400;
   opacity: 0.92;

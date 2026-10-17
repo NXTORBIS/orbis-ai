@@ -19,8 +19,8 @@
 
 /* A panel whose content is a warning rather than a fact. */
 .p3-panel.p5-warn {
-  border-color: color-mix(in srgb, #f0a33a 45%, var(--glass-border));
-  background: color-mix(in srgb, #f0a33a 6%, transparent);
+  border-color: color-mix(in srgb, var(--amber) 45%, var(--glass-border));
+  background: color-mix(in srgb, var(--amber) 6%, transparent);
 }
 
 /* ---------------------------------------------------------------- digital logic */
@@ -37,17 +37,17 @@
   grid-template-columns: 70px minmax(0, 1fr) 26px;
   align-items: center;
   gap: 8px;
-  padding: 5px 8px;
+  padding: 4px 8px;
   border: 1px solid var(--glass-border);
   border-radius: 6px;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .p5-gate-kind {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   font-size: 10px;
-  color: var(--cyan);
+  color: var(--faint);
 }
 
 .p5-gate-wires {
@@ -64,7 +64,7 @@
   place-items: center;
   width: 22px;
   height: 22px;
-  border-radius: 4px;
+  border-radius: 6px;
   border: 1px solid var(--glass-border);
   font-variant-numeric: tabular-nums;
   font-size: 11px;
@@ -100,13 +100,13 @@
 }
 
 .p5-bit.out.on {
-  background: color-mix(in srgb, #37d67a 16%, transparent);
+  background: color-mix(in srgb, var(--green) 16%, transparent);
 }
 
 .p5-strip {
   display: flex;
   gap: 1px;
-  margin: 10px 0;
+  margin: 8px 0;
   overflow-x: auto;
   padding-bottom: 4px;
 }
@@ -117,7 +117,7 @@
   gap: 1px;
   padding: 2px;
   border: 1px solid transparent;
-  border-radius: 3px;
+  border-radius: 6px;
   background: transparent;
   cursor: pointer;
   flex: 0 0 auto;
@@ -176,8 +176,8 @@
   width: 17px;
   height: 17px;
   flex: 0 0 auto;
-  border-radius: 2px;
-  font-size: 9px;
+  border-radius: 6px;
+  font-size: 10px;
   font-weight: 600;
   color: transparent;
 }
@@ -189,44 +189,44 @@
 }
 
 .p5-stage.decode {
-  background: color-mix(in srgb, #5cc8e0 30%, transparent);
+  background: color-mix(in srgb, var(--cyan) 30%, transparent);
   color: var(--text);
 }
 
 .p5-stage.execute {
-  background: color-mix(in srgb, #37d67a 30%, transparent);
+  background: color-mix(in srgb, var(--green) 30%, transparent);
   color: var(--text);
 }
 
 .p5-stage.memory {
-  background: color-mix(in srgb, #f0a33a 30%, transparent);
+  background: color-mix(in srgb, var(--amber) 30%, transparent);
   color: var(--text);
 }
 
 .p5-stage.writeback {
-  background: color-mix(in srgb, #c08bf0 30%, transparent);
+  background: color-mix(in srgb, var(--violet) 30%, transparent);
   color: var(--text);
 }
 
 /* A gap where the instruction could not move on. */
 .p5-stage.stalled {
-  background: repeating-linear-gradient(45deg, transparent, transparent 2px, color-mix(in srgb, #e05c5c 30%, transparent) 2px, color-mix(in srgb, #e05c5c 30%, transparent) 4px);
+  background: repeating-linear-gradient(45deg, transparent, transparent 2px, color-mix(in srgb, var(--red) 30%, transparent) 2px, color-mix(in srgb, var(--red) 30%, transparent) 4px);
   color: var(--faint);
 }
 
 .p5-hazards li {
-  padding-left: 6px;
+  padding-left: 4px;
   border-left: 2px solid var(--glass-border);
-  margin-bottom: 5px;
+  margin-bottom: 4px;
 }
 
 .p5-hazards li.data,
 .p5-hazards li.load-use {
-  border-left-color: #f0a33a;
+  border-left-color: var(--amber);
 }
 
 .p5-hazards li.control {
-  border-left-color: #c08bf0;
+  border-left-color: var(--violet);
 }
 
 .p5-cache-strip {
@@ -239,15 +239,15 @@
 .p5-access {
   width: 9px;
   height: 9px;
-  border-radius: 2px;
+  border-radius: 6px;
 }
 
 .p5-access.hit {
-  background: #37d67a;
+  background: var(--green);
 }
 
 .p5-access.miss {
-  background: #e05c5c;
+  background: var(--red);
 }
 
 /* ---------------------------------------------------------------- the operating system */
@@ -267,8 +267,8 @@
   min-width: 2px;
   font-size: 10px;
   font-weight: 600;
-  color: #0a1428;
-  border-right: 1px solid rgba(0, 0, 0, 0.18);
+  color: var(--surface);
+  border-right: 1px solid var(--line-strong);
   overflow: hidden;
 }
 
@@ -283,12 +283,12 @@
   font-size: 10px;
   color: var(--faint);
   font-variant-numeric: tabular-nums;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .p5-starved td,
 .p5-starved {
-  background: color-mix(in srgb, #e05c5c 8%, transparent);
+  background: color-mix(in srgb, var(--red) 8%, transparent);
 }
 
 .p5-paging {
@@ -297,7 +297,7 @@
 }
 
 .p5-fault td {
-  background: color-mix(in srgb, #f0a33a 10%, transparent);
+  background: color-mix(in srgb, var(--amber) 10%, transparent);
 }
 
 .p5-wanted {
@@ -316,7 +316,7 @@
 }
 
 .p5-evicted {
-  color: #e05c5c;
+  color: var(--red);
   font-variant-numeric: tabular-nums;
 }
 
@@ -341,18 +341,18 @@
 .p5-belady-bar > span {
   width: 100%;
   background: var(--cyan);
-  border-radius: 2px 2px 0 0;
+  border-radius: 6px 6px 0 0;
   min-height: 2px;
 }
 
 /* More memory making it worse is the whole point, so it is coloured as a fault. */
 .p5-belady-bar.worse > span {
-  background: #e05c5c;
+  background: var(--red);
 }
 
 .p5-belady-bar small,
 .p5-belady-bar em {
-  font-size: 9px;
+  font-size: 10px;
   color: var(--faint);
   font-style: normal;
 }
@@ -361,18 +361,18 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
-  margin: 10px 0;
+  gap: 4px;
+  margin: 8px 0;
 }
 
 .p5-wait-node {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 10px;
+  gap: 4px;
+  padding: 4px 8px;
   border-radius: 6px;
   border: 1px solid var(--glass-border);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .p5-wait-node.process {
@@ -380,7 +380,7 @@
 }
 
 .p5-wait-node.resource {
-  background: color-mix(in srgb, #f0a33a 10%, transparent);
+  background: color-mix(in srgb, var(--amber) 10%, transparent);
 }
 
 .p5-wait-node em {
@@ -390,8 +390,8 @@
 
 .p5-interleaving {
   margin: 8px 0;
-  padding-left: 22px;
-  font-size: 12px;
+  padding-left: 20px;
+  font-size: 13px;
   line-height: 1.7;
   font-family: var(--font-mono, ui-monospace, Consolas, monospace);
   max-height: 320px;
@@ -403,7 +403,7 @@
 }
 
 .p5-interleaving li.writes {
-  color: #f0a33a;
+  color: var(--amber);
 }
 
 /* ---------------------------------------------------------------- the network */
@@ -441,7 +441,7 @@
   width: 13px;
   height: 17px;
   flex: 0 0 auto;
-  font-size: 9px;
+  font-size: 10px;
   font-variant-numeric: tabular-nums;
   border-radius: 1px;
   color: var(--faint);
@@ -454,7 +454,7 @@
 }
 
 .p5-bit-cell.host {
-  background: color-mix(in srgb, #f0a33a 14%, transparent);
+  background: color-mix(in srgb, var(--amber) 14%, transparent);
 }
 
 .p5-bit-cell.on {
@@ -463,7 +463,7 @@
 }
 
 .p5-bit-cell.octet {
-  margin-left: 5px;
+  margin-left: 4px;
 }
 
 .p5-devices {
@@ -477,19 +477,19 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 8px 10px;
+  padding: 8px 8px;
   border: 1px solid var(--glass-border);
-  border-radius: 8px;
-  font-size: 12px;
+  border-radius: 6px;
+  font-size: 13px;
   min-width: 96px;
 }
 
 .p5-device.router {
-  border-color: color-mix(in srgb, #f0a33a 50%, transparent);
+  border-color: color-mix(in srgb, var(--amber) 50%, transparent);
 }
 
 .p5-device.server {
-  border-color: color-mix(in srgb, #c08bf0 50%, transparent);
+  border-color: color-mix(in srgb, var(--violet) 50%, transparent);
 }
 
 .p5-device.on-route {
@@ -504,14 +504,14 @@
 
 .p5-device code {
   font-size: 10px;
-  color: var(--cyan);
+  color: var(--text);
 }
 
 .p5-links {
   margin: 0;
   padding: 0;
   list-style: none;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .p5-links li {
@@ -519,7 +519,7 @@
   align-items: baseline;
   gap: 8px;
   padding: 4px 8px;
-  border-radius: 4px;
+  border-radius: 6px;
 }
 
 .p5-links li.on-route {
@@ -541,12 +541,12 @@
   padding-left: 20px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .p5-exchange li p {
   margin: 3px 0 0;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.55;
   color: var(--faint);
 }
@@ -556,13 +556,13 @@
   flex-wrap: wrap;
   align-items: baseline;
   gap: 8px;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .p5-exchange-at {
   font-variant-numeric: tabular-nums;
   font-size: 10px;
-  color: var(--cyan);
+  color: var(--faint);
   min-width: 42px;
 }
 
@@ -570,7 +570,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 4px 12px;
-  margin: 5px 0 0;
+  margin: 4px 0 0;
   font-size: 10px;
 }
 
@@ -589,11 +589,11 @@
 }
 
 .p5-allowed {
-  color: #37d67a;
+  color: var(--green);
 }
 
 .p5-blocked {
-  color: #e05c5c;
+  color: var(--red);
 }
 
 /* ---------------------------------------------------------------- images */
@@ -601,7 +601,7 @@
 .p5-pictures {
   display: flex;
   flex-wrap: wrap;
-  gap: 14px;
+  gap: 12px;
   margin: 8px 0;
 }
 
@@ -609,18 +609,17 @@
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
 }
 
 .p5-picture canvas {
   width: 256px;
   max-width: 100%;
   height: auto;
-  border: 1px solid var(--glass-border);
   border-radius: 6px;
   /* So a pixel stays a pixel when a small picture is shown large. */
   image-rendering: pixelated;
-  background: color-mix(in srgb, var(--cyan) 3%, transparent);
+  background: var(--panel);
 }
 
 .p5-picture figcaption {
@@ -648,7 +647,7 @@
 
 /* Pixels at the very ends have lost their detail, so they are marked as such. */
 .p5-histogram-bar.clipped {
-  background: #e05c5c;
+  background: var(--red);
 }
 
 .p5-histogram-scale {
@@ -656,7 +655,7 @@
   justify-content: space-between;
   font-size: 10px;
   color: var(--faint);
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 /* ---------------------------------------------------------------- learning */
@@ -665,7 +664,7 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin: 10px 0;
+  margin: 8px 0;
 }
 
 .p5-versus-bar {
@@ -676,7 +675,7 @@
 
 .p5-versus-bar > span {
   height: 20px;
-  border-radius: 3px;
+  border-radius: 6px;
   min-width: 2px;
 }
 
@@ -706,11 +705,11 @@
 }
 
 .p5-right {
-  background: color-mix(in srgb, #37d67a 40%, transparent);
+  background: color-mix(in srgb, var(--green) 40%, transparent);
 }
 
 .p5-wrong {
-  background: color-mix(in srgb, #e05c5c 40%, transparent);
+  background: color-mix(in srgb, var(--red) 40%, transparent);
 }
 
 .p5-folds {
@@ -718,7 +717,7 @@
   align-items: flex-end;
   gap: 4px;
   height: 56px;
-  margin: 6px 0;
+  margin: 4px 0;
 }
 
 .p5-fold {
@@ -731,7 +730,7 @@
 .p5-fold > span {
   width: 100%;
   background: var(--cyan);
-  border-radius: 2px 2px 0 0;
+  border-radius: 6px 6px 0 0;
 }
 
 .p5-loss {
@@ -752,17 +751,17 @@
 }
 
 .p5-loss.accuracy > span {
-  background: #37d67a;
+  background: var(--green);
 }
 
 .p5-loss.gradient > span {
-  background: #c08bf0;
+  background: var(--violet);
 }
 
 .p5-components {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   margin: 8px 0;
 }
 
@@ -775,7 +774,7 @@
 .p5-component > span {
   height: 14px;
   background: var(--cyan);
-  border-radius: 2px;
+  border-radius: 6px;
   min-width: 2px;
 }
 
@@ -791,13 +790,12 @@
   max-width: 420px;
   aspect-ratio: 1;
   display: block;
-  border: 1px solid var(--glass-border);
-  border-radius: 8px;
-  background: var(--bg-mid, #14161a);
+  border-radius: 6px;
+  background: var(--bg-mid, var(--surface-2));
 }
 
 .p5-point {
-  stroke: var(--bg-mid, #14161a);
+  stroke: var(--bg-mid, var(--surface-2));
   stroke-width: 0.4;
 }
 
@@ -806,14 +804,14 @@
 }
 
 .p5-point.group1 {
-  fill: #f0a33a;
+  fill: var(--amber);
 }
 
 .p5-layers {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin: 10px 0;
+  gap: 8px;
+  margin: 8px 0;
   flex-wrap: wrap;
 }
 
@@ -822,9 +820,9 @@
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  padding: 10px 16px;
+  padding: 8px 16px;
   border: 1px solid var(--glass-border);
-  border-radius: 8px;
+  border-radius: 6px;
   min-width: 64px;
 }
 
@@ -834,17 +832,17 @@
 }
 
 .p5-layer.out {
-  border-color: color-mix(in srgb, #37d67a 45%, transparent);
-  background: color-mix(in srgb, #37d67a 7%, transparent);
+  border-color: color-mix(in srgb, var(--green) 45%, transparent);
+  background: color-mix(in srgb, var(--green) 7%, transparent);
 }
 
 .p5-layer strong {
-  font-size: 17px;
+  font-size: 18px;
   font-variant-numeric: tabular-nums;
 }
 
 .p5-layer small {
-  font-size: 9px;
+  font-size: 10px;
   color: var(--faint);
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -863,19 +861,19 @@
    Shared by every laboratory that draws one (Draw.tsx). Colours come from the series tones the components pass, so
    the only thing here is the furniture: rules, labels, and the weight of a line. */
 
-.na-draw { margin: 10px 0 0; }
+.na-draw { margin: 8px 0 0; }
 .na-svg { width: 100%; height: auto; display: block; overflow: visible; }
-.na-draw-note { margin: 6px 2px 0; font-size: 12px; color: var(--faint); }
+.na-draw-note { margin: 4px 2px 0; font-size: 13px; color: var(--faint); }
 
 .na-rule { stroke: var(--glass-border); stroke-width: 1; }
 .na-mark { stroke: var(--cyan); stroke-width: 1; stroke-dasharray: 3 3; opacity: 0.5; }
 .na-frame { stroke: var(--glass-border); stroke-width: 1; }
 
-.na-row-label { font-size: 12px; fill: var(--faint); }
+.na-row-label { font-size: 13px; fill: var(--faint); }
 .na-tick { font-size: 11px; fill: var(--faint); }
-.na-axis { font-size: 12px; fill: var(--faint); }
-.na-in-bar { font-size: 11px; fill: #0a0d12; font-weight: 600; }
-.na-in-cell { font-size: 10.5px; fill: var(--text); }
+.na-axis { font-size: 13px; fill: var(--faint); }
+.na-in-bar { font-size: 11px; fill: var(--bg); font-weight: 600; }
+.na-in-cell { font-size: 10px; fill: var(--text); }
 .na-cell { stroke: var(--glass-border); stroke-width: 0.5; }
 
 .na-edge { stroke: var(--glass-border); stroke-width: 1.4; }
@@ -885,8 +883,8 @@
 
 .na-node { stroke: var(--glass-border); stroke-width: 1; }
 .na-node-label { font-size: 11px; fill: var(--text); font-weight: 500; }
-.na-node-note { font-size: 9.5px; fill: var(--faint); }
+.na-node-note { font-size: 10px; fill: var(--faint); }
 
 .na-wave { stroke: var(--cyan); stroke-width: 1.8; }
-.na-dot { stroke: rgba(0, 0, 0, 0.35); stroke-width: 0.5; }
+.na-dot { stroke: var(--shadow-color); stroke-width: 0.5; }
 .na-scatter { max-width: 340px; }

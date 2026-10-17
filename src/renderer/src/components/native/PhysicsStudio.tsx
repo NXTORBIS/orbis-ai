@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { SurfaceProps } from './surfaces'
 import LabShell from './LabShell'
+import { SearchBox } from '../../ui'
 // The studio is the original, whole: its own front page, its own section tabs, its own search, its own concept
 // panels and explainer, and all 245 topics. This file mounts it and offers the Formula Vault beside it.
 import StudioPage from '../../physics/StudioPage.jsx'
@@ -172,14 +173,7 @@ function FormulaVault(): React.JSX.Element {
         <h4 className="p4-heading">
           {FORMULA_COUNTS.formulas} formulas · {FORMULA_COUNTS.rearrangements} rearrangements
         </h4>
-        <input
-          className="p8-vault-search"
-          type="search"
-          value={query}
-          placeholder="Search by name, symbol or unit"
-          aria-label="Search the formula vault"
-          onChange={(event) => setQuery(event.target.value)}
-        />
+        <SearchBox value={query} onChange={setQuery} label="Search the formula vault" placeholder="Search by name, symbol or unit" />
       </div>
 
       {query.trim() !== '' && (

@@ -7,32 +7,31 @@
 /* One class per tone, so a simulation says "this is the other thing" rather than naming a colour. */
 .p8-main { stroke: var(--cyan); fill: none; }
 .p8-main.filled { fill: var(--cyan); stroke: none; }
-.p8-other { stroke: #f0a33a; fill: none; }
-.p8-other.filled { fill: #f0a33a; stroke: none; }
+.p8-other { stroke: var(--amber); fill: none; }
+.p8-other.filled { fill: var(--amber); stroke: none; }
 .p8-faint { stroke: var(--faint); fill: none; opacity: 0.6; }
 .p8-faint.filled { fill: var(--faint); stroke: none; opacity: 0.6; }
 .p8-main.dim, .p8-other.dim { opacity: 0.4; }
 .p8-grid { stroke: var(--glass-border); stroke-width: 1; opacity: 0.4; }
 .p8-label { stroke: none; fill: var(--text); }
-.p8-label.p8-other { fill: #f0a33a; }
+.p8-label.p8-other { fill: var(--amber); }
 .p8-label.p8-faint { fill: var(--faint); }
 
-.p8-graph { margin: 10px 0; }
-.p8-graph-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; margin-bottom: 3px; font-size: 12px; }
-.p8-graph svg { width: 100%; height: 80px; background: var(--panel); border: 1px solid var(--glass-border); border-radius: 8px; }
+.p8-graph { margin: 8px 0; }
+.p8-graph svg { width: 100%; height: 80px; background: var(--panel); border: 1px solid var(--glass-border); border-radius: 6px; }
 
-.p8-limits { margin: 6px 0; padding-left: 18px; font-size: 12px; line-height: 1.55; color: var(--faint); }
+.p8-limits { margin: 4px 0; padding-left: 16px; font-size: 13px; line-height: 1.55; color: var(--faint); }
 .p8-limits li { margin-bottom: 4px; }
 
 .p8-section { margin: 12px 0; }
-.p8-section-head { display: flex; flex-direction: column; gap: 2px; margin-bottom: 6px; }
-.p8-section-head span { font-size: 11.5px; }
-.p8-sims { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 7px; }
-.p8-sim { display: flex; flex-direction: column; gap: 3px; padding: 9px 11px; background: var(--panel); border: 1px solid var(--glass-border); border-radius: 9px; }
+.p8-section-head { display: flex; flex-direction: column; gap: 2px; margin-bottom: 4px; }
+.p8-section-head span { font-size: 11px; }
+.p8-sims { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.p8-sim { display: flex; flex-direction: column; gap: 3px; padding: 8px 12px; background: var(--panel); border: 1px solid var(--glass-border); border-radius: 10px; }
 .p8-sim.here { border-color: var(--cyan); }
 .p8-sim strong { font-size: 13px; }
 .p8-sim small { font-size: 11px; line-height: 1.4; }
-.p8-sim code { font-size: 10.5px; color: var(--cyan); }
+.p8-sim code { font-size: 10px; color: var(--cyan); }
 
 /* ——— The Formula Vault ——————————————————————————————————————————————————— */
 
@@ -44,21 +43,9 @@
   flex-wrap: wrap;
 }
 
-.p8-vault-search {
+/* The shared search box draws itself; the vault owns only how much of the row it takes. */
+.p8-vault-head .ui-search {
   flex: 1 1 220px;
-  min-width: 0;
-  padding: 7px 10px;
-  border: 1px solid var(--glass-border);
-  border-radius: 8px;
-  background: var(--bg-deep);
-  color: var(--text);
-  font: inherit;
-  font-size: 13px;
-}
-
-.p8-vault-search:focus-visible {
-  outline: 2px solid var(--cyan);
-  outline-offset: 1px;
 }
 
 /* The vault lives inside a lab card, not inside the window. Breaking on the viewport width put a 300px list
@@ -90,7 +77,7 @@
   padding-right: 4px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .p8-vault-detail {
@@ -103,9 +90,9 @@
   gap: 2px;
   width: 100%;
   margin-top: 4px;
-  padding: 7px 9px;
+  padding: 8px 8px;
   border: 1px solid var(--glass-border);
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
   color: var(--text);
   font: inherit;
@@ -130,11 +117,11 @@
 .p8-written {
   display: block;
   margin: 2px 0 8px;
-  padding: 8px 10px;
-  border-radius: 8px;
+  padding: 8px 8px;
+  border-radius: 6px;
   background: var(--bg-deep);
   font-size: 15px;
-  color: var(--cyan);
+  color: var(--text);
 }
 
 .p8-about {
@@ -144,8 +131,8 @@
 }
 
 .p8-sub {
-  margin: 14px 0 6px;
-  font-size: 12px;
+  margin: 12px 0 4px;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -155,14 +142,14 @@
 .p8-wants {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
 }
 
 .p8-want {
   min-width: 34px;
-  padding: 5px 9px;
+  padding: 4px 8px;
   border: 1px solid var(--glass-border);
-  border-radius: 7px;
+  border-radius: 6px;
   background: transparent;
   color: var(--text);
   font: inherit;
@@ -194,17 +181,17 @@
   display: flex;
   flex-direction: column;
   gap: 3px;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .p8-field code {
-  color: var(--cyan);
+  color: var(--text);
 }
 
 .p8-field input {
-  padding: 6px 8px;
+  padding: 4px 8px;
   border: 1px solid var(--glass-border);
-  border-radius: 7px;
+  border-radius: 6px;
   background: var(--bg-deep);
   color: var(--text);
   font: inherit;
@@ -217,17 +204,17 @@
 }
 
 .p8-answer {
-  margin-top: 14px;
-  padding: 11px 13px;
-  border: 1px solid var(--cyan);
-  border-radius: 9px;
-  background: color-mix(in srgb, var(--cyan) 8%, transparent);
+  margin-top: 12px;
+  padding: 12px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--panel);
 }
 
 .p8-answer-value {
-  font-size: 19px;
+  font-size: 18px;
   font-weight: 600;
-  color: var(--cyan);
+  color: var(--text);
 }
 
 .p8-answer-value small {
@@ -238,36 +225,35 @@
 }
 
 .p8-working {
-  margin: 6px 0 0;
-  font-size: 12px;
+  margin: 4px 0 0;
+  font-size: 13px;
   line-height: 1.5;
   color: var(--faint);
 }
 
 .p8-warning {
   margin: 8px 0 0;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
   /* The warning amber the other labs use. --amber is defined on the browser side only, so naming it here
      would resolve to nothing and the warning would render in the body colour. */
-  color: #f0a33a;
+  color: var(--amber);
 }
 
 .p8-refused {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin-top: 14px;
-  padding: 11px 13px;
-  border: 1px solid var(--glass-border);
-  border-radius: 9px;
+  margin-top: 12px;
+  padding: 12px 12px;
+  border-radius: 10px;
   background: var(--bg-deep);
   font-size: 13px;
 }
 
 .p8-refused span {
   color: var(--faint);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
 }
 
@@ -298,26 +284,6 @@
   min-width: 0;
 }
 
-.p8-studio-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.p8-studio-head strong {
-  display: block;
-  font-size: 15px;
-}
-
-.p8-studio-head small {
-  display: block;
-  margin-top: 2px;
-  font-size: 12px;
-  line-height: 1.45;
-}
-
 .p8-studio-tools {
   display: flex;
   align-items: center;
@@ -325,59 +291,31 @@
   flex-wrap: wrap;
 }
 
-.p8-studio-search {
-  min-width: 170px;
-  padding: 6px 10px;
-  border: 1px solid var(--glass-border);
-  border-radius: 8px;
-  background: var(--bg-deep);
-  color: var(--text);
-  font: inherit;
-  font-size: 12.5px;
-}
-
-.p8-studio-search:focus-visible {
-  outline: 2px solid var(--cyan);
-  outline-offset: 1px;
-}
-
 .p8-topics {
   max-height: 46vh;
   overflow-y: auto;
-  padding: 10px;
-  border: 1px solid var(--glass-border);
+  padding: 8px;
   border-radius: 10px;
   background: var(--bg-deep);
 }
 
 .p8-topic-section + .p8-topic-section {
-  margin-top: 14px;
-}
-
-.p8-topic-head {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  margin-bottom: 6px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
+  margin-top: 12px;
 }
 
 .p8-topic-rows {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-  gap: 6px;
+  gap: 4px;
 }
 
 .p8-topic {
   display: flex;
   flex-direction: column;
   gap: 1px;
-  padding: 7px 9px;
+  padding: 8px 8px;
   border: 1px solid var(--glass-border);
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
   color: var(--text);
   font: inherit;
@@ -395,7 +333,7 @@
 }
 
 .p8-topic strong {
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -422,26 +360,26 @@
   position: relative;
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
   margin-bottom: 12px;
-  padding: 9px 34px 9px 12px;
-  border: 1px solid color-mix(in srgb, var(--cyan) 35%, var(--glass-border));
+  padding: 8px 32px 8px 12px;
+  border: 1px solid var(--glass-border);
   border-radius: 10px;
-  background: color-mix(in srgb, var(--cyan) 7%, transparent);
-  font-size: 12px;
+  background: var(--panel);
+  font-size: 13px;
   line-height: 1.5;
 }
 
 .p8-did.partly {
-  border-color: color-mix(in srgb, #f0a33a 45%, var(--glass-border));
-  background: color-mix(in srgb, #f0a33a 7%, transparent);
+  border-color: color-mix(in srgb, var(--amber) 45%, var(--glass-border));
+  background: color-mix(in srgb, var(--amber) 7%, transparent);
 }
 
 .p8-did-done,
 .p8-did-not {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   padding: 2px 8px;
   border-radius: 999px;
   background: var(--bg-deep);
@@ -455,11 +393,11 @@
 .p8-did-not::before {
   content: '!';
   font-weight: 700;
-  color: #f0a33a;
+  color: var(--amber);
 }
 
 .p8-did-not {
-  color: #f0a33a;
+  color: var(--amber);
 }
 
 .p8-did-close {

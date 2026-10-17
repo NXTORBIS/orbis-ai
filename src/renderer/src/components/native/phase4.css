@@ -16,16 +16,16 @@
 .p4-says {
   margin: 0;
   padding: 8px 12px;
-  border-left: 2px solid var(--cyan);
-  background: color-mix(in srgb, var(--cyan) 7%, transparent);
+  border-left: 2px solid var(--line-strong);
+  background: var(--panel);
   border-radius: 0 6px 6px 0;
   font-size: 13px;
   line-height: 1.5;
 }
 
 .p4-heading {
-  margin: 14px 0 6px;
-  font-size: 12px;
+  margin: 12px 0 4px;
+  font-size: 13px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--faint);
@@ -33,15 +33,15 @@
 
 .p4-notes {
   margin: 8px 0 0;
-  padding-left: 18px;
-  font-size: 12px;
+  padding-left: 16px;
+  font-size: 13px;
   line-height: 1.6;
   color: var(--faint);
 }
 
 .p4-about ul {
   margin: 0;
-  padding-left: 18px;
+  padding-left: 16px;
   font-size: 13px;
   line-height: 1.6;
 }
@@ -51,7 +51,7 @@
 .p4-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
   align-items: flex-end;
   padding: 16px 4px;
 }
@@ -65,7 +65,7 @@
 
 .p4-box {
   min-width: 46px;
-  padding: 10px 8px 6px;
+  padding: 8px 8px 4px;
   border: 1px solid var(--glass-border);
   border-radius: 6px;
   background: color-mix(in srgb, var(--cyan) 4%, transparent);
@@ -87,7 +87,7 @@
 
 .p4-box-value {
   font-variant-numeric: tabular-nums;
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.2;
   overflow-wrap: anywhere;
 }
@@ -109,27 +109,27 @@
 
 .p4-box.found,
 .p4-node.found {
-  border-color: #37d67a;
-  background: color-mix(in srgb, #37d67a 20%, transparent);
+  border-color: var(--green);
+  background: color-mix(in srgb, var(--green) 20%, transparent);
 }
 
 .p4-box.added,
 .p4-node.added {
-  border-color: #37d67a;
-  background: color-mix(in srgb, #37d67a 12%, transparent);
+  border-color: var(--green);
+  background: color-mix(in srgb, var(--green) 12%, transparent);
   transform: translateY(-2px);
 }
 
 .p4-box.changed,
 .p4-node.changed {
-  border-color: #f0a33a;
-  background: color-mix(in srgb, #f0a33a 16%, transparent);
+  border-color: var(--amber);
+  background: color-mix(in srgb, var(--amber) 16%, transparent);
 }
 
 .p4-box.removed,
 .p4-node.removed {
-  border-color: #e05c5c;
-  background: color-mix(in srgb, #e05c5c 10%, transparent);
+  border-color: var(--red);
+  background: color-mix(in srgb, var(--red) 10%, transparent);
   color: var(--faint);
 }
 
@@ -141,8 +141,8 @@
 
 .p4-box.unbalanced,
 .p4-node.unbalanced {
-  border-color: #e05c5c;
-  box-shadow: 0 0 0 2px color-mix(in srgb, #e05c5c 25%, transparent);
+  border-color: var(--red);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--red) 25%, transparent);
 }
 
 .p4-chain {
@@ -192,12 +192,12 @@
 }
 
 .p4-tree-line.changed {
-  stroke: #f0a33a;
+  stroke: var(--amber);
   stroke-width: 2;
 }
 
 .p4-tree-line.broken {
-  stroke: #e05c5c;
+  stroke: var(--red);
   stroke-dasharray: 3 3;
 }
 
@@ -205,13 +205,13 @@
   position: absolute;
   transform: translate(-50%, -50%);
   min-width: 34px;
-  padding: 5px 7px;
+  padding: 4px 8px;
   border: 1px solid var(--glass-border);
   border-radius: 999px;
-  background: var(--bg-mid, #14161a);
+  background: var(--bg-mid, var(--surface-2));
   text-align: center;
   font-variant-numeric: tabular-nums;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.15;
   display: flex;
   flex-direction: column;
@@ -225,13 +225,13 @@
   display: block;
   width: 100%;
   text-align: left;
-  padding: 5px 8px;
+  padding: 4px 8px;
   border: 0;
-  border-radius: 4px;
+  border-radius: 6px;
   background: transparent;
   color: inherit;
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
   cursor: pointer;
 }
@@ -255,7 +255,7 @@
 .p4-sql-split {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(220px, 300px);
-  gap: 14px;
+  gap: 12px;
   align-items: start;
 }
 
@@ -269,7 +269,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .p4-sql-label {
@@ -282,10 +282,10 @@
 .p4-sql-box {
   width: 100%;
   box-sizing: border-box;
-  padding: 10px 12px;
+  padding: 8px 12px;
   border: 1px solid var(--glass-border);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--cyan) 3%, transparent);
+  border-radius: 6px;
+  background: var(--panel);
   color: inherit;
   font-family: var(--font-mono, ui-monospace, 'Cascadia Code', Consolas, monospace);
   font-size: 13px;
@@ -325,23 +325,23 @@
 .p4-plan {
   margin: 0;
   padding-left: 20px;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.6;
   font-family: var(--font-mono, ui-monospace, Consolas, monospace);
 }
 
 /* A whole-table read and an index lookup are the two things the plan is read for, so they are the two things marked. */
 .p4-plan li.scanning {
-  color: #f0a33a;
+  color: var(--amber);
 }
 
 .p4-plan li.indexed {
-  color: #37d67a;
+  color: var(--green);
 }
 
 .p4-table-facts {
-  margin: 6px 0;
-  font-size: 12px;
+  margin: 4px 0;
+  font-size: 13px;
 }
 
 .p4-table-facts > summary {
@@ -355,14 +355,14 @@
 }
 
 .p4-table-facts ul {
-  margin: 4px 0 6px;
+  margin: 4px 0 4px;
   padding-left: 12px;
   list-style: none;
 }
 
 .p4-table-facts li {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   align-items: baseline;
   padding: 1px 0;
 }
@@ -370,7 +370,7 @@
 .p4-insert {
   border: 0;
   background: transparent;
-  color: var(--cyan);
+  color: var(--text);
   font: inherit;
   font-family: var(--font-mono, ui-monospace, Consolas, monospace);
   padding: 0;
@@ -394,7 +394,7 @@
   list-style: none;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
 }
 
 .p4-suggestions .p2-btn {
@@ -423,7 +423,7 @@
 /* ---------------------------------------------------------------- charts */
 
 .p4-plot {
-  margin: 10px 0;
+  margin: 8px 0;
   display: grid;
   grid-template-columns: 14px minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) auto auto;
@@ -461,11 +461,11 @@
 .p4-plot-low {
   position: absolute;
   left: 3px;
-  font-size: 9px;
+  font-size: 10px;
   color: var(--faint);
   font-variant-numeric: tabular-nums;
   pointer-events: none;
-  background: color-mix(in srgb, var(--bg-mid, #14161a) 80%, transparent);
+  background: color-mix(in srgb, var(--bg-mid, var(--surface-2)) 80%, transparent);
   padding: 0 2px;
 }
 
@@ -482,7 +482,7 @@
   grid-column: 2;
   display: flex;
   justify-content: space-between;
-  font-size: 9px;
+  font-size: 10px;
   color: var(--faint);
   font-variant-numeric: tabular-nums;
 }
@@ -522,7 +522,7 @@
 .p4-legend li {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
 }
 
 .p4-legend-mark {
@@ -549,7 +549,7 @@
 
 /* The unstable half of the plane, shaded, so the phrase becomes a place. */
 .p4-unstable {
-  fill: color-mix(in srgb, #e05c5c 7%, transparent);
+  fill: color-mix(in srgb, var(--red) 7%, transparent);
 }
 
 .p4-pole {
@@ -559,7 +559,7 @@
 
 .p4-zero {
   fill: none;
-  stroke: #f0a33a;
+  stroke: var(--amber);
   stroke-width: 1.6;
 }
 
@@ -570,9 +570,8 @@
   max-width: 420px;
   aspect-ratio: 1;
   display: block;
-  border: 1px solid var(--glass-border);
   border-radius: 6px;
-  background: color-mix(in srgb, var(--cyan) 2%, transparent);
+  background: var(--panel);
 }
 
 .p4-reach {
@@ -593,23 +592,23 @@
 }
 
 .p4-joint {
-  fill: var(--bg-mid, #14161a);
+  fill: var(--bg-mid, var(--surface-2));
   stroke: var(--cyan);
   stroke-width: 1.5;
 }
 
 .p4-gripper {
-  fill: #37d67a;
+  fill: var(--green);
 }
 
 .p4-target {
   fill: none;
-  stroke: #e05c5c;
+  stroke: var(--red);
   stroke-width: 1.5;
 }
 
 .p4-target.reached {
-  stroke: #37d67a;
+  stroke: var(--green);
 }
 
 .p4-target-cross {
@@ -640,7 +639,7 @@
 }
 
 .p4-load {
-  stroke: #e05c5c;
+  stroke: var(--red);
   stroke-width: 1.8;
 }
 
@@ -649,7 +648,7 @@
 }
 
 .p4-load-head {
-  fill: #e05c5c;
+  fill: var(--red);
 }
 
 .p4-truss svg {
@@ -662,7 +661,7 @@
 
 /* Tension and compression are opposite things and must not share a colour. */
 .p4-member.tension {
-  stroke: #e05c5c;
+  stroke: var(--red);
 }
 
 .p4-member.compression {
@@ -675,13 +674,13 @@
 }
 
 .p4-support-node {
-  fill: #f0a33a;
+  fill: var(--amber);
 }
 
 .p4-tension {
-  color: #e05c5c;
+  color: var(--red);
 }
 
 .p4-compression {
-  color: var(--cyan);
+  color: var(--text);
 }

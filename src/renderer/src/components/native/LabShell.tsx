@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react'
 import type { LiveInstance } from './surfaces'
 import Parameters from './Parameters'
+import { labViewSurface } from './labSurfaces'
+import { useSurface } from '../../lib/surfaces'
 import { Segmented } from '../../ui'
 import './phase2.css'
 import './phase3.css'
@@ -75,6 +77,31 @@ export default function LabShell({
   // Both halves of the side column can be empty at once, and then there is nothing to reserve room for.
   const hasAside = aside !== undefined && aside !== null && aside !== false
   const hasAssumptions = assumptions !== undefined && assumptions.length > 0
+
+  /*
+   * The views across the top, as something Orbis can switch rather than click at.
+   *
+   * Said here because the shell owns them: they are each laboratory's own state rather than one of its declared
+   * parameters, so the parameter panel cannot describe them and nothing else can reach them. One call covers every
+   * laboratory that wears this frame.
+   *
+   * The laboratory's settings are not here -- they are declared parameters, and the card the laboratory sits in
+   * describes those, from the same declarations this shell draws the panel from.
+   */
+  useSurface(
+    labViewSurface({
+      appId: instance?.appId ?? null,
+      title,
+      tabs: tabs ?? [],
+      showing: () => showing ?? null,
+      show: (id) => onShow?.(id),
+      busy: () => busy === true,
+      ready: () => ready,
+      refused: () => refused ?? null,
+      broke: () => broke ?? null,
+      assumptions: () => assumptions ?? []
+    })
+  )
 
   return (
     <section className="p2 p4 p5" aria-label={title}>

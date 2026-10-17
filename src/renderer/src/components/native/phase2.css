@@ -15,14 +15,14 @@
 .p2 {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
 
 .p2-bar {
   display: flex;
   align-items: baseline;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
@@ -31,7 +31,7 @@
 }
 
 .p2-faint {
-  font-size: 11.5px;
+  font-size: 11px;
   line-height: 1.5;
   color: var(--faint);
 }
@@ -45,25 +45,25 @@
 .p2-controls {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   flex-wrap: wrap;
 }
 
 .p2-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 11px;
+  gap: 4px;
+  padding: 4px 12px;
   border: 1px solid var(--glass-border);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--text) 5%, transparent);
   color: var(--text);
-  font-size: 12px;
+  font-size: 13px;
   cursor: pointer;
 }
 
 .p2-btn:hover:not(:disabled) {
-  border-color: var(--cyan);
+  border-color: var(--line-strong);
 }
 
 .p2-btn:disabled {
@@ -78,21 +78,21 @@
 .p2-speed {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   margin-left: auto;
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--faint);
 }
 
 .p2-speed select,
 .p2-params select {
-  padding: 4px 6px;
+  padding: 4px 4px;
   border: 1px solid var(--glass-border);
-  border-radius: 7px;
-  background: rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--text) 5%, transparent);
   color: var(--text);
   font: inherit;
-  font-size: 11.5px;
+  font-size: 11px;
 }
 
 /* ---------------------------------------------------------------- timeline */
@@ -100,7 +100,7 @@
 .p2-timeline {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .p2-timeline input[type='range'] {
@@ -115,19 +115,18 @@
   align-items: baseline;
   gap: 8px;
   margin: 0;
-  padding: 7px 10px;
-  border: 1px solid var(--glass-border);
-  border-radius: 9px;
-  background: rgba(255, 255, 255, 0.03);
-  font-size: 12px;
+  padding: 8px 8px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--text) 3%, transparent);
+  font-size: 13px;
   line-height: 1.5;
 }
 
 .p2-kind {
   flex: none;
-  padding: 1px 7px;
+  padding: 1px 8px;
   border: 1px solid var(--glass-border);
-  border-radius: 20px;
+  border-radius: 10px;
   font-size: 10px;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -143,16 +142,16 @@
 
 .p2-kind.k-done,
 .p2-kind.k-settle {
-  border-color: rgba(120, 220, 160, 0.5);
+  border-color: color-mix(in srgb, var(--green) 50%, transparent);
 }
 
 .p2-refused {
   margin: 0;
-  padding: 8px 11px;
-  border: 1px solid rgba(240, 170, 90, 0.4);
-  border-radius: 9px;
-  background: rgba(240, 170, 90, 0.07);
-  font-size: 12px;
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--amber) 40%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--amber) 7%, transparent);
+  font-size: 13px;
   line-height: 1.55;
 }
 
@@ -165,27 +164,26 @@
 }
 
 .p2-tab {
-  padding: 4px 10px;
+  padding: 4px 8px;
   border: 1px solid transparent;
-  border-radius: 7px;
+  border-radius: 6px;
   background: transparent;
   color: var(--faint);
-  font-size: 11.5px;
+  font-size: 11px;
   cursor: pointer;
 }
 
 .p2-tab.on {
   border-color: var(--glass-border);
-  background: rgba(255, 255, 255, 0.06);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
   color: var(--text);
 }
 
 .p2-stage {
   min-height: 180px;
-  padding: 10px;
-  border: 1px solid var(--glass-border);
-  border-radius: 11px;
-  background: rgba(255, 255, 255, 0.02);
+  padding: 8px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--text) 2%, transparent);
 }
 
 /* ---------------------------------------------------------------- bars */
@@ -201,14 +199,14 @@
   position: relative;
   flex: 1;
   min-width: 2px;
-  border-radius: 3px 3px 0 0;
-  background: rgba(255, 255, 255, 0.16);
+  border-radius: 6px 6px 0 0;
+  background: color-mix(in srgb, var(--text) 16%, transparent);
   transition: height 0.12s linear;
 }
 
 /* In the region the algorithm declared it is working on. */
 .p2-bar.in-region {
-  background: rgba(255, 255, 255, 0.26);
+  background: color-mix(in srgb, var(--text) 26%, transparent);
 }
 
 /* The positions this step touches: lifted as well as coloured, so the shape says it too. */
@@ -219,7 +217,7 @@
 }
 
 .p2-bar.settled {
-  background: rgba(120, 220, 160, 0.55);
+  background: color-mix(in srgb, var(--green) 55%, transparent);
 }
 
 .p2-bar-value {
@@ -227,7 +225,7 @@
   top: -15px;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 9.5px;
+  font-size: 10px;
   color: var(--faint);
 }
 
@@ -236,8 +234,8 @@
   bottom: 2px;
   left: 50%;
   transform: translateX(-50%);
-  font-size: 9px;
-  color: rgba(0, 0, 0, 0.6);
+  font-size: 10px;
+  color: var(--shadow-deep);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -254,7 +252,7 @@
 }
 
 .p2-edge {
-  stroke: rgba(255, 255, 255, 0.18);
+  stroke: color-mix(in srgb, var(--text) 18%, transparent);
   stroke-width: 0.06;
 }
 
@@ -270,14 +268,14 @@
 }
 
 .p2-node circle {
-  fill: rgba(255, 255, 255, 0.1);
-  stroke: rgba(255, 255, 255, 0.3);
+  fill: color-mix(in srgb, var(--text) 10%, transparent);
+  stroke: color-mix(in srgb, var(--text) 30%, transparent);
   stroke-width: 0.05;
 }
 
 .p2-node.seen circle {
-  fill: rgba(120, 220, 160, 0.35);
-  stroke: rgba(120, 220, 160, 0.8);
+  fill: color-mix(in srgb, var(--green) 35%, transparent);
+  stroke: color-mix(in srgb, var(--green) 80%, transparent);
 }
 
 .p2-node.here circle {
@@ -306,19 +304,19 @@
 }
 
 .p2-table caption {
-  margin-bottom: 6px;
+  margin-bottom: 4px;
   text-align: left;
 }
 
 .p2-table td {
   min-width: 26px;
-  padding: 3px 6px;
+  padding: 3px 4px;
   border: 1px solid var(--glass-border);
   text-align: right;
 }
 
 .p2-table td.written {
-  background: rgba(0, 200, 255, 0.1);
+  background: var(--panel);
   color: var(--text);
 }
 
@@ -337,11 +335,11 @@
 }
 
 .p2-trace li {
-  font-size: 11.5px;
+  font-size: 11px;
 }
 
 .p2-trace li.here button {
-  background: rgba(255, 255, 255, 0.07);
+  background: color-mix(in srgb, var(--text) 7%, transparent);
 }
 
 .p2-trace button {
@@ -349,7 +347,7 @@
   align-items: baseline;
   gap: 8px;
   width: 100%;
-  padding: 3px 6px;
+  padding: 3px 4px;
   border: 0;
   border-radius: 6px;
   background: transparent;
@@ -360,7 +358,7 @@
 }
 
 .p2-trace button:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: color-mix(in srgb, var(--text) 5%, transparent);
 }
 
 .p2-trace-n {
@@ -381,29 +379,29 @@
 .p2-count {
   display: inline-flex;
   align-items: baseline;
-  gap: 5px;
-  padding: 4px 9px;
+  gap: 4px;
+  padding: 4px 8px;
   border: 1px solid var(--glass-border);
-  border-radius: 8px;
+  border-radius: 6px;
   font-size: 11px;
   color: var(--faint);
 }
 
 .p2-count strong {
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--text);
   font-variant-numeric: tabular-nums;
 }
 
 .p2-complexity {
-  padding: 10px 12px;
+  padding: 8px 12px;
   border: 1px solid var(--glass-border);
   border-radius: 10px;
 }
 
 .p2-complexity h4,
 .p2-stack h4 {
-  margin: 0 0 7px;
+  margin: 0 0 8px;
   font-size: 11px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -413,9 +411,9 @@
 .p2-complexity dl {
   display: grid;
   grid-template-columns: max-content 1fr;
-  gap: 3px 14px;
+  gap: 3px 12px;
   margin: 0 0 8px;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .p2-complexity dt {
@@ -435,11 +433,11 @@
 
 .p2-recursion ul,
 .p2-stack ol {
-  margin: 6px 0 0;
+  margin: 4px 0 0;
   padding: 0 0 0 16px;
   max-height: 260px;
   overflow: auto;
-  font-size: 11.5px;
+  font-size: 11px;
 }
 
 .p2-recursion ul {
@@ -463,21 +461,21 @@
 
 .p2-recursion summary,
 .p2-limits summary {
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--faint);
   cursor: pointer;
 }
 
 .p2-stack {
-  padding: 9px 12px;
+  padding: 8px 12px;
   border: 1px solid var(--glass-border);
   border-radius: 10px;
 }
 
 .p2-limits ul {
-  margin: 7px 0 0;
-  padding-left: 18px;
-  font-size: 11.5px;
+  margin: 8px 0 0;
+  padding-left: 16px;
+  font-size: 11px;
   line-height: 1.6;
   color: var(--faint);
 }
@@ -487,19 +485,19 @@
 .p2-params {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .p2-group {
   margin: 0;
-  padding: 9px 11px;
+  padding: 8px 12px;
   border: 1px solid var(--glass-border);
   border-radius: 10px;
 }
 
 .p2-group legend {
-  padding: 0 5px;
-  font-size: 10.5px;
+  padding: 0 4px;
+  font-size: 10px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--faint);
@@ -509,11 +507,11 @@
   display: flex;
   flex-direction: column;
   gap: 3px;
-  padding: 5px 0;
+  padding: 4px 0;
 }
 
 .p2-field label {
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .p2-unit {
@@ -523,19 +521,19 @@
 .p2-field input[type='text'],
 .p2-field textarea {
   width: 100%;
-  padding: 5px 8px;
+  padding: 4px 8px;
   border: 1px solid var(--glass-border);
-  border-radius: 7px;
-  background: rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--text) 4%, transparent);
   color: var(--text);
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
   resize: vertical;
 }
 
 .p2-field.bad input[type='text'],
 .p2-field.bad textarea {
-  border-color: rgba(240, 140, 120, 0.6);
+  border-color: color-mix(in srgb, var(--red) 60%, transparent);
 }
 
 .p2-field input:focus-visible,
@@ -563,7 +561,7 @@
 }
 
 .p2-derived {
-  font-size: 12px;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -578,8 +576,8 @@
 .p2-problem {
   margin: 2px 0 0;
   padding: 4px 8px;
-  border-left: 2px solid rgba(240, 140, 120, 0.8);
-  font-size: 11.5px;
+  border-left: 2px solid color-mix(in srgb, var(--red) 80%, transparent);
+  font-size: 11px;
   line-height: 1.45;
 }
 
@@ -589,7 +587,7 @@
 .p2-split {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 280px;
-  gap: 14px;
+  gap: 12px;
   align-items: start;
 }
 
@@ -600,37 +598,37 @@
 }
 
 .p2-settings summary {
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--faint);
   cursor: pointer;
 }
 
 .p2-settings > .p2-params {
-  margin-top: 9px;
+  margin-top: 8px;
 }
 
 /* ---------------------------------------------------------------- the code and variables panels
    Both sit beside the stage rather than above it, so the picture and the line it came from are visible at once. */
 
-.p2-stage.with-panel { display: grid; grid-template-columns: minmax(210px, 300px) minmax(0, 1fr); gap: 10px; align-items: start; }
+.p2-stage.with-panel { display: grid; grid-template-columns: minmax(210px, 300px) minmax(0, 1fr); gap: 8px; align-items: start; }
 
-.p2-code, .p2-vars { padding: 10px 11px; background: var(--panel); border: 1px solid var(--glass-border); border-radius: 10px; }
-.p2-code h4, .p2-vars h4 { margin: 0 0 7px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--faint); }
+.p2-code, .p2-vars { padding: 8px 12px; background: var(--panel); border: 1px solid var(--glass-border); border-radius: 10px; }
+.p2-code h4, .p2-vars h4 { margin: 0 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--faint); }
 
 .p2-code ol { margin: 0; padding: 0; list-style: none; }
-.p2-code li { display: flex; gap: 8px; padding: 1px 4px; border-radius: 4px; font-size: 11.5px; line-height: 1.55; white-space: pre; }
+.p2-code li { display: flex; gap: 8px; padding: 1px 4px; border-radius: 6px; font-size: 11px; line-height: 1.55; white-space: pre; }
 .p2-code li.on { background: color-mix(in srgb, var(--cyan) 18%, transparent); }
 .p2-code li.on code { color: var(--text); font-weight: 600; }
 .p2-code-n { flex: none; width: 16px; text-align: right; font-variant-numeric: tabular-nums; color: var(--faint); opacity: 0.7; }
 .p2-code code { font-family: var(--font-mono, ui-monospace, monospace); color: var(--faint); white-space: pre; }
-.p2-code p { margin: 7px 0 0; font-size: 11px; }
+.p2-code p { margin: 8px 0 0; font-size: 11px; }
 
-.p2-vars dl { margin: 0; display: flex; flex-direction: column; gap: 7px; }
+.p2-vars dl { margin: 0; display: flex; flex-direction: column; gap: 8px; }
 .p2-var { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; align-items: baseline; }
 .p2-var dt { margin: 0; }
-.p2-var dt code { font-family: var(--font-mono, ui-monospace, monospace); font-size: 12.5px; color: var(--cyan); }
+.p2-var dt code { font-family: var(--font-mono, ui-monospace, monospace); font-size: 13px; color: var(--cyan); }
 .p2-var dd { margin: 0; font-size: 13px; font-variant-numeric: tabular-nums; }
-.p2-var p { grid-column: 1 / -1; margin: 0; font-size: 10.5px; line-height: 1.4; }
+.p2-var p { grid-column: 1 / -1; margin: 0; font-size: 10px; line-height: 1.4; }
 
 .p2-btn.on { border-color: var(--cyan); color: var(--text); }
 
