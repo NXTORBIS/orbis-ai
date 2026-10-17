@@ -1,4 +1,5 @@
 import type { GameContext, GameInstance, GameModule } from './engine'
+import { gameRandom } from './seed'
 import { deal, memoryScore } from '../../../shared/gameLogic'
 
 const FACES = ['🪐', '☄️', '🌙', '⭐', '🛰️', '🚀', '🌌', '🔭', '👾', '🌠', '🧭', '💫']
@@ -121,7 +122,8 @@ function create(ctx: GameContext): GameInstance {
   const fresh = (): void => {
     window.clearInterval(clock)
     window.clearTimeout(flipBack)
-    deck = deal(FACES, pairs)
+    // With the day's seed the same cards are in the same places all day; without one, a new deal every time.
+    deck = deal(FACES, pairs, gameRandom(ctx))
     matched = new Set()
     open = []
     moves = seconds = focus = 0

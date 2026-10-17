@@ -16,6 +16,27 @@
   font-family: var(--font);
 }
 
+/*
+ * The Arcade as a screen of the window, rather than as the offline page.
+ *
+ * On the offline page `.og` sits inside `.browser-offline`, which is already the full-bleed layer. Opened from the
+ * Orbis menu there is no such wrapper, so it makes its own -- the same inset every other full screen in the window
+ * uses (`.eye-full` and the rest): below the title bar, and clear of the market strip when one is reserved.
+ * `data-kind` is the arcade's own marker, set only when it was opened as a screen, so the offline page is untouched.
+ */
+.og[data-kind='arcade'] {
+  position: fixed;
+  inset: 40px 0 var(--mstrip-reserved, 0px) 0;
+  z-index: 400;
+  background: var(--bg-center);
+  overflow: auto;
+}
+
+/* One line of heading rather than the offline page's three, so the picture sits on the words instead of above them. */
+.og-head-arcade .og-status {
+  align-items: center;
+}
+
 .og-muted {
   color: var(--muted);
 }
@@ -39,14 +60,14 @@
 
 .og-status {
   display: flex;
-  gap: 14px;
+  gap: 12px;
   align-items: flex-start;
   color: var(--cyan);
 }
 
 .og-status h2 {
   margin: 0 0 4px;
-  font-size: 20px;
+  font-size: 18px;
   color: var(--text);
 }
 
@@ -72,7 +93,7 @@
 .og-btn {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   height: 32px;
   padding: 0 12px;
   border-radius: 999px;
@@ -112,8 +133,8 @@
 
 .og-btn.small {
   height: 26px;
-  padding: 0 10px;
-  font-size: 12px;
+  padding: 0 8px;
+  font-size: 13px;
 }
 
 .og-btn:focus-visible,
@@ -130,7 +151,7 @@
   place-items: center;
   width: 30px;
   height: 30px;
-  border-radius: 8px;
+  border-radius: 6px;
   border: 1px solid transparent;
   background: transparent;
   color: var(--muted-strong);
@@ -174,7 +195,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 8px;
   padding: 8px 12px;
   background: var(--glass);
   border-bottom: 1px solid var(--glass-border);
@@ -187,9 +208,9 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 12px 14px;
+  padding: 12px 12px;
   border: 1px solid var(--glass-border);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--glass);
   font-size: 13px;
 }
@@ -201,10 +222,10 @@
 .og-settings {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 6px 18px;
-  padding: 14px 16px;
+  gap: 4px 16px;
+  padding: 12px 16px;
   border: 1px solid var(--glass-border);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--glass);
 }
 
@@ -212,7 +233,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
   min-height: 34px;
   font-size: 13px;
   color: var(--muted-strong);
@@ -221,7 +242,7 @@
 .og-setting select {
   max-width: 55%;
   height: 28px;
-  border-radius: 8px;
+  border-radius: 6px;
   border: 1px solid var(--pill-border);
   background: var(--pill-bg);
   color: var(--text);
@@ -251,9 +272,9 @@
   flex: 1 1 320px;
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 14px 16px;
-  border-radius: 14px;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: 10px;
   border: 1px solid var(--cyan-dim);
   background: linear-gradient(120deg, var(--cyan-fill), transparent 70%);
   color: var(--text);
@@ -277,16 +298,16 @@
 }
 
 .og-daily b {
-  font-size: 16px;
+  font-size: 15px;
 }
 
 .og-daily-icon {
-  font-size: 34px;
+  font-size: 30px;
 }
 
 .og-recent small {
   display: block;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
   color: var(--muted);
   font-size: 11px;
   text-transform: uppercase;
@@ -297,15 +318,15 @@
 .og-cats {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
 }
 
 .og-chip {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   height: 28px;
-  padding: 0 11px;
+  padding: 0 12px;
   border-radius: 999px;
   border: 1px solid var(--pill-border);
   background: transparent;
@@ -327,7 +348,7 @@
 .og-filters {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .og-search {
@@ -361,7 +382,7 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  border-radius: 14px;
+  border-radius: 10px;
   border: 1px solid var(--line-strong);
   background: var(--glass);
   transition: border-color 0.15s;
@@ -377,9 +398,9 @@
   flex-direction: column;
   align-items: flex-start;
   gap: 4px;
-  padding: 14px 14px 10px;
+  padding: 12px 12px 8px;
   border: 0;
-  border-radius: 14px;
+  border-radius: 10px;
   background: transparent;
   color: var(--text);
   text-align: left;
@@ -388,11 +409,11 @@
 }
 
 .og-card-main b {
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .og-card-icon {
-  font-size: 28px;
+  font-size: 30px;
   margin-bottom: 2px;
 }
 
@@ -412,6 +433,242 @@
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+/* ---- thirty-two games instead of twelve: ordering, counting, and what the record has to say */
+
+.og-reading {
+  padding: 24px 0;
+  font-size: 13px;
+}
+
+.og-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.og-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--glass);
+  color: var(--muted-strong);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.og-note svg {
+  flex: none;
+  margin-top: 1px;
+}
+
+/* A refusal is not decoration: everything done next is not being kept, and the colour says so. */
+.og-note.bad {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.og-note.good {
+  border-color: var(--cyan-dim);
+  color: var(--cyan);
+}
+
+.og-filter-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.og-filter-row .og-search {
+  flex: 1 1 220px;
+}
+
+.og-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 8px 0 12px;
+  border-radius: 10px;
+  border: 1px solid var(--pill-border);
+  background: var(--pill-bg);
+  font-size: 13px;
+}
+
+.og-sort select {
+  height: 26px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font: 13px var(--font);
+}
+
+.og-count {
+  margin: 0;
+  font-size: 11px;
+}
+
+/* ---- the boards */
+
+.og-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--glass);
+}
+
+.og-stats,
+.og-board {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.og-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.og-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line-strong);
+  background: var(--pill-bg);
+}
+
+.og-tile small {
+  color: var(--faint);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.og-tile b {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font: 600 17px var(--font);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.og-tile span {
+  font-size: 11px;
+}
+
+.og-top {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.og-top > small {
+  color: var(--faint);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.og-top-row {
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) minmax(60px, 2fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  font: 12px var(--font);
+  cursor: pointer;
+}
+
+.og-top-row:hover {
+  background: var(--hover);
+}
+
+.og-top-row:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 1px;
+}
+
+.og-top-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.og-bar {
+  display: block;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--pill-bg-strong);
+  overflow: hidden;
+}
+
+.og-bar > span {
+  display: block;
+  height: 100%;
+  min-width: 3px;
+  border-radius: 999px;
+  background: var(--cyan);
+}
+
+.og-runs {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.og-runs li {
+  display: grid;
+  grid-template-columns: minmax(70px, 1fr) auto auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.og-runs li:nth-child(odd) {
+  background: var(--pill-bg);
+}
+
+.og-local {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* What a run earned, under the final score. Narrow, because it is a sentence rather than a figure. */
+.og-earned {
+  max-width: min(420px, 80%);
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 /* ---- game view */
@@ -436,16 +693,16 @@
 
 .og-game-name {
   display: inline-flex;
-  gap: 6px;
-  font-size: 14px;
+  gap: 4px;
+  font-size: 13px;
 }
 
 .og-hud {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 14px;
+  gap: 4px 12px;
   margin-right: auto;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
@@ -492,10 +749,10 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
+  gap: 8px;
   background: rgba(3, 5, 9, 0.72);
   color: #e8f4ff;
-  font-size: 14px;
+  font-size: 13px;
   z-index: 2;
 }
 
@@ -521,17 +778,17 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 8px 6px 12px;
+  padding: 4px 8px 4px 12px;
   border-radius: 10px;
   background: var(--glass);
   border: 1px solid var(--glass-border);
-  font-size: 12px;
+  font-size: 13px;
   z-index: 3;
 }
 
 .og-controls {
   margin: 0;
-  padding: 6px 12px;
+  padding: 4px 12px;
   font-size: 11px;
   border-top: 1px solid var(--line-strong);
 }
@@ -545,8 +802,8 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  border-radius: 18px;
+  gap: 8px;
+  border-radius: 10px;
   cursor: pointer;
   user-select: none;
   color: #fff;
@@ -595,14 +852,14 @@
   --mm-cols: 4;
   display: grid;
   grid-template-columns: repeat(var(--mm-cols), minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
   width: min(92%, calc(var(--mm-cols) * 110px));
   padding: 12px;
 }
 
 .mm-card {
   aspect-ratio: 3 / 4;
-  border-radius: 12px;
+  border-radius: 10px;
   border: 1px solid rgba(160, 210, 255, 0.2);
   background: linear-gradient(145deg, #13243a, #0a1220);
   font-size: clamp(22px, 4vw, 40px);
@@ -638,7 +895,7 @@
   gap: 2px;
   width: min(96%, calc(var(--ms-cols) * 34px));
   max-height: 100%;
-  padding: 10px;
+  padding: 8px;
   overflow: auto;
 }
 
@@ -647,7 +904,7 @@
   min-width: 0;
   padding: 0;
   border: 0;
-  border-radius: 4px;
+  border-radius: 6px;
   background: #1c2a40;
   color: #e8f4ff;
   font: 700 clamp(10px, 1.6vw, 16px) var(--mono);
@@ -689,11 +946,11 @@
   position: relative;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
+  gap: 8px;
   width: min(90%, 420px, 80vh);
   aspect-ratio: 1;
-  padding: 10px;
-  border-radius: 14px;
+  padding: 8px;
+  border-radius: 10px;
   background: #0d1220;
   touch-action: none;
 }
@@ -733,13 +990,13 @@
 .tc {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   width: min(92%, 760px);
 }
 
 .tc-text {
-  padding: 16px 18px;
-  border-radius: 12px;
+  padding: 16px 16px;
+  border-radius: 10px;
   background: #0d1220;
   color: #7d8aa3;
   font: 20px/1.6 var(--mono);
@@ -753,7 +1010,7 @@
 .tc-text .bad {
   color: #ff6b81;
   background: rgba(255, 77, 109, 0.18);
-  border-radius: 2px;
+  border-radius: 6px;
 }
 
 .tc-text .cursor {
@@ -763,8 +1020,8 @@
 
 .tc-input {
   resize: none;
-  padding: 12px 14px;
-  border-radius: 12px;
+  padding: 12px 12px;
+  border-radius: 10px;
   border: 1px solid rgba(160, 210, 255, 0.25);
   background: #05070c;
   color: #e8f4ff;
@@ -779,5 +1036,1049 @@
 .contrast .tc-text,
 .contrast .ms-cell,
 .contrast .np-tile {
+  border: 1px solid #fff;
+}
+
+/* ---------------------------------------------------------------- Follow Along and Four in a Row
+   Two DOM games. Everything they show has to read with the sound off and in high contrast, so a lit panel changes
+   colour and lifts rather than only sounding, and a counter says whose it is by shape as well as by colour. */
+
+.fol {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  width: min(100%, 520px);
+  color: #e8f4ff;
+  text-align: center;
+}
+
+.fol-say {
+  margin: 0;
+  min-height: 24px;
+  font: 600 17px/1.4 var(--font);
+}
+
+.fol-hint {
+  margin: 0;
+  font-size: 13px;
+  color: #7d8aa3;
+}
+
+.fol-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  width: min(100%, 400px, 46vh);
+  aspect-ratio: 1;
+}
+
+.fol-panel {
+  display: grid;
+  place-items: center;
+  border: 2px solid rgba(160, 210, 255, 0.22);
+  border-radius: 10px;
+  background: var(--fol-dim);
+  color: rgba(232, 244, 255, 0.5);
+  font: 700 clamp(20px, 5vw, 34px) var(--display);
+  cursor: pointer;
+  transition: background 0.12s ease, transform 0.12s ease, box-shadow 0.12s ease, color 0.12s ease;
+}
+
+.fol-p0 {
+  --fol-dim: #10303c;
+  --fol-lit: #35e0ff;
+}
+
+.fol-p1 {
+  --fol-dim: #2c2447;
+  --fol-lit: #a78bfa;
+}
+
+.fol-p2 {
+  --fol-dim: #10342a;
+  --fol-lit: #34d399;
+}
+
+.fol-p3 {
+  --fol-dim: #3a2233;
+  --fol-lit: #f472b6;
+}
+
+.fol-panel.lit {
+  background: var(--fol-lit);
+  color: #05070c;
+  box-shadow: 0 0 26px var(--fol-lit);
+  transform: scale(1.03);
+}
+
+.fol-panel:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+}
+
+.fol.turn .fol-panel:hover {
+  border-color: var(--fol-lit);
+}
+
+/* With motion turned down, a panel still lights — it just does not move or fade to get there. */
+.fol.still .fol-panel {
+  transition: none;
+}
+
+.fol.still .fol-panel.lit {
+  transform: none;
+}
+
+.contrast .fol-panel {
+  background: #000;
+  border-color: #fff;
+  color: #fff;
+}
+
+.contrast .fol-p0 {
+  --fol-lit: #00ffff;
+}
+
+.contrast .fol-p1 {
+  --fol-lit: #ffff00;
+}
+
+.contrast .fol-p2 {
+  --fol-lit: #00ff66;
+}
+
+.contrast .fol-p3 {
+  --fol-lit: #ff66ff;
+}
+
+.c4 {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  width: min(100%, 560px);
+  color: #e8f4ff;
+  text-align: center;
+}
+
+.c4-say {
+  margin: 0;
+  min-height: 22px;
+  font: 600 16px/1.4 var(--font);
+}
+
+.c4-hint {
+  margin: 0;
+  font-size: 13px;
+  color: #7d8aa3;
+}
+
+.c4-board {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+  width: min(96%, 434px, 52vh);
+  padding: 8px;
+  border: 1px solid rgba(160, 210, 255, 0.2);
+  border-radius: 10px;
+  background: linear-gradient(160deg, #13243a, #0a1220);
+}
+
+.c4-aim {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.c4-col {
+  height: 26px;
+  border: 1px dashed rgba(160, 210, 255, 0.22);
+  border-radius: 10px 10px 6px 6px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.c4-col.aimed {
+  border-style: solid;
+  border-color: #3fd8ff;
+  background: rgba(63, 216, 255, 0.16);
+}
+
+.c4-col:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.c4-col:focus-visible {
+  outline: 2px solid #fff;
+}
+
+.c4-slot {
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #06101d;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.6);
+}
+
+.c4-slot.you {
+  background: radial-gradient(circle at 35% 30%, #8ff2ff, #1a8fb5);
+}
+
+.c4-slot.them {
+  background: radial-gradient(circle at 35% 30%, #ffb3d8, #b43a76);
+}
+
+.c4-slot.won {
+  box-shadow: 0 0 0 3px #fbbf24, 0 0 14px rgba(251, 191, 36, 0.6);
+}
+
+/* The counter falls in rather than appearing: it is how you see which column was played. */
+.c4-slot.dropped {
+  animation: c4-drop 0.22s ease-out;
+}
+
+@keyframes c4-drop {
+  from {
+    transform: translateY(-280%);
+  }
+
+  to {
+    transform: none;
+  }
+}
+
+.c4.still .c4-slot.dropped {
+  animation: none;
+}
+
+.contrast .c4-board {
+  background: #000;
+  border-color: #fff;
+}
+
+.contrast .c4-slot {
+  background: #000;
+  border: 1px solid #fff;
+  box-shadow: none;
+}
+
+.contrast .c4-slot.you {
+  background: #00ffff;
+}
+
+.contrast .c4-slot.them {
+  background: #ffff00;
+}
+
+.contrast .c4-slot.won {
+  box-shadow: 0 0 0 3px #ff66ff;
+}
+
+/* ---------------------------------------------------------------- Sudoku and Picture Logic
+ *
+ * Two games that are grids of buttons rather than a canvas, so that every square is a real control: it can be
+ * tabbed to by the screen reader, it says what it holds, and a long press behaves the way the rest of Orbis does.
+ * Both prefixes are their own: sdk- is Sudoku and nono- is Picture Logic, and nothing else in Orbis uses either.
+ */
+
+.sdk {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: min(96%, 460px);
+  max-height: 100%;
+  padding: 8px 0;
+  overflow: auto;
+}
+
+.sdk-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+}
+
+.sdk-tool {
+  padding: 4px 8px;
+  border: 1px solid rgba(160, 210, 255, 0.25);
+  border-radius: 999px;
+  background: #0d1220;
+  color: #cfe6ff;
+  font: 500 12px var(--font);
+  cursor: pointer;
+}
+
+.sdk-tool:hover:not(:disabled) {
+  border-color: #3fd8ff;
+}
+
+.sdk-tool:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.sdk-tool.on {
+  background: #15364a;
+  border-color: #3fd8ff;
+  color: #e8f4ff;
+}
+
+.sdk-grid {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  gap: 1px;
+  width: 100%;
+  padding: 3px;
+  border-radius: 6px;
+  background: #223352;
+}
+
+.sdk-cell {
+  position: relative;
+  aspect-ratio: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: #0b111c;
+  color: #3fd8ff;
+  cursor: pointer;
+}
+
+.sdk-cell.given {
+  background: #141d2e;
+  color: #e8f4ff;
+}
+
+.sdk-cell.peer {
+  background: #121c2d;
+}
+
+.sdk-cell.given.peer {
+  background: #1b2740;
+}
+
+.sdk-cell.same {
+  box-shadow: inset 0 0 0 1px rgba(63, 216, 255, 0.5);
+}
+
+.sdk-cell.focused {
+  outline: 2px solid #3fd8ff;
+  outline-offset: -2px;
+  z-index: 1;
+}
+
+.sdk-cell.clash {
+  color: #ff6b81;
+}
+
+.sdk-cell.wrong {
+  background: #58202c;
+  color: #ffd7dd;
+}
+
+.sdk-cell.edge-right {
+  margin-right: 2px;
+}
+
+.sdk-cell.edge-bottom {
+  margin-bottom: 2px;
+}
+
+.sdk-value {
+  font: 700 clamp(13px, 3.4vw, 22px) var(--mono);
+}
+
+.sdk-notes {
+  position: absolute;
+  inset: 1px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, 1fr);
+  place-items: center;
+  color: #7d8aa3;
+  font: 500 clamp(6px, 1.3vw, 9px) var(--mono);
+  pointer-events: none;
+}
+
+.sdk-pad {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  gap: 4px;
+  width: 100%;
+}
+
+.sdk-key {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 4px 0 4px;
+  border: 1px solid rgba(160, 210, 255, 0.2);
+  border-radius: 6px;
+  background: #101a2b;
+  color: #e8f4ff;
+  cursor: pointer;
+}
+
+.sdk-key b {
+  font: 700 clamp(13px, 3vw, 18px) var(--mono);
+}
+
+.sdk-key i {
+  font: 400 9px var(--font);
+  font-style: normal;
+  color: #7d8aa3;
+}
+
+.sdk-key:hover {
+  border-color: #3fd8ff;
+}
+
+.sdk-key.full {
+  opacity: 0.4;
+}
+
+.sdk-note {
+  margin: 0;
+  min-height: 16px;
+  color: #7d8aa3;
+  font-size: 13px;
+  text-align: center;
+}
+
+.nono {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: min(96%, 520px);
+  max-height: 100%;
+  padding: 8px 0;
+  overflow: auto;
+}
+
+.nono-board {
+  --nono-size: 10;
+  display: grid;
+  grid-template-columns: minmax(44px, auto) repeat(var(--nono-size), minmax(0, 1fr));
+  grid-template-rows: auto repeat(var(--nono-size), auto);
+  gap: 1px;
+  width: 100%;
+}
+
+.nono-corner {
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: #141d2e;
+  color: #7d8aa3;
+  font: 600 11px var(--mono);
+}
+
+.nono-clue {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 6px;
+  background: #121c2d;
+  color: #cfe6ff;
+  font: 600 clamp(8px, 1.5vw, 12px) var(--mono);
+}
+
+.nono-clue.down {
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 52px;
+}
+
+.nono-clue.across {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.nono-clue.solved {
+  color: #4b5a73;
+}
+
+.nono-cell {
+  aspect-ratio: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: #0f1829;
+  color: #7d8aa3;
+  font: 700 clamp(8px, 1.6vw, 13px) var(--font);
+  cursor: pointer;
+  touch-action: none;
+}
+
+.nono-cell:hover {
+  background: #1a2740;
+}
+
+.nono-cell.filled {
+  background: #3fd8ff;
+}
+
+.nono-cell.crossed {
+  background: #0b111c;
+  color: #55657f;
+}
+
+.nono-cell.focused {
+  outline: 2px solid #fbbf24;
+  outline-offset: -2px;
+  z-index: 1;
+}
+
+.nono-cell.edge-right {
+  margin-right: 2px;
+}
+
+.nono-cell.edge-bottom {
+  margin-bottom: 2px;
+}
+
+.nono-note {
+  margin: 0;
+  min-height: 16px;
+  color: #7d8aa3;
+  font-size: 13px;
+  text-align: center;
+}
+
+.contrast .sdk-cell,
+.contrast .sdk-key,
+.contrast .nono-cell,
+.contrast .nono-clue {
+  border: 1px solid #fff;
+}
+
+.contrast .sdk-cell.given {
+  background: #333;
+  color: #fff;
+}
+
+.contrast .nono-cell.filled {
+  background: #00ffff;
+}
+
+/* ---- how you are getting on: the level, the run of days, the day's challenge, what opens */
+
+.og-prog {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--glass);
+}
+
+.og-prog-top {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.og-prog-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--pill-bg);
+}
+
+.og-prog-rank {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--faint);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.og-prog-number {
+  font: 600 19px var(--font);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.og-prog-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.og-prog-block h4 {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  font: 600 13px var(--font);
+  color: var(--text);
+}
+
+/* The rule behind a figure, opened from the figure itself. */
+.og-why {
+  display: inline;
+}
+
+/* Small enough to sit in a sentence rather than beside it. */
+.og-icon-btn.small {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  vertical-align: text-bottom;
+}
+
+.og-why-list {
+  margin: 4px 0 0;
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--faint);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.og-chal-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 8px;
+}
+
+.og-chal {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--pill-bg);
+}
+
+.og-chal.done {
+  border-color: var(--cyan);
+}
+
+.og-chal-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.og-chal-done {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--pill-bg-strong);
+  color: var(--cyan);
+  font-size: 11px;
+}
+
+.og-chal p,
+.og-prog-card p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.og-chal .og-btn {
+  align-self: flex-start;
+}
+
+.og-past {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.og-past > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.og-past-day {
+  min-width: 128px;
+  color: var(--faint);
+}
+
+.og-past-chal {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.og-unlocks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 8px;
+}
+
+.og-unlocks > li {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--pill-bg);
+  font-size: 13px;
+}
+
+.og-unlocks > li.open {
+  border-color: var(--cyan);
+}
+
+.og-unlock-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font: 600 13px var(--font);
+  color: var(--text);
+}
+
+.og-mastery {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.og-mastery th,
+.og-mastery td {
+  padding: 8px 8px;
+  text-align: left;
+  border-bottom: 1px solid var(--line-strong);
+  vertical-align: top;
+}
+
+.og-mastery thead th {
+  color: var(--faint);
+  font: 500 11px var(--font);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.og-mastery tbody th {
+  font: 500 12px var(--font);
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.contrast .og-prog-card,
+.contrast .og-chal,
+.contrast .og-unlocks > li {
+  border: 1px solid #fff;
+}
+
+/* ------------------------------------------------------------------ Lights Out and Solitaire
+ * Two games with no canvas: a board of lights, and a table of cards. Their own block at the end of this file, so it
+ * never tangles with the blocks above. Class names are prefixed `lout-` and `klon-` and used nowhere else.
+ */
+
+.lout {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: min(96%, 560px);
+  max-height: 100%;
+  padding: 12px;
+  overflow: auto;
+}
+
+.lout-board {
+  --lout-size: 5;
+  display: grid;
+  grid-template-columns: repeat(var(--lout-size), minmax(0, 1fr));
+  gap: 8px;
+  width: min(100%, calc(var(--lout-size) * 86px), 62vh);
+  aspect-ratio: 1;
+}
+
+.lout-cell {
+  aspect-ratio: 1;
+  min-width: 0;
+  padding: 0;
+  border: 1px solid rgba(160, 210, 255, 0.18);
+  border-radius: 10px;
+  background: #121b2c;
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+
+.lout-cell:hover {
+  border-color: rgba(160, 210, 255, 0.45);
+}
+
+.lout-cell.on {
+  border-color: rgba(255, 224, 130, 0.65);
+  background: radial-gradient(circle at 34% 28%, #ffeab0, #f3b73c 62%, #b97d12);
+  box-shadow: 0 0 20px rgba(251, 191, 36, 0.5);
+}
+
+.lout-cell.focused {
+  outline: 2px solid #3fd8ff;
+  outline-offset: 2px;
+}
+
+.lout-cell.hinted {
+  box-shadow: inset 0 0 0 3px #3fd8ff;
+}
+
+.lout-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.lout-readout {
+  color: #7d8aa3;
+  font-size: 13px;
+  text-align: center;
+}
+
+.lout-hint {
+  padding: 4px 12px;
+  border: 1px solid rgba(160, 210, 255, 0.25);
+  border-radius: 10px;
+  background: #16203a;
+  color: #e8f4ff;
+  font: 600 12px var(--font);
+  cursor: pointer;
+}
+
+.lout-hint:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.klon {
+  --klon-w: clamp(40px, 8vw, 66px);
+  --klon-h: calc(var(--klon-w) * 1.42);
+  --klon-step: calc(var(--klon-h) * 0.26);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(98%, 900px);
+  max-height: 100%;
+  padding: 8px;
+  overflow: auto;
+}
+
+.klon-top,
+.klon-table {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.klon-gap {
+  flex: 1 1 auto;
+  min-width: 4px;
+}
+
+.klon-slot,
+.klon-column {
+  position: relative;
+  flex: 0 0 auto;
+  width: var(--klon-w);
+  border: 1px dashed rgba(160, 210, 255, 0.22);
+  border-radius: 10px;
+}
+
+.klon-slot {
+  height: var(--klon-h);
+}
+
+.klon-waste {
+  width: calc(var(--klon-w) + var(--klon-step) * 2);
+}
+
+.klon-column {
+  min-height: var(--klon-h);
+  height: calc(var(--klon-h) + (var(--klon-count, 1) - 1) * var(--klon-step));
+}
+
+.klon-stock,
+.klon-foundation {
+  cursor: pointer;
+}
+
+.klon-card {
+  position: absolute;
+  left: 0;
+  top: calc(var(--klon-i, 0) * var(--klon-step));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  width: var(--klon-w);
+  height: var(--klon-h);
+  border: 1px solid #22314e;
+  border-radius: 10px;
+  background: #f3f7ff;
+  cursor: pointer;
+}
+
+.klon-card.red {
+  color: #c81e3a;
+}
+
+.klon-card.black {
+  color: #16203a;
+}
+
+.klon-card.down {
+  border-color: #2a4068;
+  background: repeating-linear-gradient(45deg, #1d3557, #1d3557 5px, #152440 5px, #152440 10px);
+}
+
+.klon-card.held {
+  box-shadow: 0 0 0 2px #3fd8ff, 0 8px 16px rgba(0, 0, 0, 0.5);
+}
+
+.klon-card.marked {
+  box-shadow: 0 0 0 2px #fbbf24;
+}
+
+.klon-fan {
+  top: 0;
+  left: calc(var(--klon-fan, 0) * var(--klon-step));
+}
+
+.klon-rank {
+  font: 700 clamp(13px, 2.4vw, 20px) var(--font);
+}
+
+.klon-suit {
+  font-size: clamp(12px, 2.2vw, 18px);
+  line-height: 1;
+}
+
+.klon-ghost {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: rgba(160, 210, 255, 0.28);
+  font-size: calc(var(--klon-w) * 0.5);
+}
+
+.klon-ghost.red {
+  color: rgba(248, 113, 113, 0.3);
+}
+
+.klon-again {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #7d8aa3;
+  font-size: 18px;
+}
+
+.klon-slot.here,
+.klon-column.here {
+  outline: 2px solid #3fd8ff;
+  outline-offset: 2px;
+}
+
+.klon-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.klon-note {
+  color: #7d8aa3;
+  font-size: 13px;
+}
+
+.klon-btn {
+  padding: 4px 12px;
+  border: 1px solid rgba(160, 210, 255, 0.25);
+  border-radius: 6px;
+  background: #16203a;
+  color: #e8f4ff;
+  font: 600 12px var(--font);
+  cursor: pointer;
+}
+
+.klon-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lout-cell {
+    transition: none;
+  }
+}
+
+.contrast .lout-cell,
+.contrast .klon-card,
+.contrast .klon-slot,
+.contrast .klon-column {
+  border: 1px solid #fff;
+}
+
+/* Picture Logic's two mode buttons. They sit above the board because a touchscreen has no right-click, and without
+ * them there would be no way to cross a square out with a finger. */
+
+.nono-bar {
+  display: flex;
+  gap: 4px;
+}
+
+.nono-tool {
+  padding: 4px 12px;
+  border: 1px solid rgba(160, 210, 255, 0.25);
+  border-radius: 999px;
+  background: #0d1220;
+  color: #cfe6ff;
+  font: 500 12px var(--font);
+  cursor: pointer;
+}
+
+.nono-tool:hover {
+  border-color: #3fd8ff;
+}
+
+.nono-tool.on {
+  background: #15364a;
+  border-color: #3fd8ff;
+  color: #e8f4ff;
+}
+
+.contrast .nono-tool {
   border: 1px solid #fff;
 }

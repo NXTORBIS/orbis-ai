@@ -1,4 +1,5 @@
 import type { GameContext, GameInstance, GameModule } from './engine'
+import { gameRandom } from './seed'
 import type { Direction, Grid } from '../../../shared/gameLogic'
 import { canMove, emptyGrid, isGrid, maxTile, move, spawnTile } from '../../../shared/gameLogic'
 
@@ -32,6 +33,13 @@ function create(ctx: GameContext): GameInstance {
   let over = false
   let started = false
   let touch: { x: number; y: number } | null = null
+  /*
+   * One random source for the whole run, remade when a run starts.
+   *
+   * It has to be one source rather than a fresh one per tile: a seeded generator asked once always answers the same
+   * thing, so a new generator for every spawn would drop the same tile in the same corner for ever.
+   */
+  let random = gameRandom(ctx)
 
   const emit = (): void => ctx.emit({ status: over ? 'over' : paused ? 'paused' : started ? 'running' : 'ready', score, elapsedMs: 0, difficulty: 1, hud: [{ label: 'Best tile', value: maxTile(grid) }, { label: 'Undo', value: undo ? 'U' : '—' }] })
 
@@ -59,7 +67,7 @@ function create(ctx: GameContext): GameInstance {
     if (!result.moved) return
     started = true
     undo = { grid, score }
-    grid = spawnTile(result.grid)
+    grid = spawnTile(result.grid, random)
     score += result.gained
     ctx.audio.blip(result.gained ? 500 + Math.log2(result.gained) * 40 : 300, 40, 'triangle', 0.5)
     if (!reached2048 && maxTile(grid) >= 2048) {
@@ -112,7 +120,9 @@ function create(ctx: GameContext): GameInstance {
   root.addEventListener('pointerup', onTouchEnd)
 
   const fresh = (): void => {
-    grid = spawnTile(spawnTile(emptyGrid(SIZE)))
+    // A new run, a new random source: with the day's seed that is the same board and the same tiles all day.
+    random = gameRandom(ctx)
+    grid = spawnTile(spawnTile(emptyGrid(SIZE), random), random)
     score = 0
     undo = null
     reached2048 = paused = over = started = false

@@ -14,19 +14,15 @@ export interface GamePrefs {
   difficulty: 'easy' | 'normal' | 'hard'
 }
 
-export type GameStatus = 'ready' | 'running' | 'paused' | 'over'
-
-/** What a game reports about itself: real state, for the score bar and diagnostics. */
-export interface GameState {
-  status: GameStatus
-  score: number
-  level?: number
-  lives?: number
-  elapsedMs: number
-  /** How hard it is right now (1 = starting difficulty). */
-  difficulty: number
-  hud?: { label: string; value: string | number }[]
-}
+/*
+ * What a game reports about itself, from where both halves of Orbis can read it.
+ *
+ * `src/shared/games/reported.ts`, because the arcade's surface declaration needs this shape to say what a game is
+ * doing and that declaration is read by the main process, where none of the browser types in this file exist. Still
+ * exported from here, so everything that already asks the engine what a game's state looks like goes on working.
+ */
+export type { GameState, GameStatus } from '../../../shared/games/reported.ts'
+import type { GameState } from '../../../shared/games/reported.ts'
 
 export interface GameContext {
   gameId: GameId

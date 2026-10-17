@@ -1,4 +1,5 @@
 import type { GameContext, GameInstance, GameModule } from './engine'
+import { gameRandom } from './seed'
 
 type Phase = 'intro' | 'waiting' | 'go' | 'result' | 'early' | 'done' | 'paused'
 
@@ -15,6 +16,13 @@ function create(ctx: GameContext): GameInstance {
   root.tabIndex = -1
   ctx.root.querySelector('.game-surface')?.appendChild(root)
 
+  /*
+   * One random source for the whole sitting, remade when the five rounds start again.
+   *
+   * With the day's seed the five waits are the same five waits all day, so two people on this machine are reacting to
+   * the same test rather than to luck. A fresh generator per round would give the same wait five times over.
+   */
+  let random = gameRandom(ctx)
   let phase: Phase = 'intro'
   let resumeTo: Phase = 'intro'
   let timer = 0
@@ -72,7 +80,7 @@ function create(ctx: GameContext): GameInstance {
       // The moment the green frame is on screen, not when the timer fired.
       requestAnimationFrame(() => (goAt = performance.now()))
       ctx.audio.blip(880, 80, 'square', 0.6)
-    }, 1200 + Math.random() * 2800)
+    }, 1200 + random() * 2800)
   }
 
   const press = (): void => {
@@ -122,6 +130,7 @@ function create(ctx: GameContext): GameInstance {
 
   return {
     start() {
+      random = gameRandom(ctx)
       times = []
       early = 0
       phase = 'intro'
@@ -143,6 +152,7 @@ function create(ctx: GameContext): GameInstance {
     },
     restart() {
       window.clearTimeout(timer)
+      random = gameRandom(ctx)
       times = []
       early = 0
       phase = 'intro'

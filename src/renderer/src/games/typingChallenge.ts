@@ -1,4 +1,5 @@
 import type { GameContext, GameInstance, GameModule } from './engine'
+import { gameRandom } from './seed'
 import { typingStats } from '../../../shared/gameLogic'
 
 /** Original practice passages, written for Orbis. */
@@ -116,7 +117,8 @@ function create(ctx: GameContext): GameInstance {
 
   const fresh = (): void => {
     window.clearInterval(clock)
-    target = PASSAGES[Math.floor(Math.random() * PASSAGES.length)]
+    // The day's seed gives everyone on this machine the same passage all day; without one, any passage.
+    target = PASSAGES[Math.floor(gameRandom(ctx)() * PASSAGES.length)]
     input.value = ''
     input.disabled = false
     startedAt = pausedElapsed = streak = bestStreak = lastLength = 0

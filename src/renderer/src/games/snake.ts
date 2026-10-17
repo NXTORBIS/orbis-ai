@@ -1,5 +1,6 @@
 import type { GameContext, GameInstance, GameModule, GameStatus } from './engine'
 import { createLoop, difficultyFactor, fitCanvas, palette } from './engine'
+import { gameRandom } from './seed'
 
 type Point = { x: number; y: number }
 
@@ -19,6 +20,13 @@ function create(ctx: GameContext): GameInstance {
   const colors = palette(ctx.prefs.highContrast)
   const factor = difficultyFactor(ctx.prefs.difficulty)
 
+  /*
+   * One random source for the whole run, remade whenever a run starts.
+   *
+   * It cannot be a fresh generator per cell: a seeded generator asked once always answers the same thing, so the food
+   * would appear in the same square for ever. One source, asked over and over, is what makes a seeded run a real run.
+   */
+  let random = gameRandom(ctx)
   let status: GameStatus = 'ready'
   let snake: Point[] = []
   let dir: Point = { x: 1, y: 0 }
@@ -40,7 +48,7 @@ function create(ctx: GameContext): GameInstance {
   const occupied = (p: Point): boolean => snake.some((s) => s.x === p.x && s.y === p.y) || obstacles.some((o) => o.x === p.x && o.y === p.y)
   const freeCell = (): Point => {
     for (let i = 0; i < 500; i++) {
-      const p = { x: Math.floor(Math.random() * COLS), y: Math.floor(Math.random() * ROWS) }
+      const p = { x: Math.floor(random() * COLS), y: Math.floor(random() * ROWS) }
       if (!occupied(p) && !(food.x === p.x && food.y === p.y)) return p
     }
     return { x: 0, y: 0 }
@@ -53,6 +61,7 @@ function create(ctx: GameContext): GameInstance {
   }
 
   const reset = (): void => {
+    random = gameRandom(ctx)
     status = 'ready'
     snake = [{ x: 8, y: 9 }, { x: 7, y: 9 }, { x: 6, y: 9 }]
     dir = { x: 1, y: 0 }
