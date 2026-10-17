@@ -84,6 +84,21 @@ export interface MusicSettings {
   playOnStart: boolean
 }
 
+/**
+ * What each music preference that is a choice may be.
+ *
+ * One list, read by the two things that need it: `normalizeSettings` below, which checks what came off the disk, and
+ * the capability that lets Orion change a preference, which offers these as the values and refuses anything else with
+ * the list. Written out twice, a value added here would be accepted off the disk and refused to the person.
+ */
+export const MUSIC_SETTING_VALUES = Object.freeze({
+  recognition: ['automatic', 'manual', 'off'],
+  repeat: ['off', 'all', 'one'],
+  miniPlayer: ['compact', 'full'],
+  view: ['songs', 'albums', 'artists', 'genres', 'playlists', 'favourites'],
+  sort: ['title', 'artist', 'album', 'added', 'played', 'plays', 'duration', 'year']
+} as const)
+
 export const DEFAULT_MUSIC_SETTINGS: MusicSettings = {
   recognition: 'automatic',
   useVision: true,
@@ -216,17 +231,17 @@ export function normalizeSettings(raw: unknown): MusicSettings {
   const one = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
   const pick = <T extends string>(value: unknown, allowed: readonly T[], fallback: T): T => (allowed.includes(value as T) ? (value as T) : fallback)
   return {
-    recognition: pick(one.recognition, ['automatic', 'manual', 'off'] as const, DEFAULT_MUSIC_SETTINGS.recognition),
+    recognition: pick(one.recognition, MUSIC_SETTING_VALUES.recognition, DEFAULT_MUSIC_SETTINGS.recognition),
     useVision: one.useVision !== false,
     volume: typeof one.volume === 'number' && one.volume >= 0 && one.volume <= 1 ? one.volume : 1,
     shuffle: one.shuffle === true,
-    repeat: pick(one.repeat, ['off', 'all', 'one'] as const, 'off'),
+    repeat: pick(one.repeat, MUSIC_SETTING_VALUES.repeat, 'off'),
     resume: one.resume !== false,
     folders: Array.isArray(one.folders) ? one.folders.filter((f): f is string => typeof f === 'string' && f.length < 4096).slice(0, 20) : [],
     showButton: one.showButton !== false,
-    miniPlayer: pick(one.miniPlayer, ['compact', 'full'] as const, 'compact'),
-    view: pick(one.view, ['songs', 'albums', 'artists', 'genres', 'playlists', 'favourites'] as const, 'songs'),
-    sort: pick(one.sort as string, ['title', 'artist', 'album', 'added', 'played', 'plays', 'duration', 'year'] as const, 'added'),
+    miniPlayer: pick(one.miniPlayer, MUSIC_SETTING_VALUES.miniPlayer, 'compact'),
+    view: pick(one.view, MUSIC_SETTING_VALUES.view, 'songs'),
+    sort: pick(one.sort as string, MUSIC_SETTING_VALUES.sort, 'added'),
     playOnStart: one.playOnStart === true
   }
 }
