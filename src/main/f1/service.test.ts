@@ -189,3 +189,13 @@ test('a season that keeps failing is listed as missing, not hidden', async () =>
   assert.ok(all.ok)
   if (all.ok) assert.deepEqual(all.data.missing, [1960])
 })
+
+test('a shut archive is explained in a sentence, and a shut jolpica still reports its status code', async () => {
+  const { service } = setup(() => respond(401, {}))
+  const a = await service.archive(2025)
+  assert.equal(a.ok, false)
+  assert.ok(!a.ok && /sign-in/.test(a.message), a.ok ? '' : a.message)
+  assert.ok(!a.ok && !/401/.test(a.message))
+  const b = await service.schedule(2025)
+  assert.ok(!b.ok && /401/.test(b.message))
+})

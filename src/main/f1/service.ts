@@ -517,6 +517,12 @@ export class F1Service {
         stats.lastOkAt = this.now()
         return { body: [] }
       }
+      // Formula 1 closed its recording archive behind a sign-in during 2026: every address under
+      // livetiming.formula1.com/static now answers 401 whatever is sent, while live timing itself is still open. That
+      // is not a fault anybody can retry out of, so it is said as a plain sentence instead of as a status code.
+      if ((res.status === 401 || res.status === 403) && provider === 'f1archive') {
+        return this.fail(provider, 'provider-error', 'Formula 1 no longer lets anything read its recorded-session archive without a sign-in, so finished sessions cannot be replayed. Live timing is unaffected.')
+      }
       if (!res.ok) return this.fail(provider, 'provider-error', `The data provider answered with an error (${res.status}).`)
       // Bodies may begin with a byte-order mark, which JSON.parse refuses.
       let body: unknown
