@@ -346,6 +346,11 @@ export function useChat(deps: ChatDeps): ChatHandle {
           case 'research':
             patchAssistant((m) => ({ ...m, research: event.research }))
             break
+          case 'replace':
+            // Anything still queued belongs to the text being replaced; it must land first or it would overwrite this.
+            flushDeltas()
+            patchAssistant((m) => ({ ...m, content: event.content, model: event.model ?? m.model }))
+            break
           case 'artifact': {
             const { artifact } = event
             patchAssistant((m) => ({
