@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { FeatureGroup } from '../lib/features'
+import { FEATURE_LOGOS } from '../lib/featureLogos'
+import './sidebarFeatureLogos.css'
 import type { AppFeature } from '../../../shared/commandCenter'
 import { avatarFor, avatarStyle } from '../../../shared/avatars'
 import type { LucideIcon } from 'lucide-react'
@@ -316,15 +318,22 @@ export default function Sidebar(props: Props): React.JSX.Element {
                           key={id}
                           type="button"
                           role="menuitem"
-                          className={`menu-item${props.feature === id ? ' selected' : ''}`}
+                          aria-label={label}
+                          className={`menu-item sb-feature-row${props.feature === id ? ' selected' : ''}`}
                           title={hint}
                           onClick={() => {
                             props.onFeature(id)
                             setBrandOpen(false)
                           }}
                         >
-                          <Icon size={14} />
-                          {label}
+                          {FEATURE_LOGOS[id] ? (
+                            <img className="sb-feature-logo" src={FEATURE_LOGOS[id]} alt="" draggable={false} />
+                          ) : (
+                            <>
+                              <Icon size={14} />
+                              {label}
+                            </>
+                          )}
                         </button>
                       ))}
                     </div>

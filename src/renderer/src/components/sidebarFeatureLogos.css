@@ -1,0 +1,12 @@
+/* The feature rows in the Orbis menu show each feature's own logo, so the logo is the row. The row keeps its height */
+/* and the logo scales to fit the menu's width, whatever the feature's name is. */
+.sb-feature-row {
+  padding-block: 4px;
+}
+.sb-feature-logo {
+  display: block;
+  height: 26px;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+}
