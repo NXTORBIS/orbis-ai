@@ -86,6 +86,8 @@ export default function App(): React.JSX.Element {
   const [welcome, setWelcome] = useState<'closed' | 'open' | 'leaving'>('open')
   /** No valid name is saved, so startup continues into the name step. Set once, when settings load. */
   const [needsName, setNeedsName] = useState(false)
+  /** True until the account has been asked which features it wants (see WelcomeExperience). */
+  const [featuresPending, setFeaturesPending] = useState(false)
   /**
    * This profile has an account password and it has not been given yet.
    *
@@ -533,6 +535,9 @@ export default function App(): React.JSX.Element {
         setSettings(s)
         loadConversations(s)
         setNeedsName(!s.welcomeCompleted || !s.userName.trim())
+        void window.api.featureVisibility().then((answer) => {
+          if (!isRefusal(answer)) setFeaturesPending(!answer.choice.chosen)
+        }, () => undefined)
         void window.api
           .accountStatus()
           .then((status) => {
@@ -1526,6 +1531,7 @@ export default function App(): React.JSX.Element {
       <WelcomeExperience
         ready={loaded && accountChecked}
         needsName={needsName}
+        featuresPending={featuresPending}
         loadError={loadError}
         effects={effects}
         onRetryLoad={load}

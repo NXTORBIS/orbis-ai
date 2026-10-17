@@ -14,6 +14,8 @@ interface Props {
   ready: boolean
   /** No valid name is saved yet: the intro leads to the name step. Otherwise this is the normal startup screen. */
   needsName: boolean
+  /** True for an account that is open but has never been asked which features it wants. */
+  featuresPending?: boolean
   /** Local settings couldn't be read, so whether setup is finished is unknown. */
   loadError: boolean
   /**
@@ -232,7 +234,7 @@ function useParallax(rootRef: React.RefObject<HTMLDivElement | null>, reduced: b
  * The Orbis startup screen. Every launch opens on it while local data loads; a new installation then asks for the
  * user's name, and a configured one hands over to the real interface as soon as it is ready.
  */
-export default function WelcomeExperience({ ready, needsName, needsUnlock, lockedReason, loadError, effects, onRetryLoad, onComplete, onChooseFeatures, onUnlock, onEnter, onFinished }: Props): React.JSX.Element {
+export default function WelcomeExperience({ ready, needsName, featuresPending = false, needsUnlock, lockedReason, loadError, effects, onRetryLoad, onComplete, onChooseFeatures, onUnlock, onEnter, onFinished }: Props): React.JSX.Element {
   const reduced = !effects
   const [phase, setPhase] = useState<Phase>(loadError ? 'name' : 'intro')
   const [introDone, setIntroDone] = useState(false)
@@ -393,10 +395,16 @@ export default function WelcomeExperience({ ready, needsName, needsUnlock, locke
       if (phase === 'intro' && introDone) setPhase('name')
     } else if (needsUnlock) {
       if (phase === 'intro' || phase === 'name') setPhase('unlock')
+    } else if (featuresPending && (phase === 'intro' || phase === 'name' || phase === 'unlock')) {
+      // An account that is open but has never been asked what it needs. Ask once, here, then carry on into Orbis.
+      if (introDone) {
+        setStep('features')
+        setPhase('choosing')
+      }
     } else if (phase === 'intro' || phase === 'name' || phase === 'unlock') {
       setPhase('exit')
     }
-  }, [phase, ready, needsName, introDone, loadError])
+  }, [phase, ready, needsName, featuresPending, introDone, loadError])
 
   useEffect(() => {
     if (ready || loadError) {
