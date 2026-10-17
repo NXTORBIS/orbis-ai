@@ -11,7 +11,7 @@
 .ch-studio {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   /*
    * Sizes to its container rather than to its widest child. Without this the periodic table's eighteen-column
    * grid pushes the whole laboratory wider than the window -- the same fault the physics studio had.
@@ -24,14 +24,14 @@
   align-self: flex-start;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 11px;
+  gap: 4px;
+  padding: 4px 12px;
   border: 1px solid var(--glass-border);
   border-radius: 999px;
   background: var(--panel);
   color: var(--faint);
   font-family: var(--font);
-  font-size: 11.5px;
+  font-size: 11px;
   cursor: pointer;
   transition: color 0.16s ease, border-color 0.16s ease;
 }
