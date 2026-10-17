@@ -22,6 +22,21 @@ await build({ ...shared, entryPoints: ['extension-src/selection/worker.ts'], out
 // runs in the extension's worker, which is the only place that can take a picture of the window or reach the helper.
 await build({ ...shared, entryPoints: ['extension-src/visual/main.ts'], outfile: 'extension/visual.js', format: 'iife', platform: 'browser' })
 await build({ ...shared, entryPoints: ['extension-src/visual/worker.ts'], outfile: 'extension/visual-worker.js', format: 'esm', platform: 'browser' })
+// Orbis Music as a whole browser tab. Two files, and the split is narrower than the selection orb's on purpose: the
+// page is the extension's own page on the extension's own origin, so it reads the helper's address out of session
+// storage itself, exactly as the built-in Orbis panel does (the reasoning is written out at the top of
+// extension-src/music/helper.ts). The worker exists for the one thing a page cannot do -- open a tab -- because
+// chrome.tabs.create lives only in the worker and the helper refuses to open anything that is not http or https.
+// Left unminified: it is read in the browser's own devtools as often as it is run.
+await build({ ...shared, minify: false, entryPoints: ['extension-src/music/main.ts'], outfile: 'extension/music.js', format: 'esm', platform: 'browser' })
+await build({ ...shared, entryPoints: ['extension-src/music/worker.ts'], outfile: 'extension/music-worker.js', format: 'esm', platform: 'browser' })
+// The music page's colours, spacing and type, copied out of the one generated token file rather than written again.
+// An extension page cannot reach orbis-ui/, which is built into the browser, so the file has to be beside the page --
+// but it is still only ever a copy, so a colour is still decided in exactly one place (orbis-ui/tokens.json).
+{
+  const { copyFile } = await import('node:fs/promises')
+  await copyFile(join(root, 'orbis-ui/orbis-tokens.css'), join(root, 'extension/music-tokens.css'))
+}
 /*
  * `orbis-ui/panel/sidebar.ts` used to be here, not built, with a note saying the source was kept for later.
  *
