@@ -125,7 +125,7 @@ export default function Exam({
       </header>
 
       {ready && !ahead && !after ? (
-        <p className="st-empty big">
+        <p className="view-empty">
           No exam set. Add a goal with a date on it — on the Goals page — and this becomes a countdown, a plan for the
           days left, and a review of it afterwards.
         </p>

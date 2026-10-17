@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Camera, Check, Pencil, Play, Plus, Search, Sparkles, Trash2, X } from 'lucide-react'
+import { Camera, Check, Pencil, Play, Plus, Sparkles, Trash2, X } from 'lucide-react'
 import Drafts from './Drafts'
 import Photo from './Photo'
 import Hints, { type Question } from './Hints'
@@ -7,6 +7,7 @@ import TeachBack from './TeachBack'
 import type { Call } from './useStudent'
 import type { Flashcard } from '../../../../shared/student/types'
 import type { NoticeKind } from '../../lib/notices'
+import { SearchBox } from '../../ui'
 
 /**
  * Cards: the questions a student writes for themselves.
@@ -179,7 +180,7 @@ export default function Cards({
       </header>
 
       {ready && cards.length === 0 ? (
-        <p className="st-empty big">
+        <p className="view-empty">
           No cards yet. Write one for something you keep forgetting — a question on the front, the answer on the back.
           Chapter tests are built from these.
         </p>
@@ -187,10 +188,13 @@ export default function Cards({
 
       {cards.length > 0 ? (
         <div className="st-cards-filters">
-          <label className="st-search-box">
-            <Search size={14} aria-hidden />
-            <input value={query} onChange={(e) => setQuery(e.target.value.slice(0, 120))} placeholder="Search your cards" aria-label="Search your cards" />
-          </label>
+          <SearchBox
+            value={query}
+            onChange={(next) => setQuery(next.slice(0, 120))}
+            label="Search your cards"
+            maxLength={120}
+            className="st-cards-find"
+          />
           <div className="st-row-actions">
             <button type="button" className={`st-pill${deck === null ? ' on' : ''}`} aria-pressed={deck === null} onClick={() => setDeck(null)}>
               All ({cards.length})

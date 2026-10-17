@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { Coffee, HelpCircle, Lock, Music2, Pause, Play, Save, Sparkles, Target, Volume2, X } from 'lucide-react'
+import { Coffee, HelpCircle, Lock, Pause, Play, Save, Sparkles, Target, Volume2, X } from 'lucide-react'
 import Orbi from './Orbi'
 import { atmosphere } from './atmosphere'
 import { clock, spell, type Call, type Catalogue } from './useStudent'
+import { useSurface } from '../../lib/surfaces'
+import { studentSessionSurface } from './studentSurfaces'
 import { stageNow } from '../../../../shared/student/orbiAnim'
 import type { OrbiState, StudentSnapshot } from '../../../../shared/student/types'
 import type { OrbiMoment } from '../../../../shared/student/orbiAnim'
@@ -84,6 +86,34 @@ export default function FocusRunning({
     return () => atmosphere().stopAll()
   }, [])
 
+  /*
+   * What the running session lets Orbis do.
+   *
+   * Registered here rather than on Student itself because this screen's life *is* the session's life: it is drawn when
+   * a session exists and taken away when one does not, which is exactly what the register wants. A session surface
+   * that outlived the session would offer "pause" for something that is not running.
+   *
+   * No controls, and that is the design: a session's policy is snapshotted when it starts and never edited after,
+   * which is what makes the blocking worth trusting. What there is here is what a student can really do from this
+   * screen, each through the same `student:do` operation its own button calls.
+   */
+  useSurface(
+    studentSessionSurface({
+      snapshot: () => snapshot,
+      ticking: () => ticking,
+      pause: () => call('pause-focus'),
+      resume: () => call('resume-focus'),
+      startBreak: () => call('start-break'),
+      endBreak: () => call('end-break'),
+      carryOn: () => call('carry-on'),
+      extraMinute: () => call<{ ok: boolean; why?: string; minutes?: number }>('extra-minute'),
+      end: (reason) => call<{ ok: boolean }>('end-focus', reason),
+      capture: (text) => call('capture', text),
+      // Asked of Orbis again: whether a session really paused is the service's answer, not this screen's.
+      check: () => call<StudentSnapshot | null>('snapshot')
+    })
+  )
+
   // Quick Capture on a key, because its whole value is being faster than opening a tab.
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
@@ -130,25 +160,51 @@ export default function FocusRunning({
     void leave()
   }, [holding])
 
+  /**
+   * One of the session controls, which Orbis is allowed to refuse.
+   *
+   * Pausing, taking a break and coming back off one all end in a state change the service either makes or declines,
+   * and it declines when the move is not a legal one from where the session is -- taking a break while Orbis is
+   * still asking whether to carry on after a gap, for instance. Every one of these buttons used to throw that answer
+   * away, which is exactly what makes a button look dead: the press lands, nothing happens, and nothing is said. So
+   * a refusal is said out loud, in the words of the thing that was being asked for.
+   */
+  const move = async (op: string, refused: string): Promise<void> => {
+    const out = await call<{ ok: boolean }>(op)
+    if (!out?.ok) onNotify(refused, 'warn')
+  }
+
   const leave = async (): Promise<void> => {
     const out = await call<{ ok: boolean }>('end-focus', 'ended by the student')
     if (out?.ok) {
       atmosphere().stopAll()
       setPanel('none')
+      return
     }
+    onNotify('That session could not be ended. It may already have finished.', 'warn')
   }
 
   const saveThought = async (): Promise<void> => {
     const text = capture.trim()
-    if (!text) return
-    await call('capture', text)
+    // An empty box with a Save button pressed is a person expecting something to happen, so it answers rather than
+    // returning in silence and looking broken.
+    if (!text) {
+      onNotify('Write the thought down first, then press Save.', 'warn')
+      captureBox.current?.focus()
+      return
+    }
+    const out = await call<{ ok: boolean }>('capture', text)
+    if (!out?.ok) {
+      onNotify('That could not be saved. Nothing was written down.', 'warn')
+      return
+    }
     setCapture('')
     setPanel('none')
     onNotify('Saved. Carry on.')
   }
 
   if (!session || !timer) {
-    return <div className="st-focus-empty">No session is running.</div>
+    return <div className="view-empty">No session is running.</div>
   }
 
   const orbiState: OrbiState = recovering ? 'recovery' : onBreak ? 'break' : paused ? 'ready' : locked ? 'focus-locked' : 'focused'
@@ -226,7 +282,7 @@ export default function FocusRunning({
             <strong>Orbis was not running for a while.</strong> That time was not counted. {spell(timer.elapsed)} of {spell(timer.plannedSeconds)} is done.
           </p>
           <div className="st-recover-actions">
-            <button type="button" className="st-btn primary" onClick={() => void call('carry-on')}>
+            <button type="button" className="st-btn primary" onClick={() => void move('carry-on', 'This session could not be picked back up. Finish here instead.')}>
               Carry on
             </button>
             <button type="button" className="st-btn quiet" onClick={() => void leave()}>
@@ -238,21 +294,30 @@ export default function FocusRunning({
 
       <footer className="st-focus-foot">
         {onBreak ? (
-          <button type="button" className="st-btn primary" onClick={() => void call('end-break')}>
+          <button type="button" className="st-btn primary" onClick={() => void move('end-break', 'The break could not be ended. Check the timer: it may already be running again.')}>
             <Play size={15} aria-hidden /> Back to it
           </button>
         ) : paused ? (
-          <button type="button" className="st-btn primary" onClick={() => void call('resume-focus')}>
+          <button type="button" className="st-btn primary" onClick={() => void move('resume-focus', 'This session could not be started again. It may already be running.')}>
             <Play size={15} aria-hidden /> Resume
           </button>
         ) : (
           <>
-            <button type="button" className="st-btn" onClick={() => void call('pause-focus')}>
+            <button type="button" className="st-btn" onClick={() => void move('pause-focus', 'This session could not be paused right now.')}>
               <Pause size={15} aria-hidden /> Pause
             </button>
-            <button type="button" className="st-btn" onClick={() => void call('start-break')}>
-              <Coffee size={15} aria-hidden /> Break
-            </button>
+            {/*
+              * The break, offered only while the session is actually running.
+              *
+              * While Orbis is asking whether to carry on after a gap, a break is not a move the session can make, so
+              * the button was there and did nothing. The recovery panel above is the only thing to answer at that
+              * point, and it offers the break itself once the session is going again.
+              */}
+            {!recovering ? (
+              <button type="button" className="st-btn" onClick={() => void move('start-break', 'A break could not be started right now.')}>
+                <Coffee size={15} aria-hidden /> Break
+              </button>
+            ) : null}
           </>
         )}
         <button type="button" className="st-btn" onClick={() => setPanel('capture')}>
@@ -269,7 +334,7 @@ export default function FocusRunning({
         ) : null}
         {session.playlistId ? (
           <span className="st-chip">
-            <Music2 size={13} aria-hidden /> Music
+            Music
           </span>
         ) : null}
         {snapshot.canExtend ? (
@@ -367,7 +432,7 @@ export default function FocusRunning({
               <button
                 type="button"
                 onClick={() => {
-                  void call('start-break')
+                  void move('start-break', 'A break could not be started right now.')
                   setPanel('none')
                 }}
               >

@@ -152,7 +152,7 @@ export default function Day({
       ) : null}
 
       {nothing ? (
-        <p className="st-empty big">
+        <p className="view-empty">
           Nothing recorded for this day.
           {isToday ? ' A day with nothing on it is a day off, which is allowed.' : ''}
         </p>

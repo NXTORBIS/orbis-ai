@@ -173,7 +173,7 @@ export default function Missions({
       ) : null}
 
       {ready && weak.length === 0 ? (
-        <p className="st-empty big">
+        <p className="view-empty">
           Nothing is asking for a mission yet. Add your syllabus on the Plan page, or answer a few things, and Orbis
           will know what needs work.
         </p>

@@ -3,6 +3,7 @@ import { BookMarked, Check, Copy, ExternalLink, Package, Plus, Star, Trash2, X }
 import { onDay, type Call, type Catalogue } from './useStudent'
 import type { CapturedThought, DistractionItem, FocusCapsule, FocusSpace, StudentSnapshot, StudyNote, StudyResource } from '../../../../shared/student/types'
 import type { NoticeKind } from '../../lib/notices'
+import { SearchBox } from '../../ui'
 
 /**
  * Study: the things a student keeps, and the sessions they can start again.
@@ -143,7 +144,7 @@ export default function Study({
             </button>
           </div>
           {capsules.length === 0 ? (
-            <p className="st-empty big">A capsule is a session you can start again with one press — the subject, the length, the sound and what stays open.</p>
+            <p className="view-empty">A capsule is a session you can start again with one press — the subject, the length, the sound and what stays open.</p>
           ) : (
             <div className="st-grid">
               {capsules.map((one) => (
@@ -202,7 +203,7 @@ export default function Study({
             </button>
           </div>
           {spaces.length === 0 ? (
-            <p className="st-empty big">A space remembers one subject: the pages you work from, your notes, and the capsules that go with it.</p>
+            <p className="view-empty">A space remembers one subject: the pages you work from, your notes, and the capsules that go with it.</p>
           ) : (
             <div className="st-grid">
               {spaces.map((one) => (
@@ -238,7 +239,7 @@ export default function Study({
       {tab === 'library' ? (
         <>
           <div className="st-row-actions">
-            <input className="st-search" value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Search your library" aria-label="Search your study library" />
+            <SearchBox value={filter} onChange={setFilter} label="Search your study library" placeholder="Search your library" className="st-library-find" />
             <select value={subject} onChange={(e) => setSubject(e.target.value)} aria-label="Subject">
               <option value="">Every subject</option>
               {subjects.map((one) => (
@@ -252,7 +253,7 @@ export default function Study({
             </button>
           </div>
           {shownResources.length === 0 ? (
-            <p className="st-empty big">
+            <p className="view-empty">
               {resources.length === 0 ? 'Save a page while you are studying and it will be here, with your notes on it.' : 'Nothing matches that.'}
             </p>
           ) : (
@@ -312,7 +313,7 @@ export default function Study({
       {tab === 'later' ? (
         <>
           {waiting.length === 0 && captured.length === 0 ? (
-            <p className="st-empty big">Nothing waiting for later. Anything you save during a session turns up here.</p>
+            <p className="view-empty">Nothing waiting for later. Anything you save during a session turns up here.</p>
           ) : null}
 
           {waiting.length > 0 ? (

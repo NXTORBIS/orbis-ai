@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react'
-import { BarChart3, BookOpen, CalendarCheck, CalendarClock, CalendarDays, Brain, GraduationCap, Home as HomeIcon, Layers, Library, PenLine, Rocket, Settings2, Sparkles, Target, X } from 'lucide-react'
+import { BarChart3, BookOpen, CalendarCheck, CalendarClock, CalendarDays, Brain, GraduationCap, Home as HomeIcon, Layers, Library, Lock, PenLine, Rocket, Settings2, Sparkles, Target, X } from 'lucide-react'
 import Orbi from './Orbi'
 import HomeBoard, { Completion } from './Home'
 import FocusStart from './FocusStart'
@@ -12,8 +12,10 @@ import OrbiAppears from './OrbiAppears'
 import Listen from './Listen'
 import { atmosphere } from './atmosphere'
 import { useReducedMotion, useStudent } from './useStudent'
+import { useSurface } from '../../lib/surfaces'
+import { studentSurface } from './studentSurfaces'
 import { coach, newCoachState, type CoachState } from '../../../../shared/student/orbi'
-import type { FocusSession, MotivationEvent, OrbiState } from '../../../../shared/student/types'
+import type { FocusSession, MotivationEvent, OrbiState, StudentSnapshot } from '../../../../shared/student/types'
 import type { OrbiMoment } from '../../../../shared/student/orbiAnim'
 import type { NoticeKind } from '../../lib/notices'
 import './student.css'
@@ -61,9 +63,11 @@ function speak(text: string, voice: 'off' | 'minimal' | 'normal', volume: number
  * The shell: one screen at a time, Orbi beside it, and the running session taking over everything when there is one.
  * Four decisions in here are worth knowing about.
  *
- * **A running session replaces the dashboard.** Not a banner over it -- the whole screen. During Focus there is
- * nothing to browse, nothing to discover and nothing to score; there is a timer and the task. The dashboard comes
- * back when the session does not exist any more.
+ * **A running session replaces the dashboard.** Not a banner over it -- the whole body of the screen. During Focus
+ * there is nothing to browse, nothing to discover and nothing to score; there is a timer and the task. The dashboard
+ * comes back when the session does not exist any more. The navigation strip stays on screen throughout, marked as
+ * held back, because a row of buttons that disappears and a row that silently ignores a press both leave somebody
+ * wondering what they broke.
  *
  * **Orbi's rate limiting lives here.** The service says what happened; this decides whether it is worth saying out
  * loud, using the same pure `coach` the tests cover. Keeping it in the interface means the cooldowns follow what is
@@ -273,6 +277,43 @@ export default function StudentView({
     return () => window.removeEventListener('keydown', onKey)
   }, [screen, starting, finished, panel, snapshot?.session, onClose])
 
+  /*
+   * What Student lets Orbis read and do, from the outside.
+   *
+   * Above the early return below, because a hook has to be called on every draw -- and that matters here rather than
+   * being a formality: until the snapshot has arrived there is nothing to read, and `snapshot` below throws instead of
+   * answering. A getter that throws is reported as "could not be read", which is the truth; one that handed back a
+   * default would report level 1 and no streak at somebody who has both.
+   *
+   * What it offers is in `studentSurfaces.ts`, as a function of these same handlers -- `call` is the one `student:do`
+   * door the screen's own buttons and the spoken commands already use.
+   */
+  useSurface(
+    studentSurface({
+      screen: () => screen,
+      go: (id) => setScreen(id as Screen),
+      screens: NAV.map((one) => ({ id: one.id, label: one.label })),
+      snapshot: () => {
+        if (!snapshot) throw new Error('Orbis Student has not finished loading.')
+        return snapshot
+      },
+      close: onClose,
+      startFocus: (options) =>
+        call<{ ok: boolean; why?: string }>('start-focus', {
+          subject: options.subject,
+          title: options.title,
+          ...(options.minutes ? { minutes: options.minutes } : {}),
+          // The level belongs to the policy, which is the thing that gets snapshotted when the session starts. Only
+          // the level is given, so everything else about what is blocked comes from this person's own settings.
+          ...(options.level ? { policy: { level: options.level } } : {})
+        }),
+      restDay: () => call('rest-day'),
+      // Asked of Orbis again rather than read off this screen, so an action is checked against what was really
+      // recorded and not against a snapshot this screen may not have redrawn yet.
+      check: () => call<StudentSnapshot | null>('snapshot')
+    })
+  )
+
   if (!snapshot || !prefs) {
     return (
       <div className="view st-view" role="region" aria-label="Orbis Student">
@@ -450,15 +491,28 @@ export default function StudentView({
         </div>
       </header>
 
-      {/* During a session the navigation is out of the way: there is one thing to do and it is on screen. */}
-      {!session ? (
-        <nav className="st-nav" aria-label="Orbis Student">
-          {NAV.map((one) => (
+      {/*
+        * The navigation, including during a session -- held back rather than taken away.
+        *
+        * A running session still owns the whole screen: the timer is the only thing in the body. But the strip stays,
+        * because a row of buttons that quietly vanishes teaches nothing, and a row that is still there and simply
+        * ignores a press teaches something worse. Each tab is marked as held back, and pressing one says so and says
+        * the way out, which is the timer's own End session button.
+        */}
+      <nav className="st-nav" aria-label="Orbis Student">
+        {NAV.map((one) => {
+          const held = Boolean(session)
+          return (
             <button
               key={one.id}
               type="button"
-              className={`st-nav-btn${screen === one.id ? ' on' : ''}`}
-              aria-current={screen === one.id}
+              className={`st-nav-btn${!held && screen === one.id ? ' on' : ''}${held ? ' held' : ''}`}
+              aria-current={!held && screen === one.id}
+              /*
+               * Held back, not broken: `aria-disabled` rather than `disabled`, so the button keeps its place in the
+               * keyboard order and can still answer with the reason. A disabled button cannot explain itself.
+               */
+              aria-disabled={held}
               /*
                * The name is on the button itself as well as in it.
                *
@@ -466,16 +520,22 @@ export default function StudentView({
                * shorten and eventually give way to the icons. The label has to survive that, for a screen reader and
                * for a hover.
                */
-              aria-label={one.label}
-              title={one.label}
-              onClick={() => setScreen(one.id)}
+              aria-label={held ? `${one.label} — held back during Focus` : one.label}
+              title={held ? `${one.label} is held back while you are in Focus` : one.label}
+              onClick={() => {
+                if (held) {
+                  onNotify(`${one.label} is held back while you are in Focus. Press End session on the timer to get back to it.`, 'warn')
+                  return
+                }
+                setScreen(one.id)
+              }}
             >
-              <one.icon size={15} aria-hidden />
+              {held ? <Lock size={13} aria-hidden /> : <one.icon size={15} aria-hidden />}
               <span className="st-nav-label">{one.label}</span>
             </button>
-          ))}
-        </nav>
-      ) : null}
+          )
+        })}
+      </nav>
 
       <div className="st-body">
         {session ? (

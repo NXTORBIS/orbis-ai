@@ -145,7 +145,7 @@ export default function Mastery({
       </header>
 
       {nothing ? (
-        <p className="st-empty big">
+        <p className="view-empty">
           Nothing to show yet. Add your syllabus on the Plan page, then finish a session or two and this fills in.
         </p>
       ) : null}

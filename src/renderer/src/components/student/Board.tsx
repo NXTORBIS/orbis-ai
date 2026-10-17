@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Eraser, Pencil, Plus, Redo2, Save, Trash2, Undo2, X } from 'lucide-react'
+import { Eraser, Pencil, Plus, Redo2, Save, Trash2, Undo2 } from 'lucide-react'
 import { onDay, type Call } from './useStudent'
 import type { NoticeKind } from '../../lib/notices'
 
@@ -237,7 +237,7 @@ export default function Board({
               <Save size={15} aria-hidden /> {dirty ? 'Save' : 'Saved'}
             </button>
             <button type="button" className="st-btn quiet" onClick={() => void leave()}>
-              <X size={15} aria-hidden /> Close
+              Close
             </button>
           </div>
         </header>
@@ -357,7 +357,7 @@ export default function Board({
         </button>
       </header>
 
-      {ready && boards.length === 0 ? <p className="st-empty big">No boards yet. Start one when something needs drawing rather than writing.</p> : null}
+      {ready && boards.length === 0 ? <p className="view-empty">No boards yet. Start one when something needs drawing rather than writing.</p> : null}
 
       <ul className="st-board-list">
         {boards.map((one) => (

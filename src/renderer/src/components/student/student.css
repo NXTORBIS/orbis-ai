@@ -16,14 +16,26 @@
   --st-pad: 20px;
   --st-radius: 14px;
   --st-panel: color-mix(in srgb, var(--cyan) 4%, transparent);
-  --st-line: var(--glass-border, rgba(255, 255, 255, 0.1));
+  --st-line: var(--glass-border);
   --st-strong: color-mix(in srgb, var(--cyan) 26%, transparent);
-  --st-ink: var(--text, #eef2f8);
-  --st-good: #3ee58a;
-  --st-warn: #ffbe4d;
-  --st-danger: #ff5d73;
+  --st-ink: var(--text);
+  /*
+   * The raised card inside a Student panel, and the type on it. Both were read with a literal fallback and never
+   * declared, so the fallback was the only value they ever had: a near-black card with near-white type, in both
+   * themes. Declared here with the rest of the set, from the tokens.
+   */
+  --st-card: var(--glass);
+  --st-text: var(--text);
+  /*
+   * Passed, nearly there, and failed. These are meanings, not surfaces, so they are the themed three rather than
+   * three hand-written hues: the dark theme's bright green on a near-black card is the light theme's deep green on
+   * a white one, and "you passed" stays legible either way.
+   */
+  --st-good: var(--green);
+  --st-warn: var(--amber);
+  --st-danger: var(--red);
   --orbi-light: #cff4ff;
-  --orbi-mid: var(--cyan, #3fd8ff);
+  --orbi-mid: var(--cyan);
   --orbi-deep: #16607a;
   --orbi-ring: color-mix(in srgb, var(--cyan) 60%, transparent);
   --orbi-eye: #06202b;
@@ -71,7 +83,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px var(--st-pad);
+  padding: 8px var(--st-pad);
   border-bottom: 1px solid var(--st-line);
   flex: 0 0 auto;
 }
@@ -80,7 +92,7 @@
 .st-head-right {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -90,7 +102,7 @@
 }
 
 .st-head-session {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--faint);
   white-space: nowrap;
   overflow: hidden;
@@ -101,11 +113,11 @@
 .st-chip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 3px 9px;
+  gap: 4px;
+  padding: 3px 8px;
   border: 1px solid var(--st-line);
   border-radius: 999px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--faint);
   white-space: nowrap;
 }
@@ -121,7 +133,7 @@
 .st-nav {
   display: flex;
   gap: 4px;
-  padding: 10px var(--st-pad) 0;
+  padding: 8px var(--st-pad) 0;
   flex: 0 0 auto;
   /* No scrolling, in either direction: anything that does not fit has to shrink, not hide. */
   overflow: hidden;
@@ -131,11 +143,11 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: 8px;
   /* Its own width while there is room, and the first thing to give when there is not. */
   flex: 0 1 auto;
   min-width: 0;
-  padding: 8px 13px;
+  padding: 8px 12px;
   border: 1px solid transparent;
   border-radius: 10px;
   background: none;
@@ -157,6 +169,23 @@
   color: var(--cyan);
   border-color: var(--st-strong);
   background: var(--st-panel);
+}
+
+/*
+ * A tab that is held back while a session runs.
+ *
+ * Dimmed and marked with a padlock, but still a real button: it is pressable, and pressing it is how somebody finds
+ * out why it is not going anywhere. The cursor says the press will not navigate, and the hover is left looking like
+ * the resting state so nothing promises a move that will not happen.
+ */
+.st-nav-btn.held {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.st-nav-btn.held:hover {
+  color: var(--faint);
+  background: none;
 }
 
 .st-body {
@@ -214,13 +243,13 @@
 }
 
 .st-faint.small {
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .st-faint.foot {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   margin-top: var(--st-gap);
 }
 
@@ -230,8 +259,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  padding: 8px 14px;
+  gap: 8px;
+  padding: 8px 12px;
   border: 1px solid var(--st-line);
   border-radius: 10px;
   background: var(--st-panel);
@@ -259,7 +288,7 @@
 .st-btn.primary {
   background: var(--cyan);
   border-color: var(--cyan);
-  color: #04212c;
+  color: var(--surface);
 }
 
 .st-btn.primary:hover:not(:disabled) {
@@ -284,7 +313,7 @@
 
 .st-btn.big {
   padding: 12px 20px;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 /* Hold-to-confirm: the bar is the feedback, so nobody has to guess whether holding is working. */
@@ -315,7 +344,7 @@
   width: 30px;
   height: 30px;
   border: 1px solid transparent;
-  border-radius: 9px;
+  border-radius: 10px;
   background: none;
   color: var(--faint);
   cursor: pointer;
@@ -334,7 +363,7 @@
 .st-link {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   border: none;
   background: none;
   color: var(--cyan);
@@ -361,13 +390,13 @@
 }
 
 .st-tab {
-  padding: 6px 12px;
+  padding: 4px 12px;
   border: 1px solid transparent;
   border-radius: 999px;
   background: none;
   color: var(--faint);
   font: inherit;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 550;
   cursor: pointer;
 }
@@ -385,20 +414,20 @@
 .st-pills {
   display: flex;
   flex-wrap: wrap;
-  gap: 7px;
+  gap: 8px;
 }
 
 .st-pill {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 6px 12px;
+  gap: 4px;
+  padding: 4px 12px;
   border: 1px solid var(--st-line);
   border-radius: 999px;
   background: none;
   color: var(--faint);
   font: inherit;
-  font-size: 12.5px;
+  font-size: 13px;
   cursor: pointer;
   transition: color 0.15s, border-color 0.15s, background 0.15s;
 }
@@ -416,7 +445,7 @@
 .st-field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   margin-bottom: var(--st-gap);
   border: none;
   padding: 0;
@@ -432,28 +461,27 @@
 
 .st-field > span,
 .st-field > legend {
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 550;
   color: var(--faint);
   padding: 0;
 }
 
 .st-field small {
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--faint);
 }
 
 .st-field input,
 .st-field select,
-.st-field textarea,
-.st-search {
-  padding: 9px 11px;
+.st-field textarea {
+  padding: 8px 12px;
   border: 1px solid var(--st-line);
   border-radius: 10px;
   background: var(--st-panel);
   color: var(--st-ink);
   font: inherit;
-  font-size: 13.5px;
+  font-size: 13px;
   min-width: 0;
 }
 
@@ -487,7 +515,7 @@
 
 .st-row-actions {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
   flex-wrap: wrap;
   margin-bottom: var(--st-gap);
@@ -495,14 +523,14 @@
 
 .st-row-right {
   display: flex;
-  gap: 7px;
+  gap: 8px;
   align-items: center;
   flex-wrap: wrap;
 }
 
 .st-check {
   display: flex;
-  gap: 11px;
+  gap: 12px;
   align-items: flex-start;
   margin-bottom: var(--st-gap);
   cursor: pointer;
@@ -520,12 +548,12 @@
 }
 
 .st-check strong {
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 550;
 }
 
 .st-check small {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--faint);
 }
 
@@ -551,14 +579,14 @@
 .st-disclose {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   border: none;
   background: none;
-  color: var(--cyan);
+  color: var(--faint);
   font: inherit;
   font-size: 13px;
   cursor: pointer;
-  padding: 6px 0;
+  padding: 4px 0;
   margin-bottom: var(--st-gap);
 }
 
@@ -577,15 +605,6 @@
   line-height: 1.5;
 }
 
-.st-empty.big {
-  padding: 36px 20px;
-  text-align: center;
-  border: 1px dashed var(--st-line);
-  border-radius: var(--st-radius);
-  max-width: 54ch;
-  margin: 0 auto;
-}
-
 .st-big {
   margin: 0;
   font-size: 18px;
@@ -597,15 +616,14 @@
   color: var(--faint);
   border: 1px solid var(--st-line);
   border-radius: 999px;
-  padding: 1px 7px;
+  padding: 1px 8px;
 }
 
 .st-note {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: flex-start;
-  padding: 12px 14px;
-  border: 1px solid var(--st-line);
+  padding: 12px 12px;
   border-radius: var(--st-radius);
   background: var(--st-panel);
   font-size: 13px;
@@ -614,7 +632,7 @@
 }
 
 .st-note svg {
-  color: var(--cyan);
+  color: var(--faint);
   flex: 0 0 auto;
   margin-top: 1px;
 }
@@ -683,10 +701,9 @@
 }
 
 .st-widget {
-  border: 1px solid var(--st-line);
   border-radius: var(--st-radius);
   background: var(--st-panel);
-  padding: 14px 16px;
+  padding: 12px 16px;
   min-width: 0;
 }
 
@@ -702,13 +719,13 @@
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 10px;
+  gap: 8px;
+  margin-bottom: 8px;
 }
 
 .st-widget h3 {
   margin: 0;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -735,17 +752,17 @@
 }
 
 .st-orbit-main strong {
-  font-size: 19px;
+  font-size: 18px;
   font-weight: 600;
   letter-spacing: -0.01em;
 }
 
 .st-orbit-numbers {
   display: flex;
-  gap: 18px;
+  gap: 16px;
   flex-wrap: wrap;
   margin-top: 8px;
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--faint);
 }
 
@@ -762,9 +779,9 @@
   gap: 4px;
   width: 100%;
   text-align: left;
-  padding: 12px 14px;
+  padding: 12px 12px;
   border: 1px solid var(--st-strong);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--st-panel);
   color: inherit;
   font: inherit;
@@ -774,18 +791,18 @@
 
 .st-suggest:hover,
 .st-recommend:hover {
-  border-color: var(--cyan);
+  border-color: var(--glass-border);
 }
 
 .st-suggest-tag,
 .st-recommend-tag {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--cyan);
+  color: var(--faint);
 }
 
 .st-recommend strong {
@@ -794,23 +811,23 @@
 }
 
 .st-recommend-level {
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--faint);
 }
 
 .st-recommend-why {
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--faint);
 }
 
 .st-recommend-go {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   margin-top: 8px;
   color: var(--cyan);
   font-weight: 600;
-  font-size: 13.5px;
+  font-size: 13px;
 }
 
 .st-quests,
@@ -836,13 +853,13 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 8px;
 }
 
 .st-quests li {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   font-size: 13px;
 }
 
@@ -853,7 +870,7 @@
   width: 17px;
   height: 17px;
   border: 1px solid var(--st-line);
-  border-radius: 5px;
+  border-radius: 6px;
   flex: 0 0 auto;
   color: var(--cyan);
 }
@@ -876,14 +893,14 @@
 .st-quest-count {
   color: var(--faint);
   font-variant-numeric: tabular-nums;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .st-tasks li,
 .st-task-list li {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   font-size: 13px;
   min-width: 0;
 }
@@ -904,7 +921,7 @@
 }
 
 .st-task-check:hover {
-  color: var(--cyan);
+  color: var(--text);
   border-color: var(--st-strong);
 }
 
@@ -917,7 +934,7 @@
 }
 
 .st-task-due {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--faint);
 }
 
@@ -949,20 +966,20 @@
 .st-streaks {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   font-size: 13px;
   color: var(--faint);
 }
 
 .st-streaks strong {
   color: var(--st-ink);
-  font-size: 17px;
+  font-size: 18px;
 }
 
 .st-streaks span {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
 }
 
 .st-wins li {
@@ -979,27 +996,27 @@
 .st-insights {
   font-size: 13px;
   color: var(--faint);
-  gap: 6px;
+  gap: 4px;
 }
 
 .st-insights.big {
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .st-word strong {
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 600;
 }
 
 .st-word p {
-  margin: 6px 0 0;
+  margin: 4px 0 0;
   font-size: 13px;
   line-height: 1.5;
 }
 
 .st-orbi-widget {
   display: flex;
-  gap: 14px;
+  gap: 12px;
   align-items: center;
 }
 
@@ -1092,13 +1109,13 @@
   max-width: 24ch;
   padding: 8px 12px;
   border: 1px solid var(--st-line);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--surface);
   color: var(--st-ink);
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.45;
   text-align: center;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 8px 24px var(--shadow-color);
   z-index: 2;
   animation: st-in 0.22s ease-out both;
 }
@@ -1181,11 +1198,11 @@
 .st-focus-tag {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   font-size: 11px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--cyan);
+  color: var(--faint);
   font-weight: 600;
 }
 
@@ -1199,7 +1216,7 @@
 
 .st-focus-chips {
   display: flex;
-  gap: 7px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
@@ -1207,7 +1224,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 42px;
+  gap: 40px;
   flex-wrap: wrap;
   flex: 1;
   padding: 12px 0;
@@ -1262,7 +1279,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 4px;
   text-align: center;
   padding: 0 14%;
 }
@@ -1276,19 +1293,19 @@
 }
 
 .st-focus-title {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 550;
 }
 
 .st-focus-one {
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--faint);
 }
 
 .st-focus-foot {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   flex-wrap: wrap;
   width: 100%;
   padding-top: 4px;
@@ -1301,34 +1318,28 @@
 
 .st-focus-saved {
   margin: 0;
-  font-size: 12px;
-  color: var(--faint);
-}
-
-.st-focus-empty {
-  padding: 40px;
-  text-align: center;
+  font-size: 13px;
   color: var(--faint);
 }
 
 .st-recover {
   width: 100%;
   max-width: 60ch;
-  padding: 14px 16px;
+  padding: 12px 16px;
   border: 1px solid color-mix(in srgb, var(--st-warn) 40%, transparent);
   border-radius: var(--st-radius);
   background: color-mix(in srgb, var(--st-warn) 6%, transparent);
 }
 
 .st-recover p {
-  margin: 0 0 10px;
-  font-size: 13.5px;
+  margin: 0 0 8px;
+  font-size: 13px;
   line-height: 1.5;
 }
 
 .st-recover-actions {
   display: flex;
-  gap: 9px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
@@ -1340,7 +1351,7 @@
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(4, 7, 12, 0.6);
+  background: var(--glass);
   backdrop-filter: blur(6px);
   z-index: 20;
   animation: st-fade 0.18s ease-out both;
@@ -1348,7 +1359,7 @@
 
 .st-solid .st-sheet {
   backdrop-filter: none;
-  background: rgba(4, 7, 12, 0.88);
+  background: var(--glass);
 }
 
 .st-sheet-card {
@@ -1356,11 +1367,11 @@
   max-width: 540px;
   max-height: 100%;
   overflow: auto;
-  padding: 22px;
+  padding: 20px;
   border: 1px solid var(--st-line);
-  border-radius: 18px;
+  border-radius: 10px;
   background: var(--surface);
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 24px 64px var(--shadow-color);
   animation: st-in 0.2s ease-out both;
 }
 
@@ -1376,13 +1387,13 @@
 
 .st-sheet-card > input {
   width: 100%;
-  padding: 11px 13px;
+  padding: 12px 12px;
   border: 1px solid var(--st-line);
   border-radius: 10px;
   background: var(--st-panel);
   color: var(--st-ink);
   font: inherit;
-  margin: 10px 0;
+  margin: 8px 0;
 }
 
 .st-sheet-head {
@@ -1395,7 +1406,7 @@
 .st-sheet-foot {
   display: flex;
   justify-content: flex-end;
-  gap: 9px;
+  gap: 8px;
   margin-top: 16px;
 }
 
@@ -1405,10 +1416,10 @@
 }
 
 .st-intention {
-  margin: 10px 0;
-  padding: 10px 13px;
+  margin: 8px 0;
+  padding: 8px 12px;
   border-left: 2px solid var(--st-strong);
-  font-size: 13.5px;
+  font-size: 13px;
   color: var(--st-ink);
   font-style: italic;
 }
@@ -1417,7 +1428,7 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin: 14px 0;
+  margin: 12px 0;
 }
 
 .st-reset-list button {
@@ -1425,9 +1436,9 @@
   flex-direction: column;
   gap: 3px;
   text-align: left;
-  padding: 11px 13px;
+  padding: 12px 12px;
   border: 1px solid var(--st-line);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--st-panel);
   color: inherit;
   font: inherit;
@@ -1441,13 +1452,13 @@
 .st-reset-list strong {
   display: flex;
   align-items: center;
-  gap: 7px;
-  font-size: 13.5px;
+  gap: 8px;
+  font-size: 13px;
   font-weight: 550;
 }
 
 .st-reset-list span {
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--faint);
 }
 
@@ -1455,13 +1466,13 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 18px;
+  gap: 16px;
   text-align: center;
 }
 
 .st-breathe p {
   margin: 0;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 300;
   letter-spacing: 0.02em;
 }
@@ -1492,7 +1503,7 @@
 
 .st-complete-title {
   margin: 0;
-  font-size: 14px;
+  font-size: 13px;
   color: var(--faint);
 }
 
@@ -1519,13 +1530,13 @@
 }
 
 .st-complete-stats dt {
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--faint);
 }
 
 .st-complete-stats dd {
   margin: 0;
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -1543,7 +1554,7 @@
 
 .st-start-head h2 {
   margin: 0;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
 }
 
@@ -1555,7 +1566,7 @@
 
 .st-start-modes {
   display: flex;
-  gap: 5px;
+  gap: 4px;
   align-items: center;
 }
 
@@ -1564,8 +1575,8 @@
 .st-progress h3,
 .st-settings-body h3,
 .st-orbi-page h3 {
-  margin: var(--st-gap) 0 10px;
-  font-size: 12px
+  margin: var(--st-gap) 0 8px;
+  font-size: 13px
   ;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -1578,20 +1589,20 @@
 .st-goal-detail h4,
 .st-study h4 {
   margin: var(--st-gap) 0 8px;
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 600;
 }
 
 .st-start-task {
   font-size: 13px;
   color: var(--faint);
-  margin: 10px 0 0;
+  margin: 8px 0 0;
 }
 
 .st-preset-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .st-preset,
@@ -1600,9 +1611,9 @@
   flex-direction: column;
   gap: 4px;
   text-align: left;
-  padding: 12px 14px;
+  padding: 12px 12px;
   border: 1px solid var(--st-line);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--st-panel);
   color: inherit;
   font: inherit;
@@ -1617,25 +1628,25 @@
 
 .st-preset strong,
 .st-capsule strong {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
 }
 
 .st-preset-meta,
 .st-capsule span {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--faint);
 }
 
 .st-preset-blurb {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--faint);
   line-height: 1.45;
 }
 
 .st-capsule-row {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   overflow-x: auto;
   padding-bottom: 4px;
 }
@@ -1647,7 +1658,7 @@
 .st-choices {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 9px;
+  gap: 8px;
 }
 
 .st-choices.tight {
@@ -1659,9 +1670,9 @@
   flex-direction: column;
   gap: 3px;
   text-align: left;
-  padding: 11px 13px;
+  padding: 12px 12px;
   border: 1px solid var(--st-line);
-  border-radius: 12px;
+  border-radius: 10px;
   background: none;
   color: inherit;
   font: inherit;
@@ -1679,26 +1690,25 @@
 }
 
 .st-choice strong {
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 550;
 }
 
 .st-choice span {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--faint);
   line-height: 1.4;
 }
 
 .st-advanced {
-  padding: 14px;
-  border: 1px solid var(--st-line);
+  padding: 12px;
   border-radius: var(--st-radius);
   background: var(--st-panel);
   margin-bottom: var(--st-gap);
 }
 
 .st-preview {
-  padding: 14px 16px;
+  padding: 12px 16px;
   border: 1px solid color-mix(in srgb, var(--st-warn) 36%, transparent);
   border-radius: var(--st-radius);
   background: color-mix(in srgb, var(--st-warn) 5%, transparent);
@@ -1708,9 +1718,9 @@
 .st-preview h4 {
   display: flex;
   align-items: center;
-  gap: 7px;
-  margin: 0 0 10px;
-  font-size: 12px;
+  gap: 8px;
+  margin: 0 0 8px;
+  font-size: 13px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--st-warn);
@@ -1723,8 +1733,8 @@
 }
 
 .st-preview h5 {
-  margin: 0 0 6px;
-  font-size: 12px;
+  margin: 0 0 4px;
+  font-size: 13px;
   color: var(--faint);
   font-weight: 600;
 }
@@ -1741,7 +1751,7 @@
 
 .st-preview p {
   margin: 12px 0 0;
-  font-size: 12.5px;
+  font-size: 13px;
 }
 
 .st-start-foot {
@@ -1783,11 +1793,11 @@
 .st-goal-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
-  padding: 11px 13px;
+  padding: 12px 12px;
   border: 1px solid var(--st-line);
-  border-radius: 12px;
+  border-radius: 10px;
   background: none;
   color: inherit;
   font: inherit;
@@ -1807,21 +1817,20 @@
 .st-goal-name {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   flex: 1;
   min-width: 0;
   font-weight: 550;
-  font-size: 13.5px;
+  font-size: 13px;
 }
 
 .st-goal-row .st-faint {
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .st-plan {
   margin-top: var(--st-gap);
-  padding: 14px;
-  border: 1px solid var(--st-line);
+  padding: 12px;
   border-radius: var(--st-radius);
   background: var(--st-panel);
 }
@@ -1829,8 +1838,8 @@
 .st-plan h4 {
   display: flex;
   align-items: center;
-  gap: 7px;
-  margin: 0 0 10px;
+  gap: 8px;
+  margin: 0 0 8px;
   font-size: 13px;
   font-weight: 600;
 }
@@ -1838,15 +1847,15 @@
 .st-plan-row {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 .st-plan-row input {
   width: 72px;
-  padding: 7px 9px;
+  padding: 8px 8px;
   border: 1px solid var(--st-line);
-  border-radius: 9px;
+  border-radius: 10px;
   background: none;
   color: var(--st-ink);
   font: inherit;
@@ -1858,13 +1867,13 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .st-plan-list li {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   font-size: 13px;
 }
 
@@ -1887,8 +1896,8 @@
 
 .st-detail-empty h3,
 .st-goal-detail h3 {
-  margin: 0 0 10px;
-  font-size: 17px;
+  margin: 0 0 8px;
+  font-size: 18px;
   font-weight: 600;
   text-transform: none;
   letter-spacing: -0.01em;
@@ -1906,7 +1915,7 @@
 
 .st-detail-actions {
   display: flex;
-  gap: 7px;
+  gap: 8px;
   align-items: center;
 }
 
@@ -1929,7 +1938,7 @@
 
 .st-journey li {
   position: relative;
-  padding: 7px 0;
+  padding: 8px 0;
   display: flex;
   gap: 12px;
 }
@@ -1942,22 +1951,22 @@
   height: 11px;
   border: 2px solid var(--st-line);
   border-radius: 999px;
-  background: var(--bg-mid, #0b0f16);
+  background: var(--bg-mid, var(--surface));
 }
 
 .st-journey li.done .st-journey-dot {
-  border-color: var(--cyan);
-  background: var(--cyan);
+  border-color: var(--glass-border);
+  background: var(--panel);
 }
 
 .st-journey strong {
   display: block;
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 550;
 }
 
 .st-journey span.st-faint {
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .st-add-task {
@@ -1968,7 +1977,7 @@
 }
 
 .st-add-task input {
-  padding: 8px 11px;
+  padding: 8px 12px;
   border: 1px solid var(--st-line);
   border-radius: 10px;
   background: var(--st-panel);
@@ -1995,15 +2004,14 @@
 
 .st-grid.tight {
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .st-tile {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 14px;
-  border: 1px solid var(--st-line);
+  gap: 4px;
+  padding: 12px;
   border-radius: var(--st-radius);
   background: var(--st-panel);
   min-width: 0;
@@ -2019,28 +2027,29 @@
 .st-tile h4 {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   margin: 0;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
 }
 
 .st-tile p {
   margin: 0;
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.45;
 }
 
 .st-tile-foot {
   display: flex;
-  gap: 7px;
+  gap: 8px;
   align-items: center;
   margin-top: auto;
   padding-top: 8px;
   flex-wrap: wrap;
 }
 
-.st-search {
+/* The library's box is the window's shared search box; this is only how much of the row it takes. */
+.st-library-find {
   flex: 1 1 200px;
 }
 
@@ -2052,10 +2061,9 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 14px;
-  padding: 12px 14px;
-  border: 1px solid var(--st-line);
-  border-radius: 12px;
+  gap: 12px;
+  padding: 12px 12px;
+  border-radius: 10px;
   background: var(--st-panel);
   flex-wrap: wrap;
 }
@@ -2079,20 +2087,19 @@
 .st-mistakes p,
 .st-library p {
   margin: 4px 0 0;
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.45;
 }
 
 .st-mistake-actions {
   display: flex;
-  gap: 7px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 .st-note-list li {
-  padding: 12px 14px;
-  border: 1px solid var(--st-line);
-  border-radius: 12px;
+  padding: 12px 12px;
+  border-radius: 10px;
   background: var(--st-panel);
   display: flex;
   flex-direction: column;
@@ -2101,7 +2108,7 @@
 
 .st-note-list p {
   margin: 4px 0 0;
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.5;
   color: var(--faint);
 }
@@ -2128,8 +2135,7 @@
 }
 
 .st-card {
-  padding: 16px 18px;
-  border: 1px solid var(--st-line);
+  padding: 16px 16px;
   border-radius: var(--st-radius);
   background: var(--st-panel);
 }
@@ -2139,19 +2145,19 @@
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .st-card-kind {
   font-size: 11px;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--cyan);
+  color: var(--faint);
   font-weight: 600;
 }
 
 .st-card h4 {
-  margin: 0 0 6px;
+  margin: 0 0 4px;
   font-size: 18px;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -2159,7 +2165,7 @@
 
 .st-card p {
   margin: 0 0 8px;
-  font-size: 13.5px;
+  font-size: 13px;
   line-height: 1.55;
 }
 
@@ -2175,17 +2181,17 @@
 
 .st-quiz input {
   width: 100%;
-  padding: 9px 11px;
+  padding: 8px 12px;
   border: 1px solid var(--st-line);
   border-radius: 10px;
   background: none;
   color: var(--st-ink);
   font: inherit;
-  margin-bottom: 9px;
+  margin-bottom: 8px;
 }
 
 .st-answer {
-  padding: 9px 12px;
+  padding: 8px 12px;
   border-left: 2px solid var(--cyan);
   background: var(--st-panel);
   font-weight: 550;
@@ -2193,9 +2199,9 @@
 
 .st-card-actions {
   display: flex;
-  gap: 7px;
+  gap: 8px;
   flex-wrap: wrap;
-  margin-top: 10px;
+  margin-top: 8px;
 }
 
 /* ---------------------------------------------------------------- progress */
@@ -2211,28 +2217,28 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 14px;
+  padding: 12px;
   border: 1px solid var(--st-line);
   border-radius: var(--st-radius);
   background: var(--st-panel);
 }
 
 .st-summary-grid span {
-  font-size: 11.5px;
+  font-size: 11px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--faint);
 }
 
 .st-summary-grid strong {
-  font-size: 25px;
+  font-size: 22px;
   font-weight: 300;
   letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
 
 .st-summary-grid small {
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--faint);
 }
 
@@ -2247,7 +2253,7 @@
 .st-heat-cell {
   width: 12px;
   height: 12px;
-  border-radius: 3px;
+  border-radius: 6px;
   background: var(--st-line);
 }
 
@@ -2270,7 +2276,7 @@
 .st-bars {
   display: flex;
   align-items: flex-end;
-  gap: 10px;
+  gap: 8px;
   height: 140px;
   padding-bottom: 4px;
 }
@@ -2288,7 +2294,7 @@
 .st-bar-stack {
   width: 100%;
   max-width: 34px;
-  border-radius: 6px 6px 2px 2px;
+  border-radius: 6px 6px 6px 6px;
   background: linear-gradient(to top, color-mix(in srgb, var(--cyan) 45%, transparent), var(--cyan));
   min-height: 4px;
 }
@@ -2298,7 +2304,7 @@
   grid-template-columns: 1.4fr repeat(3, 0.8fr) auto;
   gap: 12px;
   align-items: center;
-  padding: 10px 12px;
+  padding: 8px 12px;
   border: 1px solid var(--st-line);
   border-radius: 10px;
   font-size: 13px;
@@ -2307,16 +2313,16 @@
 .st-achievements {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(165px, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .st-achievement {
   display: flex;
   flex-direction: column;
   gap: 3px;
-  padding: 12px 14px;
+  padding: 12px 12px;
   border: 1px solid var(--st-line);
-  border-radius: 12px;
+  border-radius: 10px;
   opacity: 0.5;
 }
 
@@ -2335,16 +2341,16 @@
 }
 
 .st-achievement strong {
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 600;
 }
 
 .st-history li button {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
   width: 100%;
-  padding: 10px 12px;
+  padding: 8px 12px;
   border: 1px solid var(--st-line);
   border-radius: 10px;
   background: none;
@@ -2376,7 +2382,7 @@
 }
 
 .st-history-state {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--faint);
 }
 
@@ -2398,13 +2404,13 @@
 }
 
 .st-nav-row {
-  padding: 9px 13px;
+  padding: 8px 12px;
   border: 1px solid transparent;
   border-radius: 10px;
   background: none;
   color: var(--faint);
   font: inherit;
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   text-align: left;
@@ -2447,8 +2453,7 @@
 .st-room {
   position: relative;
   height: 260px;
-  border: 1px solid var(--st-line);
-  border-radius: 18px;
+  border-radius: 10px;
   background:
     radial-gradient(600px 300px at 50% 120%, color-mix(in srgb, var(--cyan) 10%, transparent), transparent 70%),
     var(--st-panel);
@@ -2463,7 +2468,7 @@
   bottom: 38px;
   height: 10px;
   border-radius: 6px;
-  background: color-mix(in srgb, var(--cyan) 18%, transparent);
+  background: var(--panel);
 }
 
 .st-room-orbi {
@@ -2475,23 +2480,23 @@
 
 .st-room-item {
   position: absolute;
-  padding: 4px 9px;
+  padding: 4px 8px;
   border: 1px solid var(--st-line);
   border-radius: 999px;
   background: var(--surface);
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--faint);
 }
 
 .st-level-strip {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   margin-bottom: var(--st-gap);
 }
 
 .st-level-strip .st-faint {
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .st-collection section {
@@ -2502,9 +2507,9 @@
   display: flex;
   flex-direction: column;
   gap: 3px;
-  padding: 11px 13px;
+  padding: 12px 12px;
   border: 1px solid var(--st-line);
-  border-radius: 12px;
+  border-radius: 10px;
   opacity: 0.5;
 }
 
@@ -2535,23 +2540,22 @@
   display: grid;
   place-items: center;
   padding: 24px;
-  background: radial-gradient(1000px 600px at 50% -10%, color-mix(in srgb, var(--cyan) 10%, transparent), transparent 60%), var(--bg-mid, #0b0f16);
+  background: radial-gradient(1000px 600px at 50% -10%, color-mix(in srgb, var(--cyan) 10%, transparent), transparent 60%), var(--bg-mid, var(--surface));
   overflow: auto;
 }
 
 .st-onb-card {
   width: 100%;
   max-width: 520px;
-  padding: 30px;
-  border: 1px solid var(--glass-border, rgba(255, 255, 255, 0.1));
-  border-radius: 20px;
+  padding: 28px;
+  border-radius: 10px;
   background: var(--surface);
-  box-shadow: 0 24px 72px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 24px 72px var(--shadow-color);
 }
 
 .st-onb-progress {
   display: flex;
-  gap: 5px;
+  gap: 4px;
   margin-bottom: 24px;
 }
 
@@ -2559,7 +2563,7 @@
   flex: 1;
   height: 3px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.12);
+  background: color-mix(in srgb, var(--text) 12%, transparent);
   transition: background 0.3s;
 }
 
@@ -2569,14 +2573,14 @@
 
 .st-onb-card h1 {
   margin: 0 0 8px;
-  font-size: 25px;
+  font-size: 22px;
   font-weight: 600;
   letter-spacing: -0.02em;
 }
 
 .st-onb-blurb {
-  margin: 0 0 22px;
-  font-size: 14px;
+  margin: 0 0 20px;
+  font-size: 13px;
   line-height: 1.55;
   color: var(--faint);
 }
@@ -2594,13 +2598,13 @@
 .st-onb-exit {
   display: flex;
   justify-content: flex-end;
-  padding: 10px 12px 0;
+  padding: 8px 12px 0;
 }
 
 .st-onb-hero {
   display: grid;
   place-items: center;
-  padding: 10px 0 24px;
+  padding: 8px 0 24px;
 }
 
 .st-onb-foot {
@@ -2621,14 +2625,14 @@
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 9px;
+  gap: 8px;
 }
 
 .st-summary div {
   display: flex;
   justify-content: space-between;
-  gap: 14px;
-  font-size: 13.5px;
+  gap: 12px;
+  font-size: 13px;
 }
 
 .st-summary dt {
@@ -2646,12 +2650,12 @@
 .st-loading {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   padding: var(--st-pad);
 }
 
 .st-skeleton {
-  border-radius: 12px;
+  border-radius: 10px;
   background: linear-gradient(90deg, var(--st-panel), color-mix(in srgb, var(--cyan) 9%, transparent), var(--st-panel));
   background-size: 200% 100%;
   animation: st-shimmer 1.4s linear infinite;
@@ -2886,18 +2890,17 @@
   width: 300px;
   max-height: 70vh;
   overflow: auto;
-  padding: 14px;
-  border: 1px solid var(--st-line);
-  border-radius: 16px;
+  padding: 12px;
+  border-radius: 10px;
   background: var(--surface);
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 18px 48px var(--shadow-deep);
 }
 
 .orbi-panel > header {
   display: flex;
   align-items: center;
-  gap: 11px;
-  margin-bottom: 10px;
+  gap: 12px;
+  margin-bottom: 8px;
 }
 
 .orbi-panel > header > div {
@@ -2909,35 +2912,35 @@
 }
 
 .orbi-panel > header strong {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
 }
 
 .orbi-panel-record {
-  margin: 0 0 10px;
-  padding: 8px 11px;
+  margin: 0 0 8px;
+  padding: 8px 12px;
   border-left: 2px solid var(--st-warn);
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--st-ink);
 }
 
 .orbi-panel-rows {
   list-style: none;
-  margin: 10px 0 0;
+  margin: 8px 0 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
 }
 
 .orbi-panel-rows button {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
-  padding: 9px 11px;
+  padding: 8px 12px;
   border: 1px solid transparent;
-  border-radius: 11px;
+  border-radius: 10px;
   background: none;
   color: inherit;
   font: inherit;
@@ -2953,7 +2956,7 @@
 
 .orbi-panel-rows svg {
   margin-top: 2px;
-  color: var(--cyan);
+  color: var(--faint);
   flex: 0 0 auto;
 }
 
@@ -2970,7 +2973,7 @@
 }
 
 .orbi-panel-rows small {
-  font-size: 11.5px;
+  font-size: 11px;
   color: var(--faint);
   line-height: 1.4;
 }
@@ -2978,10 +2981,10 @@
 /* ---------------------------------------------------------------- the session's stage, and records */
 
 .st-stage {
-  font-size: 11.5px;
+  font-size: 11px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--cyan);
+  color: var(--faint);
   font-weight: 600;
 }
 
@@ -2993,11 +2996,11 @@
 
 .st-record {
   margin: 0;
-  padding: 7px 13px;
+  padding: 8px 12px;
   border: 1px solid color-mix(in srgb, var(--st-warn) 40%, transparent);
   border-radius: 999px;
   background: color-mix(in srgb, var(--st-warn) 7%, transparent);
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--st-ink);
 }
 
@@ -3012,8 +3015,7 @@
   display: block;
   width: 100%;
   height: 300px;
-  border: 1px solid var(--st-line);
-  border-radius: 18px;
+  border-radius: 10px;
   background: radial-gradient(700px 320px at 50% 110%, color-mix(in srgb, var(--cyan) 9%, transparent), transparent 70%), var(--st-panel);
 }
 
@@ -3058,8 +3060,8 @@
 }
 
 .st-sky figcaption {
-  margin-top: 9px;
-  font-size: 12.5px;
+  margin-top: 8px;
+  font-size: 13px;
   color: var(--faint);
 }
 
@@ -3074,12 +3076,12 @@
   border-left: 3px solid var(--st-strong);
   border-radius: var(--st-radius);
   background: var(--st-panel);
-  padding: 16px 18px;
+  padding: 16px 16px;
   margin-bottom: var(--st-gap);
 }
 
 .st-next.compact {
-  padding: 14px 16px;
+  padding: 12px 16px;
 }
 
 .st-next.quiet,
@@ -3095,15 +3097,15 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 6px;
+  gap: 8px;
+  margin-bottom: 4px;
 }
 
 .st-next-kicker {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 11.5px;
+  gap: 4px;
+  font-size: 11px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--faint);
@@ -3111,13 +3113,13 @@
 
 .st-next h3 {
   margin: 0;
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 600;
   letter-spacing: -0.01em;
 }
 
 .st-next-because {
-  margin: 5px 0 12px;
+  margin: 4px 0 12px;
   font-size: 13px;
   line-height: 1.55;
   color: var(--faint);
@@ -3138,22 +3140,21 @@
 
 .st-plan-page > section,
 .st-mastery > section {
-  margin-bottom: 26px;
+  margin-bottom: 24px;
 }
 
 .st-plan-page h3,
 .st-mastery h3 {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   margin: 0 0 8px;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
 }
 
 .st-plan-time {
-  padding: 16px 18px;
-  border: 1px solid var(--st-line);
+  padding: 16px 16px;
   border-radius: var(--st-radius);
   background: var(--st-panel);
 }
@@ -3164,22 +3165,22 @@
   padding: 0;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .st-plan-days label {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  font-size: 12.5px;
+  gap: 4px;
+  font-size: 13px;
   color: var(--faint);
 }
 
 .st-plan-days input {
   width: 100%;
-  padding: 7px 9px;
+  padding: 8px 8px;
   border: 1px solid var(--st-line);
-  border-radius: 9px;
+  border-radius: 10px;
   background: transparent;
   color: var(--st-ink);
   font: inherit;
@@ -3205,22 +3206,22 @@
   grid-template-columns: 84px minmax(0, 1.4fr) minmax(0, 1.6fr) 90px auto;
   gap: 12px;
   align-items: center;
-  padding: 11px 14px;
+  padding: 12px 12px;
   border: 1px solid var(--st-line);
-  border-radius: 11px;
+  border-radius: 10px;
 }
 
 .st-radar-when {
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
-  color: var(--cyan);
+  color: var(--faint);
 }
 
 .st-radar-title {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  font-size: 13.5px;
+  gap: 8px;
+  font-size: 13px;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3233,11 +3234,11 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
 }
 
 .st-week > li {
-  padding: 14px 16px;
+  padding: 12px 16px;
   border: 1px solid var(--st-line);
   border-radius: var(--st-radius);
 }
@@ -3245,13 +3246,13 @@
 .st-week > li > header {
   display: flex;
   align-items: baseline;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .st-week > li > header strong {
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .st-week > li > header .st-link {
@@ -3264,16 +3265,16 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .st-day-items > li {
   display: grid;
   grid-template-columns: 46px 74px minmax(0, 1.2fr) minmax(0, 1.4fr) auto;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
-  padding: 8px 10px;
-  border-radius: 9px;
+  padding: 8px 8px;
+  border-radius: 10px;
   background: var(--st-panel);
   font-size: 13px;
 }
@@ -3291,7 +3292,7 @@
 }
 
 .st-day-kind {
-  font-size: 11.5px;
+  font-size: 11px;
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--faint);
@@ -3306,8 +3307,8 @@
 }
 
 .st-left-out {
-  margin-top: 10px;
-  font-size: 12.5px;
+  margin-top: 8px;
+  font-size: 13px;
   color: var(--faint);
 }
 
@@ -3317,7 +3318,7 @@
 
 .st-left-out ul {
   margin: 8px 0 0;
-  padding-left: 18px;
+  padding-left: 16px;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -3325,16 +3326,16 @@
 
 .st-syllabus {
   width: 100%;
-  padding: 12px 14px;
+  padding: 12px 12px;
   border: 1px solid var(--st-line);
-  border-radius: 11px;
+  border-radius: 10px;
   background: transparent;
   color: var(--st-ink);
   font: inherit;
   font-size: 13px;
   line-height: 1.6;
   resize: vertical;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .st-syllabus:focus-visible {
@@ -3361,11 +3362,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: 12px;
   flex-wrap: wrap;
-  padding: 12px 15px;
+  padding: 12px 16px;
   border: 1px solid var(--st-line);
-  border-radius: 11px;
+  border-radius: 10px;
 }
 
 .st-weak > li > div:first-child {
@@ -3377,12 +3378,12 @@
 }
 
 .st-weak > li strong {
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .st-weak > li p {
   margin: 2px 0 0;
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.5;
   max-width: 62ch;
 }
@@ -3399,9 +3400,8 @@
 .st-strong > li {
   display: inline-flex;
   align-items: center;
-  gap: 9px;
-  padding: 7px 12px;
-  border: 1px solid var(--st-line);
+  gap: 8px;
+  padding: 8px 12px;
   border-radius: 999px;
   font-size: 13px;
   background: color-mix(in srgb, var(--st-good) 8%, transparent);
@@ -3428,7 +3428,7 @@
    * in the middle of a gap. A measurement belongs next to the thing it measures.
    */
   grid-template-columns: 16px minmax(0, 1fr) 180px max-content;
-  gap: 14px;
+  gap: 12px;
   align-items: center;
   width: 100%;
   padding: 12px 4px;
@@ -3476,9 +3476,9 @@
 .st-tree-chapter {
   display: flex;
   align-items: baseline;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
   font-size: 13px;
 }
 
@@ -3491,10 +3491,10 @@
 .st-tree-concepts > li {
   display: grid;
   grid-template-columns: 10px minmax(0, 1fr) 110px 56px;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
-  padding: 5px 6px;
-  border-radius: 7px;
+  padding: 4px 4px;
+  border-radius: 6px;
   font-size: 13px;
 }
 
@@ -3524,7 +3524,7 @@
 }
 
 .st-tree-concepts > li[data-state='stable'] .st-tree-dot {
-  background: var(--cyan);
+  background: var(--panel);
   border-color: transparent;
 }
 
@@ -3545,14 +3545,14 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 8px;
   font-size: 13px;
 }
 
 .st-proof > li {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 8px;
   color: var(--faint);
 }
 
@@ -3566,7 +3566,7 @@
   .st-tree-row,
   .st-tree-concepts > li {
     grid-template-columns: 1fr;
-    gap: 6px;
+    gap: 4px;
   }
 
   .st-week > li > header .st-link {
@@ -3580,29 +3580,28 @@
    the only reason a report like this is worth reading at all. Nothing in here is coloured as good or bad. */
 
 .st-report {
-  padding: 16px 18px;
+  padding: 16px 16px;
   margin-bottom: var(--st-gap);
-  border: 1px solid var(--st-line);
   border-radius: var(--st-radius);
   background: var(--st-panel);
 }
 
 .st-report .st-section-head {
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .st-report h3 {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   margin: 0;
   font-size: 15px;
   font-weight: 600;
 }
 
 .st-report h4 {
-  margin: 0 0 7px;
-  font-size: 12.5px;
+  margin: 0 0 8px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--faint);
   letter-spacing: 0.04em;
@@ -3611,12 +3610,12 @@
 
 .st-report-notes {
   list-style: none;
-  margin: 0 0 14px;
+  margin: 0 0 12px;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  font-size: 14px;
+  gap: 4px;
+  font-size: 13px;
   line-height: 1.55;
   max-width: 72ch;
 }
@@ -3635,18 +3634,18 @@
 }
 
 .st-report-figures strong {
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
 .st-report-subjects ul {
   list-style: none;
-  margin: 0 0 14px;
+  margin: 0 0 12px;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 8px;
 }
 
 .st-report-subjects li {
@@ -3688,11 +3687,11 @@
   bottom: calc(100% + 10px);
   right: 0;
   width: min(300px, 78vw);
-  padding: 13px 15px;
+  padding: 12px 16px;
   border: 1px solid var(--st-line);
-  border-radius: 14px;
+  border-radius: 10px;
   background: var(--surface);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 16px 40px var(--shadow-color);
   animation: st-in 0.22s ease-out both;
   z-index: 6;
 }
@@ -3703,26 +3702,26 @@
 
 .st-appears-body strong {
   display: block;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   margin-bottom: 3px;
 }
 
 .st-appears-body p {
-  margin: 0 0 11px;
+  margin: 0 0 12px;
   line-height: 1.5;
 }
 
 .st-appears-actions {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 .st-btn.small {
-  padding: 5px 10px;
-  font-size: 12.5px;
+  padding: 4px 8px;
+  font-size: 13px;
 }
 
 /* Left-hand corner: the card opens the other way so it stays on screen. */
@@ -3748,19 +3747,19 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .st-challenge-head h3 {
   margin: 0 0 2px;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 600;
 }
 
 .st-challenge-progress {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   margin-bottom: 16px;
 }
 
@@ -3776,15 +3775,15 @@
 }
 
 .st-challenge-ask {
-  margin: 0 0 14px;
-  font-size: 17px;
+  margin: 0 0 12px;
+  font-size: 18px;
   line-height: 1.5;
 }
 
 /* What the student wrote, shown back to them. Never presented as Orbis's answer. */
 .st-challenge-answer {
-  margin: 0 0 14px;
-  padding: 12px 14px;
+  margin: 0 0 12px;
+  padding: 12px 12px;
   border-left: 3px solid var(--st-strong);
   border-radius: 0 10px 10px 0;
   background: var(--st-panel);
@@ -3794,33 +3793,33 @@
 }
 
 .st-challenge-says {
-  margin: 10px 0 0;
+  margin: 8px 0 0;
   font-size: 13px;
-  color: var(--cyan);
+  color: var(--text);
 }
 
 .st-challenge-done strong {
   display: block;
-  font-size: 17px;
-  margin-bottom: 6px;
+  font-size: 18px;
+  margin-bottom: 4px;
 }
 
 /* The occasional surprise, on the card that appears when a session ends. */
 .st-surprise {
-  margin: 4px 0 14px;
-  padding: 13px 15px;
+  margin: 4px 0 12px;
+  padding: 12px 16px;
   border: 1px dashed var(--st-line);
-  border-radius: 12px;
+  border-radius: 10px;
 }
 
 .st-surprise strong {
   display: block;
-  font-size: 14px;
+  font-size: 13px;
   margin-bottom: 2px;
 }
 
 .st-surprise p {
-  margin: 0 0 10px;
+  margin: 0 0 8px;
 }
 
 /* ---------------------------------------------------------------- Orbi, with the sound and the hour
@@ -3880,16 +3879,15 @@
    the syllabus until it is ticked. */
 
 .st-found {
-  margin-top: 14px;
-  padding: 14px 16px;
-  border: 1px solid var(--st-line);
+  margin-top: 12px;
+  padding: 12px 16px;
   border-radius: var(--st-radius);
   background: var(--st-panel);
 }
 
 .st-found-list {
   list-style: none;
-  margin: 10px 0 14px;
+  margin: 8px 0 12px;
   padding: 0;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -3900,8 +3898,8 @@
 
 .st-found-list .st-check {
   margin: 0;
-  padding: 5px 7px;
-  border-radius: 8px;
+  padding: 4px 8px;
+  border-radius: 6px;
 }
 
 .st-found-list .st-check:hover {
@@ -3910,15 +3908,15 @@
 
 .st-found-list strong {
   display: block;
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 500;
 }
 
 .st-found .st-field.inline input {
   width: 140px;
-  padding: 6px 9px;
+  padding: 4px 8px;
   border: 1px solid var(--st-line);
-  border-radius: 9px;
+  border-radius: 10px;
   background: transparent;
   color: var(--st-ink);
   font: inherit;
@@ -3931,22 +3929,22 @@
    invitation to take them. What each rung costs is beside the rung, never after it. */
 
 .st-hints {
-  margin: 10px 0 14px;
+  margin: 8px 0 12px;
 }
 
 .st-hint-list {
   list-style: none;
-  margin: 0 0 10px;
+  margin: 0 0 8px;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .st-hint-list li {
-  padding: 9px 12px;
+  padding: 8px 12px;
   border-left: 2px solid var(--st-line);
-  font-size: 13.5px;
+  font-size: 13px;
   line-height: 1.5;
   color: var(--st-ink);
 }
@@ -3954,12 +3952,12 @@
 .st-hint-next {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 .st-teach-ask {
-  margin: 0 0 14px;
+  margin: 0 0 12px;
   font-size: 15px;
   line-height: 1.6;
   max-width: 62ch;
@@ -3967,7 +3965,7 @@
 
 .st-teach-points {
   list-style: none;
-  margin: 10px 0 16px;
+  margin: 8px 0 16px;
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -3978,19 +3976,19 @@
 
 .st-teach-points .st-check {
   margin: 0;
-  padding: 7px 9px;
-  border-radius: 9px;
+  padding: 8px 8px;
+  border-radius: 10px;
   align-items: flex-start;
 }
 
 .st-teach-points .st-check span {
-  font-size: 13.5px;
+  font-size: 13px;
   line-height: 1.5;
 }
 
 .st-teach-said {
   margin: 0 0 16px;
-  font-size: 16px;
+  font-size: 15px;
   line-height: 1.55;
 }
 
@@ -4029,9 +4027,9 @@
 /* Tighter, before anything is given up. */
 @container student (max-width: 1240px) {
   .st-nav-btn {
-    gap: 6px;
-    padding: 8px 9px;
-    font-size: 12.5px;
+    gap: 4px;
+    padding: 8px 8px;
+    font-size: 13px;
   }
 
   .st-nav {
@@ -4055,7 +4053,7 @@
   }
 
   .st-nav-btn {
-    padding: 8px 10px;
+    padding: 8px 8px;
   }
 }
 
@@ -4083,28 +4081,10 @@
   margin-bottom: 0;
 }
 
-.st-search-box {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+/* The cards box is the window's shared search box; this is only how much of the filter row it takes. */
+.st-cards-find {
   flex: 1 1 220px;
   max-width: 340px;
-  padding: 8px 11px;
-  border: 1px solid var(--st-line);
-  border-radius: 10px;
-  background: var(--st-panel);
-  color: var(--faint);
-}
-
-.st-search-box input {
-  flex: 1 1 auto;
-  min-width: 0;
-  border: 0;
-  background: none;
-  color: var(--st-ink);
-  font: inherit;
-  font-size: 13.5px;
-  outline: none;
 }
 
 .st-card-list {
@@ -4120,10 +4100,10 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 14px;
-  padding: 12px 15px;
+  gap: 12px;
+  padding: 12px 16px;
   border: 1px solid var(--st-line);
-  border-radius: 11px;
+  border-radius: 10px;
 }
 
 .st-card-text {
@@ -4133,12 +4113,12 @@
 
 .st-card-text strong {
   display: block;
-  font-size: 14px;
+  font-size: 13px;
   margin-bottom: 3px;
 }
 
 .st-card-text p {
-  margin: 0 0 5px;
+  margin: 0 0 4px;
   font-size: 13px;
   line-height: 1.5;
   color: var(--faint);
@@ -4153,17 +4133,17 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
+  gap: 12px;
   flex-wrap: wrap;
-  padding: 13px 15px;
-  margin-bottom: 22px;
+  padding: 12px 16px;
+  margin-bottom: 20px;
   border: 1px dashed var(--st-line);
   border-radius: var(--st-radius);
 }
 
 .st-micro strong {
   display: block;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .st-micro p {
@@ -4173,15 +4153,15 @@
 .st-missions h3 {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   margin: 0 0 8px;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
 }
 
 .st-steps {
   list-style: none;
-  margin: 14px 0 18px;
+  margin: 12px 0 16px;
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -4194,9 +4174,9 @@
   grid-template-columns: 44px minmax(0, 1fr) auto;
   gap: 12px;
   align-items: center;
-  padding: 11px 13px;
+  padding: 12px 12px;
   border: 1px solid var(--st-line);
-  border-radius: 11px;
+  border-radius: 10px;
 }
 
 /* A finished step recedes rather than being struck through: it was done, not cancelled. */
@@ -4209,7 +4189,7 @@
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   font-size: 13px;
-  color: var(--cyan);
+  color: var(--faint);
 }
 
 .st-step-text {
@@ -4218,7 +4198,7 @@
 
 .st-step-text strong {
   display: block;
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 500;
   line-height: 1.45;
 }
@@ -4226,7 +4206,7 @@
 @media (max-width: 880px) {
   .st-steps > li {
     grid-template-columns: 1fr;
-    gap: 6px;
+    gap: 4px;
   }
 
   .st-card-list > li {
@@ -4237,7 +4217,7 @@
 /* ---------------------------------------------------------------- the day, and the whiteboard */
 
 .st-briefing {
-  padding: 14px 16px;
+  padding: 12px 16px;
   margin-bottom: var(--st-gap);
   border: 1px solid var(--st-line);
   border-left: 3px solid var(--st-strong);
@@ -4248,14 +4228,14 @@
 .st-briefing strong {
   display: flex;
   align-items: center;
-  gap: 7px;
-  font-size: 14px;
+  gap: 8px;
+  font-size: 13px;
   margin-bottom: 4px;
 }
 
 .st-briefing p {
   margin: 0;
-  font-size: 13.5px;
+  font-size: 13px;
   line-height: 1.55;
   color: var(--faint);
 }
@@ -4269,7 +4249,7 @@
 .st-day-page h3,
 .st-boards h3 {
   margin: 24px 0 8px;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -4287,9 +4267,9 @@
   grid-template-columns: 74px minmax(0, 1fr) auto;
   gap: 12px;
   align-items: start;
-  padding: 11px 14px;
+  padding: 12px 12px;
   border: 1px solid var(--st-line);
-  border-radius: 11px;
+  border-radius: 10px;
 }
 
 /* A session that was ended early is shown as what it was, with no colour of judgement on it. */
@@ -4300,7 +4280,7 @@
 .st-timeline-when {
   font-variant-numeric: tabular-nums;
   font-size: 13px;
-  color: var(--cyan);
+  color: var(--faint);
 }
 
 .st-timeline-what {
@@ -4309,12 +4289,12 @@
 
 .st-timeline-what strong {
   display: block;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .st-journal {
-  margin: 7px 0 0;
-  padding: 9px 11px;
+  margin: 8px 0 0;
+  padding: 8px 12px;
   border-left: 2px solid var(--st-line);
   font-size: 13px;
   line-height: 1.55;
@@ -4336,10 +4316,10 @@
 .st-xp-list > li {
   display: grid;
   grid-template-columns: 54px minmax(0, 1fr) auto;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
-  padding: 6px 8px;
-  border-radius: 8px;
+  padding: 4px 8px;
+  border-radius: 6px;
   font-size: 13px;
 }
 
@@ -4365,13 +4345,13 @@
 .st-board-name {
   flex: 1 1 auto;
   min-width: 0;
-  padding: 6px 10px;
+  padding: 4px 8px;
   border: 1px solid transparent;
-  border-radius: 9px;
+  border-radius: 10px;
   background: none;
   color: var(--st-ink);
   font: inherit;
-  font-size: 19px;
+  font-size: 18px;
   font-weight: 600;
 }
 
@@ -4384,12 +4364,12 @@
 .st-board-tools {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   flex-wrap: wrap;
-  padding: 8px 10px;
-  margin-bottom: 10px;
+  padding: 8px 8px;
+  margin-bottom: 8px;
   border: 1px solid var(--st-line);
-  border-radius: 11px;
+  border-radius: 10px;
 }
 
 .st-board-sep {
@@ -4423,9 +4403,8 @@
   flex: 1 1 auto;
   min-height: 320px;
   width: 100%;
-  border: 1px solid var(--st-line);
   border-radius: var(--st-radius);
-  background: var(--bg-mid, #0b0f16);
+  background: var(--bg-mid, var(--surface));
   touch-action: none;
   cursor: crosshair;
 }
@@ -4436,7 +4415,7 @@
   padding: 0;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-  gap: 10px;
+  gap: 8px;
 }
 
 .st-board-list > li {
@@ -4444,9 +4423,9 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 4px 10px 4px 4px;
+  padding: 4px 8px 4px 4px;
   border: 1px solid var(--st-line);
-  border-radius: 11px;
+  border-radius: 10px;
 }
 
 .st-board-open {
@@ -4455,9 +4434,9 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 10px;
+  padding: 8px;
   border: 0;
-  border-radius: 9px;
+  border-radius: 10px;
   background: none;
   color: inherit;
   font: inherit;
@@ -4479,7 +4458,7 @@
   .st-timeline > li,
   .st-xp-list > li {
     grid-template-columns: 1fr;
-    gap: 5px;
+    gap: 4px;
   }
 }
 
@@ -4494,7 +4473,7 @@
 
 .st-ahead,
 .st-after {
-  padding: 16px 18px;
+  padding: 16px 16px;
   border: 1px solid var(--st-line);
   border-left: 3px solid var(--st-strong);
   border-radius: var(--st-radius);
@@ -4514,13 +4493,13 @@
 .st-after h3 {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   margin: 0;
-  font-size: 16px;
+  font-size: 15px;
 }
 
 .st-ahead h4 {
-  margin: 18px 0 8px;
+  margin: 16px 0 8px;
   font-size: 13px;
   font-weight: 600;
 }
@@ -4533,8 +4512,8 @@
 }
 
 .st-ahead-says {
-  margin: 10px 0 14px;
-  font-size: 14px;
+  margin: 8px 0 12px;
+  font-size: 13px;
   line-height: 1.6;
   max-width: 70ch;
 }
@@ -4545,16 +4524,16 @@
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
-  padding: 12px 14px;
+  padding: 12px 12px;
   border: 1px dashed var(--st-line);
-  border-radius: 11px;
+  border-radius: 10px;
 }
 
 .st-exam-mode strong {
   display: flex;
   align-items: center;
-  gap: 7px;
-  font-size: 14px;
+  gap: 8px;
+  font-size: 13px;
 }
 
 .st-exam-changes {
@@ -4564,7 +4543,7 @@
   display: flex;
   flex-direction: column;
   gap: 3px;
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--faint);
 }
 
@@ -4584,21 +4563,21 @@
 
 .st-stages {
   list-style: none;
-  margin: 0 0 14px;
+  margin: 0 0 12px;
   padding: 0 0 8px 20px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
 }
 
 .st-stages > li {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
-  padding: 10px 13px;
+  gap: 12px;
+  padding: 8px 12px;
   border: 1px solid var(--st-line);
-  border-radius: 11px;
+  border-radius: 10px;
 }
 
 /* A passed stage is quieter, not struck out: it was done, and it can be taken again. */
@@ -4615,7 +4594,7 @@
 }
 
 .st-stage-text strong {
-  font-size: 13.5px;
+  font-size: 13px;
 }
 
 /* ---- saying it out loud */
@@ -4638,8 +4617,8 @@
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  font-size: 13.5px;
+  gap: 4px;
+  font-size: 13px;
 }
 
 /* ---- the room */
@@ -4676,8 +4655,8 @@
    student's own material. Same type, same colour, one small line saying who wrote it. */
 
 .st-explained {
-  margin: 0 0 18px;
-  font-size: 14.5px;
+  margin: 0 0 16px;
+  font-size: 15px;
   line-height: 1.65;
   white-space: pre-wrap;
   max-width: 70ch;
@@ -4685,7 +4664,7 @@
 
 .st-drafts {
   list-style: none;
-  margin: 10px 0 16px;
+  margin: 8px 0 16px;
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -4698,8 +4677,8 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 10px;
-  padding: 8px 10px;
+  gap: 8px;
+  padding: 8px 8px;
   border: 1px solid transparent;
   border-radius: 10px;
 }
@@ -4722,7 +4701,7 @@
 
 .st-drafts strong {
   display: block;
-  font-size: 13.5px;
+  font-size: 13px;
 }
 
 .st-drafts textarea {
@@ -4731,11 +4710,11 @@
 
 .st-proposed {
   list-style: none;
-  margin: 10px 0 14px;
+  margin: 8px 0 12px;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   max-height: 300px;
   overflow: auto;
 }
@@ -4744,8 +4723,8 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 8px 10px;
-  border-radius: 9px;
+  padding: 8px 8px;
+  border-radius: 10px;
   background: var(--st-panel);
   font-size: 13px;
 }
@@ -4757,7 +4736,7 @@
 
 .st-turns {
   list-style: none;
-  margin: 0 0 14px;
+  margin: 0 0 12px;
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -4780,9 +4759,9 @@
 
 .st-turns > li p {
   margin: 0;
-  padding: 10px 13px;
-  border-radius: 12px;
-  font-size: 14px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-size: 13px;
   line-height: 1.55;
   white-space: pre-wrap;
 }
@@ -4802,19 +4781,19 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .st-say input {
   flex: 1 1 auto;
   min-width: 0;
-  padding: 10px 13px;
+  padding: 8px 12px;
   border: 1px solid var(--st-line);
-  border-radius: 11px;
+  border-radius: 10px;
   background: transparent;
   color: var(--st-ink);
   font: inherit;
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .st-say input:focus-visible {
@@ -4824,10 +4803,10 @@
 
 /* The answer, when the questions stop. Marked as the answer rather than slipped in as another turn. */
 .st-told {
-  margin: 4px 0 14px;
-  padding: 12px 14px;
+  margin: 4px 0 12px;
+  padding: 12px 12px;
   border-left: 3px solid var(--st-strong);
-  border-radius: 0 12px 12px 0;
+  border-radius: 0 10px 10px 0;
   background: var(--st-panel);
 }
 
@@ -4837,7 +4816,7 @@
 
 .st-sheet-card h4 {
   margin: 16px 0 8px;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -4911,7 +4890,7 @@
 .st-tour-veil {
   position: absolute;
   inset: 0;
-  background: color-mix(in srgb, var(--bg-deep, #05080c) 46%, transparent);
+  background: color-mix(in srgb, var(--bg-deep, var(--bg)) 46%, transparent);
   backdrop-filter: blur(1px);
 }
 
@@ -4936,11 +4915,11 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 16px 18px;
-  border: 1px solid var(--st-line, rgba(255, 255, 255, 0.12));
-  border-radius: 16px;
-  background: var(--st-card, rgba(14, 20, 28, 0.92));
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45);
+  padding: 16px 16px;
+  border: 1px solid var(--st-line, var(--line-strong));
+  border-radius: 10px;
+  background: var(--st-card);
+  box-shadow: 0 18px 50px var(--shadow-color);
   /* The one thing above the veil that can be touched. */
   pointer-events: auto;
 }
@@ -4959,12 +4938,12 @@
   margin: 0;
   font-size: 1.02rem;
   line-height: 1.5;
-  color: var(--st-text, #e8f3ff);
+  color: var(--st-text);
 }
 
 .st-tour-dots {
   display: flex;
-  gap: 5px;
+  gap: 4px;
   flex-wrap: wrap;
 }
 
@@ -4972,20 +4951,20 @@
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: var(--st-line, rgba(255, 255, 255, 0.2));
+  background: var(--st-line, color-mix(in srgb, var(--text) 20%, transparent));
 }
 
 .st-tour-dot.on {
   background: var(--cyan);
   /* Wider as well as brighter, so the step somebody is on is findable without relying on colour. */
   width: 14px;
-  border-radius: 3px;
+  border-radius: 6px;
 }
 
 .st-tour-foot {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
   justify-content: space-between;
 }
@@ -5055,12 +5034,12 @@
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 14px 16px;
-  border: 1px solid var(--st-line, rgba(255, 255, 255, 0.14));
-  border-radius: 14px;
-  background: var(--st-card, rgba(14, 20, 28, 0.95));
-  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
+  gap: 8px;
+  padding: 12px 16px;
+  border: 1px solid var(--st-line, var(--line-strong));
+  border-radius: 10px;
+  background: var(--st-card);
+  box-shadow: 0 14px 40px var(--shadow-color);
   pointer-events: auto;
   animation: st-bubble-in 180ms ease-out both;
 }
@@ -5240,7 +5219,7 @@
 .st-spot {
   position: absolute;
   box-shadow:
-    0 0 0 9999px color-mix(in srgb, var(--bg-deep, #05080c) 72%, transparent),
+    0 0 0 9999px color-mix(in srgb, var(--bg-deep, var(--bg)) 72%, transparent),
     0 0 0 1px color-mix(in srgb, var(--cyan) 55%, transparent) inset,
     0 0 22px 2px color-mix(in srgb, var(--cyan) 45%, transparent);
   transition-property: left, top, width, height, border-radius;
@@ -5253,13 +5232,13 @@
 @keyframes st-spot-rim {
   0%, 100% {
     box-shadow:
-      0 0 0 9999px color-mix(in srgb, var(--bg-deep, #05080c) 72%, transparent),
+      0 0 0 9999px color-mix(in srgb, var(--bg-deep, var(--bg)) 72%, transparent),
       0 0 0 1px color-mix(in srgb, var(--cyan) 55%, transparent) inset,
       0 0 18px 1px color-mix(in srgb, var(--cyan) 38%, transparent);
   }
   50% {
     box-shadow:
-      0 0 0 9999px color-mix(in srgb, var(--bg-deep, #05080c) 72%, transparent),
+      0 0 0 9999px color-mix(in srgb, var(--bg-deep, var(--bg)) 72%, transparent),
       0 0 0 1.5px color-mix(in srgb, var(--cyan) 85%, transparent) inset,
       0 0 34px 4px color-mix(in srgb, var(--cyan) 55%, transparent);
   }

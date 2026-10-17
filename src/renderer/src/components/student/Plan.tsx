@@ -259,7 +259,7 @@ export default function Plan({
           </div>
         ) : null}
         {days.every((one) => one.items.length === 0) ? (
-          <p className="st-empty big">
+          <p className="view-empty">
             {anyTime
               ? 'Nothing to plan yet. Add a syllabus below, or set a goal, and the days will fill themselves.'
               : 'Set some minutes above and the week will fill itself.'}

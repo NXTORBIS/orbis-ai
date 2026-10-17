@@ -27,7 +27,7 @@ export default function Constellation({ stars, reducedMotion }: { stars: readonl
 
   if (stars.length === 0) {
     return (
-      <p className="st-empty big">
+      <p className="view-empty">
         Your sky is empty for now. Every goal you set becomes a star, and it lights up when you finish it.
       </p>
     )

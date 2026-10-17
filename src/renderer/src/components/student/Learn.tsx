@@ -225,7 +225,7 @@ export default function Learn({
 
       {tab === 'review' ? (
         due.length === 0 ? (
-          <p className="st-empty big">You&apos;re caught up. Nothing is due to come back round.</p>
+          <p className="view-empty">You&apos;re caught up. Nothing is due to come back round.</p>
         ) : (
           <div className="st-cards">
             {due.map(({ item, review }) => (
@@ -247,7 +247,7 @@ export default function Learn({
           {(today?.mix ?? []).map((item) => (
             <Card key={item.id} item={item} answered={answered.has(item.id)} onAnswer={(how, correct, given) => void answer(item, how, correct, given)} />
           ))}
-          {!today?.word && (today?.mix.length ?? 0) === 0 ? <p className="st-empty big">Nothing new for today. Everything Orbis has is already in your review.</p> : null}
+          {!today?.word && (today?.mix.length ?? 0) === 0 ? <p className="view-empty">Nothing new for today. Everything Orbis has is already in your review.</p> : null}
         </div>
       ) : null}
 
@@ -259,7 +259,7 @@ export default function Learn({
             </button>
           </div>
           {mixups.length === 0 ? (
-            <p className="st-empty big">
+            <p className="view-empty">
               Nothing written down. When two ideas keep swapping places in your head, write both of them here with
               whatever tells them apart — that is the thing that fixes it, not more practice on each one.
             </p>
@@ -376,7 +376,7 @@ export default function Learn({
 
       {tab === 'mistakes' ? (
         mistakes.length === 0 ? (
-          <p className="st-empty big">No mistakes written down. You can add one from a session when something goes wrong.</p>
+          <p className="view-empty">No mistakes written down. You can add one from a session when something goes wrong.</p>
         ) : (
           <ul className="st-mistakes">
             {mistakes.map((one) => (

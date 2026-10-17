@@ -4,6 +4,8 @@ import Orbi, { wearable } from './Orbi'
 import { atmosphere } from './atmosphere'
 import { STYLES as CHARACTER_STYLES, styleFor } from '../../../../shared/student/orbiCharacter'
 import type { Call, Catalogue } from './useStudent'
+import { useSurface } from '../../lib/surfaces'
+import { studentSettingsSurface } from './studentSurfaces'
 import type { ContentCategory, StudentSnapshot } from '../../../../shared/student/types'
 import type { NoticeKind } from '../../lib/notices'
 
@@ -89,6 +91,27 @@ export default function StudentSettings({
     setConfirming(null)
     onNotify('Done.')
   }
+
+  /*
+   * What this page lets Orbis read and set.
+   *
+   * Every setter is the same `save-settings` the fields on screen call, so a value Orbis writes goes through the same
+   * reading rules -- and a bad one is pulled back into range in exactly one place. What it offers is in
+   * `studentSurfaces.ts`, where each control's type and range is read from `patchPreferences` rather than written out
+   * a second time.
+   */
+  useSurface(
+    studentSettingsSurface({
+      snapshot: () => snapshot,
+      save,
+      section: () => section,
+      openSection: (id) => setSection(id as Section),
+      sections: SECTIONS,
+      atmospheres: catalogue?.atmospheres.map((one) => ({ id: one.id, label: one.label })) ?? [],
+      reset,
+      check: () => call<StudentSnapshot | null>('snapshot')
+    })
+  )
 
   const exportAll = async (): Promise<void> => {
     const data = await call<unknown>('export')
