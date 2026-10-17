@@ -1,0 +1,31 @@
+diff --git a/content/child/runtime_features.cc b/content/child/runtime_features.cc
+index eb27b44d69..2320fe8316 100644
+--- a/content/child/runtime_features.cc
++++ b/content/child/runtime_features.cc
+@@ -376,7 +376,25 @@ void SetRuntimeFeaturesFromCommandLine(const base::CommandLine& command_line) {
+       // End of Stable Features
+       {wrf::EnableAutomationControlled, switches::kEnableAutomation, true},
+       {wrf::EnableAutomationControlled, switches::kHeadless, true},
+-      {wrf::EnableAutomationControlled, switches::kRemoteDebuggingPipe, true},
++      // Orbis change: --remote-debugging-pipe no longer marks the browser as
++      // automation-controlled.
++      //
++      // Orbis is this browser's own shell. It holds the pipe so it can show the
++      // tabs, the address bar and the Orb, and nothing else on the computer can
++      // reach it: a pipe is not a socket, so only the process that started the
++      // browser is on the other end. That is the case the code further down
++      // already makes an exception for -- a specific --remote-debugging-port is
++      // left unflagged because it "is more likely for attaching a debugger, so
++      // we should leave EnableAutomationControlled unset to ensure the browser
++      // behaves as it does when not under automation control". The pipe is the
++      // same situation, and the more private of the two.
++      //
++      // Flagging it set navigator.webdriver, and Google's sign-in refuses any
++      // page where that is true: every attempt ended in "This browser or app
++      // may not be secure", on Google's own sites and on every site offering
++      // "Sign in with Google". So the one thing this browser exists to do --
++      // be one somebody can actually sign in with -- did not work.
++      // ChromeDriver and --enable-automation are untouched above.
+       {wrf::EnableFileSystem, switches::kDisableFileSystem, false},
+       {wrf::EnableNetInfoDownlinkMax,
+        switches::kEnableNetworkInformationDownlinkMax, true},
