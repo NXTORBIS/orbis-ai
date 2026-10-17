@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { RotateCcw, Sparkles } from 'lucide-react'
+import { Sparkles } from 'lucide-react'
 import { useExperience } from './useExperience'
 import {
   DENSITIES,
@@ -254,7 +254,7 @@ export default function ExperienceSettings({
 
           <div className="mk-xp-actions">
             <button type="button" onClick={() => void experience.reset()} disabled={changed === 0}>
-              <RotateCcw size={13} /> Back to the {LEVEL_LABELS[experience.level]} defaults
+              Back to the {LEVEL_LABELS[experience.level]} defaults
             </button>
             <button type="button" onClick={() => void restart()}>
               Run Markets setup again

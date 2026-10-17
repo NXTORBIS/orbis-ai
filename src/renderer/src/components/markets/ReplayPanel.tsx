@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ChevronRight, Eye, Pause, Play, RotateCcw, SkipForward } from 'lucide-react'
+import { ChevronRight, Eye, Play, RotateCcw, SkipForward } from 'lucide-react'
 import {
   advanceReplay,
   barsForTick,
@@ -250,7 +250,7 @@ export default function ReplayPanel({
             >
               {playing ? (
                 <>
-                  <Pause size={13} /> Pause
+                  Pause
                 </>
               ) : (
                 <>
@@ -265,7 +265,7 @@ export default function ReplayPanel({
               <SkipForward size={13} /> 10
             </button>
             <button type="button" className="queue-btn small ghost" onClick={restart}>
-              <RotateCcw size={13} /> Restart
+              Restart
             </button>
 
             <div className="mk-seg">

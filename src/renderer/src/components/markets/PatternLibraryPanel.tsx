@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, BookOpen, ChevronLeft, Info, Minus, Search, TrendingDown, TrendingUp } from 'lucide-react'
+import { AlertTriangle, ChevronLeft, Info, Minus, Search, TrendingDown, TrendingUp } from 'lucide-react'
 
 /**
  * Every candlestick pattern Orbis can detect, and what each definition actually says.
@@ -254,7 +254,7 @@ export function PatternLibraryPanel(): React.JSX.Element {
     <section className="mk-panel" aria-label="Candlestick pattern library">
       <header className="mk-panel-head">
         <h3>
-          <BookOpen size={15} aria-hidden /> Pattern library
+          Pattern library
         </h3>
         <span className="mk-panel-sub">
           {patterns.length} pattern{patterns.length === 1 ? '' : 's'}

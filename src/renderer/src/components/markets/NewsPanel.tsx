@@ -43,6 +43,7 @@ export default function NewsPanel({
 }): React.JSX.Element {
   const [state, setState] = useState<NewsAnswer | null>(null)
   const [loading, setLoading] = useState(false)
+  const [checkedAt, setCheckedAt] = useState<number | null>(null)
   const [filter, setFilter] = useState('')
 
   const load = useCallback(async () => {
@@ -55,6 +56,10 @@ export default function NewsPanel({
         return
       }
       setState(got)
+      // When the check last succeeded. Publishers' feeds are held for twenty minutes, so a Refresh inside that window
+      // legitimately returns the same headlines; without this time on screen that is indistinguishable from a button
+      // that did nothing at all.
+      setCheckedAt(Date.now())
     } finally {
       setLoading(false)
     }
@@ -75,6 +80,7 @@ export default function NewsPanel({
         <Newspaper size={14} />
         <span className="mk-quiet">
           {state ? `${items.length} headlines from ${state.sources.length} publishers` : 'Reading the feeds…'}
+          {checkedAt !== null && ` · checked ${new Date(checkedAt).toLocaleTimeString()}`}
         </span>
         {mentioned.length > 0 && (
           <div className="mk-seg">
@@ -157,7 +163,8 @@ export default function NewsPanel({
       <p className="mk-quiet mk-footnote">
         Headlines come from each publisher&apos;s own syndication feed and link to the original. Orbis does not summarise
         or rate them, and a headline is linked to a market only when it names that market — so a story arriving at the
-        same time as a price move is not evidence that one caused the other.
+        same time as a price move is not evidence that one caused the other. Each publisher&apos;s feed is re-read at most
+        every twenty minutes, so a Refresh sooner than that shows the same headlines again.
         {state && state.sources.length > 0 && (
           <> Sources: {state.sources.map((one) => one.name).join(', ')}.</>
         )}

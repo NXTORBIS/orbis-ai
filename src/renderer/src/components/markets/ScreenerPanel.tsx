@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Filter, Play, Plus, Save, Trash2, X } from 'lucide-react'
+import { Filter, Play, Plus, Trash2, X } from 'lucide-react'
 import {
   DEFAULT_QUERY,
   FIELDS,
@@ -18,6 +18,8 @@ import { compactNumber } from './MarketChart'
 import AssetLogo from './AssetLogo'
 import { useCurrency } from './useCurrency'
 import type { NoticeKind } from '../../lib/notices'
+import { useSurface } from '../../lib/surfaces'
+import { screenerSurface } from '../marketsSurfaces'
 
 /**
  * The screener.
@@ -203,6 +205,41 @@ export default function ScreenerPanel({
     [running]
   )
 
+  /**
+   * Loads a screen by name or id, and runs it.
+   *
+   * Apart from the chooser so that the chooser and the declared action both go through exactly this. A preset is
+   * named and a saved screen has an id, which is why both are looked for: the chooser puts both in one list.
+   */
+  const loadScreen = useCallback(
+    async (id: string): Promise<boolean> => {
+      const preset = PRESETS.find((p) => p.name === id)
+      const saved = screens.find((one) => one.id === id || one.name === id)
+      const wanted = preset?.query ?? saved?.query
+      if (!wanted) return false
+      setQuery({ ...wanted })
+      await run(wanted)
+      return true
+    },
+    [screens, run]
+  )
+
+  /** Saves the screen as it stands. The asking is the button's; the saving is this. */
+  const saveScreen = useCallback(
+    async (name: string): Promise<SavedScreen | null> => {
+      const got = await window.api.marketsScreenSave(name.trim() || 'Screen', query)
+      if (refused(got)) {
+        onNotify(got.message ?? 'That screen could not be saved.', 'error')
+        return null
+      }
+      setScreens(got.screens)
+      // The definition, not the rows: the rows were true for one moment.
+      onNotify(`Saved the screen “${got.saved.name}”`)
+      return got.saved
+    },
+    [query, onNotify]
+  )
+
   // The first run happens on its own, so the panel opens with real markets rather than an empty table and a button.
   useEffect(() => {
     void run(query)
@@ -255,6 +292,43 @@ export default function ScreenerPanel({
       conditions: (query.groups?.[group]?.conditions ?? []).map((one, i) => (i === at ? { ...one, ...over } : one))
     })
 
+  // ---------------------------------------------------------------- what Orbis may work here
+  //
+  // Every field, operator and range below comes from the same model this panel draws itself from, and every setter is
+  // one of the functions above. The declaration is in `marketsSurfaces.ts` so it can be driven without a window.
+  useSurface(
+    screenerSurface({
+      query: () => query,
+      setQuery: (next) => setQuery(next),
+      run: (wanted) => run(wanted),
+      answer: () =>
+        answer === null
+          ? null
+          : { results: answer.answer.results.length, universe: answer.answer.universeSize, measured: answer.answer.examined },
+      running: () => running,
+      problem: () => problem,
+      loadable: () => [
+        ...PRESETS.map((one) => ({ id: one.name, name: one.name, query: one.query })),
+        ...screens.map((one) => ({ id: one.id, name: one.name, query: one.query }))
+      ],
+      load: async (id) => {
+        // Said out loud rather than quietly doing nothing: a name that is not there is a mistake worth reporting.
+        if (!(await loadScreen(id))) throw new Error(`There is no screen called “${id}”.`)
+      },
+      save: async (name) => {
+        const saved = await saveScreen(name)
+        if (!saved) throw new Error('That screen could not be saved.')
+        return saved
+      },
+      // Asked of the store again, not read off this panel, which may not have drawn yet.
+      checkSaved: async () => {
+        const got = await window.api.marketsScreens()
+        if (refused(got)) throw new Error(got.message ?? 'The saved screens could not be read.')
+        return got.screens
+      }
+    })
+  )
+
   const cash = (value: number | null | undefined): string => currency.money(value).text
   const expensive = queryNeedsCandles(query)
   const results = answer?.answer.results ?? []
@@ -267,17 +341,7 @@ export default function ScreenerPanel({
           value=""
           aria-label="Load a screen"
           onChange={(e) => {
-            const preset = PRESETS.find((p) => p.name === e.target.value)
-            if (preset) {
-              setQuery({ ...preset.query })
-              void run(preset.query)
-            } else {
-              const saved = screens.find((one) => one.id === e.target.value)
-              if (saved) {
-                setQuery({ ...saved.query })
-                void run(saved.query)
-              }
-            }
+            void loadScreen(e.target.value)
             e.currentTarget.value = ''
           }}
         >
@@ -342,18 +406,10 @@ export default function ScreenerPanel({
           onClick={() => {
             const name = window.prompt('Name this screen')
             if (name === null) return
-            void window.api.marketsScreenSave(name.trim() || 'Screen', query).then((got) => {
-              if (refused(got)) {
-                onNotify(got.message ?? 'That screen could not be saved.', 'error')
-                return
-              }
-              setScreens(got.screens)
-              // The definition, not the rows: the rows were true for one moment.
-              onNotify(`Saved the screen “${got.saved.name}”`)
-            })
+            void saveScreen(name)
           }}
         >
-          <Save size={13} /> Save
+          Save
         </button>
       </div>
 

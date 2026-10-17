@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { AlertTriangle, Info, NotebookPen, Play, RefreshCw, Search, Trash2, X } from 'lucide-react'
+import { AlertTriangle, Info, NotebookPen, Play, RefreshCw, Trash2, X } from 'lucide-react'
+import { SearchBox } from '../../ui'
 import type { PaperAnswer } from '../../../../main/markets/ipc'
 import type { Instrument } from '../../../../shared/markets/instrument'
 import type { OrderType, PaperOrder, Side } from '../../../../shared/markets/paper'
@@ -324,9 +325,8 @@ export default function PortfolioPanel({
               </button>
             </span>
           ) : (
-            <div className="mk-search">
-              <Search size={13} />
-              <input value={query} aria-label="Which market this holding is in" placeholder="Which market?" maxLength={60} onChange={(e) => setQuery(e.target.value)} />
+            <div className="mk-find">
+              <SearchBox value={query} onChange={setQuery} label="Which market this holding is in" placeholder="Which market?" small />
               {results.length > 0 && (
                 <ul className="mk-results">
                   {results.slice(0, 8).map((one) => (

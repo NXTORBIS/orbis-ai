@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { GitCompareArrows, Plus, RefreshCw, Search, X } from 'lucide-react'
+import { GitCompareArrows, Plus, RefreshCw, X } from 'lucide-react'
+import { SearchBox } from '../../ui'
 import { MAX_COMPARED, type CompareStat, type CorrelationCell, type IndexedSeries } from '../../../../shared/markets/compare'
 import type { NoticeKind } from '../../lib/notices'
 import { Introduce } from './Explain'
@@ -232,15 +233,7 @@ export default function ComparePanel({
 
       {ids.length < MAX_COMPARED && (
         <div className="mk-compare-add">
-          <label className="mk-search-field">
-            <Search size={13} />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Add a market to compare against"
-              spellCheck={false}
-            />
-          </label>
+          <SearchBox value={query} onChange={setQuery} label="Add a market to compare against" />
           {searching && <span className="mk-quiet">Searching…</span>}
           {results.length > 0 && (
             <ul className="mk-compare-results">
@@ -259,7 +252,7 @@ export default function ComparePanel({
       {problem !== '' && <p className="mk-problem">{problem}</p>}
 
       {ids.length < 2 ? (
-        <p className="mk-quiet mk-compare-empty">
+        <p className="view-empty">
           <GitCompareArrows size={15} /> Add at least one more market. {symbol} on its own is a price chart, which the
           chart tab already draws better than this one could.
         </p>

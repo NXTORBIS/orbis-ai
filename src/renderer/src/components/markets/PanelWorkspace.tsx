@@ -4,7 +4,6 @@ import {
   LayoutGrid,
   Pin,
   PinOff,
-  RotateCcw,
   Rows2,
   X
 } from 'lucide-react'
@@ -309,7 +308,7 @@ export default function PanelWorkspace({
 
         <div className="mk-ws-body">
           {market === '' ? (
-            <p className="mk-quiet mk-ws-empty">
+            <p className="view-empty">
               No market chosen yet. Open one from the watchlist and every panel that is following will show it.
             </p>
           ) : (
@@ -362,7 +361,7 @@ export default function PanelWorkspace({
             })
           }}
         >
-          <RotateCcw size={12} /> Reset
+          Reset
         </button>
       </div>
 

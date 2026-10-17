@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, Check, Search, Star } from 'lucide-react'
+import { AlertTriangle, Check, Star } from 'lucide-react'
 import { searchCurrencies, type Currency } from '../../../../shared/markets/currency'
-import { ListRow } from '../../ui'
+import { ListRow, SearchBox } from '../../ui'
 import type { CurrencyState } from './useCurrency'
 
 /**
@@ -135,18 +135,14 @@ export default function CurrencyPicker({ currency }: { currency: CurrencyState }
 
       {open && (
         <div className="mk-currency-menu" role="listbox" aria-label="Display currency">
-          <div className="mk-search">
-            <Search size={13} />
-            <input
-              ref={field}
-              value={query}
-              aria-label="Search currencies" placeholder="Search currencies…"
-              maxLength={30}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && found[0]) choose(found[0].code)
-              }}
-            />
+          <div
+            onKeyDown={(event) => {
+              // Enter takes the first currency on the list, which is how this picker has always been driven from
+              // the keyboard. It sits on the wrapper because the field itself is the shared search box now.
+              if (event.key === 'Enter' && found[0]) choose(found[0].code)
+            }}
+          >
+            <SearchBox value={query} onChange={setQuery} label="Search currencies" placeholder="Search currencies…" inputRef={field} small />
           </div>
 
           <div className="mk-currency-list">

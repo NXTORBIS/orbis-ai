@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, CandlestickChart, Check, ChevronRight, Info, Layers, Minus, Search, ShieldAlert, TrendingDown, TrendingUp, X } from 'lucide-react'
+import { AlertTriangle, Check, ChevronRight, Info, Layers, Minus, Search, ShieldAlert, TrendingDown, TrendingUp, X } from 'lucide-react'
 import type { PatternMarker } from './MarketChart'
 
 /**
@@ -186,7 +186,7 @@ export function PatternsPanel({
       <section className="mk-panel" aria-label="Candlestick patterns">
         <header className="mk-panel-head">
           <h3>
-            <CandlestickChart size={15} aria-hidden /> Candlestick patterns
+            Candlestick patterns
           </h3>
         </header>
         <p className="mk-empty">
@@ -201,7 +201,7 @@ export function PatternsPanel({
     <section className="mk-panel" aria-label="Candlestick patterns">
       <header className="mk-panel-head">
         <h3>
-          <CandlestickChart size={15} aria-hidden /> Candlestick patterns
+          Candlestick patterns
         </h3>
         <span className="mk-panel-sub">
           {symbol} · {interval}

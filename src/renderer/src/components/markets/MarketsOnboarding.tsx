@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, ArrowRight, Check, Loader2, Search, Sparkles, X } from 'lucide-react'
+import { ArrowLeft, ArrowRight, Check, Loader2, Sparkles, X } from 'lucide-react'
+import { SearchBox } from '../../ui'
 import AssetLogo from './AssetLogo'
 import {
   canLeave,
@@ -445,15 +446,7 @@ function Assets({
 
   return (
     <div className="mk-onboard-assets">
-      <label className="mk-search">
-        <Search size={14} />
-        <input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search bitcoin, ETH, SOL…"
-          aria-label="Search markets"
-        />
-      </label>
+      <SearchBox value={query} onChange={setQuery} label="Search markets" placeholder="Search bitcoin, ETH, SOL…" />
 
       {suggestions.searches.length > 0 ? (
         <span className="mk-onboard-suggest">
@@ -569,15 +562,7 @@ function Currency({
 
       {draft.currencyMode === 'manual' ? (
         <>
-          <label className="mk-search">
-            <Search size={14} />
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search currencies…"
-              aria-label="Search currencies"
-            />
-          </label>
+          <SearchBox value={query} onChange={setQuery} label="Search currencies" placeholder="Search currencies…" />
           <ul className="mk-onboard-results is-currency">
             {matching.map((one) => (
               <li key={one.code}>

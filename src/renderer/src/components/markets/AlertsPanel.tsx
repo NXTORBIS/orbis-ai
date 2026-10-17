@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Bell, BellOff, History, Plus, Search, Trash2, X } from 'lucide-react'
+import { Bell, BellOff, History, Plus, Trash2, X } from 'lucide-react'
 import {
   COOLDOWN_CHOICES,
   describeAlert,
@@ -12,7 +12,7 @@ import type { AlertsAnswer } from '../../../../main/markets/ipc'
 import type { Instrument, QuoteView } from '../../../../shared/markets/instrument'
 import type { IndicatorKind } from '../../../../shared/markets/indicators'
 import AssetLogo from './AssetLogo'
-import { ListRow } from '../../ui'
+import { ListRow, SearchBox } from '../../ui'
 import type { NoticeKind } from '../../lib/notices'
 
 /**
@@ -303,9 +303,8 @@ export default function AlertsPanel({
               </button>
             </span>
           ) : (
-            <div className="mk-search">
-              <Search size={13} />
-              <input value={query} aria-label="Which market the alert is about" placeholder="Which market?" maxLength={60} onChange={(e) => setQuery(e.target.value)} />
+            <div className="mk-find">
+              <SearchBox value={query} onChange={setQuery} label="Which market the alert is about" placeholder="Which market?" small />
               {results.length > 0 && (
                 <ul className="mk-results">
                   {results.slice(0, 8).map((one) => (

@@ -6,12 +6,11 @@ import {
   NotebookPen,
   Play,
   Plus,
-  Save,
-  Search,
   Shuffle,
   Trash2,
   X
 } from 'lucide-react'
+import { SearchBox } from '../../ui'
 import {
   COMPARATORS,
   DEFAULT_STRATEGY,
@@ -408,13 +407,13 @@ export default function BacktestPanel({
             </button>
           )}
 
-          <div className="mk-search">
-            <Search size={13} />
-            <input
+          <div className="mk-find">
+            <SearchBox
               value={query}
-              aria-label="Which market to test the strategy on" placeholder="New strategy on which market?"
-              maxLength={60}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={setQuery}
+              label="Which market to test the strategy on"
+              placeholder="New strategy on which market?"
+              small
             />
             {results.length > 0 && (
               <ul className="mk-results">
@@ -464,7 +463,7 @@ export default function BacktestPanel({
                 <option value="short">short</option>
               </select>
               <button type="button" className="queue-btn small" disabled={busy} onClick={() => void save()}>
-                <Save size={13} /> Save
+                Save
               </button>
             </div>
 

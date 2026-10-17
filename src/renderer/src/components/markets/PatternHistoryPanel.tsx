@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { AlertTriangle, BarChart3, History, Info, Trash2 } from 'lucide-react'
+import { AlertTriangle, BarChart3, Info, Trash2 } from 'lucide-react'
 import type { PatternRecord } from '../../../../shared/markets/patternHistory'
 
 /**
@@ -206,7 +206,7 @@ export function PatternHistoryPanel({ instrumentId, symbol }: PatternHistoryPane
     <section className="mk-panel" aria-label="Candlestick pattern history">
       <header className="mk-panel-head">
         <h3>
-          <History size={15} aria-hidden /> Pattern history
+          Pattern history
         </h3>
         <span className="mk-panel-sub">{records.length} recorded</span>
         {records.length > 0 && (
