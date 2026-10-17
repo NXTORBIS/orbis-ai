@@ -10,21 +10,20 @@
  */
 
 .quiz-card {
-  margin-top: 10px;
-  padding: 14px;
-  border: 1px solid var(--glass-border);
-  border-radius: 14px;
+  margin-top: 8px;
+  padding: 12px;
+  border-radius: 10px;
   background: color-mix(in srgb, var(--bg-mid) 70%, transparent);
   display: flex;
   flex-direction: column;
-  gap: 11px;
+  gap: 12px;
   max-width: 100%;
 }
 
 .quiz-head {
   display: flex;
   align-items: flex-start;
-  gap: 10px;
+  gap: 8px;
 }
 
 .quiz-title {
@@ -36,14 +35,14 @@
 }
 
 .quiz-title strong {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   line-height: 1.25;
 }
 
 .quiz-title span {
   color: var(--faint);
-  font-size: 11.5px;
+  font-size: 11px;
 }
 
 .quiz-info {
@@ -53,7 +52,7 @@
   flex: 0 0 auto;
   place-items: center;
   border: 1px solid var(--glass-border);
-  border-radius: 8px;
+  border-radius: 6px;
   background: transparent;
   color: var(--faint);
   cursor: pointer;
@@ -61,13 +60,13 @@
 
 .quiz-info:hover,
 .quiz-info[aria-expanded='true'] {
-  color: var(--cyan);
-  border-color: color-mix(in srgb, var(--cyan) 45%, transparent);
+  color: var(--text);
+  border-color: var(--glass-border);
 }
 
 .quiz-bar {
   height: 3px;
-  border-radius: 3px;
+  border-radius: 6px;
   background: color-mix(in srgb, var(--glass-border) 70%, transparent);
   overflow: hidden;
 }
@@ -75,22 +74,22 @@
 .quiz-bar > span {
   display: block;
   height: 100%;
-  border-radius: 3px;
+  border-radius: 6px;
   background: var(--cyan);
   transition: width 220ms ease;
 }
 
 .quiz-about {
   margin: 0;
-  padding-left: 18px;
+  padding-left: 16px;
   color: var(--faint);
-  font-size: 11.5px;
+  font-size: 11px;
   line-height: 1.5;
 }
 
 .quiz-asks {
   margin: 2px 0 0;
-  font-size: 14.5px;
+  font-size: 15px;
   font-weight: 500;
   line-height: 1.45;
 }
@@ -98,20 +97,20 @@
 .quiz-options {
   display: flex;
   flex-direction: column;
-  gap: 7px;
+  gap: 8px;
 }
 
 .quiz-option {
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 9px 11px;
+  gap: 8px;
+  padding: 8px 12px;
   border: 1px solid var(--glass-border);
   border-radius: 10px;
   background: transparent;
   color: inherit;
   font: inherit;
-  font-size: 13.5px;
+  font-size: 13px;
   text-align: left;
   cursor: pointer;
   transition: border-color 140ms ease, background 140ms ease;
@@ -131,10 +130,10 @@
   flex: 0 0 auto;
   place-items: center;
   border: 1px solid var(--glass-border);
-  border-radius: 5px;
+  border-radius: 6px;
   color: var(--faint);
   font-family: inherit;
-  font-size: 10.5px;
+  font-size: 10px;
 }
 
 .quiz-option:hover:not(:disabled) {
@@ -147,46 +146,46 @@
 }
 
 .quiz-option.correct {
-  border-color: color-mix(in srgb, #34d399 60%, transparent);
-  background: color-mix(in srgb, #34d399 12%, transparent);
+  border-color: color-mix(in srgb, var(--green) 60%, transparent);
+  background: color-mix(in srgb, var(--green) 12%, transparent);
 }
 
 .quiz-option.wrong {
-  border-color: color-mix(in srgb, #f87171 60%, transparent);
-  background: color-mix(in srgb, #f87171 12%, transparent);
+  border-color: color-mix(in srgb, var(--red) 60%, transparent);
+  background: color-mix(in srgb, var(--red) 12%, transparent);
 }
 
 .quiz-foot {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
 .quiz-score {
   color: var(--faint);
-  font-size: 11.5px;
+  font-size: 11px;
 }
 
 .quiz-skip,
 .quiz-next {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 7px 12px;
-  border-radius: 9px;
+  gap: 4px;
+  padding: 8px 12px;
+  border-radius: 10px;
   border: 1px solid var(--glass-border);
   background: transparent;
   color: var(--faint);
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
   cursor: pointer;
 }
 
 .quiz-skip:hover {
   color: inherit;
-  border-color: color-mix(in srgb, var(--cyan) 40%, transparent);
+  border-color: var(--glass-border);
 }
 
 .quiz-next {
@@ -203,9 +202,9 @@
 .quiz-told {
   display: flex;
   flex-direction: column;
-  gap: 7px;
-  padding: 11px;
-  border-radius: 11px;
+  gap: 8px;
+  padding: 12px;
+  border-radius: 10px;
   background: color-mix(in srgb, var(--glass-border) 30%, transparent);
   font-size: 13px;
   line-height: 1.5;
@@ -217,11 +216,11 @@
 }
 
 .quiz-told .is-right {
-  color: #34d399;
+  color: var(--green);
 }
 
 .quiz-told .is-wrong {
-  color: #f87171;
+  color: var(--red);
 }
 
 .quiz-was {
@@ -240,19 +239,19 @@
   gap: 16px;
   flex-wrap: wrap;
   padding: 12px;
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--cyan) 8%, transparent);
+  border-radius: 10px;
+  background: var(--panel);
 }
 
 .quiz-big {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  color: var(--cyan);
+  color: var(--text);
 }
 
 .quiz-big strong {
-  font-size: 26px;
+  font-size: 22px;
   font-weight: 700;
   line-height: 1;
 }
@@ -265,7 +264,7 @@
 
 .quiz-big em {
   font-style: normal;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
 }
 
@@ -277,18 +276,18 @@
   flex-direction: column;
   gap: 3px;
   color: var(--faint);
-  font-size: 11.5px;
+  font-size: 11px;
 }
 
 .quiz-marks li {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
 }
 
 .quiz-says {
   margin: 0;
-  font-size: 13.5px;
+  font-size: 13px;
 }
 
 .quiz-topics,
@@ -311,8 +310,8 @@
 .quiz-topic {
   display: flex;
   align-items: center;
-  gap: 9px;
-  font-size: 12.5px;
+  gap: 8px;
+  font-size: 13px;
 }
 
 .quiz-topic > span {
@@ -326,7 +325,7 @@
 .quiz-topic-bar {
   flex: 1;
   height: 6px;
-  border-radius: 4px;
+  border-radius: 6px;
   background: color-mix(in srgb, var(--glass-border) 70%, transparent);
   overflow: hidden;
 }
@@ -334,7 +333,7 @@
 .quiz-topic-bar > span {
   display: block;
   height: 100%;
-  border-radius: 4px;
+  border-radius: 6px;
   background: var(--cyan);
 }
 
@@ -343,13 +342,13 @@
   width: 42px;
   text-align: right;
   color: var(--faint);
-  font-size: 11.5px;
+  font-size: 11px;
 }
 
 .quiz-missed-one {
-  padding: 10px 11px;
-  border-left: 2px solid color-mix(in srgb, #f87171 60%, transparent);
-  border-radius: 0 9px 9px 0;
+  padding: 8px 12px;
+  border-left: 2px solid color-mix(in srgb, var(--red) 60%, transparent);
+  border-radius: 0 10px 10px 0;
   background: color-mix(in srgb, var(--glass-border) 25%, transparent);
 }
 
@@ -364,13 +363,13 @@
 
 .quiz-missed-picked {
   margin-top: 4px !important;
-  font-size: 12.5px;
+  font-size: 13px;
 }
 
 .quiz-missed-why {
   margin-top: 4px !important;
   color: var(--faint);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
 }
 
