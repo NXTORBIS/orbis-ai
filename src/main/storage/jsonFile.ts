@@ -1,4 +1,4 @@
-import { promises as fs } from 'node:fs'
+import { existsSync, mkdirSync, promises as fs, renameSync, writeFileSync } from 'node:fs'
 import { basename, dirname, join } from 'node:path'
 import { damageNote, openStored } from '../storedFile.ts'
 import { dataDirFor } from '../../shared/profiles.ts'
@@ -37,6 +37,13 @@ export interface JsonFileOptions {
   version?: number
   /** Brings an older file forward. Given the raw contents and the version they were written at. */
   migrate?: (raw: unknown, from: number) => unknown
+  /**
+   * What this holds, in the words somebody would use, for the one sentence shown when a file goes wrong.
+   *
+   * Without it the sentence names the file -- "Orbis could not read your chess-training.json" -- which is the
+   * program's own word for it and tells the reader nothing. "your puzzles and training records" does.
+   */
+  what?: string
 }
 
 export class JsonFile<T> {
@@ -61,6 +68,7 @@ export class JsonFile<T> {
   private readonly parse: (raw: unknown) => T
   private readonly version: number
   private readonly migrate: ((raw: unknown, from: number) => unknown) | null
+  private readonly what: string | null
 
   constructor(path: string, fallback: () => T, parse: (raw: unknown) => T, options: JsonFileOptions = {}) {
     this.path = path
@@ -68,6 +76,7 @@ export class JsonFile<T> {
     this.parse = parse
     this.version = options.version ?? 1
     this.migrate = options.migrate ?? null
+    this.what = options.what ?? null
   }
 
   /**
@@ -98,13 +107,25 @@ export class JsonFile<T> {
     if (this.writable !== null) return
     const opened = await openStored(this.path, (text) => this.fromText(text), this.fallback)
     this.writable = opened.mayWrite
-    this.damage = damageNote(opened, basename(this.path))
+    this.damage = damageNote(opened, this.what ?? basename(this.path))
     if (this.value === null) this.value = opened.value
   }
 
   /** What went wrong opening this file, in plain words. Null when nothing did. */
   problem(): string | null {
     return this.damage
+  }
+
+  /**
+   * Whether this file may be written over. Null until it has been looked at.
+   *
+   * Here because `problem()` alone cannot answer it. A file that was damaged and moved aside has a problem and may
+   * be written; a file that could not be read has a problem and may not. A caller that has to tell somebody whether
+   * their save landed needs the second answer, and reading `problem()` for it says "it saved" for the one case where
+   * nothing was written at all.
+   */
+  mayWrite(): boolean | null {
+    return this.writable
   }
 
   async read(): Promise<T> {
@@ -163,6 +184,46 @@ export class JsonFile<T> {
       await fs.rename(`${path}.tmp`, path)
     })
     return this.writing.catch(() => undefined)
+  }
+
+  /**
+   * The same write, without waiting, for the very last moment of the process.
+   *
+   * `flush` is what everything ordinary uses, and `QuitFlush` holds the close open until it finishes. This is for
+   * the point after that, where there is nothing left to wait with: it writes with the synchronous calls and
+   * reports nothing, because there is nowhere left to report it to.
+   *
+   * It keeps every refusal `flush` keeps. A file that has never been looked at is looked at with the one question
+   * that can be asked without waiting -- is anything there? -- and if something is, nothing is written: quitting is
+   * not the moment to find out what is in a file by writing over it. So a store that has only ever written and
+   * never read should flush the ordinary way first.
+   *
+   * It does not wait for a write `flush` already started. Await `flush` before this if both are wanted, which is
+   * what registering with `QuitFlush` does.
+   */
+  flushSync(): void {
+    if (this.timer) {
+      clearTimeout(this.timer)
+      this.timer = null
+    }
+    if (!this.dirty || this.value === null) return
+    if (this.writable === null) this.writable = !existsSync(this.path)
+    if (this.writable === false) {
+      // Same refusal as `flush`, and the question is left open the same way, so a cleared lock gets through next time.
+      this.writable = null
+      return
+    }
+    const data = JSON.stringify(this.version > 1 ? { v: this.version, data: this.value } : this.value)
+    const path = this.path
+    try {
+      mkdirSync(dirname(path), { recursive: true })
+      writeFileSync(`${path}.tmp`, data, { mode: 0o600 })
+      renameSync(`${path}.tmp`, path)
+      // Cleared only once it is really on the disk, so a failure here is still pending rather than forgotten.
+      this.dirty = false
+    } catch {
+      // Nowhere to say so.
+    }
   }
 }
 
@@ -241,6 +302,11 @@ export class Collection<T extends { id: string }> {
 
   flush(): Promise<void> {
     return this.file.flush()
+  }
+
+  /** The same at the very end of the process. See `JsonFile.flushSync`. */
+  flushSync(): void {
+    this.file.flushSync()
   }
 
   /** Moves to another file, and tells listeners, since everything they showed has changed. */

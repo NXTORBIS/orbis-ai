@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
 import { promises as fs } from 'node:fs'
-import { mkdtempSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Collection, JsonFile, personalFile, profileFile } from './jsonFile.ts'
@@ -139,6 +139,63 @@ describe('a small JSON store', () => {
 
     assert.match(await fs.readFile(mine, 'utf8'), /mine/)
     await assert.rejects(() => fs.readFile(theirs, 'utf8'))
+  })
+
+  it('writes what was queued a moment earlier without being awaited', async () => {
+    // What the very end of the process needs: a value held for the write delay is on the disk before the process can
+    // end, with nothing left to await it with.
+    const path = join(dir(), 'quitting.json')
+    const file = new JsonFile<Thing>(path, () => ({ name: '', count: 0 }), parseThing)
+    await file.write({ name: 'typed just before closing', count: 1 })
+    assert.equal(existsSync(path), false, 'still waiting')
+
+    file.flushSync()
+    assert.match(readFileSync(path, 'utf8'), /typed just before closing/)
+  })
+
+  it('refuses to write over a file it could not read, on the way out as well', async () => {
+    // A directory where the file should be: something is there, reading it fails, and it is not a missing file.
+    const base = dir()
+    const path = join(base, 'held.json')
+    await fs.mkdir(path, { recursive: true })
+
+    const file = new JsonFile<Thing>(path, () => ({ name: 'default', count: 0 }), parseThing)
+    await file.read()
+    assert.equal(file.mayWrite(), false)
+    await file.write({ name: 'should not land', count: 1 })
+    file.flushSync()
+
+    // Quitting is not a reason to overwrite something nobody understood.
+    assert.deepEqual(await fs.readdir(path), [])
+  })
+
+  it('says whether a file may be written, which is not the same question as whether it had a problem', async () => {
+    const base = dir()
+    const damaged = join(base, 'damaged.json')
+    await fs.writeFile(damaged, 'not json', 'utf8')
+    const moved = new JsonFile<Thing>(damaged, () => ({ name: '', count: 0 }), parseThing)
+    await moved.read()
+    // Moved aside, so there is a problem to report AND the file may be written. Reading `problem()` as "the save
+    // will fail" would tell somebody their save failed when it is about to succeed.
+    assert.notEqual(moved.problem(), null)
+    assert.equal(moved.mayWrite(), true)
+
+    const fresh = new JsonFile<Thing>(join(base, 'fresh.json'), () => ({ name: '', count: 0 }), parseThing)
+    assert.equal(fresh.mayWrite(), null, 'null until it has been looked at')
+    await fresh.read()
+    assert.equal(fresh.mayWrite(), true)
+  })
+
+  it('names what it holds in plain words when something goes wrong, rather than naming the file', async () => {
+    const path = join(dir(), 'chess-training.json')
+    await fs.writeFile(path, 'not json', 'utf8')
+    const file = new JsonFile<Thing>(path, () => ({ name: '', count: 0 }), parseThing, { what: 'puzzles and training records' })
+    await file.read()
+    assert.match(String(file.problem()), /your puzzles and training records/)
+    // It still says where the old one went, which is the one place the file's name belongs: somebody has to be able
+    // to find it. What it must not do is call the thing they lost "your chess-training.json".
+    assert.doesNotMatch(String(file.problem()), /your chess-training\.json/)
+    assert.match(String(file.problem()), /unreadable-/)
   })
 })
 
