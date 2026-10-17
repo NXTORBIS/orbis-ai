@@ -45,6 +45,7 @@ import { startTerminal } from './state/terminal';
 import { TerminalDock } from './features/TerminalDock';
 import { PlayerBar } from './features/PlayerBar';
 import { startPlayer } from './state/player';
+import { startHostControl } from './state/hostControl';
 import { ScreenshotAnnotator } from './features/ScreenshotAnnotator';
 
 export function App() {
@@ -74,6 +75,13 @@ export function App() {
         followSchedules();
         // The Files command registry (with metadata and effective bindings) for the shortcut adapter.
         reportRegistry(describeCommands());
+        /*
+         * Says what is on screen to the Orbis window, when there is one.
+         *
+         * Last, after the session has been restored and the commands exist, so the first thing the window is told is
+         * a real screen rather than an empty one. Inert when Files is running on its own.
+         */
+        startHostControl();
         let lastBindings = custom.get().resolved.shortcuts;
         custom.subscribe(() => {
           if (custom.get().resolved.shortcuts !== lastBindings) {

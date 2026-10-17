@@ -1,5 +1,5 @@
 
-import { app, opsActive, setSetting } from '../../state/app';
+import { app, opsActive, setSetting, toast } from '../../state/app';
 import { useStore } from '../../state/store';
 import { activePane, navigate, openTab } from '../../state/workspace';
 import { call } from '../../api';
@@ -12,6 +12,23 @@ import { HOME_SECTION_KEYS as SECTION_KEYS, HOME_SECTION_LABELS as SECTION_LABEL
 
 
 const KNOWN_ICON: Record<string, string> = { home: 'home', desktop: 'drive', documents: 'fileText', downloads: 'download', pictures: 'image', videos: 'fileVideo', music: 'music' };
+
+/**
+ * Copy files chosen in the system's own file picker into Orbis's folder, then show where they landed.
+ *
+ * Two things were wrong with doing this inline on the button. It cut the folder off the first new path with a
+ * pattern that only knows forward slashes, so on Windows it handed `navigate` a whole file path -- which happened
+ * to survive, because `navigate` opens a file's folder and selects the file, so the cutting was never needed in
+ * the first place. And nothing was ever said: copying several files in reported nothing, and cancelling the picker
+ * was indistinguishable from a dead button. Both are now spoken about.
+ */
+async function addToOrbis(): Promise<void> {
+  const answer = (await call('orbis:addFiles')) as { added?: string[] } | null;
+  const added = answer?.added ?? [];
+  if (!added.length) return; // The picker was closed without choosing anything; there is nothing to say.
+  toast({ level: 'success', title: `Copied ${added.length} item${added.length === 1 ? '' : 's'} into Orbis.` });
+  await navigate(activePane().id, { kind: 'fs', path: added[0]! });
+}
 
 /** A greeting for the local time of day. */
 function greeting(d: Date): string {
@@ -56,7 +73,7 @@ export function HomeView({ paneId }: { paneId: string }) {
         <p className="muted">Your folders, drives and recent activity on this computer.</p>
         <HeroStats volumes={s.volumes} recents={s.recents.length} pins={s.pins.length} />
         <div className="hero-actions">
-          <button type="button" className="btn btn-primary" onClick={() => void call('orbis:addFiles').then((r) => { const added = (r as { added: string[] } | null)?.added ?? []; if (added.length) void navigate(activePane().id, { kind: 'fs', path: added[0]!.replace(/[\/][^\/]*$/, '') }); })}><Icon name="plus" size={15} /> Add to Orbis</button>
+          <button type="button" className="btn btn-primary" onClick={() => void addToOrbis()}><Icon name="plus" size={15} /> Add to Orbis</button>
           <button type="button" className="btn btn-primary" onClick={() => void runCommand('app.palette')}><Icon name="command" size={15} /> Command palette</button>
         </div>
       </header>
