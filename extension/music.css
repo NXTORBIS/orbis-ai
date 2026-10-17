@@ -1,0 +1,3503 @@
+/*
+ * Orbis Music, as a whole tab.
+ *
+ * Every colour here is one of Orbis's own names, from music-tokens.css. Not one literal colour, not one hand-written
+ * rgba, no hard-coded white or black -- because each of those names is declared twice over there, once for the dark
+ * theme and once for the light one, so a page that only ever names them is already right in both and needs no second
+ * set of rules. Where a colour has to be mixed, `color-mix` against a token does it, which follows the theme too.
+ *
+ * Three things here are deliberately not what a streaming app would do:
+ *
+ *   - a raised surface has a two-part edge (a light line catching its top, then the glass border) rather than a flat
+ *     1px box, which is what makes an Orbis panel read as an object instead of a rectangle;
+ *   - the seek bar is light travelling along a rail, dim to hot, rather than a grey bar that turns a colour -- so the
+ *     bright end marks where the music actually is;
+ *   - a big header takes its colours from the record's own cover, blurred well past any detail, and falls back to the
+ *     Orbis accent when there is no cover, so the band is never an empty rectangle and never a picture of nothing.
+ *
+ * Classes all begin `om-`. That prefix is this page's and nothing else in Orbis uses it, so a rule here can never
+ * reach into the browser panel's own music screen or into the Orbis window.
+ *
+ * Every size question is asked of the page itself with a container query, not of the window with a media query. A
+ * media query measures the whole browser window, which is the wrong number the moment this page is shown anywhere
+ * narrower than it -- beside something, or in a small window.
+ */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  /* Named here because orbis-tokens.css on this side has no rule setting a page font at all. */
+  font-family: var(--font-sans);
+  font-size: var(--text-md);
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+#om-root {
+  height: 100%;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------- the four areas */
+
+.om {
+  container-type: inline-size;
+  container-name: om;
+  display: grid;
+  grid-template-columns: 264px minmax(0, 1fr) 328px;
+  grid-template-rows: minmax(0, 1fr) 88px;
+  grid-template-areas:
+    'side main column'
+    'bar bar bar';
+  height: 100%;
+  background: radial-gradient(130% 120% at 50% 0%, var(--bg-center), var(--bg-mid) 45%, var(--bg-edge));
+}
+
+.om.om-no-column {
+  grid-template-columns: 264px minmax(0, 1fr);
+  grid-template-areas:
+    'side main'
+    'bar bar';
+}
+
+.om.om-no-column .om-column {
+  display: none;
+}
+
+/* ---------------------------------------------------------------- down the left */
+
+.om-side {
+  grid-area: side;
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  gap: var(--space-2);
+  min-height: 0;
+  padding: var(--space-3);
+  background: var(--rail-bg);
+  border-right: 1px solid var(--line);
+}
+
+.om-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  color: var(--accent);
+}
+
+.om-brand-name {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  letter-spacing: 0.06em;
+  color: var(--text);
+}
+
+.om-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.om-nav-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: 40px;
+  padding: 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  color: var(--muted);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease);
+}
+
+.om-nav-item:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.om-nav-item.om-on {
+  color: var(--accent);
+  background: var(--accent-fill);
+  /* The line down the left edge says which one is chosen with a shape as well as a colour, so it still reads for
+     somebody who cannot separate the accent from the muted grey. */
+  box-shadow: inset 2px 0 0 0 var(--accent);
+}
+
+.om-nav-item.om-nav-unbuilt {
+  color: var(--faint);
+}
+
+.om-nav-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.om-nav-line {
+  height: 1px;
+  margin: var(--space-2) var(--space-3);
+  background: var(--line);
+}
+
+.om-side-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2) 0 var(--space-3);
+}
+
+.om-side-title {
+  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.om-side-list {
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-color: var(--scrollbar) transparent;
+  scrollbar-width: thin;
+}
+
+.om-side-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--motion-ease);
+}
+
+.om-side-row:hover {
+  background: var(--hover);
+}
+
+.om-side-row.om-on .om-side-name {
+  color: var(--accent);
+}
+
+.om-side-words {
+  display: grid;
+  min-width: 0;
+}
+
+.om-side-name,
+.om-side-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.om-side-name {
+  color: var(--text);
+}
+
+.om-side-sub {
+  font-size: var(--text-xs);
+  color: var(--faint);
+}
+
+.om-side-says {
+  margin: var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--faint);
+  line-height: 1.5;
+}
+
+/* ---------------------------------------------------------------- the middle */
+
+.om-main {
+  grid-area: main;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+}
+
+.om-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+  /* Glass, because the screen below scrolls under it. */
+  background: var(--glass);
+  backdrop-filter: blur(18px);
+  border-bottom: 1px solid var(--line);
+}
+
+.om-top-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: var(--space-2);
+  padding: 0 var(--space-4);
+  height: var(--chrome-omnibox-height);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-pill);
+  background: var(--input-bg);
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    border-color var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease);
+}
+
+.om-top-search:hover {
+  border-color: var(--accent-dim);
+  color: var(--text);
+}
+
+.om-screen {
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-color: var(--scrollbar) transparent;
+  padding: 0 var(--space-5) var(--space-6);
+  scroll-padding-top: var(--space-5);
+}
+
+/* ---------------------------------------------------------------- down the right */
+
+.om-column {
+  grid-area: column;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-color: var(--scrollbar) transparent;
+  padding: var(--space-4);
+  background: var(--surface);
+  border-left: 1px solid var(--line);
+  box-shadow: inset 0 1px 0 var(--rim-light);
+}
+
+.om-col-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.om-col-title {
+  margin: 0;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.om-col-now {
+  margin: var(--space-4) 0;
+}
+
+.om-col-track {
+  margin: var(--space-4) 0 2px;
+  font-size: var(--text-xl);
+  line-height: 1.25;
+}
+
+.om-col-artist {
+  margin: 0;
+  color: var(--muted);
+}
+
+.om-col-warn {
+  margin: var(--space-3) 0 0;
+  font-size: var(--text-sm);
+  color: var(--amber);
+  line-height: 1.5;
+}
+
+.om-col-sub {
+  margin: var(--space-5) 0 var(--space-2);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.om-col-queue {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.om-col-queue-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.om-col-queue-play {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-1) var(--space-2);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.om-col-queue-play:hover {
+  background: var(--hover);
+}
+
+/* ---------------------------------------------------------------- the player along the bottom */
+
+.om-bar {
+  grid-area: bar;
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(0, 2fr) minmax(180px, 1fr);
+  align-items: center;
+  gap: var(--space-4);
+  padding: 0 var(--space-4);
+  background: var(--bar-bg);
+  backdrop-filter: blur(24px);
+  /* A light line catching the top edge, then the glass border under it. One box-shadow, two parts, which is what
+     makes this read as a pane of glass lying over the page rather than as a block with a stroke. */
+  box-shadow:
+    inset 0 1px 0 var(--rim-light),
+    0 -1px 0 var(--glass-border),
+    0 -18px 48px var(--shadow-soft);
+}
+
+.om-bar-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.om-bar-who {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-1);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.om-bar-who:hover {
+  background: var(--hover);
+}
+
+.om-bar-words {
+  display: grid;
+  min-width: 0;
+}
+
+.om-bar-title,
+.om-bar-artist,
+.om-bar-whose {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.om-bar-artist {
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.om-bar-whose {
+  font-size: var(--text-xs);
+  color: var(--faint);
+}
+
+/* A kept answer that is no longer what is playing. Dimmed rather than hidden, so the last track is still named and
+   the words beside it say why it cannot be trusted. */
+.om-bar-stale .om-bar-title,
+.om-bar-stale .om-bar-artist,
+.om-bar-stale .om-bar-art {
+  opacity: 0.5;
+}
+
+.om-bar-stale .om-bar-whose {
+  color: var(--muted);
+}
+
+.om-bar-middle {
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+}
+
+.om-transport {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.om-play {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--on-accent);
+  cursor: pointer;
+  transition:
+    background var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) var(--motion-ease);
+}
+
+.om-play:hover:not(:disabled) {
+  background: var(--accent-strong);
+  box-shadow: 0 0 0 6px var(--accent-glow-soft);
+}
+
+.om-play:active:not(:disabled) {
+  background: var(--accent-press);
+}
+
+.om-play:disabled {
+  background: var(--pill-bg-strong);
+  color: var(--faint);
+  cursor: default;
+}
+
+.om-seek {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  max-width: 620px;
+}
+
+.om-time {
+  font-size: var(--text-xs);
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.om-bar-problem {
+  display: none;
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--amber);
+}
+
+.om-bar-problem.om-on {
+  display: block;
+}
+
+.om-bar-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-1);
+}
+
+/* The transport is meaningless while a web page owns the sound: Orbis can see that player but never touches it. */
+.om-bar.om-bar-website .om-transport,
+.om-bar.om-bar-website .om-seek {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------------- the rail: seek and volume */
+
+.om-rail {
+  position: relative;
+  height: var(--chrome-hit-target);
+  display: grid;
+  align-items: center;
+}
+
+.om-rail-short {
+  width: 96px;
+}
+
+.om-rail-track,
+.om-rail-fill {
+  position: absolute;
+  left: 0;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  pointer-events: none;
+}
+
+.om-rail-track {
+  right: 0;
+  background: var(--line-strong);
+}
+
+.om-rail-fill {
+  width: var(--om-fill, 0%);
+  /* Dim to hot, the same pair the chat's beam uses, so the bar reads as light travelling rather than as a bar
+     filling. The bright end is where the music actually is. */
+  background: linear-gradient(90deg, var(--beam-dim), var(--accent));
+  box-shadow: 0 0 6px var(--accent-glow);
+}
+
+.om-rail-input {
+  position: relative;
+  width: 100%;
+  margin: 0;
+  height: var(--chrome-hit-target);
+  background: none;
+  appearance: none;
+  cursor: pointer;
+}
+
+.om-rail-input:disabled {
+  cursor: default;
+}
+
+.om-rail-input::-webkit-slider-runnable-track {
+  height: 4px;
+  background: none;
+}
+
+.om-rail-input::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  margin-top: -4px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--text);
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--motion-ease);
+}
+
+.om-rail:hover .om-rail-input::-webkit-slider-thumb,
+.om-rail-input:focus-visible::-webkit-slider-thumb {
+  opacity: 1;
+}
+
+.om-rail-input:disabled::-webkit-slider-thumb {
+  opacity: 0;
+}
+
+/* ---------------------------------------------------------------- small controls */
+
+.om-icon {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: var(--chrome-hit-target);
+  height: var(--chrome-hit-target);
+  flex-shrink: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    background var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) var(--motion-ease);
+}
+
+.om-icon:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.om-icon:disabled {
+  color: var(--faint);
+  cursor: default;
+}
+
+.om-icon-sm {
+  width: 26px;
+  height: 26px;
+}
+
+/* On-ness is said with a colour and with a line under it, not with a colour alone. */
+.om-icon.om-on {
+  color: var(--accent);
+  box-shadow: inset 0 calc(-1 * var(--chrome-indicator-thickness)) 0 0 var(--accent);
+}
+
+.om-icon.om-repeat-one::after {
+  content: '1';
+  position: absolute;
+  margin: 12px 0 0 12px;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.om-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--chrome-hit-target);
+  padding: 6px var(--space-4);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-pill);
+  background: var(--input-bg);
+  color: var(--text);
+  cursor: pointer;
+  transition:
+    background var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease);
+}
+
+.om-btn:hover {
+  background: var(--hover);
+}
+
+.om-btn-primary {
+  background: var(--accent-fill);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.om-btn-quiet {
+  border-color: transparent;
+  background: none;
+  color: var(--accent);
+}
+
+.om-pill {
+  padding: 2px var(--space-2);
+  border: 1px solid var(--pill-border);
+  border-radius: var(--radius-pill);
+  background: var(--pill-bg);
+  font-size: var(--text-xs);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.om-pill-warn {
+  color: var(--amber);
+  border-color: color-mix(in srgb, var(--amber) 35%, transparent);
+  background: color-mix(in srgb, var(--amber) 12%, var(--pill-bg));
+}
+
+/* ---------------------------------------------------------------- a track, as a row */
+
+.om-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.om-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 56px auto auto;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  transition: background var(--motion-fast) var(--motion-ease);
+}
+
+.om-row:hover {
+  background: var(--hover);
+}
+
+.om-row.om-row-now {
+  background: var(--active);
+}
+
+.om-row.om-row-now .om-row-title {
+  color: var(--accent);
+}
+
+.om-row-off .om-row-title {
+  color: var(--muted);
+}
+
+.om-row-play {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-1);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.om-row-words {
+  display: grid;
+  min-width: 0;
+}
+
+.om-row-title,
+.om-row-artist {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.om-row-artist {
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.om-row-length {
+  font-size: var(--text-sm);
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* ---------------------------------------------------------------- covers, and the square that stands in for one */
+
+.om-tile {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+  /* The hue comes from the song's own words, so one song looks the same everywhere it appears. The lightness and
+     saturation are fixed, which keeps every stand-in legible instead of some of them glowing. */
+  background: linear-gradient(145deg, hsl(var(--om-hue, 200) 42% 26%), hsl(var(--om-hue, 200) 38% 14%));
+  box-shadow: inset 0 1px 0 var(--rim-light);
+}
+
+.om-tile-has {
+  background: var(--surface-2);
+}
+
+.om-tile-sm {
+  width: 28px;
+  height: 28px;
+}
+
+.om-tile-md {
+  width: 44px;
+  height: 44px;
+}
+
+.om-tile-lg {
+  width: 96px;
+  height: 96px;
+  border-radius: var(--radius-md);
+}
+
+.om-tile-xl {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: var(--radius-lg);
+  box-shadow:
+    inset 0 1px 0 var(--rim-light),
+    0 18px 48px var(--shadow-deep);
+}
+
+.om-tile-round {
+  border-radius: var(--radius-pill);
+}
+
+.om-tile-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.om-tile-letter {
+  font-family: var(--font-display);
+  /* White on the coloured square in both themes, because the square is dark in both: artwork does not change with
+     the theme, and neither does a stand-in for it. */
+  color: var(--on-media);
+  opacity: 0.85;
+  font-size: 44%;
+  line-height: 1;
+}
+
+/* A big header's backdrop: the small cover, blurred far past any detail, falling back to the Orbis accent. */
+.om-wash {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: var(--om-wash-image, none);
+  background-size: cover;
+  background-position: center;
+  filter: blur(56px) saturate(1.3);
+  opacity: 0.5;
+  mask-image: linear-gradient(180deg, var(--on-media), transparent);
+}
+
+.om-wash::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(130% 100% at 20% 0%, var(--accent-glow-soft), transparent 70%);
+}
+
+/* ---------------------------------------------------------------- nothing to show, and why */
+
+.om-says {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-2);
+  max-width: 48ch;
+  margin: var(--space-6) 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.om-says-title {
+  margin: 0;
+  font-size: var(--text-lg);
+  color: var(--text);
+}
+
+.om-says-detail {
+  margin: 0;
+  color: var(--faint);
+}
+
+.om-note {
+  position: fixed;
+  left: 50%;
+  bottom: calc(88px + var(--space-4));
+  transform: translateX(-50%);
+  max-width: 60ch;
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--glass);
+  backdrop-filter: blur(18px);
+  box-shadow: var(--shadow);
+  color: var(--text);
+  font-size: var(--text-sm);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion-base) var(--motion-ease);
+}
+
+.om-note.om-note-on {
+  opacity: 1;
+}
+
+/* ---------------------------------------------------------------- narrower */
+
+/*
+ * Asked of this page, not of the window. A media query would measure the whole browser window, which is the wrong
+ * number as soon as this page is shown anywhere narrower than it.
+ */
+@container om (max-width: 1180px) {
+  .om {
+    grid-template-columns: 264px minmax(0, 1fr);
+    grid-template-areas:
+      'side main'
+      'bar bar';
+  }
+
+  /* The column becomes a panel over the page rather than a third column that squeezes the music out of view. */
+  .om-column {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 88px;
+    width: 328px;
+    z-index: 5;
+    box-shadow: var(--shadow);
+  }
+}
+
+@container om (max-width: 900px) {
+  .om {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+
+  .om-side {
+    padding: var(--space-2);
+  }
+
+  .om-nav-label,
+  .om-side-head,
+  .om-side-list,
+  .om-brand-name {
+    display: none;
+  }
+
+  .om-nav-item {
+    justify-content: center;
+    padding: 0;
+  }
+}
+
+@container om (max-width: 700px) {
+  .om {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) 116px;
+    grid-template-areas:
+      'main'
+      'bar';
+  }
+
+  .om-side {
+    display: none;
+  }
+
+  .om-bar {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    gap: var(--space-1);
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .om-bar-right {
+    display: none;
+  }
+
+  .om-screen {
+    padding: 0 var(--space-3) var(--space-5);
+  }
+}
+
+/* ---------------------------------------------------------------- when somebody has asked for less movement */
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+
+  /* The halo on the leading edge of the seek bar is movement too: it is what draws the eye to the bar creeping. */
+  .om-rail-fill {
+    box-shadow: none;
+  }
+}
+
+/* ---------------------------------------------------------------- Home: rows of cards
+
+   Rows that scroll sideways, because a row says "there is more of this that way" where a wrapped grid of four says
+   "this is all of it". Every colour here is a token name, so dark and light are both right with no second set of
+   rules, and every size question is asked of the page with a container query rather than of the window. */
+
+.om-home {
+  padding-top: var(--space-5);
+}
+
+.om-home-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding-bottom: var(--space-5);
+}
+
+.om-home-greeting {
+  margin: 0;
+  font-family: var(--font-display);
+  /* A literal, because there is no type token above 18px and a greeting is the largest thing on the screen. The
+     other hero sizes in this house are literals for the same reason. */
+  font-size: 34px;
+  letter-spacing: 0.02em;
+  color: var(--greeting);
+}
+
+.om-home-have {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-sm);
+  color: var(--faint);
+  display: none;
+}
+
+.om-home-have.om-on {
+  display: block;
+}
+
+.om-home-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.om-shelf-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.om-shelf-title {
+  margin: 0;
+  font-size: var(--text-xl);
+  color: var(--text);
+}
+
+.om-shelf-detail {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-sm);
+  color: var(--faint);
+  max-width: 60ch;
+}
+
+.om-shelf-row {
+  display: flex;
+  gap: var(--space-4);
+  overflow-x: auto;
+  overflow-y: hidden;
+  /* A card is never cut in half by the edge: the row stops on a card. */
+  scroll-snap-type: x proximity;
+  scrollbar-color: var(--scrollbar) transparent;
+  padding-bottom: var(--space-2);
+}
+
+.om-shelf-row > * {
+  scroll-snap-align: start;
+}
+
+.om-card {
+  flex: 0 0 auto;
+  width: 176px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  /* The edge of a raised surface, in three parts: light caught along its top, the glass border under that, and the
+     shadow it casts. It is what makes a card read as an object rather than as a rectangle. A transition and never a
+     finished animation, because an animation that keeps applying its last keyframe outranks :hover for ever. */
+  box-shadow:
+    inset 0 1px 0 var(--rim-light),
+    0 1px 0 var(--glass-border),
+    0 10px 28px var(--shadow-soft);
+  transition:
+    background var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) var(--motion-ease);
+}
+
+.om-card:hover {
+  background: var(--surface-2);
+  box-shadow:
+    inset 0 1px 0 var(--rim-light),
+    0 1px 0 var(--glass-border),
+    0 18px 48px var(--shadow-deep),
+    0 0 0 1px var(--accent-glow-soft);
+}
+
+.om-card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.om-card-now {
+  border-color: var(--accent-dim);
+  background: var(--active);
+}
+
+.om-card-now .om-card-name {
+  color: var(--accent);
+}
+
+.om-card-cover {
+  position: relative;
+}
+
+.om-card-cover .om-tile {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+}
+
+.om-card-round .om-card-cover .om-tile {
+  border-radius: var(--radius-pill);
+}
+
+/* The circle on the cover is drawn, not clickable: the whole card is the one control, so there is nothing nested
+   inside a button and nothing extra to tab past. It shows what pressing the card will do. */
+.om-card-play {
+  position: absolute;
+  right: var(--space-2);
+  bottom: var(--space-2);
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--on-accent);
+  opacity: 0;
+  transform: translateY(var(--space-2));
+  transition:
+    opacity var(--motion-base) var(--motion-ease),
+    transform var(--motion-base) var(--motion-ease);
+}
+
+.om-card:hover .om-card-play,
+.om-card:focus-visible .om-card-play {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* A card with nothing to play does not offer a play circle. Orbis knows the name of that song and nothing more, and
+   a button that looks ready and then is not is worse than one that never looked ready. */
+.om-card-off .om-card-play {
+  display: none;
+}
+
+.om-card-off {
+  opacity: 0.82;
+}
+
+.om-card-words {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.om-card-name {
+  font-size: var(--text-md);
+  color: inherit;
+  /* Two lines and then an ellipsis: a long title must not make one card taller than the rest of the row. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.om-card-under {
+  font-size: var(--text-sm);
+  color: var(--faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.om-card-round .om-card-words {
+  align-items: center;
+  text-align: center;
+}
+
+/* ---- the screen before there is any music ---- */
+
+.om-home-first {
+  max-width: 56ch;
+  margin: var(--space-6) auto;
+  padding: var(--space-5);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow:
+    inset 0 1px 0 var(--rim-light),
+    0 18px 48px var(--shadow-soft);
+  text-align: center;
+}
+
+.om-home-first-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 22px;
+  color: var(--text);
+}
+
+.om-home-first-detail {
+  margin: var(--space-2) 0 var(--space-4);
+  font-size: var(--text-md);
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.om-home-first-do {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: center;
+}
+
+@container om (max-width: 900px) {
+  .om-home-greeting {
+    font-size: 26px;
+  }
+}
+
+@container om (max-width: 700px) {
+  .om-card {
+    width: 140px;
+  }
+
+  .om-home-head {
+    align-items: flex-start;
+  }
+}
+
+/* ---------------------------------------------------------------- what is coming next */
+
+.om-q {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--space-4);
+  padding: var(--space-5) 0 var(--space-6);
+}
+
+.om-q-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.om-q-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 32px;
+  letter-spacing: 0.02em;
+}
+
+.om-q-sub {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-md);
+  color: var(--muted);
+}
+
+.om-q-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* A heading inside the list rather than above it, so the three parts stay in one scrolling column. */
+.om-q-group {
+  margin: var(--space-4) 0 var(--space-1);
+  padding: 0 var(--space-2);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.om-q-group:first-child {
+  margin-top: 0;
+}
+
+.om-q-row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto 56px auto auto auto auto;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  transition:
+    background var(--motion-fast) var(--motion-ease),
+    opacity var(--motion-fast) var(--motion-ease);
+}
+
+.om-q-row:hover {
+  background: var(--hover);
+}
+
+/* What has already gone by is dimmed rather than hidden, so the running order reads as one list with a place in it. */
+.om-q-row-gone {
+  opacity: 0.55;
+}
+
+.om-q-row-playing {
+  background: var(--active);
+  /* The light line along the top edge is what makes the playing row read as a raised object on the glass. */
+  box-shadow:
+    inset 0 1px 0 var(--rim-light),
+    0 0 0 1px var(--accent-glow-soft);
+}
+
+.om-q-row-playing .om-row-title {
+  color: var(--accent);
+}
+
+.om-q-now {
+  justify-self: end;
+  padding: 0 var(--space-2);
+  font-size: var(--text-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.om-q-grip {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: var(--chrome-hit-target);
+  color: var(--faint);
+  cursor: grab;
+  /* Without this the browser's own scroll gesture wins the pointer and the drag never starts on a touch screen. */
+  touch-action: none;
+}
+
+.om-q-grip-off {
+  cursor: default;
+}
+
+.om-q-row:hover .om-q-grip {
+  color: var(--muted);
+}
+
+.om-q-dragging {
+  background: var(--surface-2);
+  box-shadow:
+    inset 0 1px 0 var(--rim-light),
+    0 10px 28px var(--shadow-soft);
+}
+
+.om-q-dragging .om-q-grip {
+  cursor: grabbing;
+  color: var(--accent);
+}
+
+/* The list is the frame the insertion line is placed against. */
+.om-q-list {
+  position: relative;
+}
+
+/* Where the entry would land. Laid over the list rather than pushed between the rows: a line that took up room
+   would move every row below it away from where it was measured, and the line would then flicker between two
+   places while the hand held still. */
+.om-q-line {
+  position: absolute;
+  left: var(--space-2);
+  right: var(--space-2);
+  height: 2px;
+  margin-top: -1px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(90deg, var(--beam-dim), var(--accent));
+  opacity: 0;
+  pointer-events: none;
+}
+
+.om-q-line.om-on {
+  opacity: 1;
+}
+
+.om-q-play {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-1);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* An id the library no longer has. It takes the width of a song row so nothing below it shifts. */
+.om-q-lost {
+  display: grid;
+  grid-column: 2 / 5;
+  min-width: 0;
+  padding: var(--space-1);
+  color: var(--muted);
+}
+
+.om-q-none {
+  padding: var(--space-2) 0;
+}
+
+.om-q-does {
+  display: flex;
+  gap: var(--space-2);
+}
+
+@container om (max-width: 900px) {
+  /* The two nudge buttons go first: the grip still works, and the row is about the song rather than its buttons. */
+  .om-q-row {
+    grid-template-columns: 24px minmax(0, 1fr) auto 56px auto auto;
+  }
+
+  .om-q-row .om-q-nudge {
+    display: none;
+  }
+}
+
+@container om (max-width: 700px) {
+  .om-q-title {
+    font-size: 24px;
+  }
+
+  .om-q-row {
+    grid-template-columns: 24px minmax(0, 1fr) 56px auto;
+  }
+
+  .om-q-row .om-q-why,
+  .om-q-row .om-q-heart {
+    display: none;
+  }
+}
+
+/* ---------------------------------------------------------------- an album, and an artist
+
+   Both screens are the same shape: a band at the top about one record or one person, then sections under it. They
+   share these rules because the two headers must line up exactly -- going from an album to the artist who made it
+   should move the words, not the layout. Every colour is a token name, so this is right in both themes with no
+   second set of rules, and the only movement is a transition. */
+
+.om-rec {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.om-rec-head {
+  position: relative;
+  display: grid;
+  grid-template-columns: 184px minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: end;
+  /* Room above for the blurred wash to fade in from, which sits behind this band at a negative z-index. */
+  padding: var(--space-6) var(--space-4) var(--space-5);
+  margin: 0 calc(-1 * var(--space-4));
+  isolation: isolate;
+}
+
+.om-rec-art .om-tile {
+  width: 184px;
+  height: 184px;
+  box-shadow:
+    inset 0 1px 0 var(--rim-light),
+    0 18px 48px var(--shadow-deep);
+}
+
+.om-rec-words {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.om-rec-kicker {
+  margin: 0;
+  font-size: var(--text-xs);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.om-rec-title {
+  margin: 0;
+  font-family: var(--font-display);
+  /* Larger than any type token goes, which is what a hero line wants; the rest of the house writes these as
+     literals too. Two lines and then an ellipsis, so a very long album name cannot push the buttons off screen. */
+  font-size: 40px;
+  line-height: 1.08;
+  letter-spacing: 0.02em;
+  color: var(--text);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.om-rec-line {
+  margin: 0;
+  font-size: var(--text-md);
+  color: var(--muted-strong);
+}
+
+.om-rec-note {
+  margin: 0;
+  max-width: 60ch;
+  font-size: var(--text-sm);
+  color: var(--faint);
+}
+
+.om-rec-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.om-rec-sections {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.om-rec-section-title {
+  margin: 0;
+  font-size: var(--text-xl);
+  color: var(--text);
+}
+
+.om-rec-section-detail {
+  margin: var(--space-1) 0 var(--space-3);
+  max-width: 60ch;
+  font-size: var(--text-sm);
+  color: var(--faint);
+}
+
+.om-rec-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
+  gap: var(--space-4);
+  margin-top: var(--space-3);
+}
+
+/* A card in a grid fills its column, where the same card in a scrolling shelf keeps its fixed width. */
+.om-rec-grid > .om-card {
+  width: auto;
+}
+
+/* The most-played list carries one more column than every other list: the number of times a track really played. */
+.om-rec-top .om-row {
+  grid-template-columns: minmax(0, 1fr) auto auto 56px auto auto;
+}
+
+.om-rec-plays {
+  font-size: var(--text-sm);
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+@container om (max-width: 900px) {
+  .om-rec-head {
+    grid-template-columns: 136px minmax(0, 1fr);
+    gap: var(--space-4);
+    padding-top: var(--space-5);
+  }
+
+  .om-rec-art .om-tile {
+    width: 136px;
+    height: 136px;
+  }
+
+  .om-rec-title {
+    font-size: 30px;
+  }
+}
+
+@container om (max-width: 700px) {
+  .om-rec-head {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: start;
+  }
+
+  .om-rec-plays {
+    display: none;
+  }
+
+  .om-rec-top .om-row {
+    grid-template-columns: minmax(0, 1fr) auto 56px auto auto;
+  }
+}
+
+/* ================================================================ one playlist (screens/playlist.ts) */
+
+.om-pl-head {
+  position: relative;
+  overflow: hidden;
+  margin: 0 calc(-1 * var(--space-5));
+  padding: var(--space-5) var(--space-5) var(--space-4);
+  border-bottom: 1px solid var(--line);
+}
+
+.om-pl-top {
+  position: relative;
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: end;
+}
+
+/* The playlist's artwork is the covers of its first few songs, laid out as a square. There is no cover of its own. */
+.om-pl-cover {
+  display: grid;
+  width: 160px;
+  height: 160px;
+  overflow: hidden;
+  place-items: center;
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  box-shadow:
+    inset 0 1px 0 var(--rim-light),
+    0 18px 48px var(--shadow-deep);
+}
+
+.om-pl-cover-2,
+.om-pl-cover-3,
+.om-pl-cover-4 {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+
+.om-pl-cover-2 > *,
+.om-pl-cover-3 > *,
+.om-pl-cover-4 > * {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+}
+
+.om-pl-cover-1 > * {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+}
+
+.om-pl-cover-letter {
+  font-family: var(--font-display);
+  font-size: 56px;
+  color: var(--faint);
+}
+
+.om-pl-words {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.om-pl-kind {
+  margin: 0;
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.om-pl-name {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 44px;
+  line-height: 1.05;
+  letter-spacing: 0.02em;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.om-pl-sums {
+  margin: 0;
+  font-size: var(--text-md);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.om-pl-note {
+  margin: 0;
+  max-width: 60ch;
+  font-size: var(--text-sm);
+  color: var(--faint);
+}
+
+.om-pl-actions {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding-top: var(--space-4);
+}
+
+.om-pl-play {
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+}
+
+.om-pl-danger {
+  color: var(--danger);
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+}
+
+.om-pl-confirm {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.om-pl-confirm-words {
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.om-pl-rename {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.om-pl-rename-input {
+  flex: 1 1 14ch;
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  color: var(--text);
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+}
+
+.om-pl-rename-input:focus,
+.om-pl-find-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-fill);
+}
+
+/* ---- the songs ---- */
+
+.om-pl-body {
+  padding-top: var(--space-4);
+}
+
+.om-pl-rows {
+  position: relative;
+}
+
+.om-pl-row {
+  align-items: center;
+}
+
+.om-pl-number {
+  min-width: 2.5ch;
+  padding-right: var(--space-2);
+  text-align: right;
+  font-size: var(--text-sm);
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.om-pl-moves {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* Up and down, drawn from the back and forward arrows turned a quarter turn, so no new icon is needed. */
+.om-pl-up svg {
+  transform: rotate(90deg);
+}
+
+.om-pl-down svg {
+  transform: rotate(90deg);
+}
+
+.om-pl-grip {
+  display: inline-grid;
+  place-items: center;
+  width: var(--chrome-hit-target);
+  height: var(--chrome-hit-target);
+  color: var(--faint);
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  cursor: grab;
+  touch-action: none;
+  transition: color var(--motion-fast) var(--motion-ease), background var(--motion-fast) var(--motion-ease);
+}
+
+.om-pl-grip:hover,
+.om-pl-grip:focus-visible {
+  color: var(--text);
+  background: var(--hover);
+}
+
+.om-pl-grip:active {
+  cursor: grabbing;
+}
+
+/* The row being dragged stays exactly where it is and only dims, because taking it out of the page would drop the
+   pointer capture and end the drag. */
+.om-pl-row-lifted {
+  opacity: 0.45;
+}
+
+/* Where the song will land. Hidden until a drag starts, and moved with a transform rather than by being rebuilt. */
+.om-pl-drop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: var(--accent);
+  border-radius: var(--radius-pill);
+  box-shadow: 0 0 8px var(--accent-glow);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.om-pl-drop-on {
+  opacity: 1;
+}
+
+/* ---- finding songs to add ---- */
+
+.om-pl-find {
+  margin-bottom: var(--space-4);
+  padding: var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    inset 0 1px 0 var(--rim-light),
+    0 1px 0 var(--glass-border);
+}
+
+.om-pl-find-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.om-pl-find-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-md);
+  color: var(--text);
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-pill);
+}
+
+.om-pl-found {
+  margin-top: var(--space-2);
+}
+
+.om-pl-found-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.om-pl-found-row .om-row-words {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* ---- narrower ---- */
+
+@container om (max-width: 700px) {
+  .om-pl-top {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-3);
+  }
+
+  .om-pl-cover {
+    width: 120px;
+    height: 120px;
+  }
+
+  .om-pl-name {
+    font-size: 30px;
+  }
+}
+
+/* ================================================================ Your music -- the library screen
+ *
+ * Owned by extension-src/music/screens/library.ts. Its classes all begin `oml-`, a step narrower than the page's own
+ * `om-`, so this screen's furniture can never collide with the frame's or with another screen's.
+ *
+ * Not one colour is written here. Every one is a token name, and each token is declared twice in music-tokens.css --
+ * once dark, once light -- so this screen is right in both themes with no second set of rules. The few places a
+ * colour has to be mixed use `color-mix` off a token rather than a hand-written rgba, which would be right in one
+ * theme only.
+ */
+
+.oml-head {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-5) 0 var(--space-3);
+  /* The list scrolls under the head, so the head is glass rather than a flat block. */
+  background: linear-gradient(180deg, var(--bg-center) 40%, var(--glass));
+  backdrop-filter: blur(18px);
+}
+
+.oml-head-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.oml-h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 34px;
+  letter-spacing: 0.02em;
+  color: var(--text);
+}
+
+.oml-head-do {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* ---- the five lists */
+
+.oml-tabs {
+  display: flex;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+}
+
+.oml-tab {
+  min-height: var(--chrome-hit-target);
+  padding: 0 var(--space-4);
+  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  background: var(--pill-bg);
+  color: var(--muted);
+  cursor: pointer;
+  transition:
+    background var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease);
+}
+
+.oml-tab:hover {
+  background: var(--pill-bg-strong);
+  color: var(--text);
+}
+
+.oml-tab.om-on {
+  background: var(--accent-fill);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ---- the search box, the order and the two layouts */
+
+.oml-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.oml-search-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 1 1 220px;
+  min-width: 0;
+  max-width: 420px;
+  padding: 0 var(--space-3);
+  height: var(--chrome-omnibox-height);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-pill);
+  background: var(--input-bg);
+  color: var(--muted);
+  transition: border-color var(--motion-fast) var(--motion-ease);
+}
+
+.oml-search-wrap:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 var(--chrome-omnibox-ring) var(--accent-fill);
+}
+
+.oml-search {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  outline: none;
+}
+
+.oml-search::placeholder {
+  color: var(--faint);
+}
+
+.oml-select {
+  min-height: var(--chrome-hit-target);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-control);
+  background: var(--input-bg);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.oml-select option {
+  background: var(--option-bg);
+  color: var(--text);
+}
+
+.oml-way {
+  font-size: var(--text-lg);
+  line-height: 1;
+}
+
+.oml-layout {
+  display: flex;
+  gap: var(--space-1);
+  padding: 2px;
+  border: 1px solid var(--pill-border);
+  border-radius: var(--radius-pill);
+  background: var(--pill-bg);
+}
+
+/* ---- the filter chips */
+
+.oml-chips {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.oml-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--chrome-hit-target);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--pill-border);
+  border-radius: var(--radius-pill);
+  background: var(--pill-bg);
+  color: var(--muted);
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition:
+    background var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease);
+}
+
+.oml-chip:hover {
+  background: var(--pill-bg-strong);
+  color: var(--text);
+}
+
+.oml-chip.om-on {
+  /* Mixed off a token rather than written out, so it follows the accent in both themes. */
+  background: color-mix(in srgb, var(--accent) 14%, var(--pill-bg));
+  border-color: var(--accent-dim);
+  color: var(--accent);
+}
+
+.oml-chip-n {
+  padding: 0 6px;
+  border-radius: var(--radius-pill);
+  background: var(--hover-strong);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-xs);
+}
+
+.oml-count {
+  margin: 0;
+  color: var(--faint);
+  font-size: var(--text-sm);
+}
+
+/* ---- the songs table */
+
+.oml-table {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/*
+ * One set of columns for the heading and every row, so a heading can never sit over the wrong column. The
+ * `minmax(0, â€¦)` on the three word columns is what lets a long title shrink and clip instead of pushing the length
+ * off the screen.
+ */
+.oml-tr {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 4fr) minmax(0, 3fr) minmax(0, 3fr) 112px 64px 76px;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  transition: background var(--motion-fast) var(--motion-ease);
+}
+
+.oml-tr:not(.oml-tr-head):hover {
+  background: var(--hover);
+}
+
+.oml-tr-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--table-border);
+  border-radius: 0;
+  background: var(--table-head);
+  backdrop-filter: blur(18px);
+  font-size: var(--text-xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+.oml-tr-now .oml-title {
+  color: var(--accent);
+}
+
+.oml-tr-off .oml-title {
+  color: var(--muted);
+}
+
+.oml-th {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+}
+
+.oml-th-do {
+  cursor: pointer;
+}
+
+.oml-th-do:hover {
+  color: var(--text);
+}
+
+.oml-th.om-on {
+  color: var(--accent);
+}
+
+.oml-th-way {
+  font-size: var(--text-sm);
+}
+
+/* The number sits in a cell of its own so every child of a row is a cell, which is what makes the table a table. */
+.oml-numcell {
+  display: grid;
+}
+
+/* The number turns into a play triangle on hover, which is where the row's play press lives. */
+.oml-num {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  min-height: var(--chrome-hit-target);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+.oml-num-n,
+.oml-num-play {
+  grid-area: 1 / 1;
+}
+
+.oml-num-play {
+  opacity: 0;
+  color: var(--accent);
+  transition: opacity var(--motion-fast) var(--motion-ease);
+}
+
+.oml-tr:hover .oml-num-n,
+.oml-num:focus-visible .oml-num-n {
+  opacity: 0;
+}
+
+.oml-tr:hover .oml-num-play,
+.oml-num:focus-visible .oml-num-play {
+  opacity: 1;
+}
+
+/* A row with no audio keeps its number: there is nothing to play, so nothing swaps in. */
+.oml-tr-off:hover .oml-num-n {
+  opacity: 1;
+}
+
+.oml-tr-off:hover .oml-num-play {
+  opacity: 0;
+}
+
+.oml-cell {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.oml-cell-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  overflow: visible;
+}
+
+.oml-words {
+  display: grid;
+  min-width: 0;
+}
+
+.oml-title,
+.oml-sub,
+.oml-plays {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.oml-title {
+  font-size: var(--text-md);
+  color: var(--text);
+}
+
+.oml-under {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.oml-plays,
+.oml-sub {
+  font-size: var(--text-sm);
+  color: var(--faint);
+}
+
+.oml-link {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: color var(--motion-fast) var(--motion-ease);
+}
+
+.oml-link:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
+.oml-faint {
+  color: var(--faint);
+  font-size: var(--text-sm);
+}
+
+.oml-cell-added,
+.oml-cell-length {
+  font-variant-numeric: tabular-nums;
+  color: var(--faint);
+}
+
+.oml-cell-length {
+  text-align: right;
+}
+
+.oml-cell-do {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-1);
+  overflow: visible;
+  /* The two buttons appear on hover, so a long list is not a wall of icons. They stay for a row whose heart is on,
+     and they come back for the keyboard, because something reachable by Tab that cannot be seen is a trap. */
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--motion-ease);
+}
+
+.oml-tr:hover .oml-cell-do,
+.oml-cell-do:focus-within,
+.oml-cell-do:has(.om-on) {
+  opacity: 1;
+}
+
+/* ---- squares of artwork */
+
+.oml-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: var(--space-4);
+  padding-top: var(--space-3);
+}
+
+.oml-card {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  /* The inset line is light caught on the top edge of glass, which is what makes a card read as an object rather
+     than a rectangle. A transition and never an animation: a finished animation with a `both` fill keeps applying
+     its last keyframe and would outrank the hover state forever. */
+  box-shadow:
+    inset 0 1px 0 var(--rim-light),
+    0 1px 0 var(--glass-border);
+  transition:
+    background var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) var(--motion-ease);
+}
+
+.oml-card:hover {
+  background: var(--surface-2);
+  box-shadow:
+    inset 0 1px 0 var(--rim-light),
+    0 1px 0 var(--glass-border),
+    0 0 0 1px var(--accent-glow-soft),
+    0 18px 48px var(--shadow-deep);
+}
+
+.oml-card-open {
+  display: grid;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-3);
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.oml-card-art {
+  display: block;
+}
+
+.oml-card-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-md);
+  color: var(--text);
+}
+
+.oml-card-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-sm);
+  color: var(--faint);
+}
+
+.oml-card-round .oml-card-name,
+.oml-card-round .oml-card-sub {
+  text-align: center;
+}
+
+.oml-card-play {
+  position: absolute;
+  right: calc(var(--space-3) + var(--space-2));
+  /* Sits on the bottom edge of the square, which is the card's padding plus the square's own height. */
+  top: calc(var(--space-3) + 100% - var(--space-6) - 56px);
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: 0 8px 24px var(--accent-glow);
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity var(--motion-base) var(--motion-ease),
+    transform var(--motion-base) var(--motion-ease);
+}
+
+.oml-card:hover .oml-card-play,
+.oml-card-play:focus-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ---- albums, artists and genres as rows */
+
+.oml-growlist {
+  margin: 0;
+  padding: var(--space-3) 0 0;
+  list-style: none;
+}
+
+.oml-grow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  transition: background var(--motion-fast) var(--motion-ease);
+}
+
+.oml-grow:hover {
+  background: var(--hover);
+}
+
+.oml-grow-open {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-1);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.oml-art {
+  display: block;
+  flex-shrink: 0;
+}
+
+/* ---- a list with more to it */
+
+.oml-more {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-2);
+}
+
+/* ---- narrower
+ *
+ * Asked of the page, not of the window: this screen sits in a column beside the list on the left, and the window's
+ * width is the wrong number for it. The columns a person can do without go first -- the album and when it was added,
+ * both of which are still in the row's tooltip and on the album's own screen -- and the cards get smaller before
+ * they get fewer.
+ */
+
+@container om (max-width: 1180px) {
+  .oml-tr {
+    grid-template-columns: 40px minmax(0, 4fr) minmax(0, 3fr) 64px 76px;
+  }
+
+  .oml-cell-album,
+  .oml-cell-added,
+  .oml-th.oml-cell-album,
+  .oml-th.oml-cell-added {
+    display: none;
+  }
+}
+
+@container om (max-width: 900px) {
+  .oml-h1 {
+    font-size: 26px;
+  }
+
+  .oml-grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+}
+
+@container om (max-width: 700px) {
+  .oml-tr {
+    grid-template-columns: 32px minmax(0, 1fr) 64px 76px;
+  }
+
+  .oml-cell-artist,
+  .oml-th.oml-cell-artist {
+    display: none;
+  }
+
+  .oml-num {
+    width: 32px;
+  }
+
+  /* There is nothing to hover on a touch screen, so the row's two buttons and a card's play button stay out. */
+  .oml-cell-do {
+    opacity: 1;
+  }
+
+  .oml-card-play {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ================================================================
+   Right-click menus, the shortcuts sheet, the box that asks a
+   question, and what dragging looks like.
+
+   Every colour here is a token name, so dark and light are both
+   right with no second set of rules. The raised surfaces take the
+   same light line along their top edge as the rest of the page, so
+   a menu reads as an object sitting over the glass rather than as a
+   rectangle drawn on it.
+   ================================================================ */
+
+.om-menu {
+  position: fixed;
+  z-index: 60;
+  min-width: 216px;
+  max-width: 300px;
+  padding: var(--space-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--popover-bg);
+  backdrop-filter: blur(18px);
+  box-shadow:
+    inset 0 1px 0 var(--rim-light),
+    var(--shadow);
+}
+
+.om-menu-item {
+  display: block;
+  width: 100%;
+  min-height: var(--chrome-hit-target);
+  padding: 7px var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-md);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--motion-fast) var(--motion-ease);
+}
+
+.om-menu-item:hover,
+.om-menu-item:focus-visible {
+  background: var(--hover);
+  outline: none;
+}
+
+/* Switched off, not taken away: the entry is still readable, and pressing it says why it cannot be done. */
+.om-menu-off {
+  color: var(--faint);
+}
+
+.om-menu-line {
+  height: 1px;
+  margin: var(--space-1) var(--space-2);
+  background: var(--line);
+}
+
+/* ---------------------------------------------------------------- the cover behind a box that asks something */
+
+.om-cover {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: grid;
+  place-items: center;
+  padding: var(--space-4);
+  background: var(--scrim);
+}
+
+.om-ask,
+.om-sheet {
+  width: 100%;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+  box-shadow:
+    inset 0 1px 0 var(--rim-light),
+    var(--shadow);
+}
+
+.om-ask {
+  max-width: 400px;
+  padding: var(--space-5);
+}
+
+.om-ask-title {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.om-ask-detail {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-md);
+  color: var(--muted);
+}
+
+.om-ask-input {
+  width: 100%;
+  margin-top: var(--space-4);
+  min-height: var(--chrome-hit-target);
+  padding: 6px var(--space-3);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-sm);
+  background: var(--input-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-md);
+}
+
+.om-ask-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-fill);
+  outline: none;
+}
+
+.om-ask-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+}
+
+.om-btn-danger {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+/* ---------------------------------------------------------------- the shortcuts sheet */
+
+.om-sheet {
+  max-width: 520px;
+  max-height: 80vh;
+  overflow-y: auto;
+  padding: var(--space-5);
+  scrollbar-color: var(--scrollbar) transparent;
+}
+
+.om-sheet-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.om-sheet-title {
+  margin: 0;
+  font-size: var(--text-xl);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.om-sheet-head {
+  margin: var(--space-5) 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.om-sheet-rows {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+  align-items: baseline;
+}
+
+.om-sheet-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin: 0;
+}
+
+.om-key {
+  padding: 2px var(--space-2);
+  border: 1px solid var(--pill-border);
+  border-bottom-width: 2px;
+  border-radius: var(--radius-sm);
+  background: var(--pill-bg);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--muted-strong);
+  white-space: nowrap;
+}
+
+.om-sheet-does {
+  margin: 0;
+  font-size: var(--text-md);
+  color: var(--text);
+}
+
+.om-sheet-note {
+  margin: var(--space-5) 0 0;
+  font-size: var(--text-sm);
+  color: var(--faint);
+}
+
+/* ---------------------------------------------------------------- dragging */
+
+/* The row stays where it is while it is being dragged. Taking it out from under the pointer loses the pointer. */
+.om-dragging {
+  opacity: 0.45;
+}
+
+/* Where it would land. The edge picks up the accent; the fill stays put, so the words underneath stay readable. */
+.om-drop-on {
+  box-shadow:
+    inset 0 0 0 1px var(--accent),
+    0 0 0 3px var(--accent-glow-soft);
+}
+
+/* It cannot go here. Saying so before the hand lets go, and again in words afterwards. */
+.om-drop-no {
+  box-shadow: inset 0 0 0 1px var(--danger-border);
+  cursor: no-drop;
+}
+
+.om-drop-above {
+  box-shadow: inset 0 2px 0 var(--accent);
+}
+
+.om-drop-below {
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+/* ================================================================ the screens that are Orbis's own */
+
+/*
+ * What Orbis noticed while you were browsing, the DJ and what it has worked out about you, what you have been
+ * listening to, bringing music in, and the settings. These are the parts no streaming app has an equivalent of, so
+ * they get room rather than a corner: full-width blocks down the page, each one titled and each one saying what it is
+ * for, instead of a strip of tabs.
+ *
+ * Every class here begins `om-own-`, so a rule can never reach into another screen. Every colour is a token name --
+ * not one literal, not one hand-written rgba -- which is what makes all of this correct in the light theme too.
+ */
+
+.om-own-head {
+  padding: var(--space-5) 0 var(--space-4);
+}
+
+.om-own-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 34px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text);
+}
+
+.om-own-lead {
+  margin: var(--space-2) 0 0;
+  max-width: 68ch;
+  color: var(--muted);
+  font-size: var(--text-md);
+  line-height: 1.5;
+}
+
+.om-own-block {
+  padding: var(--space-5) 0;
+  border-top: 1px solid var(--line);
+}
+
+.om-own-block-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-3);
+}
+
+.om-own-block-title {
+  margin: 0;
+  font-size: var(--text-lg);
+  font-weight: 600;
+  color: var(--text);
+}
+
+.om-own-block-detail {
+  margin: var(--space-1) 0 0;
+  max-width: 76ch;
+  color: var(--faint);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.om-own-sub {
+  margin: 0 0 var(--space-2);
+  color: var(--muted-strong);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.om-own-slot {
+  display: grid;
+  gap: var(--space-3);
+}
+
+/*
+ * A raised panel, with the two-part edge the rest of Orbis uses: a light line catching its top, then the glass
+ * border beneath. That is what makes it read as an object rather than as a rectangle with a border.
+ */
+.om-own-card {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow:
+    inset 0 1px 0 var(--rim-light),
+    0 1px 0 var(--glass-border),
+    0 12px 36px var(--shadow-soft);
+}
+
+.om-own-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.om-own-row + .om-own-row {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
+}
+
+.om-own-row-stack {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: stretch;
+}
+
+.om-own-row-words {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.om-own-row-label {
+  color: var(--text);
+  font-size: var(--text-md);
+}
+
+.om-own-row-detail {
+  max-width: 76ch;
+  color: var(--faint);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+}
+
+/* Something a person should read before they act on it, rather than a colour nobody reads as a warning. */
+.om-own-warn {
+  color: var(--amber);
+  font-size: var(--text-sm);
+}
+
+.om-own-acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* ---- on or off ---- */
+
+.om-own-switch {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--pill-border);
+  border-radius: var(--radius-pill);
+  background: var(--pill-bg);
+  cursor: pointer;
+  transition:
+    background var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease);
+}
+
+.om-own-switch.om-on {
+  border-color: var(--accent-dim);
+  background: var(--accent-fill);
+}
+
+.om-own-switch-dot {
+  display: block;
+  width: 18px;
+  height: 18px;
+  margin: 0 0 0 3px;
+  border-radius: var(--radius-pill);
+  background: var(--muted);
+  transition:
+    transform var(--motion-base) var(--motion-ease),
+    background var(--motion-fast) var(--motion-ease);
+}
+
+.om-own-switch.om-on .om-own-switch-dot {
+  background: var(--accent);
+  transform: translateX(18px);
+}
+
+.om-own-switch:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ---- one of several ---- */
+
+.om-own-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.om-own-choice {
+  display: grid;
+  gap: 2px;
+  min-height: var(--chrome-hit-target);
+  max-width: 34ch;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--pill-border);
+  border-radius: var(--radius-md);
+  background: var(--pill-bg);
+  color: var(--muted-strong);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease);
+}
+
+.om-own-choice:hover {
+  background: var(--pill-bg-strong);
+  color: var(--text);
+}
+
+/* On-ness is said with a colour and with a line, because a colour alone is not readable by everyone. */
+.om-own-choice.om-on {
+  border-color: var(--accent-dim);
+  background: var(--accent-fill);
+  color: var(--accent);
+  box-shadow: inset 0 calc(-1 * var(--chrome-indicator-thickness)) var(--accent);
+}
+
+.om-own-choice-label {
+  font-size: var(--text-md);
+}
+
+.om-own-choice-blurb {
+  color: var(--faint);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+}
+
+/* ---- the named ways of exploring ---- */
+
+.om-own-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(196px, 1fr));
+  gap: var(--space-3);
+}
+
+.om-own-tile {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-4);
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  text-align: left;
+  cursor: pointer;
+  box-shadow:
+    inset 0 1px 0 var(--rim-light),
+    0 1px 0 var(--glass-border);
+  transition:
+    background var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) var(--motion-ease);
+}
+
+.om-own-tile:hover {
+  background: var(--surface-2);
+  box-shadow:
+    inset 0 1px 0 var(--rim-light),
+    0 1px 0 var(--glass-border),
+    0 0 0 1px var(--accent-glow-soft);
+}
+
+.om-own-tile-label {
+  color: var(--text);
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.om-own-tile-blurb {
+  color: var(--faint);
+  font-size: var(--text-sm);
+  line-height: 1.4;
+}
+
+/* ---- figures that were really counted ---- */
+
+.om-own-figures {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+  gap: var(--space-3);
+}
+
+.om-own-figure {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow:
+    inset 0 1px 0 var(--rim-light),
+    0 1px 0 var(--glass-border);
+}
+
+.om-own-figure-count {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+
+.om-own-figure-what {
+  color: var(--faint);
+  font-size: var(--text-sm);
+}
+
+/* ---- a measured reading, and plays added up by name ---- */
+
+.om-own-readings,
+.om-own-tallies {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.om-own-reading,
+.om-own-tally {
+  display: grid;
+  grid-template-columns: minmax(96px, 22ch) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.om-own-reading-name,
+.om-own-tally-name {
+  overflow: hidden;
+  color: var(--text);
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.om-own-reading-rail,
+.om-own-tally-rail {
+  display: block;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--line-strong);
+}
+
+/*
+ * Light travelling along a rail, dim to hot, rather than a bar of one colour filling up. The same pair the chat beam
+ * uses, so a measurement reads as something arrived at rather than as a score out of ten.
+ */
+.om-own-reading-fill,
+.om-own-tally-fill {
+  display: block;
+  width: var(--om-own-fill, 0%);
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(90deg, var(--beam-dim), var(--accent));
+  transition: width var(--motion-base) var(--motion-ease);
+}
+
+/* A reading Orbis is not yet sure of is drawn fainter, so sureness is on screen and not only in a tooltip. */
+.om-own-reading-soft .om-own-reading-fill {
+  opacity: 0.55;
+}
+
+.om-own-reading-value,
+.om-own-tally-count {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.om-own-three {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-5);
+}
+
+/* ---- why this one ---- */
+
+.om-own-whys {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.om-own-why {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--pill-bg);
+}
+
+.om-own-why-name {
+  color: var(--text);
+  font-size: var(--text-sm);
+}
+
+.om-own-why-value {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+/* ---- what is playing on a page, and what has been named ---- */
+
+.om-own-heard {
+  border-left: var(--chrome-indicator-thickness) solid var(--accent-dim);
+}
+
+.om-own-day + .om-own-day {
+  margin-top: var(--space-4);
+}
+
+.om-own-noticed {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.om-own-noticed-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 14ch) minmax(0, 14ch) auto auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  transition: background var(--motion-fast) var(--motion-ease);
+}
+
+.om-own-noticed-row:hover {
+  background: var(--hover);
+}
+
+.om-own-noticed-from,
+.om-own-when {
+  overflow: hidden;
+  color: var(--faint);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A track row with a measured figure on the end of it, so the row keeps one column per thing. */
+.om-own-dated {
+  grid-template-columns: minmax(0, 1fr) auto 56px auto auto minmax(0, 13ch);
+}
+
+.om-own-dated .om-own-when {
+  text-align: right;
+}
+
+/* ---- saying what you feel like ---- */
+
+.om-own-asker {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.om-own-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: var(--chrome-hit-target);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-md);
+  background: var(--input-bg);
+  color: var(--text);
+  font: inherit;
+}
+
+.om-own-input::placeholder {
+  color: var(--composer-placeholder);
+}
+
+.om-own-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-fill);
+  outline: none;
+}
+
+/* ---- bringing music in ---- */
+
+.om-own-drop {
+  border: 1px dashed var(--pill-border);
+}
+
+.om-own-dropping .om-own-drop {
+  border-color: var(--accent);
+  background: var(--accent-fill);
+}
+
+/* A press that cannot be undone, waiting to be asked again. */
+.om-own-asking {
+  border-color: var(--danger-border);
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+@container om (max-width: 700px) {
+  .om-own-title {
+    font-size: 26px;
+  }
+
+  /* The name and what can be done about it are what matter on a narrow page; where and when it was heard are not. */
+  .om-own-noticed-row {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+
+  .om-own-noticed-from,
+  .om-own-when {
+    display: none;
+  }
+
+  .om-own-dated {
+    grid-template-columns: minmax(0, 1fr) auto 56px auto auto;
+  }
+}
+
+/* ---------------------------------------------------------------- Favourites, Playlists, Export and tidy
+
+   Three screens that arrived after the rest and share almost all their rules with what was already here. The
+   Favourites screen borrows the record header outright and needs one rule of its own; the other two need a grid and
+   a few rows. Every colour below is a token name, so both themes are right with no second set of rules. */
+
+/* The record band with nothing beside it. Favourites has no cover of its own -- a square made of four other covers
+   would be artwork for something nobody made -- so the band drops to one column rather than leaving a hole where the
+   picture goes. */
+.om-rec-head-alone {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* ---- Playlists ---- */
+
+.om-lists {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.om-lists-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.om-lists-title {
+  margin: 0;
+  font-family: var(--font-display);
+  /* A hero line, past where the type tokens stop; the rest of this stylesheet writes these as literals too. */
+  font-size: 32px;
+  line-height: 1.1;
+  letter-spacing: 0.02em;
+  color: var(--text);
+}
+
+.om-lists-line {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-sm);
+  color: var(--muted-strong);
+}
+
+.om-lists-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: var(--space-4);
+}
+
+/* The card and its play button sit in one cell. The play button cannot go inside the card, because the card is
+   itself one button and a button inside a button is not something a browser can make sense of. */
+.om-lists-cell {
+  position: relative;
+  min-width: 0;
+}
+
+.om-lists-cell > .om-card {
+  width: 100%;
+}
+
+.om-lists-play {
+  position: absolute;
+  right: var(--space-3);
+  /* Sat on the bottom edge of the cover rather than centred on it, so it never covers the name underneath. */
+  bottom: 68px;
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: 0 8px 20px var(--shadow-deep);
+  opacity: 0;
+  /* A transition, never an animation: a finished animation keeps applying its last keyframe for good and would
+     outrank the hover rule below it for the rest of the page's life. */
+  transition:
+    opacity var(--motion-fast) var(--motion-ease),
+    transform var(--motion-fast) var(--motion-ease);
+  transform: translateY(var(--space-2));
+}
+
+/* On keyboard focus as well as on hover, so tabbing onto it never lands on something invisible. */
+.om-lists-cell:hover .om-lists-play,
+.om-lists-cell:focus-within .om-lists-play,
+.om-lists-play:focus-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* A playlist worked out from the library. Marked in the edge rather than the fill, so the name stays as readable as
+   every other card's. */
+.om-card-worked {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--glass-border));
+}
+
+.om-lists-naming {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.om-lists-name {
+  min-width: 0;
+  flex: 1 1 200px;
+  min-height: var(--chrome-hit-target);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  background: var(--pill-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-md);
+}
+
+.om-lists-name:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* The heading above the person's own playlists is a press of its own, so it loses the heading's default look. */
+.om-side-title-press {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+  transition: color var(--motion-fast) var(--motion-ease);
+}
+
+.om-side-title-press:hover,
+.om-side-title-press:focus-visible {
+  color: var(--text);
+}
+
+/* ---- Export and tidy ---- */
+
+.om-tidy-dupes {
+  display: grid;
+  gap: var(--space-4);
+}
+
+/* A raised surface with a light line caught on its top edge over the glass border, which is what makes a group read
+   as one object rather than as a run of rows that happen to be next to each other. */
+.om-tidy-group {
+  padding: var(--space-3);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: inset 0 1px 0 var(--rim-light);
+}
+
+.om-tidy-group-head {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* A copy in a duplicate group is not playable from here -- the point of the list is to compare them, and playing one
+   is a press away on its own album -- so the row loses the play column the shared track row has. */
+.om-tidy-copy {
+  grid-template-columns: minmax(0, 1fr) auto;
+  cursor: default;
+}
+
+@container om (max-width: 700px) {
+  .om-lists-grid {
+    grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  }
+
+  .om-lists-play {
+    /* Always showing at this width: there is no hover on a touch screen to bring it in. */
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
