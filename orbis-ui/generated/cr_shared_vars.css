@@ -10,25 +10,25 @@
 
 /* Common css variables for Material Design WebUI */
 html {
-  --google-blue-50-rgb: 231, 242, 247;  /* #e8f0fe */
+  --google-blue-50-rgb: 231, 241, 245;  /* #e8f0fe */
   --google-blue-50: rgb(var(--google-blue-50-rgb));
-  --google-blue-100-rgb: 206, 229, 240;  /* #d2e3fc */
+  --google-blue-100-rgb: 206, 226, 235;  /* #d2e3fc */
   --google-blue-100: rgb(var(--google-blue-100-rgb));
-  --google-blue-200-rgb: 145, 197, 221;  /* #aecbfa */
+  --google-blue-200-rgb: 145, 190, 209;  /* #aecbfa */
   --google-blue-200: rgb(var(--google-blue-200-rgb));
   --google-blue-300-rgb: 63, 216, 255;  /* #8ab4f8 */
   --google-blue-300: rgb(var(--google-blue-300-rgb));
   --google-blue-400-rgb: 55, 190, 224;  /* #669df6 */
   --google-blue-400: rgb(var(--google-blue-400-rgb));
-  --google-blue-500-rgb: 10, 127, 179;  /* #4285f4 */
+  --google-blue-500-rgb: 11, 110, 153;  /* #4285f4 */
   --google-blue-500: rgb(var(--google-blue-500-rgb));
-  --google-blue-600-rgb: 10, 127, 179;  /* #1a73e8 */
+  --google-blue-600-rgb: 11, 110, 153;  /* #1a73e8 */
   --google-blue-600: rgb(var(--google-blue-600-rgb));
-  --google-blue-700-rgb: 8, 102, 143;  /* #1967d2 */
+  --google-blue-700-rgb: 9, 88, 122;  /* #1967d2 */
   --google-blue-700: rgb(var(--google-blue-700-rgb));
-  --google-blue-800-rgb: 6, 80, 113;  /* #185abc */
+  --google-blue-800-rgb: 7, 69, 96;  /* #185abc */
   --google-blue-800: rgb(var(--google-blue-800-rgb));
-  --google-blue-900-rgb: 5, 64, 90;  /* #174ea6 */
+  --google-blue-900-rgb: 6, 55, 77;  /* #174ea6 */
   --google-blue-900: rgb(var(--google-blue-900-rgb));
 
   --google-green-50-rgb: 230, 244, 234;  /* #e6f4ea */
@@ -129,10 +129,10 @@ html {
   --cr-focused-item-color: #fcfdfe;
   --cr-form-field-label-color: var(--google-grey-700);
   --cr-hairline-rgb: 0, 0, 0;
-  --cr-iph-anchor-highlight-color: rgba(10,127,179,0.1);
+  --cr-iph-anchor-highlight-color: rgba(11,110,153,0.1);
   --cr-menu-background-color: #fff;
   --cr-menu-background-focus-color: #fff;
-  --cr-menu-shadow: 0 12px 36px rgba(30,60,110,0.08);
+  --cr-menu-shadow: 0 10px 30px rgba(30,60,110,0.13), 0 1px 2px rgba(30,60,110,0.09);
   --cr-separator-color: rgba(40,90,170,0.1);
   --cr-title-text-color: #556b87;
   --cr-scrollable-border-color: #fff;
@@ -198,10 +198,10 @@ html {
      the color pipeline. */
   --cr-fallback-color-outline: var(--color-sys-outline, rgb(85, 107, 135));
 
-  --cr-fallback-color-primary: var(--color-sys-primary, rgb(10, 127, 179));
+  --cr-fallback-color-primary: var(--color-sys-primary, rgb(11, 110, 153));
   --cr-fallback-color-on-primary: var(--color-sys-on-primary, rgb(255, 255, 255));
 
-  --cr-fallback-color-primary-container: var(--color-sys-primary-container, rgb(222, 236, 244));
+  --cr-fallback-color-primary-container: var(--color-sys-primary-container, rgb(223, 234, 241));
   --cr-fallback-color-on-primary-container: var(--color-sys-on-primary-container, rgb(26, 42, 64));
 
   --cr-fallback-color-secondary-container: var(--color-sys-secondary-container, rgb(252, 253, 254));
@@ -231,7 +231,7 @@ html {
   --cr-fallback-color-tonal-container: rgb(252, 253, 254);
   --cr-fallback-color-on-tonal-container: rgb(26, 42, 64);
 
-  --cr-fallback-color-tonal-outline: rgb(10, 127, 179);
+  --cr-fallback-color-tonal-outline: rgb(11, 110, 153);
 
   --cr-fallback-color-error: var(--color-sys-error, rgb(168, 24, 48));
 
@@ -244,7 +244,7 @@ html {
       var(--cr-fallback-color-state-on-subtle-rgb_), .06);
   --cr-fallback-color-state-ripple-neutral-on-subtle_: rgba(
       var(--cr-fallback-color-state-on-subtle-rgb_), .08);
-  --cr-fallback-color-state-ripple-primary-rgb_: 10, 127, 179;
+  --cr-fallback-color-state-ripple-primary-rgb_: 11, 110, 153;
   --cr-fallback-color-state-ripple-primary_: rgba(
       var(--cr-fallback-color-state-ripple-primary-rgb_), 0.32);
 
@@ -302,7 +302,7 @@ html {
   --orbis-radius-control: 8px;
   --orbis-radius-card: 10px;
   --orbis-radius-pill: 999px;
-  --orbis-accent: #0a7fb3;
+  --orbis-accent: #0b6e99;
   --orbis-danger: #a81830;
   --orbis-line: rgba(40,90,170,0.1);
 }
@@ -333,7 +333,7 @@ html[webui-refresh-2026] {
     --cr-fallback-color-surface-variant: var(--color-sys-surface-variant, rgb(27, 29, 32));
     --cr-fallback-color-on-surface-variant: var(--color-sys-on-surface-variant, rgb(162, 166, 174));
     --cr-fallback-color-on-surface-subtle: rgb(162, 166, 174);
-    --cr-fallback-color-inverse-primary: rgb(10, 127, 179);
+    --cr-fallback-color-inverse-primary: rgb(11, 110, 153);
     --cr-fallback-color-inverse-surface: rgb(246, 248, 251);
     --cr-fallback-color-inverse-on-surface: rgb(26, 42, 64);
     --cr-fallback-color-tonal-container: rgb(27, 29, 32);
