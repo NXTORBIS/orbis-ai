@@ -1,7 +1,21 @@
 @tailwind components;
 @tailwind utilities;
 
-/* The Toolkit's tokens: Jarvis's dark palette, held inside the Toolkit and nowhere else. */
+/*
+ * The Toolkit's tokens: Jarvis's dark palette, held inside the Toolkit and nowhere else.
+ *
+ * This palette is not Orbis's and is not meant to be. It is a colour system of its own, written as bare HSL
+ * numbers because every one of the five hundred ported tool files reads them as `hsl(var(--name))`, Tailwind's
+ * way. Those files are the user's own code, carried over rather than rewritten, so the names stay as they are.
+ *
+ * **The one thing to know before putting an Orbis control in here.** `--cyan` below shadows the window's own
+ * `--cyan` for everything inside `.jarvis-scope`, and the two hold different kinds of value: the window's is a
+ * colour, this one is three numbers. So `color: var(--cyan)` from a shared Orbis rule resolves to "189 100% 50%"
+ * inside this subtree, which is not a colour, and the declaration is dropped -- no warning, no error, just a
+ * control with its accent missing. `.jarvis-scope` sits on the tool's own body only, never on the Toolkit's
+ * header, which is why the shared header and search box up there are safe. Keep it that way: a shared Orbis
+ * control belongs outside this scope, and anything that must live inside it should be written in this palette.
+ */
 .jarvis-scope {
   --background: 222 47% 4%; --foreground: 210 40% 98%;
   --card: 222 40% 7%; --card-foreground: 210 40% 98%;
@@ -124,7 +138,7 @@
 }
 .ripple-fx {
   position: absolute;
-  border-radius: 9999px;
+  border-radius: 999px;
   background: currentColor;
   opacity: 0.35;
   pointer-events: none;
