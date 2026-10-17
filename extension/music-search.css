@@ -1,0 +1,501 @@
+/**
+ * The Search screen's own rules.
+ *
+ * A separate file from music.css on purpose: that one belongs to the frame and to every screen at once, and a screen
+ * that wrote into it would be growing a file several other screens are growing too. The screen's own script brings
+ * this in, and the extension stages whole folders, so nothing has to list it.
+ *
+ * Every colour here is a token name. Not one literal colour, not one hand-written rgba, not one white: each token is
+ * declared twice in music-tokens.css -- dark and light -- so naming them is what makes this screen right in both
+ * themes with no second set of rules. Anything derived is derived with color-mix from a token.
+ *
+ * Every size question is a container query on the page itself. The window is the wrong thing to measure: this page
+ * sits next to a sidebar and a column, so the width of the window says nothing about the width of these cards.
+ */
+
+.om-sr {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4) 0 var(--space-6);
+}
+
+/* ---------------------------------------------------------------- the box */
+
+.om-sr-box {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--input-border);
+  border-radius: var(--radius-pill);
+  background: var(--input-bg);
+  color: var(--muted);
+  transition:
+    border-color var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) var(--motion-ease);
+}
+
+.om-sr-box:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-fill);
+}
+
+.om-sr-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-lg);
+  outline: none;
+}
+
+.om-sr-input::placeholder {
+  color: var(--faint);
+}
+
+/* The cross is there only when there is something to clear, so the box does not offer to undo nothing. */
+.om-sr-clear {
+  visibility: hidden;
+}
+
+.om-sr-clear.om-sr-clear-on {
+  visibility: visible;
+}
+
+/* ---------------------------------------------------------------- the notes above the results */
+
+.om-sr-notes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.om-sr-notes:empty {
+  display: none;
+}
+
+.om-sr-note {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-left: 2px solid var(--accent-dim);
+  border-radius: var(--radius-sm);
+  background: var(--accent-glow-soft);
+  color: var(--muted-strong);
+  font-size: var(--text-sm);
+  line-height: 1.45;
+}
+
+/* ---------------------------------------------------------------- groups */
+
+.om-sr-results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.om-sr-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.om-sr-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.om-sr-group-title {
+  margin: 0;
+  color: var(--text);
+  font-size: var(--text-xl);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/* ---------------------------------------------------------------- searched lately */
+
+.om-sr-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.om-sr-chip {
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--pill-border);
+  border-radius: var(--radius-pill);
+  background: var(--pill-bg);
+  transition: background var(--motion-fast) var(--motion-ease);
+}
+
+.om-sr-chip:hover {
+  background: var(--pill-bg-strong);
+}
+
+.om-sr-chip-go,
+.om-sr-chip-drop {
+  border: 0;
+  background: none;
+  color: var(--muted-strong);
+  cursor: pointer;
+  font: inherit;
+}
+
+.om-sr-chip-go {
+  padding: var(--space-2) var(--space-1) var(--space-2) var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.om-sr-chip-go:hover {
+  color: var(--text);
+}
+
+.om-sr-chip-drop {
+  display: grid;
+  place-items: center;
+  width: var(--chrome-hit-target);
+  min-height: var(--chrome-hit-target);
+  padding: 0 var(--space-2) 0 0;
+  border-radius: var(--radius-pill);
+  color: var(--faint);
+}
+
+.om-sr-chip-drop:hover {
+  color: var(--text);
+}
+
+.om-sr-chip-go:focus-visible,
+.om-sr-chip-drop:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* ---------------------------------------------------------------- the top result */
+
+/*
+ * A raised card with a light line along its top edge.
+ *
+ * The inset highlight is what makes it read as an object sitting on the glass rather than as a rectangle of a
+ * different colour -- and the token flips for light theme, so it stays a hairline on dark and a real edge on light.
+ * A transition, never an animation: a finished animation with a `both` fill keeps applying its last keyframe for
+ * ever and would outrank the hover.
+ */
+.om-sr-top {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: center;
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow:
+    inset 0 1px 0 var(--rim-light),
+    0 1px 0 var(--glass-border),
+    0 18px 48px var(--shadow-deep);
+  transition: box-shadow var(--motion-base) var(--motion-ease);
+}
+
+.om-sr-top:hover {
+  box-shadow:
+    inset 0 1px 0 var(--rim-light),
+    0 0 0 1px var(--accent-glow-soft),
+    0 18px 48px var(--shadow-deep);
+}
+
+.om-sr-top-words {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.om-sr-top-kind {
+  margin: 0;
+  color: var(--faint);
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.om-sr-top-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  margin: 0;
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 30px;
+  line-height: 1.15;
+}
+
+.om-sr-top-artist {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-md);
+}
+
+.om-sr-top-pills,
+.om-sr-top-does {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.om-sr-top-pills:empty {
+  display: none;
+}
+
+.om-sr-version {
+  color: var(--accent);
+  font-size: var(--text-xs);
+}
+
+/* ---------------------------------------------------------------- rows the service found */
+
+.om-sr-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.om-sr-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding-right: var(--space-2);
+  border-radius: var(--radius-md);
+  transition: background var(--motion-fast) var(--motion-ease);
+}
+
+.om-sr-row:hover {
+  background: var(--hover);
+}
+
+.om-sr-row-go {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+  padding: var(--space-2);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.om-sr-row-go:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.om-sr-row-words {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 2px;
+}
+
+.om-sr-row-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  color: var(--text);
+  font-size: var(--text-md);
+}
+
+.om-sr-row-title > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.om-sr-row-sub {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.om-sr-row-length {
+  color: var(--faint);
+  font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A recording Orbis knows but has no audio for is still a song and still reads as one, only dimmer. */
+.om-sr-row-off .om-sr-row-title {
+  color: var(--muted);
+}
+
+/* ---------------------------------------------------------------- cards for albums, artists and genres */
+
+.om-sr-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: var(--space-4);
+}
+
+.om-sr-card {
+  position: relative;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow:
+    inset 0 1px 0 var(--rim-light),
+    0 1px 0 var(--glass-border);
+  transition:
+    background var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-base) var(--motion-ease);
+}
+
+.om-sr-card:hover {
+  background: var(--surface-2);
+  box-shadow:
+    inset 0 1px 0 var(--rim-light),
+    0 0 0 1px var(--accent-glow-soft),
+    0 18px 48px var(--shadow-deep);
+}
+
+.om-sr-card-go {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-3);
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.om-sr-card-go:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.om-sr-card-art {
+  display: block;
+}
+
+.om-sr-card-name {
+  overflow: hidden;
+  color: var(--text);
+  font-size: var(--text-md);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.om-sr-card-sub {
+  overflow: hidden;
+  color: var(--faint);
+  font-size: var(--text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+ * The round play button, which rises out of the card on hover.
+ *
+ * It stays reachable by keyboard whatever the pointer is doing: focus brings it up the same way hovering the card
+ * does, so a Tab through the shelf never lands on something that cannot be seen.
+ */
+.om-sr-card-play {
+  position: absolute;
+  right: var(--space-3);
+  bottom: calc(var(--space-6) + var(--space-3));
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+  color: var(--on-accent);
+  cursor: pointer;
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity var(--motion-base) var(--motion-ease),
+    transform var(--motion-base) var(--motion-ease),
+    background var(--motion-fast) var(--motion-ease);
+}
+
+.om-sr-card:hover .om-sr-card-play,
+.om-sr-card-play:focus-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.om-sr-card-play:hover {
+  background: var(--accent-strong);
+}
+
+.om-sr-card-play:active {
+  background: var(--accent-press);
+}
+
+.om-sr-card-play:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------- sizes, asked of the page and not the window */
+
+@container om (max-width: 900px) {
+  .om-sr-cards {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
+
+  .om-sr-top-title {
+    font-size: 24px;
+  }
+}
+
+@container om (max-width: 700px) {
+  .om-sr-top {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-3);
+  }
+
+  .om-sr-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .om-sr-row-length {
+    display: none;
+  }
+}
+
+/* A card's play button rising is motion for its own sake; with motion turned down it is simply there. */
+@media (prefers-reduced-motion: reduce) {
+  .om-sr-card-play {
+    transform: none;
+  }
+}

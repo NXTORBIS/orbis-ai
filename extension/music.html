@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Orbis Music</title>
+    <!--
+      The stylesheets, in this order. The first is Orbis's colours, spacing and type, copied straight out of
+      orbis-ui/orbis-tokens.css by scripts/build-extension.mjs so there is still only one place a colour is decided.
+      The rest are this page's own rules, which name those colours and never write one of their own -- which is what
+      makes the page correct in both the light and the dark theme with no second set of rules.
+
+      Two screens were big enough to earn a file of their own rather than a longer music.css: the search screen and
+      Playing now. They are listed here because a stylesheet nobody links is a screen that ships with no styling at
+      all, which is exactly how both of them arrived.
+    -->
+    <link rel="stylesheet" href="music-tokens.css" />
+    <link rel="stylesheet" href="music.css" />
+    <link rel="stylesheet" href="music-search.css" />
+    <link rel="stylesheet" href="music-nowplaying.css" />
+  </head>
+  <body>
+    <!-- The frame and every screen are built in script, node by node. Nothing on this page is ever parsed as markup. -->
+    <div id="om-root"></div>
+    <script type="module" src="music.js"></script>
+  </body>
+</html>

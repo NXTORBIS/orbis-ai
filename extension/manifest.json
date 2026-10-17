@@ -133,6 +133,7 @@
       "world": "MAIN"
     }
   ],
+  "//music": "Orbis Music's full-tab page (music.html, built by scripts/build-extension.mjs) needs nothing registered here: an extension page is served without being declared. It is deliberately NOT in web_accessible_resources. A chrome:// page cannot be granted one on its own -- `matches` only takes http and https patterns and `extension_ids` only takes other extensions -- so the only way to let chrome://orbis link to it would be to offer it to every web site on the internet, which is a much bigger change than a link. The way in is a message to this extension's own worker (music-worker.js, kind 'orbis-music/open'), which is the only side that can call chrome.tabs.create; the app can send that down the debugging pipe it already holds, and so can the panel if it is ever moved into the extension.",
   "icons": {
     "16": "assets/icon-16.png",
     "32": "assets/icon-32.png",

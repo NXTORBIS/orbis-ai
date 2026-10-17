@@ -1,0 +1,221 @@
+/*
+ * The "playing now" screen.
+ *
+ * Its own file rather than more rules in music.css, because several screens are being written at the same time and
+ * one stylesheet shared between all of them is how a rule quietly goes missing. Nothing lists stylesheets, so a file
+ * in this folder needs no build change; the screen adds the link itself.
+ *
+ * Every colour is one of Orbis's own names from music-tokens.css. The two exceptions are --om-np-near and
+ * --om-np-far, and those are not colours written here either: they are measured out of the cover's own pixels at the
+ * moment the screen draws, and where they are named the Orbis accent is given as the fallback -- so a cover that
+ * could not be read leaves the band in Orbis's colour rather than empty, and nothing on screen is a guessed colour.
+ *
+ * Classes all begin `om-np-`, inside the page's own `om-` prefix, so nothing here can reach another screen.
+ */
+
+.om-np {
+  display: grid;
+  gap: var(--space-5);
+}
+
+/* ---------------------------------------------------------------- the band with the cover in it */
+
+.om-np-head {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: var(--space-5);
+  align-items: end;
+  padding: var(--space-6) var(--space-5) var(--space-5);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  /* The measured colours, with the Orbis accent as the declared fallback. The fallback is the whole honesty of this
+     screen's look: with no cover there is nothing to measure, and Orbis's own colour is plainly not the record's. */
+  background:
+    radial-gradient(130% 110% at 18% 0%, var(--om-np-near, var(--accent-glow)), transparent 68%),
+    linear-gradient(180deg, var(--om-np-far, var(--accent-glow-soft)), transparent 70%),
+    var(--surface);
+  box-shadow:
+    inset 0 1px 0 var(--rim-light),
+    0 1px 0 var(--glass-border),
+    0 18px 48px var(--shadow-deep);
+  /* A transition, never an animation: a finished animation with a filled end keeps applying its last frame and
+     outranks everything after it. */
+  transition: background var(--motion-base) var(--motion-ease);
+}
+
+.om-np-head-plain {
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
+.om-np-art {
+  width: 220px;
+}
+
+.om-np-words {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.om-np-kicker {
+  margin: 0;
+  font-size: var(--text-xs);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.om-np-title {
+  margin: 0;
+  font-family: var(--font-display);
+  /* No type token goes above 18px, so a heading size is a literal here, which is what the rest of the house does. */
+  font-size: 40px;
+  line-height: 1.1;
+  letter-spacing: 0.02em;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.om-np-by {
+  margin: 0;
+  font-size: var(--text-lg);
+  color: var(--muted-strong);
+}
+
+.om-np-faint {
+  color: var(--faint);
+}
+
+.om-np-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font-size: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: var(--accent-dim);
+  text-underline-offset: 3px;
+  transition: color var(--motion-fast) var(--motion-ease);
+}
+
+.om-np-link:hover {
+  color: var(--accent);
+}
+
+/* The player's own words when it refused. Never swallowed: it is the one place a real reason can be read. */
+.om-np-warn {
+  margin: 0;
+  color: var(--amber);
+  font-size: var(--text-sm);
+}
+
+.om-np-does {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.om-np-does .om-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--chrome-hit-target);
+}
+
+/* ---------------------------------------------------------------- what is true about the track */
+
+.om-np-body {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.om-np-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: inset 0 1px 0 var(--rim-light);
+  font-size: var(--text-md);
+}
+
+.om-np-fact-label {
+  color: var(--faint);
+}
+
+.om-np-fact-value {
+  margin: 0;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+
+.om-np-whybox:empty {
+  display: none;
+}
+
+.om-np-sub {
+  margin: 0 0 var(--space-3);
+  font-size: var(--text-lg);
+  color: var(--text);
+}
+
+.om-np-why {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.om-np-why-row {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--pill-border);
+  border-radius: var(--radius-pill);
+  background: var(--pill-bg);
+  color: var(--muted-strong);
+  font-size: var(--text-sm);
+}
+
+/* ---------------------------------------------------------------- what is coming next */
+
+.om-np-next-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+/* ---------------------------------------------------------------- sizes, asked of the page and not the window */
+
+@container om (max-width: 1100px) {
+  .om-np-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@container om (max-width: 760px) {
+  .om-np-head {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    padding: var(--space-4);
+  }
+
+  .om-np-art {
+    width: min(220px, 60%);
+  }
+
+  .om-np-title {
+    font-size: 28px;
+  }
+}
