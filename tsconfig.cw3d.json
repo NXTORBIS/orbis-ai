@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.web.json",
+  "include": [
+    "src/renderer/src/components/chess/three/**/*",
+    "src/renderer/src/components/chess/Board.tsx",
+    "src/shared/chess/rules.ts"
+  ],
+  "exclude": []
+}
