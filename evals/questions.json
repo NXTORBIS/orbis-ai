@@ -1,0 +1,49 @@
+[
+  {"id":"chat-01","bucket":"everyday","text":"I've had a long day and I'm too tired to think about dinner. Any ideas?"},
+  {"id":"chat-02","bucket":"everyday","text":"What's a good way to stop procrastinating on small chores?"},
+  {"id":"chat-03","bucket":"everyday","text":"hey, how's it going?"},
+  {"id":"chat-04","bucket":"everyday","text":"My houseplants keep dying. What am I probably doing wrong?"},
+  {"id":"chat-05","bucket":"everyday","text":"Can you suggest a name for my new grey cat?"},
+  {"id":"chat-06","bucket":"everyday","text":"How do I politely tell a friend I can't make it to their party?"},
+
+  {"id":"fact-01","bucket":"factual","text":"What is the capital of Australia?","expect":{"mustContain":["Canberra"]}},
+  {"id":"fact-02","bucket":"factual","text":"Who wrote the novel Pride and Prejudice?","expect":{"mustContain":["Austen"]}},
+  {"id":"fact-03","bucket":"factual","text":"What is the chemical symbol for gold?","expect":{"mustContain":["Au"]}},
+  {"id":"fact-04","bucket":"factual","text":"In what year did the Berlin Wall fall?","expect":{"answer":"1989"}},
+  {"id":"fact-05","bucket":"factual","text":"What is the largest planet in our solar system?","expect":{"mustContain":["Jupiter"]}},
+  {"id":"fact-06","bucket":"factual","text":"What is the boiling point of water at sea level in degrees Fahrenheit?","expect":{"answer":"212"}},
+
+  {"id":"explain-01","bucket":"explain","text":"Explain how vaccines work to someone with no science background."},
+  {"id":"explain-02","bucket":"explain","text":"What is inflation, in plain words?"},
+  {"id":"explain-03","bucket":"explain","text":"Explain what an API is as if I'm new to programming."},
+  {"id":"explain-04","bucket":"explain","text":"Why is the sky blue?"},
+  {"id":"explain-05","bucket":"explain","text":"What does compound interest mean and why does it matter?"},
+
+  {"id":"math-01","bucket":"maths","text":"A train travels 180 km in 2.5 hours. At the same speed, how far does it go in 4 hours?","expect":{"answer":"288"}},
+  {"id":"math-02","bucket":"maths","text":"A shirt costs $40 and is discounted by 25%. What is the sale price in dollars?","expect":{"answer":"30"}},
+  {"id":"math-03","bucket":"maths","text":"If 3 pens cost $4.50, how much do 8 pens cost in dollars?","expect":{"answer":"12"}},
+  {"id":"math-04","bucket":"maths","text":"I read 15 pages a day. How many days will it take me to finish a 420-page book?","expect":{"answer":"28"}},
+  {"id":"math-05","bucket":"maths","text":"A rectangle has a perimeter of 54 cm and a length of 15 cm. What is its area in square centimetres?","expect":{"answer":"180"}},
+  {"id":"math-06","bucket":"maths","text":"A $96 dinner bill includes a $12 drink that only one of three friends had. The other $84 is split equally between all three. How much does the friend with the drink pay in total, in dollars?","expect":{"answer":"40"}},
+
+  {"id":"code-01","bucket":"code","text":"Write a Python function that checks whether a string is a palindrome, ignoring case and spaces."},
+  {"id":"code-02","bucket":"code","text":"Write a JavaScript function called debounce(fn, ms) that delays calling fn until ms milliseconds have passed without another call.","expect":{"mustContain":["debounce","setTimeout","clearTimeout"]}},
+  {"id":"code-03","bucket":"code","text":"What's the difference between let, const and var in JavaScript?"},
+  {"id":"code-04","bucket":"code","text":"Write a SQL query that returns the 3 customers with the highest total order amount from tables customers(id, name) and orders(id, customer_id, amount)."},
+  {"id":"code-05","bucket":"code","text":"Write a Python function named fizzbuzz(n) that returns a list of strings for 1..n using the classic FizzBuzz rules.","expect":{"mustContain":["def fizzbuzz","FizzBuzz"]}},
+  {"id":"code-06","bucket":"code","text":"My Python loop `for i in range(len(items)): items.remove(items[i])` raises IndexError. Why, and how do I fix it?"},
+
+  {"id":"write-01","bucket":"writing","text":"Rewrite this to sound more professional: \"hey, just checking if u got my email, need the report asap thx\""},
+  {"id":"write-02","bucket":"writing","text":"Write a short, warm thank-you note to a colleague who covered my shift."},
+  {"id":"write-03","bucket":"writing","text":"Make this sentence clearer and shorter: \"Due to the fact that the meeting was postponed, we are in a situation where we will not be able to make a decision at this point in time.\""},
+  {"id":"write-04","bucket":"writing","text":"Write a two-sentence product description for a reusable stainless steel water bottle."},
+
+  {"id":"unsure-01","bucket":"uncertainty","text":"Is it better to buy or rent?","expect":{"uncertain":true}},
+  {"id":"unsure-02","bucket":"uncertainty","text":"What will the price of gold be on this day next year?","expect":{"uncertain":true}},
+  {"id":"unsure-03","bucket":"uncertainty","text":"Who won the most recent Formula 1 race?","expect":{"uncertain":true}},
+  {"id":"unsure-04","bucket":"uncertainty","text":"What number am I thinking of right now?","expect":{"uncertain":true}},
+
+  {"id":"format-01","bucket":"format","text":"Give me tips for a job interview in exactly three bullet points.","expect":{"bullets":3}},
+  {"id":"format-02","bucket":"format","text":"Explain what photosynthesis is in under 50 words.","expect":{"maxWords":50}},
+  {"id":"format-03","bucket":"format","text":"List four benefits of regular exercise as a bulleted list, with no introduction and no closing sentence.","expect":{"bullets":4,"maxWords":80}}
+]
