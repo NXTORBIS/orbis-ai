@@ -23,6 +23,9 @@ import HudBackground from './components/HudBackground'
 import Sidebar from './components/Sidebar'
 import UnfinishedRuns from './components/UnfinishedRuns'
 import type { FeatureId } from './components/Sidebar'
+import { featureGroupsFor } from './lib/features'
+import { useFeatureVisibility } from './lib/useFeatureVisibility'
+import { describeVisibility, factsFor, featureState, isVisible } from '../../shared/featureVisibility'
 import { INITIAL_NAV, featureOf, navReducer, showingBrowser, showingImages } from '../../shared/navigation'
 import { DEFAULT_SETTINGS_SECTION, type SettingsSectionId } from '../../shared/settingsSections'
 import { destinationFor } from '../../shared/notificationRoute'
@@ -42,6 +45,13 @@ const ClipboardView = lazy(() => import('./components/ClipboardView'))
 const CoursesView = lazy(() => import('./components/courses/CoursesView'))
 const ToolkitView = lazy(() => import('./components/toolkit/ToolkitView'))
 const EyeView = lazy(() => import('./components/eye/EyeView'))
+/*
+ * The Arcade.
+ *
+ * Lazily loaded like the rest of the screens, and the games inside it are each a chunk of their own again, so
+ * opening the window costs nothing and opening the Arcade costs the catalogue rather than thirty-two games.
+ */
+const OfflineGames = lazy(() => import('./components/OfflineGames'))
 const CosmosView = lazy(() => import('./components/cosmos/CosmosView'))
 import { setArenaReturn, withTransition } from './lib/motion'
 const ArenaView = lazy(() => import('./components/arena/ArenaView'))
@@ -52,11 +62,13 @@ const WorkspacesView = lazy(() => import('./components/WorkspacesView'))
 const SchedulesView = lazy(() => import('./components/SchedulesView'))
 const MeetingView = lazy(() => import('./components/MeetingView'))
 import { ActivityPanel, ShortcutsModal, ToastStack } from './components/Overlays'
+import ShellSurfacePoints from './components/ShellSurfacePoints'
 import SettingsModal from './components/SettingsModal'
 import WelcomeExperience from './components/WelcomeExperience'
 import UrlBar from './components/UrlBar'
 import ControlPrompts from './components/ControlPrompts'
 import { useControlRendered } from './lib/browserControl'
+import { useSurfaceBridge } from './lib/surfaces'
 import { OPEN_URL_EVENT } from './lib/openInBrowser'
 import { OPEN_ARTIFACT_EVENT, artifactChanged, openArtifact, type OpenArtifactDetail } from './lib/artifactEvents'
 import type { OpenUrlDetail } from './lib/openInBrowser'
@@ -155,6 +167,8 @@ export default function App(): React.JSX.Element {
   const settingsOpen = settingsAt !== null
   const setSettingsOpen = (open: boolean | SettingsSectionId): void =>
     setSettingsAt(open === false ? null : open === true ? DEFAULT_SETTINGS_SECTION : open)
+  /** Settings moved to another section: remembered here so this window knows where it is. */
+  const rememberSection = useCallback((section: SettingsSectionId): void => setSettingsAt(section), [])
   /**
    * Opening the browser.
    *
@@ -197,6 +211,49 @@ export default function App(): React.JSX.Element {
       void window.api.chromiumOpen('', { newTab: false })
     } else openChromium('')
   }, [openChromium])
+  /**
+   * Which features this person has showing.
+   *
+   * One of these for the window, handed down to the sidebar and the box of everything, and asked by everything that
+   * opens a screen. Nothing keeps its own list: the launcher, the palette, the slash commands, the chords and Orion
+   * all ask `isVisible` in `shared/featureVisibility.ts`, because the last time two parts of Orbis each kept their
+   * own idea of which features existed they drifted nine features apart and neither side could tell.
+   */
+  const visibility = useFeatureVisibility()
+  /** The latest choice, for the callbacks below: they are asked at the moment somebody presses something. */
+  const choiceLive = useRef(visibility.choice)
+  choiceLive.current = visibility.choice
+
+  /**
+   * Shows one screen, whatever is showing now. This is what Orbis's own control layer sets.
+   *
+   * One function for the whole switch, because there is one thing on screen (`shared/navigation.ts`) and because
+   * leaving the browser is not something a view can do by collapsing itself: Chromium is a window of its own
+   * parented into this one, so the main process has to be told. This is what the window's own surface sets, so
+   * "open Markets" and "back to the chat" go exactly the way the sidebar goes.
+   *
+   * A screen somebody has switched off **throws, with the reason in words**. That is the honest answer and the one
+   * rule four is about: the control layer reports it as hidden -- something that exists, is switched off and can be
+   * switched on -- rather than as missing, and never as having worked. Silence here would be Orion telling somebody
+   * it had opened Markets while they looked at a conversation.
+   *
+   * It waits for the saved choice rather than reading whatever has arrived, because a question asked a frame after
+   * the window opened must not be answered out of a file that had not been read yet.
+   */
+  const showScreen = useCallback(
+    async (what: string): Promise<void> => {
+      if (what === 'browser') return openChromium('', { newTab: false })
+      if (what !== 'chat' && what !== 'images') {
+        const state = featureState(what, await visibility.settled())
+        if (!state.visible) throw new Error(state.hiddenBecause ?? describeVisibility(what, choiceLive.current))
+      }
+      if (showingBrowser(navLive.current)) void window.api.chromiumReturnToChat()
+      if (what === 'chat') return go({ kind: 'chat' })
+      if (what === 'images') return go({ kind: 'images' })
+      go({ kind: 'feature', id: what as FeatureId })
+    },
+    [openChromium, visibility]
+  )
   /**
    * Pressing a notification.
    *
@@ -273,9 +330,11 @@ export default function App(): React.JSX.Element {
       const where = destinationFor(what.event, what.subject)
       switch (where.kind) {
         case 'feature':
-          setSettingsAt(null)
-          go({ kind: 'feature', id: where.id as FeatureId })
-          if (where.id === 'create' && where.focus) setCreateOpenAt({ artifactId: where.focus, token: Date.now() })
+          // Through the one guard, so a notification about a screen somebody switched off says so rather than
+          // bringing the window forward onto whatever happened to be open and looking as though it had worked.
+          void openFeature(where.id as FeatureId, () => {
+            if (where.id === 'create' && where.focus) setCreateOpenAt({ artifactId: where.focus, token: Date.now() })
+          })
           return
         case 'settings':
           setSettingsAt(where.section)
@@ -339,6 +398,57 @@ export default function App(): React.JSX.Element {
 
   // ---------- Hooks ----------
   const { notices, setNotices, unread, setUnread, toasts, setToasts, notify, logActivity, notifyRef, activityOpenRef } = useNotices()
+
+  /**
+   * Opens one of Orbis's own screens, if this person has it switched on.
+   *
+   * **Every route into a screen goes through here**: the sidebar menu, the box of everything, the slash commands, the
+   * keyboard chords, a pressed notification, a schedule, a card in the conversation. One function, because the rule
+   * has to be the same whichever way somebody arrived, and because an advertised route that quietly does nothing is a
+   * fault this repository has shipped before.
+   *
+   * A screen that is switched off is **said out loud**, with what to do about it. Never a silent failure and never a
+   * claim that it opened: Orbis says it is switched off, says everything it had is still there, and names the way to
+   * turn it on -- Ctrl+K, which really does turn it on, rather than a settings page that may not exist yet.
+   *
+   * It waits for the saved choice rather than reading whatever has arrived. A notification pressed a frame after the
+   * window opened must not be told a screen is off because the file had not been read yet.
+   */
+  const openFeature = useCallback(
+    async (id: FeatureId, then?: () => void): Promise<boolean> => {
+      const state = featureState(id, await visibility.settled())
+      if (!state.visible) {
+        notify(`${state.hiddenBecause ?? describeVisibility(id, choiceLive.current)} Press Ctrl+K and type its name to turn it back on.`, 'warn')
+        return false
+      }
+      setSettingsAt(null)
+      go({ kind: 'feature', id })
+      then?.()
+      return true
+    },
+    [notify, visibility]
+  )
+
+  /**
+   * Switching a screen on from the box of everything, and going straight to it.
+   *
+   * The whole point of being able to find a hidden screen: somebody types "chess", sees that it is off, presses
+   * Enter, and is in Chess World. A refused save is reported in those words and nothing is opened, because a screen
+   * shown as on when the file could not be written is the one failure worth more than all the others.
+   */
+  const turnFeatureOn = useCallback(
+    async (id: FeatureId): Promise<void> => {
+      const answer = await visibility.set(id, true)
+      if (answer.refused !== null) return notify(answer.refused, 'error')
+      for (const note of answer.notes) notify(note, 'warn')
+      const state = featureState(id, answer.choice)
+      if (!state.visible) return notify(state.hiddenBecause ?? describeVisibility(id, answer.choice), 'warn')
+      setSettingsAt(null)
+      go({ kind: 'feature', id })
+      notify(`${factsFor(id)?.label ?? id} is back in your menu.`)
+    },
+    [notify, visibility]
+  )
   const chat = useChat({ notify, logActivity, go, webSearch, settings })
   const {
     conversations, streams, activeId, setActiveId, active, current, queues,
@@ -351,6 +461,34 @@ export default function App(): React.JSX.Element {
     conversationsRef, streamsRef
   } = chat
 
+  /*
+   * What the window's own surface reads, kept in refs.
+   *
+   * A getter is asked at the moment somebody wants to know -- including the moment just after something has been
+   * done, before React has drawn anything. `navLive` above is already a ref for exactly that reason, and the chat
+   * hook keeps `conversationsRef` and `streamsRef` for it too; these are the same thing for the two other values the
+   * surface reads. Without them, what Orbis is told happened would be read from a copy taken before it changed.
+   */
+  /*
+   * How many times a fresh chat has been asked for.
+   *
+   * "New chat" on an unsaved, empty chat used to do nothing you could see: there is no chat to leave, so the active
+   * id stays null, the chat screen keeps the same key, and whatever had been typed in the message box sat there
+   * word for word. Counting the requests gives the screen a new key every time, so the box is empty and the chat
+   * really is new.
+   */
+  const [chatEpoch, setChatEpoch] = useState(0)
+
+  const activeLive = useRef(activeId)
+  activeLive.current = activeId
+  /** Starting a chat from a button or a shortcut: the one that also clears a typed draft. */
+  const freshChat = useCallback(() => {
+    setChatEpoch((n) => n + 1)
+    newChat()
+  }, [newChat])
+  const noticesLive = useRef(notices)
+  noticesLive.current = notices
+
   // Opened from an Arena card, a screen folds back into that card; opened from anywhere else it returns to the chat.
   const fromArena = useRef<'football' | 'f1' | null>(null)
   const closeFeature = useCallback(() => {
@@ -362,6 +500,21 @@ export default function App(): React.JSX.Element {
     } else go({ kind: 'chat' })
   }, [])
   useEffect(() => { artifactChanged() }, [feature])
+
+  /**
+   * The laboratories open in the conversation now, by app id.
+   *
+   * Read out of the refs rather than this render, and stable, because what asks for it is the Laboratories screen's
+   * own surface: it checks after opening one whether the card really turned up, which is a moment later and in a
+   * render that has not happened yet. A copy taken when the screen drew would answer about the conversation as it
+   * was before.
+   */
+  const labsOpenHere = useCallback((): readonly string[] => {
+    const id = activeLive.current
+    const conversation = id ? conversationsRef.current.find((one) => one.id === id) : undefined
+    if (!conversation) return []
+    return [...new Set(conversation.messages.flatMap((one) => (one.apps ?? []).map((two) => two.appId)))]
+  }, [conversationsRef])
 
   const [systemDark, setSystemDark] = useState(() => matchMedia('(prefers-color-scheme: dark)').matches)
 
@@ -408,7 +561,7 @@ export default function App(): React.JSX.Element {
     () =>
       window.api.onScheduleOpenPage((url) => {
         setScheduledPage(url)
-        go({ kind: 'feature', id: 'pages' })
+        void openFeature('pages')
       }),
     []
   )
@@ -473,6 +626,17 @@ export default function App(): React.JSX.Element {
     },
     [updateSettings]
   )
+
+  /**
+   * Keeping what the first run was told about which features to show.
+   *
+   * The answer from the main process is what was really stored, so a refusal is passed back as itself rather than
+   * turned into a success. Nothing here decides anything: the rules live in `shared/featureVisibility.ts`.
+   */
+  const chooseWelcomeFeatures = useCallback(async (features: readonly string[]): Promise<{ refused: string | null }> => {
+    const said = await window.api.chooseVisibleFeatures(features)
+    return { refused: said.refused }
+  }, [])
 
   /**
    * Giving the password to the account.
@@ -572,6 +736,18 @@ export default function App(): React.JSX.Element {
     setUnread(0)
   }, [])
 
+  /**
+   * Web search on or off, and saying so.
+   *
+   * One handler rather than the same two lines in three places: the button on the strip, the `/web` command and the
+   * conversation's own surface. They were two copies before this, which is how a switch comes to say one thing in
+   * one place and another somewhere else.
+   */
+  const toggleWebSearch = useCallback(() => {
+    notify(webSearch ? 'Web search off.' : 'Web search on. Replies will use live results.')
+    setWebSearch(!webSearch)
+  }, [notify, webSearch])
+
 
 
   /** From the URL bar, links and research sources: show the address in the Orbis browser, in a new tab when asked. */
@@ -592,7 +768,7 @@ export default function App(): React.JSX.Element {
       const artifactId = (e as CustomEvent<OpenArtifactDetail>).detail?.artifactId
       if (typeof artifactId !== 'string' || artifactId === '') return
       setCreateOpenAt({ artifactId, token: Date.now() })
-      go({ kind: 'feature', id: 'create' })
+      void openFeature('create')
     }
     window.addEventListener(OPEN_ARTIFACT_EVENT, onOpen)
     return () => window.removeEventListener(OPEN_ARTIFACT_EVENT, onOpen)
@@ -602,6 +778,9 @@ export default function App(): React.JSX.Element {
   useEffect(() => window.api.onOpenArtifact((artifactId) => openArtifact(artifactId)), [])
 
   useControlRendered()
+  // Answers questions about what is on screen even while no screen has registered, so "nothing is registered" comes
+  // back as that rather than as the window not answering at all.
+  useSurfaceBridge()
 
   const [editing, setEditing] = useState<{ conversationId: string | null; image: EditableImage; tool?: 'markup' } | null>(null)
   const openImageEditor = useCallback((image: EditableImage) => setEditing({ conversationId: activeId, image }), [activeId])
@@ -637,7 +816,7 @@ export default function App(): React.JSX.Element {
 
       switch (name) {
         case 'new':
-          return newChat()
+          return freshChat()
         case 'clear':
           if (!conversation || conversation.messages.length === 0) return notify('This chat is already empty.')
           clearConversation(conversation.id)
@@ -649,8 +828,7 @@ export default function App(): React.JSX.Element {
           send(`/browse ${args}`, [])
           return
         case 'web':
-          notify(webSearch ? 'Web search off.' : 'Web search on. Replies will use live results.')
-          return setWebSearch(!webSearch)
+          return toggleWebSearch()
         case 'model': {
           const wanted = shortName(args.trim())
           const model = MODELS.find((m) => shortName(m.label) === wanted || m.id.toLowerCase() === wanted) ?? MODELS.find((m) => shortName(m.label).startsWith(wanted))
@@ -695,25 +873,27 @@ export default function App(): React.JSX.Element {
         case 'create':
           // Opens the Create screen; with words after it, hands them over to be made straight away.
           if (args.trim() !== '') setCreateAsked({ text: args.trim(), token: Date.now() })
-          return go({ kind: 'feature', id: 'create' })
+          return void openFeature('create')
         case 'images':
           return go({ kind: 'images' })
         case 'study':
-          return go({ kind: 'feature', id: 'student' })
+          return void openFeature('student')
         case 'courses':
-          return go({ kind: 'feature', id: 'courses' })
+          return void openFeature('courses')
         case 'toolkit':
-          return go({ kind: 'feature', id: 'toolkit' })
+          return void openFeature('toolkit')
         case 'eye':
-          return go({ kind: 'feature', id: 'eye' })
+          return void openFeature('eye')
         case 'cosmos':
-          return go({ kind: 'feature', id: 'cosmos' })
+          return void openFeature('cosmos')
+        case 'arcade':
+          return void openFeature('arcade')
         case 'arena':
-          return go({ kind: 'feature', id: 'arena' })
+          return void openFeature('arena')
         case 'f1':
-          return go({ kind: 'feature', id: 'f1' })
+          return void openFeature('f1')
         case 'football':
-          return go({ kind: 'feature', id: 'football' })
+          return void openFeature('football')
         case 'focus': {
           /*
            * `/focus` opens Student; `/focus 25` starts twenty-five minutes there and then.
@@ -721,7 +901,7 @@ export default function App(): React.JSX.Element {
            * A number is the only thing this takes. Anything else opens the screen rather than guessing, because a
            * session started by mistake is somebody's twenty-five minutes.
            */
-          go({ kind: 'feature', id: 'student' })
+          void openFeature('student')
           const minutes = Number(args.trim())
           if (Number.isFinite(minutes) && minutes >= 1 && minutes <= 600) {
             void window.api
@@ -752,7 +932,7 @@ export default function App(): React.JSX.Element {
       clearConversation,
       dark,
       deleteConversation,
-      newChat,
+      freshChat,
       notify,
       openSearch,
       regenerate,
@@ -762,8 +942,8 @@ export default function App(): React.JSX.Element {
       stop,
       toggleBrowser,
       toggleIncognito,
-      updateSettings,
-      webSearch
+      toggleWebSearch,
+      updateSettings
     ]
   )
 
@@ -773,7 +953,7 @@ export default function App(): React.JSX.Element {
       const key = e.key.toLowerCase()
       if (e.shiftKey && key === 'o') {
         e.preventDefault()
-        newChat()
+        freshChat()
       } else if (e.shiftKey && key === 'n') {
         e.preventDefault()
         toggleIncognito()
@@ -808,13 +988,15 @@ export default function App(): React.JSX.Element {
         openSearch()
       } else if (e.shiftKey && key === 'u') {
         // Student. Ctrl+Shift+F is the browser's find-on-page, so study gets a chord pages do not use.
+        // Through the guard: an advertised chord that silently does nothing is worse than no chord at all, so with
+        // Student switched off this says that and says how to turn it on.
         e.preventDefault()
-        go({ kind: 'feature', id: 'student' })
+        void openFeature('student')
       }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [newChat, openSearch, toggleBrowser, toggleIncognito, toggleSidebar, welcome])
+  }, [freshChat, openSearch, toggleBrowser, toggleIncognito, toggleSidebar, welcome])
 
   /**
    * The native menu, and a question handed in from outside the chat.
@@ -822,12 +1004,12 @@ export default function App(): React.JSX.Element {
    * All three arrive from the main process and all three used to arrive nowhere: `File > New Chat` and
    * `Help > About Orbis` sent a message the window never listened for, so both menu items did nothing at all, and a
    * page asking Orion a question handed it to `chat:ask`, which had no other end. Placed here rather than with the
-   * other listeners near the top of this file because it needs `newChat`, which is defined further down.
+   * other listeners near the top of this file because it needs the chat hook, which is set up further down.
    */
   useEffect(() => {
     const offNewChat = window.api.onMenuNewChat(() => {
       closeFeature()
-      newChat()
+      freshChat()
     })
     const offAbout = window.api.onMenuAbout(() => setSettingsOpen('about'))
     const offAsk = window.api.onChatAsk((text) => {
@@ -841,7 +1023,7 @@ export default function App(): React.JSX.Element {
       offAbout()
       offAsk()
     }
-  }, [closeFeature, newChat])
+  }, [closeFeature, freshChat])
 
   /*
    * Escape closes whatever screen is open, handled once, here.
@@ -946,6 +1128,16 @@ export default function App(): React.JSX.Element {
     [savedConversations]
   )
   const galleryImages = useMemo(() => collectImages(savedConversations), [savedConversations])
+  /**
+   * The menu, as this person chose it. Empty categories are already gone, so no heading is left over nothing.
+   *
+   * Recomputed only when the saved choice changes, which is when somebody moves a switch.
+   */
+  const featureMenu = useMemo(() => featureGroupsFor(visibility.choice), [visibility.choice])
+  /** Chance is the one core surface that is a choice, and it is not one of the screens above. */
+  const chanceShown = isVisible('chance', visibility.choice)
+  /** The price strip goes with Markets: hiding Markets and still watching Markets is not hiding Markets. */
+  const marketsShown = isVisible('markets', visibility.choice)
   /** The browser is on screen: it takes the whole window below the address bar, so none of the chat's own bars are shown. */
   // Settings and the shortcut sheet draw over everything, the browser included: they belong to this window, and a
   // native Chromium window on top of them would hide them outright rather than sit behind the dimming.
@@ -962,7 +1154,17 @@ export default function App(): React.JSX.Element {
           browser's own toolbar, beside that address bar, where the eye already is; this stays as the window's title
           bar, 36px either way, with the Windows buttons drawn over its right end. */}
       {browserShowing ? (
-        <div className="url-strip" />
+        /*
+          The browser's own window carries the address bar, so this row has none -- but it was left completely
+          blank, a 36px band of nothing, and the only sign that pressing Browser had done anything was a separate
+          Chromium window somebody could easily miss. It says where you are now, and offers the way back.
+        */
+        <div className="url-strip">
+          <span className="url-strip-where">Browser is open in its own window</span>
+          <button type="button" className="text-btn" onClick={toggleBrowser}>
+            Return to chat
+          </button>
+        </div>
       ) : (
         <UrlBar
           onNavigate={openInBrowser}
@@ -985,10 +1187,7 @@ export default function App(): React.JSX.Element {
           onToggleHistory={toggleSidebar}
           sidebarCollapsed={sidebarCollapsed}
           webSearch={webSearch}
-          onToggleWebSearch={() => {
-            notify(webSearch ? 'Web search off.' : 'Web search on. Replies will use live results.')
-            setWebSearch(!webSearch)
-          }}
+          onToggleWebSearch={toggleWebSearch}
           onToggleActivity={toggleActivity}
           onToggleTheme={() => void updateSettings({ theme: dark ? 'light' : 'dark' })}
         >
@@ -1041,18 +1240,27 @@ export default function App(): React.JSX.Element {
           imageCount={galleryImages.length}
           imagesOpen={imagesOpen}
           chanceOpen={chanceOpen}
-          onChance={() => setChanceOpen((open) => !open)}
+          features={featureMenu}
+          chanceShown={chanceShown}
+          // Chance is a choice, so the row is not there when it is off -- and this says so anyway, because a
+          // notification or a schedule can ask for it without going past the menu.
+          onChance={() => {
+            if (!chanceShown) return notify(`${describeVisibility('chance', visibility.choice)} Press Ctrl+K and type its name to turn it back on.`, 'warn')
+            setChanceOpen((open) => !open)
+          }}
           feature={feature}
-          onFeature={(id) => go({ kind: 'toggleFeature', id })}
+          // Pressing the row you are already on still folds it away; anything else goes through the one guard.
+          onFeature={(id) => (id === feature ? go({ kind: 'toggleFeature', id }) : void openFeature(id))}
           searchToken={searchToken}
           userName={settings?.userName ?? 'You'}
           userAvatar={settings?.userAvatar ?? DEFAULT_AVATAR}
           userTitle={settings?.userTitle ?? ''}
-          onNewChat={newChat}
+          onNewChat={freshChat}
           onIncognito={toggleIncognito}
           onSearch={openSearch}
           onImages={() => { setChanceOpen(false); setFilesTool(undefined); go({ kind: 'toggleImages' }) }}
           onBrowser={toggleBrowser}
+          browserOpen={browserShowing}
           onSelect={selectChat}
           onRename={renameConversation}
           onDelete={deleteConversation}
@@ -1063,13 +1271,14 @@ export default function App(): React.JSX.Element {
 
         <main className="stage">
           <ChatView
-            key={activeId ?? 'new'}
+            key={`${activeId ?? 'new'}:${chatEpoch}`}
             conversation={active}
             stream={active ? streams[active.id] : undefined}
             settings={settings}
             loaded={loaded}
             model={current.model}
             incognito={current.incognito}
+            visibility={visibility.choice}
             quickPromptsOpen={quickPromptsOpen}
             onQuickPromptsChange={setQuickPromptsOpen}
             onModelChange={changeModel}
@@ -1093,7 +1302,7 @@ export default function App(): React.JSX.Element {
             onQuizRetry={(next) => active && addReply(active.id, '', { quiz: next })}
             onNotify={notify}
             onImprovePrompt={improvePrompt}
-            onNewChat={newChat}
+            onNewChat={freshChat}
             onSearch={openSearch}
             onOpenApp={openNativeApp}
             onUseBranch={(branchId) => active && useBranch(active.id, branchId)}
@@ -1126,17 +1335,18 @@ export default function App(): React.JSX.Element {
                   }}
                 />
               )}
-              {feature === 'labs' && <LabsView onClose={closeFeature} onNotify={notify} onOpenApp={openNativeApp} />}
+              {feature === 'labs' && <LabsView onClose={closeFeature} onNotify={notify} onOpenApp={openNativeApp} openInConversation={labsOpenHere} />}
               {feature === 'courses' && <CoursesView onClose={closeFeature} onNotify={notify} onOpenApp={openNativeApp} />}
               {feature === 'toolkit' && <ToolkitView onClose={closeFeature} />}
               {feature === 'eye' && <EyeView onClose={closeFeature} />}
               {feature === 'cosmos' && <CosmosView onClose={closeFeature} />}
+              {feature === 'arcade' && <OfflineGames onClose={closeFeature} />}
               {feature === 'arena' && (
                 <ArenaView
                   onClose={closeFeature}
                   onOpen={(id) => {
                     fromArena.current = id
-                    go({ kind: 'feature', id })
+                    void openFeature(id)
                   }}
                 />
               )}
@@ -1175,24 +1385,116 @@ export default function App(): React.JSX.Element {
         the same strip, from the same setting, a few pixels lower. Two of them stacked would be one too many, and the
         browser's is the one that belongs to what is on screen.
       */}
-      <MarketStrip suppressed={welcome !== 'closed' || browserShowing} />
+      {/*
+        And not when Markets is switched off. The strip IS Markets, a few pixels high: leaving it along the bottom of
+        somebody who took Markets out of their menu would be the "never claim a thing is on when it is off" rule
+        broken in the most visible place in the window.
+      */}
+      <MarketStrip suppressed={welcome !== 'closed' || browserShowing || !marketsShown} />
 
       <ToastStack toasts={toasts} onDismiss={(id) => setToasts((current) => current.filter((t) => t.id !== id))} />
       <ControlPrompts />
+      {/*
+        What the window itself lets Orbis do, and what the conversation lets Orbis do while the conversation is the
+        thing in front of somebody. Draws nothing: every value below is read from what this component already holds,
+        and every setter is the handler one of its own buttons already calls.
+
+        The conversation is handed over only while it is what is on screen. It stays mounted behind a module, so
+        registering it regardless would tell Orbis the conversation was in front while Chess World covered it.
+      */}
+      <ShellSurfacePoints
+        shell={{
+          nav: () => navLive.current,
+          show: showScreen,
+          browserRunning: () => browserRunning,
+          sidebar: () => !sidebarCollapsed,
+          setSidebar: (open) => setSidebarCollapsed(!open),
+          settings: () => settingsAt,
+          openSettings: (section) => setSettingsAt(section === null ? null : (section as SettingsSectionId)),
+          activity: () => activityOpen,
+          setActivity: (open) => {
+            setActivityOpen(open)
+            if (open) setUnread(0)
+          },
+          activityCount: () => ({ total: noticesLive.current.length, unread }),
+          clearActivity: () => setNotices([]),
+          palette: () => paletteOpen,
+          setPalette: setPaletteOpen,
+          shortcuts: () => shortcutsOpen,
+          setShortcuts: setShortcutsOpen,
+          back: () => go({ kind: 'escape' }),
+          chats: () => savedConversations.length
+        }}
+        chat={
+          feature === null && !imagesOpen && !browserShowing
+            ? {
+                model: () => current.model,
+                setModel: changeModel,
+                incognito: () => current.incognito,
+                // The switch starts a new unsaved chat rather than taking a value, so this asks for it only when it
+                // would really change something -- the same thing pressing it twice would do.
+                setIncognito: (on) => {
+                  if (on !== current.incognito) toggleIncognito()
+                },
+                webSearch: () => webSearch,
+                setWebSearch: (on) => {
+                  if (on !== webSearch) toggleWebSearch()
+                },
+                // From the list the window really holds, not from what was drawn: an action is checked the moment it
+                // has run.
+                open: () => {
+                  const id = activeLive.current
+                  const one = id ? conversationsRef.current.find((c) => c.id === id) : undefined
+                  return one ? { id: one.id, title: one.title, messages: one.messages.length, replying: Boolean(streamsRef.current[one.id]) } : null
+                },
+                covered: () => settingsOpen || shortcutsOpen || chanceOpen || paletteOpen || editing !== null,
+                newChat: freshChat,
+                rename: (title) => {
+                  const id = activeLive.current
+                  if (id) renameConversation(id, title)
+                },
+                clear: () => {
+                  const id = activeLive.current
+                  if (id) clearConversation(id)
+                },
+                stop: () => {
+                  const id = activeLive.current
+                  if (id) stop(id)
+                },
+                find: openSearch,
+                chats: () => savedConversations.length
+              }
+            : null
+        }
+      />
       {settingsAt && settings && (
-        <SettingsModal settings={settings} section={settingsAt} onUpdate={updateSettings} onClose={() => setSettingsAt(null)} onOpenFiles={(tool) => { setSettingsAt(null); setFilesTool(tool); go({ kind: 'images' }) }} />
+        <SettingsModal
+          settings={settings}
+          // The window's own copy, so the Features section and the menu down the side cannot disagree about what is on.
+          visibility={visibility}
+          section={settingsAt}
+          onUpdate={updateSettings}
+          // Which section is showing, kept here as well, so the window and the dialog cannot hold two different
+          // answers to "where in Settings are we" -- and so what Orbis reads from the window is the real one.
+          onSection={rememberSection}
+          onClose={() => setSettingsAt(null)}
+          onOpenFiles={(tool) => { setSettingsAt(null); setFilesTool(tool); go({ kind: 'images' }) }}
+        />
       )}
-      {chanceOpen && <ChanceView onClose={() => setChanceOpen(false)} />}
-      {shortcutsOpen && <ShortcutsModal onClose={() => setShortcutsOpen(false)} />}
+      {chanceOpen && chanceShown && <ChanceView onClose={() => setChanceOpen(false)} />}
+      {shortcutsOpen && <ShortcutsModal visibility={visibility.choice} onClose={() => setShortcutsOpen(false)} />}
       <CommandPalette
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}
-        onFeature={(id) => {
-          // One surface at a time: a screen opened from here replaces whatever was showing, rather than landing
-          // on top of the image gallery or behind the browser.
-          go({ kind: 'feature', id })
-        }}
+        // One surface at a time, and through the one guard: a screen opened from here replaces whatever was
+        // showing rather than landing on top of the image gallery or behind the browser.
+        onFeature={(id) => void openFeature(id)}
         onBrowser={() => go({ kind: 'browser' })}
+        // Found something that is switched off: turn it on and go there, in one press. This is the whole route by
+        // which somebody discovers a screen they did not pick, so it has to really switch it on rather than send
+        // them off to look for a settings page.
+        onTurnOn={(id) => void turnFeatureOn(id)}
+        visibility={visibility.choice}
         // `window: true`: this IS the window, so every screen it has is reachable from here. Without it the
         // palette read every capability's `needs` -- which describe what the BROWSER side requires -- and offered
         // "Whiteboard -- Orbis is not running" to somebody looking at Orbis.
@@ -1230,6 +1532,7 @@ export default function App(): React.JSX.Element {
         needsUnlock={needsUnlock}
         lockedReason={lockedReason}
         onComplete={completeWelcome}
+        onChooseFeatures={chooseWelcomeFeatures}
         onUnlock={unlockAccount}
         onEnter={enterFromWelcome}
         onFinished={finishWelcome}
