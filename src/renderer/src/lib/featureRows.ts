@@ -1,7 +1,7 @@
-import { Compass, FolderOpen, MessageSquare, Search, SlidersHorizontal, type LucideIcon } from 'lucide-react'
+import { Compass, FolderOpen, MessageSquare, Search, SlidersHorizontal } from 'lucide-react'
 import { FEATURE_FACTS, blurbFor, capabilityFor, factsFor, type FeatureFacts, type SurfaceId } from '../../../shared/featureVisibility'
 import { CHOICE_GROUPS } from '../../../shared/featureChoiceGroups'
-import { CHOICE_ICONS } from './features'
+import { CHOICE_ICONS, type FeatureIcon } from './features'
 
 /**
  * Everything Orbis has, as the Features screen in Settings lists it.
@@ -27,7 +27,7 @@ import { CHOICE_ICONS } from './features'
  * carries them. Settings has to show them all the same: a list of what Orbis has that leaves out the chat and the
  * browser is not a list of what Orbis has. Chance is in `CHOICE_ICONS` already, because the first run offers it.
  */
-const CORE_ICONS: Readonly<Record<string, LucideIcon>> = Object.freeze({
+const CORE_ICONS: Readonly<Record<string, FeatureIcon>> = Object.freeze({
   chat: MessageSquare,
   browser: Compass,
   files: FolderOpen,
@@ -50,7 +50,7 @@ export interface Surface {
   label: string
   /** One line in everyday words — the registry's own description where there is one. */
   hint: string
-  icon: LucideIcon
+  icon: FeatureIcon
   /** It has no switch, in the type as well as in the interface. */
   essential: boolean
   /** Other parts of the interface that go away with it, in plain words. */
@@ -71,7 +71,7 @@ export interface Surface {
 
 const surfaceOf = (facts: FeatureFacts): Surface => {
   const capability = capabilityFor(facts.id)
-  const icon: LucideIcon | undefined = CHOICE_ICONS[facts.id] ?? CORE_ICONS[facts.id]
+  const icon: FeatureIcon | undefined = CHOICE_ICONS[facts.id] ?? CORE_ICONS[facts.id]
   return {
     id: facts.id,
     // The classification's own label, which is what the first-run step shows, so the two call everything the same.

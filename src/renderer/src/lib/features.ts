@@ -1,5 +1,6 @@
-import { Crown, Dices, Gamepad2, Music2, CandlestickChart, ClipboardList, FilePlus2, FlaskConical, BookMarked, GraduationCap, LayoutGrid, LayoutTemplate, Mic, PenTool, CalendarClock, Wrench, Globe2, Orbit, Flag, Swords, Trophy, type LucideIcon } from 'lucide-react'
+import { createElement, type ComponentType } from 'react'
 import type { AppFeature } from '../../../shared/commandCenter'
+import { FEATURE_LOGOS } from './featureLogos'
 import { ALL_MENU_FEATURES, menuFeatures, menuGroups, type MenuFeature } from '../../../shared/featureMenu'
 import { everythingChoice, type VisibilityChoice } from '../../../shared/featureVisibility'
 
@@ -22,27 +23,41 @@ import { everythingChoice, type VisibilityChoice } from '../../../shared/feature
  * `src/shared/featureLauncher.test.ts` fails on it.
  */
 
-const ICONS: Readonly<Record<AppFeature, LucideIcon>> = Object.freeze({
-  chess: Crown,
-  create: FilePlus2,
-  neurova: Music2,
-  pages: LayoutTemplate,
-  labs: FlaskConical,
-  markets: CandlestickChart,
-  whiteboard: PenTool,
-  clipboard: ClipboardList,
-  workspaces: LayoutGrid,
-  schedules: CalendarClock,
-  notes: Mic,
-  student: GraduationCap,
-  courses: BookMarked,
-  toolkit: Wrench,
-  eye: Globe2,
-  cosmos: Orbit,
-  f1: Flag,
-  football: Trophy,
-  arena: Swords,
-  arcade: Gamepad2
+/** Whatever draws a screen's picture: a line icon or the screen's own logo. Both take a size. */
+export type FeatureIcon = ComponentType<{ size?: number; className?: string; strokeWidth?: number; 'aria-hidden'?: boolean | 'true' | 'false' }>
+
+/**
+ * A feature's own logo, drawn where its icon was. The logo is wider than a square icon, so it is given the height an
+ * icon of that size would have and its width follows the picture.
+ */
+const logoIcon = (id: string): FeatureIcon => {
+  const src = FEATURE_LOGOS[id]
+  const Logo: FeatureIcon = ({ size = 14, className }) =>
+    createElement('img', { src, alt: '', draggable: false, className: ['feature-logo-icon', className].filter(Boolean).join(' '), style: { height: size * 2, width: 'auto', display: 'block' } })
+  return Logo
+}
+
+const ICONS: Readonly<Record<AppFeature, FeatureIcon>> = Object.freeze({
+  chess: logoIcon('chess'),
+  create: logoIcon('create'),
+  neurova: logoIcon('neurova'),
+  pages: logoIcon('pages'),
+  labs: logoIcon('labs'),
+  markets: logoIcon('markets'),
+  whiteboard: logoIcon('whiteboard'),
+  clipboard: logoIcon('clipboard'),
+  workspaces: logoIcon('workspaces'),
+  schedules: logoIcon('schedules'),
+  notes: logoIcon('notes'),
+  student: logoIcon('student'),
+  courses: logoIcon('courses'),
+  toolkit: logoIcon('toolkit'),
+  eye: logoIcon('eye'),
+  cosmos: logoIcon('cosmos'),
+  f1: logoIcon('f1'),
+  football: logoIcon('football'),
+  arena: logoIcon('arena'),
+  arcade: logoIcon('arcade')
 })
 
 /**
@@ -52,17 +67,17 @@ const ICONS: Readonly<Record<AppFeature, LucideIcon>> = Object.freeze({
  * capability, is in no `ICONS` entry, and would be drawn as an empty square in a picker that only knew that map.
  * `src/shared/featureChoiceGroups.test.ts` fails when an optional screen is missing from here.
  */
-export const CHOICE_ICONS: Readonly<Record<string, LucideIcon>> = Object.freeze({
+export const CHOICE_ICONS: Readonly<Record<string, FeatureIcon>> = Object.freeze({
   ...ICONS,
-  chance: Dices
+  chance: logoIcon('chance')
 })
 
 export interface Feature extends MenuFeature {
-  icon: LucideIcon
+  icon: FeatureIcon
 }
 
 const withIcon = (one: MenuFeature): Feature | null => {
-  const icon = (ICONS as Partial<Record<AppFeature, LucideIcon>>)[one.id]
+  const icon = (ICONS as Partial<Record<AppFeature, FeatureIcon>>)[one.id]
   return icon ? { ...one, icon } : null
 }
 
