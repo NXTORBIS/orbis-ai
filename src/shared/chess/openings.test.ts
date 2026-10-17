@@ -4,6 +4,7 @@ import { START_FEN, applyMove, checkFen, positionKey } from './rules.ts'
 import {
   OPENING_SOURCE, datasetSize, explore, identify, recordFor, searchOpenings, transposition, volumes, walkLine
 } from './openings.ts'
+import { OPENINGS_DATA } from './openingsData.ts'
 
 /**
  * What these prove.
@@ -257,6 +258,35 @@ test('searching finds main lines before their variations, and knows ECO codes', 
   assert.deepEqual(searchOpenings('   '), [])
   // A name nobody uses finds nothing, rather than the nearest thing.
   assert.deepEqual(searchOpenings('zzzzzz opening'), [])
+})
+
+test('every row in the shipped dataset is well formed, and no position is named twice', () => {
+  /*
+   * A string-level pass over all 3,865 rows: the key has to be a position key and nothing else, the code has to be
+   * a real ECO code, and the name and the line have to be there. It is the cheap half of the check -- playing every
+   * line through the rules takes about fifteen seconds, which the generator does at build time and no test run
+   * should -- and it is the half that catches a data file that has been truncated or edited by hand.
+   */
+  const rows = OPENINGS_DATA.split('\n').filter(Boolean)
+  assert.equal(rows.length, OPENING_SOURCE.entries)
+  const keys = new Set<string>()
+  for (const row of rows) {
+    const parts = row.split('\t')
+    assert.equal(parts.length, 4, row.slice(0, 60))
+    const [key, eco, name, line] = parts
+    const fields = key.split(' ')
+    assert.equal(fields.length, 4, key)
+    assert.equal(fields[0].split('/').length, 8, key)
+    assert.ok(fields[1] === 'w' || fields[1] === 'b', key)
+    assert.match(fields[2], /^(-|K?Q?k?q?)$/, key)
+    assert.match(fields[3], /^(-|[a-h][36])$/, key)
+    assert.match(eco, /^[A-E][0-9][0-9]$/, eco)
+    assert.ok(name.trim().length > 0, key)
+    assert.ok(line.trim().length > 0, key)
+    // Two names for one position would mean the answer depended on which row was read first.
+    assert.ok(!keys.has(key), `two rows claim ${key}`)
+    keys.add(key)
+  }
 })
 
 test('every line the dataset carries can really be played, and names its own position', () => {

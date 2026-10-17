@@ -63,7 +63,7 @@ export const FAMOUS_GAMES: readonly FamousGame[] = Object.freeze([
       {
         ply: 35,
         ask: 'White has just lost a pawn on b2 and the rook in the corner is hanging. The move played ignores both. Which piece moved, and to where?',
-        afterward: 'The bishop steps in front of the black queen’s own pieces instead of guarding anything. Black takes the rook on the next two moves; White never defends either rook again.'
+        afterward: 'The bishop steps into the middle of Black’s position and guards nothing of White’s. Black takes one rook on the next move and the other two moves later; White never defends either of them.'
       },
       {
         ply: 43,
@@ -89,7 +89,7 @@ export const FAMOUS_GAMES: readonly FamousGame[] = Object.freeze([
     themes: ['queen-sacrifice', 'quiet-move', 'mating-attack'],
     note:
       'White brings a rook into the centre on move 19 and leaves a knight to be taken; Black takes it. After that the finish is ' +
-      'forced — a rook check, the queen handed over on d7, and two bishops walking the black king into mate while ' +
+      'forced — a rook check, the queen handed over with check, and two bishops walking the black king into mate while ' +
       'the black queen sits on f3 with nothing to do. The rook move is the move worth stopping at: it attacks nothing.',
     unstated: [
       'No event or round is recorded here. The game is widely described as a casual game played in Berlin.',
@@ -132,8 +132,8 @@ export const FAMOUS_GAMES: readonly FamousGame[] = Object.freeze([
     themes: ['queen-sacrifice', 'counter-attack', 'mating-attack'],
     note:
       'Black gives up the queen for a bishop on move 17, and from then on a rook, a bishop and the second rook do all ' +
-      'the work: the white queen is away on the far side of the board collecting a pawn and never gets back. The mate ' +
-      'is in the corner, with Black a queen down on material the whole way.',
+      'the work: the white queen is away on the far side of the board collecting a pawn and comes back too late to ' +
+      'help. The mate is in the corner, with Black a bishop and two rooks against a queen the whole way.',
     unstated: [
       'Which game of the congress this was, and the round.',
       'The date within 1857.'
@@ -174,9 +174,9 @@ export const FAMOUS_GAMES: readonly FamousGame[] = Object.freeze([
     ending: 'checkmate',
     themes: ['piece-sacrifice', 'queen-sacrifice', 'mating-attack'],
     note:
-      'Seventeen moves. White gives up a knight on move 10 to break the pawns in front of the black king, castles on ' +
-      'the queen’s side, and then feeds a rook and the queen into the position one after the other so that the ' +
-      'last rook mates on the back rank. Black’s bishop on f8 and rook on h8 never move at all. Orbis keeps this one for people who are new to ' +
+      'Seventeen moves. White gives up a knight on move 10 so that a bishop can come in with check and the black ' +
+      'knight that lands on d7 ends up pinned; he castles on the queen’s side and then feeds a rook and the queen ' +
+      'into the position one after the other, so that the last rook mates on the back rank. Black’s bishop on f8 and rook on h8 never move at all. Orbis keeps this one for people who are new to ' +
       'the game: it is the shortest thing in the collection and the easiest to follow end to end.',
     unstated: [
       'No event or round is recorded here. The game is widely described as a casual game played in Paris while an opera was on.',
@@ -192,8 +192,8 @@ export const FAMOUS_GAMES: readonly FamousGame[] = Object.freeze([
     guided: [
       {
         ply: 19,
-        ask: 'Black has just played b5, attacking a bishop and a knight at the same time. White moved one of them. Which, and where?',
-        afterward: 'The knight takes the pawn and is lost for it. What White gets is the open file towards the black king, which the rooks use for the rest of the game.'
+        ask: 'Black has just pushed a pawn two squares to attack the bishop on c4. White did not move the bishop. What did he play?',
+        afterward: 'The knight takes the pawn. Black wins it back at once, and for the knight White gets two pawns, a check, and the file his rooks use for the rest of the game.'
       },
       {
         ply: 31,
@@ -220,11 +220,10 @@ export const FAMOUS_GAMES: readonly FamousGame[] = Object.freeze([
     note:
       'Twenty quiet moves and then everything at once. A pawn takes en passant on move 22, which is the only en ' +
       'passant capture in this collection, the centre opens, and on move 28 the white queen goes all the way across ' +
-      'to the far wing — a move that attacks nothing on the square it lands on. Black resigned five moves later with ' +
-      'the king chased into the open and both white bishops cutting across the board.',
+      'to the far wing — a move that attacks nothing on the square it lands on. Black resigned five moves later, ' +
+      'having just lost the queen, with a bishop sitting next to his king.',
     unstated: [
-      'The round.',
-      'The date within 1883.'
+      'The round, and the date within 1883.'
     ],
     san: [
       'c4', 'e6', 'e3', 'Nf6', 'Nf3', 'b6', 'Be2', 'Bb7', 'O-O', 'd5',
@@ -376,7 +375,7 @@ export const FAMOUS_GAMES: readonly FamousGame[] = Object.freeze([
       {
         ply: 46,
         ask: 'Black is a queen down. He has rooks on c3 and d8, a bishop on b6 and a bishop on b7, and a knight on g4. The move he played also loses a piece. Which rook moved, and where?',
-        afterward: 'The second rook comes to the second rank, where the queen can take it. If she does, the bishop on b7 checks along the long diagonal and Black mates.'
+        afterward: 'The second rook comes to the second rank, where the queen can take it. If she does, the bishop on b7 comes in along the long diagonal with check, which is where the game ended.'
       },
       {
         ply: 50,
@@ -460,7 +459,7 @@ export const FAMOUS_GAMES: readonly FamousGame[] = Object.freeze([
       },
       {
         ply: 39,
-        ask: 'The black queen has just gone back to b5 and White has a queen on c4. White offered the queen again, two squares away. Where?',
+        ask: 'The black queen has just gone back to b5 and White has a queen on c4. White offered her again, further up the same file. Where?',
         afterward: 'The queen goes forward onto the seventh rank. She still cannot be taken, for the same reason, and Black is running out of squares that guard the rook.'
       },
       {
@@ -501,13 +500,13 @@ export const FAMOUS_GAMES: readonly FamousGame[] = Object.freeze([
     guided: [
       {
         ply: 52,
-        ask: 'Black has a rook on e8, a knight on d5 and a queen on c7, and White has just taken on b5. Black moved the rook forward to a square two pieces attack. Which square?',
-        afterward: 'The rook steps to the third rank in front of White’s pawns, where it can be taken by a pawn. It cannot be taken safely, because the knight is coming.'
+        ask: 'Black has a rook on e8, a knight on d5 and a queen on c7, and White has just taken on b5. Black moved the rook forward to a square where a pawn can take it. Which square?',
+        afterward: 'The rook steps to the third rank in front of White’s pawns, where the pawn on f2 can take it. Taking it does not work, because the knight is coming next.'
       },
       {
         ply: 56,
-        ask: 'White has just taken on b5 with the queen. Black has a rook on e3 and a knight on d5. Black moved the knight to a square where two things attack it. Where?',
-        afterward: 'The knight goes to the third rank, offering itself to the pawn and to a rook. Everything after this is forced for a dozen moves, which is why this is the move the game is remembered for.'
+        ask: 'White has just taken on b5 with the queen. Black has a rook on e3 and a knight on d5. Black moved the knight to a square where a rook can take it. Where?',
+        afterward: 'The knight goes to the third rank, offering itself to the rook on the c-file. Everything after this is forced for a dozen moves, which is why this is the move the game is remembered for.'
       },
       {
         ply: 80,
@@ -529,7 +528,7 @@ export const FAMOUS_GAMES: readonly FamousGame[] = Object.freeze([
     themes: ['queen-sacrifice', 'quiet-move', 'counter-attack'],
     note:
       'Black was thirteen years old. On move 11 he puts a knight on the edge of the board; on move 17, with his queen ' +
-      'attacked and nothing defending her, he moves a bishop out instead of saving her. White takes the queen, ' +
+      'attacked and only a pawn guarding her, he moves a bishop out instead of saving her. White takes the queen, ' +
       'Black takes a bishop with check, and over the next twenty moves the two bishops, a knight and a rook take more ' +
       'material than the queen was worth. The game ends in mate on move 41, with White’s king driven to c1.',
     unstated: [
@@ -554,7 +553,7 @@ export const FAMOUS_GAMES: readonly FamousGame[] = Object.freeze([
       },
       {
         ply: 34,
-        ask: 'Black’s queen on b6 is attacked by the bishop on c5 and nothing defends her. Black did not move her. What did he play instead?',
+        ask: 'Black’s queen on b6 is attacked by the bishop on c5, and the only thing guarding her is a pawn. Black did not move her. What did he play instead?',
         afterward: 'A bishop steps out to e6, leaving the queen. White took her; Black then took a bishop with check and kept taking. Orbis’s view: the point is not that the queen was offered, it is that Black had counted every check to the end.'
       },
       {
@@ -576,8 +575,8 @@ export const FAMOUS_GAMES: readonly FamousGame[] = Object.freeze([
     ending: 'resignation',
     themes: ['positional-squeeze'],
     note:
-      'No sacrifices and no mate. White opens with the c-pawn, exchanges into a position where Black has a weak pawn ' +
-      'he cannot fix, breaks on the f-file on move 26, and then simply adds pressure until Black has no move that ' +
+      'No sacrifices and no mate. White opens with the c-pawn, exchanges down to a position where Black is left with ' +
+      'a pawn on e6 he has to keep defending, breaks on the f-file on move 26, and then adds pressure until Black has no move that ' +
       'holds everything. Orbis keeps it as the counterweight to the rest of the collection: most famous games are ' +
       'fireworks, and this one is famous for not being.',
     unstated: [
@@ -602,7 +601,7 @@ export const FAMOUS_GAMES: readonly FamousGame[] = Object.freeze([
       },
       {
         ply: 75,
-        ask: 'Black has just put a knight on f6 to block. White has rooks on f2 and f3 and a queen on e4. White took the knight. With which piece?',
+        ask: 'Black has just blocked with a knight in front of his own pawns. White has two rooks stacked on one file and a queen on e4, and he took the knight. With which piece?',
         afterward: 'A rook takes it, and Black must take back with a pawn, opening the king. The second rook comes to the same square next move.'
       },
       {
@@ -624,8 +623,8 @@ export const FAMOUS_GAMES: readonly FamousGame[] = Object.freeze([
     ending: 'resignation',
     themes: ['machine', 'piece-sacrifice'],
     note:
-      'Nineteen moves. White, a machine, gives up a knight in front of the black queen on move 8 so that the black king can never get to ' +
-      'safety; the king spends the rest of the game on c8 and d8 while the white pieces come at him. Black resigned ' +
+      'Nineteen moves. White, a machine, gives up a knight for a pawn on move 8 so that the black king can never ' +
+      'castle; the king spends the rest of the game on c8 and d8 while the white pieces come at him. Black resigned ' +
       'on move 19. It is in the collection because of what it was — the last game of the match a computer won ' +
       'against the world champion — rather than because the moves are beautiful.',
     unstated: [
@@ -641,8 +640,8 @@ export const FAMOUS_GAMES: readonly FamousGame[] = Object.freeze([
     guided: [
       {
         ply: 15,
-        ask: 'White has knights on g5 and f3 and a bishop on d3; Black has just played h6, attacking a knight. White moved that knight forward into three defenders. Which square?',
-        afterward: 'The knight takes the pawn in front of the black queen and is lost. What White gets is a black king that can never castle, which turns out to be worth more than a knight here.'
+        ask: 'White has knights on g5 and f3 and a bishop on d3; Black has just played h6, attacking a knight. White did not retreat it — he played it forward and gave it up. Which square?',
+        afterward: 'The knight takes a pawn and is lost for it. What White gets is a black king that can never castle, which turns out to be worth more than a knight here.'
       },
       {
         ply: 19,
@@ -651,7 +650,7 @@ export const FAMOUS_GAMES: readonly FamousGame[] = Object.freeze([
       },
       {
         ply: 35,
-        ask: 'Black has just taken a bishop on f5 with a pawn. White has a rook on e1 and the black queen is on e7. What did White play?',
+        ask: 'Black has just taken a bishop on f5 with a pawn. White has a rook on e1 and the black queen is still on the file in front of it. What did White play?',
         afterward: 'The rook takes the queen. Black resigned four plies later. Orbis’s view: whatever anybody thinks about that match, the knight offer on move 8 is a good example of a piece given up for something that is not a mating attack.'
       }
     ]
@@ -687,7 +686,7 @@ export const FAMOUS_GAMES: readonly FamousGame[] = Object.freeze([
     guided: [
       {
         ply: 47,
-        ask: 'Black has just played Qd6, and White has a rook on d4 attacked by a pawn, a rook on e1 and a bishop on h3. White started with a capture that gives up the rook. What is it?',
+        ask: 'Black has just played Qd6. White has a rook in the centre that a pawn is attacking, another rook on e1 and a bishop on h3, and he started with a capture that gives the rook up. What is it?',
         afterward: 'The rook takes the pawn in the centre and Black takes it back. That opens the file the other rook needs, and from here White gives check on every move for twenty plies.'
       },
       {

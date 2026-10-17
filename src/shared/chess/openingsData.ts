@@ -19,8 +19,22 @@
  * 0 were a second name for a position already named, where the first name stands.
  *
  * It is a string rather than 3865 object literals because it is parsed once, on first use, and a string
- * costs the window a fraction of what that many objects would. It is GENERATED: do not hand-edit it. The generator
- * plays every line through rules.ts, so a line in here is a line Orbis can really reach.
+ * costs the window a fraction of what that many objects would.
+ *
+ * HOW TO MAKE IT AGAIN. The rows below are generated and should not be edited by hand; this is the whole recipe,
+ * written down because a dataset nobody can rebuild is a dataset that can never be updated:
+ *
+ *   1. Fetch a.tsv .. e.tsv from the repository above at the commit you want. Each row is eco, name, pgn, tab
+ *      separated, with a header row to skip.
+ *   2. Drop the move numbers from the pgn and play the moves through `applyMove` in rules.ts, from `START_FEN`.
+ *   3. The row's key is `positionKey` of the position the line ends in. Write key, eco, name and the moves it
+ *      played, tab separated, one row per line, in the dataset's own order.
+ *   4. Refuse a row whose ECO code is not A00-E99 or whose moves will not play, and count what was refused.
+ *      Refuse a key that is already there rather than overwriting a name.
+ *
+ * Playing every line is what makes the keys trustworthy, and it is why there is no second implementation of chess
+ * anywhere near this file. It takes about fifteen seconds, which is why it happens when the data is built and not
+ * when the window opens.
  */
 
 export interface OpeningDataSource {

@@ -219,8 +219,11 @@ test('a date range includes a game that could be in it and excludes one that can
   assert.ok(!ids(filterGames(list, { from: '1900.01.01' })).includes('undated'))
   // With no bounds it is shown like everything else.
   assert.deepEqual(ids(filterGames(list, {})), ids(list))
-  // A bound that is not a date is no bound.
+  // A bound that is not a date is no bound -- and the screen is told to say so rather than look like it is working.
   assert.deepEqual(ids(filterGames(list, { from: 'whenever' })), ids(list))
+  const said = describeFilter({ from: 'whenever', to: '2021' })
+  assert.ok(said.find((one) => one.key === 'from')?.words.includes('narrowing nothing'))
+  assert.ok(!said.find((one) => one.key === 'to')?.words.includes('narrowing nothing'))
 })
 
 test('notes are counted as notes and nothing claims to know about the engine', () => {

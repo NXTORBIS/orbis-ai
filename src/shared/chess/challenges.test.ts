@@ -395,6 +395,14 @@ describe('today\'s challenges', () => {
     assert.match(made[0].why, /on your study plan/)
   })
 
+  test('a challenge from the plan is called what the person calls the line', () => {
+    const made = coachChallenges([
+      { id: 'a', from: 'coach', weaknessId: 'theme-fork', title: 'Solve puzzles -- fork', titleOverride: 'Forks, every morning', what: '', activity: 'puzzle', order: 0, dismissed: false, addedAt: 0 }
+    ], NOW, plain)
+    assert.equal(made[0].label, 'Forks, every morning')
+    assert.equal(made[0].goal.label, 'Forks, every morning')
+  })
+
   test('the plan can be handed in as a plain list of lines', () => {
     const made = coachChallenges([
       { id: 'a', from: 'person', title: 'Play', what: '', activity: 'play', order: 0, dismissed: false, addedAt: 0 }
@@ -531,7 +539,9 @@ describe('the board', () => {
     assert.equal(board.achievements.length, ACHIEVEMENTS.length)
     assert.deepEqual(board.dayRules, DAY_BOUNDARY_RULES)
     assert.deepEqual(board.streakRules, STREAK_RULES)
-    assert.match(board.says, /of today's challenges done/)
+    assert.match(board.says, /of the 3 challenges for today done/)
+    // The run says its own sentence under the run itself; the board does not print it a second time.
+    assert.equal(board.says.includes(board.streak.says), false)
   })
 
   test('off, nothing is worked out and the screen is told what that means', () => {

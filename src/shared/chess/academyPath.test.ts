@@ -167,6 +167,24 @@ test('a version the records were earned against is kept and said when it has mov
   assert.match(read.repaired.join(' '), /version/)
 })
 
+/**
+ * The first time anybody opens the Academy.
+ *
+ * The value the application hands back for a record file that does not exist carries `curriculumVersion: 0`
+ * (`kept.ts`). Reading that as progress earned against version 0 put two false sentences on the screen -- "this
+ * progress was earned against version 0 of the lessons" under a banner reading "some of your saved progress could
+ * not be read" -- and they were the first thing a new person saw. Nothing was earned, so there is nothing to say.
+ */
+test('a record with nothing in it says nothing about versions, whatever version it claims', () => {
+  for (const claimed of [0, CHESS_CURRICULUM.version - 1, CHESS_CURRICULUM.version]) {
+    const raw = { curriculumId: CHESS_CURRICULUM.id, curriculumVersion: claimed, records: [], reading: [], cards: [], skipped: [], place: null }
+    const read = decodeProgress(raw, CHESS_CURRICULUM, NOW)
+    assert.deepEqual(read.repaired, [], `an empty record claiming version ${claimed} complained: ${read.repaired.join(' ')}`)
+    // And it is stamped with the version it is about to be earned against, so it does not start saying it later.
+    assert.equal(read.progress.curriculumVersion, CHESS_CURRICULUM.version)
+  }
+})
+
 test('a card keeps its scheduler when it is one Orbis has, and falls back when it is not', () => {
   const raw = {
     curriculumId: CHESS_CURRICULUM.id,

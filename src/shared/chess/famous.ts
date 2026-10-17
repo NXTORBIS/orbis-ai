@@ -220,10 +220,25 @@ export function replayFamous(game: Pick<FamousGame, 'san'>): FamousReplay {
   return built.failedAt ? { ok: built.ok, moves: built.moves, failedAt: built.failedAt } : { ok: built.ok, moves: built.moves }
 }
 
+/*
+ * Positions, worked out once per game.
+ *
+ * Replaying is cheap; replaying eighty moves every time a screen asks "what was the position before move 47?" is
+ * not, and a board that steps through a game asks exactly that, once per key press. The cache is keyed on the
+ * game's own move array, which is frozen data in `famousData.ts`, so an entry can never be stale: a different
+ * array is a different game. A game built on the fly in a test simply misses the cache.
+ */
+const positionCache = new WeakMap<object, string[]>()
+
 /** The positions of the game: index 0 is before anything was played, index n is after move n. */
 export function famousPositions(game: Pick<FamousGame, 'san'>): string[] {
+  const key = game.san as unknown as object
+  const cached = positionCache.get(key)
+  if (cached) return cached
   const replay = replayFamous(game)
-  return [START_FEN, ...replay.moves.map((m) => m.fen)]
+  const positions = [START_FEN, ...replay.moves.map((m) => m.fen)]
+  positionCache.set(key, positions)
+  return positions
 }
 
 /** The position a given move was played in. Ply 1 is the first move, so it is played in the starting position. */
@@ -639,6 +654,50 @@ export function guidedPoint(game: FamousGame, run: GuidedRun): GuidedPoint | nul
 /** The position to think in: the position the asked-for move was played in. */
 export function guidedFen(game: FamousGame, point: GuidedPoint): string {
   return fenBefore(game, point.ply)
+}
+
+/**
+ * The moves between two points in the game, written out the way a move list reads.
+ *
+ * `from` is a ply already seen and `to` is the last ply to include, both 1-based. Numbering follows the game, so a
+ * line that starts on Black's move opens with the number and a pair of dots, as notation does.
+ */
+export function writeMoveList(game: Pick<FamousGame, 'san'>, from: number, to: number): string {
+  const first = Math.max(1, from + 1)
+  const last = Math.min(game.san.length, to)
+  if (last < first) return ''
+  const parts: string[] = []
+  for (let ply = first; ply <= last; ply += 1) {
+    const number = Math.ceil(ply / 2)
+    const white = ply % 2 === 1
+    if (white) parts.push(`${number}.${game.san[ply - 1]}`)
+    else if (ply === first) parts.push(`${number}...${game.san[ply - 1]}`)
+    else parts.push(game.san[ply - 1])
+  }
+  return parts.join(' ')
+}
+
+export interface GuidedGap {
+  /** The last ply already seen: 0 at the start of a run. */
+  from: number
+  /** The last ply played before the question. */
+  to: number
+  /** Those moves written out, or empty when the question follows straight on from the last one. */
+  written: string
+}
+
+/**
+ * What happened between the last question and this one.
+ *
+ * Without this, answering a question about move 24 and then being asked about move 34 drops somebody ten moves
+ * further on with no idea how the position got there. The moves in between are shown, as moves, so the jump is
+ * visible rather than silent.
+ */
+export function guidedSince(game: FamousGame, run: GuidedRun): GuidedGap {
+  const point = guidedPoint(game, run)
+  const last = run.answers.length ? run.answers[run.answers.length - 1].ply : 0
+  const to = point ? point.ply - 1 : game.san.length
+  return { from: last, to, written: writeMoveList(game, last, to) }
 }
 
 export interface GuidedVerdict {

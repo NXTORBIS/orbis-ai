@@ -31,9 +31,13 @@ const FAMILIES = /^\.([a-z0-9-]+(?:-head|-header|-empty|-none|-search))\b/
  *
  * But NOT all of it, and the difference matters. A sweep over these found that several own real layout of their
  * own and the shared control would restyle them -- `.images-empty` is a flex column centred in the whole panel
- * while `.view-empty` is a narrow block near the top; `.labs-search` takes the room left in its header row and
- * carries a clear button that the shared search box has not got. Converting those would move pixels, which is the
- * one thing the whole exercise forbids.
+ * while `.view-empty` is a narrow block near the top. Converting those would move pixels, which is the one thing
+ * the whole exercise forbids.
+ *
+ * The search boxes turned out not to be in that group. What each of them really owned was *where it sits* -- how
+ * much of its row it takes -- and that is one line, which the screen keeps written against the row it is in. The
+ * border, the corner, the colours, the focus ring and the clear button were the same idea written out eleven times
+ * and disagreeing every time, so they come from `.ui-search` now.
  *
  * So a name staying here is not automatically a failure. What this list guarantees is narrower and still worth
  * having: nothing NEW appears, and nothing is listed that the stylesheet no longer has. A name that genuinely
@@ -43,20 +47,16 @@ const STILL_HAND_MADE: readonly string[] = [
   'automation-head',
   'browser-confirm-head',
   'chat-header',
-  'clips-search',
   'code-header',
-  'cz-search',
   'cz-section-head',
   'drawer-empty',
   'drawer-head',
   'ext-prompt-head',
   'imagegen-head',
-  'images-empty',
   'images-head',
   'meeting-detail-head',
   'mk-alert-head',
   'mk-book-head',
-  'mk-compare-empty',
   'mk-detail-head',
   'mk-empty',
   'mk-head',
@@ -68,20 +68,17 @@ const STILL_HAND_MADE: readonly string[] = [
   'mk-rule-head',
   'mk-search',
   'mk-validate-head',
-  'mk-ws-empty',
   'mk-ws-head',
   'modal-header',
   'mstrip-none',
   'mstrip-panel-head',
   'notices-head',
-  'notices-search',
   'notify-none',
   'orb-confirm-head',
   'orb-panel-head',
   'orion-answer-head',
   'page-cell-empty',
   'pages-card-head',
-  'pages-empty',
   'pages-search',
   'pages-side-head',
   'pulsar-model-head',
@@ -96,7 +93,6 @@ const STILL_HAND_MADE: readonly string[] = [
   'sb-section-head',
   'set-head',
   'set-none',
-  'set-search',
   'skill-item-head',
   'space-head',
   'tl-group-head',
@@ -104,9 +100,7 @@ const STILL_HAND_MADE: readonly string[] = [
   'view-empty',
   'view-head',
   'wf-panel-head',
-  'wf-quick-empty',
   'wf-quick-head',
-  'wf-quick-search',
 ]
 
 test('no screen invents a title row, an empty message or a search box of its own', () => {

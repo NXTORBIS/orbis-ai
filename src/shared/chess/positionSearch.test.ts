@@ -248,6 +248,34 @@ test('a structural result carries its own warning, so it cannot be shown as exac
 
 const RULES: MatchRuleId[] = ['exact', 'placement', 'placement-and-turn', 'pawns']
 
+/**
+ * Every game replayed through rules.ts, keyed by hand.
+ *
+ * This is the brute force the index is checked against. It trusts nothing a record stored: the positions come from
+ * playing the moves, and the keys are worked out one at a time rather than looked up. It is written here rather than
+ * called out of the module on purpose -- a test that checks a thing against itself checks nothing.
+ */
+function byHand(games: readonly StoredGame[], rule: MatchRuleId): Map<string, Map<string, number[]>> {
+  const keyOf = matchRule(rule).keyOf
+  const out = new Map<string, Map<string, number[]>>()
+  for (const game of games) {
+    for (const step of walkGame(game, 'replay')) {
+      if (step.fen === undefined) continue
+      const key = keyOf(step.fen)
+      if (key === null) continue
+      let games_ = out.get(key)
+      if (!games_) {
+        games_ = new Map()
+        out.set(key, games_)
+      }
+      const plies = games_.get(game.id)
+      if (plies) plies.push(step.ply)
+      else games_.set(game.id, [step.ply])
+    }
+  }
+  return out
+}
+
 test('the index gives the same answer as a full replay, for every position in the library and every rule', () => {
   const games = library()
   // Every position any game in the library reaches, plus a handful that nothing reaches.
@@ -258,6 +286,28 @@ test('the index gives the same answer as a full replay, for every position in th
   }
   assert.ok(probes.size > 30, `the fixture library should cover a useful number of positions, got ${probes.size}`)
 
+  for (const rule of RULES) {
+    const index = buildIndex(games, rule)
+    const hand = byHand(games, rule)
+    for (const fen of probes) {
+      const fast = searchIndex(index, fen)
+      const key = matchRule(rule).keyOf(fen)
+      assert.ok(key !== null, fen)
+      const expected = [...(hand.get(key) ?? new Map<string, number[]>()).entries()]
+        .map(([id, plies]) => ({ id, plies: [...plies].sort((a, b) => a - b) }))
+        .sort((a, b) => (a.id < b.id ? -1 : 1))
+      assert.deepEqual(
+        fast.hits.map((one) => ({ id: one.gameId, plies: one.plies })).sort((a, b) => (a.id < b.id ? -1 : 1)),
+        expected,
+        `${rule} disagreed about ${fen}`
+      )
+    }
+  }
+})
+
+test('the module’s own replay scan agrees with the index too, counts and all', () => {
+  const games = library()
+  const probes = [START_FEN, after(['e4']), after(['e4', 'c5', 'Nf3', 'd6', 'd4']), ROOK_ENDING, KNIGHT_AND_ROOKS]
   for (const rule of RULES) {
     const index = buildIndex(games, rule)
     for (const fen of probes) {
@@ -274,6 +324,20 @@ test('the index gives the same answer as a full replay, for every position in th
       assert.match(check.says, /give the same/)
     }
   }
+})
+
+test('verifyIndex says so when the index and the replay really do disagree', () => {
+  // A record whose stored position does not follow from its own moves: the index answers from what was stored and
+  // the replay answers from the rules, and the check is the thing that notices.
+  const tampered = gameOf('tampered', ['e4', 'e5', 'Nf3'])
+  const elsewhere = after(['d4', 'd5'])
+  tampered.moves = tampered.moves.map((move, at) => (at === 1 ? { ...move, fen: elsewhere } : move))
+  const index = buildIndex([tampered], 'exact')
+  const check = verifyIndex(index, [tampered], elsewhere)
+  assert.equal(check.agree, false)
+  assert.match(check.says, /disagree/)
+  assert.deepEqual(check.onlyInIndex, [{ gameId: 'tampered', plies: [2] }])
+  assert.deepEqual(check.onlyInScan, [])
 })
 
 test('stepping the index in small chunks builds exactly what building it in one go builds', () => {

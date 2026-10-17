@@ -168,6 +168,54 @@ export function asEvidence(source: { url: string; title?: string }, text: string
 }
 
 /**
+ * The page in front of somebody, written for a model -- including the case where there was nothing to read.
+ *
+ * `asEvidence` above answers "how does page text reach a model". This answers the question before it: whether there is
+ * any page text at all. They were one step, and that is what made the Ask screen able to lie. Reading a page can give
+ * back an address and a title with no words behind them -- a PDF, a site that blocks reading, a page that had not
+ * finished loading -- and the old sentence put that empty result into the prompt as "The page reads:" followed by
+ * nothing. A model handed an address, a title and no content does not refuse: it answers from the address, and the
+ * answer is presented as though the page had been read. That is the one thing this screen must never do.
+ *
+ * So an unreadable page is said in words, to the model, as part of the same message: there is nothing to go on, and
+ * saying so is the answer. `readable` is there so the caller can tell the person the same thing on screen, rather than
+ * leaving it to the model to volunteer it.
+ */
+export function describePageInFront(page: { url: string; title?: string; text?: string; selection?: string }): {
+  /** What goes in the prompt, already fenced when there is content. Empty only when there is no page at all. */
+  prompt: string
+  /** Whether there was anything of the page to read. False means the answer cannot be about what the page says. */
+  readable: boolean
+} {
+  const nl = String.fromCharCode(10)
+  const url = String(page?.url ?? '').trim()
+  if (!url) return { prompt: '', readable: false }
+  const title = String(page?.title ?? '').trim()
+  const selection = String(page?.selection ?? '').trim()
+  const text = String(page?.text ?? '').trim()
+
+  // What somebody has selected is what they are asking about, and it says so, so an answer about the selection is not
+  // mistaken for an answer about the whole page.
+  if (selection) {
+    return {
+      prompt: [`The person has selected part of the page they are looking at, and the selected part is below.`, asEvidence({ url, ...(title ? { title } : {}) }, selection, 5_000)].join(nl),
+      readable: true
+    }
+  }
+  if (text) {
+    return { prompt: asEvidence({ url, ...(title ? { title } : {}) }, text), readable: true }
+  }
+  return {
+    prompt: [
+      `The person is looking at ${title ? `${title} — ${url}` : url}, and Orbis could not read any text from it.`,
+      `It may be a PDF, a page that does not allow its content to be read, or a page that has not finished loading.`,
+      `You have not seen this page. Say that it could not be read, and do not answer from its address or its title as though you had read it.`
+    ].join(nl),
+    readable: false
+  }
+}
+
+/**
  * Whether a capability is consequential enough to ask about, beyond what its own policy says.
  *
  * The registry's `confirmation` is the authority and is honoured first; this is a second opinion for the cases where a

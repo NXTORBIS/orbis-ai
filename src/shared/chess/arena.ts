@@ -20,6 +20,7 @@ import {
   type ClockState,
   type TimeControl
 } from './clock.ts'
+import { isOpponentId, levelForOpponent, opponent as opponentNamed, type Opponent, type OpponentId } from './opponents.ts'
 
 /**
  * A game against the engine.
@@ -60,7 +61,13 @@ import {
 export type Difficulty = 'gentle' | 'easy' | 'club' | 'strong' | 'full'
 
 export interface DifficultyLevel {
-  id: Difficulty
+  /**
+   * Which level this is.
+   *
+   * Either one of the five settings below or one of the named opponents in `opponents.ts`, because a game against a
+   * named opponent runs through exactly this machinery rather than through a second path of its own.
+   */
+  id: Difficulty | OpponentId
   name: string
   /** Said plainly on the setup screen. Never an Elo claim. */
   about: string
@@ -73,11 +80,12 @@ export interface DifficultyLevel {
   /** How far down the engine's own list the choice may reach. 1 means the first choice only. */
   spread: number
   /**
-   * What would be asked of the engine's own `Skill Level` option, when it advertises one and something can set it.
+   * The engine's own `Skill Level`, 0 to 20, asked for with every one of this level's turns.
    *
-   * Recorded rather than applied: there is no channel from the window that sets an engine option, so today this
-   * value is not sent anywhere. It is here because it is part of what the level means, and because leaving it out
-   * would make the level look like it was only ever about thinking time. `SKILL_LEVEL_NOTE` says this on screen.
+   * Really sent: it rides along on the search request (`EngineTurnRequest.skill`), the main process holds it to what
+   * the engine said it accepts, and the engine is put back to its own default for any other search -- so a hint and
+   * an analysis are never quietly answered by a weakened engine. An engine that does not advertise the option is
+   * never sent it, and `handicapReach` in `opponents.ts` is how a screen finds that out and says so.
    */
   skillLevel?: number
 }
@@ -86,9 +94,16 @@ export const STRENGTH_NOTE =
   'These levels are approximate. Orbis does not claim a rating for any of them: no rated games have been played to measure one.'
 
 export const SKILL_LEVEL_NOTE =
-  'Strength here comes from how long the engine thinks and from how often Orbis plays one of the engine’s own lower choices. The engine’s built-in Skill Level is not set, because nothing in this window can set an engine option yet.'
+  'Strength here comes from the engine’s own Skill Level, which is set for every one of its turns and put back afterwards, from how long it thinks, and on the older levels from how often Orbis plays one of the engine’s own lower choices. An engine that does not offer a Skill Level is never sent one, and the setup screen says so rather than claiming a strength that was not set.'
 
-export const DIFFICULTIES: readonly DifficultyLevel[] = Object.freeze([
+/**
+ * The five original levels.
+ *
+ * Typed so that each of these carries one of the five ids and not an opponent's, because a caller looping over
+ * these to build a setup is building a setup for one of them. A named opponent gets into the same shape through
+ * `levelForOpponent` in `opponents.ts`.
+ */
+export const DIFFICULTIES: readonly (DifficultyLevel & { id: Difficulty })[] = Object.freeze([
   Object.freeze({
     id: 'gentle' as const,
     name: 'Gentle',
@@ -142,9 +157,16 @@ export const DIFFICULTIES: readonly DifficultyLevel[] = Object.freeze([
 
 export const difficulty = (id: Difficulty): DifficultyLevel => DIFFICULTIES.find((one) => one.id === id) ?? DIFFICULTIES[2]
 
-/** What a level really does, in one sentence, from its own data rather than from a description. */
+/**
+ * What a level really does, in one sentence, from its own data rather than from a description.
+ *
+ * The strength dial is in here because it is really sent now. A sentence that listed the thinking time and left the
+ * dial out would be describing a weaker opponent than the one you are about to play -- understating a handicap is a
+ * smaller lie than overstating one, but it is still a sentence that does not match the settings.
+ */
 export function describeDifficulty(level: DifficultyLevel): string {
   const bits: string[] = []
+  if (level.skillLevel !== undefined) bits.push(`sets the engine’s own strength dial to ${level.skillLevel} out of 20`)
   if (level.think.movetime) bits.push(`thinks for ${level.think.movetime} ms`)
   if (level.think.depth) bits.push(`no deeper than ${level.think.depth} moves ahead`)
   if (level.think.nodes) bits.push(`at most ${level.think.nodes} positions`)
@@ -154,6 +176,21 @@ export function describeDifficulty(level: DifficultyLevel): string {
     bits.push('always plays its first choice')
   }
   return `${bits.join(', ')}.`
+}
+
+/**
+ * The engine options a level sets, by name and value, for anything that wants to show them.
+ *
+ * What is really sent travels on the search request itself (`EngineTurnRequest.skill`), because the engine is
+ * shared and an option set once would answer every other screen too. This is the same fact written as a list, for a
+ * setup screen that wants to say "this is what will be set" beside an opponent.
+ *
+ * Only `Skill Level` is here. `UCI_Elo` is deliberately not: it would put a rating on a level, and Orbis has
+ * measured none. `UCI_LimitStrength` has to be on for `UCI_Elo` to mean anything at all, which is exactly the kind
+ * of pairing that gets forgotten -- and the result would be a screen showing a rating that was never applied.
+ */
+export function engineOptionsFor(level: DifficultyLevel): { name: string; value: number }[] {
+  return level.skillLevel === undefined ? [] : [{ name: 'Skill Level', value: level.skillLevel }]
 }
 
 // ---------------------------------------------------------------- how much to think
@@ -265,6 +302,13 @@ export type SideChoice = 'w' | 'b' | 'random'
 
 export interface ArenaSetup {
   side: SideChoice
+  /**
+   * The named opponent, when one was chosen from the list in `opponents.ts`.
+   *
+   * It wins over `difficulty` when it is set, and `difficulty` is what a game started from the older five-level
+   * screen still uses. Both end up as one `DifficultyLevel`, so there is one path through the game either way.
+   */
+  opponent?: OpponentId
   difficulty: Difficulty
   control: TimeControl
   assistance: Assistance
@@ -287,7 +331,7 @@ export const STANDARD_SETUP: ArenaSetup = Object.freeze({
 
 export interface SetupProblem {
   /** Which part of the setup is wrong. */
-  field: 'startFen' | 'control' | 'difficulty' | 'assistance' | 'commentary'
+  field: 'startFen' | 'control' | 'difficulty' | 'opponent' | 'assistance' | 'commentary'
   /** Said plainly. */
   reason: string
 }
@@ -299,6 +343,11 @@ export function setupProblems(setup: ArenaSetup): SetupProblem[] {
   if (!fen.ok) problems.push({ field: 'startFen', reason: fen.reason ?? 'That position cannot be played from.' })
   else if (outcome(setup.startFen).over) problems.push({ field: 'startFen', reason: 'That position is already finished, so there is no game to play.' })
   if (!DIFFICULTIES.some((one) => one.id === setup.difficulty)) problems.push({ field: 'difficulty', reason: 'That is not a level Orbis has.' })
+  // An opponent that is not on the list is refused rather than quietly turning into the gentlest one: somebody who
+  // asked for a particular opponent and silently got a different one would have no way of knowing.
+  if (setup.opponent !== undefined && !isOpponentId(setup.opponent)) {
+    problems.push({ field: 'opponent', reason: 'That is not an opponent Orbis has.' })
+  }
   if (!ASSISTANCE_LEVELS.some((one) => one.id === setup.assistance)) problems.push({ field: 'assistance', reason: 'That is not a level of help Orbis has.' })
   if (setup.control.initialSeconds < 0) problems.push({ field: 'control', reason: 'A clock cannot start below zero.' })
   return problems
@@ -364,6 +413,8 @@ export interface Hint {
 export interface ArenaState {
   setup: ArenaSetup
   level: DifficultyLevel
+  /** The named opponent being played, when one was chosen. Null for a game started from the older five levels. */
+  opponent: Opponent | null
   human: Side
   engine: Side
   startFen: string
@@ -387,6 +438,13 @@ export interface ArenaState {
   hint: Hint | null
   /** How many hints were taken, which the summary says plainly. */
   hintsTaken: number
+  /**
+   * How many moves were taken back, which the summary and the saved record both say plainly.
+   *
+   * Counted for the same reason hints are: a game you replayed a move of is not the same game as one you did not,
+   * and a record that does not say so is a record claiming something that did not happen.
+   */
+  takenBack: number
   /** The last thing that went wrong, for the screen to show. Cleared by the next thing that works. */
   problem: string | null
   startedAt: number
@@ -424,9 +482,13 @@ export function startArena(setup: ArenaSetup, o: { now: number; roll?: number })
   const roll = Number.isFinite(o.roll) ? Math.max(0, Math.min(0.999_999, o.roll as number)) : 0
   const human: Side = setup.side === 'random' ? (roll < 0.5 ? 'w' : 'b') : setup.side
   const clock = startClock(newClock(setup.control, o.now), sideToMove(startFen), o.now)
+  // A named opponent wins over the older five-level setting, and becomes the same kind of level, so everything
+  // below -- the time budget, the engine request, the record -- works one way whichever screen started the game.
+  const chosen = isOpponentId(setup.opponent) ? opponentNamed(setup.opponent) : null
   return {
     setup: { ...setup, startFen },
-    level: difficulty(setup.difficulty),
+    level: chosen ? levelForOpponent(chosen) : difficulty(setup.difficulty),
+    opponent: chosen,
     human,
     engine: otherSide(human),
     startFen,
@@ -441,6 +503,7 @@ export function startArena(setup: ArenaSetup, o: { now: number; roll?: number })
     remarks: [],
     hint: null,
     hintsTaken: 0,
+    takenBack: 0,
     problem: null,
     startedAt: o.now,
     gameId: ''
@@ -594,6 +657,94 @@ export function playMove(state: ArenaState, move: MoveInput, by: 'you' | 'engine
   return { ok: true, state: next, move: entry, ...(next.finish ? { finish: next.finish } : {}) }
 }
 
+// ---------------------------------------------------------------- taking a move back
+
+export type TakeBackStep =
+  | {
+      ok: true
+      state: ArenaState
+      /** The moves that were undone, newest last, so a screen can say exactly what went. */
+      undone: GameMove[]
+      /**
+       * A search that is still running and is now about a position that is no longer on the board.
+       *
+       * Set to its request id, so the caller can stop it. Nothing breaks if it is ignored -- a late answer names a
+       * position that is not the current one and `engineAnswered` refuses it -- but the engine would carry on
+       * thinking about a position nobody is in, which on a short clock is time thrown away.
+       */
+      stopSearch: string | null
+      /** Said plainly on screen: what happened, including what the clock did and did not do. */
+      says: string
+    }
+  | { ok: false; state: ArenaState; problem: string }
+
+/**
+ * Takes your last move back, and the engine's reply with it.
+ *
+ * It steps back to the last point where it was your turn, which is one move when the engine has not replied yet and
+ * two when it has. The board, the move list and the notation that the rules read for repetition all go back
+ * together, because a position with a history that does not match it is how a draw by repetition appears out of
+ * nowhere three moves later.
+ *
+ * **The clock is not rewound.** The time you spent thinking was really spent, and an increment the clock paid for a
+ * move stays paid. Rewinding it would be the one thing on this screen that could be used to cheat a timed game, and
+ * there is no honest way to work out what the clock "would have" said. `says` tells the person this rather than
+ * leaving them to notice.
+ *
+ * **It is counted.** `takenBack` goes up, the summary says so, and the saved game carries it, for the same reason
+ * hints are counted: a game you took a move back in is not the same game as one you did not.
+ *
+ * Refused after the game is over. A finished game is finished -- there is `reviewAsk` for looking at it instead.
+ */
+export function takeBack(state: ArenaState, now: number): TakeBackStep {
+  if (state.finish) return { ok: false, state, problem: 'The game is over, so there is nothing to take back. You can look back through it instead.' }
+  if (!state.moves.length) return { ok: false, state, problem: 'Nothing has been played yet.' }
+
+  /** The position after the first `count` moves. Zero is the position the game started from. */
+  const positionAfter = (count: number): string => (count === 0 ? state.startFen : state.moves[count - 1].fen)
+
+  let keep = state.moves.length
+  do {
+    keep -= 1
+  } while (keep > 0 && sideToMove(positionAfter(keep)) !== state.human)
+  const back = positionAfter(keep)
+  if (sideToMove(back) !== state.human) {
+    return { ok: false, state, problem: 'You have not made a move yet, so there is nothing of yours to take back.' }
+  }
+
+  const undone = state.moves.slice(keep)
+  // A pause is left alone -- taking a move back is not asking the clock to start again -- but resuming now has to
+  // start your clock rather than the one that was running before the move went away.
+  const clock = state.clock.paused
+    ? { ...state.clock, pausedFrom: state.human }
+    : startClock(state.clock, state.human, now)
+  const says =
+    undone.length === 1
+      ? `${undone[0].san} is taken back. The clock is not put back: the time you spent was really spent.`
+      : `${undone.map((one) => one.san).join(' and ')} are taken back. The clock is not put back: the time you both spent was really spent.`
+  return {
+    ok: true,
+    state: {
+      ...state,
+      fen: back,
+      moves: state.moves.slice(0, keep),
+      history: state.history.slice(0, keep),
+      clock,
+      drawOffer: null,
+      thinking: null,
+      // The engine has to be askable again: the position in front of it is a different one now.
+      askedAtPly: null,
+      // The hint was about a position that is no longer on the board.
+      hint: null,
+      takenBack: state.takenBack + undone.length,
+      problem: null
+    },
+    undone,
+    stopSearch: state.thinking ? state.thinking.requestId : null,
+    says
+  }
+}
+
 // ---------------------------------------------------------------- the engine's turn
 
 export interface EngineTurnRequest {
@@ -604,6 +755,14 @@ export interface EngineTurnRequest {
   movetime?: number
   depth?: number
   nodes?: number
+  /**
+   * The engine's own strength dial for this one search, 0 to 20. Left out when nothing is held back.
+   *
+   * On the request rather than set on the engine once, because the engine is shared: a hint, an analysis and the
+   * Game Review all talk to the same process, and a dial left turned down would answer them too. The main process
+   * sets it just before this search and puts the engine back to its own default for the next one.
+   */
+  skill?: number
 }
 
 /**
@@ -622,7 +781,8 @@ export function engineTurnRequest(state: ArenaState, requestId: string, now: num
     id: requestId,
     fen: state.fen,
     multipv: Math.max(1, Math.min(5, state.level.lines)),
-    ...limits
+    ...limits,
+    ...(state.level.skillLevel === undefined ? {} : { skill: state.level.skillLevel })
   }
 }
 
@@ -700,7 +860,13 @@ export function engineFailed(state: ArenaState, why: string): ArenaState {
 
 // ---------------------------------------------------------------- hints
 
-/** What to ask the engine for a hint, or null when a hint is not available. */
+/**
+ * What to ask the engine for a hint, or null when a hint is not available.
+ *
+ * No `skill` on this request, deliberately. A hint is the engine's own best answer; a hint from an engine turned
+ * down to play you gently is worse advice than no hint at all, and nothing on screen would show the difference.
+ * The same goes for anything else that asks the engine about a position -- see `EngineTurnRequest.skill`.
+ */
 export function hintRequest(state: ArenaState, requestId: string): EngineTurnRequest | null {
   if (state.finish || state.setup.assistance === 'none') return null
   if (!yourTurn(state)) return null
@@ -894,15 +1060,32 @@ export interface ArenaSummary {
   /** How long each side spent thinking, in milliseconds. Measured, not estimated. */
   spent: { w: number; b: number }
   hintsTaken: number
-  /** True when any hint was taken, which is said plainly rather than hidden. */
+  /** How many moves were taken back. */
+  takenBack: number
+  /** True when any hint was taken or any move was taken back, which is said plainly rather than hidden. */
   assisted: boolean
+  /** The sentence that says what help was used, or that none was. Never left out, so the screen cannot omit it. */
+  assistanceLine: string
   level: DifficultyLevel
+  /** The named opponent, when one was played. Null for a game from the older five levels. */
+  opponent: Opponent | null
   timeControl: string
   /** What the engine called itself, when the screen knew. Absent rather than guessed. */
   engineName?: string
 }
 
 const SIDE_NAME: Readonly<Record<Side, string>> = Object.freeze({ w: 'White', b: 'Black' })
+
+const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`
+
+/** What help was used, in one sentence. Said even when none was, so a clean game is a statement and not a silence. */
+export function assistanceLineFor(state: ArenaState): string {
+  const parts: string[] = []
+  if (state.hintsTaken > 0) parts.push(`${plural(state.hintsTaken, 'hint', 'hints')} taken`)
+  if (state.takenBack > 0) parts.push(`${plural(state.takenBack, 'move', 'moves')} taken back`)
+  if (!parts.length) return 'No hints, and nothing taken back.'
+  return `${parts.join(', ')}.`
+}
 
 export function summaryOf(state: ArenaState, o: { now: number; engineName?: string } = { now: 0 }): ArenaSummary | null {
   const finish = state.finish
@@ -929,8 +1112,11 @@ export function summaryOf(state: ArenaState, o: { now: number; engineName?: stri
     plies: state.moves.length,
     spent: spentAt(state.clock, o.now > 0 ? o.now : state.clock.since),
     hintsTaken: state.hintsTaken,
-    assisted: state.hintsTaken > 0,
+    takenBack: state.takenBack,
+    assisted: state.hintsTaken > 0 || state.takenBack > 0,
+    assistanceLine: assistanceLineFor(state),
     level: state.level,
+    opponent: state.opponent,
     timeControl: state.setup.control.label,
     ...(o.engineName ? { engineName: o.engineName } : {})
   }
@@ -950,6 +1136,76 @@ export function sourceFor(state: ArenaState, engineName?: string): GameSource {
     kind: 'local-engine',
     engine: engineName && engineName.trim() ? engineName.trim().slice(0, 120) : 'a local engine',
     level: `${state.level.name} — ${describeDifficulty(state.level)}`
+  }
+}
+
+// ---------------------------------------------------------------- having the game looked at afterwards
+
+/**
+ * Everything a review of this game needs, or null while it is still being played.
+ *
+ * The seam for the Game Review workstream. It is a plain record on purpose: nothing here starts a review, nothing
+ * here claims one happened, and nothing here imports a reviewer -- so this file keeps working whether or not one
+ * exists yet. A screen asks for this, hands it to whatever does reviews, and shows what comes back; with nothing to
+ * hand it to, it shows `REVIEW_UNAVAILABLE` instead of an empty panel that looks like a review of nothing.
+ *
+ * `help` is in here because a review that scores how well you played without saying you were shown the move four
+ * times is a review of a game that did not happen.
+ */
+export interface ReviewAsk {
+  startFen: string
+  moves: GameMove[]
+  /** Which colour the person had, so a review can say whose mistakes are whose. */
+  human: Side
+  engine: Side
+  result: GameResult
+  reason: FinishReason
+  /** What the engine was set to, so a review can say what it was you were playing. */
+  level: DifficultyLevel
+  opponent: Opponent | null
+  help: { hintsTaken: number; takenBack: number; says: string }
+  /** The stored game, when it has been saved. Empty when the game was never written down. */
+  gameId: string
+}
+
+export const REVIEW_UNAVAILABLE =
+  'Orbis cannot go through this game move by move yet. The game itself is saved, so it can be looked at as soon as that is built.'
+
+/**
+ * What a reviewer has to be, for the end-of-game screen to offer a review.
+ *
+ * Written here so there is a contract rather than a convention, and so the screen can be built against it before a
+ * reviewer exists. Three things it insists on, each because of the way an end-of-game "accuracy" panel goes wrong:
+ *
+ *   - `start` hands back something that reports its own progress, because a real review is a search over every
+ *     position in the game and takes real seconds. A function that returns a finished verdict could only be one
+ *     that guessed.
+ *   - `progress` carries `complete`, so the screen says "still going" rather than drawing a half-finished figure as
+ *     though it were the answer. Section 060 asks for exactly this.
+ *   - nothing in it returns a rating or an accuracy percentage as a required field. A reviewer that has measured
+ *     something may report it; one that has not must be able to say so.
+ */
+export interface GameReviewPort {
+  /** Whether a review can be run at all right now -- usually, whether the engine is there. Said in words. */
+  available(): { ok: true } | { ok: false; because: string }
+  /** Starts a review. `onProgress` is called as it goes, including once at the end with `complete: true`. */
+  start(ask: ReviewAsk, o: { onProgress: (progress: { done: number; of: number; complete: boolean; note?: string }) => void; signal?: AbortSignal }): Promise<unknown>
+}
+
+export function reviewAsk(state: ArenaState): ReviewAsk | null {
+  const finish = state.finish
+  if (!finish) return null
+  return {
+    startFen: state.startFen,
+    moves: movesFor(state),
+    human: state.human,
+    engine: state.engine,
+    result: finish.result,
+    reason: finish.reason,
+    level: state.level,
+    opponent: state.opponent,
+    help: { hintsTaken: state.hintsTaken, takenBack: state.takenBack, says: assistanceLineFor(state) },
+    gameId: state.gameId
   }
 }
 
@@ -977,7 +1233,10 @@ export function metaFor(state: ArenaState, o: { engineName?: string } = {}): Gam
     extra: {
       OrbisLevel: state.level.name,
       OrbisStrength: describeDifficulty(state.level),
-      ...(state.hintsTaken > 0 ? { OrbisHints: String(state.hintsTaken) } : {})
+      ...(state.opponent ? { OrbisOpponent: state.opponent.name } : {}),
+      ...(state.hintsTaken > 0 ? { OrbisHints: String(state.hintsTaken) } : {}),
+      // Only when it happened. A tag saying none were taken back would be noise on every other game.
+      ...(state.takenBack > 0 ? { OrbisTakeBacks: String(state.takenBack) } : {})
     }
   }
 }
@@ -994,4 +1253,74 @@ export function thinkingLine(state: ArenaState, now: number): string | null {
   const seconds = Math.max(0, Math.round((now - thinking.startedAt) / 100) / 10)
   if (thinking.purpose === 'hint') return `Asking the engine about this position… ${seconds.toFixed(1)}s`
   return `${state.level.name}: thinking… ${seconds.toFixed(1)}s`
+}
+
+// ---------------------------------------------------------------- reading what the engine sent
+
+export interface EngineUpdate {
+  /** The request it belongs to. Without this an update cannot be matched to anything. */
+  requestId: string
+  /** The position it was calculated in. */
+  fen: string
+  /** True for the engine's final answer; false for the depth-by-depth updates along the way. */
+  complete: boolean
+  /** White-positive, as the engine service already turned it round. `none` when it has not scored yet. */
+  score: Score
+  depth: number | null
+  /** Only on the final answer. */
+  bestmove: string | null
+  bestmoveSan: string | null
+  /** The first move of each line the engine offered, best first. */
+  lines: { uci: string }[]
+  /** Set when the engine said the score was only a bound, so it is not settled. */
+  bound: 'lower' | 'upper' | null
+  /** Said plainly by the engine service when its answer could not be used as it stood. */
+  note: string | null
+}
+
+const isScore = (raw: unknown): raw is Score => {
+  if (!raw || typeof raw !== 'object') return false
+  const value = raw as { kind?: unknown; cp?: unknown; moves?: unknown }
+  if (value.kind === 'none') return true
+  if (value.kind === 'cp') return typeof value.cp === 'number' && Number.isFinite(value.cp)
+  if (value.kind === 'mate') return typeof value.moves === 'number' && Number.isFinite(value.moves)
+  return false
+}
+
+/**
+ * An analysis update, read rather than trusted.
+ *
+ * It arrives from the main process as an unknown value, and the two fields that make it usable -- the request it
+ * belongs to and the position it was about -- are exactly the two a careless screen leaves out. An update with
+ * either of them missing, or with a position that is not a position, is not an update about anything, so it comes
+ * back as null and the caller ignores it rather than showing numbers under whatever is on the board.
+ */
+export function readEngineUpdate(raw: unknown): EngineUpdate | null {
+  if (!raw || typeof raw !== 'object') return null
+  const value = raw as Record<string, unknown>
+  const requestId = typeof value.requestId === 'string' ? value.requestId : ''
+  const fen = typeof value.fen === 'string' ? value.fen.trim() : ''
+  if (!requestId || !fen || !checkFen(fen).ok) return null
+  const lines: { uci: string }[] = []
+  if (Array.isArray(value.lines)) {
+    for (const line of value.lines) {
+      const pv = (line as { pvUci?: unknown })?.pvUci
+      if (Array.isArray(pv) && typeof pv[0] === 'string' && COORDINATES.test(pv[0])) lines.push({ uci: pv[0] })
+    }
+  }
+  const bestmove = typeof value.bestmove === 'string' && COORDINATES.test(value.bestmove) ? value.bestmove : null
+  // The engine's first choice leads the list. A line array that did not include it would otherwise lose it.
+  if (bestmove && !lines.some((one) => one.uci === bestmove)) lines.unshift({ uci: bestmove })
+  return {
+    requestId,
+    fen,
+    complete: value.complete === true,
+    score: isScore(value.score) ? value.score : { kind: 'none' },
+    depth: typeof value.depth === 'number' && Number.isFinite(value.depth) ? value.depth : null,
+    bestmove,
+    bestmoveSan: typeof value.bestmoveSan === 'string' ? value.bestmoveSan : null,
+    lines,
+    bound: value.bound === 'lower' || value.bound === 'upper' ? value.bound : null,
+    note: typeof value.note === 'string' && value.note.trim() ? value.note : null
+  }
 }

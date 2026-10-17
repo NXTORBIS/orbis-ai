@@ -229,6 +229,7 @@ export type AppFeature =
   | 'f1'
   | 'arena'
   | 'football'
+  | 'arcade'
 
 /**
  * The capabilities Orbis has.
@@ -275,7 +276,10 @@ export const CAPABILITIES: OrbisCapability[] = [
   // ---- Research
   { id: 'search', name: 'Search', lane: 'find', category: 'research', description: 'Search the web from Orbis', icon: 'search', keywords: ['search', 'find', 'web', 'images', 'videos', 'news'], target: { kind: 'panel', view: 'search' }, pinnable: true, needs: ['helper'] },
   { id: 'galaxy', name: 'Galaxy', lane: 'find', category: 'research', description: 'A map of everything Orbis keeps, and how it connects', icon: 'galaxy', keywords: ['galaxy', 'map', 'graph', 'connections', 'knowledge'], target: { kind: 'panel', view: 'galaxy' }, pinnable: true, needs: ['helper'] },
-  { id: 'notes', name: 'Notes', lane: 'keep', category: 'research', description: 'Notes kept in Orbis', icon: 'notes', keywords: ['note', 'write', 'jot'], target: { kind: 'panel', view: 'notes' }, app: 'notes', pinnable: true, needs: ['helper'] },
+  // The screen this opens is the microphone recorder: it listens to this computer, writes down what it heard and can
+  // summarise it afterwards. It was listed as "Notes -- Notes kept in Orbis" with the words note, write and jot, so
+  // the menu promised a notepad nobody would find. The name and the words now match the screen.
+  { id: 'notes', name: 'Spoken notes', lane: 'keep', category: 'research', description: 'Listens to this computer and writes down what was said', icon: 'notes', keywords: ['note', 'notes', 'meeting', 'record', 'transcribe', 'microphone', 'dictate'], target: { kind: 'panel', view: 'notes' }, app: 'notes', pinnable: true, needs: ['helper'] },
   { id: 'whiteboard', name: 'Whiteboard', lane: 'keep', category: 'research', description: 'Boards to gather things on', icon: 'whiteboard', keywords: ['whiteboard', 'board', 'canvas', 'draw'], target: { kind: 'view', view: 'whiteboard' }, app: 'whiteboard', pinnable: false, needs: ['helper'] },
   { id: 'sources', name: 'Sources', lane: 'find', category: 'research', description: 'The pages behind an answer', icon: 'sources', keywords: ['source', 'citation', 'reference', 'research'], target: { kind: 'view', view: 'sources' }, pinnable: false, needs: ['helper'] },
 
@@ -345,6 +349,9 @@ export const CAPABILITIES: OrbisCapability[] = [
   { id: 'arena', name: 'Arena', lane: 'elsewhere', category: 'arena', description: 'The Arena’s front door: live football, Formula 1 and what is coming', icon: 'news', keywords: ['arena', 'sport', 'sports', 'live', 'scores', 'football', 'f1', 'formula 1', 'racing', 'stadium', 'orbis arena'], target: { kind: 'app' }, app: 'arena', pinnable: false, needs: [] },
   { id: 'football', name: 'Football', lane: 'elsewhere', category: 'arena', description: 'Football: live scores, fixtures, tables, goals and form from open data', icon: 'game', keywords: ['football', 'soccer', 'live scores', 'fixtures', 'results', 'table', 'standings', 'bundesliga', 'premier league', 'la liga', 'serie a', 'goals', 'match', 'league', 'arena'], target: { kind: 'app' }, app: 'football', pinnable: false, needs: [] },
   { id: 'f1', name: 'F1', lane: 'elsewhere', category: 'arena', description: 'Formula 1: the calendar, results, standings, and lap and sector timing', icon: 'timer', keywords: ['f1', 'formula 1', 'formula one', 'grand prix', 'race', 'racing', 'standings', 'championship', 'lap times', 'sectors', 'drivers', 'constructors', 'arena', 'motorsport'], target: { kind: 'app' }, app: 'f1', pinnable: false, needs: [] },
+  // The arcade. Its games have been in the tree the whole time and the catalogue of them was in Settings, but the
+  // window had no way to open the screen that plays them, so the only route to a game was a page failing to load.
+  { id: 'arcade', name: 'Arcade', lane: 'elsewhere', category: 'tools', description: 'Games that need no connection, with your scores and unfinished games kept', icon: 'arcade', keywords: ['arcade', 'game', 'games', 'play', 'snake', 'solitaire', 'sudoku', 'minesweeper', 'puzzle', 'offline', 'mini games', 'high score'], target: { kind: 'app' }, app: 'arcade', pinnable: false, needs: [] },
   { id: 'cosmos', name: 'ORBIS COSMOS', lane: 'elsewhere', category: 'tools', description: 'A real-time 3D universe: the Solar System, nearby stars and the Milky Way, simulated to scale', icon: 'star', keywords: ['cosmos', 'space', 'universe', 'solar system', 'planets', 'stars', 'galaxy', 'astronomy', 'gaia', 'sky', 'orbit'], target: { kind: 'app' }, app: 'cosmos', pinnable: false, needs: [] },
   { id: 'eye', name: 'OrbisEye', lane: 'elsewhere', category: 'tools', description: 'A live 3D Earth: aircraft, ships, satellites, earthquakes and cameras, with voice control', icon: 'sun', keywords: ['eye', 'orbiseye', 'earth', 'globe', 'map', 'flights', 'aircraft', 'planes', 'ships', 'satellites', 'earthquakes', 'cctv', 'cameras', 'radio', 'live', 'osint', 'world'], target: { kind: 'app' }, app: 'eye', pinnable: false, needs: [] },
   { id: 'toolkit', name: 'Toolkit', lane: 'elsewhere', category: 'tools', description: 'Over two thousand calculators, converters and lab tools that work on this computer', icon: 'grid', keywords: ['toolkit', 'tool', 'tools', 'calculator', 'converter', 'calculate', 'convert', 'formula', 'engineering', 'physics', 'chemistry', 'science', 'lab'], target: { kind: 'app' }, app: 'toolkit', pinnable: false, needs: [] },

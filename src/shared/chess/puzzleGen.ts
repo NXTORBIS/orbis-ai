@@ -5,9 +5,9 @@ import {
   type Exercise, type ExerciseCheck, type Provenance, type Solution
 } from './exercise.ts'
 import { nestLine } from './lessons.ts'
-import { fenAt, positionKey, type StoredGame } from './model.ts'
+import { fenAt, type StoredGame } from './model.ts'
 import {
-  applyMove, legalMoves, moveNumber, outcome, sideToMove, type ChessMove
+  applyMove, legalMoves, moveNumber, outcome, positionKey, sideToMove, type ChessMove
 } from './rules.ts'
 import {
   GAME_TAG_PREFIX, PUZZLE_FAILURE, checkedThemes, gameTag, hintsFor, newPuzzle, verifyPuzzle,
@@ -784,7 +784,7 @@ export function mateAt(game: SourceGame, ply: number, options: GenerateOptions):
 
 // ---------------------------------------------------------------- whole games
 
-function collect(gameId: string, plies: number, candidates: readonly Candidate[], index: PlyIndex | null, options: GenerateOptions): GenerateResult {
+function collect(gameId: string, plies: number, candidates: readonly Candidate[], index: PlyIndex | null): GenerateResult {
   const generated: Generated[] = []
   const rejected: Rejected[] = []
   const skipped: Skipped[] = []
@@ -847,7 +847,7 @@ export function generateFromGame(game: SourceGame, evaluations: readonly GenEval
     if (candidate.kind === 'puzzle') made += 1
     candidates.push(candidate)
   }
-  return collect(game.id, game.moves.length, candidates, index, options)
+  return collect(game.id, game.moves.length, candidates, index)
 }
 
 /** Every forced mate a game contains, found by the rules, with no engine. */
@@ -864,7 +864,7 @@ export function scanForMates(game: SourceGame, options: GenerateOptions): Genera
     if (candidate.kind === 'puzzle') made += 1
     candidates.push(candidate)
   }
-  return collect(game.id, game.moves.length, candidates, null, options)
+  return collect(game.id, game.moves.length, candidates, null)
 }
 
 /** How long a mate scan is likely to take, so a screen can warn before starting one rather than after. */

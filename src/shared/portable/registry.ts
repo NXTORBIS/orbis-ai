@@ -249,11 +249,31 @@ export const CATEGORIES: readonly PortableCategory[] = Object.freeze([
   }),
   category({
     id: 'chess',
-    label: 'Chess games',
-    describe: 'Games played against the engine, games brought in from files, and what you wrote about them.',
+    label: 'Chess',
+    describe:
+      'Games played against the engine, games brought in from files and what you wrote about them, the lines you have explored and the engine answers you have recorded against them, with your board settings, your puzzles and how you have got on with them, your opening repertoire, your Academy progress and your study plan.',
     portability: 'portable',
     sensitivity: 'personal',
-    storage: ['personal/chess-games.json'],
+    /*
+     * Seven files. The games are one; the other six are everything else Chess World remembers, split by how often
+     * each is written rather than by what it is about -- `src/main/chess/data.ts` says why.
+     *
+     * The analyses travel with the games and are a separate file from them on purpose: a study is what somebody
+     * thinks about a game rather than part of it, and an analysis that cannot be read must not cost the game.
+     *
+     * No streak and no list of sittings travel, because neither is stored: both are worked out from the attempts,
+     * the drills and the games, all of which are here. No analysis reports travel either: a report is worked out
+     * from the engine answers kept with the study.
+     */
+    storage: [
+      'personal/chess-games.json',
+      'personal/chess-settings.json',
+      'personal/chess-training.json',
+      'personal/chess-openings.json',
+      'personal/chess-academy.json',
+      'personal/chess-progress.json',
+      'personal/chess-studies.json'
+    ],
     scope: 'profile',
     schemaVersion: 1,
     dependsOn: [],
@@ -261,6 +281,60 @@ export const CATEGORIES: readonly PortableCategory[] = Object.freeze([
     userAction: null,
     why: null,
     mergeable: true
+  }),
+  category({
+    id: 'arcade',
+    label: 'Games',
+    describe:
+      'Your high scores, every run you have finished with how long it took and what it earned, your favourites, the games you left part way through and your game settings. Your level, your run of days and what you play most are worked out from the runs rather than stored, so they travel with them.',
+    portability: 'portable',
+    sensitivity: 'personal',
+    /*
+     * One file, unlike Chess World's seven. Everything in it is written at the same moment -- a run finishes, and the
+     * best score, the run list, the recently played row and the saved board all change together -- so splitting it
+     * would mean writes that have to agree rather than separate blast radii. `src/main/games/arcadeStore.ts` says more.
+     *
+     * A score kept in the window's own storage is what this replaces, and that old copy is deliberately left where
+     * it is rather than deleted, so somebody who goes back to an older Orbis still finds their scores.
+     */
+    storage: ['personal/arcade.json'],
+    scope: 'profile',
+    schemaVersion: 1,
+    dependsOn: [],
+    requiresReauthentication: false,
+    userAction: null,
+    why: null,
+    mergeable: true
+  }),
+  category({
+    id: 'features.visible',
+    label: 'Which features you see',
+    describe:
+      'Which of Orbis’s screens you have chosen to have in your menu. Nothing is deleted when a feature is switched off, so this carries your arrangement rather than your data — every hidden feature’s own things travel in its own category.',
+    portability: 'portable',
+    sensitivity: 'ordinary',
+    /*
+     * One small file, written only when somebody changes a switch -- the coldest store in Orbis. Its own category
+     * rather than part of a bigger one for the reason that decides every split here: a file that cannot be read must
+     * cost the menu's arrangement and nothing else.
+     *
+     * It is per-profile and not part of `orion.settings`, because `settings.json` is shared between every profile by
+     * design, and the point of this choice is that a work profile and a personal one can differ.
+     */
+    storage: ['personal/features.json'],
+    scope: 'profile',
+    schemaVersion: 1,
+    dependsOn: [],
+    requiresReauthentication: false,
+    userAction: null,
+    why: null,
+    /*
+     * Not mergeable, and this is a real decision rather than the easy default. Two lists of features have no
+     * defensible way to combine: the union turns somebody's deliberately short menu back into the long one they were
+     * escaping, and the intersection takes away screens they use. Replacing is the only honest answer, and merging
+     * into an existing profile keeps what is already on this machine.
+     */
+    mergeable: false
   }),
   category({
     id: 'neurova',

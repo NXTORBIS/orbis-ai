@@ -33,7 +33,9 @@ import {
   readPlayer,
   readRecord,
   resultWords,
+  roundShortName,
   statusWords,
+  tournamentOf,
   unreadableEvents,
   viewerPosition,
   worthShowing,
@@ -308,13 +310,41 @@ test("the provider's own featuring rank orders tournaments of the same status, a
   assert.deepEqual(groups.map((g) => g.name), ['Ranked 3', 'Ranked 5', 'Unranked'])
 })
 
-test('the longest declared embargo on any round is the tournament\'s, and none declared stays none', () => {
+test('an embargo stays on the round that declared it and is never claimed for a whole tournament', () => {
   const groups = groupByTournament([
-    event({ eventId: 'a', tournamentName: 'T', status: 'live', delaySeconds: 300 }),
+    event({ eventId: 'a', tournamentName: 'T', status: 'live' }),
     event({ eventId: 'b', tournamentName: 'T', status: 'scheduled', delaySeconds: 900 })
   ])
-  assert.equal(groups[0].delaySeconds, 900)
-  assert.equal(groupByTournament([event({ tournamentName: 'U' })])[0].delaySeconds, undefined)
+  // A tournament where one round is held back and another is not has no one embargo, so there is no field for
+  // one to be put in. The rounds carry their own, exactly as the provider declared them.
+  assert.equal((groups[0] as unknown as Record<string, unknown>).delaySeconds, undefined)
+  assert.equal(groups[0].rounds.find((r) => r.eventId === 'a')?.delaySeconds, undefined)
+  assert.equal(groups[0].rounds.find((r) => r.eventId === 'b')?.delaySeconds, 900)
+})
+
+test("a round's name loses its tournament's name, and only when that really is the prefix", () => {
+  assert.equal(roundShortName({ name: 'Tata Steel — Round 3', tournamentName: 'Tata Steel' }), 'Round 3')
+  assert.equal(roundShortName({ name: 'Tata Steel - Round 3', tournamentName: 'Tata Steel' }), 'Round 3')
+  assert.equal(roundShortName({ name: 'Tata Steel: Round 3', tournamentName: 'Tata Steel' }), 'Round 3')
+  // Not a prefix: the whole name stays.
+  assert.equal(roundShortName({ name: 'Round 3 of Tata Steel', tournamentName: 'Tata Steel' }), 'Round 3 of Tata Steel')
+  assert.equal(roundShortName({ name: 'Tata Steel Masters — Round 3', tournamentName: 'Tata Steel' }), 'Tata Steel Masters — Round 3')
+  // Nothing left over, or no tournament at all: the name is the name.
+  assert.equal(roundShortName({ name: 'Tata Steel', tournamentName: 'Tata Steel' }), 'Tata Steel')
+  assert.equal(roundShortName({ name: 'Tata Steel — ', tournamentName: 'Tata Steel' }), 'Tata Steel —')
+  assert.equal(roundShortName({ name: 'A club match' }), 'A club match')
+})
+
+test('the tournament a round belongs to is found among the rounds that were listed, or not at all', () => {
+  const listed = [
+    event({ eventId: 'r1', name: 'Tata Steel — Round 1', tournamentName: 'Tata Steel' }),
+    event({ eventId: 'r2', name: 'Tata Steel — Round 2', tournamentName: 'Tata Steel' }),
+    event({ eventId: 'c1', name: 'Candidates — Round 5', tournamentName: 'Candidates' })
+  ]
+  assert.equal(tournamentOf(listed, 'r2')?.name, 'Tata Steel')
+  assert.equal(tournamentOf(listed, 'r2')?.rounds.length, 2)
+  assert.equal(tournamentOf(listed, 'nope'), null)
+  assert.equal(tournamentOf([], 'r1'), null)
 })
 
 // ---- words -----------------------------------------------------------------------------------------------------

@@ -17,7 +17,6 @@ import {
   remarkOn,
   speaksAbout,
   styleInfo,
-  type CommentaryInput,
   type CommentaryStyle,
   type Judgement,
   type MoveContext

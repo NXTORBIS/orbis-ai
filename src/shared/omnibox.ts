@@ -483,3 +483,44 @@ export function recentSuggestions(sources: OmniSources, limit = 12): OmniSuggest
   }
   return out.slice(0, limit)
 }
+
+/**
+ * How a web address reads when nobody is typing in it.
+ *
+ * An address bar at rest is not a text field somebody is editing -- it is a label saying where you are. So the part
+ * that matters is the site, and the scheme and the path are context. Chromium's own bar does this natively by
+ * drawing the host brighter than the rest; an `<input>` cannot, because it has one colour for all its text. So the
+ * bar draws this over the top while it is unfocused and hands back to the real input the moment somebody types.
+ *
+ * `https://` is dropped rather than dimmed, which is what every browser does now -- it is the default and saying so
+ * is noise. `http://` is kept, because there the scheme is the warning.
+ */
+export interface AddressParts {
+  /** Shown before the site, and only when it is worth saying. Usually empty. */
+  before: string
+  /** The site itself, drawn brightest. */
+  site: string
+  /** Everything after it -- the path, the query -- drawn dim. */
+  after: string
+}
+
+export function addressParts(url: string): AddressParts | null {
+  const trimmed = url.trim()
+  if (!trimmed) return null
+  let parsed: URL
+  try {
+    parsed = new URL(trimmed)
+  } catch {
+    // Not an address Orbis can take apart -- a search, half-typed text. It is shown exactly as it is.
+    return null
+  }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return null
+  // Only the insecure scheme is worth the room it takes.
+  const before = parsed.protocol === 'http:' ? 'http://' : ''
+  // A lone trailing slash is dropped only when nothing follows it: `youtube.com` rather than `youtube.com/`, but
+  // `youtube.com/?themeRefresh=1` keeps its slash, because the address really does have a path there.
+  const tail = `${parsed.search}${parsed.hash}`
+  const path = parsed.pathname === '/' && !tail ? '' : parsed.pathname
+  const after = `${path}${tail}`
+  return { before, site: parsed.host, after }
+}

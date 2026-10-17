@@ -13,7 +13,7 @@ import type { Readiness } from './commandCenter.ts'
  * written. All eighteen drew as ordinary live rows -- full colour, enabled button, a description promising something --
  * and clicking one put a name in the address bar that the panel did not recognise, so the panel fell back to its home.
  * Choosing "Tabs" in the Command Center opened the Command Center. Nothing failed, nothing was logged, and the only way
- * to find out was to click all forty-five.
+ * to find out was to click every row in the panel, one at a time.
  *
  * What makes this test worth having is that it does not trust either side on its own. It reads the real files -- the
  * panel's markup, and the two files that build the rail's views -- and compares them against what the registry claims.
@@ -196,6 +196,38 @@ test('every capability goes somewhere that exists, or is shown as unavailable wi
 
     // page, do, ask: nothing in this file can say where they lead, so nothing here claims to.
     assert.equal(why, null, `${capability.id} is a ${target.kind} target and this test cannot judge its destination`)
+  }
+})
+
+/**
+ * Two rows must not lead to the same place.
+ *
+ * This is the other way a row lies, and it does not need a missing destination to do it. "Privacy" and "Tracking"
+ * both opened chrome://settings/privacy, so one of the two names was a promise of a screen that was never written:
+ * whichever you clicked, you got the other one's screen. The same went for a reading list that opened the bookmarks
+ * page. A name is a claim about where it goes, and when two names go to one place at most one of them is true.
+ *
+ * Panel and rail views are already held to this by the address check above. This is the browser addresses, the
+ * handlers and the helper channels -- everything the panel hands straight to the browser or to Orbis.
+ */
+test('no two rows lead to the same place', () => {
+  const where = new Map<string, string[]>()
+  for (const capability of CAPABILITIES) {
+    const target = capability.target
+    const place =
+      target.kind === 'page' ? `address ${target.url}`
+      : target.kind === 'do' ? `handler ${target.message}`
+      : target.kind === 'ask' ? `channel ${target.channel}`
+      : null
+    if (!place) continue
+    where.set(place, [...(where.get(place) ?? []), capability.id])
+  }
+  for (const [place, ids] of where) {
+    assert.equal(
+      ids.length,
+      1,
+      `${ids.join(' and ')} all lead to the same ${place}, so at most one of those names is telling the truth about where it goes. Give each its own destination or keep one row.`
+    )
   }
 })
 

@@ -324,9 +324,11 @@ export function readTheme(text: string): PuzzleTheme | null {
   if ((PUZZLE_THEMES as readonly string[]).includes(key)) return key as PuzzleTheme
   // The few spellings other sources use for the same idea. Anything else is left alone rather than guessed at.
   const known: Readonly<Record<string, PuzzleTheme>> = {
-    mateinone: 'mate', 'mate-in-one': 'mate', 'mate-in-1': 'mate', mate1: 'mate',
-    'mate-in-two': 'mate', 'mate-in-2': 'mate', mate2: 'mate',
-    'mate-in-three': 'mate', 'mate-in-3': 'mate',
+    mateinone: 'mate', 'mate-in-one': 'mate', 'mate-in-1': 'mate', mate1: 'mate', matein1: 'mate',
+    'mate-in-two': 'mate', 'mate-in-2': 'mate', mate2: 'mate', matein2: 'mate',
+    'mate-in-three': 'mate', 'mate-in-3': 'mate', mate3: 'mate', matein3: 'mate',
+    'mate-in-four': 'mate', 'mate-in-4': 'mate', matein4: 'mate',
+    'mate-in-five': 'mate', 'mate-in-5': 'mate', matein5: 'mate',
     checkmate: 'mate', mating: 'mate',
     backrankmate: 'back-rank-mate', 'back-rank': 'back-rank-mate', backrank: 'back-rank-mate',
     smotheredmate: 'smothered-mate',
@@ -1163,6 +1165,50 @@ export function dailyStreak(store: PuzzleStore, today: string): Streak {
   }
 }
 
+export type DayState =
+  /** That day's challenge was chosen and really solved. */
+  | 'done'
+  /** It was chosen and not solved. */
+  | 'missed'
+  /** Nothing was chosen that day, because Orbis was not opened. Not the same as having missed it. */
+  | 'nothing'
+
+export interface DayMark {
+  day: string
+  state: DayState
+  says: string
+}
+
+/**
+ * The last few days, each one saying which of three things it was.
+ *
+ * The third state is the whole point. A day with no challenge recorded is a day Orbis was never opened, and showing
+ * that as a miss would tell somebody they failed something that was never put in front of them. `dailyFor` only
+ * fixes a day when it is asked, so gaps in the record are gaps in the record and are drawn as such.
+ *
+ * Newest first, and `days` is held to something a strip can actually show.
+ */
+export function recentDays(store: PuzzleStore, today: string, days = 7): DayMark[] {
+  const out: DayMark[] = []
+  let day = today
+  for (let back = 0; back < Math.max(1, Math.min(60, Math.trunc(days))); back++) {
+    const puzzleId = store.daily[day]
+    if (puzzleId === undefined) {
+      out.push({ day, state: 'nothing', says: `${day}: nothing was chosen, because Orbis was not opened that day.` })
+    } else {
+      const record = store.records[puzzleId]
+      const solved = Boolean(record?.attempts.some((attempt) => attempt.day === day && counts(attempt)))
+      out.push({
+        day,
+        state: solved ? 'done' : 'missed',
+        says: solved ? `${day}: solved.` : `${day}: chosen, and not solved.`
+      })
+    }
+    day = previousDay(day)
+  }
+  return out
+}
+
 // ---------------------------------------------------------------- filtering
 
 export interface PuzzleFilter {
@@ -1172,7 +1218,13 @@ export interface PuzzleFilter {
   onlyCheckedThemes?: boolean
   ratingFrom?: number
   ratingTo?: number
-  /** False leaves out puzzles nobody has rated. Default true, because most of them have no rating. */
+  /**
+   * What to do with puzzles nobody has rated, which is most of them.
+   *
+   * With no rating band asked for they are kept, unless this is explicitly false. With a band asked for they are
+   * left out unless this is explicitly true -- "rated 1400 to 1799" says nothing at all about a puzzle with no
+   * rating, and quietly including it would be answering a question that was not asked.
+   */
   includeUnrated?: boolean
   status?: readonly PuzzleStatus[]
   verification?: readonly Verification['status'][]
@@ -1189,7 +1241,7 @@ export function filterIsEmpty(filter: PuzzleFilter): boolean {
   return !(filter.themes?.length)
     && filter.ratingFrom === undefined
     && filter.ratingTo === undefined
-    && filter.includeUnrated === false
+    && filter.includeUnrated !== false
     && !(filter.status?.length)
     && !(filter.verification?.length)
     && !(filter.source?.length)
@@ -1216,17 +1268,13 @@ export function matchesPuzzle(puzzle: Puzzle, record: PuzzleRecord | undefined, 
     const have = new Set(themeNames(puzzle, filter.onlyCheckedThemes === true))
     if (!filter.themes.some((theme) => have.has(theme))) return false
   }
-  if (filter.ratingFrom !== undefined || filter.ratingTo !== undefined) {
-    if (puzzle.rating === null) {
-      if (filter.includeUnrated === false) return false
-      // A rating band says nothing about a puzzle with no rating, so one is only kept when unrated is allowed.
-      if (filter.includeUnrated !== true) return false
-    } else {
-      if (filter.ratingFrom !== undefined && puzzle.rating < filter.ratingFrom) return false
-      if (filter.ratingTo !== undefined && puzzle.rating > filter.ratingTo) return false
-    }
-  } else if (filter.includeUnrated === false && puzzle.rating === null) {
-    return false
+  const bandAsked = filter.ratingFrom !== undefined || filter.ratingTo !== undefined
+  if (puzzle.rating === null) {
+    // A band says nothing about a puzzle with no rating, so a band leaves it out unless it was asked for by name.
+    if (bandAsked ? filter.includeUnrated !== true : filter.includeUnrated === false) return false
+  } else if (bandAsked) {
+    if (filter.ratingFrom !== undefined && puzzle.rating < filter.ratingFrom) return false
+    if (filter.ratingTo !== undefined && puzzle.rating > filter.ratingTo) return false
   }
   if (filter.status?.length && !filter.status.includes(statusOf(record))) return false
   if (filter.verification?.length && !filter.verification.includes(puzzle.exercise.verification.status)) return false

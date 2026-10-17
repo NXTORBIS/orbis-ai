@@ -36,9 +36,9 @@ export const DEFAULT_MODEL = 'base'
  * Fixed when the session begins and never reconsidered: the words somebody speaks into the browser's assistant belong
  * to the browser's assistant, and must not turn up in the chat box.
  */
-export type VoiceTarget = 'chat' | 'browser-orion' | 'search' | 'url-bar'
+export type VoiceTarget = 'chat' | 'browser-orion' | 'search' | 'url-bar' | 'chess'
 
-export const VOICE_TARGETS: VoiceTarget[] = ['chat', 'browser-orion', 'search', 'url-bar']
+export const VOICE_TARGETS: VoiceTarget[] = ['chat', 'browser-orion', 'search', 'url-bar', 'chess']
 
 /**
  * Push-to-talk: hold Ctrl+Shift+M, speak, let go. It is a shortcut, not a second way of transcribing — it starts and

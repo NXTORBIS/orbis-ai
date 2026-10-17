@@ -285,10 +285,27 @@ export function decodeProgress(raw: unknown, curriculum: Curriculum, now: number
     }
   }
 
-  const curriculumVersion = num(raw.curriculumVersion) ?? curriculum.version
-  if (curriculumVersion !== curriculum.version) {
-    repaired.push(`This progress was earned against version ${curriculumVersion} of the lessons; the lessons are now at version ${curriculum.version}.`)
+  /*
+   * Was anything ever earned? No attempts, nothing read, no cards, nothing marked as already known and no place left
+   * off at is what a profile that has never opened the Academy looks like -- and that is not a record to say anything
+   * about.
+   *
+   * It has to be asked, because the value the application hands back for a file that is not there carries
+   * `curriculumVersion: 0` (`kept.ts`, and `shapes.ts` defaults a missing one the same way). So the first time
+   * anybody opened the Academy they were told "this progress was earned against version 0 of the lessons; the
+   * lessons are now at version 1", under a banner reading "some of your saved progress could not be read". Both
+   * sentences were false, and they were the first thing a new person saw on the screen.
+   *
+   * A record with something in it and an older version still says so: that is the message doing its job.
+   */
+  const earnedSomething = keptRecords.length > 0 || reading.length > 0 || cards.length > 0 || skipped.length > 0 || place !== null
+  const storedVersion = num(raw.curriculumVersion) ?? curriculum.version
+  if (earnedSomething && storedVersion !== curriculum.version) {
+    repaired.push(`This progress was earned against version ${storedVersion} of the lessons; the lessons are now at version ${curriculum.version}.`)
   }
+  // Nothing earned is stamped with the version it is about to be earned against, so an empty record does not carry
+  // a stale number forward and start saying this on every later read.
+  const curriculumVersion = earnedSomething ? storedVersion : curriculum.version
 
   return {
     progress: {
@@ -303,7 +320,7 @@ export function decodeProgress(raw: unknown, curriculum: Curriculum, now: number
       savedAt: num(raw.savedAt)
     },
     repaired,
-    fresh: false
+    fresh: !earnedSomething && repaired.length === 0
   }
 }
 

@@ -103,18 +103,20 @@ export const ENDGAMES: readonly EndgameEntry[] = [
     objective: { kind: 'win' },
     method: 'Walk the king to the edge with the queen a knight move away from it, bring your own king up, and mate. The one thing to watch is stalemate: when the defender has only one square left, give it a check, not another square taken away.',
     difficulty: 2,
-    provenance: 'Authored for Orbis from the standard queen-and-king mating technique. Orbis does not prove this position is won -- that it is, is standard theory; what is checked here is the written line.'
+    provenance: 'Authored for Orbis from the standard queen-and-king mating technique. Orbis does not prove this position is won -- that it is, is standard theory; what is checked here is that the written line is legal and mates.',
+    line: ['Qc6', 'Kd4', 'Ke2', 'Ke5', 'Ke3', 'Kf5', 'Qe4+', 'Kf6', 'Kf4', 'Kf7', 'Kg5', 'Kg7', 'Qb7+', 'Kf8', 'Kf6', 'Ke8', 'Qc8#']
   },
   {
-    id: 'mate-rook-from-centre',
+    id: 'mate-rook-the-box',
     theme: 'basic-mate',
-    title: 'Rook against a king in the open',
-    fen: '8/8/8/4k3/8/8/8/4K2R w - - 0 1',
+    title: 'Shrinking the box',
+    fen: '4k3/7R/3K4/8/8/8/8/8 w - - 0 1',
     sideToMove: 'w',
     objective: { kind: 'win' },
-    method: 'The rook takes a rank or a file away and the kings do the rest: step your king up until they face each other, then shrink the box by one. It takes longer than the queen and never needs a single check until the end.',
-    difficulty: 4,
-    provenance: 'Authored for Orbis from the standard rook-and-king mating technique (the box). Orbis does not prove this position is won -- that it is, is standard theory; what is checked here is the written line.'
+    method: 'The rook holds the rank so the king cannot come back, and your own king walks up beside it to take the last squares away. The rook moves again only to give the mate.',
+    difficulty: 3,
+    provenance: 'Authored for Orbis from the standard rook-and-king mating technique (the box). Orbis does not prove this position is won -- that it is, is standard theory; what is checked here is that the written line is legal and mates.',
+    line: ['Kc7', 'Kf8', 'Kd8', 'Kg8', 'Re7', 'Kf8', 'Kd7', 'Kg8', 'Ke8', 'Kh8', 'Kf7', 'Kh7', 'Re6', 'Kh8', 'Rh6#']
   },
 
   // ---------------------------------------------------------------- king and pawn
@@ -141,7 +143,8 @@ export const ENDGAMES: readonly EndgameEntry[] = [
     method: 'For a pawn on the fourth rank the squares that matter are the three two ranks in front of it: with your king on one of them the pawn gets through whoever is to move. The other king is too far away here to argue about them.',
     difficulty: 2,
     provenance: 'Authored for Orbis from standard king-and-pawn theory (key squares). The position is set up for this exercise, not taken from a game.',
-    marks: ['d6', 'e6', 'f6']
+    marks: ['d6', 'e6', 'f6'],
+    line: ['Kd4', 'Kg2', 'Kd5', 'Kf3', 'Kd6']
   },
   {
     id: 'kp-square-of-the-pawn',
@@ -153,7 +156,8 @@ export const ENDGAMES: readonly EndgameEntry[] = [
     method: 'Draw the square whose side runs from the pawn to the end of the board: if your king is inside it when it is your move, you catch the pawn without counting anything. The marked corners are that square.',
     difficulty: 3,
     provenance: 'Authored for Orbis from standard king-and-pawn theory (the square of the pawn). The position is set up for this exercise, not taken from a game.',
-    marks: ['a4', 'e4', 'e8', 'a8']
+    marks: ['a4', 'e4', 'e8', 'a8'],
+    line: ['Kd6', 'a5', 'Kc6', 'a6', 'Kb6', 'Kb2', 'Kxa6']
   },
   {
     id: 'kp-catch-the-runner',
@@ -188,7 +192,8 @@ export const ENDGAMES: readonly EndgameEntry[] = [
     method: 'Against a pawn on the edge the defending king does not need the opposition or anything else: it needs the corner in front of the pawn, where it cannot be driven out. Get to a8 and there is nowhere for the other king to put you.',
     difficulty: 3,
     provenance: 'Authored for Orbis from standard king-and-pawn theory (the rook pawn). The position is set up for this exercise, not taken from a game.',
-    marks: ['a8']
+    marks: ['a8'],
+    line: ['Kb8', 'a6', 'Ka8']
   },
 
   // ---------------------------------------------------------------- rook endings
@@ -208,7 +213,7 @@ export const ENDGAMES: readonly EndgameEntry[] = [
     id: 'rook-behind-the-passed-pawn',
     theme: 'rook',
     title: 'Behind the passed pawn',
-    fen: '3r3k/8/8/3P4/8/8/8/4K1R1 w - - 0 1',
+    fen: '3r3k/8/8/3P4/8/8/5K2/6R1 w - - 0 1',
     sideToMove: 'w',
     objective: { kind: 'technique', goal: { kind: 'piece-on', piece: 'r', squares: ['d1', 'd2', 'd3', 'd4'] }, within: 1 },
     method: 'A rook belongs behind a passed pawn, its own or the other side\'s: as the pawn goes forward the rook gets more squares and the defender gets fewer. Here that means getting onto the pawn\'s file behind it.',
@@ -273,7 +278,8 @@ export const ENDGAMES: readonly EndgameEntry[] = [
     objective: { kind: 'technique', goal: { kind: 'no-pawns' }, within: 6 },
     method: 'A passed pawn far from everything else is worth more than a pawn: it drags the defending king away and your king eats what is left behind. The pawn is a decoy, so do not mind losing it.',
     difficulty: 4,
-    provenance: 'Authored for Orbis from standard pawn-endgame theory (the outside passed pawn). The position is set up for this exercise, not taken from a game.'
+    provenance: 'Authored for Orbis from standard pawn-endgame theory (the outside passed pawn). The position is set up for this exercise, not taken from a game.',
+    line: ['a4', 'Kd6', 'Kd3', 'Kc6', 'Kc4', 'Kb7', 'Kd5', 'Ka8', 'Kxe5']
   },
   {
     id: 'convert-take-the-last-pawn',

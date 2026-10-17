@@ -93,6 +93,16 @@ export type ControlDomain =
    */
   | 'markets'
   /**
+   * The controls inside Orbis's own screens.
+   *
+   * Its own switch because it is its own question. Every other domain is about a part of the browser; this one is
+   * about reaching inside Orbis's feature screens -- a panel in Chess World, a parameter in a simulation, a tool in
+   * Markets -- which somebody may well want Orion kept out of while leaving it the run of the browser. Note what
+   * switching it off does not do: it stops Orion using the screens' declared controls, not the person using them, and
+   * `ui` remains a separate switch for operating the window by clicking it.
+   */
+  | 'screens'
+  /**
    * Orbis Music.
    *
    * Its own domain so "what Orion may do about music" is one switch. Note what it cannot do even when it is on:

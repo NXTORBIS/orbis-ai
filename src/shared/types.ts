@@ -6,6 +6,7 @@ import type { SourcePreferences } from './researchSources'
 import type { ResearchChange, ResearchStage } from './researchRun'
 import type { SharedProject } from './portable/share'
 import type { Meeting, MeetingSummary } from './meeting'
+import type { VisibilityChoice } from './featureVisibility'
 
 /** A file a project keeps, as the window is shown it. The words themselves stay in the main process. */
 export interface ProjectFileView {
@@ -145,6 +146,12 @@ export interface NeurovaWorkspace {
   originalLyrics: string | null
 }
 import type { StoredGame as ChessStoredGame } from './chess/model'
+import type { KeptAnswer, StoredOpenings, StoredProgress, StoredTraining } from './chess/kept'
+import type { AcademyProgress as ChessAcademyProgress } from './chess/academyPath'
+import type { StoredStudy as StoredChessStudy } from './chess/study'
+import type { ChessSettings } from './chess/settings'
+import type { CacheCounters as ChessCacheCounters, CacheSize as ChessCacheSize } from './chess/analysisCache'
+import type { ArcadeAnswer, KeptArcade } from './games/kept'
 import type { Workspace, WorkspaceSummary } from './workspaces'
 
 /** What came of bringing a PGN file in: every game accounted for, including the ones that could not be read. */
@@ -156,6 +163,32 @@ export interface ChessImportSummary {
   ids: string[]
 }
 export type { ChessStoredGame }
+
+/**
+ * What the store of kept engine answers says about itself.
+ *
+ * `off` means answers are not being kept at all in this build, which is not a fault; `state.available` being false
+ * with a `problem` means something is wrong with the file and every position is being searched afresh, which is also
+ * not a fault -- only slow. A screen must tell the two apart rather than showing "0 answers kept" for both.
+ */
+export type ChessAnalysisCacheAnswer =
+  | { kind: 'off'; because: string }
+  | {
+      kind: 'state'
+      available: boolean
+      problem: string | null
+      counters: ChessCacheCounters
+      size: ChessCacheSize
+      rejections: { reason: string; plain: string; count: number }[]
+      /** The questions that cannot be evicted right now, because somebody is looking at them. */
+      protected: readonly string[]
+      engine: { name: string | null; version: string | null; build: string | null } | null
+    }
+  | { kind: 'cleared'; forgotten: number }
+  | { kind: 'pruned'; dropped: number }
+  | { kind: 'pinned'; done: boolean }
+  | { kind: 'counters-reset' }
+
 import type { Profile } from './profiles'
 import type { ConfigChange, ExperienceConfig, ExperienceExport, ExperienceHealth, ImportCheck } from './experience'
 import type { ArtifactRef } from './artifacts/model'
@@ -888,6 +921,19 @@ export interface PageApplicationSummary {
   navigation: { kind: 'page' | 'group'; id: string; label: string; route: string | null; children: unknown[] }[]
   describes: string[]
   problems: { severity: 'error' | 'warning'; kind: string; message: string; subject: string }[]
+}
+
+/**
+ * What Orbis says about which features this profile sees.
+ *
+ * `choice` is what is really stored. `notes` is anything that could not be read, in sentences somebody can be shown.
+ * `refused` is set only when nothing was written -- a file Orbis could not read is reported and left alone, never
+ * replaced, because replacing it would silently reset somebody's choices.
+ */
+export interface FeatureVisibilityAnswer {
+  choice: VisibilityChoice
+  notes: readonly string[]
+  refused: string | null
 }
 
 export interface NxtorbisApi {
@@ -1910,6 +1956,31 @@ export interface NxtorbisApi {
    */
   choose(op: string, asked?: unknown): Promise<unknown>
 
+  /**
+   * "Do this on my screens", said in words: one request in, and what really happened out.
+   *
+   * The answer's `kind` is the thing to read. `done` means steps ran, and `confirmed` says whether every one that
+   * changes something was confirmed by a reading taken afterwards -- never by a command having been sent. `answered`
+   * is a question answered from real readings with nothing changed. `question` is one short question back, because
+   * guessing between two real controls sets the wrong one. `refused` means the request was wrong and nothing was
+   * touched. `nothing` means Orbis has no such thing on screen, said rather than opening something near it.
+   *
+   * Nothing is granted by asking this way: every step goes through the control layer as Orion, so the switches in
+   * Settings → What Orion may do, the effect policy, the approval prompts, the tab lock and the log all apply. See
+   * `src/main/screenAgent.ts` and `docs/orbis-control.md`.
+   */
+  screens(
+    request: string,
+    context?: { recent?: { role: 'user' | 'assistant'; text: string }[]; lastPath?: string }
+  ): Promise<{
+    kind: 'done' | 'answered' | 'question' | 'refused' | 'nothing' | 'unavailable'
+    text: string
+    outline?: string[]
+    steps?: { what: string; capability: string; status: 'confirmed' | 'unconfirmed' | 'nothing-to-do' | 'refused' | 'failed' | 'skipped'; detail: string }[]
+    confirmed?: boolean
+    choices?: string[]
+  }>
+
   /** Orbis Student: one operation channel, and a nudge when anything changed. */
   student(op: string, a?: unknown, b?: unknown, c?: unknown): Promise<unknown>
   onStudentChanged(listener: () => void): () => void
@@ -2352,10 +2423,86 @@ export interface NxtorbisApi {
   chessImportPgnText(text: string, name?: string): Promise<ChessImportSummary>
   chessExportPgn(ids: string[]): Promise<string | null>
   chessToPgn(id: string): Promise<string | null>
-  chessEngineStatus(): Promise<{ state: string; detail: string; name?: string; version?: string }>
+  /**
+   * What the engine is doing, and what it said it can do.
+   *
+   * `options` is every option the engine advertised in its handshake, which is the only honest way to find out
+   * whether a thing Orbis wants to set can be set at all. It is empty before a handshake, and empty is not the same
+   * answer as "it has not got one" -- `handicapReach` in `src/shared/chess/opponents.ts` keeps those apart. The
+   * handler has always sent this; the declared type left it out, so nothing on screen could read it.
+   */
+  chessEngineStatus(): Promise<{
+    state: string
+    detail: string
+    name?: string
+    version?: string
+    options?: { name: string; type: string; default?: string; min?: number; max?: number; vars?: string[] }[]
+    /** What was really set on the engine, after it clamped each value to its own range. */
+    applied?: Record<string, string>
+  }>
   chessEngineInstall(): Promise<boolean>
-  chessAnalyse(request: { id: string; fen: string; multipv?: number; movetime?: number; depth?: number; nodes?: number }): Promise<string>
+  /**
+   * Asks the engine about a position.
+   *
+   * `skill` is the engine's own strength dial, 0 to 20, for this one search: it is what makes a gentle opponent in
+   * the Arena gentle. Left out means nothing is held back, which is what a hint, an evaluation or a review wants --
+   * the dial is set just before the search that asks for it and put back afterwards, so one weakened game cannot
+   * quietly weaken everything else that asks the same engine.
+   */
+  chessAnalyse(request: { id: string; fen: string; multipv?: number; movetime?: number; depth?: number; nodes?: number; variant?: string; fresh?: boolean; skill?: number }): Promise<string>
   chessStopAnalysis(id?: string): Promise<boolean>
+  /**
+   * What the store of kept engine answers is doing.
+   *
+   * One door for all of it, the way notifications and Music are one door each. Without the operation it answers with
+   * the whole state: whether answers are being kept, what went wrong if they are not, every counter, how much room
+   * they take, each refusal with how often it happened, and which questions cannot be evicted because somebody is
+   * looking at them. `clear` forgets everything, which is safe here and nowhere else in Chess World -- every answer
+   * in it can be worked out again by asking the engine. `pin` keeps one answer out of eviction.
+   *
+   * Every figure is counted rather than estimated, so "the cache is helping" is something that can be shown rather
+   * than claimed.
+   */
+  chessAnalysisCache(op?: 'state' | 'clear' | 'prune' | 'pin' | 'reset-counters', a?: string, b?: boolean): Promise<ChessAnalysisCacheAnswer>
+  /*
+   * Everything Chess World keeps about a person apart from their games, in the profile rather than in this window's
+   * own storage. Two channels each for five files, because a file that cannot be read must not stop the other four
+   * being read. Every answer carries `notes` for what could not be read and `refused` for when nothing was written
+   * -- and a save whose answer has `refused` set did not happen, so a screen must say so rather than show the new
+   * value as kept.
+   */
+  chessSettings(): Promise<KeptAnswer<ChessSettings>>
+  chessSaveSettings(settings: ChessSettings): Promise<KeptAnswer<ChessSettings>>
+  chessTraining(): Promise<KeptAnswer<StoredTraining>>
+  chessSaveTraining(training: StoredTraining): Promise<KeptAnswer<StoredTraining>>
+  chessOpenings(): Promise<KeptAnswer<StoredOpenings>>
+  chessSaveOpenings(openings: StoredOpenings): Promise<KeptAnswer<StoredOpenings>>
+  chessAcademy(): Promise<KeptAnswer<ChessAcademyProgress>>
+  chessSaveAcademy(progress: ChessAcademyProgress): Promise<KeptAnswer<ChessAcademyProgress>>
+  chessProgress(): Promise<KeptAnswer<StoredProgress>>
+  chessSaveProgress(progress: StoredProgress): Promise<KeptAnswer<StoredProgress>>
+  /*
+   * What somebody has worked out about one game: the lines, the notes and the engine's answers with the depth behind
+   * each one. Its own file, so an analysis that cannot be read cannot cost the game it was about -- and `null` with
+   * `refused` empty means "nothing saved for this game yet", which is not the same answer as `refused` being set.
+   */
+  chessStudy(gameId: string): Promise<KeptAnswer<StoredChessStudy | null>>
+  chessSaveStudy(study: StoredChessStudy): Promise<KeptAnswer<StoredChessStudy | null>>
+  /*
+   * The arcade's record: the preferences, the favourites, the recently played row, the best score of each game, the
+   * games left part way through, and every run that has been finished.
+   *
+   * In the profile rather than in this window's own storage, so a high score follows the person rather than the
+   * window it was set in, and travels with a profile export. One file, because every part of it is written at the
+   * moment a run finishes. `refused` set means nothing was written at all -- a screen that shows a new best score
+   * without looking at it is a screen that lies about saving.
+   *
+   * There is no channel for the leaderboard, the levels, the streak or "what you play most". Every one of those is
+   * worked out from this record in `src/shared/games`, which the window imports directly: a channel for a computed
+   * figure would be a second answer to a question that already has one.
+   */
+  arcadeRecord(): Promise<ArcadeAnswer<KeptArcade>>
+  arcadeSave(record: KeptArcade): Promise<ArcadeAnswer<KeptArcade>>
   neurovaWorkspace(id: string): Promise<NeurovaWorkspace>
   neurovaPlanPropose(id: string): Promise<NeurovaWorkspace>
   neurovaPlanEdit(id: string, e: unknown): Promise<{ workspace: NeurovaWorkspace; reason: string | null }>
@@ -2420,6 +2567,25 @@ export interface NxtorbisApi {
   checkExperienceImport(raw: unknown): Promise<ImportCheck & { changes?: ConfigChange[] }>
   importExperience(raw: unknown, how?: 'replace' | 'merge'): Promise<{ config: ExperienceConfig; changes: ConfigChange[] }>
   onExperienceChanged(listener: (config: ExperienceConfig) => void): () => void
+
+  // ---------------------------------------------------------------- which features this profile sees
+
+  /**
+   * Which features this profile has showing, with anything that could not be read said out loud.
+   *
+   * `notes` is for the person: a file something else was holding, a value that made no sense, a choice saved by a
+   * newer Orbis. `refused` set means nothing could be written -- so a save whose answer has it set did not happen,
+   * and the screen must say so rather than showing the new value as kept.
+   *
+   * Whether a feature is *visible* is worked out from this with `isVisible` in `shared/featureVisibility.ts`. There
+   * is no channel for that, deliberately: it is pure code both halves of Orbis read, and a second answer to it is
+   * how the window and the browser once drifted nine features apart.
+   */
+  featureVisibility(): Promise<FeatureVisibilityAnswer>
+  /** Turns one feature on or off. The answer is what was really stored, not what was asked for. */
+  setFeatureVisible(feature: string, on: boolean): Promise<FeatureVisibilityAnswer>
+  /** Replaces the whole set at once: the picker, and the first-run step. */
+  chooseVisibleFeatures(features: readonly string[]): Promise<FeatureVisibilityAnswer>
 
   // ---------------------------------------------------------------- Orbis Pages
 

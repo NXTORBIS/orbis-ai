@@ -774,8 +774,17 @@ export interface PlanItem {
   from: 'coach' | 'person'
   /** The weakness it answers, for a coach item. */
   weaknessId?: string
+  /** The coach's own wording, or the person's for a line they wrote. */
   title: string
-  /** What doing it means. */
+  /**
+   * What the person renamed it to.
+   *
+   * Kept apart from `title` rather than written over it, so a coach line can be called whatever the person likes
+   * while the sentence that says what the evidence is stays exactly as the evidence says it. Clearing the override
+   * brings the coach's wording back.
+   */
+  titleOverride?: string
+  /** What doing it means. For a coach line this is the evidence, and only the coach writes it. */
   what: string
   activity: ActivityKind
   /** Lower first. The person's own ordering, not the coach's. */
@@ -792,11 +801,18 @@ export interface StudyPlan {
 
 export const EMPTY_PLAN: StudyPlan = Object.freeze({ items: Object.freeze([]) as readonly PlanItem[], updatedAt: 0 })
 
+/** What a line is called on screen: the person's wording if they gave one, the coach's otherwise. */
+export function planTitle(item: PlanItem): string {
+  return item.titleOverride ?? item.title
+}
+
 const planItemFor = (weakness: Weakness, order: number, now: number): PlanItem => ({
   id: `coach:${weakness.id}`,
   from: 'coach',
   weaknessId: weakness.id,
-  title: `${ACTIVITIES[weakness.activity].label} -- ${weakness.label.toLowerCase()}`,
+  // The weakness's own label is used as it stands. Lower-casing it read well for "mistakes in the endgame" and turned
+  // the Catalan into "catalan", and a plan that cannot spell an opening's name is not one anybody will trust.
+  title: `${ACTIVITIES[weakness.activity].label} -- ${weakness.label}`,
   what: `${weakness.because} ${ACTIVITIES[weakness.activity].label} is what works on it, and ${ACTIVITIES[weakness.activity].records} is what will show whether it helped.`,
   activity: weakness.activity,
   order,
@@ -832,9 +848,16 @@ export function mergePlan(plan: StudyPlan, profile: WeaknessProfile, now: number
       if (item.dismissed) kept.push(item)
       continue
     }
-    // The wording follows the evidence, which has moved on; the person's order and dismissal do not.
+    // The coach's wording follows the evidence, which has moved on. The person's order, their dismissal and the name
+    // they gave the line do not.
     const fresh = planItemFor(weakness, item.order, item.addedAt)
-    kept.push({ ...fresh, order: item.order, dismissed: item.dismissed, addedAt: item.addedAt })
+    kept.push({
+      ...fresh,
+      order: item.order,
+      dismissed: item.dismissed,
+      addedAt: item.addedAt,
+      ...(item.titleOverride === undefined ? {} : { titleOverride: item.titleOverride })
+    })
   }
   const have = new Set(kept.map((one) => one.id))
   let order = kept.reduce((top, one) => Math.max(top, one.order), -1)
@@ -920,12 +943,36 @@ export function addPlanItem(plan: StudyPlan, o: { id: string; title: string; wha
   return { items: renumber([...plan.items, item]), updatedAt: now }
 }
 
-/** Changing the words on a line. Only the person's own lines: a coach line says what the evidence says. */
+/**
+ * Changing the words on a line.
+ *
+ * Any line can be renamed, the coach's included: the name is a label and the person's plan is theirs. What cannot be
+ * rewritten is `what` -- the sentence giving the counts the line rests on -- because a plan line claiming the record
+ * says something it does not say would be the one piece of fabrication this whole module exists to avoid.
+ */
 export function renamePlanItem(plan: StudyPlan, id: string, title: string, now: number): StudyPlan {
   const text = title.trim()
   if (!text) return plan
-  if (!plan.items.some((one) => one.id === id && one.from === 'person')) return plan
-  return { items: plan.items.map((one) => (one.id === id ? { ...one, title: text } : one)), updatedAt: now }
+  const item = plan.items.find((one) => one.id === id)
+  if (!item) return plan
+  if (item.from === 'person') {
+    return { items: plan.items.map((one) => (one.id === id ? { ...one, title: text, titleOverride: text } : one)), updatedAt: now }
+  }
+  return { items: plan.items.map((one) => (one.id === id ? { ...one, titleOverride: text } : one)), updatedAt: now }
+}
+
+/** Dropping the person's own name for a coach line, so it goes back to saying what the coach calls it. */
+export function resetPlanTitle(plan: StudyPlan, id: string, now: number): StudyPlan {
+  const item = plan.items.find((one) => one.id === id)
+  if (!item || item.titleOverride === undefined || item.from === 'person') return plan
+  return {
+    items: plan.items.map((one) => {
+      if (one.id !== id) return one
+      const { titleOverride, ...rest } = one
+      return rest
+    }),
+    updatedAt: now
+  }
 }
 
 /**

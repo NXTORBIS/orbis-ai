@@ -314,7 +314,8 @@ describe('the audit against what is actually on disk', () => {
 
   /** Not a store of the user's: a folder Orbis reads from or stages into, which has nothing to carry. */
   const NOT_A_STORE: Readonly<Record<string, string>> = Object.freeze({
-    chess: 'where the downloaded chess engine and its licence live. It is a program, not the person\'s work, and a\n      profile taken to another computer fetches it again rather than carrying it.'
+    chess: 'where the downloaded chess engine and its licence live. It is a program, not the person\'s work, and a\n      profile taken to another computer fetches it again rather than carrying it.',
+    'chess-analysis': 'the answers the chess engine has already given, kept so a position looked at twice is not\n      searched twice. Worked out rather than written by anybody, and every answer in it is keyed to the exact engine\n      binary on this computer -- so a profile carried elsewhere would be carrying megabytes that its own engine would\n      refuse on the first lookup. It is worked out again instead.'
   })
 
   test('every store the code writes is in the table', async () => {

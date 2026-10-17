@@ -374,8 +374,10 @@ export function describeFilter(filter: LibraryFilter): { key: keyof LibraryFilte
   if (filter.black?.trim()) say('black', `Black is ${filter.black.trim()}`)
   if (filter.event?.trim()) say('event', `event is ${filter.event.trim()}`)
   if (filter.site?.trim()) say('site', `place is ${filter.site.trim()}`)
-  if (filter.from?.trim()) say('from', `from ${filter.from.trim()}`)
-  if (filter.to?.trim()) say('to', `up to ${filter.to.trim()}`)
+  // A bound Orbis cannot read as a date narrows nothing, and saying so is the difference between a filter that is
+  // not working and one that looks like it is working and is quietly letting everything through.
+  if (filter.from?.trim()) say('from', `from ${filter.from.trim()}${parseGameDate(filter.from).year === undefined ? ', which is not a date, so it is narrowing nothing' : ''}`)
+  if (filter.to?.trim()) say('to', `up to ${filter.to.trim()}${parseGameDate(filter.to).year === undefined ? ', which is not a date, so it is narrowing nothing' : ''}`)
   if (filter.results?.length) say('results', `result is ${filter.results.map(resultWords).join(' or ')}`)
   if (filter.sources?.length) say('sources', `came from ${filter.sources.map(sourceWords).join(' or ')}`)
   if (filter.variants?.length) say('variants', `variant is ${filter.variants.join(' or ')}`)

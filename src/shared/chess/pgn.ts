@@ -1,4 +1,5 @@
 import { START_FEN, checkFen } from './rules.ts'
+import { isStandardVariant } from './variants.ts'
 import { buildMoves, fingerprintOf, type GameMeta, type GameMove, type GameResult, type PlayerInfo } from './model.ts'
 
 /**
@@ -59,9 +60,6 @@ export const PGN_LIMITS = {
   movesPerGame: 2_000,
   commentChars: 20_000
 }
-
-/** The variants named in the wild that Orbis does not play. Recognised so they are refused, not misread. */
-const KNOWN_VARIANTS = new Set(['standard', 'chess', 'normal', 'classical', 'from position'])
 
 const unescapeTag = (value: string): string => value.replace(/\\(["\\])/g, '$1')
 
@@ -264,7 +262,9 @@ export function readPgn(text: string, opts: { limit?: number } = {}): PgnReadRes
     const written = readMoveText(block.moves)
     if (written.result && meta.result === '*') meta.result = written.result
     const variantTag = (tags.Variant ?? '').trim().toLowerCase()
-    const variant = variantTag && !KNOWN_VARIANTS.has(variantTag) ? variantTag : 'standard'
+    // Which spellings mean ordinary chess is one question with one answer, in `variants.ts`. This file used to keep
+    // its own shorter list, which refused a file tagged `Variant "Standard Chess"` even though it is ordinary chess.
+    const variant = variantTag && !isStandardVariant(variantTag) ? variantTag : 'standard'
     const startFen = tags.FEN?.trim() || START_FEN
     const base: Omit<ParsedGame, 'ok' | 'moves' | 'fingerprint'> = {
       meta,

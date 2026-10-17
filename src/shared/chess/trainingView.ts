@@ -124,7 +124,7 @@ export const GYM_CATALOGUE: readonly GymEntry[] = Object.freeze([
           {
             move: 'a8b8',
             children: [
-              { move: 'd7d8q' }
+              { move: 'd7d8r' }
             ]
           }
         ]
@@ -143,7 +143,7 @@ export const GYM_CATALOGUE: readonly GymEntry[] = Object.freeze([
           {
             move: 'd7d8',
             children: [
-              { move: 'e6e7' }
+              { move: 'c6c8' }
             ]
           }
         ]
@@ -160,9 +160,9 @@ export const GYM_CATALOGUE: readonly GymEntry[] = Object.freeze([
         move: 'f8e7',
         children: [
           {
-            move: 'g6h5',
+            move: 'g6h6',
             children: [
-              { move: 'd5f5' }
+              { move: 'd5g5' }
             ]
           }
         ]
@@ -181,13 +181,13 @@ export const GYM_CATALOGUE: readonly GymEntry[] = Object.freeze([
           {
             move: 'g8h8',
             children: [
-              { move: 'b7b8q' }
+              { move: 'b7b8r' }
             ]
           },
           {
             move: 'g8f8',
             children: [
-              { move: 'b7b8q' }
+              { move: 'b7b8r' }
             ]
           }
         ]
@@ -214,25 +214,6 @@ export const GYM_CATALOGUE: readonly GymEntry[] = Object.freeze([
     ]
   },
   {
-    id: 'gym-knight-defends',
-    fen: '8/7n/8/7Q/3k4/8/2K5/4R3 w - - 0 1',
-    mateIn: 2,
-    pieces: 5,
-    lines: [
-      {
-        move: 'h5e5',
-        children: [
-          {
-            move: 'd4c4',
-            children: [
-              { move: 'e1c1' }
-            ]
-          }
-        ]
-      }
-    ]
-  },
-  {
     id: 'gym-take-the-rook',
     fen: '8/8/3Q4/8/8/2r2K1k/1B6/8 w - - 0 1',
     mateIn: 2,
@@ -244,26 +225,7 @@ export const GYM_CATALOGUE: readonly GymEntry[] = Object.freeze([
           {
             move: 'h3h4',
             children: [
-              { move: 'd6h2' }
-            ]
-          }
-        ]
-      }
-    ]
-  },
-  {
-    id: 'gym-quiet-first-move',
-    fen: '8/3K4/8/1R6/2Q2N2/4p3/8/6k1 w - - 0 1',
-    mateIn: 2,
-    pieces: 6,
-    lines: [
-      {
-        move: 'c4e2',
-        children: [
-          {
-            move: 'g1h1',
-            children: [
-              { move: 'b5b1' }
+              { move: 'd6h6' }
             ]
           }
         ]
@@ -288,7 +250,7 @@ export const GYM_CATALOGUE: readonly GymEntry[] = Object.freeze([
           {
             move: 'g8f8',
             children: [
-              { move: 'c7f7' }
+              { move: 'a2a8' }
             ]
           }
         ]
@@ -305,47 +267,9 @@ export const GYM_CATALOGUE: readonly GymEntry[] = Object.freeze([
         move: 'f6b6',
         children: [
           {
-            move: 'a5a6',
+            move: 'a4a3',
             children: [
-              { move: 'b6b4' }
-            ]
-          }
-        ]
-      }
-    ]
-  },
-  {
-    id: 'gym-queen-two-rooks',
-    fen: '2R5/2K5/5k2/4R3/8/4Q3/8/8 w - - 0 1',
-    mateIn: 2,
-    pieces: 5,
-    lines: [
-      {
-        move: 'e3g5',
-        children: [
-          {
-            move: 'f6f7',
-            children: [
-              { move: 'c8f8' }
-            ]
-          }
-        ]
-      }
-    ]
-  },
-  {
-    id: 'gym-rooks-and-queen',
-    fen: '4R3/3R4/6K1/8/6Q1/8/2k5/8 w - - 0 1',
-    mateIn: 2,
-    pieces: 5,
-    lines: [
-      {
-        move: 'g4b4',
-        children: [
-          {
-            move: 'c2c1',
-            children: [
-              { move: 'd7d1' }
+              { move: 'b5a5' }
             ]
           }
         ]
@@ -364,19 +288,19 @@ export const GYM_CATALOGUE: readonly GymEntry[] = Object.freeze([
           {
             move: 'b4a5',
             children: [
-              { move: 'c2c5' }
+              { move: 'c2a2' }
+            ]
+          },
+          {
+            move: 'b4a3',
+            children: [
+              { move: 'c2a2' }
             ]
           },
           {
             move: 'b4a4',
             children: [
-              { move: 'b1b3' }
-            ]
-          },
-          {
-            move: 'e5c4',
-            children: [
-              { move: 'b1b3' }
+              { move: 'c2a2' }
             ]
           }
         ]
@@ -384,31 +308,35 @@ export const GYM_CATALOGUE: readonly GymEntry[] = Object.freeze([
     ]
   },
   {
-    id: 'gym-take-the-pawn',
-    fen: '1k6/5p1Q/8/8/8/6R1/P7/3K4 w - - 0 1',
-    mateIn: 2,
-    pieces: 6,
+    id: 'gym-quiet-mate-in-three',
+    fen: '8/p7/8/BP6/Q7/3k4/5p2/6K1 w - - 0 1',
+    mateIn: 3,
+    pieces: 7,
     lines: [
       {
-        move: 'h7f7',
+        move: 'g1f2',
         children: [
           {
-            move: 'b8a8',
+            move: 'a7a6',
             children: [
-              { move: 'g3g8' }
-            ]
-          },
-          {
-            move: 'b8c8',
-            children: [
-              { move: 'f7f8' }
+              {
+                move: 'f2f3',
+                children: [
+                  {
+                    move: 'a6b5',
+                    children: [
+                      { move: 'a4e4' }
+                    ]
+                  }
+                ]
+              }
             ]
           }
         ]
       }
     ]
   }
-] as const satisfies readonly GymEntry[])
+])
 
 /** The ids whose first moves are the complete set, because a search produced them. Nothing else may claim that. */
 export const EXHAUSTIVE_ROOT_IDS: readonly string[] = Object.freeze(GYM_CATALOGUE.map((entry) => entry.id))
@@ -464,6 +392,42 @@ function tagsFor(fen: string, mateIn: number): string[] {
   ]
 }
 
+/**
+ * Every mate, where the search kept only one.
+ *
+ * `forcedMateTree` keeps alternatives at the root and one answer per defence below it, which is the right thing for
+ * a search and the wrong thing for marking: in `k7/3P4/P1K5/8/8/8/8/8` the search answers 1.Kb6 Kb8 with 2.d8=R#,
+ * and a solver who writes 2.d8=Q# -- which is also mate -- would be told their line parted from the answer. It
+ * would be the exercise that was wrong.
+ *
+ * So wherever the tree has a solver move that ends the line, every move that gives mate in that position is added
+ * beside it. Nothing is invented: a move is added only when the rules say it is checkmate, and the test checks both
+ * directions -- every accepted finish is a mate, and every mate is accepted.
+ */
+function withEveryMate(fen: string, nodes: readonly MoveNode[], depth: number): MoveNode[] {
+  const solverTurn = depth % 2 === 0
+  const out: MoveNode[] = []
+  const have = new Set<string>()
+  for (const node of nodes) {
+    const made = applyMove(fen, node.move)
+    if (!made) { out.push(cloneNode(node)); continue }
+    have.add(made.uci)
+    const kids = node.children ?? []
+    out.push({
+      ...cloneNode(node),
+      ...(kids.length ? { children: withEveryMate(made.after, kids, depth + 1) } : {})
+    })
+  }
+  if (!solverTurn) return out
+  const endsHere = nodes.some((node) => (node.children ?? []).length === 0)
+  if (!endsHere) return out
+  for (const move of legalMoves(fen)) {
+    if (!move.checkmate || have.has(move.uci)) continue
+    out.push({ move: move.uci })
+  }
+  return out
+}
+
 /** One catalogue entry as an exercise, with its verification worked out rather than claimed. */
 export function gymExercise(entry: GymEntry): { exercise: Exercise; ok: boolean; problems: readonly string[] } {
   const draft = newExercise({
@@ -473,7 +437,7 @@ export function gymExercise(entry: GymEntry): { exercise: Exercise; ok: boolean;
     objective: 'mate-in-n',
     movesToMate: entry.mateIn,
     prompt: `${SIDE_WORD[sideToMove(entry.fen)]} to move. Force mate in ${sayCount(entry.mateIn)}.`,
-    solution: { lines: entry.lines.map((line) => cloneNode(line)) },
+    solution: { lines: withEveryMate(entry.fen, entry.lines, 0) },
     hints: hintsFor(entry.fen, entry.lines, entry.mateIn),
     source: {
       kind: 'generated',
@@ -565,7 +529,15 @@ export type Forcing = 'check' | 'capture' | 'quiet'
 
 export interface Candidate {
   uci: string
+  /** Standard notation for this position, mate mark and all. Used to play and to compare, never shown. */
   san: string
+  /**
+   * The notation to put on screen: the same move with a mate written as a check.
+   *
+   * A mate is a check, so "Qh7+" is true of "Qh7#" -- and it does not tell somebody which of thirty moves is the
+   * one that ends it. A candidate list is the step *before* calculating, and a hash in it is the answer.
+   */
+  shown: string
   from: string
   to: string
   piece: PieceLetter
@@ -606,6 +578,7 @@ function describeCandidate(move: ChessMove): Candidate {
   return {
     uci: move.uci,
     san: move.san,
+    shown: move.san.replace(/#$/, '+'),
     from: move.from,
     to: move.to,
     piece: move.piece,
@@ -765,14 +738,7 @@ export function lineRows(entry: LineEntry): { rows: LineRow[]; firstNumber: numb
 
 /** The line as one string, for copying out or for showing it back. */
 export function lineText(entry: LineEntry): string {
-  const { rows, blackFirst, firstNumber } = lineRows(entry)
-  const parts: string[] = []
-  for (const row of rows) {
-    if (row.white) parts.push(`${row.number}.${row.white.san}`)
-    else if (row.number === firstNumber && blackFirst) parts.push(`${row.number}...`)
-    if (row.black) parts.push(row.black.san)
-  }
-  return parts.join(' ').replace(/(\d+)\.\.\. /, '$1...')
+  return writeLine(entry.startFen, entry.moves.map((move) => move.san))
 }
 
 // ---------------------------------------------------------------- submitting a line
@@ -809,6 +775,53 @@ export function submitLine(exercise: Exercise, draft: LineDraft, replies: ReplyS
     compared: filled.line,
     stoppedSupplyingAt: filled.stoppedAt
   }
+}
+
+/**
+ * The line as it will be compared, for showing it back.
+ *
+ * With `both-sides` that is the draft itself. With `from-the-exercise` it is not: the draft holds only the solver's
+ * own moves, and the line being checked is that with Orbis's replies in it. Showing only the solver's moves would
+ * be showing a line nobody submitted -- and it would not even be playable, because White's second move cannot be
+ * played in a position where it is Black's turn.
+ */
+export function shownLine(exercise: Exercise, draft: LineDraft, replies: ReplySource): LineEntry {
+  if (replies === 'both-sides') return enterLine(draft.startFen, draft.texts)
+  return enterLine(exercise.startFen, interleave(exercise, draft.texts).line)
+}
+
+/**
+ * The position the next move is written in.
+ *
+ * The bug this exists to stop: a box that read every move against the draft's own last position would refuse every
+ * second move in `from-the-exercise` mode, because that position has the other side to move. The position the next
+ * solver move is played in is the one after Orbis's reply to the last one.
+ */
+export function nextFen(exercise: Exercise, draft: LineDraft, replies: ReplySource): string {
+  const walk = shownLine(exercise, draft, replies)
+  return walk.fens.length ? walk.fens[walk.fens.length - 1] : exercise.startFen
+}
+
+/**
+ * One more move on a draft, read against the position it will really be played in.
+ *
+ * `appendMove` is the `both-sides` case and this is both, so a screen has one function to call and no reason to
+ * work out which position to use. As with `appendMove`, a move that cannot be played is **not kept**.
+ */
+export function appendSolverMove(exercise: Exercise, draft: LineDraft, replies: ReplySource, text: string): Appended {
+  if (replies === 'both-sides') return appendMove(draft, text)
+  const here = nextFen(exercise, draft, replies)
+  const guard = canPlayFrom(here)
+  if (!guard.ok) {
+    return {
+      draft,
+      added: false,
+      read: { ok: false, fault: 'chess', code: 'no-such-move', says: guard.says ?? 'The line cannot go on from here.' }
+    }
+  }
+  const read = readMove(here, text)
+  if (!read.ok) return { draft, added: false, read }
+  return { draft: { ...draft, texts: [...draft.texts, text.trim()] }, added: true, read }
 }
 
 // ---------------------------------------------------------------- what the attempt established
@@ -908,7 +921,9 @@ export function calculationReport(exercise: Exercise, submission: GymSubmission,
         ? `At ply ${d.at + 1} you played ${d.played}; the exercise answers ${d.accepted.join(' or ') || 'something else'}.`
         : `At ply ${d.at + 1} you gave the other side ${d.played}, which the exercise does not record as a defence. Everything after that was calculated against a defence nobody checked.`
     })
-    if (d.by === 'solver' && !rootsAreComplete(exercise.id)) {
+    // "Your move may still be good" is only honest where the answers are not known to be the complete set. At the
+    // first move of a catalogue exercise they are, because a search produced them; deeper in, they are not.
+    if (d.by === 'solver' && !(d.at === 0 && rootsAreComplete(exercise.id))) {
       established.push({
         settled: 'unknown',
         says: 'Your move may still be good. The exercise records the answers somebody wrote down, not every move that works.'
@@ -942,14 +957,16 @@ export function calculationReport(exercise: Exercise, submission: GymSubmission,
   }
 
   const diverged = comparison.divergence
+  // The board goes back to the position the parting move was played *in*, which is the one worth looking at. The
+  // position after it is a position nobody needs to study.
   const showFen = diverged
-    ? comparison.entry.fens[diverged.at] ?? comparison.entry.startFen
+    ? diverged.at === 0 ? comparison.entry.startFen : comparison.entry.fens[diverged.at - 1] ?? comparison.entry.startFen
     : comparison.entry.fens[comparison.entry.fens.length - 1] ?? null
 
   return {
     heading,
     showFen: showFen ?? null,
-    showPly: diverged ? diverged.at : comparison.entry.moves.length - 1,
+    showPly: diverged ? diverged.at : comparison.entry.moves.length > 0 ? comparison.entry.moves.length - 1 : null,
     established,
     candidates: context.candidates.length ? reviewCandidates(exercise, context.candidates) : [],
     worth: comparison.verdict === 'solves' ? hintWorth(exercise, context.hintsTaken) : null
@@ -1020,7 +1037,7 @@ export const BLIND_LEVELS: readonly BlindLevel[] = Object.freeze([
     passes: 'A line that is one of the exercise\'s answers.',
     study: true
   }
-] as const satisfies readonly BlindLevel[])
+])
 
 export function blindLevel(id: BlindLevelId): BlindLevel {
   return BLIND_LEVELS.find((one) => one.id === id) ?? BLIND_LEVELS[0]
@@ -1081,7 +1098,7 @@ export function viewRules(input: {
   /** The position to show afterwards, when it is not the starting one -- the end of a tracked line. */
   doneFen?: string
 }): ViewRules {
-  const { level, phase, mode } = input
+  const { phase, mode } = input
   if (phase === 'ready') {
     return {
       boardFen: null,
@@ -1127,6 +1144,75 @@ export function viewRules(input: {
   }
 }
 
+// ---------------------------------------------------------------- the gym: what may be on screen
+
+export type GymMode =
+  /** The position goes off screen before the line is written. Section 215's hidden-board mode. */
+  | 'hidden'
+  /** The position stays on screen and the pieces may be moved about on it to work the line out. */
+  | 'with-board'
+
+export interface GymRules extends ViewRules {
+  /**
+   * Whether the pieces may be moved about on the board as a way of working the line out.
+   *
+   * Separate from `boardFen` because they are different permissions: after submitting, the board comes back and the
+   * pieces still may not be moved -- the attempt is finished and a board somebody can play with would quietly turn
+   * the review into a second go.
+   */
+  mayMovePieces: boolean
+}
+
+/** The gym's own words for the place the board is. None of them names a square, a piece or a position. */
+const GYM_LABEL: Readonly<Record<Phase, string>> = Object.freeze({
+  ready: 'The board, before a round starts',
+  studying: 'The position, to look at before you start',
+  answering: 'The board is hidden while you calculate',
+  done: 'The position as it really is'
+})
+
+/**
+ * Whether the board may be on screen in the Calculation Gym, and whether it may be played with.
+ *
+ * The gym's one decision, the way `viewRules` is the blindfold screen's. It exists because the gym has a round the
+ * blindfold ladder does not -- one where the position stays on screen the whole time, which is most of what the gym
+ * is for -- and because `scored` means something slightly different here: not "this counts towards a level" but
+ * "this was a hidden-board attempt", which is the only kind that says anything about calculating in your head.
+ *
+ * **`boardFen` is not decided twice.** Every phase except calculating-with-the-board is the same question the
+ * blindfold screen asks, so the answer comes straight out of `viewRules` and only the wording is the gym's. That is
+ * what stops a change to the hiding rule reaching one screen and not the other.
+ */
+export function gymView(input: { mode: GymMode; phase: Phase; fen: string; doneFen?: string }): GymRules {
+  const blind = viewRules({
+    level: 'solve',
+    phase: input.phase,
+    mode: 'strict',
+    fen: input.fen,
+    ...(input.doneFen !== undefined ? { doneFen: input.doneFen } : {})
+  })
+  const hidden = input.mode === 'hidden'
+  if (hidden || input.phase !== 'answering') {
+    return {
+      ...blind,
+      label: GYM_LABEL[input.phase],
+      // A round with the board on screen is not a hidden-board round, whatever phase it is in.
+      scored: hidden,
+      mayMovePieces: false
+    }
+  }
+  // Calculating with the board on screen. The one case the blindfold ladder has no equivalent of.
+  return {
+    boardFen: input.fen,
+    because: null,
+    label: 'The position. You can move the pieces about on it.',
+    readOut: '',
+    scored: false,
+    hintsAllowed: true,
+    mayMovePieces: true
+  }
+}
+
 /**
  * The position written out, for the mode that reads it out.
  *
@@ -1153,13 +1239,29 @@ export function sayPosition(fen: string): string {
   return parts.join(' ')
 }
 
-/** The prompt a screen may show while the position is hidden. Falls back to one built from the objective. */
+const OBJECTIVE_WORD: Readonly<Record<Exercise['objective'], string>> = Object.freeze({
+  'mate-in-n': 'Force checkmate.',
+  'win-material': 'Win material.',
+  'find-best': 'Find the strongest move.',
+  'hold-draw': 'Hold the draw.',
+  reconstruct: 'Play the line out.',
+  answer: 'Answer the question.'
+})
+
+/**
+ * The prompt a screen may show while the position is hidden.
+ *
+ * An exercise somebody else wrote may well name a square -- "the knight on c3 is pinned" is a perfectly good prompt
+ * with a board on screen and gives the position away without one. So a prompt that is not safe is not patched up and
+ * shown; one is built from the objective instead, and the real prompt waits until the board comes back.
+ */
 export function promptWhileHidden(exercise: Exercise): string {
   if (safeWhileHidden(exercise.prompt)) return exercise.prompt
+  const side = `${SIDE_WORD[exercise.sideToMove]} to move.`
   if (exercise.objective === 'mate-in-n' && exercise.movesToMate) {
-    return `${SIDE_WORD[exercise.sideToMove]} to move. Force mate in ${sayCount(exercise.movesToMate)}.`
+    return `${side} Force mate in ${sayCount(exercise.movesToMate)}.`
   }
-  return `${SIDE_WORD[exercise.sideToMove]} to move. ${exercise.prompt.replace(SQUARE_PATTERN, 'a square')}`
+  return `${side} ${OBJECTIVE_WORD[exercise.objective]}`
 }
 
 // ---------------------------------------------------------------- blindfold: positions to work from
@@ -1242,6 +1344,18 @@ function mulberry32(seed: number): () => number {
   }
 }
 
+/** A seeded shuffle. `sort` with a random comparator is not one: it is not even a permutation of the input. */
+function shuffled<T>(list: readonly T[], random: () => number): T[] {
+  const out = [...list]
+  for (let i = out.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(random() * (i + 1)) % (i + 1)
+    const swap = out[i]
+    out[i] = out[j]
+    out[j] = swap
+  }
+  return out
+}
+
 // ---------------------------------------------------------------- blindfold: following a line
 
 interface TrackSeed {
@@ -1263,7 +1377,7 @@ const TRACK_SEEDS: readonly TrackSeed[] = Object.freeze([
   {
     id: 'track-short-castling',
     from: 'start',
-    moves: ['e4', 'e5', 'Nf3', 'Nc6', 'Bc4', 'Bc5', 'O-O', 'O-O'],
+    moves: ['e4', 'e5', 'Nf3', 'Nf6', 'Bc4', 'Bc5', 'O-O', 'O-O'],
     says: 'both sides castle, which moves two pieces each time'
   },
   {
@@ -1275,7 +1389,7 @@ const TRACK_SEEDS: readonly TrackSeed[] = Object.freeze([
   {
     id: 'track-promotion',
     from: 'start',
-    moves: ['e4', 'd5', 'exd5', 'c6', 'dxc6', 'Nf6', 'cxb7', 'Bg4', 'bxa8q'],
+    moves: ['e4', 'd5', 'exd5', 'c6', 'dxc6', 'Nf6', 'cxb7', 'Bg4', 'bxa8=Q'],
     says: 'a pawn walks up the board, takes twice and becomes a queen'
   },
   {
@@ -1522,12 +1636,10 @@ export function buildRound(level: BlindLevelId, options: RoundOptions): BlindRou
   if (level === 'moves-from') {
     // A square worth asking about: the side to move, more than one square to go to, and not the king, whose moves
     // are the easiest thing on the board.
-    const shuffled = [...positions].sort(() => random() - 0.5)
-    for (const position of shuffled) {
+    for (const position of shuffled(positions, random)) {
       const mine = sideToMove(position.fen)
       const pieces = boardSquares(position.fen).filter((p) => p.color === mine && p.type !== 'k')
-      const sorted = [...pieces].sort(() => random() - 0.5)
-      for (const piece of sorted) {
+      for (const piece of shuffled(pieces, random)) {
         const squares = [...new Set(destinationsFrom(position.fen, piece.square).map((m) => m.to))].sort()
         if (squares.length < 2) continue
         return {
@@ -1660,7 +1772,8 @@ export interface RoundAnswer {
  * screen that shows "passed" without the rule beside it is asking to be believed; this does not give it the option.
  */
 export function markRound(round: BlindRound, answer: RoundAnswer): RoundResult {
-  const level = blindLevel(round.kind === 'moves-from' ? 'moves-from' : round.kind === 'track' ? 'track' : round.kind === 'locate' ? 'locate' : round.kind === 'reconstruct' ? 'reconstruct' : 'solve')
+  // Every round's `kind` is the level it belongs to, which is deliberate: there is no mapping to get wrong.
+  const level = blindLevel(round.kind)
 
   if (round.kind === 'locate') {
     const results = markQuestions(round.questions, answer.answers ?? {})
@@ -1764,16 +1877,34 @@ export function reconstructionFaults(recall: RecallScore): { square: string; ver
 export const TRAINING_KEY = 'orbis.chess.training'
 export const TRAINING_VERSION = 1
 
+/**
+ * Which trainer an attempt belongs to.
+ *
+ * All four share this record because they are written at the same moments and read by the same screens. What each
+ * one puts in `item` is its own business and is worked out by a named function in that trainer's module --
+ * `visionItem`, `drillItem` -- so a record can always be read back to the thing it was about.
+ */
+export type TrainingArea = 'calculation' | 'blindfold' | 'vision' | 'drill'
+
+const AREAS: readonly TrainingArea[] = ['calculation', 'blindfold', 'vision', 'drill']
+
 export interface TrainingAttempt {
   /** Unique within the store, so a retry never lands on the same record. */
   id: string
   at: number
-  area: 'calculation' | 'blindfold'
+  area: TrainingArea
   /** The exercise id, or the level id for a blindfold round. */
   item: string
   /** The round within a blindfold level, so a round can be found again from its seed. */
   seed?: number
-  /** Whether the board was kept away. The whole point of the record. */
+  /**
+   * Whether nothing on screen gave the answer away. The whole point of the record.
+   *
+   * For the Calculation Gym and the blindfold ladder that means the board was kept off the screen. For Vision it
+   * means the file and rank labels were off the edge of the board, which is the same idea: with them on, "where is
+   * e4" is answered by reading the board rather than by knowing it. A drill is never strict -- the board is on
+   * screen and being played on, which is what a drill is -- so it records `false` rather than pretending.
+   */
   strict: boolean
   /** How it went, in the words of the thing that marked it. */
   verdict: string
@@ -1793,6 +1924,14 @@ export interface TrainingSettings {
   mode: BlindMode
   studySeconds: number
   questions: number
+  /**
+   * The most pieces a blindfold position may have.
+   *
+   * One of the four things a round gets harder by, and the one a person is most likely to want turned down: a
+   * position with thirty pieces in it is a different exercise from one with five, not a harder version of the same
+   * one. Kept here with the others so a setting somebody chose survives closing the window (Section 226).
+   */
+  mostPieces: number
 }
 
 export const DEFAULT_SETTINGS: TrainingSettings = Object.freeze({
@@ -1800,7 +1939,8 @@ export const DEFAULT_SETTINGS: TrainingSettings = Object.freeze({
   replies: 'both-sides' as ReplySource,
   mode: 'strict' as BlindMode,
   studySeconds: 20,
-  questions: 5
+  questions: 5,
+  mostPieces: 8
 })
 
 export interface TrainingStore {
@@ -1874,7 +2014,9 @@ export function readTraining(raw: string | null | undefined): StoreRead {
     replies: REPLIES.includes(settingsRaw.replies as ReplySource) ? (settingsRaw.replies as ReplySource) : DEFAULT_SETTINGS.replies,
     mode: MODES.includes(settingsRaw.mode as BlindMode) ? (settingsRaw.mode as BlindMode) : DEFAULT_SETTINGS.mode,
     studySeconds: clampNumber(settingsRaw.studySeconds, 5, 300, DEFAULT_SETTINGS.studySeconds),
-    questions: clampNumber(settingsRaw.questions, 1, 12, DEFAULT_SETTINGS.questions)
+    questions: clampNumber(settingsRaw.questions, 1, 12, DEFAULT_SETTINGS.questions),
+    // Four is the fewest a position can have and still be worth remembering; sixty-four is every square full.
+    mostPieces: clampNumber(settingsRaw.mostPieces, 4, 64, DEFAULT_SETTINGS.mostPieces)
   }
 
   const attempts: TrainingAttempt[] = []
@@ -1904,7 +2046,7 @@ function readAttempt(value: unknown): TrainingAttempt | null {
   const one = value as Record<string, unknown>
   const id = typeof one.id === 'string' && one.id.trim() ? one.id.slice(0, 80) : null
   const item = typeof one.item === 'string' && one.item.trim() ? one.item.slice(0, 120) : null
-  const area = one.area === 'calculation' || one.area === 'blindfold' ? one.area : null
+  const area = AREAS.includes(one.area as TrainingArea) ? (one.area as TrainingArea) : null
   if (!id || !item || !area) return null
   const at = typeof one.at === 'number' && Number.isFinite(one.at) ? Math.trunc(one.at) : 0
   return {
@@ -2009,11 +2151,12 @@ export interface LevelStanding extends ItemStanding {
  */
 export function ladder(store: TrainingStore): LevelStanding[] {
   const out: LevelStanding[] = []
-  let previousPassed = true
+  let previousStrict = true
+  let previousAnyhow = true
   let previousTitle = ''
   for (const level of BLIND_LEVELS) {
     const standing = standingOf(store, 'blindfold', level.id)
-    const open = previousPassed
+    const open = previousStrict
     out.push({
       ...standing,
       level,
@@ -2022,11 +2165,13 @@ export function ladder(store: TrainingStore): LevelStanding[] {
         ? previousTitle === ''
           ? 'Open: this is where the ladder starts.'
           : `Open: you passed "${previousTitle}" with the board away.`
-        : standing.passedAnyhow
-          ? `"${previousTitle}" has not been passed with the board away yet. You can still start this one.`
+        : previousAnyhow
+          // Passed, but with the position read out. That is a different exercise, so it does not open this one.
+          ? `"${previousTitle}" has not been passed with the board away yet -- it was passed with the position read out, which is a different exercise. You can still start this one.`
           : `Opens when you pass "${previousTitle}" with the board away. You can still start it now.`
     })
-    previousPassed = standing.passedStrict
+    previousStrict = standing.passedStrict
+    previousAnyhow = standing.passedAnyhow
     previousTitle = level.title
   }
   return out
@@ -2069,10 +2214,10 @@ export function summarise(store: TrainingStore): TrainingSummary {
 }
 
 /** An id for a new attempt. Time plus a counter, because two attempts can land in the same millisecond. */
-let serial = 0
+let attemptSerial = 0
 export function attemptId(now: number): string {
-  serial = (serial + 1) % 100000
-  return `a${now.toString(36)}-${serial.toString(36)}`
+  attemptSerial = (attemptSerial + 1) % 100000
+  return `a${Math.trunc(now).toString(36)}-${attemptSerial.toString(36)}`
 }
 
 // ---------------------------------------------------------------- the solution, for the feedback

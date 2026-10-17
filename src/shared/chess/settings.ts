@@ -166,6 +166,14 @@ export interface BoardTheme {
   /** The ring on a square a lesson or a puzzle is pointing at. */
   mark: string
   /**
+   * The square under a king being attacked.
+   *
+   * Part of the theme rather than one red for all five, because it replaces the square colour outright: a red that
+   * works under the pale pieces of one board can hide the dark pieces of another, and the test beside this file
+   * checks both sides against it exactly as it checks them against the two square colours.
+   */
+  check: string
+  /**
    * The a-h and 1-8 labels, one colour for each square.
    *
    * Two of them rather than one because board.css draws them white on both colours, and white on the pale square
@@ -188,6 +196,7 @@ export const BOARD_THEMES: readonly BoardTheme[] = Object.freeze([
     blackPiece: '#101822',
     blackEdge: '#dfe7f0',
     mark: '#e0b341',
+    check: '#8d3b45',
     coordOnLight: '#0c121a',
     coordOnDark: '#eef3f8'
   }),
@@ -202,6 +211,7 @@ export const BOARD_THEMES: readonly BoardTheme[] = Object.freeze([
     blackPiece: '#231408',
     blackEdge: '#f3e2cc',
     mark: '#2f7fd0',
+    check: '#a0382c',
     coordOnLight: '#201206',
     coordOnDark: '#fff6e8'
   }),
@@ -216,6 +226,7 @@ export const BOARD_THEMES: readonly BoardTheme[] = Object.freeze([
     blackPiece: '#16200f',
     blackEdge: '#eef3dd',
     mark: '#c7462f',
+    check: '#9c3b2e',
     coordOnLight: '#141c08',
     coordOnDark: '#0e1606'
   }),
@@ -230,6 +241,7 @@ export const BOARD_THEMES: readonly BoardTheme[] = Object.freeze([
     blackPiece: '#070b10',
     blackEdge: '#c9d4e0',
     mark: '#f0c548',
+    check: '#7e2f3a',
     coordOnLight: '#080c12',
     coordOnDark: '#e6edf5'
   }),
@@ -244,6 +256,7 @@ export const BOARD_THEMES: readonly BoardTheme[] = Object.freeze([
     blackPiece: '#000000',
     blackEdge: '#ffffff',
     mark: '#ffd400',
+    check: '#a50d0d',
     coordOnLight: '#000000',
     coordOnDark: '#ffffff'
   })
@@ -297,6 +310,8 @@ export type Reach =
    * board on screen the moment they change, including boards this screen does not own.
    */
   | { kind: 'board-style' }
+  /** Handed to the board as a prop by whoever renders it. Real wherever a board is given it. */
+  | { kind: 'board-prop'; prop: string }
   /** Sent to the engine with every analysis, through `analysisRequestFrom`. */
   | { kind: 'engine-request' }
   /** How a score reads, through `formatForSettings`. */
@@ -359,7 +374,7 @@ export const FIELDS: readonly FieldInfo[] = Object.freeze([
   },
   {
     path: 'board.pieces', group: 'board', label: 'How the pieces are drawn',
-    plain: 'The pieces are letters from the chess alphabet rather than pictures, so this is how heavily they are outlined.',
+    plain: 'How heavily each piece is outlined, and whether it is lifted off its square.',
     shape: {
       kind: 'choice',
       choices: [
@@ -422,7 +437,7 @@ export const FIELDS: readonly FieldInfo[] = Object.freeze([
         { value: 'side-to-move', label: 'Whoever is to move' }
       ]
     },
-    reach: { kind: 'stored', waitingFor: 'The Play and Study screens choose which way up a board opens; neither reads this yet.' }
+    reach: { kind: 'board-prop', prop: 'orientation' }
   },
   {
     path: 'moves.notation', group: 'moves', label: 'How moves are written',
@@ -521,11 +536,17 @@ export const FIELDS: readonly FieldInfo[] = Object.freeze([
   },
   {
     path: 'analysis.evalBar', group: 'analysis', label: 'The bar beside the board', plain: 'The strip showing who stands better.',
-    shape: SWITCH, reach: { kind: 'stored', waitingFor: 'Nothing draws the bar yet.' }
+    shape: SWITCH, reach: { kind: 'board-prop', prop: 'evalBar' }
   },
   {
     path: 'analysis.bestMoveArrow', group: 'analysis', label: "An arrow on the engine's move", plain: 'Draws the move the engine likes on the board.',
-    shape: SWITCH, reach: { kind: 'stored', waitingFor: 'The board draws no arrows yet.' }
+    shape: SWITCH,
+    // The Study board draws arrows now -- the ones a person draws on it themselves, through the same `marks` prop an
+    // engine arrow would use. What is missing is the screen handing it the engine's move, which is why this is still
+    // a statement rather than a switch. It said "the board draws the arrows you draw yourself" while no screen in
+    // Chess World passed `onMarksChange` at all, so no board anywhere would be drawn on; the sentence now names the
+    // one screen where it is true.
+    reach: { kind: 'stored', waitingFor: "The Study board draws the arrows you draw on it yourself; nothing hands it the engine's move yet." }
   }
 ]) as readonly FieldInfo[]
 
@@ -545,6 +566,26 @@ export const GROUPS: readonly GroupInfo[] = Object.freeze([
 
 export const fieldsIn = (group: GroupId): readonly FieldInfo[] => FIELDS.filter((one) => one.group === group)
 export const fieldInfo = (path: FieldPath): FieldInfo | undefined => FIELDS.find((one) => one.path === path)
+
+/**
+ * Settings that work in some places and not yet in others.
+ *
+ * The middle case, and the one a settings screen usually lies about. A field in here has a real control and the
+ * control really does something -- but not yet everywhere somebody would expect, and *that* is the sentence they
+ * need. Saying nothing would be a quiet half-truth, and calling the whole thing unconnected would be a lie in the
+ * other direction: the preference is set, it is honoured where it is read, and the places that do not read it yet
+ * are named one by one.
+ *
+ * This is deliberately not `stored`. A field cannot be both: `stored` means nothing anywhere acts on it.
+ */
+export const NOT_EVERYWHERE: Readonly<Partial<Record<FieldPath, string>>> = Object.freeze({
+  'board.orientation':
+    'The board below follows this. The Play and Study screens each keep their own idea of which way up they are and do not read it yet, so a board you open there still starts with White at the bottom.',
+  'moves.notation':
+    'The line of moves below follows this, and so does the line the engine gives back. The move list on the Study screen always writes Nf3 and does not read it yet.',
+  'analysis.evalBar':
+    'The Study screen draws the bar beside its board and follows this. The Play and Puzzle boards have no bar of their own, so turning it on does not put one there.'
+})
 
 // ---------------------------------------------------------------- reading and writing one field
 
@@ -996,6 +1037,19 @@ export interface Shortcut {
   when?: string
   /** Where it is handled. Named so a conflict report says which file to look in. */
   owner: string
+  /**
+   * Whether anything in Orbis really answers this chord today.
+   *
+   * Required, and never optional with a hopeful default. Nine of the chess-screen chords below were advertised as
+   * working, named `ChessSettings.tsx` as the file that answered them, and that file has never had a key handler in
+   * it -- so pressing any of them did nothing at all while the sheet said otherwise. A field that defaulted to true
+   * would let the next one in silently.
+   *
+   * `false` is a thing the sheet prints rather than hides, and `settings.test.ts` checks both halves against the
+   * files themselves: a chord that says it works has to be looked for in the file it names, and a chord that says
+   * it does not must not be.
+   */
+  answered: boolean
 }
 
 /**
@@ -1072,34 +1126,34 @@ export const chordFace = (chord: string): string =>
  * which is why the test asserts that each one is still in the file it says it is.
  */
 export const APP_SHORTCUTS: readonly Shortcut[] = Object.freeze([
-  { id: 'app.new-chat', chord: 'Ctrl+Shift+O', scope: 'window', action: 'Start a new chat', description: 'Leaves whatever screen you are on.', owner: 'App.tsx' },
-  { id: 'app.incognito', chord: 'Ctrl+Shift+N', scope: 'window', action: 'Incognito chat', description: 'Turns the private chat on or off.', owner: 'App.tsx' },
-  { id: 'app.settings', chord: 'Ctrl+,', scope: 'window', action: 'Open Settings', description: 'Opens at Account.', owner: 'App.tsx' },
-  { id: 'app.browser', chord: 'Ctrl+Shift+B', scope: 'window', action: 'Open the browser', description: '', owner: 'App.tsx' },
-  { id: 'app.sidebar', chord: 'Ctrl+B', scope: 'window', action: 'Show or hide the sidebar', description: '', owner: 'App.tsx' },
-  { id: 'app.address-bar', chord: 'Ctrl+E', scope: 'window', action: 'Go to the address bar', description: '', owner: 'App.tsx' },
-  { id: 'app.palette', chord: 'Ctrl+K', scope: 'window', action: 'Everything Orbis can do', description: 'The command palette.', owner: 'App.tsx' },
-  { id: 'app.find-in-chat', chord: 'Ctrl+Shift+F', scope: 'window', action: 'Search this conversation', description: '', owner: 'App.tsx' },
-  { id: 'app.student', chord: 'Ctrl+Shift+U', scope: 'window', action: 'Open Student', description: '', owner: 'App.tsx' },
+  { id: 'app.new-chat', chord: 'Ctrl+Shift+O', scope: 'window', action: 'Start a new chat', description: 'Leaves whatever screen you are on.', owner: 'App.tsx', answered: true },
+  { id: 'app.incognito', chord: 'Ctrl+Shift+N', scope: 'window', action: 'Incognito chat', description: 'Turns the private chat on or off.', owner: 'App.tsx', answered: true },
+  { id: 'app.settings', chord: 'Ctrl+,', scope: 'window', action: 'Open Settings', description: 'Opens at Account.', owner: 'App.tsx', answered: true },
+  { id: 'app.browser', chord: 'Ctrl+Shift+B', scope: 'window', action: 'Open the browser', description: '', owner: 'App.tsx', answered: true },
+  { id: 'app.sidebar', chord: 'Ctrl+B', scope: 'window', action: 'Show or hide the sidebar', description: '', owner: 'App.tsx', answered: true },
+  { id: 'app.address-bar', chord: 'Ctrl+E', scope: 'window', action: 'Go to the address bar', description: '', owner: 'App.tsx', answered: true },
+  { id: 'app.palette', chord: 'Ctrl+K', scope: 'window', action: 'Everything Orbis can do', description: 'The command palette.', owner: 'App.tsx', answered: true },
+  { id: 'app.find-in-chat', chord: 'Ctrl+Shift+F', scope: 'window', action: 'Search this conversation', description: '', owner: 'App.tsx', answered: true },
+  { id: 'app.student', chord: 'Ctrl+Shift+U', scope: 'window', action: 'Open Student', description: '', owner: 'App.tsx', answered: true },
   {
     id: 'app.push-to-talk', chord: 'Ctrl+Shift+M', scope: 'window', action: 'Hold to talk',
-    description: 'Held rather than pressed: it records while the keys are down.', owner: 'App.tsx'
+    description: 'Held rather than pressed: it records while the keys are down.', owner: 'App.tsx', answered: true
   },
   {
     id: 'app.escape', chord: 'Escape', scope: 'window', action: 'Out of this screen',
     description: 'Closes the screen you are on.',
     when: 'Not while a dialog, menu or popover is open, and not while there is text in the box you are typing in.',
-    owner: 'App.tsx'
+    owner: 'App.tsx', answered: true
   },
-  { id: 'menu.new-chat', chord: 'Ctrl+N', scope: 'window', action: 'New chat', description: 'From the File menu.', owner: 'src/main/index.ts (native menu)' },
-  { id: 'menu.quit', chord: 'Ctrl+Q', scope: 'window', action: 'Quit Orbis', description: 'From the File menu.', owner: 'src/main/index.ts (native menu)' },
-  { id: 'menu.undo', chord: 'Ctrl+Z', scope: 'window', action: 'Undo the last edit', description: 'The operating system handles this one.', owner: 'src/main/index.ts (native menu)' },
-  { id: 'menu.redo', chord: 'Ctrl+Shift+Z', scope: 'window', action: 'Redo the last edit', description: '', owner: 'src/main/index.ts (native menu)' },
-  { id: 'menu.cut', chord: 'Ctrl+X', scope: 'window', action: 'Cut the selection', description: '', owner: 'src/main/index.ts (native menu)' },
-  { id: 'menu.copy', chord: 'Ctrl+C', scope: 'window', action: 'Copy the selection', description: '', owner: 'src/main/index.ts (native menu)' },
-  { id: 'menu.paste', chord: 'Ctrl+V', scope: 'window', action: 'Paste the clipboard', description: '', owner: 'src/main/index.ts (native menu)' },
-  { id: 'menu.reload', chord: 'Ctrl+R', scope: 'window', action: 'Reload the window', description: '', owner: 'src/main/index.ts (native menu)' },
-  { id: 'menu.devtools', chord: 'Ctrl+Shift+I', scope: 'window', action: 'Developer tools', description: '', owner: 'src/main/index.ts (native menu)' }
+  { id: 'menu.new-chat', chord: 'Ctrl+N', scope: 'window', action: 'New chat', description: 'From the File menu.', owner: 'src/main/index.ts (native menu)', answered: true },
+  { id: 'menu.quit', chord: 'Ctrl+Q', scope: 'window', action: 'Quit Orbis', description: 'From the File menu.', owner: 'src/main/index.ts (native menu)', answered: true },
+  { id: 'menu.undo', chord: 'Ctrl+Z', scope: 'window', action: 'Undo the last edit', description: 'The operating system handles this one.', owner: 'src/main/index.ts (native menu)', answered: true },
+  { id: 'menu.redo', chord: 'Ctrl+Shift+Z', scope: 'window', action: 'Redo the last edit', description: '', owner: 'src/main/index.ts (native menu)', answered: true },
+  { id: 'menu.cut', chord: 'Ctrl+X', scope: 'window', action: 'Cut the selection', description: '', owner: 'src/main/index.ts (native menu)', answered: true },
+  { id: 'menu.copy', chord: 'Ctrl+C', scope: 'window', action: 'Copy the selection', description: '', owner: 'src/main/index.ts (native menu)', answered: true },
+  { id: 'menu.paste', chord: 'Ctrl+V', scope: 'window', action: 'Paste the clipboard', description: '', owner: 'src/main/index.ts (native menu)', answered: true },
+  { id: 'menu.reload', chord: 'Ctrl+R', scope: 'window', action: 'Reload the window', description: '', owner: 'src/main/index.ts (native menu)', answered: true },
+  { id: 'menu.devtools', chord: 'Ctrl+Shift+I', scope: 'window', action: 'Developer tools', description: '', owner: 'src/main/index.ts (native menu)', answered: true }
 ]) as readonly Shortcut[]
 
 /**
@@ -1110,16 +1164,49 @@ export const APP_SHORTCUTS: readonly Shortcut[] = Object.freeze([
  * will find out which one they are about to get.
  */
 export const BOARD_KEYS: readonly Shortcut[] = Object.freeze([
-  { id: 'board.left', chord: 'ArrowLeft', scope: 'chess-board', action: 'Move the cursor one square left', description: '', owner: 'Board.tsx' },
-  { id: 'board.right', chord: 'ArrowRight', scope: 'chess-board', action: 'Move the cursor one square right', description: '', owner: 'Board.tsx' },
-  { id: 'board.up', chord: 'ArrowUp', scope: 'chess-board', action: 'Move the cursor one square up', description: '', owner: 'Board.tsx' },
-  { id: 'board.down', chord: 'ArrowDown', scope: 'chess-board', action: 'Move the cursor one square down', description: '', owner: 'Board.tsx' },
+  { id: 'board.left', chord: 'ArrowLeft', scope: 'chess-board', action: 'Move the cursor one square left', description: '', owner: 'Board.tsx', answered: true },
+  { id: 'board.right', chord: 'ArrowRight', scope: 'chess-board', action: 'Move the cursor one square right', description: '', owner: 'Board.tsx', answered: true },
+  { id: 'board.up', chord: 'ArrowUp', scope: 'chess-board', action: 'Move the cursor one square up', description: '', owner: 'Board.tsx', answered: true },
+  { id: 'board.down', chord: 'ArrowDown', scope: 'chess-board', action: 'Move the cursor one square down', description: '', owner: 'Board.tsx', answered: true },
   {
     id: 'board.take', chord: 'Enter', scope: 'chess-board', action: 'Pick the piece up, or put it down',
-    description: 'On your own piece it picks it up. On a square it may go to it plays the move.', owner: 'Board.tsx'
+    description: 'On your own piece it picks it up. On a square it may go to it plays the move.', owner: 'Board.tsx', answered: true
   },
-  { id: 'board.take-space', chord: 'Space', scope: 'chess-board', action: 'The same as Enter', description: '', owner: 'Board.tsx' },
-  { id: 'board.drop', chord: 'Escape', scope: 'chess-board', action: 'Let go of the piece', description: 'Only while a piece is picked up.', when: 'Only while a piece is picked up.', owner: 'Board.tsx' }
+  { id: 'board.take-space', chord: 'Space', scope: 'chess-board', action: 'The same as Enter', description: '', owner: 'Board.tsx', answered: true },
+  {
+    id: 'board.drop', chord: 'Escape', scope: 'chess-board', action: 'Let go of the piece',
+    description: 'Only while a piece is picked up, or while an arrow is half drawn.',
+    when: 'Only while a piece is picked up, or while an arrow is waiting for the square it points at.', owner: 'Board.tsx', answered: true
+  },
+  /*
+   * Drawing on the board without a mouse.
+   *
+   * The mouse draws by right-dragging and picks its colour from whatever is held down. A keyboard has no modifier
+   * to hold while it presses a key, so the colour is a standing choice instead, and C walks through the four.
+   *
+   * All four only do anything on a board whose marks somebody keeps -- a drawing has to belong to the position, so
+   * a board with nowhere to send one cannot be drawn on at all.
+   */
+  {
+    id: 'board.mark', chord: 'M', scope: 'chess-board', action: 'Colour the square the cursor is on',
+    description: 'The same key again takes the colour off.',
+    when: 'Only on a board whose marks are kept with the position.', owner: 'Board.tsx', answered: true
+  },
+  {
+    id: 'board.ink', chord: 'C', scope: 'chess-board', action: 'Change the colour arrows and squares are drawn in',
+    description: 'Round through green, red, blue and yellow. With a mouse, hold Shift, Alt or Ctrl instead.',
+    when: 'Only on a board whose marks are kept with the position.', owner: 'Board.tsx', answered: true
+  },
+  {
+    id: 'board.arrow', chord: 'X', scope: 'chess-board', action: 'Draw an arrow from here',
+    description: 'Press it where the arrow starts, walk to the square it points at, and press it again. Escape drops it.',
+    when: 'Only on a board whose marks are kept with the position.', owner: 'Board.tsx', answered: true
+  },
+  {
+    id: 'board.clear-marks', chord: 'Delete', scope: 'chess-board', action: 'Take off every arrow and colour on this position',
+    description: 'A plain left click with the mouse does the same.',
+    when: 'Only on a board whose marks are kept with the position.', owner: 'Board.tsx', answered: true
+  }
 ]) as readonly Shortcut[]
 
 /**
@@ -1134,29 +1221,29 @@ export const CHESS_SHORTCUTS: readonly Shortcut[] = Object.freeze([
   {
     id: 'chess.previous', chord: 'ArrowLeft', scope: 'chess-screen', action: 'Back one move',
     description: 'Steps back through the game.', when: 'Not while the keyboard is on the board, where the arrows move the cursor instead.',
-    owner: 'ChessSettings.tsx'
+    owner: 'nobody yet', answered: false
   },
   {
     id: 'chess.next', chord: 'ArrowRight', scope: 'chess-screen', action: 'Forward one move',
-    description: 'Steps forward through the game.', when: 'Not while the keyboard is on the board.', owner: 'ChessSettings.tsx'
+    description: 'Steps forward through the game.', when: 'Not while the keyboard is on the board.', owner: 'nobody yet', answered: false
   },
-  { id: 'chess.first', chord: 'Home', scope: 'chess-screen', action: 'The starting position', description: '', when: 'Not while typing.', owner: 'ChessSettings.tsx' },
-  { id: 'chess.last', chord: 'End', scope: 'chess-screen', action: 'The last move played', description: '', when: 'Not while typing.', owner: 'ChessSettings.tsx' },
-  { id: 'chess.flip', chord: 'F', scope: 'chess-screen', action: 'Turn the board round', description: 'Swaps which side is at the bottom.', when: 'Not while typing.', owner: 'ChessSettings.tsx' },
-  { id: 'chess.ask', chord: 'A', scope: 'chess-screen', action: 'Ask the engine about this position', description: 'Uses the engine settings as they stand.', when: 'Not while typing, and only once the engine is set up.', owner: 'ChessSettings.tsx' },
-  { id: 'chess.stop', chord: 'Shift+A', scope: 'chess-screen', action: 'Stop the engine', description: '', when: 'Not while typing.', owner: 'ChessSettings.tsx' },
-  { id: 'chess.new', chord: 'N', scope: 'chess-screen', action: 'A new board', description: '', when: 'Not while typing.', owner: 'ChessSettings.tsx' },
-  { id: 'chess.save', chord: 'S', scope: 'chess-screen', action: 'Save this game as a PGN file', description: '', when: 'Not while typing, and only with a game open.', owner: 'ChessSettings.tsx' },
-  { id: 'chess.play', chord: '1', scope: 'chess-screen', action: 'The Play tab', description: '', when: 'Not while typing.', owner: 'ChessSettings.tsx' },
-  { id: 'chess.study', chord: '2', scope: 'chess-screen', action: 'The Study tab', description: '', when: 'Not while typing.', owner: 'ChessSettings.tsx' },
-  { id: 'chess.library', chord: '3', scope: 'chess-screen', action: 'The Library tab', description: '', when: 'Not while typing.', owner: 'ChessSettings.tsx' },
-  { id: 'chess.live', chord: '4', scope: 'chess-screen', action: 'The Live tab', description: '', when: 'Not while typing.', owner: 'ChessSettings.tsx' },
-  { id: 'chess.settings', chord: 'Shift+S', scope: 'chess-screen', action: 'Chess World settings', description: '', when: 'Not while typing.', owner: 'ChessSettings.tsx' },
-  { id: 'chess.help', chord: '?', scope: 'chess-screen', action: 'This list of keys', description: 'Opens the sheet you are reading.', when: 'Not while typing.', owner: 'ChessSettings.tsx' },
+  { id: 'chess.first', chord: 'Home', scope: 'chess-screen', action: 'The starting position', description: '', when: 'Not while typing.', owner: 'nobody yet', answered: false },
+  { id: 'chess.last', chord: 'End', scope: 'chess-screen', action: 'The last move played', description: '', when: 'Not while typing.', owner: 'nobody yet', answered: false },
+  { id: 'chess.flip', chord: 'F', scope: 'chess-screen', action: 'Turn the board round', description: 'Swaps which side is at the bottom.', when: 'Not while typing.', owner: 'nobody yet', answered: false },
+  { id: 'chess.ask', chord: 'A', scope: 'chess-screen', action: 'Ask the engine about this position', description: 'Uses the engine settings as they stand.', when: 'Not while typing, and only once the engine is set up.', owner: 'nobody yet', answered: false },
+  { id: 'chess.stop', chord: 'Shift+A', scope: 'chess-screen', action: 'Stop the engine', description: '', when: 'Not while typing.', owner: 'nobody yet', answered: false },
+  { id: 'chess.new', chord: 'N', scope: 'chess-screen', action: 'A new board', description: '', when: 'Not while typing.', owner: 'nobody yet', answered: false },
+  { id: 'chess.save', chord: 'S', scope: 'chess-screen', action: 'Save this game as a PGN file', description: '', when: 'Not while typing, and only with a game open.', owner: 'nobody yet', answered: false },
+  { id: 'chess.play', chord: '1', scope: 'chess-screen', action: 'Go to Play', description: '', when: 'Not while typing.', owner: 'ChessView.tsx', answered: true },
+  { id: 'chess.study', chord: '2', scope: 'chess-screen', action: 'Go to Study', description: '', when: 'Not while typing.', owner: 'ChessView.tsx', answered: true },
+  { id: 'chess.library', chord: '3', scope: 'chess-screen', action: 'Go to your Library', description: '', when: 'Not while typing.', owner: 'ChessView.tsx', answered: true },
+  { id: 'chess.live', chord: '4', scope: 'chess-screen', action: 'Go to Live', description: '', when: 'Not while typing.', owner: 'ChessView.tsx', answered: true },
+  { id: 'chess.settings', chord: 'Shift+S', scope: 'chess-screen', action: 'Go to Chess World settings', description: '', when: 'Not while typing.', owner: 'ChessView.tsx', answered: true },
+  { id: 'chess.help', chord: '?', scope: 'chess-screen', action: 'This list of keys', description: 'Opens the sheet you are reading.', when: 'Not while typing.', owner: 'ChessView.tsx', answered: true },
   {
     id: 'chess.help-close', chord: 'Escape', scope: 'chess-shortcut-sheet', action: 'Close this sheet',
     description: "Orbis's own Escape steps aside while a dialog is open, so this one closes the sheet and leaves Chess World where it is.",
-    owner: 'ui/Modal.tsx'
+    owner: 'ui/Modal.tsx', answered: true
   }
 ]) as readonly Shortcut[]
 
@@ -1266,9 +1353,8 @@ export const BOARD_ACCESS_NOTES: readonly AccessNote[] = Object.freeze([
   },
   {
     what: 'A marked square in a lesson or a puzzle',
-    state: 'missing',
-    detail: 'A marked square gets a gold ring on the screen and its description does not mention it. Neither does the square of a king in check. Both are visible and neither is said.',
-    needs: "The square's description should name both, beside what it already says."
+    state: 'works',
+    detail: 'A marked square says so in its own description, and so does the square of a king in check -- "e8, black king, in check". A square somebody has coloured themselves names the colour as well, and the checked square carries the + sign chess has always used, so neither of them is a colour and nothing else.'
   },
   {
     what: 'Choosing what a pawn becomes',

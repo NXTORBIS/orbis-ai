@@ -264,6 +264,15 @@ export const GOAL_LABEL: Record<Goal, string> = {
 export interface SearchLimits {
   /** Positions the search may look at before it gives up. */
   budget?: number
+  /**
+   * A moment to stop at, as a timestamp.
+   *
+   * A node budget is the honest limit and the only one the tests use, because the same budget always gives the same
+   * answer. A screen needs the other kind: a position's cost cannot be known in advance, and a search that is still
+   * thinking is a window that has stopped. So a caller on a screen passes `Date.now() + 200` and takes
+   * `complete: false` for an answer. It is the one clock this module reads, and only when asked.
+   */
+  deadline?: number
 }
 
 export interface SearchResult {
@@ -277,6 +286,7 @@ export interface SearchResult {
 interface Context {
   goal: Goal
   budget: number
+  deadline: number
   nodes: number
   stopped: boolean
   /** `${positionKey}|${depth}` to whether the mover can force the goal within `depth` of its own moves. */
@@ -325,6 +335,9 @@ function canForce(ctx: Context, fen: string, depth: number): boolean {
   if (remembered !== undefined) return remembered
   ctx.nodes += 1
   if (ctx.nodes > ctx.budget) { ctx.stopped = true; return false }
+  // The clock is only looked at when a caller asked for one, and only every so often, so a search that is given a
+  // node budget alone stays exactly as deterministic as the budget makes it.
+  if (ctx.deadline > 0 && ctx.nodes % 64 === 0 && Date.now() > ctx.deadline) { ctx.stopped = true; return false }
 
   const moves = movesIn(ctx, fen)
   if (!moves.length) return false
@@ -352,7 +365,15 @@ function canForce(ctx: Context, fen: string, depth: number): boolean {
 }
 
 function newContext(goal: Goal, limits: SearchLimits): Context {
-  return { goal, budget: limits.budget ?? 120_000, nodes: 0, stopped: false, memo: new Map(), moves: new Map() }
+  return {
+    goal,
+    budget: limits.budget ?? 120_000,
+    deadline: limits.deadline ?? 0,
+    nodes: 0,
+    stopped: false,
+    memo: new Map(),
+    moves: new Map()
+  }
 }
 
 /**

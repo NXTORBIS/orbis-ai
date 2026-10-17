@@ -17,8 +17,32 @@ export type GameId =
   | 'number-puzzle'
   | 'reaction-test'
   | 'typing-challenge'
+  // Added with the arcade. Each is its own mechanic, not a reskin of one above: a reskin would be a longer list
+  // and the same game, which is the one thing this collection is not allowed to become.
+  | 'stacker'
+  | 'sokoban'
+  | 'lights-out'
+  | 'pipes'
+  | 'solitaire'
+  | 'sudoku'
+  | 'nonogram'
+  | 'match-three'
+  | 'water-sort'
+  | 'sliding-tiles'
+  | 'sequence-memory'
+  | 'connect-four'
+  | 'maze-chase'
+  | 'asteroid-field'
+  | 'paddle-duel'
+  | 'road-cross'
+  | 'tower-defence'
+  | 'platform-climb'
+  | 'rhythm-tap'
+  | 'angle-shot'
 
-export type GameCategory = 'arcade' | 'puzzle' | 'reaction' | 'strategy' | 'classic' | 'casual' | 'typing'
+export type GameCategory =
+  | 'arcade' | 'puzzle' | 'reaction' | 'strategy' | 'classic' | 'casual' | 'typing'
+  | 'cards' | 'logic' | 'rhythm' | 'physics'
 
 export interface GameInfo {
   id: GameId
@@ -45,7 +69,28 @@ export const GAMES: GameInfo[] = [
   { id: 'minesweeper', name: 'Minesweeper', description: 'Clear the field without touching a mine. Flag what you suspect.', icon: '💣', categories: ['puzzle', 'strategy', 'classic'], controls: 'Click to reveal, right-click or F to flag', score: 'points', continuable: true },
   { id: 'number-puzzle', name: 'Fusion 2048', description: 'Slide the tiles; matching numbers fuse. Reach 2048 and beyond.', icon: '🔢', categories: ['puzzle', 'strategy'], controls: 'Arrows / WASD or swipe; U to undo', score: 'points', continuable: true },
   { id: 'reaction-test', name: 'Reaction Test', description: 'Wait for GO, then react as fast as you can. No early starts.', icon: '⚡', categories: ['reaction'], controls: 'Click, tap or Space when it says GO', score: 'lower-ms', continuable: false },
-  { id: 'typing-challenge', name: 'Typing Challenge', description: 'Type the passage quickly and accurately. Keep your streak alive.', icon: '⌨️', categories: ['typing'], controls: 'Type the text shown', score: 'wpm', continuable: false }
+  { id: 'typing-challenge', name: 'Typing Challenge', description: 'Type the passage quickly and accurately. Keep your streak alive.', icon: '⌨️', categories: ['typing'], controls: 'Type the text shown', score: 'wpm', continuable: false },
+  // ---- the arcade
+  { id: 'stacker', name: 'Stacker', description: 'Falling shapes, turned and dropped. Fill a row and it clears.', icon: '🧊', categories: ['puzzle', 'arcade', 'classic'], controls: 'Left and right to move, Up or X to turn, Down to drop faster, Space to drop', score: 'points', continuable: true },
+  { id: 'sokoban', name: 'Crate Pusher', description: 'Push every crate onto a mark. You can push, never pull.', icon: '📦', categories: ['puzzle', 'logic'], controls: 'Arrows or WASD to walk, U to undo, R to start the room again', score: 'points', continuable: true },
+  { id: 'lights-out', name: 'Lights Out', description: 'Press a light and its neighbours flip too. Turn them all off.', icon: '💡', categories: ['puzzle', 'logic'], controls: 'Click, or arrow keys and Enter', score: 'points', continuable: true },
+  { id: 'pipes', name: 'Pipeworks', description: 'Turn the pipes until the water runs from the tap to the tank.', icon: '🔧', categories: ['puzzle', 'logic'], controls: 'Click to turn a pipe, right-click to turn it back', score: 'points', continuable: true },
+  { id: 'solitaire', name: 'Solitaire', description: 'Klondike. Build the four suits up from the ace.', icon: '🂡', categories: ['cards', 'classic', 'strategy'], controls: 'Click to pick up and put down; double-click sends a card home', score: 'points', continuable: true },
+  { id: 'sudoku', name: 'Sudoku', description: 'Every row, column and box holds one to nine, once each.', icon: '🔡', categories: ['puzzle', 'logic'], controls: 'Arrows to move, 1 to 9 to write, 0 or Backspace to erase, N for notes', score: 'points', continuable: true },
+  { id: 'nonogram', name: 'Picture Logic', description: 'The numbers say how the filled squares run. Work out the picture.', icon: '🖼', categories: ['puzzle', 'logic'], controls: 'Click to fill, right-click to cross out', score: 'points', continuable: true },
+  { id: 'match-three', name: 'Gem Swap', description: 'Swap two gems to line up three. Chains pay far more than singles.', icon: '💎', categories: ['puzzle', 'casual'], controls: 'Click two gems, or drag one onto its neighbour', score: 'points', continuable: true },
+  { id: 'water-sort', name: 'Colour Sort', description: 'Pour between tubes until each holds one colour. Nothing is lost.', icon: '🧪', categories: ['puzzle', 'logic', 'casual'], controls: 'Click a tube to lift, click another to pour; U to undo', score: 'points', continuable: true },
+  { id: 'sliding-tiles', name: 'Sliding Tiles', description: 'One gap, fifteen tiles. Slide them back into order.', icon: '🔳', categories: ['puzzle', 'classic'], controls: 'Click a tile beside the gap, or use the arrow keys', score: 'lower-ms', continuable: true },
+  { id: 'sequence-memory', name: 'Follow Along', description: 'Watch the pattern, then play it back. It grows by one each round.', icon: '🎵', categories: ['casual', 'reaction'], controls: 'Click the panels, or keys 1 to 4', score: 'points', continuable: false },
+  { id: 'connect-four', name: 'Four in a Row', description: 'Drop counters down the columns. Four in a line wins.', icon: '🔴', categories: ['strategy', 'classic'], controls: 'Click a column, or left and right then Enter', score: 'points', continuable: true },
+  { id: 'maze-chase', name: 'Maze Chase', description: 'Clear the maze of dots while four hunters learn your habits.', icon: '👻', categories: ['arcade', 'classic'], controls: 'Arrows or WASD', score: 'points', continuable: false },
+  { id: 'asteroid-field', name: 'Drift', description: 'Turn and thrust with real momentum. Shots split the rocks.', icon: '☄', categories: ['arcade', 'physics', 'classic'], controls: 'Left and right to turn, Up to thrust, Space to fire, Shift to jump away', score: 'points', continuable: false },
+  { id: 'paddle-duel', name: 'Paddle Duel', description: 'The oldest game there is, against an opponent that reads the angle.', icon: '🏓', categories: ['arcade', 'classic', 'reaction'], controls: 'Up and down, W and S, or move the mouse', score: 'points', continuable: false },
+  { id: 'road-cross', name: 'Road Cross', description: 'Across the traffic, then the river, where the logs do not wait.', icon: '🐸', categories: ['arcade', 'classic', 'casual'], controls: 'Arrows or WASD, one square at a time', score: 'points', continuable: false },
+  { id: 'tower-defence', name: 'Hold the Line', description: 'Place towers along the path and spend what the waves pay you.', icon: '🗼', categories: ['strategy', 'arcade'], controls: 'Click to place, click a tower to improve or sell it', score: 'points', continuable: true },
+  { id: 'platform-climb', name: 'Up and Up', description: 'Bounce from ledge to ledge. The ledges do not all stay put.', icon: '🪜', categories: ['arcade', 'casual'], controls: 'Left and right, A and D, or tilt with the mouse', score: 'points', continuable: false },
+  { id: 'rhythm-tap', name: 'On the Beat', description: 'Hit each note as it lands on the line. Late and early both count.', icon: '🥁', categories: ['rhythm', 'reaction'], controls: 'D F J K, or click the four lanes', score: 'points', continuable: false },
+  { id: 'angle-shot', name: 'Angle Shot', description: 'One shot, one angle, one strength. The wind has its own opinion.', icon: '⛳', categories: ['physics', 'casual', 'puzzle'], controls: 'Drag to aim and set the strength, release to shoot', score: 'lower-ms', continuable: true }
 ]
 
 export const gameInfo = (id: GameId): GameInfo => GAMES.find((g) => g.id === id)!

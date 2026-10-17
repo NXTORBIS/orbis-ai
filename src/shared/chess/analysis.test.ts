@@ -5,8 +5,9 @@ import { buildMoves, fenAt, fingerprintOf, type StoredGame } from './model.ts'
 import type { Score } from './evaluation.ts'
 import {
   acceptUpdate, addMove, annotate, annotationOf, branchPoint, branchesAt, buildReport, canPromote, clearAnnotation,
-  cursorFen, enterBranch, evaluationFromWatch, first, flattenLine, graphGaps, graphSegments, last, leaveBranch,
-  mainLine, next, noWatch, openSession, originalMoves, planCoverage, planDeeper, planQuickPass, plyOf, prev, promote,
+  cursorFen, enterBranch, evaluationFromWatch, first, flattenLine, graphGaps, graphSegments, jump, last, leaveBranch,
+  mainLine, next, noWatch, openSession, originalMoves, pendingUndo, planCoverage, planDeeper, planQuickPass, plyOf,
+  prev, promote,
   readUpdate, recordEvaluation, removeLine, reportFromSession, sessionProblems, undo, watchFor, writeLine,
   type EngineUpdate, type PositionEval
 } from './analysis.ts'
@@ -576,6 +577,43 @@ test('coverage compares what was asked with what came back', () => {
 
   const tight = planQuickPass(game, { totalMs: 600, quickMs: 200, floorMs: 50 })
   assert.deepEqual(planCoverage(game, tight, []).unasked, [0, 1])
+})
+
+test('a game with no moves is a session, a report and a plan, all of them empty and none of them broken', () => {
+  const game = gameOf([])
+  const s = openSession(game)
+  assert.deepEqual(flattenLine(s), [])
+  assert.deepEqual(mainLine(s), [s.tree.rootId])
+  assert.deepEqual(originalMoves(s), [])
+  assert.equal(branchPoint(s), null)
+  assert.deepEqual(branchesAt(s), [])
+  assert.equal(pendingUndo(s), null)
+  assert.equal(undo(s).what, null)
+
+  const report = buildReport(game, [])
+  assert.equal(report.plies, 0)
+  assert.equal(report.graph.length, 1)
+  assert.deepEqual(report.moves, [])
+  assert.deepEqual(report.coverage.notAnalysed, [0])
+  assert.equal(report.centipawnLoss.white, null)
+
+  const plan = planQuickPass(game, { totalMs: 10_000 })
+  assert.deepEqual(plan.steps.map((p) => p.ply), [0])
+  assert.deepEqual(planDeeper(game, { totalMs: 10_000 }, []).steps, [])
+})
+
+test('an instruction that points nowhere is ignored rather than acted on', () => {
+  let s = openSession(gameOf(SHORT))
+  assert.equal(jump(s, 'nowhere'), s)
+  assert.equal(enterBranch(s, 'nowhere'), s)
+  assert.equal(leaveBranch(s), s)
+  assert.equal(promote(s, 'nowhere'), s)
+  assert.equal(promote(s, s.tree.rootId), s)
+  assert.equal(annotate(s, 'nowhere', { text: 'hello' }, 1), s)
+  assert.equal(recordEvaluation(s, 'nowhere', { fen: START_FEN, score: cp(10), depth: 10 }), s)
+  // Entering a child that belongs to a different node is not entering a branch.
+  s = next(s)
+  assert.equal(enterBranch(s, s.original[3]), s)
 })
 
 // ---------------------------------------------------------------- the engine's answers

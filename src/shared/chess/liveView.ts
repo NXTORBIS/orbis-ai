@@ -446,11 +446,17 @@ export interface TournamentGroup {
   /** The earliest start and the latest end known across the rounds. Absent when the provider gave neither. */
   from?: number
   to?: number
-  /** The longest embargo declared on any of its rounds. Absent when none was declared. */
-  delaySeconds?: number
   /** The provider's page, from the first round that has one. */
   url?: string
 }
+
+/*
+ * There is deliberately no embargo on a tournament.
+ *
+ * A declared delay belongs to a *round* -- the provider sets it per round, and in a tournament where one round is
+ * held back and another is not, a tournament-level figure would claim the embargo for rounds that never declared
+ * one. So the screen says it on the round, where it is true.
+ */
 
 const liveliest = (rounds: readonly LiveEventView[]): LiveStatus =>
   rounds.reduce<LiveStatus>((best, one) => (STATUS_RANK[one.status] < STATUS_RANK[best] ? one.status : best), 'finished')
@@ -504,7 +510,6 @@ export function groupByTournament(events: readonly LiveEventView[]): TournamentG
     const rounds = [...group.rounds].sort(roundOrder)
     const from = least(rounds.map((r) => r.startsAt))
     const to = most(rounds.map((r) => r.finishedAt))
-    const delay = most(rounds.map((r) => r.delaySeconds))
     const url = rounds.find((r) => r.url !== undefined)?.url
     return {
       ...group,
@@ -512,7 +517,6 @@ export function groupByTournament(events: readonly LiveEventView[]): TournamentG
       status: liveliest(rounds),
       ...put('from', from),
       ...put('to', to),
-      ...put('delaySeconds', delay),
       ...put('url', url)
     }
   })
@@ -534,6 +538,33 @@ export function groupByTournament(events: readonly LiveEventView[]): TournamentG
     if (starts !== 0 && Number.isFinite(starts)) return starts
     return a.name.localeCompare(b.name, undefined, { numeric: true })
   })
+}
+
+/**
+ * A round's name with its tournament's name taken off the front.
+ *
+ * A provider's flat list of what is on can only carry one name per entry, so it carries "Tournament — Round 3".
+ * Inside a tournament the first half is already on screen above, and a strip of five buttons each repeating it is
+ * unreadable. Only an exact prefix is taken off, with the separator the provider actually used, so a round
+ * genuinely called something else keeps the whole of its name.
+ */
+export function roundShortName(event: Pick<LiveEventView, 'name' | 'tournamentName'>): string {
+  const whole = event.name.trim()
+  const tour = event.tournamentName?.trim()
+  if (!tour || whole === tour) return whole
+  for (const separator of [' — ', ' – ', ' - ', ': ', ' | ']) {
+    const prefix = tour + separator
+    if (!whole.startsWith(prefix)) continue
+    const rest = whole.slice(prefix.length).trim()
+    // Never return nothing: a round whose name is only its tournament's name keeps that name.
+    if (rest) return rest
+  }
+  return whole
+}
+
+/** The tournament a round belongs to, among the rounds a provider listed. Null when that round is not listed. */
+export function tournamentOf(events: readonly LiveEventView[], eventId: string): TournamentGroup | null {
+  return groupByTournament(events).find((group) => group.rounds.some((one) => one.eventId === eventId)) ?? null
 }
 
 // ---- saying things in words ------------------------------------------------------------------------------------

@@ -1,4 +1,4 @@
-import { applyMove, positionKey, type PieceLetter } from './rules.ts'
+import { applyMove, type PieceLetter } from './rules.ts'
 import type { StoredGame } from './model.ts'
 import type { Material, SideMaterial } from './variants.ts'
 import { OPENING_SOURCE, recordFor, type OpeningDataSource, type OpeningRecord } from './openings.ts'
@@ -62,6 +62,15 @@ interface Fields {
   turn: string
   castling: string
   enPassant: string
+  /**
+   * The four fields written back out, which is exactly what `positionKey` in rules.ts produces.
+   *
+   * Built here so that reading a position costs one parse rather than two. It has to be character for character the
+   * same as `positionKey`, and `positionSearch.test.ts` asserts that over every position in a fixture library and a
+   * list of awkward ones -- because if it ever drifted, this file would have a second idea of what the same position
+   * is, which is the one thing it exists to prevent.
+   */
+  key: string
 }
 
 /**
@@ -105,7 +114,13 @@ function fieldsOf(fen: string): Fields | null {
   }
   if (rows !== 8 || squares !== 8) return null
   if (f[1] !== 'w' && f[1] !== 'b') return null
-  return { placement, turn: f[1], castling: f[2], enPassant: f[3] }
+  return {
+    placement,
+    turn: f[1],
+    castling: f[2],
+    enPassant: f[3],
+    key: `${placement} ${f[1]} ${f[2]} ${f[3]}`
+  }
 }
 
 /**
@@ -148,47 +163,94 @@ function pawnSkeleton(placement: string): string {
 
 const blankSide = (): SideMaterial => ({ p: 0, n: 0, b: 0, r: 0, q: 0, k: 0, men: 0, lightBishops: 0, darkBishops: 0 })
 
-/**
- * What is on the board, counted straight out of the placement field.
+/*
+ * Counting the men without allocating anything.
  *
- * `materialOf` in variants.ts counts the same thing from a list of squares, and that is the one a screen should use.
- * This one exists because the index counts material for every position of every game, and going through
- * `boardSquares` would mean loading each position into the rules library and allocating an object per piece --
- * millions of them for a real library.
+ * The index counts material for every position of every game -- sixty thousand of them for three thousand games --
+ * and a `Material` object is three objects. Allocating a hundred and eighty thousand of them, and then collecting
+ * them, cost more than everything else the index does put together. So the counting writes into one reused array of
+ * fourteen numbers, and an actual `Material` object is built only when a new set of men turns up, which happens a
+ * few thousand times rather than sixty thousand.
  *
- * The two must agree, and `positionSearch.test.ts` holds them together over a few hundred real positions. If they
- * ever disagree, this one is wrong.
+ * The array is safe to reuse because nothing holds on to it: every caller turns the counts into a string or copies
+ * them into an object before anything else runs.
  */
-function materialFromPlacement(placement: string): Material {
-  const material: Material = { w: blankSide(), b: blankSide() }
+const W = 0
+const B = 7
+/** p, n, bishops-on-one-colour, bishops-on-the-other, r, q, k -- for White, then for Black. */
+const COUNTS = new Int32Array(14)
+
+/** Where a piece letter lands in the counts above, by its character code. */
+const SLOT: Record<number, number> = {
+  112: 0, 110: 1, 114: 4, 113: 5, 107: 6, // p n r q k
+  80: 0, 78: 1, 82: 4, 81: 5, 75: 6 // P N R Q K
+}
+
+/**
+ * Walks a placement field and leaves the counts in `into`. False when the field is not a board.
+ *
+ * `materialFromPlacement` and `materialKeyOf` both go through here, so the full object and the short string can
+ * never describe the board differently.
+ */
+function countInto(into: Int32Array, placement: string): boolean {
+  into.fill(0)
   let file = 0
   let rank = 8
   for (let i = 0; i < placement.length; i++) {
-    const ch = placement[i]
-    if (ch === '/') {
+    const code = placement.charCodeAt(i)
+    if (code === 47) {
       rank -= 1
       file = 0
       continue
     }
-    if (ch >= '1' && ch <= '8') {
-      file += ch.charCodeAt(0) - 48
+    if (code >= 49 && code <= 56) {
+      file += code - 48
       continue
     }
-    const white = ch !== ch.toLowerCase()
-    const type = ch.toLowerCase() as PieceLetter
-    const side = white ? material.w : material.b
-    side[type] += 1
-    side.men += 1
-    if (type === 'b') {
+    const white = code >= 65 && code <= 90
+    const base = white ? W : B
+    if (code === 98 || code === 66) {
       // The same rule as `isLightSquare` in variants.ts, so the two files put a bishop in the same bucket. Only
       // whether two bishops share a bucket is ever asked here -- never what the bucket is called -- so nothing in
       // this file tells a person a square is light or dark.
-      if ((file + rank) % 2 === 1) side.lightBishops += 1
-      else side.darkBishops += 1
+      into[base + ((file + rank) % 2 === 1 ? 2 : 3)] += 1
+    } else {
+      const slot = SLOT[code]
+      if (slot === undefined) return false
+      into[base + slot] += 1
     }
     file += 1
   }
-  return material
+  return true
+}
+
+const sideFrom = (counts: Int32Array, base: number): SideMaterial => {
+  const side = blankSide()
+  side.p = counts[base]
+  side.n = counts[base + 1]
+  side.lightBishops = counts[base + 2]
+  side.darkBishops = counts[base + 3]
+  side.r = counts[base + 4]
+  side.q = counts[base + 5]
+  side.k = counts[base + 6]
+  side.b = side.lightBishops + side.darkBishops
+  side.men = side.p + side.n + side.b + side.r + side.q + side.k
+  return side
+}
+
+/**
+ * What is on the board, counted straight out of the placement field.
+ *
+ * `materialOf` in variants.ts counts the same thing from a list of squares, and that is the one a screen should use.
+ * This one exists because going through `boardSquares` would mean loading each position into the rules library and
+ * allocating an object per piece -- millions of them for a real library.
+ *
+ * The two must agree, and `positionSearch.test.ts` holds them together over every position in a fixture library and
+ * over a bishop on each of the sixty-four squares. If they ever disagree, this one is wrong.
+ */
+function materialFromPlacement(placement: string): Material | null {
+  if (!countInto(COUNTS, placement)) return null
+  return { w: sideFrom(COUNTS, W), b: sideFrom(COUNTS, B) }
 }
 
 /** What is on the board in a position, or null when the position cannot be read. */
@@ -196,6 +258,9 @@ export function materialOfFen(fen: string): Material | null {
   const fields = fieldsOf(fen)
   return fields ? materialFromPlacement(fields.placement) : null
 }
+
+const signatureOf = (counts: Int32Array, base: number): string =>
+  `${counts[base]},${counts[base + 1]},${counts[base + 2]},${counts[base + 3]},${counts[base + 4]},${counts[base + 5]},${counts[base + 6]}`
 
 /**
  * Material written as one short string, so two positions with the same men share it.
@@ -206,6 +271,12 @@ export function materialOfFen(fen: string): Material | null {
 export function materialSignature(material: Material): string {
   const side = (s: SideMaterial): string => `${s.p},${s.n},${s.lightBishops},${s.darkBishops},${s.r},${s.q},${s.k}`
   return `${side(material.w)}|${side(material.b)}`
+}
+
+/** The same string, straight off a placement field and without building a `Material` to do it. */
+function materialKeyOf(placement: string): string | null {
+  if (!countInto(COUNTS, placement)) return null
+  return `${signatureOf(COUNTS, W)}|${signatureOf(COUNTS, B)}`
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -234,10 +305,29 @@ export interface MatchRule {
 }
 
 /**
+ * How each rule turns an already-read position into a key.
+ *
+ * Kept apart from the rules themselves so that reading a position costs one parse: the index reads the fields once
+ * and asks for the key, rather than handing the text back to be split again.
+ */
+const KEY_FROM_FIELDS: Record<MatchRuleId, (fields: Fields) => string> = {
+  exact: (f) => f.key,
+  placement: (f) => f.placement,
+  'placement-and-turn': (f) => `${f.placement} ${f.turn}`,
+  pawns: (f) => pawnSkeleton(f.placement)
+}
+
+const keyOfFen = (id: MatchRuleId) => (fen: string): string | null => {
+  const fields = fieldsOf(fen)
+  return fields ? KEY_FROM_FIELDS[id](fields) : null
+}
+
+/**
  * The matching rules.
  *
- * The exact rule's key is `positionKey` from rules.ts, called directly rather than rebuilt, so there is one idea of
- * "the same position" in Orbis and this file cannot drift from it.
+ * The exact rule's key is the same four fields `positionKey` in rules.ts writes, in the same order, so there is one
+ * idea of "the same position" in Orbis. The test asserts the two are character for character equal rather than
+ * trusting that they look the same.
  */
 export const MATCH_RULES: readonly MatchRule[] = Object.freeze([
   Object.freeze({
@@ -249,7 +339,7 @@ export const MATCH_RULES: readonly MatchRule[] = Object.freeze([
     caution:
       'The clocks are not part of a position: they change what a draw claim does, not what is legal now. Everything '
       + 'that decides a legal move is matched, so a board that looks the same but has lost a castling right is not a match.',
-    keyOf: (fen: string): string | null => (fieldsOf(fen) ? positionKey(fen) : null)
+    keyOf: keyOfFen('exact')
   }),
   Object.freeze({
     id: 'placement' as const,
@@ -260,7 +350,7 @@ export const MATCH_RULES: readonly MatchRule[] = Object.freeze([
     caution:
       'This is not an exact match. It can return a position where it is the other side to move, or where a castling '
       + 'right differs, so the moves available there are not the moves available here.',
-    keyOf: (fen: string): string | null => fieldsOf(fen)?.placement ?? null
+    keyOf: keyOfFen('placement')
   }),
   Object.freeze({
     id: 'placement-and-turn' as const,
@@ -271,10 +361,7 @@ export const MATCH_RULES: readonly MatchRule[] = Object.freeze([
     caution:
       'This is not an exact match. Castling rights and the en passant square are ignored, and both change what is '
       + 'legal, so a result can be a position you could not have played the same move in.',
-    keyOf: (fen: string): string | null => {
-      const fields = fieldsOf(fen)
-      return fields ? `${fields.placement} ${fields.turn}` : null
-    }
+    keyOf: keyOfFen('placement-and-turn')
   }),
   Object.freeze({
     id: 'pawns' as const,
@@ -285,10 +372,7 @@ export const MATCH_RULES: readonly MatchRule[] = Object.freeze([
     caution:
       'This is not an exact match, and it is the loosest rule here: only the pawns are compared. A rook ending and a '
       + 'queen ending with the same pawns are the same structure.',
-    keyOf: (fen: string): string | null => {
-      const fields = fieldsOf(fen)
-      return fields ? pawnSkeleton(fields.placement) : null
-    }
+    keyOf: keyOfFen('pawns')
   })
 ])
 
@@ -410,10 +494,19 @@ const push = (map: Map<string, PositionHit[]>, key: string, hit: PositionHit): v
   else map.set(key, [hit])
 }
 
-function readGame(index: LibraryIndex, game: StoredGame, keyOf: (fen: string) => string | null): void {
+/**
+ * One game into the index.
+ *
+ * Each position is parsed once and then asked for two things: its key under the index's rule, and which men are on
+ * the board. A full `Material` object is built only when a set of men has not been seen before, which is the
+ * difference between this being instant and this being the slowest thing in the window.
+ */
+function readGame(index: LibraryIndex, game: StoredGame, keyFrom: (fields: Fields) => string): void {
   index.gamesById.set(game.id, game)
   index.games += 1
-  for (const { ply, fen } of positionsOf(game)) {
+  const count = game.moves.length
+  for (let ply = 0; ply <= count; ply++) {
+    const fen = ply === 0 ? game.startFen : game.moves[ply - 1].fen
     const fields = fieldsOf(fen)
     if (!fields) {
       index.skipped.push({
@@ -425,19 +518,20 @@ function readGame(index: LibraryIndex, game: StoredGame, keyOf: (fen: string) =>
       })
       continue
     }
-    const key = keyOf(fen)
-    if (key === null) {
-      index.skipped.push({ gameId: game.id, ply, why: `The position after move ${ply} could not be turned into a key.` })
+    const signature = materialKeyOf(fields.placement)
+    if (signature === null) {
+      index.skipped.push({ gameId: game.id, ply, why: `The men on the board at move ${ply} could not be counted.` })
       continue
     }
     index.positions += 1
     const hit: PositionHit = { gameId: game.id, ply }
-    push(index.byKey, key, hit)
-    const material = materialFromPlacement(fields.placement)
-    const signature = materialSignature(material)
+    push(index.byKey, keyFrom(fields), hit)
     const bucket = index.byMaterial.get(signature)
     if (bucket) bucket.where.push(hit)
-    else index.byMaterial.set(signature, { signature, material, where: [hit] })
+    else {
+      const material = materialFromPlacement(fields.placement)
+      if (material) index.byMaterial.set(signature, { signature, material, where: [hit] })
+    }
   }
 }
 
@@ -449,9 +543,9 @@ function readGame(index: LibraryIndex, game: StoredGame, keyOf: (fen: string) =>
  */
 export function stepIndex(build: IndexBuild, games = 200): IndexBuild {
   if (build.progress.done) return build
-  const keyOf = matchRule(build.index.rule).keyOf
+  const keyFrom = KEY_FROM_FIELDS[build.index.rule] ?? KEY_FROM_FIELDS.exact
   const until = Math.min(build.source.length, build.at + Math.max(1, Math.round(games)))
-  for (let i = build.at; i < until; i++) readGame(build.index, build.source[i], keyOf)
+  for (let i = build.at; i < until; i++) readGame(build.index, build.source[i], keyFrom)
   build.at = until
   build.progress = progressOf(until, build.source.length, build.index.positions)
   return build
@@ -1018,7 +1112,21 @@ export interface SurveyBuild {
   at: number
   /** Counting is done in a map and sorted at the end, so a partial survey is still in a usable order. */
   tally: Map<string, OpeningCount>
+  /**
+   * Answers the dataset has already given, by position.
+   *
+   * Asking the dataset means validating the position first, which is the slowest thing in this file. Opening moves
+   * repeat enormously across a library -- everybody who plays 1.e4 reaches the same position -- so the same question
+   * is asked thousands of times. Remembering the answer changes nothing about what the answer is.
+   *
+   * It stops growing at a limit, because a library of twenty thousand long games would otherwise fill it with
+   * middlegame positions that will never be asked about twice.
+   */
+  seen: Map<string, OpeningRecord | null>
 }
+
+/** How many remembered answers are worth keeping. Past this, the questions have stopped repeating. */
+const SURVEY_MEMORY = 120_000
 
 /**
  * What openings are really in the library, counted.
@@ -1038,8 +1146,20 @@ export function startOpeningSurvey(games: readonly StoredGame[], options: { maxP
     progress: progressOf(0, games.length, 0),
     source: games,
     at: 0,
-    tally: new Map()
+    tally: new Map(),
+    seen: new Map()
   }
+}
+
+/** What the dataset calls this position, asked once per position however many games reach it. */
+function nameOf(build: SurveyBuild, fen: string): OpeningRecord | null {
+  const fields = fieldsOf(fen)
+  if (!fields) return null
+  const remembered = build.seen.get(fields.key)
+  if (remembered !== undefined) return remembered
+  const record = recordFor(fen)
+  if (build.seen.size < SURVEY_MEMORY) build.seen.set(fields.key, record)
+  return record
 }
 
 function surveyGame(build: SurveyBuild, game: StoredGame): void {
@@ -1047,7 +1167,7 @@ function surveyGame(build: SurveyBuild, game: StoredGame): void {
   const until = Math.min(game.moves.length, build.survey.maxPly)
   // The starting position too: a game set up from a known position is named by it.
   for (let ply = 0; ply <= until; ply++) {
-    const record = recordFor(ply === 0 ? game.startFen : game.moves[ply - 1].fen)
+    const record = nameOf(build, ply === 0 ? game.startFen : game.moves[ply - 1].fen)
     if (record) deepest = record
   }
   build.survey.games += 1

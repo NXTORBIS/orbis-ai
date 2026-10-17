@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { contrast } from '../themes.ts'
 import {
@@ -84,10 +84,52 @@ test('a field that goes nowhere yet says so, and says what will read it', () => 
   // And the other way round: a reach that does draw a control must be one of the kinds something really reads.
   const live = FIELDS.filter((one) => drawnAs(one.reach) === 'control').map((one) => one.reach.kind)
   for (const kind of live) {
-    assert.ok(['board-style', 'engine-request', 'score-display', 'move-display', 'sound'].includes(kind), `${kind} draws a control and reaches nothing`)
+    // `board-prop` belongs here because the board really takes it: `BoardProps.orientation` in `Board.tsx`, passed
+    // by whoever renders a board. It was added to `Reach` after this list was written, which is why the list is
+    // checked against the type rather than remembered -- a kind that reaches nothing must be `stored` and say so.
+    assert.ok(['board-style', 'board-prop', 'engine-request', 'score-display', 'move-display', 'sound'].includes(kind), `${kind} draws a control and reaches nothing`)
   }
   // A sanity floor: if this ever reaches zero the screen has become a list of excuses.
   assert.ok(FIELDS.filter((one) => drawnAs(one.reach) === 'control').length >= 15, 'almost nothing on this screen does anything')
+})
+
+/**
+ * The hole the test above left open, and the fault that went through it.
+ *
+ * The check above compares a field's *kind* to a list of kinds. `board-prop` is on that list because the board does
+ * take props -- but a field saying `board-prop` proves only that a prop by that name exists, not that any screen
+ * ever hands the setting to it. `analysis.evalBar` sat there for weeks: the board had an `evalBar` prop, no screen
+ * passed one, and the settings screen drew a live switch that neither put a bar on a board nor removed the one the
+ * Study screen drew. A guard that compares a table to a list rather than to the code is how that survived.
+ *
+ * So this reads the screens. For every `board-prop` field, some file under `components/chess` must read the value
+ * and render a board -- the read is the thing that was missing, and it is the thing a list of kinds cannot see.
+ */
+test('a setting handed to the board as a prop is really read by some screen that draws a board', () => {
+  const dir = fileURLToPath(new URL('../../renderer/src/components/chess/', import.meta.url))
+  const sources: { name: string; text: string }[] = []
+  const walk = (at: string): void => {
+    for (const entry of readdirSync(at, { withFileTypes: true })) {
+      const full = `${at}/${entry.name}`
+      if (entry.isDirectory()) walk(full)
+      else if (entry.name.endsWith('.tsx') && !entry.name.includes('.test.')) sources.push({ name: entry.name, text: readFileSync(full, 'utf8') })
+    }
+  }
+  walk(dir)
+  const props = FIELDS.filter((one) => one.reach.kind === 'board-prop')
+  assert.ok(props.length > 0, 'no field claims to reach the board as a prop any more; this test has nothing to check')
+  for (const field of props) {
+    const [group, key] = field.path.split('.')
+    // Read through whatever the screen calls its settings -- `settings.analysis.evalBar`, `prefs.board.orientation`
+    // -- and in a file that really draws a board, because a read that decides nothing on a board is not a reach.
+    const reads = sources.filter(
+      (one) => new RegExp(`\\.${group}\\.${key}\\b`).test(one.text) && /<Board\b|<EvalBar\b/.test(one.text)
+    )
+    assert.ok(
+      reads.length > 0,
+      `${field.path} draws a control and says it reaches the board as the ${(field.reach as { prop: string }).prop} prop, but no screen under components/chess reads .${group}.${key} and draws a board. Either read it where the board is, or make the field 'stored' so the screen prints a sentence instead of a switch.`
+    )
+  }
 })
 
 test('the engine ranges are the ones the engine channel really enforces', () => {
@@ -364,7 +406,7 @@ test('the stylesheet and the colour data are the same colours', () => {
       ['--cw-light', theme.light], ['--cw-dark', theme.dark],
       ['--cw-wp', theme.whitePiece], ['--cw-we', theme.whiteEdge],
       ['--cw-bp', theme.blackPiece], ['--cw-be', theme.blackEdge],
-      ['--cw-mark', theme.mark],
+      ['--cw-mark', theme.mark], ['--cw-check', theme.check],
       ['--cw-coord-light', theme.coordOnLight], ['--cw-coord-dark', theme.coordOnDark]
     ]
     for (const [name, value] of expected) {
@@ -390,14 +432,33 @@ test('every theme has a visible difference between its two squares', () => {
 test('every piece can be seen on both of its squares, by its colour or by its outline', () => {
   const worst: string[] = []
   for (const theme of BOARD_THEMES) {
-    for (const square of [theme.light, theme.dark]) {
+    // The check square is in here because it replaces the square colour outright: a king is standing on it, and a
+    // red that hides the king is a mark that makes the thing it is marking invisible.
+    for (const [square, which] of [[theme.light, 'the light square'], [theme.dark, 'the dark square'], [theme.check, 'the check square']] as const) {
       for (const [side, fill, edge] of [['White', theme.whitePiece, theme.whiteEdge], ['Black', theme.blackPiece, theme.blackEdge]] as const) {
         const best = Math.max(contrast(fill, square) ?? 0, contrast(edge, square) ?? 0)
-        if (best < 3) worst.push(`${theme.name}: the ${side.toLowerCase()} pieces on ${square} are only ${best.toFixed(2)}:1 away, outline included`)
+        if (best < 3) worst.push(`${theme.name}: the ${side.toLowerCase()} pieces on ${which} (${square}) are only ${best.toFixed(2)}:1 away, outline included`)
       }
     }
   }
   assert.deepEqual(worst, [], 'these pieces cannot be made out on their own board')
+})
+
+/**
+ * The bug a probe found and nothing else could have.
+ *
+ * The square-colour rules in this stylesheet are four class-level selectors against board.css's two, so once a
+ * board theme is chosen they beat board.css's own rule for the check square -- and the red disappeared under the
+ * square colour. It is invisible on the standard board, because the standard board sets no theme at all.
+ */
+test('the check square is painted above the square colour, not under it', () => {
+  const colourRule = /:root\[data-cw-board\] \.cw-sq\.light/.exec(CSS)
+  const checkRule = /:root\[data-cw-board\]\[data-cw-checkmark='on'\] \.cw-sq\.is-check/.exec(CSS)
+  assert.ok(colourRule, 'the square colours are no longer set from here')
+  assert.ok(checkRule, 'nothing restates the check square, so a chosen board colour paints over it')
+  // One more class-level selector, so it wins wherever the two end up in the file.
+  assert.ok((checkRule.index ?? 0) > (colourRule.index ?? 0), 'the check square is restated before the colours it has to beat')
+  assert.match(BOARD_CSS, /\.cw-sq\.is-check \{ background: #8d3b45; \}/, 'board.css no longer paints the check square; this override may be stale')
 })
 
 test('the square names can be read on the square they sit on', () => {
@@ -430,7 +491,10 @@ test('the colours this panel introduces can be read on its own background', () =
   const backgrounds = ['#060708', '#f1f4f8']
   const own = [...CSS.matchAll(/(?:^|[\s:,])(#[0-9a-f]{6})\b/gi)].map((one) => one[1].toLowerCase())
   const themeColours = new Set(
-    BOARD_THEMES.flatMap((one) => [one.light, one.dark, one.whitePiece, one.whiteEdge, one.blackPiece, one.blackEdge, one.mark, one.coordOnLight, one.coordOnDark])
+    BOARD_THEMES.flatMap((one) => [
+      one.light, one.dark, one.whitePiece, one.whiteEdge, one.blackPiece, one.blackEdge,
+      one.mark, one.check, one.coordOnLight, one.coordOnDark
+    ])
   )
   // Pure black and pure white are the cursor's two bands, which are drawn on a square and not on the panel.
   const onThePanel = [...new Set(own)].filter((one) => !themeColours.has(one) && one !== '#000000' && one !== '#ffffff')
@@ -445,6 +509,44 @@ test('the colours this panel introduces can be read on its own background', () =
     }
   }
   assert.deepEqual(bad, [], 'these marks are too faint to see against the panel')
+})
+
+/**
+ * The second bug a probe found, and the reason the strong cursor is two shadows rather than a shadow and an outline.
+ *
+ * `outline-offset: -3px` puts a 3px outline in exactly the same three pixels an `inset 0 0 0 3px` shadow occupies,
+ * and the outline paints last -- so the white band covered the black one completely, the cursor was a single white
+ * ring, and on a pale square it was as hard to see as the one it was replacing. The computed styles said both were
+ * applied, because both were; only a picture showed that one was underneath the other.
+ */
+test('the strong cursor draws two bands that do not sit on top of each other', () => {
+  const block = /:root\[data-cw-cursor='strong'\] \.cw-sq\.is-cursor \{([^}]*)\}/.exec(CSS)
+  assert.ok(block, 'the strong cursor is gone')
+  assert.ok(!/outline-offset/.test(block[1]), 'the cursor is back to an outline with an offset, which hides the band under it')
+  assert.match(block[1], /outline:\s*none/, "board.css's own dashed cursor is left to draw underneath this one")
+
+  const bands = [...block[1].matchAll(/inset 0 0 0 (\d+)px (#[0-9a-f]{6})/g)].map((one) => ({ at: Number(one[1]), colour: one[2] }))
+  assert.equal(bands.length, 2, `the cursor draws ${bands.length} bands rather than two`)
+  assert.deepEqual(bands.map((one) => one.colour), ['#000000', '#ffffff'], 'the two bands are not black and white')
+  // Different spreads, so one sits inside the other instead of over it. The narrower is painted first, on top.
+  assert.ok(bands[1].at > bands[0].at, 'both bands have the same spread, so the second is invisible under the first')
+
+  // Both combinations keep every ring, each further in than the last.
+  for (const also of ['is-selected', 'is-target']) {
+    const combined = new RegExp(`:root\\[data-cw-cursor='strong'\\] \\.cw-sq\\.is-cursor\\.${also} \\{([^}]*)\\}`).exec(CSS)
+    assert.ok(combined, `a square that is the cursor and ${also} loses one of its rings`)
+    const spreads = [...combined[1].matchAll(/inset 0 0 0 (\d+)px/g)].map((one) => Number(one[1]))
+    assert.equal(spreads.length, 3, `the cursor with ${also} draws ${spreads.length} rings rather than three`)
+    assert.deepEqual(spreads, [...spreads].sort((a, b) => a - b), `the rings for the cursor with ${also} are not in order, so an outer one covers an inner`)
+  }
+
+  // And the two band colours have to stand out from every square they can land on, which is the whole point.
+  for (const theme of BOARD_THEMES) {
+    for (const square of [theme.light, theme.dark, theme.check]) {
+      const best = Math.max(contrast('#000000', square) ?? 0, contrast('#ffffff', square) ?? 0)
+      assert.ok(best >= 4.5, `neither band stands out on ${theme.name}'s ${square}: the best is ${best.toFixed(2)}:1`)
+    }
+  }
 })
 
 test('every class this panel defines starts with its own prefix', () => {
@@ -620,8 +722,8 @@ test('a key that means two things in two places says which is which', () => {
 
 test('two keys in places the keyboard cannot be in at once are not called a conflict', () => {
   const made: Shortcut[] = [
-    { id: 'a', chord: 'ArrowUp', scope: 'chess-board', action: 'one', description: '', owner: 'x' },
-    { id: 'b', chord: 'ArrowUp', scope: 'chess-move-list', action: 'two', description: '', owner: 'y' }
+    { id: 'a', chord: 'ArrowUp', scope: 'chess-board', action: 'one', description: '', owner: 'x', answered: true },
+    { id: 'b', chord: 'ArrowUp', scope: 'chess-move-list', action: 'two', description: '', owner: 'y', answered: true }
   ]
   assert.deepEqual(conflictsIn(made), [])
 })
@@ -665,18 +767,121 @@ test('the app chords in this map are really in the files it says they are', () =
   assert.deepEqual(missing, [], 'this map describes shortcuts that have moved or gone')
 })
 
+/**
+ * The one that had already gone wrong.
+ *
+ * Fifteen chess-screen chords named `ChessSettings.tsx` as the file that answered them, and that file has never had
+ * a key handler in it. Pressing ArrowLeft, Home, End, F, A, N or S on the Chess World screen did nothing at all,
+ * and the key sheet said each of them worked -- the same shape of fault as a browser chord that was registered
+ * nowhere and left people pressing a key that opened the sidebar instead.
+ *
+ * So both halves are checked against the files themselves. A chord that says it is answered has to be looked for in
+ * the file it names. A chord that says nothing answers it must not be looked for anywhere -- otherwise the day
+ * somebody implements one, the sheet starts under-claiming instead of over-claiming, which is the same lie upside
+ * down.
+ */
+test('every chess chord says truthfully whether anything answers it', () => {
+  const read = (where: string): string => readFileSync(fileURLToPath(new URL(where, import.meta.url)), 'utf8')
+  const files: Readonly<Record<string, string>> = {
+    'ChessView.tsx': read('../../renderer/src/components/chess/ChessView.tsx'),
+    'ui/Modal.tsx': read('../../renderer/src/ui/Modal.tsx')
+  }
+  /**
+   * How a handler is written for one chord: the key as the keyboard really delivers it.
+   *
+   * The case matters and is the whole reason this is not one regex. An unshifted letter arrives lowercase and a
+   * shifted one arrives as the capital, so `S` is answered by `=== 's'` and `Shift+S` by `=== 'S'`. Folding the two
+   * together made `S` -- which nothing answers -- match the Shift+S handler, and the check passed the wrong chord.
+   */
+  const looksFor = (text: string, chord: string): boolean => {
+    const bits = normalizeChord(chord).split('+')
+    const key = bits[bits.length - 1]
+    if (key === 'Space') return /key === ' '/.test(text)
+    if (/^[A-Z]$/.test(key)) {
+      const want = bits.includes('Shift') ? key : key.toLowerCase()
+      return new RegExp(`key(?:\\.toLowerCase\\(\\))? [!=]== '${want}'`).test(text)
+    }
+    // A number key is answered through a table of them rather than a comparison, so both shapes count.
+    if (/^[0-9]$/.test(key)) return new RegExp(`'${key}':`).test(text) || new RegExp(`key [!=]== '${key}'`).test(text)
+    const spelt = key === '?' ? '\\?' : key
+    return new RegExp(`key(?:\\.toLowerCase\\(\\))? [!=]== '${spelt}'`).test(text)
+  }
+  const wrong: string[] = []
+  const everywhere = Object.values(files).join('\n')
+  for (const one of CHESS_SHORTCUTS) {
+    if (one.answered) {
+      const text = files[one.owner]
+      if (text === undefined) { wrong.push(`${one.id} says it is answered in "${one.owner}", which this check cannot read`); continue }
+      if (!looksFor(text, one.chord)) wrong.push(`${one.id}: ${one.chord} says it is answered in ${one.owner} and nothing there looks for it`)
+      continue
+    }
+    assert.equal(one.owner, 'nobody yet', `${one.id} is not answered and names ${one.owner} as its owner`)
+    if (looksFor(everywhere, one.chord)) wrong.push(`${one.id}: ${one.chord} is now answered somewhere and the sheet still says nothing answers it`)
+  }
+  assert.deepEqual(wrong, [], 'the key sheet and the handlers disagree')
+  // And the sheet has to be saying both things, or this check has stopped looking at one of them.
+  assert.ok(CHESS_SHORTCUTS.some((one) => one.answered), 'no chess chord is answered at all')
+  assert.ok(CHESS_SHORTCUTS.some((one) => !one.answered), 'every chess chord is answered; that would be new')
+})
+
 test("the board's own keys in this map are the keys Board.tsx really answers", () => {
   const board = readFileSync(fileURLToPath(new URL('../../renderer/src/components/chess/Board.tsx', import.meta.url)), 'utf8')
   for (const one of BOARD_KEYS) {
     const key = normalizeChord(one.chord)
-    const looked = key === 'Space' ? /e\.key === ' '/ : new RegExp(`e\\.key === '${key}'`)
+    /*
+     * A letter arrives from the keyboard as itself or as its capital depending on Shift, so the board folds the
+     * case before comparing and a chord of `M` is answered by `e.key.toLowerCase() === 'm'`. Everything else is
+     * compared as it comes. Both forms are looked for, which is the same allowance the App.tsx check above makes.
+     */
+    const looked = key === 'Space'
+      ? /e\.key === ' '/
+      : /^[A-Z]$/.test(key)
+        ? new RegExp(`e\\.key\\.toLowerCase\\(\\) === '${key.toLowerCase()}'`)
+        : new RegExp(`e\\.key === '${key}'`)
     assert.ok(looked.test(board), `${one.id}: Board.tsx does not answer ${key}`)
   }
   // And nothing it answers is missing from the map, which is what would make the sheet lie by omission.
-  const answered = [...board.matchAll(/e\.key === '([^']+)'/g)].map((one) => (one[1] === ' ' ? 'Space' : one[1]))
+  const answered = [
+    ...[...board.matchAll(/e\.key === '([^']+)'/g)].map((one) => (one[1] === ' ' ? 'Space' : one[1])),
+    ...[...board.matchAll(/e\.key\.toLowerCase\(\) === '([^']+)'/g)].map((one) => one[1])
+  ]
   for (const key of new Set(answered)) {
-    assert.ok(BOARD_KEYS.some((one) => normalizeChord(one.chord) === key), `Board.tsx answers ${key} and the keys sheet does not mention it`)
+    assert.ok(
+      BOARD_KEYS.some((one) => normalizeChord(one.chord) === normalizeChord(key)),
+      `Board.tsx answers ${key} and the keys sheet does not mention it`
+    )
   }
+})
+
+/**
+ * A key the sheet advertises has to work on some board a person can actually reach.
+ *
+ * The test above proves `Board.tsx` answers the key. That is not the same claim. Drawing only happens on a board
+ * that was handed `onMarksChange` -- `Board.tsx` says so itself: "a board given no onMarksChange draws the marks it
+ * is handed and cannot be drawn on" -- and for a long while no screen in Chess World passed it. So the four drawing
+ * keys were in the keyboard sheet, implemented in the board, and dead on every board in the product, while the
+ * settings screen said in plain words that the board draws the arrows you draw yourself.
+ *
+ * Four keys and a sentence, all true of the file and none of them true of the screen. This asks the screens.
+ */
+test('the keys that draw on the board work on a board some screen really lets you draw on', () => {
+  const needMarks = BOARD_KEYS.filter((one) => /marks are kept/i.test(one.when ?? ''))
+  assert.ok(needMarks.length > 0, 'no key says it needs a board that keeps marks; this test has nothing to check')
+  const dir = fileURLToPath(new URL('../../renderer/src/components/chess/', import.meta.url))
+  const screens: string[] = []
+  const walk = (at: string): void => {
+    for (const entry of readdirSync(at, { withFileTypes: true })) {
+      const full = `${at}/${entry.name}`
+      if (entry.isDirectory()) walk(full)
+      else if (entry.name.endsWith('.tsx') && entry.name !== 'Board.tsx' && !entry.name.includes('.test.')) screens.push(readFileSync(full, 'utf8'))
+    }
+  }
+  walk(dir)
+  const lettingYouDraw = screens.filter((text) => /onMarksChange=/.test(text)).length
+  assert.ok(
+    lettingYouDraw > 0,
+    `${needMarks.length} keys in the keyboard sheet (${needMarks.map((one) => one.chord).join(', ')}) only work on a board that keeps its marks, and no screen under components/chess passes onMarksChange, so none of them does anything anywhere.`
+  )
 })
 
 test('every shortcut says what it does and where it is handled', () => {

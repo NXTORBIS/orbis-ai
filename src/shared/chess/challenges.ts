@@ -1,4 +1,4 @@
-import { ACTIVITIES, type ActivityKind, type PlanItem, type StudyPlan } from './coach.ts'
+import { ACTIVITIES, planTitle, type ActivityKind, type PlanItem, type StudyPlan } from './coach.ts'
 import {
   CALENDAR_RULES, DEFAULT_DAY_RULES, addDays, dayEnd, dayKey, dayLabel, dayStart, mergeEvents, weekStart,
   type ActivityEvent, type DayRules
@@ -484,11 +484,11 @@ export function coachChallenges(plan: StudyPlan | readonly PlanItem[], now: numb
   const target = Math.max(1, o.target ?? 2)
   return items.map((item) => ({
     id: `coach:${period.key}:${item.id}`,
-    label: item.title,
+    label: planTitle(item),
     why: 'This is on your study plan.',
     goal: makeGoal({
       id: `coach:${period.key}:${item.id}`,
-      label: item.title,
+      label: planTitle(item),
       period: 'day',
       target,
       measure: { kind: 'attempts', activities: [item.activity] }
@@ -696,7 +696,8 @@ export function challengeBoard(o: {
   const goals = (o.goals ?? [DAILY_PRACTICE, WEEKLY_PRACTICE]).map((goal) => goalStanding(goal, events, o.now, rules))
   const streak = streakOf(o.streakGoal ?? DAILY_PRACTICE, events, o.now, rules)
   const achievements = achievementStandings(achievementView(events, o.now, rules))
-  const doneToday = [...daily, ...fromPlan].filter((one) => one.standing.complete).length
+  const forToday = [...daily, ...fromPlan]
+  const doneToday = forToday.filter((one) => one.standing.complete).length
   return {
     on: true,
     today,
@@ -710,8 +711,9 @@ export function challengeBoard(o: {
     dayRules: DAY_BOUNDARY_RULES,
     streakRules: STREAK_RULES,
     offMeans: GAMIFICATION_OFF_MEANS,
+    // The streak says its own sentence beside the run; repeating it here would print it twice on one screen.
     says: events.length === 0
       ? 'Nothing has been recorded yet, so every one of these is at nought. They fill in from what you do.'
-      : `${doneToday} of ${daily.length + fromPlan.length} of today's challenges done. ${streak.says}`
+      : `${doneToday} of the ${forToday.length} ${forToday.length === 1 ? 'challenge' : 'challenges'} for today done.`
   }
 }

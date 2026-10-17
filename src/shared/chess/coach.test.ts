@@ -2,10 +2,10 @@ import { test, describe } from 'node:test'
 import assert from 'node:assert/strict'
 import {
   ACTIVITIES, ACTIVITY_KINDS, ACTIVITY_OF_EXERCISE, CANNOT_SAY, EVIDENCE, KIND_ORDER, PHASE_RULE, WEAK_AT,
-  activePlan, addPlanItem, dismissPlanItem, dismissedPlan, mergePlan, movePlanItem, phaseOf, removePlanItem,
-  renamePlanItem, reorderPlan, restorePlanItem, suggestPlan, weaknessProfile,
+  activePlan, addPlanItem, dismissPlanItem, dismissedPlan, mergePlan, movePlanItem, phaseOf, planTitle,
+  removePlanItem, renamePlanItem, reorderPlan, resetPlanTitle, restorePlanItem, suggestPlan, weaknessProfile,
   type AnalysedGame, type AnalysedMove, type CoachEvidence, type OpeningRecallRecord, type StudyPlan,
-  type TrainingRecord, type Weakness
+  type PlanItem, type TrainingRecord, type Weakness
 } from './coach.ts'
 import { START_FEN } from './rules.ts'
 import type { MoveClass, Side } from './evaluation.ts'
@@ -607,16 +607,43 @@ describe('the study plan', () => {
     assert.equal(restorePlanItem(back, 'coach:theme-fork', NOW + 3), back, 'restoring something already showing changed the plan')
   })
 
-  test('only the person\'s own lines can be reworded or taken off; a coach line is put aside instead', () => {
+  test('any line can be renamed, and the coach\'s own wording and evidence are kept underneath', () => {
     const first = suggestPlan(twoWeaknesses, NOW)
-    assert.equal(renamePlanItem(first, 'coach:theme-fork', 'Something else', NOW), first)
+    const coachWording = first.items.find((one) => one.id === 'coach:theme-fork')?.title
+    const coachEvidence = first.items.find((one) => one.id === 'coach:theme-fork')?.what
+    const renamed = renamePlanItem(first, 'coach:theme-fork', 'Forks, every morning', NOW)
+    const item = renamed.items.find((one) => one.id === 'coach:theme-fork')
+    assert.ok(item)
+    assert.equal(planTitle(item), 'Forks, every morning')
+    assert.equal(item.title, coachWording, 'the coach\'s wording was written over')
+    assert.equal(item.what, coachEvidence, 'the sentence giving the evidence was rewritten')
+    assert.equal(renamePlanItem(first, 'nope', 'x', NOW), first)
+    assert.equal(renamePlanItem(first, 'coach:theme-fork', '  ', NOW), first, 'an empty name was accepted')
+  })
+
+  test('the person\'s name for a coach line survives a merge, and can be dropped again', () => {
+    const renamed = renamePlanItem(suggestPlan(twoWeaknesses, NOW), 'coach:theme-fork', 'My own words', NOW)
+    const merged = mergePlan(renamed, twoWeaknesses, NOW + 1)
+    const item = merged.items.find((one) => one.id === 'coach:theme-fork')
+    assert.ok(item)
+    assert.equal(planTitle(item), 'My own words')
+    const back = resetPlanTitle(merged, 'coach:theme-fork', NOW + 2)
+    const after = back.items.find((one) => one.id === 'coach:theme-fork')
+    assert.ok(after)
+    assert.equal(after.titleOverride, undefined)
+    assert.equal(planTitle(after), item.title)
+    assert.equal(resetPlanTitle(back, 'coach:theme-fork', NOW + 3), back, 'resetting a line with no override changed the plan')
+  })
+
+  test('only the person\'s own lines can be taken off; a coach line is put aside instead', () => {
+    const first = suggestPlan(twoWeaknesses, NOW)
     const mine = addPlanItem(first, { id: 'mine', title: 'Mine', activity: 'play' }, NOW)
-    assert.equal(renamePlanItem(mine, 'mine', 'Renamed', NOW).items.find((one) => one.id === 'mine')?.title, 'Renamed')
-    assert.equal(renamePlanItem(mine, 'mine', '   ', NOW), mine, 'an empty name was accepted')
+    assert.equal(planTitle(renamePlanItem(mine, 'mine', 'Renamed', NOW).items.find((one) => one.id === 'mine') as PlanItem), 'Renamed')
     const removedMine = removePlanItem(mine, 'mine', NOW)
     assert.equal(removedMine.items.some((one) => one.id === 'mine'), false)
     const removedCoach = removePlanItem(mine, 'coach:theme-fork', NOW)
     assert.equal(removedCoach.items.find((one) => one.id === 'coach:theme-fork')?.dismissed, true)
+    assert.equal(resetPlanTitle(mine, 'mine', NOW), mine, 'a person\'s own line was handed back the coach\'s wording')
   })
 
   test('a line cannot be added twice under one name', () => {

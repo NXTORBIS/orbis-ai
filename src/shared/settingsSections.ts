@@ -19,6 +19,7 @@ import { rankFindables } from './settingsSearch.ts'
 
 export type SettingsSectionId =
   | 'account'
+  | 'features'
   | 'security'
   | 'orion'
   | 'browsing'
@@ -65,6 +66,40 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = Object.freeze([
     // twelve worlds were drawn; the setting was simply never written down here, so searching Settings for
     // "picture" found nothing and the guard that says every setting has a home was failing.
     settings: ['assistantName', 'userName', 'userTitle', 'userAvatar']
+  },
+  {
+    id: 'features',
+    /*
+     * Which screens somebody sees, which is the one setting that changes what the rest of Orbis looks like.
+     *
+     * Second in the list, straight after who you are, because it is the question every other section is downstream
+     * of: there is no point reading the Markets settings of somebody who has Markets switched off. It owns no key of
+     * `Settings` at all -- the choice is one file per profile (`personal/features.json`), because settings.json is
+     * shared between every profile by design and a work life and a personal one have every reason to want different
+     * menus.
+     */
+    label: 'Features',
+    blurb: 'Which of Orbis’s screens are in your menu. Nothing is ever deleted.',
+    icon: 'layoutGrid',
+    keywords: [
+      'features',
+      'screens',
+      'menu',
+      'hide',
+      'show',
+      'turn off',
+      'turn on',
+      'switch off',
+      'declutter',
+      'tidy',
+      'clutter',
+      'simplify',
+      'what orbis can do',
+      'add a feature',
+      'remove a feature',
+      'sidebar'
+    ],
+    settings: []
   },
   {
     id: 'security',

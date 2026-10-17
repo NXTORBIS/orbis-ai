@@ -52,8 +52,13 @@ export const START_RATING = 1200
 export const MIN_RATING = 400
 export const MAX_RATING = 3000
 
-/** The most one attempt may move a rating, in points. */
-export const MAX_STEP = 32
+/**
+ * The most one attempt may move a rating, in points.
+ *
+ * Deliberately below the largest K, so the cap actually binds rather than sitting there as decoration: a clean solve
+ * against a much harder puzzle moves 24 points and not the 32 the arithmetic wanted, and `RatingStep.capped` says so.
+ */
+export const MAX_STEP = 24
 
 /** Finished attempts before the number is called a rating rather than a working figure. */
 export const ATTEMPTS_FOR_A_RATING = 10
