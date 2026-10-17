@@ -47,7 +47,8 @@ export function registerMemoryIpc(o: MemoryIpcOptions): void {
 
   handle('memory:add', (_event, text: unknown, options: unknown) => {
     const v = (options ?? {}) as Record<string, unknown>
-    return o.memory().add(text, { category: category(v.category), pinned: v.pinned === true, origin: 'settings' })
+    // Where it came from is part of the entry, so "I approved that chip" and "I typed that in Settings" stay apart.
+    return o.memory().add(text, { category: category(v.category), pinned: v.pinned === true, origin: v.fromSuggestion === true ? 'suggestion' : 'settings' })
   })
 
   handle('memory:update', (_event, id: unknown, patch: unknown) => {
