@@ -108,3 +108,60 @@ test('a long answer that happens to begin with an apology is not treated as a re
   assert.equal(out.shown, said, 'nothing was held back or thrown away')
   assert.equal(out.models.length, 1)
 })
+
+/** An SSE body that sends one frame per token, so the test can see how much arrives at a time. */
+function tokenStream(tokens: string[]): ReadableStream<Uint8Array> {
+  const enc = new TextEncoder()
+  const frames = [
+    ...tokens.map((t) => 'data: ' + JSON.stringify({ choices: [{ delta: { content: t } }] })),
+    'data: ' + JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] }),
+    'data: [DONE]'
+  ]
+  return new ReadableStream({
+    start(controller) {
+      for (const f of frames) controller.enqueue(enc.encode(f + String.fromCharCode(10, 10)))
+      controller.close()
+    }
+  })
+}
+
+/** Runs one reply token by token and reports each piece as it reached the screen. */
+async function typed(tokens: string[]): Promise<string[]> {
+  const pieces: string[] = []
+  await streamChat({
+    apiKeys: ['key-one'],
+    model: 'orion-core',
+    messages: [{ id: 'q', role: 'user', content: 'What is stalemate?', createdAt: 0 }],
+    systemPrompt: 'You are Orion.',
+    reasoningEffort: 'low',
+    autoFallback: false,
+    signal: new AbortController().signal,
+    emit: (event) => { if (event.type === 'delta' && event.content) pieces.push(event.content) },
+    fetchFn: (async () => ({
+      ok: true, status: 200, statusText: 'OK', headers: new Headers(), body: tokenStream(tokens), text: async () => ''
+    })) as never
+  })
+  return pieces
+}
+
+test('an ordinary reply is not held back for a moment', async () => {
+  // This is the whole point of the guard being narrow. Holding a reply back to be sure it is not a refusal would
+  // make every short answer arrive late, so a reply that cannot be one is released on its first word.
+  const tokens = ['Stale', 'mate is ', 'a draw. ', 'The king ', 'is not in ', 'check and ', 'cannot move.']
+  const pieces = await typed(tokens)
+
+  assert.equal(pieces.join(''), tokens.join(''), 'nothing was lost')
+  assert.equal(pieces.length, tokens.length, 'every token arrived on its own, none were held and bundled together')
+  assert.equal(pieces[0], 'Stale', 'the very first token went straight to the screen')
+})
+
+test('a reply that begins with an apology is shown once it is clearly an answer', async () => {
+  // The guard holds this opening back, because so far it reads exactly like a refusal. What releases it is the
+  // reply carrying on past a few hundred characters: nobody refuses at length.
+  const tokens = ["I'm sorry, ", 'but I ', "can't be ", 'brief about this. ', 'Stalemate is a draw. '.repeat(40)]
+  const pieces = await typed(tokens)
+
+  assert.equal(pieces.join(''), tokens.join(''), 'the answer is shown in full, exactly as written')
+  assert.ok(pieces.length < tokens.length, 'its opening was held back while it could still have been a refusal')
+  assert.ok(pieces[0].startsWith("I'm sorry, but I can't be brief"), 'and then released from the beginning')
+})

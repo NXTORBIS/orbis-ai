@@ -1,7 +1,7 @@
 import type { ChatMessage, ModelInfo, ReasoningEffort, StreamEvent } from '../shared/types'
 import { CHAT_MODELS, modelInfo, modelLabel, providerOf } from '../shared/models.ts'
 import { PROVIDERS } from '../shared/providers.ts'
-import { AUTO_MODEL, REFUSAL_MAX_CHARS, isFlatRefusal } from '../shared/modelRoute.ts'
+import { AUTO_MODEL, REFUSAL_MAX_CHARS, couldBeRefusal, isFlatRefusal } from '../shared/modelRoute.ts'
 import { chooseContext, contextFrom } from '../shared/attachmentIndex.ts'
 import { SseParser, ThinkTagSplitter } from './sse.ts'
 
@@ -257,7 +257,14 @@ class RefusedError extends Error {
   }
 }
 
-/** Holds a short reply back until it is clear it is an answer and not a flat refusal. */
+/**
+ * Holds a reply back only while it could still be a refusal.
+ *
+ * Ordinary replies must not be slowed down by this, and text can only be held before it is shown -- so the guard
+ * watches the opening and lets go the instant the reply cannot be a refusal, which for almost every answer is its
+ * first word. Only a reply that really does open "I'm sorry, but I can't..." waits, and then only until it either
+ * finishes (a refusal) or grows past a few hundred characters (an answer that merely began that way).
+ */
 class RefusalGuard implements Gate {
   private held = ''
   private open = false
@@ -265,19 +272,26 @@ class RefusalGuard implements Gate {
   push(content: string): string {
     if (this.open) return content
     this.held += content
-    if (this.held.length <= REFUSAL_MAX_CHARS) return ''
-    this.open = true
-    const held = this.held
-    this.held = ''
-    return held
+    // Not a refusal, or too long to be only a refusal: let it through and stop watching.
+    if (this.held.length > REFUSAL_MAX_CHARS || !couldBeRefusal(this.held)) return this.release()
+    return ''
   }
 
   finish(finished: boolean): string {
     if (this.open) return ''
+    if (isFlatRefusal(this.held, finished)) {
+      const said = this.held.trim()
+      this.held = ''
+      this.open = true
+      throw new RefusedError(said)
+    }
+    return this.release()
+  }
+
+  private release(): string {
+    this.open = true
     const held = this.held
     this.held = ''
-    this.open = true
-    if (isFlatRefusal(held, finished)) throw new RefusedError(held.trim())
     return held
   }
 }

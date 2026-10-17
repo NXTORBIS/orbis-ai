@@ -188,6 +188,41 @@ export function isFlatRefusal(text: string, finished: boolean): boolean {
   if (!finished) return false
   const said = text.trim()
   if (said.length === 0 || said.length > REFUSAL_MAX_CHARS) return false
-  const plain = said.toLowerCase().replace(/[‘’ʼ]/g, "'")
+  const plain = plainly(said)
   return REFUSAL_OPENERS.some((one) => one.test(plain))
+}
+
+/**
+ * The phrasings a refusal opens with, as plain text so a half-arrived reply can be judged.
+ *
+ * This is what keeps the guard out of the way of ordinary replies. Text can only be held back before it is shown,
+ * and holding every reply back long enough to be sure would make every short answer arrive late -- so instead the
+ * very first characters are checked against these, and the moment a reply cannot be one of them it goes straight
+ * out. An answer beginning "The board is" is released on its first word.
+ */
+const REFUSAL_HEADS: readonly string[] = [
+  "i'm sorry, but i ", 'i am sorry, but i ', "i'm sorry but i ", 'i am sorry but i ',
+  "i can't ", 'i cannot ', "i'm unable to ", 'i am unable to ', "i'm not able to ", 'i am not able to ',
+  "sorry, i can't ", 'sorry, i cannot ', "sorry i can't ", 'sorry i cannot ',
+  "unfortunately, i can't ", 'unfortunately, i cannot ', "unfortunately i can't ", 'unfortunately i cannot ',
+  "as an ai, i can't ", 'as an ai, i cannot ', 'as an ai language model, i ',
+  'i must decline', "i won't "
+]
+
+/** Lower case, with the curly apostrophes models write made ordinary. */
+function plainly(text: string): string {
+  return text.replace(/[‘’ʼ]/g, "'").toLowerCase()
+}
+
+/**
+ * Could this much of a reply still turn out to be a refusal?
+ *
+ * False means it certainly cannot, and whatever is being held may be shown at once. True means it is still worth
+ * waiting -- either it is too short to tell, or it really does open with a refusal and it is not yet clear whether
+ * the whole reply is one.
+ */
+export function couldBeRefusal(sofar: string): boolean {
+  const said = plainly(sofar.trimStart())
+  if (said.length === 0) return true
+  return REFUSAL_HEADS.some((head) => head.startsWith(said) || said.startsWith(head))
 }
