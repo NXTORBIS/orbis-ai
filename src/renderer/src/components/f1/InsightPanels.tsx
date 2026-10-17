@@ -6,6 +6,7 @@ import type { F1Answer } from '../../../../shared/f1/types'
 import { LineChart, type Series } from './Chart'
 import { ExportButton, SourceLine, Waiting, useF1 } from './shared'
 import { ReportButton } from './ExtraPanels'
+import { SearchBox } from '../../ui'
 
 interface SeasonData {
   results: SeasonRow[]
@@ -130,7 +131,7 @@ export function HistoryPanel({ season, onSeason }: { season: number; onSeason: (
             </tbody>
           </table>
           <h3 className="f1-h">Every champion</h3>
-          <input className="f1-search" value={find} onChange={(e) => setFind(e.target.value)} placeholder="Search a year, driver or team" aria-label="Search champions" />
+          <SearchBox value={find} onChange={setFind} label="Search champions" placeholder="Search a year, driver or team" className="f1-find" />
           <table className="f1-table">
             <thead>
               <tr>

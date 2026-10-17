@@ -1,4 +1,4 @@
-import { Download, RefreshCw } from 'lucide-react'
+import { Download } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { emptyPrefs, sanitizePrefs, type F1Prefs } from '../../../../shared/f1/extras'
 import { safeFileName, toCsv } from '../../../../shared/f1/csv'
@@ -40,7 +40,7 @@ export function SourceLine({ load, retry }: { load: Load<unknown>; retry: () => 
     <p className={`f1-source is-${freshness}`}>
       {PROVIDER_NAME[source.provider]} · {words} · {at.toLocaleString()}
       <button type="button" className="f1-link" onClick={retry}>
-        <RefreshCw size={12} /> Refresh
+        Refresh
       </button>
     </p>
   )
@@ -54,7 +54,7 @@ export function Waiting({ load, retry, what }: { load: Load<unknown>; retry: () 
         <p>Could not load {what}.</p>
         <small>{load.message}</small>
         <button type="button" className="f1-btn" onClick={retry}>
-          <RefreshCw size={14} /> Try again
+          Try again
         </button>
       </div>
     )

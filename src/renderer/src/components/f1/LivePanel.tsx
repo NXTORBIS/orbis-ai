@@ -1,4 +1,4 @@
-import { Maximize2, Pause, Play, Radio, RotateCcw } from 'lucide-react'
+import { Pause, Play, Radio } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { LiveDriverRow, LiveRaceControl } from '../../../../shared/f1/live/snapshot'
 import type { StreamEvent, StreamPhase } from '../../../../shared/f1/live/stream-types'
@@ -7,6 +7,7 @@ import type { F1Answer } from '../../../../shared/f1/types'
 import type { ArchiveSession } from '../../../../shared/f1/archive'
 import { TrackMap, type MapCar } from './Chart'
 import { ExportButton } from './shared'
+import { SearchBox } from '../../ui'
 
 const PHASE_LABEL: Record<StreamPhase, string> = {
   idle: 'Not connected',
@@ -152,7 +153,7 @@ export default function LivePanel({ year }: { year: number }): React.JSX.Element
         </button>
         <span className="f1-or">or replay a finished session</span>
         <select aria-label="Recorded session" value={pick} onChange={(e) => setPick(e.target.value)} disabled={!archive}>
-          <option value="">{archive ? 'Choose a session…' : archiveError ? 'Archive unavailable' : 'Loading sessions…'}</option>
+          <option value="">{archive ? 'Choose a session…' : archiveError ? 'No recorded sessions' : 'Loading sessions…'}</option>
           {sessions
             .slice()
             .reverse()
@@ -163,10 +164,15 @@ export default function LivePanel({ year }: { year: number }): React.JSX.Element
             ))}
         </select>
         <button type="button" className="f1-btn" onClick={loadReplay} disabled={!pick || busy}>
-          <RotateCcw size={14} /> Replay
+          Replay
         </button>
       </div>
-      {archiveError && <p className="f1-note f1-bad">The recorded-session list could not be loaded: {archiveError}</p>}
+      {/* The provider's own sentence, not a code. Formula 1 closed the archive behind a sign-in, which no retry fixes. */}
+      {archiveError && (
+        <p className="f1-note f1-bad" role="status">
+          {archiveError}
+        </p>
+      )}
 
       <div className={`f1-status is-${status?.phase ?? 'idle'}`} role="status">
         <strong>{PHASE_LABEL[status?.phase ?? 'idle']}</strong>
@@ -217,7 +223,7 @@ export default function LivePanel({ year }: { year: number }): React.JSX.Element
       {snap && snap.drivers.length > 0 && (
         <>
           <div className="f1-sourcebar">
-            <input className="f1-search" style={{ maxWidth: 260, marginBottom: 0 }} value={find} onChange={(e) => setFind(e.target.value)} placeholder="Find a driver or team" aria-label="Find a driver or team" />
+            <SearchBox value={find} onChange={setFind} label="Find a driver or team" className="f1-find-live" />
             <label className="f1-check">
               <input type="checkbox" checked={dense} onChange={(e) => setDense(e.target.checked)} /> Compact
             </label>
@@ -225,7 +231,7 @@ export default function LivePanel({ year }: { year: number }): React.JSX.Element
               <input type="checkbox" checked={traps} onChange={(e) => setTraps(e.target.checked)} /> Speed traps
             </label>
             <button type="button" className="f1-btn" onClick={() => void grid.current?.requestFullscreen?.().catch(() => undefined)} title="Fill the screen with the timing">
-              <Maximize2 size={14} /> Full screen
+              Full screen
             </button>
             <ExportButton
               name={`timing-${snap.session.meeting ?? 'session'}`}
@@ -311,7 +317,7 @@ export default function LivePanel({ year }: { year: number }): React.JSX.Element
                 ))}
               </ul>
               <h2 className="f1-h">Race control</h2>
-              <input className="f1-search" placeholder="Filter messages" aria-label="Filter race control messages" value={rcFilter} onChange={(e) => setRcFilter(e.target.value)} />
+              <SearchBox value={rcFilter} onChange={setRcFilter} label="Filter race control messages" placeholder="Filter messages" className="f1-find" />
               <ul className="f1-rc">
                 {messages.length === 0 && <li className="f1-note">No race control messages.</li>}
                 {messages.slice(0, 80).map((m, i) => (
