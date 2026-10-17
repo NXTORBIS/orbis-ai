@@ -219,7 +219,26 @@ export class Native {
 
   /** Every app, with whether it can actually open. One list, which both Search Labs and Orion read. */
   async catalogue(): Promise<
-    readonly { id: string; name: string; summary: string; domain: string; icon: string; capabilities: readonly string[]; blocked: string | null }[]
+    readonly {
+      id: string
+      name: string
+      summary: string
+      domain: string
+      icon: string
+      /*
+       * The words somebody is likely to use for it, and what it says it will not do.
+       *
+       * Sent because the screen that lists the laboratories searches by tag and prints the first limitation on each
+       * card -- it always did, and until now the catalogue did not carry either, so the search quietly looked at
+       * nothing and the line never drew. The aliases are here for the same reason: "the projectile motion lab" is
+       * what somebody asks for, and only the manifest knows that is `projectile-lab`.
+       */
+      aliases: readonly string[]
+      tags: readonly string[]
+      limitations: readonly string[]
+      capabilities: readonly string[]
+      blocked: string | null
+    }[]
   > {
     const readiness = await this.readinessNow()
     return allApps(this.registry).map((manifest) => {
@@ -230,6 +249,9 @@ export class Native {
         summary: manifest.summary,
         domain: manifest.domain,
         icon: manifest.icon,
+        aliases: manifest.aliases,
+        tags: manifest.tags,
+        limitations: manifest.limitations,
         capabilities: manifest.capabilities.map((one) => one.id),
         blocked: can.ok ? null : (can.blocked?.says ?? 'It cannot open here.')
       }
