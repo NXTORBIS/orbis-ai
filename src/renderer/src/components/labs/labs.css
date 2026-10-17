@@ -17,121 +17,46 @@
   min-height: 0;
 }
 
+/*
+ * The header is the window's shared three-part header now -- a title with a count under it, a box to narrow the
+ * list, and the way out. Everything that used to be written here is drawn by that, including how much of the row
+ * the search box takes. What is left is the one thing this screen owns: where the header stops and the list starts.
+ */
 .labs-head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
   padding: 12px 16px;
   border-bottom: 1px solid var(--glass-border);
-}
-
-.labs-title {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  color: var(--cyan);
-  min-width: 0;
-}
-
-.labs-title > div {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.labs-title strong {
-  color: var(--text);
-  font-size: 14px;
-  font-weight: 650;
-}
-
-.labs-title span {
-  color: var(--faint);
-  font-size: 11.5px;
-}
-
-/* The search box takes the room that is left, down to a width it is still usable at. */
-.labs-search {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  flex: 1 1 240px;
-  min-width: 180px;
-  padding: 6px 10px;
-  border: 1px solid var(--glass-border);
-  border-radius: 999px;
-  background: var(--panel);
-  color: var(--faint);
-}
-
-.labs-search:focus-within {
-  border-color: color-mix(in srgb, var(--cyan) 50%, var(--glass-border));
-}
-
-.labs-search input {
-  flex: 1 1 auto;
-  min-width: 0;
-  border: 0;
-  background: none;
-  color: var(--text);
-  font-family: var(--font);
-  font-size: 12.5px;
-  outline: none;
-}
-
-.labs-search input::placeholder {
-  color: var(--faint);
-}
-
-.labs-search button {
-  display: grid;
-  place-items: center;
-  width: 18px;
-  height: 18px;
-  border: 0;
-  border-radius: 50%;
-  background: none;
-  color: var(--faint);
-  cursor: pointer;
-}
-
-.labs-search button:hover {
-  background: var(--bg-mid);
-  color: var(--text);
 }
 
 .labs-body {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  padding: 14px 16px 28px;
+  padding: 12px 16px 28px;
   /* Nothing in here may widen the screen; a long summary wraps instead. */
   overflow-x: hidden;
 }
 
-.labs-refused,
-.labs-none {
+.labs-refused {
   margin: 28px auto;
   max-width: 540px;
   color: var(--faint);
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.6;
   text-align: center;
 }
 
 .labs-group + .labs-group {
-  margin-top: 22px;
+  margin-top: 20px;
 }
 
 .labs-group h3 {
   display: flex;
   align-items: baseline;
-  gap: 9px;
+  gap: 8px;
   flex-wrap: wrap;
-  margin: 0 0 9px;
+  margin: 0 0 8px;
   color: var(--text);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 650;
 }
 
@@ -151,17 +76,17 @@
 .labs-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(min(248px, 100%), 1fr));
-  gap: 9px;
+  gap: 8px;
 }
 
 .labs-card {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
   min-width: 0;
-  padding: 11px 12px;
+  padding: 12px 12px;
   border: 1px solid var(--glass-border);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--panel);
   color: var(--text);
   font-family: var(--font);
@@ -171,8 +96,8 @@
 }
 
 .labs-card:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--cyan) 45%, var(--glass-border));
-  background: color-mix(in srgb, var(--cyan) 7%, var(--panel));
+  border-color: var(--glass-border);
+  background: var(--hover);
 }
 
 .labs-card:active:not(:disabled) {
@@ -190,7 +115,7 @@
 }
 
 .labs-card strong {
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 650;
   /* A long laboratory name wraps rather than widening the column. */
   overflow-wrap: anywhere;
@@ -198,15 +123,15 @@
 
 .labs-says {
   color: var(--faint);
-  font-size: 11.5px;
+  font-size: 11px;
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
 
 /* What it will not do. Amber because it is a limit rather than a fault. */
 .labs-wont {
-  color: #f0a33a;
-  font-size: 10.5px;
+  color: var(--amber);
+  font-size: 10px;
   line-height: 1.45;
   /* Three lines at most: the point is a warning, not the whole manual. */
   display: -webkit-box;

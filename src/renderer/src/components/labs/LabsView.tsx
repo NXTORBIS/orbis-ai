@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Search, X, FlaskConical, ChevronRight } from 'lucide-react'
+import { FlaskConical, ChevronRight } from 'lucide-react'
 import type { NoticeKind } from '../../lib/notices'
+import { useSurface } from '../../lib/surfaces'
+import { SearchBox, ViewHeader } from '../../ui'
+import { labsCatalogueSurface } from './labsSurfaces'
 import './labs.css'
 
 /**
@@ -28,9 +31,12 @@ interface App {
   summary: string
   domain: string
   icon: string
+  /** Other names for it: "projectile motion", "trajectory". What somebody actually types. */
+  aliases: readonly string[]
   tags: readonly string[]
   limitations: readonly string[]
-  opensAt: string
+  /** The sentence saying it cannot open here, or null. */
+  blocked: string | null
 }
 
 /** The subjects, in the order somebody would look for them rather than alphabetically. */
@@ -51,7 +57,8 @@ const SUBJECTS: readonly { id: string; label: string; about: string }[] = Object
 export default function LabsView({
   onClose,
   onNotify,
-  onOpenApp
+  onOpenApp,
+  openInConversation
 }: {
   onClose(): void
   onNotify(message: string, kind?: NoticeKind): void
@@ -64,6 +71,14 @@ export default function LabsView({
    * the instance and put nothing on screen.
    */
   onOpenApp(appId: string): void
+  /**
+   * The laboratories already open in the conversation, by app id.
+   *
+   * Handed in because this screen cannot know: a laboratory lives in a card on a message, and the conversation is
+   * the shell's. It is what makes "open the circuit laboratory" confirmable rather than merely issued -- the card
+   * turning up in the conversation is the only reading that says it really opened.
+   */
+  openInConversation(): readonly string[]
 }): React.JSX.Element {
   const [apps, setApps] = useState<App[] | null>(null)
   const [refused, setRefused] = useState<string | null>(null)
@@ -126,6 +141,7 @@ export default function LabsView({
       if (want === '') return true
       if (one.name.toLowerCase().includes(want)) return true
       if (one.summary.toLowerCase().includes(want)) return true
+      if ((one.aliases ?? []).some((alias) => alias.toLowerCase().includes(want))) return true
       return (one.tags ?? []).some((tag) => tag.toLowerCase().includes(want))
     }
 
@@ -146,50 +162,71 @@ export default function LabsView({
 
   const howMany = groups.reduce((sum, one) => sum + one.apps.length, 0)
 
+  /*
+   * What the surface reads, kept in refs.
+   *
+   * A getter is asked at the moment somebody wants to know, including the moment just after something has been done
+   * and before React has drawn. Reading `apps` and `query` straight out of this render would answer with a copy
+   * taken before whatever was asked for happened.
+   */
+  const live = useRef({ apps, refused, query, groups })
+  live.current = { apps, refused, query, groups }
+
+  /*
+   * Above the return and with no early return before it, because it is a hook.
+   *
+   * Every reader below is the screen's own state and every handler is the one its own control calls: the search box
+   * and the card. Opening by name is matched against the same catalogue the screen draws.
+   */
+  useSurface(
+    labsCatalogueSurface({
+      catalogue: () => live.current.apps,
+      refused: () => live.current.refused,
+      search: () => live.current.query,
+      setSearch: (text) => setQuery(text),
+      matching: () => live.current.groups.flatMap((one) => one.apps),
+      open: (appId) => {
+        // The screen's own card handler, so a laboratory opened by Orbis opens exactly as one opened by hand.
+        const found = (live.current.apps ?? []).find((one) => one.id === appId)
+        if (found) open(found)
+      },
+      openHere: () => openInConversation(),
+      close: onClose
+    })
+  )
+
   return (
     <section className="view labs-view" aria-label="Laboratories">
-      <header className="labs-head">
-        <div className="labs-title">
-          <FlaskConical size={17} aria-hidden />
-          <div>
-            <strong>Laboratories</strong>
-            <span>
-              {apps === null
-                ? 'Reading the catalogue…'
-                : query.trim() === ''
-                  ? `${apps.length} of them, grouped by subject`
-                  : `${howMany} of ${apps.length} match`}
-            </span>
-          </div>
-        </div>
-
-        <label className="labs-search">
-          <Search size={14} aria-hidden />
-          <input
-            ref={box}
-            type="search"
+      <ViewHeader
+        className="labs-head"
+        icon={<FlaskConical size={17} aria-hidden />}
+        title="Laboratories"
+        note={
+          apps === null
+            ? 'Reading the catalogue…'
+            : query.trim() === ''
+              ? `${apps.length} of them, grouped by subject`
+              : `${howMany} of ${apps.length} match`
+        }
+        search={
+          <SearchBox
             value={query}
+            onChange={setQuery}
+            label="Search the laboratories"
             placeholder="Search by name, by subject, or by what you want to do…"
-            aria-label="Search the laboratories"
-            onChange={(event) => setQuery(event.target.value)}
+            inputRef={box}
+            clearable
           />
-          {query !== '' && (
-            <button type="button" aria-label="Clear the search" onClick={() => setQuery('')}>
-              <X size={13} aria-hidden />
-            </button>
-          )}
-        </label>
-
-        <button type="button" className="icon-btn" aria-label="Close the laboratories" onClick={onClose}>
-          <X size={16} aria-hidden />
-        </button>
-      </header>
+        }
+        onClose={onClose}
+        closeLabel="Close the laboratories"
+      />
 
       <div className="labs-body">
         {refused !== null && <p className="labs-refused">{refused}</p>}
 
         {apps !== null && howMany === 0 && refused === null && (
-          <p className="labs-none">
+          <p className="view-empty">
             Nothing matches “{query.trim()}”. Try a subject — physics, chemistry, computing — or what you want to
             do, like “sort” or “titration”.
           </p>
